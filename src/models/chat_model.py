@@ -18,13 +18,6 @@ class OpenAIBase():
         else:
             messages = message
 
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            stream=stream,
-        )
-        logger.debug(response)
-
         if stream:
             return self._stream_response(messages)
         else:
@@ -62,3 +55,50 @@ class Zhipu(OpenAIBase):
         api_key = os.getenv("ZHIPUAPI")
         base_url = "https://open.bigmodel.cn/api/paas/v4/"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
+
+
+import qianfan
+
+
+class WenxinResponse:
+    def __init__(self, content):
+        self.content = content
+
+
+class Wenxin:
+
+    def __init__(self, model_name="ernie-lite-8k") -> None:
+        self.model_name = model_name
+        access_key = os.getenv("QIANFAN_ACCESS_KEY")
+        secret_key = os.getenv("QIANFAN_SECRET_KEY")
+        self.client = qianfan.ChatCompletion(ak=access_key, sk=secret_key)
+
+    def predict(self, message, stream=False):
+
+        logger.debug(message)
+        if isinstance(message, str):
+            messages=[{"role": "user", "content": message}]
+        else:
+            messages = message
+
+        if stream:
+            return self._stream_response(messages)
+        else:
+            return self._get_response(messages)
+
+    def _stream_response(self, messages):
+        response = self.client.do(
+            model=self.model_name,
+            messages=messages,
+            stream=True,
+        )
+        for chunk in response:
+            yield WenxinResponse(chunk["body"]["result"])
+
+    def _get_response(self, messages):
+        response = self.client.do(
+            model=self.model_name,
+            messages=messages,
+            stream=False,
+        )
+        return WenxinResponse(response["body"]["result"])

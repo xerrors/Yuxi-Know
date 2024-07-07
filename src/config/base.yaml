@@ -2,7 +2,7 @@ name: base
 
 ## model
 ### model_provider, option in deepseek, zhipu
-model_provider: zhipu
+model_provider: wenxin
 
 ## startup
 stream: True

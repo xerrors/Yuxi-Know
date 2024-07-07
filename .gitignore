@@ -19,3 +19,6 @@ log
 logs
 *.log.*
 *.db
+
+### IDE
+.vscode

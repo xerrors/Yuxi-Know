@@ -2,16 +2,16 @@ import os
 from dotenv import load_dotenv
 from core.history import HistoryManager
 from config import Config
-from models.chat_model import DeepSeek, Zhipu
+from models import select_model
 
 load_dotenv()
 
 
 if __name__ == "__main__":
     config = Config("config/base.yaml")
-    model = Zhipu()
+    model = select_model(config)
 
-    print("[CLI] Type 'exit' to quit")
+    print(f"[{config.model_provider}:{config.get('model_name', 'default')}] Type 'exit' to quit")
 
     history_manager = HistoryManager()
     while True:
