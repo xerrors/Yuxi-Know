@@ -38,6 +38,15 @@ class Config(SimpleConfig):
         self.stream = False
 
         self.load()
+        self.handle_self()
+
+    def handle_self(self):
+        ### handle local model
+        model_root_dir = os.getenv("MODEL_ROOT_DIR", "pretrained_models")
+        for model, model_rel_path in self.model_local_paths.items():
+            if not model_rel_path.startswith("/"):
+                self.model_local_paths[model] = os.path.join(model_root_dir, model_rel_path)
+
 
     def load(self):
         if self.filename is not None and os.path.exists(self.filename):

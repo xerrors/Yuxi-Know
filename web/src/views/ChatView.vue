@@ -6,7 +6,7 @@
           v-for="message in state.messages"
           :key="message.id"
           class="message-box"
-          :class="message.type"
+          :class="message.role"
         >
           <img v-if="message.filetype === 'image'" :src="message.url" class="message-image" alt="">
           <p v-else style="white-space: pre-line" class="message-text">{{ message.text }}</p>
@@ -97,10 +97,15 @@ const scrollToBottom = () => {
   }, 10) // 10ms 后滚动到底部
 }
 
-const appendMessage = (message, type) => {
+/**
+ *
+ * @param {*} message 消息内容
+ * @param {*} role 消息
+ */
+const appendMessage = (message, role) => {
   state.messages.push({
     id: state.messages.length + 1,
-    type,
+    role,
     text: message
   })
   scrollToBottom()
@@ -196,9 +201,7 @@ const getFormattedDocs = (docs) => {
 }
 
 const sendDeafultMessage = () => {
-  setTimeout(() => {
-    appendMessage('你好？我是 Project: Athena，有什么可以帮你？😊', 'received')
-  }, 1000);
+  appendMessage('你好？我是 Project: Athena，有什么可以帮你？😊', 'received')
 }
 
 const clearChat = () => {
@@ -272,6 +275,7 @@ div.chat, div.info {
   font-weight: 400;
   box-sizing: border-box;
   box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16);
+  animation: slideInUp 0.1s ease-in;
 }
 
 .message-box.sent {
@@ -287,6 +291,7 @@ div.chat, div.info {
   color: #111111;
   background-color: #ffffff;
   text-align: left;
+  // animation-delay: 0.2s; /* 延迟 100ms 开始动画 */
 }
 
 p.message-text {
@@ -391,5 +396,16 @@ p.note {
   text-align: center;
   padding: 1rem;
   color: #ccc;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

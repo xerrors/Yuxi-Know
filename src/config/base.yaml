@@ -2,7 +2,22 @@ name: base
 
 ## model
 ### model_provider, option in deepseek, zhipu
-model_provider: wenxin
+model_provider: qianfan
+embed_model: bge-large-zh  # option in ["bge-large-zh"]
 
 ## startup
 stream: True
+
+## knowledge
+enable_query_rewrite: True
+enable_knowledge_base: True
+enable_knowledge_graph: True
+enable_search_engine: True
+
+## vector_store
+milvus_local_path: data/vector_base/milvus.db  # 初步
+
+
+## model dir
+model_local_paths:
+  bge-large-zh: bge-large-zh-v1.5

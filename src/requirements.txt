@@ -1,5 +1,9 @@
+FlagEmbedding==1.2.10
 Flask==3.0.3
 Flask_Cors==4.0.1
+llama_index==0.10.53
 openai==1.35.10
+pymilvus==2.4.4
 python-dotenv==1.0.1
 PyYAML==6.0.1
+qianfan==0.4.0.1
