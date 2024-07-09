@@ -4,7 +4,7 @@ from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from core import HistoryManager
-from core import PreRetrival
+from core import PreRetrieval
 from config import Config
 from models import select_model
 from utils.logging_config import setup_logger
@@ -16,7 +16,7 @@ logger = setup_logger("server")
 
 config = Config("config/base.yaml")
 model = select_model(config)
-pre_retrival = PreRetrival(config)
+pre_retrieval = PreRetrieval(config)
 
 
 apps = Flask(__name__)# 这段代码是为了解决跨域问题，Flask默认不支持跨域
@@ -48,7 +48,7 @@ def chat():
 
     external = ""
     if config.enable_knowledge_base:
-        kb_res = pre_retrival.search(query)
+        kb_res = pre_retrieval.search(query)
         if kb_res:
             kb_res = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res[0]])
             kb_res = f"知识库信息: {kb_res}"

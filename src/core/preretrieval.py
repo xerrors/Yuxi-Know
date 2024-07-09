@@ -10,7 +10,7 @@ from utils.logging_config import setup_logger
 from pymilvus import MilvusClient
 
 
-logger = setup_logger("PreRetrival")
+logger = setup_logger("PreRetrieval")
 
 def pdfreader(file_path):
     """读取PDF文件并返回text文本"""
@@ -32,7 +32,7 @@ def plainreader(file_path):
     return text
 
 
-class PreRetrival:
+class PreRetrieval:
 
     def __init__(self, config):
         self.config = config

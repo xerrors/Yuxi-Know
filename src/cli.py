@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from core import HistoryManager
-from core import PreRetrival
+from core import PreRetrieval
 from config import Config
 from models import select_model
 
@@ -11,8 +11,8 @@ load_dotenv()
 if __name__ == "__main__":
     config = Config("config/base.yaml")
     model = select_model(config)
-    pre_retrival = PreRetrival(config)
-    # pre_retrival.add_file("/home/zwj/workspace/ProjectAthena/src/data/file/鉴定工作报告、技术报告-0708.pdf")
+    pre_retrieval = PreRetrieval(config)
+    # pre_retrieval.add_file("/home/zwj/workspace/ProjectAthena/src/data/file/鉴定工作报告、技术报告-0708.pdf")
 
     print(f"[{config.model_provider}:{config.get('model_name', 'default')}] Type 'exit' to quit")
 
@@ -25,7 +25,7 @@ if __name__ == "__main__":
         external = ""
 
         if config.enable_knowledge_base:
-            kb_res = pre_retrival.search(message)
+            kb_res = pre_retrieval.search(message)
             if kb_res:
                 kb_res = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res[0]])
                 kb_res = f"知识库信息: {kb_res}"
