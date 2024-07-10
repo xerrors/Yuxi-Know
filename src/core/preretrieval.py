@@ -88,7 +88,7 @@ class PreRetrieval:
             output_fields=["text", "subject"],  # specifies fields to be returned
         )
 
-        return res
+        return res[0]  # 因为 query 只有一个
 
     def read_text(self, file):
         support_format = [".pdf", ".txt", "*.md"]

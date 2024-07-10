@@ -50,7 +50,7 @@ def chat():
     if config.enable_knowledge_base:
         kb_res = pre_retrieval.search(query)
         if kb_res:
-            kb_res = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res[0]])
+            kb_res = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
             kb_res = f"知识库信息: {kb_res}"
             external += kb_res
 

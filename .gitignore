@@ -19,6 +19,7 @@ log
 logs
 *.log.*
 *.db
+*.lock
 
 ### IDE
 .vscode
