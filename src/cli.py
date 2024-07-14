@@ -12,7 +12,6 @@ if __name__ == "__main__":
     config = Config("config/base.yaml")
     model = select_model(config)
     retriever = Retriever(config)
-    # pre_retrieval.add_file("/home/zwj/workspace/ProjectAthena/src/data/file/鉴定工作报告、技术报告-0708.pdf")
 
     print(f"[{config.model_provider}:{config.get('model_name', 'default')}] Type 'exit' to quit")
 

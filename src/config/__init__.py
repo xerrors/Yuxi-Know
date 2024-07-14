@@ -44,6 +44,7 @@ class Config(SimpleConfig):
         ### handle local model
         model_root_dir = os.getenv("MODEL_ROOT_DIR", "pretrained_models")
         for model, model_rel_path in self.model_local_paths.items():
+            # 如果 model_rel_path 不是绝对路径，那么拼接 model_root_dir
             if not model_rel_path.startswith("/"):
                 self.model_local_paths[model] = os.path.join(model_root_dir, model_rel_path)
 
