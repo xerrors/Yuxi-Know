@@ -136,22 +136,10 @@ class OneKE:
             task = "KG"
             output = self.predict(text=text, schema=schema, task=task, language="zh")
             formatted_output = parse_and_format_output(output=output, task_type=task)
-            if os.path.exists(output_path):
-                with open(output_path, 'r', encoding='utf-8') as f:
-                    existing_data = json.load(f)
-            else:
-                existing_data = []
 
-            # 将新的数据添加到现有数据之后
-            existing_data.extend(formatted_output)
-
-            # 将合并后的数据写回 JSON 文件
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(existing_data, f, ensure_ascii=False, indent=4)
-
-            # with open(output_path, 'a+', encoding='utf-8') as f:
-            #     for entry in formatted_output:
-            #         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+            with open(output_path, 'a+', encoding='utf-8') as f:
+                for entry in formatted_output:
+                    f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
         print(f"预测结果已添加到 {output_path} 文件中。")
         return output_path
