@@ -117,37 +117,45 @@ class OneKE:
         return outputs
 
     def processing_text_to_kg(self, text_or_path, output_path):
-        if os.path.isfile(text_or_path):
-            with open(text_or_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-        else:
-            text = text_or_path
+        for chunk in read_and_process_chars(text_or_path):
 
-        schema = [
-            {
-                "entity_type": "食品",
-                "attributes": {
-                    "名称": "食品的名称，包括品牌名、通用名称或专业化学名",
-                    "分类": "食品所属的类型，例如水果、蔬菜、肉类、谷物、调料、添加剂、益生菌等",
-                    "成分": "食品的主要成分，详细列出包括天然成分、添加剂、保鲜剂、营养强化剂等",
-                    "营养价值": "食品的营养成分，概括其提供的能量和主要营养素，如蛋白质、脂肪、碳水化合物、维生素和矿物质",
-                    "加工方式": "食品的处理或制备方法，包括日常烹饪、加工处理及实验室制备方式等",
-                    "作用或食用效果": "食品对健康或身体的影响，可能的功效或用途"
+            text = chunk
+            schema = [
+                {
+                    "entity_type": "食品",
+                    "attributes": {
+                        "名称": "食品的名称，包括品牌名、通用名称或专业化学名",
+                        "分类": "食品所属的类型，例如水果、蔬菜、肉类、谷物、调料、添加剂、益生菌等",
+                        "成分": "食品的主要成分，详细列出包括天然成分、添加剂、保鲜剂、营养强化剂等",
+                        "营养价值": "食品的营养成分，概括其提供的能量和主要营养素，如蛋白质、脂肪、碳水化合物、维生素和矿物质",
+                        "加工方式": "食品的处理或制备方法，包括日常烹饪、加工处理及实验室制备方式等",
+                        "作用或食用效果": "食品对健康或身体的影响，可能的功效或用途"
+                    }
                 }
-            }
-        ]
+            ]
+            task = "KG"
+            output = self.predict(text=text, schema=schema, task=task, language="zh")
+            formatted_output = parse_and_format_output(output=output, task_type=task)
+            if os.path.exists(output_path):
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    existing_data = json.load(f)
+            else:
+                existing_data = []
 
-        task = "KG"
-        output = self.predict(text=text, schema=schema, task=task, language="zh")
-        formatted_output = parse_and_format_output(output=output, task_type=task)
+            # 将新的数据添加到现有数据之后
+            existing_data.extend(formatted_output)
 
-        with open(output_path, 'a+', encoding='utf-8') as f:
-            for entry in formatted_output:
-                f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+            # 将合并后的数据写回 JSON 文件
+            with open(output_path, 'w', encoding='utf-8') as f:
+                json.dump(existing_data, f, ensure_ascii=False, indent=4)
+
+            # with open(output_path, 'a+', encoding='utf-8') as f:
+            #     for entry in formatted_output:
+            #         f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
         print(f"预测结果已添加到 {output_path} 文件中。")
         return output_path
-
+    
 def read_and_process_chars(file_path, char_size=512, overlap_size=100):
     buffer = ""
     with open(file_path, 'r', encoding='utf-8') as file:

@@ -1,6 +1,6 @@
 import fitz
 
-from logging_config import setup_logger, logger
+from utils.logging_config import setup_logger, logger
 
 def is_text_pdf(pdf_path):
     doc = fitz.open(pdf_path)

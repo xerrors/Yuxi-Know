@@ -1,2 +1,2 @@
-from oneke import *
-from pdf2txt import *
+from plugins.oneke import *
+from plugins.pdf2txt import *
