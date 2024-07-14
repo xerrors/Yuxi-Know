@@ -10,3 +10,8 @@ def is_text_pdf(pdf_path):
         if text.strip():  # 检查是否有文本内容
             return True
     return False
+
+def hashstr(input_string, length=16):
+    import hashlib
+    hash = hashlib.md5(str(input_string).encode()).hexdigest()
+    return hash[:length]

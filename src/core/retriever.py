@@ -1,19 +1,14 @@
-from core import PreRetrieval
-
 class Retriever:
 
     def __init__(self, config):
         self.config = config
-        self.pre_retrieval = PreRetrieval(config)
 
     def retrieval(self, query):
 
         refs = {}
 
-        # TODO: 查询分类、查询重写、查询分解、查询伪文档生成（HyDE）
-
-        if self.config.enable_knowledge_base:
-            refs["knowledge_base"] = self.pre_retrieval.search(query)
+        # TODO: 查询分类、查询重写、查询分解、查询伪文档生成（HyDE）)
+        # NOTE：2024-07-14 暂时禁用知识检索
 
         return refs
 

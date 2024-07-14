@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from core import HistoryManager
-from core import PreRetrieval, Retriever
+from core import Retriever
 from config import Config
 from models import select_model
 
