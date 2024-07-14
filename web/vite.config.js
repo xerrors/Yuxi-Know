@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     proxy: {
       '^/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://127.0.0.1:5000', // 5000端口是flask的Debug模式默认端口, 8000是非Debug模式默认端口
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }

@@ -34,6 +34,13 @@
   --color-text: var(--vt-c-text-light-1);
 
   --section-gap: 160px;
+
+  --main-color: #005f77;
+  --main-color-light: #007f96;
+  --main-color-dark: #004d5c;
+  --min-width: 400px;
+  --min-header-width: 80px;
+  --min-sider-width: 100px;
 }
 
 /* @media (prefers-color-scheme: dark) {

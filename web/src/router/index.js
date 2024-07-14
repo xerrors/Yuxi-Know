@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import AppLayout from '@/layouts/AppLayout.vue';
+import BlankLayout from '@/layouts/BlankLayout.vue';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -7,21 +8,59 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: HomeView,
-      meta: { keepAlive: true }
+      component: BlankLayout,
+      children: [        {
+          path: '',
+          name: 'home',
+          component: import('../views/HomeView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
     },
     {
       path: '/chat',
       name: 'chat',
-      component: () => import('../views/ChatView.vue'),
-      meta: { keepAlive: true }
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'Chat',
+          component: import('../views/ChatView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
     },
-    // {
-    //   path: '/knowledge',
-    //   name: 'knowledge',
-    //   component: () => import('../views/KnowledgeView.vue'),
-    //   meta: { keepAlive: true }
-    // },
+    {
+      path: '/knowledge',
+      name: 'knowledge',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'Knowledge',
+          component: import('../views/EmptyView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
+    },
+    {
+      path: '/setting',
+      name: 'setting',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'setting',
+          component: import('../views/EmptyView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: () => import('../views/NotFoundView.vue')
+    }
     // {
     //   path: '/kg',
     //   name: 'knowledge-graph',

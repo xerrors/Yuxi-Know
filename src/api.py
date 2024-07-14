@@ -4,7 +4,7 @@ from flask import Flask, jsonify, Response, request
 from flask_cors import CORS
 from dotenv import load_dotenv
 from core import HistoryManager
-from core import PreRetrieval
+from core import Retriever
 from config import Config
 from models import select_model
 from utils.logging_config import setup_logger
@@ -16,7 +16,7 @@ logger = setup_logger("server")
 
 config = Config("config/base.yaml")
 model = select_model(config)
-pre_retrieval = PreRetrieval(config)
+retriever = Retriever(config)
 
 
 apps = Flask(__name__)# 这段代码是为了解决跨域问题，Flask默认不支持跨域
@@ -39,27 +39,17 @@ def page_not_found(e):
 def chat_get():
     return "Chat Get!"
 
-
 @apps.route('/chat', methods=['POST'])
 def chat():
     request_data = json.loads(request.data)
     query = request_data['query']
     logger.debug(f"Web query: {query}")
 
-    external = ""
-    if config.enable_knowledge_base:
-        kb_res = pre_retrieval.search(query)
-        if kb_res:
-            kb_res = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
-            kb_res = f"知识库信息: {kb_res}"
-            external += kb_res
-
-    if len(external) > 0:
-        query = f"以下是参考资料：\n\n\n {external} 请根据前面的知识回答：{query}"
-
+    new_query, refs = retriever(query)
 
     history_manager = HistoryManager(request_data['history'])
-    messages = history_manager.add_user(query)
+    messages = history_manager.get_history_with_msg(new_query)
+    history_manager.add_user(query)
     logger.debug(f"Web history: {history_manager}")
 
     def generate_response():
@@ -68,14 +58,27 @@ def chat():
             content += delta.content
             response_chunk = json.dumps({
                 "history": history_manager.update_ai(content),
-                "response": content
+                "response": content,
+                "refs": refs  # TODO: 优化 refs，不需要每次都返回
             }, ensure_ascii=False).encode('utf8') + b'\n'
             yield response_chunk
 
     return Response(generate_response(), content_type='application/json', status=200)
 
+@apps.route('/call', methods=['POST'])
+def call():
+    request_data = json.loads(request.data)
+    query = request_data['query']
+    logger.debug(f"Web query: {query}")
+    response = model.predict(query, stream=False)
+
+    return jsonify({
+        "response": response.content,
+    })
+
+
 
 if __name__ == '__main__':
     print("Starting model...")
     apps.secret_key = os.urandom(24)
-    apps.run(host='0.0.0.0', port=8000, debug=False, threaded=True)
+    apps.run(host='0.0.0.0', port=8000, debug=True, threaded=True)
