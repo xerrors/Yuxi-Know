@@ -25,6 +25,12 @@ class HistoryManager():
             self.add_ai(content)
             return self.messages
 
+    def get_history_with_msg(self, msg, role="user"):
+        """Get history with new message, but not append it to history."""
+        history = self.messages[:]
+        history.append({"role": role, "content": msg})
+        return history
+
     def __str__(self):
         history_str = ""
         for message in self.messages:

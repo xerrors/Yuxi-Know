@@ -47,4 +47,6 @@ class Retriever:
         raise NotImplementedError
 
     def __call__(self, query):
-        return self.retrieval(query)
+        refs = self.retrieval(query)
+        query = self.construct_query(query, refs)
+        return query, refs

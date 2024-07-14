@@ -23,9 +23,7 @@ if __name__ == "__main__":
             break
 
         # 检索结果
-        refs = retriever(query)
-        # 重新构建用户的输入
-        query = retriever.construct_query(query, refs)
+        query, refs = retriever(query)
 
         messages = history_manager.add_user(query)
         response = model.predict(messages, stream=config.stream)
