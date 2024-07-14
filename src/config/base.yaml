@@ -3,6 +3,9 @@ name: base
 ## model
 ### model_provider, option in deepseek, zhipu
 model_provider: qianfan
+
+# 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
+# 如果需要自定义路径，则在下面配置 model_local_paths
 embed_model: bge-large-zh  # option in ["bge-large-zh"]
 
 ## startup
@@ -17,7 +20,8 @@ enable_search_engine: True
 ## vector_store
 milvus_local_path: data/vector_base/milvus.db  # 初步
 
-
-## model dir
+## model dir 可以写相对路径和绝对路径
+### 相对路径是相对于环境变量中 MODEL_ROOT_DIR 的路径
 model_local_paths:
   bge-large-zh: bge-large-zh-v1.5
+  oneke: oneke

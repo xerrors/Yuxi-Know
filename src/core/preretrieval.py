@@ -1,5 +1,6 @@
 # Read Chunking Embedding and save it to Vector Database
 import os
+import utils
 
 from pathlib import Path
 from llama_index.readers.file import PDFReader
@@ -8,6 +9,7 @@ from models.embedding import EmbeddingModel
 from utils.logging_config import setup_logger
 
 from pymilvus import MilvusClient
+from plugins import OneKE, pdf2txt
 
 
 logger = setup_logger("PreRetrieval")
@@ -17,10 +19,12 @@ def pdfreader(file_path):
     assert os.path.exists(file_path), "File not found"
     assert file_path.endswith(".pdf"), "File format not supported"
 
-    doc = PDFReader().load_data(file=Path(file_path))
+    if utils.is_text_pdf(file_path):
+        doc = PDFReader().load_data(file=Path(file_path))
+        text = "\n\n".join([d.get_content() for d in doc])
+    else:
+        text = pdf2txt(file_path)
 
-    # 简单的拼接起来之后返回纯文本
-    text = "\n\n".join([d.get_content() for d in doc])
     return text
 
 def plainreader(file_path):
@@ -40,6 +44,7 @@ class PreRetrieval:
 
         self.embed_model = EmbeddingModel(config)
         self.client = MilvusClient(config.milvus_local_path)
+        self.oneke = OneKE(config)
 
     def _init_config(self, config):
         self.vector_dim = 1024  # 暂时不知道这个和 embedding model 的 embedding 大小有什么关系
@@ -50,6 +55,8 @@ class PreRetrieval:
         """添加文件到数据库"""
         collection_name = collection_name or self.default_collection_name
         text = self.read_text(file)
+        # convert text to graph
+        # self.oneke.processing_text_to_kg(text, none)
         chunks = self.chunking(text)
 
         self.add_documents(chunks, collection_name)

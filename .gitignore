@@ -20,7 +20,12 @@ logs
 *.log.*
 *.db
 *.lock
+tmp
+cache
 
 ### IDE
 .vscode
 *.nogit.*
+
+*.pdf
+src/data
