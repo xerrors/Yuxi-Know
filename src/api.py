@@ -3,7 +3,7 @@ load_dotenv()
 
 import os
 from views import create_app
-from utils.logging_config import setup_logger
+from utils import setup_logger
 
 logger = setup_logger("Server")
 

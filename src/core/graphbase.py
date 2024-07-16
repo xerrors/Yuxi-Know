@@ -1,20 +1,21 @@
 import os
 import json
-import threading
-from neo4j import GraphDatabase
-# from src.config import Config
-from plugins import *
+from neo4j import GraphDatabase as GD
+from plugins import pdf2txt, OneKE
 
-class KnowledgeGraphDatabase:
+class GraphDatabase:
     def __init__(self, config):
-        self._init_config(config)
-        self.driver = GraphDatabase.driver(os.environ.get("NEO4J_URI"), auth=(os.environ.get("NEO4J_USERNAME"), os.environ.get("NEO4J_PASSWORD")))
-        
-    def _init_config(self, config):
-        # self.KGB_URI = os.environ.get("NEO4J_URI")
-        # self.KGB_USERNAME = os.environ.get("NEO4J_USERNAME")
-        # self.PASSWORD = os.environ.get("NEO4J_PASSWORD")
-        pass
+        self.config = config
+        self.driver = None
+        self.files = []
+        self.status = "closed"
+
+    def start(self):
+        uri = os.environ.get("NEO4J_URI")
+        username = os.environ.get("NEO4J_USERNAME")
+        password = os.environ.get("NEO4J_PASSWORD")
+        self.driver = GD.driver(uri, auth=(username, password))
+        self.status = "open"
 
     def close(self):
         """关闭数据库连接"""
@@ -25,16 +26,16 @@ class KnowledgeGraphDatabase:
         with self.driver.session() as session:
             existing_databases = session.run("SHOW DATABASES")
             existing_db_names = [db['name'] for db in existing_databases]
-            
+
             if existing_db_names:
                 print(f"已存在数据库: {existing_db_names[0]}")
                 return existing_db_names[0]  # 返回所有已有数据库名称
-            
+
             session.run(f"CREATE DATABASE {kgdb_name}")
             print(f"数据库 '{kgdb_name}' 创建成功.")
             return kgdb_name  # 返回创建的数据库名称
-            
-    def get_database_info(self, db_name):
+
+    def get_database_info(self, db_name="neo4j"):
         """获取指定数据库的信息"""
         self.use_database(db_name)
         def query(tx):
@@ -46,6 +47,7 @@ class KnowledgeGraphDatabase:
                 "entity_count": entity_count,
                 "relationship_count": relationship_count,
                 "triples_count": triples_count,
+                "status": self.status
             }
 
         with self.driver.session() as session:
@@ -53,7 +55,7 @@ class KnowledgeGraphDatabase:
 
     def use_database(self, kgdb_name):
         """切换到指定数据库"""
-        self.driver = GraphDatabase.driver(f"{os.environ.get('NEO4J_URI')}/{kgdb_name}", auth=(os.environ.get('NEO4J_USERNAME'), os.environ.get('NEO4J_PASSWORD')))
+        self.driver = GD.driver(f"{os.environ.get('NEO4J_URI')}/{kgdb_name}", auth=(os.environ.get('NEO4J_USERNAME'), os.environ.get('NEO4J_PASSWORD')))
 
     def txt_add_entity(self, triples, kgdb_name):
         """添加实体三元组"""
@@ -163,28 +165,27 @@ class KnowledgeGraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, keyword, hops)
-        
+
     def query_node_info(self, node_name, kgdb_name, hops = 2):
         """查询指定节点的详细信息返回信息"""
         self.use_database(kgdb_name)  # 切换到指定数据库
         def query(tx, node_name, hops):
             result = tx.run(f"""
-            MATCH (n {{name: $node_name}}) 
-            OPTIONAL MATCH (n)-[r*1..{hops}]->(m) 
+            MATCH (n {{name: $node_name}})
+            OPTIONAL MATCH (n)-[r*1..{hops}]->(m)
             RETURN n, r, m
             """, node_name=node_name)
             return result.values()
 
         with self.driver.session() as session:
             return session.execute_read(query, node_name, hops)
-        
 
 
 
 if __name__ == "__main__":
     config = None
     # 初始化知识图谱数据库
-    kgdb = KnowledgeGraphDatabase(config)
+    kgdb = GraphDatabase(config)
     kgdb_name = "neo4j"
 
     # 创建新的数据库

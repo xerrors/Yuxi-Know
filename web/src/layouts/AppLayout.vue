@@ -9,6 +9,7 @@ import {
   BookOutlined,
   BookFilled
 } from '@ant-design/icons-vue'
+import { themeConfig } from '@/assets/theme'
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
@@ -25,8 +26,8 @@ console.log(route)
         <RouterLink to="/chat" class="nav-item" active-class="active">
           <component :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
         </RouterLink>
-        <RouterLink to="/knowledge" class="nav-item" active-class="active">
-          <component :is="route.path === '/knowledge' ? BookFilled : BookOutlined" />
+        <RouterLink to="/database" class="nav-item" active-class="active">
+          <component :is="route.path.startsWith('/database') ? BookFilled : BookOutlined" />
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
@@ -34,11 +35,13 @@ console.log(route)
         <component :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
       </RouterLink>
     </div>
+    <a-config-provider :theme="themeConfig">
     <router-view v-slot="{ Component }" id="app-router-view">
       <keep-alive>
         <component :is="Component" />
       </keep-alive>
     </router-view>
+    </a-config-provider>
   </div>
 </template>
 
@@ -48,7 +51,6 @@ console.log(route)
 .app-layout {
   display: flex;
   flex-direction: row;
-  align-items: center;
   width: 100%;
   height: 100vh;
   min-width: var(--min-width);
@@ -70,9 +72,10 @@ div.header, #app-router-view {
   flex: 0 0 80px;
   justify-content: flex-start;
   align-items: center;
-  background-color: #F9F9F9;
+  background-color: #F4F8F9;
   height: 100%;
   width: 80px;
+  border-right: 1px solid #e2eef3;
 
   & .logo {
     width: 50px;
@@ -90,6 +93,16 @@ div.header, #app-router-view {
       font-size: 24px;
       font-weight: bold;
       color: #333;
+    }
+  }
+
+  .setting {
+    font-size: 20px;
+    color: #333;
+    margin: 20px 0;
+
+    &:hover {
+      cursor: pointer;
     }
   }
 }
@@ -126,17 +139,7 @@ div.header, #app-router-view {
   }
 }
 
-.header .setting {
-  font-size: 20px;
-  color: #333;
-  margin: 20px 0;
-
-  &:hover {
-    cursor: pointer;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 520px) {
   .app-layout {
     flex-direction: column;
   }
@@ -144,10 +147,24 @@ div.header, #app-router-view {
   .app-layout div.header {
     flex-direction: row;
     width: 100%;
-    height: 60px;
+    height: 40px;
     padding: 0 20px;
     justify-content: space-between;
     align-items: center;
+    flex: 0 0 60px;
+    border-right: none;
+    border-bottom: 1px solid #e2eef3;
+
+    .logo {
+      flex-shrink: 0;
+      width: 40px;
+      height: 40px;
+      margin: 0;
+    }
+
+    .setting {
+      margin: 0;
+    }
   }
 
   .app-layout .nav {
@@ -164,6 +181,9 @@ div.header, #app-router-view {
     .nav-item.active {
       background-color: transparent;
     }
+  }
+  .app-layout .chat-box::webkit-scrollbar {
+    width: 0;
   }
 }
 </style>

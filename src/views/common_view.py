@@ -56,7 +56,7 @@ def call():
     request_data = json.loads(request.data)
     query = request_data['query']
     logger.debug(f"Web query: {query}")
-    response = model.predict(query, stream=False)
+    response = model.predict(query)
 
     return jsonify({
         "response": response.content,
