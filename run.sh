@@ -17,7 +17,7 @@ npm run server &
 
 # Start the backend service
 cd ../src
-flask --app=api run &
+python api.py
 
 # Wait for all background jobs to finish
 wait
