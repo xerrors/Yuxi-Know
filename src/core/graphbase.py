@@ -110,73 +110,73 @@ class KnowledgeGraphDatabase:
         """
         tx.run(query)
 
-    def query_all_nodes_and_relationships(self, kgdb_name):
+    def query_all_nodes_and_relationships(self, kgdb_name, hops = 2):
         """查询图数据库中所有三元组信息"""
         self.use_database(kgdb_name)
-        def query(tx):
-            result = tx.run("""
-            MATCH (n)-[r]->(m)
+        def query(tx, hops):
+            result = tx.run(f"""
+            MATCH (n)-[r*1..{hops}]->(m)
             RETURN n, r, m
             """)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query)
+            return session.execute_read(query, hops)
 
-    def query_specific_entity(self, entity_name, kgdb_name):
+    def query_specific_entity(self, entity_name, kgdb_name, hops = 2):
         """查询指定实体三元组信息"""
         self.use_database(kgdb_name)
-        def query(tx, entity_name):
-            result = tx.run("""
-            MATCH (n {name: $entity_name})-[r]->(m)
+        def query(tx, entity_name, hops):
+            result = tx.run(f"""
+            MATCH (n {{name: $entity_name}})-[r*1..{hops}]->(m)
             RETURN n, r, m
             """, entity_name=entity_name)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, entity_name)
+            return session.execute_read(query, entity_name, hops)
 
-    def query_by_relationship_type(self, relationship_type, kgdb_name):
+    def query_by_relationship_type(self, relationship_type, kgdb_name, hops = 2):
         """查询指定关系三元组信息"""
         self.use_database(kgdb_name)
-        def query(tx, relationship_type):
+        def query(tx, relationship_type, hops):
             result = tx.run(f"""
-            MATCH (n)-[r:`{relationship_type}`]->(m)
+            MATCH (n)-[r:`{relationship_type}`*1..{hops}]->(m)
             RETURN n, r, m
             """)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, relationship_type)
+            return session.execute_read(query, relationship_type, hops)
 
-    def query_entity_like(self, keyword, kgdb_name):
+    def query_entity_like(self, keyword, kgdb_name, hops = 2):
         """模糊查询"""
         self.use_database(kgdb_name)
-        def query(tx, keyword):
-            result = tx.run("""
+        def query(tx, keyword, hops):
+            result = tx.run(f"""
             MATCH (n:Entity)
             WHERE n.name CONTAINS $keyword
-            MATCH (n)-[r]->(m)
+            MATCH (n)-[r*1..{hops}]->(m)
             RETURN n, r, m
             """, keyword=keyword)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, keyword)
+            return session.execute_read(query, keyword, hops)
         
-    def query_node_info(self, node_name, kgdb_name):
-        """查询指定节点的详细信息返回信息和"""
+    def query_node_info(self, node_name, kgdb_name, hops = 2):
+        """查询指定节点的详细信息返回信息"""
         self.use_database(kgdb_name)  # 切换到指定数据库
-        def query(tx, node_name):
-            result = tx.run("""
-            MATCH (n {name: $node_name}) 
-            OPTIONAL MATCH (n)-[r]->(m) 
+        def query(tx, node_name, hops):
+            result = tx.run(f"""
+            MATCH (n {{name: $node_name}}) 
+            OPTIONAL MATCH (n)-[r*1..{hops}]->(m) 
             RETURN n, r, m
             """, node_name=node_name)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, node_name)
+            return session.execute_read(query, node_name, hops)
         
 
 
