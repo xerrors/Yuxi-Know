@@ -63,7 +63,7 @@ def pdf2txt(pdf_path):
     with open(respath, 'w', encoding='utf-8') as f:
         f.write(whole_text)
 
-    return whole_text
+    return respath
 
 if __name__ == "__main__":
     pdf_path = r'data/file/焙烤食品工艺学.pdf'

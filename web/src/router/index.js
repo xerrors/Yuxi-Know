@@ -12,7 +12,7 @@ const router = createRouter({
       children: [        {
           path: '',
           name: 'home',
-          component: import('../views/HomeView.vue'),
+          component: () => import('../views/HomeView.vue'),
           meta: { keepAlive: true }
         }
       ]
@@ -25,21 +25,26 @@ const router = createRouter({
         {
           path: '',
           name: 'Chat',
-          component: import('../views/ChatView.vue'),
+          component: () => import('../views/ChatView.vue'),
           meta: { keepAlive: true }
         }
       ]
     },
     {
-      path: '/knowledge',
-      name: 'knowledge',
+      path: '/database',
+      name: 'database',
       component: AppLayout,
       children: [
         {
           path: '',
-          name: 'Knowledge',
-          component: import('../views/EmptyView.vue'),
+          name: 'database',
+          component: () => import('../views/DataBaseView.vue'),
           meta: { keepAlive: true }
+        },
+        {
+          path: ':database_id',
+          name: 'databaseInfo',
+          component: () => import('../views/DataBaseInfoView.vue'),
         }
       ]
     },
@@ -51,7 +56,7 @@ const router = createRouter({
         {
           path: '',
           name: 'setting',
-          component: import('../views/EmptyView.vue'),
+          component: () => import('../views/EmptyView.vue'),
           meta: { keepAlive: true }
         }
       ]
@@ -59,7 +64,7 @@ const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
-      component: () => import('../views/NotFoundView.vue')
+      component: () => import('../views/EmptyView.vue')
     }
     // {
     //   path: '/kg',

@@ -126,7 +126,7 @@ onMounted(() => {
   width: 100px;
   height: 100%;
   overflow-y: auto;
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid #EDF4F5;
   min-width: var(--min-sider-width);
   max-width: 200px;
 
@@ -185,11 +185,11 @@ onMounted(() => {
   }
 
   &.active {
-    background-color: #f0f0f0;
+    background-color: #EDF4F5;
   }
 
   &:hover {
-    background-color: #f0f0f0;
+    background-color: #EDF4F5;
 
     & .conversation__delete {
       display: block;

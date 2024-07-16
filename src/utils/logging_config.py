@@ -6,7 +6,7 @@ from datetime import datetime
 # DATETIME = datetime.now().strftime('%Y-%m-%d-%H%M%S')
 DATETIME = "debug" # 为了方便，调试的时候输出到 debug.log 文件
 
-def setup_logger(name, log_file=None, level=logging.DEBUG, console=False):
+def setup_logger(name, log_file=None, level=logging.DEBUG, console=True):
 
     if log_file is None:
         log_file = f'output/log/project-{DATETIME}.log'
@@ -21,7 +21,7 @@ def setup_logger(name, log_file=None, level=logging.DEBUG, console=False):
     file_handler.setLevel(level)
 
     # Formatter for the logs
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

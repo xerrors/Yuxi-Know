@@ -1,9 +1,9 @@
 import os
 import json
 import yaml
-import logging
+from utils.logging_config import setup_logger
 
-logger = logging.getLogger(__name__)
+logger = setup_logger("Config")
 
 
 class SimpleConfig(dict):
@@ -32,6 +32,7 @@ class Config(SimpleConfig):
     def __init__(self, filename=None):
         super().__init__()
         self.filename = filename
+        logger.info(f"Loading config from {filename}")
 
         ### startup
         self.mode = "cli"

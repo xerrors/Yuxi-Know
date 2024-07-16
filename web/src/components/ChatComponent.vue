@@ -361,20 +361,21 @@ div.chat-examples {
   font-variation-settings: 'wght' 400, 'opsz' 10.5;
   font-weight: 400;
   box-sizing: border-box;
+  color: #0D0D0D;
   /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
   /* animation: slideInUp 0.1s ease-in; */
 }
 
 .message-box.sent {
-  color: white;
   background-color: #efefef;
   line-height: 24px;
-  background: linear-gradient(45deg, var(--main-color-light) 10.79%, var(--main-color) 87.08%);
+  background: #EDF4F5;
   align-self: flex-end;
 }
 
 .message-box.received {
   color: initial;
+  width: fit-content;
   padding-top: 16px;
   background-color: #f7f7f7;
   text-align: left;
