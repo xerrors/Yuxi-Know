@@ -1,9 +1,11 @@
+from core.startup import dbm, model
+
 class Retriever:
 
     def __init__(self, config):
         self.config = config
 
-    def retrieval(self, query):
+    def retrieval(self, query, history):
 
         refs = {}
 
@@ -37,11 +39,16 @@ class Retriever:
         """
         raise NotImplementedError
 
+    def query_graph(self, query, history):
+        # res = model.predict("qiansdgsa, dasdh ashdsakjdk ak ").content
+
+        return {}
+
     def rewrite_query(self, query):
         """重写查询"""
         raise NotImplementedError
 
-    def __call__(self, query):
-        refs = self.retrieval(query)
+    def __call__(self, query, history):
+        refs = self.retrieval(query, history)
         query = self.construct_query(query, refs)
         return query, refs

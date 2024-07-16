@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request, Response
 
 from core import HistoryManager
 from utils.logging_config import setup_logger
-from core.startup import config, model, retriever, dbm
+from core.startup import config, model, dbm
 
 db = Blueprint('database', __name__, url_prefix="/database")
 

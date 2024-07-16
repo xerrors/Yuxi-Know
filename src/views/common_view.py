@@ -3,11 +3,13 @@ from flask import Blueprint, jsonify, request, Response
 
 from core import HistoryManager
 from utils.logging_config import setup_logger
-from core.startup import config, model, retriever
+from core.startup import config, model
+from core.retriever import Retriever
 
 
 common = Blueprint('common', __name__)
 logger = setup_logger("server-common")
+retriever = Retriever(config)
 
 @common.route('/', methods=["GET"])
 def route_index():
@@ -30,10 +32,10 @@ def chat():
     request_data = json.loads(request.data)
     query = request_data['query']
     logger.debug(f"Web query: {query}")
-
-    new_query, refs = retriever(query)
-
     history_manager = HistoryManager(request_data['history'])
+
+    new_query, refs = retriever(query, history_manager.messages)
+
     messages = history_manager.get_history_with_msg(new_query)
     history_manager.add_user(query)
     logger.debug(f"Web history: {history_manager}")
