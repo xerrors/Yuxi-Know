@@ -29,10 +29,10 @@ class Retriever:
             kb_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
             external += f"知识库信息: \n\n{kb_text}"
 
-        db_res = refs.get("graph_base").get("results", [])
-        if len(db_res) > 0:
-            db_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in db_res])
-            external += f"图数据库信息: \n\n{db_text}"
+        # db_res = refs.get("graph_base").get("results", [])
+        # if len(db_res) > 0:
+        #     db_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in db_res])
+        #     external += f"图数据库信息: \n\n{db_text}"
 
         if len(external) > 0:
             query = f"以下是参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答：{query}"
@@ -58,7 +58,7 @@ class Retriever:
 
     def query_knowledgebase(self, query, history, meta):
 
-        kb_res = None
+        kb_res = []
         if meta.get("db_name"):
             kb_res = dbm.knowledge_base.search(query, meta["db_name"], limit=5)
             for r in kb_res:
