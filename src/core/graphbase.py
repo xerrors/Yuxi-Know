@@ -57,7 +57,7 @@ class GraphDatabase:
         """切换到指定数据库"""
         self.driver = GD.driver(f"{os.environ.get('NEO4J_URI')}/{kgdb_name}", auth=(os.environ.get('NEO4J_USERNAME'), os.environ.get('NEO4J_PASSWORD')))
 
-    def txt_add_entity(self, triples, kgdb_name):
+    def txt_add_entity(self, triples, kgdb_name='neo4j'):
         """添加实体三元组"""
         self.use_database(kgdb_name)
         def create(tx, triples):
@@ -75,7 +75,7 @@ class GraphDatabase:
         with self.driver.session() as session:
             session.execute_write(create, triples)
 
-    def file_add_entity(self, file_path, output_path,kgdb_name):
+    def file_add_entity(self, file_path, output_path, kgdb_name='neo4j'):
         self.use_database(kgdb_name)  # 切换到指定数据库
         text_path = pdf2txt(file_path)
         oneke = OneKE()
@@ -112,7 +112,7 @@ class GraphDatabase:
         """
         tx.run(query)
 
-    def query_all_nodes_and_relationships(self, kgdb_name, hops = 2):
+    def query_all_nodes_and_relationships(self, kgdb_name='neo4j', hops = 2):
         """查询图数据库中所有三元组信息"""
         self.use_database(kgdb_name)
         def query(tx, hops):
@@ -123,9 +123,11 @@ class GraphDatabase:
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, hops)
+            original_results = session.execute_read(query, hops)
+            formatted_results = self.format_query_results(original_results)
+            return formatted_results, original_results
 
-    def query_specific_entity(self, entity_name, kgdb_name, hops = 2):
+    def query_specific_entity(self, entity_name, kgdb_name='neo4j', hops = 2):
         """查询指定实体三元组信息"""
         self.use_database(kgdb_name)
         def query(tx, entity_name, hops):
@@ -136,9 +138,11 @@ class GraphDatabase:
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, entity_name, hops)
+            original_results = session.execute_read(query, entity_name, hops)
+            formatted_results = self.format_query_results(original_results)
+            return formatted_results, original_results
 
-    def query_by_relationship_type(self, relationship_type, kgdb_name, hops = 2):
+    def query_by_relationship_type(self, relationship_type, kgdb_name='neo4j', hops = 2):
         """查询指定关系三元组信息"""
         self.use_database(kgdb_name)
         def query(tx, relationship_type, hops):
@@ -149,9 +153,11 @@ class GraphDatabase:
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, relationship_type, hops)
+            original_results = session.execute_read(query, relationship_type, hops)
+            formatted_results = self.format_query_results(original_results)
+            return formatted_results, original_results
 
-    def query_entity_like(self, keyword, kgdb_name, hops = 2):
+    def query_entity_like(self, keyword, kgdb_name='neo4j', hops = 2):
         """模糊查询"""
         self.use_database(kgdb_name)
         def query(tx, keyword, hops):
@@ -164,9 +170,11 @@ class GraphDatabase:
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, keyword, hops)
+            original_results = session.execute_read(query, keyword, hops)
+            formatted_results = self.format_query_results(original_results)
+            return formatted_results, original_results
 
-    def query_node_info(self, node_name, kgdb_name, hops = 2):
+    def query_node_info(self, node_name, kgdb_name='neo4j', hops = 2):
         """查询指定节点的详细信息返回信息"""
         self.use_database(kgdb_name)  # 切换到指定数据库
         def query(tx, node_name, hops):
@@ -178,7 +186,20 @@ class GraphDatabase:
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, node_name, hops)
+            original_results = session.execute_read(query, node_name, hops)
+            formatted_results = self.format_query_results(original_results)
+            return formatted_results, original_results
+        
+    def format_query_results(self, results):
+        formatted_results = []
+        for row in results:
+            n, rs, m = row
+            entity_a = n['name']
+            entity_b = m['name']
+            for rel in rs:
+                relationship = rel.type
+                formatted_results.append(f"实体 {entity_a} 和 实体 {entity_b} 的关系是 {relationship}")
+        return formatted_results
 
 
 
