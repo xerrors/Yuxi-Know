@@ -67,12 +67,19 @@
       </div>
     </div>
     <div class="input-box">
-      <input
+      <a-textarea
+        class="user-input"
+        v-model:value="conv.inputText"
+        @keydown.enter="sendMessage"
+        placeholder="输入问题……"
+        :auto-size="{ minRows: 1, maxRows: 10 }"
+      />
+      <!-- <input
         class="user-input"
         v-model="conv.inputText"
         @keydown.enter="sendMessage"
         placeholder="输入问题……"
-      />
+      /> -->
       <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)">
         <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
       </a-button>
@@ -460,14 +467,14 @@ img.message-image {
   max-width: calc(1100px - 2rem);
   margin: 0 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   background-color: #F4F4F4;
   border-radius: 2rem;
-  height: 3.5rem;
+  height: auto;
   padding: 0.5rem;
 }
 
-input.user-input {
+.user-input {
   flex: 1;
   height: 40px;
   padding: 0.5rem 1rem;
@@ -478,8 +485,14 @@ input.user-input {
   color: #111111;
   font-size: 16px;
   font-variation-settings: 'wght' 400, 'opsz' 10.5;
+  outline: none;
 
   &:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  &:active {
     outline: none;
   }
 }
