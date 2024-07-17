@@ -44,7 +44,7 @@ class Retriever:
         results = []
         _, entities = self.rewrite_query(query, history)
         for entitie in entities:
-            result, _ = dbm.graph_base.query_entity_like(entitie)
+            result = dbm.graph_base.query_entity_like(entitie)
             results.append(result) if result else None
         return results
 
