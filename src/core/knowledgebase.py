@@ -66,8 +66,7 @@ class KnowledgeBase:
         res = self.client.insert(collection_name=collection_name, data=data)
         return res
 
-    def search(self, query, collection_name, limit=None):
-        limit = limit or self.default_query_limit
+    def search(self, query, collection_name, limit=3):
 
         query_vectors = self.embed_model.encode_queries([query])
 

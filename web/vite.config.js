@@ -20,5 +20,8 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, '')
       }
     },
+    watch: {
+      ignored: ['**/node_modules/**', '**/dist/**'],
+    },
   }
 })

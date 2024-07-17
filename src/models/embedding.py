@@ -1,4 +1,4 @@
-from FlagEmbedding import FlagModel
+from FlagEmbedding import FlagModel, FlagReranker
 
 from utils.logging_config import setup_logger
 
@@ -6,11 +6,15 @@ from utils.logging_config import setup_logger
 logger = setup_logger("EmbeddingModel")
 
 SUPPORT_LIST = {
-    "bge-large-zh": "BAAI/bge-large-zh-v1.5",
+    "bge-large-zh-v1.5": "BAAI/bge-large-zh-v1.5",
+}
+
+RERANKER_LIST = {
+    "bge-reranker-v2-m3": "BAAI/bge-reranker-v2-m3",
 }
 
 QUERY_INSTRUCTION = {
-    "bge-large-zh": "为这个句子生成表示以用于检索相关文章：",
+    "bge-large-zh-v1.5": "为这个句子生成表示以用于检索相关文章：",
 }
 
 class EmbeddingModel(FlagModel):
@@ -26,3 +30,15 @@ class EmbeddingModel(FlagModel):
                 use_fp16=False, **kwargs)
 
         logger.info(f"Embedding model {config.embed_model} loaded")
+
+
+class ReRanker(FlagReranker):
+    def __init__(self, config, **kwargs):
+
+        assert config.reranker in RERANKER_LIST.keys(), f"Unsupported ReRanker: {config.reranker}, only support {RERANKER_LIST.keys()}"
+
+        model_name_or_path = config.model_local_paths.get(config.reranker, RERANKER_LIST[config.reranker])
+        logger.info(f"Loading ReRanker model {config.re_ranker} from {model_name_or_path}")
+
+        super().__init__(model_name_or_path, use_fp16=True, **kwargs)
+        logger.info(f"ReRanker model {config.re_ranker} loaded")

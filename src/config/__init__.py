@@ -34,9 +34,23 @@ class Config(SimpleConfig):
         self.filename = filename
         logger.info(f"Loading config from {filename}")
 
-        ### startup
+        ### >>> 默认配置
+        # 可以在 config/base.yaml 中覆盖
         self.mode = "cli"
-        self.stream = False
+        self.stream = True
+
+        # 功能选项
+        self.enable_query_rewrite = True
+        self.enable_knowledge_base = True
+        self.enable_knowledge_graph = True
+        self.enable_search_engine = True
+
+        # 模型配置
+        ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
+        ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
+        self.embed_model = "bge-large-zh-v1.5"
+        self.reranker = "bge-reranker-v2-m3"
+        ### <<< 默认配置结束
 
         self.load()
         self.handle_self()
@@ -51,6 +65,7 @@ class Config(SimpleConfig):
 
 
     def load(self):
+        """根据传入的文件覆盖掉默认配置"""
         if self.filename is not None and os.path.exists(self.filename):
             if self.filename.endswith(".json"):
                 with open(self.filename, 'r') as f:

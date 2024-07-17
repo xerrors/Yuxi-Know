@@ -7,7 +7,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 
-def pdf2txt(pdf_path):
+def pdf2txt(pdf_path, return_text=False):
     output_dir = os.path.join('tmp', 'pdf2txt', os.path.basename(pdf_path).split('.')[0])
     os.makedirs(output_dir, exist_ok=True)
 
@@ -62,6 +62,9 @@ def pdf2txt(pdf_path):
     whole_text = '\n'.join(text)
     with open(respath, 'w', encoding='utf-8') as f:
         f.write(whole_text)
+
+    if return_text:
+        return whole_text
 
     return respath
 

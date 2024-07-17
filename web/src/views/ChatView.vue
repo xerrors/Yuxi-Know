@@ -39,6 +39,9 @@ const convs = reactive(JSON.parse(localStorage.getItem('chat-convs')) || [
 
 const state = reactive({
   isSidebarOpen: true,
+  selectedKB: null,
+  showPanel: false,
+  databases: [],
 })
 
 const curConvId = ref(0)
@@ -86,6 +89,18 @@ const delConv = (index) => {
   }
 }
 
+const loadDatabases = () => {
+  fetch('/api/database/', {
+    method: "GET",
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log(data)
+      state.databases = data.databases
+    }
+  )
+}
+
 // Watch convs and save to localStorage
 watch(
   () => convs,
@@ -97,6 +112,7 @@ watch(
 
 // Load convs from localStorage on mount
 onMounted(() => {
+  loadDatabases()
   const savedSonvs = JSON.parse(localStorage.getItem('chat-convs'))
   if (savedSonvs) {
     for (let i = 0; i < savedSonvs.length; i++) {
@@ -167,6 +183,7 @@ onMounted(() => {
   padding: 16px;
   cursor: pointer;
   width: 100%;
+  user-select: none;
 
   &__title {
     white-space: nowrap; /* 禁止换行 */
