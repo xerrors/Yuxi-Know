@@ -53,8 +53,33 @@ class Retriever:
         _, entities = self.rewrite_query(query, history)
         for entitie in entities:
             result = dbm.graph_base.query_entity_like(entitie)
-            results.append(result) if result else None
-        return results
+            results.extend(result) if result else None
+        return {"results": self.format_query_results(results)}
+
+    def format_query_results(self, results):
+        formatted_results = {"nodes": [], "edges": []}
+        for row in results:
+            n, relations, m = row
+            formatted_results["nodes"].append({
+                "id": n.id,
+                "name": n._properties["name"],
+                "properties": n._properties
+            })
+            formatted_results["nodes"].append({
+                "id": m.id,
+                "name": m._properties["name"],
+                "properties": m._properties
+            })
+            for rel in relations:
+                formatted_results["edges"].append({
+                    "id": rel.id,
+                    "type": rel.type,
+                    "source": rel.start_node.id,
+                    "target": rel.end_node.id,
+                    "source_name": rel.start_node._properties["name"],
+                    "target_name": rel.end_node._properties["name"],
+                })
+        return formatted_results
 
     def query_knowledgebase(self, query, history, meta):
 

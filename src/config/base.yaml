@@ -3,7 +3,7 @@ name: base
 
 ## model
 ### model_provider, option in deepseek, zhipu
-model_provider: qianfan
+model_provider: zhipu
 
 ## model dir 可以写相对路径和绝对路径
 ### 相对路径是相对于环境变量中 MODEL_ROOT_DIR 的路径
