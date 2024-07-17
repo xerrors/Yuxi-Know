@@ -12,9 +12,10 @@ class Retriever:
         refs = {}
 
         # TODO: 查询分类、查询重写、查询分解、查询伪文档生成（HyDE）)
+        refs["meta"] = meta
+        refs["rewrite_query"] = self.rewrite_query(query, history)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, meta)
-        refs["graph_base"] = self.query_graph(query, history, meta)
-
+        refs["graph_base"] = self.query_graph(query, history, meta, entities=refs["rewrite_query"][1])
 
         return refs
 
@@ -46,40 +47,16 @@ class Retriever:
         """
         raise NotImplementedError
 
-    def query_graph(self, query, history, meta):
+    def query_graph(self, query, history, meta, entities):
         # res = model.predict("qiansdgsa, dasdh ashdsakjdk ak ").content
 
         results = []
-        _, entities = self.rewrite_query(query, history)
-        for entitie in entities:
-            result = dbm.graph_base.query_entity_like(entitie)
-            results.extend(result) if result else None
-        return {"results": self.format_query_results(results)}
+        if meta.get("use_graph"):
+            for entitie in entities:
+                result = dbm.graph_base.query_entity_like(entitie)
+                results.extend(result) if result else None
 
-    def format_query_results(self, results):
-        formatted_results = {"nodes": [], "edges": []}
-        for row in results:
-            n, relations, m = row
-            formatted_results["nodes"].append({
-                "id": n.id,
-                "name": n._properties["name"],
-                "properties": n._properties
-            })
-            formatted_results["nodes"].append({
-                "id": m.id,
-                "name": m._properties["name"],
-                "properties": m._properties
-            })
-            for rel in relations:
-                formatted_results["edges"].append({
-                    "id": rel.id,
-                    "type": rel.type,
-                    "source": rel.start_node.id,
-                    "target": rel.end_node.id,
-                    "source_name": rel.start_node._properties["name"],
-                    "target_name": rel.end_node._properties["name"],
-                })
-        return formatted_results
+        return {"results": self.format_query_results(results)}
 
     def query_knowledgebase(self, query, history, meta):
 
@@ -135,6 +112,31 @@ class Retriever:
         entities = [entity for entity in entities if all(char.isalnum() or char in '汉字' for char in entity)]
 
         return rewritten_query, entities
+
+    def format_query_results(self, results):
+        formatted_results = {"nodes": [], "edges": []}
+        for row in results:
+            n, relations, m = row
+            formatted_results["nodes"].append({
+                "id": n.id,
+                "name": n._properties["name"],
+                "properties": n._properties
+            })
+            formatted_results["nodes"].append({
+                "id": m.id,
+                "name": m._properties["name"],
+                "properties": m._properties
+            })
+            for rel in relations:
+                formatted_results["edges"].append({
+                    "id": rel.id,
+                    "type": rel.type,
+                    "source": rel.start_node.id,
+                    "target": rel.end_node.id,
+                    "source_name": rel.start_node._properties["name"],
+                    "target_name": rel.end_node._properties["name"],
+                })
+        return formatted_results
 
     def __call__(self, query, history, meta):
         refs = self.retrieval(query, history, meta)

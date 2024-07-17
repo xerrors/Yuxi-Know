@@ -19,24 +19,56 @@
         </div>
       </div>
       <div class="header__right">
-        <a-dropdown>
+        <!-- <div class="nav-btn text metas">
+          <CompassFilled v-if="meta.use_web" />
+          <GoldenFilled v-if="meta.use_graph"/>
+        </div> -->
+        <a-dropdown v-if="state.selectedKB !== null">
           <a class="ant-dropdown-link nav-btn text" @click.prevent>
             <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
             {{ state.selectedKB === null ? '未选择' : state.databases[state.selectedKB]?.name }}
           </a>
           <template #overlay>
             <a-menu>
-              <a-menu-item v-for="(db, index) in state.databases" :key="index">
-                <a href="javascript:;" @click="state.selectedKB=index">{{ db.name }}</a>
+              <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+                <a href="javascript:;">{{ db.name }}</a>
               </a-menu-item>
-              <a-menu-item >
-                <a href="javascript:;" @click="state.selectedKB = null">不使用</a>
+              <a-menu-item  @click="state.selectedKB = null">
+                <a href="javascript:;">不使用</a>
               </a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
         <div class="nav-btn text" @click="state.showPanel = !state.showPanel">张文杰</div>
-        <div v-if="state.showPanel" class="my-panal" ref="panel">暂时不知道干嘛的地方</div>
+        <div v-if="state.showPanel" class="my-panal" ref="panel">
+          <div class="graphbase flex-center">
+            知识库
+            <div @click.stop>
+              <a-dropdown>
+                <a class="ant-dropdown-link " @click.prevent>
+                  <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
+                  {{ state.selectedKB === null ? '未选择' : state.databases[state.selectedKB]?.name }}
+                </a>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+                      <a href="javascript:;">{{ db.name }}</a>
+                    </a-menu-item>
+                    <a-menu-item  @click="state.selectedKB = null">
+                      <a href="javascript:;">不使用</a>
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </div>
+          </div>
+          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph">
+            图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
+          </div>
+          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web">
+            搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
+          </div>
+        </div>
       </div>
     </div>
     <div v-if="conv.messages.length == 0" class="chat-examples">
@@ -70,7 +102,7 @@
       <a-textarea
         class="user-input"
         v-model:value="conv.inputText"
-        @keydown.enter="sendMessage"
+        @keydown="handleKeyDown"
         placeholder="输入问题……"
         :auto-size="{ minRows: 1, maxRows: 10 }"
       />
@@ -89,7 +121,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, toRefs } from 'vue'
+import { reactive, ref, onMounted, toRefs, nextTick, computed } from 'vue'
 import { onClickOutside } from '@vueuse/core'
 import {
   SendOutlined,
@@ -98,6 +130,8 @@ import {
   LoadingOutlined,
   BookOutlined,
   BookFilled,
+  CompassFilled,
+  GoldenFilled,
 } from '@ant-design/icons-vue'
 import { marked } from 'marked';
 
@@ -120,6 +154,13 @@ const examples = ref([
   '今天天气怎么样？'
 ])
 
+const meta = reactive({
+  db_name: computed(() => state.value.databases[state.value.selectedKB]?.metaname),
+  use_graph: false,
+  use_search: false,
+  graph_name: "neo4j",
+})
+
 marked.setOptions({
   gfm: true,
   breaks: true,
@@ -128,6 +169,27 @@ marked.setOptions({
 });
 
 onClickOutside(panel, () => setTimeout(() => state.value.showPanel = false, 30))
+
+const handleKeyDown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    sendMessage()
+    console.log('Enter')
+  } else if (e.key === 'Enter' && e.shiftKey) {
+    console.log('Shift + Enter')
+    // Insert a newline character at the current cursor position
+    const textarea = e.target;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    conv.value.inputText.value =
+      conv.value.inputText.value.substring(0, start) +
+      '\n' +
+      conv.value.inputText.value.substring(end);
+    nextTick(() => {
+      textarea.setSelectionRange(start + 1, start + 1);
+    });
+  }
+}
 
 const renameTitle = () => {
   const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
@@ -227,9 +289,7 @@ const sendMessage = () => {
       body: JSON.stringify({
         query: user_input,
         history: conv.value.history,
-        meta: {
-          db_name: state.value.databases[state.value.selectedKB]?.metaname
-        }
+        meta: meta
       }),
       headers: {
         'Content-Type': 'application/json'
@@ -264,7 +324,7 @@ const sendMessage = () => {
             conv.value.history = data.history
             buffer = ''
           } catch (e) {
-            console.log(e)
+            // console.log(e)
           }
           return readChunk()
         })
@@ -349,6 +409,11 @@ onMounted(() => {
   }
 }
 
+.metas {
+  display: flex;
+  gap: 8px;
+}
+
 .my-panal {
   position: absolute;
   top: 100%;
@@ -360,6 +425,25 @@ onMounted(() => {
   border-radius: 12px;
   padding: 12px;
   z-index: 100;
+  width: 250px;
+
+  .flex-center {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .graphbase {
+    padding: 8px 16px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+
+    &:hover {
+      background-color: #EAEAEA;
+    }
+  }
 }
 
 
