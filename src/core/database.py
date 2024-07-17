@@ -1,7 +1,8 @@
 import os
 import json
 import time
-from utils import hashstr, setup_logger
+from utils import hashstr, setup_logger, is_text_pdf
+from plugins import pdf2txt
 from core.knowledgebase import KnowledgeBase
 from core.filereader import pdfreader, plainreader
 from core.graphbase import GraphDatabase
@@ -146,17 +147,24 @@ class DataBaseManager:
         support_format = [".pdf", ".txt", "*.md"]
         assert os.path.exists(file), "File not found"
         logger.info(f"Try to read file {file}")
-        if os.path.isfile(file):
-            if file.endswith(".pdf"):
-                return pdfreader(file)
-            elif file.endswith(".txt") or file.endswith(".md"):
-                return plainreader(file)
-            else:
-                logger.error(f"File format not supported, only support {support_format}")
-                raise Exception(f"File format not supported, only support {support_format}")
-        else:
+
+        if not os.path.isfile(file):
             logger.error(f"Directory not supported now!")
             raise NotImplementedError("Directory not supported now!")
+
+        if file.endswith(".pdf"):
+            if is_text_pdf(file):
+                return pdfreader(file)
+            else:
+                return pdf2txt(file, return_text=True)
+
+        elif file.endswith(".txt") or file.endswith(".md"):
+            return plainreader(file)
+
+        else:
+            logger.error(f"File format not supported, only support {support_format}")
+            raise Exception(f"File format not supported, only support {support_format}")
+
 
     def delete_file(self, db_id, file_id):
         db = self.get_kb_by_id(db_id)
@@ -186,6 +194,16 @@ class DataBaseManager:
         for i in range(0, len(text), chunk_size):
             chunks.append(text[i:i + chunk_size])
         return chunks
+
+    def delete_database(self, db_id):
+        db = self.get_kb_by_id(db_id)
+        if db is None:
+            return {"message": "database not found"}, 404
+
+        self.knowledge_base.client.drop_collection(db.metaname)
+        self.data["databases"] = [d for d in self.data["databases"] if d.db_id != db_id]
+        self._save_databases()
+        return {"message": "删除成功"}
 
     def get_kb_by_id(self, db_id):
         for db in self.data["databases"]:

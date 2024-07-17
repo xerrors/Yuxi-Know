@@ -31,10 +31,11 @@ def chat_get():
 def chat():
     request_data = json.loads(request.data)
     query = request_data['query']
+    meta = request_data.get('meta')
     logger.debug(f"Web query: {query}")
     history_manager = HistoryManager(request_data['history'])
 
-    new_query, refs = retriever(query, history_manager.messages)
+    new_query, refs = retriever(query, history_manager.messages, meta)
 
     messages = history_manager.get_history_with_msg(new_query)
     history_manager.add_user(query)
@@ -63,3 +64,7 @@ def call():
     return jsonify({
         "response": response.content,
     })
+
+@common.route('/config', methods=['get'])
+def get_config():
+    return jsonify(config)

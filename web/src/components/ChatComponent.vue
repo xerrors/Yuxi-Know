@@ -19,7 +19,24 @@
         </div>
       </div>
       <div class="header__right">
-        <div class="nav-btn text" @click="myAlert('未开发')">张文杰</div>
+        <a-dropdown>
+          <a class="ant-dropdown-link nav-btn text" @click.prevent>
+            <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
+            {{ state.selectedKB === null ? '未选择' : state.databases[state.selectedKB]?.name }}
+          </a>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item v-for="(db, index) in state.databases" :key="index">
+                <a href="javascript:;" @click="state.selectedKB=index">{{ db.name }}</a>
+              </a-menu-item>
+              <a-menu-item >
+                <a href="javascript:;" @click="state.selectedKB = null">不使用</a>
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+        <div class="nav-btn text" @click="state.showPanel = !state.showPanel">张文杰</div>
+        <div v-if="state.showPanel" class="my-panal" ref="panel">暂时不知道干嘛的地方</div>
       </div>
     </div>
     <div v-if="conv.messages.length == 0" class="chat-examples">
@@ -43,7 +60,10 @@
         :class="message.role"
       >
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <p v-else v-html="renderMarkdown(message.text)" class="message-md" ></p>
+        <p v-else
+          v-html="renderMarkdown(message.text)"
+          class="message-md"
+          @click="consoleMsg(message)"></p>
       </div>
     </div>
     <div class="input-box">
@@ -63,7 +83,15 @@
 
 <script setup>
 import { reactive, ref, onMounted, toRefs } from 'vue'
-import { SendOutlined, MenuOutlined, FormOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { onClickOutside } from '@vueuse/core'
+import {
+  SendOutlined,
+  MenuOutlined,
+  FormOutlined,
+  LoadingOutlined,
+  BookOutlined,
+  BookFilled,
+} from '@ant-design/icons-vue'
 import { marked } from 'marked';
 
 const props = defineProps({
@@ -76,9 +104,10 @@ const emit = defineEmits(['renameTitle'])
 const { conv, state } = toRefs(props)
 const chatBox = ref(null)
 const isStreaming = ref(false)
+const panel = ref(null)
 const examples = ref([
   '写一个冒泡排序',
-  '介绍一下 MECT',
+  '肉碱是什么？',
   '介绍一下江南大学',
   'A大于B，B小于C，A和C哪个大？',
   '今天天气怎么样？'
@@ -91,6 +120,8 @@ marked.setOptions({
   // 更多选项可以在 marked 文档中找到：https://marked.js.org/
 });
 
+onClickOutside(panel, () => setTimeout(() => state.value.showPanel = false, 30))
+
 const renameTitle = () => {
   const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
   const firstUserMessage = conv.value.messages[0].text
@@ -101,19 +132,16 @@ const renameTitle = () => {
   })
 }
 
-const myAlert = (message) => {
-  alert(message)
-}
-
-const renderMarkdown = (text) => {
-  return marked(text)
-}
+const myAlert = (message) => alert(message)
+const renderMarkdown = (text) => marked(text)
 
 const scrollToBottom = () => {
   setTimeout(() => {
     chatBox.value.scrollTop = chatBox.value.scrollHeight - chatBox.value.clientHeight
   }, 10)
 }
+
+const consoleMsg = (message) => console.log(message)
 
 const generateRandomHash = (length) => {
     let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -192,6 +220,9 @@ const sendMessage = () => {
       body: JSON.stringify({
         query: user_input,
         history: conv.value.history,
+        meta: {
+          db_name: state.value.databases[state.value.selectedKB]?.metaname
+        }
       }),
       headers: {
         'Content-Type': 'application/json'
@@ -274,10 +305,19 @@ onMounted(() => {
   padding: 1rem;
 }
 
-.chat div.header .header__left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
+.chat div.header {
+  user-select: none;
+
+  .header__left, .header__right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+}
+
+.ant-dropdown-link {
+  color: var(--c-text-light-1);
+  cursor: pointer;
 }
 
 .nav-btn {
@@ -300,6 +340,19 @@ onMounted(() => {
   &:hover {
     background-color: #ECECEC;
   }
+}
+
+.my-panal {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 5px;
+  background-color: white;
+  border: 1px solid #ccc;
+  box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.05);
+  border-radius: 12px;
+  padding: 12px;
+  z-index: 100;
 }
 
 

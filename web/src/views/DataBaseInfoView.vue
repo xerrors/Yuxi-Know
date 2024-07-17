@@ -1,15 +1,22 @@
 <template>
   <div style="display: flex;">
   <div class="sider">
-    <a-button type="link" @click="backToDatabase"><LeftOutlined />返回知识库</a-button>
-    <div class="top">
-      <div class="icon"><ReadFilled /></div>
-      <div class="info">
-        <h3>{{ database.name }}</h3>
-        <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata?.row_count }}</span></p>
+    <div class="sider-top">
+      <div class="header-actions">
+        <a-button type="text" @click="backToDatabase"><LeftOutlined /></a-button>
+        <a-button type="text" danger class="del-db" @click="deleteDatabse"><DeleteOutlined /></a-button>
       </div>
+      <div class="top">
+        <div class="icon"><ReadFilled /></div>
+        <div class="info">
+          <h3>{{ database.name }}</h3>
+          <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata?.row_count }}</span></p>
+        </div>
+      </div>
+      <p class="description">{{ database.description }}</p>
     </div>
-    <p class="description">{{ database.description }}</p>
+    <div class="sider-bottom">
+    </div>
   </div>
   <div class="db-info-container">
     <h2>向知识库中添加文件</h2>
@@ -59,7 +66,11 @@
           <ClockCircleFilled style="color: #FFCD43;"/>
         </template>
         <template v-else-if="column.key === 'action'">
-          <a-button class="del-btn" type="link" @click="deleteFile(text)" :disabled="state.lock">删除</a-button>
+          <a-button class="del-btn" type="link"
+            @click="deleteFile(text)"
+            :disabled="state.lock || record.status != 'done' "
+            >删除
+          </a-button>
         </template>
         <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
         <span v-else>{{ text }}</span>
@@ -84,7 +95,7 @@
 
 <script setup>
 import { onMounted, reactive, ref, watch } from 'vue';
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   ReadFilled,
@@ -93,6 +104,7 @@ import {
   HourglassFilled,
   CloseCircleFilled,
   ClockCircleFilled,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
 
 
@@ -109,6 +121,7 @@ const state = reactive({
   refrashing: false,
   lock: false,
   drawer: false,
+  refreshInterval: null,
 });
 
 const handleFileUpload = (event) => {
@@ -137,6 +150,41 @@ const handleRefresh = () => {
     state.refrashing = false
     console.log(database.value)
   })
+}
+
+const deleteDatabse = () => {
+
+  Modal.confirm({
+    title: '删除数据库',
+    content: '确定要删除该数据库吗？',
+    okText: '确认',
+    cancelText: '取消',
+    onOk: () => {
+      state.lock = true
+      fetch('/api/database/', {
+        method: "DELETE",
+        body: JSON.stringify({
+          db_id: databaseId.value
+        }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        console.log(data)
+        message.success(data.message)
+        router.push('/database')
+      })
+      .catch(error => {
+        console.error(error)
+        message.error(error.message)
+      })
+      .finally(() => {
+        state.lock = false
+      })
+    },
+    onCancel: () => {
+      console.log('Cancel');
+    },
+  });
 }
 
 const openFileDetail = (record) => {
@@ -230,7 +278,7 @@ const addDocumentByFile = () => {
 
   state.loading = true
   state.lock = true
-  const refreshInterval = setInterval(() => {
+  state.refreshInterval = setInterval(() => {
     getDatabaseInfo();
   }, 1000);
   fetch('/api/database/add_by_file', {
@@ -252,7 +300,7 @@ const addDocumentByFile = () => {
     })
     .finally(() => {
       getDatabaseInfo()
-      clearInterval(refreshInterval)
+      clearInterval(state.refreshInterval)
       state.loading = false
     })
 }
@@ -293,7 +341,8 @@ const columns = [
 watch(() => route.params.database_id, (newId) => {
     databaseId.value = newId;
     console.log(newId)
-    getDatabaseInfo();
+    clearInterval(state.refreshInterval)
+    getDatabaseInfo()
   }
 );
 
@@ -308,13 +357,34 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .sider {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   width: 300px;
   height: 100%;
-  padding: 20px;
+  padding: 0;
   border-right: 1px solid #E0EAFF;
 
-  button {
-    margin-bottom: 20px;
+  .sider-top {
+
+    & > * {
+      padding: 0 20px;
+    }
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-top: 10px;
+      padding-bottom: 10px;
+      background-color: #FAFAFA;
+      border-bottom: 1px solid #E0EAFF;
+
+      button {
+        height: auto;
+        font-size: 16px;
+        color: var(--c-text-light-1);
+      }
+    }
   }
 }
 
@@ -394,9 +464,16 @@ onMounted(() => {
     }
   }
 
-  button.del-btn:hover {
+  button.del-btn {
     cursor: pointer;
-    color: var(--error-color);
+
+    &:hover {
+      color: var(--error-color);
+    }
+    &:disabled {
+      cursor: not-allowed;
+    }
   }
+
 }
 </style>

@@ -45,7 +45,7 @@
     <h2>图数据库</h2>
     <p>基于 neo4j 构建的图数据库。</p>
     <div :class="{'graphloading': graphloading}">
-      <div class="dbcard graphbase" >
+      <div class="dbcard graphbase" @click="navigateToGraph">
         <div class="top">
           <div class="icon"><AppstoreFilled /></div>
           <div class="info">
@@ -64,11 +64,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue'
-import { useRouter } from 'vue-router';
+import { ref, onMounted, reactive, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
 import { ReadFilled, PlusOutlined, AppstoreFilled } from '@ant-design/icons-vue'
 
+const route = useRoute()
 const router = useRouter()
 const databases = ref([])
 const graph = ref(null)
@@ -80,7 +81,7 @@ const newDatabase = reactive({
   loading: false,
 })
 
-const load_databases = () => {
+const loadDatabases = () => {
   loadGraph()
   fetch('/api/database/', {
     method: "GET",
@@ -112,7 +113,7 @@ const createDatabase = () => {
   .then(response => response.json())
   .then(data => {
     console.log(data)
-    load_databases()
+    loadDatabases()
     newDatabase.open = false
     newDatabase.name = ''
     newDatabase.description = ''
@@ -124,6 +125,10 @@ const createDatabase = () => {
 
 const navigateToDatabase = (databaseId) => {
   router.push({ path: `/database/${databaseId}` });
+};
+
+const navigateToGraph = () => {
+  router.push({ path: `/database/graph` });
 };
 
 const loadGraph = () => {
@@ -144,8 +149,14 @@ const loadGraph = () => {
     })
 }
 
+watch(() => route.path, (newPath, oldPath) => {
+  if (newPath === '/database') {
+    loadDatabases();
+  }
+});
+
 onMounted(() => {
-  load_databases()
+  loadDatabases()
 })
 
 </script>
