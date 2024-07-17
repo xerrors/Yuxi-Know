@@ -58,8 +58,8 @@ def chat():
 def call():
     request_data = json.loads(request.data)
     query = request_data['query']
-    logger.debug(f"Web query: {query}")
     response = model.predict(query)
+    logger.debug(f"Call query: {query} Response: {response.content}")
 
     return jsonify({
         "response": response.content,
