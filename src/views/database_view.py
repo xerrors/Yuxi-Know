@@ -28,6 +28,15 @@ def create_database():
     database = dbm.create_database(database_name, description, db_type)
     return jsonify(database)
 
+# TODO: 删除数据库
+@db.route('/', methods=['DELETE'])
+def delete_database():
+    data = json.loads(request.data)
+    db_id = data.get('db_id')
+    logger.debug(f"Delete database {db_id}")
+    dbm.delete_database(db_id)
+    return jsonify({"message": "删除成功"})
+
 
 @db.route('/add_by_file', methods=['POST'])
 def create_document_by_file():
@@ -53,9 +62,6 @@ def get_database_info():
 
     return jsonify(database)
 
-@db.route('/info', methods=['DELETE'])
-def delete_database():
-    return jsonify({"message": "unimplemented"}), 501
 
 @db.route('/document', methods=['DELETE'])
 def delete_document():
