@@ -20,6 +20,10 @@ def select_model(config):
         from models.chat_model import Qianfan
         return Qianfan(model_name)
 
+    elif model_provider == "vllm":
+        from models.chat_model import VLLM
+        return VLLM(model_name)
+
     elif model_provider is None:
         raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")
     else:

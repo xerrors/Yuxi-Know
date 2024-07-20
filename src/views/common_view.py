@@ -44,13 +44,14 @@ def chat():
     def generate_response():
         content = ""
         for delta in model.predict(messages, stream=True):
-            content += delta.content
-            response_chunk = json.dumps({
-                "history": history_manager.update_ai(content),
-                "response": content,
-                "refs": refs  # TODO: 优化 refs，不需要每次都返回
-            }, ensure_ascii=False).encode('utf8') + b'\n'
-            yield response_chunk
+            if delta.content:
+                content += delta.content
+                response_chunk = json.dumps({
+                    "history": history_manager.update_ai(content),
+                    "response": content,
+                    "refs": refs  # TODO: 优化 refs，不需要每次都返回
+                }, ensure_ascii=False).encode('utf8') + b'\n'
+                yield response_chunk
 
     return Response(generate_response(), content_type='application/json', status=200)
 
