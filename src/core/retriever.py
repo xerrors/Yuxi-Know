@@ -1,5 +1,8 @@
 from core.startup import dbm, model
 from models.embedding import ReRanker
+from utils.logging_config import setup_logger
+logger = setup_logger("server-common")
+
 
 class Retriever:
 
@@ -30,10 +33,10 @@ class Retriever:
             kb_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
             external += f"知识库信息: \n\n{kb_text}"
 
-        # db_res = refs.get("graph_base").get("results", [])
-        # if len(db_res) > 0:
-        #     db_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in db_res])
-        #     external += f"图数据库信息: \n\n{db_text}"
+        db_res = refs.get("graph_base").get("results", [])
+        if len(db_res) > 0:
+            db_text = '\n'.join([f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res['edges']])
+            external += f"图数据库信息: \n\n{db_text}"
 
         if len(external) > 0:
             query = f"以下是参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答：{query}"
@@ -53,9 +56,9 @@ class Retriever:
         results = []
         if meta.get("use_graph"):
             for entitie in entities:
-                result = dbm.graph_base.query_entity_like(entitie)
-                results.extend(result) if result else None
-
+                result = dbm.graph_base.query_by_vector(entitie)
+                if result != []:
+                    results.extend(result) 
         return {"results": self.format_query_results(results)}
 
     def query_knowledgebase(self, query, history, meta):
@@ -113,29 +116,44 @@ class Retriever:
 
         return rewritten_query, entities
 
-    def format_query_results(self, results):
+    def format_query_results(sfle, results):
         formatted_results = {"nodes": [], "edges": []}
-        for row in results:
-            n, relations, m = row
-            formatted_results["nodes"].append({
-                "id": n.id,
-                "name": n._properties["name"],
-                "properties": n._properties
-            })
-            formatted_results["nodes"].append({
-                "id": m.id,
-                "name": m._properties["name"],
-                "properties": m._properties
-            })
-            for rel in relations:
-                formatted_results["edges"].append({
-                    "id": rel.id,
-                    "type": rel.type,
-                    "source": rel.start_node.id,
-                    "target": rel.end_node.id,
-                    "source_name": rel.start_node._properties["name"],
-                    "target_name": rel.end_node._properties["name"],
-                })
+        
+        node_dict = {}
+        
+        for item in results:
+            if isinstance(item[1], list) and len(item[1]) > 0:
+                relationship = item[1][0]
+                rel_id = relationship.element_id
+                nodes = relationship.nodes
+                if len(nodes) == 2:
+                    node1, node2 = nodes
+                    
+                    node1_id = node1.element_id
+                    node2_id = node2.element_id
+                    node1_name = item[0]  
+                    node2_name = item[2] if len(item) > 2 else 'unknown'
+                    
+                    if node1_id not in node_dict:
+                        node_dict[node1_id] = {"id": node1_id, "name": node1_name}
+                    if node2_id not in node_dict:
+                        node_dict[node2_id] = {"id": node2_id, "name": node2_name}
+                                        
+                    relationship_type = relationship._properties.get('type', 'unknown')
+                    if relationship_type == 'unknown':
+                        relationship_type = relationship.type
+                    
+                    formatted_results["edges"].append({
+                        "id": rel_id,
+                        "type": relationship_type,
+                        "source_id": node1_id,
+                        "target_id": node2_id,
+                        "source_name": node1_name,
+                        "target_name": node2_name
+                    })
+        
+        formatted_results["nodes"] = list(node_dict.values())
+        
         return formatted_results
 
     def __call__(self, query, history, meta):

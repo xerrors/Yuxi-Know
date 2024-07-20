@@ -30,3 +30,4 @@ cache
 *.pdf
 src/data
 neo4j*
+*/package-lock.json

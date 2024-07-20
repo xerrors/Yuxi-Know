@@ -6,6 +6,7 @@ from plugins import pdf2txt
 from core.knowledgebase import KnowledgeBase
 from core.filereader import pdfreader, plainreader
 from core.graphbase import GraphDatabase
+from models.embedding import EmbeddingModel
 
 logger = setup_logger("DataBaseManager")
 
@@ -19,6 +20,7 @@ class DataBaseLite:
         self.metaname = kwargs.get("metaname", f"{db_type}_{hashstr(name)}")
         self.metadata = kwargs.get("metaname", {})
         self.files = kwargs.get("files", [])
+
 
     def update(self, metadata):
         self.metadata = metadata
@@ -45,11 +47,12 @@ class DataBaseManager:
     def __init__(self, config=None) -> None:
         self.config = config
         self.database_path = "data/databases.json"
-        self.knowledge_base = KnowledgeBase(config)
+        self.embed_model = EmbeddingModel(config)
+        self.knowledge_base = KnowledgeBase(config, self.embed_model)
         self.data = {"databases": [], "graph": {}}
 
         if self.config.enable_knowledge_graph:
-            self.graph_base = GraphDatabase(self.config)
+            self.graph_base = GraphDatabase(self.config, self.embed_model)
             self.graph_base.start()
 
         self._load_databases()
