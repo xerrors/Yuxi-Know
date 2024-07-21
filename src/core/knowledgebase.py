@@ -8,11 +8,11 @@ logger = setup_logger("KnowledgeBase")
 
 class KnowledgeBase:
 
-    def __init__(self, config=None) -> None:
+    def __init__(self, config=None, embed_model=None ) -> None:
         self.config = config
         self._init_config(config)
-
-        self.embed_model = EmbeddingModel(config)
+        assert embed_model, "embed_model=None"
+        self.embed_model = embed_model
         self.client = MilvusClient("data/vector_base/milvus.db")
 
     def _init_config(self, config):
