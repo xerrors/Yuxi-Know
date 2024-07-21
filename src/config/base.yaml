@@ -3,7 +3,7 @@ name: base
 
 ## model
 ### model_provider, option in deepseek, zhipu
-model_provider: zhipu
+model_provider: vllm
 model_name: null # for default
 
 ## model dir 可以写相对路径和绝对路径
