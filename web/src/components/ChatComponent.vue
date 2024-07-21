@@ -39,7 +39,7 @@
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text" @click="state.showPanel = !state.showPanel">张文杰</div>
+        <div class="nav-btn text" @click="state.showPanel = !state.showPanel"><SettingOutlined /></div>
         <div v-if="state.showPanel" class="my-panal" ref="panel">
           <div class="graphbase flex-center">
             知识库
@@ -132,6 +132,7 @@ import {
   BookFilled,
   CompassFilled,
   GoldenFilled,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 import { marked } from 'marked';
 
