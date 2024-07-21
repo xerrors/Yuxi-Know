@@ -35,10 +35,13 @@
           <div class="icon"><ReadFilled /></div>
           <div class="info">
             <h3>{{ database.name }}</h3>
-            <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata.row_count }}</span></p>
+            <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata.row_count }}行</span></p>
           </div>
         </div>
         <p class="description">{{ database.description }}</p>
+        <div class="tags">
+          <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
+        </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
@@ -197,8 +200,8 @@ onMounted(() => {
 .dbcard, .database {
   padding: 10px;
   border-radius: 12px;
-  width: 380px;
-  height: 150px;
+  width: 360px;
+  height: 160px;
   padding: 20px;
   cursor: pointer;
   flex: 1 1 380px;
@@ -226,6 +229,7 @@ onMounted(() => {
     .info {
       h3, p {
         margin: 0;
+        color: black;
       }
 
       p {
@@ -239,9 +243,10 @@ onMounted(() => {
     color: var(--c-text-light-1);
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
+    margin-bottom: 10px;
   }
 }
 

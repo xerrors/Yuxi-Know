@@ -1,5 +1,5 @@
 <script setup>
-import { KeepAlive } from 'vue'
+import { KeepAlive, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   MessageOutlined,
@@ -10,6 +10,20 @@ import {
   BookFilled
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
+import { useConfigStore } from '@/stores/counter'
+
+const configStore = useConfigStore()
+
+const getRemoteConfig = () => {
+  fetch('/api/config').then(res => res.json()).then(data => {
+    console.log(data)
+    configStore.setConfig(data)
+  })
+}
+
+onMounted(() => {
+  getRemoteConfig()
+})
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
@@ -72,7 +86,7 @@ div.header, #app-router-view {
   flex: 0 0 80px;
   justify-content: flex-start;
   align-items: center;
-  background-color: #F4F8F9;
+  background-color: #F2F6F7;
   height: 100%;
   width: 80px;
   border-right: 1px solid #e2eef3;

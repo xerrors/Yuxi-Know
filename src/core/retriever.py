@@ -1,4 +1,3 @@
-from core.startup import dbm, model
 from models.embedding import Reranker
 from utils.logging_config import setup_logger
 logger = setup_logger("server-common")
@@ -6,9 +5,11 @@ logger = setup_logger("server-common")
 
 class Retriever:
 
-    def __init__(self, config):
+    def __init__(self, config, dbm, model):
         self.config = config
         self.reranker = Reranker(config)
+        self.dbm = dbm
+        self.model = model
 
     def retrieval(self, query, history, meta):
 
@@ -56,7 +57,7 @@ class Retriever:
         results = []
         if meta.get("use_graph"):
             for entitie in entities:
-                result = dbm.graph_base.query_by_vector(entitie)
+                result = self.dbm.graph_base.query_by_vector(entitie)
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
@@ -65,7 +66,7 @@ class Retriever:
 
         kb_res = []
         if meta.get("db_name"):
-            kb_res = dbm.knowledge_base.search(query, meta["db_name"], limit=5)
+            kb_res = self.dbm.knowledge_base.search(query, meta["db_name"], limit=5)
             for r in kb_res:
                 r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
 
@@ -97,7 +98,7 @@ class Retriever:
             # 构建提示词
             rewritten_query_prompt = rewritten_query_prompt_template.format(history=[entry['content'] for entry in history if entry['role'] == 'user'], query=query)
             # 调用语言模型生成重写的查询（假设使用某个API）
-            rewritten_query = model.predict(rewritten_query_prompt).content
+            rewritten_query = self.model.predict(rewritten_query_prompt).content
 
 
         if meta.get("use_graph"):
@@ -113,7 +114,7 @@ class Retriever:
             """
             # 构建提示词
             entity_extraction_prompt = entity_extraction_prompt_template.format(text=rewritten_query)
-            entities = model.predict(entity_extraction_prompt).content.split(",")
+            entities = self.model.predict(entity_extraction_prompt).content.split(",")
             entities = [entity for entity in entities if all(char.isalnum() or char in '汉字' for char in entity)]
         else:
             entities = []

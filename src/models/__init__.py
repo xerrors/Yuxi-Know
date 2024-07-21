@@ -6,7 +6,7 @@ def select_model(config):
     model_provider = config.model_provider
     model_name = config.model_name
 
-    logger.info(f"Selecting model from {model_provider} with name {model_name}")
+    logger.info(f"Selecting model from {model_provider} with {model_name or 'default'}")
 
     if model_provider == "deepseek":
         from models.chat_model import DeepSeek

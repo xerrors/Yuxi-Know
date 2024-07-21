@@ -10,3 +10,17 @@ export const useCounterStore = defineStore('counter', () => {
 
   return { count, doubleCount, increment }
 })
+
+
+export const useConfigStore = defineStore('config', () => {
+  const config = ref({})
+  function setConfig(newConfig) {
+    config.value = newConfig
+  }
+
+  function setConfigValue(key, value) {
+    config.value[key] = value
+  }
+
+  return { config, setConfig, setConfigValue }
+})

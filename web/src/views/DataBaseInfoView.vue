@@ -10,10 +10,13 @@
         <div class="icon"><ReadFilled /></div>
         <div class="info">
           <h3>{{ database.name }}</h3>
-          <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata?.row_count }}</span></p>
+          <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata?.row_count }}行</span></p>
         </div>
       </div>
       <p class="description">{{ database.description }}</p>
+      <div class="tags">
+        <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
+      </div>
     </div>
     <div class="sider-bottom">
     </div>
@@ -292,11 +295,15 @@ const addDocumentByFile = () => {
     .then(data => {
       console.log(data)
       fileList.value = []
-      message.success(data.status)
+      if (data.status === 'failed') {
+        message.error(data.message)
+      } else {
+        message.success(data.message)
+      }
     })
     .catch(error => {
       console.error(error)
-      message.error(error.status)
+      message.error(error.message)
     })
     .finally(() => {
       getDatabaseInfo()
