@@ -39,7 +39,9 @@
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text" @click="state.showPanel = !state.showPanel"><SettingOutlined /></div>
+        <div class="nav-btn text" @click="state.showPanel = !state.showPanel">
+          <component :is="state.showPanel ? SettingFilled : SettingOutlined" />
+        </div>
         <div v-if="state.showPanel" class="my-panal" ref="panel">
           <div class="graphbase flex-center">
             知识库
@@ -133,6 +135,7 @@ import {
   CompassFilled,
   GoldenFilled,
   SettingOutlined,
+  SettingFilled,
 } from '@ant-design/icons-vue'
 import { marked } from 'marked';
 

@@ -145,6 +145,7 @@ onMounted(() => {
   border-right: 1px solid #EDF4F5;
   min-width: var(--min-sider-width);
   max-width: 200px;
+  background-color: #FAFCFD;
 
   & .actions {
     height: var(--header-height);
@@ -152,10 +153,10 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    margin-bottom: 16px;
+    // margin-bottom: 16px;
     position: sticky;
     top: 0;
-    background-color: white;
+    background-color: #FAFCFD;
     z-index: 9;
 
     .action {
@@ -180,7 +181,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
+  padding: 12px;
   cursor: pointer;
   width: 100%;
   user-select: none;
