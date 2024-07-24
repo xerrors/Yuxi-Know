@@ -92,13 +92,7 @@ class GraphDatabase:
         if UIE_MODEL is None:
             UIE_MODEL = OneKE()
         triples_path = UIE_MODEL.processing_text_to_kg(text_path, output_path)
-        def read_triples(file_path):
-            with open(file_path, 'r', encoding='utf-8') as file:
-                for line in file:
-                    item = json.loads(line.strip())
-                    yield [item]
-        for trio in read_triples(triples_path):
-            self.txt_add_entity(trio, kgdb_name)
+        self.jsonl_file_add_entity(triples_path)
         return kgdb_name
 
     def txt_add_vector_entity(self, triples, kgdb_name='neo4j'):
@@ -141,16 +135,45 @@ class GraphDatabase:
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
         self.status = "processing"
         self.use_database(kgdb_name)  # 切换到指定数据库
-        triples_path = file_path
 
         def read_triples(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line in file:
-                    item = json.loads(line.strip())
-                    yield [item]
+                    yield json.loads(line.strip())
 
-        for trio in read_triples(triples_path):
-            self.txt_add_entity(trio, kgdb_name)
+        triples = list(read_triples(file_path))
+
+        def batch_create(tx, triples):
+            query = """
+            UNWIND $triples AS triple
+            MERGE (a:Entity {name: triple.h})
+            MERGE (b:Entity {name: triple.t})
+            MERGE (a)-[r:RELATION {type: triple.r}]->(b)
+            """
+            tx.run(query, triples=triples)
+
+        def batch_add_embeddings(tx, embeddings):
+            query = """
+            UNWIND $embeddings AS embedding
+            MATCH (e:Entity {name: embedding.name})
+            SET e.embedding = embedding.vector
+            """
+            tx.run(query, embeddings=embeddings)
+
+        with self.driver.session() as session:
+            session.execute_write(batch_create, triples)
+
+            # 获取embedding并批量添加
+            embeddings = []
+            for triple in triples:
+                h = triple['h']
+                t = triple['t']
+                embedding_h = self.get_embedding(h)
+                embedding_t = self.get_embedding(t)
+                embeddings.append({"name": h, "vector": embedding_h})
+                embeddings.append({"name": t, "vector": embedding_t})
+
+            session.execute_write(batch_add_embeddings, embeddings)
 
         self.status = "open"
         return kgdb_name
@@ -300,12 +323,8 @@ if __name__ == "__main__":
 
     kgdb_name = "neo4j"
 
-    QUERY_INSTRUCTION = {
-    "bge-large-zh-v1.5": "为这个句子生成表示以用于检索相关文章：",
-    }
     class EmbeddingModel(FlagModel):
         def __init__(self, config, **kwargs):
-
 
             model_name_or_path = "/data2024/yyyl/model/BAAI/bge-large-zh-v1.5/"
 
@@ -336,67 +355,67 @@ if __name__ == "__main__":
     #         ]
 
     # print(kgdb.query_by_vector("维C"))
-    def format_query_results(results):
-        formatted_results = {"nodes": [], "edges": []}
+    # def format_query_results(results):
+    #     formatted_results = {"nodes": [], "edges": []}
 
-        # 用于存储所有唯一的节点信息
-        node_dict = {}
+    #     # 用于存储所有唯一的节点信息
+    #     node_dict = {}
 
-        for item in results:
-            # 确保item[1]是一个非空的列表
-            if isinstance(item[1], list) and len(item[1]) > 0:
-                relationship = item[1][0]
-                rel_id = relationship.element_id
-                nodes = relationship.nodes
-                if len(nodes) == 2:
-                    node1, node2 = nodes
+    #     for item in results:
+    #         # 确保item[1]是一个非空的列表
+    #         if isinstance(item[1], list) and len(item[1]) > 0:
+    #             relationship = item[1][0]
+    #             rel_id = relationship.element_id
+    #             nodes = relationship.nodes
+    #             if len(nodes) == 2:
+    #                 node1, node2 = nodes
 
-                    # 提取源节点和目标节点信息
-                    node1_id = node1.element_id
-                    node2_id = node2.element_id
-                    node1_name = item[0]  # 假设节点名称和列表中的第一个元素相同
-                    node2_name = item[2] if len(item) > 2 else 'unknown'
+    #                 # 提取源节点和目标节点信息
+    #                 node1_id = node1.element_id
+    #                 node2_id = node2.element_id
+    #                 node1_name = item[0]  # 假设节点名称和列表中的第一个元素相同
+    #                 node2_name = item[2] if len(item) > 2 else 'unknown'
 
-                    # 记录节点信息
-                    if node1_id not in node_dict:
-                        node_dict[node1_id] = {"id": node1_id, "name": node1_name}
-                    if node2_id not in node_dict:
-                        node_dict[node2_id] = {"id": node2_id, "name": node2_name}
+    #                 # 记录节点信息
+    #                 if node1_id not in node_dict:
+    #                     node_dict[node1_id] = {"id": node1_id, "name": node1_name}
+    #                 if node2_id not in node_dict:
+    #                     node_dict[node2_id] = {"id": node2_id, "name": node2_name}
 
-                    # 确定关系类型
+    #                 # 确定关系类型
 
-                    relationship_type = relationship._properties.get('type', 'unknown')
-                    if relationship_type == 'unknown':
-                        relationship_type = relationship.type
+    #                 relationship_type = relationship._properties.get('type', 'unknown')
+    #                 if relationship_type == 'unknown':
+    #                     relationship_type = relationship.type
 
-                    # 记录边的信息
-                    formatted_results["edges"].append({
-                        "id": rel_id,
-                        "type": relationship_type,
-                        "source_id": node1_id,
-                        "target_id": node2_id,
-                        "source_name": node1_name,
-                        "target_name": node2_name
-                    })
+    #                 # 记录边的信息
+    #                 formatted_results["edges"].append({
+    #                     "id": rel_id,
+    #                     "type": relationship_type,
+    #                     "source_id": node1_id,
+    #                     "target_id": node2_id,
+    #                     "source_name": node1_name,
+    #                     "target_name": node2_name
+    #                 })
 
-        # 将唯一的节点信息添加到结果中
-        formatted_results["nodes"] = list(node_dict.values())
+    #     # 将唯一的节点信息添加到结果中
+    #     formatted_results["nodes"] = list(node_dict.values())
 
-        return formatted_results
+    #     return formatted_results
 
-    entities = ['jqy', '维c']
-    results = []
-    for entitie in entities:
-        result = kgdb.query_by_vector(entitie)
-        if result != []:
-            results.extend(result)
-    print(format_query_results(results))
+    # entities = ['jqy', '维c']
+    # results = []
+    # for entitie in entities:
+    #     result = kgdb.query_by_vector(entitie)
+    #     if result != []:
+    #         results.extend(result)
+    # print(format_query_results(results))
 
 
     # kgdb.txt_add_vector_entity(triples, model)
     # print("Extend the Graph data base")
 
-    # kgdb.txt_add_entity(triples, kgdb_name)
+    # kgdb.jsonl_file_add_entity("/data2024/yyyl/ProjectAthena/tep.jsonl", kgdb_name)
     # print("Extend the Graph data base")
 
     # triples_path = "output.jsonl"
@@ -421,7 +440,7 @@ if __name__ == "__main__":
     # print(results)
 
     # 查询特定实体及其关系
-    # results = kgdb.query_specific_entity("zzz", kgdb_name)
+    # results = kgdb.query_specific_entity("kllll", kgdb_name)
     # print(results)
 
     # 查询特定实体及其关系
