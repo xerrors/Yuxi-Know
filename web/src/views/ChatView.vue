@@ -185,6 +185,7 @@ onMounted(() => {
   cursor: pointer;
   width: 100%;
   user-select: none;
+  transition: border-left 0.1s;
 
   &__title {
     white-space: nowrap; /* 禁止换行 */
@@ -203,6 +204,7 @@ onMounted(() => {
   }
 
   &.active {
+    border-left: 4px solid var(--main-color);
     background-color: #EDF4F5;
   }
 

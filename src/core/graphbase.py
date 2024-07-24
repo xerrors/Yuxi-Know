@@ -6,7 +6,10 @@ from neo4j import GraphDatabase as GD
 from transformers import AutoTokenizer, AutoModel
 from FlagEmbedding import FlagModel, FlagReranker
 
+from plugins import pdf2txt
+from plugins.oneke import OneKE
 
+UIE_MODEL = None
 
 class GraphDatabase:
     def __init__(self, config, embed_model=None):
@@ -85,8 +88,10 @@ class GraphDatabase:
     def pdf_file_add_entity(self, file_path, output_path, kgdb_name='neo4j'):
         self.use_database(kgdb_name)  # 切换到指定数据库
         text_path = pdf2txt(file_path)
-        oneke = OneKE()
-        triples_path = oneke.processing_text_to_kg(text_path, output_path)
+        global UIE_MODEL
+        if UIE_MODEL is None:
+            UIE_MODEL = OneKE()
+        triples_path = UIE_MODEL.processing_text_to_kg(text_path, output_path)
         def read_triples(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line in file:
@@ -95,7 +100,7 @@ class GraphDatabase:
         for trio in read_triples(triples_path):
             self.txt_add_entity(trio, kgdb_name)
         return kgdb_name
-    
+
     def txt_add_vector_entity(self, triples, kgdb_name='neo4j'):
         """添加实体三元组"""
         self.use_database(kgdb_name)
@@ -134,15 +139,20 @@ class GraphDatabase:
                 session.execute_write(self.set_embedding, entry['t'], embedding_t)
 
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
+        self.status = "processing"
         self.use_database(kgdb_name)  # 切换到指定数据库
         triples_path = file_path
+
         def read_triples(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line in file:
                     item = json.loads(line.strip())
                     yield [item]
+
         for trio in read_triples(triples_path):
             self.txt_add_entity(trio, kgdb_name)
+
+        self.status = "open"
         return kgdb_name
 
     def delete_entity(self, entity_name=None, kgdb_name="neo4j"):
@@ -221,7 +231,7 @@ class GraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, keyword, hops)
-        
+
     def query_by_vector_tep(self, keyword, kgdb_name='neo4j'):
         """向量查询"""
         self.use_database(kgdb_name)
@@ -238,11 +248,11 @@ class GraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, keyword)
-    
-    def query_by_vector(self, entity_name, kgdb_name='neo4j'):
+
+    def query_by_vector(self, entity_name, kgdb_name='neo4j', hops=2):
         self.use_database(kgdb_name)
         result = self.query_by_vector_tep(entity_name)
-        ans = self.query_specific_entity(result[0][0])
+        ans = self.query_specific_entity(result[0][0], hops) # 这里是只获取第一个 TODO: 优化
         return ans
 
     def query_node_info(self, node_name, kgdb_name='neo4j', hops = 2):
@@ -258,20 +268,20 @@ class GraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, node_name, hops)
-        
+
     def get_embedding(self, text):
         inputs = [text]
         with torch.no_grad():
             outputs = self.embed_model.encode(inputs)
         embeddings = outputs[0] # 假设取平均作为文本的嵌入向量
         return embeddings
-    
+
     def set_embedding(self, tx, entity_name, embedding):
         tx.run("""
         MATCH (e:Entity {name: $name})
         CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
         """, name=entity_name, embedding=embedding)
-        
+
     # def format_query_results(self, results):
     #     formatted_results = []
     #     for row in results:
@@ -301,7 +311,7 @@ if __name__ == "__main__":
 
             super().__init__(model_name_or_path, use_fp16=False, **kwargs)
 
-   
+
     model = EmbeddingModel(config)
     # 初始化知识图谱数据库
     kgdb = GraphDatabase(config, model)
@@ -311,7 +321,7 @@ if __name__ == "__main__":
     # 返回指定数据库信息
     # info = kgdb.get_database_info(kgdb_name)
     # print(info)
-        
+
     # triples = [
     #         {
     #             "h": "CCC",
@@ -324,14 +334,14 @@ if __name__ == "__main__":
     #             "r": "同事"
     #         }
     #         ]
-    
+
     # print(kgdb.query_by_vector("维C"))
     def format_query_results(results):
         formatted_results = {"nodes": [], "edges": []}
-        
+
         # 用于存储所有唯一的节点信息
         node_dict = {}
-        
+
         for item in results:
             # 确保item[1]是一个非空的列表
             if isinstance(item[1], list) and len(item[1]) > 0:
@@ -340,25 +350,25 @@ if __name__ == "__main__":
                 nodes = relationship.nodes
                 if len(nodes) == 2:
                     node1, node2 = nodes
-                    
+
                     # 提取源节点和目标节点信息
                     node1_id = node1.element_id
                     node2_id = node2.element_id
                     node1_name = item[0]  # 假设节点名称和列表中的第一个元素相同
                     node2_name = item[2] if len(item) > 2 else 'unknown'
-                    
+
                     # 记录节点信息
                     if node1_id not in node_dict:
                         node_dict[node1_id] = {"id": node1_id, "name": node1_name}
                     if node2_id not in node_dict:
                         node_dict[node2_id] = {"id": node2_id, "name": node2_name}
-                    
+
                     # 确定关系类型
-                    
+
                     relationship_type = relationship._properties.get('type', 'unknown')
                     if relationship_type == 'unknown':
                         relationship_type = relationship.type
-                    
+
                     # 记录边的信息
                     formatted_results["edges"].append({
                         "id": rel_id,
@@ -368,10 +378,10 @@ if __name__ == "__main__":
                         "source_name": node1_name,
                         "target_name": node2_name
                     })
-        
+
         # 将唯一的节点信息添加到结果中
         formatted_results["nodes"] = list(node_dict.values())
-        
+
         return formatted_results
 
     entities = ['jqy', '维c']
@@ -379,7 +389,7 @@ if __name__ == "__main__":
     for entitie in entities:
         result = kgdb.query_by_vector(entitie)
         if result != []:
-            results.extend(result) 
+            results.extend(result)
     print(format_query_results(results))
 
 

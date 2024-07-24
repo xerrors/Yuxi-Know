@@ -285,8 +285,9 @@ const sendMessage = () => {
   if (conv.value.inputText.trim()) {
     isStreaming.value = true
     appendUserMessage(conv.value.inputText)
+    appendAiMessage("检索中……", null)
+    const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
     const user_input = conv.value.inputText
-    var cur_res_id = null
     conv.value.inputText = ''
     fetch('/api/chat', {
       method: 'POST',
@@ -319,12 +320,7 @@ const sendMessage = () => {
 
           try {
             const data = JSON.parse(message)
-            if (cur_res_id === null) {
-              appendAiMessage(data.response, data.refs)
-              cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
-            } else {
-              updateMessage(data.response, cur_res_id)
-            }
+            updateMessage(data.response, cur_res_id)
             conv.value.history = data.history
             buffer = ''
           } catch (e) {

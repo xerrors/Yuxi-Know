@@ -47,7 +47,7 @@
     </div>
     <h2>图数据库</h2>
     <p>基于 neo4j 构建的图数据库。</p>
-    <div :class="{'graphloading': graphloading}">
+    <div :class="{'graphloading': graphloading}" v-if="graph">
       <div class="dbcard graphbase" @click="navigateToGraph">
         <div class="top">
           <div class="icon"><AppstoreFilled /></div>

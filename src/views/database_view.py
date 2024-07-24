@@ -86,9 +86,10 @@ def upload_file():
     file = request.files['file']
     if file.filename == '':
         return jsonify({'message': 'No selected file'}), 400
-    elif file.filename.split('.')[-1] not in ['pdf', 'txt', 'md']:
-        return jsonify({'message': 'Unsupported file type'}), 400
+    # elif file.filename.split('.')[-1] not in ['pdf', 'txt', 'md']:
+    #     return jsonify({'message': 'Unsupported file type'}), 400
     if file:
+        os.makedirs("data/uploads", exist_ok=True)
         filename = file.filename
         file_path = os.path.join("data/uploads", filename)
         file.save(file_path)
@@ -98,3 +99,28 @@ def upload_file():
 def get_graph_info():
     graph_info = startup.dbm.get_graph()
     return jsonify(graph_info)
+
+@db.route('/graph/node', methods=['GET'])
+def get_graph_node():
+    entity_name = request.args.get('entity_name')
+    kgdb_name = request.args.get('kgdb_name')
+    hops = request.args.get('hops')
+    if not entity_name:
+        return jsonify({'message': 'entity_name and kgdb_name are required'}), 400
+
+    logger.debug(f"Get graph node {entity_name} in {kgdb_name} with {hops} hops")
+    result = startup.dbm.graph_base.query_by_vector(entity_name, kgdb_name, hops)
+    return jsonify({'result': startup.retriever.format_query_results(result), 'message': 'success'}), 200
+
+@db.route('/graph/add', methods=['POST'])
+def add_graph_entity():
+    data = json.loads(request.data)
+    kgdb_name = data.get('kgdb_name')
+    file_path = data.get('file_path')
+
+    if file_path.endswith('.jsonl'):
+        startup.dbm.graph_base.jsonl_file_add_entity(file_path, kgdb_name)
+    else:
+        return jsonify({'message': 'Unsupported file type'}), 400
+
+    return jsonify({'message': 'Entity successfully added'}), 200

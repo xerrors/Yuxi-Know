@@ -51,10 +51,10 @@ class DataBaseManager:
         self.database_path = "data/databases.json"
         self.embed_model = get_embedding_model(config)
         self.knowledge_base = KnowledgeBase(config, self.embed_model)
+        self.graph_base = GraphDatabase(self.config, self.embed_model)
         self.data = {"databases": [], "graph": {}}
 
         if self.config.enable_knowledge_graph:
-            self.graph_base = GraphDatabase(self.config, self.embed_model)
             self.graph_base.start()
 
         self._load_databases()
@@ -130,10 +130,9 @@ class DataBaseManager:
         for idx, file in new_files:
             db.files[idx]["status"] = "processing"
 
-            text = self.read_text(file)
-            chunks = self.chunking(text)
-
             try:
+                text = self.read_text(file)
+                chunks = self.chunking(text)
                 self.knowledge_base.add_documents(
                     docs=chunks,
                     collection_name=db.metaname,
@@ -156,7 +155,7 @@ class DataBaseManager:
             return db.to_dict()
 
     def read_text(self, file):
-        support_format = [".pdf", ".txt", "*.md"]
+        support_format = [".pdf", ".txt", ".md"]
         assert os.path.exists(file), "File not found"
         logger.info(f"Try to read file {file}")
 
