@@ -2,7 +2,8 @@
   <div class="chat-container">
     <div v-if="state.isSidebarOpen" class="conversations">
       <div class="actions">
-        <div class="action new" @click="addNewConv"><FormOutlined /></div>
+        <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
+         <span>对话历史</span>
         <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
       </div>
       <div class="conversation"
@@ -153,7 +154,6 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    // margin-bottom: 16px;
     position: sticky;
     top: 0;
     background-color: #FAFCFD;
@@ -167,7 +167,7 @@ onMounted(() => {
       justify-content: center;
       align-items: center;
       border-radius: 8px;
-      color: #6D6D6D;
+      color: var(--c-black-light-2);
       cursor: pointer;
 
       &:hover {
@@ -175,44 +175,49 @@ onMounted(() => {
       }
     }
   }
-}
 
-.conversation {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  cursor: pointer;
-  width: 100%;
-  user-select: none;
-  transition: border-left 0.1s;
+  .conversation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    cursor: pointer;
+    width: 100%;
+    user-select: none;
+    transition: border-left 0.1s;
 
-  &__title {
-    white-space: nowrap; /* 禁止换行 */
-    overflow: hidden;    /* 超出部分隐藏 */
-    text-overflow: ellipsis; /* 显示省略号 */
-  }
+    &__title {
+      color: var(--c-black-light-3);
+      white-space: nowrap; /* 禁止换行 */
+      overflow: hidden;    /* 超出部分隐藏 */
+      text-overflow: ellipsis; /* 显示省略号 */
+    }
 
-  &__delete {
-    display: none;
-    color: #7D7D7D;
+    &__delete {
+      display: none;
+      color: #7D7D7D;
+
+      &:hover {
+        color: #F93A37;
+        background-color: #EEE;
+      }
+    }
+
+    &.active {
+      border-left: 3px solid var(--main-color);
+      background-color: #EDF4F5;
+
+      & .conversation__title {
+        color: var(--c-black-light-1);
+      }
+    }
 
     &:hover {
-      color: #F93A37;
-      background-color: #EEE;
-    }
-  }
+      background-color: #EDF4F5;
 
-  &.active {
-    border-left: 4px solid var(--main-color);
-    background-color: #EDF4F5;
-  }
-
-  &:hover {
-    background-color: #EDF4F5;
-
-    & .conversation__delete {
-      display: block;
+      & .conversation__delete {
+        display: block;
+      }
     }
   }
 }

@@ -15,7 +15,6 @@ class Retriever:
 
         refs = {}
 
-        # TODO: 查询分类、查询重写、查询分解、查询伪文档生成（HyDE）)
         refs["meta"] = meta
         refs["rewrite_query"] = self.rewrite_query(query, history, meta)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, meta)
@@ -35,7 +34,7 @@ class Retriever:
             external += f"知识库信息: \n\n{kb_text}"
 
         db_res = refs.get("graph_base").get("results", [])
-        if len(db_res) > 0:
+        if len(db_res["nodes"]) > 0:
             db_text = '\n'.join([f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res['edges']])
             external += f"图数据库信息: \n\n{db_text}"
 
@@ -164,4 +163,5 @@ class Retriever:
     def __call__(self, query, history, meta):
         refs = self.retrieval(query, history, meta)
         query = self.construct_query(query, refs, meta)
+        logger.debug(f"Retriever query: {query}")
         return query, refs

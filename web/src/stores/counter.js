@@ -20,6 +20,14 @@ export const useConfigStore = defineStore('config', () => {
 
   function setConfigValue(key, value) {
     config.value[key] = value
+    fetch('/api/config', {
+      method: 'POST',
+      body: JSON.stringify(config.value),
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Success:', data)
+    })
   }
 
   return { config, setConfig, setConfigValue }

@@ -38,15 +38,17 @@ console.log(route)
       </div>
       <div class="nav">
         <RouterLink to="/chat" class="nav-item" active-class="active">
-          <component :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
+          <component class="icon" :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
+          <span class="text">对话</span>
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
-          <component :is="route.path.startsWith('/database') ? BookFilled : BookOutlined" />
+          <component class="icon" :is="route.path.startsWith('/database') ? BookFilled : BookOutlined" />
+          <span class="text">知识</span>
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
-      <RouterLink to="/setting" class="setting" active-class="active">
-        <component :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
+      <RouterLink  class="nav-item setting" to="/setting" active-class="active">
+        <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
       </RouterLink>
     </div>
     <a-config-provider :theme="themeConfig">
@@ -86,15 +88,15 @@ div.header, #app-router-view {
   flex: 0 0 80px;
   justify-content: flex-start;
   align-items: center;
-  background-color: #F2F6F7;
+  background-color: var(--main-light-2);
   height: 100%;
   width: 80px;
   border-right: 1px solid #e2eef3;
 
-  & .logo {
-    width: 50px;
-    height: 50px;
-    margin: 20px 0;
+  .logo {
+    width: 40px;
+    height: 40px;
+    margin: 30px 0;
 
     img {
       width: 100%;
@@ -111,6 +113,7 @@ div.header, #app-router-view {
   }
 
   .setting {
+    width: auto;
     font-size: 20px;
     color: #333;
     margin: 20px 0;
@@ -129,33 +132,37 @@ div.header, #app-router-view {
   position: relative;
   height: 45px;
   gap: 16px;
-}
 
-.header .nav .nav-item {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: #222;
-  font-size: 20px;
-  transition: background-color 0.2s ease-in-out;
-  margin: 0 10px;
+  .nav-item {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: transparent;
+    color: #222;
+    font-size: 20px;
+    transition: background-color 0.2s ease-in-out;
+    margin: 0 10px;
 
-  &.active {
-    font-weight: bold;
-    color: var(--main-color);
-    background-color: #e2eef3;
-  }
+    .text {
+      display: none;
+    }
 
-  &:hover {
-    background-color: #e2eef3;
-    cursor: pointer;
+    &.active {
+      font-weight: bold;
+      color: var(--main-color);
+      background-color: #e2eef3;
+    }
+
+    &:hover {
+      background-color: #e2eef3;
+      cursor: pointer;
+    }
   }
 }
 
 @media (max-width: 520px) {
   .app-layout {
-    flex-direction: column;
+    flex-direction: column-reverse;
   }
 
   .app-layout div.header {
@@ -167,9 +174,10 @@ div.header, #app-router-view {
     align-items: center;
     flex: 0 0 60px;
     border-right: none;
-    border-bottom: 1px solid #e2eef3;
+    border-top: 1px solid #e2eef3;
 
     .logo {
+      display: none;
       flex-shrink: 0;
       width: 40px;
       height: 40px;
@@ -178,8 +186,11 @@ div.header, #app-router-view {
 
     .setting {
       margin: 0;
+      width: 60px;
     }
   }
+
+
 
   .app-layout .nav {
     flex-direction: row;
@@ -188,12 +199,29 @@ div.header, #app-router-view {
     justify-content: center;
     gap: 0;
 
+    .nav-item {
+      text-decoration: none;
+
+      span.text {
+        display: block;
+        color: #333;
+      }
+      span.icon {
+        display: none;
+      }
+    }
+
     .nav-item:hover {
       background-color: transparent;
     }
 
     .nav-item.active {
+      font-weight: bold;
       background-color: transparent;
+
+      span.text {
+        font-weight: bold;
+      }
     }
   }
   .app-layout .chat-box::webkit-scrollbar {

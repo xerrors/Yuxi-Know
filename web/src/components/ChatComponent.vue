@@ -1,6 +1,6 @@
 <!-- ChatComponent.vue -->
 <template>
-  <div class="chat">
+  <div class="chat"  ref="chatContainer">
     <div class="header">
       <div class="header__left">
         <div
@@ -11,11 +11,10 @@
           <MenuOutlined />
         </div>
         <div
-          v-if="!state.isSidebarOpen"
           class="newchat nav-btn"
           @click="$emit('newconv')"
         >
-          <FormOutlined />
+          <PlusCircleOutlined /> <span class="text">新对话</span>
         </div>
       </div>
       <div class="header__right">
@@ -24,14 +23,14 @@
           <GoldenFilled v-if="meta.use_graph"/>
         </div> -->
         <a-dropdown v-if="state.selectedKB !== null">
-          <a class="ant-dropdown-link nav-btn text" @click.prevent>
-            <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
-            {{ state.selectedKB === null ? '未选择' : state.databases[state.selectedKB]?.name }}
+          <a class="ant-dropdown-link nav-btn" @click.prevent>
+            <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />
+            <span class="text">{{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}</span>
           </a>
           <template #overlay>
             <a-menu>
               <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
-                <a href="javascript:;">{{ db.name }}</a>
+                <a href="javascript:;" >{{ db.name }}</a>
               </a-menu-item>
               <a-menu-item  @click="state.selectedKB = null">
                 <a href="javascript:;">不使用</a>
@@ -40,7 +39,7 @@
           </template>
         </a-dropdown>
         <div class="nav-btn text" @click="state.showPanel = !state.showPanel">
-          <component :is="state.showPanel ? SettingFilled : SettingOutlined" />
+          <component :is="state.showPanel ? SettingFilled : SettingOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="state.showPanel" class="my-panal" ref="panel">
           <div class="graphbase flex-center">
@@ -49,7 +48,7 @@
               <a-dropdown>
                 <a class="ant-dropdown-link " @click.prevent>
                   <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
-                  {{ state.selectedKB === null ? '未选择' : state.databases[state.selectedKB]?.name }}
+                  {{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}
                 </a>
                 <template #overlay>
                   <a-menu>
@@ -86,7 +85,7 @@
         </div>
       </div>
     </div>
-    <div ref="chatBox" class="chat-box">
+    <div class="chat-box">
       <div
         v-for="message in conv.messages"
         :key="message.id"
@@ -98,27 +97,33 @@
           v-html="renderMarkdown(message.text)"
           class="message-md"
           @click="consoleMsg(message)"></p>
+
+        <div class="refs" v-if="message.role=='received' && message.refs?.knowledge_base.results.length > 0">
+          <a-tag
+            v-for="(ref, index) in message.refs?.knowledge_base.results"
+            :key="index"
+            color="blue"
+          >
+            {{ ref.id }}
+          </a-tag>
+        </div>
       </div>
     </div>
-    <div class="input-box">
-      <a-textarea
-        class="user-input"
-        v-model:value="conv.inputText"
-        @keydown="handleKeyDown"
-        placeholder="输入问题……"
-        :auto-size="{ minRows: 1, maxRows: 10 }"
-      />
-      <!-- <input
-        class="user-input"
-        v-model="conv.inputText"
-        @keydown.enter="sendMessage"
-        placeholder="输入问题……"
-      /> -->
-      <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)">
-        <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-      </a-button>
+    <div class="bottom">
+      <div class="input-box">
+        <a-textarea
+          class="user-input"
+          v-model:value="conv.inputText"
+          @keydown="handleKeyDown"
+          placeholder="输入问题……"
+          :auto-size="{ minRows: 1, maxRows: 10 }"
+        />
+        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)">
+          <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
+        </a-button>
+      </div>
+      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性</p>
     </div>
-    <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性</p>
   </div>
 </template>
 
@@ -136,6 +141,7 @@ import {
   GoldenFilled,
   SettingOutlined,
   SettingFilled,
+  PlusCircleOutlined,
 } from '@ant-design/icons-vue'
 import { marked } from 'marked';
 
@@ -147,13 +153,13 @@ const props = defineProps({
 const emit = defineEmits(['renameTitle'])
 
 const { conv, state } = toRefs(props)
-const chatBox = ref(null)
+const chatContainer = ref(null)
 const isStreaming = ref(false)
 const panel = ref(null)
 const examples = ref([
   '写一个冒泡排序',
   '肉碱是什么？',
-  '介绍一下江南大学',
+  '洋葱的功效是什么？',
   'A大于B，B小于C，A和C哪个大？',
   '今天天气怎么样？'
 ])
@@ -161,7 +167,7 @@ const examples = ref([
 const meta = reactive({
   db_name: computed(() => state.value.databases[state.value.selectedKB]?.metaname),
   use_graph: false,
-  use_search: false,
+  use_web: false,
   graph_name: "neo4j",
 })
 
@@ -210,7 +216,7 @@ const renderMarkdown = (text) => marked(text)
 
 const scrollToBottom = () => {
   setTimeout(() => {
-    chatBox.value.scrollTop = chatBox.value.scrollHeight - chatBox.value.clientHeight
+    chatContainer.value.scrollTop = chatContainer.value.scrollHeight - chatContainer.value.clientHeight
   }, 10)
 }
 
@@ -253,10 +259,11 @@ const appendAiMessage = (message, refs=null) => {
   scrollToBottom()
 }
 
-const updateMessage = (text, id) => {
+const updateMessage = (text, id, refs) => {
   const message = conv.value.messages.find((message) => message.id === id)
   if (message) {
     message.text = text
+    message.refs = refs
   } else {
     console.error('Message not found')
   }
@@ -320,7 +327,7 @@ const sendMessage = () => {
 
           try {
             const data = JSON.parse(message)
-            updateMessage(data.response, cur_res_id)
+            updateMessage(data.response, cur_res_id, data.refs)
             conv.value.history = data.history
             buffer = ''
           } catch (e) {
@@ -353,62 +360,64 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .chat {
-  width: 200px;
-  max-width: 1100px;
-  margin: 0 auto;
+  position: relative;
+  width: 100%;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
   background: white;
   position: relative;
   box-sizing: border-box;
-  flex: 5 5 auto;
-}
+  flex: 5 5 200px;
+  overflow-y: scroll;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
 
-.chat div.header {
-  height: var(--header-height);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
-}
-
-.chat div.header {
-  user-select: none;
-
-  .header__left, .header__right {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, and Opera */
   }
-}
 
-.ant-dropdown-link {
-  color: var(--c-text-light-1);
-  cursor: pointer;
-}
+  .header {
+    user-select: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: white;
+    height: var(--header-height);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
 
-.nav-btn {
-  font-size: 1.2rem;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 8px;
-  color: #6D6D6D;
-  cursor: pointer;
+    .header__left, .header__right {
+      display: flex;
+      align-items: center;
+    }
+  }
 
-  &.text {
+  .nav-btn {
+    height: 2.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    color: var(--c-text-light-1);
+    cursor: pointer;
     font-size: 1rem;
     width: auto;
     padding: 0.5rem 1rem;
+
+    .text {
+      margin-left: 10px;
+    }
+
+    &:hover {
+      background-color: #EDF4F5;
+    }
   }
 
-  &:hover {
-    background-color: #ECECEC;
-  }
 }
-
 .metas {
   display: flex;
   gap: 8px;
@@ -424,7 +433,7 @@ onMounted(() => {
   box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   padding: 12px;
-  z-index: 100;
+  z-index: 101;
   width: 250px;
 
   .flex-center {
@@ -447,138 +456,168 @@ onMounted(() => {
 }
 
 
-div.chat-examples {
+.chat-examples {
   padding: 0 50px;
   text-align: center;
   position: absolute;
   top: 20%;
   width: 100%;
   z-index: 100;
-}
 
-.chat-examples h1 {
-  margin-bottom: 20px;
-  font-size: 24px;
-  color: #333;
-}
-
-.opt {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-.opt__button {
-  background-color: white;
-  color: #222;
-  padding: 4px 1rem;
-  border-radius: 1rem;
-  cursor: pointer;
-  border: 2px solid white;
-  transition: background-color 0.3s;
-  box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.05);
-
-  &:hover {
-    background-color: #fcfcfc;
-    box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.1);
+  h1 {
+    margin-bottom: 20px;
+    font-size: 24px;
+    color: #333;
   }
+
+  .opt {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+
+    .opt__button {
+      background-color: white;
+      color: #222;
+      padding: 6px 1rem;
+      border-radius: 1rem;
+      cursor: pointer;
+      // border: 2px solid var(--main-light-2);
+      transition: background-color 0.3s;
+      box-shadow: 0px 0px 10px 4px var(--main-light-2);
+
+
+      &:hover {
+        background-color: #fcfcfc;
+        box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.1);
+      }
+    }
+  }
+
 }
 
 .chat-box {
-  flex: 1;
-  overflow-y: auto;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  flex-grow: 1;
   padding: 1rem;
   display: flex;
   flex-direction: column;
+
+  .message-box {
+    max-width: 95%;
+    display: inline-block;
+    border-radius: 0.8rem;
+    margin: 0.8rem 0;
+    padding: 1rem;
+    user-select: text;
+    word-break: break-word;
+    font-size: 16px;
+    font-variation-settings: 'wght' 400, 'opsz' 10.5;
+    font-weight: 400;
+    box-sizing: border-box;
+    color: #0D0D0D;
+    /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
+    /* animation: slideInUp 0.1s ease-in; */
+  }
+
+  .message-box.sent {
+    background-color: #efefef;
+    line-height: 24px;
+    background: #EDF4F5;
+    align-self: flex-end;
+  }
+
+  .message-box.received {
+    color: initial;
+    width: fit-content;
+    padding-top: 16px;
+    background-color: #F5F7F8;
+    text-align: left;
+    word-wrap: break-word;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    text-align: justify;
+  }
+
+  p.message-text {
+    max-width: 100%;
+    word-wrap: break-word;
+    margin-bottom: 0;
+  }
+
+  p.message-md {
+    word-wrap: break-word;
+    margin-bottom: 0;
+  }
+
+  .refs {
+    margin-bottom: 20px;
+  }
 }
 
-.message-box {
-  max-width: 90%;
-  display: inline-block;
-  border-radius: 0.8rem;
-  margin: 0.8rem 0;
-  padding: 0.8rem;
-  user-select: text;
-  word-break: break-word;
-  font-size: 16px;
-  font-variation-settings: 'wght' 400, 'opsz' 10.5;
-  font-weight: 400;
-  box-sizing: border-box;
-  color: #0D0D0D;
-  /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
-  /* animation: slideInUp 0.1s ease-in; */
-}
 
-.message-box.sent {
-  background-color: #efefef;
-  line-height: 24px;
-  background: #EDF4F5;
-  align-self: flex-end;
-}
 
-.message-box.received {
-  color: initial;
-  width: fit-content;
-  padding-top: 16px;
-  background-color: #f7f7f7;
-  text-align: left;
-  word-wrap: break-word;
-  margin-bottom: 0;
-  padding-bottom: 0;
-  text-align: justify;
-}
-
-p.message-text {
-  max-width: 100%;
-  word-wrap: break-word;
-  margin-bottom: 0;
-}
-
-p.message-md {
-  word-wrap: break-word;
-  margin-bottom: 0;
-}
-
-img.message-image {
-  max-width: 300px;
-  max-height: 50vh;
-  object-fit: contain;
-}
-
-.input-box {
-  width: calc(100% - 2rem);
-  max-width: calc(1100px - 2rem);
+.bottom {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
   margin: 0 auto;
-  display: flex;
-  align-items: flex-end;
-  background-color: #F4F4F4;
-  border-radius: 2rem;
-  height: auto;
-  padding: 0.5rem;
+  padding: 0.5rem 2rem;
+  background: white;
+
+
+  .input-box {
+    display: flex;
+    width: 100%;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: flex-end;
+    background-color: #F5F7F8;
+    border-radius: 2rem;
+    height: auto;
+    padding: 0.5rem;
+
+    .user-input {
+      flex: 1;
+      height: 40px;
+      padding: 0.5rem 1rem;
+      background-color: transparent;
+      border: none;
+      font-size: 1.2rem;
+      margin: 0 0.6rem;
+      color: #111111;
+      font-size: 16px;
+      font-variation-settings: 'wght' 400, 'opsz' 10.5;
+      outline: none;
+
+      &:focus {
+        outline: none;
+        box-shadow: none;
+      }
+
+      &:active {
+        outline: none;
+      }
+    }
+  }
+
+  .note {
+    width: 100%;
+    font-size: small;
+    text-align: center;
+    padding: 0rem;
+    color: #ccc;
+    margin: 4px 0;
+  }
 }
 
-.user-input {
-  flex: 1;
-  height: 40px;
-  padding: 0.5rem 1rem;
-  background-color: transparent;
-  border: none;
-  font-size: 1.2rem;
-  margin: 0 0.6rem;
-  color: #111111;
-  font-size: 16px;
-  font-variation-settings: 'wght' 400, 'opsz' 10.5;
-  outline: none;
 
-  &:focus {
-    outline: none;
-    box-shadow: none;
-  }
 
-  &:active {
-    outline: none;
-  }
+.ant-dropdown-link {
+  color: var(--c-text-light-1);
+  cursor: pointer;
 }
 
 .ant-btn-icon-only {
@@ -590,6 +629,10 @@ img.message-image {
   background-color: black;
   border-radius: 3rem;
   color: white;
+
+  &:hover {
+    color: white;
+  }
 }
 
 button:disabled {
@@ -597,25 +640,33 @@ button:disabled {
   cursor: not-allowed;
 }
 
-p.note {
-  width: 100%;
-  font-size: small;
-  text-align: center;
-  padding: 0rem;
-  color: #ccc;
-  margin: 4px 0;
-}
+@media (max-width: 520px) {
+  .chat {
+    height: calc(100vh - 60px);
+  }
 
-/*
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
+  .chat-container .chat .header {
+    background: var(--main-light-2);
+    .header__left, .header__right {
+      gap: 20px;
+    }
+
+    .nav-btn {
+      font-size: 1.5rem;
+      padding: 0;
+
+      &:hover {
+        background-color: transparent;
+        color: black;
+      }
+
+      .text {
+        display: none;
+      }
+    }
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+
+
+
 }
-  */
 </style>

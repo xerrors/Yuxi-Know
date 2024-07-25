@@ -7,12 +7,18 @@
     <div class="actions">
       <div class="actions-left">
         <a-button @click="state.showModal = true">上传文件</a-button>
-        <a-modal v-model:open="state.showModal" title="上传文件" @ok="handleUpload">
+        <a-modal
+          :open="state.showModal" title="上传文件"
+          @ok="addDocumentByFile"
+          @cancel="() => state.showModal = false"
+          ok-text="添加到图数据库" cancel-text="取消"
+          :confirm-loading="state.precessing">
           <div class="upload">
             <a-upload-dragger
               class="upload-dragger"
               v-model:fileList="fileList"
               name="file"
+              :fileList="fileList"
               :max-count="1"
               :disabled="state.precessing"
               action="/api/database/upload"
@@ -25,16 +31,6 @@
               </p>
             </a-upload-dragger>
           </div>
-          <a-button
-            type="primary"
-            @click="addDocumentByFile"
-            :loading="state.precessing"
-            :disabled="fileList.length === 0"
-            style="margin: 0px 20px 20px 0;"
-          >
-            添加到图数据库
-          </a-button>
-          <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
         </a-modal>
       </div>
       <div class="action-right">
@@ -42,6 +38,7 @@
           v-model="state.searchInput"
           placeholder="输入要查询的实体"
           style="width: 200px"
+          @keydown.enter="onSearch"
         />
         <a-button
           type="primary"
@@ -121,14 +118,15 @@ const addDocumentByFile = () => {
       file_path: files[0]
     }),
   })
-  // .then(response => response.json())
-  //   .then((data) => {
-  //     message.success(data.message);
-  //   })
-  //   .catch((error) => {
-  //     message.error(error.message);
-  //   })
-  //   .finally(() => state.precessing = false)
+  .then(response => response.json())
+  .then((data) => {
+    message.success(data.message);
+    state.showModal = false;
+  })
+  .catch((error) => {
+    message.error(error.message);
+  })
+  .finally(() => state.precessing = false)
 };
 
 const onSearch = () => {
@@ -261,7 +259,7 @@ const handleDrop = (event) => {
   margin: 20px 0;
   border-radius: 16px;
   width: 100%;
-  height: 400px;
+  height: calc(100% - 200px);
 }
 
 

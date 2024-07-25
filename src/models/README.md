@@ -30,6 +30,8 @@ python -m vllm.entrypoints.openai.api_server \
 
 ### 2. 向量模型支持
 
+需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，回导致知识库不可用。未来考虑增加一键迁移脚本。
+
 
 |模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
 |:-|:-|:-|

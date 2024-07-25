@@ -17,39 +17,43 @@
       <div class="tags">
         <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
       </div>
+      <a-divider/>
+      <h3 style="margin-top: 20px;">向知识库中添加文件</h3>
+      <div class="upload">
+        <a-upload-dragger
+          class="upload-dragger"
+          v-model:fileList="fileList"
+          name="file"
+          :multiple="true"
+          :disabled="state.loading"
+          action="/api/database/upload"
+          @change="handleFileUpload"
+          @drop="handleDrop"
+        >
+          <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+          <p class="ant-upload-hint">
+            目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
+          </p>
+        </a-upload-dragger>
+      </div>
+      <a-button
+        type="primary"
+        @click="addDocumentByFile"
+        :loading="state.loading"
+        :disabled="fileList.length === 0"
+        style="margin: 0px 20px 20px 20px;"
+      >
+        添加到知识库
+      </a-button>
+      <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
     </div>
     <div class="sider-bottom">
     </div>
   </div>
   <div class="db-info-container">
-    <h2>向知识库中添加文件</h2>
-    <div class="upload">
-      <a-upload-dragger
-        class="upload-dragger"
-        v-model:fileList="fileList"
-        name="file"
-        :multiple="true"
-        :disabled="state.loading"
-        action="/api/database/upload"
-        @change="handleFileUpload"
-        @drop="handleDrop"
-      >
-        <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
-        <p class="ant-upload-hint">
-          目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
-        </p>
-      </a-upload-dragger>
+    <div class="query-test">
+      用于测试检索
     </div>
-    <a-button
-      type="primary"
-      @click="addDocumentByFile"
-      :loading="state.loading"
-      :disabled="fileList.length === 0"
-      style="margin: 0px 20px 20px 0;"
-    >
-      添加到知识库
-    </a-button>
-    <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
     <a-table :columns="columns" :data-source="database.files" row-key="file_id" class="my-table">
       <template #bodyCell="{ column, text, record }">
         <template v-if="column.key === 'file_id'">
@@ -398,6 +402,17 @@ onMounted(() => {
 .db-info-container {
   padding: 20px;
   flex: 1 1 auto;
+
+  .query-test {
+    width: 100%;
+    height: 300px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--main-light-3);
+    margin-bottom: 20px;
+    border-radius: 8px;
+  }
 }
 
 .top {
@@ -446,19 +461,19 @@ onMounted(() => {
 .my-table {
   .pdf, .txt, .md {
     color: white;
-    padding: 4px 8px;
-    border-radius: 2px;
+    padding: 2px 4px;
+    border-radius: 4px;
     font-size: small;
     font-weight: bold;
   }
 
   .pdf {
-    background: #f17592;
+    background: #005F77;
   }
 
   .txt {
 
-    background: #31c989;
+    background: #068033;
   }
 
   button.main-btn {

@@ -1,4 +1,4 @@
-python -m vllm.entrypoints.openai.api_server \
+CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
 	--model="/home/zwj/workspace/models/chatglm3-6b" \
 	--tensor-parallel-size 1 \
 	--trust-remote-code \
