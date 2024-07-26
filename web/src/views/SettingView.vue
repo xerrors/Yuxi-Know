@@ -150,7 +150,7 @@ const sendRestart = () => {
     flex-direction: column;
     gap: 16px;
     // box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border: 1px solid #E2EEF3;
+    border: 1px solid var(--main-light-3);
   }
 
   .card {

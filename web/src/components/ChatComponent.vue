@@ -413,7 +413,7 @@ onMounted(() => {
     }
 
     &:hover {
-      background-color: #EDF4F5;
+      background-color: var(--main-light-3);
     }
   }
 
@@ -450,7 +450,7 @@ onMounted(() => {
     transition: background-color 0.3s;
 
     &:hover {
-      background-color: #EAEAEA;
+      background-color: var(--main-light-3);
     }
   }
 }
@@ -482,9 +482,9 @@ onMounted(() => {
       padding: 6px 1rem;
       border-radius: 1rem;
       cursor: pointer;
-      // border: 2px solid var(--main-light-2);
+      // border: 2px solid var(--main-light-4);
       transition: background-color 0.3s;
-      box-shadow: 0px 0px 10px 4px var(--main-light-2);
+      box-shadow: 0px 0px 10px 4px var(--main-light-4);
 
 
       &:hover {
@@ -525,7 +525,7 @@ onMounted(() => {
   .message-box.sent {
     background-color: #efefef;
     line-height: 24px;
-    background: #EDF4F5;
+    background: var(--main-light-3);
     align-self: flex-end;
   }
 
@@ -646,7 +646,7 @@ button:disabled {
   }
 
   .chat-container .chat .header {
-    background: var(--main-light-2);
+    background: var(--main-light-4);
     .header__left, .header__right {
       gap: 20px;
     }

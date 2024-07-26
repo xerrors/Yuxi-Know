@@ -3,7 +3,7 @@
     <div v-if="state.isSidebarOpen" class="conversations">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
-         <span>对话历史</span>
+         <span style="font-weight: bold;">对话历史</span>
         <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
       </div>
       <div class="conversation"
@@ -143,7 +143,7 @@ onMounted(() => {
   width: 100px;
   height: 100%;
   overflow-y: auto;
-  border-right: 1px solid #EDF4F5;
+  border-right: 1px solid var(--main-light-3);
   min-width: var(--min-sider-width);
   max-width: 200px;
   background-color: #FAFCFD;
@@ -171,7 +171,7 @@ onMounted(() => {
       cursor: pointer;
 
       &:hover {
-        background-color: #ECECEC;
+        background-color: var(--main-light-3);
       }
     }
   }
@@ -184,7 +184,6 @@ onMounted(() => {
     cursor: pointer;
     width: 100%;
     user-select: none;
-    transition: border-left 0.1s;
 
     &__title {
       color: var(--c-black-light-3);
@@ -205,7 +204,8 @@ onMounted(() => {
 
     &.active {
       border-left: 3px solid var(--main-color);
-      background-color: #EDF4F5;
+      padding-left: 13px;
+      background-color: var(--main-light-3);
 
       & .conversation__title {
         color: var(--c-black-light-1);
@@ -213,7 +213,7 @@ onMounted(() => {
     }
 
     &:hover {
-      background-color: #EDF4F5;
+      background-color: var(--main-light-3);
 
       & .conversation__delete {
         display: block;

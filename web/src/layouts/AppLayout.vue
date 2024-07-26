@@ -88,10 +88,10 @@ div.header, #app-router-view {
   flex: 0 0 80px;
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--main-light-2);
+  background-color: var(--main-light-4);
   height: 100%;
   width: 80px;
-  border-right: 1px solid #e2eef3;
+  border-right: 1px solid var(--main-light-2);
 
   .logo {
     width: 40px;
@@ -150,11 +150,11 @@ div.header, #app-router-view {
     &.active {
       font-weight: bold;
       color: var(--main-color);
-      background-color: #e2eef3;
+      background-color: var(--main-light-2);
     }
 
     &:hover {
-      background-color: #e2eef3;
+      background-color: var(--main-light-2);
       cursor: pointer;
     }
   }
@@ -174,7 +174,7 @@ div.header, #app-router-view {
     align-items: center;
     flex: 0 0 60px;
     border-right: none;
-    border-top: 1px solid #e2eef3;
+    border-top: 1px solid var(--main-light-2);
 
     .logo {
       display: none;
