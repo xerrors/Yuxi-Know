@@ -10,3 +10,25 @@ export const useCounterStore = defineStore('counter', () => {
 
   return { count, doubleCount, increment }
 })
+
+
+export const useConfigStore = defineStore('config', () => {
+  const config = ref({})
+  function setConfig(newConfig) {
+    config.value = newConfig
+  }
+
+  function setConfigValue(key, value) {
+    config.value[key] = value
+    fetch('/api/config', {
+      method: 'POST',
+      body: JSON.stringify(config.value),
+    })
+    .then(response => response.json())
+    .then(data => {
+      console.log('Success:', data)
+    })
+  }
+
+  return { config, setConfig, setConfigValue }
+})

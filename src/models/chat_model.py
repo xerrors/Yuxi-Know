@@ -56,6 +56,13 @@ class Zhipu(OpenAIBase):
         base_url = "https://open.bigmodel.cn/api/paas/v4/"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
+class VLLM(OpenAIBase):
+    def __init__(self, model_name=None):
+        model_name = model_name or "vllm"
+        api_key = os.getenv("VLLM_API_KEY")
+        base_url = os.getenv("VLLM_API_BASE")
+        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
+
 
 import qianfan
 
@@ -100,3 +107,5 @@ class Qianfan:
             stream=False,
         )
         return QianfanResponse(response["body"]["result"])
+
+

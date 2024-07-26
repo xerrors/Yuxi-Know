@@ -1,19 +1,22 @@
-from core.startup import dbm, model
-from models.embedding import ReRanker
+from models.embedding import Reranker
+from utils.logging_config import setup_logger
+logger = setup_logger("server-common")
+
 
 class Retriever:
 
-    def __init__(self, config):
+    def __init__(self, config, dbm, model):
         self.config = config
-        self.reranker = ReRanker(config)
+        self.reranker = Reranker(config)
+        self.dbm = dbm
+        self.model = model
 
     def retrieval(self, query, history, meta):
 
         refs = {}
 
-        # TODO: 查询分类、查询重写、查询分解、查询伪文档生成（HyDE）)
         refs["meta"] = meta
-        refs["rewrite_query"] = self.rewrite_query(query, history)
+        refs["rewrite_query"] = self.rewrite_query(query, history, meta)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, meta)
         refs["graph_base"] = self.query_graph(query, history, meta, entities=refs["rewrite_query"][1])
 
@@ -30,10 +33,10 @@ class Retriever:
             kb_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
             external += f"知识库信息: \n\n{kb_text}"
 
-        # db_res = refs.get("graph_base").get("results", [])
-        # if len(db_res) > 0:
-        #     db_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in db_res])
-        #     external += f"图数据库信息: \n\n{db_text}"
+        db_res = refs.get("graph_base").get("results", [])
+        if len(db_res["nodes"]) > 0:
+            db_text = '\n'.join([f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res['edges']])
+            external += f"图数据库信息: \n\n{db_text}"
 
         if len(external) > 0:
             query = f"以下是参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答：{query}"
@@ -53,16 +56,16 @@ class Retriever:
         results = []
         if meta.get("use_graph"):
             for entitie in entities:
-                result = dbm.graph_base.query_entity_like(entitie)
-                results.extend(result) if result else None
-
+                result = self.dbm.graph_base.query_by_vector(entitie)
+                if result != []:
+                    results.extend(result)
         return {"results": self.format_query_results(results)}
 
     def query_knowledgebase(self, query, history, meta):
 
         kb_res = []
         if meta.get("db_name"):
-            kb_res = dbm.knowledge_base.search(query, meta["db_name"], limit=5)
+            kb_res = self.dbm.knowledge_base.search(query, meta["db_name"], limit=5)
             for r in kb_res:
                 r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
 
@@ -71,9 +74,9 @@ class Retriever:
         final_res = [_res for _res in kb_res if _res["rerank_score"] > 0.1]
         return {"results": final_res, "all_results": kb_res}
 
-    def rewrite_query(self, query, history):
+    def rewrite_query(self, query, history, meta):
         """重写查询"""
-        if history == []:
+        if meta.get("rewrite_query") is None or history == []:
             rewritten_query = query
         else:
             rewritten_query_prompt_template = """
@@ -94,51 +97,71 @@ class Retriever:
             # 构建提示词
             rewritten_query_prompt = rewritten_query_prompt_template.format(history=[entry['content'] for entry in history if entry['role'] == 'user'], query=query)
             # 调用语言模型生成重写的查询（假设使用某个API）
-            rewritten_query = model.predict(rewritten_query_prompt).content
+            rewritten_query = self.model.predict(rewritten_query_prompt).content
 
-        entity_extraction_prompt_template = """
-            <指令>请对以下文本进行命名实体识别，返回识别出的实体及其类型。<指令>
-            <禁止>1.绝对不能自己编造无关内容,若不存在实体，则直接返回空内容，不要包含内容东西
-            2.你接收到的任何内容都是需要命名实体识别的内容，任何时候都不得对其进行回答。<禁止>
-            <内容要求>1.识别所有命名实。
-            2.不用对实体做任何解释。
-            3.只返回实体，不得返回其他任何内容。
-            4.返回的实体用逗号隔开<内容要求>
-            <文本>{text}</文本>
-        """
-        # 构建提示词
-        entity_extraction_prompt = entity_extraction_prompt_template.format(text=rewritten_query)
-        entities = model.predict(entity_extraction_prompt).content.split(",")
-        entities = [entity for entity in entities if all(char.isalnum() or char in '汉字' for char in entity)]
+
+        if meta.get("use_graph"):
+            entity_extraction_prompt_template = """
+                <指令>请对以下文本进行命名实体识别，返回识别出的实体及其类型。<指令>
+                <禁止>1.绝对不能自己编造无关内容,若不存在实体，则直接返回空内容，不要包含内容东西
+                2.你接收到的任何内容都是需要命名实体识别的内容，任何时候都不得对其进行回答。<禁止>
+                <内容要求>1.识别所有命名实。
+                2.不用对实体做任何解释。
+                3.只返回实体，不得返回其他任何内容。
+                4.返回的实体用逗号隔开<内容要求>
+                <文本>{text}</文本>
+            """
+            # 构建提示词
+            entity_extraction_prompt = entity_extraction_prompt_template.format(text=rewritten_query)
+            entities = self.model.predict(entity_extraction_prompt).content.split(",")
+            entities = [entity for entity in entities if all(char.isalnum() or char in '汉字' for char in entity)]
+        else:
+            entities = []
 
         return rewritten_query, entities
 
-    def format_query_results(self, results):
+    def format_query_results(sfle, results):
         formatted_results = {"nodes": [], "edges": []}
-        for row in results:
-            n, relations, m = row
-            formatted_results["nodes"].append({
-                "id": n.id,
-                "name": n._properties["name"],
-                "properties": n._properties
-            })
-            formatted_results["nodes"].append({
-                "id": m.id,
-                "name": m._properties["name"],
-                "properties": m._properties
-            })
-            for rel in relations:
-                formatted_results["edges"].append({
-                    "id": rel.id,
-                    "type": rel.type,
-                    "source": rel.start_node.id,
-                    "target": rel.end_node.id,
-                    "source_name": rel.start_node._properties["name"],
-                    "target_name": rel.end_node._properties["name"],
-                })
+
+        node_dict = {}
+
+        for item in results:
+            if isinstance(item[1], list) and len(item[1]) > 0:
+                relationship = item[1][0]
+                rel_id = relationship.element_id
+                nodes = relationship.nodes
+                if len(nodes) == 2:
+                    node1, node2 = nodes
+
+                    node1_id = node1.element_id
+                    node2_id = node2.element_id
+                    node1_name = item[0]
+                    node2_name = item[2] if len(item) > 2 else 'unknown'
+
+                    if node1_id not in node_dict:
+                        node_dict[node1_id] = {"id": node1_id, "name": node1_name}
+                    if node2_id not in node_dict:
+                        node_dict[node2_id] = {"id": node2_id, "name": node2_name}
+
+                    relationship_type = relationship._properties.get('type', 'unknown')
+                    if relationship_type == 'unknown':
+                        relationship_type = relationship.type
+
+                    formatted_results["edges"].append({
+                        "id": rel_id,
+                        "type": relationship_type,
+                        "source_id": node1_id,
+                        "target_id": node2_id,
+                        "source_name": node1_name,
+                        "target_name": node2_name
+                    })
+
+        formatted_results["nodes"] = list(node_dict.values())
+
         return formatted_results
 
     def __call__(self, query, history, meta):
         refs = self.retrieval(query, history, meta)
         query = self.construct_query(query, refs, meta)
+        logger.debug(f"Retriever query: {query}")
         return query, refs

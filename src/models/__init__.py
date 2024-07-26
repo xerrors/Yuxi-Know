@@ -6,7 +6,7 @@ def select_model(config):
     model_provider = config.model_provider
     model_name = config.model_name
 
-    logger.info(f"Selecting model from {model_provider} with name {model_name}")
+    logger.info(f"Selecting model from {model_provider} with {model_name or 'default'}")
 
     if model_provider == "deepseek":
         from models.chat_model import DeepSeek
@@ -19,6 +19,10 @@ def select_model(config):
     elif model_provider == "qianfan":
         from models.chat_model import Qianfan
         return Qianfan(model_name)
+
+    elif model_provider == "vllm":
+        from models.chat_model import VLLM
+        return VLLM(model_name)
 
     elif model_provider is None:
         raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")

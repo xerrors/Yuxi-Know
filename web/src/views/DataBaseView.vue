@@ -35,16 +35,19 @@
           <div class="icon"><ReadFilled /></div>
           <div class="info">
             <h3>{{ database.name }}</h3>
-            <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata.row_count }}</span></p>
+            <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata.row_count }}行</span></p>
           </div>
         </div>
         <p class="description">{{ database.description }}</p>
+        <div class="tags">
+          <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
+        </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
-    <h2>图数据库</h2>
+    <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
     <p>基于 neo4j 构建的图数据库。</p>
-    <div :class="{'graphloading': graphloading}">
+    <div :class="{'graphloading': graphloading}" v-if="graph">
       <div class="dbcard graphbase" @click="navigateToGraph">
         <div class="top">
           <div class="icon"><AppstoreFilled /></div>
@@ -64,16 +67,18 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch } from 'vue'
+import { ref, onMounted, reactive, watch, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
-import { ReadFilled, PlusOutlined, AppstoreFilled } from '@ant-design/icons-vue'
+import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
 const databases = ref([])
 const graph = ref(null)
 const graphloading = ref(false)
+
+const indicator = h(LoadingOutlined, {spin: true});
 
 const newDatabase = reactive({
   name: '',
@@ -184,25 +189,25 @@ onMounted(() => {
 }
 
 .database, .graphbase {
-    background-color: white;
-    box-shadow: 0px 1px 2px 0px rgba(16,24,40,.06),0px 1px 3px 0px rgba(16,24,40,.1);
-    border: 2px solid white;
-    transition: box-shadow 0.2s ease-in-out;
+  background-color: white;
+  box-shadow: 0px 1px 2px 0px rgba(16,24,40,.06),0px 1px 3px 0px rgba(16,24,40,.1);
+  border: 2px solid white;
+  transition: box-shadow 0.2s ease-in-out;
 
-    &:hover {
-      box-shadow: 0px 4px 6px -2px rgba(16,24,40,.03),0px 12px 16px -4px rgba(16,24,40,.08);
-    }
+  &:hover {
+    box-shadow: 0px 4px 6px -2px rgba(16,24,40,.03),0px 12px 16px -4px rgba(16,24,40,.08);
   }
+}
 
 .dbcard, .database {
   padding: 10px;
   border-radius: 12px;
-  width: 380px;
-  height: 150px;
+  width: 340px;
+  height: 160px;
   padding: 20px;
   cursor: pointer;
   flex: 1 1 380px;
-  max-width: 380px;
+  max-width: 450px;
 
   .top {
     display: flex;
@@ -226,6 +231,7 @@ onMounted(() => {
     .info {
       h3, p {
         margin: 0;
+        color: black;
       }
 
       p {
@@ -239,9 +245,10 @@ onMounted(() => {
     color: var(--c-text-light-1);
     overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
+    margin-bottom: 10px;
   }
 }
 

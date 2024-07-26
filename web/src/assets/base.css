@@ -10,10 +10,10 @@
 
   --c-indigo: #2c3e50;
 
-  --c-divider-light-1: rgba(60, 60, 60, 0.29);
-  --c-divider-light-2: rgba(60, 60, 60, 0.12);
-  --c-divider-dark-1: rgba(84, 84, 84, 0.65);
-  --c-divider-dark-2: rgba(84, 84, 84, 0.48);
+  --c-black-light-1: #333333;
+  --c-black-light-2: #454545;
+  --c-black-light-3: #666666;
+  --c-black-light-4: #999999;
 
   --c-text-light-1: var(--c-indigo);
   --c-text-light-2: rgba(60, 66, 70, 0.66);
@@ -27,8 +27,8 @@
   --color-background-soft: var(--c-white-soft);
   --color-background-mute: var(--c-white-mute);
 
-  --color-border: var(--c-divider-light-2);
-  --color-border-hover: var(--c-divider-light-1);
+  --color-border: var(--c-black-light-2);
+  --color-border-hover: var(--c-black-light-1);
 
   --color-heading: var(--c-text-light-1);
   --color-text: var(--c-text-light-1);
@@ -36,8 +36,11 @@
   --section-gap: 160px;
 
   --main-color: #005f77;
-  --main-color-light: #007f96;
   --main-color-dark: #004d5c;
+  --main-light-1: #007f96;
+  --main-light-2: #D3EAED;
+  --main-light-3: #EDF4F5;
+  --main-light-4: #F2F6F7;
   --min-width: 400px;
   --min-header-width: 80px;
   --min-sider-width: 100px;
@@ -50,8 +53,8 @@
     --color-background-soft: var(--c-black-soft);
     --color-background-mute: var(--c-black-mute);
 
-    --color-border: var(--c-divider-dark-2);
-    --color-border-hover: var(--c-divider-dark-1);
+    --color-border: var(--c-black-dark-2);
+    --color-border-hover: var(--c-black-dark-1);
 
     --color-heading: var(--c-text-dark-1);
     --color-text: var(--c-text-dark-2);

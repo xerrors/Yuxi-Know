@@ -6,6 +6,7 @@ from plugins import pdf2txt
 from core.knowledgebase import KnowledgeBase
 from core.filereader import pdfreader, plainreader
 from core.graphbase import GraphDatabase
+from models.embedding import get_embedding_model
 
 logger = setup_logger("DataBaseManager")
 
@@ -16,9 +17,11 @@ class DataBaseLite:
         self.description = description
         self.db_type = db_type
         self.db_id = kwargs.get("db_id", hashstr(name))
-        self.metaname = kwargs.get("metaname", f"{db_type}_{hashstr(name)}")
+        self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
         self.metadata = kwargs.get("metaname", {})
         self.files = kwargs.get("files", [])
+        self.embed_model = kwargs.get("embed_model", None)
+
 
     def update(self, metadata):
         self.metadata = metadata
@@ -29,6 +32,7 @@ class DataBaseLite:
             "description": self.description,
             "db_type": self.db_type,
             "db_id": self.db_id,
+            "embed_model": self.embed_model,
             "metaname": self.metaname,
             "metadata": self.metadata,
             "files": self.files
@@ -45,11 +49,12 @@ class DataBaseManager:
     def __init__(self, config=None) -> None:
         self.config = config
         self.database_path = "data/databases.json"
-        self.knowledge_base = KnowledgeBase(config)
+        self.embed_model = get_embedding_model(config)
+        self.knowledge_base = KnowledgeBase(config, self.embed_model)
+        self.graph_base = GraphDatabase(self.config, self.embed_model)
         self.data = {"databases": [], "graph": {}}
 
         if self.config.enable_knowledge_graph:
-            self.graph_base = GraphDatabase(self.config)
             self.graph_base.start()
 
         self._load_databases()
@@ -93,7 +98,7 @@ class DataBaseManager:
             return {"graph": {}, "message": "Graph database is not enabled"}
 
     def create_database(self, database_name, description, db_type):
-        new_database = DataBaseLite(database_name, description, db_type)
+        new_database = DataBaseLite(database_name, description, db_type, embed_model=self.config.embed_model)
 
         self.knowledge_base.add_collection(new_database.metaname)
         self.data["databases"].append(new_database)
@@ -102,6 +107,11 @@ class DataBaseManager:
 
     def add_files(self, db_id, files):
         db = self.get_kb_by_id(db_id)
+
+        if db.embed_model != self.config.embed_model:
+            logger.error(f"Embed model not match, {db.embed_model} != {self.config.embed_model}")
+            return {"message": "Embed model not match", "status": "failed"}
+
         new_files = []
         for file in files:
             # filenames = [f["filename"] for f in db.files]
@@ -120,10 +130,9 @@ class DataBaseManager:
         for idx, file in new_files:
             db.files[idx]["status"] = "processing"
 
-            text = self.read_text(file)
-            chunks = self.chunking(text)
-
             try:
+                text = self.read_text(file)
+                chunks = self.chunking(text)
                 self.knowledge_base.add_documents(
                     docs=chunks,
                     collection_name=db.metaname,
@@ -135,6 +144,8 @@ class DataBaseManager:
 
             self._save_databases()
 
+        return {"message": "全部解析完成", "status": "success"}
+
     def get_database_info(self, db_id):
         db = self.get_kb_by_id(db_id)
         if db is None:
@@ -144,7 +155,7 @@ class DataBaseManager:
             return db.to_dict()
 
     def read_text(self, file):
-        support_format = [".pdf", ".txt", "*.md"]
+        support_format = [".pdf", ".txt", ".md"]
         assert os.path.exists(file), "File not found"
         logger.info(f"Try to read file {file}")
 

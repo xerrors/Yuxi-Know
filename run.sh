@@ -11,13 +11,13 @@ stop_services() {
 # Trap signals to stop services
 trap stop_services SIGINT SIGTERM
 
-# Start the frontend service
-cd web
-npm run server &
-
-# Start the backend service
-cd ../src
+# Start the server
+cd src
 python api.py
+
+# Start the frontend service
+cd ../web
+npm run server &
 
 # Wait for all background jobs to finish
 wait
