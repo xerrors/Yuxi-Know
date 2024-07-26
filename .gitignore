@@ -32,3 +32,4 @@ src/data
 neo4j*
 */package-lock.json
 src/config/base.yaml
+web/package-lock.json
