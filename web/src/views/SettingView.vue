@@ -11,7 +11,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select ref="select" style="width: 220px"
+          <a-select ref="select" style="width: 160px"
             :value="configStore.config?.model_provider"
             @change="handleChange('model_provider', $event)"
           >
@@ -27,7 +27,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select style="width: 220px"
+          <a-select style="width: 160px"
             :value="configStore.config?.embed_model"
             @change="handleChange('embed_model', $event)"
           >
@@ -43,7 +43,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select style="width: 220px"
+          <a-select style="width: 160px"
             :value="configStore.config?.reranker"
             @change="handleChange('reranker', $event)"
           >
@@ -92,7 +92,7 @@
 <script setup>
 import { message } from 'ant-design-vue';
 import { computed, reactive, ref } from 'vue'
-import { useConfigStore } from '@/stores/counter';
+import { useConfigStore } from '@/stores/config';
 import { ReloadOutlined } from '@ant-design/icons-vue';
 
 const configStore = useConfigStore()
@@ -113,13 +113,12 @@ const handleChange = (key, e) => {
 }
 const sendRestart = () => {
   console.log('Restarting...')
-  state.loading = true
+  message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
   fetch('/api/restart', {
     method: 'POST',
   }).then(() => {
     console.log('Restarted')
-    state.loading = false
-    message.success('重载成功')
+    message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
     setTimeout(() => {
       window.location.reload()
     }, 1000)
@@ -143,7 +142,7 @@ const sendRestart = () => {
 
   .section {
     margin-top: 20px;
-    background-color: #FAFCFD;
+    background-color: var(--main-light-4);
     padding: 20px;
     border-radius: 8px;
     display: flex;

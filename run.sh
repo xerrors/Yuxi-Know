@@ -4,7 +4,7 @@
 stop_services() {
     echo "Stopping services..."
     pkill -f "npm run server"
-    pkill -f "flask --app=api run"
+    pkill -f "python api.py"
     exit
 }
 
@@ -13,7 +13,7 @@ trap stop_services SIGINT SIGTERM
 
 # Start the server
 cd src
-python api.py
+python api.py &
 
 # Start the frontend service
 cd ../web

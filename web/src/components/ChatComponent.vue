@@ -39,7 +39,7 @@
           </template>
         </a-dropdown>
         <div class="nav-btn text" @click="state.showPanel = !state.showPanel">
-          <component :is="state.showPanel ? SettingFilled : SettingOutlined" /> <span class="text">选项</span>
+          <component :is="state.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="state.showPanel" class="my-panal" ref="panel">
           <div class="graphbase flex-center">
@@ -122,7 +122,7 @@
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
-      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性</p>
+      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}</p>
     </div>
   </div>
 </template>
@@ -142,8 +142,11 @@ import {
   SettingOutlined,
   SettingFilled,
   PlusCircleOutlined,
+  FolderOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons-vue'
 import { marked } from 'marked';
+import { useConfigStore } from '@/stores/config'
 
 const props = defineProps({
   conv: Object,
@@ -151,6 +154,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['renameTitle'])
+const configStore = useConfigStore()
 
 const { conv, state } = toRefs(props)
 const chatContainer = ref(null)
@@ -663,6 +667,22 @@ button:disabled {
       .text {
         display: none;
       }
+    }
+  }
+
+  .bottom {
+    padding: 0.5rem 0.5rem;
+
+    .input-box {
+      border-radius: 8px;
+      padding: 0.5rem;
+
+      textarea.user-input {
+        padding: 0.5rem 0;
+      }
+    }
+    .note {
+      display: none;
     }
   }
 
