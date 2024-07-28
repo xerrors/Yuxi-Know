@@ -75,7 +75,7 @@
         <template v-else-if="column.key === 'action'">
           <a-button class="del-btn" type="link"
             @click="deleteFile(text)"
-            :disabled="state.lock || record.status != 'done' "
+            :disabled="state.lock || record.status == 'processing' || record.status == 'waiting' "
             >删除
           </a-button>
         </template>
