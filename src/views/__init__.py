@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
-from views.common_view import common
-from views.database_view import db
+from src.views.common_view import common
+from src.views.database_view import db
 
 
 def create_app():

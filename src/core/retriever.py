@@ -1,5 +1,5 @@
-from models.embedding import Reranker
-from utils.logging_config import setup_logger
+from src.models.embedding import Reranker
+from src.utils.logging_config import setup_logger
 logger = setup_logger("server-common")
 
 
@@ -65,13 +65,16 @@ class Retriever:
 
         kb_res = []
         if meta.get("db_name"):
+            kb = self.dbm.metaname2db[meta["db_name"]]
             kb_res = self.dbm.knowledge_base.search(query, meta["db_name"], limit=5)
             for r in kb_res:
+                r["file"] = kb.id2file[r["entity"]["file_id"]]
                 r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
 
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
 
         final_res = [_res for _res in kb_res if _res["rerank_score"] > 0.1]
+
         return {"results": final_res, "all_results": kb_res}
 
     def rewrite_query(self, query, history, meta):

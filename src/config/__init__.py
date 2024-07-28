@@ -1,7 +1,7 @@
 import os
 import json
 import yaml
-from utils.logging_config import setup_logger
+from src.utils.logging_config import setup_logger
 
 logger = setup_logger("Config")
 
@@ -34,13 +34,13 @@ class Config(SimpleConfig):
 
     def __init__(self, filename=None):
         super().__init__()
-        self.filename = filename or "config/base.yaml"
         self._config_items = {}
 
         ### >>> 默认配置
         # 可以在 config/base.yaml 中覆盖
         self.add_item("mode", default="cli", des="运行模式", choices=["cli", "api"])
         self.add_item("stream", default=True, des="是否开启流式输出")
+        self.add_item("save_dir", default="saves", des="保存目录")
         # 功能选项
         self.add_item("enable_query_rewrite", default=True, des="是否开启查询重写")
         self.add_item("enable_knowledge_base", default=True, des="是否开启知识库")
@@ -56,6 +56,8 @@ class Config(SimpleConfig):
         self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=["bge-reranker-v2-m3"])
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         ### <<< 默认配置结束
+
+        self.filename = filename or os.path.join(self.save_dir, "config", "config.yaml")
 
         self.load()
         self.handle_self()
@@ -99,13 +101,13 @@ class Config(SimpleConfig):
             else:
                 logger.warning(f"Unknown config file type {self.filename}")
         else:
-            logger.warning(f"Config file {self.filename} not found")
+            logger.warning(f"\n\n{'='*70}\n{'Config file not found':^70}\n{'You can custum your config in `' + self.filename + '`':^70}\n{'='*70}\n\n")
 
     def save(self):
         logger.info(f"Saving config to {self.filename}")
         if self.filename is None:
             logger.warning("Config file is not specified, save to default config/base.yaml")
-            self.filename = "config/base.yaml"
+            self.filename = os.path.join(self.save_dir, "config", "config.yaml")
 
         if self.filename.endswith(".json"):
             with open(self.filename, 'w+') as f:

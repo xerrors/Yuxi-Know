@@ -1,6 +1,7 @@
-## Project: Athena
+<h1 style="text-align: center">Project: Athena</h1>
 
-![home](web/public/home.png)
+
+<img src="web/public/home.png" style="border-radius: 16px; margin: 0 auto; max-height: 400px; display: block;"/>
 
 ### 准备
 
@@ -11,18 +12,22 @@
 ### 启动命令行模式
 
 ```bash
-cd src
-python cli.py
+python -m src.cli
 ```
 
 ### 启动网页模式
 
 ```bash
+python -m src.api
+
 cd web
 npm install
 npm run server
+```
 
-cd src
-python api.py
+或者
+
+```bash
+bash run.sh
 ```
 

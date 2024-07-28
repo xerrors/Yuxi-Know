@@ -12,8 +12,10 @@ import {
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
+import { useDatabaseStore } from '@/stores/database'
 
 const configStore = useConfigStore()
+const databaseStore = useDatabaseStore()
 
 const getRemoteConfig = () => {
   fetch('/api/config').then(res => res.json()).then(data => {
@@ -22,7 +24,15 @@ const getRemoteConfig = () => {
   })
 }
 
+const getRemoteDatabase = () => {
+  fetch('/api/database').then(res => res.json()).then(data => {
+    console.log("database", data)
+    databaseStore.setDatabase(data.databases)
+  })
+}
+
 onMounted(() => {
+  getRemoteDatabase()
   getRemoteConfig()
 })
 

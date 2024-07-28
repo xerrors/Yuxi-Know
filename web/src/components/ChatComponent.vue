@@ -98,13 +98,36 @@
           class="message-md"
           @click="consoleMsg(message)"></p>
 
-        <div class="refs" v-if="message.role=='received' && message.refs?.knowledge_base.results.length > 0">
+        <div class="refs" v-if="message.role=='received' && message.groupedResults && message.status=='finished'">
           <a-tag
-            v-for="(ref, index) in message.refs?.knowledge_base.results"
-            :key="index"
-            color="blue"
+            class="filetag"
+            v-for="(results, filename) in message.groupedResults"
+            :key="filename"
+            @click="opts.openDetail = true"
+            :bordered="false"
           >
-            {{ ref.id }}
+            {{ filename }}
+            <a-drawer
+              v-model:open="opts.openDetail"
+              title="检索详情"
+              width="800"
+              :contentWrapperStyle="{ maxWidth: '100%'}"
+              placement="right"
+              class="retrieval-detail"
+              rootClassName="root"
+            >
+              <div class="fileinfo">
+                <p><strong>文件名:</strong> {{ results[0].file.filename }}</p>
+                <p><strong>文件类型:</strong> {{ results[0].file.type }}</p>
+                <p><strong>创建时间:</strong> {{ new Date(results[0].file.created_at * 1000).toLocaleString() }}</p>
+              </div>
+              <div v-for="(res, idx) in results" :key="idx" class="result-item">
+                <p class="result-id"><strong>ID:</strong> #{{ res.id }}</p>
+                <p class="result-distance"><strong>相似度距离:</strong> {{ res.distance }}</p>
+                <p class="result-rerank-score"><strong>重排序分数:</strong> {{ res.rerank_score }}</p>
+                <p class="result-text">{{ res.entity.text }}</p>
+              </div>
+            </a-drawer>
           </a-tag>
         </div>
       </div>
@@ -153,7 +176,7 @@ const props = defineProps({
   state: Object
 })
 
-const emit = defineEmits(['renameTitle'])
+const emit = defineEmits(['rename-title', 'newconv']);
 const configStore = useConfigStore()
 
 const { conv, state } = toRefs(props)
@@ -162,11 +185,15 @@ const isStreaming = ref(false)
 const panel = ref(null)
 const examples = ref([
   '写一个冒泡排序',
-  '肉碱是什么？',
-  '洋葱的功效是什么？',
+  '肉碱的分子量是多少？直接回答',
+  '简述大蒜的功效是什么？',
   'A大于B，B小于C，A和C哪个大？',
   '今天天气怎么样？'
 ])
+
+const opts = reactive({
+  openDetail: false
+})
 
 const meta = reactive({
   db_name: computed(() => state.value.databases[state.value.selectedKB]?.metaname),
@@ -188,9 +215,7 @@ const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     sendMessage()
-    console.log('Enter')
   } else if (e.key === 'Enter' && e.shiftKey) {
-    console.log('Shift + Enter')
     // Insert a newline character at the current cursor position
     const textarea = e.target;
     const start = textarea.selectionStart;
@@ -258,20 +283,45 @@ const appendAiMessage = (message, refs=null) => {
     id: generateRandomHash(16),
     role: 'received',
     text: message,
-    refs
+    refs,
+    status: "querying"
   })
   scrollToBottom()
 }
 
-const updateMessage = (text, id, refs) => {
+const updateMessage = (text, id, refs, status) => {
   const message = conv.value.messages.find((message) => message.id === id)
   if (message) {
     message.text = text
     message.refs = refs
+    message.status = status
   } else {
     console.error('Message not found')
   }
+
   scrollToBottom()
+}
+
+const updateStatus = (id, status) => {
+  const message = conv.value.messages.find((message) => message.id === id)
+  if (message) {
+    message.status = status
+  } else {
+    console.error('Message not found')
+  }
+
+  console.log("updateStatus", message, message.refs.knowledge_base.results.length > 0)
+  if (message.refs.knowledge_base.results.length > 0) {
+    message.groupedResults = message.refs.knowledge_base.results.reduce((acc, result) => {
+      const { filename } = result.file;
+      console.log(acc, result, filename)
+      if (!acc[filename]) {
+        acc[filename] = []
+      }
+      acc[filename].push(result)
+      return acc;
+    }, {})
+  }
 }
 
 
@@ -293,12 +343,12 @@ const simpleCall = (message) => {
 }
 
 const sendMessage = () => {
-  if (conv.value.inputText.trim()) {
+  const user_input = conv.value.inputText.trim()
+  if (user_input) {
     isStreaming.value = true
-    appendUserMessage(conv.value.inputText)
+    appendUserMessage(user_input)
     appendAiMessage("检索中……", null)
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
-    const user_input = conv.value.inputText
     conv.value.inputText = ''
     fetch('/api/chat', {
       method: 'POST',
@@ -319,6 +369,7 @@ const sendMessage = () => {
           if (done) {
             console.log(conv.value)
             console.log('Finished')
+            updateStatus(cur_res_id, "finished")
             isStreaming.value = false
             if (conv.value.messages.length === 2) {
               renameTitle()
@@ -331,7 +382,7 @@ const sendMessage = () => {
 
           try {
             const data = JSON.parse(message)
-            updateMessage(data.response, cur_res_id, data.refs)
+            updateMessage(data.response, cur_res_id, data.refs, "loading")
             conv.value.history = data.history
             buffer = ''
           } catch (e) {
@@ -558,6 +609,39 @@ onMounted(() => {
 
   .refs {
     margin-bottom: 20px;
+
+    .filetag:hover {
+      cursor: pointer;
+    }
+  }
+}
+
+.retrieval-detail {
+  .fileinfo {
+    margin-bottom: 20px;
+    padding: 10px;
+    background: var(--main-light-3);
+    border-radius: 8px;
+    p {
+      margin: 0;
+      line-height: 1.5;
+    }
+  }
+
+  .result-item {
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    background: var(--main-light-4);
+
+    .result-id,
+    .result-distance,
+    .result-rerank-score,
+    .result-text-label,
+    .result-text {
+      margin: 5px 0;
+    }
   }
 }
 
@@ -685,8 +769,5 @@ button:disabled {
       display: none;
     }
   }
-
-
-
 }
 </style>

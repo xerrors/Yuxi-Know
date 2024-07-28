@@ -1,12 +1,12 @@
 import os
 import json
 import time
-from utils import hashstr, setup_logger, is_text_pdf
-from plugins import pdf2txt
-from core.knowledgebase import KnowledgeBase
-from core.filereader import pdfreader, plainreader
-from core.graphbase import GraphDatabase
-from models.embedding import get_embedding_model
+from src.utils import hashstr, setup_logger, is_text_pdf
+from src.plugins import pdf2txt
+from src.core.knowledgebase import KnowledgeBase
+from src.core.filereader import pdfreader, plainreader
+from src.core.graphbase import GraphDatabase
+from src.models.embedding import get_embedding_model
 
 logger = setup_logger("DataBaseManager")
 
@@ -21,6 +21,7 @@ class DataBaseLite:
         self.metadata = kwargs.get("metaname", {})
         self.files = kwargs.get("files", [])
         self.embed_model = kwargs.get("embed_model", None)
+        self.id2file = {f["file_id"]: f for f in self.files}
 
 
     def update(self, metadata):
@@ -48,7 +49,7 @@ class DataBaseManager:
 
     def __init__(self, config=None) -> None:
         self.config = config
-        self.database_path = "data/databases.json"
+        self.database_path = os.path.join(config.save_dir, "data", "database.json")
         self.embed_model = get_embedding_model(config)
         self.knowledge_base = KnowledgeBase(config, self.embed_model)
         self.graph_base = GraphDatabase(self.config, self.embed_model)
@@ -58,6 +59,7 @@ class DataBaseManager:
             self.graph_base.start()
 
         self._load_databases()
+        self._update_database()
 
     def _load_databases(self):
         """将数据库的信息保存到本地的文件里面"""
@@ -73,14 +75,20 @@ class DataBaseManager:
 
     def _save_databases(self):
         """将数据库的信息保存到本地的文件里面"""
+        self._update_database()
         with open(self.database_path, "w+") as f:
             json.dump({
                 "databases": [db.to_dict() for db in self.data["databases"]],
                 "graph": self.data["graph"]
             }, f, ensure_ascii=False, indent=4)
 
-    def get_databases(self):
+    def _update_database(self):
+        self.id2db = {db.db_id: db for db in self.data["databases"]}
+        self.name2db = {db.name: db for db in self.data["databases"]}
+        self.metaname2db = {db.metaname: db for db in self.data["databases"]}
 
+    def get_databases(self):
+        self._update_database()
         knowledge_base_collections = self.knowledge_base.get_collection_names()
         if len(self.data["databases"]) != len(knowledge_base_collections):
             logger.warning(f"Database number not match, {knowledge_base_collections}")
@@ -220,3 +228,4 @@ class DataBaseManager:
         for db in self.data["databases"]:
             if db.db_id == db_id:
                 return db
+        return None

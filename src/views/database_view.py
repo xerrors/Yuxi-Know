@@ -3,8 +3,8 @@ import json
 import threading
 from flask import Blueprint, jsonify, request, Response
 
-from utils.logging_config import setup_logger
-from core.startup import startup
+from src.utils import setup_logger, hashstr
+from src.core.startup import startup
 
 db = Blueprint('database', __name__, url_prefix="/database")
 
@@ -89,9 +89,10 @@ def upload_file():
     # elif file.filename.split('.')[-1] not in ['pdf', 'txt', 'md']:
     #     return jsonify({'message': 'Unsupported file type'}), 400
     if file:
-        os.makedirs("data/uploads", exist_ok=True)
-        filename = file.filename
-        file_path = os.path.join("data/uploads", filename)
+        upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        filename = f"{hashstr(file.filename, 6, with_salt=True)}_{file.filename}"
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         return jsonify({'message': 'File successfully uploaded', 'file_path': file_path}), 200
 

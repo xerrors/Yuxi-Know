@@ -4,7 +4,7 @@
 stop_services() {
     echo "Stopping services..."
     pkill -f "npm run server"
-    pkill -f "python api.py"
+    pkill -f "python -m src.api"
     exit
 }
 
@@ -12,11 +12,10 @@ stop_services() {
 trap stop_services SIGINT SIGTERM
 
 # Start the server
-cd src
-python api.py &
+python -m src.api &
 
 # Start the frontend service
-cd ../web
+cd web
 npm run server &
 
 # Wait for all background jobs to finish

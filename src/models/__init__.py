@@ -1,4 +1,4 @@
-from utils.logging_config import logger
+from src.utils.logging_config import logger
 
 
 def select_model(config):
@@ -9,19 +9,19 @@ def select_model(config):
     logger.info(f"Selecting model from {model_provider} with {model_name or 'default'}")
 
     if model_provider == "deepseek":
-        from models.chat_model import DeepSeek
+        from src.models.chat_model import DeepSeek
         return DeepSeek(model_name)
 
     elif model_provider == "zhipu":
-        from models.chat_model import Zhipu
+        from src.models.chat_model import Zhipu
         return Zhipu(model_name)
 
     elif model_provider == "qianfan":
-        from models.chat_model import Qianfan
+        from src.models.chat_model import Qianfan
         return Qianfan(model_name)
 
     elif model_provider == "vllm":
-        from models.chat_model import VLLM
+        from src.models.chat_model import VLLM
         return VLLM(model_name)
 
     elif model_provider is None:

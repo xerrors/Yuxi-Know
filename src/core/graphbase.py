@@ -2,13 +2,13 @@ import os
 import json
 import torch
 from neo4j import GraphDatabase as GD
-# from plugins import pdf2txt, OneKE
+# from src.plugins import pdf2txt, OneKE
 from transformers import AutoTokenizer, AutoModel
 from FlagEmbedding import FlagModel, FlagReranker
 import warnings
 
-from plugins import pdf2txt
-from plugins.oneke import OneKE
+from src.plugins import pdf2txt
+from src.plugins.oneke import OneKE
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -289,7 +289,7 @@ class GraphDatabase:
         ans = []
         for query in querys:
             tep = self.query_specific_entity(query, hops) # 这里是只获取第一个 TODO: 优化
-            ans.extend(tep) 
+            ans.extend(tep)
         return ans
 
     def query_node_info(self, node_name, kgdb_name='neo4j', hops = 2):

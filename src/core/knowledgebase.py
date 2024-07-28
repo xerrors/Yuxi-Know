@@ -1,22 +1,25 @@
 import os
 
-from models.embedding import EmbeddingModel
+from src.models.embedding import EmbeddingModel
 from pymilvus import MilvusClient
-from utils import setup_logger, hashstr
+from src.utils import setup_logger, hashstr
 logger = setup_logger("KnowledgeBase")
 
 
 class KnowledgeBase:
 
-    def __init__(self, config=None, embed_model=None ) -> None:
+    def __init__(self, config=None, embed_model=None) -> None:
         self.config = config
         self._init_config(config)
+
         assert embed_model, "embed_model=None"
         self.embed_model = embed_model
-        self.client = MilvusClient("data/vector_base/milvus.db")
+        self.client = MilvusClient(self.milvus_path)
 
     def _init_config(self, config):
         self.vector_dim = 1024  # 暂时不知道这个和 embedding model 的 embedding 大小有什么关系
+        self.milvus_path = os.path.join(config.save_dir, "data/vector_base/milvus.db")
+        os.makedirs(os.path.dirname(self.milvus_path), exist_ok=True)
 
     def get_collection_names(self):
         return self.client.list_collections()
@@ -74,7 +77,7 @@ class KnowledgeBase:
             collection_name=collection_name,  # target collection
             data=query_vectors,  # query vectors
             limit=limit,  # number of returned entities
-            output_fields=["text"],  # specifies fields to be returned
+            output_fields=["text", "file_id"],  # specifies fields to be returned
         )
 
         return res[0]  # 因为 query 只有一个

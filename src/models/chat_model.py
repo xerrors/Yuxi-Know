@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from utils.logging_config import setup_logger
+from src.utils.logging_config import setup_logger
 
 
 logger = setup_logger(__name__)

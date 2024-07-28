@@ -9,8 +9,8 @@ DATETIME = "debug" # 为了方便，调试的时候输出到 debug.log 文件
 def setup_logger(name, log_file=None, level=logging.DEBUG, console=False):
 
     if log_file is None:
-        log_file = f'output/log/project-{DATETIME}.log'
-    os.makedirs("output/log", exist_ok=True)
+        log_file = f'log/project-{DATETIME}.log'
+    os.makedirs("log", exist_ok=True)
 
     """Function to setup logger with the given name and log file."""
     logger = logging.getLogger(name)

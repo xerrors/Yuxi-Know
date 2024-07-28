@@ -1,9 +1,9 @@
 import json
 from flask import Blueprint, jsonify, request, Response
 
-from core import HistoryManager
-from utils.logging_config import setup_logger
-from core.startup import startup
+from src.core import HistoryManager
+from src.utils.logging_config import setup_logger
+from src.core.startup import startup
 
 common = Blueprint('common', __name__)
 logger = setup_logger("server-common")
