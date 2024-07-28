@@ -46,6 +46,7 @@
           <a-select style="width: 160px"
             :value="configStore.config?.reranker"
             @change="handleChange('reranker', $event)"
+            :disabled="!configStore.config.enable_reranker"
           >
             <a-select-option
               v-for="(name, idx) in items?.reranker.choices" :key="idx"
@@ -78,10 +79,14 @@
           />
         </div>
         <div class="card">
-          <span class="label">{{ items?.enable_query_rewrite.des }}</span>
+          <span class="label">{{ items?.enable_reranker.des }}
+            <a-button small v-if="needRestart.enable_reranker" @click="sendRestart">
+              <ReloadOutlined />需要重启
+            </a-button>
+          </span>
           <a-switch
-            :checked="configStore.config.enable_query_rewrite"
-            @change="handleChange('enable_query_rewrite', !configStore.config.enable_query_rewrite)"
+            :checked="configStore.config.enable_reranker"
+            @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
           />
         </div>
       </div>

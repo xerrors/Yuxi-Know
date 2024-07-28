@@ -47,7 +47,7 @@
     </div>
     <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
     <p>基于 neo4j 构建的图数据库。</p>
-    <div :class="{'graphloading': graphloading}" v-if="graph">
+    <div :class="{'graphloading': graphloading, 'databases': true}" v-if="graph">
       <div class="dbcard graphbase" @click="navigateToGraph">
         <div class="top">
           <div class="icon"><AppstoreFilled /></div>
@@ -189,6 +189,7 @@ onMounted(() => {
 }
 
 .database, .graphbase {
+  flex: 1 1 380px;
   background-color: white;
   box-shadow: 0px 1px 2px 0px rgba(16,24,40,.06),0px 1px 3px 0px rgba(16,24,40,.1);
   border: 2px solid white;

@@ -21,8 +21,12 @@ class DataBaseLite:
         self.metadata = kwargs.get("metaname", {})
         self.files = kwargs.get("files", [])
         self.embed_model = kwargs.get("embed_model", None)
-        self.id2file = {f["file_id"]: f for f in self.files}
 
+    def id2file(self, file_id):
+        for f in self.files:
+            if f["file_id"] == file_id:
+                return f
+        return None
 
     def update(self, metadata):
         self.metadata = metadata

@@ -277,7 +277,7 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query, keyword)
 
-    def query_by_vector(self, entity_name,  num_of_res=2, threshold=0.9,kgdb_name='neo4j', hops=2):
+    def query_by_vector(self, entity_name, num_of_res=2, threshold=0.9, kgdb_name='neo4j', hops=2):
         self.use_database(kgdb_name)
         result = self.query_by_vector_tep(entity_name)
         querys = []

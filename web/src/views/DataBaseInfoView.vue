@@ -10,7 +10,7 @@
         <div class="icon"><ReadFilled /></div>
         <div class="info">
           <h3>{{ database.name }}</h3>
-          <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata?.row_count }}行</span></p>
+          <p><span>{{ database.metadata?.row_count }}行 · {{  database.files?.length || 0 }}文件</span></p>
         </div>
       </div>
       <p class="description">{{ database.description }}</p>
@@ -18,42 +18,58 @@
         <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
       </div>
       <a-divider/>
-      <h3 style="margin-top: 20px;">向知识库中添加文件</h3>
-      <div class="upload">
-        <a-upload-dragger
-          class="upload-dragger"
-          v-model:fileList="fileList"
-          name="file"
-          :multiple="true"
-          :disabled="state.loading"
-          action="/api/database/upload"
-          @change="handleFileUpload"
-          @drop="handleDrop"
-        >
-          <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
-          <p class="ant-upload-hint">
-            目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
-          </p>
-        </a-upload-dragger>
+      <div class="pagebtns">
+        <a-button @click="state.curPage='add'" :class="{ 'active': state.curPage === 'add' }">
+          <CloudUploadOutlined />添加文件
+        </a-button>
+        <a-button @click="state.curPage='query-test'" :class="{ 'active': state.curPage === 'query-test' }">
+          <SearchOutlined />检索测试
+        </a-button>
       </div>
-      <a-button
-        type="primary"
-        @click="addDocumentByFile"
-        :loading="state.loading"
-        :disabled="fileList.length === 0"
-        style="margin: 0px 20px 20px 20px;"
-      >
-        添加到知识库
-      </a-button>
-      <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
+      <div class="query-params" v-if="state.curPage == 'query-test'">
+        <p style="text-align: center; margin: 0;"><strong>参数配置</strong></p>
+        <div class="params-item">
+          <p>检索数量：</p>
+          <a-input-number size="small" v-model:value="meta.queryCount" :min="1" :max="20" />
+        </div>
+        <div class="params-item">
+          <p>过滤低质量：</p>
+          <a-switch v-model:checked="meta.filter"  size="small" />
+        </div>
+      </div>
     </div>
     <div class="sider-bottom">
     </div>
   </div>
-  <div class="db-info-container">
-    <div class="query-test">
-      用于测试检索
+  <div class="db-info-container" v-if="state.curPage == 'add'">
+    <h3>向知识库中添加文件</h3>
+    <div class="upload">
+      <a-upload-dragger
+        class="upload-dragger"
+        v-model:fileList="fileList"
+        name="file"
+        :multiple="true"
+        :disabled="state.loading"
+        action="/api/database/upload"
+        @change="handleFileUpload"
+        @drop="handleDrop"
+      >
+        <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+        <p class="ant-upload-hint">
+          目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
+        </p>
+      </a-upload-dragger>
     </div>
+    <a-button
+      type="primary"
+      @click="addDocumentByFile"
+      :loading="state.loading"
+      :disabled="fileList.length === 0"
+      style="margin: 0px 20px 20px 0;"
+    >
+      添加到知识库
+    </a-button>
+    <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
     <a-table :columns="columns" :data-source="database.files" row-key="file_id" class="my-table">
       <template #bodyCell="{ column, text, record }">
         <template v-if="column.key === 'file_id'">
@@ -97,6 +113,31 @@
       </p>
     </a-drawer>
   </div>
+  <div class="db-info-container" v-else-if="state.curPage == 'query-test'">
+    <h3>检索测试</h3>
+    <div class="query-action">
+      <a-textarea
+        v-model:value="queryText"
+        placeholder="填写需要查询的句子"
+        :auto-size="{ minRows: 2, maxRows: 10 }"
+      />
+      <!-- :loading="state.searchLoading" -->
+      <a-button @click="onQuery" :disabled="queryText.length == 0">
+        <SearchOutlined v-if="!state.searchLoading"/>检索
+      </a-button>
+    </div>
+    <div class="query-test" v-if="queryResult">
+      <div class="query-card" v-for="(result, idx) in (meta.filter ? queryResult.results : queryResult.all_results)" :key="idx">
+        <p>
+          <strong>#{{ idx + 1 }}&nbsp;&nbsp;&nbsp;</strong>
+          <span>{{ result.file.filename }}&nbsp;&nbsp;&nbsp;</span>
+          <span><strong>距离</strong>：{{ result.distance.toFixed(4) }}&nbsp;&nbsp;&nbsp;</span>
+          <span v-if="result.rerank_score"><strong>重排序</strong>：{{ result.rerank_score.toFixed(4) }}</span>
+        </p>
+        <p class="query-text">{{ result.entity.text }}</p>
+      </div>
+    </div>
+  </div>
   </div>
 </template>
 
@@ -112,6 +153,8 @@ import {
   CloseCircleFilled,
   ClockCircleFilled,
   DeleteOutlined,
+  CloudUploadOutlined,
+  SearchOutlined,
 } from '@ant-design/icons-vue'
 
 
@@ -123,13 +166,54 @@ const database = ref({});
 const fileList = ref([]);
 const selectedFile = ref(null);
 
+// 查询测试
+const queryText = ref('');
+const queryResult = ref(null)
+
 const state = reactive({
   loading: false,
   refrashing: false,
+  searchLoading: false,
   lock: false,
   drawer: false,
   refreshInterval: null,
+  curPage: "add",
 });
+
+const meta = reactive({
+  queryCount: 10,
+  filter: false,
+});
+
+const onQuery = () => {
+  console.log(queryText.value)
+  state.searchLoading = true
+  if (!queryText.value.trim()) {
+    message.error('请输入查询内容')
+    state.searchLoading = false
+    return
+  }
+  meta.db_name = database.value.metaname
+  fetch('/api/database/query-test', {
+    method: "POST",
+    body: JSON.stringify({
+      query: queryText.value.trim(),
+      meta: meta
+    }),
+  })
+  .then(response => response.json())
+  .then(data => {
+    console.log(data)
+    queryResult.value = data
+  })
+  .catch(error => {
+    console.error(error)
+    message.error(error.message)
+  })
+  .finally(() => {
+    state.searchLoading = false
+  })
+}
 
 const handleFileUpload = (event) => {
   console.log(event)
@@ -371,10 +455,11 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 300px;
+  width: 275px;
   height: 100%;
   padding: 0;
   border-right: 1px solid #E0EAFF;
+  flex: 0 0 275px;
 
   .sider-top {
 
@@ -387,7 +472,7 @@ onMounted(() => {
       margin-bottom: 20px;
       padding-top: 10px;
       padding-bottom: 10px;
-      background-color: #FAFAFA;
+      background-color: var(--main-light-5);
       border-bottom: 1px solid #E0EAFF;
 
       button {
@@ -397,21 +482,101 @@ onMounted(() => {
       }
     }
   }
+
+  .pagebtns {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    button {
+      padding: 10px 16px;
+      height: auto;
+      border-radius: 8px;
+      border: none;
+      background: var(--main-light-4);
+    }
+
+    .active {
+      font-weight: bold;
+      color: var(--main-color);
+      background: var(--main-light-2);
+    }
+  }
+
+  .query-params {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: var(--main-light-4);
+    border-radius: 8px;
+    margin: 20px;
+    box-sizing: border-box;
+    gap: 12px;
+
+    .params-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+
+      p {
+        margin: 0;
+      }
+    }
+  }
 }
 
 .db-info-container {
   padding: 20px;
   flex: 1 1 auto;
+  overflow: scroll;
+
+  .query-action {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+
+    textarea {
+      padding: 12px 16px;
+      border: 1px solid var(--main-light-2);
+    }
+
+    button {
+      height: auto;
+      width: 120px;
+      box-shadow: none;
+      border: none;
+      font-weight: bold;
+      background: var(--main-light-2);
+      color: var(--main-color);
+
+      &:disabled {
+        cursor: not-allowed;
+        background: var(--main-light-4);
+        color: var(--c-black-light-3);
+      }
+    }
+  }
 
   .query-test {
-    width: 100%;
-    height: 300px;
     display: flex;
-    justify-content: center;
-    align-items: center;
-    background: var(--main-light-3);
+    flex-direction: column;
     margin-bottom: 20px;
     border-radius: 8px;
+    gap: 16px;
+
+    .query-card {
+      padding: 20px 16px;
+      border-radius: 8px;
+      background: var(--main-light-5);
+      border: 1px solid var(--main-light-3);
+    }
+
+    .query-text {
+      font-size: 14px;
+      margin-bottom: 0;
+      color: var(--c-text-light-1);
+    }
   }
 }
 

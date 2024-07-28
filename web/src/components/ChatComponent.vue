@@ -22,40 +22,42 @@
           <CompassFilled v-if="meta.use_web" />
           <GoldenFilled v-if="meta.use_graph"/>
         </div> -->
-        <a-dropdown v-if="state.selectedKB !== null">
+        <a-dropdown v-if="meta.selectedKB !== null">
           <a class="ant-dropdown-link nav-btn" @click.prevent>
-            <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />
-            <span class="text">{{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}</span>
+            <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
+             <BookOutlined />
+            <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
           </a>
           <template #overlay>
             <a-menu>
-              <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
                 <a href="javascript:;" >{{ db.name }}</a>
               </a-menu-item>
-              <a-menu-item  @click="state.selectedKB = null">
+              <a-menu-item  @click="meta.selectedKB = null">
                 <a href="javascript:;">不使用</a>
               </a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text" @click="state.showPanel = !state.showPanel">
-          <component :is="state.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
+        <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
+          <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
-        <div v-if="state.showPanel" class="my-panal" ref="panel">
+        <div v-if="opts.showPanel" class="my-panal" ref="panel">
           <div class="graphbase flex-center">
             知识库
             <div @click.stop>
               <a-dropdown>
                 <a class="ant-dropdown-link " @click.prevent>
-                  <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
-                  {{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}
+                  <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" />&nbsp; -->
+                  <BookOutlined />&nbsp;
+                  <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
                 </a>
                 <template #overlay>
                   <a-menu>
-                    <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
                       <a href="javascript:;">{{ db.name }}</a>
                     </a-menu-item>
-                    <a-menu-item  @click="state.selectedKB = null">
+                    <a-menu-item  @click="meta.selectedKB = null">
                       <a href="javascript:;">不使用</a>
                     </a-menu-item>
                   </a-menu>
@@ -69,12 +71,15 @@
           <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
+          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+            重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
+          </div>
         </div>
       </div>
     </div>
     <div v-if="conv.messages.length == 0" class="chat-examples">
       <h1>你好，我是 Athena 😊</h1>
-      <div class="opt">
+      <div class="opts">
         <div
           class="opt__button"
           v-for="(exp, key) in examples"
@@ -151,8 +156,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, toRefs, nextTick, computed } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { reactive, ref, onMounted, toRefs, nextTick, computed, watch } from 'vue'
 import {
   SendOutlined,
   MenuOutlined,
@@ -168,6 +172,7 @@ import {
   FolderOutlined,
   FolderOpenOutlined,
 } from '@ant-design/icons-vue'
+import { onClickOutside } from '@vueuse/core'
 import { marked } from 'marked';
 import { useConfigStore } from '@/stores/config'
 
@@ -192,24 +197,29 @@ const examples = ref([
 ])
 
 const opts = reactive({
-  openDetail: false
+  showPanel: false,
+  openDetail: false,
+  databases: [],
 })
 
-const meta = reactive({
-  db_name: computed(() => state.value.databases[state.value.selectedKB]?.metaname),
+const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
+  rewrite_query: true,
+  selectedKB: null,
 })
 
+// 更多选项可以在 marked 文档中找到：https://marked.js.org/
 marked.setOptions({
   gfm: true,
   breaks: true,
   tables: true,
-  // 更多选项可以在 marked 文档中找到：https://marked.js.org/
 });
 
-onClickOutside(panel, () => setTimeout(() => state.value.showPanel = false, 30))
+const renderMarkdown = (text) => marked(text)
+const consoleMsg = (message) => console.log(message)
+onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
 
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -236,12 +246,9 @@ const renameTitle = () => {
   const firstAiMessage = conv.value.messages[1].text
   const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
   simpleCall(context).then((data) => {
-    emit('renameTitle', data.response.split("：")[0])
+    emit('rename-title', data.response.split("：")[0])
   })
 }
-
-const myAlert = (message) => alert(message)
-const renderMarkdown = (text) => marked(text)
 
 const scrollToBottom = () => {
   setTimeout(() => {
@@ -249,7 +256,6 @@ const scrollToBottom = () => {
   }, 10)
 }
 
-const consoleMsg = (message) => console.log(message)
 
 const generateRandomHash = (length) => {
     let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -258,15 +264,6 @@ const generateRandomHash = (length) => {
         hash += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return hash;
-}
-
-const appendMessage = (message, role) => {
-  conv.value.messages.push({
-    id: generateRandomHash(16),
-    role,
-    text: message
-  })
-  scrollToBottom()
 }
 
 const appendUserMessage = (message) => {
@@ -298,7 +295,6 @@ const updateMessage = (text, id, refs, status) => {
   } else {
     console.error('Message not found')
   }
-
   scrollToBottom()
 }
 
@@ -324,22 +320,26 @@ const updateStatus = (id, status) => {
   }
 }
 
-
 const simpleCall = (message) => {
   return new Promise((resolve, reject) => {
     fetch('/api/call', {
       method: 'POST',
-      body: JSON.stringify({
-        query: message,
-      }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      body: JSON.stringify({ query: message, }),
+      headers: { 'Content-Type': 'application/json' }
     })
     .then((response) => response.json())
     .then((data) => resolve(data))
     .catch((error) => reject(error))
   })
+}
+
+const loadDatabases = () => {
+  fetch('/api/database/', { method: "GET", })
+    .then(response => response.json())
+    .then(data => {
+      console.log(data)
+      opts.databases = data.databases
+    })
 }
 
 const sendMessage = () => {
@@ -350,6 +350,7 @@ const sendMessage = () => {
     appendAiMessage("检索中……", null)
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
     conv.value.inputText = ''
+    meta.db_name = opts.databases[meta.selectedKB]?.metaname
     fetch('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
@@ -371,9 +372,7 @@ const sendMessage = () => {
             console.log('Finished')
             updateStatus(cur_res_id, "finished")
             isStreaming.value = false
-            if (conv.value.messages.length === 2) {
-              renameTitle()
-            }
+            if (conv.value.messages.length === 2) { renameTitle() }
             return
           }
 
@@ -394,7 +393,7 @@ const sendMessage = () => {
       return readChunk()
     })
   } else {
-    console.log('Please enter a message')
+    console.log('请输入消息')
   }
 }
 
@@ -403,14 +402,30 @@ const autoSend = (message) => {
   sendMessage()
 }
 
-const clearChat = () => {
-  conv.value.messages = []
-  conv.value.history = []
-}
+// const clearChat = () => {
+//   conv.value.messages = []
+//   conv.value.history = []
+// }
 
+// 从本地存储加载数据
 onMounted(() => {
   scrollToBottom()
-})
+  loadDatabases()
+  const storedMeta = localStorage.getItem('meta');
+  if (storedMeta) {
+    const parsedMeta = JSON.parse(storedMeta);
+    Object.assign(meta, parsedMeta);
+  }
+});
+
+// 监听 meta 对象的变化，并保存到本地存储
+watch(
+  () => meta,
+  (newMeta) => {
+    localStorage.setItem('meta', JSON.stringify(newMeta));
+  },
+  { deep: true }
+);
 </script>
 
 <style lang="less" scoped>
@@ -525,7 +540,7 @@ onMounted(() => {
     color: #333;
   }
 
-  .opt {
+  .opts {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;

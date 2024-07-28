@@ -42,7 +42,7 @@ class Config(SimpleConfig):
         self.add_item("stream", default=True, des="是否开启流式输出")
         self.add_item("save_dir", default="saves", des="保存目录")
         # 功能选项
-        self.add_item("enable_query_rewrite", default=True, des="是否开启查询重写")
+        self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=True, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=True, des="是否开启知识图谱")
         self.add_item("enable_search_engine", default=True, des="是否开启搜索引擎")
@@ -58,6 +58,7 @@ class Config(SimpleConfig):
         ### <<< 默认配置结束
 
         self.filename = filename or os.path.join(self.save_dir, "config", "config.yaml")
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self.load()
         self.handle_self()
@@ -78,7 +79,6 @@ class Config(SimpleConfig):
                 # 如果 model_rel_path 不是绝对路径，那么拼接 model_root_dir
                 if not model_rel_path.startswith("/"):
                     self.model_local_paths[model] = os.path.join(model_root_dir, model_rel_path)
-
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""
@@ -108,6 +108,7 @@ class Config(SimpleConfig):
         if self.filename is None:
             logger.warning("Config file is not specified, save to default config/base.yaml")
             self.filename = os.path.join(self.save_dir, "config", "config.yaml")
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         if self.filename.endswith(".json"):
             with open(self.filename, 'w+') as f:
