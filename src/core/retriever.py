@@ -59,7 +59,7 @@ class Retriever:
         # res = model.predict("qiansdgsa, dasdh ashdsakjdk ak ").content
 
         results = []
-        if refs["meta"].get("use_graph"):
+        if refs["meta"].get("use_graph") and self.config.enable_knowledge_base:
             for entity in refs["entities"]:
                 result = self.dbm.graph_base.query_by_vector(entity)
                 if result != []:
@@ -71,7 +71,8 @@ class Retriever:
         query = refs.get("rewritten_query", query)
 
         kb_res = []
-        if refs["meta"].get("db_name"):
+        final_res = []
+        if refs["meta"].get("db_name") and self.config.enable_knowledge_base:
             db_name = refs["meta"]["db_name"]
             kb = self.dbm.metaname2db[refs["meta"]["db_name"]]
             limit = refs["meta"].get("queryCount", 10)

@@ -55,12 +55,13 @@ class DataBaseManager:
         self.config = config
         self.database_path = os.path.join(config.save_dir, "data", "database.json")
         self.embed_model = get_embedding_model(config)
-        self.knowledge_base = KnowledgeBase(config, self.embed_model)
-        self.graph_base = GraphDatabase(self.config, self.embed_model)
-        self.data = {"databases": [], "graph": {}}
 
-        if self.config.enable_knowledge_graph:
+        if self.config.enable_knowledge_base:
+            self.knowledge_base = KnowledgeBase(config, self.embed_model)
+            self.graph_base = GraphDatabase(self.config, self.embed_model)
             self.graph_base.start()
+
+        self.data = {"databases": [], "graph": {}}
 
         self._load_databases()
         self._update_database()
@@ -103,11 +104,11 @@ class DataBaseManager:
         return {"databases": [db.to_dict() for db in self.data["databases"]]}
 
     def get_graph(self):
-        if self.config.enable_knowledge_graph:
+        if self.config.enable_graph_base:
             self.data["graph"].update(self.graph_base.get_database_info("neo4j"))
             return {"graph": self.data["graph"]}
         else:
-            return {"graph": {}, "message": "Graph database is not enabled"}
+            return {"message": "Graph base not enabled", "graph": {}}
 
     def create_database(self, database_name, description, db_type):
         new_database = DataBaseLite(database_name, description, db_type, embed_model=self.config.embed_model)

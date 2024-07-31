@@ -206,6 +206,32 @@ onMounted(() => {
   }
 }
 
+.conversations::-webkit-scrollbar {
+  position: absolute;
+  width: 4px;
+}
+
+.conversations::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb {
+  background: var(--c-text-dark-2);
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb:hover {
+  background: rgb(100, 100, 100);
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb:active {
+  background: rgb(68, 68, 68);
+  border-radius: 4px;
+}
+
+
 @media (max-width: 520px) {
   .conversations {
     position: absolute;

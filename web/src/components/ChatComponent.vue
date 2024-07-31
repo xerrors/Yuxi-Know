@@ -43,7 +43,7 @@
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="opts.showPanel" class="my-panal" ref="panel">
-          <div class="graphbase flex-center">
+          <div class="graphbase flex-center" v-if="configStore.config.enable_knowledge_base">
             知识库
             <div @click.stop>
               <a-dropdown>
@@ -65,14 +65,20 @@
               </a-dropdown>
             </div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph">
+          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web">
+          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
             重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
+          </div>
+          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+            流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
+          </div>
+          <div class="graphbase flex-center" @click="meta.summary_title = !meta.summary_title">
+            总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
           </div>
         </div>
       </div>
@@ -150,7 +156,7 @@
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
-      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}</p>
+      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}:{{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -208,6 +214,8 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   graph_name: "neo4j",
   rewrite_query: true,
   selectedKB: null,
+  stream: true,
+  summary_title: true,
 })
 
 // 更多选项可以在 marked 文档中找到：https://marked.js.org/
@@ -241,13 +249,17 @@ const handleKeyDown = (e) => {
 }
 
 const renameTitle = () => {
-  const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
-  const firstUserMessage = conv.value.messages[0].text
-  const firstAiMessage = conv.value.messages[1].text
-  const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
-  simpleCall(context).then((data) => {
-    emit('rename-title', data.response.split("：")[0])
-  })
+  if (meta.summary_title) {
+    const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
+    const firstUserMessage = conv.value.messages[0].text
+    const firstAiMessage = conv.value.messages[1].text
+    const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
+    simpleCall(context).then((data) => {
+      emit('rename-title', data.response.split("：")[0])
+    })
+  } else {
+    emit('rename-title', conv.value.messages[0].text)
+  }
 }
 
 const scrollToBottom = () => {
@@ -347,7 +359,7 @@ const sendMessage = () => {
   if (user_input) {
     isStreaming.value = true
     appendUserMessage(user_input)
-    appendAiMessage("检索中……", null)
+    appendAiMessage("···", null)
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
     conv.value.inputText = ''
     meta.db_name = opts.databases[meta.selectedKB]?.metaname
@@ -441,12 +453,6 @@ watch(
   box-sizing: border-box;
   flex: 5 5 200px;
   overflow-y: scroll;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none;  /* IE and Edge */
-
-  &::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, and Opera */
-  }
 
   .header {
     user-select: none;
@@ -503,7 +509,7 @@ watch(
   box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   padding: 12px;
-  z-index: 101;
+  z-index: 11;
   width: 250px;
 
   .flex-center {
@@ -532,7 +538,7 @@ watch(
   position: absolute;
   top: 20%;
   width: 100%;
-  z-index: 100;
+  z-index: 9;
 
   h1 {
     margin-bottom: 20px;
@@ -742,6 +748,34 @@ button:disabled {
   background: #D7D7D7;
   cursor: not-allowed;
 }
+
+
+
+.chat::-webkit-scrollbar {
+  position: absolute;
+  width: 4px;
+}
+
+.chat::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb {
+  background: var(--c-text-dark-2);
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb:hover {
+  background: rgb(100, 100, 100);
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb:active {
+  background: rgb(68, 68, 68);
+  border-radius: 4px;
+}
+
 
 @media (max-width: 520px) {
   .chat {

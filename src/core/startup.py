@@ -9,6 +9,9 @@ logger = setup_logger("Startup")
 
 class Startup:
     def __init__(self):
+        self.start()
+
+    def start(self):
         self.config = Config()
         self.model = select_model(self.config)
         self.dbm = DataBaseManager(self.config)
@@ -16,9 +19,7 @@ class Startup:
 
     def restart(self):
         logger.info("Restarting...")
-        self.model = select_model(self.config)
-        self.dbm = DataBaseManager(self.config)
-        self.retriever = Retriever(self.config, self.dbm, self.model)
+        self.start()
         logger.info("Restarted")
 
 

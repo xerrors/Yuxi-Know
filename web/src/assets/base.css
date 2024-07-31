@@ -18,7 +18,7 @@
   --c-text-light-1: var(--c-indigo);
   --c-text-light-2: rgba(60, 66, 70, 0.66);
   --c-text-dark-1: var(--c-white);
-  --c-text-dark-2: rgba(235, 235, 235, 0.64);
+  --c-text-dark-2: #b8b8b8;
 }
 
 /* semantic color variables for this project */

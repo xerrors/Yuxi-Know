@@ -41,14 +41,20 @@ def chat():
     def generate_response():
         content = ""
         for delta in startup.model.predict(messages, stream=True):
-            if delta.content:
+            if not delta.content:
+                continue
+
+            if hasattr(delta, 'is_full') and delta.is_full:
+                content = delta.content
+            else:
                 content += delta.content
-                response_chunk = json.dumps({
-                    "history": history_manager.update_ai(content),
-                    "response": content,
-                    "refs": refs  # TODO: 优化 refs，不需要每次都返回
-                }, ensure_ascii=False).encode('utf8') + b'\n'
-                yield response_chunk
+
+            response_chunk = json.dumps({
+                "history": history_manager.update_ai(content),
+                "response": content,
+                "refs": refs  # TODO: 优化 refs，不需要每次都返回
+            }, ensure_ascii=False).encode('utf8') + b'\n'
+            yield response_chunk
 
     return Response(generate_response(), content_type='application/json', status=200)
 
@@ -57,7 +63,7 @@ def call():
     request_data = json.loads(request.data)
     query = request_data['query']
     response = startup.model.predict(query)
-    logger.debug(f"Call query: {query} Response: {response.content}")
+    logger.debug(f"\n\n\nCall query: \n{query} \n\nResponse: \n{response.content}\n\n")
 
     return jsonify({
         "response": response.content,

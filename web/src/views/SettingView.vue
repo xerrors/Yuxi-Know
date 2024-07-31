@@ -22,6 +22,25 @@
           </a-select>
         </div>
         <div class="card">
+          <span class="label">
+            {{ items?.model_name.des }} &nbsp;
+            <a-button small v-if="needRestart.model_name" @click="sendRestart">
+              <ReloadOutlined />需要重启
+            </a-button>
+          </span>
+          <a-select ref="select" style="width: 160px"
+            :value="configStore.config?.model_name"
+            @change="handleChange('model_name', $event)"
+            v-if="configStore.config?.model_names && configStore.config?.model_provider && configStore.config?.model_names[configStore.config?.model_provider]"
+          >
+          <a-select-option
+            v-for="(name, idx) in configStore.config.model_names[configStore.config.model_provider]"
+            :key="idx"
+            :value="name">{{ name }}
+          </a-select-option>
+          </a-select>
+        </div>
+        <div class="card">
           <span class="label">{{ items?.embed_model.des }} &nbsp;
             <a-button small v-if="needRestart.embed_model" @click="sendRestart">
               <ReloadOutlined />需要重启
@@ -58,19 +77,23 @@
       <h3>功能配置</h3>
       <div class="section">
         <div class="card">
-          <span class="label">{{ items?.enable_knowledge_base.des }}</span>
+          <span class="label">{{ items?.enable_knowledge_base.des }}
+            <a-button small v-if="needRestart.enable_knowledge_base" @click="sendRestart">
+              <ReloadOutlined />需要重启
+            </a-button>
+          </span>
           <a-switch
             :checked="configStore.config.enable_knowledge_base"
             @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
           />
         </div>
-        <div class="card">
+        <!-- <div class="card">
           <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
           <a-switch
             :checked="configStore.config.enable_knowledge_graph"
             @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
           />
-        </div>
+        </div> -->
         <div class="card">
           <span class="label">{{ items?.enable_search_engine.des }}</span>
           <a-switch
@@ -126,7 +149,7 @@ const sendRestart = () => {
     message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
     setTimeout(() => {
       window.location.reload()
-    }, 1000)
+    }, 200)
   })
 }
 </script>

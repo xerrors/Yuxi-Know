@@ -14,7 +14,11 @@ progress = {} # 只针对单个用户的进度
 
 @db.route('/', methods=['GET'])
 def get_databases():
-    database = startup.dbm.get_databases()
+    try:
+        database = startup.dbm.get_databases()
+    except Exception as e:
+        return jsonify({"message": "获取数据库列表失败", "databases": []})
+
     return jsonify(database)
 
 @db.route('/', methods=['POST'])

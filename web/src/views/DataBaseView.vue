@@ -1,5 +1,5 @@
 <template>
-  <div class="database-container">
+  <div class="database-container" v-if="configStore.config.enable_knowledge_base">
     <h2>文档知识库</h2>
     <p>知识型数据库，主要是非结构化的文本组成，使用向量检索使用。</p>
     <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase">
@@ -64,6 +64,15 @@
       </div>
     </div>
   </div>
+  <div class="database-empty" v-else>
+    <a-empty>
+      <template #description>
+        <span>
+          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置知识库。
+        </span>
+      </template>
+    </a-empty>
+  </div>
 </template>
 
 <script setup>
@@ -71,6 +80,7 @@ import { ref, onMounted, reactive, watch, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
 import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
+import { useConfigStore } from '@/stores/config';
 
 const route = useRoute()
 const router = useRouter()
@@ -79,6 +89,7 @@ const graph = ref(null)
 const graphloading = ref(false)
 
 const indicator = h(LoadingOutlined, {spin: true});
+const configStore = useConfigStore()
 
 const newDatabase = reactive({
   name: '',
@@ -258,4 +269,13 @@ onMounted(() => {
   filter: blur(2px);
 }
 
+
+.database-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  flex-direction: column;
+  color: var(--c-text-light-1);
+}
 </style>
