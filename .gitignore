@@ -34,3 +34,4 @@ neo4j*
 web/package-lock.json
 saves
 notebooks
+*.yaml
