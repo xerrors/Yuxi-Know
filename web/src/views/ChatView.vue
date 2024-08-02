@@ -12,7 +12,7 @@
         :class="{ active: curConvId === index }"
         @click="goToConversation(index)">
         <div class="conversation__title">{{ state.title }}</div>
-        <div class="conversation__delete" @click.prevent="delConv(index)"><DeleteOutlined /></div>
+        <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
       </div>
     </div>
     <ChatComponent
@@ -78,7 +78,10 @@ const addNewConv = () => {
 
 const delConv = (index) => {
   convs.splice(index, 1)
-  if (index === curConvId.value) {
+
+  if (index < curConvId.value) {
+    curConvId.value -= 1
+  } else if (index === curConvId.value) {
     curConvId.value = 0
   }
 
