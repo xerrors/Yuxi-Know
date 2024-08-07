@@ -34,7 +34,7 @@ def chat():
 
     new_query, refs = startup.retriever(query, history_manager.messages, meta)
 
-    messages = history_manager.get_history_with_msg(new_query)
+    messages = history_manager.get_history_with_msg(new_query, max_rounds=meta.get('history_round'))
     history_manager.add_user(query)
     logger.debug(f"Web history: {history_manager}")
 

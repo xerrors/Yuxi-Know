@@ -43,7 +43,7 @@
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="opts.showPanel" class="my-panal swing-in-top-fwd" ref="panel">
-          <div class="graphbase flex-center" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
             知识库
             <div @click.stop>
               <a-dropdown>
@@ -65,20 +65,23 @@
               </a-dropdown>
             </div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
+          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
             重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
             流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.summary_title = !meta.summary_title">
+          <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
+          </div>
+          <div class="flex-center">
+            最大历史轮数     <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
         </div>
       </div>
@@ -216,6 +219,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   selectedKB: null,
   stream: true,
   summary_title: true,
+  history_round: 5,
 })
 
 // 更多选项可以在 marked 文档中找到：https://marked.js.org/
@@ -517,9 +521,6 @@ watch(
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-  }
-
-  .graphbase {
     padding: 8px 16px;
     border-radius: 12px;
     cursor: pointer;
