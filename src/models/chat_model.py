@@ -64,7 +64,6 @@ class VLLM(OpenAIBase):
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
-import qianfan
 
 
 class GeneralResponse:
@@ -76,6 +75,7 @@ class GeneralResponse:
 class Qianfan:
 
     def __init__(self, model_name="ernie_speed") -> None:
+        import qianfan
         self.model_name = model_name
         access_key = os.getenv("QIANFAN_ACCESS_KEY")
         secret_key = os.getenv("QIANFAN_SECRET_KEY")

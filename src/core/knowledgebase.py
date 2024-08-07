@@ -14,6 +14,7 @@ class KnowledgeBase:
 
         assert embed_model, "embed_model=None"
         self.embed_model = embed_model
+
         self.client = MilvusClient(self.milvus_path)
 
     def _init_config(self, config):

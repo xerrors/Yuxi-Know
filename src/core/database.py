@@ -2,10 +2,7 @@ import os
 import json
 import time
 from src.utils import hashstr, setup_logger, is_text_pdf
-from src.plugins import pdf2txt
-from src.core.knowledgebase import KnowledgeBase
 from src.core.filereader import pdfreader, plainreader
-from src.core.graphbase import GraphDatabase
 from src.models.embedding import get_embedding_model
 
 logger = setup_logger("DataBaseManager")
@@ -57,6 +54,8 @@ class DataBaseManager:
         self.embed_model = get_embedding_model(config)
 
         if self.config.enable_knowledge_base:
+            from src.core.knowledgebase import KnowledgeBase
+            from src.core.graphbase import GraphDatabase
             self.knowledge_base = KnowledgeBase(config, self.embed_model)
             self.graph_base = GraphDatabase(self.config, self.embed_model)
             self.graph_base.start()
@@ -180,6 +179,7 @@ class DataBaseManager:
             if is_text_pdf(file):
                 return pdfreader(file)
             else:
+                from src.plugins import pdf2txt
                 return pdf2txt(file, return_text=True)
 
         elif file.endswith(".txt") or file.endswith(".md"):
