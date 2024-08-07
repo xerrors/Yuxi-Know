@@ -1,4 +1,4 @@
-from utils.logging_config import logger
+from src.utils.logging_config import logger
 
 
 def select_model(config):
@@ -6,23 +6,27 @@ def select_model(config):
     model_provider = config.model_provider
     model_name = config.model_name
 
-    logger.info(f"Selecting model from {model_provider} with {model_name or 'default'}")
+    logger.info(f"Selecting model from {model_provider} with {model_name}")
 
     if model_provider == "deepseek":
-        from models.chat_model import DeepSeek
+        from src.models.chat_model import DeepSeek
         return DeepSeek(model_name)
 
     elif model_provider == "zhipu":
-        from models.chat_model import Zhipu
+        from src.models.chat_model import Zhipu
         return Zhipu(model_name)
 
     elif model_provider == "qianfan":
-        from models.chat_model import Qianfan
+        from src.models.chat_model import Qianfan
         return Qianfan(model_name)
 
     elif model_provider == "vllm":
-        from models.chat_model import VLLM
+        from src.models.chat_model import VLLM
         return VLLM(model_name)
+
+    elif model_provider == "dashscope":
+        from src.models.chat_model import DashScope
+        return DashScope(model_name)
 
     elif model_provider is None:
         raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")

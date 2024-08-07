@@ -7,12 +7,15 @@ import {
   SettingOutlined,
   SettingFilled,
   BookOutlined,
-  BookFilled
+  BookFilled,
+  GithubOutlined,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
-import { useConfigStore } from '@/stores/counter'
+import { useConfigStore } from '@/stores/config'
+import { useDatabaseStore } from '@/stores/database'
 
 const configStore = useConfigStore()
+const databaseStore = useDatabaseStore()
 
 const getRemoteConfig = () => {
   fetch('/api/config').then(res => res.json()).then(data => {
@@ -21,7 +24,18 @@ const getRemoteConfig = () => {
   })
 }
 
+const getRemoteDatabase = () => {
+  if (!configStore.config.enable_knowledge_base) {
+    return
+  }
+  fetch('/api/database').then(res => res.json()).then(data => {
+    console.log("database", data)
+    databaseStore.setDatabase(data.databases)
+  })
+}
+
 onMounted(() => {
+  getRemoteDatabase()
   getRemoteConfig()
 })
 
@@ -39,17 +53,25 @@ console.log(route)
       <div class="nav">
         <RouterLink to="/chat" class="nav-item" active-class="active">
           <component class="icon" :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
-          <span class="text">对话</span>
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
           <component class="icon" :is="route.path.startsWith('/database') ? BookFilled : BookOutlined" />
-          <span class="text">知识</span>
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
+      <div class="github nav-item">
+        <a href="https://github.com/xerrors/ProjectAthena" target="_blank">
+          <GithubOutlined  class="icon" style="color: #222;"/>
+        </a>
+      </div>
       <RouterLink  class="nav-item setting" to="/setting" active-class="active">
         <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
       </RouterLink>
+    </div>
+    <div class="header-mobile">
+      <RouterLink to="/chat" class="nav-item" active-class="active">对话</RouterLink>
+      <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
+      <RouterLink to="/setting" class="nav-item" active-class="active">设置</RouterLink>
     </div>
     <a-config-provider :theme="themeConfig">
     <router-view v-slot="{ Component }" id="app-router-view">
@@ -70,6 +92,10 @@ console.log(route)
   width: 100%;
   height: 100vh;
   min-width: var(--min-width);
+
+  .header-mobile {
+    display: none;
+  }
 }
 
 div.header, #app-router-view {
@@ -112,6 +138,28 @@ div.header, #app-router-view {
     }
   }
 
+  .nav-item {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background-color: transparent;
+    color: #222;
+    font-size: 20px;
+    transition: background-color 0.2s ease-in-out;
+    margin: 0 10px;
+
+    &.active {
+      font-weight: bold;
+      color: var(--main-color);
+      background-color: var(--main-light-2);
+    }
+
+    &:hover {
+      background-color: var(--main-light-2);
+      cursor: pointer;
+    }
+  }
+
   .setting {
     width: auto;
     font-size: 20px;
@@ -132,95 +180,38 @@ div.header, #app-router-view {
   position: relative;
   height: 45px;
   gap: 16px;
-
-  .nav-item {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 8px;
-    background-color: transparent;
-    color: #222;
-    font-size: 20px;
-    transition: background-color 0.2s ease-in-out;
-    margin: 0 10px;
-
-    .text {
-      display: none;
-    }
-
-    &.active {
-      font-weight: bold;
-      color: var(--main-color);
-      background-color: var(--main-light-2);
-    }
-
-    &:hover {
-      background-color: var(--main-light-2);
-      cursor: pointer;
-    }
-  }
 }
 
 @media (max-width: 520px) {
   .app-layout {
     flex-direction: column-reverse;
+
+    div.header {
+      display: none;
+    }
   }
 
-  .app-layout div.header {
+  .app-layout div.header-mobile {
+    display: flex;
     flex-direction: row;
     width: 100%;
-    height: 40px;
     padding: 0 20px;
-    justify-content: space-between;
+    justify-content: space-around;
     align-items: center;
     flex: 0 0 60px;
     border-right: none;
-    border-top: 1px solid var(--main-light-2);
-
-    .logo {
-      display: none;
-      flex-shrink: 0;
-      width: 40px;
-      height: 40px;
-      margin: 0;
-    }
-
-    .setting {
-      margin: 0;
-      width: 60px;
-    }
-  }
-
-
-
-  .app-layout .nav {
-    flex-direction: row;
-    height: 100%;
-    width: 100%;
-    justify-content: center;
-    gap: 0;
 
     .nav-item {
       text-decoration: none;
-
-      span.text {
-        display: block;
-        color: #333;
-      }
-      span.icon {
-        display: none;
-      }
-    }
-
-    .nav-item:hover {
-      background-color: transparent;
-    }
-
-    .nav-item.active {
+      width: 40px;
+      color: var(--c-text-light-2);
+      font-size: 1rem;
       font-weight: bold;
-      background-color: transparent;
+      transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;
 
-      span.text {
-        font-weight: bold;
+      &.active {
+        color: black;
+        font-size: 1.1rem;
       }
     }
   }

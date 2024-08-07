@@ -3,8 +3,8 @@ import json
 import threading
 from flask import Blueprint, jsonify, request, Response
 
-from utils.logging_config import setup_logger
-from core.startup import startup
+from src.utils import setup_logger, hashstr
+from src.core.startup import startup
 
 db = Blueprint('database', __name__, url_prefix="/database")
 
@@ -14,7 +14,11 @@ progress = {} # 只针对单个用户的进度
 
 @db.route('/', methods=['GET'])
 def get_databases():
-    database = startup.dbm.get_databases()
+    try:
+        database = startup.dbm.get_databases()
+    except Exception as e:
+        return jsonify({"message": "获取数据库列表失败", "databases": []})
+
     return jsonify(database)
 
 @db.route('/', methods=['POST'])
@@ -27,7 +31,6 @@ def create_database():
     database = startup.dbm.create_database(database_name, description, db_type)
     return jsonify(database)
 
-# TODO: 删除数据库
 @db.route('/', methods=['DELETE'])
 def delete_database():
     data = json.loads(request.data)
@@ -36,6 +39,15 @@ def delete_database():
     startup.dbm.delete_database(db_id)
     return jsonify({"message": "删除成功"})
 
+@db.route('/query-test', methods=['POST'])
+def query_test():
+    data = json.loads(request.data)
+    query = data.get('query')
+    meta = data.get('meta')
+    logger.debug(f"Query test in {meta}: {query}")
+
+    result = startup.retriever.query_knowledgebase(query, history=None, refs={"meta": meta})
+    return jsonify(result)
 
 @db.route('/add_by_file', methods=['POST'])
 def create_document_by_file():
@@ -89,9 +101,10 @@ def upload_file():
     # elif file.filename.split('.')[-1] not in ['pdf', 'txt', 'md']:
     #     return jsonify({'message': 'Unsupported file type'}), 400
     if file:
-        os.makedirs("data/uploads", exist_ok=True)
-        filename = file.filename
-        file_path = os.path.join("data/uploads", filename)
+        upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        filename = f"{hashstr(file.filename, 6, with_salt=True)}_{file.filename}"
+        file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         return jsonify({'message': 'File successfully uploaded', 'file_path': file_path}), 200
 
@@ -109,7 +122,7 @@ def get_graph_node():
         return jsonify({'message': 'entity_name and kgdb_name are required'}), 400
 
     logger.debug(f"Get graph node {entity_name} in {kgdb_name} with {hops} hops")
-    result = startup.dbm.graph_base.query_by_vector(entity_name, kgdb_name, hops)
+    result = startup.dbm.graph_base.query_by_vector(entity_name, kgdb_name=kgdb_name, hops=hops)
     return jsonify({'result': startup.retriever.format_query_results(result), 'message': 'success'}), 200
 
 @db.route('/graph/add', methods=['POST'])
@@ -124,3 +137,4 @@ def add_graph_entity():
         return jsonify({'message': 'Unsupported file type'}), 400
 
     return jsonify({'message': 'Entity successfully added'}), 200
+

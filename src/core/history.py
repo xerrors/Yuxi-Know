@@ -1,4 +1,4 @@
-from utils.logging_config import logger
+from src.utils.logging_config import logger
 
 class HistoryManager():
     def __init__(self, history=None):
@@ -25,9 +25,13 @@ class HistoryManager():
             self.add_ai(content)
             return self.messages
 
-    def get_history_with_msg(self, msg, role="user"):
+    def get_history_with_msg(self, msg, role="user", max_rounds=None):
         """Get history with new message, but not append it to history."""
-        history = self.messages[:]
+        if max_rounds is None:
+            history = self.messages[:]
+        else:
+            history = self.messages[-(2*max_rounds):]
+
         history.append({"role": role, "content": msg})
         return history
 

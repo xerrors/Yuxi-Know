@@ -2,8 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-from views import create_app
-from utils import setup_logger
+from src.views import create_app
+from src.utils import setup_logger
 
 logger = setup_logger("Server")
 

@@ -1,7 +1,7 @@
 import os
 from FlagEmbedding import FlagModel, FlagReranker
 
-from utils.logging_config import setup_logger
+from src.utils.logging_config import setup_logger
 
 
 logger = setup_logger("EmbeddingModel")
@@ -72,6 +72,9 @@ class ZhipuEmbedding:
 
 
 def get_embedding_model(config):
+    if not config.enable_knowledge_base:
+        return None
+
     if config.embed_model == "zhipu":
         return ZhipuEmbedding(config)
     else:

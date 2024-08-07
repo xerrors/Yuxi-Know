@@ -1,4 +1,5 @@
-from utils.logging_config import setup_logger, logger
+import time
+from src.utils.logging_config import setup_logger, logger
 
 def is_text_pdf(pdf_path):
     import fitz
@@ -10,7 +11,11 @@ def is_text_pdf(pdf_path):
             return True
     return False
 
-def hashstr(input_string, length=8):
+def hashstr(input_string, length=8, with_salt=False):
     import hashlib
+    # 添加时间戳作为干扰
+    if with_salt:
+        input_string += str(time.time())
+
     hash = hashlib.md5(str(input_string).encode()).hexdigest()
     return hash[:length]

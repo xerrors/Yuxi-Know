@@ -11,7 +11,7 @@ from transformers import (
     BitsAndBytesConfig
 )
 
-from utils import setup_logger
+from src.utils import setup_logger
 logger = setup_logger("OneKE")
 
 dotenv.load_dotenv()
@@ -143,7 +143,7 @@ class OneKE:
 
         print(f"预测结果已添加到 {output_path} 文件中。")
         return output_path
-    
+
 def read_and_process_chars(file_path, char_size=512, overlap_size=100):
     buffer = ""
     with open(file_path, 'r', encoding='utf-8') as file:

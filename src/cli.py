@@ -1,9 +1,9 @@
 import os
 from dotenv import load_dotenv
-from core import HistoryManager
-from core import Retriever
-from config import Config
-from models import select_model
+from src.core import HistoryManager
+from src.core import Retriever
+from src.config import Config
+from src.models import select_model
 
 load_dotenv()
 
