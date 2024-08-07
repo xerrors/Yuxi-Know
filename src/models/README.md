@@ -2,12 +2,12 @@
 
 ### 1. 对话模型支持
 
-模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。
+模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请配置 APIKEY 后使用，配置项目参考：[.env.template](../.env.template)
 
 |模型供应商(`config.model_provider`)|默认模型(`config.model_name`)|配置项目(`.env`)|
 |:-|:-|:-|
 |`qianfan`|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
-|`zhipu`|`glm-4`|`ZHIPUAPI`|
+|`zhipu`(default)|`glm-4`|`ZHIPUAPI`|
 |`deepseek`|`deepseek-chat`|`DEEPSEEKAPI`|
 |`vllm`|`vllm`|`VLLM_API_KEY`, `VLLM_API_BASE`|
 
