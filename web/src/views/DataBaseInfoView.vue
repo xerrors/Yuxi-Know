@@ -34,7 +34,12 @@
         </div>
         <div class="params-item">
           <p>过滤低质量：</p>
-          <a-switch v-model:checked="meta.filter"  size="small" />
+          <a-switch v-model:checked="meta.filter" />
+        </div>
+        <div class="params-item">
+          <p>重写查询</p>
+            <a-segmented v-model:value="meta.rewrite_query" :options="['OFF', 'ON', 'HyDE']" />
+
         </div>
       </div>
     </div>
@@ -122,7 +127,7 @@
         :auto-size="{ minRows: 2, maxRows: 10 }"
       />
       <!-- :loading="state.searchLoading" -->
-      <a-button @click="onQuery" :disabled="queryText.length == 0">
+      <a-button @click="onQuery" :disabled="queryText.length == 0" :loading="state.searchLoading">
         <SearchOutlined v-if="!state.searchLoading"/>检索
       </a-button>
     </div>
@@ -183,6 +188,7 @@ const state = reactive({
 const meta = reactive({
   queryCount: 10,
   filter: false,
+  rewrite_query: 'OFF',
 });
 
 const onQuery = () => {
@@ -507,9 +513,8 @@ onMounted(() => {
     display: flex;
     flex-direction: column;
     padding: 20px;
-    background: var(--main-light-4);
     border-radius: 8px;
-    margin: 20px;
+    margin: 20px 0;
     box-sizing: border-box;
     gap: 12px;
 
@@ -523,6 +528,10 @@ onMounted(() => {
         margin: 0;
       }
     }
+    .params-item.col {
+      flex-direction: column;
+    }
+
   }
 }
 

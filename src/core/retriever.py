@@ -15,9 +15,7 @@ class Retriever:
 
     def retrieval(self, query, history, meta):
 
-        refs = {}
-        refs["meta"] = meta
-        refs["rewritten_query"] = self.rewrite_query(query, history, refs)
+        refs = {"query": query, "history": history, "meta": meta}
         refs["entities"] = self.reco_entities(query, history, refs)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, refs)
         refs["graph_base"] = self.query_graph(query, history, refs)
@@ -68,36 +66,46 @@ class Retriever:
 
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
-        query = refs.get("rewritten_query", query)
+        rw_query = self.rewrite_query(query, history, refs)
 
         kb_res = []
         final_res = []
         if refs["meta"].get("db_name") and self.config.enable_knowledge_base:
+
             db_name = refs["meta"]["db_name"]
-            kb = self.dbm.metaname2db[refs["meta"]["db_name"]]
+            kb = self.dbm.metaname2db[db_name]
             limit = refs["meta"].get("queryCount", 10)
-            kb_res = self.dbm.knowledge_base.search(query, db_name, limit=limit)
+
+            kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=limit)
             for r in kb_res:
                 r["file"] = kb.id2file(r["entity"]["file_id"])
 
             if self.config.enable_reranker:
+                RERANK_THRESHOLD = 0.1
                 for r in kb_res:
                     r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
                 kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-                final_res = [_res for _res in kb_res if _res["rerank_score"] > 0.1]
+                final_res = [_res for _res in kb_res if _res["rerank_score"] > RERANK_THRESHOLD]
+
             else:
                 final_res = kb_res[:5]
 
-        return {"results": final_res, "all_results": kb_res}
+        return {"results": final_res, "all_results": kb_res, "rw_query": rw_query}
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        if refs["meta"].get("rewrite_query") is None or history == []:
+        rewrite_query_span = refs["meta"].get("rewrite_query", None)
+        if rewrite_query_span is None or rewrite_query_span == "OFF":
             rewritten_query = query
         else:
             from src.utils.prompts import rewritten_query_prompt_template
-            rewritten_query_prompt = rewritten_query_prompt_template.format(history=[entry['content'] for entry in history if entry['role'] == 'user'], query=query)
+            history_query = [entry['content'] for entry in history if entry['role'] == 'user'] if history else ""
+            rewritten_query_prompt = rewritten_query_prompt_template.format(history=history_query, query=query)
             rewritten_query = self.model.predict(rewritten_query_prompt).content
+
+        if rewrite_query_span == "HyDE":
+            hy_doc = self.model.predict(rewritten_query).content
+            rewritten_query = f"{rewritten_query} {hy_doc}"
 
         return rewritten_query
 

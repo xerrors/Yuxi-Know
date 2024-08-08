@@ -73,15 +73,17 @@ class KnowledgeBase:
     def search(self, query, collection_name, limit=3):
 
         query_vectors = self.embed_model.encode_queries([query])
+        return self.search_by_vector(query_vectors[0], collection_name, limit)
 
+    def search_by_vector(self, vector, collection_name, limit=3):
         res = self.client.search(
             collection_name=collection_name,  # target collection
-            data=query_vectors,  # query vectors
+            data=[vector],  # query vectors
             limit=limit,  # number of returned entities
             output_fields=["text", "file_id"],  # specifies fields to be returned
         )
 
-        return res[0]  # 因为 query 只有一个
+        return res[0]
 
     def examples(self, collection_name, limit=20):
         res = self.client.query(
