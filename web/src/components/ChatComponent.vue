@@ -137,8 +137,18 @@
               </div>
               <div v-for="(res, idx) in results" :key="idx" class="result-item">
                 <p class="result-id"><strong>ID:</strong> #{{ res.id }}</p>
-                <p class="result-distance"><strong>相似度距离:</strong> {{ res.distance }}</p>
-                <p class="result-rerank-score"><strong>重排序分数:</strong> {{ res.rerank_score }}</p>
+                <p class="result-distance">
+                  <strong>相似度距离:</strong>
+                  <div class=scorebar>
+                    <a-progress :percent="(res.distance * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                  </div>
+                </p>
+                <p class="result-rerank-score">
+                  <strong>重排序分数:</strong>
+                  <div class=scorebar>
+                    <a-progress :percent="(res.rerank_score * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                  </div>
+                </p>
                 <p class="result-text">{{ res.entity.text }}</p>
               </div>
             </a-drawer>
@@ -663,6 +673,18 @@ watch(
     .result-text-label,
     .result-text {
       margin: 5px 0;
+    }
+
+    .scorebar {
+      margin-left: 10px;
+      display: inline-block;
+      width: 200px;
+      padding-bottom: 2px;
+
+
+      & > * {
+        margin: 0;
+      }
     }
   }
 }
