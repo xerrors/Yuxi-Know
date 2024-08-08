@@ -64,17 +64,18 @@ class VLLM(OpenAIBase):
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
-import qianfan
 
 
-class QianfanResponse:
+class GeneralResponse:
     def __init__(self, content):
         self.content = content
+        self.is_full = False
 
 
 class Qianfan:
 
     def __init__(self, model_name="ernie_speed") -> None:
+        import qianfan
         self.model_name = model_name
         access_key = os.getenv("QIANFAN_ACCESS_KEY")
         secret_key = os.getenv("QIANFAN_SECRET_KEY")
@@ -98,7 +99,7 @@ class Qianfan:
             stream=True,
         )
         for chunk in response:
-            yield QianfanResponse(chunk["body"]["result"])
+            yield GeneralResponse(chunk["body"]["result"])
 
     def _get_response(self, messages):
         response = self.client.do(
@@ -106,6 +107,55 @@ class Qianfan:
             messages=messages,
             stream=False,
         )
-        return QianfanResponse(response["body"]["result"])
+        return GeneralResponse(response["body"]["result"])
 
 
+
+class DashScope:
+
+    def __init__(self, model_name="qwen-long") -> None:
+        self.model_name = model_name
+        self.api_key= os.getenv("DASHSCOPE_API_KEY")
+
+
+    def predict(self, message, stream=False):
+        if isinstance(message, str):
+            messages=[{"role": "user", "content": message}]
+        else:
+            messages = message
+
+        if stream:
+            return self._stream_response(messages)
+        else:
+            return self._get_response(messages)
+
+    def _stream_response(self, messages):
+        import dashscope
+        response = dashscope.Generation.call(
+            api_key=self.api_key,
+            model=self.model_name,
+            messages=messages,
+            result_format='message',
+            stream=True,
+        )
+        for chunk in response:
+            message = chunk.output.choices[0].message
+            message.is_full = True
+            yield chunk.output.choices[0].message
+
+    def _get_response(self, messages):
+        import dashscope
+        response = dashscope.Generation.call(
+            api_key=self.api_key,
+            model=self.model_name,
+            messages=messages,
+            result_format='message',
+            stream=False,
+        )
+        return response.output.choices[0].message
+
+
+if __name__ == "__main__":
+    model = DashScope()
+    for a in model.predict("你好", stream=True):
+        print(a.content)

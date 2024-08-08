@@ -1,13 +1,13 @@
 import os
 import fitz  # fitz就是pip install PyMuPDF
 import cv2
-from paddleocr import PPStructure, save_structure_res
-from paddleocr.ppstructure.recovery.recovery_to_doc import sorted_layout_boxes, convert_info_docx
 from copy import deepcopy
 from tqdm import tqdm
 
 
 def pdf2txt(pdf_path, return_text=False):
+    from paddleocr import PPStructure, save_structure_res
+    from paddleocr.ppstructure.recovery.recovery_to_doc import sorted_layout_boxes, convert_info_docx
     output_dir = os.path.join('tmp', 'pdf2txt', os.path.basename(pdf_path).split('.')[0])
     os.makedirs(output_dir, exist_ok=True)
 

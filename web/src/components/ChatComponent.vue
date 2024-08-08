@@ -22,40 +22,42 @@
           <CompassFilled v-if="meta.use_web" />
           <GoldenFilled v-if="meta.use_graph"/>
         </div> -->
-        <a-dropdown v-if="state.selectedKB !== null">
+        <a-dropdown v-if="meta.selectedKB !== null">
           <a class="ant-dropdown-link nav-btn" @click.prevent>
-            <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />
-            <span class="text">{{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}</span>
+            <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
+             <BookOutlined />
+            <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
           </a>
           <template #overlay>
             <a-menu>
-              <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
                 <a href="javascript:;" >{{ db.name }}</a>
               </a-menu-item>
-              <a-menu-item  @click="state.selectedKB = null">
+              <a-menu-item  @click="meta.selectedKB = null">
                 <a href="javascript:;">不使用</a>
               </a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text" @click="state.showPanel = !state.showPanel">
-          <component :is="state.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
+        <div class="nav-btn text " @click="opts.showPanel = !opts.showPanel">
+          <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
-        <div v-if="state.showPanel" class="my-panal" ref="panel">
-          <div class="graphbase flex-center">
+        <div v-if="opts.showPanel" class="my-panal swing-in-top-fwd" ref="panel">
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
             知识库
             <div @click.stop>
               <a-dropdown>
                 <a class="ant-dropdown-link " @click.prevent>
-                  <component :is="state.selectedKB === null ? BookOutlined : BookFilled" />&nbsp;
-                  {{ state.selectedKB === null ? '不使用' : state.databases[state.selectedKB]?.name }}
+                  <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" />&nbsp; -->
+                  <BookOutlined />&nbsp;
+                  <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
                 </a>
                 <template #overlay>
                   <a-menu>
-                    <a-menu-item v-for="(db, index) in state.databases" :key="index" @click="state.selectedKB=index">
+                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
                       <a href="javascript:;">{{ db.name }}</a>
                     </a-menu-item>
-                    <a-menu-item  @click="state.selectedKB = null">
+                    <a-menu-item  @click="meta.selectedKB = null">
                       <a href="javascript:;">不使用</a>
                     </a-menu-item>
                   </a-menu>
@@ -63,18 +65,30 @@
               </a-dropdown>
             </div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph">
+          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web">
+          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
+          </div>
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
+            重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
+          </div>
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+            流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
+          </div>
+          <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
+            总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
+          </div>
+          <div class="flex-center">
+            最大历史轮数     <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
         </div>
       </div>
     </div>
     <div v-if="conv.messages.length == 0" class="chat-examples">
       <h1>你好，我是 Athena 😊</h1>
-      <div class="opt">
+      <div class="opts">
         <div
           class="opt__button"
           v-for="(exp, key) in examples"
@@ -145,14 +159,13 @@
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
-      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}</p>
+      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}:{{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, toRefs, nextTick, computed } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { reactive, ref, onMounted, toRefs, nextTick, computed, watch } from 'vue'
 import {
   SendOutlined,
   MenuOutlined,
@@ -168,6 +181,7 @@ import {
   FolderOutlined,
   FolderOpenOutlined,
 } from '@ant-design/icons-vue'
+import { onClickOutside } from '@vueuse/core'
 import { marked } from 'marked';
 import { useConfigStore } from '@/stores/config'
 
@@ -192,24 +206,32 @@ const examples = ref([
 ])
 
 const opts = reactive({
-  openDetail: false
+  showPanel: false,
+  openDetail: false,
+  databases: [],
 })
 
-const meta = reactive({
-  db_name: computed(() => state.value.databases[state.value.selectedKB]?.metaname),
+const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
+  rewrite_query: true,
+  selectedKB: null,
+  stream: true,
+  summary_title: true,
+  history_round: 5,
 })
 
+// 更多选项可以在 marked 文档中找到：https://marked.js.org/
 marked.setOptions({
   gfm: true,
   breaks: true,
   tables: true,
-  // 更多选项可以在 marked 文档中找到：https://marked.js.org/
 });
 
-onClickOutside(panel, () => setTimeout(() => state.value.showPanel = false, 30))
+const renderMarkdown = (text) => marked(text)
+const consoleMsg = (message) => console.log(message)
+onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
 
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -231,17 +253,18 @@ const handleKeyDown = (e) => {
 }
 
 const renameTitle = () => {
-  const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
-  const firstUserMessage = conv.value.messages[0].text
-  const firstAiMessage = conv.value.messages[1].text
-  const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
-  simpleCall(context).then((data) => {
-    emit('renameTitle', data.response.split("：")[0])
-  })
+  if (meta.summary_title) {
+    const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
+    const firstUserMessage = conv.value.messages[0].text
+    const firstAiMessage = conv.value.messages[1].text
+    const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
+    simpleCall(context).then((data) => {
+      emit('rename-title', data.response.split("：")[0])
+    })
+  } else {
+    emit('rename-title', conv.value.messages[0].text)
+  }
 }
-
-const myAlert = (message) => alert(message)
-const renderMarkdown = (text) => marked(text)
 
 const scrollToBottom = () => {
   setTimeout(() => {
@@ -249,7 +272,6 @@ const scrollToBottom = () => {
   }, 10)
 }
 
-const consoleMsg = (message) => console.log(message)
 
 const generateRandomHash = (length) => {
     let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -258,15 +280,6 @@ const generateRandomHash = (length) => {
         hash += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return hash;
-}
-
-const appendMessage = (message, role) => {
-  conv.value.messages.push({
-    id: generateRandomHash(16),
-    role,
-    text: message
-  })
-  scrollToBottom()
 }
 
 const appendUserMessage = (message) => {
@@ -298,7 +311,6 @@ const updateMessage = (text, id, refs, status) => {
   } else {
     console.error('Message not found')
   }
-
   scrollToBottom()
 }
 
@@ -324,17 +336,12 @@ const updateStatus = (id, status) => {
   }
 }
 
-
 const simpleCall = (message) => {
   return new Promise((resolve, reject) => {
     fetch('/api/call', {
       method: 'POST',
-      body: JSON.stringify({
-        query: message,
-      }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      body: JSON.stringify({ query: message, }),
+      headers: { 'Content-Type': 'application/json' }
     })
     .then((response) => response.json())
     .then((data) => resolve(data))
@@ -342,14 +349,24 @@ const simpleCall = (message) => {
   })
 }
 
+const loadDatabases = () => {
+  fetch('/api/database/', { method: "GET", })
+    .then(response => response.json())
+    .then(data => {
+      console.log(data)
+      opts.databases = data.databases
+    })
+}
+
 const sendMessage = () => {
   const user_input = conv.value.inputText.trim()
   if (user_input) {
     isStreaming.value = true
     appendUserMessage(user_input)
-    appendAiMessage("检索中……", null)
+    appendAiMessage("···", null)
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
     conv.value.inputText = ''
+    meta.db_name = opts.databases[meta.selectedKB]?.metaname
     fetch('/api/chat', {
       method: 'POST',
       body: JSON.stringify({
@@ -371,9 +388,7 @@ const sendMessage = () => {
             console.log('Finished')
             updateStatus(cur_res_id, "finished")
             isStreaming.value = false
-            if (conv.value.messages.length === 2) {
-              renameTitle()
-            }
+            if (conv.value.messages.length === 2) { renameTitle() }
             return
           }
 
@@ -394,7 +409,7 @@ const sendMessage = () => {
       return readChunk()
     })
   } else {
-    console.log('Please enter a message')
+    console.log('请输入消息')
   }
 }
 
@@ -403,14 +418,30 @@ const autoSend = (message) => {
   sendMessage()
 }
 
-const clearChat = () => {
-  conv.value.messages = []
-  conv.value.history = []
-}
+// const clearChat = () => {
+//   conv.value.messages = []
+//   conv.value.history = []
+// }
 
+// 从本地存储加载数据
 onMounted(() => {
   scrollToBottom()
-})
+  loadDatabases()
+  const storedMeta = localStorage.getItem('meta');
+  if (storedMeta) {
+    const parsedMeta = JSON.parse(storedMeta);
+    Object.assign(meta, parsedMeta);
+  }
+});
+
+// 监听 meta 对象的变化，并保存到本地存储
+watch(
+  () => meta,
+  (newMeta) => {
+    localStorage.setItem('meta', JSON.stringify(newMeta));
+  },
+  { deep: true }
+);
 </script>
 
 <style lang="less" scoped>
@@ -426,12 +457,6 @@ onMounted(() => {
   box-sizing: border-box;
   flex: 5 5 200px;
   overflow-y: scroll;
-  scrollbar-width: none; /* Firefox */
-  -ms-overflow-style: none;  /* IE and Edge */
-
-  &::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, and Opera */
-  }
 
   .header {
     user-select: none;
@@ -488,7 +513,7 @@ onMounted(() => {
   box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.05);
   border-radius: 12px;
   padding: 12px;
-  z-index: 101;
+  z-index: 11;
   width: 250px;
 
   .flex-center {
@@ -496,9 +521,6 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-  }
-
-  .graphbase {
     padding: 8px 16px;
     border-radius: 12px;
     cursor: pointer;
@@ -517,7 +539,7 @@ onMounted(() => {
   position: absolute;
   top: 20%;
   width: 100%;
-  z-index: 100;
+  z-index: 9;
 
   h1 {
     margin-bottom: 20px;
@@ -525,7 +547,7 @@ onMounted(() => {
     color: #333;
   }
 
-  .opt {
+  .opts {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -727,6 +749,38 @@ button:disabled {
   background: #D7D7D7;
   cursor: not-allowed;
 }
+
+
+
+.chat::-webkit-scrollbar {
+  position: absolute;
+  width: 4px;
+}
+
+.chat::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb {
+  background: var(--c-text-dark-2);
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb:hover {
+  background: rgb(100, 100, 100);
+  border-radius: 4px;
+}
+
+.chat::-webkit-scrollbar-thumb:active {
+  background: rgb(68, 68, 68);
+  border-radius: 4px;
+}
+
+.slide-out-left{-webkit-animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
+.swing-in-top-fwd {-webkit-animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;}
+@-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
+@-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
 
 @media (max-width: 520px) {
   .chat {

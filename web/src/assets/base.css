@@ -4,7 +4,7 @@
   --c-white-soft: #f8f8f8;
   --c-white-mute: #f2f2f2;
 
-  --c-black: #181818;
+  --c-black: #202428;
   --c-black-soft: #222222;
   --c-black-mute: #282828;
 
@@ -18,7 +18,7 @@
   --c-text-light-1: var(--c-indigo);
   --c-text-light-2: rgba(60, 66, 70, 0.66);
   --c-text-dark-1: var(--c-white);
-  --c-text-dark-2: rgba(235, 235, 235, 0.64);
+  --c-text-dark-2: #b8b8b8;
 }
 
 /* semantic color variables for this project */
@@ -31,7 +31,7 @@
   --color-border-hover: var(--c-black-light-1);
 
   --color-heading: var(--c-text-light-1);
-  --color-text: var(--c-text-light-1);
+  --color-text: var(--c-black);
 
   --section-gap: 160px;
 
@@ -41,9 +41,10 @@
   --main-light-2: #D3EAED;
   --main-light-3: #EDF4F5;
   --main-light-4: #F2F6F7;
+  --main-light-5: #F7FAFB;
+  --main-light-6: #FAFDFD;
   --min-width: 400px;
   --min-header-width: 80px;
-  --min-sider-width: 100px;
   --error-color: #f50a0d;
 }
 
@@ -74,8 +75,6 @@ body {
   display: flow-root;
   min-height: 100vh;
   color: var(--color-text);
-  background: var(--color-background);
-  transition: color 0.5s, background-color 0.5s;
   line-height: 1.6;
   font-family: 'HarmonyOS Sans SC', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
     Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;

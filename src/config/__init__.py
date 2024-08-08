@@ -42,22 +42,22 @@ class Config(SimpleConfig):
         self.add_item("stream", default=True, des="是否开启流式输出")
         self.add_item("save_dir", default="saves", des="保存目录")
         # 功能选项
-        self.add_item("enable_query_rewrite", default=True, des="是否开启查询重写")
-        self.add_item("enable_knowledge_base", default=True, des="是否开启知识库")
-        self.add_item("enable_knowledge_graph", default=True, des="是否开启知识图谱")
-        self.add_item("enable_search_engine", default=True, des="是否开启搜索引擎")
+        self.add_item("enable_reranker", default=False, des="是否开启重排序")
+        self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
+        self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
 
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
-        self.add_item("model_provider", default="qianfan", des="模型提供商", choices=["qianfan", "vllm", "zhipu", "deepseek"])
-        self.add_item("model_name", default=None, des="模型名称，为空则表示使用默认值")
+        self.add_item("model_provider", default="zhipu", des="模型提供商", choices=["qianfan", "vllm", "zhipu", "deepseek", "dashscope"])
+        self.add_item("model_name", default=None, des="模型名称")
         self.add_item("embed_model", default="bge-large-zh-v1.5", des="Embedding 模型", choices=["bge-large-zh-v1.5", "zhipu"])
         self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=["bge-reranker-v2-m3"])
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         ### <<< 默认配置结束
 
         self.filename = filename or os.path.join(self.save_dir, "config", "config.yaml")
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self.load()
         self.handle_self()
@@ -79,6 +79,14 @@ class Config(SimpleConfig):
                 if not model_rel_path.startswith("/"):
                     self.model_local_paths[model] = os.path.join(model_root_dir, model_rel_path)
 
+        self.model_names = MODEL_NAMES
+
+        if self.model_name not in self.model_names[self.model_provider]:
+            logger.warning(f"Model name {self.model_name} not in {self.model_provider}, using default model name")
+            self.model_name = self.model_names[self.model_provider][0]
+
+        default_model_name = self.model_names[self.model_provider][0]
+        self.model_name = self.get("model_name") or default_model_name
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""
@@ -108,6 +116,7 @@ class Config(SimpleConfig):
         if self.filename is None:
             logger.warning("Config file is not specified, save to default config/base.yaml")
             self.filename = os.path.join(self.save_dir, "config", "config.yaml")
+            os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         if self.filename.endswith(".json"):
             with open(self.filename, 'w+') as f:
@@ -121,3 +130,47 @@ class Config(SimpleConfig):
                 json.dump(self, f, indent=4)
 
         logger.info(f"Config file {self.filename} saved")
+
+MODEL_NAMES = {
+    # https://platform.deepseek.com/api-docs/zh-cn/pricing
+    "deepseek": [
+        "deepseek-chat",
+        "deepseek-coder"
+    ],
+
+    # https://open.bigmodel.cn/dev/api  glm-4-0520、glm-4 、glm-4-air、glm-4-airx、 glm-4-flash
+    "zhipu": [
+        "glm-4",
+        "glm-4-0520",
+        "glm-4-air",
+        "glm-4-airx",
+        "glm-4-flash"
+    ],
+
+    # {'ERNIE-4.0-8K-0104', 'ERNIE-Lite-8K-0308', 'ERNIE-Speed-128K', 'ERNIE-3.5-128K（预览版）', 'Yi-34B-Chat', 'ERNIE-4.0-8K-Preview-0518', 'ERNIE-Bot-4', 'ERNIE-3.5-128K', 'ChatGLM2-6B-32K', 'ERNIE-3.5-8K', 'EB-turbo-AppBuilder', 'ERNIE-Lite-AppBuilder-8K', 'ERNIE-4.0-8K-0329', 'AquilaChat-7B', 'Gemma-7B-it', 'Qianfan-Chinese-Llama-2-70B', 'Mixtral-8x7B-Instruct', 'Gemma-7B-It', 'ERNIE Speed-AppBuilder', 'ERNIE-Function-8K', 'ERNIE-4.0-8K-preview', 'ERNIE-Bot', 'Qianfan-BLOOMZ-7B-compressed', 'ERNIE-4.0-8K', 'BLOOMZ-7B', 'ERNIE-Character-8K', 'ERNIE-3.5-8K-0205', 'ERNIE-4.0-8K-0613', 'Llama-2-70B-Chat', 'ERNIE-Character-Fiction-8K', 'ERNIE-4.0-8K-Preview', 'ERNIE-3.5-8K-Preview', 'ERNIE-Speed', 'ERNIE-Tiny-8K', 'ERNIE-4.0-Turbo-8K-Preview', 'Meta-Llama-3-8B', 'ERNIE-4.0-8K-Latest', 'ERNIE 3.5', 'XuanYuan-70B-Chat-4bit', 'Llama-2-13B-Chat', 'ERNIE-Bot-turbo', 'ERNIE-3.5-8K-0613', 'ERNIE-Lite-AppBuilder-8K-0614', 'ERNIE-4.0-preview', 'Llama-2-7B-Chat', 'Qianfan-Chinese-Llama-2-13B', 'ERNIE-Bot-turbo-AI', 'Meta-Llama-3-70B', 'ERNIE-Functions-8K', 'ERNIE-Lite-8K-0922（原ERNIE-Bot-turbo-0922）', 'ERNIE Speed', 'ERNIE-3.5-preview', 'Qianfan-Chinese-Llama-2-7B', 'ERNIE-Speed-8K', 'ERNIE-Lite-8K-0922', 'ChatLaw', 'ERNIE-3.5-8K-0329', 'ERNIE-4.0-Turbo-8K', 'ERNIE-3.5-8K-preview', 'ERNIE-Lite-8K'}
+    "qianfan": [
+        "ERNIE-Speed",
+        "ERNIE-Speed-8K",
+        "ERNIE-Speed-128K",
+        "ERNIE-Tiny-8K",
+        "ERNIE-Lite-8K",
+        "ERNIE-4.0-8K-Latest"
+        "Yi-34B-Chat",
+    ],
+
+    "vllm": [
+        "vllm",
+    ],
+
+    # https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
+    "dashscope": [
+        "qwen-long",
+        "qwen2-7b-instruct",
+        "qwen2-1.5b-instruct",
+        "llama3.1-8b-instruct",
+        "llama3-8b-instruct",
+        "llama3.1-405b-instruct",
+        "baichuan2-7b-chat-v1",
+        "qwen2-0.5b-instruct"
+    ]
+}

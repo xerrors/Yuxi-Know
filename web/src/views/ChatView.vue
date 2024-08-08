@@ -1,6 +1,6 @@
 <template>
   <div class="chat-container">
-    <div v-if="state.isSidebarOpen" class="conversations">
+    <div class="conversations" :class="['conversations', { 'is-open': state.isSidebarOpen }]">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
          <span style="font-weight: bold;">对话历史</span>
@@ -12,7 +12,7 @@
         :class="{ active: curConvId === index }"
         @click="goToConversation(index)">
         <div class="conversation__title">{{ state.title }}</div>
-        <div class="conversation__delete" @click.prevent="delConv(index)"><DeleteOutlined /></div>
+        <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
       </div>
     </div>
     <ChatComponent
@@ -40,9 +40,6 @@ const convs = reactive(JSON.parse(localStorage.getItem('chat-convs')) || [
 
 const state = reactive({
   isSidebarOpen: true,
-  selectedKB: null,
-  showPanel: false,
-  databases: [],
 })
 
 const curConvId = ref(0)
@@ -81,25 +78,16 @@ const addNewConv = () => {
 
 const delConv = (index) => {
   convs.splice(index, 1)
-  if (index === curConvId.value) {
+
+  if (index < curConvId.value) {
+    curConvId.value -= 1
+  } else if (index === curConvId.value) {
     curConvId.value = 0
   }
 
   if (convs.length === 0) {
     addNewConv()
   }
-}
-
-const loadDatabases = () => {
-  fetch('/api/database/', {
-    method: "GET",
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      state.databases = data.databases
-    }
-  )
 }
 
 // Watch convs and save to localStorage
@@ -113,7 +101,6 @@ watch(
 
 // Load convs from localStorage on mount
 onMounted(() => {
-  loadDatabases()
   const savedSonvs = JSON.parse(localStorage.getItem('chat-convs'))
   if (savedSonvs) {
     for (let i = 0; i < savedSonvs.length; i++) {
@@ -133,20 +120,29 @@ onMounted(() => {
   position: relative;
 }
 
-.chat-container .conversations {
-  flex: 1 1 auto;
+.chat-container .conversations:not(.is-open) {
+  width: 0;
+  opacity: 0;
+  flex: 0 0 0;
 }
 
+.chat-container .conversations.is-open {
+  overflow: hidden; /* 确保内容不溢出 */
+  white-space: nowrap; /* 防止文本换行 */
+  flex: 1 1 auto; /* 当侧边栏打开时，占据可用空间 */
+}
 .conversations {
   display: flex;
   flex-direction: column;
-  width: 100px;
+  width: 230px; /* 初始宽度 */
   height: 100%;
+  max-width: 230px;
   overflow-y: auto;
   border-right: 1px solid var(--main-light-3);
-  min-width: var(--min-sider-width);
-  max-width: 200px;
   background-color: #FAFCFD;
+  overflow: hidden; /* 确保内容不溢出 */
+  white-space: nowrap; /* 防止文本换行 */
+  transition: all 0.2s ease-out;
 
   & .actions {
     height: var(--header-height);
@@ -220,6 +216,31 @@ onMounted(() => {
       }
     }
   }
+}
+
+.conversations::-webkit-scrollbar {
+  position: absolute;
+  width: 4px;
+}
+
+.conversations::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb {
+  background: var(--c-text-dark-2);
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb:hover {
+  background: rgb(100, 100, 100);
+  border-radius: 4px;
+}
+
+.conversations::-webkit-scrollbar-thumb:active {
+  background: rgb(68, 68, 68);
+  border-radius: 4px;
 }
 
 @media (max-width: 520px) {

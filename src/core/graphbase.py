@@ -277,10 +277,12 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query, keyword)
 
-    def query_by_vector(self, entity_name,  num_of_res=2, threshold=0.9,kgdb_name='neo4j', hops=2):
+    def query_by_vector(self, entity_name, threshold=0.9,kgdb_name='neo4j', hops=2, num_of_res=2):
         self.use_database(kgdb_name)
         result = self.query_by_vector_tep(entity_name)
         querys = []
+        threshold = 0.9 if threshold is None else threshold
+        num_of_res = 2 if num_of_res is None else num_of_res
         for i in range(num_of_res):
             if result[i][1] > threshold:
                 querys.append(result[i][0])

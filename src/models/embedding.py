@@ -72,6 +72,9 @@ class ZhipuEmbedding:
 
 
 def get_embedding_model(config):
+    if not config.enable_knowledge_base:
+        return None
+
     if config.embed_model == "zhipu":
         return ZhipuEmbedding(config)
     else:
