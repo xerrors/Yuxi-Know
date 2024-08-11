@@ -3,6 +3,7 @@
     <div class="setting">
       <h2>设置</h2>
       <h3>模型配置</h3>
+      <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，可参考 <code>src/.env.template</code></p>
       <div class="section">
         <div class="card">
           <span class="label">

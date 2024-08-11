@@ -1,6 +1,6 @@
 <template>
   <div class="chat-container">
-    <div v-if="state.isSidebarOpen" class="conversations">
+    <div class="conversations" :class="['conversations', { 'is-open': state.isSidebarOpen }]">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
          <span style="font-weight: bold;">对话历史</span>
@@ -120,20 +120,29 @@ onMounted(() => {
   position: relative;
 }
 
-.chat-container .conversations {
-  flex: 1 1 auto;
+.chat-container .conversations:not(.is-open) {
+  width: 0;
+  opacity: 0;
+  flex: 0 0 0;
 }
 
+.chat-container .conversations.is-open {
+  overflow: hidden; /* 确保内容不溢出 */
+  white-space: nowrap; /* 防止文本换行 */
+  flex: 1 1 auto; /* 当侧边栏打开时，占据可用空间 */
+}
 .conversations {
   display: flex;
   flex-direction: column;
-  width: 100px;
+  width: 230px; /* 初始宽度 */
   height: 100%;
+  max-width: 230px;
   overflow-y: auto;
   border-right: 1px solid var(--main-light-3);
-  min-width: var(--min-sider-width);
-  max-width: 200px;
   background-color: #FAFCFD;
+  overflow: hidden; /* 确保内容不溢出 */
+  white-space: nowrap; /* 防止文本换行 */
+  transition: all 0.2s ease-out;
 
   & .actions {
     height: var(--header-height);
@@ -233,7 +242,6 @@ onMounted(() => {
   background: rgb(68, 68, 68);
   border-radius: 4px;
 }
-
 
 @media (max-width: 520px) {
   .conversations {

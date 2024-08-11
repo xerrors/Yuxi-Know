@@ -1,14 +1,13 @@
 import os
 
 from pathlib import Path
-from llama_index.readers.file import PDFReader
-
 
 def pdfreader(file_path):
     """读取PDF文件并返回text文本"""
     assert os.path.exists(file_path), "File not found"
     assert file_path.endswith(".pdf"), "File format not supported"
 
+    from llama_index.readers.file import PDFReader
     doc = PDFReader().load_data(file=Path(file_path))
 
     # 简单的拼接起来之后返回纯文本

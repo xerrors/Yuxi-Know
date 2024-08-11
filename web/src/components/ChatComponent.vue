@@ -39,11 +39,11 @@
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
+        <div class="nav-btn text " @click="opts.showPanel = !opts.showPanel">
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
-        <div v-if="opts.showPanel" class="my-panal" ref="panel">
-          <div class="graphbase flex-center" v-if="configStore.config.enable_knowledge_base">
+        <div v-if="opts.showPanel" class="my-panal swing-in-top-fwd" ref="panel">
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
             知识库
             <div @click.stop>
               <a-dropdown>
@@ -65,20 +65,23 @@
               </a-dropdown>
             </div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
+          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
             重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
             流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
           </div>
-          <div class="graphbase flex-center" @click="meta.summary_title = !meta.summary_title">
+          <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
+          </div>
+          <div class="flex-center">
+            最大历史轮数     <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
         </div>
       </div>
@@ -134,8 +137,18 @@
               </div>
               <div v-for="(res, idx) in results" :key="idx" class="result-item">
                 <p class="result-id"><strong>ID:</strong> #{{ res.id }}</p>
-                <p class="result-distance"><strong>相似度距离:</strong> {{ res.distance }}</p>
-                <p class="result-rerank-score"><strong>重排序分数:</strong> {{ res.rerank_score }}</p>
+                <p class="result-distance">
+                  <strong>相似度距离:</strong>
+                  <div class=scorebar>
+                    <a-progress :percent="(res.distance * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                  </div>
+                </p>
+                <p class="result-rerank-score">
+                  <strong>重排序分数:</strong>
+                  <div class=scorebar>
+                    <a-progress :percent="(res.rerank_score * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                  </div>
+                </p>
                 <p class="result-text">{{ res.entity.text }}</p>
               </div>
             </a-drawer>
@@ -216,6 +229,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   selectedKB: null,
   stream: true,
   summary_title: true,
+  history_round: 5,
 })
 
 // 更多选项可以在 marked 文档中找到：https://marked.js.org/
@@ -517,9 +531,6 @@ watch(
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-  }
-
-  .graphbase {
     padding: 8px 16px;
     border-radius: 8px;
     cursor: pointer;
@@ -663,6 +674,18 @@ watch(
     .result-text {
       margin: 5px 0;
     }
+
+    .scorebar {
+      margin-left: 10px;
+      display: inline-block;
+      width: 200px;
+      padding-bottom: 2px;
+
+
+      & > * {
+        margin: 0;
+      }
+    }
   }
 }
 
@@ -780,6 +803,10 @@ button:disabled {
   border-radius: 4px;
 }
 
+.slide-out-left{-webkit-animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
+.swing-in-top-fwd {-webkit-animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;}
+@-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
+@-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
 
 @media (max-width: 520px) {
   .chat {
