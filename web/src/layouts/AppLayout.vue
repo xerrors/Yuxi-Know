@@ -122,7 +122,7 @@ div.header, #app-router-view {
   .logo {
     width: 40px;
     height: 40px;
-    margin: 30px 0;
+    margin: 18px 0 35px 0;
 
     img {
       width: 100%;
@@ -164,7 +164,8 @@ div.header, #app-router-view {
     width: auto;
     font-size: 20px;
     color: #333;
-    margin: 20px 0;
+    margin-bottom: 20px;
+    margin-top: 10px;
 
     &:hover {
       cursor: pointer;

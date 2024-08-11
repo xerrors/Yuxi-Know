@@ -521,7 +521,7 @@ watch(
 
   .graphbase {
     padding: 8px 16px;
-    border-radius: 12px;
+    border-radius: 8px;
     cursor: pointer;
     transition: background-color 0.3s;
 
@@ -687,6 +687,10 @@ watch(
     border-radius: 2rem;
     height: auto;
     padding: 0.5rem;
+
+    &:focus-within {
+      background-color: #F2F2F2;
+    }
 
     .user-input {
       flex: 1;
