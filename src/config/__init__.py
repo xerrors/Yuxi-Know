@@ -154,7 +154,7 @@ MODEL_NAMES = {
         "ERNIE-Speed-128K",
         "ERNIE-Tiny-8K",
         "ERNIE-Lite-8K",
-        "ERNIE-4.0-8K-Latest"
+        "ERNIE-4.0-8K-Latest",
         "Yi-34B-Chat",
     ],
 

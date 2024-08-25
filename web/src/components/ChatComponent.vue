@@ -14,7 +14,7 @@
           class="newchat nav-btn"
           @click="$emit('newconv')"
         >
-          <PlusCircleOutlined /> <span class="text">新对话</span>
+          <PlusCircleOutlined /> <span class="text">新对话 {{ configStore.config?.model_name }}</span>
         </div>
       </div>
       <div class="header__right">
@@ -107,8 +107,13 @@
         :class="message.role"
       >
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
+        <div v-else-if="message.text.length == 0"  class="loading-dots">
+          <div></div>
+          <div></div>
+          <div></div>
+        </div>
         <p v-else
-          v-html="renderMarkdown(message.text)"
+          v-html="renderMarkdown(message)"
           class="message-md"
           @click="consoleMsg(message)"></p>
 
@@ -149,6 +154,7 @@
                     <a-progress :percent="(res.rerank_score * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
                   </div>
                 </p>
+                <a-divider />
                 <p class="result-text">{{ res.entity.text }}</p>
               </div>
             </a-drawer>
@@ -169,7 +175,7 @@
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
-      <p class="note">即便强如雅典娜也可能会出错，请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}:{{ configStore.config?.model_name }}</p>
+      <p class="note">请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -192,8 +198,11 @@ import {
   FolderOpenOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
-import { marked } from 'marked';
+import { Marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
 import { useConfigStore } from '@/stores/config'
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
 
 const props = defineProps({
   conv: Object,
@@ -232,16 +241,30 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   history_round: 5,
 })
 
-// 更多选项可以在 marked 文档中找到：https://marked.js.org/
-marked.setOptions({
-  gfm: true,
-  breaks: true,
-  tables: true,
-});
+const marked = new Marked(
+  {
+    gfm: true,
+    breaks: true,
+    tables: true,
+  },
+  markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code) {
+      return hljs.highlightAuto(code).value;
+    }
+  })
+);
 
-const renderMarkdown = (text) => marked(text)
+
 const consoleMsg = (message) => console.log(message)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
+const renderMarkdown = (message) => {
+  if (message.status === 'loading') {
+    return marked.parse(message.text + '🟢')
+  } else {
+    return marked.parse(message.text)
+  }
+}
 
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -313,16 +336,17 @@ const appendAiMessage = (message, refs=null) => {
 }
 
 const updateMessage = (text, id, refs, status) => {
-  const message = conv.value.messages.find((message) => message.id === id)
+  const message = conv.value.messages.find((message) => message.id === id);
   if (message) {
-    message.text = text
-    message.refs = refs
-    message.status = status
+    message.refs = refs;
+    message.status = status;
+    message.text = text;
   } else {
-    console.error('Message not found')
+    console.error('Message not found');
   }
-  scrollToBottom()
-}
+  scrollToBottom();
+};
+
 
 const updateStatus = (id, status) => {
   const message = conv.value.messages.find((message) => message.id === id)
@@ -332,7 +356,6 @@ const updateStatus = (id, status) => {
     console.error('Message not found')
   }
 
-  console.log("updateStatus", message, message.refs.knowledge_base.results.length > 0)
   if (message.refs.knowledge_base.results.length > 0) {
     message.groupedResults = message.refs.knowledge_base.results.reduce((acc, result) => {
       const { filename } = result.file;
@@ -373,7 +396,7 @@ const sendMessage = () => {
   if (user_input) {
     isStreaming.value = true
     appendUserMessage(user_input)
-    appendAiMessage("···", null)
+    appendAiMessage("", null)
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
     conv.value.inputText = ''
     meta.db_name = opts.databases[meta.selectedKB]?.metaname
@@ -585,7 +608,7 @@ watch(
 
 .chat-box {
   width: 100%;
-  max-width: 1100px;
+  max-width: 900px;
   margin: 0 auto;
   flex-grow: 1;
   padding: 1rem;
@@ -593,25 +616,24 @@ watch(
   flex-direction: column;
 
   .message-box {
-    max-width: 95%;
     display: inline-block;
-    border-radius: 0.8rem;
+    border-radius: 1.5rem;
     margin: 0.8rem 0;
-    padding: 1rem;
+    padding: 0.625rem 1.25rem;
     user-select: text;
     word-break: break-word;
     font-size: 16px;
     font-variation-settings: 'wght' 400, 'opsz' 10.5;
     font-weight: 400;
     box-sizing: border-box;
-    color: #0D0D0D;
+    color: black;
     /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
     /* animation: slideInUp 0.1s ease-in; */
   }
 
   .message-box.sent {
-    background-color: #efefef;
     line-height: 24px;
+    max-width: 95%;
     background: var(--main-light-3);
     align-self: flex-end;
   }
@@ -620,10 +642,9 @@ watch(
     color: initial;
     width: fit-content;
     padding-top: 16px;
-    background-color: #F5F7F8;
     text-align: left;
     word-wrap: break-word;
-    margin-bottom: 0;
+    margin: 0;
     padding-bottom: 0;
     text-align: justify;
   }
@@ -651,21 +672,23 @@ watch(
 .retrieval-detail {
   .fileinfo {
     margin-bottom: 20px;
-    padding: 10px;
-    background: var(--main-light-3);
+    padding: 1rem;
+    background: var(--main-50);
+    color: var(--main-800);
     border-radius: 8px;
+    // border: 1px solid var(--main-100);
     p {
-      margin: 0;
+      margin: 10px;
       line-height: 1.5;
     }
   }
 
   .result-item {
     margin-bottom: 20px;
-    padding: 10px;
+    padding: 24px 16px 10px 16px;
     border: 1px solid #e8e8e8;
     border-radius: 8px;
-    background: var(--main-light-4);
+    background: var(--main-light-6);
 
     .result-id,
     .result-distance,
@@ -696,23 +719,23 @@ watch(
   bottom: 0;
   width: 100%;
   margin: 0 auto;
-  padding: 0.5rem 2rem;
+  padding: 4px 2rem 0 2rem;
   background: white;
 
 
   .input-box {
     display: flex;
     width: 100%;
-    max-width: 1100px;
+    max-width: 900px;
     margin: 0 auto;
     align-items: flex-end;
-    background-color: #F5F7F8;
+    background-color: var(--main-light-4);
     border-radius: 2rem;
     height: auto;
     padding: 0.5rem;
 
     &:focus-within {
-      background-color: #F2F2F2;
+      background-color: #ECF1F2;
     }
 
     .user-input {
@@ -762,9 +785,10 @@ watch(
   background-color: transparent;
   border: none;
   height: 2.5rem;
-  background-color: black;
+  background-color: var(--main-color);
   border-radius: 3rem;
   color: white;
+  transition: background-color 0.3s;
 
   &:hover {
     color: white;
@@ -772,7 +796,7 @@ watch(
 }
 
 button:disabled {
-  background: #D7D7D7;
+  background: #E0E0E0;
   cursor: not-allowed;
 }
 
@@ -803,8 +827,37 @@ button:disabled {
   border-radius: 4px;
 }
 
-.slide-out-left{-webkit-animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
-.swing-in-top-fwd {-webkit-animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;}
+.loading-dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-dots div {
+  width: 10px;
+  height: 10px;
+  margin: 0 5px;
+  background-color: #333;
+  border-radius: 50%;
+  animation: loading 0.8s infinite ease-in-out both;
+}
+
+.loading-dots div:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.loading-dots div:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dots div:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes loading {0%,80%,100%{transform:scale(0.5);}40%{transform:scale(1);}}
+
+.slide-out-left{-webkit-animation:slide-out-left .2s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
+.swing-in-top-fwd {-webkit-animation: swing-in-top-fwd 0.2s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;}
 @-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
 @-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
 
@@ -848,6 +901,19 @@ button:disabled {
     .note {
       display: none;
     }
+  }
+}
+</style>
+
+<style lang="less">
+.message-box pre {
+  border-radius: 8px;
+  font-size: 14px;
+  border: 1px solid var(--main-light-3);
+  padding: 1rem;
+
+  &:has(code.hljs) {
+    padding: 0;
   }
 }
 </style>
