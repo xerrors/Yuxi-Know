@@ -8,7 +8,7 @@ logger = setup_logger("EmbeddingModel")
 
 SUPPORT_LIST = {
     "bge-large-zh-v1.5": "BAAI/bge-large-zh-v1.5",
-    "zhipu": "embedding-2",
+    "zhipu": "embedding-3",
 }
 
 RERANKER_LIST = {
@@ -57,11 +57,19 @@ class ZhipuEmbedding:
         self.query_instruction_for_retrieval = "为这个句子生成表示以用于检索相关文章："
 
     def predict(self, message):
-        response = self.client.embeddings.create(
-            model=SUPPORT_LIST[self.config.embed_model],
-            input=message
-        )
-        return [a["embedding"] for a in response["data"]]
+
+        data = []
+
+        for i in range(0, len(message), 10):
+            group_msg = message[i:i+10]
+            response = self.client.embeddings.create(
+                model=SUPPORT_LIST[self.config.embed_model],
+                input=group_msg
+            )
+
+            data.extend([a.embedding for a in response.data])
+
+        return data
 
     def encode(self, message):
         return self.predict(message)

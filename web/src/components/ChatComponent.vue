@@ -330,7 +330,8 @@ const appendAiMessage = (message, refs=null) => {
     role: 'received',
     text: message,
     refs,
-    status: "querying"
+    status: "querying",
+    model_name: configStore.config.model_name
   })
   scrollToBottom()
 }
@@ -641,11 +642,13 @@ watch(
   .message-box.received {
     color: initial;
     width: fit-content;
-    padding-top: 16px;
     text-align: left;
     word-wrap: break-word;
     margin: 0;
     padding-bottom: 0;
+    padding-top: 16px;
+    padding-left: 0;
+    padding-right: 0;
     text-align: justify;
   }
 
