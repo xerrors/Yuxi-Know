@@ -9,10 +9,11 @@ logger = setup_logger("DataBaseManager")
 
 
 class DataBaseLite:
-    def __init__(self, name, description, db_type, **kwargs) -> None:
+    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
         self.name = name
         self.description = description
         self.db_type = db_type
+        self.dimension = dimension
         self.db_id = kwargs.get("db_id", hashstr(name))
         self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
         self.metadata = kwargs.get("metaname", {})
@@ -37,7 +38,8 @@ class DataBaseLite:
             "embed_model": self.embed_model,
             "metaname": self.metaname,
             "metadata": self.metadata,
-            "files": self.files
+            "files": self.files,
+            "dimension": self.dimension
         }
 
     def to_json(self):
@@ -115,10 +117,14 @@ class DataBaseManager:
         else:
             return {"message": "Graph base not enabled", "graph": {}}
 
-    def create_database(self, database_name, description, db_type):
-        new_database = DataBaseLite(database_name, description, db_type, embed_model=self.config.embed_model)
+    def create_database(self, database_name, description, db_type, dimension):
+        new_database = DataBaseLite(database_name,
+                                    description,
+                                    db_type,
+                                    embed_model=self.config.embed_model,
+                                    dimension=dimension)
 
-        self.knowledge_base.add_collection(new_database.metaname)
+        self.knowledge_base.add_collection(new_database.metaname, dimension)
         self.data["databases"].append(new_database)
         self._save_databases()
         return self.get_databases()

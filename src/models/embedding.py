@@ -1,37 +1,24 @@
 import os
 from FlagEmbedding import FlagModel, FlagReranker
 
+from src.config import EMBED_MODEL_INFO, RERANKER_LIST
 from src.utils.logging_config import setup_logger
 
 
 logger = setup_logger("EmbeddingModel")
 
-SUPPORT_LIST = {
-    "bge-large-zh-v1.5": "BAAI/bge-large-zh-v1.5",
-    "zhipu": "embedding-3",
-}
-
-RERANKER_LIST = {
-    "bge-reranker-v2-m3": "BAAI/bge-reranker-v2-m3",
-}
-
-QUERY_INSTRUCTION = {
-    "bge-large-zh-v1.5": "为这个句子生成表示以用于检索相关文章：",
-}
 
 class EmbeddingModel(FlagModel):
-    def __init__(self, config, **kwargs):
-
-        assert config.embed_model in SUPPORT_LIST.keys(), f"Unsupported embed model: {config.embed_model}, only support {SUPPORT_LIST}"
-
-        model_name_or_path = config.model_local_paths.get(config.embed_model, SUPPORT_LIST[config.embed_model])
-        logger.info(f"Loading embedding model {config.embed_model} from {model_name_or_path}")
+    def __init__(self, model_info, config, **kwargs):
+        self.info = model_info
+        model_name_or_path = config.model_local_paths.get(model_info.name, model_info.default_path)
+        logger.info(f"Loading embedding model {model_info.name} from {model_name_or_path}")
 
         super().__init__(model_name_or_path,
-                query_instruction_for_retrieval=QUERY_INSTRUCTION[config.embed_model],
+                query_instruction_for_retrieval=model_info.get("query_instruction", None),
                 use_fp16=False, **kwargs)
 
-        logger.info(f"Embedding model {config.embed_model} loaded")
+        logger.info(f"Embedding model {model_info.name} loaded")
 
 
 class Reranker(FlagReranker):
@@ -50,8 +37,9 @@ from zhipuai import ZhipuAI
 
 class ZhipuEmbedding:
 
-    def __init__(self, config) -> None:
+    def __init__(self, model_info, config) -> None:
         self.config = config
+        self.model_info = model_info
         self.client = ZhipuAI(api_key=os.getenv("ZHIPUAPI"))
         logger.info("Zhipu Embedding model loaded")
         self.query_instruction_for_retrieval = "为这个句子生成表示以用于检索相关文章："
@@ -63,8 +51,8 @@ class ZhipuEmbedding:
         for i in range(0, len(message), 10):
             group_msg = message[i:i+10]
             response = self.client.embeddings.create(
-                model=SUPPORT_LIST[self.config.embed_model],
-                input=group_msg
+                model=self.model_info.default_path,
+                input=group_msg,
             )
 
             data.extend([a.embedding for a in response.data])
@@ -83,7 +71,12 @@ def get_embedding_model(config):
     if not config.enable_knowledge_base:
         return None
 
-    if config.embed_model == "zhipu":
-        return ZhipuEmbedding(config)
-    else:
-        return EmbeddingModel(config)
+    assert config.embed_model in EMBED_MODEL_INFO.keys(), f"Unsupported embed model: {config.embed_model}, only support {EMBED_MODEL_INFO.keys()}"
+
+    if config.embed_model in ["bge-large-zh-v1.5"]:
+        model = EmbeddingModel(EMBED_MODEL_INFO[config.embed_model], config)
+
+    if config.embed_model in ["zhipu-embedding-2", "zhipu-embedding-3"]:
+        model = ZhipuEmbedding(EMBED_MODEL_INFO[config.embed_model], config)
+
+    return model

@@ -12,7 +12,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select ref="select" style="width: 160px"
+          <a-select ref="select" style="width: 200px"
             :value="configStore.config?.model_provider"
             @change="handleChange('model_provider', $event)"
           >
@@ -29,7 +29,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select ref="select" style="width: 160px"
+          <a-select ref="select" style="width: 200px"
             :value="configStore.config?.model_name"
             @change="handleChange('model_name', $event)"
             v-if="configStore.config?.model_names && configStore.config?.model_provider && configStore.config?.model_names[configStore.config?.model_provider]"
@@ -47,7 +47,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select style="width: 160px"
+          <a-select style="width: 200px"
             :value="configStore.config?.embed_model"
             @change="handleChange('embed_model', $event)"
           >
@@ -63,7 +63,7 @@
               <ReloadOutlined />需要重启
             </a-button>
           </span>
-          <a-select style="width: 160px"
+          <a-select style="width: 200px"
             :value="configStore.config?.reranker"
             @change="handleChange('reranker', $event)"
             :disabled="!configStore.config.enable_reranker"

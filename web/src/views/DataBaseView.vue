@@ -11,6 +11,9 @@
         placeholder="新建数据库描述"
         :auto-size="{ minRows: 2, maxRows: 5 }"
       />
+      <h3 style="margin-top: 20px;">向量维度</h3>
+      <p>必须与向量模型 {{ configStore.config.embed_model }} 一致</p>
+      <a-input v-model:value="newDatabase.dimension" placeholder="向量维度 (e.g. 768, 1024)" />
       <template #footer>
         <a-button key="back" @click="newDatabase.open=false">取消</a-button>
         <a-button key="submit" type="primary" :loading="newDatabase.loading" @click="createDatabase">创建</a-button>
@@ -40,7 +43,8 @@
         </div>
         <p class="description">{{ database.description }}</p>
         <div class="tags">
-          <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
+          <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
+          <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
         </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
@@ -94,6 +98,7 @@ const configStore = useConfigStore()
 const newDatabase = reactive({
   name: '',
   description: '',
+  dimension: '',
   loading: false,
 })
 
@@ -123,7 +128,8 @@ const createDatabase = () => {
     body: JSON.stringify({
       database_name: newDatabase.name,
       description: newDatabase.description,
-      db_type: "knowledge"
+      db_type: "knowledge",
+      dimension: newDatabase.dimension,
     })
   })
   .then(response => response.json())
@@ -132,7 +138,8 @@ const createDatabase = () => {
     loadDatabases()
     newDatabase.open = false
     newDatabase.name = ''
-    newDatabase.description = ''
+    newDatabase.description = '',
+    newDatabase.dimension = ''
   })
   .finally(() => {
     newDatabase.loading = false
@@ -238,12 +245,18 @@ onMounted(() => {
       background-color: #F5F8FF;
       border-radius: 8px;
       border: 1px solid #E0EAFF;
+      color: var(--main-color);
     }
 
     .info {
       h3, p {
         margin: 0;
         color: black;
+      }
+
+      h3 {
+        font-size: 16px;
+        font-weight: bold;
       }
 
       p {

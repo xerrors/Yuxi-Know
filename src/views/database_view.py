@@ -27,8 +27,9 @@ def create_database():
     database_name = data.get('database_name')
     description = data.get('description')
     db_type = data.get('db_type')
+    dimension = data.get('dimension')
     logger.debug(f"Create database {database_name}")
-    database = startup.dbm.create_database(database_name, description, db_type)
+    database = startup.dbm.create_database(database_name, description, db_type, dimension=dimension)
     return jsonify(database)
 
 @db.route('/', methods=['DELETE'])

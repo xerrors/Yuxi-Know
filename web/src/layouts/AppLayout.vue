@@ -1,5 +1,5 @@
 <script setup>
-import { KeepAlive, onMounted } from 'vue'
+import { ref, KeepAlive, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   MessageOutlined,
@@ -15,9 +15,12 @@ import {
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
+import DebugComponent from '@/components/DebugComponent.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
+
+const showDebug = ref(false)
 
 const getRemoteConfig = () => {
   fetch('/api/config').then(res => res.json()).then(data => {
@@ -48,6 +51,18 @@ console.log(route)
 
 <template>
   <div class="app-layout">
+    <div class="debug-panel">
+      <div class="shown-btn" @click="showDebug=!showDebug">Debug</div>
+      <a-drawer
+        v-model:open="showDebug"
+        title="调试面板"
+        width="800"
+        :contentWrapperStyle="{ maxWidth: '100%'}"
+        placement="right"
+      >
+        <DebugComponent />
+      </a-drawer>
+    </div>
     <div class="header">
       <div class="logo">
         <router-link to="/"><img src="/jnu.png"> </router-link>
@@ -97,6 +112,19 @@ console.log(route)
 
   .header-mobile {
     display: none;
+  }
+
+  .debug-panel {
+    position: absolute;
+    z-index: 100;
+    right: 0;
+    top: 50px;
+    border-radius: 16px 0 0 16px;
+    background-color: var(--main-light-3);
+    padding: 8px 8px 8px 16px;
+    box-shadow: 0 0 20px 10px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease-in-out;
+    cursor: pointer;
   }
 }
 
