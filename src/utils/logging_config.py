@@ -3,21 +3,23 @@ import os
 from datetime import datetime
 
 
-# DATETIME = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-DATETIME = "debug" # 为了方便，调试的时候输出到 debug.log 文件
+DATETIME = datetime.now().strftime('%Y-%m-%d-%H%M%S')
+# DATETIME = "debug" # 为了方便，调试的时候输出到 debug.log 文件
+LOG_FILE = f'log/project-{DATETIME}.log'
 
-def setup_logger(name, log_file=None, level=logging.DEBUG, console=False):
-
-    if log_file is None:
-        log_file = f'log/project-{DATETIME}.log'
+def setup_logger(name, level=logging.DEBUG, console=False):
     os.makedirs("log", exist_ok=True)
 
     """Function to setup logger with the given name and log file."""
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
+    # 清除已有的 Handler，防止重复添加
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
     # File handler for logging to a file
-    file_handler = logging.FileHandler(log_file)
+    file_handler = logging.FileHandler(LOG_FILE)
     file_handler.setLevel(level)
 
     # Formatter for the logs
@@ -33,6 +35,7 @@ def setup_logger(name, log_file=None, level=logging.DEBUG, console=False):
         logger.addHandler(console_handler)
 
     return logger
+
 
 # Setup the root logger
 logger = setup_logger('Athena')

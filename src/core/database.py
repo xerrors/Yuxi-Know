@@ -9,10 +9,11 @@ logger = setup_logger("DataBaseManager")
 
 
 class DataBaseLite:
-    def __init__(self, name, description, db_type, **kwargs) -> None:
+    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
         self.name = name
         self.description = description
         self.db_type = db_type
+        self.dimension = dimension
         self.db_id = kwargs.get("db_id", hashstr(name))
         self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
         self.metadata = kwargs.get("metaname", {})
@@ -37,7 +38,8 @@ class DataBaseLite:
             "embed_model": self.embed_model,
             "metaname": self.metaname,
             "metadata": self.metadata,
-            "files": self.files
+            "files": self.files,
+            "dimension": self.dimension
         }
 
     def to_json(self):
@@ -77,6 +79,12 @@ class DataBaseManager:
                 "graph": data["graph"]
             }
 
+        # 检查所有文件，如果出现状态是 processing 的，那么设置为 failed
+        for db in self.data["databases"]:
+            for file in db.files:
+                if file["status"] == "processing" or file["status"] == "waiting":
+                    file["status"] = "failed"
+
     def _save_databases(self):
         """将数据库的信息保存到本地的文件里面"""
         self._update_database()
@@ -109,10 +117,14 @@ class DataBaseManager:
         else:
             return {"message": "Graph base not enabled", "graph": {}}
 
-    def create_database(self, database_name, description, db_type):
-        new_database = DataBaseLite(database_name, description, db_type, embed_model=self.config.embed_model)
+    def create_database(self, database_name, description, db_type, dimension):
+        new_database = DataBaseLite(database_name,
+                                    description,
+                                    db_type,
+                                    embed_model=self.config.embed_model,
+                                    dimension=dimension)
 
-        self.knowledge_base.add_collection(new_database.metaname)
+        self.knowledge_base.add_collection(new_database.metaname, dimension)
         self.data["databases"].append(new_database)
         self._save_databases()
         return self.get_databases()
@@ -129,29 +141,36 @@ class DataBaseManager:
             # filenames = [f["filename"] for f in db.files]
             # if os.path.basename(file) in filenames:
             #     continue
-            db.files.append({
+            new_file = {
                 "file_id": "file_" + hashstr(file + str(time.time())),
                 "filename": os.path.basename(file),
                 "path": file,
                 "type": file.split(".")[-1],
                 "status": "waiting",
                 "created_at": time.time()
-            })
-            new_files.append((len(db.files) - 1, file))
+            }
+            db.files.append(new_file)
+            new_files.append(new_file)
 
-        for idx, file in new_files:
+        for new_file in new_files:
+            file_id = new_file["file_id"]
+            idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
             db.files[idx]["status"] = "processing"
 
             try:
-                text = self.read_text(file)
+                text = self.read_text(new_file["path"])
                 chunks = self.chunking(text)
                 self.knowledge_base.add_documents(
                     docs=chunks,
                     collection_name=db.metaname,
-                    file_id=db.files[idx]["file_id"])
+                    file_id=file_id)
+
+                idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
                 db.files[idx]["status"] = "done"
+
             except Exception as e:
                 logger.error(f"Failed to add documents to collection {db.metaname}, {e}")
+                idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
                 db.files[idx]["status"] = "failed"
 
             self._save_databases()
