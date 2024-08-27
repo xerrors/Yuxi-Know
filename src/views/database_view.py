@@ -27,8 +27,9 @@ def create_database():
     database_name = data.get('database_name')
     description = data.get('description')
     db_type = data.get('db_type')
+    dimension = data.get('dimension')
     logger.debug(f"Create database {database_name}")
-    database = startup.dbm.create_database(database_name, description, db_type)
+    database = startup.dbm.create_database(database_name, description, db_type, dimension=dimension)
     return jsonify(database)
 
 @db.route('/', methods=['DELETE'])
@@ -103,7 +104,7 @@ def upload_file():
     if file:
         upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
         os.makedirs(upload_dir, exist_ok=True)
-        filename = f"{hashstr(file.filename, 6, with_salt=True)}_{file.filename}"
+        filename = f"{hashstr(file.filename, 4, with_salt=True)}_{file.filename}"
         file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         return jsonify({'message': 'File successfully uploaded', 'file_path': file_path}), 200

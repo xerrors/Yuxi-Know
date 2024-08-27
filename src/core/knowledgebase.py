@@ -18,7 +18,6 @@ class KnowledgeBase:
         self.client = MilvusClient(self.milvus_path)
 
     def _init_config(self, config):
-        self.vector_dim = 1024  # 暂时不知道这个和 embedding model 的 embedding 大小有什么关系
         self.milvus_path = os.path.join(config.save_dir, "data/vector_base/milvus.db")
         os.makedirs(os.path.dirname(self.milvus_path), exist_ok=True)
 
@@ -40,14 +39,14 @@ class KnowledgeBase:
         # collection["id"] = hashstr(collection_name)
         return collection
 
-    def add_collection(self, collection_name):
+    def add_collection(self, collection_name, dimension=None):
         if self.client.has_collection(collection_name=collection_name):
             logger.warning(f"Collection {collection_name} already exists, drop it")
             self.client.drop_collection(collection_name=collection_name)
 
         self.client.create_collection(
             collection_name=collection_name,
-            dimension=self.vector_dim,  # The vectors we will use in this demo has 768 dimensions
+            dimension= dimension,  # The vectors we will use in this demo has 768 dimensions
         )
 
     def add_documents(self, docs, collection_name, **kwargs):
@@ -55,8 +54,8 @@ class KnowledgeBase:
         # 检查 collection 是否存在
         import random
         if not self.client.has_collection(collection_name=collection_name):
-            logger.warning(f"Collection {collection_name} not found, create it")
-            self.add_collection(collection_name)
+            logger.error(f"Collection {collection_name} not found, create it")
+            # self.add_collection(collection_name)
 
         vectors = self.embed_model.encode(docs)
 

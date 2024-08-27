@@ -1,5 +1,17 @@
 /* color palette from <https://github.com/vuejs/theme> */
 :root {
+  --main-900: #003A51;
+  --main-800: #004F69;
+  --main-700: #00637F;
+  --main-600: #1B7796;
+  --main-500: #2C86A8;
+  --main-400: #4e99b9;
+  --main-300: #6AADCB;
+  --main-200: #8CC6E1;
+  --main-100: #ABE0F7;
+  --main-50: #CDF5FF;
+  --main-25: #E6FAFF;
+
   --c-white: #ffffff;
   --c-white-soft: #f8f8f8;
   --c-white-mute: #f2f2f2;
@@ -8,59 +20,27 @@
   --c-black-soft: #222222;
   --c-black-mute: #282828;
 
-  --c-indigo: #2c3e50;
-
   --c-black-light-1: #333333;
   --c-black-light-2: #454545;
   --c-black-light-3: #666666;
   --c-black-light-4: #999999;
 
-  --c-text-light-1: var(--c-indigo);
-  --c-text-light-2: rgba(60, 66, 70, 0.66);
-  --c-text-dark-1: var(--c-white);
+  --c-text-light-1: var(--c-black);
+  --c-text-dark-1: #0D0D0D;
   --c-text-dark-2: #b8b8b8;
-}
-
-/* semantic color variables for this project */
-:root {
-  --color-background: var(--c-white);
-  --color-background-soft: var(--c-white-soft);
-  --color-background-mute: var(--c-white-mute);
-
-  --color-border: var(--c-black-light-2);
-  --color-border-hover: var(--c-black-light-1);
-
-  --color-heading: var(--c-text-light-1);
   --color-text: var(--c-black);
 
-  --section-gap: 160px;
-
-  --main-color: #005f77;
+  --main-color: var(--main-700);
   --main-color-dark: #004d5c;
-  --main-light-1: #007f96;
-  --main-light-2: #D3EAED;
-  --main-light-3: #EDF4F5;
-  --main-light-4: #F2F6F7;
+  --main-light-1: #0076AB;
+  --main-light-2: #DAEAED;
+  --main-light-3: #EDF0F1;
+  --main-light-4: #F2F5F5;
   --main-light-5: #F7FAFB;
   --main-light-6: #FAFDFD;
   --min-width: 400px;
-  --min-header-width: 80px;
   --error-color: #f50a0d;
 }
-
-/* @media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: var(--c-black);
-    --color-background-soft: var(--c-black-soft);
-    --color-background-mute: var(--c-black-mute);
-
-    --color-border: var(--c-black-dark-2);
-    --color-border-hover: var(--c-black-dark-1);
-
-    --color-heading: var(--c-text-dark-1);
-    --color-text: var(--c-text-dark-2);
-  }
-} */
 
 *,
 *::before,

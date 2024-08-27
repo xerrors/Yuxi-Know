@@ -51,7 +51,7 @@ class Config(SimpleConfig):
         ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
         self.add_item("model_provider", default="zhipu", des="模型提供商", choices=["qianfan", "vllm", "zhipu", "deepseek", "dashscope"])
         self.add_item("model_name", default=None, des="模型名称")
-        self.add_item("embed_model", default="bge-large-zh-v1.5", des="Embedding 模型", choices=["bge-large-zh-v1.5", "zhipu"])
+        self.add_item("embed_model", default="zhipu-embedding-3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
         self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=["bge-reranker-v2-m3"])
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         ### <<< 默认配置结束
@@ -92,22 +92,29 @@ class Config(SimpleConfig):
         """根据传入的文件覆盖掉默认配置"""
         logger.info(f"Loading config from {self.filename}")
         if self.filename is not None and os.path.exists(self.filename):
+
             if self.filename.endswith(".json"):
                 with open(self.filename, 'r') as f:
                     content = f.read()
                     if content:
-                        self.update(json.loads(content))
+                        local_config = json.loads(content)
+                        local_config.pop("_config_items")
+                        self.update(local_config)
                     else:
                         print(f"{self.filename} is empty.")
+
             elif self.filename.endswith(".yaml"):
                 with open(self.filename, 'r') as f:
                     content = f.read()
                     if content:
-                        self.update(yaml.safe_load(content))
+                        local_config = yaml.safe_load(content)
+                        local_config.pop("_config_items")
+                        self.update(local_config)
                     else:
                         print(f"{self.filename} is empty.")
             else:
                 logger.warning(f"Unknown config file type {self.filename}")
+
         else:
             logger.warning(f"\n\n{'='*70}\n{'Config file not found':^70}\n{'You can custum your config in `' + self.filename + '`':^70}\n{'='*70}\n\n")
 
@@ -154,7 +161,7 @@ MODEL_NAMES = {
         "ERNIE-Speed-128K",
         "ERNIE-Tiny-8K",
         "ERNIE-Lite-8K",
-        "ERNIE-4.0-8K-Latest"
+        "ERNIE-4.0-8K-Latest",
         "Yi-34B-Chat",
     ],
 
@@ -170,7 +177,30 @@ MODEL_NAMES = {
         "llama3.1-8b-instruct",
         "llama3-8b-instruct",
         "llama3.1-405b-instruct",
-        "baichuan2-7b-chat-v1",
         "qwen2-0.5b-instruct"
     ]
+}
+
+
+EMBED_MODEL_INFO = {
+    "bge-large-zh-v1.5": SimpleConfig({
+        "name": "bge-large-zh-v1.5",
+        "default_path": "BAAI/bge-large-zh-v1.5",
+        "dimension": 1024,
+        "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+    }),
+    "zhipu-embedding-2": SimpleConfig({
+        "name": "zhipu-embedding-2",
+        "default_path": "embedding-2",
+        "dimension": 1024,
+    }),
+    "zhipu-embedding-3": SimpleConfig({
+        "name": "zhipu-embedding-3",
+        "default_path": "embedding-3",
+        "dimension": 2048,
+    }),
+}
+
+RERANKER_LIST = {
+    "bge-reranker-v2-m3": "BAAI/bge-reranker-v2-m3",
 }

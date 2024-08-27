@@ -1,5 +1,5 @@
 <script setup>
-import { KeepAlive, onMounted } from 'vue'
+import { ref, KeepAlive, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   MessageOutlined,
@@ -9,13 +9,18 @@ import {
   BookOutlined,
   BookFilled,
   GithubOutlined,
+  DatabaseOutlined,
+  DatabaseFilled,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
+import DebugComponent from '@/components/DebugComponent.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
+
+const showDebug = ref(false)
 
 const getRemoteConfig = () => {
   fetch('/api/config').then(res => res.json()).then(data => {
@@ -46,6 +51,18 @@ console.log(route)
 
 <template>
   <div class="app-layout">
+    <div class="debug-panel">
+      <div class="shown-btn" @click="showDebug=!showDebug">Debug</div>
+      <a-drawer
+        v-model:open="showDebug"
+        title="调试面板"
+        width="800"
+        :contentWrapperStyle="{ maxWidth: '100%'}"
+        placement="right"
+      >
+        <DebugComponent />
+      </a-drawer>
+    </div>
     <div class="header">
       <div class="logo">
         <router-link to="/"><img src="/jnu.png"> </router-link>
@@ -55,7 +72,7 @@ console.log(route)
           <component class="icon" :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/database') ? BookFilled : BookOutlined" />
+          <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
@@ -96,6 +113,19 @@ console.log(route)
   .header-mobile {
     display: none;
   }
+
+  .debug-panel {
+    position: absolute;
+    z-index: 100;
+    right: 0;
+    top: 50px;
+    border-radius: 16px 0 0 16px;
+    background-color: var(--main-light-3);
+    padding: 8px 8px 8px 16px;
+    box-shadow: 0 0 20px 10px rgba(0, 0, 0, 0.1);
+    transition: right 0.3s ease-in-out;
+    cursor: pointer;
+  }
 }
 
 div.header, #app-router-view {
@@ -111,13 +141,13 @@ div.header, #app-router-view {
 .header {
   display: flex;
   flex-direction: column;
-  flex: 0 0 80px;
+  flex: 0 0 70px;
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--main-light-4);
+  background-color: var(--main-light-3);
   height: 100%;
-  width: 80px;
-  border-right: 1px solid var(--main-light-2);
+  width: 70px;
+  border-right: 1px solid var(--main-light-3);
 
   .logo {
     width: 40px;
@@ -150,12 +180,12 @@ div.header, #app-router-view {
 
     &.active {
       font-weight: bold;
-      color: var(--main-color);
-      background-color: var(--main-light-2);
+      color: var(--main-600);
+      background-color: #E6E8E9;
     }
 
     &:hover {
-      background-color: var(--main-light-2);
+      background-color: #E6E8E9;
       cursor: pointer;
     }
   }
@@ -205,7 +235,7 @@ div.header, #app-router-view {
     .nav-item {
       text-decoration: none;
       width: 40px;
-      color: var(--c-text-light-2);
+      color: var(--c-black-soft);
       font-size: 1rem;
       font-weight: bold;
       transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;

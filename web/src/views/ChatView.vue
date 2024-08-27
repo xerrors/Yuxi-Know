@@ -6,13 +6,15 @@
          <span style="font-weight: bold;">对话历史</span>
         <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
       </div>
-      <div class="conversation"
-        v-for="(state, index) in convs"
-        :key="index"
-        :class="{ active: curConvId === index }"
-        @click="goToConversation(index)">
-        <div class="conversation__title">{{ state.title }}</div>
-        <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
+      <div class="conversation-list">
+        <div class="conversation"
+          v-for="(state, index) in convs"
+          :key="index"
+          :class="{ active: curConvId === index }"
+          @click="goToConversation(index)">
+          <div class="conversation__title">{{ state.title }}</div>
+          <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
+        </div>
       </div>
     </div>
     <ChatComponent
@@ -132,17 +134,12 @@ onMounted(() => {
   flex: 1 1 auto; /* 当侧边栏打开时，占据可用空间 */
 }
 .conversations {
-  display: flex;
-  flex-direction: column;
   width: 230px; /* 初始宽度 */
-  height: 100%;
   max-width: 230px;
-  overflow-y: auto;
   border-right: 1px solid var(--main-light-3);
-  background-color: #FAFCFD;
   overflow: hidden; /* 确保内容不溢出 */
-  white-space: nowrap; /* 防止文本换行 */
-  transition: all 0.2s ease-out;
+  max-height: 100%;
+  background-color: #FAFCFD;
 
   & .actions {
     height: var(--header-height);
@@ -150,10 +147,8 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 16px;
-    position: sticky;
-    top: 0;
-    background-color: #FAFCFD;
     z-index: 9;
+    border-bottom: 1px solid var(--main-light-3);
 
     .action {
       font-size: 1.2rem;
@@ -172,7 +167,14 @@ onMounted(() => {
     }
   }
 
-  .conversation {
+  .conversation-list {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    max-height: 100%;
+  }
+
+  .conversation-list .conversation {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -199,12 +201,12 @@ onMounted(() => {
     }
 
     &.active {
-      border-left: 3px solid var(--main-color);
+      border-left: 3px solid var(--main-600);
       padding-left: 13px;
       background-color: var(--main-light-3);
 
       & .conversation__title {
-        color: var(--c-black-light-1);
+        color: var(--main-900);
       }
     }
 
@@ -218,33 +220,33 @@ onMounted(() => {
   }
 }
 
-.conversations::-webkit-scrollbar {
+.conversation-list::-webkit-scrollbar {
   position: absolute;
   width: 4px;
 }
 
-.conversations::-webkit-scrollbar-track {
+.conversation-list::-webkit-scrollbar-track {
   background: transparent;
   border-radius: 4px;
 }
 
-.conversations::-webkit-scrollbar-thumb {
+.conversation-list::-webkit-scrollbar-thumb {
   background: var(--c-text-dark-2);
   border-radius: 4px;
 }
 
-.conversations::-webkit-scrollbar-thumb:hover {
+.conversation-list::-webkit-scrollbar-thumb:hover {
   background: rgb(100, 100, 100);
   border-radius: 4px;
 }
 
-.conversations::-webkit-scrollbar-thumb:active {
+.conversation-list::-webkit-scrollbar-thumb:active {
   background: rgb(68, 68, 68);
   border-radius: 4px;
 }
 
 @media (max-width: 520px) {
-  .conversations {
+  .conversation {
     position: absolute;
     z-index: 101;
     width: 300px;

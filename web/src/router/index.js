@@ -67,6 +67,19 @@ const router = createRouter({
         }
       ]
     },
+    // {
+    //   path: '/monitor',
+    //   name: 'monitor',
+    //   component: AppLayout,
+    //   children: [
+    //     {
+    //       path: '',
+    //       name: 'monitor',
+    //       component: () => import('../views/MonitorView.vue'),
+    //       meta: { keepAlive: true }
+    //     }
+    //   ]
+    // },
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',

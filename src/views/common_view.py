@@ -29,7 +29,6 @@ def chat():
     request_data = json.loads(request.data)
     query = request_data['query']
     meta = request_data.get('meta')
-    logger.debug(f"Web query: {query}")
     history_manager = HistoryManager(request_data['history'])
 
     new_query, refs = startup.retriever(query, history_manager.messages, meta)
@@ -63,7 +62,7 @@ def call():
     request_data = json.loads(request.data)
     query = request_data['query']
     response = startup.model.predict(query)
-    logger.debug(f"\n\n\nCall query: \n{query} \n\nResponse: \n{response.content}\n\n")
+    logger.debug({"query": query, "response": response.content})
 
     return jsonify({
         "response": response.content,
@@ -84,3 +83,12 @@ def update_config():
 def restart():
     startup.restart()
     return jsonify({"message": "Restarted!"})
+
+
+@common.route('/log', methods=['GET'])
+def get_log():
+    from src.utils.logging_config import LOG_FILE
+    with open(LOG_FILE, 'r') as f:
+        log = f.read()
+
+    return jsonify({"log": log})

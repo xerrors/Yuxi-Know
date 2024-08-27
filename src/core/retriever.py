@@ -66,29 +66,31 @@ class Retriever:
 
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
-        rw_query = self.rewrite_query(query, history, refs)
 
         kb_res = []
         final_res = []
-        if refs["meta"].get("db_name") and self.config.enable_knowledge_base:
+        if not refs["meta"].get("db_name") or not self.config.enable_knowledge_base:
+            return {"results": final_res, "all_results": kb_res, "rw_query": query, "message": "Knowledge base is disabled"}
 
-            db_name = refs["meta"]["db_name"]
-            kb = self.dbm.metaname2db[db_name]
-            limit = refs["meta"].get("queryCount", 10)
+        rw_query = self.rewrite_query(query, history, refs)
 
-            kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=limit)
+        db_name = refs["meta"]["db_name"]
+        kb = self.dbm.metaname2db[db_name]
+        limit = refs["meta"].get("queryCount", 10)
+
+        kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=limit)
+        for r in kb_res:
+            r["file"] = kb.id2file(r["entity"]["file_id"])
+
+        if self.config.enable_reranker:
+            RERANK_THRESHOLD = 0.1
             for r in kb_res:
-                r["file"] = kb.id2file(r["entity"]["file_id"])
+                r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
+            kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
+            final_res = [_res for _res in kb_res if _res["rerank_score"] > RERANK_THRESHOLD]
 
-            if self.config.enable_reranker:
-                RERANK_THRESHOLD = 0.1
-                for r in kb_res:
-                    r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
-                kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-                final_res = [_res for _res in kb_res if _res["rerank_score"] > RERANK_THRESHOLD]
-
-            else:
-                final_res = kb_res[:5]
+        else:
+            final_res = kb_res[:5]
 
         return {"results": final_res, "all_results": kb_res, "rw_query": rw_query}
 

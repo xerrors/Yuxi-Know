@@ -11,8 +11,6 @@ class OpenAIBase():
         self.model_name = model_name
 
     def predict(self, message, stream=False):
-
-        logger.debug(message)
         if isinstance(message, str):
             messages=[{"role": "user", "content": message}]
         else:
