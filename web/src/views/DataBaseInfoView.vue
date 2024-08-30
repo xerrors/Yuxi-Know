@@ -7,7 +7,7 @@
         <a-button type="text" danger class="del-db" @click="deleteDatabse"><DeleteOutlined /></a-button>
       </div>
       <div class="top">
-        <div class="icon"><ReadFilled /></div>
+        <!-- <div class="icon"><ReadFilled /></div> -->
         <div class="info">
           <h3>{{ database.name }}</h3>
           <p><span>{{ database.metadata?.row_count }}行 · {{  database.files?.length || 0 }}文件</span></p>
@@ -15,7 +15,7 @@
       </div>
       <p class="description">{{ database.description }}</p>
       <div class="tags">
-        <a-tag color="blue" v-if="database.embed_model">Embed: {{ database.embed_model }}</a-tag>
+        <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
       </div>
       <a-divider/>
       <div class="pagebtns">
@@ -476,8 +476,7 @@ onMounted(() => {
       display: flex;
       justify-content: space-between;
       margin-bottom: 20px;
-      padding-top: 10px;
-      padding-bottom: 10px;
+      padding: 10px;
       background-color: var(--main-light-5);
       border-bottom: 1px solid #E0EAFF;
 
@@ -485,6 +484,8 @@ onMounted(() => {
         height: auto;
         font-size: 16px;
         color: var(--c-text-light-1);
+        padding-left: 8px;
+        padding-right: 8px;
       }
     }
   }

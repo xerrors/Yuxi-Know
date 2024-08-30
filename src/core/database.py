@@ -8,46 +8,6 @@ from src.models.embedding import get_embedding_model
 logger = setup_logger("DataBaseManager")
 
 
-class DataBaseLite:
-    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
-        self.name = name
-        self.description = description
-        self.db_type = db_type
-        self.dimension = dimension
-        self.db_id = kwargs.get("db_id", hashstr(name))
-        self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
-        self.metadata = kwargs.get("metaname", {})
-        self.files = kwargs.get("files", [])
-        self.embed_model = kwargs.get("embed_model", None)
-
-    def id2file(self, file_id):
-        for f in self.files:
-            if f["file_id"] == file_id:
-                return f
-        return None
-
-    def update(self, metadata):
-        self.metadata = metadata
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "description": self.description,
-            "db_type": self.db_type,
-            "db_id": self.db_id,
-            "embed_model": self.embed_model,
-            "metaname": self.metaname,
-            "metadata": self.metadata,
-            "files": self.files,
-            "dimension": self.dimension
-        }
-
-    def to_json(self):
-        return json.dumps(self.to_dict(), ensure_ascii=False)
-
-    def __str__(self):
-        return self.to_json()
-
 class DataBaseManager:
 
     def __init__(self, config=None) -> None:
@@ -253,3 +213,44 @@ class DataBaseManager:
             if db.db_id == db_id:
                 return db
         return None
+
+
+class DataBaseLite:
+    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
+        self.name = name
+        self.description = description
+        self.db_type = db_type
+        self.dimension = dimension
+        self.db_id = kwargs.get("db_id", hashstr(name))
+        self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
+        self.metadata = kwargs.get("metaname", {})
+        self.files = kwargs.get("files", [])
+        self.embed_model = kwargs.get("embed_model", None)
+
+    def id2file(self, file_id):
+        for f in self.files:
+            if f["file_id"] == file_id:
+                return f
+        return None
+
+    def update(self, metadata):
+        self.metadata = metadata
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "db_type": self.db_type,
+            "db_id": self.db_id,
+            "embed_model": self.embed_model,
+            "metaname": self.metaname,
+            "metadata": self.metadata,
+            "files": self.files,
+            "dimension": self.dimension
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    def __str__(self):
+        return self.to_json()
