@@ -72,9 +72,9 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
   gap: 10px;
 
   .item {
-    background: var(--main-25);
-    color: var(--main-800);
-    border: 1px solid var(--main-100);
+    background: var(--main-10);
+    color: var(--main-600);
+    border: 1px solid var(--main-50);
     padding: 2px 8px;
     border-radius: 8px;
     font-size: 14px;
@@ -91,7 +91,7 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
       cursor: pointer;
 
       &:hover {
-        background: var(--main-100);
+        background: var(--main-25);
       }
     }
   }

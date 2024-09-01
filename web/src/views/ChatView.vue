@@ -3,7 +3,7 @@
     <div class="conversations" :class="['conversations', { 'is-open': state.isSidebarOpen }]">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
-         <span style="font-weight: bold;">对话历史</span>
+         <span style="font-weight: bold; user-select: none;">对话历史</span>
         <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
       </div>
       <div class="conversation-list">

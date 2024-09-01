@@ -11,6 +11,8 @@ import {
   GithubOutlined,
   DatabaseOutlined,
   DatabaseFilled,
+  GoldOutlined,
+  GoldFilled,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -73,6 +75,9 @@ console.log(route)
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
           <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
+        </RouterLink>
+        <RouterLink to="/graph" class="nav-item" active-class="active">
+          <component class="icon" :is="route.path.startsWith('/graph') ? GoldFilled: GoldOutlined" />
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>

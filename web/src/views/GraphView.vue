@@ -1,5 +1,5 @@
 <template>
-  <div class="graph-container">
+  <div class="graph-container" v-if="configStore.config.enable_knowledge_base">
     <div class="info">
       <h1>Neo4j 图数据库</h1>
       <p>基于 Neo4j 构建的图数据库。</p>
@@ -52,12 +52,24 @@
     <div class="main" id="container"></div>
 
   </div>
+  <div class="database-empty" v-else>
+    <a-empty>
+      <template #description>
+        <span>
+          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置知识库。
+        </span>
+      </template>
+    </a-empty>
+  </div>
 </template>
 
 <script setup>
 import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from "ant-design-vue";
+import { useConfigStore } from '@/stores/config';
+
+const configStore = useConfigStore()
 
 let graphInstance
 const fileList = ref([]);
@@ -253,7 +265,6 @@ const handleDrop = (event) => {
   }
 }
 
-
 #container {
   background: #F7F7F7;
   margin: 20px 0;
@@ -262,8 +273,12 @@ const handleDrop = (event) => {
   height: calc(100% - 200px);
 }
 
-
-
-
-
+.database-empty {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  flex-direction: column;
+  color: var(--c-text-light-1);
+}
 </style>

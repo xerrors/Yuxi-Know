@@ -49,7 +49,7 @@
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
-    <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
+    <!-- <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
     <p>基于 neo4j 构建的图数据库。</p>
     <div :class="{'graphloading': graphloading, 'databases': true}" v-if="graph">
       <div class="dbcard graphbase" @click="navigateToGraph">
@@ -64,9 +64,8 @@
           </div>
         </div>
         <p class="description">基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。</p>
-        <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
-    </div>
+    </div> -->
   </div>
   <div class="database-empty" v-else>
     <a-empty>
