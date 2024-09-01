@@ -1,7 +1,7 @@
 <template>
-  <div class="graph-container" v-if="configStore.config.enable_knowledge_base">
+  <div class="graph-container layout-container" v-if="configStore.config.enable_knowledge_base">
     <div class="info">
-      <h1>Neo4j 图数据库</h1>
+      <h2>Neo4j 图数据库</h2>
       <p>基于 Neo4j 构建的图数据库。</p>
       </div>
     <div class="actions">
@@ -228,10 +228,6 @@ const handleDrop = (event) => {
 </script>
 
 <style lang="less" scoped>
-.graph-container {
-  padding: 20px;
-}
-
 .actions {
   display: flex;
   justify-content: space-between;

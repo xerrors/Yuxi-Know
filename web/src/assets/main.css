@@ -3,3 +3,14 @@
 :root {
   --header-height: 60px;
 }
+
+/* layout */
+
+.layout-container {
+  padding: 10px 30px;
+  background-color: #FCFEFF;
+
+  h2 {
+    margin: 20px 0 10px 0;
+  }
+}

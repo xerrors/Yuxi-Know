@@ -1,5 +1,5 @@
 <template>
-  <div class="setting-container">
+  <div class="setting-container layout-container">
     <div class="setting">
       <h2>设置</h2>
       <h3>模型配置</h3>
@@ -156,10 +156,6 @@ const sendRestart = () => {
 </script>
 
 <style lang="less" scoped>
-.setting-container {
-  width: 100%;
-  padding: 20px;
-}
 
 .setting {
   max-width: 800px;
