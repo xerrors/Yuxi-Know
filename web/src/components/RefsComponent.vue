@@ -28,13 +28,13 @@
             <p class="result-distance">
               <strong>相似度距离:</strong>
               <div class="scorebar">
-                <a-progress :percent="(res.distance * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                <a-progress :percent="parseFloat((res.distance * 100).toFixed(2))" stroke-color="#1677FF" :size="[200, 10]"/>
               </div>
             </p>
-            <p class="result-rerank-score">
+            <p class="result-rerank-score" v-if="res.rerank_score">
               <strong>重排序分数:</strong>
               <div class="scorebar">
-                <a-progress :percent="(res.rerank_score * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                <a-progress :percent="parseFloat((res.rerank_score * 100).toFixed(2))" stroke-color="#1677FF" :size="[200, 10]"/>
               </div>
             </p>
             <a-divider />
@@ -74,7 +74,6 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
   .item {
     background: var(--main-10);
     color: var(--main-600);
-    border: 1px solid var(--main-50);
     padding: 2px 8px;
     border-radius: 8px;
     font-size: 14px;

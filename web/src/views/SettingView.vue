@@ -88,13 +88,13 @@
             @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
           />
         </div>
-        <!-- <div class="card">
+        <div class="card">
           <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
           <a-switch
             :checked="configStore.config.enable_knowledge_graph"
             @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
           />
-        </div> -->
+        </div>
         <div class="card">
           <span class="label">{{ items?.enable_search_engine.des }}</span>
           <a-switch
@@ -136,6 +136,10 @@ const state = reactive({
 })
 
 const handleChange = (key, e) => {
+  if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
+    message.error('请先启用知识库功能')
+    return
+  }
   console.log('Change', key, e)
   needRestart[key] = true
   configStore.setConfigValue(key, e)

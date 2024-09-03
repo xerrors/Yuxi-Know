@@ -1,5 +1,5 @@
 <template>
-  <div class="graph-container layout-container" v-if="configStore.config.enable_knowledge_base">
+  <div class="graph-container layout-container" v-if="state.showPage">
     <div class="info">
       <h2>Neo4j 图数据库</h2>
       <p>基于 Neo4j 构建的图数据库。</p>
@@ -50,13 +50,12 @@
       </div>
     </div>
     <div class="main" id="container"></div>
-
   </div>
   <div class="database-empty" v-else>
     <a-empty>
       <template #description>
         <span>
-          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置知识库。
+          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置图数据库。
         </span>
       </template>
     </a-empty>
@@ -94,10 +93,13 @@ const state = reactive({
   searchLoading: false,
   showModal: false,
   precessing: false,
+  showPage: computed(() => configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph),
 })
 
-const getCurWidth = () => document.getElementById("container").offsetWidth
-const getCurHeight = () => document.getElementById("container").offsetHeight
+// const showPage = computed(() => {
+//   return configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph
+// })
+
 
 const graphData = computed(() => {
   return {
@@ -174,14 +176,15 @@ const randerGraph = () => {
   graphInstance.render();
 }
 
-
-
-
 onMounted(() => {
+  if (!state.showPage) {
+    return
+  }
+
   graphInstance = new Graph({
     container: document.getElementById("container"),
-    width: getCurWidth(),
-    height: getCurHeight(),
+    width: document.getElementById("container").offsetWidth,
+    height: document.getElementById("container").offsetHeight,
     autoFit: true,
     autoResize: true,
     layout: {
@@ -273,6 +276,7 @@ const handleDrop = (event) => {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
   height: 100%;
   flex-direction: column;
   color: var(--c-text-light-1);

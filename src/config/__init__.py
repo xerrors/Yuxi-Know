@@ -38,12 +38,12 @@ class Config(SimpleConfig):
 
         ### >>> 默认配置
         # 可以在 config/base.yaml 中覆盖
-        self.add_item("mode", default="cli", des="运行模式", choices=["cli", "api"])
         self.add_item("stream", default=True, des="是否开启流式输出")
         self.add_item("save_dir", default="saves", des="保存目录")
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
+        self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
 
         # 模型配置
@@ -69,6 +69,13 @@ class Config(SimpleConfig):
             "des": des,
             "choices": choices
         }
+
+    def __dict__(self):
+        blocklist = [
+            "_config_items",
+            "model_names",
+        ]
+        return {k: v for k, v in self.items() if k not in blocklist}
 
     def handle_self(self):
         ### handle local model
@@ -98,7 +105,6 @@ class Config(SimpleConfig):
                     content = f.read()
                     if content:
                         local_config = json.loads(content)
-                        local_config.pop("_config_items")
                         self.update(local_config)
                     else:
                         print(f"{self.filename} is empty.")
@@ -108,7 +114,6 @@ class Config(SimpleConfig):
                     content = f.read()
                     if content:
                         local_config = yaml.safe_load(content)
-                        local_config.pop("_config_items")
                         self.update(local_config)
                     else:
                         print(f"{self.filename} is empty.")

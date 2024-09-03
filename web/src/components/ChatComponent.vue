@@ -329,6 +329,7 @@ const updateStatus = (id, status) => {
       return acc;
     }, {})
   }
+  scrollToBottom()
 }
 
 const simpleCall = (message) => {
@@ -573,7 +574,7 @@ watch(
   max-width: 900px;
   margin: 0 auto;
   flex-grow: 1;
-  padding: 1rem;
+  padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
 

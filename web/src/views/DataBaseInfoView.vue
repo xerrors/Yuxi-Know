@@ -18,14 +18,6 @@
         <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
       </div>
       <a-divider/>
-      <div class="pagebtns">
-        <div @click="state.curPage='add'" :class="{ 'active': state.curPage === 'add' }">
-          <CloudUploadOutlined />添加文件
-        </div>
-        <div @click="state.curPage='query-test'" :class="{ 'active': state.curPage === 'query-test' }">
-          <SearchOutlined />检索测试
-        </div>
-      </div>
       <div class="query-params" v-if="state.curPage == 'query-test'">
         <p style="text-align: center; margin: 0;"><strong>参数配置</strong></p>
         <div class="params-item">
@@ -46,103 +38,113 @@
     <div class="sider-bottom">
     </div>
   </div>
-  <div class="db-info-container" v-if="state.curPage == 'add'">
-    <h3>向知识库中添加文件</h3>
-    <div class="upload">
-      <a-upload-dragger
-        class="upload-dragger"
-        v-model:fileList="fileList"
-        name="file"
-        :multiple="true"
-        :disabled="state.loading"
-        action="/api/database/upload"
-        @change="handleFileUpload"
-        @drop="handleDrop"
-      >
-        <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
-        <p class="ant-upload-hint">
-          目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
-        </p>
-      </a-upload-dragger>
-    </div>
-    <a-button
-      type="primary"
-      @click="addDocumentByFile"
-      :loading="state.loading"
-      :disabled="fileList.length === 0"
-      style="margin: 0px 20px 20px 0;"
-    >
-      添加到知识库
-    </a-button>
-    <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
-    <a-table :columns="columns" :data-source="database.files" row-key="file_id" class="my-table">
-      <template #bodyCell="{ column, text, record }">
-        <template v-if="column.key === 'file_id'">
-          <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text.toUpperCase() }}</a-button>
-        </template>
-        <template v-else-if="column.key === 'type'"><span :class="text">{{ text.toUpperCase() }}</span></template>
-        <template v-else-if="column.key === 'status' && text === 'done'">
-          <CheckCircleFilled style="color: #41A317;"/>
-        </template>
-        <template v-else-if="column.key === 'status' && text === 'failed'">
-          <CloseCircleFilled style="color: #FF4D4F ;"/>
-        </template>
-        <template v-else-if="column.key === 'status' && text === 'processing'">
-          <HourglassFilled style="color: #1677FF;"/>
-        </template>
-        <template v-else-if="column.key === 'status' && text === 'waiting'">
-          <ClockCircleFilled style="color: #FFCD43;"/>
-        </template>
-        <template v-else-if="column.key === 'action'">
-          <a-button class="del-btn" type="link"
-            @click="deleteFile(text)"
-            :disabled="state.lock || record.status == 'processing' || record.status == 'waiting' "
-            >删除
-          </a-button>
-        </template>
-        <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
-        <span v-else>{{ text }}</span>
-      </template>
-    </a-table>
-    <a-drawer
-      width="50%"
-      v-model:open="state.drawer"
-      class="custom-class"
-      :title="selectedFile?.filename"
-      placement="right"
-      @after-open-change="afterOpenChange"
-    >
-      <h2>共 {{ selectedFile?.lines.length }} 个片段</h2>
-      <p v-for="line in selectedFile?.lines" :key="line.id">
-        <strong>Chunk #{{ line.id }}</strong>   {{ line.text }}
-      </p>
-    </a-drawer>
-  </div>
-  <div class="db-info-container" v-else-if="state.curPage == 'query-test'">
-    <h3>检索测试</h3>
-    <div class="query-action">
-      <a-textarea
-        v-model:value="queryText"
-        placeholder="填写需要查询的句子"
-        :auto-size="{ minRows: 2, maxRows: 10 }"
-      />
-      <!-- :loading="state.searchLoading" -->
-      <a-button @click="onQuery" :disabled="queryText.length == 0" :loading="state.searchLoading">
-        <SearchOutlined v-if="!state.searchLoading"/>检索
-      </a-button>
-    </div>
-    <div class="query-test" v-if="queryResult">
-      <div class="query-card" v-for="(result, idx) in (meta.filter ? queryResult.results : queryResult.all_results)" :key="idx">
-        <p>
-          <strong>#{{ idx + 1 }}&nbsp;&nbsp;&nbsp;</strong>
-          <span>{{ result.file.filename }}&nbsp;&nbsp;&nbsp;</span>
-          <span><strong>距离</strong>：{{ result.distance.toFixed(4) }}&nbsp;&nbsp;&nbsp;</span>
-          <span v-if="result.rerank_score"><strong>重排序</strong>：{{ result.rerank_score.toFixed(4) }}</span>
-        </p>
-        <p class="query-text">{{ result.entity.text }}</p>
+  <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
+    <a-tab-pane key="add">
+      <template #tab><span><CloudUploadOutlined />添加文件</span></template>
+      <div class="db-info-container">
+        <h3>向知识库中添加文件</h3>
+        <div class="upload">
+          <a-upload-dragger
+            class="upload-dragger"
+            v-model:fileList="fileList"
+            name="file"
+            :multiple="true"
+            :disabled="state.loading"
+            action="/api/database/upload"
+            @change="handleFileUpload"
+            @drop="handleDrop"
+          >
+            <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+            <p class="ant-upload-hint">
+              目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
+            </p>
+          </a-upload-dragger>
+        </div>
+        <a-button
+          type="primary"
+          @click="addDocumentByFile"
+          :loading="state.loading"
+          :disabled="fileList.length === 0"
+          style="margin: 0px 20px 20px 0;"
+        >
+          添加到知识库
+        </a-button>
+        <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
+        <a-table :columns="columns" :data-source="database.files" row-key="file_id" class="my-table">
+          <template #bodyCell="{ column, text, record }">
+            <template v-if="column.key === 'file_id'">
+              <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text.toUpperCase() }}</a-button>
+            </template>
+            <template v-else-if="column.key === 'type'"><span :class="text">{{ text.toUpperCase() }}</span></template>
+            <template v-else-if="column.key === 'status' && text === 'done'">
+              <CheckCircleFilled style="color: #41A317;"/>
+            </template>
+            <template v-else-if="column.key === 'status' && text === 'failed'">
+              <CloseCircleFilled style="color: #FF4D4F ;"/>
+            </template>
+            <template v-else-if="column.key === 'status' && text === 'processing'">
+              <HourglassFilled style="color: #1677FF;"/>
+            </template>
+            <template v-else-if="column.key === 'status' && text === 'waiting'">
+              <ClockCircleFilled style="color: #FFCD43;"/>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <a-button class="del-btn" type="link"
+                @click="deleteFile(text)"
+                :disabled="state.lock || record.status == 'processing' || record.status == 'waiting' "
+                >删除
+              </a-button>
+            </template>
+            <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+            <span v-else>{{ text }}</span>
+          </template>
+        </a-table>
+        <a-drawer
+          width="50%"
+          v-model:open="state.drawer"
+          class="custom-class"
+          :title="selectedFile?.filename"
+          placement="right"
+          @after-open-change="afterOpenChange"
+        >
+          <h2>共 {{ selectedFile?.lines.length }} 个片段</h2>
+          <p v-for="line in selectedFile?.lines" :key="line.id">
+            <strong>Chunk #{{ line.id }}</strong>   {{ line.text }}
+          </p>
+        </a-drawer>
       </div>
-    </div>
-  </div>
+    </a-tab-pane>
+    <a-tab-pane key="query-test" force-render>
+      <template #tab><span><SearchOutlined />检索测试</span></template>
+      <div class="db-info-container">
+        <h3>检索测试</h3>
+        <div class="query-action">
+          <a-textarea
+            v-model:value="queryText"
+            placeholder="填写需要查询的句子"
+            :auto-size="{ minRows: 2, maxRows: 10 }"
+          />
+          <!-- :loading="state.searchLoading" -->
+          <a-button class="btn-query" @click="onQuery" :disabled="queryText.length == 0">
+            <span v-if="!state.searchLoading"><SearchOutlined /> 检索</span>
+            <span v-else><LoadingOutlined /></span>
+          </a-button>
+        </div>
+        <div class="query-test" v-if="queryResult">
+          <div class="query-card" v-for="(result, idx) in (meta.filter ? queryResult.results : queryResult.all_results)" :key="idx">
+            <p>
+              <strong>#{{ idx + 1 }}&nbsp;&nbsp;&nbsp;</strong>
+              <span>{{ result.file.filename }}&nbsp;&nbsp;&nbsp;</span>
+              <span><strong>距离</strong>：{{ result.distance.toFixed(4) }}&nbsp;&nbsp;&nbsp;</span>
+              <span v-if="result.rerank_score"><strong>重排序</strong>：{{ result.rerank_score.toFixed(4) }}</span>
+            </p>
+            <p class="query-text">{{ result.entity.text }}</p>
+          </div>
+        </div>
+      </div>
+    </a-tab-pane>
+    <!-- <a-tab-pane key="3" tab="Tab 3">Content of Tab Pane 3</a-tab-pane> -->
+  </a-tabs>
   </div>
 </template>
 
@@ -160,6 +162,7 @@ import {
   DeleteOutlined,
   CloudUploadOutlined,
   SearchOutlined,
+  LoadingOutlined
 } from '@ant-design/icons-vue'
 
 
@@ -490,38 +493,38 @@ onMounted(() => {
     }
   }
 
-  .pagebtns {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
+  // .pagebtns {
+  //   display: flex;
+  //   flex-direction: column;
+  //   gap: 16px;
 
-    > div {
-      gap: 1rem;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 10px 16px;
-      height: auto;
-      border-radius: 4px;
-      border: none;
-      background: var(--main-light-5);
-      letter-spacing: 4px;
-      border-radius: 8px;
-      border: 1px solid var(--main-light-2);
+  //   > div {
+  //     gap: 1rem;
+  //     width: 100%;
+  //     display: flex;
+  //     justify-content: center;
+  //     align-items: center;
+  //     padding: 10px 16px;
+  //     height: auto;
+  //     border-radius: 4px;
+  //     border: none;
+  //     background: var(--main-light-5);
+  //     letter-spacing: 4px;
+  //     border-radius: 8px;
+  //     border: 1px solid var(--main-light-2);
 
-      &:hover {
-        cursor: pointer;
-        background: var(--main-light-3);
-      }
-    }
+  //     &:hover {
+  //       cursor: pointer;
+  //       background: var(--main-light-3);
+  //     }
+  //   }
 
-    .active {
-      color: var(--main-color);
-      background: var(--main-light-3);
-      font-weight: bold;
-    }
-  }
+  //   .active {
+  //     color: var(--main-color);
+  //     background: var(--main-light-3);
+  //     font-weight: bold;
+  //   }
+  // }
 
   .query-params {
     display: flex;
@@ -549,10 +552,13 @@ onMounted(() => {
   }
 }
 
+.atab-container {
+  padding: 12px 16px;
+  width: 100%;
+}
+
 .db-info-container {
-  padding: 20px;
   flex: 1 1 auto;
-  overflow: scroll;
 
   .query-action {
     display: flex;
@@ -564,13 +570,13 @@ onMounted(() => {
       border: 1px solid var(--main-light-2);
     }
 
-    button {
+    button.btn-query {
       height: auto;
-      width: 120px;
+      width: 100px;
       box-shadow: none;
       border: none;
       font-weight: bold;
-      background: var(--main-light-2);
+      background: var(--main-light-3);
       color: var(--main-color);
 
       &:disabled {
@@ -625,6 +631,24 @@ onMounted(() => {
   .info {
     h3, p {
       margin: 0;
+    }
+
+    h3 {
+      font-size: 20px;
+      font-weight: bold;
+
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0px;
+        width: 100%;
+        height: 10px;
+        background: var(--main-color);
+        display: block;
+        opacity: 0.5;
+        z-index: -1;
+
+      }
     }
 
     p {
