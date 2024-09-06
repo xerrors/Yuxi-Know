@@ -135,7 +135,7 @@ def get_graph_nodes():
 
     logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
     result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
-    return jsonify({'result': startup.retriever.foramt_general_results(result), 'message': 'success'}), 200
+    return jsonify({'result': startup.retriever.format_general_results(result), 'message': 'success'}), 200
 
 @db.route('/graph/add', methods=['POST'])
 def add_graph_entity():
