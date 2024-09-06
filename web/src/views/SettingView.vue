@@ -137,9 +137,15 @@ const state = reactive({
 
 const handleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
-    message.error('请先启用知识库功能')
+    message.error('启动知识图谱必须请先启用知识库功能')
     return
   }
+
+  if (key == 'enable_knowledge_base' && !e && configStore.config.enable_knowledge_graph) {
+    message.error('关闭知识库功能必须请先关闭知识图谱功能')
+    return
+  }
+
   console.log('Change', key, e)
   needRestart[key] = true
   configStore.setConfigValue(key, e)

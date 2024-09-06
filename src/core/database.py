@@ -71,13 +71,16 @@ class DataBaseManager:
         return {"databases": [db.to_dict() for db in self.data["databases"]]}
 
     def get_graph(self):
-        if self.config.enable_graph_base:
+        if self.config.enable_knowledge_graph:
             self.data["graph"].update(self.graph_base.get_database_info("neo4j"))
             return {"graph": self.data["graph"]}
         else:
             return {"message": "Graph base not enabled", "graph": {}}
 
     def create_database(self, database_name, description, db_type, dimension):
+        from src.config import EMBED_MODEL_INFO
+        dimension = dimension or EMBED_MODEL_INFO[self.config.embed_model]["dimension"]
+
         new_database = DataBaseLite(database_name,
                                     description,
                                     db_type,
@@ -94,7 +97,7 @@ class DataBaseManager:
 
         if db.embed_model != self.config.embed_model:
             logger.error(f"Embed model not match, {db.embed_model} != {self.config.embed_model}")
-            return {"message": "Embed model not match", "status": "failed"}
+            return {"message": f"Embed model not match, cur: {self.config.embed_model}", "status": "failed"}
 
         new_files = []
         for file in files:
@@ -167,7 +170,6 @@ class DataBaseManager:
         else:
             logger.error(f"File format not supported, only support {support_format}")
             raise Exception(f"File format not supported, only support {support_format}")
-
 
     def delete_file(self, db_id, file_id):
         db = self.get_kb_by_id(db_id)

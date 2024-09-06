@@ -107,11 +107,12 @@
         :class="message.role"
       >
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0"  class="loading-dots">
+        <div v-else-if="message.text.length == 0 && message.status=='querying'"  class="loading-dots">
           <div></div>
           <div></div>
           <div></div>
         </div>
+        <div v-else-if="message.text.length == 0 || message.status == 'error'" class="err-msg">请求错误，请重试</div>
         <p v-else
           v-html="renderMarkdown(message)"
           class="message-md"
@@ -182,7 +183,8 @@ const examples = ref([
   '肉碱的分子量是多少？直接回答',
   '简述大蒜的功效是什么？',
   'A大于B，B小于C，A和C哪个大？',
-  '今天天气怎么样？'
+  '今天天气怎么样？',
+  '吃饭吃出苍蝇可以索赔吗？',
 ])
 
 const opts = reactive({
@@ -404,6 +406,11 @@ const sendMessage = () => {
       }
       return readChunk()
     })
+    .catch((error) => {
+      console.error(error)
+      updateStatus(cur_res_id, "error")
+      isStreaming.value = false
+    })
   } else {
     console.log('请输入消息')
   }
@@ -592,6 +599,15 @@ watch(
     color: black;
     /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
     /* animation: slideInUp 0.1s ease-in; */
+
+    .err-msg {
+      color: red;
+      border: 1px solid red;
+      padding: 0.2rem 1rem;
+      border-radius: 8px;
+      text-align: center;
+      background: #FFEBEE;
+    }
   }
 
   .message-box.sent {
@@ -624,8 +640,6 @@ watch(
     word-wrap: break-word;
     margin-bottom: 0;
   }
-
-
 }
 
 

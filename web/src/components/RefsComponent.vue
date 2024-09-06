@@ -1,8 +1,8 @@
 <!-- RefsComponent.vue -->
 <template>
   <div class="refs" v-if="showRefs">
-    <span class="item"><GlobalOutlined /> {{ message.model_name }}</span>
     <div class="tags">
+      <span class="item"><GlobalOutlined /> {{ message.model_name }}</span>
       <span class="filetag item"
         v-for="(results, filename) in message.groupedResults"
         :key="filename"
@@ -81,6 +81,7 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
 
   .tags {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 
     .filetag {

@@ -45,10 +45,11 @@ class ZhipuEmbedding:
         self.query_instruction_for_retrieval = "为这个句子生成表示以用于检索相关文章："
 
     def predict(self, message):
-
         data = []
 
         for i in range(0, len(message), 10):
+            if len(message) > 10:
+                logger.info(f"Encoding {i} to {i+10} with {len(message)} messages")
             group_msg = message[i:i+10]
             response = self.client.embeddings.create(
                 model=self.model_info.default_path,

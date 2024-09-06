@@ -1,9 +1,24 @@
 <template>
-  <div class="graph-container layout-container" v-if="state.showPage">
+  <div class="database-empty" v-if="!state.showPage">
+    <a-empty>
+      <template #description>
+        <span>
+          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置图数据库。
+        </span>
+      </template>
+    </a-empty>
+  </div>
+  <div class="graph-container layout-container" v-else>
     <div class="info">
-      <h2>Neo4j 图数据库</h2>
-      <p>基于 Neo4j 构建的图数据库。</p>
-      </div>
+      <h2>图数据库 {{ graph?.database_name }}</h2>
+      <p>
+        <span v-if="state.graphloading">加载中</span>
+        <span class="green-dot" v-if="graph?.status == 'open'"></span>
+        <span class="red-dot" v-else></span>
+        <span>{{ graph?.status }}</span> ·
+        <span>共 {{ graph?.entity_count }} 实体，{{ graph?.relationship_count }} 个关系</span>
+      </p>
+    </div>
     <div class="actions">
       <div class="actions-left">
         <a-button @click="state.showModal = true">上传文件</a-button>
@@ -32,6 +47,8 @@
             </a-upload-dragger>
           </div>
         </a-modal>
+        <input v-model="sampleNodeCount">
+        <a-button @click="loadSampleNodes">确定</a-button>
       </div>
       <div class="action-right">
         <input
@@ -49,16 +66,7 @@
         </a-button>
       </div>
     </div>
-    <div class="main" id="container"></div>
-  </div>
-  <div class="database-empty" v-else>
-    <a-empty>
-      <template #description>
-        <span>
-          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置图数据库。
-        </span>
-      </template>
-    </a-empty>
+    <div class="main" id="container" ref="container"></div>
   </div>
 </template>
 
@@ -71,24 +79,17 @@ import { useConfigStore } from '@/stores/config';
 const configStore = useConfigStore()
 
 let graphInstance
+const graph = ref(null)
+const container = ref(null);
 const fileList = ref([]);
+const sampleNodeCount = ref(100);
 const subgraph = reactive({
-  nodes: [
-    { id: '1', name: 'node1' },
-    { id: '2', name: 'node2' },
-    { id: '3', name: 'node3' },
-    { id: '4', name: 'node4' },
-    { id: '5', name: 'node5' },
-  ],
-  edges: [
-    { id: 'e1', source_id: '1', target_id: '2', type: 'edge1' },
-    { id: 'e2', source_id: '1', target_id: '3', type: 'edge2' },
-    { id: 'e3', source_id: '2', target_id: '4', type: 'edge3' },
-    { id: 'e4', source_id: '2', target_id: '5', type: 'edge4' },
-  ],
+  nodes: [],
+  edges: [],
 });
 
 const state = reactive({
+  graphloading: false,
   searchInput: '',
   searchLoading: false,
   showModal: false,
@@ -96,10 +97,24 @@ const state = reactive({
   showPage: computed(() => configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph),
 })
 
-// const showPage = computed(() => {
-//   return configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph
-// })
 
+const loadGraph = () => {
+  state.graphloading = true
+  fetch('/api/database/graph', {
+    method: "GET",
+  })
+    .then(response => response.json())
+    .then(data => {
+      console.log(data)
+      graph.value = data.graph
+      state.graphloading = false
+    })
+    .catch(error => {
+      console.error(error)
+      message.error(error.message)
+      state.graphloading = false
+    })
+}
 
 const graphData = computed(() => {
   return {
@@ -143,6 +158,29 @@ const addDocumentByFile = () => {
   .finally(() => state.precessing = false)
 };
 
+const loadSampleNodes = () => {
+  fetch(`/api/database/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
+    .then((res) => {
+      if (res.ok) {
+        return res.json();
+      } else {
+        throw new Error("加载失败");
+      }
+    })
+    .then((data) => {
+      subgraph.nodes = data.result.nodes
+      subgraph.edges = data.result.edges
+      console.log(data)
+      console.log(subgraph)
+      setTimeout(() => {
+        randerGraph()
+      }, 500)
+    })
+    .catch((error) => {
+      message.error(error.message);
+    })
+}
+
 const onSearch = () => {
   if (!state.searchInput) {
     message.error('请输入要查询的实体')
@@ -177,44 +215,49 @@ const randerGraph = () => {
 }
 
 onMounted(() => {
-  if (!state.showPage) {
-    return
-  }
-
-  graphInstance = new Graph({
-    container: document.getElementById("container"),
-    width: document.getElementById("container").offsetWidth,
-    height: document.getElementById("container").offsetHeight,
-    autoFit: true,
-    autoResize: true,
-    layout: {
-      type: 'force-atlas2',
-      preventOverlap: true,
-      kr: 100,
-    },
-    node: {
-      type: 'circle',
-      style: {
-        labelText: (d) => d.data.label,
-        size: 40,
-      },
-      palette: {
-        field: 'label',
-        color: 'tableau',
-      },
-    },
-    edge: {
-      type: 'line',
-      style: {
-        labelText: (d) => d.data.label,
-        labelBackground: '#fff',
-      },
-    },
-    behaviors: ['drag-element'],
-  });
-  graphInstance.setData(graphData.value);
-  graphInstance.render();
-  window.addEventListener('resize', randerGraph);
+  loadGraph();
+  loadSampleNodes();
+  setTimeout(() => {
+    if (state.showPage) {
+      graphInstance = new Graph({
+        container: container.value,
+        width: container.value.offsetWidth,
+        height: container.value.offsetHeight,
+        autoFit: true,
+        autoResize: true,
+        layout: {
+          type: 'd3-force',
+          preventOverlap: true,
+          kr: 100,
+          collide: {
+            strength: 0.5,
+          },
+        },
+        node: {
+          type: 'circle',
+          style: {
+            labelText: (d) => d.data.label,
+            size: 40,
+          },
+          palette: {
+            field: 'label',
+            color: 'tableau',
+          },
+        },
+        edge: {
+          type: 'line',
+          style: {
+            labelText: (d) => d.data.label,
+            labelBackground: '#fff',
+          },
+        },
+        behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
+      });
+      graphInstance.setData(graphData.value);
+      graphInstance.render();
+      window.addEventListener('resize', randerGraph);
+    }
+  }, 400)
 });
 
 
@@ -231,16 +274,47 @@ const handleDrop = (event) => {
 </script>
 
 <style lang="less" scoped>
+.graph-container {
+
+  .info span.green-dot, .info span.red-dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin: 0 5px;
+  }
+
+  .info span.green-dot {
+    background: #52c41a;
+  }
+
+  .info span.red-dot {
+    background: #f5222d;
+  }
+
+  .info {
+    margin-bottom: 20px;
+  }
+}
+
+
 .actions {
   display: flex;
   justify-content: space-between;
   margin-bottom: 20px;
 
+  .actions-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
   input {
+    width: 100px;
     margin-right: 10px;
     border-radius: 8px;
     padding: 4px 12px;
-    border: 2px solid #d9d9d9;
+    border: 2px solid var(--main-300);
     outline: none;
     height: 42px;
 
@@ -269,7 +343,8 @@ const handleDrop = (event) => {
   margin: 20px 0;
   border-radius: 16px;
   width: 100%;
-  height: calc(100% - 200px);
+  height: 800px;
+  resize: horizontal;
 }
 
 .database-empty {
