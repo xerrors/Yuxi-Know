@@ -9,10 +9,11 @@ import warnings
 
 from src.plugins import pdf2txt
 from src.plugins.oneke import OneKE
+from src.utils import setup_logger
+
+logger = setup_logger("server-graphbase")
 
 warnings.filterwarnings("ignore", category=UserWarning)
-
-
 
 UIE_MODEL = None
 
@@ -35,6 +36,16 @@ class GraphDatabase:
     def close(self):
         """关闭数据库连接"""
         self.driver.close()
+
+    def get_sample_nodes(self, kgdb_name='neo4j', num=50):
+        """获取指定数据库的前 num 个节点信息"""
+        self.use_database(kgdb_name)
+        def query(tx, num):
+            result = tx.run("MATCH (n)-[r]->(m) RETURN n, r, m LIMIT $num", num=int(num))
+            return result.values()
+
+        with self.driver.session() as session:
+            return session.execute_read(query, num)
 
     def create_graph_database(self, kgdb_name):
         """创建新的数据库，如果已存在则返回已有数据库的名称"""
@@ -116,21 +127,25 @@ class GraphDatabase:
                 MERGE (t:Entity {name: $t})
                 MERGE (h)-[r:RELATION {type: $r}]->(t)
                 """, h=entry['h'], t=entry['t'], r=entry['r'])
-        def _create_vector_index(tx):
-            index_name = "entity-embeddings"
+        def _create_vector_index(tx, dim):
+            index_name = "entityEmbeddings"
             if not _index_exists(tx, index_name):
                 tx.run(f"""
                 CREATE VECTOR INDEX {index_name}
                 FOR (n: Entity) ON (n.embedding)
                 OPTIONS {{indexConfig: {{
-                `vector.dimensions`: 1024,
+                `vector.dimensions`: {dim},
                 `vector.similarity_function`: 'cosine'
                 }} }};
                 """)
+
+        from src.config import EMBED_MODEL_INFO
+        embed_info = EMBED_MODEL_INFO[self.config.embed_model]
         with self.driver.session() as session:
             session.execute_write(_create_graph, triples)
-            session.execute_write(_create_vector_index)
-            for entry in triples:
+            session.execute_write(_create_vector_index, embed_info.dimension)
+            for i, entry in enumerate(triples):
+                logger.info(f"Adding entity {i+1}/{len(triples)}")
                 embedding_h = self.get_embedding(entry['h'])
                 session.execute_write(self.set_embedding, entry['h'], embedding_h)
 
@@ -148,37 +163,39 @@ class GraphDatabase:
 
         triples = list(read_triples(file_path))
 
-        def batch_create(tx, triples):
-            query = """
-            UNWIND $triples AS triple
-            MERGE (a:Entity {name: triple.h})
-            MERGE (b:Entity {name: triple.t})
-            MERGE (a)-[r:RELATION {type: triple.r}]->(b)
-            """
-            tx.run(query, triples=triples)
+        self.txt_add_vector_entity(triples, kgdb_name)
 
-        def batch_add_embeddings(tx, embeddings):
-            query = """
-            UNWIND $embeddings AS embedding
-            MATCH (e:Entity {name: embedding.name})
-            SET e.embedding = embedding.vector
-            """
-            tx.run(query, embeddings=embeddings)
-
-        with self.driver.session() as session:
-            session.execute_write(batch_create, triples)
-
-            # 获取embedding并批量添加
-            embeddings = []
-            for triple in triples:
-                h = triple['h']
-                t = triple['t']
-                embedding_h = self.get_embedding(h)
-                embedding_t = self.get_embedding(t)
-                embeddings.append({"name": h, "vector": embedding_h})
-                embeddings.append({"name": t, "vector": embedding_t})
-
-            session.execute_write(batch_add_embeddings, embeddings)
+        # def batch_create(tx, triples):
+        #     query = """
+        #     UNWIND $triples AS triple
+        #     MERGE (a:Entity {name: triple.h})
+        #     MERGE (b:Entity {name: triple.t})
+        #     MERGE (a)-[r:RELATION {type: triple.r}]->(b)
+        #     """
+        #     tx.run(query, triples=triples)
+        #
+        # def batch_add_embeddings(tx, embeddings):
+        #     query = """
+        #     UNWIND $embeddings AS embedding
+        #     MATCH (e:Entity {name: embedding.name})
+        #     SET e.embedding = embedding.vector
+        #     """
+        #     tx.run(query, embeddings=embeddings)
+        #
+        # with self.driver.session() as session:
+        #     session.execute_write(batch_create, triples)
+        #
+        #     # 获取embedding并批量添加
+        #     embeddings = []
+        #     for triple in triples:
+        #         h = triple['h']
+        #         t = triple['t']
+        #         embedding_h = self.get_embedding(h)
+        #         embedding_t = self.get_embedding(t)
+        #         embeddings.append({"name": h, "vector": embedding_h})
+        #         embeddings.append({"name": t, "vector": embedding_t})
+        #
+        #     session.execute_write(batch_add_embeddings, embeddings)
 
         self.status = "open"
         return kgdb_name
@@ -260,13 +277,21 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query, keyword, hops)
 
+    def query_node(self, entity_name, args):
+        # TODO 添加判断节点数量为 0 停止检索
+
+        if args.get("exact_match"):
+            raise NotImplemented("not implement for `exact_match`")
+        else:
+            return self.query_by_vector(entity_name, kgdb_name=args.get("kgdb_name"), hops=args.get("hops"))
+
     def query_by_vector_tep(self, keyword, kgdb_name='neo4j'):
         """向量查询"""
         self.use_database(kgdb_name)
         def query(tx, text):
             embedding = self.get_embedding(text)
             result = tx.run("""
-            CALL db.index.vector.queryNodes('entity-embeddings', 10, $embedding)
+            CALL db.index.vector.queryNodes('entityEmbeddings', 10, $embedding)
             YIELD node AS similarEntity, score
             RETURN similarEntity.name AS name, score
             """, embedding=embedding)
@@ -277,7 +302,7 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query, keyword)
 
-    def query_by_vector(self, entity_name, threshold=0.9,kgdb_name='neo4j', hops=2, num_of_res=2):
+    def query_by_vector(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, num_of_res=2):
         self.use_database(kgdb_name)
         result = self.query_by_vector_tep(entity_name)
         querys = []

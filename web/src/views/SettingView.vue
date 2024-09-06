@@ -1,5 +1,5 @@
 <template>
-  <div class="setting-container">
+  <div class="setting-container layout-container">
     <div class="setting">
       <h2>设置</h2>
       <h3>模型配置</h3>
@@ -88,13 +88,13 @@
             @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
           />
         </div>
-        <!-- <div class="card">
+        <div class="card">
           <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
           <a-switch
             :checked="configStore.config.enable_knowledge_graph"
             @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
           />
-        </div> -->
+        </div>
         <div class="card">
           <span class="label">{{ items?.enable_search_engine.des }}</span>
           <a-switch
@@ -136,6 +136,16 @@ const state = reactive({
 })
 
 const handleChange = (key, e) => {
+  if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
+    message.error('启动知识图谱必须请先启用知识库功能')
+    return
+  }
+
+  if (key == 'enable_knowledge_base' && !e && configStore.config.enable_knowledge_graph) {
+    message.error('关闭知识库功能必须请先关闭知识图谱功能')
+    return
+  }
+
   console.log('Change', key, e)
   needRestart[key] = true
   configStore.setConfigValue(key, e)
@@ -156,10 +166,6 @@ const sendRestart = () => {
 </script>
 
 <style lang="less" scoped>
-.setting-container {
-  width: 100%;
-  padding: 20px;
-}
 
 .setting {
   max-width: 800px;

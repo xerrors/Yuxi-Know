@@ -8,46 +8,6 @@ from src.models.embedding import get_embedding_model
 logger = setup_logger("DataBaseManager")
 
 
-class DataBaseLite:
-    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
-        self.name = name
-        self.description = description
-        self.db_type = db_type
-        self.dimension = dimension
-        self.db_id = kwargs.get("db_id", hashstr(name))
-        self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
-        self.metadata = kwargs.get("metaname", {})
-        self.files = kwargs.get("files", [])
-        self.embed_model = kwargs.get("embed_model", None)
-
-    def id2file(self, file_id):
-        for f in self.files:
-            if f["file_id"] == file_id:
-                return f
-        return None
-
-    def update(self, metadata):
-        self.metadata = metadata
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "description": self.description,
-            "db_type": self.db_type,
-            "db_id": self.db_id,
-            "embed_model": self.embed_model,
-            "metaname": self.metaname,
-            "metadata": self.metadata,
-            "files": self.files,
-            "dimension": self.dimension
-        }
-
-    def to_json(self):
-        return json.dumps(self.to_dict(), ensure_ascii=False)
-
-    def __str__(self):
-        return self.to_json()
-
 class DataBaseManager:
 
     def __init__(self, config=None) -> None:
@@ -111,13 +71,16 @@ class DataBaseManager:
         return {"databases": [db.to_dict() for db in self.data["databases"]]}
 
     def get_graph(self):
-        if self.config.enable_graph_base:
+        if self.config.enable_knowledge_graph:
             self.data["graph"].update(self.graph_base.get_database_info("neo4j"))
             return {"graph": self.data["graph"]}
         else:
             return {"message": "Graph base not enabled", "graph": {}}
 
     def create_database(self, database_name, description, db_type, dimension):
+        from src.config import EMBED_MODEL_INFO
+        dimension = dimension or EMBED_MODEL_INFO[self.config.embed_model]["dimension"]
+
         new_database = DataBaseLite(database_name,
                                     description,
                                     db_type,
@@ -134,7 +97,7 @@ class DataBaseManager:
 
         if db.embed_model != self.config.embed_model:
             logger.error(f"Embed model not match, {db.embed_model} != {self.config.embed_model}")
-            return {"message": "Embed model not match", "status": "failed"}
+            return {"message": f"Embed model not match, cur: {self.config.embed_model}", "status": "failed"}
 
         new_files = []
         for file in files:
@@ -208,7 +171,6 @@ class DataBaseManager:
             logger.error(f"File format not supported, only support {support_format}")
             raise Exception(f"File format not supported, only support {support_format}")
 
-
     def delete_file(self, db_id, file_id):
         db = self.get_kb_by_id(db_id)
         file_idx_to_delete = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
@@ -253,3 +215,44 @@ class DataBaseManager:
             if db.db_id == db_id:
                 return db
         return None
+
+
+class DataBaseLite:
+    def __init__(self, name, description, db_type, dimension=None, **kwargs) -> None:
+        self.name = name
+        self.description = description
+        self.db_type = db_type
+        self.dimension = dimension
+        self.db_id = kwargs.get("db_id", hashstr(name))
+        self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
+        self.metadata = kwargs.get("metaname", {})
+        self.files = kwargs.get("files", [])
+        self.embed_model = kwargs.get("embed_model", None)
+
+    def id2file(self, file_id):
+        for f in self.files:
+            if f["file_id"] == file_id:
+                return f
+        return None
+
+    def update(self, metadata):
+        self.metadata = metadata
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "description": self.description,
+            "db_type": self.db_type,
+            "db_id": self.db_id,
+            "embed_model": self.embed_model,
+            "metaname": self.metaname,
+            "metadata": self.metadata,
+            "files": self.files,
+            "dimension": self.dimension
+        }
+
+    def to_json(self):
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+    def __str__(self):
+        return self.to_json()

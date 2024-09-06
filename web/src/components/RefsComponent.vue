@@ -1,8 +1,8 @@
 <!-- RefsComponent.vue -->
 <template>
   <div class="refs" v-if="showRefs">
-    <span class="item"><GlobalOutlined /> {{ message.model_name }}</span>
     <div class="tags">
+      <span class="item"><GlobalOutlined /> {{ message.model_name }}</span>
       <span class="filetag item"
         v-for="(results, filename) in message.groupedResults"
         :key="filename"
@@ -28,13 +28,13 @@
             <p class="result-distance">
               <strong>相似度距离:</strong>
               <div class="scorebar">
-                <a-progress :percent="(res.distance * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                <a-progress :percent="parseFloat((res.distance * 100).toFixed(2))" stroke-color="#1677FF" :size="[200, 10]"/>
               </div>
             </p>
-            <p class="result-rerank-score">
+            <p class="result-rerank-score" v-if="res.rerank_score">
               <strong>重排序分数:</strong>
               <div class="scorebar">
-                <a-progress :percent="(res.rerank_score * 100).toFixed(2)" stroke-color="#1677FF" :size="[200, 10]"/>
+                <a-progress :percent="parseFloat((res.rerank_score * 100).toFixed(2))" stroke-color="#1677FF" :size="[200, 10]"/>
               </div>
             </p>
             <a-divider />
@@ -72,9 +72,8 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
   gap: 10px;
 
   .item {
-    background: var(--main-25);
-    color: var(--main-800);
-    border: 1px solid var(--main-100);
+    background: var(--main-10);
+    color: var(--main-600);
     padding: 2px 8px;
     border-radius: 8px;
     font-size: 14px;
@@ -82,6 +81,7 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
 
   .tags {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 
     .filetag {
@@ -91,7 +91,7 @@ const showRefs = computed(() => message.value.role=='received' && message.value.
       cursor: pointer;
 
       &:hover {
-        background: var(--main-100);
+        background: var(--main-25);
       }
     }
   }

@@ -14,7 +14,7 @@
           class="newchat nav-btn"
           @click="$emit('newconv')"
         >
-          <PlusCircleOutlined /> <span class="text">新对话 {{ configStore.config?.model_name }}</span>
+          <PlusCircleOutlined /> <span class="text">新对话：{{ configStore.config?.model_name }}</span>
         </div>
       </div>
       <div class="header__right">
@@ -107,11 +107,12 @@
         :class="message.role"
       >
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0"  class="loading-dots">
+        <div v-else-if="message.text.length == 0 && message.status=='querying'"  class="loading-dots">
           <div></div>
           <div></div>
           <div></div>
         </div>
+        <div v-else-if="message.text.length == 0 || message.status == 'error'" class="err-msg">请求错误，请重试</div>
         <p v-else
           v-html="renderMarkdown(message)"
           class="message-md"
@@ -182,7 +183,8 @@ const examples = ref([
   '肉碱的分子量是多少？直接回答',
   '简述大蒜的功效是什么？',
   'A大于B，B小于C，A和C哪个大？',
-  '今天天气怎么样？'
+  '今天天气怎么样？',
+  '吃饭吃出苍蝇可以索赔吗？',
 ])
 
 const opts = reactive({
@@ -329,6 +331,7 @@ const updateStatus = (id, status) => {
       return acc;
     }, {})
   }
+  scrollToBottom()
 }
 
 const simpleCall = (message) => {
@@ -402,6 +405,11 @@ const sendMessage = () => {
         })
       }
       return readChunk()
+    })
+    .catch((error) => {
+      console.error(error)
+      updateStatus(cur_res_id, "error")
+      isStreaming.value = false
     })
   } else {
     console.log('请输入消息')
@@ -573,7 +581,7 @@ watch(
   max-width: 900px;
   margin: 0 auto;
   flex-grow: 1;
-  padding: 1rem;
+  padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
 
@@ -591,6 +599,15 @@ watch(
     color: black;
     /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
     /* animation: slideInUp 0.1s ease-in; */
+
+    .err-msg {
+      color: red;
+      border: 1px solid red;
+      padding: 0.2rem 1rem;
+      border-radius: 8px;
+      text-align: center;
+      background: #FFEBEE;
+    }
   }
 
   .message-box.sent {
@@ -623,8 +640,6 @@ watch(
     word-wrap: break-word;
     margin-bottom: 0;
   }
-
-
 }
 
 
@@ -773,7 +788,7 @@ button:disabled {
 @keyframes loading {0%,80%,100%{transform:scale(0.5);}40%{transform:scale(1);}}
 
 .slide-out-left{-webkit-animation:slide-out-left .2s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
-.swing-in-top-fwd {-webkit-animation: swing-in-top-fwd 0.2s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;animation: swing-in-top-fwd 0.5s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;}
+.swing-in-top-fwd{-webkit-animation:swing-in-top-fwd .2s ease-out both;animation:swing-in-top-fwd .2s ease-out both}
 @-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
 @-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
 

@@ -1,0 +1,17 @@
+version: '3.9'
+services:
+ 
+  neo4j:
+    image: neo4j:latest
+    volumes:
+      - ./conf:/var/lib/neo4j/conf
+      - ./import:/var/lib/neo4j/import
+      - ./plugins:/plugins
+      - ./data:/data
+      - ./logs:/var/lib/neo4j/logs
+    restart: always
+    ports:
+      - 7474:7474
+      - 7687:7687
+    environment:
+      - NEO4J_AUTH=neo4j/0123456789

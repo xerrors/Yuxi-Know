@@ -11,6 +11,9 @@ import {
   GithubOutlined,
   DatabaseOutlined,
   DatabaseFilled,
+  GoldOutlined,
+  GoldFilled,
+  BugOutlined,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -52,7 +55,7 @@ console.log(route)
 <template>
   <div class="app-layout">
     <div class="debug-panel">
-      <div class="shown-btn" @click="showDebug=!showDebug">Debug</div>
+      <div class="shown-btn" @click="showDebug=!showDebug"><BugOutlined /></div>
       <a-drawer
         v-model:open="showDebug"
         title="调试面板"
@@ -73,6 +76,9 @@ console.log(route)
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
           <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
+        </RouterLink>
+        <RouterLink to="/graph" class="nav-item" active-class="active">
+          <component class="icon" :is="route.path.startsWith('/graph') ? GoldFilled: GoldOutlined" />
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
@@ -118,11 +124,13 @@ console.log(route)
     position: absolute;
     z-index: 100;
     right: 0;
-    top: 50px;
-    border-radius: 16px 0 0 16px;
-    background-color: var(--main-light-3);
-    padding: 8px 8px 8px 16px;
-    box-shadow: 0 0 20px 10px rgba(0, 0, 0, 0.1);
+    bottom: 50px;
+    border-radius: 20px 0 0 20px;
+    background-color: var(--main-light-4);
+    padding: 6px;
+    padding-left: 12px;
+    box-shadow: 0 0 10px 5px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--c-black-soft);
     transition: right 0.3s ease-in-out;
     cursor: pointer;
   }
@@ -181,11 +189,11 @@ div.header, #app-router-view {
     &.active {
       font-weight: bold;
       color: var(--main-600);
-      background-color: #E6E8E9;
+      background-color: rgba(  0,  93, 125, 0.1);
     }
 
     &:hover {
-      background-color: #E6E8E9;
+      background-color: rgba(  0,  93, 125, 0.1);
       cursor: pointer;
     }
   }

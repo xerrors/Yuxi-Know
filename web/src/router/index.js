@@ -31,6 +31,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/graph',
+      name: 'graph',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'Graph',
+          component: () => import('../views/GraphView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
+    },
+    {
       path: '/database',
       name: 'database',
       component: AppLayout,
@@ -45,12 +58,6 @@ const router = createRouter({
           path: ':database_id',
           name: 'databaseInfo',
           component: () => import('../views/DataBaseInfoView.vue'),
-        },
-        {
-          path: 'graph',
-          name: 'graph',
-          component: () => import('../views/GraphView.vue'),
-          meta: { keepAlive: true }
         }
       ]
     },

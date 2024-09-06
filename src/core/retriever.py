@@ -83,7 +83,7 @@ class Retriever:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
         if self.config.enable_reranker:
-            RERANK_THRESHOLD = 0.1
+            RERANK_THRESHOLD = 0.001
             for r in kb_res:
                 r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
@@ -124,7 +124,46 @@ class Retriever:
 
         return entities
 
+    def foramt_general_results(self, results):
+        logger.debug(f"Formatting general results: {results}")
+        formatted_results = {"nodes": [], "edges": []}
+
+        for item in results:
+            relationship = item[1]
+            rel_id = relationship.element_id
+            nodes = relationship.nodes
+            if len(nodes) != 2:
+                continue
+
+            source, target = nodes
+
+            source_id = source.element_id
+            target_id = target.element_id
+            source_name = source._properties.get('name', 'unknown')
+            target_name = target._properties.get('name', 'unknown')
+
+            if source_id not in formatted_results["nodes"]:
+                formatted_results["nodes"].append({"id": source_id, "name": source_name})
+            if target_id not in formatted_results["nodes"]:
+                formatted_results["nodes"].append({"id": target_id, "name": target_name})
+
+            relationship_type = relationship._properties.get('type', 'unknown')
+            if relationship_type == 'unknown':
+                relationship_type = relationship.type
+
+            formatted_results["edges"].append({
+                "id": rel_id,
+                "type": relationship_type,
+                "source_id": source_id,
+                "target_id": target_id,
+                "source_name": source_name,
+                "target_name": target_name
+            })
+
+        return formatted_results
+
     def format_query_results(self, results):
+        logger.debug(f"Formatting query results: {results}")
         formatted_results = {"nodes": [], "edges": []}
 
         node_dict = {}

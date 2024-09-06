@@ -1,5 +1,5 @@
 <template>
-  <div class="database-container" v-if="configStore.config.enable_knowledge_base">
+  <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
     <h2>文档知识库</h2>
     <p>知识型数据库，主要是非结构化的文本组成，使用向量检索使用。</p>
     <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase">
@@ -49,7 +49,7 @@
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
-    <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
+    <!-- <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
     <p>基于 neo4j 构建的图数据库。</p>
     <div :class="{'graphloading': graphloading, 'databases': true}" v-if="graph">
       <div class="dbcard graphbase" @click="navigateToGraph">
@@ -64,9 +64,8 @@
           </div>
         </div>
         <p class="description">基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。</p>
-        <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
-    </div>
+    </div> -->
   </div>
   <div class="database-empty" v-else>
     <a-empty>
@@ -103,7 +102,7 @@ const newDatabase = reactive({
 })
 
 const loadDatabases = () => {
-  loadGraph()
+  // loadGraph()
   fetch('/api/database/', {
     method: "GET",
   })
@@ -154,23 +153,23 @@ const navigateToGraph = () => {
   router.push({ path: `/database/graph` });
 };
 
-const loadGraph = () => {
-  graphloading.value = true
-  fetch('/api/database/graph', {
-    method: "GET",
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      graph.value = data.graph
-      graphloading.value = false
-    })
-    .catch(error => {
-      console.error(error)
-      message.error(error.message)
-      graphloading.value = false
-    })
-}
+// const loadGraph = () => {
+//   graphloading.value = true
+//   fetch('/api/database/graph', {
+//     method: "GET",
+//   })
+//     .then(response => response.json())
+//     .then(data => {
+//       console.log(data)
+//       graph.value = data.graph
+//       graphloading.value = false
+//     })
+//     .catch(error => {
+//       console.error(error)
+//       message.error(error.message)
+//       graphloading.value = false
+//     })
+// }
 
 watch(() => route.path, (newPath, oldPath) => {
   if (newPath === '/database') {
@@ -185,14 +184,6 @@ onMounted(() => {
 </script>
 
 <style lang="less" scoped>
-.database-container {
-  padding: 10px 30px;
-  background-color: #FCFEFF;
-
-  h2 {
-    margin: 20px 0 10px 0;
-  }
-}
 .database-actions, .document-actions {
   margin-bottom: 20px;
 }
@@ -278,10 +269,9 @@ onMounted(() => {
 }
 
 // 整个卡片是模糊的
-.graphloading {
-  filter: blur(2px);
-}
-
+// .graphloading {
+//   filter: blur(2px);
+// }
 
 .database-empty {
   display: flex;

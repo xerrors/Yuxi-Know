@@ -123,8 +123,19 @@ def get_graph_node():
         return jsonify({'message': 'entity_name and kgdb_name are required'}), 400
 
     logger.debug(f"Get graph node {entity_name} in {kgdb_name} with {hops} hops")
-    result = startup.dbm.graph_base.query_by_vector(entity_name, kgdb_name=kgdb_name, hops=hops)
+    result = startup.dbm.graph_base.query_node(entity_name, request.args)
     return jsonify({'result': startup.retriever.format_query_results(result), 'message': 'success'}), 200
+
+@db.route('/graph/nodes', methods=['GET'])
+def get_graph_nodes():
+    kgdb_name = request.args.get('kgdb_name')
+    num = request.args.get('num')
+    if not kgdb_name:
+        return jsonify({'message': 'kgdb_name is required'}), 400
+
+    logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
+    result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
+    return jsonify({'result': startup.retriever.foramt_general_results(result), 'message': 'success'}), 200
 
 @db.route('/graph/add', methods=['POST'])
 def add_graph_entity():

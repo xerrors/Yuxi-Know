@@ -25,13 +25,19 @@ cache
 
 ### IDE
 .vscode
+.idea
 *.nogit.*
 
 *.pdf
+*.yaml
 src/data
 neo4j*
 */package-lock.json
 web/package-lock.json
 saves
 notebooks
-*.yaml
+local_neo4j/data
+local_neo4j/logs
+local_neo4j/import
+local_neo4j/plugins
+local_neo4j/conf
