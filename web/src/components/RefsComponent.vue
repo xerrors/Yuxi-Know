@@ -6,11 +6,11 @@
       <span class="filetag item"
         v-for="(results, filename) in message.groupedResults"
         :key="filename"
-        @click="openDetail = true"
+        @click="toggleDrawer(filename)"
       >
         <FileTextOutlined /> {{ filename }}
         <a-drawer
-          v-model:open="openDetail"
+          v-model:open="openDetail[filename]"
           title="检索详情"
           width="800"
           :contentWrapperStyle="{ maxWidth: '100%'}"
@@ -19,7 +19,7 @@
           rootClassName="root"
         >
           <div class="fileinfo">
-            <p><strong>文件名:</strong> {{ results[0].file.filename }}</p>
+            <p><strong>文件名:</strong> {{ filename }}</p>
             <p><strong>文件类型:</strong> {{ results[0].file.type }}</p>
             <p><strong>创建时间:</strong> {{ new Date(results[0].file.created_at * 1000).toLocaleString() }}</p>
           </div>
@@ -47,7 +47,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import {
   GlobalOutlined,
   FileTextOutlined,
@@ -59,7 +59,18 @@ const props = defineProps({
 
 const message = ref(props.message)
 
-const openDetail = ref(false)
+// 使用 reactive 创建一个响应式对象来存储每个文件的抽屉状态
+const openDetail = reactive({})
+
+// 初始化 openDetail 对象
+for (const filename in message.value.groupedResults) {
+  openDetail[filename] = false
+}
+
+const toggleDrawer = (filename) => {
+  openDetail[filename] = !openDetail[filename]
+}
+
 const showRefs = computed(() => message.value.role=='received' && message.value.status=='finished')
 </script>
 
