@@ -1,7 +1,6 @@
-<h1 style="text-align: center">Project: Athena</h1>
-
-
 <img src="web/public/home.png" style="border-radius: 16px; margin: 0 auto; max-height: 400px; display: block;"/>
+
+<h1 style="text-align: center">Yuxi (语析)</h1>
 
 ## 准备
 
