@@ -16,7 +16,7 @@ logger = setup_logger("OneKE")
 
 dotenv.load_dotenv()
 
-MODEL_NAME_OR_PATH = os.path.join(os.getenv('MODEL_ROOT_DIR'), 'OneKE')
+MODEL_NAME_OR_PATH = os.path.join(os.getenv('MODEL_ROOT_DIR', './'), 'OneKE')
 
 instruction_mapper = {
     'NERzh': "你是专门进行实体抽取的专家。请从input中抽取出符合schema定义的实体，不存在的实体类型返回空列表。请按照JSON字符串的格式回答。",

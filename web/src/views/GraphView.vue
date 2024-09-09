@@ -10,18 +10,18 @@
   </div>
   <div class="graph-container layout-container" v-else>
     <div class="info">
-      <h2>图数据库 {{ graph?.database_name }}</h2>
+      <h2>图数据库 {{ graphInfo?.database_name }}</h2>
       <p>
-        <span v-if="state.graphloading">加载中</span>
-        <span class="green-dot" v-if="graph?.status == 'open'"></span>
+        <span v-if="state.loadingGraphInfo">加载中</span>
+        <span class="green-dot" v-if="graphInfo?.status == 'open'"></span>
         <span class="red-dot" v-else></span>
-        <span>{{ graph?.status }}</span> ·
-        <span>共 {{ graph?.entity_count }} 实体，{{ graph?.relationship_count }} 个关系</span>
+        <span>{{ graphInfo?.status }}</span> ·
+        <span>共 {{ graphInfo?.entity_count }} 实体，{{ graphInfo?.relationship_count }} 个关系</span>
       </p>
     </div>
     <div class="actions">
       <div class="actions-left">
-        <a-button @click="state.showModal = true">上传文件</a-button>
+        <a-button @click="state.showModal = true"><UploadOutlined /> 上传文件</a-button>
         <a-modal
           :open="state.showModal" title="上传文件"
           @ok="addDocumentByFile"
@@ -42,15 +42,15 @@
             >
               <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
               <p class="ant-upload-hint">
-                目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加。
+                目前仅支持上传 jsonl 文件。且同名文件无法重复添加。
               </p>
             </a-upload-dragger>
           </div>
         </a-modal>
         <input v-model="sampleNodeCount">
-        <a-button @click="loadSampleNodes">确定</a-button>
+        <a-button @click="loadSampleNodes" :loading="state.fetching">获取节点</a-button>
       </div>
-      <div class="action-right">
+      <div class="actions-right">
         <input
           v-model="state.searchInput"
           placeholder="输入要查询的实体"
@@ -66,7 +66,8 @@
         </a-button>
       </div>
     </div>
-    <div class="main" id="container" ref="container"></div>
+    <div class="main" id="container" ref="container" v-show="graphData.nodes.length > 0"></div>
+    <a-empty v-show="graphData.nodes.length === 0"  style="padding: 4rem 0;"/>
   </div>
 </template>
 
@@ -75,21 +76,23 @@ import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message } from "ant-design-vue";
 import { useConfigStore } from '@/stores/config';
+import { UploadOutlined } from '@ant-design/icons-vue';
 
 const configStore = useConfigStore()
 
 let graphInstance
-const graph = ref(null)
+const graphInfo = ref(null)
 const container = ref(null);
 const fileList = ref([]);
 const sampleNodeCount = ref(100);
-const subgraph = reactive({
+const graphData = reactive({
   nodes: [],
   edges: [],
 });
 
 const state = reactive({
-  graphloading: false,
+  fetching: false,
+  loadingGraphInfo: false,
   searchInput: '',
   searchLoading: false,
   showModal: false,
@@ -98,27 +101,27 @@ const state = reactive({
 })
 
 
-const loadGraph = () => {
-  state.graphloading = true
+const loadGraphInfo = () => {
+  state.loadingGraphInfo = true
   fetch('/api/database/graph', {
     method: "GET",
   })
     .then(response => response.json())
     .then(data => {
       console.log(data)
-      graph.value = data.graph
-      state.graphloading = false
+      graphInfo.value = data.graph
+      state.loadingGraphInfo = false
     })
     .catch(error => {
       console.error(error)
       message.error(error.message)
-      state.graphloading = false
+      state.loadingGraphInfo = false
     })
 }
 
-const graphData = computed(() => {
+const getGraphData = () => {
   return {
-    nodes: subgraph.nodes.map(node => {
+    nodes: graphData.nodes.map(node => {
       return {
         id: node.id,
         data: {
@@ -126,7 +129,7 @@ const graphData = computed(() => {
         },
       }
     }),
-    edges: subgraph.edges.map(edge => {
+    edges: graphData.edges.map(edge => {
       return {
         source: edge.source_id,
         target: edge.target_id,
@@ -136,7 +139,7 @@ const graphData = computed(() => {
       }
     }),
   }
-})
+}
 
 const addDocumentByFile = () => {
   state.precessing = true
@@ -159,6 +162,7 @@ const addDocumentByFile = () => {
 };
 
 const loadSampleNodes = () => {
+  state.fetching = true
   fetch(`/api/database/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
     .then((res) => {
       if (res.ok) {
@@ -168,22 +172,26 @@ const loadSampleNodes = () => {
       }
     })
     .then((data) => {
-      subgraph.nodes = data.result.nodes
-      subgraph.edges = data.result.edges
-      console.log(data)
-      console.log(subgraph)
-      setTimeout(() => {
-        randerGraph()
-      }, 500)
+      graphData.nodes = data.result.nodes
+      graphData.edges = data.result.edges
+      console.log(graphData)
+      randerGraph()
     })
     .catch((error) => {
       message.error(error.message);
     })
+    .finally(() => state.fetching = false)
 }
 
 const onSearch = () => {
   if (!state.searchInput) {
     message.error('请输入要查询的实体')
+    return
+  }
+
+  const cur_embed_model = configStore.config.embed_model
+  if (cur_embed_model !== 'zhipu-embedding-3') {
+    message.error('当前不支持实体检索，请在设置中选择向量模型为 zhipu-embedding-3')
     return
   }
 
@@ -197,10 +205,13 @@ const onSearch = () => {
       }
     })
     .then((data) => {
-      subgraph.nodes = data.result.nodes
-      subgraph.edges = data.result.edges
+      graphData.nodes = data.result.nodes
+      graphData.edges = data.result.edges
+      if (graphData.nodes.length === 0) {
+        message.info('未找到相关实体')
+      }
       console.log(data)
-      console.log(subgraph)
+      console.log(graphData)
       randerGraph()
     })
     .catch((error) => {
@@ -210,54 +221,58 @@ const onSearch = () => {
 };
 
 const randerGraph = () => {
-  graphInstance.setData(graphData.value);
+
+  if (graphInstance) {
+    graphInstance.destroy();
+  }
+
+  initGraph();
+  graphInstance.setData(getGraphData());
   graphInstance.render();
 }
 
+const initGraph = () => {
+  graphInstance = new Graph({
+    container: container.value,
+    width: container.value.offsetWidth,
+    height: container.value.offsetHeight,
+    autoFit: true,
+    autoResize: true,
+    layout: {
+      type: 'd3-force',
+      preventOverlap: true,
+      kr: 20,
+      collide: {
+        strength: 1.0,
+      },
+    },
+    node: {
+      type: 'circle',
+      style: {
+        labelText: (d) => d.data.label,
+        size: 70,
+      },
+      palette: {
+        field: 'label',
+        color: 'tableau',
+      },
+    },
+    edge: {
+      type: 'line',
+      style: {
+        labelText: (d) => d.data.label,
+        labelBackground: '#fff',
+        endArrow: true,
+      },
+    },
+    behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
+  });
+  window.addEventListener('resize', randerGraph);
+}
+
 onMounted(() => {
-  loadGraph();
+  loadGraphInfo();
   loadSampleNodes();
-  setTimeout(() => {
-    if (state.showPage) {
-      graphInstance = new Graph({
-        container: container.value,
-        width: container.value.offsetWidth,
-        height: container.value.offsetHeight,
-        autoFit: true,
-        autoResize: true,
-        layout: {
-          type: 'd3-force',
-          preventOverlap: true,
-          kr: 100,
-          collide: {
-            strength: 0.5,
-          },
-        },
-        node: {
-          type: 'circle',
-          style: {
-            labelText: (d) => d.data.label,
-            size: 40,
-          },
-          palette: {
-            field: 'label',
-            color: 'tableau',
-          },
-        },
-        edge: {
-          type: 'line',
-          style: {
-            labelText: (d) => d.data.label,
-            labelBackground: '#fff',
-          },
-        },
-        behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
-      });
-      graphInstance.setData(graphData.value);
-      graphInstance.render();
-      window.addEventListener('resize', randerGraph);
-    }
-  }, 400)
 });
 
 
@@ -303,7 +318,7 @@ const handleDrop = (event) => {
   justify-content: space-between;
   margin-bottom: 20px;
 
-  .actions-left {
+  .actions-left, .actions-right {
     display: flex;
     align-items: center;
     gap: 10px;
@@ -311,7 +326,6 @@ const handleDrop = (event) => {
 
   input {
     width: 100px;
-    margin-right: 10px;
     border-radius: 8px;
     padding: 4px 12px;
     border: 2px solid var(--main-300);
@@ -324,6 +338,7 @@ const handleDrop = (event) => {
   }
 
   button {
+    border-width: 2px;
     height: 40px;
     box-shadow: none;
   }
@@ -343,8 +358,9 @@ const handleDrop = (event) => {
   margin: 20px 0;
   border-radius: 16px;
   width: 100%;
-  height: 800px;
+  height: calc(100vh - 200px);
   resize: horizontal;
+  overflow: hidden;
 }
 
 .database-empty {

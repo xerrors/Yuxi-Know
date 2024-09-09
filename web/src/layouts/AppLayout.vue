@@ -54,8 +54,8 @@ console.log(route)
 
 <template>
   <div class="app-layout">
-    <div class="debug-panel">
-      <div class="shown-btn" @click="showDebug=!showDebug"><BugOutlined /></div>
+    <div class="debug-panel" @click="showDebug=!showDebug">
+      <div class="shown-btn"><BugOutlined /></div>
       <a-drawer
         v-model:open="showDebug"
         title="调试面板"

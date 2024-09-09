@@ -1,3 +1,4 @@
+import itertools
 import json
 from flask import Blueprint, jsonify, request, Response
 
@@ -89,6 +90,7 @@ def restart():
 def get_log():
     from src.utils.logging_config import LOG_FILE
     with open(LOG_FILE, 'r') as f:
-        log = f.read()
+        log_lines = itertools.islice(f, 1000)
+        log = ''.join(log_lines)
 
     return jsonify({"log": log})

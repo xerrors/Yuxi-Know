@@ -1,25 +1,53 @@
 import os
+import uuid
 import fitz  # fitz就是pip install PyMuPDF
 import cv2
 from copy import deepcopy
 from tqdm import tqdm
+from argparse import ArgumentParser
+from src.utils import logger
+
+GOLBAL_STATE = {}
 
 
 def pdf2txt(pdf_path, return_text=False):
+    if not os.path.exists(pdf_path):
+        raise FileNotFoundError(f"File not found: {pdf_path}")
+
+    # Importing these modules here to avoid unnecessary imports in other files
     from paddleocr import PPStructure, save_structure_res
     from paddleocr.ppstructure.recovery.recovery_to_doc import sorted_layout_boxes, convert_info_docx
-    output_dir = os.path.join('tmp', 'pdf2txt', os.path.basename(pdf_path).split('.')[0])
+    filename =  os.path.basename(pdf_path).split('.')[0]
+    output_dir = os.path.join('saves', 'data', 'pdf2txt', filename)
     os.makedirs(output_dir, exist_ok=True)
 
     table_engine = PPStructure(recovery=True, lang='ch')
 
     imgs = convert_imgs(pdf_path, output_dir)
-    respath = os.path.join(output_dir, 'res.txt')
+    respath = os.path.join(output_dir, f'{filename}.txt')
+
+    global GOLBAL_STATE
+    task_id = str(uuid.uuid4())
+    if task_id in GOLBAL_STATE:
+        logger.info(f"Reusing previous state for process {task_id}")
+        return GOLBAL_STATE[task_id]
+    else:
+        logger.info(f"Creating new state for process {task_id}")
+        GOLBAL_STATE[task_id] = {
+            'pdf_path': pdf_path,
+            'return_text': return_text,
+            'output_dir': output_dir,
+            'status': 'in-progress',
+            'total': len(imgs),
+            'progress': 0
+        }
+
 
     text = []
     for img_name in tqdm(imgs, desc='to txt', ncols=100):
         img = cv2.imread(img_name)
         result = table_engine(img)
+        GOLBAL_STATE[task_id]['progress'] += 1
 
         save_structure_res(result, output_dir, "structure_result")
 
@@ -43,6 +71,9 @@ def pdf2txt(pdf_path, return_text=False):
     whole_text = ''.join(text)
     with open(respath, 'w', encoding='utf-8') as f:
         f.write(whole_text)
+        logger.info(f"Extracted text saved to {respath}")
+
+    GOLBAL_STATE[task_id]['status'] = 'completed'
 
     if return_text:
         return whole_text
@@ -72,6 +103,13 @@ def convert_imgs(pdf_path, output_dir):
 
     return imgs
 
+def get_state(task_id):
+    return GOLBAL_STATE.get(task_id, {})
+
 if __name__ == "__main__":
-    pdf_path = r'saves/data/uploads/2e04d5_保健食品.pdf'
-    print(pdf2txt(pdf_path))
+    parser = ArgumentParser()
+    parser.add_argument('--pdf-path', type=str, required=True, help='Path to the PDF file')
+    parser.add_argument('--return-text', action='store_true', help='Return the extracted text')
+    args = parser.parse_args()
+
+    pdf2txt(args.pdf_path, args.return_text)

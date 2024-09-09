@@ -1,5 +1,6 @@
 from src.models.embedding import Reranker
 from src.utils.logging_config import setup_logger
+
 logger = setup_logger("server-common")
 
 
@@ -37,12 +38,14 @@ class Retriever:
         # 解析图数据库的结果
         db_res = refs.get("graph_base").get("results", [])
         if len(db_res["nodes"]) > 0:
-            db_text = '\n'.join([f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res['edges']])
+            db_text = "\n".join(
+                [f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res["edges"]]
+            )
             external += f"图数据库信息: \n\n{db_text}"
 
         # 构造查询
         if len(external) > 0:
-            query = f"以下是参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答：{query}"
+            query = f"参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答问题。\n\n问题：{query}\n\n回答："
 
         return query
 
@@ -70,42 +73,53 @@ class Retriever:
         kb_res = []
         final_res = []
         if not refs["meta"].get("db_name") or not self.config.enable_knowledge_base:
-            return {"results": final_res, "all_results": kb_res, "rw_query": query, "message": "Knowledge base is disabled"}
+            return {
+                "results": final_res,
+                "all_results": kb_res,
+                "rw_query": query,
+                "message": "Knowledge base is disabled",
+            }
 
         rw_query = self.rewrite_query(query, history, refs)
 
         db_name = refs["meta"]["db_name"]
         kb = self.dbm.metaname2db[db_name]
-        limit = refs["meta"].get("queryCount", 10)
 
-        kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=limit)
-        for r in kb_res:
+        max_query_count = refs["meta"].get("maxQueryCount", 10)
+        rerank_threshold = refs["meta"].get("rerankThreshold", 0.1)
+        distance_threshold = refs["meta"].get("distanceThreshold", 0)
+        top_k = refs["meta"].get("topK", 5)
+
+        all_kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
+        for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
+        # use distance threshold to filter results
+        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
+
         if self.config.enable_reranker:
-            RERANK_THRESHOLD = 0.001
             for r in kb_res:
-                r["rerank_score"] = self.reranker.compute_score([query, r["entity"]["text"]], normalize=True)
+                r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-            final_res = [_res for _res in kb_res if _res["rerank_score"] > RERANK_THRESHOLD]
+            kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
 
-        else:
-            final_res = kb_res[:5]
+        kb_res = kb_res[:top_k]
 
-        return {"results": final_res, "all_results": kb_res, "rw_query": rw_query}
+        return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        rewrite_query_span = refs["meta"].get("rewrite_query", None)
-        if rewrite_query_span is None or rewrite_query_span == "OFF":
+        rewrite_query_span = refs["meta"].get("rewriteQuery", "off")
+        if rewrite_query_span == "off":
             rewritten_query = query
         else:
             from src.utils.prompts import rewritten_query_prompt_template
-            history_query = [entry['content'] for entry in history if entry['role'] == 'user'] if history else ""
+
+            history_query = [entry["content"] for entry in history if entry["role"] == "user"] if history else ""
             rewritten_query_prompt = rewritten_query_prompt_template.format(history=history_query, query=query)
             rewritten_query = self.model.predict(rewritten_query_prompt).content
 
-        if rewrite_query_span == "HyDE":
+        if rewrite_query_span == "hyde":
             hy_doc = self.model.predict(rewritten_query).content
             rewritten_query = f"{rewritten_query} {hy_doc}"
 
@@ -118,54 +132,68 @@ class Retriever:
         entities = []
         if refs["meta"].get("use_graph"):
             from src.utils.prompts import entity_extraction_prompt_template
+
             entity_extraction_prompt = entity_extraction_prompt_template.format(text=query)
             entities = self.model.predict(entity_extraction_prompt).content.split(",")
-            entities = [entity for entity in entities if all(char.isalnum() or char in '汉字' for char in entity)]
+            entities = [entity for entity in entities if all(char.isalnum() or char in "汉字" for char in entity)]
 
         return entities
 
-    def foramt_general_results(self, results):
-        logger.debug(f"Formatting general results: {results}")
+    def _extract_relationship_info(self, relationship, source_name, target_name):
+        """
+        提取关系信息并返回格式化的节点和边信息
+        """
+        rel_id = relationship.element_id
+        nodes = relationship.nodes
+        if len(nodes) != 2:
+            return None, None
+
+        source, target = nodes
+        source_id = source.element_id
+        target_id = target.element_id
+
+        relationship_type = relationship._properties.get("type", "unknown")
+        if relationship_type == "unknown":
+            relationship_type = relationship.type
+
+        edge_info = {
+            "id": rel_id,
+            "type": relationship_type,
+            "source_id": source_id,
+            "target_id": target_id,
+            "source_name": source_name,
+            "target_name": target_name,
+        }
+
+        node_info = [
+            {"id": source_id, "name": source_name},
+            {"id": target_id, "name": target_name},
+        ]
+
+        return node_info, edge_info
+
+    def format_general_results(self, results):
         formatted_results = {"nodes": [], "edges": []}
 
         for item in results:
             relationship = item[1]
-            rel_id = relationship.element_id
-            nodes = relationship.nodes
-            if len(nodes) != 2:
+            source_name = item[0]._properties.get("name", "unknown")
+            target_name = item[2]._properties.get("name", "unknown") if len(item) > 2 else "unknown"
+
+            node_info, edge_info = self._extract_relationship_info(relationship, source_name, target_name)
+            if node_info is None or edge_info is None:
                 continue
 
-            source, target = nodes
+            for node in node_info:
+                if node["id"] not in [n["id"] for n in formatted_results["nodes"]]:
+                    formatted_results["nodes"].append(node)
 
-            source_id = source.element_id
-            target_id = target.element_id
-            source_name = source._properties.get('name', 'unknown')
-            target_name = target._properties.get('name', 'unknown')
-
-            if source_id not in formatted_results["nodes"]:
-                formatted_results["nodes"].append({"id": source_id, "name": source_name})
-            if target_id not in formatted_results["nodes"]:
-                formatted_results["nodes"].append({"id": target_id, "name": target_name})
-
-            relationship_type = relationship._properties.get('type', 'unknown')
-            if relationship_type == 'unknown':
-                relationship_type = relationship.type
-
-            formatted_results["edges"].append({
-                "id": rel_id,
-                "type": relationship_type,
-                "source_id": source_id,
-                "target_id": target_id,
-                "source_name": source_name,
-                "target_name": target_name
-            })
+            formatted_results["edges"].append(edge_info)
 
         return formatted_results
 
     def format_query_results(self, results):
-        logger.debug(f"Formatting query results: {results}")
         formatted_results = {"nodes": [], "edges": []}
-
         node_dict = {}
 
         for item in results:
@@ -173,35 +201,18 @@ class Retriever:
                 continue
 
             relationship = item[1][0]
-            rel_id = relationship.element_id
-            nodes = relationship.nodes
-            if len(nodes) != 2:
+            source_name = item[0]
+            target_name = item[2] if len(item) > 2 else "unknown"
+
+            node_info, edge_info = self._extract_relationship_info(relationship, source_name, target_name)
+            if node_info is None or edge_info is None:
                 continue
 
-            source, target = nodes
+            for node in node_info:
+                if node["id"] not in node_dict:
+                    node_dict[node["id"]] = node
 
-            source_id = source.element_id
-            target_id = target.element_id
-            source_name = item[0]
-            target_name = item[2] if len(item) > 2 else 'unknown'
-
-            if source_id not in node_dict:
-                node_dict[source_id] = {"id": source_id, "name": source_name}
-            if target_id not in node_dict:
-                node_dict[target_id] = {"id": target_id, "name": target_name}
-
-            relationship_type = relationship._properties.get('type', 'unknown')
-            if relationship_type == 'unknown':
-                relationship_type = relationship.type
-
-            formatted_results["edges"].append({
-                "id": rel_id,
-                "type": relationship_type,
-                "source_id": source_id,
-                "target_id": target_id,
-                "source_name": source_name,
-                "target_name": target_name
-            })
+            formatted_results["edges"].append(edge_info)
 
         formatted_results["nodes"] = list(node_dict.values())
 

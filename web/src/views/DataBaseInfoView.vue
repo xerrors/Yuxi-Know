@@ -16,22 +16,41 @@
       <p class="description">{{ database.description }}</p>
       <div class="tags">
         <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
+        <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
       </div>
       <a-divider/>
       <div class="query-params" v-if="state.curPage == 'query-test'">
-        <p style="text-align: center; margin: 0;"><strong>参数配置</strong></p>
+        <!-- <p style="text-align: center; margin: 0;"><strong>参数配置</strong></p> -->
         <div class="params-item">
           <p>检索数量：</p>
-          <a-input-number size="small" v-model:value="meta.queryCount" :min="1" :max="20" />
+          <a-input-number size="small" v-model:value="meta.maxQueryCount" :min="1" :max="20" />
+        </div>
+        <div class="params-item">
+          <p>TopK：</p>
+          <a-input-number size="small" v-model:value="meta.topK" :min="1" :max="meta.maxQueryCount" />
         </div>
         <div class="params-item">
           <p>过滤低质量：</p>
           <a-switch v-model:checked="meta.filter" />
         </div>
-        <div class="params-item">
-          <p>重写查询</p>
-            <a-segmented v-model:value="meta.rewrite_query" :options="['OFF', 'ON', 'HyDE']" />
-
+        <div class="params-item w100" v-if="configStore.config.enable_reranker">
+          <p>重排序阈值：</p>
+          <a-slider v-model:value="meta.rerankThreshold" :min="0" :max="1" :step="0.01" />
+        </div>
+        <div class="params-item w100">
+          <p>距离阈值：</p>
+          <a-slider v-model:value="meta.distanceThreshold" :min="0" :max="1" :step="0.01" />
+        </div>
+        <div class="params-item col">
+          <p>重写查询<small>（修改后需重新检索）</small>：</p>
+          <a-segmented v-model:value="meta.rewriteQuery" :options="rewriteQueryOptions" >
+            <template #label="{ payload }">
+              <div style="padding: 4px 4px">
+                <p>{{ payload.title }}</p>
+                <small>{{ payload.subTitle }}</small>
+              </div>
+            </template>
+          </a-segmented>
         </div>
       </div>
     </div>
@@ -42,7 +61,7 @@
     <a-tab-pane key="add">
       <template #tab><span><CloudUploadOutlined />添加文件</span></template>
       <div class="db-info-container">
-        <h3>向知识库中添加文件</h3>
+        <!-- <h3>向知识库中添加文件</h3> -->
         <div class="upload">
           <a-upload-dragger
             class="upload-dragger"
@@ -117,7 +136,7 @@
     <a-tab-pane key="query-test" force-render>
       <template #tab><span><SearchOutlined />检索测试</span></template>
       <div class="db-info-container">
-        <h3>检索测试</h3>
+        <!-- <h3>检索测试</h3> -->
         <div class="query-action">
           <a-textarea
             v-model:value="queryText"
@@ -131,7 +150,11 @@
           </a-button>
         </div>
         <div class="query-test" v-if="queryResult">
-          <div class="query-card" v-for="(result, idx) in (meta.filter ? queryResult.results : queryResult.all_results)" :key="idx">
+          <div class="results-overview">
+            <p>总数：{{ queryResult.all_results.length }}，过滤后：{{ filteredResults.length }} （TopK：{{ meta.topK }}）</p>
+            <p>重写后查询：{{ queryResult.rw_query }}</p>
+          </div>
+          <div class="query-card" v-for="(result, idx) in (filteredResults)" :key="idx">
             <p>
               <strong>#{{ idx + 1 }}&nbsp;&nbsp;&nbsp;</strong>
               <span>{{ result.file.filename }}&nbsp;&nbsp;&nbsp;</span>
@@ -149,9 +172,10 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue';
+import { onMounted, reactive, ref, watch, toRaw } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useConfigStore } from '@/stores/config'
 import {
   ReadFilled,
   LeftOutlined,
@@ -177,6 +201,8 @@ const selectedFile = ref(null);
 // 查询测试
 const queryText = ref('');
 const queryResult = ref(null)
+const filteredResults = ref([])
+const configStore = useConfigStore()
 
 const state = reactive({
   loading: false,
@@ -189,10 +215,43 @@ const state = reactive({
 });
 
 const meta = reactive({
-  queryCount: 10,
-  filter: false,
-  rewrite_query: 'OFF',
+  maxQueryCount: 30,
+  filter: true,
+  rewriteQuery: 'off',
+  rerankThreshold: 0.1,
+  distanceThreshold: 0.5,
+  topK: 10,
 });
+
+const rewriteQueryOptions = ref([
+  { value: 'off', payload: { title: 'off', subTitle: '不启用' } },
+  { value: 'on', payload: { title: 'on', subTitle: '启用重写' } },
+  { value: 'hyde', payload: { title: 'hyde', subTitle: '伪文档生成' } },
+])
+
+const filterQueryResults = () => {
+  if (!queryResult.value || !queryResult.value.all_results) {
+    return;
+  }
+
+  let results = toRaw(queryResult.value.all_results);
+  console.log("results", results);
+
+  if (meta.filter) {
+    results = results.filter(r => r.distance >= meta.distanceThreshold);
+    console.log("before", results);
+    if (configStore.config.enable_reranker) {
+      results = results
+        .filter(r => r.rerank_score >= meta.rerankThreshold)
+        .sort((a, b) => b.rerank_score - a.rerank_score);
+    }
+    console.log("after", results);
+
+    results = results.slice(0, meta.topK);
+  }
+
+  filteredResults.value = results;
+}
 
 const onQuery = () => {
   console.log(queryText.value)
@@ -214,6 +273,7 @@ const onQuery = () => {
   .then(data => {
     console.log(data)
     queryResult.value = data
+    filterQueryResults()
   })
   .catch(error => {
     console.error(error)
@@ -348,7 +408,6 @@ const getDatabaseInfo = () => {
   })
 }
 
-
 const deleteFile = (fileId) => {
   console.log(fileId)
   state.lock = true
@@ -410,36 +469,12 @@ const addDocumentByFile = () => {
 }
 
 const columns = [
-  {
-    title: '文件ID',
-    dataIndex: 'file_id',
-    key: 'file_id',
-  },
-  {
-    title: '文件名',
-    dataIndex: 'filename',
-    key: 'filename',
-  },
-  {
-    title: '上传时间',
-    dataIndex: 'created_at',
-    key: 'created_at',
-  },
-  {
-    title: '状态',
-    dataIndex: 'status',
-    key: 'status',
-  },
-  {
-    title: '类型',
-    dataIndex: 'type',
-    key: 'type',
-  },
-  {
-    title: '操作',
-    key: 'action',
-    dataIndex: 'file_id',
-  }
+  { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
+  { title: '文件名', dataIndex: 'filename', key: 'filename' },
+  { title: '上传时间', dataIndex: 'created_at', key: 'created_at' },
+  { title: '状态', dataIndex: 'status', key: 'status' },
+  { title: '类型', dataIndex: 'type', key: 'type' },
+  { title: '操作', key: 'action', dataIndex: 'file_id' }
 ];
 
 watch(() => route.params.database_id, (newId) => {
@@ -450,12 +485,20 @@ watch(() => route.params.database_id, (newId) => {
   }
 );
 
+// 检测到 meta 变化时重新查询
+watch(() => meta, () => {
+  filterQueryResults()
+}, { deep: true })
+
+
 onMounted(() => {
   getDatabaseInfo();
   // const refreshInterval = setInterval(() => {
   //   getDatabaseInfo();
   // }, 10000);
 })
+
+
 
 </script>
 
@@ -546,15 +589,27 @@ onMounted(() => {
       }
     }
     .params-item.col {
+      align-items: flex-start;
       flex-direction: column;
+      width: 100%;
+      height: auto;
     }
 
+    .params-item.w100 > *{
+      width: 100%;
+    }
+
+    .ant-slider {
+      margin: 6px 0px;
+    }
   }
 }
 
 .atab-container {
-  padding: 12px 16px;
+  padding: 0;
   width: 100%;
+  max-height: 100%;
+  overflow: auto;
 }
 
 .db-info-container {
@@ -675,8 +730,10 @@ onMounted(() => {
     color: white;
     padding: 2px 4px;
     border-radius: 4px;
-    font-size: small;
+    font-size: 10px;
     font-weight: bold;
+    opacity: 0.8;
+    user-select: none;
   }
 
   .pdf {
@@ -709,5 +766,26 @@ onMounted(() => {
     }
   }
 
+}
+</style>
+
+<style lang="less">
+.atab-container div.ant-tabs-nav {
+  background: var(--main-light-5);
+  padding: 1rem;
+  padding-bottom: 0;
+}
+
+.atab-container .ant-tabs-content-holder {
+  padding: 0 1rem;
+}
+
+.params-item.col .ant-segmented {
+  width: 100%;
+
+  div.ant-segmented-group {
+    display: flex;
+    justify-content: space-around;
+  }
 }
 </style>

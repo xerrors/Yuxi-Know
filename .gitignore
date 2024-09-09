@@ -41,3 +41,4 @@ local_neo4j/logs
 local_neo4j/import
 local_neo4j/plugins
 local_neo4j/conf
+graphrag

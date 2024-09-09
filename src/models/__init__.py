@@ -28,6 +28,10 @@ def select_model(config):
         from src.models.chat_model import DashScope
         return DashScope(model_name)
 
+    elif model_provider == "openai":
+        from src.models.chat_model import OpenModel
+        return OpenModel(model_name)
+
     elif model_provider is None:
         raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")
     else:

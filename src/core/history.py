@@ -38,5 +38,6 @@ class HistoryManager():
     def __str__(self):
         history_str = ""
         for message in self.messages:
-            history_str += f"{message['role']}: {message['content']}"
+            msg = message["content"].replace('\n', ' ')
+            history_str += f"\n{message['role']}: {msg}"
         return history_str

@@ -1,11 +1,15 @@
 import os
+import uuid
 from FlagEmbedding import FlagModel, FlagReranker
 
 from src.config import EMBED_MODEL_INFO, RERANKER_LIST
 from src.utils.logging_config import setup_logger
+from src.utils import hashstr
 
 
 logger = setup_logger("EmbeddingModel")
+
+GLOBAL_EMBED_STATE = {}
 
 
 class EmbeddingModel(FlagModel):
@@ -47,9 +51,21 @@ class ZhipuEmbedding:
     def predict(self, message):
         data = []
 
+        if len(message) > 10:
+            global GLOBAL_EMBED_STATE
+            task_id = hashstr(message)
+            logger.info(f"Creating new state for process {task_id}")
+            GLOBAL_EMBED_STATE[task_id] = {
+                'status': 'in-progress',
+                'total': len(message),
+                'progress': 0
+            }
+
         for i in range(0, len(message), 10):
             if len(message) > 10:
                 logger.info(f"Encoding {i} to {i+10} with {len(message)} messages")
+                GLOBAL_EMBED_STATE[task_id]['progress'] = i
+
             group_msg = message[i:i+10]
             response = self.client.embeddings.create(
                 model=self.model_info.default_path,
@@ -57,6 +73,10 @@ class ZhipuEmbedding:
             )
 
             data.extend([a.embedding for a in response.data])
+
+        if len(message) > 10:
+            GLOBAL_EMBED_STATE[task_id]['progress'] = len(message)
+            GLOBAL_EMBED_STATE[task_id]['status'] = 'completed'
 
         return data
 

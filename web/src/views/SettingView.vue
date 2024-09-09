@@ -42,7 +42,8 @@
           </a-select>
         </div>
         <div class="card">
-          <span class="label">{{ items?.embed_model.des }} &nbsp;
+          <span class="label">
+            {{ items?.embed_model.des }} &nbsp;
             <a-button small v-if="needRestart.embed_model" @click="sendRestart">
               <ReloadOutlined />需要重启
             </a-button>
@@ -58,7 +59,8 @@
           </a-select>
         </div>
         <div class="card">
-          <span class="label">{{ items?.reranker.des }} &nbsp;
+          <span class="label">
+            {{ items?.reranker.des }} &nbsp;
             <a-button small v-if="needRestart.reranker" @click="sendRestart">
               <ReloadOutlined />需要重启
             </a-button>
@@ -89,7 +91,11 @@
           />
         </div>
         <div class="card">
-          <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
+          <span class="label">{{ items?.enable_knowledge_graph.des }}
+            <a-button small v-if="needRestart.enable_knowledge_graph" @click="sendRestart">
+              <ReloadOutlined />需要重启
+            </a-button>
+          </span>
           <a-switch
             :checked="configStore.config.enable_knowledge_graph"
             @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
@@ -194,6 +200,13 @@ const sendRestart = () => {
 
     .label {
       margin-right: 20px;
+
+      button {
+        margin-left: 10px;
+        height: 24px;
+        padding: 0 8px;
+        font-size: smaller;
+      }
     }
   }
 
