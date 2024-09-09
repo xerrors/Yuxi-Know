@@ -1,15 +1,17 @@
 from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
+# sudo ln -s /snap/core22/1586/usr/sbin/iptables /usr/sbin/iptables
+
 def check_neo4j_status(uri="bolt://localhost:7687", username="neo4j", password="0123456789"):
     """
     检查 Neo4j 数据库是否可以连接并正常工作。
-    
+
     参数:
         uri (str): Neo4j 的 URI，默认为 "bolt://localhost:7687"
         username (str): 数据库用户名，默认为 "neo4j"
         password (str): 数据库密码，默认为 "0123456789"
-    
+
     返回:
         str: "OK" 表示连接成功，"UNAVAILABLE" 表示服务不可用，"AUTH_FAILED" 表示认证失败。
     """

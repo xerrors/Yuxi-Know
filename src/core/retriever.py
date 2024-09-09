@@ -84,28 +84,33 @@ class Retriever:
 
         db_name = refs["meta"]["db_name"]
         kb = self.dbm.metaname2db[db_name]
-        limit = refs["meta"].get("queryCount", 10)
 
-        kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=limit)
-        for r in kb_res:
+        max_query_count = refs["meta"].get("maxQueryCount", 10)
+        rerank_threshold = refs["meta"].get("rerankThreshold", 0.1)
+        distance_threshold = refs["meta"].get("distanceThreshold", 0)
+        top_k = refs["meta"].get("topK", 5)
+
+        all_kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
+        for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
+        # use distance threshold to filter results
+        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
+
         if self.config.enable_reranker:
-            RERANK_THRESHOLD = 0.001
             for r in kb_res:
                 r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-            final_res = [_res for _res in kb_res if _res["rerank_score"] > RERANK_THRESHOLD]
+            kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
 
-        else:
-            final_res = kb_res[:5]
+        kb_res = kb_res[:top_k]
 
-        return {"results": final_res, "all_results": kb_res, "rw_query": rw_query}
+        return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        rewrite_query_span = refs["meta"].get("rewrite_query", None)
-        if rewrite_query_span is None or rewrite_query_span == "OFF":
+        rewrite_query_span = refs["meta"].get("rewriteQuery", "off")
+        if rewrite_query_span == "off":
             rewritten_query = query
         else:
             from src.utils.prompts import rewritten_query_prompt_template
@@ -114,7 +119,7 @@ class Retriever:
             rewritten_query_prompt = rewritten_query_prompt_template.format(history=history_query, query=query)
             rewritten_query = self.model.predict(rewritten_query_prompt).content
 
-        if rewrite_query_span == "HyDE":
+        if rewrite_query_span == "hyde":
             hy_doc = self.model.predict(rewritten_query).content
             rewritten_query = f"{rewritten_query} {hy_doc}"
 
@@ -168,7 +173,6 @@ class Retriever:
         return node_info, edge_info
 
     def format_general_results(self, results):
-        logger.debug(f"Formatting general results: {results}")
         formatted_results = {"nodes": [], "edges": []}
 
         for item in results:
@@ -189,7 +193,6 @@ class Retriever:
         return formatted_results
 
     def format_query_results(self, results):
-        logger.debug(f"Formatting query results: {results}")
         formatted_results = {"nodes": [], "edges": []}
         node_dict = {}
 

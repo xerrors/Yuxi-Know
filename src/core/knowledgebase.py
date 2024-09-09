@@ -63,7 +63,7 @@ class KnowledgeBase:
             "id": int(random.random() * 1e12),
             "vector": vectors[i],
             "text": docs[i],
-            "hash": hashstr(docs[i] + str(random.random())),
+            "hash": hashstr(docs[i], with_salt=True),
             **kwargs} for i in range(len(vectors))]
 
         res = self.client.insert(collection_name=collection_name, data=data)

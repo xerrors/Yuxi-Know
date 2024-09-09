@@ -49,7 +49,7 @@ class Config(SimpleConfig):
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
-        self.add_item("model_provider", default="zhipu", des="模型提供商", choices=["qianfan", "vllm", "zhipu", "deepseek", "dashscope"])
+        self.add_item("model_provider", default="zhipu", des="模型提供商", choices=["openai", "qianfan", "vllm", "zhipu", "deepseek", "dashscope"])
         self.add_item("model_name", default=None, des="模型名称")
         self.add_item("embed_model", default="zhipu-embedding-3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
         self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=["bge-reranker-v2-m3"])
@@ -145,6 +145,13 @@ class Config(SimpleConfig):
 
 MODEL_NAMES = {
     # https://platform.deepseek.com/api-docs/zh-cn/pricing
+    "openai": [
+        "gpt-4",
+        "gpt-4o",
+        "gpt-4-0125-preview",
+        "gpt-4o-mini",
+    ],
+
     "deepseek": [
         "deepseek-chat",
         "deepseek-coder"

@@ -48,7 +48,7 @@
           </div>
         </a-modal>
         <input v-model="sampleNodeCount">
-        <a-button @click="loadSampleNodes">获取节点</a-button>
+        <a-button @click="loadSampleNodes" :loading="state.fetching">获取节点</a-button>
       </div>
       <div class="actions-right">
         <input
@@ -66,7 +66,8 @@
         </a-button>
       </div>
     </div>
-    <div class="main" id="container" ref="container"></div>
+    <div class="main" id="container" ref="container" v-show="graphData.nodes.length > 0"></div>
+    <a-empty v-show="graphData.nodes.length === 0"  style="padding: 4rem 0;"/>
   </div>
 </template>
 
@@ -90,6 +91,7 @@ const graphData = reactive({
 });
 
 const state = reactive({
+  fetching: false,
   loadingGraphInfo: false,
   searchInput: '',
   searchLoading: false,
@@ -160,6 +162,7 @@ const addDocumentByFile = () => {
 };
 
 const loadSampleNodes = () => {
+  state.fetching = true
   fetch(`/api/database/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
     .then((res) => {
       if (res.ok) {
@@ -177,11 +180,18 @@ const loadSampleNodes = () => {
     .catch((error) => {
       message.error(error.message);
     })
+    .finally(() => state.fetching = false)
 }
 
 const onSearch = () => {
   if (!state.searchInput) {
     message.error('请输入要查询的实体')
+    return
+  }
+
+  const cur_embed_model = configStore.config.embed_model
+  if (cur_embed_model !== 'zhipu-embedding-3') {
+    message.error('当前不支持实体检索，请在设置中选择向量模型为 zhipu-embedding-3')
     return
   }
 
@@ -197,6 +207,9 @@ const onSearch = () => {
     .then((data) => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
+      if (graphData.nodes.length === 0) {
+        message.info('未找到相关实体')
+      }
       console.log(data)
       console.log(graphData)
       randerGraph()
@@ -345,8 +358,9 @@ const handleDrop = (event) => {
   margin: 20px 0;
   border-radius: 16px;
   width: 100%;
-  height: 800px;
+  height: calc(100vh - 200px);
   resize: horizontal;
+  overflow: hidden;
 }
 
 .database-empty {

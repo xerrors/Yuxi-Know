@@ -38,7 +38,7 @@ python -m vllm.entrypoints.openai.api_server \
 |`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*修改为本地路径）|
 |`zhipu`|`embedding-2`|`ZHIPUAPI` (`.env`)|
 
-### 3. 重排序模型支持
+
 
 
 例如（`config/base.yaml`）：
@@ -52,3 +52,7 @@ model_name: null # for default
 model_local_paths:
   bge-large-zh-v1.5: /models/bge-large-zh-v1.5
 ```
+
+### 3. 重排序模型支持
+
+目前仅支持 `BAAI/bge-reranker-v2-m3`。

@@ -30,10 +30,10 @@
           </a>
           <template #overlay>
             <a-menu>
-              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
+              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
                 <a href="javascript:;" >{{ db.name }}</a>
               </a-menu-item>
-              <a-menu-item  @click="meta.selectedKB = null">
+              <a-menu-item  @click="useDatabase(null)">
                 <a href="javascript:;">不使用</a>
               </a-menu-item>
             </a-menu>
@@ -54,10 +54,10 @@
                 </a>
                 <template #overlay>
                   <a-menu>
-                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="meta.selectedKB=index">
+                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
                       <a href="javascript:;">{{ db.name }}</a>
                     </a-menu-item>
-                    <a-menu-item  @click="meta.selectedKB = null">
+                    <a-menu-item  @click="useDatabase(null)">
                       <a href="javascript:;">不使用</a>
                     </a-menu-item>
                   </a-menu>
@@ -71,14 +71,14 @@
           <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query" v-if="configStore.config.enable_reranker">
-            重写查询 <div @click.stop><a-switch v-model:checked="meta.rewrite_query" /></div>
-          </div>
-          <div class="flex-center" @click="meta.rewrite_query = !meta.rewrite_query">
+          <div class="flex-center" @click="meta.stream = !meta.stream">
             流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
           </div>
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
+          </div>
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
+            重写查询 <a-segmented v-model:value="meta.rewriteQuery" :options="['off', 'on', 'hyde']"/>
           </div>
           <div class="flex-center">
             最大历史轮数     <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
@@ -162,6 +162,7 @@ import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import { useConfigStore } from '@/stores/config'
+import { message } from 'ant-design-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
@@ -197,7 +198,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
-  rewrite_query: true,
+  rewriteQuery: "off",
   selectedKB: null,
   stream: true,
   summary_title: true,
@@ -226,6 +227,17 @@ const renderMarkdown = (message) => {
     return marked.parse(message.text + '🟢')
   } else {
     return marked.parse(message.text)
+  }
+}
+
+const useDatabase = (index) => {
+  const selected = opts.databases[index]
+  console.log(selected)
+  if (index != null && configStore.config.embed_model != selected.embed_model) {
+    console.log(selected.embed_model, configStore.config.embed_model)
+    message.error(`所选知识库的向量模型（${selected.embed_model}）与当前向量模型（${configStore.config.embed_model}) 不匹配，请重新选择`)
+  } else {
+    meta.selectedKB = index
   }
 }
 
@@ -517,7 +529,7 @@ watch(
   border-radius: 12px;
   padding: 12px;
   z-index: 11;
-  width: 250px;
+  width: 280px;
 
   .flex-center {
     display: flex;

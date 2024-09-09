@@ -39,6 +39,14 @@ class OpenAIBase():
         return response.choices[0].message
 
 
+class OpenModel(OpenAIBase):
+    def __init__(self, model_name=None):
+        model_name = model_name or "gpt-4o-mini"
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENAI_API_BASE")
+        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
+
+
 class DeepSeek(OpenAIBase):
     def __init__(self, model_name=None):
         model_name = model_name or "deepseek-chat"
