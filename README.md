@@ -19,9 +19,9 @@ PyYAML==6.0.1
 zhipuai
 ```
 
-### 【可选】配置图数据库 neo4j
+### 配置图数据库 neo4j (可选)
 
-使用 docker 部署 neo4j 服务，配置文件见 [local_neo4j/docker-compose.yml](local_neo4j/docker-compose.yml). 
+使用 docker 部署 neo4j 服务，配置文件见 [local_neo4j/docker-compose.yml](local_neo4j/docker-compose.yml).
 默认账号密码见最后一行，可以使用 `http://localhost:7474/` 在浏览器可视化访问。
 
 ```bash
@@ -36,17 +36,44 @@ docker compose up -d
 
 ## 启动
 
+### 1. 手动启动
+
 ```bash
-python -m src.api 
+python -m src.api
 
 cd web
 npm install
 npm run server
 ```
 
-或者
+### 2. 脚本启动
 
 ```bash
 bash run.sh
+```
+
+### 3. Docker 启动
+
+**提醒**：此部分暂时依赖于前端打包之后的内容（后面考虑更新），同时会自动启动 neo4j 图数据库。
+
+```bash
+docker compose up --build
+```
+
+如果需要使用到本地模型，比如向量模型或者重排序模型，则需要将环境变量中设置的 `MODEL_ROOT_DIR` 做映射，比如本地模型都是存放在 `/hdd/models` 里面，则需要在 `docker-compose.yml` 中添加：
+
+```yml
+services:
+  # 后端服务
+  backend:
+    image: pytorch/pytorch:2.4.1-cuda11.8-cudnn9-runtime  # 或者您可以自定义 Python 基础镜像
+    container_name: backend
+    working_dir: /app
+    volumes:
+      - ./src:/app/src  # 映射源代码
+      - ./requirements.txt:/app/requirements.txt
+      - ./saves:/app/saves
+      - /hdd/models:/hdd/models  # <=== 修改这里
+...
 ```
 

@@ -1,0 +1,23 @@
+# 忽略 Git 相关的文件夹
+.git
+.gitignore
+
+# 忽略 Python 的缓存文件
+__pycache__/
+*.pyc
+*.pyo
+
+# 忽略虚拟环境目录
+venv/
+env/
+
+# 忽略 node_modules 文件夹（前端项目）
+web/node_modules/
+
+# 忽略日志和临时文件
+*.log
+*.tmp
+
+# 忽略 Docker 本身的文件
+Dockerfile
+docker-compose.yml
