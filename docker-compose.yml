@@ -10,7 +10,6 @@ services:
       - ./src:/app/src  # 映射源代码
       - ./saves:/app/saves
       - /hdd/zwj/models:/hdd/zwj/models
-      - backend-pip-cache:/root/.cache/pip  # 缓存 pip 依赖
     ports:
       - "5000:5000"  # 曝露后端端口
     depends_on:
@@ -58,6 +57,3 @@ services:
 networks:
   app-network:
     driver: bridge
-
-volumes:
-  backend-pip-cache:
