@@ -133,6 +133,9 @@ def get_graph_nodes():
     if not kgdb_name:
         return jsonify({'message': 'kgdb_name is required'}), 400
 
+    if not startup.config.enable_knowledge_graph:
+        return jsonify({'message': 'Knowledge graph is not enabled'}), 400
+
     logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
     result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
     return jsonify({'result': startup.retriever.format_general_results(result), 'message': 'success'}), 200

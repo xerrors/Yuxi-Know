@@ -17,10 +17,13 @@ class DataBaseManager:
 
         if self.config.enable_knowledge_base:
             from src.core.knowledgebase import KnowledgeBase
-            from src.core.graphbase import GraphDatabase
             self.knowledge_base = KnowledgeBase(config, self.embed_model)
-            self.graph_base = GraphDatabase(self.config, self.embed_model)
-            self.graph_base.start()
+            if self.config.enable_knowledge_graph:
+                from src.core.graphbase import GraphDatabase
+                self.graph_base = GraphDatabase(self.config, self.embed_model)
+                self.graph_base.start()
+            else:
+                self.graph_base = None
 
         self.data = {"databases": [], "graph": {}}
 
