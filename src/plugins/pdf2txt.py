@@ -1,11 +1,12 @@
 import os
 import uuid
 import fitz  # fitz就是pip install PyMuPDF
-import cv2
+from PIL import Image
 from copy import deepcopy
 from tqdm import tqdm
 from argparse import ArgumentParser
 from src.utils import logger
+import numpy as np  # Added import for numpy
 
 GOLBAL_STATE = {}
 
@@ -45,7 +46,8 @@ def pdf2txt(pdf_path, return_text=False):
 
     text = []
     for img_name in tqdm(imgs, desc='to txt', ncols=100):
-        img = cv2.imread(img_name)
+        img = Image.open(img_name)
+        img = np.array(img)  # 如果需要将图像转换为numpy数组
         result = table_engine(img)
         GOLBAL_STATE[task_id]['progress'] += 1
 
