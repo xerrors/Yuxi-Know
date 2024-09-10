@@ -89,10 +89,10 @@
           添加到知识库
         </a-button>
         <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
-        <a-table :columns="columns" :data-source="database.files" row-key="file_id" class="my-table">
+        <a-table :columns="columns" :data-source="database.files" row-key="filename" class="my-table">
           <template #bodyCell="{ column, text, record }">
-            <template v-if="column.key === 'file_id'">
-              <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text.toUpperCase() }}</a-button>
+            <template v-if="column.key === 'filename'">
+              <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
             </template>
             <template v-else-if="column.key === 'type'"><span :class="text">{{ text.toUpperCase() }}</span></template>
             <template v-else-if="column.key === 'status' && text === 'done'">
@@ -110,7 +110,7 @@
             <template v-else-if="column.key === 'action'">
               <a-button class="del-btn" type="link"
                 @click="deleteFile(text)"
-                :disabled="state.lock || record.status == 'processing' || record.status == 'waiting' "
+                :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' "
                 >删除
               </a-button>
             </template>
@@ -469,7 +469,7 @@ const addDocumentByFile = () => {
 }
 
 const columns = [
-  { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
+  // { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
   { title: '文件名', dataIndex: 'filename', key: 'filename' },
   { title: '上传时间', dataIndex: 'created_at', key: 'created_at' },
   { title: '状态', dataIndex: 'status', key: 'status' },

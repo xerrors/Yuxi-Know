@@ -11,9 +11,9 @@
         placeholder="新建数据库描述"
         :auto-size="{ minRows: 2, maxRows: 5 }"
       />
-      <h3 style="margin-top: 20px;">向量维度</h3>
+      <!-- <h3 style="margin-top: 20px;">向量维度</h3>
       <p>必须与向量模型 {{ configStore.config.embed_model }} 一致</p>
-      <a-input v-model:value="newDatabase.dimension" placeholder="向量维度 (e.g. 768, 1024)" />
+      <a-input v-model:value="newDatabase.dimension" placeholder="向量维度 (e.g. 768, 1024)" /> -->
       <template #footer>
         <a-button key="back" @click="newDatabase.open=false">取消</a-button>
         <a-button key="submit" type="primary" :loading="newDatabase.loading" @click="createDatabase">创建</a-button>
