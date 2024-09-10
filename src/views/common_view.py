@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, Response
 from src.core import HistoryManager
 from src.utils.logging_config import setup_logger
 from src.core.startup import startup
+from collections import deque
 
 common = Blueprint('common', __name__)
 logger = setup_logger("server-common")
@@ -89,8 +90,12 @@ def restart():
 @common.route('/log', methods=['GET'])
 def get_log():
     from src.utils.logging_config import LOG_FILE
+    from collections import deque
+
     with open(LOG_FILE, 'r') as f:
-        log_lines = itertools.islice(f, 1000)
-        log = ''.join(log_lines)
+        # 使用deque保存最后1000行
+        last_lines = deque(f, maxlen=1000)
+
+    log = ''.join(last_lines)
 
     return jsonify({"log": log})
