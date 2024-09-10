@@ -39,16 +39,14 @@ python -m vllm.entrypoints.openai.api_server \
 |`zhipu`|`embedding-2`|`ZHIPUAPI` (`.env`)|
 
 
-
-
-例如（`config/base.yaml`）：
+例如（`saves/config/config.yaml`）：
 
 ```yaml
 model_provider: qianfan
 model_name: null # for default
 
-## model dir 可以写相对路径和绝对路径
-### 相对路径是相对于环境变量 (.env) 中 MODEL_ROOT_DIR 的路径
+## model dir 可以写**相对路径**和**绝对路径**
+### 相对路径是相对于环境变量 (.env) 中 MODEL_ROOT_DIR（若为空则是相对于 `pretrained_models`) 的路径
 model_local_paths:
   bge-large-zh-v1.5: /models/bge-large-zh-v1.5
 ```
