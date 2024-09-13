@@ -37,7 +37,7 @@ def chat():
 
     messages = history_manager.get_history_with_msg(new_query, max_rounds=meta.get('history_round'))
     history_manager.add_user(query)
-    logger.debug(f"Web history: {history_manager}")
+    logger.debug(f"Web history: {history_manager.messages}")
 
     def generate_response():
         content = ""
