@@ -1,123 +1,134 @@
 <template>
-  <div class="setting-container layout-container">
-    <div class="setting">
-      <h2>设置</h2>
-      <h3>模型配置</h3>
-      <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，可参考 <code>src/.env.template</code></p>
-      <div class="section">
-        <div class="card">
-          <span class="label">
-            {{ items?.model_provider.des }} &nbsp;
-            <a-button small v-if="needRestart.model_provider" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-select ref="select" style="width: 200px"
-            :value="configStore.config?.model_provider"
-            @change="handleChange('model_provider', $event)"
-          >
+  <div class="">
+    <HeaderComponent title="设置" class="setting-header">
+      <template #description>
+        <p>配置文件也可以在 <code>saves/config/config.yaml</code> 中修改</p>
+      </template>
+      <template #actions>
+        <a-button type="primary" @click="sendRestart">
+          <ReloadOutlined />重启服务
+        </a-button>
+      </template>
+    </HeaderComponent>
+    <div class="setting-container layout-container">
+      <div class="setting">
+        <h3>模型配置</h3>
+        <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，可参考 <code>src/.env.template</code></p>
+        <div class="section">
+          <div class="card">
+            <span class="label">
+              {{ items?.model_provider.des }} &nbsp;
+              <a-button small v-if="needRestart.model_provider" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-select ref="select" style="width: 200px"
+              :value="configStore.config?.model_provider"
+              @change="handleChange('model_provider', $event)"
+            >
+              <a-select-option
+                v-for="(name, idx) in items?.model_provider.choices" :key="idx"
+                :value="name">{{ name }}
+              </a-select-option>
+            </a-select>
+          </div>
+          <div class="card">
+            <span class="label">
+              {{ items?.model_name.des }} &nbsp;
+              <a-button small v-if="needRestart.model_name" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-select ref="select" style="width: 200px"
+              :value="configStore.config?.model_name"
+              @change="handleChange('model_name', $event)"
+              v-if="configStore.config?.model_names && configStore.config?.model_provider && configStore.config?.model_names[configStore.config?.model_provider]"
+            >
             <a-select-option
-              v-for="(name, idx) in items?.model_provider.choices" :key="idx"
+              v-for="(name, idx) in configStore.config.model_names[configStore.config.model_provider]"
+              :key="idx"
               :value="name">{{ name }}
             </a-select-option>
-          </a-select>
+            </a-select>
+          </div>
+          <div class="card">
+            <span class="label">
+              {{ items?.embed_model.des }} &nbsp;
+              <a-button small v-if="needRestart.embed_model" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-select style="width: 200px"
+              :value="configStore.config?.embed_model"
+              @change="handleChange('embed_model', $event)"
+            >
+              <a-select-option
+                v-for="(name, idx) in items?.embed_model.choices" :key="idx"
+                :value="name">{{ name }}
+              </a-select-option>
+            </a-select>
+          </div>
+          <div class="card">
+            <span class="label">
+              {{ items?.reranker.des }} &nbsp;
+              <a-button small v-if="needRestart.reranker" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-select style="width: 200px"
+              :value="configStore.config?.reranker"
+              @change="handleChange('reranker', $event)"
+              :disabled="!configStore.config.enable_reranker"
+            >
+              <a-select-option
+                v-for="(name, idx) in items?.reranker.choices" :key="idx"
+                :value="name">{{ name }}
+              </a-select-option>
+            </a-select>
+          </div>
         </div>
-        <div class="card">
-          <span class="label">
-            {{ items?.model_name.des }} &nbsp;
-            <a-button small v-if="needRestart.model_name" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-select ref="select" style="width: 200px"
-            :value="configStore.config?.model_name"
-            @change="handleChange('model_name', $event)"
-            v-if="configStore.config?.model_names && configStore.config?.model_provider && configStore.config?.model_names[configStore.config?.model_provider]"
-          >
-          <a-select-option
-            v-for="(name, idx) in configStore.config.model_names[configStore.config.model_provider]"
-            :key="idx"
-            :value="name">{{ name }}
-          </a-select-option>
-          </a-select>
-        </div>
-        <div class="card">
-          <span class="label">
-            {{ items?.embed_model.des }} &nbsp;
-            <a-button small v-if="needRestart.embed_model" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-select style="width: 200px"
-            :value="configStore.config?.embed_model"
-            @change="handleChange('embed_model', $event)"
-          >
-            <a-select-option
-              v-for="(name, idx) in items?.embed_model.choices" :key="idx"
-              :value="name">{{ name }}
-            </a-select-option>
-          </a-select>
-        </div>
-        <div class="card">
-          <span class="label">
-            {{ items?.reranker.des }} &nbsp;
-            <a-button small v-if="needRestart.reranker" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-select style="width: 200px"
-            :value="configStore.config?.reranker"
-            @change="handleChange('reranker', $event)"
-            :disabled="!configStore.config.enable_reranker"
-          >
-            <a-select-option
-              v-for="(name, idx) in items?.reranker.choices" :key="idx"
-              :value="name">{{ name }}
-            </a-select-option>
-          </a-select>
-        </div>
-      </div>
-      <h3>功能配置</h3>
-      <div class="section">
-        <div class="card">
-          <span class="label">{{ items?.enable_knowledge_base.des }}
-            <a-button small v-if="needRestart.enable_knowledge_base" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-switch
-            :checked="configStore.config.enable_knowledge_base"
-            @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
-          />
-        </div>
-        <div class="card">
-          <span class="label">{{ items?.enable_knowledge_graph.des }}
-            <a-button small v-if="needRestart.enable_knowledge_graph" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-switch
-            :checked="configStore.config.enable_knowledge_graph"
-            @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
-          />
-        </div>
-        <div class="card">
-          <span class="label">{{ items?.enable_search_engine.des }}</span>
-          <a-switch
-            :checked="configStore.config.enable_search_engine"
-            @change="handleChange('enable_search_engine', !configStore.config.enable_search_engine)"
-          />
-        </div>
-        <div class="card">
-          <span class="label">{{ items?.enable_reranker.des }}
-            <a-button small v-if="needRestart.enable_reranker" @click="sendRestart">
-              <ReloadOutlined />需要重启
-            </a-button>
-          </span>
-          <a-switch
-            :checked="configStore.config.enable_reranker"
-            @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
-          />
+        <h3>功能配置</h3>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_base.des }}
+              <a-button small v-if="needRestart.enable_knowledge_base" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_base"
+              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
+            />
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_graph.des }}
+              <a-button small v-if="needRestart.enable_knowledge_graph" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_graph"
+              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
+            />
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_search_engine.des }}</span>
+            <a-switch
+              :checked="configStore.config.enable_search_engine"
+              @change="handleChange('enable_search_engine', !configStore.config.enable_search_engine)"
+            />
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_reranker.des }}
+              <a-button small v-if="needRestart.enable_reranker" @click="sendRestart">
+                <ReloadOutlined />需要重启
+              </a-button>
+            </span>
+            <a-switch
+              :checked="configStore.config.enable_reranker"
+              @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -129,6 +140,7 @@ import { message } from 'ant-design-vue';
 import { computed, reactive, ref } from 'vue'
 import { useConfigStore } from '@/stores/config';
 import { ReloadOutlined } from '@ant-design/icons-vue';
+import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const configStore = useConfigStore()
 const needRestart = reactive({
@@ -172,10 +184,22 @@ const sendRestart = () => {
 </script>
 
 <style lang="less" scoped>
+.setting-header p {
+  margin: 8px 0 0;
+}
+
+.setting-container {
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+}
 
 .setting {
+  width: 100%;
   max-width: 800px;
   margin: 0 auto;
+  height: 100%;
 
   h3 {
     margin-top: 20px;
@@ -211,6 +235,4 @@ const sendRestart = () => {
   }
 
 }
-
-
 </style>

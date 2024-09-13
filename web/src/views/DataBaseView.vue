@@ -1,7 +1,14 @@
 <template>
   <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
-    <h2>文档知识库</h2>
-    <p>知识型数据库，主要是非结构化的文本组成，使用向量检索使用。</p>
+    <HeaderComponent
+      title="文档知识库"
+      description="知识型数据库，主要是非结构化的文本组成，使用向量检索使用。"
+    >
+      <template #actions>
+        <a-button type="primary" @click="newDatabase.open=true">新建数据库</a-button>
+      </template>
+    </HeaderComponent>
+
     <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase">
       <h3>数据库名称<span style="color: red">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建数据库名称" />
@@ -41,7 +48,7 @@
             <p><span>{{ database.metaname }}</span> · <span>{{ database.metadata.row_count }}行</span></p>
           </div>
         </div>
-        <p class="description">{{ database.description }}</p>
+        <p class="description">{{ database.description || '暂无描述' }}</p>
         <div class="tags">
           <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
           <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
@@ -84,6 +91,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
 import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
 import { useConfigStore } from '@/stores/config';
+import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const route = useRoute()
 const router = useRouter()
@@ -188,6 +196,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 .databases {
+  padding: 20px;
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
@@ -280,5 +289,9 @@ onMounted(() => {
   height: 100%;
   flex-direction: column;
   color: var(--c-text-light-1);
+}
+
+.database-container {
+  padding: 0;
 }
 </style>

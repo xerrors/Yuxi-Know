@@ -14,7 +14,7 @@
           class="newchat nav-btn"
           @click="$emit('newconv')"
         >
-          <PlusCircleOutlined /> <span class="text">新对话：{{ configStore.config?.model_name }}</span>
+          <PlusCircleOutlined /> <span class="text">{{ configStore.config?.model_name }}</span>
         </div>
       </div>
       <div class="header__right">
@@ -81,13 +81,13 @@
             重写查询 <a-segmented v-model:value="meta.rewriteQuery" :options="['off', 'on', 'hyde']"/>
           </div>
           <div class="flex-center">
-            最大历史轮数     <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
+            最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
         </div>
       </div>
     </div>
     <div v-if="conv.messages.length == 0" class="chat-examples">
-      <h1>你好，我是 Athena 😊</h1>
+      <h1>你好，我是语析，一个基于知识图谱的智能助手</h1>
       <div class="opts">
         <div
           class="opt__button"
@@ -157,6 +157,7 @@ import {
   FolderOpenOutlined,
   GlobalOutlined,
   FileTextOutlined,
+  RobotOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -186,6 +187,7 @@ const examples = ref([
   'A大于B，B小于C，A和C哪个大？',
   '今天天气怎么样？',
   '吃饭吃出苍蝇可以索赔吗？',
+  '帮我写一个请假条',
 ])
 
 const opts = reactive({
@@ -267,7 +269,8 @@ const renameTitle = () => {
     const firstAiMessage = conv.value.messages[1].text
     const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
     simpleCall(context).then((data) => {
-      emit('rename-title', data.response.split("：")[0])
+      const response = data.response.split("：")[0].replace(/^["'"']/g, '').replace(/["'"']$/g, '')
+      emit('rename-title', response)
     })
   } else {
     emit('rename-title', conv.value.messages[0].text)
@@ -306,7 +309,6 @@ const appendAiMessage = (message, refs=null) => {
     text: message,
     refs,
     status: "querying",
-    model_name: configStore.config.model_name
   })
   scrollToBottom()
 }
@@ -317,6 +319,7 @@ const updateMessage = (text, id, refs, status) => {
     message.refs = refs;
     message.status = status;
     message.text = text;
+    message.model_name = refs.model_name
   } else {
     console.error('Message not found');
   }
@@ -613,19 +616,19 @@ watch(
     /* animation: slideInUp 0.1s ease-in; */
 
     .err-msg {
-      color: red;
-      border: 1px solid red;
+      color: #FF6B6B;
+      border: 1px solid #FF6B6B;
       padding: 0.2rem 1rem;
       border-radius: 8px;
       text-align: center;
-      background: #FFEBEE;
+      background: #FFF0F0;
     }
   }
 
   .message-box.sent {
     line-height: 24px;
     max-width: 95%;
-    background: var(--main-light-3);
+    background: var(--main-light-4);
     align-self: flex-end;
   }
 
@@ -654,9 +657,6 @@ watch(
   }
 }
 
-
-
-
 .bottom {
   position: sticky;
   bottom: 0;
@@ -665,26 +665,29 @@ watch(
   padding: 4px 2rem 0 2rem;
   background: white;
 
-
   .input-box {
     display: flex;
     width: 100%;
+    height: auto;
     max-width: 900px;
     margin: 0 auto;
     align-items: flex-end;
-    background-color: var(--main-light-4);
-    border-radius: 2rem;
-    height: auto;
     padding: 0.5rem;
-
+    box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
+    border: 1px solid #E5E5E5;
+    border-radius: 2rem;
+    background: #fafafa;
+    transition: background 0.3s, box-shadow 0.3s;
     &:focus-within {
-      background-color: #ECF1F2;
+      border: 1px solid #BABABA;
+      background: white;
+      box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
     }
 
     .user-input {
       flex: 1;
       height: 40px;
-      padding: 0.5rem 1rem;
+      padding: 0.5rem 0.5rem;
       background-color: transparent;
       border: none;
       font-size: 1.2rem;
@@ -703,6 +706,25 @@ watch(
         outline: none;
       }
     }
+
+    .send-btn {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-weight: 500;
+      padding: 0.5rem 1rem;
+      border-radius: 1rem;
+      transition: background-color 0.3s;
+
+      &:hover {
+        background-color: var(--main-light-3);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+        background-color: #DCDCDC;
+      }
+    }
   }
 
   .note {
@@ -712,6 +734,7 @@ watch(
     padding: 0rem;
     color: #ccc;
     margin: 4px 0;
+    user-select: none;
   }
 }
 
@@ -777,24 +800,32 @@ button:disabled {
 }
 
 .loading-dots div {
-  width: 10px;
-  height: 10px;
-  margin: 0 5px;
-  background-color: #333;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  background-color: #666;
   border-radius: 50%;
-  animation: loading 0.8s infinite ease-in-out both;
+  opacity: 0.3;
+  animation: pulse 1.4s infinite ease-in-out both;
 }
 
 .loading-dots div:nth-child(1) {
-  animation-delay: 0s;
+  animation-delay: -0.32s;
 }
 
 .loading-dots div:nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: -0.16s;
 }
 
-.loading-dots div:nth-child(3) {
-  animation-delay: 0.4s;
+@keyframes pulse {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.3;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes loading {0%,80%,100%{transform:scale(0.5);}40%{transform:scale(1);}}

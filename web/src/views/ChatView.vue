@@ -12,7 +12,7 @@
           :key="index"
           :class="{ active: curConvId === index }"
           @click="goToConversation(index)">
-          <div class="conversation__title">{{ state.title }}</div>
+          <div class="conversation__title"><CommentOutlined /> &nbsp;{{ state.title }}</div>
           <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
         </div>
       </div>
@@ -27,7 +27,7 @@
 
 <script setup>
 import { reactive, ref, watch, onMounted } from 'vue'
-import { FormOutlined, MenuOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { FormOutlined, MenuOutlined, DeleteOutlined, CommentOutlined } from '@ant-design/icons-vue'
 import ChatComponent from '@/components/ChatComponent.vue'
 
 const convs = reactive(JSON.parse(localStorage.getItem('chat-convs')) || [
@@ -201,8 +201,8 @@ onMounted(() => {
     }
 
     &.active {
-      border-left: 3px solid var(--main-600);
-      padding-left: 13px;
+      border-right: 3px solid var(--main-500);
+      padding-right: 13px;
       background-color: var(--main-light-3);
 
       & .conversation__title {
