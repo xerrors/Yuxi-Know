@@ -84,6 +84,7 @@ class Retriever:
 
         db_name = refs["meta"]["db_name"]
         kb = self.dbm.metaname2db[db_name]
+        logger.debug(f"{refs['meta']=}")
 
         max_query_count = refs["meta"].get("maxQueryCount", 10)
         rerank_threshold = refs["meta"].get("rerankThreshold", 0.1)
@@ -99,7 +100,7 @@ class Retriever:
 
         if self.config.enable_reranker:
             for r in kb_res:
-                r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)
+                r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)[0]
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
             kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
 
