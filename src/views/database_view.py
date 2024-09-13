@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+from functools import wraps
 from flask import Blueprint, jsonify, request, Response
 
 from src.utils import setup_logger, hashstr
@@ -11,6 +12,19 @@ db = Blueprint('database', __name__, url_prefix="/database")
 logger = setup_logger("server-database")
 
 progress = {} # 只针对单个用户的进度
+
+def handle_exceptions(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            logger.debug(f"Entering {f.__name__}")
+            result = f(*args, **kwargs)
+            logger.debug(f"Exiting {f.__name__}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in {f.__name__}: {str(e)}")
+            return jsonify({"message": str(e), "error": "处理请求时发生错误"}), 500
+    return decorated_function
 
 @db.route('/', methods=['GET'])
 def get_databases():
@@ -115,41 +129,35 @@ def get_graph_info():
     return jsonify(graph_info)
 
 @db.route('/graph/node', methods=['GET'])
+@handle_exceptions
 def get_graph_node():
-    entity_name = request.args.get('entity_name')
-    kgdb_name = request.args.get('kgdb_name')
-    hops = request.args.get('hops')
-    if not entity_name:
-        return jsonify({'message': 'entity_name and kgdb_name are required'}), 400
-
-    logger.debug(f"Get graph node {entity_name} in {kgdb_name} with {hops} hops")
-    result = startup.dbm.graph_base.query_node(entity_name, request.args)
+    assert request.args.get("entity_name"), "entity_name is required"
+    logger.debug(f"Get graph node {request.args.get('entity_name')} with {request.args}")
+    result = startup.dbm.graph_base.query_node(**request.args)
     return jsonify({'result': startup.retriever.format_query_results(result), 'message': 'success'}), 200
 
 @db.route('/graph/nodes', methods=['GET'])
+@handle_exceptions
 def get_graph_nodes():
     kgdb_name = request.args.get('kgdb_name')
     num = request.args.get('num')
-    if not kgdb_name:
-        return jsonify({'message': 'kgdb_name is required'}), 400
-
-    if not startup.config.enable_knowledge_graph:
-        return jsonify({'message': 'Knowledge graph is not enabled'}), 400
+    assert kgdb_name, "kgdb_name is required"
+    assert startup.config.enable_knowledge_graph, "Knowledge graph is not enabled"
 
     logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
     result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
     return jsonify({'result': startup.retriever.format_general_results(result), 'message': 'success'}), 200
 
 @db.route('/graph/add', methods=['POST'])
+@handle_exceptions
 def add_graph_entity():
     data = json.loads(request.data)
     kgdb_name = data.get('kgdb_name')
     file_path = data.get('file_path')
+    assert file_path.endswith('.jsonl'), "file_path must be a jsonl file"
+    assert startup.config.enable_knowledge_graph, "Knowledge graph is not enabled"
 
-    if file_path.endswith('.jsonl'):
-        startup.dbm.graph_base.jsonl_file_add_entity(file_path, kgdb_name)
-    else:
-        return jsonify({'message': 'Unsupported file type'}), 400
+    startup.dbm.graph_base.jsonl_file_add_entity(file_path, kgdb_name)
 
     return jsonify({'message': 'Entity successfully added'}), 200
 

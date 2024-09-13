@@ -146,11 +146,11 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query)
 
-    def use_database(self, kgdb_name):
+    def use_database(self, kgdb_name="neo4j"):
         """切换到指定数据库"""
-        if kgdb_name != self.kgdb_name:
-            raise ValueError(f"传入的数据库名称 '{kgdb_name}' 与当前实例的数据库名称 '{self.kgdb_name}' 不一致")
-        self.start()
+        assert kgdb_name == self.kgdb_name, f"传入的数据库名称 '{kgdb_name}' 与当前实例的数据库名称 '{self.kgdb_name}' 不一致"
+        if self.status == "closed":
+            self.start()
 
     def txt_add_entity(self, triples, kgdb_name='neo4j'):
         """添加实体三元组"""
@@ -234,38 +234,6 @@ class GraphDatabase:
 
         self.txt_add_vector_entity(triples, kgdb_name)
 
-        # def batch_create(tx, triples):
-        #     query = """
-        #     UNWIND $triples AS triple
-        #     MERGE (a:Entity {name: triple.h})
-        #     MERGE (b:Entity {name: triple.t})
-        #     MERGE (a)-[r:RELATION {type: triple.r}]->(b)
-        #     """
-        #     tx.run(query, triples=triples)
-        #
-        # def batch_add_embeddings(tx, embeddings):
-        #     query = """
-        #     UNWIND $embeddings AS embedding
-        #     MATCH (e:Entity {name: embedding.name})
-        #     SET e.embedding = embedding.vector
-        #     """
-        #     tx.run(query, embeddings=embeddings)
-        #
-        # with self.driver.session() as session:
-        #     session.execute_write(batch_create, triples)
-        #
-        #     # 获取embedding并批量添加
-        #     embeddings = []
-        #     for triple in triples:
-        #         h = triple['h']
-        #         t = triple['t']
-        #         embedding_h = self.get_embedding(h)
-        #         embedding_t = self.get_embedding(t)
-        #         embeddings.append({"name": h, "vector": embedding_h})
-        #         embeddings.append({"name": t, "vector": embedding_t})
-        #
-        #     session.execute_write(batch_add_embeddings, embeddings)
-
         self.status = "open"
         return kgdb_name
 
@@ -292,18 +260,41 @@ class GraphDatabase:
         """
         tx.run(query)
 
-    def query_all_nodes_and_relationships(self, kgdb_name='neo4j', hops = 2):
-        """查询图数据库中所有三元组信息"""
+    def query_node(self, entity_name, hops=2, **kwargs):
+        # TODO 添加判断节点数量为 0 停止检索
+        if kwargs.get("exact_match"):
+            raise NotImplemented("not implement for `exact_match`")
+        else:
+            return self.query_by_vector(entity_name=entity_name, **kwargs)
+
+    def query_by_vector(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, num_of_res=5):
+        result = self.query_by_vector_tep(entity_name=entity_name)
+        querys = []
+        for i in range(num_of_res):
+            if result[i][1] > threshold:
+                querys.append(result[i][0])
+            else:
+                break
+        ans = []
+        for query in querys:
+            tep = self.query_specific_entity(entity_name=query, hops=hops) # 这里是只获取第一个 TODO: 优化
+            ans.extend(tep)
+        return ans
+
+    def query_by_vector_tep(self, entity_name, kgdb_name='neo4j'):
+        """向量查询"""
         self.use_database(kgdb_name)
-        def query(tx, hops):
-            result = tx.run(f"""
-            MATCH (n)-[r*1..{hops}]->(m)
-            RETURN n, r, m
-            """)
+        def query(tx, text):
+            embedding = self.get_embedding(text)
+            result = tx.run("""
+            CALL db.index.vector.queryNodes('entityEmbeddings', 10, $embedding)
+            YIELD node AS similarEntity, score
+            RETURN similarEntity.name AS name, score
+            """, embedding=embedding)
             return result.values()
 
         with self.driver.session() as session:
-            return session.execute_read(query, hops)
+            return session.execute_read(query, entity_name)
 
     def query_specific_entity(self, entity_name, kgdb_name='neo4j', hops=2):
         """查询指定实体三元组信息"""
@@ -317,6 +308,19 @@ class GraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, entity_name, hops)
+
+    def query_all_nodes_and_relationships(self, kgdb_name='neo4j', hops = 2):
+        """查询图数据库中所有三元组信息"""
+        self.use_database(kgdb_name)
+        def query(tx, hops):
+            result = tx.run(f"""
+            MATCH (n)-[r*1..{hops}]->(m)
+            RETURN n, r, m
+            """)
+            return result.values()
+
+        with self.driver.session() as session:
+            return session.execute_read(query, hops)
 
     def query_by_relationship_type(self, relationship_type, kgdb_name='neo4j', hops = 2):
         """查询指定关系三元组信息"""
@@ -345,48 +349,6 @@ class GraphDatabase:
 
         with self.driver.session() as session:
             return session.execute_read(query, keyword, hops)
-
-    def query_node(self, entity_name, args):
-        # TODO 添加判断节点数量为 0 停止检索
-
-        if args.get("exact_match"):
-            raise NotImplemented("not implement for `exact_match`")
-        else:
-            return self.query_by_vector(entity_name, kgdb_name=args.get("kgdb_name"), hops=args.get("hops"))
-
-    def query_by_vector_tep(self, keyword, kgdb_name='neo4j'):
-        """向量查询"""
-        self.use_database(kgdb_name)
-        def query(tx, text):
-            embedding = self.get_embedding(text)
-            result = tx.run("""
-            CALL db.index.vector.queryNodes('entityEmbeddings', 10, $embedding)
-            YIELD node AS similarEntity, score
-            RETURN similarEntity.name AS name, score
-            """, embedding=embedding)
-            # result = result.values()
-            # query = result[0][0]
-            return result.values()
-
-        with self.driver.session() as session:
-            return session.execute_read(query, keyword)
-
-    def query_by_vector(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, num_of_res=2):
-        self.use_database(kgdb_name)
-        result = self.query_by_vector_tep(entity_name)
-        querys = []
-        threshold = 0.9 if threshold is None else threshold
-        num_of_res = 2 if num_of_res is None else num_of_res
-        for i in range(num_of_res):
-            if result[i][1] > threshold:
-                querys.append(result[i][0])
-            else:
-                break
-        ans = []
-        for query in querys:
-            tep = self.query_specific_entity(query, hops) # 这里是只获取第一个 TODO: 优化
-            ans.extend(tep)
-        return ans
 
     def query_node_info(self, node_name, kgdb_name='neo4j', hops = 2):
         """查询指定节点的详细信息返回信息"""
