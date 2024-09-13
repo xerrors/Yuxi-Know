@@ -14,6 +14,10 @@ import {
   GoldOutlined,
   GoldFilled,
   BugOutlined,
+  ProjectFilled,
+  ProjectOutlined,
+  StarFilled,
+  StarOutlined,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -73,12 +77,19 @@ console.log(route)
       <div class="nav">
         <RouterLink to="/chat" class="nav-item" active-class="active">
           <component class="icon" :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
+          <span class="text">对话</span>
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
           <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
+          <span class="text">知识</span>
         </RouterLink>
         <RouterLink to="/graph" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/graph') ? GoldFilled: GoldOutlined" />
+          <component class="icon" :is="route.path.startsWith('/graph') ? ProjectFilled: ProjectOutlined" />
+          <span class="text">图谱</span>
+        </RouterLink>
+        <RouterLink to="/tools" class="nav-item" active-class="active">
+          <component class="icon" :is="route.path.startsWith('/tools') ? StarFilled: StarOutlined" />
+          <span class="text">工具</span>
         </RouterLink>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
@@ -97,10 +108,11 @@ console.log(route)
       <RouterLink to="/setting" class="nav-item" active-class="active">设置</RouterLink>
     </div>
     <a-config-provider :theme="themeConfig">
-    <router-view v-slot="{ Component }" id="app-router-view">
-      <keep-alive>
+    <router-view v-slot="{ Component, route }" id="app-router-view">
+      <keep-alive v-if="route.meta.keepAlive !== false">
         <component :is="Component" />
       </keep-alive>
+      <component :is="Component" v-else />
     </router-view>
     </a-config-provider>
   </div>
@@ -139,6 +151,7 @@ console.log(route)
 div.header, #app-router-view {
   height: 100%;
   max-width: 100%;
+  user-select: none;
 }
 
 #app-router-view {
@@ -152,15 +165,15 @@ div.header, #app-router-view {
   flex: 0 0 70px;
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--main-light-3);
+  background-color: var(--main-light-4);
   height: 100%;
-  width: 70px;
+  width: 74px;
   border-right: 1px solid var(--main-light-3);
 
   .logo {
     width: 40px;
     height: 40px;
-    margin: 18px 0 35px 0;
+    margin: 18px 0 18px 0;
 
     img {
       width: 100%;
@@ -177,24 +190,50 @@ div.header, #app-router-view {
   }
 
   .nav-item {
-    padding: 8px 16px;
-    border: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    padding: 4px;
+    padding-top: 10px;
+    border: 1px solid transparent;
     border-radius: 8px;
     background-color: transparent;
     color: #222;
     font-size: 20px;
     transition: background-color 0.2s ease-in-out;
     margin: 0 10px;
+    text-decoration: none;
+    cursor: pointer;
+
+    &.github {
+      padding: 10px 12px;
+    }
+
+    &.setting {
+      padding: 16px 12px;
+      width: 56px;
+    }
 
     &.active {
       font-weight: bold;
       color: var(--main-600);
-      background-color: rgba(  0,  93, 125, 0.1);
+      background-color: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
+      border: 1px solid white;
     }
 
     &:hover {
-      background-color: rgba(  0,  93, 125, 0.1);
-      cursor: pointer;
+      background-color: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10px);
+    }
+
+    .text {
+      font-size: 12px;
+      margin-top: 4px;
+      text-align: center;
     }
   }
 
