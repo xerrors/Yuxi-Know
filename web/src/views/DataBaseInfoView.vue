@@ -61,6 +61,7 @@
     <a-tab-pane key="add">
       <template #tab><span><CloudUploadOutlined />添加文件</span></template>
       <div class="db-info-container">
+        <a-alert v-if="database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" />
         <!-- <h3>向知识库中添加文件</h3> -->
         <div class="upload">
           <a-upload-dragger
@@ -79,16 +80,18 @@
             </p>
           </a-upload-dragger>
         </div>
-        <a-button
-          type="primary"
-          @click="addDocumentByFile"
-          :loading="state.loading"
-          :disabled="fileList.length === 0"
-          style="margin: 0px 20px 20px 0;"
-        >
-          添加到知识库
-        </a-button>
-        <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
+        <div class="actions">
+          <a-button
+            type="primary"
+            @click="addDocumentByFile"
+            :loading="state.loading"
+            :disabled="fileList.length === 0"
+            style="margin: 0px 20px 20px 0;"
+          >
+            添加到知识库
+          </a-button>
+          <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
+        </div>
         <a-table :columns="columns" :data-source="database.files" row-key="filename" class="my-table">
           <template #bodyCell="{ column, text, record }">
             <template v-if="column.key === 'filename'">
@@ -136,6 +139,7 @@
     <a-tab-pane key="query-test" force-render>
       <template #tab><span><SearchOutlined />检索测试</span></template>
       <div class="db-info-container">
+        <a-alert v-if="database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" />
         <!-- <h3>检索测试</h3> -->
         <div class="query-action">
           <a-textarea
@@ -254,6 +258,11 @@ const filterQueryResults = () => {
 }
 
 const onQuery = () => {
+  if (database.value.embed_model != configStore.config.embed_model) {
+    message.error('向量模型不匹配，请重新选择')
+    return
+  }
+
   console.log(queryText.value)
   state.searchLoading = true
   if (!queryText.value.trim()) {
@@ -614,6 +623,9 @@ onMounted(() => {
 
 .db-info-container {
   flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 
   .query-action {
     display: flex;
@@ -714,8 +726,6 @@ onMounted(() => {
 }
 
 .upload {
-  margin-bottom: 20px;
-
   .upload-dragger {
     margin: 0px;
   }
