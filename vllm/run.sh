@@ -1,13 +1,17 @@
-CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
-	--model="/home/zwj/workspace/models/chatglm3-6b" \
-	--tensor-parallel-size 1 \
-	--trust-remote-code \
-	--device auto \
-	--gpu-memory-utilization 0.98 \
-	--dtype half \
-	--served-model-name "vllm" \
-	--host 0.0.0.0 \
-	--port 8080
+MODEL=Meta-Llama-3-8B-Instruct
+
+if [ "$1" = "llama" ]; then
+    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server \
+        --model="/hdd/zwj/models/meta-llama/$MODEL" \
+        --tensor-parallel-size 2 \
+        --trust-remote-code \
+        --device auto \
+        --gpu-memory-utilization 0.98 \
+        --dtype half \
+        --served-model-name "$1" \
+        --host 0.0.0.0 \
+        --port 8080
+fi
 
 # https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments
 # model	模型路径，以文件夹结尾
