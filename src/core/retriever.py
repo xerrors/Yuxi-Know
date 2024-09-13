@@ -17,6 +17,7 @@ class Retriever:
     def retrieval(self, query, history, meta):
 
         refs = {"query": query, "history": history, "meta": meta}
+        refs["model_name"] = self.config.model_name
         refs["entities"] = self.reco_entities(query, history, refs)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, refs)
         refs["graph_base"] = self.query_graph(query, history, refs)
@@ -96,7 +97,10 @@ class Retriever:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
         # use distance threshold to filter results
-        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
+        if refs["meta"].get("mode") == "search":
+            kb_res = all_kb_res
+        else:
+            kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
 
         if self.config.enable_reranker:
             for r in kb_res:
