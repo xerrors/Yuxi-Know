@@ -39,7 +39,7 @@ const router = createRouter({
           path: '',
           name: 'Graph',
           component: () => import('../views/GraphView.vue'),
-          meta: { keepAlive: true }
+          meta: { keepAlive: false }
         }
       ]
     },
@@ -58,6 +58,7 @@ const router = createRouter({
           path: ':database_id',
           name: 'databaseInfo',
           component: () => import('../views/DataBaseInfoView.vue'),
+          meta: { keepAlive: false }
         }
       ]
     },
@@ -74,39 +75,30 @@ const router = createRouter({
         }
       ]
     },
-    // {
-    //   path: '/monitor',
-    //   name: 'monitor',
-    //   component: AppLayout,
-    //   children: [
-    //     {
-    //       path: '',
-    //       name: 'monitor',
-    //       component: () => import('../views/MonitorView.vue'),
-    //       meta: { keepAlive: true }
-    //     }
-    //   ]
-    // },
+    {
+      path: '/tools',
+      name: 'tools',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'ToolsView',
+          component: () => import('../views/ToolsView.vue'),
+          meta: { keepAlive: true }
+        },
+        // {
+        //   path: ':id',
+        //   name: 'ToolsComponent',
+        //   component: () => import('../views/ToolsFooComponent.vue'),
+        //   meta: { keepAlive: true }
+        // }
+      ]
+    },
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('../views/EmptyView.vue')
-    }
-    // {
-    //   path: '/kg',
-    //   name: 'knowledge-graph',
-    //   // route level code-splitting
-    //   // this generates a separate chunk (About.[hash].js) for this route
-    //   // which is lazy-loaded when the route is visited.
-    //   component: () => import('../views/GraphView.vue'),
-    //   meta: { keepAlive: true }
-    // },
-    // {
-    //   path: '/about',
-    //   name: 'about',
-    //   component: () => import('../views/AboutView.vue'),
-    //   meta: { keepAlive: true }
-    // }
+    },
   ]
 })
 
