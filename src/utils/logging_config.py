@@ -38,7 +38,7 @@ def setup_logger(name, level=logging.DEBUG, console=False):
 
 
 # Setup the root logger
-logger = setup_logger('Athena')
+logger = setup_logger('Yuxi')
 
 # If you want to disable logging from external libraries
 # logging.getLogger('some_external_library').setLevel(logging.CRITICAL)
