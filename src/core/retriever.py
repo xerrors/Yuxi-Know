@@ -25,27 +25,28 @@ class Retriever:
         return refs
 
     def construct_query(self, query, refs, meta):
-        if len(refs) == 0:
+        if not refs or len(refs) == 0:
             return query
 
-        external = ""
+        external_parts = []
 
         # 解析知识库的结果
-        kb_res = refs.get("knowledge_base").get("results", [])
-        if len(kb_res) > 0:
-            kb_text = "\n".join([f"{r['id']}: {r['entity']['text']}" for r in kb_res])
-            external += f"知识库信息: \n\n{kb_text}"
+        kb_res = refs.get("knowledge_base", {}).get("results", [])
+        if kb_res:
+            kb_text = "\n".join(f"{r['id']}: {r['entity']['text']}" for r in kb_res)
+            external_parts.extend(["知识库信息:", kb_text])
 
         # 解析图数据库的结果
-        db_res = refs.get("graph_base").get("results", [])
-        if len(db_res["nodes"]) > 0:
+        db_res = refs.get("graph_base", {}).get("results", {})
+        if db_res.get("nodes") and len(db_res["nodes"]) > 0:
             db_text = "\n".join(
-                [f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res["edges"]]
+                [f"{edge['source_name']}和{edge['target_name']}的关系是{edge['type']}" for edge in db_res.get("edges", [])]
             )
-            external += f"图数据库信息: \n\n{db_text}"
+            external_parts.extend(["图数据库信息:", db_text])
 
         # 构造查询
-        if len(external) > 0:
+        if external_parts and len(external_parts) > 0:
+            external = "\n\n".join(external_parts)
             query = f"参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答问题。\n\n问题：{query}\n\n回答："
 
         return query
@@ -73,7 +74,9 @@ class Retriever:
 
         kb_res = []
         final_res = []
-        if not refs["meta"].get("db_name") or not self.config.enable_knowledge_base:
+
+        db_name = refs["meta"].get("db_name")
+        if not db_name or not self.config.enable_knowledge_base:
             return {
                 "results": final_res,
                 "all_results": kb_res,
@@ -83,21 +86,21 @@ class Retriever:
 
         rw_query = self.rewrite_query(query, history, refs)
 
-        db_name = refs["meta"]["db_name"]
         kb = self.dbm.metaname2db[db_name]
         logger.debug(f"{refs['meta']=}")
 
-        max_query_count = refs["meta"].get("maxQueryCount", 10)
-        rerank_threshold = refs["meta"].get("rerankThreshold", 0.1)
-        distance_threshold = refs["meta"].get("distanceThreshold", 0)
-        top_k = refs["meta"].get("topK", 5)
+        meta = refs["meta"]
+        max_query_count = meta.get("maxQueryCount", 10)
+        rerank_threshold = meta.get("rerankThreshold", 0.1)
+        distance_threshold = meta.get("distanceThreshold", 0)
+        top_k = meta.get("topK", 5)
 
         all_kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
         for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
         # use distance threshold to filter results
-        if refs["meta"].get("mode") == "search":
+        if meta.get("mode") == "search":
             kb_res = all_kb_res
         else:
             kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
@@ -136,11 +139,12 @@ class Retriever:
 
         entities = []
         if refs["meta"].get("use_graph"):
-            from src.utils.prompts import entity_extraction_prompt_template
+            from src.utils.prompts import entity_extraction_prompt_template as entity_template
+            from src.utils.prompts import keywords_prompt_template as entity_template
 
-            entity_extraction_prompt = entity_extraction_prompt_template.format(text=query)
-            entities = self.model.predict(entity_extraction_prompt).content.split(",")
-            entities = [entity for entity in entities if all(char.isalnum() or char in "汉字" for char in entity)]
+            entity_extraction_prompt = entity_template.format(text=query)
+            entities = self.model.predict(entity_extraction_prompt).content.split("<->")
+            # entities = [entity for entity in entities if all(char.isalnum() or char in "汉字" for char in entity)]
 
         return entities
 
@@ -202,7 +206,7 @@ class Retriever:
         node_dict = {}
 
         for item in results:
-            if not isinstance(item[1], list) or len(item[1]) == 0:
+            if not isinstance(item[1], list) or not item[1]:
                 continue
 
             relationship = item[1][0]
@@ -213,10 +217,7 @@ class Retriever:
             if node_info is None or edge_info is None:
                 continue
 
-            for node in node_info:
-                if node["id"] not in node_dict:
-                    node_dict[node["id"]] = node
-
+            node_dict.update({node["id"]: node for node in node_info})
             formatted_results["edges"].append(edge_info)
 
         formatted_results["nodes"] = list(node_dict.values())

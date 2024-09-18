@@ -268,18 +268,18 @@ class GraphDatabase:
             return self.query_by_vector(entity_name=entity_name, **kwargs)
 
     def query_by_vector(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, num_of_res=5):
-        result = self.query_by_vector_tep(entity_name=entity_name)
-        querys = []
-        for i in range(num_of_res):
-            if result[i][1] > threshold:
-                querys.append(result[i][0])
-            else:
-                break
-        ans = []
-        for query in querys:
-            tep = self.query_specific_entity(entity_name=query, hops=hops) # 这里是只获取第一个 TODO: 优化
-            ans.extend(tep)
-        return ans
+        results = self.query_by_vector_tep(entity_name=entity_name)
+
+        # 筛选出分数高于阈值的实体
+        qualified_entities = [result[0] for result in results[:num_of_res] if result[1] > threshold]
+
+        # 对每个合格的实体进行查询
+        all_query_results = []
+        for entity in qualified_entities:
+            query_result = self.query_specific_entity(entity_name=entity, hops=hops, kgdb_name=kgdb_name)
+            all_query_results.extend(query_result)
+
+        return all_query_results
 
     def query_by_vector_tep(self, entity_name, kgdb_name='neo4j'):
         """向量查询"""

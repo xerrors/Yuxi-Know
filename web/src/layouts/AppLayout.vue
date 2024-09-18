@@ -58,8 +58,18 @@ console.log(route)
 
 <template>
   <div class="app-layout">
-    <div class="debug-panel" @click="showDebug=!showDebug">
-      <div class="shown-btn"><BugOutlined /></div>
+    <div class="debug-panel" >
+      <a-float-button 
+        @click="showDebug=!showDebug"
+        tooltip="调试面板"
+        :style="{
+          right: '12px',
+        }"
+      >
+        <template #icon>
+          <BugOutlined />
+        </template>
+      </a-float-button>
       <a-drawer
         v-model:open="showDebug"
         title="调试面板"
@@ -138,12 +148,6 @@ console.log(route)
     right: 0;
     bottom: 50px;
     border-radius: 20px 0 0 20px;
-    background-color: var(--main-light-4);
-    padding: 6px;
-    padding-left: 12px;
-    box-shadow: 0 0 10px 5px rgba(0, 0, 0, 0.05);
-    border: 1px solid var(--c-black-soft);
-    transition: right 0.3s ease-in-out;
     cursor: pointer;
   }
 }

@@ -868,29 +868,36 @@ onMounted(() => {
 </style>
 
 <style lang="less">
-.atab-container {
-  padding: 0;
-  width: 100%;
-  max-height: 100%;
-  overflow: auto;
+.db-main-container {
+  .atab-container {
+    padding: 0;
+    width: 100%;
+    max-height: 100%;
+    overflow: auto;
 
-  div.ant-tabs-nav {
-    background: var(--main-light-5);
-    padding: 8px 20px;
-    padding-bottom: 0;
+    div.ant-tabs-nav {
+      background: var(--main-light-5);
+      padding: 8px 20px;
+      padding-bottom: 0;
+    }
+
+    .ant-tabs-content-holder {
+      padding: 0 20px;
+    }
   }
 
-  .ant-tabs-content-holder {
-    padding: 0 20px;
+  .params-item.col .ant-segmented {
+    width: 100%;
+    div.ant-segmented-group {
+      display: flex;
+      justify-content: space-around;
+    }
+    label.ant-segmented-item {
+      flex: 1;
+      text-align: center;
+    }
   }
 }
 
-.params-item.col .ant-segmented {
-  width: 100%;
 
-  div.ant-segmented-group {
-    display: flex;
-    justify-content: space-around;
-  }
-}
 </style>

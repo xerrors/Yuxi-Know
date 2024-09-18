@@ -572,19 +572,19 @@ watch(
     gap: 10px;
 
     .opt__button {
-      background-color: white;
-      color: #222;
-      padding: 6px 1rem;
-      border-radius: 1rem;
+      background-color: #f2f5f5;
+      color: #333;
+      padding: .5rem 1.5rem;
+      border-radius: 2rem;
       cursor: pointer;
       // border: 2px solid var(--main-light-4);
       transition: background-color 0.3s;
-      box-shadow: 0px 0px 10px 4px var(--main-light-4);
+      // box-shadow: 0px 0px 10px 2px var(--main-light-4);
 
 
       &:hover {
-        background-color: #fcfcfc;
-        box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.1);
+        background-color: #f0f1f1;
+        // box-shadow: 0px 0px 10px 1px rgba(0, 0, 0, 0.1);
       }
     }
   }
@@ -672,19 +672,19 @@ watch(
     max-width: 900px;
     margin: 0 auto;
     align-items: flex-end;
-    padding: 0.5rem;
-    box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
-    border: 1px solid #E5E5E5;
-    border-radius: 2rem;
-    background: #fafafa;
+    padding: 0.25rem 0.5rem;
+    // box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
+    border: 2px solid #E5E5E5;
+    border-radius: 1rem;
+    background: #fcfdfd;
     transition: background 0.3s, box-shadow 0.3s;
     &:focus-within {
-      border: 1px solid #BABABA;
+      border: 2px solid var(--main-500);
       background: white;
-      box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
+      // box-shadow: rgb(42 60 79 / 5%) 0px 4px 10px 0px;
     }
 
-    .user-input {
+    textarea.user-input {
       flex: 1;
       height: 40px;
       padding: 0.5rem 0.5rem;
@@ -696,7 +696,7 @@ watch(
       font-size: 16px;
       font-variation-settings: 'wght' 400, 'opsz' 10.5;
       outline: none;
-
+      resize: none;
       &:focus {
         outline: none;
         box-shadow: none;
@@ -706,27 +706,27 @@ watch(
         outline: none;
       }
     }
-
-    .send-btn {
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      font-weight: 500;
-      padding: 0.5rem 1rem;
-      border-radius: 1rem;
-      transition: background-color 0.3s;
-
-      &:hover {
-        background-color: var(--main-light-3);
-      }
-
-      &:disabled {
-        cursor: not-allowed;
-        background-color: #DCDCDC;
-      }
-    }
   }
 
+  button.ant-btn-icon-only {
+    font-size: 1.25rem;
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+    transition: color 0.3s;
+    box-shadow: none;
+    color: var(--main-700);;
+    padding: 0;
+
+    &:hover {
+      color: var(--c-text-dark-1);
+    }
+
+    &:disabled {
+      color: #ccc;
+      cursor: not-allowed;
+    }
+  }
   .note {
     width: 100%;
     font-size: small;
@@ -743,27 +743,6 @@ watch(
 .ant-dropdown-link {
   color: var(--c-text-light-1);
   cursor: pointer;
-}
-
-.ant-btn-icon-only {
-  font-size: 16px;
-  cursor: pointer;
-  background-color: transparent;
-  border: none;
-  height: 2.5rem;
-  background-color: var(--main-color);
-  border-radius: 3rem;
-  color: white;
-  transition: background-color 0.3s;
-
-  &:hover {
-    color: white;
-  }
-}
-
-button:disabled {
-  background: #E0E0E0;
-  cursor: not-allowed;
 }
 
 
