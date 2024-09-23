@@ -1,5 +1,5 @@
 # 使用 Node.js 作为基础镜像，用于构建前端
-FROM node:16-alpine AS build-stage
+FROM node:latest AS build-stage
 WORKDIR /app
 
 # 将 package.json 和 package-lock.json 复制到工作目录
