@@ -4,8 +4,9 @@
 
 ## 准备
 
-1. 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。
-2. 配置 python 环境 `pip install -r requirements.txt`
+1. 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAPI=<ZHIPU_KEY>`。
+2. 配置 python 环境 `pip install -r requirements.txt`。
+3. 前端 UI 部分，需要安装 Node.js  环境，参考：[Download Node.js](https://nodejs.org/en/download/package-manager)。
 
 **如果不启用知识库，可以仅安装下面的依赖**
 
@@ -33,20 +34,23 @@ docker compose up -d
 如果想要管理 neo4j，也可以使用 `docker ps` 查看容器 id，然后使用 `docker exec -it  <CONTAINER_ID> /bin/bash` 进入容器。
 如果想要删除数据库中的文件，可以进入容器并停止 neo4j 后，执行 `rm -rf /data/databases`。
 
-
 ## 启动
 
 ### 1. 手动启动
 
 ```bash
+# 后端部分
 python -m src.api
 
+# 前端部分
 cd web
-npm install
+npm install  # 首次运行需要
 npm run server
 ```
 
 ### 2. 脚本启动
+
+注意：此脚本不会启动图数据库 neo4j。
 
 ```bash
 bash run.sh
@@ -78,4 +82,3 @@ services:
 ```
 
 **提醒**：启动 docker 之后，如果需要进行调试的时候，务必先停掉 docker （在项目路径下，使用 `docker compose down`），然后再运行 `bash run.sh`，不然会出现端口冲突。这是由于没有单独设置生产环境和开发环境，这个以后再说。
-
