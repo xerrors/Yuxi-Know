@@ -466,7 +466,7 @@ watch(
 .chat {
   position: relative;
   width: 100%;
-  height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;

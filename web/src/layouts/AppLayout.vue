@@ -1,5 +1,5 @@
 <script setup>
-import { ref, KeepAlive, onMounted } from 'vue'
+import { ref, reactive, KeepAlive, onMounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   MessageOutlined,
@@ -27,7 +27,10 @@ import DebugComponent from '@/components/DebugComponent.vue'
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 
-const showDebug = ref(false)
+const layoutSettings = reactive({
+  showDebug: false,
+  useTopBar: false, // 是否使用顶栏
+})
 
 const getRemoteConfig = () => {
   fetch('/api/config').then(res => res.json()).then(data => {
@@ -57,10 +60,10 @@ console.log(route)
 </script>
 
 <template>
-  <div class="app-layout">
+  <div class="app-layout" :class="{ 'use-top-bar': layoutSettings.useTopBar }">
     <div class="debug-panel" >
-      <a-float-button 
-        @click="showDebug=!showDebug"
+      <a-float-button
+        @click="layoutSettings.showDebug = !layoutSettings.showDebug"
         tooltip="调试面板"
         :style="{
           right: '12px',
@@ -71,7 +74,7 @@ console.log(route)
         </template>
       </a-float-button>
       <a-drawer
-        v-model:open="showDebug"
+        v-model:open="layoutSettings.showDebug"
         title="调试面板"
         width="800"
         :contentWrapperStyle="{ maxWidth: '100%'}"
@@ -80,9 +83,12 @@ console.log(route)
         <DebugComponent />
       </a-drawer>
     </div>
-    <div class="header">
+    <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
       <div class="logo">
-        <router-link to="/"><img src="/jnu.png"> </router-link>
+        <router-link to="/">
+          <img src="/jnu.png">
+          <span class="logo-text">语析</span>
+        </router-link>
       </div>
       <div class="nav">
         <RouterLink to="/chat" class="nav-item" active-class="active">
@@ -185,6 +191,10 @@ div.header, #app-router-view {
       border-radius: 50%;
     }
 
+    .logo-text {
+      display: none;
+    }
+
     & > a {
       text-decoration: none;
       font-size: 24px;
@@ -213,6 +223,10 @@ div.header, #app-router-view {
 
     &.github {
       padding: 10px 12px;
+      &:hover {
+        background-color: transparent;
+        border: 1px solid transparent;
+      }
     }
 
     &.setting {
@@ -301,4 +315,96 @@ div.header, #app-router-view {
     width: 0;
   }
 }
+
+.app-layout.use-top-bar {
+  flex-direction: column;
+}
+
+.header.top-bar {
+  flex-direction: row;
+  flex: 0 0 50px;
+  width: 100%;
+  height: 50px;
+  border-right: none;
+  border-bottom: 1px solid var(--main-light-2);
+  background-color: var(--main-light-3);
+  padding: 0 20px;
+  gap: 24px;
+
+  .logo {
+    width: fit-content;
+    height: 28px;
+    margin-right: 16px;
+    display: flex;
+    align-items: center;
+
+    a {
+      display: flex;
+      align-items: center;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    img {
+      width: 28px;
+      height: 28px;
+      margin-right: 8px;
+    }
+
+    .logo-text {
+      display: block;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--main-600);
+      white-space: nowrap;
+    }
+  }
+
+  .nav {
+    flex-direction: row;
+    height: auto;
+    gap: 20px;
+  }
+
+  .nav-item {
+    flex-direction: row;
+    width: auto;
+    padding: 4px 16px;
+    margin: 0;
+
+    .icon {
+      margin-right: 8px;
+      font-size: 15px; // 减小图标大小
+    }
+
+    .text {
+      margin-top: 0;
+      font-size: 15px;
+    }
+
+
+    &.github, &.setting {
+      padding: 8px 12px;
+
+      .icon {
+        margin-right: 0;
+        font-size: 18px;
+      }
+
+      &.active {
+        color: var(--main-600);
+      }
+    }
+
+    &.github {
+      a {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+    }
+  }
+}
+
 </style>
