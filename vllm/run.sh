@@ -1,9 +1,14 @@
 MODEL=Meta-Llama-3-8B-Instruct
 
+if [ -z "$1" ]; then
+    echo "Error: No argument provided. Please specify a model name."
+    exit 1
+fi
+
 if [ "$1" = "llama" ]; then
-    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server \
+    CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
         --model="/hdd/zwj/models/meta-llama/$MODEL" \
-        --tensor-parallel-size 2 \
+        --tensor-parallel-size 1 \
         --trust-remote-code \
         --device auto \
         --gpu-memory-utilization 0.98 \
