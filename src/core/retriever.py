@@ -45,9 +45,10 @@ class Retriever:
             external_parts.extend(["图数据库信息:", db_text])
 
         # 构造查询
+        from src.utils.prompts import knowbase_qa_template
         if external_parts and len(external_parts) > 0:
             external = "\n\n".join(external_parts)
-            query = f"参考资料：\n\n\n{external}\n\n\n请根据前面的知识回答问题。\n\n问题：{query}\n\n回答："
+            query = knowbase_qa_template.format(external=external, query=query)
 
         return query
 

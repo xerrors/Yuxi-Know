@@ -7,12 +7,14 @@
     </HeaderComponent>
 
     <div class="tools-grid">
-      <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.id)">
-        <div class="tool-icon">
-          <component :is="tool.icon" />
+      <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.name)">
+        <div class="tool-header">
+          <div class="tool-icon">
+            <component :is="iconMap[tool.name]" />
+          </div>
+          <h3>{{ tool.title }}</h3>
         </div>
         <div class="tool-info">
-          <h3>{{ tool.name }}</h3>
           <p>{{ tool.description }}</p>
         </div>
       </div>
@@ -21,39 +23,42 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { CalculatorOutlined, FileSearchOutlined, TranslationOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
-import { Button as AButton } from 'ant-design-vue';
 
 const router = useRouter();
+const tools = ref([]);
+const iconMap = ref({
+  "text_chunking": FileSearchOutlined
+})
 
-const tools = ref([
-  {
-    id: 'calculator',
-    name: '计算器',
-    description: '进行各种数学计算',
-    icon: CalculatorOutlined,
-  },
-  {
-    id: 'file-analyzer',
-    name: '文件分析器',
-    description: '分析各种文件的内容和结构',
-    icon: FileSearchOutlined,
-  },
-  {
-    id: 'translator',
-    name: '翻译工具',
-    description: '在不同语言之间进行翻译',
-    icon: TranslationOutlined,
-  },
-  // 可以继续添加更多工具...
-]);
+const state = reactive({
+  loadingTools: true,
+})
 
-const navigateToTool = (toolId) => {
-  router.push({ name: 'ToolsComponent', params: { id: toolId } });
+const getTools = () => {
+  state.loadingTools = true
+  fetch('/api/tools/')
+    .then(response => response.json())
+    .then(data => {
+      tools.value = data;
+      state.loadingTools = false;
+    })
+    .catch(error => {
+      console.error('Error fetching tools:', error);
+      state.loadingTools = false;
+    });
 };
+
+const navigateToTool = (toolName) => {
+  router.push(`/tools/${toolName}`);
+};
+
+onMounted(() => {
+  getTools();
+});
 </script>
 
 <style scoped lang="less">
@@ -65,38 +70,44 @@ const navigateToTool = (toolId) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 20px;
-  padding: 24px;
-}
-
-.tool-card {
-  background-color: #fff;
-  border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition: all 0.3s ease;
 
-  &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
+  .tool-card {
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    padding: 20px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
 
-  .tool-icon {
-    font-size: 24px;
-    margin-bottom: 10px;
-    color: #1890ff;
-  }
-
-  .tool-info {
-    h3 {
-      margin: 0 0 10px;
-      font-size: 18px;
+    &:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
     }
 
-    p {
-      margin: 0;
-      color: #666;
-      font-size: 14px;
+    .tool-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      font-size: 1rem;
+
+      .tool-icon {
+        margin-right: 10px;
+      }
+
+      h3 {
+        margin: 0;
+      }
+    }
+
+    .tool-info {
+      flex-grow: 1;
+
+      p {
+        margin: 0;
+      }
     }
   }
 }

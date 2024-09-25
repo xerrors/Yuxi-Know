@@ -2,7 +2,6 @@ import os
 import json
 import time
 from src.utils import hashstr, setup_logger, is_text_pdf
-from src.core.filereader import pdfreader, plainreader
 from src.models.embedding import get_embedding_model
 
 logger = setup_logger("DataBaseManager")
@@ -95,18 +94,16 @@ class DataBaseManager:
         self._save_databases()
         return self.get_databases()
 
-    def add_files(self, db_id, files):
+    def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
         if db.embed_model != self.config.embed_model:
             logger.error(f"Embed model not match, {db.embed_model} != {self.config.embed_model}")
             return {"message": f"Embed model not match, cur: {self.config.embed_model}", "status": "failed"}
 
+        # Preprocessing the files to the queue
         new_files = []
         for file in files:
-            # filenames = [f["filename"] for f in db.files]
-            # if os.path.basename(file) in filenames:
-            #     continue
             new_file = {
                 "file_id": "file_" + hashstr(file + str(time.time())),
                 "filename": os.path.basename(file),
@@ -118,25 +115,30 @@ class DataBaseManager:
             db.files.append(new_file)
             new_files.append(new_file)
 
+        from src.core.indexing import chunk_file, chunk_text
         for new_file in new_files:
             file_id = new_file["file_id"]
-            idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
+            idx = self.get_idx_by_fileid(db, file_id)
             db.files[idx]["status"] = "processing"
 
             try:
-                text = self.read_text(new_file["path"])
-                chunks = self.chunking(text)
+                if new_file["type"] in ["txt", "docx", "md"]:
+                    nodes = chunk_file(new_file["path"], params=params)
+                else:
+                    text = self.read_text(new_file["path"])
+                    nodes = chunk_text(text, params)
+
                 self.knowledge_base.add_documents(
-                    docs=chunks,
+                    docs=[node.to_dict() for node in nodes],
                     collection_name=db.metaname,
                     file_id=file_id)
 
-                idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
+                idx = self.get_idx_by_fileid(db, file_id)
                 db.files[idx]["status"] = "done"
 
             except Exception as e:
                 logger.error(f"Failed to add documents to collection {db.metaname}, {e}")
-                idx = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
+                idx = self.get_idx_by_fileid(db, file_id)
                 db.files[idx]["status"] = "failed"
 
             self._save_databases()
@@ -151,7 +153,7 @@ class DataBaseManager:
             db.update(self.knowledge_base.get_collection_info(db.metaname))
             return db.to_dict()
 
-    def read_text(self, file):
+    def read_text(self, file, params=None):
         support_format = [".pdf", ".txt", ".md"]
         assert os.path.exists(file), "File not found"
         logger.info(f"Try to read file {file}")
@@ -162,12 +164,14 @@ class DataBaseManager:
 
         if file.endswith(".pdf"):
             if is_text_pdf(file):
+                from src.core.filereader import pdfreader
                 return pdfreader(file)
             else:
                 from src.plugins import pdf2txt
                 return pdf2txt(file, return_text=True)
 
         elif file.endswith(".txt") or file.endswith(".md"):
+            from src.core.filereader import plainreader
             return plainreader(file)
 
         else:
@@ -176,7 +180,7 @@ class DataBaseManager:
 
     def delete_file(self, db_id, file_id):
         db = self.get_kb_by_id(db_id)
-        file_idx_to_delete = [idx for idx, f in enumerate(db.files) if f["file_id"] == file_id][0]
+        file_idx_to_delete = self.get_idx_by_fileid(db, file_id)
 
         self.knowledge_base.client.delete(
             collection_name=db.metaname,
@@ -196,7 +200,10 @@ class DataBaseManager:
         )
         return {"lines": lines}
 
-    def chunking(self, text, chunk_size=1024):
+    def chunking(self, text, params=None):
+        chunk_method = params.get("chunk_method", "fixed")
+        chunk_size = params.get("chunk_size", 500)
+
         """将文本切分成固定大小的块"""
         chunks = []
         for i in range(0, len(text), chunk_size):
@@ -218,6 +225,11 @@ class DataBaseManager:
             if db.db_id == db_id:
                 return db
         return None
+
+    def get_idx_by_fileid(self, db, file_id):
+        for idx, f in enumerate(db.files):
+            if f["file_id"] == file_id:
+                return idx
 
 
 class DataBaseLite:
