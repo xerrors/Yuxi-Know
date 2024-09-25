@@ -20,6 +20,10 @@ PyYAML==6.0.1
 zhipuai
 ```
 
+> **Windows Warning**
+>
+> milvus-lite（向量数据库）不支持在 Windows 上运行，建议使用 WSL，详见：https://github.com/milvus-io/milvus-lite/issues/175
+
 ### 配置图数据库 neo4j (可选)
 
 使用 docker 部署 neo4j 服务，配置文件见 [local_neo4j/docker-compose.yml](local_neo4j/docker-compose.yml).
@@ -82,3 +86,11 @@ services:
 ```
 
 **提醒**：启动 docker 之后，如果需要进行调试的时候，务必先停掉 docker （在项目路径下，使用 `docker compose down`），然后再运行 `bash run.sh`，不然会出现端口冲突。这是由于没有单独设置生产环境和开发环境，这个以后再说。
+
+## 其余脚本
+
+镜像构建之后，单独启动后端服务
+
+```bash
+docker run -w /app -v ./src:/app/src -v ./saves:/app/saves -p 5000:5000 yuxi-know-backend
+```
