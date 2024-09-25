@@ -630,7 +630,7 @@ onMounted(() => {
           p {
             margin: 0;
             font-size: 15px;
-            color: var(--c-text-light-1);
+            color: var(--gray-900);
           }
 
           &.col {
@@ -682,7 +682,7 @@ onMounted(() => {
       &:disabled {
         cursor: not-allowed;
         background: var(--main-light-4);
-        color: var(--c-black-light-3);
+        color: var(--gray-700);
       }
     }
   }
@@ -746,7 +746,7 @@ onMounted(() => {
 
         .query-text {
           font-style: italic;
-          color: var(--c-text-light-1);
+          color: var(--gray-900);
         }
       }
     }
@@ -765,7 +765,7 @@ onMounted(() => {
       p {
         margin-bottom: 8px;
         line-height: 1.6;
-        color: var(--c-text-light-1);
+        color: var(--gray-900);
 
         &:last-child {
           margin-bottom: 0;

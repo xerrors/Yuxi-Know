@@ -86,12 +86,11 @@ const router = createRouter({
           component: () => import('../views/ToolsView.vue'),
           meta: { keepAlive: true }
         },
-        // {
-        //   path: ':id',
-        //   name: 'ToolsComponent',
-        //   component: () => import('../views/ToolsFooComponent.vue'),
-        //   meta: { keepAlive: true }
-        // }
+        {
+          path: 'text_chunking',
+          name: 'TextChunking',
+          component: () => import('../components/TextChunkingComponent.vue'),
+        },
       ]
     },
     {

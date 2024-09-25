@@ -500,7 +500,7 @@ watch(
     justify-content: center;
     align-items: center;
     border-radius: 8px;
-    color: var(--c-text-light-1);
+    color: var(--gray-900);
     cursor: pointer;
     font-size: 1rem;
     width: auto;
@@ -719,7 +719,7 @@ watch(
     padding: 0;
 
     &:hover {
-      color: var(--c-text-dark-1);
+      color: var(--gray-1000);
     }
 
     &:disabled {
@@ -741,7 +741,7 @@ watch(
 
 
 .ant-dropdown-link {
-  color: var(--c-text-light-1);
+  color: var(--gray-900);
   cursor: pointer;
 }
 
@@ -758,7 +758,7 @@ watch(
 }
 
 .chat::-webkit-scrollbar-thumb {
-  background: var(--c-text-dark-2);
+  background: var(--gray-400);
   border-radius: 4px;
 }
 

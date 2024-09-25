@@ -412,6 +412,6 @@ const graphStatusText = computed(() => {
   width: 100%;
   height: 100%;
   flex-direction: column;
-  color: var(--c-text-light-1);
+  color: var(--gray-900);
 }
 </style>

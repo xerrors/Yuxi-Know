@@ -10,7 +10,7 @@
     </HeaderComponent>
 
     <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase">
-      <h3>数据库名称<span style="color: red">*</span></h3>
+      <h3>数据库名称<span style="color: var(--error-color)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建数据库名称" />
       <h3 style="margin-top: 20px;">数据库描述</h3>
       <a-textarea
@@ -260,14 +260,14 @@ onMounted(() => {
       }
 
       p {
-        color: var(--c-text-light-1);
+        color: var(--gray-900);
         font-size: small;
       }
     }
   }
 
   .description {
-    color: var(--c-text-light-1);
+    color: var(--gray-900);
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 1;
@@ -288,7 +288,7 @@ onMounted(() => {
   align-items: center;
   height: 100%;
   flex-direction: column;
-  color: var(--c-text-light-1);
+  color: var(--gray-900);
 }
 
 .database-container {

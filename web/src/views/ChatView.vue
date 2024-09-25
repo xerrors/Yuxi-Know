@@ -139,7 +139,7 @@ onMounted(() => {
   border-right: 1px solid var(--main-light-3);
   overflow: hidden; /* 确保内容不溢出 */
   max-height: 100%;
-  background-color: #FAFCFD;
+  background-color: var(--bg-sider);
 
   & .actions {
     height: var(--header-height);
@@ -158,7 +158,7 @@ onMounted(() => {
       justify-content: center;
       align-items: center;
       border-radius: 8px;
-      color: var(--c-black-light-2);
+      color: var(--gray-800);
       cursor: pointer;
 
       &:hover {
@@ -184,7 +184,7 @@ onMounted(() => {
     user-select: none;
 
     &__title {
-      color: var(--c-black-light-3);
+      color: var(--gray-700);
       white-space: nowrap; /* 禁止换行 */
       overflow: hidden;    /* 超出部分隐藏 */
       text-overflow: ellipsis; /* 显示省略号 */
@@ -231,7 +231,7 @@ onMounted(() => {
 }
 
 .conversation-list::-webkit-scrollbar-thumb {
-  background: var(--c-text-dark-2);
+  background: var(--gray-400);
   border-radius: 4px;
 }
 

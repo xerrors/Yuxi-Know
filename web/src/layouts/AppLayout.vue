@@ -59,7 +59,7 @@ console.log(route)
 <template>
   <div class="app-layout">
     <div class="debug-panel" >
-      <a-float-button 
+      <a-float-button
         @click="showDebug=!showDebug"
         tooltip="调试面板"
         :style="{
@@ -198,7 +198,7 @@ div.header, #app-router-view {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 56px;
+    width: 52px;
     padding: 4px;
     padding-top: 10px;
     border: 1px solid transparent;
@@ -225,7 +225,6 @@ div.header, #app-router-view {
       color: var(--main-600);
       background-color: rgba(255, 255, 255, 0.8);
       backdrop-filter: blur(10px);
-      box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
       border: 1px solid white;
     }
 
@@ -286,7 +285,7 @@ div.header, #app-router-view {
     .nav-item {
       text-decoration: none;
       width: 40px;
-      color: var(--c-black-soft);
+      color: var(--gray-900);
       font-size: 1rem;
       font-weight: bold;
       transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;
