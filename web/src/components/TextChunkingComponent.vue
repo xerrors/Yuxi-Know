@@ -11,10 +11,13 @@
           @finish="chunkText"
         >
           <a-form-item label="Chunk Size" name="chunkSize" >
-            <a-input v-model:value="params.chunkSize" />
+            <a-input v-model:value="params.chunkSize" :disabled="params.useParser" />
           </a-form-item>
           <a-form-item label="Chunk Overlap" name="chunkOverlap" >
-            <a-input v-model:value="params.chunkOverlap" />
+            <a-input v-model:value="params.chunkOverlap" :disabled="params.useParser" />
+          </a-form-item>
+          <a-form-item label="使用文件节点解析器" name="useParser" v-if="state.useFile">
+            <a-switch v-model:checked="params.useParser" />
           </a-form-item>
 
           <a-form-item>
@@ -26,16 +29,38 @@
     </div>
     <div class="result-container">
       <div class="input-container">
-        <textarea v-model="text" placeholder="Enter text to chunk"></textarea>
-        <div class="infos">
+        <div class="actions">
+          <span :class="{'active': !state.useFile}" @click="state.useFile = false">上传文本</span>
+          <span :class="{'active': state.useFile}" @click="state.useFile = true">上传文件</span>
+        </div>
+        <div class="upload" v-if="state.useFile">
+          <a-upload-dragger
+            class="upload-dragger"
+            v-model:fileList="fileList"
+            name="file"
+            :max-count="1"
+            :disabled="state.uploading"
+            action="/api/database/upload"
+            @change="handleFileUpload"
+            @drop="handleDrop"
+          >
+            <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+            <p class="ant-upload-hint">
+              目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加
+            </p>
+          </a-upload-dragger>
+        </div>
+        <textarea v-if="!state.useFile" v-model="text" placeholder="Enter text to chunk"></textarea>
+        <div class="infos" v-if="!state.useFile">
           <!-- <span>字数: {{ wordCount }}</span> -->
           <span>字符数: {{ charCount }}</span>
           <span>Token 数：{{ estimatedTokenCount }}</span>
         </div>
       </div>
+      <!-- <div>{{ chunks[0] }}</div> -->
       <div id="result-cards" class="result-cards">
         <div v-for="(chunk, index) in chunks" :key="index" class="chunk">
-          <p>{{ chunk }}</p>
+          <p><strong>#{{ index + 1 }}</strong> {{ chunk.text }}</p>
         </div>
       </div>
     </div>
@@ -49,13 +74,17 @@ import { message } from 'ant-design-vue'
 const text = ref('');
 const state = reactive({
   loading: true,
+  uploading: false,
+  useFile: false,
 })
 
 const params = reactive({
   chunkSize: 500,
-  chunkOverlap: 20
+  chunkOverlap: 20,
+  useParser: false,
 })
 const chunks = ref([]);
+const fileList = ref([]);
 
 const wordCount = computed(() => text.value.split(/\s+/).filter(Boolean).length);
 const charCount = computed(() => text.value.length)
@@ -78,19 +107,32 @@ const estimatedTokenCount = computed(() => {
 })
 
 const chunkText = async () => {
-  if (text.value.length === 0) {
-    message.error("请输入文本")
-    return
+  let text_or_file = ''
+  if (state.useFile) {
+    if (fileList.value.length === 0) {
+      message.error("请上传文件")
+      return
+    }
+    console.log(fileList.value)
+    text_or_file = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)[0]
+  } else {
+    if (text.value.length === 0) {
+      message.error("请输入文本")
+      return
+    }
+    text_or_file = text.value
   }
+
   try {
     state.loading = true
     const response = await fetch('/api/tools/text_chunking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        text: text.value,
+        text: text_or_file,
         chunk_size: params.chunkSize,
-        chunk_overlap: params.chunkOverlap
+        chunk_overlap: params.chunkOverlap,
+        use_parser: params.useParser
       })
     });
 
@@ -99,7 +141,7 @@ const chunkText = async () => {
     }
 
     const data = await response.json();
-    chunks.value = data.nodes.map(node => node.text);
+    chunks.value = data.nodes;
     state.loading = false
   } catch (error) {
     console.error('Error chunking text:', error);
@@ -141,6 +183,28 @@ const chunkText = async () => {
       flex-direction: column;
       margin-bottom: 15px;
 
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        width: fit-content;
+        background-color: var(--gray-200);
+        padding: 8px 6px;
+        border-radius: 8px;
+
+        span {
+          color: var(--gray-900);
+          cursor: pointer;
+          padding: 4px 10px;
+          border-radius: 8px;
+          transition: background-color 0.3s;
+
+          &.active {
+            background-color: white;
+          }
+        }
+      }
+
       textarea {
         resize: vertical;
         height: 300px;
@@ -149,7 +213,7 @@ const chunkText = async () => {
         border-radius: 8px;
         font-size: 1rem;
         transition: border-color 0.3s;
-        background-color: var(--gray-50);
+        background-color: var(--gray-100);
 
         &:focus {
           border-color: var(--main-color);
@@ -174,38 +238,36 @@ const chunkText = async () => {
     }
 
     .chunk {
-      background-color: #f9fcff;
-      border-radius: 4px;
-      padding: 10px;
+      background-color: var(--main-5);
+      border: 1px solid var(--main-light-3);
+      border-radius: 8px;
+      padding: 16px;
       margin-bottom: 10px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      box-shadow: 0 0 10px 2px rgba(0, 0, 0, 0.01);
       break-inside: avoid; /* 避免元素被分割到不同列 */
+      // 强制换行
+      word-wrap: break-word;
+      word-break: break-all;
     }
   }
 }
 
 
-@media (max-width: 768px) {
+@media (max-width: 980px) {
   #result-cards {
     column-count: 1;
   }
 }
 
-@media (min-width: 769px) and (max-width: 1200px) {
+@media (min-width: 981px) and (max-width: 1500px) {
   #result-cards {
     column-count: 2;
   }
 }
 
-@media (min-width: 1201px) and (max-width: 1900px) {
+@media (min-width: 1501px){
   #result-cards {
     column-count: 3;
-  }
-}
-
-@media (min-width: 1901px){
-  #result-cards {
-    column-count: 4;
   }
 }
 </style>

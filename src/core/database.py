@@ -115,21 +115,16 @@ class DataBaseManager:
             db.files.append(new_file)
             new_files.append(new_file)
 
-        from src.core.indexing import chunk_file, chunk_text
+        from src.core.indexing import chunk
         for new_file in new_files:
             file_id = new_file["file_id"]
             idx = self.get_idx_by_fileid(db, file_id)
             db.files[idx]["status"] = "processing"
 
             try:
-                if new_file["type"] in ["txt", "docx", "md"]:
-                    nodes = chunk_file(new_file["path"], params=params)
-                else:
-                    text = self.read_text(new_file["path"])
-                    nodes = chunk_text(text, params)
-
+                nodes = chunk(new_file["path"], params=params)
                 self.knowledge_base.add_documents(
-                    docs=[node.to_dict() for node in nodes],
+                    docs=[node.text for node in nodes],
                     collection_name=db.metaname,
                     file_id=file_id)
 

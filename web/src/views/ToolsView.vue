@@ -107,6 +107,7 @@ onMounted(() => {
 
       p {
         margin: 0;
+        color: var(--gray-800);
       }
     }
   }
