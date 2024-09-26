@@ -3,7 +3,14 @@
 <h1 style="text-align: center">Yuxi (语析) </h1>
 
 > [!WARNING]
-> 当前项目还处于开发的早期。
+> **[WIP]** 当前项目还处于开发的早期。
+
+## 预览
+
+![图片1](./images/img1.png)
+![图片1](./images/img2.png)
+![图片1](./images/img3.png)
+![图片1](./images/img4.png)
 
 
 ## 准备
