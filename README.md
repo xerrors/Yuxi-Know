@@ -16,7 +16,7 @@
 ## 准备
 
 1. 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAPI=<ZHIPU_KEY>`。
-2. 配置 python 环境 `pip install -r requirements.txt`。
+2. 配置 python 环境 `pip install -r requirements.txt`，python 版本应当小于 `3.12`。
 3. 前端 UI 部分，需要安装 Node.js  环境，参考：[Download Node.js](https://nodejs.org/en/download/package-manager)。
 
 **如果不启用知识库，可以仅安装下面的依赖**
@@ -31,8 +31,7 @@ PyYAML==6.0.1
 zhipuai
 ```
 
-> **Windows Warning**
->
+> [!WARNING]
 > milvus-lite（向量数据库）不支持在 Windows 上运行，建议使用 WSL，详见：https://github.com/milvus-io/milvus-lite/issues/175
 
 ### 配置图数据库 neo4j (可选)
