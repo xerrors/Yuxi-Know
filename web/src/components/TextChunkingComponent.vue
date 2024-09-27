@@ -11,17 +11,17 @@
           @finish="chunkText"
         >
           <a-form-item label="Chunk Size" name="chunkSize" >
-            <a-input v-model:value="params.chunkSize" :disabled="params.useParser" />
+            <a-input v-model:value="params.chunkSize" :disabled="params.useParser && state.useFile" />
           </a-form-item>
           <a-form-item label="Chunk Overlap" name="chunkOverlap" >
-            <a-input v-model:value="params.chunkOverlap" :disabled="params.useParser" />
+            <a-input v-model:value="params.chunkOverlap" :disabled="params.useParser && state.useFile" />
           </a-form-item>
           <a-form-item label="使用文件节点解析器" name="useParser" v-if="state.useFile">
             <a-switch v-model:checked="params.useParser" />
           </a-form-item>
 
           <a-form-item>
-            <a-button type="primary" html-type="submit">Chunk Text</a-button>
+            <a-button type="primary" html-type="submit" :loading="state.loading">Chunk Text</a-button>
           </a-form-item>
         </a-form>
         <!-- Future parameters can be added here -->
@@ -73,7 +73,7 @@ import { message } from 'ant-design-vue'
 
 const text = ref('');
 const state = reactive({
-  loading: true,
+  loading: false,
   uploading: false,
   useFile: false,
 })

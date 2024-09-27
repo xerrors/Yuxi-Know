@@ -19,3 +19,4 @@ zhipuai>=2.1.2
 neo4j>=5.22.0
 sentencepiece==0.1.99
 llama-index-readers-file
+docx2txt
