@@ -52,7 +52,7 @@ class ZhipuEmbedding:
     def __init__(self, model_info, config) -> None:
         self.config = config
         self.model_info = model_info
-        self.client = ZhipuAI(api_key=os.getenv("ZHIPUAPI"))
+        self.client = ZhipuAI(api_key=os.getenv("ZHIPUAI_API_KEY"))
         logger.info("Zhipu Embedding model loaded")
         self.query_instruction_for_retrieval = "为这个句子生成表示以用于检索相关文章："
 

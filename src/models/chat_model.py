@@ -50,15 +50,15 @@ class OpenModel(OpenAIBase):
 class DeepSeek(OpenAIBase):
     def __init__(self, model_name=None):
         model_name = model_name or "deepseek-chat"
-        api_key = os.getenv("DEEPSEEKAPI")
+        api_key = os.getenv("DEEPSEEK_API_KEY")
         base_url = "https://api.deepseek.com"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
 class Zhipu(OpenAIBase):
     def __init__(self, model_name=None):
-        model_name = model_name or "glm-4"
-        api_key = os.getenv("ZHIPUAPI")
+        model_name = model_name or "glm-4-flash"
+        api_key = os.getenv("ZHIPUAI_API_KEY")
         base_url = "https://open.bigmodel.cn/api/paas/v4/"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
@@ -69,7 +69,12 @@ class VLLM(OpenAIBase):
         base_url = os.getenv("VLLM_API_BASE")
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
-
+class SiliconFlow(OpenAIBase):
+    def __init__(self, model_name=None):
+        model_name = model_name or "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        api_key = os.getenv("SILICONFLOW_API_KEY")
+        base_url = "https://api.siliconflow.cn/v1"
+        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
 class GeneralResponse:
@@ -119,10 +124,9 @@ class Qianfan:
 
 class DashScope:
 
-    def __init__(self, model_name="qwen-long") -> None:
+    def __init__(self, model_name="qwen-max-latest") -> None:
         self.model_name = model_name
         self.api_key= os.getenv("DASHSCOPE_API_KEY")
-
 
     def predict(self, message, stream=False):
         if isinstance(message, str):
@@ -162,6 +166,6 @@ class DashScope:
 
 
 if __name__ == "__main__":
-    model = DashScope()
+    model = SiliconFlow()
     for a in model.predict("你好", stream=True):
-        print(a.content)
+        print(a.content, end="")

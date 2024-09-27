@@ -7,8 +7,8 @@
 |模型供应商(`config.model_provider`)|默认模型(`config.model_name`)|配置项目(`.env`)|
 |:-|:-|:-|
 |`qianfan`|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
-|`zhipu`(default)|`glm-4`|`ZHIPUAPI`|
-|`deepseek`|`deepseek-chat`|`DEEPSEEKAPI`|
+|`zhipu`(default)|`glm-4`|`ZHIPUAI_API_KEY`|
+|`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
 |`vllm`|`vllm`|`VLLM_API_KEY`, `VLLM_API_BASE`|
 
 vllm 的具体配置项可以参考[这里](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments), 部署参考脚本：
@@ -36,7 +36,7 @@ python -m vllm.entrypoints.openai.api_server \
 |模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
 |:-|:-|:-|
 |`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*修改为本地路径）|
-|`zhipu`|`embedding-2`|`ZHIPUAPI` (`.env`)|
+|`zhipu`|`embedding-2`|`ZHIPUAI_API_KEY` (`.env`)|
 
 
 例如（`saves/config/config.yaml`）：
