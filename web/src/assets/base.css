@@ -16,18 +16,21 @@
   --main-10: #F5FDFF;
   --main-5: #FAFCFD;
 
+  --gray-10000: #000000;
   --gray-2000: #0C1214;
   --gray-1000: #171C1F;
   --gray-900: #212729;
   --gray-800: #42484A;
   --gray-700: #616161;
-  --gray-600: #8C9194;
-  --gray-500: #A7ACAF;
-  --gray-400: #C2C7CA;
-  --gray-300: #DEE3E6;
-  --gray-200: #EFF1F4;
-  --gray-100: #F8FAFD;
-  --gray-50: #FBFDFF;
+  --gray-600: #8C9193;
+  --gray-500: #A7ACAD;
+  --gray-400: #C4C7C8;
+  --gray-300: #DFE3E4;
+  --gray-200: #EFF1F2;
+  --gray-100: #F8FAFB;
+  --gray-50: #FBFDFE;
+  --gray-10: #FDFEFF;
+  --gray-0: #FFFFFF;
 
   --main-color: #1c6586;
   --main-color-dark: #004d5c;

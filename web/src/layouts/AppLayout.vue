@@ -175,10 +175,10 @@ div.header, #app-router-view {
   flex: 0 0 70px;
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--main-light-4);
+  background-color: var(--gray-100);
   height: 100%;
   width: 74px;
-  border-right: 1px solid var(--main-light-3);
+  border-right: 1px solid var(--gray-300);
 
   .logo {
     width: 40px;
@@ -237,8 +237,7 @@ div.header, #app-router-view {
     &.active {
       font-weight: bold;
       color: var(--main-600);
-      background-color: rgba(255, 255, 255, 0.8);
-      backdrop-filter: blur(10px);
+      background-color: white;
       border: 1px solid white;
     }
 

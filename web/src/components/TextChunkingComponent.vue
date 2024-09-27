@@ -30,7 +30,7 @@
     <div class="result-container">
       <div class="input-container">
         <div class="actions">
-          <span :class="{'active': !state.useFile}" @click="state.useFile = false">上传文本</span>
+          <span :class="{'active': !state.useFile}" @click="state.useFile = false">输入文本</span>
           <span :class="{'active': state.useFile}" @click="state.useFile = true">上传文件</span>
         </div>
         <div class="upload" v-if="state.useFile">
@@ -189,18 +189,19 @@ const chunkText = async () => {
         margin-bottom: 10px;
         width: fit-content;
         background-color: var(--gray-200);
-        padding: 8px 6px;
-        border-radius: 8px;
+        padding: 4px;
+        border-radius: 4px;
 
         span {
           color: var(--gray-900);
           cursor: pointer;
           padding: 4px 10px;
-          border-radius: 8px;
+          border-radius: 4px;
           transition: background-color 0.3s;
 
           &.active {
             background-color: white;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03),0 1px 6px -1px rgba(0, 0, 0, 0.02),0 2px 4px 0 rgba(0, 0, 0, 0.02)
           }
         }
       }

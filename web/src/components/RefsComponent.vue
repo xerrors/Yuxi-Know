@@ -164,24 +164,25 @@ const getPercent = (value) => {
 .refs {
   display: flex;
   margin-bottom: 20px;
-  color: var(--c-text-light-4);
+  color: var(--gray-500);
   font-size: 14px;
   gap: 10px;
 
   .item {
-    background: var(--main-25);
-    color: var(--main-500);
+    background: var(--gray-100);
+    color: var(--gray-800);
     padding: 2px 8px;
     border-radius: 8px;
     font-size: 14px;
+    user-select: none;
 
     &.btn {
       cursor: pointer;
       &:hover {
-        background: var(--main-25);
+        background: var(--gray-200);
       }
       &:active {
-        background: var(--main-50);
+        background: var(--gray-300);
       }
     }
   }

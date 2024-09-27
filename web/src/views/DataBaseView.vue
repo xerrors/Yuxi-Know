@@ -197,8 +197,8 @@ onMounted(() => {
 }
 .databases {
   padding: 20px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
 
   .new-database {
@@ -207,7 +207,6 @@ onMounted(() => {
 }
 
 .database, .graphbase {
-  flex: 1 1 380px;
   background-color: white;
   box-shadow: 0px 1px 2px 0px rgba(16,24,40,.06),0px 1px 3px 0px rgba(16,24,40,.1);
   border: 2px solid white;
@@ -219,14 +218,12 @@ onMounted(() => {
 }
 
 .dbcard, .database {
+  width: 100%;
   padding: 10px;
   border-radius: 12px;
-  width: 340px;
   height: 160px;
   padding: 20px;
   cursor: pointer;
-  flex: 1 1 380px;
-  max-width: 450px;
 
   .top {
     display: flex;

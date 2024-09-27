@@ -10,12 +10,11 @@
         >
           <MenuOutlined />
         </div>
-        <div
-          class="newchat nav-btn"
-          @click="$emit('newconv')"
-        >
-          <PlusCircleOutlined /> <span class="text">{{ configStore.config?.model_name }}</span>
-        </div>
+        <a-tooltip :title="configStore.config?.model_name">
+          <div class="newchat nav-btn" @click="$emit('newconv')">
+            <PlusCircleOutlined /> <span class="text">新对话</span>
+          </div>
+        </a-tooltip>
       </div>
       <div class="header__right">
         <!-- <div class="nav-btn text metas">
@@ -39,10 +38,10 @@
             </a-menu>
           </template>
         </a-dropdown>
-        <div class="nav-btn text " @click="opts.showPanel = !opts.showPanel">
+        <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
-        <div v-if="opts.showPanel" class="my-panal swing-in-top-fwd" ref="panel">
+        <div v-if="opts.showPanel" class="my-panal r0 top100 swing-in-top-fwd" ref="panel">
           <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
             知识库
             <div @click.stop>
@@ -93,7 +92,7 @@
           class="opt__button"
           v-for="(exp, key) in examples"
           :key="key"
-          @click="autoSend(exp)"
+          @click="conv.inputText = exp"
         >
           {{ exp }}
         </div>
@@ -113,11 +112,10 @@
           <div></div>
         </div>
         <div v-else-if="message.text.length == 0 || message.status == 'error'" class="err-msg">请求错误，请重试</div>
-        <p v-else
+        <div v-else
           v-html="renderMarkdown(message)"
           class="message-md"
-          @click="consoleMsg(message)"></p>
-
+          @click="consoleMsg(message)"></div>
         <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
       </div>
     </div>
@@ -180,11 +178,11 @@ const { conv, state } = toRefs(props)
 const chatContainer = ref(null)
 const isStreaming = ref(false)
 const panel = ref(null)
+const modelCard = ref(null)
 const examples = ref([
   '写一个冒泡排序',
   '肉碱的分子量是多少？直接回答',
-  '简述大蒜的功效是什么？',
-  'A大于B，B小于C，A和C哪个大？',
+  '总结大蒜的功效是什么？',
   '今天天气怎么样？',
   '吃饭吃出苍蝇可以索赔吗？',
   '帮我写一个请假条',
@@ -192,6 +190,7 @@ const examples = ref([
 
 const opts = reactive({
   showPanel: false,
+  showModelCard: false,
   openDetail: false,
   databases: [],
 })
@@ -221,9 +220,10 @@ const marked = new Marked(
   })
 );
 
-
 const consoleMsg = (message) => console.log(message)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
+onClickOutside(modelCard, () => setTimeout(() => opts.showModelCard = false, 30))
+
 const renderMarkdown = (message) => {
   if (message.status === 'loading') {
     return marked.parse(message.text + '🟢')
@@ -523,8 +523,6 @@ watch(
 
 .my-panal {
   position: absolute;
-  top: 100%;
-  right: 0;
   margin-top: 5px;
   background-color: white;
   border: 1px solid #ccc;
@@ -550,6 +548,15 @@ watch(
   }
 }
 
+.my-panal.r0.top100 {
+  top: 100%;
+  right: 0;
+}
+
+.my-panal.l0.top100 {
+  top: 100%;
+  left: 0;
+}
 
 .chat-examples {
   padding: 0 50px;
@@ -572,7 +579,7 @@ watch(
     gap: 10px;
 
     .opt__button {
-      background-color: #f2f5f5;
+      background-color: var(--gray-200);
       color: #333;
       padding: .5rem 1.5rem;
       border-radius: 2rem;
@@ -867,6 +874,12 @@ watch(
 
   &:has(code.hljs) {
     padding: 0;
+  }
+}
+
+.message-md {
+  h1, h2, h3, h4, h5, h6 {
+    font-size: 1rem;
   }
 }
 </style>

@@ -182,6 +182,7 @@ onMounted(() => {
     cursor: pointer;
     width: 100%;
     user-select: none;
+    transition: background-color 0.2s ease-in-out;
 
     &__title {
       color: var(--gray-700);
@@ -192,7 +193,8 @@ onMounted(() => {
 
     &__delete {
       display: none;
-      color: #7D7D7D;
+      color: var(--gray-500);
+      transition: all 0.2s ease-in-out;
 
       &:hover {
         color: #F93A37;
@@ -203,20 +205,21 @@ onMounted(() => {
     &.active {
       border-right: 3px solid var(--main-500);
       padding-right: 13px;
-      background-color: var(--main-light-3);
+      background-color: var(--gray-200);
 
       & .conversation__title {
-        color: var(--main-900);
+        color: var(--gray-1000);
       }
     }
 
-    &:hover {
+    &:not(.active):hover {
       background-color: var(--main-light-3);
 
       & .conversation__delete {
         display: block;
       }
     }
+
   }
 }
 
