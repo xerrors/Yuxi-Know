@@ -104,3 +104,15 @@ services:
 ```bash
 docker run -w /app -v ./src:/app/src -v ./saves:/app/saves -p 5000:5000 yuxi-know-backend
 ```
+
+## Docker 镜像相关
+
+如果无法直接下载相关镜像，尝试将前缀替换为：
+
+```bash
+# 以 neo4j 为例，其余一样
+docker pull m.daocloud.io/docker.io/library/neo4j:latest
+
+# 然后重命名镜像
+docker tag m.daocloud.io/docker.io/library/neo4j:latest neo4j:latest
+```
