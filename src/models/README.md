@@ -6,16 +6,19 @@
 
 |模型供应商(`config.model_provider`)|默认模型(`config.model_name`)|配置项目(`.env`)|
 |:-|:-|:-|
-|`qianfan`|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
+|`openai` | `gpt-4o` | `OPENAI_API_KEY` |
+|`qianfan`（百度）|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
 |`zhipu`(default)|`glm-4`|`ZHIPUAI_API_KEY`|
+|`dashscope`（阿里） | `qwen-max-latest` | `DASHSCOPE_API_KEY`|
 |`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
+|`siliconflow` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`|
 |`vllm`|`vllm`|`VLLM_API_KEY`, `VLLM_API_BASE`|
 
 vllm 的具体配置项可以参考[这里](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments), 部署参考脚本：
 
 ```bash
 python -m vllm.entrypoints.openai.api_server \
-	--model="/home/zwj/workspace/models/chatglm3-6b" \
+	--model="/hdd/models/meta-llama/Meta-Llama-3.1-8B-Instruct" \
 	--tensor-parallel-size 1 \
 	--trust-remote-code \
 	--device auto \
@@ -26,17 +29,18 @@ python -m vllm.entrypoints.openai.api_server \
 	--port 8080
 ```
 
-*openai 没条件测，不知道
-
 ### 2. 向量模型支持
 
-需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，回导致知识库不可用。未来考虑增加一键迁移脚本。
+建议直接使用智谱 AI 的 embedding-3。
+
+> [!Warning]
+> 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，回导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
 
 
 |模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
 |:-|:-|:-|
 |`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*修改为本地路径）|
-|`zhipu`|`embedding-2`|`ZHIPUAI_API_KEY` (`.env`)|
+|`zhipu`|`embedding-2`, `embedding-3`|`ZHIPUAI_API_KEY` (`.env`)|
 
 
 例如（`saves/config/config.yaml`）：
