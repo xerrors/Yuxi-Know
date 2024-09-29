@@ -10,7 +10,7 @@
         >
           <MenuOutlined />
         </div>
-        <a-tooltip :title="configStore.config?.model_name">
+        <a-tooltip :title="configStore.config?.model_name" placement="rightTop">
           <div class="newchat nav-btn" @click="$emit('newconv')">
             <PlusCircleOutlined /> <span class="text">新对话</span>
           </div>

@@ -83,7 +83,7 @@
       <div class="setting" v-if="state.section == 'model'">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY</p>
-        <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
+        <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key" :style="{backgroundColor: modelProvider == item ? colorMap[item] : white }">
           <div class="card-header">
             <h3>{{ modelNames[item].name }}</h3>
             <a :href="modelNames[item].url" target="_blank">详情</a>
@@ -136,6 +136,16 @@ const isNeedRestart = ref(false)
 const state = reactive({
   loading: false,
   section: 'base'
+})
+
+const colorMap = reactive({
+  siliconflow: '#FFECFF',
+  zhipu: '#EFF1FE',
+  qianfan: '#E8F5FE',
+  deepseek: '#D3DCFF',
+  openai: '#E5E7EB',
+  vllm: '#E5E7EB',
+  bailian: '#EFF1FE',
 })
 
 // 筛选 modelStatus 中为真的key
@@ -320,7 +330,7 @@ const sendRestart = () => {
         height: 1rem;
         background-color: green;
         border-radius: 50%;
-        box-shadow: 0 0 2px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 0 10px 1px rgba(  0,128,  0, 0.5);
         border: 2px solid white;
       }
 
@@ -349,6 +359,7 @@ const sendRestart = () => {
         align-items: center;
         cursor: pointer;
         box-sizing: border-box;
+        background-color: rgba(255, 255, 255, 0.6);
         &:hover {
           border-color: var(--gray-400);
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
