@@ -91,6 +91,11 @@ const router = createRouter({
           name: 'TextChunking',
           component: () => import('../components/TextChunkingComponent.vue'),
         },
+        {
+          path: 'pdf2txt',
+          name: 'PDF_to_TXT',
+          component: () => import('../components/ConvertToTxtComponent.vue'),
+        },
       ]
     },
     {

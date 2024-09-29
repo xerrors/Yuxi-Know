@@ -20,6 +20,13 @@ def route_index():
             "description": "将文本分块以更好地理解。可以输入文本或者上传文件。",
             "url": "/tools/text_chunking",
             "method": "POST",
+        },
+        {
+            "name": "pdf2txt",
+            "title": "PDF转文本",
+            "description": "将PDF文件转换为文本文件。",
+            "url": "/tools/pdf2txt",
+            "method": "POST",
         }
     ]
 
@@ -32,3 +39,10 @@ def text_chunking():
     text = request.json.get("text")
     nodes = chunk(text, params=request.json)
     return jsonify({"nodes": [node.to_dict() for node in nodes]})
+
+@tools.route("/pdf2txt", methods=["POST"])
+def handle_pdf2txt():
+    from src.plugins import pdf2txt
+    file = request.json.get("file")
+    text = pdf2txt(file, return_text=True)
+    return jsonify({"text": text})
