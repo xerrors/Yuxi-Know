@@ -7,6 +7,7 @@ Flask_Cors>=4.0.1
 llama_index>=0.11.8
 openai>=1.44.1
 paddleocr>=2.8.1
+paddlepaddle>=2.4.0
 pandas>=2.2.2
 Pillow>=10.4.0
 pymilvus>=2.4.4
@@ -19,4 +20,5 @@ zhipuai>=2.1.2
 neo4j>=5.22.0
 sentencepiece==0.1.99
 llama-index-readers-file
+opencv-python-headless
 docx2txt

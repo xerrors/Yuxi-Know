@@ -4,8 +4,9 @@ import fitz  # fitz就是pip install PyMuPDF
 from PIL import Image
 from copy import deepcopy
 from tqdm import tqdm
+from pathlib import Path
 from argparse import ArgumentParser
-from src.utils import logger
+from src.utils import logger, is_text_pdf
 import numpy as np  # Added import for numpy
 
 GOLBAL_STATE = {}
@@ -14,6 +15,9 @@ GOLBAL_STATE = {}
 def pdf2txt(pdf_path, return_text=False):
     if not os.path.exists(pdf_path):
         raise FileNotFoundError(f"File not found: {pdf_path}")
+
+    if is_text_pdf(pdf_path):
+        return pdfreader(pdf_path)
 
     # Importing these modules here to avoid unnecessary imports in other files
     from paddleocr import PPStructure, save_structure_res
@@ -107,6 +111,29 @@ def convert_imgs(pdf_path, output_dir):
 
 def get_state(task_id):
     return GOLBAL_STATE.get(task_id, {})
+
+
+def pdfreader(file_path):
+    """读取PDF文件并返回text文本"""
+    assert os.path.exists(file_path), "File not found"
+    assert file_path.endswith(".pdf"), "File format not supported"
+
+    from llama_index.readers.file import PDFReader
+    doc = PDFReader().load_data(file=Path(file_path))
+
+    # 简单的拼接起来之后返回纯文本
+    text = "\n\n".join([d.get_content() for d in doc])
+    return text
+
+def plainreader(file_path):
+    """读取普通文本文件并返回text文本"""
+    assert os.path.exists(file_path), "File not found"
+
+    with open(file_path, "r") as f:
+        text = f.read()
+    return text
+
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()

@@ -1,6 +1,7 @@
 import os
 import json
 import time
+from src.plugins import pdf2txt
 from src.utils import hashstr, setup_logger, is_text_pdf
 from src.models.embedding import get_embedding_model
 
@@ -108,7 +109,7 @@ class DataBaseManager:
                 "file_id": "file_" + hashstr(file + str(time.time())),
                 "filename": os.path.basename(file),
                 "path": file,
-                "type": file.split(".")[-1],
+                "type": file.split(".")[-1].lower(),
                 "status": "waiting",
                 "created_at": time.time()
             }
@@ -122,7 +123,12 @@ class DataBaseManager:
             db.files[idx]["status"] = "processing"
 
             try:
-                nodes = chunk(new_file["path"], params=params)
+                if new_file["type"] == "pdf":
+                    texts = self.read_text(new_file["path"])
+                    nodes = chunk(texts, params=params)
+                else:
+                    nodes = chunk(new_file["path"], params=params)
+
                 self.knowledge_base.add_documents(
                     docs=[node.text for node in nodes],
                     collection_name=db.metaname,

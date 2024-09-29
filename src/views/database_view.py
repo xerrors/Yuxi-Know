@@ -118,7 +118,7 @@ def upload_file():
     if file:
         upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
         os.makedirs(upload_dir, exist_ok=True)
-        filename = f"{hashstr(file.filename, 4, with_salt=True)}_{file.filename}"
+        filename = f"{hashstr(file.filename, 4, with_salt=True)}_{file.filename}".lower()
         file_path = os.path.join(upload_dir, filename)
         file.save(file_path)
         return jsonify({'message': 'File successfully uploaded', 'file_path': file_path}), 200

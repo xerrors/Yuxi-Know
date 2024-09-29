@@ -18,7 +18,7 @@ def chunk(text_or_path, params=None):
 
     if os.path.isfile(text_or_path) and "uploads" in text_or_path:
         parser = SimpleFileNodeParser()
-        file_type = Path(text_or_path).suffix
+        file_type = Path(text_or_path).suffix.lower()
         if file_type in [".txt", ".json", ".md"]:
             docs = FlatReader().load_data(Path(text_or_path))
         elif file_type in [".docx"]:
