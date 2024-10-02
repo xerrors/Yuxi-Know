@@ -58,7 +58,7 @@ class DeepSeek(OpenAIBase):
 class Zhipu(OpenAIBase):
     def __init__(self, model_name=None):
         model_name = model_name or "glm-4-flash"
-        api_key = os.getenv("ZHIPUAI_API_KEY")
+        api_key = os.getenv("ZHIPUAI_API_KEY", "270ea71e9560c0ff406acbcdd48bfd97.e3XOMdWKuZb7Q1Sk")
         base_url = "https://open.bigmodel.cn/api/paas/v4/"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 

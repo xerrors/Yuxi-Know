@@ -15,7 +15,7 @@
             name="file"
             :max-count="1"
             :disabled="state.uploading"
-            action="/api/database/upload"
+            action="/api/data/upload"
             @change="handleFileUpload"
             @drop="handleDrop"
           >
@@ -92,7 +92,7 @@ const convertPdfToText = async () => {
 
   try {
     state.loading = true;
-    const response = await fetch('/api/tools/pdf2txt', {
+    const response = await fetch('/api/tool/pdf2txt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file: file })

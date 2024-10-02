@@ -351,7 +351,7 @@ const updateStatus = (id, status) => {
 
 const simpleCall = (message) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/call', {
+    fetch('/api/chat/call', {
       method: 'POST',
       body: JSON.stringify({ query: message, }),
       headers: { 'Content-Type': 'application/json' }
@@ -363,7 +363,7 @@ const simpleCall = (message) => {
 }
 
 const loadDatabases = () => {
-  fetch('/api/database/', { method: "GET", })
+  fetch('/api/data/', { method: "GET", })
     .then(response => response.json())
     .then(data => {
       console.log(data)
@@ -371,63 +371,74 @@ const loadDatabases = () => {
     })
 }
 
-const sendMessage = () => {
-  const user_input = conv.value.inputText.trim()
-  if (user_input) {
-    isStreaming.value = true
-    appendUserMessage(user_input)
-    appendAiMessage("", null)
-    const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
-    conv.value.inputText = ''
-    meta.db_name = opts.databases[meta.selectedKB]?.metaname
-    fetch('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        query: user_input,
-        history: conv.value.history,
-        meta: meta
-      }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }).then((response) => {const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      // 逐步读取响应文本
-      const readChunk = () => {
-        return reader.read().then(({ done, value }) => {
-          if (done) {
-            console.log(conv.value)
-            console.log('Finished')
-            updateStatus(cur_res_id, "finished")
-            isStreaming.value = false
-            if (conv.value.messages.length === 2) { renameTitle() }
-            return
-          }
+// 新函数用于处理 fetch 请求
+const fetchChatResponse = (user_input, cur_res_id) => {
+  fetch('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: user_input,
+      history: conv.value.history,
+      meta: meta
+    }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  }).then((response) => {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-          buffer += decoder.decode(value, { stream: true })
-          const message = buffer.trim().split('\n').pop()
+    // 逐步读取响应文本
+    const readChunk = () => {
+      return reader.read().then(({ done, value }) => {
+        if (done) {
+          // 处理完成
+          updateStatus(cur_res_id, "finished");
+          isStreaming.value = false;
+          if (conv.value.messages.length === 2) { renameTitle(); }
+          return; // 结束读取
+        }
 
+        buffer += decoder.decode(value, { stream: true });
+        const messages = buffer.trim().split('\n');
+
+        messages.forEach((message) => {
           try {
-            const data = JSON.parse(message)
-            updateMessage(data.response, cur_res_id, data.refs, "loading")
-            conv.value.history = data.history
-            buffer = ''
+            const data = JSON.parse(message);
+            updateMessage(data.response, cur_res_id, data.refs, "loading");
+            conv.value.history = data.history;
           } catch (e) {
-            // console.log(e)
+            console.error('JSON 解析错误:', e);
           }
-          return readChunk()
-        })
-      }
-      return readChunk()
-    })
-    .catch((error) => {
-      console.error(error)
-      updateStatus(cur_res_id, "error")
-      isStreaming.value = false
-    })
+        });
+        buffer = ''; // 清空缓冲区
+        return readChunk(); // 继续读取
+      });
+    };
+    return readChunk();
+  })
+  .catch((error) => {
+    console.error(error);
+    updateStatus(cur_res_id, "error");
+    isStreaming.value = false;
+  });
+}
+
+// 更新后的 sendMessage 函数
+const sendMessage = () => {
+  const user_input = conv.value.inputText.trim();
+  const dbName = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.metaname : null;
+  if (user_input) {
+    isStreaming.value = true;
+    appendUserMessage(user_input);
+    appendAiMessage("", null);
+    const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
+    conv.value.inputText = '';
+    meta.db_name = dbName;
+
+    fetchChatResponse(user_input, cur_res_id)
   } else {
-    console.log('请输入消息')
+    console.log('请输入消息');
   }
 }
 
@@ -435,11 +446,6 @@ const autoSend = (message) => {
   conv.value.inputText = message
   sendMessage()
 }
-
-// const clearChat = () => {
-//   conv.value.messages = []
-//   conv.value.history = []
-// }
 
 // 从本地存储加载数据
 onMounted(() => {

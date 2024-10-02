@@ -43,7 +43,7 @@ const getRemoteDatabase = () => {
   if (!configStore.config.enable_knowledge_base) {
     return
   }
-  fetch('/api/database').then(res => res.json()).then(data => {
+  fetch('/api/data').then(res => res.json()).then(data => {
     console.log("database", data)
     databaseStore.setDatabase(data.databases)
   })

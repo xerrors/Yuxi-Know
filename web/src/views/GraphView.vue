@@ -59,7 +59,7 @@
           :fileList="fileList"
           :max-count="1"
           :disabled="state.precessing"
-          action="/api/database/upload"
+          action="/api/data/upload"
           @change="handleFileUpload"
           @drop="handleDrop"
         >
@@ -106,7 +106,7 @@ const state = reactive({
 
 const loadGraphInfo = () => {
   state.loadingGraphInfo = true
-  fetch('/api/database/graph', {
+  fetch('/api/data/graph', {
     method: "GET",
   })
     .then(response => response.json())
@@ -147,7 +147,7 @@ const getGraphData = () => {
 const addDocumentByFile = () => {
   state.precessing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  fetch('/api/database/graph/add', {
+  fetch('/api/data/graph/add', {
     method: 'POST',
     body: JSON.stringify({
       file_path: files[0]
@@ -166,7 +166,7 @@ const addDocumentByFile = () => {
 
 const loadSampleNodes = () => {
   state.fetching = true
-  fetch(`/api/database/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
+  fetch(`/api/data/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
     .then((res) => {
       if (res.ok) {
         return res.json();
@@ -199,7 +199,7 @@ const onSearch = () => {
   }
 
   state.searchLoading = true
-  fetch(`/api/database/graph/node?entity_name=${state.searchInput}`)
+  fetch(`/api/data/graph/node?entity_name=${state.searchInput}`)
     .then((res) => {
       if (!res.ok) {
         return res.json().then(errorData => {

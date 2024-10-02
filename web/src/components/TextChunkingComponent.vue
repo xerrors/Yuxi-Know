@@ -40,7 +40,7 @@
             name="file"
             :max-count="1"
             :disabled="state.uploading"
-            action="/api/database/upload"
+            action="/api/data/upload"
             @change="handleFileUpload"
             @drop="handleDrop"
           >
@@ -125,14 +125,16 @@ const chunkText = async () => {
 
   try {
     state.loading = true
-    const response = await fetch('/api/tools/text_chunking', {
+    const response = await fetch('/api/tool/text-chunking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         text: text_or_file,
-        chunk_size: params.chunkSize,
-        chunk_overlap: params.chunkOverlap,
-        use_parser: params.useParser
+        params: {
+          chunk_size: params.chunkSize,
+          chunk_overlap: params.chunkOverlap,
+          use_parser: params.useParser
+        }
       })
     });
 

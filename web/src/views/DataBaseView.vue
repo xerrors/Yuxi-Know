@@ -111,7 +111,7 @@ const newDatabase = reactive({
 
 const loadDatabases = () => {
   // loadGraph()
-  fetch('/api/database/', {
+  fetch('/api/data/', {
     method: "GET",
   })
     .then(response => response.json())
@@ -130,7 +130,7 @@ const createDatabase = () => {
     newDatabase.loading = false
     return
   }
-  fetch('/api/database/', {
+  fetch('/api/data/', {
     method: "POST",
     body: JSON.stringify({
       database_name: newDatabase.name,
@@ -163,7 +163,7 @@ const navigateToGraph = () => {
 
 // const loadGraph = () => {
 //   graphloading.value = true
-//   fetch('/api/database/graph', {
+//   fetch('/api/data/graph', {
 //     method: "GET",
 //   })
 //     .then(response => response.json())

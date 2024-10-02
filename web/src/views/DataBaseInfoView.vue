@@ -32,7 +32,7 @@
               name="file"
               :multiple="true"
               :disabled="state.loading"
-              action="/api/database/upload"
+              action="/api/data/upload"
               @change="handleFileUpload"
               @drop="handleDrop"
             >
@@ -300,7 +300,7 @@ const onQuery = () => {
     return
   }
   meta.db_name = database.value.metaname
-  fetch('/api/database/query-test', {
+  fetch('/api/data/query-test', {
     method: "POST",
     body: JSON.stringify({
       query: queryText.value.trim(),
@@ -359,7 +359,7 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch('/api/database/', {
+      fetch('/api/data/', {
         method: "DELETE",
         body: JSON.stringify({
           db_id: databaseId.value
@@ -387,7 +387,7 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  fetch(`/api/database/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
+  fetch(`/api/data/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
     method: "GET",
   })
     .then(response => response.json())
@@ -427,7 +427,7 @@ const getDatabaseInfo = () => {
   const db_id = databaseId.value
   state.lock = true
   return new Promise((resolve, reject) => {
-    fetch(`/api/database/info?db_id=${db_id}`, {
+    fetch(`/api/data/info?db_id=${db_id}`, {
       method: "GET",
     })
       .then(response => response.json())
@@ -449,7 +449,7 @@ const getDatabaseInfo = () => {
 const deleteFile = (fileId) => {
   console.log(fileId)
   state.lock = true
-  fetch('/api/database/document', {
+  fetch('/api/data/document', {
     method: "DELETE",
     body: JSON.stringify({
       db_id: databaseId.value,
@@ -478,7 +478,7 @@ const addDocumentByFile = () => {
   state.refreshInterval = setInterval(() => {
     getDatabaseInfo();
   }, 1000);
-  fetch('/api/database/add_by_file', {
+  fetch('/api/data/add_by_file', {
     method: "POST",
     body: JSON.stringify({
       db_id: databaseId.value,

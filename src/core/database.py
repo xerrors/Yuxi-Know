@@ -64,6 +64,7 @@ class DataBaseManager:
 
     def get_databases(self):
         self._update_database()
+        assert self.config.enable_knowledge_base, "知识库未启用"
         knowledge_base_collections = self.knowledge_base.get_collection_names()
         if len(self.data["databases"]) != len(knowledge_base_collections):
             logger.warning(f"Database number not match, {knowledge_base_collections}")
