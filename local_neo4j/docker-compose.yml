@@ -1,6 +1,6 @@
 version: '3.9'
 services:
- 
+
   neo4j:
     image: neo4j:latest
     volumes:
@@ -9,7 +9,6 @@ services:
       - ./plugins:/plugins
       - ./data:/data
       - ./logs:/var/lib/neo4j/logs
-    restart: always
     ports:
       - 7474:7474
       - 7687:7687
