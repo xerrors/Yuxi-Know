@@ -4,7 +4,7 @@
 stop_services() {
     echo "Stopping services..."
     pkill -f "npm run server"
-    pkill -f "python -m src.api"
+    pkill -f "uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload"
     exit
 }
 
@@ -12,7 +12,7 @@ stop_services() {
 trap stop_services SIGINT SIGTERM
 
 # Start the server
-python -m src.api &
+uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload &
 
 # Start the frontend service
 cd web

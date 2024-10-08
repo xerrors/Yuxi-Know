@@ -1,7 +1,7 @@
 <template>
 <div>
   <HeaderComponent
-    :title="database.name"
+    :title="database.name || '数据库信息'"
   >
     <template #description>
       <div class="database-info">
@@ -87,7 +87,7 @@
             width="50%"
             v-model:open="state.drawer"
             class="custom-class"
-            :title="selectedFile?.filename"
+            :title="selectedFile?.filename || '文件详情'"
             placement="right"
             @after-open-change="afterOpenChange"
           >
@@ -302,6 +302,9 @@ const onQuery = () => {
   meta.db_name = database.value.metaname
   fetch('/api/data/query-test', {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       query: queryText.value.trim(),
       meta: meta
@@ -361,6 +364,9 @@ const deleteDatabse = () => {
       state.lock = true
       fetch('/api/data/', {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"  // 添加 Content-Type 头
+        },
         body: JSON.stringify({
           db_id: databaseId.value
         }),
@@ -451,6 +457,9 @@ const deleteFile = (fileId) => {
   state.lock = true
   fetch('/api/data/document', {
     method: "DELETE",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       db_id: databaseId.value,
       file_id: fileId
@@ -478,8 +487,11 @@ const addDocumentByFile = () => {
   state.refreshInterval = setInterval(() => {
     getDatabaseInfo();
   }, 1000);
-  fetch('/api/data/add_by_file', {
+  fetch('/api/data/add-by-file', {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       db_id: databaseId.value,
       files: files

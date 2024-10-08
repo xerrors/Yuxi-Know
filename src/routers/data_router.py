@@ -23,7 +23,7 @@ async def create_database(
     database_name: str = Body(...),
     description: str = Body(...),
     db_type: str = Body(...),
-    dimension: int = Body(None)
+    dimension: Optional[int] = Body(None)
 ):
     logger.debug(f"Create database {database_name}")
     database_info = startup.dbm.create_database(
@@ -52,7 +52,7 @@ async def create_document_by_file(db_id: str = Body(...), files: List[str] = Bod
     msg = startup.dbm.add_files(db_id, files)
     return msg
 
-@data.get("/database-info")
+@data.get("/info")
 async def get_database_info(db_id: str):
     logger.debug(f"Get database {db_id} info")
     database = startup.dbm.get_database_info(db_id)
@@ -69,7 +69,13 @@ async def delete_document(db_id: str = Body(...), file_id: str = Body(...)):
 @data.get("/document")
 async def get_document_info(db_id: str, file_id: str):
     logger.debug(f"GET document {file_id} info in {db_id}")
-    info = startup.dbm.get_file_info(db_id, file_id)
+
+    try:
+        info = startup.dbm.get_file_info(db_id, file_id)
+    except Exception as e:
+        logger.error(f"Failed to get file info, {e}, {db_id=}, {file_id=}")
+        info = {"message": "Failed to get file info", "status": "failed"}, 500
+
     return info
 
 @data.post("/upload")

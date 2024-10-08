@@ -149,6 +149,9 @@ const addDocumentByFile = () => {
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
   fetch('/api/data/graph/add', {
     method: 'POST',
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       file_path: files[0]
     }),

@@ -30,5 +30,13 @@ export const useConfigStore = defineStore('config', () => {
     })
   }
 
-  return { config, setConfig, setConfigValue }
+  function refreshConfig() {
+    fetch('/api/config')
+    .then(response => response.json())
+    .then(data => {
+      setConfig(data)
+    })
+  }
+
+  return { config, setConfig, setConfigValue, refreshConfig }
 })

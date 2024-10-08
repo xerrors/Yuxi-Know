@@ -83,7 +83,69 @@
       <div class="setting" v-if="state.section == 'model'">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY</p>
-        <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key" :style="{backgroundColor: modelProvider == item ? colorMap[item] : white }">
+        <div class="model-provider-card">
+          <div class="card-header">
+            <h3>自定义模型</h3>
+          </div>
+          <div class="card-body">
+            <div
+              :class="{'model_selected': modelProvider == 'custom' && configStore.config.model_name == item.name, 'card-models': true, 'custom-model': true}"
+              v-for="(item, key) in configStore.config.custom_models" :key="key"
+              @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.name)"
+            >
+              <div class="card-models__header">
+                <div class="name">{{ item.name }}</div>
+                <div class="action">
+                  <!-- 添加确认删除 -->
+                  <a-popconfirm
+                    title="确认删除该模型?"
+                    @confirm="handleDeleteCustomModel(item.name)"
+                    okText="确认删除"
+                    cancelText="取消"
+                    ok-type="danger"
+                    :disabled="configStore.config.model_name == item.name"
+                  >
+                    <a-button type="text" :disabled="configStore.config.model_name == item.name"  @click.stop><DeleteOutlined /></a-button>
+                  </a-popconfirm>
+                  <a-button type="text" @click.stop="handleEditCustomModel(item)"><EditOutlined /></a-button>
+                </div>
+              </div>
+              <div class="api_base">{{ item.api_base }}</div>
+              <!-- <div class="select-btn"></div> -->
+            </div>
+            <div class="card-models custom-model" @click="customModel.visible=true">
+              <div class="card-models__header">
+                <div class="name"> + 添加模型</div>
+              </div>
+              <div class="api_base">添加兼容 OpenAI 的模型</div>
+              <a-modal
+                class="custom-model-modal"
+                v-model:open="customModel.visible"
+                :title="customModel.modelTitle"
+                @ok="handleAddCustomModel"
+                @cancel="handleCancelCustomModel"
+                :okText="'确认'"
+                :cancelText="'取消'"
+                :okButtonProps="{disabled: !customModel.name || !customModel.api_base}"
+                :ok-type="'primary'"
+              >
+                <p>添加的模型是兼容 OpenAI 的模型，比如 vllm，Ollama。</p>
+                <a-form :model="customModel" layout="vertical" >
+                  <a-form-item label="模型名称" name="name" :rules="[{ required: true, message: '请输入模型名称' }]">
+                    <a-input v-model:value="customModel.name" />
+                  </a-form-item>
+                  <a-form-item label="API Base" name="api_base" :rules="[{ required: true, message: '请输入API Base' }]">
+                    <a-input v-model:value="customModel.api_base" type="password"/>
+                  </a-form-item>
+                  <a-form-item label="API KEY" name="api_key">
+                    <a-input v-model:value="customModel.api_key" autocomplete="off"/>
+                  </a-form-item>
+                </a-form>
+              </a-modal>
+            </div>
+          </div>
+        </div>
+        <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
           <div class="card-header">
             <h3>{{ modelNames[item].name }}</h3>
             <a :href="modelNames[item].url" target="_blank">详情</a>
@@ -96,7 +158,7 @@
               @click="handleChange('model_provider', item); handleChange('model_name', model)"
             >
               <div class="model_name">{{ model }}</div>
-              <div class="select-btn"></div>
+              <!-- <div class="select-btn"></div> -->
             </div>
           </div>
         </div>
@@ -116,7 +178,7 @@
 
 <script setup>
 import { message } from 'ant-design-vue';
-import { computed, reactive, ref, h } from 'vue'
+import { computed, reactive, ref, h, watch } from 'vue'
 import { useConfigStore } from '@/stores/config';
 import {
   ReloadOutlined,
@@ -124,8 +186,11 @@ import {
   CodeOutlined,
   ExceptionOutlined,
   FolderOutlined,
+  DeleteOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import { notification, Button } from 'ant-design-vue';
 
 const configStore = useConfigStore()
 const items = computed(() => configStore.config._config_items)
@@ -133,19 +198,17 @@ const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
 const modelProvider = computed(() => configStore.config?.model_provider)
 const isNeedRestart = ref(false)
+const customModel = reactive({
+  modelTitle: '添加自定义模型',
+  visible: false,
+  name: '',
+  api_key: '',
+  api_base: '',
+  edit_type: 'add',
+})
 const state = reactive({
   loading: false,
   section: 'base'
-})
-
-const colorMap = reactive({
-  siliconflow: '#FFECFF',
-  zhipu: '#EFF1FE',
-  qianfan: '#E8F5FE',
-  deepseek: '#D3DCFF',
-  openai: '#E5E7EB',
-  vllm: '#E5E7EB',
-  bailian: '#EFF1FE',
 })
 
 // 筛选 modelStatus 中为真的key
@@ -179,12 +242,73 @@ const handleChange = (key, e) => {
         || key == 'reranker') {
     if (!isNeedRestart.value) {
       isNeedRestart.value = true
-      message.info('修改配置后需要重启服务才能生效')
+      notification.info({
+        message: '需要重启服务',
+        description: '请点击右下角按钮重启服务',
+        placement: 'topLeft',
+        duration: 0,
+        btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重启')
+      })
     }
   }
 
   configStore.setConfigValue(key, e)
 }
+
+const handleAddCustomModel = async () => {
+  if (!customModel.name || !customModel.api_base) {
+    message.error('请填写完整模型信息')
+    return
+  }
+
+  if (!configStore.config.custom_models) {
+    configStore.config.custom_models = []
+  }
+
+  if (configStore.config.custom_models.find(item => item.name == customModel.name)) {
+    message.error('模型名称已存在')
+    return
+  }
+
+  if (customModel.edit_type == 'add') {
+    configStore.config.custom_models.push(customModel)
+  } else {
+    configStore.config.custom_models = configStore.config.custom_models.map(item => {
+      if (item.name == customModel.name) {
+        return customModel
+      }
+      return item
+    })
+  }
+
+  customModel.visible = false
+  await configStore.setConfigValue('custom_models', configStore.config.custom_models)
+  configStore.refreshConfig()
+  message.success('添加自定义模型成功')
+}
+
+const handleDeleteCustomModel = (name) => {
+  configStore.config.custom_models = configStore.config.custom_models.filter(item => item.name != name)
+  configStore.setConfigValue('custom_models', configStore.config.custom_models)
+  configStore.refreshConfig()
+}
+
+const handleEditCustomModel = (item) => {
+  customModel.modelTitle = '编辑自定义模型'
+  customModel.name = item.name
+  customModel.api_key = item.api_key
+  customModel.api_base = item.api_base
+  customModel.visible = true
+  customModel.edit_type = 'edit'
+}
+
+const handleCancelCustomModel = () => {
+  customModel.name = ''
+  customModel.api_key = ''
+  customModel.api_base = ''
+  customModel.visible = false
+}
+
 const sendRestart = () => {
   console.log('Restarting...')
   message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
@@ -213,8 +337,8 @@ const sendRestart = () => {
   padding: 0;
   box-sizing: border-box;
   display: flex;
-  background: inherit;
   position: relative;
+  min-height: 100%;
 }
 
 .sider {
@@ -295,8 +419,8 @@ const sendRestart = () => {
   }
 
   .model-provider-card {
-    background-color: var(--gray-10);
     border: 1px solid var(--gray-300);
+    background-color: white;
     border-radius: 8px;
     margin-bottom: 16px;
     padding: 16px;
@@ -328,9 +452,9 @@ const sendRestart = () => {
       .success {
         width: 1rem;
         height: 1rem;
-        background-color: green;
+        background-color: rgb(91, 186, 91);
         border-radius: 50%;
-        box-shadow: 0 0 10px 1px rgba(  0,128,  0, 0.5);
+        box-shadow: 0 0 10px 1px rgba(  0,128,  0, 0.2);
         border: 2px solid white;
       }
 
@@ -351,7 +475,6 @@ const sendRestart = () => {
         width: 100%;
         border-radius: 8px;
         border: 1px solid var(--gray-300);
-        background-color: var(--gray-50);
         padding: 10px 16px;
         display: flex;
         gap: 6px;
@@ -359,9 +482,9 @@ const sendRestart = () => {
         align-items: center;
         cursor: pointer;
         box-sizing: border-box;
-        background-color: rgba(255, 255, 255, 0.6);
+        background-color: var(--gray-10);
+        transition: box-shadow 0.1s;
         &:hover {
-          border-color: var(--gray-400);
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
         .model_name {
@@ -386,7 +509,60 @@ const sendRestart = () => {
             border: 2px solid var(--main-color);
           }
         }
+
+        &.custom-model {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          padding-right: 8px;
+          gap: 10px;
+          .card-models__header {
+            width: 100%;
+            height: 32px;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            .name {
+              color: var(--gray-1000);
+              font-weight: bold;
+            }
+            .action {
+              opacity: 0;
+              user-select: none;
+              margin-left: auto;
+              button {
+                padding: 4px 8px;
+              }
+            }
+            .custom-model-modal {
+              .ant-form-item {
+                margin-bottom: 10px;
+              }
+            }
+          }
+          .api_base {
+            font-size: 12px;
+            color: var(--gray-600);
+          }
+
+          &:hover {
+            .card-models__header {
+              .action {
+                opacity: 1;
+              }
+            }
+          }
+        }
+        &.model_selected.custom-model {
+          padding: 9px 7px 9px 15px;
+          .card-models__header {
+            .action {
+              opacity: 1;
+            }
+          }
+        }
       }
+
     }
   }
 

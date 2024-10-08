@@ -132,11 +132,14 @@ const createDatabase = () => {
   }
   fetch('/api/data/', {
     method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify({
       database_name: newDatabase.name,
       description: newDatabase.description,
       db_type: "knowledge",
-      dimension: newDatabase.dimension,
+      dimension: newDatabase.dimension ? parseInt(newDatabase.dimension) : null,
     })
   })
   .then(response => response.json())
@@ -160,24 +163,6 @@ const navigateToDatabase = (databaseId) => {
 const navigateToGraph = () => {
   router.push({ path: `/database/graph` });
 };
-
-// const loadGraph = () => {
-//   graphloading.value = true
-//   fetch('/api/data/graph', {
-//     method: "GET",
-//   })
-//     .then(response => response.json())
-//     .then(data => {
-//       console.log(data)
-//       graph.value = data.graph
-//       graphloading.value = false
-//     })
-//     .catch(error => {
-//       console.error(error)
-//       message.error(error.message)
-//       graphloading.value = false
-//     })
-// }
 
 watch(() => route.path, (newPath, oldPath) => {
   if (newPath === '/database') {

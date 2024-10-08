@@ -242,7 +242,7 @@ class DataBaseLite:
         self.dimension = dimension
         self.db_id = kwargs.get("db_id", hashstr(name))
         self.metaname = kwargs.get("metaname", f"{db_type[:1]}{hashstr(name)}")
-        self.metadata = kwargs.get("metaname", {})
+        self.metadata = kwargs.get("metadata", {})
         self.files = kwargs.get("files", [])
         self.embed_model = kwargs.get("embed_model", None)
 

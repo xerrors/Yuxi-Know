@@ -1,4 +1,3 @@
-<!-- ChatComponent.vue -->
 <template>
   <div class="chat"  ref="chatContainer">
     <div class="header">
@@ -128,7 +127,7 @@
           placeholder="输入问题……"
           :auto-size="{ minRows: 1, maxRows: 10 }"
         />
-        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)">
+        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
@@ -373,7 +372,7 @@ const loadDatabases = () => {
 
 // 新函数用于处理 fetch 请求
 const fetchChatResponse = (user_input, cur_res_id) => {
-  fetch('/api/chat', {
+  fetch('/api/chat/', {
     method: 'POST',
     body: JSON.stringify({
       query: user_input,
@@ -408,7 +407,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
             updateMessage(data.response, cur_res_id, data.refs, "loading");
             conv.value.history = data.history;
           } catch (e) {
-            console.error('JSON 解析错误:', e);
+            // console.error('JSON 解析错误:', e);
           }
         });
         buffer = ''; // 清空缓冲区

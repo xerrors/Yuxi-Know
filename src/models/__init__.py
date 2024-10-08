@@ -20,10 +20,6 @@ def select_model(config):
         from src.models.chat_model import Qianfan
         return Qianfan(model_name)
 
-    elif model_provider == "vllm":
-        from src.models.chat_model import VLLM
-        return VLLM(model_name)
-
     elif model_provider == "dashscope":
         from src.models.chat_model import DashScope
         return DashScope(model_name)
@@ -35,6 +31,14 @@ def select_model(config):
     elif model_provider == "siliconflow":
         from src.models.chat_model import SiliconFlow
         return SiliconFlow(model_name)
+
+    elif model_provider == "custom":
+        model_info = next((x for x in config.custom_models if x["name"] == model_name), None)
+        if model_info is None:
+            raise ValueError(f"Model {model_name} not found in custom models")
+
+        from src.models.chat_model import CustomModel
+        return CustomModel(model_info)
 
     elif model_provider is None:
         raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")

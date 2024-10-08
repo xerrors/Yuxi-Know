@@ -51,7 +51,7 @@ const getRemoteDatabase = () => {
 
 onMounted(() => {
   getRemoteDatabase()
-  getRemoteConfig()
+  configStore.refreshConfig()
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API

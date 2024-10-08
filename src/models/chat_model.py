@@ -62,18 +62,18 @@ class Zhipu(OpenAIBase):
         base_url = "https://open.bigmodel.cn/api/paas/v4/"
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
-class VLLM(OpenAIBase):
-    def __init__(self, model_name=None):
-        model_name = model_name or "vllm"
-        api_key = os.getenv("VLLM_API_KEY")
-        base_url = os.getenv("VLLM_API_BASE")
-        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
-
 class SiliconFlow(OpenAIBase):
     def __init__(self, model_name=None):
         model_name = model_name or "meta-llama/Meta-Llama-3.1-8B-Instruct"
         api_key = os.getenv("SILICONFLOW_API_KEY")
         base_url = "https://api.siliconflow.cn/v1"
+        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
+
+class CustomModel(OpenAIBase):
+    def __init__(self, model_info):
+        model_name = model_info["name"]
+        api_key = model_info["api_key"]
+        base_url = model_info["api_base"]
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
