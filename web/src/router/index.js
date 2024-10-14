@@ -87,7 +87,7 @@ const router = createRouter({
           meta: { keepAlive: true }
         },
         {
-          path: 'text_chunking',
+          path: 'text-chunking',
           name: 'TextChunking',
           component: () => import('../components/TextChunkingComponent.vue'),
         },

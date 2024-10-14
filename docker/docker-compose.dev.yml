@@ -1,0 +1,128 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    container_name: api-dev
+    working_dir: /app
+    volumes:
+      - ../src:/app/src
+      - ../saves:/app/saves
+      - /hdd/zwj/models:/hdd/zwj/models
+    ports:
+      - "5000:5000"
+    depends_on:
+      - graph
+      - milvus
+    networks:
+      - app-network
+    environment:
+      - NEO4J_URI=bolt://graph:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=0123456789
+      - MILVUS_URI=http://milvus:19530
+    command: uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/web.Dockerfile
+      target: development
+    container_name: web-dev
+    volumes:
+      - ../web:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+    networks:
+      - app-network
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://api:5000  # 添加这行
+    command: npm run server
+
+  graph:
+    image: neo4j:latest
+    container_name: graph-dev
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - ./volumes/neo4j/data:/data
+      - ./volumes/neo4j/logs:/var/lib/neo4j/logs
+    environment:
+      - NEO4J_AUTH=neo4j/0123456789
+      - NEO4J_server_bolt_listen__address=0.0.0.0:7687
+      - NEO4J_server_http_listen__address=0.0.0.0:7474
+    networks:
+      - app-network
+
+  etcd:
+    container_name: milvus-etcd-dev
+    image: quay.io/coreos/etcd:v3.5.5
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - ./volumes/milvus/etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  minio:
+    container_name: milvus-minio-dev
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - ./volumes/milvus/minio:/minio_data
+    command: minio server /minio_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  milvus:
+    image: milvusdb/milvus:latest
+    container_name: milvus-standalone-dev
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: minio:9000
+      MILVUS_LOG_LEVEL: error  # Add this line to reduce log output
+    volumes:
+      - ./volumes/milvus/milvus:/var/lib/milvus
+      - ./volumes/milvus/logs:/var/lib/milvus/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    depends_on:
+      - "etcd"
+      - "minio"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

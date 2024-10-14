@@ -1,7 +1,7 @@
 <template>
 <div>
   <HeaderComponent
-    :title="database.name"
+    :title="database.name || '数据库信息'"
   >
     <template #description>
       <div class="database-info">
@@ -32,7 +32,7 @@
               name="file"
               :multiple="true"
               :disabled="state.loading"
-              action="/api/database/upload"
+              action="/api/data/upload"
               @change="handleFileUpload"
               @drop="handleDrop"
             >
@@ -87,7 +87,7 @@
             width="50%"
             v-model:open="state.drawer"
             class="custom-class"
-            :title="selectedFile?.filename"
+            :title="selectedFile?.filename || '文件详情'"
             placement="right"
             @after-open-change="afterOpenChange"
           >
@@ -300,8 +300,11 @@ const onQuery = () => {
     return
   }
   meta.db_name = database.value.metaname
-  fetch('/api/database/query-test', {
+  fetch('/api/data/query-test', {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       query: queryText.value.trim(),
       meta: meta
@@ -359,8 +362,11 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch('/api/database/', {
+      fetch(`/api/data/?db_id=${databaseId.value}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
           db_id: databaseId.value
         }),
@@ -387,7 +393,7 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  fetch(`/api/database/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
+  fetch(`/api/data/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
     method: "GET",
   })
     .then(response => response.json())
@@ -425,9 +431,12 @@ const formatRelativeTime = (timestamp) => {
 
 const getDatabaseInfo = () => {
   const db_id = databaseId.value
+  if (!db_id) {
+    return
+  }
   state.lock = true
   return new Promise((resolve, reject) => {
-    fetch(`/api/database/info?db_id=${db_id}`, {
+    fetch(`/api/data/info?db_id=${db_id}`, {
       method: "GET",
     })
       .then(response => response.json())
@@ -449,8 +458,11 @@ const getDatabaseInfo = () => {
 const deleteFile = (fileId) => {
   console.log(fileId)
   state.lock = true
-  fetch('/api/database/document', {
+  fetch('/api/data/document', {
     method: "DELETE",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       db_id: databaseId.value,
       file_id: fileId
@@ -478,8 +490,11 @@ const addDocumentByFile = () => {
   state.refreshInterval = setInterval(() => {
     getDatabaseInfo();
   }, 1000);
-  fetch('/api/database/add_by_file', {
+  fetch('/api/data/add-by-file', {
     method: "POST",
+    headers: {
+      "Content-Type": "application/json"  // 添加 Content-Type 头
+    },
     body: JSON.stringify({
       db_id: databaseId.value,
       files: files

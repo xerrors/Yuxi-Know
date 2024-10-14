@@ -1,4 +1,3 @@
-<!-- ChatComponent.vue -->
 <template>
   <div class="chat"  ref="chatContainer">
     <div class="header">
@@ -17,10 +16,9 @@
         </a-tooltip>
       </div>
       <div class="header__right">
-        <!-- <div class="nav-btn text metas">
-          <CompassFilled v-if="meta.use_web" />
-          <GoldenFilled v-if="meta.use_graph"/>
-        </div> -->
+        <div class="nav-btn text metas" v-if="meta.use_graph">
+          <GoldOutlined /> 图数据库
+        </div>
         <a-dropdown v-if="meta.selectedKB !== null">
           <a class="ant-dropdown-link nav-btn" @click.prevent>
             <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
@@ -128,7 +126,7 @@
           placeholder="输入问题……"
           :auto-size="{ minRows: 1, maxRows: 10 }"
         />
-        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)">
+        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
           <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
         </a-button>
       </div>
@@ -148,6 +146,7 @@ import {
   BookFilled,
   CompassFilled,
   GoldenFilled,
+  GoldOutlined,
   SettingOutlined,
   SettingFilled,
   PlusCircleOutlined,
@@ -283,7 +282,6 @@ const scrollToBottom = () => {
   }, 10)
 }
 
-
 const generateRandomHash = (length) => {
     let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let hash = '';
@@ -315,14 +313,31 @@ const appendAiMessage = (message, refs=null) => {
 
 const updateMessage = (text, id, refs, status) => {
   const message = conv.value.messages.find((message) => message.id === id);
+
   if (message) {
-    message.refs = refs;
-    message.status = status;
-    message.text = text;
-    message.model_name = refs.model_name
+    // 只有在 text 不为空时更新
+    if (text !== null && text !== undefined && text !== '') {
+      message.text = text;
+    }
+
+    // 只有在 refs 不为空时更新
+    if (refs !== null && refs !== undefined) {
+      message.refs = refs;
+
+      // 如果 refs 里面的 model_name 不为空时更新
+      if (refs.model_name !== null && refs.model_name !== undefined && refs.model_name !== '') {
+        message.model_name = refs.model_name;
+      }
+    }
+
+    // 只有在 status 不为空时更新
+    if (status !== null && status !== undefined && status !== '') {
+      message.status = status;
+    }
   } else {
     console.error('Message not found');
   }
+
   scrollToBottom();
 };
 
@@ -335,8 +350,11 @@ const updateStatus = (id, status) => {
     console.error('Message not found')
   }
 
-  if (message.refs.knowledge_base.results.length > 0) {
-    message.groupedResults = message.refs.knowledge_base.results.reduce((acc, result) => {
+  if (message.refs && message.refs.knowledge_base.results.length > 0) {
+
+    message.groupedResults = message.refs.knowledge_base.results
+    .filter(result => result.file && result.file.filename)
+    .reduce((acc, result) => {
       const { filename } = result.file;
       console.log(acc, result, filename)
       if (!acc[filename]) {
@@ -351,7 +369,7 @@ const updateStatus = (id, status) => {
 
 const simpleCall = (message) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/call', {
+    fetch('/api/chat/call', {
       method: 'POST',
       body: JSON.stringify({ query: message, }),
       headers: { 'Content-Type': 'application/json' }
@@ -363,7 +381,7 @@ const simpleCall = (message) => {
 }
 
 const loadDatabases = () => {
-  fetch('/api/database/', { method: "GET", })
+  fetch('/api/data/', { method: "GET", })
     .then(response => response.json())
     .then(data => {
       console.log(data)
@@ -371,63 +389,98 @@ const loadDatabases = () => {
     })
 }
 
-const sendMessage = () => {
-  const user_input = conv.value.inputText.trim()
-  if (user_input) {
-    isStreaming.value = true
-    appendUserMessage(user_input)
-    appendAiMessage("", null)
-    const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
-    conv.value.inputText = ''
-    meta.db_name = opts.databases[meta.selectedKB]?.metaname
-    fetch('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify({
-        query: user_input,
-        history: conv.value.history,
-        meta: meta
-      }),
+// 新函数用于处理 fetch 请求
+const fetchChatResponse = (user_input, cur_res_id) => {
+  fetch('/api/chat/', {
+    method: 'POST',
+    body: JSON.stringify({
+      query: user_input,
+      history: conv.value.history,
+      meta: meta,
+      cur_res_id: cur_res_id,
+    }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  })
+  .then((response) => {
+    if (!response.body) throw new Error("ReadableStream not supported.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = '';
+
+    const readChunk = () => {
+      return reader.read().then(({ done, value }) => {
+        if (done) {
+          fetchRefs(cur_res_id).then((data) => {
+            console.log(data)
+            updateMessage(null, cur_res_id, data, "finished");
+            updateStatus(cur_res_id, "finished");
+          })
+          isStreaming.value = false;
+          if (conv.value.messages.length === 2) { renameTitle(); }
+          return;
+        }
+
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        try {
+          const data = JSON.parse(chunk);
+          updateMessage(data.response, cur_res_id, data.refs, "loading");
+          console.debug(data.response)
+          conv.value.history = data.history;
+        } catch (e) {
+          // console.debug('JSON 解析错误:', e, chunk);
+        }
+        return readChunk(); // 继续读取
+      });
+    };
+    readChunk();
+
+
+  })
+  .catch((error) => {
+    console.error(error);
+    updateStatus(cur_res_id, "error");
+    isStreaming.value = false;
+  })
+  .finally(() => {
+    isStreaming.value = false;
+  });
+}
+
+const fetchRefs = (cur_res_id) => {
+  return new Promise((resolve, reject) => {
+    fetch(`/api/chat/refs?cur_res_id=${cur_res_id}`, {
+      method: "GET",
       headers: {
-        'Content-Type': 'application/json'
-      }
-    }).then((response) => {const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      // 逐步读取响应文本
-      const readChunk = () => {
-        return reader.read().then(({ done, value }) => {
-          if (done) {
-            console.log(conv.value)
-            console.log('Finished')
-            updateStatus(cur_res_id, "finished")
-            isStreaming.value = false
-            if (conv.value.messages.length === 2) { renameTitle() }
-            return
-          }
+        "Content-Type": "application/json"
+      },
+    }).then(response => response.json())
+      .then(data => {
+        resolve(data.refs)
+      })
+      .catch((error) => {
+        reject(error)
+      })
+  })
+}
 
-          buffer += decoder.decode(value, { stream: true })
-          const message = buffer.trim().split('\n').pop()
+// 更新后的 sendMessage 函数
+const sendMessage = () => {
+  const user_input = conv.value.inputText.trim();
+  const dbName = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.metaname : null;
+  if (user_input) {
+    isStreaming.value = true;
+    appendUserMessage(user_input);
+    appendAiMessage("", null);
+    const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
+    conv.value.inputText = '';
+    meta.db_name = dbName;
 
-          try {
-            const data = JSON.parse(message)
-            updateMessage(data.response, cur_res_id, data.refs, "loading")
-            conv.value.history = data.history
-            buffer = ''
-          } catch (e) {
-            // console.log(e)
-          }
-          return readChunk()
-        })
-      }
-      return readChunk()
-    })
-    .catch((error) => {
-      console.error(error)
-      updateStatus(cur_res_id, "error")
-      isStreaming.value = false
-    })
+    fetchChatResponse(user_input, cur_res_id)
   } else {
-    console.log('请输入消息')
+    console.log('请输入消息');
   }
 }
 
@@ -435,11 +488,6 @@ const autoSend = (message) => {
   conv.value.inputText = message
   sendMessage()
 }
-
-// const clearChat = () => {
-//   conv.value.messages = []
-//   conv.value.history = []
-// }
 
 // 从本地存储加载数据
 onMounted(() => {

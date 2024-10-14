@@ -43,15 +43,16 @@ const getRemoteDatabase = () => {
   if (!configStore.config.enable_knowledge_base) {
     return
   }
-  fetch('/api/database').then(res => res.json()).then(data => {
+  fetch('/api/data').then(res => res.json()).then(data => {
     console.log("database", data)
     databaseStore.setDatabase(data.databases)
   })
 }
 
 onMounted(() => {
-  getRemoteDatabase()
   getRemoteConfig()
+  getRemoteDatabase()
+  configStore.refreshConfig()
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API

@@ -80,13 +80,20 @@ class Config(SimpleConfig):
 
     def handle_self(self):
         self.model_names = MODEL_NAMES
+        model_provider_info = self.model_names.get(self.model_provider, {})
 
-        if self.model_name not in self.model_names[self.model_provider]["models"]:
-            logger.warning(f"Model name {self.model_name} not in {self.model_provider}, using default model name")
-            self.model_name = self.model_names[self.model_provider]["default"]
+        if self.model_provider != "custom":
+            if self.model_name not in model_provider_info["models"]:
+                logger.warning(f"Model name {self.model_name} not in {self.model_provider}, using default model name")
+                self.model_name = model_provider_info["default"]
 
-        default_model_name = self.model_names[self.model_provider]["default"]
-        self.model_name = self.get("model_name") or default_model_name
+            default_model_name = model_provider_info["default"]
+            self.model_name = self.get("model_name") or default_model_name
+        else:
+            self.model_name = self.get("model_name")
+            if self.model_name not in [item["name"] for item in self.custom_models]:
+                logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
+                self.model_name = self.custom_models[0]["name"]
 
         self.model_provider_status = {}
         for provider in self.model_names:
@@ -200,15 +207,6 @@ MODEL_NAMES = {
         ]
     },
 
-    "vllm": {
-        "name": "VLLM",
-        "default": "vllm",
-        "env": ["VLLM_API_KEY", "VLLM_API_BASE"],
-        "models": [
-            "vllm",
-        ]
-    },
-
     # https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
     "dashscope": {
         "name": "阿里百炼 (DashScope)",
@@ -241,7 +239,7 @@ MODEL_NAMES = {
             "meta-llama/Meta-Llama-3.1-70B-Instruct",
             "meta-llama/Meta-Llama-3.1-405B-Instruct",
         ]
-    }
+    },
 }
 
 

@@ -31,7 +31,7 @@ import HeaderComponent from '@/components/HeaderComponent.vue';
 const router = useRouter();
 const tools = ref([]);
 const iconMap = ref({
-  "text_chunking": FileSearchOutlined
+  "text-chunking": FileSearchOutlined
 })
 
 const state = reactive({
@@ -40,7 +40,7 @@ const state = reactive({
 
 const getTools = () => {
   state.loadingTools = true
-  fetch('/api/tools/')
+  fetch('/api/tool/')
     .then(response => response.json())
     .then(data => {
       tools.value = data;

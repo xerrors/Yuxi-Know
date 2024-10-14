@@ -16,70 +16,6 @@ logger = setup_logger("server-graphbase")
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-"""
-from neo4j import GraphDatabase
-import random
-
-class KnowledgeGraph:
-    def __init__(self, uri, user, password):
-        self._driver = GraphDatabase.driver(uri, auth=(user, password))
-
-    def close(self):
-        self._driver.close()
-
-    def use_database(self, kgdb_name):
-        with self._driver.session() as session:
-            session.run(f"USE {kgdb_name}")
-
-    def get_sample_nodes(self, kgdb_name='neo4j', num=50):
-        self.use_database(kgdb_name)
-        selected_nodes = set()
-        nodes_to_expand = set()
-        result_nodes = []
-
-        with self._driver.session() as session:
-            while len(selected_nodes) < num:
-                # 如果需要扩展的节点为空，随机选择一个新节点
-                if not nodes_to_expand:
-                    result = session.run("MATCH (n) RETURN n, rand() as r ORDER BY r LIMIT 1")
-                    for record in result:
-                        nodes_to_expand.add(record['n'].id)
-                        result_nodes.append({'n': record['n'], 'r': None, 'm': None})
-
-                # 从需要扩展的节点中随机选择一个节点
-                current_node_id = random.choice(list(nodes_to_expand))
-                nodes_to_expand.remove(current_node_id)
-
-                # 获取当前节点的邻居节点，最多5个
-                result = session.run(
-                    f"MATCH (n)-[r]-(m) WHERE id(n) = {current_node_id} RETURN n, r, m LIMIT 5"
-                )
-
-                for record in result:
-                    neighbor_node_id = record['m'].id
-                    if neighbor_node_id not in selected_nodes:
-                        selected_nodes.add(neighbor_node_id)
-                        nodes_to_expand.add(neighbor_node_id)
-                        result_nodes.append({'n': record['n'], 'r': record['r'], 'm': record['m']})
-
-                # 如果已经达到最大值，停止扩展
-                if len(selected_nodes) >= num:
-                    break
-
-        return result_nodes[:num]
-
-# 示例用法
-uri = "bolt://localhost:7687"
-user = "neo4j"
-password = "password"
-kg = KnowledgeGraph(uri, user, password)
-sample_nodes = kg.get_sample_nodes(num=50)
-for node in sample_nodes:
-    print(f"Node: {node['n'].id}, Relationship: {node['r']}, Neighbor: {node['m'].id}")
-kg.close()
-
-"""
-
 UIE_MODEL = None
 
 class GraphDatabase:
@@ -97,8 +33,14 @@ class GraphDatabase:
         username = os.environ.get("NEO4J_USERNAME", "neo4j")
         password = os.environ.get("NEO4J_PASSWORD", "0123456789")
         logger.info(f"Connecting to Neo4j at {uri}/{self.kgdb_name}")
-        self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
-        self.status = "open"
+        try:
+            self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
+            self.status = "open"
+            logger.info(f"Connected to Neo4j at {uri}/{self.kgdb_name}, {self.get_database_info()}")
+        except Exception as e:
+            logger.error(f"Failed to connect to Neo4j: {e}, {uri}, {self.kgdb_name}, {username}, {password}")
+            self.config.enable_knowledge_graph = False
+
 
     def close(self):
         """关闭数据库连接"""
@@ -132,14 +74,19 @@ class GraphDatabase:
         """获取指定数据库的信息"""
         self.use_database(db_name)
         def query(tx):
-            entity_count = tx.run("MATCH (n:Entity) RETURN count(n) AS count").single()["count"]
+            entity_count = tx.run("MATCH (n) RETURN count(n) AS count").single()["count"]
             relationship_count = tx.run("MATCH ()-[r]->() RETURN count(r) AS count").single()["count"]
             triples_count = tx.run("MATCH (n)-[r]->(m) RETURN count(n) AS count").single()["count"]
+
+            # 获取所有标签
+            labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
+
             return {
                 "database_name": db_name,
                 "entity_count": entity_count,
                 "relationship_count": relationship_count,
                 "triples_count": triples_count,
+                "labels": labels,
                 "status": self.status
             }
 
@@ -223,6 +170,7 @@ class GraphDatabase:
 
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
         self.status = "processing"
+        kgdb_name = kgdb_name or 'neo4j'
         self.use_database(kgdb_name)  # 切换到指定数据库
 
         def read_triples(file_path):

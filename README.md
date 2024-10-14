@@ -1,5 +1,3 @@
-<img src="web/public/home.png" style="border-radius: 16px; margin: 0 auto; max-height: 400px; display: block;"/>
-
 <h1 style="text-align: center">Yuxi (语析) </h1>
 
 > [!WARNING]
@@ -7,17 +5,62 @@
 
 ## 预览
 
-![图片1](./images/img1.png)
-![图片1](./images/img2.png)
-![图片1](./images/img3.png)
-![图片1](./images/img4.png)
-
+![DEMO.GIF](./images/demo.gif)
 
 ## 准备
 
-1. 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAI_API_KEY=<ZHIPU_KEY>`。
-2. 配置 python 环境 `pip install -r requirements.txt`，python 版本应当小于 `3.12`。
-3. 前端 UI 部分，需要安装 Node.js  环境，参考：[Download Node.js](https://nodejs.org/en/download/package-manager)。
+提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。
+
+
+
+## Dockers 启动
+
+**提醒**：此部分暂时依赖于前端打包之后的内容（后面考虑更新），同时会自动启动 neo4j 图数据库。
+
+```bash
+docker-compose -f docker/docker-compose.dev.yml up --build
+```
+
+下面的这些容器都会启动：
+
+```bash
+[+] Running 7/7
+ ✔ Network docker_app-network       Created
+ ✔ Container graph-dev              Started
+ ✔ Container milvus-etcd-dev        Started
+ ✔ Container milvus-minio-dev       Started
+ ✔ Container milvus-standalone-dev  Started
+ ✔ Container api-dev                Started
+ ✔ Container web-dev                Started
+```
+
+关闭 docker 服务：
+
+```bash
+docker-compose -f docker/docker-compose.dev.yml down
+```
+
+如果需要使用到本地模型，比如向量模型或者重排序模型，则需要将环境变量中设置的 `MODEL_ROOT_DIR` 做映射，比如本地模型都是存放在 `/hdd/models` 里面，则需要在 `docker-compose.yml` 中添加：
+
+```yml
+services:
+  # 后端服务
+  backend:
+    image: pytorch/pytorch:2.4.1-cuda11.8-cudnn9-runtime  # 或者您可以自定义 Python 基础镜像
+    container_name: backend
+    working_dir: /app
+    volumes:
+      - ./src:/app/src  # 映射源代码
+      - ./requirements.txt:/app/requirements.txt
+      - ./saves:/app/saves
+      - /hdd/models:/hdd/models  # <=== 修改这里
+...
+```
+
+##
+
+1. 配置 python 环境 `pip install -r requirements.txt`，python 版本应当小于 `3.12`。
+2. 前端 UI 部分，需要安装 Node.js  环境，参考：[Download Node.js](https://nodejs.org/en/download/package-manager)。
 
 **如果不启用知识库，可以仅安装下面的依赖**
 
@@ -50,11 +93,13 @@ docker compose up -d
 
 ## 启动
 
+推荐使用 docker 启动
+
 ### 1. 手动启动
 
 ```bash
 # 后端部分
-python -m src.api
+python -m src.main
 
 # 前端部分
 cd web
@@ -72,30 +117,9 @@ bash run.sh
 
 ### 3. Docker 启动
 
-**提醒**：此部分暂时依赖于前端打包之后的内容（后面考虑更新），同时会自动启动 neo4j 图数据库。
+## Changelog
 
-```bash
-docker compose up --build
-```
-
-如果需要使用到本地模型，比如向量模型或者重排序模型，则需要将环境变量中设置的 `MODEL_ROOT_DIR` 做映射，比如本地模型都是存放在 `/hdd/models` 里面，则需要在 `docker-compose.yml` 中添加：
-
-```yml
-services:
-  # 后端服务
-  backend:
-    image: pytorch/pytorch:2.4.1-cuda11.8-cudnn9-runtime  # 或者您可以自定义 Python 基础镜像
-    container_name: backend
-    working_dir: /app
-    volumes:
-      - ./src:/app/src  # 映射源代码
-      - ./requirements.txt:/app/requirements.txt
-      - ./saves:/app/saves
-      - /hdd/models:/hdd/models  # <=== 修改这里
-...
-```
-
-**提醒**：启动 docker 之后，如果需要进行调试的时候，务必先停掉 docker （在项目路径下，使用 `docker compose down`），然后再运行 `bash run.sh`，不然会出现端口冲突。这是由于没有单独设置生产环境和开发环境，这个以后再说。
+- 2024.10.12 后端修改为 FastAPI，并添加了 Milnvs 的独立部署。
 
 ## 其余脚本
 

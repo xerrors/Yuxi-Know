@@ -12,7 +12,6 @@
 |`dashscope`（阿里） | `qwen-max-latest` | `DASHSCOPE_API_KEY`|
 |`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
 |`siliconflow` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`|
-|`vllm`|`vllm`|`VLLM_API_KEY`, `VLLM_API_BASE`|
 
 vllm 的具体配置项可以参考[这里](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments), 部署参考脚本：
 

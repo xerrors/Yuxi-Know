@@ -22,3 +22,6 @@ sentencepiece==0.1.99
 llama-index-readers-file
 opencv-python-headless
 docx2txt
+uvicorn[standard]
+fastapi
+python-multipart

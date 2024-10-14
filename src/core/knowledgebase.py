@@ -1,7 +1,7 @@
 import os
 
 from src.models.embedding import EmbeddingModel
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, MilvusException
 from src.utils import setup_logger, hashstr
 logger = setup_logger("KnowledgeBase")
 
@@ -9,17 +9,29 @@ logger = setup_logger("KnowledgeBase")
 class KnowledgeBase:
 
     def __init__(self, config=None, embed_model=None) -> None:
-        self.config = config
-        self._init_config(config)
-
+        self.config = config or {}
         assert embed_model, "embed_model=None"
         self.embed_model = embed_model
 
-        self.client = MilvusClient(self.milvus_path)
+        self.client = None
+        if not self.connect_to_milvus():
+            raise ConnectionError("Failed to connect to Milvus")
 
-    def _init_config(self, config):
-        self.milvus_path = os.path.join(config.save_dir, "data/vector_base/milvus.db")
-        os.makedirs(os.path.dirname(self.milvus_path), exist_ok=True)
+    def connect_to_milvus(self):
+        """
+        连接到 Milvus 服务。
+        使用配置中的 URI，如果没有配置，则使用默认值。
+        """
+        try:
+            uri = os.getenv('MILVUS_URI', self.config.get('milvus_uri', "http://milvus:19530"))
+            self.client = MilvusClient(uri=uri)
+            # 可以添加一个简单的测试来确保连接成功
+            self.client.list_collections()
+            logger.info(f"Successfully connected to Milvus at {uri}")
+            return True
+        except MilvusException as e:
+            logger.error(f"Failed to connect to Milvus: {e}")
+            return False
 
     def get_collection_names(self):
         return self.client.list_collections()
