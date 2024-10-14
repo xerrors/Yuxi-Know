@@ -50,6 +50,7 @@ const getRemoteDatabase = () => {
 }
 
 onMounted(() => {
+  getRemoteConfig()
   getRemoteDatabase()
   configStore.refreshConfig()
 })

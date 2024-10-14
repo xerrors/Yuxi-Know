@@ -25,20 +25,13 @@
   const fetchLogs = async () => {
     state.fetching = true;
     try {
-      // 清空之前的错误信息
       error.value = '';
-
-      // 发送请求获取日志数据
-      const response = await fetch('/api/log'); // 替换为你的 API 路径
-
+      const response = await fetch('/api/log');
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
       }
 
-      // 解析 JSON 数据
       const data = await response.json();
-
-      // 将日志信息赋值给 logs 变量
       logs.value = data.log;
 
       // 等待 DOM 更新完成后自动滚动到最底部

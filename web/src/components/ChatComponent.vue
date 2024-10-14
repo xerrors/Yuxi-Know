@@ -16,10 +16,9 @@
         </a-tooltip>
       </div>
       <div class="header__right">
-        <!-- <div class="nav-btn text metas">
-          <CompassFilled v-if="meta.use_web" />
-          <GoldenFilled v-if="meta.use_graph"/>
-        </div> -->
+        <div class="nav-btn text metas" v-if="meta.use_graph">
+          <GoldOutlined /> 图数据库
+        </div>
         <a-dropdown v-if="meta.selectedKB !== null">
           <a class="ant-dropdown-link nav-btn" @click.prevent>
             <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
@@ -147,6 +146,7 @@ import {
   BookFilled,
   CompassFilled,
   GoldenFilled,
+  GoldOutlined,
   SettingOutlined,
   SettingFilled,
   PlusCircleOutlined,
@@ -282,7 +282,6 @@ const scrollToBottom = () => {
   }, 10)
 }
 
-
 const generateRandomHash = (length) => {
     let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let hash = '';
@@ -314,14 +313,31 @@ const appendAiMessage = (message, refs=null) => {
 
 const updateMessage = (text, id, refs, status) => {
   const message = conv.value.messages.find((message) => message.id === id);
+
   if (message) {
-    message.refs = refs;
-    message.status = status;
-    message.text = text;
-    message.model_name = refs.model_name
+    // 只有在 text 不为空时更新
+    if (text !== null && text !== undefined && text !== '') {
+      message.text = text;
+    }
+
+    // 只有在 refs 不为空时更新
+    if (refs !== null && refs !== undefined) {
+      message.refs = refs;
+
+      // 如果 refs 里面的 model_name 不为空时更新
+      if (refs.model_name !== null && refs.model_name !== undefined && refs.model_name !== '') {
+        message.model_name = refs.model_name;
+      }
+    }
+
+    // 只有在 status 不为空时更新
+    if (status !== null && status !== undefined && status !== '') {
+      message.status = status;
+    }
   } else {
     console.error('Message not found');
   }
+
   scrollToBottom();
 };
 
@@ -380,50 +396,73 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     body: JSON.stringify({
       query: user_input,
       history: conv.value.history,
-      meta: meta
+      meta: meta,
+      cur_res_id: cur_res_id,
     }),
     headers: {
       'Content-Type': 'application/json'
     }
-  }).then((response) => {
+  })
+  .then((response) => {
+    if (!response.body) throw new Error("ReadableStream not supported.");
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+    const decoder = new TextDecoder("utf-8");
     let buffer = '';
 
-    // 逐步读取响应文本
     const readChunk = () => {
       return reader.read().then(({ done, value }) => {
         if (done) {
-          // 处理完成
-          updateStatus(cur_res_id, "finished");
+          fetchRefs(cur_res_id).then((data) => {
+            console.log(data)
+            updateMessage(null, cur_res_id, data, "finished");
+            updateStatus(cur_res_id, "finished");
+          })
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
-          return; // 结束读取
+          return;
         }
 
-        buffer += decoder.decode(value, { stream: true });
-        const messages = buffer.trim().split('\n');
-
-        messages.forEach((message) => {
-          try {
-            const data = JSON.parse(message);
-            updateMessage(data.response, cur_res_id, data.refs, "loading");
-            conv.value.history = data.history;
-          } catch (e) {
-            // console.error('JSON 解析错误:', e);
-          }
-        });
-        buffer = ''; // 清空缓冲区
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        try {
+          const data = JSON.parse(chunk);
+          updateMessage(data.response, cur_res_id, data.refs, "loading");
+          console.debug(data.response)
+          conv.value.history = data.history;
+        } catch (e) {
+          // console.debug('JSON 解析错误:', e, chunk);
+        }
         return readChunk(); // 继续读取
       });
     };
-    return readChunk();
-    isStreaming.value = false;
+    readChunk();
+
+
   })
   .catch((error) => {
     console.error(error);
     updateStatus(cur_res_id, "error");
     isStreaming.value = false;
+  })
+  .finally(() => {
+    isStreaming.value = false;
+  });
+}
+
+const fetchRefs = (cur_res_id) => {
+  return new Promise((resolve, reject) => {
+    fetch(`/api/chat/refs?cur_res_id=${cur_res_id}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json"
+      },
+    }).then(response => response.json())
+      .then(data => {
+        resolve(data.refs)
+      })
+      .catch((error) => {
+        reject(error)
+      })
   })
 }
 

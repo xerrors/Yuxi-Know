@@ -16,7 +16,7 @@ async def route_index():
     return {"message": "You Got It!"}
 
 @base.get("/config")
-async def get_config():
+def get_config():
     return startup.config
 
 @base.post("/config")
@@ -32,7 +32,7 @@ async def restart():
     return {"message": "Restarted!"}
 
 @base.get("/log")
-async def get_log():
+def get_log():
     from src.utils.logging_config import LOG_FILE
     from collections import deque
 

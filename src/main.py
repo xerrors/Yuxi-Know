@@ -24,5 +24,5 @@ logger = setup_logger("server:main")
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=5000, threads=10, workers=10)
 

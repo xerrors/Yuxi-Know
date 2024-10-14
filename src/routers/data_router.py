@@ -1,7 +1,6 @@
 import os
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
-from pydantic import BaseModel
 
 from src.utils import setup_logger, hashstr
 from src.core.startup import startup
