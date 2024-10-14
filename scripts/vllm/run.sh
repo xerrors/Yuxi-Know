@@ -6,12 +6,12 @@ if [ -z "$1" ]; then
 fi
 
 if [ "$1" = "llama" ]; then
-    CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
-        --model="/hdd/zwj/models/meta-llama/$MODEL" \
-        --tensor-parallel-size 1 \
+    python -m vllm.entrypoints.openai.api_server \
+        --model="/hdd/zwj/models/meta-llama/Meta-Llama-3-8B-Instruct" \
+        --tensor-parallel-size 2 \
         --trust-remote-code \
         --device auto \
-        --gpu-memory-utilization 0.98 \
+        --gpu-memory-utilization 0.8 \
         --dtype half \
         --served-model-name "$1" \
         --host 0.0.0.0 \

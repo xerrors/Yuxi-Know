@@ -334,8 +334,11 @@ const updateStatus = (id, status) => {
     console.error('Message not found')
   }
 
-  if (message.refs.knowledge_base.results.length > 0) {
-    message.groupedResults = message.refs.knowledge_base.results.reduce((acc, result) => {
+  if (message.refs && message.refs.knowledge_base.results.length > 0) {
+
+    message.groupedResults = message.refs.knowledge_base.results
+    .filter(result => result.file && result.file.filename)
+    .reduce((acc, result) => {
       const { filename } = result.file;
       console.log(acc, result, filename)
       if (!acc[filename]) {
@@ -415,12 +418,13 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       });
     };
     return readChunk();
+    isStreaming.value = false;
   })
   .catch((error) => {
     console.error(error);
     updateStatus(cur_res_id, "error");
     isStreaming.value = false;
-  });
+  })
 }
 
 // 更新后的 sendMessage 函数

@@ -7,10 +7,6 @@ from src.utils.logging_config import setup_logger
 
 load_dotenv()
 
-import os
-
-os.environ["ZHIPUAI_API_KEY"] = "270ea71e9560c0ff406acbcdd48bfd97.e3XOMdWKuZb7Q1Sk"
-
 app = FastAPI()
 app.include_router(router)
 

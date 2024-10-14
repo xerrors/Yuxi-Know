@@ -362,10 +362,10 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch('/api/data/', {
+      fetch(`/api/data/?db_id=${databaseId.value}`, {
         method: "DELETE",
         headers: {
-          "Content-Type": "application/json"  // 添加 Content-Type 头
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           db_id: databaseId.value
@@ -431,6 +431,9 @@ const formatRelativeTime = (timestamp) => {
 
 const getDatabaseInfo = () => {
   const db_id = databaseId.value
+  if (!db_id) {
+    return
+  }
   state.lock = true
   return new Promise((resolve, reject) => {
     fetch(`/api/data/info?db_id=${db_id}`, {

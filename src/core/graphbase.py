@@ -170,6 +170,7 @@ class GraphDatabase:
 
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
         self.status = "processing"
+        kgdb_name = kgdb_name or 'neo4j'
         self.use_database(kgdb_name)  # 切换到指定数据库
 
         def read_triples(file_path):

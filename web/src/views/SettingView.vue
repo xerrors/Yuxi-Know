@@ -135,7 +135,7 @@
                     <a-input v-model:value="customModel.name" />
                   </a-form-item>
                   <a-form-item label="API Base" name="api_base" :rules="[{ required: true, message: '请输入API Base' }]">
-                    <a-input v-model:value="customModel.api_base" type="password"/>
+                    <a-input v-model:value="customModel.api_base"/>
                   </a-form-item>
                   <a-form-item label="API KEY" name="api_key">
                     <a-input v-model:value="customModel.api_key" autocomplete="off"/>

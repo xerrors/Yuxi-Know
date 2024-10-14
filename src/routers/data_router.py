@@ -35,7 +35,7 @@ async def create_database(
     return database_info
 
 @data.delete("/")
-async def delete_database(db_id: str = Body(...)):
+async def delete_database(db_id):
     logger.debug(f"Delete database {db_id}")
     startup.dbm.delete_database(db_id)
     return {"message": "删除成功"}
@@ -114,7 +114,7 @@ async def get_graph_nodes(kgdb_name: str, num: int):
     return {"result": startup.retriever.format_general_results(result), "message": "success"}
 
 @data.post("/graph/add")
-async def add_graph_entity(kgdb_name: str = Body(...), file_path: str = Body(...)):
+async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None)):
     if not startup.config.enable_knowledge_graph:
         raise HTTPException(status_code=400, detail="Knowledge graph is not enabled")
 
