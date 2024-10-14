@@ -5,6 +5,8 @@
 
 ## 预览
 
+![DEMO.GIF](./images/demo.gif)
+
 ## 准备
 
 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。
