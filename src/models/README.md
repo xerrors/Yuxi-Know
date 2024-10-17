@@ -13,24 +13,11 @@
 |`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
 |`siliconflow` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`|
 
-vllm 的具体配置项可以参考[这里](https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments), 部署参考脚本：
-
-```bash
-python -m vllm.entrypoints.openai.api_server \
-	--model="/hdd/models/meta-llama/Meta-Llama-3.1-8B-Instruct" \
-	--tensor-parallel-size 1 \
-	--trust-remote-code \
-	--device auto \
-	--gpu-memory-utilization 0.98 \
-	--dtype half \
-	--served-model-name "vllm" \
-	--host 0.0.0.0 \
-	--port 8080
-```
+同样支持以 OpenAI 的兼容模型运行模型，可以直接在设置里面添加。比如使用 vllm 和 Ollama 运行本地模型时。
 
 ### 2. 向量模型支持
 
-建议直接使用智谱 AI 的 embedding-3。
+建议直接使用智谱 AI 的 embedding-3，这样不需要做任何修改，且资费不贵。
 
 > [!Warning]
 > 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，回导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
@@ -38,22 +25,23 @@ python -m vllm.entrypoints.openai.api_server \
 
 |模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
 |:-|:-|:-|
-|`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*修改为本地路径）|
+|`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*可选：修改为本地路径）|
 |`zhipu`|`embedding-2`, `embedding-3`|`ZHIPUAI_API_KEY` (`.env`)|
 
-
-例如（`saves/config/config.yaml`）：
-
-```yaml
-model_provider: qianfan
-model_name: null # for default
-
-## model dir 可以写**相对路径**和**绝对路径**
-### 相对路径是相对于环境变量 (.env) 中 MODEL_ROOT_DIR（若为空则是相对于 `pretrained_models`) 的路径
-model_local_paths:
-  bge-large-zh-v1.5: /models/bge-large-zh-v1.5
-```
 
 ### 3. 重排序模型支持
 
 目前仅支持 `BAAI/bge-reranker-v2-m3`。
+
+### 4. 本地模型支持
+
+对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
+
+对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在 `saves/config/config.yaml` 配置相关内容。同时注意要在 docker 中做映射，参考 README 中的 `docker/docker-compose.yml`。
+
+例如：
+
+```yaml
+model_local_paths:
+  bge-large-zh-v1.5: /models/bge-large-zh-v1.5
+```
