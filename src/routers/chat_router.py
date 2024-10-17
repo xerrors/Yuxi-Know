@@ -28,14 +28,30 @@ def chat_post(
         cur_res_id: str = Body(...)):
 
     history_manager = HistoryManager(history)
-    new_query, refs = startup.retriever(query, history_manager.messages, meta)
-    refs_pool[cur_res_id] = refs
 
-    messages = history_manager.get_history_with_msg(new_query, max_rounds=meta.get('history_round'))
-    history_manager.add_user(query)
-    logger.debug(f"Web history: {history_manager.messages}")
+    def make_chunk(content, status, history):
+        return json.dumps({
+            "response": content,
+            "history": history,
+            "model_name": startup.config.model_name,
+            "status": status,
+        }, ensure_ascii=False).encode('utf-8') + b"\n"
 
     def generate_response():
+
+        if meta.get("enable_retrieval"):
+            chunk = make_chunk("", "searching", history=None)
+            yield chunk
+
+            new_query, refs = startup.retriever(query, history_manager.messages, meta)
+            refs_pool[cur_res_id] = refs
+        else:
+            new_query = query
+
+        messages = history_manager.get_history_with_msg(new_query, max_rounds=meta.get('history_round'))
+        history_manager.add_user(query)
+        logger.debug(f"Web history: {history_manager.messages}")
+
         content = ""
         for delta in startup.model.predict(messages, stream=True):
             if not delta.content:
@@ -47,12 +63,8 @@ def chat_post(
                 content += delta.content
 
             logger.debug(f"Response: {content}")
-
-            _chunk = json.dumps({
-                "response": content,
-                "history": history_manager.update_ai(content),
-            }, ensure_ascii=False).encode('utf-8') + b"\n"
-            yield _chunk
+            chunk = make_chunk(content, "loading", history=history_manager.update_ai(content))
+            yield chunk
 
     return StreamingResponse(generate_response(), media_type='application/json')
 

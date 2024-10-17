@@ -16,10 +16,10 @@
         </a-tooltip>
       </div>
       <div class="header__right">
-        <div class="nav-btn text metas" v-if="meta.use_graph">
+        <div class="nav-btn text metas" v-if="meta.use_graph && meta.enable_retrieval">
           <GoldOutlined /> 图数据库
         </div>
-        <a-dropdown v-if="meta.selectedKB !== null">
+        <a-dropdown v-if="meta.selectedKB !== null && meta.enable_retrieval">
           <a class="ant-dropdown-link nav-btn" @click.prevent>
             <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
              <BookOutlined />
@@ -40,7 +40,20 @@
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="opts.showPanel" class="my-panal r0 top100 swing-in-top-fwd" ref="panel">
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" @click="meta.stream = !meta.stream">
+            流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
+          </div>
+          <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
+            总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
+          </div>
+          <div class="flex-center" @click="meta.enable_retrieval = !meta.enable_retrieval">
+            启用检索 <div @click.stop><a-switch v-model:checked="meta.enable_retrieval" /></div>
+          </div>
+          <div class="flex-center">
+            最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
+          </div>
+          <a-divider v-if="meta.enable_retrieval"></a-divider>
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
             知识库
             <div @click.stop>
               <a-dropdown>
@@ -62,23 +75,14 @@
               </a-dropdown>
             </div>
           </div>
-          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine">
+          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="flex-center" @click="meta.stream = !meta.stream">
-            流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
-          </div>
-          <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
-            总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
-          </div>
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base">
+          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
             重写查询 <a-segmented v-model:value="meta.rewriteQuery" :options="['off', 'on', 'hyde']"/>
-          </div>
-          <div class="flex-center">
-            最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
         </div>
       </div>
@@ -104,12 +108,19 @@
         :class="message.role"
       >
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0 && message.status=='querying'"  class="loading-dots">
+        <div v-else-if="message.text.length == 0 && message.status=='init'"  class="loading-dots">
           <div></div>
           <div></div>
           <div></div>
         </div>
-        <div v-else-if="message.text.length == 0 || message.status == 'error'" class="err-msg">请求错误，请重试</div>
+        <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
+        <div
+          v-else-if="message.text.length == 0 || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
+          class="err-msg"
+          @click="retryMessage(message.id)"
+        >
+          请求错误，请重试
+        </div>
         <div v-else
           v-html="renderMarkdown(message)"
           class="message-md"
@@ -195,6 +206,7 @@ const opts = reactive({
 })
 
 const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
+  enable_retrieval: false,
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
@@ -306,33 +318,32 @@ const appendAiMessage = (message, refs=null) => {
     role: 'received',
     text: message,
     refs,
-    status: "querying",
+    status: "init",
   })
   scrollToBottom()
 }
 
-const updateMessage = (text, id, refs, status) => {
-  const message = conv.value.messages.find((message) => message.id === id);
+const updateMessage = (info) => {
+  const message = conv.value.messages.find((message) => message.id === info.id);
 
   if (message) {
     // 只有在 text 不为空时更新
-    if (text !== null && text !== undefined && text !== '') {
-      message.text = text;
+    if (info.text !== null && info.text !== undefined && info.text !== '') {
+      message.text = info.text;
     }
 
     // 只有在 refs 不为空时更新
-    if (refs !== null && refs !== undefined) {
-      message.refs = refs;
+    if (info.refs !== null && info.refs !== undefined) {
+      message.refs = info.refs;
+    }
 
-      // 如果 refs 里面的 model_name 不为空时更新
-      if (refs.model_name !== null && refs.model_name !== undefined && refs.model_name !== '') {
-        message.model_name = refs.model_name;
-      }
+    if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
+      message.model_name = info.model_name;
     }
 
     // 只有在 status 不为空时更新
-    if (status !== null && status !== undefined && status !== '') {
-      message.status = status;
+    if (info.status !== null && info.status !== undefined && info.status !== '') {
+      message.status = info.status;
     }
   } else {
     console.error('Message not found');
@@ -412,11 +423,21 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     const readChunk = () => {
       return reader.read().then(({ done, value }) => {
         if (done) {
-          fetchRefs(cur_res_id).then((data) => {
-            console.log(data)
-            updateMessage(null, cur_res_id, data, "finished");
+          const message = conv.value.messages.find((message) => message.id === cur_res_id)
+          if (message.refs && message.refs.meta.enable_retrieval) {
+            console.log("fetching refs")
+            fetchRefs(cur_res_id).then((data) => {
+              console.log(data)
+              updateMessage({
+                id: cur_res_id,
+                refs: data,
+                status: "finished",
+              });
+              updateStatus(cur_res_id, "finished");
+            })
+          } else {
             updateStatus(cur_res_id, "finished");
-          })
+          }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
@@ -426,9 +447,16 @@ const fetchChatResponse = (user_input, cur_res_id) => {
         buffer += chunk;
         try {
           const data = JSON.parse(chunk);
-          updateMessage(data.response, cur_res_id, data.refs, "loading");
+          updateMessage({
+            id: cur_res_id,
+            text: data.response,
+            model_name: data.model_name,
+            status: data.status,
+          });
           console.debug(data.response)
-          conv.value.history = data.history;
+          if (data.history) {
+            conv.value.history = data.history;
+          }
         } catch (e) {
           // console.debug('JSON 解析错误:', e, chunk);
         }
@@ -444,9 +472,6 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     updateStatus(cur_res_id, "error");
     isStreaming.value = false;
   })
-  .finally(() => {
-    isStreaming.value = false;
-  });
 }
 
 const fetchRefs = (cur_res_id) => {
@@ -482,6 +507,19 @@ const sendMessage = () => {
   } else {
     console.log('请输入消息');
   }
+}
+
+const retryMessage = (id) => {
+  // 找到 id 对应的 message，然后删除包含 message 在内以及后面所有的 message
+  console.log("retryMessage", id)
+  const index = conv.value.messages.findIndex(message => message.id === id);
+  const pastMessage = conv.value.messages[index-1]
+  conv.value.inputText = pastMessage.text
+  if (index !== -1) {
+    conv.value.messages = conv.value.messages.slice(0, index-1);
+  }
+  console.log(conv.value.messages)
+  sendMessage();
 }
 
 const autoSend = (message) => {
@@ -677,6 +715,12 @@ watch(
       border-radius: 8px;
       text-align: center;
       background: #FFF0F0;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+
+    .searching-msg {
+      color: var(--gray-500);
     }
   }
 
