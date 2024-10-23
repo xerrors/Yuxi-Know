@@ -10,6 +10,8 @@ COPY ../requirements.txt /app/requirements.txt
 # 安装依赖（Docker 会缓存这一步，除非 requirements.txt 发生变化）
 RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
+RUN pip install gunicorn
+
 # 复制代码到容器中
 COPY ../src /app/src
 

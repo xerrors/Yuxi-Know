@@ -10,7 +10,7 @@ data = APIRouter(prefix="/data")
 logger = setup_logger("server-database")
 
 @data.get("/")
-async def get_databases():
+def get_databases():
     try:
         database = startup.dbm.get_databases()
     except Exception as e:
