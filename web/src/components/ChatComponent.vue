@@ -319,6 +319,7 @@ const appendAiMessage = (message, refs=null) => {
     text: message,
     refs,
     status: "init",
+    meta: {},
   })
   scrollToBottom()
 }
@@ -345,6 +346,10 @@ const updateMessage = (info) => {
     if (info.status !== null && info.status !== undefined && info.status !== '') {
       message.status = info.status;
     }
+
+    if (info.meta !== null && info.meta !== undefined) {
+      message.meta = info.meta;
+    }
   } else {
     console.error('Message not found');
   }
@@ -353,21 +358,13 @@ const updateMessage = (info) => {
 };
 
 
-const updateStatus = (id, status) => {
+const groupRefs = (id) => {
   const message = conv.value.messages.find((message) => message.id === id)
-  if (message) {
-    message.status = status
-  } else {
-    console.error('Message not found')
-  }
-
   if (message.refs && message.refs.knowledge_base.results.length > 0) {
-
     message.groupedResults = message.refs.knowledge_base.results
     .filter(result => result.file && result.file.filename)
     .reduce((acc, result) => {
       const { filename } = result.file;
-      console.log(acc, result, filename)
       if (!acc[filename]) {
         acc[filename] = []
       }
@@ -424,7 +421,8 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       return reader.read().then(({ done, value }) => {
         if (done) {
           const message = conv.value.messages.find((message) => message.id === cur_res_id)
-          if (message.refs && message.refs.meta.enable_retrieval) {
+          console.log(message)
+          if (message.meta.enable_retrieval) {
             console.log("fetching refs")
             fetchRefs(cur_res_id).then((data) => {
               console.log(data)
@@ -433,10 +431,10 @@ const fetchChatResponse = (user_input, cur_res_id) => {
                 refs: data,
                 status: "finished",
               });
-              updateStatus(cur_res_id, "finished");
+              groupRefs(cur_res_id);
             })
           } else {
-            updateStatus(cur_res_id, "finished");
+            groupRefs(cur_res_id);
           }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
@@ -452,6 +450,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
             text: data.response,
             model_name: data.model_name,
             status: data.status,
+            meta: data.meta,
           });
           console.debug(data.response)
           if (data.history) {
@@ -464,12 +463,13 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       });
     };
     readChunk();
-
-
   })
   .catch((error) => {
     console.error(error);
-    updateStatus(cur_res_id, "error");
+    updateMessage({
+      id: cur_res_id,
+      status: "error",
+    });
     isStreaming.value = false;
   })
 }
@@ -511,9 +511,9 @@ const sendMessage = () => {
 
 const retryMessage = (id) => {
   // 找到 id 对应的 message，然后删除包含 message 在内以及后面所有的 message
-  console.log("retryMessage", id)
   const index = conv.value.messages.findIndex(message => message.id === id);
   const pastMessage = conv.value.messages[index-1]
+  console.log("retryMessage", id, pastMessage)
   conv.value.inputText = pastMessage.text
   if (index !== -1) {
     conv.value.messages = conv.value.messages.slice(0, index-1);

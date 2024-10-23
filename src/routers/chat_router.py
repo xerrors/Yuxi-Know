@@ -35,6 +35,7 @@ def chat_post(
             "history": history,
             "model_name": startup.config.model_name,
             "status": status,
+            "meta": meta,
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
     def generate_response():

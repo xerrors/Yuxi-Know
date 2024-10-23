@@ -84,7 +84,8 @@ async def upload_file(file: UploadFile = File(...)):
 
     upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
     os.makedirs(upload_dir, exist_ok=True)
-    filename = f"{hashstr(file.filename, 4, with_salt=True)}_{file.filename}".lower()
+    basename, ext = os.path.splitext(file.filename)
+    filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}_{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
 
     with open(file_path, "wb") as buffer:
