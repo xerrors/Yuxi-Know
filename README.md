@@ -11,7 +11,10 @@
 
 提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中，参考 `src/.env.template`。默认使用的是智谱AI。需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。
 
+## 目前已知 Bug
 
+- [ ] refs 获取存在问题
+- [ ] 模型切换存在问题
 
 ## Dockers 启动
 
