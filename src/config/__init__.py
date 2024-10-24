@@ -91,9 +91,9 @@ class Config(SimpleConfig):
             self.model_name = self.get("model_name") or default_model_name
         else:
             self.model_name = self.get("model_name")
-            if self.model_name not in [item["name"] for item in self.custom_models]:
+            if self.model_name not in [item["custom_id"] for item in self.custom_models]:
                 logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
-                self.model_name = self.custom_models[0]["name"]
+                self.model_name = self.custom_models[0]["custom_id"]
 
         self.model_provider_status = {}
         for provider in self.model_names:

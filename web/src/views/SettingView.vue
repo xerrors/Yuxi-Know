@@ -89,17 +89,16 @@
           </div>
           <div class="card-body">
             <div
-              :class="{'model_selected': modelProvider == 'custom' && configStore.config.model_name == item.name, 'card-models': true, 'custom-model': true}"
-              v-for="(item, key) in configStore.config.custom_models" :key="key"
-              @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.name)"
+              :class="{'model_selected': modelProvider == 'custom' && configStore.config.model_name == item.custom_id, 'card-models': true, 'custom-model': true}"
+              v-for="(item, key) in configStore.config.custom_models" :key="item.custom_id"
+              @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.custom_id)"
             >
               <div class="card-models__header">
                 <div class="name">{{ item.name }}</div>
                 <div class="action">
-                  <!-- 添加确认删除 -->
                   <a-popconfirm
                     title="确认删除该模型?"
-                    @confirm="handleDeleteCustomModel(item.name)"
+                    @confirm="handleDeleteCustomModel(item.custom_id)"
                     okText="确认删除"
                     cancelText="取消"
                     ok-type="danger"
@@ -111,7 +110,6 @@
                 </div>
               </div>
               <div class="api_base">{{ item.api_base }}</div>
-              <!-- <div class="select-btn"></div> -->
             </div>
             <div class="card-models custom-model" @click="customModel.visible=true">
               <div class="card-models__header">
@@ -158,7 +156,6 @@
               @click="handleChange('model_provider', item); handleChange('model_name', model)"
             >
               <div class="model_name">{{ model }}</div>
-              <!-- <div class="select-btn"></div> -->
             </div>
           </div>
         </div>
@@ -201,6 +198,7 @@ const isNeedRestart = ref(false)
 const customModel = reactive({
   modelTitle: '添加自定义模型',
   visible: false,
+  custom_id: '', // Add this line
   name: '',
   api_key: '',
   api_base: '',
@@ -219,6 +217,15 @@ const modelKeys = computed(() => {
 const notModelKeys = computed(() => {
   return Object.keys(modelStatus.value).filter(key => !modelStatus.value[key])
 })
+
+const generateRandomHash = (length) => {
+  let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let hash = '';
+  for (let i = 0; i < length; i++) {
+      hash += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return hash;
+}
 
 const handleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
@@ -264,17 +271,31 @@ const handleAddCustomModel = async () => {
     configStore.config.custom_models = []
   }
 
-  if (configStore.config.custom_models.find(item => item.name == customModel.name)) {
-    message.error('模型名称已存在')
-    return
+
+  const model_info = {
+    custom_id: customModel.custom_id,
+    name: customModel.name,
+    api_key: customModel.api_key,
+    api_base: customModel.api_base,
   }
 
   if (customModel.edit_type == 'add') {
-    configStore.config.custom_models.push(customModel)
+  if (configStore.config.custom_models.find(item => item.custom_id == customModel.custom_id)) {
+    message.error('模型ID已存在')
+      return
+    }
+    const modelHash = generateRandomHash(4)
+    model_info.custom_id = `${customModel.name}-${modelHash}`
+    configStore.config.custom_models.push(model_info)
   } else {
     configStore.config.custom_models = configStore.config.custom_models.map(item => {
-      if (item.name == customModel.name) {
-        return customModel
+      if (item.custom_id == customModel.custom_id) {
+        if (item.name != customModel.name) {
+          const modelHash = generateRandomHash(4)
+          model_info.custom_id = `${customModel.name}-${modelHash}`
+          configStore.setConfigValue('model_name', model_info.custom_id)
+        }
+        return model_info
       }
       return item
     })
@@ -285,13 +306,14 @@ const handleAddCustomModel = async () => {
   message.success('添加自定义模型成功')
 }
 
-const handleDeleteCustomModel = (name) => {
-  const updatedModels = configStore.config.custom_models.filter(item => item.name !== name);
+const handleDeleteCustomModel = (custom_id) => {
+  const updatedModels = configStore.config.custom_models.filter(item => item.custom_id !== custom_id);
   configStore.setConfigValue('custom_models', updatedModels);
 }
 
 const handleEditCustomModel = (item) => {
   customModel.modelTitle = '编辑自定义模型'
+  customModel.custom_id = item.custom_id
   customModel.name = item.name
   customModel.api_key = item.api_key
   customModel.api_base = item.api_base
@@ -300,6 +322,7 @@ const handleEditCustomModel = (item) => {
 }
 
 const handleCancelCustomModel = () => {
+  customModel.custom_id = ''
   customModel.name = ''
   customModel.api_key = ''
   customModel.api_base = ''
@@ -565,3 +588,4 @@ const sendRestart = () => {
 
 }
 </style>
+
