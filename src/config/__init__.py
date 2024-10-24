@@ -157,7 +157,6 @@ MODEL_NAMES = {
         "models": [
             "gpt-4",
             "gpt-4o",
-            "gpt-4-0125-preview",
             "gpt-4o-mini",
             "gpt-3.5-turbo"
         ]
