@@ -1,10 +1,8 @@
-import time
-import uuid
-from fastapi import APIRouter, HTTPException, Request, Body
-from fastapi.responses import StreamingResponse, Response
-from concurrent.futures import ThreadPoolExecutor
 import json
 import asyncio
+from fastapi import APIRouter, Body
+from fastapi.responses import StreamingResponse, Response
+from concurrent.futures import ThreadPoolExecutor
 from src.core import HistoryManager
 from src.core.startup import startup
 from src.utils.logging_config import setup_logger
@@ -63,7 +61,6 @@ def chat_post(
             else:
                 content += delta.content
 
-            logger.debug(f"Response: {content}")
             chunk = make_chunk(content, "loading", history=history_manager.update_ai(content))
             yield chunk
 

@@ -58,8 +58,9 @@ class ZhipuEmbedding:
 
     def predict(self, message):
         data = []
+        batch_size = 40
 
-        if len(message) > 10:
+        if len(message) > batch_size:
             global GLOBAL_EMBED_STATE
             task_id = hashstr(message)
             logger.info(f"Creating new state for process {task_id}")
@@ -69,12 +70,12 @@ class ZhipuEmbedding:
                 'progress': 0
             }
 
-        for i in range(0, len(message), 10):
-            if len(message) > 10:
-                logger.info(f"Encoding {i} to {i+10} with {len(message)} messages")
+        for i in range(0, len(message), batch_size):
+            if len(message) > batch_size:
+                logger.info(f"Encoding {i} to {i+batch_size} with {len(message)} messages")
                 GLOBAL_EMBED_STATE[task_id]['progress'] = i
 
-            group_msg = message[i:i+10]
+            group_msg = message[i:i+batch_size]
             response = self.client.embeddings.create(
                 model=self.model_info.default_path,
                 input=group_msg,
@@ -82,7 +83,7 @@ class ZhipuEmbedding:
 
             data.extend([a.embedding for a in response.data])
 
-        if len(message) > 10:
+        if len(message) > batch_size:
             GLOBAL_EMBED_STATE[task_id]['progress'] = len(message)
             GLOBAL_EMBED_STATE[task_id]['status'] = 'completed'
 

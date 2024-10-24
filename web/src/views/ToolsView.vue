@@ -2,16 +2,16 @@
   <div class="tools-container layout-container">
     <HeaderComponent
       title="工具箱"
-      description="这里展示了各种可用的工具。点击查看详情。"
+      description="这里展示了各种可用的工具。"
     >
     </HeaderComponent>
 
     <div class="tools-grid">
       <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.name)">
         <div class="tool-header">
-          <div class="tool-icon">
+          <!-- <div class="tool-icon">
             <component :is="iconMap[tool.name]" />
-          </div>
+          </div> -->
           <h3>{{ tool.title }}</h3>
         </div>
         <div class="tool-info">

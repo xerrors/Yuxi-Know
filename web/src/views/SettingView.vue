@@ -145,9 +145,9 @@
         </div>
         <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
           <div class="card-header">
-            <h3>{{ modelNames[item].name }}</h3>
-            <a :href="modelNames[item].url" target="_blank">详情</a>
             <div v-if="modelStatus[item]" class="success"></div>
+            <h3>{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
           </div>
           <div class="card-body" v-if="modelStatus[item]">
             <div
@@ -185,6 +185,7 @@ import {
   FolderOutlined,
   DeleteOutlined,
   EditOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { notification, Button } from 'ant-design-vue';
@@ -452,12 +453,13 @@ const sendRestart = () => {
       h3 {
         margin: 0;
         font-size: 1rem;
+        font-weight: bold;
       }
 
       a {
         text-decoration: none;
-        color: var(--gray-700);
-        font-size: 14px;
+        color: var(--gray-500);
+        font-size: 12px;
         transition: all 0.1s;
 
         &:hover {
@@ -465,16 +467,16 @@ const sendRestart = () => {
         }
       }
 
-      .success, .missing-keys {
+      .details, .missing-keys {
         margin-left: auto;
       }
 
       .success {
-        width: 1rem;
-        height: 1rem;
+        width: 0.75rem;
+        height: 0.75rem;
         background-color: rgb(91, 186, 91);
         border-radius: 50%;
-        box-shadow: 0 0 10px 1px rgba(  0,128,  0, 0.2);
+        box-shadow: 0 0 10px 1px rgba(  0,128,  0, 0.1);
         border: 2px solid white;
       }
 
@@ -482,6 +484,7 @@ const sendRestart = () => {
         color: var(--gray-600);
         & > span {
           margin-left: 10px;
+          user-select: all;
         }
       }
     }

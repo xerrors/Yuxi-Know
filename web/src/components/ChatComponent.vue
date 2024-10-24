@@ -667,6 +667,7 @@ watch(
   top: 20%;
   width: 100%;
   z-index: 9;
+  animation: slideInUp 0.5s ease-out;
 
   h1 {
     margin-bottom: 20px;
@@ -913,7 +914,7 @@ watch(
 
 @keyframes pulse {
   0%, 80%, 100% {
-    transform: scale(0.6);
+    transform: scale(0.8);
     opacity: 0.3;
   }
   40% {
@@ -928,6 +929,9 @@ watch(
 .swing-in-top-fwd{-webkit-animation:swing-in-top-fwd .2s ease-out both;animation:swing-in-top-fwd .2s ease-out both}
 @-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
 @-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
 @media (max-width: 520px) {
   .chat {
@@ -971,6 +975,8 @@ watch(
     }
   }
 }
+
+
 </style>
 
 <style lang="less">
@@ -989,6 +995,17 @@ watch(
   h1, h2, h3, h4, h5, h6 {
     font-size: 1rem;
   }
+
+  li, ol, ul {
+    & > p {
+      margin: 0.25rem 0;
+    }
+  }
+
+  ol, ul {
+    padding-left: 1rem;
+  }
 }
 </style>
+
 

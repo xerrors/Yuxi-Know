@@ -104,19 +104,19 @@
           <div class="sider">
             <div class="sider-top">
               <div class="query-params" v-if="state.curPage == 'query-test'">
-                <h3 class="params-title">参数配置</h3>
+                <!-- <h3 class="params-title">参数配置</h3> -->
                 <div class="params-group">
                   <div class="params-item">
                     <p>检索数量：</p>
                     <a-input-number size="small" v-model:value="meta.maxQueryCount" :min="1" :max="20" />
                   </div>
                   <div class="params-item">
-                    <p>TopK：</p>
-                    <a-input-number size="small" v-model:value="meta.topK" :min="1" :max="meta.maxQueryCount" />
-                  </div>
-                  <div class="params-item">
                     <p>过滤低质量：</p>
                     <a-switch v-model:checked="meta.filter" />
+                  </div>
+                  <div class="params-item">
+                    <p>筛选 TopK：</p>
+                    <a-input-number size="small" v-model:value="meta.topK" :min="1" :max="meta.maxQueryCount" />
                   </div>
                 </div>
                 <div class="params-group">
@@ -160,6 +160,7 @@
             </div>
 
             <!-- 新增示例按钮 -->
+            <span>示例查询：</span>
             <div class="query-examples">
               <a-button v-for="example in queryExamples" :key="example" @click="useQueryExample(example)">
                 {{ example }}
@@ -602,14 +603,17 @@ onMounted(() => {
       .query-params {
         display: flex;
         flex-direction: column;
-        border-radius: 8px;
         box-sizing: border-box;
         font-size: 15px;
         gap: 12px;
-        background-color: var(--main-light-6);
-        padding: 16px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        border: 1px solid var(--main-light-3);
+        // background-color: var(--main-light-6);
+        // padding: 16px;
+        // box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        // border: 1px solid var(--main-light-3);
+        // border-radius: 8px;
+        padding-top: 12px;
+        padding-right: 16px;
+        border-right: 1px solid var(--main-light-3);
 
         .params-title {
           margin-top: 0;
@@ -644,7 +648,7 @@ onMounted(() => {
 
           p {
             margin: 0;
-            font-size: 15px;
+            font-size: 16px;
             color: var(--gray-900);
           }
 
@@ -706,18 +710,18 @@ onMounted(() => {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-bottom: 20px;
+    margin: 10px 0;
 
     .ant-btn {
       font-size: 14px;
       padding: 4px 12px;
       height: auto;
-      background-color: var(--main-light-4);
+      background-color: var(--gray-200);
       border: none;
-      color: var(--main-600);
+      color: var(--gray-800);
 
       &:hover {
-        background-color: var(--main-light-3);
+        background-color: var(--gray-300);
       }
     }
   }
@@ -903,6 +907,7 @@ onMounted(() => {
 
   .params-item.col .ant-segmented {
     width: 100%;
+    font-size: smaller;
     div.ant-segmented-group {
       display: flex;
       justify-content: space-around;
@@ -910,6 +915,9 @@ onMounted(() => {
     label.ant-segmented-item {
       flex: 1;
       text-align: center;
+      div.ant-segmented-item-label > div > p {
+        font-size: small;
+      }
     }
   }
 }
