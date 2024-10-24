@@ -434,31 +434,47 @@ const fetchChatResponse = (user_input, cur_res_id) => {
               groupRefs(cur_res_id);
             })
           } else {
-            groupRefs(cur_res_id);
+            updateMessage({
+              id: cur_res_id,
+              status: "finished",
+            });
           }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
         }
 
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        try {
-          const data = JSON.parse(chunk);
-          updateMessage({
-            id: cur_res_id,
-            text: data.response,
-            model_name: data.model_name,
-            status: data.status,
-            meta: data.meta,
-          });
-          console.debug(data.response)
-          if (data.history) {
-            conv.value.history = data.history;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+
+        // 处理除最后一行外的所有完整行
+        for (let i = 0; i < lines.length - 1; i++) {
+          const line = lines[i].trim();
+          if (line) {
+            try {
+              const data = JSON.parse(line);
+              updateMessage({
+                id: cur_res_id,
+                text: data.response,
+                model_name: data.model_name,
+                status: data.status,
+                meta: data.meta,
+              });
+              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].text)
+              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
+
+              if (data.history) {
+                conv.value.history = data.history;
+              }
+            } catch (e) {
+              console.error('JSON 解析错误:', e, line);
+            }
           }
-        } catch (e) {
-          // console.debug('JSON 解析错误:', e, chunk);
         }
+
+        // 保留最后一个可能不完整的行
+        buffer = lines[lines.length - 1];
+
         return readChunk(); // 继续读取
       });
     };
@@ -471,7 +487,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       status: "error",
     });
     isStreaming.value = false;
-  })
+  });
 }
 
 const fetchRefs = (cur_res_id) => {
@@ -975,3 +991,4 @@ watch(
   }
 }
 </style>
+
