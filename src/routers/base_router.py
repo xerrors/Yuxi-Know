@@ -4,7 +4,7 @@ base = APIRouter()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-from fastapi import Request
+from fastapi import Request, Body
 from src.core import HistoryManager
 from src.utils.logging_config import setup_logger
 from src.core.startup import startup
@@ -20,9 +20,8 @@ def get_config():
     return startup.config
 
 @base.post("/config")
-async def update_config(request: Request):
-    request_data = await request.json()
-    startup.config.update(request_data)
+async def update_config(key = Body(...), value = Body(...)):
+    startup.config[key] = value
     startup.config.save()
     return startup.config
 

@@ -22,11 +22,15 @@ export const useConfigStore = defineStore('config', () => {
     config.value[key] = value
     fetch('/api/config', {
       method: 'POST',
-      body: JSON.stringify(config.value),
+      body: JSON.stringify({ key, value }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
     })
     .then(response => response.json())
     .then(data => {
-      console.log('Success:', data)
+      console.debug('Success:', data)
+      setConfig(data)
     })
   }
 
@@ -34,6 +38,7 @@ export const useConfigStore = defineStore('config', () => {
     fetch('/api/config')
     .then(response => response.json())
     .then(data => {
+      console.log("config", data)
       setConfig(data)
     })
   }

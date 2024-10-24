@@ -231,8 +231,7 @@ const handleChange = (key, e) => {
     return
   }
 
-  console.log('Change', key, e)
-
+  // 这些都是需要重启的配置
   if (key == 'enable_reranker'
         || key == 'enable_knowledge_graph'
         || key == 'enable_knowledge_base'
@@ -283,14 +282,12 @@ const handleAddCustomModel = async () => {
 
   customModel.visible = false
   await configStore.setConfigValue('custom_models', configStore.config.custom_models)
-  configStore.refreshConfig()
   message.success('添加自定义模型成功')
 }
 
 const handleDeleteCustomModel = (name) => {
-  configStore.config.custom_models = configStore.config.custom_models.filter(item => item.name != name)
-  configStore.setConfigValue('custom_models', configStore.config.custom_models)
-  configStore.refreshConfig()
+  const updatedModels = configStore.config.custom_models.filter(item => item.name !== name);
+  configStore.setConfigValue('custom_models', updatedModels);
 }
 
 const handleEditCustomModel = (item) => {

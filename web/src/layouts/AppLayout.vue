@@ -33,26 +33,19 @@ const layoutSettings = reactive({
 })
 
 const getRemoteConfig = () => {
-  fetch('/api/config').then(res => res.json()).then(data => {
-    console.log(data)
-    configStore.setConfig(data)
-  })
+  configStore.refreshConfig()
 }
 
 const getRemoteDatabase = () => {
   if (!configStore.config.enable_knowledge_base) {
     return
   }
-  fetch('/api/data').then(res => res.json()).then(data => {
-    console.log("database", data)
-    databaseStore.setDatabase(data.databases)
-  })
+  databaseStore.refreshDatabase()
 }
 
 onMounted(() => {
   getRemoteConfig()
   getRemoteDatabase()
-  configStore.refreshConfig()
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API

@@ -21,7 +21,7 @@ services:
       - NEO4J_USERNAME=neo4j
       - NEO4J_PASSWORD=0123456789
       - MILVUS_URI=http://milvus:19530
-    command: gunicorn src.main:app --bind 0.0.0.0:5000 --reload --workers 10 --worker-class uvicorn.workers.UvicornWorker
+    command: uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload
 
   web:
     build:
