@@ -1,4 +1,13 @@
-<h1 style="text-align: center">语析 （基于大模型的知识图谱问答平台）</h1>
+<h1 align="center">语析 （基于大模型的知识图谱问答平台）</h1>
+<div align="center">
+
+![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff) 
+![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
+![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
+![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github) 
+
+</div>
 
 
 
