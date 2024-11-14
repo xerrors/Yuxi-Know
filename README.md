@@ -96,7 +96,7 @@ docker-compose -f docker/docker-compose.yml up --build
 |:-|:-|:-|
 |`openai` | `gpt-4o` | `OPENAI_API_KEY` |
 |`qianfan`（百度）|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
-|`zhipu`(default)|`glm-4`|`ZHIPUAI_API_KEY`|
+|`zhipu`(default)|`glm-4-flash` (free) |`ZHIPUAI_API_KEY`|
 |`dashscope`（阿里） | `qwen-max-latest` | `DASHSCOPE_API_KEY`|
 |`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
 |`siliconflow` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`|
