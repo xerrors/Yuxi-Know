@@ -1,9 +1,17 @@
 import os
 import json
 import yaml
+from pathlib import Path
 from src.utils.logging_config import setup_logger
 
 logger = setup_logger("Config")
+
+with open(Path("src/config/models.yaml"), "r") as f:
+    _models = yaml.safe_load(f)
+
+MODEL_NAMES = _models["MODEL_NAMES"]
+EMBED_MODEL_INFO = _models["EMBED_MODEL_INFO"]
+RERANKER_LIST = _models["RERANKER_LIST"]
 
 
 class SimpleConfig(dict):
@@ -95,10 +103,17 @@ class Config(SimpleConfig):
                 logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
                 self.model_name = self.custom_models[0]["custom_id"]
 
+        conds = {}
         self.model_provider_status = {}
         for provider in self.model_names:
-            conds = [bool(os.getenv(_k)) for _k in self.model_names[provider]["env"]]
-            self.model_provider_status[provider] = all(conds)
+            conds[provider] = self.model_names[provider]["env"]
+            conds_bool = [bool(os.getenv(_k)) for _k in conds[provider]]
+            self.model_provider_status[provider] = all(conds_bool)
+
+        self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
+        assert len(self.valuable_model_provider) > 0, f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"
+
+        
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""
@@ -147,120 +162,3 @@ class Config(SimpleConfig):
                 json.dump(self, f, indent=4)
 
         logger.info(f"Config file {self.filename} saved")
-
-MODEL_NAMES = {
-    "openai": {
-        "name": "OpenAI",
-        "url": "https://platform.openai.com/docs/models",
-        "default": "gpt-3.5-turbo",
-        "env": ["OPENAI_API_KEY"],
-        "models": [
-            "gpt-4",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "gpt-3.5-turbo"
-        ]
-    },
-
-    # https://platform.deepseek.com/api-docs/zh-cn/pricing
-    "deepseek": {
-        "name": "DeepSeek",
-        "url": "https://platform.deepseek.com/api-docs/zh-cn/pricing",
-        "default": "deepseek-chat",
-        "env": ["DEEPSEEK_API_KEY"],
-        "models": [
-            "deepseek-chat",
-        ]
-    },
-
-    # https://open.bigmodel.cn/dev/api  glm-4-plus、glm-4-0520、glm-4 、glm-4-air、glm-4-airx、glm-4-long 、 glm-4-flashx 、 glm-4-flash
-    "zhipu": {
-        "name": "智谱AI (Zhipu)",
-        "url": "https://open.bigmodel.cn/dev/api",
-        "default": "glm-4-flash",
-        "env": ["ZHIPUAI_API_KEY"],
-        "models": [
-            "glm-4",
-            "glm-4-plus",
-            "glm-4-air",
-            "glm-4-airx",
-            "glm-4-long",
-            "glm-4-flashx",
-            "glm-4-flash",
-        ]
-    },
-
-    # {'ERNIE-4.0-8K-0104', 'ERNIE-Lite-8K-0308', 'ERNIE-Speed-128K', 'ERNIE-3.5-128K（预览版）', 'Yi-34B-Chat', 'ERNIE-4.0-8K-Preview-0518', 'ERNIE-Bot-4', 'ERNIE-3.5-128K', 'ChatGLM2-6B-32K', 'ERNIE-3.5-8K', 'EB-turbo-AppBuilder', 'ERNIE-Lite-AppBuilder-8K', 'ERNIE-4.0-8K-0329', 'AquilaChat-7B', 'Gemma-7B-it', 'Qianfan-Chinese-Llama-2-70B', 'Mixtral-8x7B-Instruct', 'Gemma-7B-It', 'ERNIE Speed-AppBuilder', 'ERNIE-Function-8K', 'ERNIE-4.0-8K-preview', 'ERNIE-Bot', 'Qianfan-BLOOMZ-7B-compressed', 'ERNIE-4.0-8K', 'BLOOMZ-7B', 'ERNIE-Character-8K', 'ERNIE-3.5-8K-0205', 'ERNIE-4.0-8K-0613', 'Llama-2-70B-Chat', 'ERNIE-Character-Fiction-8K', 'ERNIE-4.0-8K-Preview', 'ERNIE-3.5-8K-Preview', 'ERNIE-Speed', 'ERNIE-Tiny-8K', 'ERNIE-4.0-Turbo-8K-Preview', 'Meta-Llama-3-8B', 'ERNIE-4.0-8K-Latest', 'ERNIE 3.5', 'XuanYuan-70B-Chat-4bit', 'Llama-2-13B-Chat', 'ERNIE-Bot-turbo', 'ERNIE-3.5-8K-0613', 'ERNIE-Lite-AppBuilder-8K-0614', 'ERNIE-4.0-preview', 'Llama-2-7B-Chat', 'Qianfan-Chinese-Llama-2-13B', 'ERNIE-Bot-turbo-AI', 'Meta-Llama-3-70B', 'ERNIE-Functions-8K', 'ERNIE-Lite-8K-0922（原ERNIE-Bot-turbo-0922）', 'ERNIE Speed', 'ERNIE-3.5-preview', 'Qianfan-Chinese-Llama-2-7B', 'ERNIE-Speed-8K', 'ERNIE-Lite-8K-0922', 'ChatLaw', 'ERNIE-3.5-8K-0329', 'ERNIE-4.0-Turbo-8K', 'ERNIE-3.5-8K-preview', 'ERNIE-Lite-8K'}
-    "qianfan": {
-        "name": "百度千帆 (QianFan)",
-        "url": "https://open.bigmodel.cn/dev/api",
-        "default": "ERNIE-Speed",
-        "env": ["QIANFAN_ACCESS_KEY", "QIANFAN_SECRET_KEY"],
-        "models": [
-            "ERNIE-Speed",
-            "ERNIE-Speed-8K",
-            "ERNIE-Speed-128K",
-            "ERNIE-Tiny-8K",
-            "ERNIE-Lite-8K",
-            "ERNIE-4.0-8K-Latest",
-        ]
-    },
-
-    # https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
-    "dashscope": {
-        "name": "阿里百炼 (DashScope)",
-        "url": "https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market",
-        "default": "qwen2.5-72b-instruct",
-        "env": ["DASHSCOPE_API_KEY"],
-        "models": [
-            "qwen-max-latest",
-            "qwen-plus-latest",
-            "qwen-long-latest",
-            "qwen-turbo-latest",
-            "qwen2.5-72b-instruct",
-            "qwen2.5-32b-instruct",
-            "qwen2.5-14b-instruct",
-            "qwen2.5-7b-instruct",
-            "qwen2.5-3b-instruct",
-            "qwen2.5-1.5b-instruct",
-            "qwen2.5-0.5b-instruct",
-        ]
-    },
-
-    # https://cloud.siliconflow.cn/models
-    "siliconflow": {
-        "name": "SiliconFlow",
-        "url": "https://cloud.siliconflow.cn/models",
-        "default": "meta-llama/Meta-Llama-3.1-8B-Instruct",
-        "env": ["SILICONFLOW_API_KEY"],
-        "models": [
-            "meta-llama/Meta-Llama-3.1-8B-Instruct",
-            "meta-llama/Meta-Llama-3.1-70B-Instruct",
-            "meta-llama/Meta-Llama-3.1-405B-Instruct",
-        ]
-    },
-}
-
-
-EMBED_MODEL_INFO = {
-    "bge-large-zh-v1.5": SimpleConfig({
-        "name": "bge-large-zh-v1.5",
-        "default_path": "BAAI/bge-large-zh-v1.5",
-        "dimension": 1024,
-        "query_instruction": "为这个句子生成表示以用于检索相关文章：",
-    }),
-    "zhipu-embedding-2": SimpleConfig({
-        "name": "zhipu-embedding-2",
-        "default_path": "embedding-2",
-        "dimension": 1024,
-    }),
-    "zhipu-embedding-3": SimpleConfig({
-        "name": "zhipu-embedding-3",
-        "default_path": "embedding-3",
-        "dimension": 2048,
-    }),
-}
-
-RERANKER_LIST = {
-    "bge-reranker-v2-m3": "BAAI/bge-reranker-v2-m3",
-}

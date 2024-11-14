@@ -1,6 +1,6 @@
 <template>
   <div class="welcome">
-    <header class="glass-header">江南大学人工智能与计算机学院</header>
+    <header class="glass-header">江南语析</header>
     <h1>{{ title }}</h1>
     <p>大模型驱动的知识库管理工具</p>
     <button class="home-btn" @click="goToChat">开始对话</button>
@@ -13,7 +13,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
-const title = ref('📢 Athena ✨')
+const title = ref('📢 Yuxi-Know ✨')
 const router = useRouter()
 
 const goToChat = () => {

@@ -51,6 +51,7 @@ class DataBaseManager:
     def _save_databases(self):
         """将数据库的信息保存到本地的文件里面"""
         self._update_database()
+        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
         with open(self.database_path, "w+") as f:
             json.dump({
                 "databases": [db.to_dict() for db in self.data["databases"]],

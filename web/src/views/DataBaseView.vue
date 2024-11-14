@@ -2,7 +2,7 @@
   <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
     <HeaderComponent
       title="文档知识库"
-      description="知识型数据库，主要是非结构化的文本组成，使用向量检索使用。"
+      description="知识型数据库，主要是非结构化的文本组成，使用向量检索使用。如果出现问题，可以检查 saves/data/database.json 查看配置。"
     >
       <template #actions>
         <a-button type="primary" @click="newDatabase.open=true">新建数据库</a-button>

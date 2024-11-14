@@ -64,13 +64,13 @@
               @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
             />
           </div>
-          <div class="card">
+          <!-- <div class="card">
             <span class="label">{{ items?.enable_search_engine.des }}</span>
             <a-switch
               :checked="configStore.config.enable_search_engine"
               @change="handleChange('enable_search_engine', !configStore.config.enable_search_engine)"
             />
-          </div>
+          </div> -->
           <div class="card">
             <span class="label">{{ items?.enable_reranker.des }}</span>
             <a-switch
@@ -168,6 +168,9 @@
             </div>
           </div>
         </div>
+      </div>
+      <div class="setting" v-if="state.section =='path'">
+        <p>暂无配置</p>
       </div>
     </div>
   </div>

@@ -78,9 +78,9 @@ console.log(route)
       </a-drawer>
     </div>
     <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
-      <div class="logo">
+      <div class="logo circle">
         <router-link to="/">
-          <img src="/jnu.png">
+          <img src="/avatar.jpg">
           <span class="logo-text">语析</span>
         </router-link>
       </div>
@@ -182,7 +182,7 @@ div.header, #app-router-view {
     img {
       width: 100%;
       height: 100%;
-      border-radius: 50%;
+      border-radius: 4px;  // 50% for circle 
     }
 
     .logo-text {
