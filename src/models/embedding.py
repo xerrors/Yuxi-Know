@@ -20,13 +20,13 @@ class EmbeddingModel(FlagModel):
             model_name=model_info["name"],
             default_path=model_info.get("default_path", None))
 
-        logger.info(f"Loading embedding model {model_info["name"]} from {model_name_or_path}")
+        logger.info(f"Loading embedding model {model_info['name']} from {model_name_or_path}")
 
         super().__init__(model_name_or_path,
                 query_instruction_for_retrieval=model_info.get("query_instruction", None),
                 use_fp16=False, **kwargs)
 
-        logger.info(f"Embedding model {model_info["name"]} loaded")
+        logger.info(f"Embedding model {model_info['name']} loaded")
 
 
 class Reranker(FlagReranker):
