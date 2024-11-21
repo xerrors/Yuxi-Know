@@ -159,7 +159,7 @@ class GraphDatabase:
         embed_info = EMBED_MODEL_INFO[self.config.embed_model]
         with self.driver.session() as session:
             session.execute_write(_create_graph, triples)
-            session.execute_write(_create_vector_index, embed_info.dimension)
+            session.execute_write(_create_vector_index, embed_info.get('dimension'))
             for i, entry in enumerate(triples):
                 logger.info(f"Adding entity {i+1}/{len(triples)}")
                 embedding_h = self.get_embedding(entry['h'])
