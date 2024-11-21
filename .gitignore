@@ -29,7 +29,6 @@ cache
 *.nogit.*
 
 *.pdf
-*.yaml
 src/data
 */package-lock.json
 web/package-lock.json

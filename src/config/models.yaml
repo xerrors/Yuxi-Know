@@ -1,0 +1,94 @@
+MODEL_NAMES:
+  openai:
+    name: OpenAI
+    url: https://platform.openai.com/docs/models
+    default: gpt-3.5-turbo
+    env:
+      - OPENAI_API_KEY
+    models:
+      - gpt-4
+      - gpt-4o
+      - gpt-4o-mini
+      - gpt-3.5-turbo
+  deepseek:
+    name: DeepSeek
+    url: https://platform.deepseek.com/api-docs/zh-cn/pricing
+    default: deepseek-chat
+    env:
+      - DEEPSEEK_API_KEY
+    models:
+      - deepseek-chat
+  zhipu:
+    name: 智谱AI (Zhipu)
+    url: https://open.bigmodel.cn/dev/api
+    default: glm-4-flash
+    env:
+      - ZHIPUAI_API_KEY
+    models:
+      - glm-4
+      - glm-4-plus
+      - glm-4-air
+      - glm-4-airx
+      - glm-4-long
+      - glm-4-flashx
+      - glm-4-flash
+  qianfan:
+    name: 百度千帆 (QianFan)
+    url: https://open.bigmodel.cn/dev/api
+    default: ERNIE-Speed
+    env:
+      - QIANFAN_ACCESS_KEY
+      - QIANFAN_SECRET_KEY
+    models:
+      - ERNIE-Speed
+      - ERNIE-Speed-8K
+      - ERNIE-Speed-128K
+      - ERNIE-Tiny-8K
+      - ERNIE-Lite-8K
+      - ERNIE-4.0-8K-Latest
+  dashscope:
+    name: 阿里百炼 (DashScope)
+    url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
+    default: qwen2.5-72b-instruct
+    env:
+      - DASHSCOPE_API_KEY
+    models:
+      - qwen-max-latest
+      - qwen-plus-latest
+      - qwen-long-latest
+      - qwen-turbo-latest
+      - qwen2.5-72b-instruct
+      - qwen2.5-32b-instruct
+      - qwen2.5-14b-instruct
+      - qwen2.5-7b-instruct
+      - qwen2.5-3b-instruct
+      - qwen2.5-1.5b-instruct
+      - qwen2.5-0.5b-instruct
+  siliconflow:
+    name: SiliconFlow
+    url: https://cloud.siliconflow.cn/models
+    default: meta-llama/Meta-Llama-3.1-8B-Instruct
+    env:
+      - SILICONFLOW_API_KEY
+    models:
+      - meta-llama/Meta-Llama-3.1-8B-Instruct
+      - meta-llama/Meta-Llama-3.1-70B-Instruct
+      - meta-llama/Meta-Llama-3.1-405B-Instruct
+
+EMBED_MODEL_INFO:
+  bge-large-zh-v1.5:
+    name: bge-large-zh-v1.5
+    default_path: BAAI/bge-large-zh-v1.5
+    dimension: 1024
+    query_instruction: "为这个句子生成表示以用于检索相关文章："
+  zhipu-embedding-2:
+    name: zhipu-embedding-2
+    default_path: embedding-2
+    dimension: 1024
+  zhipu-embedding-3:
+    name: zhipu-embedding-3
+    default_path: embedding-3
+    dimension: 2048
+
+RERANKER_LIST:
+  bge-reranker-v2-m3: BAAI/bge-reranker-v2-m3
