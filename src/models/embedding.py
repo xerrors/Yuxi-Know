@@ -58,7 +58,7 @@ class ZhipuEmbedding:
 
     def predict(self, message):
         data = []
-        batch_size = 40
+        batch_size = 20
 
         if len(message) > batch_size:
             global GLOBAL_EMBED_STATE
