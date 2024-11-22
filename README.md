@@ -122,7 +122,7 @@ docker-compose -f docker/docker-compose.yml up --build
 
 |模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
 |:-|:-|:-|
-|`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`（*可选：修改为本地路径）|
+|`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`|
 |`zhipu`|`embedding-2`, `embedding-3`|`ZHIPUAI_API_KEY` (`.env`)|
 
 
