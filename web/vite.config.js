@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
         }
       },
       watch: {
+        usePolling: true,
         ignored: ['**/node_modules/**', '**/dist/**'],
       },
       host: '0.0.0.0',
