@@ -1,25 +1,26 @@
 <h1 align="center">语析 （基于大模型的知识图谱问答平台）</h1>
 <div align="center">
 
-![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff) 
+![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)
 ![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
 ![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
-![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github) 
+![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)
 
 </div>
 
-
-
 > [!NOTE]
 > 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
+
+已知问题：
+
+- [ ] 从 Flask 更换到 Fast API 之后，并行命令还存在问题。
 
 ## 概述
 
 基于大模型 RAG 知识库与知识图谱的问答平台。Llamaindex + VueJS + Flask + Neo4j。大模型适配 OpenAI、国内主流大模型平台的模型调用、本地 vllm 部署。只需要配置对应服务平台的 `API_KEY` 即可使用。
 
 ![main](./images/main.png)
-
 
 ## 快速上手
 
@@ -30,17 +31,15 @@ ZHIPUAI_API_KEY=270ea********8bfa97.e3XOMd****Q1Sk
 OPENAI_API_KEY=sk-*********[可选]
 ```
 
-
 本项目的基础对话服务可以在不含显卡的设备上运行，大模型使用在线服务商的接口。但是如果想要完整的知识库对话体验，则需要 8G 以上的显存。因为需要本地运行 embedding 模型和 rerank 模型。
 
-**提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 ` docker/docker-compose.yml` 启动。
+**提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 `docker/docker-compose.yml` 启动。
 
 ```bash
 docker-compose -f docker/docker-compose.dev.yml up --build
 ```
 
 **也可以加上 `-d` 参数，后台运行。*
-
 
 下面的这些容器都会启动：
 
@@ -55,7 +54,7 @@ docker-compose -f docker/docker-compose.dev.yml up --build
  ✔ Container web-dev                Started
 ```
 
-然后打开 `[http://localhost:5173/](http://localhost:5173/)` 就可以看到结果了。
+然后打开 [http://localhost:5173/](http://localhost:5173/) 就可以看到结果了。
 
 **预览**
 
@@ -101,14 +100,14 @@ docker-compose -f docker/docker-compose.yml up --build
 
 模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/config/models.yaml](src/config/models.yaml)
 
-|模型供应商|默认模型|配置项目|
-|:-|:-|:-|
-|`openai` | `gpt-4o` | `OPENAI_API_KEY` |
-|`qianfan`（百度）|`ernie_speed`|`QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY`|
-|`zhipu`(default)|`glm-4-flash` (free) |`ZHIPUAI_API_KEY`|
-|`dashscope`（阿里） | `qwen-max-latest` | `DASHSCOPE_API_KEY`|
-|`deepseek`|`deepseek-chat`|`DEEPSEEK_API_KEY`|
-|`siliconflow` | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`|
+| 模型供应商            | 默认模型                                  | 配置项目                                       |
+| :-------------------- | :---------------------------------------- | :--------------------------------------------- |
+| `openai`            | `gpt-4o`                                | `OPENAI_API_KEY`                             |
+| `qianfan`（百度）   | `ernie_speed`                           | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
+| `zhipu`(默认)       | `glm-4-flash` (免费)                    | `ZHIPUAI_API_KEY`                            |
+| `dashscope`（阿里） | `qwen-max-latest`                       | `DASHSCOPE_API_KEY`                          |
+| `deepseek`          | `deepseek-chat`                         | `DEEPSEEK_API_KEY`                           |
+| `siliconflow`       | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`                        |
 
 同样支持以 OpenAI 的兼容模型运行模型，可以直接在 Web 设置里面添加。比如使用 vllm 和 Ollama 运行本地模型时。
 
@@ -117,14 +116,12 @@ docker-compose -f docker/docker-compose.yml up --build
 建议直接使用智谱 AI 的 embedding-3，这样不需要做任何修改，且资费不贵。
 
 > [!Warning]
-> 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，回导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
+> 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
 
-
-|模型名称(`config.embed_model`)|默认路径/模型|需要配置项目（`config.model_local_paths`）|
-|:-|:-|:-|
-|`bge-large-zh-v1.5`|`BAAI/bge-large-zh-v1.5`|`bge-large-zh-v1.5`|
-|`zhipu`|`embedding-2`, `embedding-3`|`ZHIPUAI_API_KEY` (`.env`)|
-
+| 模型名称(`config.embed_model`) | 默认路径/模型                    | 需要配置项目（`config.model_local_paths`） |
+| :------------------------------- | :------------------------------- | :------------------------------------------- |
+| `bge-large-zh-v1.5`            | `BAAI/bge-large-zh-v1.5`       | `bge-large-zh-v1.5`                        |
+| `zhipu`                        | `embedding-2`, `embedding-3` | `ZHIPUAI_API_KEY` (`.env`)               |
 
 ### 3. 重排序模型支持
 
@@ -147,7 +144,6 @@ model_local_paths:
 
 本项目支持多种格式的知识库，目前支持的格式有：pdf、txt、md。文件上传后，会首先转换为纯文本，然后使用向量模型将文本转换为向量，然后存储到向量数据库中。这个过程可能会花费不少时间。
 
-
 ## 知识图谱支持
 
 > [!NOTE]
@@ -158,8 +154,6 @@ model_local_paths:
 项目启动后会自动启动 neo4j 服务，可以直接使用 [http://localhost:7474/](http://localhost:7474/) 去访问和管理图数据库，初始默认的账户密码是 `neo4j` 和 `0123456789`。可以在 `docker/docker-compose.yml` 和 `docker\docker-compose.dev.yml` 中修改（注：`api.environment` 和 `graph.environment` 都需要修改）。
 
 目前项目中暂不支持同时查询多个知识图谱，短期内也没有计划支持。不过倒是可以通过配置不同的 `NEO4J_URI` 服务来切换知识图谱。如果已经有了基于 neo4j 的知识图谱，可以将 `docker-compose.yml` 中的 `graph` 配置项删除，并将 `api.environment` 中的 `NEO4J_URI` 配置项修改为 neo4j 的服务地址。
-
-
 
 ## 更新日志
 

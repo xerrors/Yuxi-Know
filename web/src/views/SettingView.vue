@@ -170,7 +170,7 @@
         </div>
       </div>
       <div class="setting" v-if="state.section ==='path'">
-        <p>暂无配置</p>
+        <h3>暂无配置</h3>
       </div>
     </div>
   </div>
