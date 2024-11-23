@@ -2,8 +2,8 @@
   <div class="refs" v-if="showRefs">
     <div class="tags">
       <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
-      <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span>
-      <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span>
+      <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
+      <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
       <span class="item"><GlobalOutlined /> {{ msg.model_name }}</span>
       <span
         class="item btn"

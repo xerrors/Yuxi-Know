@@ -79,6 +79,21 @@
             />
           </div>
         </div>
+        <h3>检索配置</h3>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.use_rewrite_query.des }}</span>
+            <a-select style="width: 200px"
+              :value="configStore.config?.use_rewrite_query"
+              @change="handleChange('use_rewrite_query', $event)"
+            >
+              <a-select-option
+                v-for="(name, idx) in items?.use_rewrite_query.choices" :key="idx"
+                :value="name">{{ name }}
+              </a-select-option>
+            </a-select>
+          </div>
+        </div>
       </div>
       <div class="setting" v-if="state.section === 'model'">
         <h3>模型配置</h3>
@@ -161,10 +176,10 @@
         </div>
         <div class="model-provider-card" v-for="(item, key) in notModelKeys" :key="key">
           <div class="card-header">
-            <h3>{{ modelNames[item].name }}</h3>
-            <a :href="modelNames[item].url" target="_blank">详情</a>
+            <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
             <div class="missing-keys">
-              需配置 <span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
+              <small>需配置</small> <span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
             </div>
           </div>
         </div>

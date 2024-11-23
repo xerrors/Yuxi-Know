@@ -81,9 +81,9 @@
           <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            重写查询 <a-segmented v-model:value="meta.rewriteQuery" :options="['off', 'on', 'hyde']"/>
-          </div>
+          <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
+            重写查询 <a-segmented v-model:value="meta.use_rewrite_query" :options="['off', 'on', 'hyde']"/>
+          </div> -->
         </div>
       </div>
     </div>
@@ -191,11 +191,7 @@ const panel = ref(null)
 const modelCard = ref(null)
 const examples = ref([
   '写一个冒泡排序',
-  '肉碱的分子量是多少？直接回答',
-  '总结大蒜的功效是什么？',
   '今天天气怎么样？',
-  '吃饭吃出苍蝇可以索赔吗？',
-  '帮我写一个请假条',
   '贾宝玉今年多少岁？',
 ])
 
@@ -211,7 +207,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
-  rewriteQuery: "off",
+  // use_rewrite_query: "off",
   selectedKB: null,
   stream: true,
   summary_title: true,

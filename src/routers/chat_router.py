@@ -42,6 +42,7 @@ def chat_post(
             chunk = make_chunk("", "searching", history=None)
             yield chunk
 
+            meta["config"] = startup.config
             new_query, refs = startup.retriever(query, history_manager.messages, meta)
             refs_pool[cur_res_id] = refs
         else:
