@@ -18,6 +18,7 @@ import {
   ProjectOutlined,
   StarFilled,
   StarOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -101,6 +102,13 @@ console.log(route)
           <component class="icon" :is="route.path.startsWith('/tools') ? StarFilled: StarOutlined" />
           <span class="text">工具</span>
         </RouterLink>
+        <a-tooltip placement="right">
+          <template #title>后端疑似没有正常启动，请刷新一下或者检查 docker logs api-dev</template>
+          <div class="nav-item warning" v-if="!configStore.config._config_items">
+            <component class="icon" :is="ExclamationCircleOutlined" />
+            <span class="text">警告</span>
+          </div>
+        </a-tooltip>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
       <div class="github nav-item">
@@ -182,7 +190,7 @@ div.header, #app-router-view {
     img {
       width: 100%;
       height: 100%;
-      border-radius: 4px;  // 50% for circle 
+      border-radius: 4px;  // 50% for circle
     }
 
     .logo-text {
@@ -233,6 +241,10 @@ div.header, #app-router-view {
       color: var(--main-600);
       background-color: white;
       border: 1px solid white;
+    }
+
+    &.warning {
+      color: red;
     }
 
     &:hover {

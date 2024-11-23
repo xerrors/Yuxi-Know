@@ -80,7 +80,7 @@
           </div>
         </div>
       </div>
-      <div class="setting" v-if="state.section == 'model'">
+      <div class="setting" v-if="state.section === 'model'">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY</p>
         <div class="model-provider-card">
@@ -169,7 +169,7 @@
           </div>
         </div>
       </div>
-      <div class="setting" v-if="state.section =='path'">
+      <div class="setting" v-if="state.section ==='path'">
         <p>暂无配置</p>
       </div>
     </div>
