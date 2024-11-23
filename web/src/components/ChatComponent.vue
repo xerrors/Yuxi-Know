@@ -196,6 +196,7 @@ const examples = ref([
   '今天天气怎么样？',
   '吃饭吃出苍蝇可以索赔吗？',
   '帮我写一个请假条',
+  '贾宝玉今年多少岁？',
 ])
 
 const opts = reactive({
