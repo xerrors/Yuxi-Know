@@ -185,7 +185,11 @@
         </div>
       </div>
       <div class="setting" v-if="state.section ==='path'">
-        <h3>暂无配置</h3>
+        <h3>本地模型配置</h3>
+        <TableConfigComponent
+          :config="configStore.config?.model_local_paths"
+          @update:config="handleModelLocalPathsUpdate"
+        />
       </div>
     </div>
   </div>
@@ -206,6 +210,7 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 
 const configStore = useConfigStore()
@@ -246,6 +251,10 @@ const generateRandomHash = (length) => {
   return hash;
 }
 
+const handleModelLocalPathsUpdate = (config) => {
+  handleChange('model_local_paths', config)
+}
+
 const handleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
     message.error('启动知识图谱必须请先启用知识库功能')
@@ -264,7 +273,8 @@ const handleChange = (key, e) => {
         || key == 'model_provider'
         || key == 'model_name'
         || key == 'embed_model'
-        || key == 'reranker') {
+        || key == 'reranker'
+        || key == 'model_local_paths') {
     if (!isNeedRestart.value) {
       isNeedRestart.value = true
       notification.info({
