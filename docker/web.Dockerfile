@@ -6,7 +6,7 @@ WORKDIR /app
 COPY ./web/package*.json ./
 
 # 安装依赖
-RUN npm install --registry https://registry.npmmirror.com
+RUN npm install --registry https://registry.npmmirror.com --verbose --force
 
 # 复制源代码
 COPY ./web .
@@ -21,7 +21,7 @@ FROM node:22.10.0 AS build-stage
 WORKDIR /app
 
 COPY ./web/package*.json ./
-RUN npm install --registry https://registry.npmmirror.com
+RUN npm install --registry https://registry.npmmirror.com --force
 
 COPY ./web .
 RUN npm run build
