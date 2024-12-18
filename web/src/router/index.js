@@ -11,7 +11,7 @@ const router = createRouter({
       component: BlankLayout,
       children: [        {
           path: '',
-          name: 'home',
+          name: 'Home',
           component: () => import('../views/HomeView.vue'),
           meta: { keepAlive: true }
         }
@@ -50,7 +50,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'database',
+          name: 'Database',
           component: () => import('../views/DataBaseView.vue'),
           meta: { keepAlive: true }
         },
@@ -69,7 +69,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'setting',
+          name: 'Setting',
           component: () => import('../views/SettingView.vue'),
           meta: { keepAlive: true }
         }
