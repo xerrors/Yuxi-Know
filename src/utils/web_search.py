@@ -7,7 +7,7 @@ logger = setup_logger("web-search")
 
 class WebSearcher:
     def __init__(self):
-        api_key = os.getenv("TAVILY_API_KEY", "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")
+        api_key = os.getenv("TAVILY_API_KEY")
         if not api_key:
             raise ValueError("TAVILY_API_KEY environment variable is not set")
         self.client = TavilyClient(api_key)
