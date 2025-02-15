@@ -18,6 +18,7 @@ MODEL_NAMES:
       - DEEPSEEK_API_KEY
     models:
       - deepseek-chat
+      - deepseek-reasoner
   zhipu:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api

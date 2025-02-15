@@ -25,3 +25,4 @@ docx2txt
 uvicorn[standard]
 fastapi
 python-multipart
+tavily-python
