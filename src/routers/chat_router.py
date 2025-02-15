@@ -72,12 +72,7 @@ def chat_post(
             chunk = make_chunk("", "searching", history=None)
             yield chunk
 
-<<<<<<< HEAD
-            meta["config"] = startup.config
-            new_query, refs = startup.retriever(query, history_manager.messages, meta)
-=======
             modified_query, refs = startup.retriever(modified_query, history_manager.messages, meta)
->>>>>>> feature/web_search
             refs_pool[cur_res_id] = refs
 
         messages = history_manager.get_history_with_msg(modified_query, max_rounds=meta.get('history_round'))
