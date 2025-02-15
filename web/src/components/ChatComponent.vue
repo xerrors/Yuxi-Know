@@ -81,6 +81,9 @@
           <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
+          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search">
+            网页搜索 <div @click.stop><a-switch v-model:checked="meta.enable_web_search" /></div>
+          </div>
           <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
             重写查询 <a-segmented v-model:value="meta.use_rewrite_query" :options="['off', 'on', 'hyde']"/>
           </div> -->
@@ -166,6 +169,8 @@ import {
   GlobalOutlined,
   FileTextOutlined,
   RobotOutlined,
+  EditOutlined,
+  PlusOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -206,12 +211,14 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   enable_retrieval: false,
   use_graph: false,
   use_web: false,
+  enable_web_search: false,
   graph_name: "neo4j",
   // use_rewrite_query: "off",
   selectedKB: null,
   stream: true,
   summary_title: true,
   history_round: 5,
+  db_name: null,
 })
 
 const marked = new Marked(
@@ -323,35 +330,26 @@ const appendAiMessage = (message, refs=null) => {
 
 const updateMessage = (info) => {
   const message = conv.value.messages.find((message) => message.id === info.id);
-
   if (message) {
-    // 只有在 text 不为空时更新
-    if (info.text !== null && info.text !== undefined && info.text !== '') {
-      message.text = info.text;
-    }
-
-    // 只有在 refs 不为空时更新
-    if (info.refs !== null && info.refs !== undefined) {
-      message.refs = info.refs;
-    }
-
-    if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
-      message.model_name = info.model_name;
-    }
-
-    // 只有在 status 不为空时更新
-    if (info.status !== null && info.status !== undefined && info.status !== '') {
-      message.status = info.status;
-    }
-
-    if (info.meta !== null && info.meta !== undefined) {
-      message.meta = info.meta;
+    try {
+      if (info.text !== null && info.text !== undefined && info.text !== '') {
+        message.text = info.text;
+      }
+      if (info.status !== null && info.status !== undefined && info.status !== '') {
+        message.status = info.status;
+      }
+      if (info.meta !== null && info.meta !== undefined) {
+        message.meta = info.meta;
+      }
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error updating message:', error);
+      message.status = 'error';
+      message.text = '消息更新失败';
     }
   } else {
-    console.error('Message not found');
+    console.error('Message not found:', info.id);
   }
-
-  scrollToBottom();
 };
 
 
@@ -395,21 +393,21 @@ const loadDatabases = () => {
 }
 
 // 新函数用于处理 fetch 请求
-const fetchChatResponse = (user_input, cur_res_id) => {
+const fetchChatResponse = (requestData) => {
   fetch('/api/chat/', {
     method: 'POST',
-    body: JSON.stringify({
-      query: user_input,
-      history: conv.value.history,
-      meta: meta,
-      cur_res_id: cur_res_id,
-    }),
     headers: {
       'Content-Type': 'application/json'
-    }
+    },
+    body: JSON.stringify(requestData)
   })
-  .then((response) => {
-    if (!response.body) throw new Error("ReadableStream not supported.");
+  .then(response => {
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    if (!response.body) {
+      throw new Error("ReadableStream not supported.");
+    }
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let buffer = '';
@@ -417,22 +415,22 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     const readChunk = () => {
       return reader.read().then(({ done, value }) => {
         if (done) {
-          const message = conv.value.messages.find((message) => message.id === cur_res_id)
+          const message = conv.value.messages.find((message) => message.id === requestData.cur_res_id)
           console.log(message)
           if (message.meta.enable_retrieval) {
             console.log("fetching refs")
-            fetchRefs(cur_res_id).then((data) => {
+            fetchRefs(requestData.cur_res_id).then((data) => {
               console.log(data)
               updateMessage({
-                id: cur_res_id,
+                id: requestData.cur_res_id,
                 refs: data,
                 status: "finished",
               });
-              groupRefs(cur_res_id);
+              groupRefs(requestData.cur_res_id);
             })
           } else {
             updateMessage({
-              id: cur_res_id,
+              id: requestData.cur_res_id,
               status: "finished",
             });
           }
@@ -451,7 +449,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
             try {
               const data = JSON.parse(line);
               updateMessage({
-                id: cur_res_id,
+                id: requestData.cur_res_id,
                 text: data.response,
                 model_name: data.model_name,
                 status: data.status,
@@ -478,12 +476,14 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     readChunk();
   })
   .catch((error) => {
-    console.error(error);
+    console.error('Error in fetchChatResponse:', error);
     updateMessage({
-      id: cur_res_id,
+      id: requestData.cur_res_id,
       status: "error",
+      text: `请求错误：${error.message}`,
     });
     isStreaming.value = false;
+    message.error(`请求失败：${error.message}`);
   });
 }
 
@@ -514,9 +514,30 @@ const sendMessage = () => {
     appendAiMessage("", null);
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
     conv.value.inputText = '';
-    meta.db_name = dbName;
+    
+    // 准备发送的数据
+    const requestData = {
+      query: user_input,
+      history: conv.value.history,
+      cur_res_id: cur_res_id,
+      meta: {
+        enable_retrieval: meta.enable_retrieval,
+        use_graph: meta.use_graph,
+        use_web: meta.use_web,
+        enable_web_search: meta.enable_web_search,
+        graph_name: meta.graph_name,
+        rewriteQuery: meta.rewriteQuery,
+        selectedKB: meta.selectedKB,
+        stream: meta.stream,
+        summary_title: meta.summary_title,
+        history_round: meta.history_round,
+        db_name: dbName,
+      }
+    };
 
-    fetchChatResponse(user_input, cur_res_id)
+    console.log('Sending request with data:', requestData); // 添加日志
+
+    fetchChatResponse(requestData);
   } else {
     console.log('请输入消息');
   }
@@ -643,6 +664,17 @@ watch(
 
     &:hover {
       background-color: var(--main-light-3);
+    }
+
+    .anticon {
+      margin-right: 8px;
+      font-size: 16px;
+    }
+    
+    .ant-switch {
+      &.ant-switch-checked {
+        background-color: var(--main-500);
+      }
     }
   }
 }
@@ -973,7 +1005,15 @@ watch(
   }
 }
 
-
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  
+  .search-switch {
+    margin-right: 8px;
+  }
+}
 </style>
 
 <style lang="less">
