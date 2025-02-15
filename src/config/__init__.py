@@ -17,7 +17,7 @@ RERANKER_LIST = _models["RERANKER_LIST"]
 class SimpleConfig(dict):
 
     def __key(self, key):
-        return "" if key is None else key.lower()
+        return "" if key is None else key.lower()  # 目前忘记了这里为什么要 lower 了，只能说配置项最好不要有大写的
 
     def __str__(self):
         return json.dumps(self)
@@ -53,7 +53,7 @@ class Config(SimpleConfig):
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
-
+        self.add_item("enable_web_search", default=False, des="是否开启网页搜索")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
@@ -61,6 +61,7 @@ class Config(SimpleConfig):
         self.add_item("model_name", default=None, des="模型名称")
         self.add_item("embed_model", default="zhipu-embedding-3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
         self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
+        self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         ### <<< 默认配置结束
 
@@ -113,7 +114,7 @@ class Config(SimpleConfig):
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
         assert len(self.valuable_model_provider) > 0, f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"
 
-        
+
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""

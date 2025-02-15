@@ -16,8 +16,6 @@ logger = setup_logger("OneKE")
 
 dotenv.load_dotenv()
 
-MODEL_NAME_OR_PATH = os.path.join(os.getenv('MODEL_ROOT_DIR', './'), 'OneKE')
-
 instruction_mapper = {
     'NERzh': "你是专门进行实体抽取的专家。请从input中抽取出符合schema定义的实体，不存在的实体类型返回空列表。请按照JSON字符串的格式回答。",
     'REzh': "你是专门进行关系抽取的专家。请从input中抽取出符合schema定义的关系三元组。请按照JSON字符串的格式回答。",
@@ -42,7 +40,7 @@ class OneKE:
     def __init__(self, config=None):
 
         self.config = config
-        model_name_or_path = config.model_local_paths.get('oneke', "zjunlp/OneKE")
+        model_name_or_path = config.model_local_paths.get('zjunlp/OneKE', "zjunlp/OneKE")
         logger.info(f"Loading KGC model OneKE from {model_name_or_path}")
 
         model_config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)

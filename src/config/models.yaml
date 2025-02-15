@@ -18,6 +18,7 @@ MODEL_NAMES:
       - DEEPSEEK_API_KEY
     models:
       - deepseek-chat
+      - deepseek-reasoner
   zhipu:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api
@@ -81,6 +82,10 @@ EMBED_MODEL_INFO:
     default_path: BAAI/bge-large-zh-v1.5
     dimension: 1024
     query_instruction: "为这个句子生成表示以用于检索相关文章："
+  bge-m3:
+    name: bge-m3
+    default_path: BAAI/bge-m3
+    dimension: 1024
   zhipu-embedding-2:
     name: zhipu-embedding-2
     default_path: embedding-2
