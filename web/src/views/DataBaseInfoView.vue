@@ -132,7 +132,7 @@
                 <div class="params-group">
                   <div class="params-item col">
                     <p>重写查询<small>（修改后需重新检索）</small>：</p>
-                    <a-segmented v-model:value="meta.rewriteQuery" :options="rewriteQueryOptions">
+                    <a-segmented v-model:value="meta.use_rewrite_query" :options="use_rewrite_queryOptions">
                       <template #label="{ payload }">
                         <div>
                           <p style="margin: 4px 0">{{ payload.subTitle }}</p>
@@ -251,13 +251,13 @@ const meta = reactive({
   mode: 'search',
   maxQueryCount: 30,
   filter: true,
-  rewriteQuery: 'off',
+  use_rewrite_query: 'off',
   rerankThreshold: 0.1,
   distanceThreshold: 0.3,
   topK: 10,
 });
 
-const rewriteQueryOptions = ref([
+const use_rewrite_queryOptions = ref([
   { value: 'off', payload: { title: 'off', subTitle: '不启用' } },
   { value: 'on', payload: { title: 'on', subTitle: '启用重写' } },
   { value: 'hyde', payload: { title: 'hyde', subTitle: '伪文档生成' } },
@@ -546,10 +546,7 @@ watch(() => meta, () => {
 
 // 添加示例查询
 const queryExamples = ref([
-  '食品添加剂的安全性如何?',
-  '如何识别和预防食物中毒?',
-  '转基因食品对人体健康有什么影响?',
-  '如何正确储存和处理生鲜食品?'
+  '贾宝玉的丫鬟有哪些？',
 ]);
 
 // 使用示例查询的方法

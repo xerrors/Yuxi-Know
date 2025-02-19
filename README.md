@@ -12,9 +12,6 @@
 > [!NOTE]
 > 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
 
-已知问题：
-
-- [ ] 从 Flask 更换到 Fast API 之后，并行命令还存在问题。
 
 ## 概述
 
@@ -36,7 +33,7 @@ OPENAI_API_KEY=sk-*********[可选]
 **提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 `docker/docker-compose.yml` 启动。
 
 ```bash
-docker-compose -f docker/docker-compose.dev.yml up --build
+docker compose -f docker/docker-compose.dev.yml up --build
 ```
 
 **也可以加上 `-d` 参数，后台运行。*

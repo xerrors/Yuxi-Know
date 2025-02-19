@@ -1,0 +1,17 @@
+# 基础配置
+stream: true
+save_dir: saves
+
+# 功能开关
+enable_reranker: false
+enable_knowledge_base: false
+enable_knowledge_graph: false
+enable_search_engine: false
+enable_web_search: false
+
+# 模型配置
+model_provider: "deepseek"  # 设置为 deepseek
+model_name: "deepseek-chat"  # 设置默认模型名称
+embed_model: "zhipu-embedding-3"
+reranker: "bge-reranker-v2-m3"
+model_local_paths: {} 

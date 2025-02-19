@@ -118,7 +118,11 @@ class Retriever:
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        rewrite_query_span = refs["meta"].get("rewriteQuery", "off")
+        if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
+            rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
+        else:
+            rewrite_query_span = refs["meta"]["config"].get("use_rewrite_query", "off")
+
         if rewrite_query_span == "off":
             rewritten_query = query
         else:

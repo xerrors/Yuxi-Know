@@ -11,7 +11,7 @@ const router = createRouter({
       component: BlankLayout,
       children: [        {
           path: '',
-          name: 'home',
+          name: 'Home',
           component: () => import('../views/HomeView.vue'),
           meta: { keepAlive: true }
         }
