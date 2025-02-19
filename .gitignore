@@ -38,3 +38,5 @@ notebooks
 graphrag
 docker/volumes
 .cursorrules
+src/static/config.yaml
+src/static/config.dev.yam
