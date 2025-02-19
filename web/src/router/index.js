@@ -7,7 +7,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
+      name: 'main',
       component: BlankLayout,
       children: [        {
           path: '',
@@ -24,7 +24,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'Chat',
+          name: 'ChatComp',
           component: () => import('../views/ChatView.vue'),
           meta: { keepAlive: true }
         }
@@ -37,7 +37,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'Graph',
+          name: 'GraphComp',
           component: () => import('../views/GraphView.vue'),
           meta: { keepAlive: false }
         }
@@ -50,13 +50,13 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'database',
+          name: 'DatabaseComp',
           component: () => import('../views/DataBaseView.vue'),
           meta: { keepAlive: true }
         },
         {
           path: ':database_id',
-          name: 'databaseInfo',
+          name: 'DatabaseInfoComp',
           component: () => import('../views/DataBaseInfoView.vue'),
           meta: { keepAlive: false }
         }
@@ -69,7 +69,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'setting',
+          name: 'SettingComp',
           component: () => import('../views/SettingView.vue'),
           meta: { keepAlive: true }
         }
@@ -82,7 +82,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'ToolsView',
+          name: 'ToolsComp',
           component: () => import('../views/ToolsView.vue'),
           meta: { keepAlive: true }
         },
