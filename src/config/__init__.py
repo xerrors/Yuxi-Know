@@ -67,7 +67,6 @@ class Config(SimpleConfig):
         self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
         ### <<< 默认配置结束
 
-
         self.load()
         self.handle_self()
 
@@ -121,7 +120,6 @@ class Config(SimpleConfig):
 
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
         assert len(self.valuable_model_provider) > 0, f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"
-
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""

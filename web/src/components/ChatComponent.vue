@@ -217,6 +217,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   stream: true,
   summary_title: false,
   history_round: 5,
+  db_name: null,
 })
 
 const marked = new Marked(
@@ -329,7 +330,6 @@ const appendAiMessage = (text, refs=null) => {
 
 const updateMessage = (info) => {
   const message = conv.value.messages.find((message) => message.id === info.id);
-
   if (message) {
     try {
       // 只有在 text 不为空时更新
@@ -666,7 +666,6 @@ watch(
       margin-right: 8px;
       font-size: 16px;
     }
-
     .ant-switch {
       &.ant-switch-checked {
         background-color: var(--main-500);
@@ -1005,7 +1004,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-
   .search-switch {
     margin-right: 8px;
   }
