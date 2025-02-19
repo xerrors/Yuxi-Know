@@ -81,9 +81,12 @@
           <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
             搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
           </div>
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            重写查询 <a-segmented v-model:value="meta.rewriteQuery" :options="['off', 'on', 'hyde']"/>
+          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
+            网页搜索 <div @click.stop><a-switch v-model:checked="meta.enable_web_search" /></div>
           </div>
+          <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
+            重写查询 <a-segmented v-model:value="meta.use_rewrite_query" :options="['off', 'on', 'hyde']"/>
+          </div> -->
         </div>
       </div>
     </div>
@@ -114,6 +117,7 @@
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
+        <div v-else-if="message.status == 'reasoning' && isStreaming" class="searching-msg"><i>正在思考…… {{ message.reasoning }}</i></div>
         <div
           v-else-if="message.text.length == 0 || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
           class="err-msg"
@@ -191,11 +195,7 @@ const panel = ref(null)
 const modelCard = ref(null)
 const examples = ref([
   '写一个冒泡排序',
-  '肉碱的分子量是多少？直接回答',
-  '总结大蒜的功效是什么？',
   '今天天气怎么样？',
-  '吃饭吃出苍蝇可以索赔吗？',
-  '帮我写一个请假条',
   '贾宝玉今年多少岁？',
 ])
 
@@ -210,11 +210,12 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   enable_retrieval: false,
   use_graph: false,
   use_web: false,
+  enable_web_search: false,
   graph_name: "neo4j",
-  rewriteQuery: "off",
+  // use_rewrite_query: "off",
   selectedKB: null,
   stream: true,
-  summary_title: true,
+  summary_title: false,
   history_round: 5,
 })
 
@@ -313,11 +314,12 @@ const appendUserMessage = (message) => {
   scrollToBottom()
 }
 
-const appendAiMessage = (message, refs=null) => {
+const appendAiMessage = (text, refs=null) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'received',
-    text: message,
+    text: text,
+    reasoning: '',
     refs,
     status: "init",
     meta: {},
@@ -329,33 +331,42 @@ const updateMessage = (info) => {
   const message = conv.value.messages.find((message) => message.id === info.id);
 
   if (message) {
-    // 只有在 text 不为空时更新
-    if (info.text !== null && info.text !== undefined && info.text !== '') {
-      message.text = info.text;
-    }
+    try {
+      // 只有在 text 不为空时更新
+      if (info.text !== null && info.text !== undefined && info.text !== '') {
+        message.text = info.text;
+      }
 
-    // 只有在 refs 不为空时更新
-    if (info.refs !== null && info.refs !== undefined) {
-      message.refs = info.refs;
-    }
+      if (info.reasoning !== null && info.reasoning !== undefined && info.reasoning !== '') {
+        message.reasoning = info.reasoning;
+      }
 
-    if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
-      message.model_name = info.model_name;
-    }
+      // 只有在 refs 不为空时更新
+      if (info.refs !== null && info.refs !== undefined) {
+        message.refs = info.refs;
+      }
+
+      if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
+        message.model_name = info.model_name;
+      }
 
     // 只有在 status 不为空时更新
-    if (info.status !== null && info.status !== undefined && info.status !== '') {
-      message.status = info.status;
-    }
+      if (info.status !== null && info.status !== undefined && info.status !== '') {
+        message.status = info.status;
+      }
 
-    if (info.meta !== null && info.meta !== undefined) {
-      message.meta = info.meta;
+      if (info.meta !== null && info.meta !== undefined) {
+        message.meta = info.meta;
+      }
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error updating message:', error);
+      message.status = 'error';
+      message.text = '消息更新失败';
     }
   } else {
-    console.error('Message not found');
+    console.error('Message not found:', info.id);
   }
-
-  scrollToBottom();
 };
 
 
@@ -378,7 +389,7 @@ const groupRefs = (id) => {
 
 const simpleCall = (message) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/chat/call', {
+    fetch('/api/chat/call_lite', {
       method: 'POST',
       body: JSON.stringify({ query: message, }),
       headers: { 'Content-Type': 'application/json' }
@@ -457,10 +468,12 @@ const fetchChatResponse = (user_input, cur_res_id) => {
               updateMessage({
                 id: cur_res_id,
                 text: data.response,
+                reasoning: data.reasoning_response,
                 model_name: data.model_name,
                 status: data.status,
                 meta: data.meta,
               });
+              // console.log(data)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].text)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
 
@@ -647,6 +660,17 @@ watch(
 
     &:hover {
       background-color: var(--main-light-3);
+    }
+
+    .anticon {
+      margin-right: 8px;
+      font-size: 16px;
+    }
+
+    .ant-switch {
+      &.ant-switch-checked {
+        background-color: var(--main-500);
+      }
     }
   }
 }
@@ -977,7 +1001,15 @@ watch(
   }
 }
 
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 
+  .search-switch {
+    margin-right: 8px;
+  }
+}
 </style>
 
 <style lang="less">

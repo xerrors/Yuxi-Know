@@ -1,5 +1,4 @@
 import os
-import uuid
 from FlagEmbedding import FlagModel, FlagReranker
 
 from src.config import EMBED_MODEL_INFO, RERANKER_LIST
@@ -15,11 +14,7 @@ GLOBAL_EMBED_STATE = {}
 class EmbeddingModel(FlagModel):
     def __init__(self, model_info, config, **kwargs):
         self.info = model_info
-        model_name_or_path = handle_local_model(
-            paths=config.model_local_paths,
-            model_name=model_info["name"],
-            default_path=model_info.get("default_path", None))
-
+        model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("default_path"))
         logger.info(f"Loading embedding model {model_info['name']} from {model_name_or_path}")
 
         super().__init__(model_name_or_path,
@@ -34,11 +29,8 @@ class Reranker(FlagReranker):
 
         assert config.reranker in RERANKER_LIST.keys(), f"Unsupported Reranker: {config.reranker}, only support {RERANKER_LIST.keys()}"
 
-        model_name_or_path = handle_local_model(
-            paths=config.model_local_paths,
-            model_name=config.reranker,
-            default_path=RERANKER_LIST[config.reranker])
-
+        model_info = RERANKER_LIST[config.reranker]
+        model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("default_path"))
         logger.info(f"Loading Reranker model {config.reranker} from {model_name_or_path}")
 
         super().__init__(model_name_or_path, use_fp16=True, **kwargs)
@@ -113,6 +105,4 @@ def get_embedding_model(config):
 
 def handle_local_model(paths, model_name, default_path):
     model_path = paths.get(model_name, default_path)
-    if os.getenv("MODEL_ROOT_DIR") and not os.path.isabs(model_path):
-        model_path = os.path.join(os.getenv("MODEL_ROOT_DIR"), model_path)
     return model_path

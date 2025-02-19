@@ -18,6 +18,7 @@ MODEL_NAMES:
       - DEEPSEEK_API_KEY
     models:
       - deepseek-chat
+      - deepseek-reasoner
   zhipu:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api
@@ -74,13 +75,13 @@ MODEL_NAMES:
       - meta-llama/Meta-Llama-3.1-8B-Instruct
       - meta-llama/Meta-Llama-3.1-70B-Instruct
       - meta-llama/Meta-Llama-3.1-405B-Instruct
+      - deepseek-ai/DeepSeek-R1
 
 EMBED_MODEL_INFO:
-  bge-large-zh-v1.5:
-    name: bge-large-zh-v1.5
-    default_path: BAAI/bge-large-zh-v1.5
+  bge-m3:
+    name: BAAI/bge-m3
+    default_path: BAAI/bge-m3
     dimension: 1024
-    query_instruction: "为这个句子生成表示以用于检索相关文章："
   zhipu-embedding-2:
     name: zhipu-embedding-2
     default_path: embedding-2
@@ -91,4 +92,6 @@ EMBED_MODEL_INFO:
     dimension: 2048
 
 RERANKER_LIST:
-  bge-reranker-v2-m3: BAAI/bge-reranker-v2-m3
+  bge-reranker-v2-m3:
+    name: BAAI/bge-reranker-v2-m3
+    default_path: BAAI/bge-reranker-v2-m3

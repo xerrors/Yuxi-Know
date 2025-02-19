@@ -1,3 +1,4 @@
+import os
 from src.core import DataBaseManager
 from src.core.retriever import Retriever
 from src.models import select_model
@@ -16,6 +17,10 @@ class Startup:
         self.model = select_model(self.config)
         self.dbm = DataBaseManager(self.config)
         self.retriever = Retriever(self.config, self.dbm, self.model)
+
+        self.model_lite = select_model(self.config,
+                                       model_provider=self.config.model_provider_lite or "zhipu",
+                                       model_name=self.config.model_name_lite or "glm-4-flash")
 
     def restart(self):
         logger.info("Restarting...")

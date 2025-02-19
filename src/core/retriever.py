@@ -14,6 +14,10 @@ class Retriever:
         if self.config.enable_reranker:
             self.reranker = Reranker(config)
 
+        if self.config.enable_web_search:
+            from src.utils.web_search import WebSearcher
+            self.web_searcher = WebSearcher()
+
     def retrieval(self, query, history, meta):
 
         refs = {"query": query, "history": history, "meta": meta}
@@ -21,6 +25,7 @@ class Retriever:
         refs["entities"] = self.reco_entities(query, history, refs)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, refs)
         refs["graph_base"] = self.query_graph(query, history, refs)
+        refs["web_search"] = self.query_web(query, history, refs)
 
         return refs
 
@@ -44,6 +49,12 @@ class Retriever:
             )
             external_parts.extend(["图数据库信息:", db_text])
 
+        # 解析网络搜索的结果
+        web_res = refs.get("web_search", {}).get("results", [])
+        if web_res:
+            web_text = "\n".join(f"{r['title']}: {r['snippet']}" for r in web_res)
+            external_parts.extend(["网络搜索信息:", web_text])
+
         # 构造查询
         from src.utils.prompts import knowbase_qa_template
         if external_parts and len(external_parts) > 0:
@@ -60,8 +71,6 @@ class Retriever:
         raise NotImplementedError
 
     def query_graph(self, query, history, refs):
-        # res = model.predict("qiansdgsa, dasdh ashdsakjdk ak ").content
-
         results = []
         if refs["meta"].get("use_graph") and self.config.enable_knowledge_base:
             for entity in refs["entities"]:
@@ -69,6 +78,7 @@ class Retriever:
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
+
 
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
@@ -116,9 +126,27 @@ class Retriever:
 
         return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
 
+    def query_web(self, query, history, refs):
+        """查询网络"""
+
+        if not (refs["meta"].get("enable_web_search") and self.config.enable_web_search):
+            return {"results": [], "message": "Web search is disabled"}
+
+        try:
+            search_results = self.web_searcher.search(query)
+        except Exception as e:
+            logger.error(f"Web search error: {str(e)}")
+            return {"results": [], "message": "Web search error"}
+
+        return {"results": search_results}
+
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        rewrite_query_span = refs["meta"].get("rewriteQuery", "off")
+        if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
+            rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
+        else:
+            rewrite_query_span = self.config.use_rewrite_query
+
         if rewrite_query_span == "off":
             rewritten_query = query
         else:

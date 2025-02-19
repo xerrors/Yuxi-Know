@@ -1,10 +1,10 @@
 from src.utils.logging_config import logger
 
 
-def select_model(config):
+def select_model(config, model_provider=None, model_name=None):
 
-    model_provider = config.model_provider
-    model_name = config.model_name
+    model_provider = model_provider or config.model_provider
+    model_name = model_name or config.model_name
 
     logger.info(f"Selecting model from {model_provider} with {model_name}")
 

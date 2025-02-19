@@ -2,7 +2,7 @@
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
       <template #description>
-        <p>配置文件也可以在 <code>saves/config/config.yaml</code> 中修改</p>
+        <p>配置文件也可以在 <code>src/static/config.yaml</code> 中修改</p>
       </template>
       <template #actions>
         <a-button type="primary" v-if="isNeedRestart" @click="sendRestart">
@@ -77,6 +77,21 @@
               :checked="configStore.config.enable_reranker"
               @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
             />
+          </div>
+        </div>
+        <h3>检索配置</h3>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.use_rewrite_query.des }}</span>
+            <a-select style="width: 200px"
+              :value="configStore.config?.use_rewrite_query"
+              @change="handleChange('use_rewrite_query', $event)"
+            >
+              <a-select-option
+                v-for="(name, idx) in items?.use_rewrite_query.choices" :key="idx"
+                :value="name">{{ name }}
+              </a-select-option>
+            </a-select>
           </div>
         </div>
       </div>
@@ -161,16 +176,21 @@
         </div>
         <div class="model-provider-card" v-for="(item, key) in notModelKeys" :key="key">
           <div class="card-header">
-            <h3>{{ modelNames[item].name }}</h3>
-            <a :href="modelNames[item].url" target="_blank">详情</a>
+            <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
             <div class="missing-keys">
-              需配置 <span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
+              <small>需配置</small> <span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
             </div>
           </div>
         </div>
       </div>
       <div class="setting" v-if="state.section ==='path'">
-        <h3>暂无配置</h3>
+        <h3>本地模型配置</h3>
+        <p>如果是 Docker 启动，务必确保在环境变量中设置了 MODEL_DIR，或者设置了 volumes 映射</p>
+        <TableConfigComponent
+          :config="configStore.config?.model_local_paths"
+          @update:config="handleModelLocalPathsUpdate"
+        />
       </div>
     </div>
   </div>
@@ -191,6 +211,7 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 
 const configStore = useConfigStore()
@@ -231,6 +252,10 @@ const generateRandomHash = (length) => {
   return hash;
 }
 
+const handleModelLocalPathsUpdate = (config) => {
+  handleChange('model_local_paths', config)
+}
+
 const handleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
     message.error('启动知识图谱必须请先启用知识库功能')
@@ -249,7 +274,8 @@ const handleChange = (key, e) => {
         || key == 'model_provider'
         || key == 'model_name'
         || key == 'embed_model'
-        || key == 'reranker') {
+        || key == 'reranker'
+        || key == 'model_local_paths') {
     if (!isNeedRestart.value) {
       isNeedRestart.value = true
       notification.info({

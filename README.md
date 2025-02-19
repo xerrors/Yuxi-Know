@@ -12,9 +12,8 @@
 > [!NOTE]
 > 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
 
-已知问题：
-
-- [ ] 从 Flask 更换到 Fast API 之后，并行命令还存在问题。
+- [ ] Ollma Embedding 支持（Open-like Embedding 支持）
+- [x] DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
 
 ## 概述
 
@@ -31,12 +30,12 @@ ZHIPUAI_API_KEY=270ea********8bfa97.e3XOMd****Q1Sk
 OPENAI_API_KEY=sk-*********[可选]
 ```
 
-本项目的基础对话服务可以在不含显卡的设备上运行，大模型使用在线服务商的接口。但是如果想要完整的知识库对话体验，则需要 8G 以上的显存。因为需要本地运行 embedding 模型和 rerank 模型。
+本项目的基础对话服务可以在不含显卡的设备上运行，大模型使用在线服务商的接口。但是如果想要完整的知识库对话体验，则需要 8G 以上的显存。因为需要本地运行 embedding 模型和 rerank 模型。如果需要指定本地模型所在路径，需要配置 `MODEL_DIR` 参数。
 
 **提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 `docker/docker-compose.yml` 启动。
 
 ```bash
-docker-compose -f docker/docker-compose.dev.yml up --build
+docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
 ```
 
 **也可以加上 `-d` 参数，后台运行。*
@@ -63,7 +62,7 @@ docker-compose -f docker/docker-compose.dev.yml up --build
 关闭 docker 服务：
 
 ```bash
-docker-compose -f docker/docker-compose.dev.yml down
+docker compose -f docker/docker-compose.dev.yml --env-file src/.env down
 ```
 
 查看日志：
@@ -72,26 +71,10 @@ docker-compose -f docker/docker-compose.dev.yml down
 docker logs <CONTAINER_NAME>  # 例如：docker logs api-dev
 ```
 
-如果需要使用到本地模型（不推荐手动指定），比如向量模型或者重排序模型，则需要将环境变量中设置的 `MODEL_ROOT_DIR` 做映射，比如本地模型都是存放在 `/hdd/models` 里面，则需要在 `docker-compose.yml` 和 `docker-compose.dev.yml`  中添加：
-
-```yml
-services:
-  api:
-    build:
-      context: ..
-      dockerfile: docker/api.Dockerfile
-    container_name: api-dev
-    working_dir: /app
-    volumes:
-      - ../src:/app/src
-      - ../saves:/app/saves
-      - /hdd/zwj/models:/hdd/zwj/models  # <== 修改这一行
-```
-
 **生产环境部署**：本项目同时支持使用 Docker 部署生产环境，只需要更换 `docker-compose` 文件就可以了。
 
 ```bash
-docker-compose -f docker/docker-compose.yml up --build
+docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 ```
 
 ## 模型支持
@@ -131,7 +114,7 @@ docker-compose -f docker/docker-compose.yml up --build
 
 对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
 
-对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在 `saves/config/config.yaml` 配置相关内容。同时注意要在 docker 中做映射，参考 README 中的 `docker/docker-compose.yml`。
+对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在网页的 settings 里面做映射。
 
 例如：
 
