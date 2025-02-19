@@ -65,7 +65,7 @@ class Config(SimpleConfig):
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         ### <<< 默认配置结束
 
-        self.filename = filename or os.path.join(self.save_dir, "config", "config.yaml")
+        self.filename = filename or os.path.join("src", "config", "base.yaml")
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self.load()

@@ -33,7 +33,7 @@ OPENAI_API_KEY=sk-*********[可选]
 **提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 `docker/docker-compose.yml` 启动。
 
 ```bash
-docker-compose -f docker/docker-compose.dev.yml up --build
+docker compose -f docker/docker-compose.dev.yml up --build
 ```
 
 **也可以加上 `-d` 参数，后台运行。*
