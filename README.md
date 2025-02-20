@@ -1,19 +1,15 @@
-<h1 align="center">语析 （基于大模型的知识图谱问答平台）</h1>
+<h1 align="center">语析 （基于大模型的知识库+知识图谱问答平台）</h1>
 <div align="center">
 
 ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)
-![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)
+![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)  
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
 ![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
 ![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)
+![](https://img.shields.io/github/stars/xerrors/Yuxi-Know)
 
 </div>
 
-> [!NOTE]
-> 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
-
-- [ ] Ollma Embedding 支持（Open-like Embedding 支持）
-- [x] DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
 
 ## 概述
 
@@ -21,9 +17,24 @@
 
 ![main](./images/main.png)
 
+> [!NOTE]
+> 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
+
+代办清单
+
+- [ ] Ollma Embedding 支持（Open-like Embedding 支持）
+- [ ] 知识图谱索引支持自定义 Embedding 模型
+- [x] DeepSeek-R1 支持
+
+## 更新日志
+
+- 2025.02.20 DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
+- 2024.10.12 后端修改为 [FastAPI](https://github.com/fastapi)，并添加了 [Milvus-Standalone](https://github.com/milvus-io) 的独立部署。
+
+
 ## 快速上手
 
-在启动之前，提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中。默认使用的是智谱AI。因此务必需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。其余模型的配置可以参考 [src/config/models.yaml](src/config/models.yaml) 中的 env。
+在启动之前，提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中。默认使用的是智谱AI。因此务必需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。其余模型的配置可以参考 [src/static/models.yaml](src/static/models.yaml) 中的 env。
 
 ```
 ZHIPUAI_API_KEY=270ea********8bfa97.e3XOMd****Q1Sk
@@ -131,10 +142,6 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 项目启动后会自动启动 neo4j 服务，可以直接使用 [http://localhost:7474/](http://localhost:7474/) 去访问和管理图数据库，初始默认的账户密码是 `neo4j` 和 `0123456789`。可以在 `docker/docker-compose.yml` 和 `docker\docker-compose.dev.yml` 中修改（注：`api.environment` 和 `graph.environment` 都需要修改）。
 
 目前项目中暂不支持同时查询多个知识图谱，短期内也没有计划支持。不过倒是可以通过配置不同的 `NEO4J_URI` 服务来切换知识图谱。如果已经有了基于 neo4j 的知识图谱，可以将 `docker-compose.yml` 中的 `graph` 配置项删除，并将 `api.environment` 中的 `NEO4J_URI` 配置项修改为 neo4j 的服务地址。
-
-## 更新日志
-
-- 2024.10.12 后端修改为 [FastAPI](https://github.com/fastapi)，并添加了 [Milvus-Standalone](https://github.com/milvus-io) 的独立部署。
 
 ## 相关问题
 
