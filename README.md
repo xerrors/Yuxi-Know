@@ -101,10 +101,10 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 > [!Warning]
 > 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
 
-| 模型名称(`config.embed_model`) | 默认路径/模型                    | 需要配置项目（`config.model_local_paths`） |
-| :------------------------------- | :------------------------------- | :------------------------------------------- |
-| `bge-large-zh-v1.5`            | `BAAI/bge-large-zh-v1.5`       | `bge-large-zh-v1.5`                        |
-| `zhipu`                        | `embedding-2`, `embedding-3` | `ZHIPUAI_API_KEY` (`.env`)               |
+| 模型名称(`config.embed_model`) | 默认路径/模型                    | 
+| :------------------------------- | :------------------------------- |
+| `bge-m3`            | `BAAI/bge-m3`       | 
+| `zhipu`                        | `embedding-2`, `embedding-3` |
 
 ### 3. 重排序模型支持
 
@@ -114,14 +114,8 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
 
-对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在网页的 settings 里面做映射。
+对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在网页的 settings 里面做映射。或者修改 `src/static/config.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
 
-例如：
-
-```yaml
-model_local_paths:
-  bge-large-zh-v1.5: /models/bge-large-zh-v1.5
-```
 
 ## 知识库支持
 
