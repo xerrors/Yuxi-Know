@@ -110,6 +110,24 @@
         class="message-box"
         :class="message.role"
       >
+        <div v-if="message.reasoning_content" class="searching-msg">
+          <a-collapse
+            v-model:activeKey="message.showThinking"
+            :bordered="false"
+            style="background: rgb(255, 255, 255)"
+          >
+            <template #expandIcon="{ isActive }">
+              <caret-right-outlined :rotate="isActive ? 90 : 0" />
+            </template>
+            <a-collapse-panel
+              key="show"
+              :header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
+              :style="'background: #f7f7f7; border-radius: 8px; margin-bottom: 24px; border: 0; overflow: hidden'"
+            >
+              <p>{{ message.reasoning_content }}</p>
+            </a-collapse-panel>
+          </a-collapse>
+        </div>
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
         <div v-else-if="message.text.length == 0 && message.status=='init'"  class="loading-dots">
           <div></div>
@@ -117,9 +135,8 @@
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
-        <div v-else-if="message.status == 'reasoning' && isStreaming" class="searching-msg"><i>正在思考…… {{ message.reasoning_content }}</i></div>
         <div
-          v-else-if="message.text.length == 0 || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
+          v-else-if="(message.text.length == 0 && message.status!='reasoning') || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
           class="err-msg"
           @click="retryMessage(message.id)"
         >
@@ -170,6 +187,7 @@ import {
   GlobalOutlined,
   FileTextOutlined,
   RobotOutlined,
+  CaretRightOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -324,6 +342,7 @@ const appendAiMessage = (text, refs=null) => {
     refs,
     status: "init",
     meta: {},
+    showThinking: "show"
   })
   scrollToBottom()
 }
@@ -362,6 +381,11 @@ const updateMessage = (info) => {
       if (info.message !== null && info.message !== undefined) {
         msg.message = info.message;
       }
+
+      if (info.showThinking !== null && info.showThinking !== undefined) {
+        msg.showThinking = info.showThinking;
+      }
+
       scrollToBottom();
     } catch (error) {
       console.error('Error updating message:', error);
@@ -442,6 +466,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
             console.log("fetching refs")
             groupRefs(cur_res_id);
           }
+          updateMessage({showThinking: "no", id: cur_res_id});
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
