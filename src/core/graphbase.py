@@ -27,6 +27,7 @@ class GraphDatabase:
         self.kgdb_name = kgdb_name
         assert embed_model, "embed_model=None"
         self.embed_model = embed_model
+        self.embed_model_name = None
 
     def start(self):
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
@@ -87,7 +88,8 @@ class GraphDatabase:
                 "relationship_count": relationship_count,
                 "triples_count": triples_count,
                 "labels": labels,
-                "status": self.status
+                "status": self.status,
+                "embed_model_name": self.embed_model_name
             }
 
         with self.driver.session() as session:
@@ -171,6 +173,7 @@ class GraphDatabase:
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
         self.status = "processing"
         kgdb_name = kgdb_name or 'neo4j'
+        self.embed_model_name = self.embed_model_name or self.config.embed_model
         self.use_database(kgdb_name)  # 切换到指定数据库
 
         def read_triples(file_path):

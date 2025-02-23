@@ -24,7 +24,7 @@
         <div class="section">
           <div class="card">
             <span class="label">{{ items?.embed_model.des }}</span>
-            <a-select style="width: 200px"
+            <a-select style="width: 300px"
               :value="configStore.config?.embed_model"
               @change="handleChange('embed_model', $event)"
             >
@@ -36,7 +36,7 @@
           </div>
           <div class="card">
             <span class="label">{{ items?.reranker.des }}</span>
-            <a-select style="width: 200px"
+            <a-select style="width: 300px"
               :value="configStore.config?.reranker"
               @change="handleChange('reranker', $event)"
               :disabled="!configStore.config.enable_reranker"

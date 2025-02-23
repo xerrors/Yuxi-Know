@@ -11,7 +11,7 @@
   <div class="graph-container layout-container" v-else>
     <HeaderComponent
       title="图数据库"
-      :description="`${graphInfo?.database_name || ''} - 共 ${graphInfo?.entity_count || 0} 实体，${graphInfo?.relationship_count || 0} 个关系`"
+      :description="`${graphInfo?.database_name || ''} - 共 ${graphInfo?.entity_count || 0} 实体，${graphInfo?.relationship_count || 0} 个关系。向量模型：${graphInfo?.embed_model_name || '未上传文件'}`"
     >
       <template #actions>
         <div class="status-wrapper">
@@ -43,7 +43,7 @@
       </div>
     </div>
     <div class="main" id="container" ref="container" v-show="graphData.nodes.length > 0"></div>
-    <a-empty v-show="graphData.nodes.length === 0"  style="padding: 4rem 0;"/>
+    <a-empty v-show="graphData.nodes.length === 0" style="padding: 4rem 0;"/>
 
     <a-modal
       :open="state.showModal" title="上传文件"
@@ -51,6 +51,11 @@
       @cancel="() => state.showModal = false"
       ok-text="添加到图数据库" cancel-text="取消"
       :confirm-loading="state.precessing">
+      <div v-if="graphInfo?.embed_model_name">
+        <p>当前图数据库向量模型：{{ graphInfo?.embed_model_name }}</p>
+        <p>当前所选择的向量模型是 {{ configStore.config.embed_model }}</p>
+      </div>
+      <p v-else>第一次创建之后将无法修改向量模型，当前向量模型 {{ configStore.config.embed_model }}</p>
       <div class="upload">
         <a-upload-dragger
           class="upload-dragger"
@@ -58,7 +63,7 @@
           name="file"
           :fileList="fileList"
           :max-count="1"
-          :disabled="state.precessing"
+          :disabled="state.precessing || (graphInfo?.embed_model_name && graphInfo?.embed_model_name !== configStore.config.embed_model)"
           action="/api/data/upload"
           @change="handleFileUpload"
           @drop="handleDrop"
@@ -181,7 +186,7 @@ const loadSampleNodes = () => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
       console.log(graphData)
-      randerGraph()
+      setTimeout(() => randerGraph(), 500)
     })
     .catch((error) => {
       message.error(error.message);
@@ -192,12 +197,6 @@ const loadSampleNodes = () => {
 const onSearch = () => {
   if (!state.searchInput) {
     message.error('请输入要查询的实体')
-    return
-  }
-
-  const cur_embed_model = configStore.config.embed_model
-  if (cur_embed_model !== 'zhipu-embedding-3') {
-    message.error('当前不支持实体检索，请在设置中选择向量模型为 zhipu-embedding-3')
     return
   }
 

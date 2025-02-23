@@ -27,26 +27,29 @@ def chat_post(
 
     history_manager = HistoryManager(history)
 
-    def make_chunk(content=None, status=None, history=None, reasoning_content=None):
+    def make_chunk(content=None, **kwargs):
         return json.dumps({
             "response": content,
-            "reasoning_response": reasoning_content,
-            "history": history,
             "model_name": startup.config.model_name,
-            "status": status,
             "meta": meta,
+            **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
     def generate_response():
         modified_query = query
+        refs = None
 
         # 处理知识库检索
         if meta and meta.get("enable_retrieval"):
             chunk = make_chunk(status="searching")
             yield chunk
 
-            modified_query, refs = startup.retriever(modified_query, history_manager.messages, meta)
-            refs_pool[cur_res_id] = refs
+            try:
+                modified_query, refs = startup.retriever(modified_query, history_manager.messages, meta)
+            except Exception as e:
+                logger.error(f"Retriever error: {e}")
+                yield make_chunk(message=f"Retriever error: {e}", status="error")
+                return
 
         messages = history_manager.get_history_with_msg(modified_query, max_rounds=meta.get('history_round'))
         history_manager.add_user(query)  # 注意这里使用原始查询
@@ -56,7 +59,7 @@ def chat_post(
         reasoning_content = ""
         for delta in startup.model.predict(messages, stream=True):
             if not delta.content and hasattr(delta, 'reasoning_content'):
-                reasoning_content += delta.reasoning_content
+                reasoning_content += delta.reasoning_content or ""
                 chunk = make_chunk(reasoning_content=reasoning_content, status="reasoning")
                 yield chunk
                 continue
@@ -67,14 +70,15 @@ def chat_post(
             else:
                 content += delta.content or ""
 
-            chunk = make_chunk(content=content,
-                               reasoning_content=reasoning_content,
-                               status="loading",
-                               history=history_manager.update_ai(content))
+            chunk = make_chunk(content=content, status="loading")
             yield chunk
 
         logger.debug(f"Final response: {content}")
         logger.debug(f"Final reasoning response: {reasoning_content}")
+        yield make_chunk(content=content,
+                         status="finished",
+                         history=history_manager.update_ai(content),
+                         refs=refs)
 
     return StreamingResponse(generate_response(), media_type='application/json')
 
