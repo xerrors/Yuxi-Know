@@ -2,7 +2,7 @@
 <div align="center">
 
 ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)
-![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)  
+![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D) 
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
 ![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
 ![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)
@@ -28,20 +28,20 @@
 
 ## 更新日志
 
+- 2025.02.23 SiliconFlow 的 Rerank 和 Embedding model 支持。现在默认使用 SiliconFlow。
 - 2025.02.20 DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
 - 2024.10.12 后端修改为 [FastAPI](https://github.com/fastapi)，并添加了 [Milvus-Standalone](https://github.com/milvus-io) 的独立部署。
 
 
 ## 快速上手
 
-在启动之前，提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中。默认使用的是智谱AI。因此务必需要配置 `ZHIPUAI_API_KEY=<ZHIPUAI_API_KEY>`。其余模型的配置可以参考 [src/static/models.yaml](src/static/models.yaml) 中的 env。
+在启动之前，提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中。默认使用的是硅基流动。因此务必需要配置 `SILICONFLOW_API_KEY=<SILICONFLOW_API_KEY>`。其余模型的配置可以参考 [src/static/models.yaml](src/static/models.yaml) 中的 env。
 
 ```
-ZHIPUAI_API_KEY=270ea********8bfa97.e3XOMd****Q1Sk
-OPENAI_API_KEY=sk-*********[可选]
+SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
 ```
 
-本项目的基础对话服务可以在不含显卡的设备上运行，大模型使用在线服务商的接口。但是如果想要完整的知识库对话体验，则需要 8G 以上的显存。因为需要本地运行 embedding 模型和 rerank 模型。如果需要指定本地模型所在路径，需要配置 `MODEL_DIR` 参数。
+本项目的基础对话服务可以在不含显卡的设备上运行，大模型使用在线服务商的接口。如果需要指定本地模型（如 Embedding、Rerank 模型）所在路径，需要配置 `MODEL_DIR` 参数。并在 Docker Compose 中启用映射。
 
 **提醒**：下面的脚本会启动开发版本，源代码的修改会自动更新（含前端和后端）。如果生产环境部署，请使用 `docker/docker-compose.yml` 启动。
 
@@ -88,6 +88,8 @@ docker logs <CONTAINER_NAME>  # 例如：docker logs api-dev
 docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 ```
 
+注：如果想要在本地使用 PyCharm 等 IDE 加断点调试，可以使用 Docker 运行除 API 以外的容器，然后本地运行 main.py，但是需要注意将对应的环境变量添加到 .env 文件中
+
 ## 模型支持
 
 ### 1. 对话模型支持
@@ -96,36 +98,28 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 | 模型供应商            | 默认模型                                  | 配置项目                                       |
 | :-------------------- | :---------------------------------------- | :--------------------------------------------- |
+| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费)  | `SILICONFLOW_API_KEY`                        |
 | `openai`            | `gpt-4o`                                | `OPENAI_API_KEY`                             |
-| `qianfan`（百度）   | `ernie_speed`                           | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
-| `zhipu`(默认)       | `glm-4-flash` (免费)                    | `ZHIPUAI_API_KEY`                            |
-| `dashscope`（阿里） | `qwen-max-latest`                       | `DASHSCOPE_API_KEY`                          |
 | `deepseek`          | `deepseek-chat`                         | `DEEPSEEK_API_KEY`                           |
-| `siliconflow`       | `meta-llama/Meta-Llama-3.1-8B-Instruct` | `SILICONFLOW_API_KEY`                        |
+| `zhipu`（智谱清言）       | `glm-4-flash`                   | `ZHIPUAI_API_KEY`                            |
+| `dashscope`（阿里） | `qwen-max-latest`                       | `DASHSCOPE_API_KEY`                          |
+| `qianfan`（百度）   | `ernie_speed`                           | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
 
 同样支持以 OpenAI 的兼容模型运行模型，可以直接在 Web 设置里面添加。比如使用 vllm 和 Ollama 运行本地模型时。
 
-### 2. 向量模型支持
+### 2. 向量模型支持和重排序模型支持
 
-建议直接使用智谱 AI 的 embedding-3，这样不需要做任何修改，且资费不贵。
+建议直接使用硅基流动部署的 bge-m3，这样不需要做任何修改，且免费。其余模型参考：[src/config/models.yaml](src/config/models.yaml)
 
 > [!Warning]
 > 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
 
-| 模型名称(`config.embed_model`) | 默认路径/模型                    | 
-| :------------------------------- | :------------------------------- |
-| `bge-m3`            | `BAAI/bge-m3`       | 
-| `zhipu`                        | `embedding-2`, `embedding-3` |
-
-### 3. 重排序模型支持
-
-目前仅支持 `BAAI/bge-reranker-v2-m3`。
-
-### 4. 本地模型支持
 
 对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
 
-对于**向量模型**和**重排序模型**，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。如果想要使用本地已经下载好的模型（不建议），可以在网页的 settings 里面做映射。或者修改 `src/static/config.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
+对于**向量模型**和**重排序模型**，选择以 `local` 前缀开头的模型，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。（但请注意，如果是 Docker 运行，模型仅会缓存到 Docker 里面）
+
+如果想要使用本地已经下载好的模型，可以在网页的 settings 里面做映射。或者修改 `src/static/config.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
 
 
 ## 知识库支持
