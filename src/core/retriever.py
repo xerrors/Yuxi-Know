@@ -1,4 +1,4 @@
-from src.models.embedding import Reranker
+from src.models.rerank_model import get_reranker
 from src.utils.logging_config import setup_logger
 
 logger = setup_logger("server-common")
@@ -12,7 +12,7 @@ class Retriever:
         self.model = model
 
         if self.config.enable_reranker:
-            self.reranker = Reranker(config)
+            self.reranker = get_reranker(config)
 
         if self.config.enable_web_search:
             from src.utils.web_search import WebSearcher
@@ -110,15 +110,13 @@ class Retriever:
         for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
-        # use distance threshold to filter results
-        if meta.get("mode") == "search":
-            kb_res = all_kb_res
-        else:
-            kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
+        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
 
-        if self.config.enable_reranker:
-            for r in kb_res:
-                r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)[0]
+        if self.config.enable_reranker and len(kb_res) > 0:
+            texts = [r["entity"]["text"] for r in kb_res]
+            rerank_scores = self.reranker.compute_score([rw_query, texts], normalize=True)
+            for i, r in enumerate(kb_res):
+                r["rerank_score"] = rerank_scores[i]
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
             kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
 

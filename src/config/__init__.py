@@ -59,10 +59,10 @@ class Config(SimpleConfig):
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
-        self.add_item("model_provider", default="zhipu", des="模型提供商", choices=list(MODEL_NAMES.keys()))
-        self.add_item("model_name", default=None, des="模型名称")
-        self.add_item("embed_model", default="zhipu-embedding-3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
-        self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
+        self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(MODEL_NAMES.keys()))
+        self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
+        self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
+        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
         ### <<< 默认配置结束

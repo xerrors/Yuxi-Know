@@ -1,6 +1,5 @@
 import os
 
-from src.models.embedding import EmbeddingModel
 from pymilvus import MilvusClient, MilvusException
 from src.utils import setup_logger, hashstr
 logger = setup_logger("KnowledgeBase")
@@ -83,7 +82,7 @@ class KnowledgeBase:
 
     def search(self, query, collection_name, limit=3):
 
-        query_vectors = self.embed_model.encode_queries([query])
+        query_vectors = self.embed_model.batch_encode([query])
         return self.search_by_vector(query_vectors[0], collection_name, limit)
 
     def search_by_vector(self, vector, collection_name, limit=3):

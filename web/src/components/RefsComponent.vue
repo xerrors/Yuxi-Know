@@ -1,10 +1,10 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
-      <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
       <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
       <span class="item"><GlobalOutlined /> {{ msg.model_name }}</span>
+      <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
       <span
         class="item btn"
         @click="openSubGraph(msg)"
@@ -165,15 +165,15 @@ const getPercent = (value) => {
   display: flex;
   margin-bottom: 20px;
   color: var(--gray-500);
-  font-size: 14px;
+  font-size: 13px;
   gap: 10px;
 
   .item {
     background: var(--gray-100);
-    color: var(--gray-800);
+    color: var(--gray-700);
     padding: 2px 8px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 13px;
     user-select: none;
 
     &.btn {

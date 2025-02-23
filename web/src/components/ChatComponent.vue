@@ -46,7 +46,7 @@
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
           </div>
-          <div class="flex-center" @click="meta.enable_retrieval = !meta.enable_retrieval">
+          <div class="flex-center" @click="meta.enable_retrieval = !meta.enable_retrieval" v-if="configStore.config.enable_knowledge_base">
             启用检索 <div @click.stop><a-switch v-model:checked="meta.enable_retrieval" /></div>
           </div>
           <div class="flex-center">
@@ -117,13 +117,13 @@
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
-        <div v-else-if="message.status == 'reasoning' && isStreaming" class="searching-msg"><i>正在思考…… {{ message.reasoning }}</i></div>
+        <div v-else-if="message.status == 'reasoning' && isStreaming" class="searching-msg"><i>正在思考…… {{ message.reasoning_content }}</i></div>
         <div
           v-else-if="message.text.length == 0 || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
           class="err-msg"
           @click="retryMessage(message.id)"
         >
-          请求错误，请重试
+          请求错误，请重试。{{ message.message }}
         </div>
         <div v-else
           v-html="renderMarkdown(message)"
@@ -234,15 +234,15 @@ const marked = new Marked(
   })
 );
 
-const consoleMsg = (message) => console.log(message)
+const consoleMsg = (msg) => console.log(msg)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
 onClickOutside(modelCard, () => setTimeout(() => opts.showModelCard = false, 30))
 
-const renderMarkdown = (message) => {
-  if (message.status === 'loading') {
-    return marked.parse(message.text + '🟢')
+const renderMarkdown = (msg) => {
+  if (msg.status === 'loading') {
+    return marked.parse(msg.text + '🟢')
   } else {
-    return marked.parse(message.text)
+    return marked.parse(msg.text)
   }
 }
 
@@ -306,11 +306,11 @@ const generateRandomHash = (length) => {
     return hash;
 }
 
-const appendUserMessage = (message) => {
+const appendUserMessage = (msg) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'sent',
-    text: message
+    text: msg
   })
   scrollToBottom()
 }
@@ -320,7 +320,7 @@ const appendAiMessage = (text, refs=null) => {
     id: generateRandomHash(16),
     role: 'received',
     text: text,
-    reasoning: '',
+    reasoning_content: '',
     refs,
     status: "init",
     meta: {},
@@ -329,40 +329,44 @@ const appendAiMessage = (text, refs=null) => {
 }
 
 const updateMessage = (info) => {
-  const message = conv.value.messages.find((message) => message.id === info.id);
-  if (message) {
+  const msg = conv.value.messages.find((msg) => msg.id === info.id);
+  if (msg) {
     try {
       // 只有在 text 不为空时更新
       if (info.text !== null && info.text !== undefined && info.text !== '') {
-        message.text = info.text;
+        msg.text = info.text;
       }
 
-      if (info.reasoning !== null && info.reasoning !== undefined && info.reasoning !== '') {
-        message.reasoning = info.reasoning;
+      if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
+        msg.reasoning_content = info.reasoning_content;
       }
 
       // 只有在 refs 不为空时更新
       if (info.refs !== null && info.refs !== undefined) {
-        message.refs = info.refs;
+        msg.refs = info.refs;
       }
 
       if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
-        message.model_name = info.model_name;
+        msg.model_name = info.model_name;
       }
 
-    // 只有在 status 不为空时更新
+      // 只有在 status 不为空时更新
       if (info.status !== null && info.status !== undefined && info.status !== '') {
-        message.status = info.status;
+        msg.status = info.status;
       }
 
       if (info.meta !== null && info.meta !== undefined) {
-        message.meta = info.meta;
+        msg.meta = info.meta;
+      }
+
+      if (info.message !== null && info.message !== undefined) {
+        msg.message = info.message;
       }
       scrollToBottom();
     } catch (error) {
       console.error('Error updating message:', error);
-      message.status = 'error';
-      message.text = '消息更新失败';
+      msg.status = 'error';
+      msg.text = '消息更新失败';
     }
   } else {
     console.error('Message not found:', info.id);
@@ -371,9 +375,9 @@ const updateMessage = (info) => {
 
 
 const groupRefs = (id) => {
-  const message = conv.value.messages.find((message) => message.id === id)
-  if (message.refs && message.refs.knowledge_base.results.length > 0) {
-    message.groupedResults = message.refs.knowledge_base.results
+  const msg = conv.value.messages.find((msg) => msg.id === id)
+  if (msg.refs && msg.refs.knowledge_base.results.length > 0) {
+    msg.groupedResults = msg.refs.knowledge_base.results
     .filter(result => result.file && result.file.filename)
     .reduce((acc, result) => {
       const { filename } = result.file;
@@ -387,11 +391,11 @@ const groupRefs = (id) => {
   scrollToBottom()
 }
 
-const simpleCall = (message) => {
+const simpleCall = (msg) => {
   return new Promise((resolve, reject) => {
     fetch('/api/chat/call_lite', {
       method: 'POST',
-      body: JSON.stringify({ query: message, }),
+      body: JSON.stringify({ query: msg, }),
       headers: { 'Content-Type': 'application/json' }
     })
     .then((response) => response.json())
@@ -432,24 +436,11 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     const readChunk = () => {
       return reader.read().then(({ done, value }) => {
         if (done) {
-          const message = conv.value.messages.find((message) => message.id === cur_res_id)
-          console.log(message)
-          if (message.meta.enable_retrieval) {
+          const msg = conv.value.messages.find((msg) => msg.id === cur_res_id)
+          console.log(msg)
+          if (msg.meta.enable_retrieval) {
             console.log("fetching refs")
-            fetchRefs(cur_res_id).then((data) => {
-              console.log(data)
-              updateMessage({
-                id: cur_res_id,
-                refs: data,
-                status: "finished",
-              });
-              groupRefs(cur_res_id);
-            })
-          } else {
-            updateMessage({
-              id: cur_res_id,
-              status: "finished",
-            });
+            groupRefs(cur_res_id);
           }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
@@ -468,12 +459,11 @@ const fetchChatResponse = (user_input, cur_res_id) => {
               updateMessage({
                 id: cur_res_id,
                 text: data.response,
-                reasoning: data.reasoning_response,
-                model_name: data.model_name,
+                reasoning_content: data.reasoning_content,
                 status: data.status,
                 meta: data.meta,
+                ...data,
               });
-              // console.log(data)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].text)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
 
@@ -541,7 +531,7 @@ const sendMessage = () => {
 
 const retryMessage = (id) => {
   // 找到 id 对应的 message，然后删除包含 message 在内以及后面所有的 message
-  const index = conv.value.messages.findIndex(message => message.id === id);
+  const index = conv.value.messages.findIndex(msg => msg.id === id);
   const pastMessage = conv.value.messages[index-1]
   console.log("retryMessage", id, pastMessage)
   conv.value.inputText = pastMessage.text
@@ -552,8 +542,8 @@ const retryMessage = (id) => {
   sendMessage();
 }
 
-const autoSend = (message) => {
-  conv.value.inputText = message
+const autoSend = (msg) => {
+  conv.value.inputText = msg
   sendMessage()
 }
 
@@ -750,12 +740,12 @@ watch(
     /* animation: slideInUp 0.1s ease-in; */
 
     .err-msg {
-      color: #FF6B6B;
-      border: 1px solid #FF6B6B;
-      padding: 0.2rem 1rem;
+      color: #eb8080;
+      border: 1px solid #eb8080;
+      padding: 0.5rem 1rem;
       border-radius: 8px;
-      text-align: center;
-      background: #FFF0F0;
+      text-align: left;
+      background: #FFF5F5;
       margin-bottom: 10px;
       cursor: pointer;
     }
