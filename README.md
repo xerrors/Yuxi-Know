@@ -99,7 +99,7 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 ### 1. 对话模型支持
 
-模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/config/models.yaml](src/config/models.yaml)
+模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/static/models.yaml](src/static/models.yaml) 
 
 | 模型供应商            | 默认模型                                  | 配置项目                                       |
 | :-------------------- | :---------------------------------------- | :--------------------------------------------- |
