@@ -1,0 +1,18 @@
+embed_model: siliconflow/BAAI/bge-m3
+enable_knowledge_base: true
+enable_knowledge_graph: false
+enable_reranker: true
+enable_search_engine: false
+enable_web_search: false
+filename: src/static/config.yaml
+model_dir: /Users/wenjie/Documents/projects/Yuxi-Know/models
+model_local_paths: {}
+model_name: Qwen/Qwen2.5-7B-Instruct
+model_provider: siliconflow
+reranker: siliconflow/BAAI/bge-reranker-v2-m3
+save_dir: saves
+stream: true
+use_rewrite_query: 'off'
+valuable_model_provider:
+- zhipu
+- siliconflow
