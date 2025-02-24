@@ -26,7 +26,7 @@
 代办清单
 
 - [ ] Ollma Embedding 支持（Open-like Embedding 支持）
-- [ ] 知识图谱索引支持自定义 Embedding 模型
+- [x] 知识图谱索引支持自定义 Embedding 模型
 - [x] DeepSeek-R1 支持
 
 ## 更新日志
