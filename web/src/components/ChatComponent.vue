@@ -117,6 +117,7 @@
               v-if="configStore.config.enable_knowledge_graph"
               @click="meta.use_graph=!meta.use_graph"
             >
+              <DeploymentUnitOutlined style="margin-right: 3px;"/>
               知识图谱
             </div>
             <a-dropdown
@@ -174,6 +175,7 @@ import {
   FileTextOutlined,
   RobotOutlined,
   CaretRightOutlined,
+  DeploymentUnitOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
