@@ -28,6 +28,7 @@
 
 ## 更新日志
 
+- 2025.02.24 新增网页检索以及内容展示，需要配置 `TAVILY_API_KEY`, 感谢 [littlewwwhite](https://github.com/littlewwwhite)。
 - 2025.02.23 SiliconFlow 的 Rerank 和 Embedding model 支持。现在默认使用 SiliconFlow。
 - 2025.02.20 DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
 - 2024.10.12 后端修改为 [FastAPI](https://github.com/fastapi)，并添加了 [Milvus-Standalone](https://github.com/milvus-io) 的独立部署。
