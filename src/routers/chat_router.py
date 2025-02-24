@@ -35,12 +35,15 @@ def chat_post(
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
+    def need_retrieve(meta):
+        return meta.get("use_web") or meta.get("use_graph") or meta.get("db_name")
+
     def generate_response():
         modified_query = query
         refs = None
 
         # 处理知识库检索
-        if meta and meta.get("enable_retrieval"):
+        if meta and need_retrieve(meta):
             chunk = make_chunk(status="searching")
             yield chunk
 

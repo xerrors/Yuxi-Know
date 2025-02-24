@@ -16,26 +16,6 @@
         </a-tooltip>
       </div>
       <div class="header__right">
-        <div class="nav-btn text metas" v-if="meta.use_graph && meta.enable_retrieval">
-          <GoldOutlined /> 图数据库
-        </div>
-        <a-dropdown v-if="meta.selectedKB !== null && meta.enable_retrieval">
-          <a class="ant-dropdown-link nav-btn" @click.prevent>
-            <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
-             <BookOutlined />
-            <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
-          </a>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
-                <a href="javascript:;" >{{ db.name }}</a>
-              </a-menu-item>
-              <a-menu-item  @click="useDatabase(null)">
-                <a href="javascript:;">不使用</a>
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
@@ -46,44 +26,9 @@
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
           </div>
-          <div class="flex-center" @click="meta.enable_retrieval = !meta.enable_retrieval" v-if="configStore.config.enable_knowledge_base">
-            启用检索 <div @click.stop><a-switch v-model:checked="meta.enable_retrieval" /></div>
-          </div>
           <div class="flex-center">
             最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
-          <a-divider v-if="meta.enable_retrieval"></a-divider>
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            知识库
-            <div @click.stop>
-              <a-dropdown>
-                <a class="ant-dropdown-link " @click.prevent>
-                  <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" />&nbsp; -->
-                  <BookOutlined />&nbsp;
-                  <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
-                </a>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
-                      <a href="javascript:;">{{ db.name }}</a>
-                    </a-menu-item>
-                    <a-menu-item  @click="useDatabase(null)">
-                      <a href="javascript:;">不使用</a>
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-            </div>
-          </div>
-          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
-          </div>
-          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search" v-if="configStore.config.enable_web_search && meta.enable_retrieval">
-            网页搜索 <div @click.stop><a-switch v-model:checked="meta.enable_web_search" /></div>
-          </div>
-          <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            重写查询 <a-segmented v-model:value="meta.use_rewrite_query" :options="['off', 'on', 'hyde']"/>
-          </div> -->
         </div>
       </div>
     </div>
@@ -148,18 +93,60 @@
     </div>
     <div class="bottom">
       <div class="input-box">
-        <a-textarea
-          class="user-input"
-          v-model:value="conv.inputText"
-          @keydown="handleKeyDown"
-          placeholder="输入问题……"
-          :auto-size="{ minRows: 1, maxRows: 10 }"
-        />
-        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
-          <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-        </a-button>
+        <div class="input-area">
+          <a-textarea
+            class="user-input"
+            v-model:value="conv.inputText"
+            @keydown="handleKeyDown"
+            placeholder="输入问题……"
+            :auto-size="{ minRows: 2, maxRows: 10 }"
+          />
+        </div>
+        <div class="input-options">
+          <div class="options__left">
+            <div
+              :class="{'switch': true, 'opt-item': true, 'active': meta.use_web}"
+              v-if="configStore.config.enable_web_search"
+              @click="meta.use_web=!meta.use_web"
+            >
+              <CompassOutlined style="margin-right: 3px;"/>
+              联网搜索
+            </div>
+            <div
+              :class="{'switch': true, 'opt-item': true, 'active': meta.use_graph}"
+              v-if="configStore.config.enable_knowledge_graph"
+              @click="meta.use_graph=!meta.use_graph"
+            >
+              知识图谱
+            </div>
+            <a-dropdown
+              v-if="configStore.config.enable_knowledge_base"
+              :class="{'opt-item': true, 'active': meta.selectedKB !== null}"
+            >
+              <a class="ant-dropdown-link" @click.prevent>
+                <BookOutlined style="margin-right: 3px;"/>
+                <span class="text">{{ meta.selectedKB === null ? '不使用知识库' : opts.databases[meta.selectedKB]?.name }}</span>
+              </a>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
+                    <a href="javascript:;">{{ db.name }}</a>
+                  </a-menu-item>
+                  <a-menu-item @click="useDatabase(null)">
+                    <a href="javascript:;">不使用</a>
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </div>
+          <div class="options__right">
+            <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
+              <template #icon> <ArrowUpOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
+            </a-button>
+          </div>
+        </div>
       </div>
-      <p class="note">请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
+      <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -173,6 +160,8 @@ import {
   LoadingOutlined,
   BookOutlined,
   BookFilled,
+  CompassOutlined,
+  ArrowUpOutlined,
   CompassFilled,
   GoldenFilled,
   GoldOutlined,
@@ -222,10 +211,8 @@ const opts = reactive({
 })
 
 const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
-  enable_retrieval: false,
   use_graph: false,
   use_web: false,
-  enable_web_search: false,
   graph_name: "neo4j",
   // use_rewrite_query: "off",
   selectedKB: null,
@@ -459,10 +446,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
         if (done) {
           const msg = conv.value.messages.find((msg) => msg.id === cur_res_id)
           console.log(msg)
-          if (msg.meta.enable_retrieval) {
-            console.log("fetching refs")
-            groupRefs(cur_res_id);
-          }
+          groupRefs(cur_res_id);
           updateMessage({showThinking: "no", id: cur_res_id});
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
@@ -819,13 +803,12 @@ watch(
 
   .input-box {
     display: flex;
+    flex-direction: column;
     width: 100%;
     height: auto;
     max-width: 900px;
     margin: 0 auto;
-    align-items: flex-end;
     padding: 0.25rem 0.5rem;
-    // box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
     border: 2px solid #E5E5E5;
     border-radius: 1rem;
     background: #fcfdfd;
@@ -833,7 +816,43 @@ watch(
     &:focus-within {
       border: 2px solid var(--main-500);
       background: white;
-      // box-shadow: rgb(42 60 79 / 5%) 0px 4px 10px 0px;
+    }
+
+    .input-options {
+      display: flex;
+      padding: 4px 8px;
+
+      .options__left,
+      .options__right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .options__left {
+        flex: 1;
+
+        .opt-item {
+          border-radius: 12px;
+          border: 1px solid var(--gray-300);
+          padding: 4px 8px;
+          cursor: pointer;
+          font-size: 12px;
+          color: var(--gray-700);
+
+          &.active {
+            color: var(--main-600);
+            border: 1px solid var(--main-500);
+            background-color: var(--main-10);
+          }
+        }
+      }
+    }
+
+    .input-area {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
     }
 
     textarea.user-input {
@@ -843,7 +862,7 @@ watch(
       background-color: transparent;
       border: none;
       font-size: 1.2rem;
-      margin: 0 0.6rem;
+      margin: 0 0;
       color: #111111;
       font-size: 16px;
       font-variation-settings: 'wght' 400, 'opsz' 10.5;
@@ -861,21 +880,23 @@ watch(
   }
 
   button.ant-btn-icon-only {
-    font-size: 1.25rem;
+    height: 32px;
+    width: 32px;
     cursor: pointer;
-    background-color: transparent;
+    background-color: var(--main-color);
+    border-radius: 50%;
     border: none;
     transition: color 0.3s;
     box-shadow: none;
-    color: var(--main-700);;
+    color: white;
     padding: 0;
 
     &:hover {
-      color: var(--gray-1000);
+      background-color: var(--main-800);
     }
 
     &:disabled {
-      color: #ccc;
+      background-color: var(--gray-400);
       cursor: not-allowed;
     }
   }

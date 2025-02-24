@@ -15,9 +15,9 @@
       <span
         class="item btn"
         @click="showWebResult(msg)"
-        v-if="msg.refs.web_search"
+        v-if="msg.refs?.web_search.results.length > 0"
       >
-        <GlobalOutlined /> 网页搜索 {{ msg.refs.web_search.results.length }}
+        <GlobalOutlined /> 网页搜索 {{ msg.refs.web_search?.results.length }}
       </span>
       <span class="filetag item btn"
         v-for="(results, filename) in msg.groupedResults"
@@ -185,8 +185,8 @@ const webResults = ref(null)
 
 // 添加显示网页搜索结果的方法
 const showWebResult = (msg) => {
-  if (msg.refs.web_search) {
-    webResults.value = msg.refs.web_search.results
+  if (msg.refs?.web_search) {
+    webResults.value = msg.refs?.web_search.results
     webResultVisible.value = true
   } else {
     console.error('无法获取网页搜索结果')
