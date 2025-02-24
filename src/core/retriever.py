@@ -30,6 +30,7 @@ class Retriever:
         return refs
 
     def construct_query(self, query, refs, meta):
+        logger.debug(f"{refs=}")
         if not refs or len(refs) == 0:
             return query
 
@@ -52,7 +53,7 @@ class Retriever:
         # 解析网络搜索的结果
         web_res = refs.get("web_search", {}).get("results", [])
         if web_res:
-            web_text = "\n".join(f"{r['title']}: {r['snippet']}" for r in web_res)
+            web_text = "\n".join(f"{r['title']}: {r['content']}" for r in web_res)
             external_parts.extend(["网络搜索信息:", web_text])
 
         # 构造查询
@@ -131,7 +132,7 @@ class Retriever:
             return {"results": [], "message": "Web search is disabled"}
 
         try:
-            search_results = self.web_searcher.search(query)
+            search_results = self.web_searcher.search(query, max_results=5)
         except Exception as e:
             logger.error(f"Web search error: {str(e)}")
             return {"results": [], "message": "Web search error"}

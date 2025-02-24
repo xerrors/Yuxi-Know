@@ -76,6 +76,7 @@ MODEL_NAMES:
       - Qwen/Qwen2.5-7B-Instruct
       - deepseek-ai/DeepSeek-R1
       - deepseek-ai/DeepSeek-V3
+      - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
 
 EMBED_MODEL_INFO:
   local/BAAI/bge-m3:

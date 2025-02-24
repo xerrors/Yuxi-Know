@@ -78,10 +78,7 @@
           <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
             图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
           </div>
-          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
-            搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
-          </div>
-          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
+          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search" v-if="configStore.config.enable_web_search && meta.enable_retrieval">
             网页搜索 <div @click.stop><a-switch v-model:checked="meta.enable_web_search" /></div>
           </div>
           <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">

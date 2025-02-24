@@ -64,13 +64,13 @@
               @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
             />
           </div>
-          <!-- <div class="card">
-            <span class="label">{{ items?.enable_search_engine.des }}</span>
+          <div class="card">
+            <span class="label">{{ items?.enable_web_search.des }}</span>
             <a-switch
-              :checked="configStore.config.enable_search_engine"
-              @change="handleChange('enable_search_engine', !configStore.config.enable_search_engine)"
+              :checked="configStore.config.enable_web_search"
+              @change="handleChange('enable_web_search', !configStore.config.enable_web_search)"
             />
-          </div> -->
+          </div>
           <div class="card">
             <span class="label">{{ items?.enable_reranker.des }}</span>
             <a-switch

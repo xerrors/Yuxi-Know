@@ -55,7 +55,7 @@ class Config(SimpleConfig):
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
-        self.add_item("enable_web_search", default=False, des="是否开启网页搜索")
+        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（需配置 TAVILY_API_KEY）")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
