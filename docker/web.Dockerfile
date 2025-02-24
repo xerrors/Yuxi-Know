@@ -1,5 +1,5 @@
 # 开发阶段
-FROM node:22.10.0 AS development
+FROM node:latest AS development
 WORKDIR /app
 
 # 复制 package.json 和 package-lock.json（如果存在）
@@ -17,7 +17,7 @@ EXPOSE 5173
 # 启动开发服务器的命令在 docker-compose 文件中定义
 
 # 生产阶段
-FROM node:22.10.0 AS build-stage
+FROM node:latest AS build-stage
 WORKDIR /app
 
 COPY ./web/package*.json ./

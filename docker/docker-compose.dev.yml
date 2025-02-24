@@ -11,7 +11,7 @@ services:
       - ../src/static/config.dev.yaml:/app/src/static/config.yaml
       - ${MODEL_DIR}:${MODEL_DIR} # 如果出现 undefined volume MODEL_DIR: invalid compose project，请添加此环境变量或者注释此行
     ports:
-      - "5000:5000"
+      - "5050:5050"
     depends_on:
       - graph
       - milvus
@@ -23,7 +23,7 @@ services:
       - NEO4J_PASSWORD=0123456789
       - MILVUS_URI=http://milvus:19530
       - MODEL_DIR=${MODEL_DIR}  # 优先级高于 .env 中的 MODEL_DIR
-    command: uvicorn src.main:app --host 0.0.0.0 --port 5000 --reload
+    command: uvicorn src.main:app --host 0.0.0.0 --port 5050 --reload
 
   web:
     build:
@@ -42,7 +42,7 @@ services:
       - app-network
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://api:5000  # 添加这行
+      - VITE_API_URL=http://api:5050  # 添加这行
     command: npm run server
 
   graph:

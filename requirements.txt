@@ -18,7 +18,7 @@ torch>=2.4.0
 tqdm>=4.66.1
 zhipuai>=2.1.2
 neo4j>=5.22.0
-sentencepiece==0.1.99
+sentencepiece>=0.1.99
 llama-index-readers-file
 opencv-python-headless
 docx2txt
