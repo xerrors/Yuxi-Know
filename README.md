@@ -15,7 +15,8 @@
 
 基于大模型 RAG 知识库与知识图谱的问答平台。Llamaindex + VueJS + Flask + Neo4j。大模型适配 OpenAI、国内主流大模型平台的模型调用、本地 vllm 部署。只需要配置对应服务平台的 `API_KEY` 即可使用。
 
-![main](./images/main.png)
+![image](https://github.com/user-attachments/assets/e396d038-f67d-49b1-9b07-1392806eccea)
+
 
 > [!NOTE]
 > 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
