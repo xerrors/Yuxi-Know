@@ -271,6 +271,7 @@ const handleChange = (key, e) => {
   if (key == 'enable_reranker'
         || key == 'enable_knowledge_graph'
         || key == 'enable_knowledge_base'
+        || key == 'enable_web_search'
         || key == 'model_provider'
         || key == 'model_name'
         || key == 'embed_model'
