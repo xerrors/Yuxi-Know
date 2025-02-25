@@ -77,6 +77,7 @@
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
+        <div v-else-if="message.status == 'generating' && isStreaming" class="searching-msg"><i>正在生成……</i></div>
         <div
           v-else-if="(message.text.length == 0 && message.status!='reasoning') || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
           class="err-msg"
@@ -216,7 +217,6 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_graph: false,
   use_web: false,
   graph_name: "neo4j",
-  // use_rewrite_query: "off",
   selectedKB: null,
   stream: true,
   summary_title: false,
