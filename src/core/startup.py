@@ -19,8 +19,8 @@ class Startup:
         self.retriever = Retriever(self.config, self.dbm, self.model)
 
         self.model_lite = select_model(self.config,
-                                       model_provider=self.config.model_provider_lite or "zhipu",
-                                       model_name=self.config.model_name_lite or "glm-4-flash")
+                                       model_provider=self.config.model_provider_lite,
+                                       model_name=self.config.model_name_lite)
 
     def restart(self):
         logger.info("Restarting...")

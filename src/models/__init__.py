@@ -1,20 +1,29 @@
+import os
+
 from src.utils.logging_config import logger
+from src.models.chat_model import OpenAIBase
 
 
 def select_model(config, model_provider=None, model_name=None):
 
     model_provider = model_provider or config.model_provider
-    model_name = model_name or config.model_name
+    model_info = config.model_names[model_provider]
+    model_name = model_name or config.model_name or model_info["default"]
 
-    logger.info(f"Selecting model from {model_provider} with {model_name}")
+    logger.info(f"Selecting model from `{model_provider}` with `{model_name}`")
 
-    if model_provider == "deepseek":
-        from src.models.chat_model import DeepSeek
-        return DeepSeek(model_name)
-
-    elif model_provider == "zhipu":
-        from src.models.chat_model import Zhipu
-        return Zhipu(model_name)
+    if model_provider in [
+        "deepseek",
+        "ark",
+        "siliconflow",
+        "zhipu",
+        "lingyiwanwu",
+    ]:
+        return OpenAIBase(
+            api_key=os.getenv(model_info["env"][0]),
+            base_url=model_info["base_url"],
+            model_name=model_name,
+        )
 
     elif model_provider == "qianfan":
         from src.models.chat_model import Qianfan
@@ -27,10 +36,6 @@ def select_model(config, model_provider=None, model_name=None):
     elif model_provider == "openai":
         from src.models.chat_model import OpenModel
         return OpenModel(model_name)
-
-    elif model_provider == "siliconflow":
-        from src.models.chat_model import SiliconFlow
-        return SiliconFlow(model_name)
 
     elif model_provider == "custom":
         model_info = next((x for x in config.custom_models if x["custom_id"] == model_name), None)

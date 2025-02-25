@@ -47,28 +47,6 @@ class OpenModel(OpenAIBase):
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
-class DeepSeek(OpenAIBase):
-    def __init__(self, model_name=None):
-        model_name = model_name or "deepseek-chat"
-        api_key = os.getenv("DEEPSEEK_API_KEY", "your-default-api-key")
-        base_url = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com/v1")
-        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
-
-
-class Zhipu(OpenAIBase):
-    def __init__(self, model_name=None):
-        model_name = model_name or "glm-4-flash"
-        api_key = os.getenv("ZHIPUAI_API_KEY", "270ea71e9560c0ff406acbcdd48bfd97.e3XOMdWKuZb7Q1Sk")
-        base_url = "https://open.bigmodel.cn/api/paas/v4/"
-        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
-
-class SiliconFlow(OpenAIBase):
-    def __init__(self, model_name=None):
-        model_name = model_name or "meta-llama/Meta-Llama-3.1-8B-Instruct"
-        api_key = os.getenv("SILICONFLOW_API_KEY")
-        base_url = "https://api.siliconflow.cn/v1"
-        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
-
 class CustomModel(OpenAIBase):
     def __init__(self, model_info):
         model_name = model_info["name"]

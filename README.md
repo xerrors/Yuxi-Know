@@ -99,18 +99,37 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 ### 1. 对话模型支持
 
-模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/static/models.yaml](src/static/models.yaml) 
+模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/static/models.yaml](src/static/models.yaml)
 
 | 模型供应商            | 默认模型                                  | 配置项目                                       |
 | :-------------------- | :---------------------------------------- | :--------------------------------------------- |
 | `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费)  | `SILICONFLOW_API_KEY`                        |
 | `openai`            | `gpt-4o`                                | `OPENAI_API_KEY`                             |
 | `deepseek`          | `deepseek-chat`                         | `DEEPSEEK_API_KEY`                           |
+| `arc`（豆包方舟）       | `doubao-1-5-pro-32k-250115`        | `ARK_API_KEY`                            |
 | `zhipu`（智谱清言）       | `glm-4-flash`                   | `ZHIPUAI_API_KEY`                            |
 | `dashscope`（阿里） | `qwen-max-latest`                       | `DASHSCOPE_API_KEY`                          |
 | `qianfan`（百度）   | `ernie_speed`                           | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
 
-同样支持以 OpenAI 的兼容模型运行模型，可以直接在 Web 设置里面添加。比如使用 vllm 和 Ollama 运行本地模型时。
+此外，如果想要添加供应商的模型，确认知识 OpenAI 调用的方法之后，只需要在 [src/static/models.yaml](src/static/models.yaml) 中添加对应的模型配置即可。配置示例如下：
+
+```yaml
+  ark:
+    name: 豆包（Ark）
+    url: https://console.volcengine.com/ark/region:ark+cn-beijing/model # 模型列表
+    default: doubao-1-5-pro-32k-250115 # 默认模型
+    base_url: https://ark.cn-beijing.volces.com/api/v3
+    env:  # 需要配置的环境变量，仅限API key
+      - ARK_API_KEY
+    models:
+      - doubao-1-5-pro-32k-250115
+      - doubao-1-5-lite-32k-250115
+      - deepseek-r1-250120
+```
+
+同样支持添加以 OpenAI 的兼容模式运行的单个模型，可以直接在 Web 设置里面添加。比如使用 vllm 和 Ollama 运行本地模型时。
+
+![](./images/custom_models.png)
 
 ### 2. 向量模型支持和重排序模型支持
 
