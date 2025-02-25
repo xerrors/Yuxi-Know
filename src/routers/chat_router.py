@@ -54,35 +54,41 @@ def chat_post(
                 yield make_chunk(message=f"Retriever error: {e}", status="error")
                 return
 
-        yield make_chunk(status="generating")
+            yield make_chunk(status="generating")
+
         messages = history_manager.get_history_with_msg(modified_query, max_rounds=meta.get('history_round'))
         history_manager.add_user(query)  # 注意这里使用原始查询
         logger.debug(f"Web history: {history_manager.messages}")
 
         content = ""
         reasoning_content = ""
-        for delta in startup.model.predict(messages, stream=True):
-            if not delta.content and hasattr(delta, 'reasoning_content'):
-                reasoning_content += delta.reasoning_content or ""
-                chunk = make_chunk(reasoning_content=reasoning_content, status="reasoning")
+        try:
+            for delta in startup.model.predict(messages, stream=True):
+                if not delta.content and hasattr(delta, 'reasoning_content'):
+                    reasoning_content += delta.reasoning_content or ""
+                    chunk = make_chunk(reasoning_content=reasoning_content, status="reasoning")
+                    yield chunk
+                    continue
+
+                # 文心一言
+                if hasattr(delta, 'is_full') and delta.is_full:
+                    content = delta.content
+                else:
+                    content += delta.content or ""
+
+                chunk = make_chunk(content=content, status="loading")
                 yield chunk
-                continue
 
-            # 文心一言
-            if hasattr(delta, 'is_full') and delta.is_full:
-                content = delta.content
-            else:
-                content += delta.content or ""
-
-            chunk = make_chunk(content=content, status="loading")
-            yield chunk
-
-        logger.debug(f"Final response: {content}")
-        logger.debug(f"Final reasoning response: {reasoning_content}")
-        yield make_chunk(content=content,
-                         status="finished",
-                         history=history_manager.update_ai(content),
-                         refs=refs)
+            logger.debug(f"Final response: {content}")
+            logger.debug(f"Final reasoning response: {reasoning_content}")
+            yield make_chunk(content=content,
+                            status="finished",
+                            history=history_manager.update_ai(content),
+                            refs=refs)
+        except Exception as e:
+            logger.error(f"Model error: {e}")
+            yield make_chunk(message=f"Model error: {e}", status="error")
+            return
 
     return StreamingResponse(generate_response(), media_type='application/json')
 
