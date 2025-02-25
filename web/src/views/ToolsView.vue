@@ -2,7 +2,7 @@
   <div class="tools-container layout-container">
     <HeaderComponent
       title="工具箱"
-      description="这里展示了各种可用的工具。"
+      description="这里展示了各种可用的工具。(注：不是大模型的工具)"
     >
     </HeaderComponent>
 

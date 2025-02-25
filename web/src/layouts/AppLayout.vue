@@ -9,10 +9,12 @@ import {
   BookOutlined,
   BookFilled,
   GithubOutlined,
-  DatabaseOutlined,
-  DatabaseFilled,
+  FolderOutlined,
+  FolderFilled,
   GoldOutlined,
   GoldFilled,
+  ToolFilled,
+  ToolOutlined,
   BugOutlined,
   ProjectFilled,
   ProjectOutlined,
@@ -91,7 +93,7 @@ console.log(route)
           <span class="text">对话</span>
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
+          <component class="icon" :is="route.path.startsWith('/database') ? FolderFilled : FolderOutlined" />
           <span class="text">知识</span>
         </RouterLink>
         <RouterLink to="/graph" class="nav-item" active-class="active">
@@ -99,7 +101,7 @@ console.log(route)
           <span class="text">图谱</span>
         </RouterLink>
         <RouterLink to="/tools" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/tools') ? StarFilled: StarOutlined" />
+          <component class="icon" :is="route.path.startsWith('/tools') ? ToolFilled: ToolOutlined" />
           <span class="text">工具</span>
         </RouterLink>
         <a-tooltip placement="right">
