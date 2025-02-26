@@ -1069,7 +1069,12 @@ watch(
 }
 
 .message-md {
+  color: var(--gray-900);
   max-width: 100%;
+
+  strong {
+    color: var(--gray-800);
+  }
   h1, h2, h3, h4, h5, h6 {
     font-size: 1rem;
   }
@@ -1082,6 +1087,15 @@ watch(
 
   ol, ul {
     padding-left: 1rem;
+  }
+
+  hr {
+    margin-bottom: 1rem;
+  }
+
+  a {
+    color: var(--main-800);
+    margin: auto 2px;
   }
 }
 </style>
