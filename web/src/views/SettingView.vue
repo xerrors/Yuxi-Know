@@ -14,15 +14,15 @@
       </template>
     </HeaderComponent>
     <div class="setting-container layout-container">
-      <div class="sider">
+      <div class="sider" v-if="state.windowWidth > 520">
         <a-button type="text" :class="{ activesec: state.section === 'base'}" @click="state.section='base'" :icon="h(SettingOutlined)"> 基本设置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'model'}" @click="state.section='model'" :icon="h(CodeOutlined)"> 模型配置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
       </div>
-      <div class="setting" v-if="state.section === 'base'">
+      <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'base'">
         <h3>基础模型配置</h3>
         <div class="section">
-          <div class="card">
+          <div class="card card-select">
             <span class="label">{{ items?.embed_model.des }}</span>
             <a-select style="width: 300px"
               :value="configStore.config?.embed_model"
@@ -34,7 +34,7 @@
               </a-select-option>
             </a-select>
           </div>
-          <div class="card">
+          <div class="card card-select">
             <span class="label">{{ items?.reranker.des }}</span>
             <a-select style="width: 300px"
               :value="configStore.config?.reranker"
@@ -81,7 +81,7 @@
         </div>
         <h3>检索配置</h3>
         <div class="section">
-          <div class="card">
+          <div class="card card-select">
             <span class="label">{{ items?.use_rewrite_query.des }}</span>
             <a-select style="width: 200px"
               :value="configStore.config?.use_rewrite_query"
@@ -95,7 +95,7 @@
           </div>
         </div>
       </div>
-      <div class="setting" v-if="state.section === 'model'">
+      <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'model'">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY</p>
         <div class="model-provider-card">
@@ -184,7 +184,7 @@
           </div>
         </div>
       </div>
-      <div class="setting" v-if="state.section ==='path'">
+      <div class="setting" v-if="state.windowWidth <= 520 || state.section ==='path'">
         <h3>本地模型配置</h3>
         <p>如果是 Docker 启动，务必确保在环境变量中设置了 MODEL_DIR，或者设置了 volumes 映射</p>
         <TableConfigComponent
@@ -198,7 +198,7 @@
 
 <script setup>
 import { message } from 'ant-design-vue';
-import { computed, reactive, ref, h, watch } from 'vue'
+import { computed, reactive, ref, h, watch, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '@/stores/config';
 import {
   ReloadOutlined,
@@ -231,16 +231,17 @@ const customModel = reactive({
 })
 const state = reactive({
   loading: false,
-  section: 'base'
+  section: 'base',
+  windowWidth: window?.innerWidth || 0
 })
 
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {
-  return Object.keys(modelStatus.value).filter(key => modelStatus.value[key])
+  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
 })
 
 const notModelKeys = computed(() => {
-  return Object.keys(modelStatus.value).filter(key => !modelStatus.value[key])
+  return Object.keys(modelStatus.value || {}).filter(key => !modelStatus.value?.[key])
 })
 
 const generateRandomHash = (length) => {
@@ -359,6 +360,19 @@ const handleCancelCustomModel = () => {
   customModel.api_base = ''
   customModel.visible = false
 }
+
+const updateWindowWidth = () => {
+  state.windowWidth = window?.innerWidth || 0
+}
+
+onMounted(() => {
+  updateWindowWidth()
+  window.addEventListener('resize', updateWindowWidth)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateWindowWidth)
+})
 
 const sendRestart = () => {
   console.log('Restarting...')
@@ -618,7 +632,18 @@ const sendRestart = () => {
 
     }
   }
+}
 
+@media (max-width: 520px) {
+  .setting-container {
+    flex-direction: column;
+  }
+
+  .card.card-select {
+    gap: 0.75rem;
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
 

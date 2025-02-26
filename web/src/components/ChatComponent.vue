@@ -1,6 +1,6 @@
 <template>
   <div class="chat"  ref="chatContainer">
-    <div class="header">
+    <div class="chat-header">
       <div class="header__left">
         <div
           v-if="!state.isSidebarOpen"
@@ -593,7 +593,7 @@ watch(
   flex: 5 5 200px;
   overflow-y: scroll;
 
-  .header {
+  .chat-header {
     user-select: none;
     position: sticky;
     top: 0;
@@ -1008,14 +1008,14 @@ watch(
     height: calc(100vh - 60px);
   }
 
-  .chat-container .chat .header {
+  .chat-container .chat .chat-header {
     background: var(--main-light-4);
     .header__left, .header__right {
-      gap: 20px;
+      gap: 24px;
     }
 
     .nav-btn {
-      font-size: 1.5rem;
+      font-size: 1.3rem;
       padding: 0;
 
       &:hover {
