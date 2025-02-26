@@ -143,7 +143,7 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 对于**向量模型**和**重排序模型**，选择以 `local` 前缀开头的模型，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。（但请注意，如果是 Docker 运行，模型仅会缓存到 Docker 里面）
 
-如果想要使用本地已经下载好的模型，可以在网页的 settings 里面做映射。或者修改 `src/static/config.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
+如果想要使用本地已经下载好的模型，可以在网页的 settings 里面做映射。或者修改 `saves/config/base.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
 
 
 ## 知识库支持

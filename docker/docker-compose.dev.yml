@@ -8,7 +8,6 @@ services:
     volumes:
       - ../src:/app/src
       - ../saves_dev:/app/saves
-      - ../src/static/config.dev.yaml:/app/src/static/config.yaml
       # - ${MODEL_DIR}:${MODEL_DIR} # 如果出现 undefined volume MODEL_DIR: invalid compose project，请添加此环境变量或者注释此行
     ports:
       - "5050:5050"

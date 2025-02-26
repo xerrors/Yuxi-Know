@@ -2,7 +2,7 @@
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
       <template #description>
-        <p>配置文件也可以在 <code>src/static/config.yaml</code> 中修改</p>
+        <p>配置文件也可以在 <code>saves/config/base.yaml</code> 中修改</p>
       </template>
       <template #actions>
         <a-button type="primary" v-if="isNeedRestart" @click="sendRestart">

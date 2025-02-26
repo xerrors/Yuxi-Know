@@ -44,11 +44,10 @@ class Config(SimpleConfig):
         super().__init__()
         self._config_items = {}
         self.save_dir = "saves"
-        self.filename = str(Path("src/static/config.yaml"))
+        self.filename = str(Path("saves/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         ### >>> 默认配置
-        # 可以在 config/base.yaml 中覆盖
         self.add_item("stream", default=True, des="是否开启流式输出")
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
@@ -63,6 +62,7 @@ class Config(SimpleConfig):
         self.add_item("model_provider_lite", default="siliconflow", des="模型提供商（用于轻量任务）", choices=list(MODEL_NAMES.keys()))
         self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
         self.add_item("model_name_lite", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称（用于轻量任务）")
+
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
@@ -155,7 +155,7 @@ class Config(SimpleConfig):
         logger.info(f"Saving config to {self.filename}")
         if self.filename is None:
             logger.warning("Config file is not specified, save to default config/base.yaml")
-            self.filename = os.path.join(self.save_dir, "config", "config.yaml")
+            self.filename = os.path.join(self.save_dir, "config", "base.yaml")
             os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         if self.filename.endswith(".json"):
