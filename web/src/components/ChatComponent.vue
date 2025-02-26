@@ -122,7 +122,7 @@
               知识图谱
             </div>
             <a-dropdown
-              v-if="configStore.config.enable_knowledge_base"
+              v-if="configStore.config.enable_knowledge_base && opts.databases.length > 0"
               :class="{'opt-item': true, 'active': meta.selectedKB !== null}"
             >
               <a class="ant-dropdown-link" @click.prevent>
@@ -786,6 +786,7 @@ watch(
     text-align: left;
     word-wrap: break-word;
     margin: 0;
+    max-width: 100%;
     padding-bottom: 0;
     padding-top: 16px;
     padding-left: 0;
@@ -821,10 +822,10 @@ watch(
     max-width: 900px;
     margin: 0 auto;
     padding: 0.25rem 0.5rem;
-    border: 2px solid #E5E5E5;
+    border: 2px solid var(--gray-200);
     border-radius: 1rem;
-    background: #fcfdfd;
-    transition: background 0.3s, box-shadow 0.3s;
+    background: var(--gray-50);
+    transition: background, border 0.3s, box-shadow 0.3s;
     &:focus-within {
       border: 2px solid var(--main-500);
       background: white;
@@ -1068,6 +1069,7 @@ watch(
 }
 
 .message-md {
+  max-width: 100%;
   h1, h2, h3, h4, h5, h6 {
     font-size: 1rem;
   }
