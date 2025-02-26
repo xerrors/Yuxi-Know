@@ -2,7 +2,7 @@
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
       <template #description>
-        <p>配置文件也可以在 <code>saves/config/config.yaml</code> 中修改</p>
+        <p>配置文件也可以在 <code>src/static/config.yaml</code> 中修改</p>
       </template>
       <template #actions>
         <a-button type="primary" v-if="isNeedRestart" @click="sendRestart">
@@ -24,7 +24,7 @@
         <div class="section">
           <div class="card">
             <span class="label">{{ items?.embed_model.des }}</span>
-            <a-select style="width: 200px"
+            <a-select style="width: 300px"
               :value="configStore.config?.embed_model"
               @change="handleChange('embed_model', $event)"
             >
@@ -36,7 +36,7 @@
           </div>
           <div class="card">
             <span class="label">{{ items?.reranker.des }}</span>
-            <a-select style="width: 200px"
+            <a-select style="width: 300px"
               :value="configStore.config?.reranker"
               @change="handleChange('reranker', $event)"
               :disabled="!configStore.config.enable_reranker"
@@ -64,13 +64,13 @@
               @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
             />
           </div>
-          <!-- <div class="card">
-            <span class="label">{{ items?.enable_search_engine.des }}</span>
+          <div class="card">
+            <span class="label">{{ items?.enable_web_search.des }}</span>
             <a-switch
-              :checked="configStore.config.enable_search_engine"
-              @change="handleChange('enable_search_engine', !configStore.config.enable_search_engine)"
+              :checked="configStore.config.enable_web_search"
+              @change="handleChange('enable_web_search', !configStore.config.enable_web_search)"
             />
-          </div> -->
+          </div>
           <div class="card">
             <span class="label">{{ items?.enable_reranker.des }}</span>
             <a-switch
@@ -186,6 +186,7 @@
       </div>
       <div class="setting" v-if="state.section ==='path'">
         <h3>本地模型配置</h3>
+        <p>如果是 Docker 启动，务必确保在环境变量中设置了 MODEL_DIR，或者设置了 volumes 映射</p>
         <TableConfigComponent
           :config="configStore.config?.model_local_paths"
           @update:config="handleModelLocalPathsUpdate"
@@ -270,6 +271,7 @@ const handleChange = (key, e) => {
   if (key == 'enable_reranker'
         || key == 'enable_knowledge_graph'
         || key == 'enable_knowledge_base'
+        || key == 'enable_web_search'
         || key == 'model_provider'
         || key == 'model_name'
         || key == 'embed_model'

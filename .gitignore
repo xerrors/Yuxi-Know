@@ -33,9 +33,10 @@ src/data
 */package-lock.json
 web/package-lock.json
 saves
+saves_dev
 notebooks
 graphrag
 docker/volumes
-
-
 .cursorrules
+src/static/config.yaml
+src/static/config.dev.yaml

@@ -43,7 +43,7 @@
 
     <a-modal
       title="添加路径映射"
-      v-model:visible="addConfigModalVisible"
+      v-model:open="addConfigModalVisible"
       @ok="confirmAddConfig"
       class="config-modal"
     >
@@ -91,12 +91,14 @@ props.config && Object.entries(props.config).forEach(([key, value]) => {
 
 // 控制模态框显示
 const addConfigModalVisible = ref(false);
+const isAdding = ref(false); // 添加新的ref变量
 
 // 新增配置项数据
 const newConfig = ref({ key: '', value: '' });
 
 // 添加配置
 const addConfig = () => {
+  isAdding.value = true;  // 设置添加状态
   addConfigModalVisible.value = true;
 };
 
@@ -113,6 +115,7 @@ const confirmAddConfig = () => {
   configList.push({ key: newConfig.value.key, value: newConfig.value.value });
   addConfigModalVisible.value = false;
   newConfig.value = { key: '', value: '' };
+  isAdding.value = false;  // 重置添加状态
 };
 
 // 删除配置
@@ -137,6 +140,13 @@ const configObject = computed(() => {
 watch(configObject, (newValue) => {
   emit('update:config', newValue);
 }, { deep: true });
+
+// 监听模态框关闭
+watch(addConfigModalVisible, (newValue) => {
+  if (!newValue) {
+    isAdding.value = false;  // 当模态框关闭时重置添加状态
+  }
+});
 </script>
 
 <style scoped>

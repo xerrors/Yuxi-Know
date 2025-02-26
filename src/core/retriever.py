@@ -1,4 +1,4 @@
-from src.models.embedding import Reranker
+from src.models.rerank_model import get_reranker
 from src.utils.logging_config import setup_logger
 
 logger = setup_logger("server-common")
@@ -12,7 +12,11 @@ class Retriever:
         self.model = model
 
         if self.config.enable_reranker:
-            self.reranker = Reranker(config)
+            self.reranker = get_reranker(config)
+
+        if self.config.enable_web_search:
+            from src.utils.web_search import WebSearcher
+            self.web_searcher = WebSearcher()
 
     def retrieval(self, query, history, meta):
 
@@ -21,10 +25,12 @@ class Retriever:
         refs["entities"] = self.reco_entities(query, history, refs)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, refs)
         refs["graph_base"] = self.query_graph(query, history, refs)
+        refs["web_search"] = self.query_web(query, history, refs)
 
         return refs
 
     def construct_query(self, query, refs, meta):
+        logger.debug(f"{refs=}")
         if not refs or len(refs) == 0:
             return query
 
@@ -44,6 +50,12 @@ class Retriever:
             )
             external_parts.extend(["图数据库信息:", db_text])
 
+        # 解析网络搜索的结果
+        web_res = refs.get("web_search", {}).get("results", [])
+        if web_res:
+            web_text = "\n".join(f"{r['title']}: {r['content']}" for r in web_res)
+            external_parts.extend(["网络搜索信息:", web_text])
+
         # 构造查询
         from src.utils.prompts import knowbase_qa_template
         if external_parts and len(external_parts) > 0:
@@ -60,8 +72,6 @@ class Retriever:
         raise NotImplementedError
 
     def query_graph(self, query, history, refs):
-        # res = model.predict("qiansdgsa, dasdh ashdsakjdk ak ").content
-
         results = []
         if refs["meta"].get("use_graph") and self.config.enable_knowledge_base:
             for entity in refs["entities"]:
@@ -69,6 +79,7 @@ class Retriever:
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
+
 
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
@@ -100,15 +111,13 @@ class Retriever:
         for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
-        # use distance threshold to filter results
-        if meta.get("mode") == "search":
-            kb_res = all_kb_res
-        else:
-            kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
+        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
 
-        if self.config.enable_reranker:
-            for r in kb_res:
-                r["rerank_score"] = self.reranker.compute_score([rw_query, r["entity"]["text"]], normalize=True)[0]
+        if self.config.enable_reranker and len(kb_res) > 0:
+            texts = [r["entity"]["text"] for r in kb_res]
+            rerank_scores = self.reranker.compute_score([rw_query, texts], normalize=True)
+            for i, r in enumerate(kb_res):
+                r["rerank_score"] = rerank_scores[i]
             kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
             kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
 
@@ -116,12 +125,26 @@ class Retriever:
 
         return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
 
+    def query_web(self, query, history, refs):
+        """查询网络"""
+
+        if not (refs["meta"].get("use_web") and self.config.enable_web_search):
+            return {"results": [], "message": "Web search is disabled"}
+
+        try:
+            search_results = self.web_searcher.search(query, max_results=5)
+        except Exception as e:
+            logger.error(f"Web search error: {str(e)}")
+            return {"results": [], "message": "Web search error"}
+
+        return {"results": search_results}
+
     def rewrite_query(self, query, history, refs):
         """重写查询"""
         if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
             rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
         else:
-            rewrite_query_span = refs["meta"]["config"].get("use_rewrite_query", "off")
+            rewrite_query_span = self.config.use_rewrite_query
 
         if rewrite_query_span == "off":
             rewritten_query = query

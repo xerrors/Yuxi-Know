@@ -9,10 +9,12 @@ import {
   BookOutlined,
   BookFilled,
   GithubOutlined,
-  DatabaseOutlined,
-  DatabaseFilled,
+  FolderOutlined,
+  FolderFilled,
   GoldOutlined,
   GoldFilled,
+  ToolFilled,
+  ToolOutlined,
   BugOutlined,
   ProjectFilled,
   ProjectOutlined,
@@ -33,6 +35,10 @@ const layoutSettings = reactive({
   useTopBar: false, // 是否使用顶栏
 })
 
+// Add state for GitHub stars
+const githubStars = ref(0)
+const isLoadingStars = ref(false)
+
 const getRemoteConfig = () => {
   configStore.refreshConfig()
 }
@@ -44,9 +50,24 @@ const getRemoteDatabase = () => {
   databaseStore.refreshDatabase()
 }
 
+// Fetch GitHub stars count
+const fetchGithubStars = async () => {
+  try {
+    isLoadingStars.value = true
+    const response = await fetch('https://api.github.com/repos/xerrors/Yuxi-Know')
+    const data = await response.json()
+    githubStars.value = data.stargazers_count
+  } catch (error) {
+    console.error('Error fetching GitHub stars:', error)
+  } finally {
+    isLoadingStars.value = false
+  }
+}
+
 onMounted(() => {
   getRemoteConfig()
   getRemoteDatabase()
+  fetchGithubStars() // Fetch GitHub stars on mount
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
@@ -91,7 +112,7 @@ console.log(route)
           <span class="text">对话</span>
         </RouterLink>
         <RouterLink to="/database" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/database') ? DatabaseFilled : DatabaseOutlined" />
+          <component class="icon" :is="route.path.startsWith('/database') ? FolderFilled : FolderOutlined" />
           <span class="text">知识</span>
         </RouterLink>
         <RouterLink to="/graph" class="nav-item" active-class="active">
@@ -99,7 +120,7 @@ console.log(route)
           <span class="text">图谱</span>
         </RouterLink>
         <RouterLink to="/tools" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/tools') ? StarFilled: StarOutlined" />
+          <component class="icon" :is="route.path.startsWith('/tools') ? ToolFilled: ToolOutlined" />
           <span class="text">工具</span>
         </RouterLink>
         <a-tooltip placement="right">
@@ -112,8 +133,11 @@ console.log(route)
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
       <div class="github nav-item">
-        <a href="https://github.com/xerrors/ProjectAthena" target="_blank">
-          <GithubOutlined  class="icon" style="color: #222;"/>
+        <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
+          <GithubOutlined class="icon" style="color: #222;"/>
+          <span v-if="githubStars > 0" class="github-stars">
+            <span class="star-count">{{ githubStars }}</span>
+          </span>
         </a>
       </div>
       <RouterLink  class="nav-item setting" to="/setting" active-class="active">
@@ -228,6 +252,30 @@ div.header, #app-router-view {
       &:hover {
         background-color: transparent;
         border: 1px solid transparent;
+      }
+
+      .github-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: inherit;
+      }
+
+      .github-stars {
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+        margin-top: 4px;
+
+        .star-icon {
+          color: #f0a742;
+          font-size: 12px;
+          margin-right: 2px;
+        }
+
+        .star-count {
+          font-weight: 600;
+        }
       }
     }
 
@@ -387,7 +435,6 @@ div.header, #app-router-view {
       font-size: 15px;
     }
 
-
     &.github, &.setting {
       padding: 8px 12px;
 
@@ -404,11 +451,21 @@ div.header, #app-router-view {
     &.github {
       a {
         display: flex;
-        justify-content: center;
         align-items: center;
+      }
+
+      .github-stars {
+        display: flex;
+        align-items: center;
+        margin-left: 6px;
+
+        .star-icon {
+          color: #f0a742;
+          font-size: 14px;
+          margin-right: 2px;
+        }
       }
     }
   }
 }
-
 </style>

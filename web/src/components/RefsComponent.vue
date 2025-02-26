@@ -1,16 +1,23 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
-      <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
       <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
-      <span class="item"><GlobalOutlined /> {{ msg.model_name }}</span>
+      <span class="item"><BulbOutlined /> {{ msg.model_name }}</span>
+      <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
       <span
         class="item btn"
         @click="openSubGraph(msg)"
         v-if="hasSubGraphData(msg)"
       >
-        <GlobalOutlined /> 关系图
+        <DeploymentUnitOutlined /> 关系图
+      </span>
+      <span
+        class="item btn"
+        @click="showWebResult(msg)"
+        v-if="msg.refs?.web_search.results.length > 0"
+      >
+        <GlobalOutlined /> 网页搜索 {{ msg.refs.web_search?.results.length }}
       </span>
       <span class="filetag item btn"
         v-for="(results, filename) in msg.groupedResults"
@@ -21,7 +28,7 @@
         <a-drawer
           v-model:open="openDetail[filename]"
           :title="filename"
-          width="800"
+          width="700"
           :contentWrapperStyle="{ maxWidth: '100%'}"
           placement="right"
           class="retrieval-detail"
@@ -60,6 +67,35 @@
     >
       <GraphContainer :graphData="subGraphData" />
     </a-modal>
+    <a-drawer
+      v-model:open="webResultVisible"
+      title="网页搜索结果"
+      width="700"
+      :contentWrapperStyle="{ maxWidth: '100%'}"
+      placement="right"
+      class="web-result-detail"
+      rootClassName="root"
+    >
+      <div class="results-list">
+        <div v-for="result in webResults" :key="result.url" class="result-item">
+          <div class="result-meta">
+            <div class="score-info">
+              <span>
+                <strong>相关度：</strong>
+                <a-progress :percent="getPercent(result.score)"/>
+              </span>
+            </div>
+            <div class="result-url">
+              <a :href="result.url" target="_blank">{{ result.url }}</a>
+            </div>
+          </div>
+          <div class="result-content">
+            <h3 class="result-title">{{ result.title }}</h3>
+            <div class="result-text">{{ result.content }}</div>
+          </div>
+        </div>
+      </div>
+    </a-drawer>
   </div>
 </template>
 
@@ -73,6 +109,8 @@ import {
   CopyOutlined,
   LikeOutlined,
   DislikeOutlined,
+  DeploymentUnitOutlined,
+  BulbOutlined,
   FileOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons-vue'
@@ -143,6 +181,20 @@ const closeSubGraph = () => {
   subGraphVisible.value = false
 }
 
+// 添加网页搜索结果相关变量
+const webResultVisible = ref(false)
+const webResults = ref(null)
+
+// 添加显示网页搜索结果的方法
+const showWebResult = (msg) => {
+  if (msg.refs?.web_search) {
+    webResults.value = msg.refs?.web_search.results
+    webResultVisible.value = true
+  } else {
+    console.error('无法获取网页搜索结果')
+  }
+}
+
 const hasSubGraphData = (msg) => {
   return msg.refs &&
          msg.refs.graph_base &&
@@ -165,15 +217,15 @@ const getPercent = (value) => {
   display: flex;
   margin-bottom: 20px;
   color: var(--gray-500);
-  font-size: 14px;
+  font-size: 13px;
   gap: 10px;
 
   .item {
     background: var(--gray-100);
-    color: var(--gray-800);
+    color: var(--gray-700);
     padding: 2px 8px;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 13px;
     user-select: none;
 
     &.btn {
@@ -273,6 +325,78 @@ const getPercent = (value) => {
 
   .result-meta {
     margin-bottom: 12px;
+  }
+}
+
+.web-result-detail {
+  .results-list {
+    .result-item {
+      border-bottom: 1px solid #f0f0f0;
+      padding: 16px 0;
+
+      &:last-child {
+        border-bottom: none;
+      }
+    }
+
+    .result-meta {
+      margin-bottom: 12px;
+
+      .score-info {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2rem;
+        margin-bottom: 8px;
+
+        span {
+          display: flex;
+          align-items: center;
+
+          strong {
+            margin-right: 8px;
+            white-space: nowrap;
+            color: #666;
+          }
+
+          .ant-progress {
+            width: 170px;
+            margin-bottom: 0;
+            margin-inline: 10px;
+
+            .ant-progress-bg {
+              background-color: #666;
+            }
+          }
+        }
+      }
+
+      .result-url {
+        font-size: 12px;
+        color: #1677FF;
+        margin-bottom: 8px;
+        word-break: break-all;
+      }
+    }
+
+    .result-content {
+      .result-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        color: #333;
+      }
+
+      .result-text {
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background-color: #f9f9f9;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #e8e8e8;
+      }
+    }
   }
 }
 </style>

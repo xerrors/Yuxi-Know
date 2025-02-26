@@ -5,7 +5,7 @@
     <p>大模型驱动的知识库管理工具</p>
     <button class="home-btn" @click="goToChat">开始对话</button>
     <img src="/home.png" alt="Placeholder Image" />
-    <footer>© 江南语析 2024 [WIP] v0.12.138</footer>
+    <footer>© 江南语析 2025 [WIP] v0.12.138</footer>
   </div>
 </template>
 

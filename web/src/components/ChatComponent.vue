@@ -16,26 +16,6 @@
         </a-tooltip>
       </div>
       <div class="header__right">
-        <div class="nav-btn text metas" v-if="meta.use_graph && meta.enable_retrieval">
-          <GoldOutlined /> 图数据库
-        </div>
-        <a-dropdown v-if="meta.selectedKB !== null && meta.enable_retrieval">
-          <a class="ant-dropdown-link nav-btn" @click.prevent>
-            <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" /> -->
-             <BookOutlined />
-            <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
-          </a>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
-                <a href="javascript:;" >{{ db.name }}</a>
-              </a-menu-item>
-              <a-menu-item  @click="useDatabase(null)">
-                <a href="javascript:;">不使用</a>
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
@@ -46,47 +26,9 @@
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
           </div>
-          <div class="flex-center" @click="meta.enable_retrieval = !meta.enable_retrieval">
-            启用检索 <div @click.stop><a-switch v-model:checked="meta.enable_retrieval" /></div>
-          </div>
           <div class="flex-center">
             最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
-          <a-divider v-if="meta.enable_retrieval"></a-divider>
-          <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            知识库
-            <div @click.stop>
-              <a-dropdown>
-                <a class="ant-dropdown-link " @click.prevent>
-                  <!-- <component :is="meta.selectedKB === null ? BookOutlined : BookFilled" />&nbsp; -->
-                  <BookOutlined />&nbsp;
-                  <span class="text">{{ meta.selectedKB === null ? '不使用' : opts.databases[meta.selectedKB]?.name }}</span>
-                </a>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
-                      <a href="javascript:;">{{ db.name }}</a>
-                    </a-menu-item>
-                    <a-menu-item  @click="useDatabase(null)">
-                      <a href="javascript:;">不使用</a>
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-            </div>
-          </div>
-          <div class="flex-center" @click="meta.use_graph = !meta.use_graph" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            图数据库 <div @click.stop><a-switch v-model:checked="meta.use_graph" /></div>
-          </div>
-          <div class="flex-center" @click="meta.use_web = !meta.use_web" v-if="configStore.config.enable_search_engine && meta.enable_retrieval">
-            搜索引擎（Bing） <div @click.stop><a-switch v-model:checked="meta.use_web" /></div>
-          </div>
-          <div class="flex-center" @click="meta.enable_web_search = !meta.enable_web_search">
-            网页搜索 <div @click.stop><a-switch v-model:checked="meta.enable_web_search" /></div>
-          </div>
-          <!-- <div class="flex-center" v-if="configStore.config.enable_knowledge_base && meta.enable_retrieval">
-            重写查询 <a-segmented v-model:value="meta.use_rewrite_query" :options="['off', 'on', 'hyde']"/>
-          </div> -->
         </div>
       </div>
     </div>
@@ -110,6 +52,24 @@
         class="message-box"
         :class="message.role"
       >
+        <div v-if="message.reasoning_content" class="reasoning-msg">
+          <a-collapse
+            v-model:activeKey="message.showThinking"
+            :bordered="false"
+            style="background: rgb(255, 255, 255)"
+          >
+            <template #expandIcon="{ isActive }">
+              <caret-right-outlined :rotate="isActive ? 90 : 0" />
+            </template>
+            <a-collapse-panel
+              key="show"
+              :header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
+              :style="'background: #f7f7f7; border-radius: 8px; margin-bottom: 24px; border: 0; overflow: hidden'"
+            >
+              <p style="color: var(--gray-800)">{{ message.reasoning_content }}</p>
+            </a-collapse-panel>
+          </a-collapse>
+        </div>
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
         <div v-else-if="message.text.length == 0 && message.status=='init'"  class="loading-dots">
           <div></div>
@@ -117,12 +77,13 @@
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
+        <div v-else-if="message.status == 'generating' && isStreaming" class="searching-msg"><i>正在生成……</i></div>
         <div
-          v-else-if="message.text.length == 0 || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
+          v-else-if="(message.text.length == 0 && message.status!='reasoning') || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
           class="err-msg"
           @click="retryMessage(message.id)"
         >
-          请求错误，请重试
+          请求错误，请重试。{{ message.message }}
         </div>
         <div v-else
           v-html="renderMarkdown(message)"
@@ -133,18 +94,61 @@
     </div>
     <div class="bottom">
       <div class="input-box">
-        <a-textarea
-          class="user-input"
-          v-model:value="conv.inputText"
-          @keydown="handleKeyDown"
-          placeholder="输入问题……"
-          :auto-size="{ minRows: 1, maxRows: 10 }"
-        />
-        <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
-          <template #icon> <SendOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-        </a-button>
+        <div class="input-area">
+          <a-textarea
+            class="user-input"
+            v-model:value="conv.inputText"
+            @keydown="handleKeyDown"
+            placeholder="输入问题……"
+            :auto-size="{ minRows: 2, maxRows: 10 }"
+          />
+        </div>
+        <div class="input-options">
+          <div class="options__left">
+            <div
+              :class="{'switch': true, 'opt-item': true, 'active': meta.use_web}"
+              v-if="configStore.config.enable_web_search"
+              @click="meta.use_web=!meta.use_web"
+            >
+              <CompassOutlined style="margin-right: 3px;"/>
+              联网搜索
+            </div>
+            <div
+              :class="{'switch': true, 'opt-item': true, 'active': meta.use_graph}"
+              v-if="configStore.config.enable_knowledge_graph"
+              @click="meta.use_graph=!meta.use_graph"
+            >
+              <DeploymentUnitOutlined style="margin-right: 3px;"/>
+              知识图谱
+            </div>
+            <a-dropdown
+              v-if="configStore.config.enable_knowledge_base && opts.databases.length > 0"
+              :class="{'opt-item': true, 'active': meta.selectedKB !== null}"
+            >
+              <a class="ant-dropdown-link" @click.prevent>
+                <BookOutlined style="margin-right: 3px;"/>
+                <span class="text">{{ meta.selectedKB === null ? '不使用知识库' : opts.databases[meta.selectedKB]?.name }}</span>
+              </a>
+              <template #overlay>
+                <a-menu>
+                  <a-menu-item v-for="(db, index) in opts.databases" :key="index" @click="useDatabase(index)">
+                    <a href="javascript:;">{{ db.name }}</a>
+                  </a-menu-item>
+                  <a-menu-item @click="useDatabase(null)">
+                    <a href="javascript:;">不使用</a>
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </div>
+          <div class="options__right">
+            <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
+              <template #icon> <ArrowUpOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
+            </a-button>
+          </div>
+        </div>
       </div>
-      <p class="note">请注意辨别内容的可靠性 模型供应商：{{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
+      <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -158,6 +162,8 @@ import {
   LoadingOutlined,
   BookOutlined,
   BookFilled,
+  CompassOutlined,
+  ArrowUpOutlined,
   CompassFilled,
   GoldenFilled,
   GoldOutlined,
@@ -169,8 +175,8 @@ import {
   GlobalOutlined,
   FileTextOutlined,
   RobotOutlined,
-  EditOutlined,
-  PlusOutlined,
+  CaretRightOutlined,
+  DeploymentUnitOutlined,
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -208,15 +214,12 @@ const opts = reactive({
 })
 
 const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
-  enable_retrieval: false,
   use_graph: false,
   use_web: false,
-  enable_web_search: false,
   graph_name: "neo4j",
-  // use_rewrite_query: "off",
   selectedKB: null,
   stream: true,
-  summary_title: true,
+  summary_title: false,
   history_round: 5,
   db_name: null,
 })
@@ -235,15 +238,15 @@ const marked = new Marked(
   })
 );
 
-const consoleMsg = (message) => console.log(message)
+const consoleMsg = (msg) => console.log(msg)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
 onClickOutside(modelCard, () => setTimeout(() => opts.showModelCard = false, 30))
 
-const renderMarkdown = (message) => {
-  if (message.status === 'loading') {
-    return marked.parse(message.text + '🟢')
+const renderMarkdown = (msg) => {
+  if (msg.status === 'loading') {
+    return marked.parse(msg.text + '🟢')
   } else {
-    return marked.parse(message.text)
+    return marked.parse(msg.text)
   }
 }
 
@@ -307,45 +310,73 @@ const generateRandomHash = (length) => {
     return hash;
 }
 
-const appendUserMessage = (message) => {
+const appendUserMessage = (msg) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'sent',
-    text: message
+    text: msg
   })
   scrollToBottom()
 }
 
-const appendAiMessage = (message, refs=null) => {
+const appendAiMessage = (text, refs=null) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'received',
-    text: message,
+    text: text,
+    reasoning_content: '',
     refs,
     status: "init",
     meta: {},
+    showThinking: "show"
   })
   scrollToBottom()
 }
 
 const updateMessage = (info) => {
-  const message = conv.value.messages.find((message) => message.id === info.id);
-  if (message) {
+  const msg = conv.value.messages.find((msg) => msg.id === info.id);
+  if (msg) {
     try {
+      // 只有在 text 不为空时更新
       if (info.text !== null && info.text !== undefined && info.text !== '') {
-        message.text = info.text;
+        msg.text = info.text;
       }
+
+      if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
+        msg.reasoning_content = info.reasoning_content;
+      }
+
+      // 只有在 refs 不为空时更新
+      if (info.refs !== null && info.refs !== undefined) {
+        msg.refs = info.refs;
+      }
+
+      if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
+        msg.model_name = info.model_name;
+      }
+
+      // 只有在 status 不为空时更新
       if (info.status !== null && info.status !== undefined && info.status !== '') {
-        message.status = info.status;
+        msg.status = info.status;
       }
+
       if (info.meta !== null && info.meta !== undefined) {
-        message.meta = info.meta;
+        msg.meta = info.meta;
       }
+
+      if (info.message !== null && info.message !== undefined) {
+        msg.message = info.message;
+      }
+
+      if (info.showThinking !== null && info.showThinking !== undefined) {
+        msg.showThinking = info.showThinking;
+      }
+
       scrollToBottom();
     } catch (error) {
       console.error('Error updating message:', error);
-      message.status = 'error';
-      message.text = '消息更新失败';
+      msg.status = 'error';
+      msg.text = '消息更新失败';
     }
   } else {
     console.error('Message not found:', info.id);
@@ -354,9 +385,9 @@ const updateMessage = (info) => {
 
 
 const groupRefs = (id) => {
-  const message = conv.value.messages.find((message) => message.id === id)
-  if (message.refs && message.refs.knowledge_base.results.length > 0) {
-    message.groupedResults = message.refs.knowledge_base.results
+  const msg = conv.value.messages.find((msg) => msg.id === id)
+  if (msg.refs && msg.refs.knowledge_base.results.length > 0) {
+    msg.groupedResults = msg.refs.knowledge_base.results
     .filter(result => result.file && result.file.filename)
     .reduce((acc, result) => {
       const { filename } = result.file;
@@ -370,11 +401,11 @@ const groupRefs = (id) => {
   scrollToBottom()
 }
 
-const simpleCall = (message) => {
+const simpleCall = (msg) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/chat/call', {
+    fetch('/api/chat/call_lite', {
       method: 'POST',
-      body: JSON.stringify({ query: message, }),
+      body: JSON.stringify({ query: msg, }),
       headers: { 'Content-Type': 'application/json' }
     })
     .then((response) => response.json())
@@ -393,21 +424,21 @@ const loadDatabases = () => {
 }
 
 // 新函数用于处理 fetch 请求
-const fetchChatResponse = (requestData) => {
+const fetchChatResponse = (user_input, cur_res_id) => {
   fetch('/api/chat/', {
     method: 'POST',
+    body: JSON.stringify({
+      query: user_input,
+      history: conv.value.history,
+      meta: meta,
+      cur_res_id: cur_res_id,
+    }),
     headers: {
       'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(requestData)
+    }
   })
-  .then(response => {
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    if (!response.body) {
-      throw new Error("ReadableStream not supported.");
-    }
+  .then((response) => {
+    if (!response.body) throw new Error("ReadableStream not supported.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
     let buffer = '';
@@ -415,25 +446,10 @@ const fetchChatResponse = (requestData) => {
     const readChunk = () => {
       return reader.read().then(({ done, value }) => {
         if (done) {
-          const message = conv.value.messages.find((message) => message.id === requestData.cur_res_id)
-          console.log(message)
-          if (message.meta.enable_retrieval) {
-            console.log("fetching refs")
-            fetchRefs(requestData.cur_res_id).then((data) => {
-              console.log(data)
-              updateMessage({
-                id: requestData.cur_res_id,
-                refs: data,
-                status: "finished",
-              });
-              groupRefs(requestData.cur_res_id);
-            })
-          } else {
-            updateMessage({
-              id: requestData.cur_res_id,
-              status: "finished",
-            });
-          }
+          const msg = conv.value.messages.find((msg) => msg.id === cur_res_id)
+          console.log(msg)
+          groupRefs(cur_res_id);
+          updateMessage({showThinking: "no", id: cur_res_id});
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
@@ -449,11 +465,12 @@ const fetchChatResponse = (requestData) => {
             try {
               const data = JSON.parse(line);
               updateMessage({
-                id: requestData.cur_res_id,
+                id: cur_res_id,
                 text: data.response,
-                model_name: data.model_name,
+                reasoning_content: data.reasoning_content,
                 status: data.status,
                 meta: data.meta,
+                ...data,
               });
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].text)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
@@ -476,14 +493,12 @@ const fetchChatResponse = (requestData) => {
     readChunk();
   })
   .catch((error) => {
-    console.error('Error in fetchChatResponse:', error);
+    console.error(error);
     updateMessage({
-      id: requestData.cur_res_id,
+      id: cur_res_id,
       status: "error",
-      text: `请求错误：${error.message}`,
     });
     isStreaming.value = false;
-    message.error(`请求失败：${error.message}`);
   });
 }
 
@@ -508,36 +523,18 @@ const fetchRefs = (cur_res_id) => {
 const sendMessage = () => {
   const user_input = conv.value.inputText.trim();
   const dbName = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.metaname : null;
+  if (isStreaming.value) {
+    message.error('请等待上一条消息处理完成');
+    return
+  }
   if (user_input) {
     isStreaming.value = true;
     appendUserMessage(user_input);
     appendAiMessage("", null);
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
     conv.value.inputText = '';
-    
-    // 准备发送的数据
-    const requestData = {
-      query: user_input,
-      history: conv.value.history,
-      cur_res_id: cur_res_id,
-      meta: {
-        enable_retrieval: meta.enable_retrieval,
-        use_graph: meta.use_graph,
-        use_web: meta.use_web,
-        enable_web_search: meta.enable_web_search,
-        graph_name: meta.graph_name,
-        rewriteQuery: meta.rewriteQuery,
-        selectedKB: meta.selectedKB,
-        stream: meta.stream,
-        summary_title: meta.summary_title,
-        history_round: meta.history_round,
-        db_name: dbName,
-      }
-    };
-
-    console.log('Sending request with data:', requestData); // 添加日志
-
-    fetchChatResponse(requestData);
+    meta.db_name = dbName;
+    fetchChatResponse(user_input, cur_res_id)
   } else {
     console.log('请输入消息');
   }
@@ -545,7 +542,7 @@ const sendMessage = () => {
 
 const retryMessage = (id) => {
   // 找到 id 对应的 message，然后删除包含 message 在内以及后面所有的 message
-  const index = conv.value.messages.findIndex(message => message.id === id);
+  const index = conv.value.messages.findIndex(msg => msg.id === id);
   const pastMessage = conv.value.messages[index-1]
   console.log("retryMessage", id, pastMessage)
   conv.value.inputText = pastMessage.text
@@ -556,8 +553,8 @@ const retryMessage = (id) => {
   sendMessage();
 }
 
-const autoSend = (message) => {
-  conv.value.inputText = message
+const autoSend = (msg) => {
+  conv.value.inputText = msg
   sendMessage()
 }
 
@@ -670,7 +667,6 @@ watch(
       margin-right: 8px;
       font-size: 16px;
     }
-    
     .ant-switch {
       &.ant-switch-checked {
         background-color: var(--main-500);
@@ -755,18 +751,25 @@ watch(
     /* animation: slideInUp 0.1s ease-in; */
 
     .err-msg {
-      color: #FF6B6B;
-      border: 1px solid #FF6B6B;
-      padding: 0.2rem 1rem;
+      color: #eb8080;
+      border: 1px solid #eb8080;
+      padding: 0.5rem 1rem;
       border-radius: 8px;
-      text-align: center;
-      background: #FFF0F0;
+      text-align: left;
+      background: #FFF5F5;
       margin-bottom: 10px;
       cursor: pointer;
     }
 
     .searching-msg {
       color: var(--gray-500);
+      animation: colorPulse 2s infinite;
+    }
+
+    @keyframes colorPulse {
+      0% { color: var(--gray-700); }
+      50% { color: var(--gray-300); }
+      100% { color: var(--gray-700); }
     }
   }
 
@@ -783,6 +786,7 @@ watch(
     text-align: left;
     word-wrap: break-word;
     margin: 0;
+    max-width: 100%;
     padding-bottom: 0;
     padding-top: 16px;
     padding-left: 0;
@@ -812,21 +816,56 @@ watch(
 
   .input-box {
     display: flex;
+    flex-direction: column;
     width: 100%;
     height: auto;
     max-width: 900px;
     margin: 0 auto;
-    align-items: flex-end;
     padding: 0.25rem 0.5rem;
-    // box-shadow: rgba(42, 60, 79, 0.1) 0px 6px 10px 0px;
-    border: 2px solid #E5E5E5;
+    border: 2px solid var(--gray-200);
     border-radius: 1rem;
-    background: #fcfdfd;
-    transition: background 0.3s, box-shadow 0.3s;
+    background: var(--gray-50);
+    transition: background, border 0.3s, box-shadow 0.3s;
     &:focus-within {
       border: 2px solid var(--main-500);
       background: white;
-      // box-shadow: rgb(42 60 79 / 5%) 0px 4px 10px 0px;
+    }
+
+    .input-options {
+      display: flex;
+      padding: 4px 8px;
+
+      .options__left,
+      .options__right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .options__left {
+        flex: 1;
+
+        .opt-item {
+          border-radius: 12px;
+          border: 1px solid var(--gray-300);
+          padding: 4px 8px;
+          cursor: pointer;
+          font-size: 12px;
+          color: var(--gray-700);
+
+          &.active {
+            color: var(--main-600);
+            border: 1px solid var(--main-500);
+            background-color: var(--main-10);
+          }
+        }
+      }
+    }
+
+    .input-area {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
     }
 
     textarea.user-input {
@@ -836,7 +875,7 @@ watch(
       background-color: transparent;
       border: none;
       font-size: 1.2rem;
-      margin: 0 0.6rem;
+      margin: 0 0;
       color: #111111;
       font-size: 16px;
       font-variation-settings: 'wght' 400, 'opsz' 10.5;
@@ -854,21 +893,23 @@ watch(
   }
 
   button.ant-btn-icon-only {
-    font-size: 1.25rem;
+    height: 32px;
+    width: 32px;
     cursor: pointer;
-    background-color: transparent;
+    background-color: var(--main-color);
+    border-radius: 50%;
     border: none;
     transition: color 0.3s;
     box-shadow: none;
-    color: var(--main-700);;
+    color: white;
     padding: 0;
 
     &:hover {
-      color: var(--gray-1000);
+      background-color: var(--main-800);
     }
 
     &:disabled {
-      color: #ccc;
+      background-color: var(--gray-400);
       cursor: not-allowed;
     }
   }
@@ -1009,7 +1050,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  
   .search-switch {
     margin-right: 8px;
   }
@@ -1029,6 +1069,7 @@ watch(
 }
 
 .message-md {
+  max-width: 100%;
   h1, h2, h3, h4, h5, h6 {
     font-size: 1rem;
   }

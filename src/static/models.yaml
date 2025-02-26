@@ -14,6 +14,7 @@ MODEL_NAMES:
     name: DeepSeek
     url: https://platform.deepseek.com/api-docs/zh-cn/pricing
     default: deepseek-chat
+    base_url: https://api.deepseek.com/v1
     env:
       - DEEPSEEK_API_KEY
     models:
@@ -23,6 +24,7 @@ MODEL_NAMES:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api
     default: glm-4-flash
+    base_url: https://open.bigmodel.cn/api/paas/v4/
     env:
       - ZHIPUAI_API_KEY
     models:
@@ -33,6 +35,19 @@ MODEL_NAMES:
       - glm-4-long
       - glm-4-flashx
       - glm-4-flash
+  siliconflow:
+    name: SiliconFlow
+    url: https://cloud.siliconflow.cn/models
+    default: Qwen/Qwen2.5-7B-Instruct
+    base_url: https://api.siliconflow.cn/v1
+    env:
+      - SILICONFLOW_API_KEY
+    models:
+      - meta-llama/Meta-Llama-3.1-8B-Instruct
+      - Qwen/Qwen2.5-7B-Instruct
+      - deepseek-ai/DeepSeek-R1
+      - deepseek-ai/DeepSeek-V3
+      - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
   qianfan:
     name: 百度千帆 (QianFan)
     url: https://open.bigmodel.cn/dev/api
@@ -55,45 +70,51 @@ MODEL_NAMES:
       - DASHSCOPE_API_KEY
     models:
       - qwen-max-latest
-      - qwen-plus-latest
       - qwen-long-latest
-      - qwen-turbo-latest
       - qwen2.5-72b-instruct
       - qwen2.5-32b-instruct
-      - qwen2.5-14b-instruct
       - qwen2.5-7b-instruct
-      - qwen2.5-3b-instruct
       - qwen2.5-1.5b-instruct
       - qwen2.5-0.5b-instruct
-  siliconflow:
-    name: SiliconFlow
-    url: https://cloud.siliconflow.cn/models
-    default: meta-llama/Meta-Llama-3.1-8B-Instruct
+  ark:
+    name: 豆包（Ark）
+    url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
+    default: doubao-1-5-pro-32k-250115
+    base_url: https://ark.cn-beijing.volces.com/api/v3
     env:
-      - SILICONFLOW_API_KEY
+      - ARK_API_KEY
     models:
-      - meta-llama/Meta-Llama-3.1-8B-Instruct
-      - meta-llama/Meta-Llama-3.1-70B-Instruct
-      - meta-llama/Meta-Llama-3.1-405B-Instruct
+      - doubao-1-5-pro-32k-250115
+      - doubao-1-5-lite-32k-250115
+      - deepseek-r1-250120
+  lingyiwanwu:
+    name: 零一万物
+    url: https://platform.lingyiwanwu.com/docs#%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AE%A1%E8%B4%B9
+    base_url: https://api.lingyiwanwu.com/v1
+    default: yi-lightning
+    env:
+      - LINGYIWANWU_API_KEY
+    models:
+      - yi-lightning
 
 EMBED_MODEL_INFO:
-  bge-large-zh-v1.5:
-    name: bge-large-zh-v1.5
-    default_path: BAAI/bge-large-zh-v1.5
-    dimension: 1024
-    query_instruction: "为这个句子生成表示以用于检索相关文章："
-  bge-m3:
-    name: bge-m3
+  local/BAAI/bge-m3:
+    name: BAAI/bge-m3
     default_path: BAAI/bge-m3
     dimension: 1024
-  zhipu-embedding-2:
-    name: zhipu-embedding-2
-    default_path: embedding-2
+  zhipu/zhipu-embedding-2:
+    name: embedding-2
     dimension: 1024
-  zhipu-embedding-3:
-    name: zhipu-embedding-3
-    default_path: embedding-3
+  zhipu/zhipu-embedding-3:
+    name: embedding-3
     dimension: 2048
+  siliconflow/BAAI/bge-m3:
+    name: BAAI/bge-m3
+    dimension: 1024
 
 RERANKER_LIST:
-  bge-reranker-v2-m3: BAAI/bge-reranker-v2-m3
+  local/BAAI/bge-reranker-v2-m3:
+    name: BAAI/bge-reranker-v2-m3
+    default_path: BAAI/bge-reranker-v2-m3
+  siliconflow/BAAI/bge-reranker-v2-m3:
+    name: BAAI/bge-reranker-v2-m3

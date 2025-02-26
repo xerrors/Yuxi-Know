@@ -6,7 +6,7 @@ from src.utils.logging_config import setup_logger
 
 logger = setup_logger("Config")
 
-with open(Path("src/config/models.yaml"), "r") as f:
+with open(Path("src/static/models.yaml"), "r") as f:
     _models = yaml.safe_load(f)
 
 MODEL_NAMES = _models["MODEL_NAMES"]
@@ -40,33 +40,34 @@ class SimpleConfig(dict):
 
 class Config(SimpleConfig):
 
-    def __init__(self, filename=None):
+    def __init__(self):
         super().__init__()
         self._config_items = {}
+        self.save_dir = "saves"
+        self.filename = str(Path("src/static/config.yaml"))
+        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         ### >>> 默认配置
         # 可以在 config/base.yaml 中覆盖
         self.add_item("stream", default=True, des="是否开启流式输出")
-        self.add_item("save_dir", default="saves", des="保存目录")
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
-        self.add_item("enable_web_search", default=False, des="是否开启网页搜索")
+        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（需配置 TAVILY_API_KEY）")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
-        ## 如果需要自定义路径，则在 config/base.yaml 中配置 model_local_paths
-        self.add_item("model_provider", default="zhipu", des="模型提供商", choices=list(MODEL_NAMES.keys()))
-        self.add_item("model_name", default=None, des="模型名称")
-        self.add_item("embed_model", default="zhipu-embedding-3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
-        self.add_item("reranker", default="bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
-        self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
+        ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
+        self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(MODEL_NAMES.keys()))
+        self.add_item("model_provider_lite", default="siliconflow", des="模型提供商（用于轻量任务）", choices=list(MODEL_NAMES.keys()))
+        self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
+        self.add_item("model_name_lite", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称（用于轻量任务）")
+        self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
+        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
+        self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
         ### <<< 默认配置结束
-
-        self.filename = filename or os.path.join(self.save_dir, "config", "config.yaml")
-        os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self.load()
         self.handle_self()
@@ -90,7 +91,9 @@ class Config(SimpleConfig):
     def handle_self(self):
         self.model_names = MODEL_NAMES
         model_provider_info = self.model_names.get(self.model_provider, {})
+        self.model_dir = os.environ.get("MODEL_DIR", "")
 
+        # 检查模型提供商是否存在
         if self.model_provider != "custom":
             if self.model_name not in model_provider_info["models"]:
                 logger.warning(f"Model name {self.model_name} not in {self.model_provider}, using default model name")
@@ -104,6 +107,7 @@ class Config(SimpleConfig):
                 logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
                 self.model_name = self.custom_models[0]["custom_id"]
 
+        # 检查模型提供商的环境变量
         conds = {}
         self.model_provider_status = {}
         for provider in self.model_names:
@@ -111,10 +115,13 @@ class Config(SimpleConfig):
             conds_bool = [bool(os.getenv(_k)) for _k in conds[provider]]
             self.model_provider_status[provider] = all(conds_bool)
 
+        # 检查web_search的环境变量
+        if self.enable_web_search and not os.getenv("TAVILY_API_KEY"):
+            logger.warning("TAVILY_API_KEY not set, web search will be disabled")
+            self.enable_web_search = False
+
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
         assert len(self.valuable_model_provider) > 0, f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"
-
-
 
     def load(self):
         """根据传入的文件覆盖掉默认配置"""

@@ -41,9 +41,16 @@ const convs = reactive(JSON.parse(localStorage.getItem('chat-convs')) || [
 ])
 
 const state = reactive({
-  isSidebarOpen: true,
+  isSidebarOpen: JSON.parse(localStorage.getItem('chat-sidebar-open') || 'true'),
 })
 
+// Watch isSidebarOpen and save to localStorage
+watch(
+  () => state.isSidebarOpen,
+  (newValue) => {
+    localStorage.setItem('chat-sidebar-open', JSON.stringify(newValue))
+  }
+)
 const curConvId = ref(0)
 
 const generateRandomHash = (length) => {
