@@ -3,7 +3,7 @@
     <a-empty>
       <template #description>
         <span>
-          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置图数据库。
+          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面启用知识图谱。
         </span>
       </template>
     </a-empty>
@@ -178,6 +178,8 @@ const loadSampleNodes = () => {
     .then((res) => {
       if (res.ok) {
         return res.json();
+      } else if (!configStore.config.enable_knowledge_graph) {
+        throw new Error('请前往设置页面配置启用知识图谱')
       } else {
         throw new Error("加载失败");
       }

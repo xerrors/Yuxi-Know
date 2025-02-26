@@ -52,7 +52,7 @@
         class="message-box"
         :class="message.role"
       >
-        <div v-if="message.reasoning_content" class="searching-msg">
+        <div v-if="message.reasoning_content" class="reasoning-msg">
           <a-collapse
             v-model:activeKey="message.showThinking"
             :bordered="false"
@@ -66,7 +66,7 @@
               :header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
               :style="'background: #f7f7f7; border-radius: 8px; margin-bottom: 24px; border: 0; overflow: hidden'"
             >
-              <p>{{ message.reasoning_content }}</p>
+              <p style="color: var(--gray-800)">{{ message.reasoning_content }}</p>
             </a-collapse-panel>
           </a-collapse>
         </div>
@@ -763,6 +763,13 @@ watch(
 
     .searching-msg {
       color: var(--gray-500);
+      animation: colorPulse 2s infinite;
+    }
+
+    @keyframes colorPulse {
+      0% { color: var(--gray-700); }
+      50% { color: var(--gray-300); }
+      100% { color: var(--gray-700); }
     }
   }
 
