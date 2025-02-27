@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, toRefs, nextTick, computed, watch } from 'vue'
+import { reactive, ref, onMounted, toRefs, nextTick, onUnmounted, watch } from 'vue'
 import {
   SendOutlined,
   MenuOutlined,
@@ -197,7 +197,11 @@ const configStore = useConfigStore()
 
 const { conv, state } = toRefs(props)
 const chatContainer = ref(null)
+
 const isStreaming = ref(false)
+const userIsScrolling = ref(false);
+const shouldAutoScroll = ref(true);
+
 const panel = ref(null)
 const modelCard = ref(null)
 const examples = ref([
@@ -295,10 +299,23 @@ const renameTitle = () => {
   }
 }
 
+const handleUserScroll = () => {
+  // 计算我们是否接近底部（100像素以内）
+  const isNearBottom = chatContainer.value.scrollHeight - chatContainer.value.scrollTop - chatContainer.value.clientHeight < 100;
+
+  // 如果用户不在底部，则仅将其标记为用户滚动
+  userIsScrolling.value = !isNearBottom;
+
+  // 如果用户再次滚动到底部，请恢复自动滚动
+  shouldAutoScroll.value = isNearBottom;
+};
+
 const scrollToBottom = () => {
-  setTimeout(() => {
-    chatContainer.value.scrollTop = chatContainer.value.scrollHeight - chatContainer.value.clientHeight
-  }, 10)
+  if (shouldAutoScroll.value) {
+    setTimeout(() => {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight - chatContainer.value.clientHeight;
+    }, 10);
+  }
 }
 
 const generateRandomHash = (length) => {
@@ -502,22 +519,6 @@ const fetchChatResponse = (user_input, cur_res_id) => {
   });
 }
 
-const fetchRefs = (cur_res_id) => {
-  return new Promise((resolve, reject) => {
-    fetch(`/api/chat/refs?cur_res_id=${cur_res_id}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
-      },
-    }).then(response => response.json())
-      .then(data => {
-        resolve(data.refs)
-      })
-      .catch((error) => {
-        reject(error)
-      })
-  })
-}
 
 // 更新后的 sendMessage 函数
 const sendMessage = () => {
@@ -531,6 +532,8 @@ const sendMessage = () => {
     isStreaming.value = true;
     appendUserMessage(user_input);
     appendAiMessage("", null);
+    forceScrollToBottom();
+
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
     conv.value.inputText = '';
     meta.db_name = dbName;
@@ -553,21 +556,35 @@ const retryMessage = (id) => {
   sendMessage();
 }
 
-const autoSend = (msg) => {
-  conv.value.inputText = msg
-  sendMessage()
-}
 
 // 从本地存储加载数据
 onMounted(() => {
   scrollToBottom()
   loadDatabases()
+
+  chatContainer.value.addEventListener('scroll', handleUserScroll);
+
+  // 从本地存储加载数据
   const storedMeta = localStorage.getItem('meta');
   if (storedMeta) {
     const parsedMeta = JSON.parse(storedMeta);
     Object.assign(meta, parsedMeta);
   }
 });
+
+onUnmounted(() => {
+  if (chatContainer.value) {
+    chatContainer.value.removeEventListener('scroll', handleUserScroll);
+  }
+});
+
+// 添加新函数来处理特定的滚动行为
+const forceScrollToBottom = () => {
+  shouldAutoScroll.value = true;
+  setTimeout(() => {
+    chatContainer.value.scrollTop = chatContainer.value.scrollHeight - chatContainer.value.clientHeight;
+  }, 10);
+};
 
 // 监听 meta 对象的变化，并保存到本地存储
 watch(
@@ -728,7 +745,7 @@ watch(
 
 .chat-box {
   width: 100%;
-  max-width: 900px;
+  max-width: 800px;
   margin: 0 auto;
   flex-grow: 1;
   padding: 1rem 2rem;
@@ -819,7 +836,7 @@ watch(
     flex-direction: column;
     width: 100%;
     height: auto;
-    max-width: 900px;
+    max-width: 800px;
     margin: 0 auto;
     padding: 0.25rem 0.5rem;
     border: 2px solid var(--gray-200);
@@ -1057,24 +1074,29 @@ watch(
 </style>
 
 <style lang="less">
-.message-box pre {
-  border-radius: 8px;
-  font-size: 14px;
-  border: 1px solid var(--main-light-3);
-  padding: 1rem;
-
-  &:has(code.hljs) {
-    padding: 0;
-  }
-}
-
 .message-md {
   color: var(--gray-900);
   max-width: 100%;
 
+  pre {
+    border-radius: 8px;
+    font-size: 14px;
+    border: 1px solid var(--main-light-3);
+    padding: 1rem;
+
+    &:has(code.hljs) {
+      padding: 0;
+    }
+
+    code.hljs {
+      background-color: var(--gray-100);
+    }
+  }
+
   strong {
     color: var(--gray-800);
   }
+
   h1, h2, h3, h4, h5, h6 {
     font-size: 1rem;
   }
