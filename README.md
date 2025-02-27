@@ -16,10 +16,8 @@
 
 ![image](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
-> [!NOTE]
-> 当前项目还处于开发的早期，还存在一些 BUG，有问题随时提 issue。
 
-代办清单
+待办清单
 
 - [ ] Ollma Embedding 支持（Open-like Embedding 支持）
 - [ ] embedding 过程添加进度显示
@@ -33,7 +31,13 @@
 - 2025.02.20 DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或者 `SILICONFLOW_API_KEY` 使用
 - 2024.10.12 后端修改为 [FastAPI](https://github.com/fastapi)，并添加了 [Milvus-Standalone](https://github.com/milvus-io) 的独立部署。
 
-![image](https://github.com/user-attachments/assets/8416a933-cc43-45d0-bf06-00df0ba6c4fb)
+
+
+| PC 网页      | 小屏设备 |
+|:-----------|:-----------|
+| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6)| ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a)|
+
+
 
 ## 快速上手
 
