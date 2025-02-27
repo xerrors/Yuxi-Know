@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.routers import router
-from src.utils.logging_config import setup_logger
+from src.utils.logging_config import logger
 
 load_dotenv()
 
@@ -18,9 +18,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-logger = setup_logger("server:main")
 
 
 if __name__ == "__main__":

@@ -5,10 +5,7 @@ import numpy as np
 from FlagEmbedding import FlagReranker
 
 from src.config import RERANKER_LIST
-from src.utils.logging_config import setup_logger
-
-
-logger = setup_logger("RerankModel")
+from src.utils.logging_config import logger
 
 
 class LocalReranker(FlagReranker):

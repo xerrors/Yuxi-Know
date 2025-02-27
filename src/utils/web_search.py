@@ -1,9 +1,7 @@
 import os
 from typing import List, Dict
 from tavily import TavilyClient
-from src.utils.logging_config import setup_logger
-
-logger = setup_logger("web-search")
+from src.utils.logging_config import logger
 
 class WebSearcher:
     def __init__(self):

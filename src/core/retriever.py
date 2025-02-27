@@ -1,7 +1,5 @@
 from src.models.rerank_model import get_reranker
-from src.utils.logging_config import setup_logger
-
-logger = setup_logger("server-common")
+from src.utils.logging_config import logger
 
 
 class Retriever:

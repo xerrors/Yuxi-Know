@@ -1,8 +1,7 @@
 import os
 
 from pymilvus import MilvusClient, MilvusException
-from src.utils import setup_logger, hashstr
-logger = setup_logger("KnowledgeBase")
+from src.utils import logger, hashstr
 
 
 class KnowledgeBase:

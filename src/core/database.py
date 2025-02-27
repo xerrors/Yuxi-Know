@@ -2,10 +2,8 @@ import os
 import json
 import time
 from src.plugins import pdf2txt
-from src.utils import hashstr, setup_logger, is_text_pdf
+from src.utils import hashstr, logger, is_text_pdf
 from src.models.embedding import get_embedding_model
-
-logger = setup_logger("DataBaseManager")
 
 
 class DataBaseManager:

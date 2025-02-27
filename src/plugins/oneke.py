@@ -11,8 +11,7 @@ from transformers import (
     BitsAndBytesConfig
 )
 
-from src.utils import setup_logger
-logger = setup_logger("OneKE")
+from src.utils import logger
 
 dotenv.load_dotenv()
 

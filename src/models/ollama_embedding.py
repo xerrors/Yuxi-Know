@@ -4,9 +4,7 @@ import numpy as np
 from typing import List, Union, Dict
 
 from src.models.embedding import RemoteEmbeddingModel
-from src.utils.logging_config import setup_logger
-
-logger = setup_logger("OllamaEmbedding")
+from src.utils.logging_config import logger
 
 class OllamaEmbedding(RemoteEmbeddingModel):
     """

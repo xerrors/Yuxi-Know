@@ -5,11 +5,11 @@ base = APIRouter()
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi import Request, Body
-from src.core import HistoryManager
-from src.utils.logging_config import setup_logger
-from src.core.startup import startup
 
-logger = setup_logger("server-base")
+from src.core import HistoryManager
+from src.core.startup import startup
+from src.utils import logger
+
 
 @base.get("/")
 async def route_index():

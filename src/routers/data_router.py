@@ -2,12 +2,11 @@ import os
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
 
-from src.utils import setup_logger, hashstr
+from src.utils import logger, hashstr
 from src.core.startup import startup
 
 data = APIRouter(prefix="/data")
 
-logger = setup_logger("server-database")
 
 @data.get("/")
 def get_databases():

@@ -18,6 +18,7 @@ def select_model(config, model_provider=None, model_name=None):
         "siliconflow",
         "zhipu",
         "lingyiwanwu",
+        "together.ai",
     ]:
         return OpenAIBase(
             api_key=os.getenv(model_info["env"][0]),

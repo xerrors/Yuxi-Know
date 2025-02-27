@@ -4,11 +4,8 @@ import requests
 from FlagEmbedding import FlagModel
 
 from src.config import EMBED_MODEL_INFO
-from src.utils.logging_config import setup_logger
-from src.utils import hashstr
+from src.utils import hashstr, logger
 
-
-logger = setup_logger("EmbeddingModel")
 
 class LocalEmbeddingModel(FlagModel):
     def __init__(self, config, **kwargs):

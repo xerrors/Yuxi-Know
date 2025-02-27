@@ -2,9 +2,7 @@ import os
 import json
 import yaml
 from pathlib import Path
-from src.utils.logging_config import setup_logger
-
-logger = setup_logger("Config")
+from src.utils.logging_config import logger
 
 with open(Path("src/static/models.yaml"), "r") as f:
     _models = yaml.safe_load(f)
@@ -53,7 +51,6 @@ class Config(SimpleConfig):
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
-        self.add_item("enable_search_engine", default=False, des="是否开启搜索引擎")
         self.add_item("enable_web_search", default=False, des="是否开启网页搜索（需配置 TAVILY_API_KEY）")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
