@@ -63,8 +63,8 @@ class Retriever:
 
     def query_classification(self, query):
         """判断是否需要查询
-        - 对于完全基于用户给定信息的任务，称之为“足够”“sufficient”，不需要检索；
-        - 否则，称之为“不足”“insufficient”，可能需要检索，
+        - 对于完全基于用户给定信息的任务，称之为"足够""sufficient"，不需要检索；
+        - 否则，称之为"不足""insufficient"，可能需要检索，
         """
         raise NotImplementedError
 

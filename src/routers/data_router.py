@@ -99,7 +99,6 @@ async def get_graph_info():
 
 @data.get("/graph/node")
 async def get_graph_node(entity_name: str):
-    logger.debug(f"Get graph node {entity_name}")
     result = startup.dbm.graph_base.query_node(entity_name=entity_name)
     return {"result": startup.retriever.format_query_results(result), "message": "success"}
 

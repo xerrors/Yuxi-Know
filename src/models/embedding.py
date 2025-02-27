@@ -28,6 +28,7 @@ class RemoteEmbeddingModel:
     embed_state = {}
 
     def batch_encode(self, messages, batch_size=20):
+        logger.info(f"Batch encoding {len(messages)} messages")
         data = []
 
         if len(messages) > batch_size:
