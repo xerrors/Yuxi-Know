@@ -112,7 +112,7 @@ async def get_graph_nodes(kgdb_name: str, num: int):
     result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
     return {"result": startup.retriever.format_general_results(result), "message": "success"}
 
-@data.post("/graph/add")
+@data.post("/graph/add-by-jsonl")
 async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None)):
     if not startup.config.enable_knowledge_graph:
         raise HTTPException(status_code=400, detail="Knowledge graph is not enabled")

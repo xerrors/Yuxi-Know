@@ -152,7 +152,7 @@ const getGraphData = () => {
 const addDocumentByFile = () => {
   state.precessing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  fetch('/api/data/graph/add', {
+  fetch('/api/data/graph/add-by-jsonl', {
     method: 'POST',
     headers: {
       "Content-Type": "application/json"  // 添加 Content-Type 头
@@ -178,7 +178,7 @@ const loadSampleNodes = () => {
     .then((res) => {
       if (res.ok) {
         return res.json();
-      } else if (!configStore.config.enable_knowledge_graph) {
+      } else if (configStore?.config && !configStore?.config.enable_knowledge_graph) {
         throw new Error('请前往设置页面配置启用知识图谱')
       } else {
         throw new Error("加载失败");

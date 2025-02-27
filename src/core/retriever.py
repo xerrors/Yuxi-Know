@@ -17,7 +17,6 @@ class Retriever:
             self.web_searcher = WebSearcher()
 
     def retrieval(self, query, history, meta):
-
         refs = {"query": query, "history": history, "meta": meta}
         refs["model_name"] = self.config.model_name
         refs["entities"] = self.reco_entities(query, history, refs)
@@ -105,12 +104,14 @@ class Retriever:
         distance_threshold = meta.get("distanceThreshold", 0)
         top_k = meta.get("topK", 5)
 
+        # 检索
         all_kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
         for r in all_kb_res:
             r["file"] = kb.id2file(r["entity"]["file_id"])
 
         kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
 
+        # 重排序
         if self.config.enable_reranker and len(kb_res) > 0:
             texts = [r["entity"]["text"] for r in kb_res]
             rerank_scores = self.reranker.compute_score([rw_query, texts], normalize=True)
@@ -228,6 +229,7 @@ class Retriever:
         return formatted_results
 
     def format_query_results(self, results):
+        logger.debug(f"Graph Query Results: {results}")
         formatted_results = {"nodes": [], "edges": []}
         node_dict = {}
 

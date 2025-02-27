@@ -11,7 +11,6 @@ chat = APIRouter(prefix="/chat")
 # 创建线程池
 executor = ThreadPoolExecutor()
 
-refs_pool = {}
 
 @chat.get("/")
 async def chat_get():
@@ -25,6 +24,7 @@ def chat_post(
         cur_res_id: str = Body(...)):
 
     history_manager = HistoryManager(history)
+    logger.debug(f"Received query: {query} with meta: {meta}")
 
     def make_chunk(content=None, **kwargs):
         return json.dumps({
@@ -112,9 +112,3 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
     logger.debug({"query": query, "response": response.content})
 
     return {"response": response.content}
-
-@chat.get("/refs")
-def get_refs(cur_res_id: str):
-    global refs_pool
-    refs = refs_pool.pop(cur_res_id, None)
-    return {"refs": refs}
