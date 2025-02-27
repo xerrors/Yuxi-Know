@@ -1,8 +1,7 @@
 import os
 
 from pymilvus import MilvusClient, MilvusException
-from src.utils import setup_logger, hashstr
-logger = setup_logger("KnowledgeBase")
+from src.utils import logger, hashstr
 
 
 class KnowledgeBase:
@@ -68,7 +67,7 @@ class KnowledgeBase:
             logger.error(f"Collection {collection_name} not found, create it")
             # self.add_collection(collection_name)
 
-        vectors = self.embed_model.encode(docs)
+        vectors = self.embed_model.batch_encode(docs)
 
         data = [{
             "id": int(random.random() * 1e12),

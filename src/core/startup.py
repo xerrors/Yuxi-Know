@@ -3,9 +3,7 @@ from src.core import DataBaseManager
 from src.core.retriever import Retriever
 from src.models import select_model
 from src.config import Config
-from src.utils import setup_logger
-
-logger = setup_logger("Startup")
+from src.utils import logger
 
 
 class Startup:

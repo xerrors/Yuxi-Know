@@ -1,6 +1,6 @@
 import time
 import random
-from src.utils.logging_config import setup_logger, logger
+from src.utils.logging_config import logger
 
 def is_text_pdf(pdf_path):
     import fitz

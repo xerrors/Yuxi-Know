@@ -50,6 +50,18 @@ MODEL_NAMES:
       - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
       - Qwen/Qwen2.5-72B-Instruct
       - Qwen/Qwen2.5-7B-Instruct
+  together.ai:
+    name: Together.ai
+    url: https://api.together.ai/models
+    base_url: https://api.together.xyz/v1/
+    default: meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
+    env:
+      - TOGETHER_API_KEY
+    models:
+      - meta-llama/Llama-3.3-70B-Instruct-Turbo
+      - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
+      - deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free
+
   qianfan:
     name: 百度千帆 (QianFan)
     url: https://open.bigmodel.cn/dev/api

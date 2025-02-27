@@ -10,7 +10,6 @@
 
 </div>
 
-
 ## 概述
 
 基于大模型 RAG 知识库与知识图谱的问答平台。Llamaindex + VueJS + Flask + Neo4j。大模型适配 OpenAI、国内主流大模型平台的模型调用、本地 vllm 部署。只需要配置对应服务平台的 `API_KEY` 即可使用。
@@ -18,11 +17,12 @@
 ![image](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
 
-代办清单
+待办清单
 
 - [ ] Ollma Embedding 支持（Open-like Embedding 支持）
-- [x] 知识图谱索引支持自定义 Embedding 模型
-- [x] DeepSeek-R1 支持
+- [ ] embedding 过程添加进度显示
+- [X] 知识图谱索引支持自定义 Embedding 模型
+- [X] DeepSeek-R1 支持
 
 ## 更新日志
 
@@ -36,7 +36,6 @@
 | PC 网页      | 小屏设备 |
 |:-----------|:-----------|
 | ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6)| ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a)|
-
 
 
 
@@ -103,15 +102,15 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 
 模型仅支持通过API调用的模型，如果是需要运行本地模型，则建议使用 vllm 转成 API 服务之后使用。使用前请在 `.env` 配置 APIKEY 后使用，配置项目参考：[src/static/models.yaml](src/static/models.yaml)
 
-| 模型供应商            | 默认模型                                  | 配置项目                                       |
-| :-------------------- | :---------------------------------------- | :--------------------------------------------- |
-| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费)  | `SILICONFLOW_API_KEY`                        |
-| `openai`            | `gpt-4o`                                | `OPENAI_API_KEY`                             |
-| `deepseek`          | `deepseek-chat`                         | `DEEPSEEK_API_KEY`                           |
-| `arc`（豆包方舟）       | `doubao-1-5-pro-32k-250115`        | `ARK_API_KEY`                            |
-| `zhipu`（智谱清言）       | `glm-4-flash`                   | `ZHIPUAI_API_KEY`                            |
-| `dashscope`（阿里） | `qwen-max-latest`                       | `DASHSCOPE_API_KEY`                          |
-| `qianfan`（百度）   | `ernie_speed`                           | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
+| 模型供应商             | 默认模型                            | 配置项目                                       |
+| :--------------------- | :---------------------------------- | :--------------------------------------------- |
+| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费) | `SILICONFLOW_API_KEY`                        |
+| `openai`             | `gpt-4o`                          | `OPENAI_API_KEY`                             |
+| `deepseek`           | `deepseek-chat`                   | `DEEPSEEK_API_KEY`                           |
+| `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`                                |
+| `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`                            |
+| `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`                          |
+| `qianfan`（百度）    | `ernie_speed`                     | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
 
 此外，如果想要添加供应商的模型，确认知识 OpenAI 调用的方法之后，只需要在 [src/static/models.yaml](src/static/models.yaml) 中添加对应的模型配置即可。配置示例如下：
 
@@ -140,13 +139,11 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 > [!Warning]
 > 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
 
-
 对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
 
 对于**向量模型**和**重排序模型**，选择以 `local` 前缀开头的模型，可以不做修改会自动下载模型，如果下载过程中出现问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置相关内容。（但请注意，如果是 Docker 运行，模型仅会缓存到 Docker 里面）
 
 如果想要使用本地已经下载好的模型，可以在网页的 settings 里面做映射。或者修改 `saves/config/base.yaml` 来配置映射关系。但请记得，本地模型的路径要在 docker-compose 的文件中映射 volumes。
-
 
 ## 知识库支持
 

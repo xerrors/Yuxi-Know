@@ -3,11 +3,10 @@ from fastapi import APIRouter, Body
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
-from src.utils import setup_logger
+from src.utils import logger
 
 tool = APIRouter(prefix="/tool")
 
-logger = setup_logger("server-tools")
 
 class Tool(BaseModel):
     name: str

@@ -50,12 +50,13 @@
       @ok="addDocumentByFile"
       @cancel="() => state.showModal = false"
       ok-text="添加到图数据库" cancel-text="取消"
+      :ok-button-props="{ disabled: disabled }"
       :confirm-loading="state.precessing">
       <div v-if="graphInfo?.embed_model_name">
         <p>当前图数据库向量模型：{{ graphInfo?.embed_model_name }}</p>
-        <p>当前所选择的向量模型是 {{ configStore.config.embed_model }}</p>
+        <p>当前所选择的向量模型是 {{ cur_embed_model }}</p>
       </div>
-      <p v-else>第一次创建之后将无法修改向量模型，当前向量模型 {{ configStore.config.embed_model }}</p>
+      <p v-else>第一次创建之后将无法修改向量模型，当前向量模型 {{ cur_embed_model }}</p>
       <div class="upload">
         <a-upload-dragger
           class="upload-dragger"
@@ -63,7 +64,7 @@
           name="file"
           :fileList="fileList"
           :max-count="1"
-          :disabled="state.precessing || (graphInfo?.embed_model_name && graphInfo?.embed_model_name !== configStore.config.embed_model)"
+          :disabled="disabled"
           action="/api/data/upload"
           @change="handleFileUpload"
           @drop="handleDrop"
@@ -87,6 +88,12 @@ import { UploadOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const configStore = useConfigStore()
+const cur_embed_model = computed(() => configStore.config.embed_model_names[configStore.config.embed_model].name)
+const disabled = computed(() => {
+  if (state.precessing) return true
+  if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) return true
+  return false
+})
 
 let graphInstance
 const graphInfo = ref(null)
@@ -152,7 +159,7 @@ const getGraphData = () => {
 const addDocumentByFile = () => {
   state.precessing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  fetch('/api/data/graph/add', {
+  fetch('/api/data/graph/add-by-jsonl', {
     method: 'POST',
     headers: {
       "Content-Type": "application/json"  // 添加 Content-Type 头
@@ -178,7 +185,7 @@ const loadSampleNodes = () => {
     .then((res) => {
       if (res.ok) {
         return res.json();
-      } else if (!configStore.config.enable_knowledge_graph) {
+      } else if (configStore?.config && !configStore?.config.enable_knowledge_graph) {
         throw new Error('请前往设置页面配置启用知识图谱')
       } else {
         throw new Error("加载失败");

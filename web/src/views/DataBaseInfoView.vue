@@ -59,7 +59,9 @@
               <template v-if="column.key === 'filename'">
                 <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
               </template>
-              <template v-else-if="column.key === 'type'"><span :class="text">{{ text.toUpperCase() }}</span></template>
+              <template v-else-if="column.key === 'type'">
+                <span :class="['span-type', text]">{{ text.toUpperCase() }}</span>
+              </template>
               <template v-else-if="column.key === 'status' && text === 'done'">
                 <CheckCircleFilled style="color: #41A317;"/>
               </template>
@@ -813,7 +815,7 @@ onMounted(() => {
     padding: 0;
   }
 
-  .pdf, .txt, .md {
+  .span-type {
     color: white;
     padding: 2px 4px;
     border-radius: 4px;
@@ -821,6 +823,7 @@ onMounted(() => {
     font-weight: bold;
     opacity: 0.8;
     user-select: none;
+    background: #005F77;
   }
 
   .pdf {
@@ -830,6 +833,16 @@ onMounted(() => {
   .txt {
     background: #068033;
   }
+
+  .docx, .doc {
+    background: #2C59B7;
+  }
+
+  .md {
+    background: #020817;
+  }
+
+
 
   button.main-btn {
     font-weight: bold;

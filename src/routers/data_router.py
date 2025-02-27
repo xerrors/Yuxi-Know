@@ -2,12 +2,11 @@ import os
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
 
-from src.utils import setup_logger, hashstr
+from src.utils import logger, hashstr
 from src.core.startup import startup
 
 data = APIRouter(prefix="/data")
 
-logger = setup_logger("server-database")
 
 @data.get("/")
 def get_databases():
@@ -100,7 +99,6 @@ async def get_graph_info():
 
 @data.get("/graph/node")
 async def get_graph_node(entity_name: str):
-    logger.debug(f"Get graph node {entity_name}")
     result = startup.dbm.graph_base.query_node(entity_name=entity_name)
     return {"result": startup.retriever.format_query_results(result), "message": "success"}
 
@@ -113,7 +111,7 @@ async def get_graph_nodes(kgdb_name: str, num: int):
     result = startup.dbm.graph_base.get_sample_nodes(kgdb_name, num)
     return {"result": startup.retriever.format_general_results(result), "message": "success"}
 
-@data.post("/graph/add")
+@data.post("/graph/add-by-jsonl")
 async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None)):
     if not startup.config.enable_knowledge_graph:
         raise HTTPException(status_code=400, detail="Knowledge graph is not enabled")

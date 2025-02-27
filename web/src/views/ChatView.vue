@@ -256,10 +256,11 @@ onMounted(() => {
 }
 
 @media (max-width: 520px) {
-  .conversation {
+  .conversations {
     position: absolute;
     z-index: 101;
     width: 300px;
+    height: 100%;
     border-radius: 0 16px 16px 0;
     box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
   }

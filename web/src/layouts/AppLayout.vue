@@ -337,8 +337,12 @@ div.header, #app-router-view {
     div.header {
       display: none;
     }
-  }
 
+    .debug-panel {
+      bottom: 10rem;
+    }
+
+  }
   .app-layout div.header-mobile {
     display: flex;
     flex-direction: row;
@@ -348,6 +352,7 @@ div.header, #app-router-view {
     align-items: center;
     flex: 0 0 60px;
     border-right: none;
+    height: 40px;
 
     .nav-item {
       text-decoration: none;

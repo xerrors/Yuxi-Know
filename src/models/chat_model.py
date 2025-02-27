@@ -1,9 +1,6 @@
 import os
 from openai import OpenAI
-from src.utils.logging_config import setup_logger
-
-
-logger = setup_logger(__name__)
+from src.utils import logger
 
 class OpenAIBase():
     def __init__(self, api_key, base_url, model_name):
