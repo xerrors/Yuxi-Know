@@ -19,7 +19,6 @@ class DataBaseManager:
             if self.config.enable_knowledge_graph:
                 from src.core.graphbase import GraphDatabase
                 self.graph_base = GraphDatabase(self.config, self.embed_model)
-                self.graph_base.start()
             else:
                 self.graph_base = None
 

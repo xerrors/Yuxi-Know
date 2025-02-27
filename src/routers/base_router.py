@@ -39,6 +39,6 @@ def get_log():
         last_lines = deque(f, maxlen=1000)
 
     log = ''.join(last_lines)
-    return {"log": log}
+    return {"log": log, "message": "success", "log_file": LOG_FILE}
 
 
