@@ -87,6 +87,9 @@ class Config(SimpleConfig):
 
     def handle_self(self):
         self.model_names = MODEL_NAMES
+        self.embed_model_names = EMBED_MODEL_INFO
+        self.reranker_names = RERANKER_LIST
+
         model_provider_info = self.model_names.get(self.model_provider, {})
         self.model_dir = os.environ.get("MODEL_DIR", "")
 
