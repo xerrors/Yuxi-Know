@@ -29,6 +29,12 @@ class GraphDatabase:
         self.work_dir = os.path.join(config.save_dir, "knowledge_graph", kgdb_name)
         os.makedirs(self.work_dir, exist_ok=True)
 
+        # 尝试加载已保存的图数据库信息
+        if self.load_graph_info():
+            logger.info(f"已加载图数据库信息：{self.kgdb_name}")
+        else:
+            logger.info(f"未找到已保存的图数据库信息，将创建新的配置")
+
         self.start()
 
     def start(self):
@@ -40,6 +46,8 @@ class GraphDatabase:
             self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
             self.status = "open"
             logger.info(f"Connected to Neo4j at {uri}/{self.kgdb_name}, {self.get_database_info()}")
+            # 连接成功后保存图数据库信息
+            self.save_graph_info()
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}, {uri}, {self.kgdb_name}, {username}, {password}")
             self.config.enable_knowledge_graph = False
@@ -184,6 +192,9 @@ class GraphDatabase:
                 session.execute_write(self.set_embedding, entry['h'], embedding_h)
                 session.execute_write(self.set_embedding, entry['t'], embedding_t)
 
+            # 数据添加完成后保存图信息
+            self.save_graph_info()
+
     def jsonl_file_add_entity(self, file_path, kgdb_name='neo4j'):
         self.status = "processing"
         kgdb_name = kgdb_name or 'neo4j'
@@ -200,6 +211,8 @@ class GraphDatabase:
         self.txt_add_vector_entity(triples, kgdb_name)
 
         self.status = "open"
+        # 更新并保存图数据库信息
+        self.save_graph_info()
         return kgdb_name
 
     def delete_entity(self, entity_name=None, kgdb_name="neo4j"):
@@ -227,6 +240,8 @@ class GraphDatabase:
 
     def query_node(self, entity_name, hops=2, **kwargs):
         # TODO 添加判断节点数量为 0 停止检索
+
+        logger.debug(f"Query graph node {entity_name} with {hops=}")
         if kwargs.get("exact_match"):
             raise NotImplemented("not implement for `exact_match`")
         else:
@@ -337,6 +352,71 @@ class GraphDatabase:
         MATCH (e:Entity {name: $name})
         CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
         """, name=entity_name, embedding=embedding)
+
+    def save_graph_info(self):
+        """
+        将图数据库的基本信息保存到工作目录中的JSON文件
+        保存的信息包括：数据库名称、状态、嵌入模型名称等
+        """
+        try:
+            # 获取数据库信息
+            db_info = None
+            if self.status == "open" and self.driver:
+                try:
+                    db_info = self.get_database_info(self.kgdb_name)
+                except Exception as e:
+                    logger.warning(f"无法获取数据库信息：{e}")
+
+            # 构建要保存的信息字典
+            graph_info = {
+                "kgdb_name": self.kgdb_name,
+                "status": self.status,
+                "embed_model_name": self.embed_model_name,
+                "last_updated": None,  # 这里可以添加时间戳
+                "database_info": db_info
+            }
+
+            # 添加时间戳
+            from datetime import datetime
+            graph_info["last_updated"] = datetime.now().isoformat()
+
+            # 保存到JSON文件
+            info_file_path = os.path.join(self.work_dir, "graph_info.json")
+            with open(info_file_path, 'w', encoding='utf-8') as f:
+                json.dump(graph_info, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"图数据库信息已保存到：{info_file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"保存图数据库信息失败：{e}")
+            return False
+
+    def load_graph_info(self):
+        """
+        从工作目录中的JSON文件加载图数据库的基本信息
+        返回True表示加载成功，False表示加载失败
+        """
+        try:
+            info_file_path = os.path.join(self.work_dir, "graph_info.json")
+            if not os.path.exists(info_file_path):
+                logger.warning(f"图数据库信息文件不存在：{info_file_path}")
+                return False
+
+            with open(info_file_path, 'r', encoding='utf-8') as f:
+                graph_info = json.load(f)
+
+            # 更新对象属性
+            if graph_info.get("embed_model_name"):
+                self.embed_model_name = graph_info["embed_model_name"]
+
+            # 如果需要，可以加载更多信息
+            # 注意：这里不更新self.kgdb_name，因为它是在初始化时设置的
+
+            logger.info(f"已加载图数据库信息，最后更新时间：{graph_info.get('last_updated')}")
+            return True
+        except Exception as e:
+            logger.error(f"加载图数据库信息失败：{e}")
+            return False
 
 
 if __name__ == "__main__":
