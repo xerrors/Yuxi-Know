@@ -4,7 +4,7 @@ import yaml
 from pathlib import Path
 from src.utils.logging_config import logger
 
-with open(Path("src/static/models.yaml"), "r") as f:
+with open(Path("src/static/models.yaml"), 'r', encoding='utf-8') as f:
     _models = yaml.safe_load(f)
 
 MODEL_NAMES = _models["MODEL_NAMES"]
