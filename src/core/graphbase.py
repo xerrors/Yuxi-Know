@@ -280,7 +280,7 @@ class GraphDatabase:
         def query(tx, entity_name, hops):
             result = tx.run(f"""
             MATCH (n {{name: $entity_name}})-[r*1..{hops}]-(m)
-            RETURN n.name AS node_name, r, m.name AS neighbor_name
+            RETURN n, r, m
             """, entity_name=entity_name)
             return result.values()
 

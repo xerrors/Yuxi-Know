@@ -175,7 +175,7 @@ class Retriever:
 
         return entities
 
-    def _extract_relationship_info(self, relationship, source_name, target_name):
+    def _extract_relationship_info(self, relationship, source_name=None, target_name=None, node_dict=None):
         """
         提取关系信息并返回格式化的节点和边信息
         """
@@ -187,6 +187,9 @@ class Retriever:
         source, target = nodes
         source_id = source.element_id
         target_id = target.element_id
+
+        source_name = node_dict[source_id]["name"] if source_name is None else source_name
+        target_name = node_dict[target_id]["name"] if target_name is None else target_name
 
         relationship_type = relationship._properties.get("type", "unknown")
         if relationship_type == "unknown":
@@ -234,20 +237,28 @@ class Retriever:
         node_dict = {}
 
         for item in results:
-            if not isinstance(item[1], list) or not item[1]:
+            # 检查数据格式
+            if len(item) < 2 or not isinstance(item[1], list):
                 continue
 
-            relationship = item[1][0]
-            source_name = item[0]
-            target_name = item[2] if len(item) > 2 else "unknown"
+            node_dict[item[0].element_id] = dict(id=item[0].element_id, name=item[0]._properties.get("name", "Unknown"))
+            node_dict[item[2].element_id] = dict(id=item[2].element_id, name=item[2]._properties.get("name", "Unknown"))
 
-            node_info, edge_info = self._extract_relationship_info(relationship, source_name, target_name)
-            if node_info is None or edge_info is None:
-                continue
+            # 处理关系列表中的每个关系
+            for i, relationship in enumerate(item[1]):
+                try:
+                    # 提取关系信息
+                    node_info, edge_info = self._extract_relationship_info(relationship, node_dict=node_dict)
+                    if node_info is None or edge_info is None:
+                        continue
 
-            node_dict.update({node["id"]: node for node in node_info})
-            formatted_results["edges"].append(edge_info)
+                    # 添加边
+                    formatted_results["edges"].append(edge_info)
+                except Exception as e:
+                    logger.error(f"处理关系时出错: {e}, 关系: {relationship}")
+                    continue
 
+        # 将节点字典转换为列表
         formatted_results["nodes"] = list(node_dict.values())
 
         return formatted_results
