@@ -23,6 +23,7 @@
 
 ![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
+
 ## 📋 更新日志
 
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
@@ -32,7 +33,11 @@
 
 ![功能展示](https://github.com/user-attachments/assets/8416a933-cc43-45d0-bf06-00df0ba6c4fb)
 
-## 🚀 快速上手
+
+| PC 网页      | 小屏设备 |
+|:-----------|:-----------|
+| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6)| ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a)|
+
 
 ### 环境配置
 
