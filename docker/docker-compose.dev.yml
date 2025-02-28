@@ -16,12 +16,15 @@ services:
       - milvus
     networks:
       - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - NEO4J_URI=bolt://graph:7687
       - NEO4J_USERNAME=neo4j
       - NEO4J_PASSWORD=0123456789
       - MILVUS_URI=http://milvus:19530
       - MODEL_DIR=${MODEL_DIR}  # 优先级高于 .env 中的 MODEL_DIR
+      - RUNNING_IN_DOCKER=true
     command: uvicorn src.main:app --host 0.0.0.0 --port 5050 --reload
 
   web:
