@@ -11,7 +11,7 @@
   <div class="graph-container layout-container" v-else>
     <HeaderComponent
       title="图数据库"
-      :description="`${graphInfo?.database_name || ''} - 共 ${graphInfo?.entity_count || 0} 实体，${graphInfo?.relationship_count || 0} 个关系。向量模型：${graphInfo?.embed_model_name || '未上传文件'}`"
+      :description="graphDescription"
     >
       <template #actions>
         <div class="status-wrapper">
@@ -32,6 +32,7 @@
         <a-button
           type="primary"
           :loading="state.searchLoading"
+          :disabled="state.searchLoading"
           @click="onSearch"
         >
           检索实体
@@ -204,6 +205,22 @@ const loadSampleNodes = () => {
 }
 
 const onSearch = () => {
+  if (state.searchLoading) {
+    message.error('请稍后再试')
+    return
+  }
+
+  if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) {
+    if (!graphInfo?.value?.embed_model_name) {
+      message.error('请先上传文件(jsonl)')
+      return
+    }
+
+    if (!confirm(`构建图数据库时向量模型为 ${graphInfo?.value?.embed_model_name}，当前向量模型为 ${cur_embed_model.value}，是否继续查询？`)) {
+      return
+    }
+  }
+
   if (!state.searchInput) {
     message.error('请输入要查询的实体')
     return
@@ -313,6 +330,15 @@ const graphStatusClass = computed(() => {
 const graphStatusText = computed(() => {
   if (state.loadingGraphInfo) return '加载中';
   return graphInfo.value?.status === 'open' ? '已连接' : '已关闭';
+});
+
+const graphDescription = computed(() => {
+  const dbName = graphInfo.value?.database_name || '';
+  const entityCount = graphInfo.value?.entity_count || 0;
+  const relationCount = graphInfo.value?.relationship_count || 0;
+  const modelName = graphInfo.value?.embed_model_name || '未上传文件';
+
+  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系。向量模型：${modelName}`;
 });
 
 </script>
