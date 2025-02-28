@@ -137,7 +137,7 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build
 建议直接使用硅基流动部署的 bge-m3，这样不需要做任何修改，且免费。其余模型参考：[src/static/models.yaml](src/static/models.yaml)
 
 > [!Warning]
-> 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。此外，知识图谱的向量索引的建立默认使用 embedding-3 构建，因此检索的时候必须使用 embedding-3（现阶段还不支持修改）
+> 需要注意，由于知识库和图数据库的构建都依赖于向量模型，如果中途更改向量模型，会导致知识库不可用。
 
 对于**语言模型**，并不支持直接运行本地语言模型，请使用 vllm 或者 ollama 转成 API 服务之后使用。
 
