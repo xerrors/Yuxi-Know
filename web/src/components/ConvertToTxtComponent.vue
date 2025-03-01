@@ -95,7 +95,7 @@ const convertPdfToText = async () => {
     const response = await fetch('/api/tool/pdf2txt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ file: file })
+      body: JSON.stringify(file.toString())
     });
 
     if (!response.ok) {
