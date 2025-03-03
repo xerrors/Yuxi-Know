@@ -14,6 +14,7 @@ class Tool(BaseModel):
     description: str
     url: str
     method: str
+    params: Optional[Dict[str, Any]] = None
 
 @tool.get("/", response_model=List[Tool])
 async def route_index():

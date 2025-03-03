@@ -71,24 +71,24 @@
           </a-collapse>
         </div>
         <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0 && message.status=='init'"  class="loading-dots">
+        <div v-else-if="message.text.length == 0 && (message.status=='init' || message.status=='reasoning') && isStreaming"  class="loading-dots">
           <div></div>
           <div></div>
           <div></div>
         </div>
         <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
         <div v-else-if="message.status == 'generating' && isStreaming" class="searching-msg"><i>正在生成……</i></div>
-        <div
-          v-else-if="(message.text.length == 0 && message.status!='reasoning') || message.status == 'error' || (message.status != 'finished' && !isStreaming)"
+        <div v-else-if="message.text.length > 0"
+          v-html="renderMarkdown(message)"
+          class="message-md"
+          @click="consoleMsg(message)">
+        </div>
+        <div v-else
           class="err-msg"
           @click="retryMessage(message.id)"
         >
           请求错误，请重试。{{ message.message }}
         </div>
-        <div v-else
-          v-html="renderMarkdown(message)"
-          class="message-md"
-          @click="consoleMsg(message)"></div>
         <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
       </div>
     </div>
@@ -555,7 +555,6 @@ const retryMessage = (id) => {
   console.log(conv.value.messages)
   sendMessage();
 }
-
 
 // 从本地存储加载数据
 onMounted(() => {

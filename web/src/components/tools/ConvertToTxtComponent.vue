@@ -3,7 +3,7 @@
     <div class="sidebar">
       <div class="additional-params">
         <h4>相关参数</h4>
-        <!-- Add any PDF-specific parameters here if needed -->
+        <p>暂无相关参数</p>
       </div>
     </div>
     <div class="result-container">
