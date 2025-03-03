@@ -57,7 +57,6 @@ def chat_post(
 
         messages = history_manager.get_history_with_msg(modified_query, max_rounds=meta.get('history_round'))
         history_manager.add_user(query)  # 注意这里使用原始查询
-        logger.debug(f"Web history: {history_manager.messages}")
 
         content = ""
         reasoning_content = ""
