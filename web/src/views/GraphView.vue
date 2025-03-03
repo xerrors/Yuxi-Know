@@ -54,8 +54,11 @@
       :ok-button-props="{ disabled: disabled }"
       :confirm-loading="state.precessing">
       <div v-if="graphInfo?.embed_model_name">
-        <p>当前图数据库向量模型：{{ graphInfo?.embed_model_name }}</p>
-        <p>当前所选择的向量模型是 {{ cur_embed_model }}</p>
+        <a-alert v-if="!modelMatched" message="模型不匹配，构建索引可能会出现无法检索到的情况！" type="warning" />
+        <p>
+          当前图数据库向量模型：{{ graphInfo?.embed_model_name }}，
+          当前所选择的向量模型是 {{ cur_embed_model }}
+        </p>
       </div>
       <p v-else>第一次创建之后将无法修改向量模型，当前向量模型 {{ cur_embed_model }}</p>
       <div class="upload">
@@ -89,12 +92,9 @@ import { UploadOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const configStore = useConfigStore()
-const cur_embed_model = computed(() => configStore.config.embed_model_names[configStore.config.embed_model].name)
-const disabled = computed(() => {
-  if (state.precessing) return true
-  if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) return true
-  return false
-})
+const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '')
+const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
+const disabled = computed(() => state.precessing || !modelMatched.value)
 
 let graphInstance
 const graphInfo = ref(null)
