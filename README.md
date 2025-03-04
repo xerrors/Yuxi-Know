@@ -23,7 +23,6 @@
 
 ![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
-
 ## 📋 更新日志
 
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
@@ -33,11 +32,9 @@
 
 ![功能展示](https://github.com/user-attachments/assets/8416a933-cc43-45d0-bf06-00df0ba6c4fb)
 
-
-| PC 网页      | 小屏设备 |
-|:-----------|:-----------|
-| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6)| ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a)|
-
+| PC 网页                                                                                 | 小屏设备                                                                                |
+| :-------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
+| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6) | ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a) |
 
 ### 环境配置
 
@@ -149,7 +146,29 @@ ark:
 
 对于**向量模型**和**重排序模型**，选择 `local` 前缀的模型会自动下载。如遇下载问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置。
 
-要使用已下载的本地模型，可在网页设置中映射，或修改 `saves/config/base.yaml`。记得在 docker-compose 中映射相应的 volumes。
+要使用已下载的本地模型，可在 models.yaml 或者网页设置中映射。
+
+**添加向量模型**
+
+```yaml
+  # 添加本地向量模型（所有 FlagEmbedding 支持的模型）
+  local/BAAI/bge-m3:
+    name: BAAI/bge-m3
+    dimension: 1024
+    # local_path: /models/BAAI/bge-m3，也可以在这里配置
+
+  # 添加 OpenAI 兼容的向量模型
+  siliconflow/BAAI/bge-m3:
+    name: BAAI/bge-m3
+    dimension: 1024
+    url: https://api.siliconflow.cn/v1/embeddings
+    api_key: SILICONFLOW_API_KEY
+
+  # 添加 Ollama 模型
+  ollama/nomic-embed-text:
+    name: nomic-embed-text
+    dimension: 768
+```
 
 ## 📚 知识库支持
 
