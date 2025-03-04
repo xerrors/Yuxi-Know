@@ -1,6 +1,6 @@
 import os
 from openai import OpenAI
-from src.utils import logger
+from src.utils import logger, get_docker_safe_url
 
 class OpenAIBase():
     def __init__(self, api_key, base_url, model_name):
@@ -43,14 +43,6 @@ class OpenModel(OpenAIBase):
         base_url = os.getenv("OPENAI_API_BASE")
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
-
-def get_docker_safe_url(base_url):
-    if os.getenv("RUNNING_IN_DOCKER") == "true":
-        # 替换所有可能的本地地址形式
-        base_url = base_url.replace("http://localhost", "http://host.docker.internal")
-        base_url = base_url.replace("http://127.0.0.1", "http://host.docker.internal")
-        logger.info(f"Running in docker, using {base_url} as base url")
-    return base_url
 
 
 class CustomModel(OpenAIBase):

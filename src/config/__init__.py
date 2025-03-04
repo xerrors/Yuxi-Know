@@ -82,6 +82,8 @@ class Config(SimpleConfig):
             "_config_items",
             "model_names",
             "model_provider_status",
+            "embed_model_names",
+            "reranker_names",
         ]
         return {k: v for k, v in self.items() if k not in blocklist}
 

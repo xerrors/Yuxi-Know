@@ -186,7 +186,7 @@
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section ==='path'">
         <h3>本地模型配置</h3>
-        <p>如果是 Docker 启动，务必确保在环境变量中设置了 MODEL_DIR，或者设置了 volumes 映射</p>
+        <p>如果是 Docker 启动，务必确保在环境变量中设置了 MODEL_DIR（建议是绝对路径），并设置了 volumes 映射。</p>
         <TableConfigComponent
           :config="configStore.config?.model_local_paths"
           @update:config="handleModelLocalPathsUpdate"
