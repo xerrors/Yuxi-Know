@@ -1,4 +1,4 @@
-<h1 align="center">语析 - 基于大模型的知识库与知识图谱问答平台</h1>
+<h1 align="center">语析 - 基于大模型的知识库与知识图谱问答系统</h1>
 <div align="center">
 
 ![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)
