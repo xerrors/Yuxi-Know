@@ -136,12 +136,31 @@ const loadGraphInfo = () => {
 }
 
 const getGraphData = () => {
+  // 计算每个节点的度数（连接数）
+  const nodeDegrees = {};
+  
+  // 初始化所有节点的度数为0
+  graphData.nodes.forEach(node => {
+    nodeDegrees[node.id] = 0;
+  });
+  
+  // 计算每个节点的连接数
+  graphData.edges.forEach(edge => {
+    nodeDegrees[edge.source_id] = (nodeDegrees[edge.source_id] || 0) + 1;
+    nodeDegrees[edge.target_id] = (nodeDegrees[edge.target_id] || 0) + 1;
+  });
+  
   return {
     nodes: graphData.nodes.map(node => {
+      // 计算节点大小，基础大小为15，每个连接增加5的大小，最小为15，最大为50
+      const degree = nodeDegrees[node.id] || 0;
+      const nodeSize = Math.min(15 + degree * 5, 50);
+      
       return {
         id: node.id,
         data: {
-          label: node.name
+          label: node.name,
+          degree: degree, // 存储度数信息
         },
       }
     }),
@@ -277,16 +296,21 @@ const initGraph = () => {
     layout: {
       type: 'd3-force',
       preventOverlap: true,
-      kr: 20,
       collide: {
-        strength: 1.0,
+        radius: 40,
+        strength: 0.5, // 碰撞强度
       },
     },
     node: {
       type: 'circle',
       style: {
         labelText: (d) => d.data.label,
-        size: 70,
+        // 使用节点度数来决定大小
+        size: (d) => {
+          const degree = d.data.degree || 0;
+          // 基础大小为15，每个连接增加5的大小，最小为15，最大为50
+          return Math.min(15 + degree * 5, 50);
+        },
       },
       palette: {
         field: 'label',
