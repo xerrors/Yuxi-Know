@@ -5,14 +5,21 @@ from FlagEmbedding import FlagModel
 from zhipuai import ZhipuAI
 
 from src.config import EMBED_MODEL_INFO
-from src.utils import hashstr, logger
+from src.utils import hashstr, logger, get_docker_safe_url
 
 
-class RemoteEmbeddingModel:
+class BaseEmbeddingModel:
     embed_state = {}
+    EMBED_MODEL_INFO = EMBED_MODEL_INFO
+
+    def encode(self, message):
+        return self.predict(message)
+
+    def encode_queries(self, queries):
+        return self.predict(queries)
 
     def batch_encode(self, messages, batch_size=20):
-        logger.info(f"Batch encoding {len(messages)} messages")
+        logger.info(f"[Embedding: {self.model}] Batch encoding {len(messages)} messages")
         data = []
 
         if len(messages) > batch_size:
@@ -35,45 +42,23 @@ class RemoteEmbeddingModel:
 
         return data
 
-class LocalEmbeddingModel(FlagModel, RemoteEmbeddingModel):
+class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
     def __init__(self, config, **kwargs):
         info = EMBED_MODEL_INFO[config.embed_model]
-        model_name_or_path = config.model_local_paths.get(info["name"], info.get("default_path"))
-        logger.info(f"Loading embedding model {info['name']} from {model_name_or_path}")
 
-        super().__init__(model_name_or_path,
+        self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
+        self.model = self.model or info["name"]
+
+        logger.info(f"Loading embedding model {info['name']} from {self.model}")
+
+        super().__init__(self.model,
                 query_instruction_for_retrieval=info.get("query_instruction", None),
                 use_fp16=False, **kwargs)
 
         logger.info(f"Embedding model {info['name']} loaded")
 
 
-    def batch_encode(self, messages, batch_size=20):
-        logger.info(f"Batch encoding {len(messages)} messages")
-        data = []
-
-        if len(messages) > batch_size:
-            task_id = hashstr(messages)
-            self.embed_state[task_id] = {
-                'status': 'in-progress',
-                'total': len(messages),
-                'progress': 0
-            }
-
-        for i in range(0, len(messages), batch_size):
-            group_msg = messages[i:i+batch_size]
-            logger.info(f"Encoding {i} to {i+batch_size} with {len(messages)} messages")
-            response = self.encode_queries(group_msg)
-            data.extend(response)
-
-        if len(messages) > batch_size:
-            self.embed_state[task_id]['progress'] = len(messages)
-            self.embed_state[task_id]['status'] = 'completed'
-
-        return data
-
-
-class ZhipuEmbedding(RemoteEmbeddingModel):
+class ZhipuEmbedding(BaseEmbeddingModel):
 
     def __init__(self, config) -> None:
         self.config = config
@@ -88,36 +73,48 @@ class ZhipuEmbedding(RemoteEmbeddingModel):
         data = [a.embedding for a in response.data]
         return data
 
-    def encode(self, message):
-        return self.predict(message)
 
-    def encode_queries(self, queries):
-        return self.predict(queries)
+class OllamaEmbedding(BaseEmbeddingModel):
+    def __init__(self, config) -> None:
+        self.info = EMBED_MODEL_INFO[config.embed_model]
+        self.model = self.info["name"]
+        self.url = self.info.get("url", "http://localhost:11434/api/embed")
+        self.url = get_docker_safe_url(self.url)
+
+    def predict(self, message: list[str] | str):
+        if isinstance(message, str):
+            message = [message]
+
+        payload = {
+            "model": self.model,
+            "input": message,
+        }
+        response = requests.request("POST", self.url, json=payload)
+        response = json.loads(response.text)
+        assert response.get("embeddings"), f"Ollama Embedding failed: {response}"
+        return response["embeddings"]
 
 
-class SiliconFlowEmbedding(RemoteEmbeddingModel):
+class OtherEmbedding(BaseEmbeddingModel):
 
     def __init__(self, config) -> None:
-        self.url = "https://api.siliconflow.cn/v1/embeddings"
-        self.model = EMBED_MODEL_INFO[config.embed_model]["name"]
-        api_key = os.getenv("SILICONFLOW_API_KEY")
-        assert api_key, "SILICONFLOW_API_KEY is required"
+        self.info = EMBED_MODEL_INFO[config.embed_model]
+        self.model = self.info["name"]
+        self.api_key = os.getenv(self.info["api_key"], None)
+        self.url = get_docker_safe_url(self.info["url"])
+        assert self.url and self.model, f"URL and model are required. Cur embed model: {config.embed_model}"
         self.headers = {
-            "Authorization": f"Bearer {api_key}",
+            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
-    def encode(self, message):
+    def predict(self, message):
         payload = self.build_payload(message)
         response = requests.request("POST", self.url, json=payload, headers=self.headers)
         response = json.loads(response.text)
-        # logger.debug(f"SiliconFlow Embedding response: {response}")
-        assert response["data"], f"SiliconFlow Embedding failed: {response}"
+        assert response["data"], f"Other Embedding failed: {response}"
         data = [a["embedding"] for a in response["data"]]
         return data
-
-    def encode_queries(self, queries):
-        return self.encode(queries)
 
     def build_payload(self, message):
         return {
@@ -135,11 +132,14 @@ def get_embedding_model(config):
     if provider == "local":
         model = LocalEmbeddingModel(config)
 
-    if provider == "zhipu":
+    elif provider == "zhipu":
         model = ZhipuEmbedding(config)
 
-    if provider == "siliconflow":
-        model = SiliconFlowEmbedding(config)
+    elif provider == "ollama":
+        model = OllamaEmbedding(config)
+
+    else:
+        model = OtherEmbedding(config)
 
     return model
 

@@ -11,7 +11,8 @@ from src.utils.logging_config import logger
 class LocalReranker(FlagReranker):
     def __init__(self, config, **kwargs):
         model_info = RERANKER_LIST[config.reranker]
-        model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("default_path"))
+        model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("local_path"))
+        model_name_or_path = model_name_or_path or model_info["name"]
         logger.info(f"Loading Reranker model {config.reranker} from {model_name_or_path}")
 
         super().__init__(model_name_or_path, use_fp16=True, **kwargs)
@@ -64,4 +65,6 @@ def get_reranker(config):
         return LocalReranker(config)
     elif provider == "siliconflow":
         return SilconFlowReranker(config)
+    else:
+        raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {RERANKER_LIST.keys()}")
 

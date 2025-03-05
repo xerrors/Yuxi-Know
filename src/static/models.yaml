@@ -114,21 +114,36 @@ MODEL_NAMES:
 EMBED_MODEL_INFO:
   local/BAAI/bge-m3:
     name: BAAI/bge-m3
-    default_path: BAAI/bge-m3
     dimension: 1024
+    # local_path: /models/BAAI/bge-m3，也可以在这里配置
+
   zhipu/zhipu-embedding-2:
     name: embedding-2
     dimension: 1024
+
   zhipu/zhipu-embedding-3:
     name: embedding-3
     dimension: 2048
+
   siliconflow/BAAI/bge-m3:
     name: BAAI/bge-m3
     dimension: 1024
+    url: https://api.siliconflow.cn/v1/embeddings
+    api_key: SILICONFLOW_API_KEY
+
+  ollama/nomic-embed-text:
+    name: nomic-embed-text
+    dimension: 768
+
+  ollama/bge-m3:
+    name: bge-m3
+    dimension: 1024
 
 RERANKER_LIST:
+
   local/BAAI/bge-reranker-v2-m3:
     name: BAAI/bge-reranker-v2-m3
-    default_path: BAAI/bge-reranker-v2-m3
+    # local_path: /models/BAAI/bge-m3，也可以在这里配置
+
   siliconflow/BAAI/bge-reranker-v2-m3:
     name: BAAI/bge-reranker-v2-m3
