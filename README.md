@@ -148,9 +148,13 @@ ark:
 
 要使用已下载的本地模型，可在 models.yaml 或者网页设置中映射。
 
+![image](https://github.com/user-attachments/assets/ab62ea17-c7d0-4f94-84af-c4bab26865ad)
+
+
 **添加向量模型**
 
 ```yaml
+# src/static/models.yaml
   # 添加本地向量模型（所有 FlagEmbedding 支持的模型）
   local/BAAI/bge-m3:
     name: BAAI/bge-m3
