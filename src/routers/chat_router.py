@@ -2,14 +2,12 @@ import json
 import asyncio
 from fastapi import APIRouter, Body
 from fastapi.responses import StreamingResponse, Response
-from concurrent.futures import ThreadPoolExecutor
 from src.core import HistoryManager
-from src.core.startup import startup
+from src.core.startup import startup, executor
 from src.utils.logging_config import logger
 
 chat = APIRouter(prefix="/chat")
-# 创建线程池
-executor = ThreadPoolExecutor()
+
 
 
 @chat.get("/")

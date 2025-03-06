@@ -1,15 +1,16 @@
 import os
+import asyncio
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
 
 from src.utils import logger, hashstr
-from src.core.startup import startup
+from src.core.startup import startup, executor
 
 data = APIRouter(prefix="/data")
 
 
 @data.get("/")
-def get_databases():
+async def get_databases():
     try:
         database = startup.dbm.get_databases()
     except Exception as e:
@@ -47,8 +48,17 @@ async def query_test(query: str = Body(...), meta: dict = Body(...)):
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: List[str] = Body(...)):
     logger.debug(f"Add document in {db_id} by file: {files}")
-    msg = startup.dbm.add_files(db_id, files)
-    return msg
+    try:
+        # 使用线程池执行耗时操作
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            executor,  # 使用与chat_router相同的线程池
+            lambda: startup.dbm.add_files(db_id, files)
+        )
+        return {"message": "文件添加完成", "status": "success"}
+    except Exception as e:
+        logger.error(f"添加文件失败: {e}")
+        return {"message": f"添加文件失败: {e}", "status": "failed"}
 
 @data.get("/info")
 async def get_database_info(db_id: str):
@@ -84,7 +94,7 @@ async def upload_file(file: UploadFile = File(...)):
     upload_dir = os.path.join(startup.config.save_dir, "data/uploads")
     os.makedirs(upload_dir, exist_ok=True)
     basename, ext = os.path.splitext(file.filename)
-    filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}_{ext}".lower()
+    filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
 
     with open(file_path, "wb") as buffer:
