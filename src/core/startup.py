@@ -1,9 +1,14 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
+
 from src.core import DataBaseManager
 from src.core.retriever import Retriever
 from src.models import select_model
 from src.config import Config
 from src.utils import logger
+
+# 创建线程池
+executor = ThreadPoolExecutor()
 
 
 class Startup:

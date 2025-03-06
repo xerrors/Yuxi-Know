@@ -69,8 +69,15 @@ class DataBaseManager:
                 f"Database number not match, {knowledge_base_collections}, "
                 f"self.data['databases']: {self.data['databases']}, ")
 
+        # 更新每个数据库的状态信息
         for db in self.data["databases"]:
+            # 获取最新的集合信息
             db.update(self.knowledge_base.get_collection_info(db.metaname))
+
+            # 检查文件处理状态
+            processing_files = [f for f in db.files if f["status"] in ["processing", "waiting"]]
+            if processing_files:
+                logger.info(f"数据库 {db.name} 有 {len(processing_files)} 个文件正在处理中")
 
         return {"databases": [db.to_dict() for db in self.data["databases"]]}
 
@@ -117,11 +124,16 @@ class DataBaseManager:
             db.files.append(new_file)
             new_files.append(new_file)
 
+        # 先保存一次数据库状态，确保waiting状态被记录
+        self._save_databases()
+
         from src.core.indexing import chunk
         for new_file in new_files:
             file_id = new_file["file_id"]
             idx = self.get_idx_by_fileid(db, file_id)
             db.files[idx]["status"] = "processing"
+            # 更新处理状态
+            self._save_databases()
 
             try:
                 if new_file["type"] == "pdf":
@@ -143,9 +155,9 @@ class DataBaseManager:
                 idx = self.get_idx_by_fileid(db, file_id)
                 db.files[idx]["status"] = "failed"
 
+            # 每个文件处理完成后立即保存数据库状态
             self._save_databases()
 
-        return {"message": "全部解析完成", "status": "success"}
 
     def get_database_info(self, db_id):
         db = self.get_kb_by_id(db_id)

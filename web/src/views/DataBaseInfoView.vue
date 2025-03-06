@@ -206,7 +206,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch, toRaw } from 'vue';
+import { onMounted, reactive, ref, watch, toRaw, onUnmounted } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
@@ -490,9 +490,7 @@ const addDocumentByFile = () => {
 
   state.loading = true
   state.lock = true
-  state.refreshInterval = setInterval(() => {
-    getDatabaseInfo();
-  }, 1000);
+
   fetch('/api/data/add-by-file', {
     method: "POST",
     headers: {
@@ -519,7 +517,7 @@ const addDocumentByFile = () => {
     })
     .finally(() => {
       getDatabaseInfo()
-      clearInterval(state.refreshInterval)
+      // 不在这里清除定时器，而是在定时器内部根据文件状态清除
       state.loading = false
     })
 }
@@ -559,9 +557,17 @@ const useQueryExample = (example) => {
 
 onMounted(() => {
   getDatabaseInfo();
-  // const refreshInterval = setInterval(() => {
-  //   getDatabaseInfo();
-  // }, 10000);
+  state.refreshInterval = setInterval(() => {
+    getDatabaseInfo();
+  }, 10000);
+})
+
+// 添加 onUnmounted 钩子，在组件卸载时清除定时器
+onUnmounted(() => {
+  if (state.refreshInterval) {
+    clearInterval(state.refreshInterval);
+    state.refreshInterval = null;
+  }
 })
 
 
