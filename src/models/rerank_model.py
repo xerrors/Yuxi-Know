@@ -15,7 +15,7 @@ class LocalReranker(FlagReranker):
         model_name_or_path = model_name_or_path or model_info["name"]
         logger.info(f"Loading Reranker model {config.reranker} from {model_name_or_path}")
 
-        super().__init__(model_name_or_path, use_fp16=True, **kwargs)
+        super().__init__(model_name_or_path, use_fp16=True, device=config.device, **kwargs)
         logger.info(f"Reranker model {config.reranker} loaded")
 
 

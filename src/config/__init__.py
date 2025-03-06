@@ -64,6 +64,7 @@ class Config(SimpleConfig):
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
+        self.add_item("device", default="cuda", des="运行本地模型的设备", choices=["cpu", "cuda"])
         ### <<< 默认配置结束
 
         self.load()

@@ -1,14 +1,10 @@
 import os
 import json
-import torch
-from neo4j import GraphDatabase as GD
-# from src.plugins import pdf2txt, OneKE
-from transformers import AutoTokenizer, AutoModel
-from FlagEmbedding import FlagModel, FlagReranker
 import warnings
 
-from src.plugins import pdf2txt
-from src.plugins.oneke import OneKE
+import torch
+from neo4j import GraphDatabase as GD
+
 from src.utils import logger
 
 warnings.filterwarnings("ignore", category=UserWarning)

@@ -19,7 +19,7 @@ class BaseEmbeddingModel:
         return self.predict(queries)
 
     def batch_encode(self, messages, batch_size=20):
-        logger.info(f"[Embedding: {self.model}] Batch encoding {len(messages)} messages")
+        logger.info(f"Batch encoding {len(messages)} messages")
         data = []
 
         if len(messages) > batch_size:
@@ -49,11 +49,13 @@ class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
         self.model = self.model or info["name"]
 
-        logger.info(f"Loading embedding model {info['name']} from {self.model}")
+        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
 
         super().__init__(self.model,
                 query_instruction_for_retrieval=info.get("query_instruction", None),
-                use_fp16=False, **kwargs)
+                use_fp16=False,
+                device=config.device,
+                **kwargs)
 
         logger.info(f"Embedding model {info['name']} loaded")
 
