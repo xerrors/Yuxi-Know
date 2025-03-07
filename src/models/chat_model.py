@@ -127,7 +127,7 @@ class DashScope:
         )
         for chunk in response:
             message = chunk.output.choices[0].message
-            message.is_full = True
+            message.is_full = False
             yield chunk.output.choices[0].message
 
     def _get_response(self, messages):

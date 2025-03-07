@@ -50,6 +50,7 @@ MODEL_NAMES:
       - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
       - Qwen/Qwen2.5-72B-Instruct
       - Qwen/Qwen2.5-7B-Instruct
+      - Qwen/QwQ-32B
   together.ai:
     name: Together.ai
     url: https://api.together.ai/models
@@ -62,20 +63,6 @@ MODEL_NAMES:
       - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
       - deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free
 
-  qianfan:
-    name: 百度千帆 (QianFan)
-    url: https://open.bigmodel.cn/dev/api
-    default: ERNIE-Speed
-    env:
-      - QIANFAN_ACCESS_KEY
-      - QIANFAN_SECRET_KEY
-    models:
-      - ERNIE-Speed
-      - ERNIE-Speed-8K
-      - ERNIE-Speed-128K
-      - ERNIE-Tiny-8K
-      - ERNIE-Lite-8K
-      - ERNIE-4.0-8K-Latest
   dashscope:
     name: 阿里百炼 (DashScope)
     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
@@ -84,12 +71,13 @@ MODEL_NAMES:
       - DASHSCOPE_API_KEY
     models:
       - qwen-max-latest
-      - qwen-long-latest
       - qwen2.5-72b-instruct
       - qwen2.5-32b-instruct
       - qwen2.5-7b-instruct
-      - qwen2.5-1.5b-instruct
       - qwen2.5-0.5b-instruct
+      - qwq-plus-latest
+      - qwq-32b
+
   ark:
     name: 豆包（Ark）
     url: https://console.volcengine.com/ark/region:ark+cn-beijing/model

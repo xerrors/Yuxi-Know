@@ -111,7 +111,6 @@ docker logs <容器名称>  # 例如：docker logs api-dev
 | `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`                                |
 | `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`                            |
 | `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`                          |
-| `qianfan`（百度）    | `ernie_speed`                     | `QIANFAN_ACCESS_KEY`, `QIANFAN_SECRET_KEY` |
 
 #### 添加新模型供应商
 

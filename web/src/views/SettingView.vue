@@ -160,7 +160,10 @@
         </div>
         <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
           <div class="card-header">
-            <div v-if="modelStatus[item]" class="success"></div>
+            <!-- <div v-if="modelStatus[item]" class="success"></div> -->
+            <div :class="{'model-icon': true, 'available': modelStatus[item]}">
+              <img :src="modelIcons[item]" alt="模型图标">
+            </div>
             <h3>{{ modelNames[item].name }}</h3>
             <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
           </div>
@@ -213,6 +216,8 @@ import {
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
+import { modelIcons } from '@/utils/modelIcon'
+
 
 const configStore = useConfigStore()
 const items = computed(() => configStore.config._config_items)
@@ -487,12 +492,28 @@ const sendRestart = () => {
     border: 1px solid var(--gray-300);
     background-color: white;
     border-radius: 8px;
-    margin-bottom: 16px;
-    padding: 16px;
+    margin-bottom: 12px;
+    padding: 12px;
     .card-header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 10px;
+
+      .model-icon {
+        width: 24px;
+        height: 24px;
+        // 灰度
+        filter: grayscale(100%);
+        img {
+          width: 100%;
+          height: 100%;
+        }
+        
+        &.available {
+          filter: grayscale(0%);
+        }
+      }
+
 
       h3 {
         margin: 0;
@@ -536,27 +557,27 @@ const sendRestart = () => {
     .card-body {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 10px;
+      gap: 12px;
       margin-top: 10px;
       .card-models {
         width: 100%;
         border-radius: 8px;
         border: 1px solid var(--gray-300);
-        padding: 10px 16px;
+        padding: 12px 16px;
         display: flex;
         gap: 6px;
         justify-content: space-between;
         align-items: center;
         cursor: pointer;
         box-sizing: border-box;
-        background-color: var(--gray-10);
+        background-color: var(--gray-50);
         transition: box-shadow 0.1s;
         &:hover {
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
         .model_name {
           font-size: 14px;
-          color: var(--gray-800);
+          color: var(--gray-900);
         }
         .select-btn {
           width: 16px;
