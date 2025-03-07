@@ -83,6 +83,43 @@ docker compose -f docker/docker-compose.yml --env-file src/.env up --build -d
 
 ![系统演示](./images/demo.gif)
 
+问答支持 Deepseek-R1 等推理模型、知识图谱检索、知识库检索、网页检索
+
+![Image](https://github.com/user-attachments/assets/97ad6771-e4a2-4324-a001-ecb0abe40fdd)
+
+网页检索结果：
+
+![Image](https://github.com/user-attachments/assets/20d51700-78d5-48a8-ab16-00bc98a1df37)
+
+知识图谱检索结果：
+
+![Image](https://github.com/user-attachments/assets/61b4e06f-4e6e-4a75-bfcb-b1a424523bb6)
+
+知识库检索结果
+
+![Image](https://github.com/user-attachments/assets/53e786f4-08d7-45c1-bcec-df46d0c3c49b)
+
+知识库管理：
+
+
+![Image](https://github.com/user-attachments/assets/55a6de55-59a0-4636-9c00-e4bfd6573c1b)
+
+![Image](https://github.com/user-attachments/assets/0f4f39ba-e6b7-4f18-a3c3-147477922f58)
+
+
+知识图谱
+
+![Image](https://github.com/user-attachments/assets/5849d875-801c-4d29-9d38-9245685e9d73)
+
+可视化配置：
+
+![Image](https://github.com/user-attachments/assets/5faac8bc-7968-42d0-a77d-5f8881a24de1)
+
+丰富的模型支持：
+
+![Image](https://github.com/user-attachments/assets/7a54ca07-78da-4aef-b0a0-47aa539dae8e)
+
+
 ### 服务管理
 
 **关闭服务**：
