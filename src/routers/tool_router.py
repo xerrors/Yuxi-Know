@@ -45,6 +45,6 @@ async def text_chunking(text: str = Body(...), params: Dict[str, Any] = Body(...
 
 @tool.post("/pdf2txt")
 async def handle_pdf2txt(file: str = Body(...)):
-    from src.plugins import pdf2txt
-    text = pdf2txt(file, return_text=True)
+    from src.plugins import ocr
+    text = ocr.process_pdf(file)
     return {"text": text}

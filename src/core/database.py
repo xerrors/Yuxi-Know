@@ -1,7 +1,6 @@
 import os
 import json
 import time
-from src.plugins import pdf2txt
 from src.utils import hashstr, logger, is_text_pdf
 from src.models.embedding import get_embedding_model
 
@@ -177,12 +176,8 @@ class DataBaseManager:
             raise NotImplementedError("Directory not supported now!")
 
         if file.endswith(".pdf"):
-            if is_text_pdf(file):
-                from src.core.filereader import pdfreader
-                return pdfreader(file)
-            else:
-                from src.plugins import pdf2txt
-                return pdf2txt(file, return_text=True)
+            from src.plugins import ocr
+            return ocr.process_pdf(file)
 
         elif file.endswith(".txt") or file.endswith(".md"):
             from src.core.filereader import plainreader

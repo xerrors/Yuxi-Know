@@ -38,3 +38,5 @@ notebooks
 graphrag
 docker/volumes
 .cursorrules
+
+/models

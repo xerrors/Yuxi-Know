@@ -124,16 +124,6 @@ class GraphDatabase:
         with self.driver.session() as session:
             session.execute_write(create, triples)
 
-    # def pdf_file_add_entity(self, file_path, output_path, kgdb_name='neo4j'):
-    #     self.use_database(kgdb_name)  # 切换到指定数据库
-    #     text_path = pdf2txt(file_path)
-    #     global UIE_MODEL
-    #     if UIE_MODEL is None:
-    #         UIE_MODEL = OneKE()
-    #     triples_path = UIE_MODEL.processing_text_to_kg(text_path, output_path)
-    #     self.jsonl_file_add_entity(triples_path)
-    #     return kgdb_name
-
     def txt_add_vector_entity(self, triples, kgdb_name='neo4j'):
         """添加实体三元组"""
         self.use_database(kgdb_name)
