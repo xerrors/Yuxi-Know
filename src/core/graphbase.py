@@ -377,6 +377,25 @@ class GraphDatabase:
             logger.error(f"保存图数据库信息失败：{e}")
             return False
 
+    def query_nodes_without_embedding(self, kgdb_name='neo4j'):
+        """查询没有嵌入向量的节点
+
+        Returns:
+            list: 没有嵌入向量的节点列表
+        """
+        self.use_database(kgdb_name)
+
+        def query(tx):
+            result = tx.run("""
+            MATCH (n:Entity)
+            WHERE n.embedding IS NULL
+            RETURN n.name AS name
+            """)
+            return [record["name"] for record in result]
+
+        with self.driver.session() as session:
+            return session.execute_read(query)
+
     def load_graph_info(self):
         """
         从工作目录中的JSON文件加载图数据库的基本信息
@@ -403,6 +422,34 @@ class GraphDatabase:
         except Exception as e:
             logger.error(f"加载图数据库信息失败：{e}")
             return False
+
+    def add_embedding_to_nodes(self, node_names=None, kgdb_name='neo4j'):
+        """为节点添加嵌入向量
+
+        Args:
+            node_names (list, optional): 要添加嵌入向量的节点名称列表，None表示所有没有嵌入向量的节点
+            kgdb_name (str, optional): 图数据库名称，默认为'neo4j'
+
+        Returns:
+            int: 成功添加嵌入向量的节点数量
+        """
+        self.use_database(kgdb_name)
+
+        # 如果node_names为None，则获取所有没有嵌入向量的节点
+        if node_names is None:
+            node_names = self.query_nodes_without_embedding(kgdb_name)
+
+        count = 0
+        with self.driver.session() as session:
+            for node_name in node_names:
+                try:
+                    embedding = self.get_embedding(node_name)
+                    session.execute_write(self.set_embedding, node_name, embedding)
+                    count += 1
+                except Exception as e:
+                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}")
+
+        return count
 
 
 if __name__ == "__main__":

@@ -87,6 +87,20 @@ class DataBaseManager:
         else:
             return {"message": "Graph base not enabled", "graph": {}}
 
+    def is_graph_running(self):
+        """检查图数据库是否正在运行
+
+        Returns:
+            bool: 图数据库是否正在运行
+        """
+        # 检查是否启用了图数据库
+        if not self.config.enable_knowledge_graph or not hasattr(self, 'graph_base') or self.graph_base is None:
+            return False
+
+        # 获取图数据库信息，检查状态
+        graph_info = self.graph_base.get_database_info("neo4j")
+        return graph_info.get("status") == "open"
+
     def create_database(self, database_name, description, db_type, dimension):
         from src.config import EMBED_MODEL_INFO
         dimension = dimension or EMBED_MODEL_INFO[self.config.embed_model]["dimension"]

@@ -105,7 +105,31 @@ async def upload_file(file: UploadFile = File(...)):
 @data.get("/graph")
 async def get_graph_info():
     graph_info = startup.dbm.get_graph()
+
+    # 获取未索引节点数量
+    unindexed_count = 0
+    if startup.dbm.is_graph_running():
+        # 调用GraphDatabase的query_nodes_without_embedding方法
+        unindexed_nodes = startup.dbm.graph_base.query_nodes_without_embedding()
+        unindexed_count = len(unindexed_nodes) if unindexed_nodes else 0
+
+    # 将未索引节点数量添加到返回结果中
+    graph_info["graph"]["unindexed_node_count"] = unindexed_count
+
     return graph_info
+
+@data.post("/graph/index-nodes")
+async def index_nodes(data: dict = Body(default={})):
+    if not startup.dbm.is_graph_running():
+        raise HTTPException(status_code=400, detail="图数据库未启动")
+
+    # 获取参数或使用默认值
+    kgdb_name = data.get('kgdb_name', 'neo4j')
+
+    # 调用GraphDatabase的add_embedding_to_nodes方法
+    count = startup.dbm.graph_base.add_embedding_to_nodes(kgdb_name=kgdb_name)
+
+    return {"status": "success", "message": f"已成功为{count}个节点添加嵌入向量", "indexed_count": count}
 
 @data.get("/graph/node")
 async def get_graph_node(entity_name: str):
