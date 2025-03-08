@@ -18,6 +18,9 @@
           <div class="status-indicator" :class="graphStatusClass"></div>
         </div>
         <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
+        <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
+          <SyncOutlined/> 为{{ unindexedCount }}个节点添加索引
+        </a-button>
       </template>
     </HeaderComponent>
 
@@ -88,7 +91,7 @@ import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { UploadOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const configStore = useConfigStore()
@@ -113,9 +116,14 @@ const state = reactive({
   searchLoading: false,
   showModal: false,
   precessing: false,
+  indexing: false,
   showPage: computed(() => configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph),
 })
 
+// 计算未索引节点数量
+const unindexedCount = computed(() => {
+  return graphInfo.value?.unindexed_node_count || 0;
+});
 
 const loadGraphInfo = () => {
   state.loadingGraphInfo = true
@@ -138,24 +146,24 @@ const loadGraphInfo = () => {
 const getGraphData = () => {
   // 计算每个节点的度数（连接数）
   const nodeDegrees = {};
-  
+
   // 初始化所有节点的度数为0
   graphData.nodes.forEach(node => {
     nodeDegrees[node.id] = 0;
   });
-  
+
   // 计算每个节点的连接数
   graphData.edges.forEach(edge => {
     nodeDegrees[edge.source_id] = (nodeDegrees[edge.source_id] || 0) + 1;
     nodeDegrees[edge.target_id] = (nodeDegrees[edge.target_id] || 0) + 1;
   });
-  
+
   return {
     nodes: graphData.nodes.map(node => {
       // 计算节点大小，基础大小为15，每个连接增加5的大小，最小为15，最大为50
       const degree = nodeDegrees[node.id] || 0;
       const nodeSize = Math.min(15 + degree * 5, 50);
-      
+
       return {
         id: node.id,
         data: {
@@ -361,9 +369,55 @@ const graphDescription = computed(() => {
   const entityCount = graphInfo.value?.entity_count || 0;
   const relationCount = graphInfo.value?.relationship_count || 0;
   const modelName = graphInfo.value?.embed_model_name || '未上传文件';
+  const unindexed = unindexedCount.value > 0 ? `，${unindexedCount.value}个节点未索引` : '';
 
-  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系。向量模型：${modelName}`;
+  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系。向量模型：${modelName}${unindexed}`;
 });
+
+// 为未索引节点添加索引
+const indexNodes = () => {
+  // 判断 embed_model_name 是否相同
+  if (!modelMatched.value) {
+    message.error(`向量模型不匹配，无法添加索引，当前向量模型为 ${cur_embed_model.value}，图数据库向量模型为 ${graphInfo.value?.embed_model_name}`)
+    return
+  }
+
+  if (state.precessing) {
+    message.error('后台正在处理，请稍后再试')
+    return
+  }
+
+  state.indexing = true;
+  fetch('/api/data/graph/index-nodes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      kgdb_name: 'neo4j'
+    }),
+  })
+  .then(response => {
+    if (!response.ok) {
+      return response.json().then(errorData => {
+        throw new Error(errorData.detail || `请求失败：${response.status} ${response.statusText}`);
+      });
+    }
+    return response.json();
+  })
+  .then(data => {
+    message.success(data.message);
+    // 刷新图谱信息
+    loadGraphInfo();
+  })
+  .catch(error => {
+    console.error(error);
+    message.error(error.message || '添加索引失败');
+  })
+  .finally(() => {
+    state.indexing = false;
+  });
+};
 
 </script>
 
