@@ -21,6 +21,7 @@ def chat_post(
         history: list = Body(...),
         cur_res_id: str = Body(...)):
 
+    meta["server_model_name"] = startup.model.model_name
     history_manager = HistoryManager(history)
     logger.debug(f"Received query: {query} with meta: {meta}")
 

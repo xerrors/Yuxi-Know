@@ -4,8 +4,11 @@ from src.utils import logger, get_docker_safe_url
 
 class OpenAIBase():
     def __init__(self, api_key, base_url, model_name):
+        self.api_key = api_key
+        self.base_url = base_url
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
+        # logger.debug(f"{self.get_models()=}")
 
     def predict(self, message, stream=False):
         if isinstance(message, str):
@@ -34,6 +37,13 @@ class OpenAIBase():
             stream=False,
         )
         return response.choices[0].message
+    
+    def get_models(self):
+        try:
+            return self.client.models.list()
+        except Exception as e:
+            logger.error(f"Error getting models: {e}")
+            return []
 
 
 class OpenModel(OpenAIBase):
@@ -60,7 +70,8 @@ class GeneralResponse:
         self.is_full = False
 
 
-class Qianfan:
+class Qianfan(OpenAIBase):
+    """弃用"""
 
     def __init__(self, model_name="ernie_speed") -> None:
         import qianfan
@@ -99,7 +110,7 @@ class Qianfan:
 
 
 
-class DashScope:
+class DashScope(OpenAIBase):
 
     def __init__(self, model_name="qwen-max-latest") -> None:
         self.model_name = model_name
@@ -143,6 +154,4 @@ class DashScope:
 
 
 if __name__ == "__main__":
-    model = SiliconFlow()
-    for a in model.predict("你好", stream=True):
-        print(a.content, end="")
+    pass

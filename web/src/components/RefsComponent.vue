@@ -3,7 +3,7 @@
     <div class="tags">
       <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
-      <span class="item"><BulbOutlined /> {{ msg.model_name }}</span>
+      <span class="item"><BulbOutlined /> {{ msg.meta.server_model_name }}</span>
       <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
       <span
         class="item btn"
