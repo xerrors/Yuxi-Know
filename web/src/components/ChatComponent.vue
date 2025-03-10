@@ -987,7 +987,7 @@ watch(
   background-color: #666;
   border-radius: 50%;
   opacity: 0.3;
-  animation: pulse 1.4s infinite ease-in-out both;
+  animation: pulse 0.5s infinite ease-in-out both;
 }
 
 .loading-dots div:nth-child(1) {
