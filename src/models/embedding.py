@@ -33,7 +33,8 @@ class BaseEmbeddingModel:
         for i in range(0, len(messages), batch_size):
             group_msg = messages[i:i+batch_size]
             logger.info(f"Encoding {i} to {i+batch_size} with {len(messages)} messages")
-            response = self.encode_queries(group_msg)
+            response = self.encode(group_msg)
+            logger.debug(f"Response: {len(response)=}, {len(group_msg)=}, {len(response[0])=}")
             data.extend(response)
 
         if len(messages) > batch_size:
@@ -48,6 +49,9 @@ class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
 
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
         self.model = self.model or info["name"]
+
+        if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
+            self.model = _path
 
         logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
 
