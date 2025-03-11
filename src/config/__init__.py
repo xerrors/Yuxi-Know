@@ -95,6 +95,7 @@ class Config(SimpleConfig):
 
         model_provider_info = self.model_names.get(self.model_provider, {})
         self.model_dir = os.environ.get("MODEL_DIR", "")
+        logger.info(f"MODEL_DIR: {self.model_dir}; 如果是在 docker 中运行，会自动挂载 MODEL_DIR 到 /models 目录，请检查 docker compose 文件")
 
         # 检查模型提供商是否存在
         if self.model_provider != "custom":

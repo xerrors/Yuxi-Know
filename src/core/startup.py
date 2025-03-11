@@ -21,6 +21,7 @@ class Startup:
         self.dbm = DataBaseManager(self.config)
         self.retriever = Retriever(self.config, self.dbm, self.model)
 
+        logger.info(f"Loading lite model: {self.config.model_name_lite}")
         self.model_lite = select_model(self.config,
                                        model_provider=self.config.model_provider_lite,
                                        model_name=self.config.model_name_lite)

@@ -26,9 +26,7 @@ class GraphDatabase:
         os.makedirs(self.work_dir, exist_ok=True)
 
         # 尝试加载已保存的图数据库信息
-        if self.load_graph_info():
-            logger.info(f"已加载图数据库信息：{self.kgdb_name}")
-        else:
+        if not self.load_graph_info():
             logger.info(f"未找到已保存的图数据库信息，将创建新的配置")
 
         self.start()
