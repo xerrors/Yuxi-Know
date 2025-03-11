@@ -6,12 +6,21 @@ from src.utils.logging_config import logger
 def is_text_pdf(pdf_path):
     import fitz
     doc = fitz.open(pdf_path)
-    for page_num in range(len(doc)):
+    total_pages = len(doc)
+    if total_pages == 0:
+        return False
+        
+    text_pages = 0
+    for page_num in range(total_pages):
         page = doc.load_page(page_num)
         text = page.get_text()
         if text.strip():  # 检查是否有文本内容
-            return True
-    return False
+            text_pages += 1
+    
+    # 计算有文本内容的页面比例
+    text_ratio = text_pages / total_pages
+    # 如果超过50%的页面有文本内容，则认为是文本PDF
+    return text_ratio > 0.5
 
 def hashstr(input_string, length=8, with_salt=False):
     import hashlib
