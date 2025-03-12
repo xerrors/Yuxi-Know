@@ -59,13 +59,15 @@ class KnowledgeBase:
             dimension= dimension,  # The vectors we will use in this demo has 768 dimensions
         )
 
-    def add_documents(self, docs, collection_name, **kwargs):
+    def add_documents(self, docs, collection_name, chunk_infos=None, **kwargs):
         """添加已经分块之后的文本"""
         # 检查 collection 是否存在
         import random
         if not self.client.has_collection(collection_name=collection_name):
             logger.error(f"Collection {collection_name} not found, create it")
             # self.add_collection(collection_name)
+
+        chunk_infos = chunk_infos or [{}] * len(docs)
 
         vectors = self.embed_model.batch_encode(docs)
 
@@ -74,7 +76,9 @@ class KnowledgeBase:
             "vector": vectors[i],
             "text": docs[i],
             "hash": hashstr(docs[i], with_salt=True),
-            **kwargs} for i in range(len(vectors))]
+            **kwargs,
+            **chunk_infos[i]
+        } for i in range(len(vectors))]
 
         res = self.client.insert(collection_name=collection_name, data=data)
         return res

@@ -94,8 +94,8 @@
             @after-open-change="afterOpenChange"
           >
             <h2>共 {{ selectedFile?.lines.length }} 个片段</h2>
-            <p v-for="line in selectedFile?.lines" :key="line.id">
-              <strong>Chunk #{{ line.id }}</strong>   {{ line.text }}
+            <p v-for="line in selectedFile?.lines" :key="line.id" class="line-text">
+              {{ line.text }}
             </p>
           </a-drawer>
         </div>
@@ -869,6 +869,15 @@ onUnmounted(() => {
     &:disabled {
       cursor: not-allowed;
     }
+  }
+}
+
+.custom-class .line-text {
+  padding: 10px;
+  border-radius: 4px;
+  
+  &:hover {
+    background-color: var(--main-light-4);
   }
 }
 </style>

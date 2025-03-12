@@ -8,9 +8,21 @@ from llama_index.readers.file import FlatReader, DocxReader
 from src.utils import hashstr
 
 def chunk(text_or_path, params=None):
+    """
+    将文本或文件切分成固定大小的块
+    
+    Args:
+        text_or_path: 文本或文件路径
+        params: 参数
+            chunk_size: 块大小
+            chunk_overlap: 块重叠大小
+            use_parser: 是否使用文件解析器
+    Returns:
+        nodes: 节点列表
+    """
     params = params or {}
     chunk_size = int(params.get("chunk_size", 500))
-    chunk_overlap = int(params.get("chunk_overlap", 20))
+    chunk_overlap = int(params.get("chunk_overlap", 100))
     splitter = SentenceSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
