@@ -1,7 +1,8 @@
 import os
 import json
 import time
-from src.utils import hashstr, logger, is_text_pdf
+from src.utils import hashstr, logger
+from src.core.indexing import chunk
 from src.models.embedding import get_embedding_model
 
 
@@ -140,7 +141,6 @@ class DataBaseManager:
         # 先保存一次数据库状态，确保waiting状态被记录
         self._save_databases()
 
-        from src.core.indexing import chunk
         for new_file in new_files:
             file_id = new_file["file_id"]
             idx = self.get_idx_by_fileid(db, file_id)
@@ -156,9 +156,10 @@ class DataBaseManager:
                     nodes = chunk(new_file["path"], params=params)
 
                 self.knowledge_base.add_documents(
-                    docs=[node.text for node in nodes],
+                    file_id=file_id,
                     collection_name=db.metaname,
-                    file_id=file_id)
+                    docs=[node.text for node in nodes],
+                    chunk_infos=[node.dict() for node in nodes])
 
                 idx = self.get_idx_by_fileid(db, file_id)
                 db.files[idx]["status"] = "done"
@@ -219,19 +220,15 @@ class DataBaseManager:
         lines = self.knowledge_base.client.query(
             collection_name=db.metaname,
             filter=f"file_id == '{file_id}'",
-            output_fields=["id", "text", "file_id", "hash"]
+            output_fields=None
         )
+        # 删除 vector 字段
+        for line in lines:
+            line.pop("vector")
+
+        lines.sort(key=lambda x: x.get("start_char_idx", 0))
+        logger.debug(f"lines[0]: {lines[0]}")
         return {"lines": lines}
-
-    def chunking(self, text, params=None):
-        chunk_method = params.get("chunk_method", "fixed")
-        chunk_size = params.get("chunk_size", 500)
-
-        """将文本切分成固定大小的块"""
-        chunks = []
-        for i in range(0, len(text), chunk_size):
-            chunks.append(text[i:i + chunk_size])
-        return chunks
 
     def delete_database(self, db_id):
         db = self.get_kb_by_id(db_id)
