@@ -67,7 +67,7 @@ class DataBaseManager:
         if len(self.data["databases"]) != len(knowledge_base_collections):
             logger.warning(
                 f"Database number not match, {knowledge_base_collections}, "
-                f"self.data['databases']: {self.data['databases']}, ")
+                f"self.data['databases']: {self.get_db_metanames()}, ")
 
         # 更新每个数据库的状态信息
         for db in self.data["databases"]:
@@ -227,8 +227,11 @@ class DataBaseManager:
             line.pop("vector")
 
         lines.sort(key=lambda x: x.get("start_char_idx", 0))
-        logger.debug(f"lines[0]: {lines[0]}")
+        # logger.debug(f"lines[0]: {lines[0]}")
         return {"lines": lines}
+
+    def get_db_metanames(self):
+        return [db.metaname for db in self.data["databases"]]
 
     def delete_database(self, db_id):
         db = self.get_kb_by_id(db_id)
