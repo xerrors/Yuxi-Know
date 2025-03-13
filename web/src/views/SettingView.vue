@@ -164,7 +164,7 @@
             <div class="model-title-container">
               <h3>{{ modelNames[item].name }}</h3>
               <a :href="modelNames[item].url" target="_blank" class="model-url">
-                更多模型
+                <InfoCircleOutlined />
               </a>
             </div>
             <a-button 
@@ -197,7 +197,7 @@
             <div class="model-title-container">
               <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
               <a :href="modelNames[item].url" target="_blank" class="model-url">
-                <InfoCircleOutlined /> 更多模型
+                <InfoCircleOutlined />
               </a>
             </div>
             <div class="missing-keys">
@@ -270,8 +270,11 @@ const notModelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => !modelStatus.value?.[key])
 })
 
-// 模型展开状态管理
-const expandedModels = reactive({})
+// 模型展开状态管理，默认展开
+const expandedModels = reactive(modelKeys.value.reduce((acc, key) => {
+  acc[key] = true
+  return acc
+}, {}))
 
 const generateRandomHash = (length) => {
   let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -517,12 +520,14 @@ const sendRestart = () => {
     padding: 12px;
     .card-header {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 10px;
 
       .model-title-container {
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
         flex: 1;
       }
 
@@ -533,8 +538,9 @@ const sendRestart = () => {
       }
 
       .model-icon {
-        width: 40px;
-        height: 40px;
+        width: 28px;
+        height: 28px;
+        
         // 灰度
         filter: grayscale(100%);
         img {
@@ -610,7 +616,7 @@ const sendRestart = () => {
 
         .icon-wrapper {
           display: inline-flex;
-          transition: transform 0.5s ease;
+          transition: transform 0.2s ease;
           
           &.rotated {
             transform: rotate(180deg);
@@ -622,10 +628,10 @@ const sendRestart = () => {
     .card-body-wrapper {
       max-height: 0;
       overflow: hidden;
-      transition: max-height 0.5s ease-in-out;
+      transition: max-height 0.2s ease-out;  // 先快后慢
       
       &.expanded {
-        max-height: 500px; /* 设置一个足够大的值 */
+        max-height: 700px; /* 设置一个足够大的值 */
       }
     }
 
