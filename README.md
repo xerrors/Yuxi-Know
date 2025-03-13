@@ -38,12 +38,15 @@
 
 ### 环境配置
 
-在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中。
+在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中（此文件项目中没有，需要自行参考 [src/.env.template](src/.env.template) 创建）。更多可配置项，可参考 后面**对话模型**部分。
 
 默认使用硅基流动的服务，因此**必须**配置：
 
 ```
 SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
+OPENAI_API_KEY=<API_KEY> # 如果需要配置 openai 则添加此行，并替换 API_KEY
+DEEPSEEK_API_KEY=<API_KEY>  # 如果配置 DeepSeek 添加此行，并替换 API_KEY
+ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 API_KEY
 ```
 
 > 本项目的基础对话服务可在不含显卡的设备上运行，大模型使用在线服务商的接口。
