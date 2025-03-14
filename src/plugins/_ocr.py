@@ -118,8 +118,6 @@ class OCRPlugin:
         :param pdf_path: PDF文件路径
         :return: 提取的文本
         """
-        if self.ocr is None:
-            self.load_model()
 
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
