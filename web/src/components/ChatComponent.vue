@@ -301,7 +301,7 @@ const renameTitle = () => {
 
 const handleUserScroll = () => {
   // 计算我们是否接近底部（100像素以内）
-  const isNearBottom = chatContainer.value.scrollHeight - chatContainer.value.scrollTop - chatContainer.value.clientHeight < 100;
+  const isNearBottom = chatContainer.value.scrollHeight - chatContainer.value.scrollTop - chatContainer.value.clientHeight < 20;
 
   // 如果用户不在底部，则仅将其标记为用户滚动
   userIsScrolling.value = !isNearBottom;
