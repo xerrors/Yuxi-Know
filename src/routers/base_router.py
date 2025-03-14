@@ -1,14 +1,10 @@
+from fastapi import Request, Body
 from fastapi import APIRouter
 
 base = APIRouter()
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi import Request, Body
-
-from src.core import HistoryManager
 from src.core.startup import startup
-from src.utils import logger
+from src.utils import hashstr, logger
 
 
 @base.get("/")
@@ -17,13 +13,16 @@ async def route_index():
 
 @base.get("/config")
 def get_config():
-    return startup.config
+    return startup.config.get_safe_config()
 
 @base.post("/config")
 async def update_config(key = Body(...), value = Body(...)):
+    if key == "custom_models":
+        value = startup.config.compare_custom_models(value)
+
     startup.config[key] = value
     startup.config.save()
-    return startup.config
+    return startup.config.get_safe_config()
 
 @base.post("/restart")
 async def restart():
