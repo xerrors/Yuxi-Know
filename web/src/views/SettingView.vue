@@ -156,21 +156,21 @@
           </div>
         </div>
         <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
-          <div class="card-header">
+          <div class="card-header" @click="toggleExpand(item)">
             <!-- <div v-if="modelStatus[item]" class="success"></div> -->
             <div :class="{'model-icon': true, 'available': modelStatus[item]}">
               <img :src="modelIcons[item]" alt="模型图标">
             </div>
             <div class="model-title-container">
               <h3>{{ modelNames[item].name }}</h3>
-              <a :href="modelNames[item].url" target="_blank" class="model-url">
+              <a :href="modelNames[item].url" target="_blank" class="model-url" @click.stop>
                 <InfoCircleOutlined />
               </a>
             </div>
             <a-button 
               type="text" 
               class="expand-button" 
-              @click="expandedModels[item] = !expandedModels[item]"
+              @click.stop="toggleExpand(item)"
             >
               <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
                 <DownOutlined />
@@ -270,11 +270,22 @@ const notModelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => !modelStatus.value?.[key])
 })
 
-// 模型展开状态管理，默认展开
-const expandedModels = reactive(modelKeys.value.reduce((acc, key) => {
-  acc[key] = true
-  return acc
-}, {}))
+// 模型展开状态管理
+const expandedModels = reactive({})
+
+// 监听 modelKeys 变化，确保新添加的模型也是默认展开状态
+watch(modelKeys, (newKeys) => {
+  newKeys.forEach(key => {
+    if (expandedModels[key] === undefined) {
+      expandedModels[key] = true
+    }
+  })
+}, { immediate: true })
+
+// 切换展开状态的方法
+const toggleExpand = (item) => {
+  expandedModels[item] = !expandedModels[item]
+}
 
 const generateRandomHash = (length) => {
   let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -522,6 +533,7 @@ const sendRestart = () => {
       display: flex;
       align-items: center;
       gap: 10px;
+      cursor: pointer;
 
       .model-title-container {
         display: flex;
