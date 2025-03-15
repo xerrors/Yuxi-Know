@@ -3,7 +3,8 @@ import asyncio
 from fastapi import APIRouter, Body
 from fastapi.responses import StreamingResponse, Response
 from src.core import HistoryManager
-from src.core.startup import startup, executor
+from src import executor, config, retriever
+from src.models import select_model
 from src.utils.logging_config import logger
 
 chat = APIRouter(prefix="/chat")
@@ -21,14 +22,15 @@ def chat_post(
         history: list = Body(...),
         cur_res_id: str = Body(...)):
 
-    meta["server_model_name"] = startup.model.model_name
+    model = select_model(config)
+    meta["server_model_name"] = model.model_name
     history_manager = HistoryManager(history)
     logger.debug(f"Received query: {query} with meta: {meta}")
 
     def make_chunk(content=None, **kwargs):
         return json.dumps({
             "response": content,
-            "model_name": startup.config.model_name,
+            "model_name": config.model_name,
             "meta": meta,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
@@ -46,7 +48,7 @@ def chat_post(
             yield chunk
 
             try:
-                modified_query, refs = startup.retriever(modified_query, history_manager.messages, meta)
+                modified_query, refs = retriever(modified_query, history_manager.messages, meta)
             except Exception as e:
                 logger.error(f"Retriever error: {e}")
                 yield make_chunk(message=f"Retriever error: {e}", status="error")
@@ -60,7 +62,7 @@ def chat_post(
         content = ""
         reasoning_content = ""
         try:
-            for delta in startup.model.predict(messages, stream=True):
+            for delta in model.predict(messages, stream=True):
                 if not delta.content and hasattr(delta, 'reasoning_content'):
                     reasoning_content += delta.reasoning_content or ""
                     chunk = make_chunk(reasoning_content=reasoning_content, status="reasoning")
@@ -91,9 +93,10 @@ def chat_post(
 
 @chat.post("/call")
 async def call(query: str = Body(...), meta: dict = Body(None)):
+    model = select_model(config, model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
     async def predict_async(query):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(executor, startup.model.predict, query)
+        return await loop.run_in_executor(executor, model.predict, query)
 
     response = await predict_async(query)
     logger.debug({"query": query, "response": response.content})
@@ -104,7 +107,10 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
 async def call(query: str = Body(...), meta: dict = Body(None)):
     async def predict_async(query):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(executor, startup.model_lite.predict, query)
+        model_provider = meta.get("model_provider", config.model_provider_lite)
+        model_name = meta.get("model_name", config.model_name_lite)
+        model = select_model(config, model_provider=model_provider, model_name=model_name)
+        return await loop.run_in_executor(executor, model.predict, query)
 
     response = await predict_async(query)
     logger.debug({"query": query, "response": response.content})

@@ -1,13 +1,9 @@
 from fastapi import APIRouter
+from fastapi import Request, Body
 
 base = APIRouter()
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from fastapi import Request, Body
-
-from src.core import HistoryManager
-from src.core.startup import startup
+from src import config, dbm, retriever
 from src.utils import logger
 
 
@@ -17,17 +13,18 @@ async def route_index():
 
 @base.get("/config")
 def get_config():
-    return startup.config
+    return config
 
 @base.post("/config")
 async def update_config(key = Body(...), value = Body(...)):
-    startup.config[key] = value
-    startup.config.save()
-    return startup.config
+    config[key] = value
+    config.save()
+    return config
 
 @base.post("/restart")
 async def restart():
-    startup.restart()
+    dbm.restart()
+    retriever.restart()
     return {"message": "Restarted!"}
 
 @base.get("/log")

@@ -278,8 +278,6 @@ const handleChange = (key, e) => {
         || key == 'enable_knowledge_graph'
         || key == 'enable_knowledge_base'
         || key == 'enable_web_search'
-        || key == 'model_provider'
-        || key == 'model_name'
         || key == 'embed_model'
         || key == 'reranker'
         || key == 'model_local_paths') {

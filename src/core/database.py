@@ -1,6 +1,8 @@
 import os
 import json
 import time
+
+from src import config
 from src.utils import hashstr, logger
 from src.core.indexing import chunk
 from src.models.embedding import get_embedding_model
@@ -8,22 +10,23 @@ from src.models.embedding import get_embedding_model
 
 class DataBaseManager:
 
-    def __init__(self, config=None) -> None:
-        self.config = config
+    def __init__(self) -> None:
         self.database_path = os.path.join(config.save_dir, "data", "database.json")
-        self.embed_model = get_embedding_model(config)
+        self._load_models()
 
-        if self.config.enable_knowledge_base:
+    def _load_models(self):
+        """所有需要重启的模型"""
+        self.embed_model = get_embedding_model(config)
+        if config.enable_knowledge_base:
             from src.core.knowledgebase import KnowledgeBase
             self.knowledge_base = KnowledgeBase(config, self.embed_model)
-            if self.config.enable_knowledge_graph:
+            if config.enable_knowledge_graph:
                 from src.core.graphbase import GraphDatabase
-                self.graph_base = GraphDatabase(self.config, self.embed_model)
+                self.graph_base = GraphDatabase(config, self.embed_model)
             else:
                 self.graph_base = None
 
         self.data = {"databases": [], "graph": {}}
-
         self._load_databases()
         self._update_database()
 
@@ -62,7 +65,7 @@ class DataBaseManager:
 
     def get_databases(self):
         self._update_database()
-        assert self.config.enable_knowledge_base, "知识库未启用"
+        assert config.enable_knowledge_base, "知识库未启用"
         knowledge_base_collections = self.knowledge_base.get_collection_names()
         if len(self.data["databases"]) != len(knowledge_base_collections):
             logger.warning(
@@ -82,7 +85,7 @@ class DataBaseManager:
         return {"databases": [db.to_dict() for db in self.data["databases"]]}
 
     def get_graph(self):
-        if self.config.enable_knowledge_graph:
+        if config.enable_knowledge_graph:
             self.data["graph"].update(self.graph_base.get_database_info("neo4j"))
             return {"graph": self.data["graph"]}
         else:
@@ -95,7 +98,7 @@ class DataBaseManager:
             bool: 图数据库是否正在运行
         """
         # 检查是否启用了图数据库
-        if not self.config.enable_knowledge_graph or not hasattr(self, 'graph_base') or self.graph_base is None:
+        if not config.enable_knowledge_graph or not hasattr(self, 'graph_base') or self.graph_base is None:
             return False
 
         # 获取图数据库信息，检查状态
@@ -104,12 +107,12 @@ class DataBaseManager:
 
     def create_database(self, database_name, description, db_type, dimension):
         from src.config import EMBED_MODEL_INFO
-        dimension = dimension or EMBED_MODEL_INFO[self.config.embed_model]["dimension"]
+        dimension = dimension or EMBED_MODEL_INFO[config.embed_model]["dimension"]
 
         new_database = DataBaseLite(database_name,
                                     description,
                                     db_type,
-                                    embed_model=self.config.embed_model,
+                                    embed_model=config.embed_model,
                                     dimension=dimension)
 
         self.knowledge_base.add_collection(new_database.metaname, dimension)
@@ -120,9 +123,9 @@ class DataBaseManager:
     def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
-        if db.embed_model != self.config.embed_model:
-            logger.error(f"Embed model not match, {db.embed_model} != {self.config.embed_model}")
-            return {"message": f"Embed model not match, cur: {self.config.embed_model}", "status": "failed"}
+        if db.embed_model != config.embed_model:
+            logger.error(f"Embed model not match, {db.embed_model} != {config.embed_model}")
+            return {"message": f"Embed model not match, cur: {config.embed_model}", "status": "failed"}
 
         # Preprocessing the files to the queue
         new_files = []
@@ -253,6 +256,11 @@ class DataBaseManager:
         for idx, f in enumerate(db.files):
             if f["file_id"] == file_id:
                 return idx
+
+    def restart(self):
+        self.embed_model = get_embedding_model(config)
+        self._load_databases()
+        self._update_database()
 
 
 class DataBaseLite:
