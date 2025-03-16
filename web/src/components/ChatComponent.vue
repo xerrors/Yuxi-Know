@@ -205,9 +205,10 @@ const shouldAutoScroll = ref(true);
 const panel = ref(null)
 const modelCard = ref(null)
 const examples = ref([
-  '写一个冒泡排序',
-  '今天天气怎么样？',
-  '贾宝玉今年多少岁？',
+  '写一个简单的冒泡排序',
+  '今天无锡天气怎么样？',
+  '介绍一下红楼梦',
+  '今天星期几？'
 ])
 
 const opts = reactive({

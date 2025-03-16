@@ -1,3 +1,4 @@
+from fastapi import Request, Body
 from fastapi import APIRouter
 from fastapi import Request, Body
 
@@ -13,13 +14,16 @@ async def route_index():
 
 @base.get("/config")
 def get_config():
-    return config
+    return config.get_safe_config()
 
 @base.post("/config")
 async def update_config(key = Body(...), value = Body(...)):
+    if key == "custom_models":
+        value = config.compare_custom_models(value)
+
     config[key] = value
     config.save()
-    return config
+    return config.get_safe_config()
 
 @base.post("/restart")
 async def restart():
