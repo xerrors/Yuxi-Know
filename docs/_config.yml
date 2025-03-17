@@ -1,4 +1,4 @@
-theme: just-the-docs
+remote_theme: just-the-docs/just-the-docs
 url: https://xerrors.github.io/Yuxi-Know
 baseurl: /Yuxi-Know
 title: 语析 - 基于大模型的知识库与知识图谱问答系统
