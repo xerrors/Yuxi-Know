@@ -1,5 +1,6 @@
 import os
 import asyncio
+import traceback
 from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
 
@@ -81,7 +82,7 @@ async def get_document_info(db_id: str, file_id: str):
     try:
         info = dbm.get_file_info(db_id, file_id)
     except Exception as e:
-        logger.error(f"Failed to get file info, {e}, {db_id=}, {file_id=}")
+        logger.error(f"Failed to get file info, {e}, {db_id=}, {file_id=}, {traceback.format_exc()}")
         info = {"message": "Failed to get file info", "status": "failed"}, 500
 
     return info

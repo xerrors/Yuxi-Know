@@ -1,5 +1,6 @@
 import json
 import asyncio
+import traceback
 from fastapi import APIRouter, Body
 from fastapi.responses import StreamingResponse, Response
 from src.core import HistoryManager
@@ -85,7 +86,7 @@ def chat_post(
                             history=history_manager.update_ai(content),
                             refs=refs)
         except Exception as e:
-            logger.error(f"Model error: {e}")
+            logger.error(f"Model error: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Model error: {e}", status="error")
             return
 

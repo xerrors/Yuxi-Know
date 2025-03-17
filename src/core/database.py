@@ -229,7 +229,7 @@ class DataBaseManager:
         for line in lines:
             line.pop("vector")
 
-        lines.sort(key=lambda x: x.get("start_char_idx", 0))
+        lines.sort(key=lambda x: x.get("start_char_idx") or 0)
         # logger.debug(f"lines[0]: {lines[0]}")
         return {"lines": lines}
 
