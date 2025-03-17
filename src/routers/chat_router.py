@@ -51,7 +51,7 @@ def chat_post(
             try:
                 modified_query, refs = retriever(modified_query, history_manager.messages, meta)
             except Exception as e:
-                logger.error(f"Retriever error: {e}")
+                logger.error(f"Retriever error: {e}, {traceback.format_exc()}")
                 yield make_chunk(message=f"Retriever error: {e}", status="error")
                 return
 
@@ -106,6 +106,7 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
 
 @chat.post("/call_lite")
 async def call(query: str = Body(...), meta: dict = Body(None)):
+    meta = meta or {}
     async def predict_async(query):
         loop = asyncio.get_event_loop()
         model_provider = meta.get("model_provider", config.model_provider_lite)
