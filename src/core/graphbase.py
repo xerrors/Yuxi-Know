@@ -1,6 +1,7 @@
 import os
 import json
 import warnings
+import traceback
 
 import torch
 from neo4j import GraphDatabase as GD
@@ -445,7 +446,7 @@ class GraphDatabase:
                     session.execute_write(self.set_embedding, node_name, embedding)
                     count += 1
                 except Exception as e:
-                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}")
+                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}, {traceback.format_exc()}")
 
         return count
 

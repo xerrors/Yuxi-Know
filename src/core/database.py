@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import traceback
 
 from src import config
 from src.utils import hashstr, logger
@@ -168,7 +169,7 @@ class DataBaseManager:
                 db.files[idx]["status"] = "done"
 
             except Exception as e:
-                logger.error(f"Failed to add documents to collection {db.metaname}, {e}")
+                logger.error(f"Failed to add documents to collection {db.metaname}, {e}, {traceback.format_exc()}")
                 idx = self.get_idx_by_fileid(db, file_id)
                 db.files[idx]["status"] = "failed"
 
