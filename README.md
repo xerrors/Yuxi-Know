@@ -49,7 +49,7 @@ DEEPSEEK_API_KEY=<API_KEY>  # 如果配置 DeepSeek 添加此行，并替换 API
 ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 API_KEY
 ```
 
-[SiliconFlow 注册（含邀请码）](https://cloud.siliconflow.cn/i/Eo5yTHGJ)
+需要确保账户有一点点额度供调用，或使用这个链接注册[SiliconFlow 注册（含邀请码）](https://cloud.siliconflow.cn/i/Eo5yTHGJ)，或者14元的赠送额度。
 
 > 本项目的基础对话服务可在不含显卡的设备上运行，大模型使用在线服务商的接口。
 
