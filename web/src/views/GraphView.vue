@@ -133,7 +133,7 @@ const loadGraphInfo = () => {
     .then(response => response.json())
     .then(data => {
       console.log(data)
-      graphInfo.value = data.graph
+      graphInfo.value = data
       state.loadingGraphInfo = false
     })
     .catch(error => {

@@ -1,2 +1,3 @@
 from .history import *
-from .database import *
+from .knowledgebase import KnowledgeBase
+from .graphbase import GraphDatabase

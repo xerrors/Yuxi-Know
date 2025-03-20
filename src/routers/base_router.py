@@ -4,7 +4,7 @@ from fastapi import Request, Body
 
 base = APIRouter()
 
-from src import config, dbm, retriever
+from src import config, retriever, knowledge_base, graph_base
 from src.utils import logger
 
 
@@ -27,7 +27,8 @@ async def update_config(key = Body(...), value = Body(...)):
 
 @base.post("/restart")
 async def restart():
-    dbm.restart()
+    knowledge_base.restart()
+    graph_base.restart()
     retriever.restart()
     return {"message": "Restarted!"}
 

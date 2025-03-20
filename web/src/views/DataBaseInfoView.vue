@@ -54,7 +54,7 @@
             </a-button>
             <a-button @click="handleRefresh" :loading="state.refrashing">刷新状态</a-button>
           </div>
-          <a-table :columns="columns" :data-source="database.files" row-key="filename" class="my-table">
+          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table">
             <template #bodyCell="{ column, text, record }">
               <template v-if="column.key === 'filename'">
                 <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
@@ -93,8 +93,8 @@
             placement="right"
             @after-open-change="afterOpenChange"
           >
-            <h2>共 {{ selectedFile?.lines.length }} 个片段</h2>
-            <p v-for="line in selectedFile?.lines" :key="line.id" class="line-text">
+            <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
+            <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
               {{ line.text }}
             </p>
           </a-drawer>
@@ -302,7 +302,7 @@ const onQuery = () => {
     state.searchLoading = false
     return
   }
-  meta.db_name = database.value.metaname
+  meta.db_id = database.value.db_id
   fetch('/api/data/query-test', {
     method: "POST",
     headers: {
@@ -402,9 +402,15 @@ const openFileDetail = (record) => {
     .then(response => response.json())
     .then(data => {
       console.log(data)
+      if (data.status == "failed") {
+        message.error(data.message)
+        return
+      }
       state.lock = false
-      selectedFile.value = record
-      selectedFile.value.lines = data.lines
+      selectedFile.value = {
+        ...record,
+        lines: data.lines || []
+      }
       state.drawer = true
     })
     .catch(error => {
@@ -517,7 +523,6 @@ const addDocumentByFile = () => {
     })
     .finally(() => {
       getDatabaseInfo()
-      // 不在这里清除定时器，而是在定时器内部根据文件状态清除
       state.loading = false
     })
 }
@@ -875,7 +880,7 @@ onUnmounted(() => {
 .custom-class .line-text {
   padding: 10px;
   border-radius: 4px;
-  
+
   &:hover {
     background-color: var(--main-light-4);
   }

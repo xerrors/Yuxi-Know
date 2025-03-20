@@ -1,4 +1,4 @@
-from src import config, dbm
+from src import config, knowledge_base, graph_base
 from src.models.rerank_model import get_reranker
 from src.utils.logging_config import logger
 from src.models import select_model
@@ -76,7 +76,7 @@ class Retriever:
         results = []
         if refs["meta"].get("use_graph") and config.enable_knowledge_base:
             for entity in refs["entities"]:
-                result = dbm.graph_base.query_by_vector(entity)
+                result = graph_base.query_by_vector(entity)
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
@@ -88,8 +88,8 @@ class Retriever:
         kb_res = []
         final_res = []
 
-        db_name = refs["meta"].get("db_name")
-        if not db_name or not config.enable_knowledge_base:
+        db_id = refs["meta"].get("db_id")
+        if not db_id or not config.enable_knowledge_base:
             return {
                 "results": final_res,
                 "all_results": kb_res,
@@ -99,7 +99,7 @@ class Retriever:
 
         rw_query = self.rewrite_query(query, history, refs)
 
-        kb = dbm.metaname2db[db_name]
+        kb = knowledge_base.id2db[db_id]
         logger.debug(f"{refs['meta']=}")
 
         meta = refs["meta"]
@@ -109,9 +109,9 @@ class Retriever:
         top_k = meta.get("topK", 5)
 
         # 检索
-        all_kb_res = dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
+        all_kb_res = knowledge_base.search(rw_query, db_id, limit=max_query_count)
         for r in all_kb_res:
-            r["file"] = kb.id2file(r["entity"]["file_id"])
+            r["file"] = kb.files[r["entity"]["file_id"]]
 
         kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
 

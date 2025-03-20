@@ -1,9 +1,11 @@
-system_prompt = """
-"""
+from datetime import datetime
+
+def get_system_prompt():
+    return (f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
 
 knowbase_qa_template = """
-请利用查询到的资料回答问题，回答问题时，不要过度的分点作答。如果非要分点作答，可以使用 一、二、等：
+请利用查询到的资料回答问题，回答问题时，不要过度的分点作答。
 
 <参考资料>：
 {external}

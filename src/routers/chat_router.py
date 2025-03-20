@@ -37,7 +37,7 @@ def chat_post(
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
     def need_retrieve(meta):
-        return meta.get("use_web") or meta.get("use_graph") or meta.get("db_name")
+        return meta.get("use_web") or meta.get("use_graph") or meta.get("db_id")
 
     def generate_response():
         modified_query = query
