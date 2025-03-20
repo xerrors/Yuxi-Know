@@ -40,7 +40,7 @@ class SilconFlowReranker():
         payload = self.build_payload(query, sentences, max_length)
         response = requests.request("POST", self.url, json=payload, headers=self.headers)
         response = json.loads(response.text)
-        logger.debug(f"SiliconFlow Reranker response: {response}")
+        # logger.debug(f"SiliconFlow Reranker response: {response}")
 
         results = sorted(response["results"], key=lambda x: x["index"])
         all_scores = [result["relevance_score"] for result in results]

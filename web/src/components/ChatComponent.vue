@@ -226,7 +226,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   stream: true,
   summary_title: false,
   history_round: 5,
-  db_name: null,
+  db_id: null,
 })
 
 const marked = new Marked(
@@ -524,7 +524,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
 // 更新后的 sendMessage 函数
 const sendMessage = () => {
   const user_input = conv.value.inputText.trim();
-  const dbName = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.metaname : null;
+  const dbID = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.db_id : null;
   if (isStreaming.value) {
     message.error('请等待上一条消息处理完成');
     return
@@ -537,7 +537,7 @@ const sendMessage = () => {
 
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
     conv.value.inputText = '';
-    meta.db_name = dbName;
+    meta.db_id = dbID;
     fetchChatResponse(user_input, cur_res_id)
   } else {
     console.log('请输入消息');
