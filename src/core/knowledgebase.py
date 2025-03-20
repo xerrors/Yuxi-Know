@@ -184,7 +184,7 @@ class KnowledgeBase:
         return {"message": "删除成功"}
 
     def restart(self):
-        self.embed_model = get_embedding_model(config)
+        self._load_models()
         self._load_databases()
 
     ################################
