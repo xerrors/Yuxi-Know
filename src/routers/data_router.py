@@ -2,7 +2,7 @@ import os
 import asyncio
 import traceback
 from typing import List, Optional
-from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body
+from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body, Form, Query
 
 from src.utils import logger, hashstr
 from src import executor, retriever, config, knowledge_base, graph_base
@@ -91,12 +91,19 @@ async def get_document_info(db_id: str, file_id: str):
     return info
 
 @data.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    file: UploadFile = File(...),
+    db_id: Optional[str] = Query(None)
+):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No selected file")
 
-    upload_dir = os.path.join(config.save_dir, "data/uploads")
-    os.makedirs(upload_dir, exist_ok=True)
+    # 根据db_id获取上传路径，如果db_id为None则使用默认路径
+    if db_id:
+        upload_dir = knowledge_base.get_db_upload_path(db_id)
+    else:
+        upload_dir = os.path.join(config.save_dir, "data", "uploads")
+
     basename, ext = os.path.splitext(file.filename)
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
@@ -104,7 +111,7 @@ async def upload_file(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
 
-    return {"message": "File successfully uploaded", "file_path": file_path}
+    return {"message": "File successfully uploaded", "file_path": file_path, "db_id": db_id}
 
 @data.get("/graph")
 async def get_graph_info():

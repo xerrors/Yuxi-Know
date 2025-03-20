@@ -16,7 +16,8 @@ class KnowledgeBase:
     def __init__(self) -> None:
         self.data = []
         self.client = None
-        self.database_path = os.path.join(config.save_dir, "data", "database.json")
+        self.work_dir = os.path.join(config.save_dir, "data")
+        self.database_path = os.path.join(self.work_dir, "database.json")
         self._load_models()
         self._load_databases()
 
@@ -63,9 +64,25 @@ class KnowledgeBase:
                           embed_model=self.embed_model.embed_model_fullname,
                           dimension=dimension)
 
+        # 创建数据库对应的文件夹
+        self._ensure_db_folders(db.db_id)
+
         self.add_collection(db.db_id, dimension)
         self.data.append(db)
         self._save_databases()
+
+    def _ensure_db_folders(self, db_id):
+        """确保数据库文件夹存在"""
+        db_folder = os.path.join(self.work_dir, db_id)
+        uploads_folder = os.path.join(db_folder, "uploads")
+        os.makedirs(db_folder, exist_ok=True)
+        os.makedirs(uploads_folder, exist_ok=True)
+        return db_folder, uploads_folder
+
+    def get_db_upload_path(self, db_id=None):
+        """获取上传文件夹路径，如果没有指定db_id则使用默认路径"""
+        _, uploads_folder = self._ensure_db_folders(db_id)
+        return uploads_folder
 
     def get_databases(self):
         assert config.enable_knowledge_base, "知识库未启用"

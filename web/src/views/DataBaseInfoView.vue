@@ -32,7 +32,7 @@
               name="file"
               :multiple="true"
               :disabled="state.loading"
-              action="/api/data/upload"
+              :action="'/api/data/upload?db_id=' + databaseId"
               @change="handleFileUpload"
               @drop="handleDrop"
             >
