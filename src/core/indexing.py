@@ -29,7 +29,8 @@ def chunk(text_or_path, params=None):
         chunk_overlap=chunk_overlap,
     )
 
-    if os.path.isfile(text_or_path) and "uploads" in text_or_path:
+    # 如果文件存在，并且是当前目录下的文件，则使用文件解析器
+    if os.path.isfile(text_or_path) and os.path.exists(text_or_path) and os.path.abspath(text_or_path).startswith(os.getcwd()):
         parser = SimpleFileNodeParser()
         file_type = Path(text_or_path).suffix.lower()
         if file_type in [".txt", ".json", ".md"]:

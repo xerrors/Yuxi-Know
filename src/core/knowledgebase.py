@@ -18,6 +18,12 @@ class KnowledgeBase:
         self.client = None
         self.work_dir = os.path.join(config.save_dir, "data")
         self.database_path = os.path.join(self.work_dir, "database.json")
+
+        # Configuration
+        self.default_distance_threshold = 0.5
+        self.default_rerank_threshold = 0.1
+        self.default_max_query_count = 20
+
         self._load_models()
         self._load_databases()
 
@@ -28,6 +34,10 @@ class KnowledgeBase:
 
         from src.models.embedding import get_embedding_model
         self.embed_model = get_embedding_model(config)
+
+        if config.enable_reranker:
+            from src.models.rerank_model import get_reranker
+            self.reranker = get_reranker(config)
 
         if not self.connect_to_milvus():
             raise ConnectionError("Failed to connect to Milvus")
@@ -126,29 +136,87 @@ class KnowledgeBase:
         return {"lines": lines}
 
     def get_kb_by_id(self, db_id):
+        if not config.enable_knowledge_base:
+            return None
+
         return next((db for db in self.data if db.db_id == db_id), None)
+
+    def file_to_chunk(self, files, params=None):
+        """将文件转换为分块
+
+        这里主要是将文件转换为分块，但并不保存到数据库，仅仅返回分块后的信息，返回的信息里面也包含文件的id，文件名，文件类型，文件路径，文件状态，文件创建时间等。
+        files: list of file path
+        params: params for chunking
+
+        return: list of chunk info
+        """
+        file_infos = {}
+        for file in files:
+            file_id = "file_" + hashstr(file + str(time.time()))
+
+            file_type = file.split(".")[-1].lower()
+
+            if file_type == "pdf":
+                texts = read_text(file)
+                nodes = chunk(texts, params=params)
+            else:
+                nodes = chunk(file, params=params)
+
+            file_infos[file_id] = {
+                "file_id": file_id,
+                "filename": os.path.basename(file),
+                "path": file,
+                "type": file_type,
+                "status": "waiting",
+                "created_at": time.time(),
+                "nodes": [node.dict() for node in nodes]
+            }
+
+        return file_infos
+
+    def url_to_chunk(self, url, params=None):
+        """将url转换为分块，读取url的内容，并转换为分块"""
+        raise NotImplementedError("Not implemented")
+
+    def add_chunks(self, db_id, file_chunks):
+        """添加分块"""
+        db = self.get_kb_by_id(db_id)
+
+        if db.embed_model != config.embed_model:
+            logger.error(f"Embed model not match, {db.embed_model} != {config.embed_model}")
+            return {"message": f"Embed model not match, cur: {config.embed_model}, req: {db.embed_model}", "status": "failed"}
+
+        db.files.update(file_chunks)
+        self._save_databases()
+
+        for file_id, chunk in file_chunks.items():
+            db.files[file_id]["status"] = "processing"
+            self._save_databases()
+
+            try:
+                self.add_documents(
+                    file_id=file_id,
+                    collection_name=db.db_id,
+                    docs=[node["text"] for node in chunk["nodes"]],
+                    chunk_infos=chunk["nodes"])
+
+                db.files[file_id]["status"] = "done"
+
+            except Exception as e:
+                logger.error(f"Failed to add documents to collection {db.db_id}, {e}, {traceback.format_exc()}")
+                db.files[file_id]["status"] = "failed"
+
+            self._save_databases()
 
     def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
         if db.embed_model != config.embed_model:
             logger.error(f"Embed model not match, {db.embed_model} != {config.embed_model}")
-            return {"message": f"Embed model not match, cur: {config.embed_model}", "status": "failed"}
+            return {"message": f"Embed model not match, cur: {config.embed_model}, req: {db.embed_model}", "status": "failed"}
 
         # Preprocessing the files to the queue
-        new_files = {}
-        for file in files:
-            file_id = "file_" + hashstr(file + str(time.time()))
-            new_file = {
-                "file_id": file_id,
-                "filename": os.path.basename(file),
-                "path": file,
-                "type": file.split(".")[-1].lower(),
-                "status": "waiting",
-                "created_at": time.time()
-            }
-            new_files[file_id] = new_file
-
+        new_files = self.file_to_chunk(files, params=params)
         db.files.update(new_files)  # 更新数据库状态
 
         # 先保存一次数据库状态，确保waiting状态被记录
@@ -160,17 +228,11 @@ class KnowledgeBase:
             self._save_databases()
 
             try:
-                if new_file["type"] == "pdf":
-                    texts = read_text(new_file["path"])
-                    nodes = chunk(texts, params=params)
-                else:
-                    nodes = chunk(new_file["path"], params=params)
-
                 self.add_documents(
                     file_id=file_id,
                     collection_name=db.db_id,
-                    docs=[node.text for node in nodes],
-                    chunk_infos=[node.dict() for node in nodes])
+                    docs=[node["text"] for node in new_file["nodes"]],
+                    chunk_infos=new_file["nodes"])
 
                 db.files[file_id]["status"] = "done"
 
@@ -204,8 +266,63 @@ class KnowledgeBase:
         self._load_models()
         self._load_databases()
 
+    ###################################
+    #* Below is the code for retriever #
+    ###################################
+
+    def get_retriever(self, db_id):
+        db = self.get_kb_by_id(db_id)
+        if db is None:
+            raise Exception(f"database not found, {db_id}")
+
+        return db.retriever
+
+    def query(self, query, db_id, **kwargs):
+        db = self.get_kb_by_id(db_id)
+
+        distance_threshold = kwargs.get("distance_threshold", self.default_distance_threshold)
+        rerank_threshold = kwargs.get("rerank_threshold", self.default_rerank_threshold)
+        max_query_count = kwargs.get("max_query_count", self.default_max_query_count)
+
+        all_db_result = self.search(query, db_id, limit=max_query_count)
+        for res in all_db_result:
+            res["file"] = db.files[res["entity"]["file_id"]]
+
+        db_result = [r for r in all_db_result if r["distance"] > distance_threshold]
+
+        if config.enable_reranker and len(db_result) > 0 and self.reranker:
+            texts = [r["entity"]["text"] for r in db_result]
+            rerank_scores = self.reranker.compute_score([query, texts], normalize=False)
+            for i, r in enumerate(db_result):
+                r["rerank_score"] = rerank_scores[i]
+            db_result.sort(key=lambda x: x["rerank_score"], reverse=True)
+            db_result = [_res for _res in db_result if _res["rerank_score"] > rerank_threshold]
+
+        if kwargs.get("top_k", None):
+            db_result = db_result[:kwargs["top_k"]]
+
+        return {
+            "results": db_result,
+            "all_results": all_db_result,
+        }
+
+    def get_retriever(self, db_id):
+        retriever_params = {
+            "distance_threshold": self.default_distance_threshold,
+            "rerank_threshold": self.default_rerank_threshold,
+            "max_query_count": self.default_max_query_count,
+            "top_k": 10,
+        }
+
+        def retriever(query):
+            response = self.query(query, db_id, **retriever_params)
+            return response["results"]
+
+        return retriever
+
+
     ################################
-    # Below is the code for milvus #
+    #* Below is the code for milvus #
     ################################
     def connect_to_milvus(self):
         """
@@ -276,7 +393,7 @@ class KnowledgeBase:
         return res
 
     def search(self, query, collection_name, limit=3):
-
+        """搜索数据库"""
         query_vectors = self.embed_model.batch_encode([query])
         return self.search_by_vector(query_vectors[0], collection_name, limit)
 

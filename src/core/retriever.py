@@ -85,48 +85,35 @@ class Retriever:
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
 
-        kb_res = []
-        final_res = []
+        response = {
+            "results": [],
+            "all_results": [],
+            "rw_query": query,
+            "message": "",
+        }
 
-        db_id = refs["meta"].get("db_id")
+        meta = refs["meta"]
+
+        db_id = meta.get("db_id")
         if not db_id or not config.enable_knowledge_base:
-            return {
-                "results": final_res,
-                "all_results": kb_res,
-                "rw_query": query,
-                "message": "Knowledge base is disabled",
-            }
+            response["message"] = "知识库未启用、或未指定知识库、或知识库不存在"
+            return response
 
         rw_query = self.rewrite_query(query, history, refs)
 
-        kb = knowledge_base.id2db[db_id]
-        logger.debug(f"{refs['meta']=}")
+        logger.debug(f"{meta=}")
+        query_result = knowledge_base.query(query=rw_query,
+                                            db_id=db_id,
+                                            distance_threshold=meta.get("distanceThreshold", 0.5),
+                                            rerank_threshold=meta.get("rerankThreshold", 0.1),
+                                            max_query_count=meta.get("maxQueryCount", 20),
+                                            top_k=meta.get("topK", 10))
 
-        meta = refs["meta"]
-        max_query_count = meta.get("maxQueryCount", 10)
-        rerank_threshold = meta.get("rerankThreshold", 0.1)
-        distance_threshold = meta.get("distanceThreshold", 0)
-        top_k = meta.get("topK", 5)
+        response["results"] = query_result["results"]
+        response["all_results"] = query_result["all_results"]
+        response["rw_query"] = rw_query
 
-        # 检索
-        all_kb_res = knowledge_base.search(rw_query, db_id, limit=max_query_count)
-        for r in all_kb_res:
-            r["file"] = kb.files[r["entity"]["file_id"]]
-
-        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
-
-        # 重排序
-        if config.enable_reranker and len(kb_res) > 0:
-            texts = [r["entity"]["text"] for r in kb_res]
-            rerank_scores = self.reranker.compute_score([rw_query, texts], normalize=True)
-            for i, r in enumerate(kb_res):
-                r["rerank_score"] = rerank_scores[i]
-            kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-            kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
-
-        kb_res = kb_res[:top_k]
-
-        return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
+        return response
 
     def query_web(self, query, history, refs):
         """查询网络"""
@@ -144,7 +131,9 @@ class Retriever:
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        model = select_model(config)
+        model_provider = config.model_provider_lite
+        model_name = config.model_name_lite
+        model = select_model(config, model_provider=model_provider, model_name=model_name)
         if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
             rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
         else:
@@ -168,7 +157,9 @@ class Retriever:
     def reco_entities(self, query, history, refs):
         """识别句子中的实体"""
         query = refs.get("rewritten_query", query)
-        model = select_model(config)
+        model_provider = config.model_provider_lite
+        model_name = config.model_name_lite
+        model = select_model(config, model_provider=model_provider, model_name=model_name)
 
         entities = []
         if refs["meta"].get("use_graph"):

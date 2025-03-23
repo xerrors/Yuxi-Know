@@ -49,6 +49,12 @@ async def query_test(query: str = Body(...), meta: dict = Body(...)):
     result = retriever.query_knowledgebase(query, history=None, refs={"meta": meta})
     return result
 
+@data.post("/file-to-chunk")
+async def file_to_chunk(files: List[str] = Body(...), params: dict = Body(...)):
+    logger.debug(f"File to chunk: {files}")
+    result = knowledge_base.file_to_chunk(files, params=params)
+    return result
+
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: List[str] = Body(...)):
     logger.debug(f"Add document in {db_id} by file: {files}")
@@ -63,6 +69,20 @@ async def create_document_by_file(db_id: str = Body(...), files: List[str] = Bod
     except Exception as e:
         logger.error(f"添加文件失败: {e}, {traceback.format_exc()}")
         return {"message": f"添加文件失败: {e}", "status": "failed"}
+
+@data.post("/add-by-chunks")
+async def add_by_chunks(db_id: str = Body(...), file_chunks: dict = Body(...)):
+    logger.debug(f"Add chunks in {db_id}: {file_chunks}")
+    try:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            executor,  # 使用与chat_router相同的线程池
+            lambda: knowledge_base.add_chunks(db_id, file_chunks)
+        )
+        return {"message": "分块添加完成", "status": "success"}
+    except Exception as e:
+        logger.error(f"添加分块失败: {e}, {traceback.format_exc()}")
+        return {"message": f"添加分块失败: {e}", "status": "failed"}
 
 @data.get("/info")
 async def get_database_info(db_id: str):

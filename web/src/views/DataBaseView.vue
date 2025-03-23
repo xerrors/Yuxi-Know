@@ -45,7 +45,7 @@
           <div class="icon"><ReadFilled /></div>
           <div class="info">
             <h3>{{ database.name }}</h3>
-            <p><span>{{ database.metadata.row_count }} 行</span></p>
+            <p><span>{{ database.metadata.row_count }} 行</span> · <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span></p>
           </div>
         </div>
         <p class="description">{{ database.description || '暂无描述' }}</p>
