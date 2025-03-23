@@ -29,6 +29,17 @@
           <div class="flex-center">
             最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
+          <div class="flex-center">
+            字体大小
+            <a-select v-model:value="meta.fontSize" style="width: 100px" placeholder="选择字体大小">
+              <a-select-option value="smaller">更小</a-select-option>
+              <a-select-option value="default">默认</a-select-option>
+              <a-select-option value="larger">更大</a-select-option>
+            </a-select>
+          </div>
+          <div class="flex-center" @click="meta.wideScreen = !meta.wideScreen">
+            宽屏模式 <div @click.stop><a-switch v-model:checked="meta.wideScreen" /></div>
+          </div>
         </div>
       </div>
     </div>
@@ -45,7 +56,7 @@
         </div>
       </div>
     </div>
-    <div class="chat-box">
+    <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
       <div
         v-for="message in conv.messages"
         :key="message.id"
@@ -93,7 +104,7 @@
       </div>
     </div>
     <div class="bottom">
-      <div class="input-box">
+      <div class="input-box" :class="{ 'wide-screen': meta.wideScreen }">
         <div class="input-area">
           <a-textarea
             class="user-input"
@@ -227,6 +238,8 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   summary_title: false,
   history_round: 5,
   db_id: null,
+  fontSize: 'default',
+  wideScreen: false,
 })
 
 const marked = new Marked(
@@ -751,6 +764,27 @@ watch(
   padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
+  transition: max-width 0.3s ease;
+
+  &.wide-screen {
+    max-width: 1200px;
+  }
+
+  &.font-smaller {
+    font-size: 14px;
+
+    .message-box {
+      font-size: 14px;
+    }
+  }
+
+  &.font-larger {
+    font-size: 16px;
+
+    .message-box {
+      font-size: 16px;
+    }
+  }
 
   .message-box {
     display: inline-block;
@@ -759,7 +793,7 @@ watch(
     padding: 0.625rem 1.25rem;
     user-select: text;
     word-break: break-word;
-    font-size: 0.9rem;
+    font-size: 15px;
     font-variation-settings: 'wght' 400, 'opsz' 10.5;
     font-weight: 400;
     box-sizing: border-box;
@@ -842,7 +876,12 @@ watch(
     border: 2px solid var(--gray-200);
     border-radius: 1rem;
     background: var(--gray-50);
-    transition: background, border 0.3s, box-shadow 0.3s;
+    transition: background, border 0.3s, box-shadow 0.3s, max-width 0.3s ease;
+
+    &.wide-screen {
+      max-width: 1200px;
+    }
+
     &:focus-within {
       border: 2px solid var(--main-500);
       background: white;

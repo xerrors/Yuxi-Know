@@ -3,7 +3,7 @@
     <div class="conversations" :class="['conversations', { 'is-open': state.isSidebarOpen }]">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
-         <span style="font-weight: bold; user-select: none;">对话历史</span>
+         <span class="header-title">对话历史</span>
         <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
       </div>
       <div class="conversation-list">
@@ -129,6 +129,12 @@ onMounted(() => {
   position: relative;
 }
 
+.chat-container .conversations {
+  transition: width 0.3s ease, opacity 0.3s ease, flex 0.3s ease;
+  white-space: nowrap; /* 防止文本换行 */
+  overflow: hidden; /* 确保内容不溢出 */
+}
+
 .chat-container .conversations:not(.is-open) {
   width: 0;
   opacity: 0;
@@ -136,15 +142,14 @@ onMounted(() => {
 }
 
 .chat-container .conversations.is-open {
-  overflow: hidden; /* 确保内容不溢出 */
-  white-space: nowrap; /* 防止文本换行 */
   flex: 1 1 auto; /* 当侧边栏打开时，占据可用空间 */
+  width: 230px;
+  opacity: 1;
 }
 .conversations {
   width: 230px; /* 初始宽度 */
   max-width: 230px;
   border-right: 1px solid var(--main-light-3);
-  overflow: hidden; /* 确保内容不溢出 */
   max-height: 100%;
   background-color: var(--bg-sider);
 
@@ -156,6 +161,13 @@ onMounted(() => {
     padding: 16px;
     z-index: 9;
     border-bottom: 1px solid var(--main-light-3);
+
+    .header-title {
+      font-weight: bold;
+      user-select: none;
+      white-space: nowrap;
+      overflow: hidden;
+    }
 
     .action {
       font-size: 1.2rem;
