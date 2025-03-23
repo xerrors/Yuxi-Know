@@ -66,7 +66,7 @@ async def create_document_by_file(db_id: str = Body(...), files: List[str] = Bod
 
 @data.get("/info")
 async def get_database_info(db_id: str):
-    logger.debug(f"Get database {db_id} info")
+    # logger.debug(f"Get database {db_id} info")
     database = knowledge_base.get_database_info(db_id)
     if database is None:
         raise HTTPException(status_code=404, detail="Database not found")

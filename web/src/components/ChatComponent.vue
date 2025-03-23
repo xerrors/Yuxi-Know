@@ -713,7 +713,7 @@ watch(
 
   h1 {
     margin-bottom: 20px;
-    font-size: 24px;
+    font-size: 1.2rem;
     color: #333;
   }
 
@@ -759,7 +759,7 @@ watch(
     padding: 0.625rem 1.25rem;
     user-select: text;
     word-break: break-word;
-    font-size: 16px;
+    font-size: 0.9rem;
     font-variation-settings: 'wght' 400, 'opsz' 10.5;
     font-weight: 400;
     box-sizing: border-box;
@@ -891,7 +891,6 @@ watch(
       padding: 0.5rem 0.5rem;
       background-color: transparent;
       border: none;
-      font-size: 1.2rem;
       margin: 0 0;
       color: #111111;
       font-size: 16px;
@@ -1080,7 +1079,7 @@ watch(
 
   pre {
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 0.9rem;
     border: 1px solid var(--main-light-3);
     padding: 1rem;
 
@@ -1089,6 +1088,7 @@ watch(
     }
 
     code.hljs {
+      font-size: 0.8rem;
       background-color: var(--gray-100);
     }
   }
