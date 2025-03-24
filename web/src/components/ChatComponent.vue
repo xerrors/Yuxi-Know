@@ -29,6 +29,17 @@
           <div class="flex-center">
             最大历史轮数 <a-input-number id="inputNumber" v-model:value="meta.history_round" :min="1" :max="50" />
           </div>
+          <div class="flex-center">
+            字体大小
+            <a-select v-model:value="meta.fontSize" style="width: 100px" placeholder="选择字体大小">
+              <a-select-option value="smaller">更小</a-select-option>
+              <a-select-option value="default">默认</a-select-option>
+              <a-select-option value="larger">更大</a-select-option>
+            </a-select>
+          </div>
+          <div class="flex-center" @click="meta.wideScreen = !meta.wideScreen">
+            宽屏模式 <div @click.stop><a-switch v-model:checked="meta.wideScreen" /></div>
+          </div>
         </div>
       </div>
     </div>
@@ -45,7 +56,7 @@
         </div>
       </div>
     </div>
-    <div class="chat-box">
+    <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
       <div
         v-for="message in conv.messages"
         :key="message.id"
@@ -93,7 +104,7 @@
       </div>
     </div>
     <div class="bottom">
-      <div class="input-box">
+      <div class="input-box" :class="{ 'wide-screen': meta.wideScreen }">
         <div class="input-area">
           <a-textarea
             class="user-input"
@@ -205,9 +216,10 @@ const shouldAutoScroll = ref(true);
 const panel = ref(null)
 const modelCard = ref(null)
 const examples = ref([
-  '写一个冒泡排序',
-  '今天天气怎么样？',
-  '贾宝玉今年多少岁？',
+  '写一个简单的冒泡排序',
+  '今天无锡天气怎么样？',
+  '介绍一下红楼梦',
+  '今天星期几？'
 ])
 
 const opts = reactive({
@@ -225,7 +237,9 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   stream: true,
   summary_title: false,
   history_round: 5,
-  db_name: null,
+  db_id: null,
+  fontSize: 'default',
+  wideScreen: false,
 })
 
 const marked = new Marked(
@@ -523,7 +537,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
 // 更新后的 sendMessage 函数
 const sendMessage = () => {
   const user_input = conv.value.inputText.trim();
-  const dbName = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.metaname : null;
+  const dbID = opts.databases.length > 0 ? opts.databases[meta.selectedKB]?.db_id : null;
   if (isStreaming.value) {
     message.error('请等待上一条消息处理完成');
     return
@@ -536,7 +550,7 @@ const sendMessage = () => {
 
     const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id;
     conv.value.inputText = '';
-    meta.db_name = dbName;
+    meta.db_id = dbID;
     fetchChatResponse(user_input, cur_res_id)
   } else {
     console.log('请输入消息');
@@ -712,7 +726,7 @@ watch(
 
   h1 {
     margin-bottom: 20px;
-    font-size: 24px;
+    font-size: 1.2rem;
     color: #333;
   }
 
@@ -750,6 +764,27 @@ watch(
   padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
+  transition: max-width 0.3s ease;
+
+  &.wide-screen {
+    max-width: 1200px;
+  }
+
+  &.font-smaller {
+    font-size: 14px;
+
+    .message-box {
+      font-size: 14px;
+    }
+  }
+
+  &.font-larger {
+    font-size: 16px;
+
+    .message-box {
+      font-size: 16px;
+    }
+  }
 
   .message-box {
     display: inline-block;
@@ -758,7 +793,7 @@ watch(
     padding: 0.625rem 1.25rem;
     user-select: text;
     word-break: break-word;
-    font-size: 16px;
+    font-size: 15px;
     font-variation-settings: 'wght' 400, 'opsz' 10.5;
     font-weight: 400;
     box-sizing: border-box;
@@ -841,7 +876,12 @@ watch(
     border: 2px solid var(--gray-200);
     border-radius: 1rem;
     background: var(--gray-50);
-    transition: background, border 0.3s, box-shadow 0.3s;
+    transition: background, border 0.3s, box-shadow 0.3s, max-width 0.3s ease;
+
+    &.wide-screen {
+      max-width: 1200px;
+    }
+
     &:focus-within {
       border: 2px solid var(--main-500);
       background: white;
@@ -890,7 +930,6 @@ watch(
       padding: 0.5rem 0.5rem;
       background-color: transparent;
       border: none;
-      font-size: 1.2rem;
       margin: 0 0;
       color: #111111;
       font-size: 16px;
@@ -1079,7 +1118,7 @@ watch(
 
   pre {
     border-radius: 8px;
-    font-size: 14px;
+    font-size: 0.9rem;
     border: 1px solid var(--main-light-3);
     padding: 1rem;
 
@@ -1088,6 +1127,7 @@ watch(
     }
 
     code.hljs {
+      font-size: 0.8rem;
       background-color: var(--gray-100);
     }
   }

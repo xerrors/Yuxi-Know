@@ -1,30 +1,34 @@
+from src import config, knowledge_base, graph_base
 from src.models.rerank_model import get_reranker
 from src.utils.logging_config import logger
-
+from src.models import select_model
 
 class Retriever:
 
-    def __init__(self, config, dbm, model):
-        self.config = config
-        self.dbm = dbm
-        self.model = model
+    def __init__(self):
+        self._load_models()
 
-        if self.config.enable_reranker:
+    def _load_models(self):
+        if config.enable_reranker:
             self.reranker = get_reranker(config)
 
-        if self.config.enable_web_search:
+        if config.enable_web_search:
             from src.utils.web_search import WebSearcher
             self.web_searcher = WebSearcher()
 
     def retrieval(self, query, history, meta):
         refs = {"query": query, "history": history, "meta": meta}
-        refs["model_name"] = self.config.model_name
+        refs["model_name"] = config.model_name
         refs["entities"] = self.reco_entities(query, history, refs)
         refs["knowledge_base"] = self.query_knowledgebase(query, history, refs)
         refs["graph_base"] = self.query_graph(query, history, refs)
         refs["web_search"] = self.query_web(query, history, refs)
 
         return refs
+
+    def restart(self):
+        """所有需要重启的模型"""
+        self._load_models()
 
     def construct_query(self, query, refs, meta):
         logger.debug(f"{refs=}")
@@ -70,9 +74,9 @@ class Retriever:
 
     def query_graph(self, query, history, refs):
         results = []
-        if refs["meta"].get("use_graph") and self.config.enable_knowledge_base:
+        if refs["meta"].get("use_graph") and config.enable_knowledge_base:
             for entity in refs["entities"]:
-                result = self.dbm.graph_base.query_by_vector(entity)
+                result = graph_base.query_by_vector(entity)
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
@@ -81,53 +85,40 @@ class Retriever:
     def query_knowledgebase(self, query, history, refs):
         """查询知识库"""
 
-        kb_res = []
-        final_res = []
+        response = {
+            "results": [],
+            "all_results": [],
+            "rw_query": query,
+            "message": "",
+        }
 
-        db_name = refs["meta"].get("db_name")
-        if not db_name or not self.config.enable_knowledge_base:
-            return {
-                "results": final_res,
-                "all_results": kb_res,
-                "rw_query": query,
-                "message": "Knowledge base is disabled",
-            }
+        meta = refs["meta"]
+
+        db_id = meta.get("db_id")
+        if not db_id or not config.enable_knowledge_base:
+            response["message"] = "知识库未启用、或未指定知识库、或知识库不存在"
+            return response
 
         rw_query = self.rewrite_query(query, history, refs)
 
-        kb = self.dbm.metaname2db[db_name]
-        logger.debug(f"{refs['meta']=}")
+        logger.debug(f"{meta=}")
+        query_result = knowledge_base.query(query=rw_query,
+                                            db_id=db_id,
+                                            distance_threshold=meta.get("distanceThreshold", 0.5),
+                                            rerank_threshold=meta.get("rerankThreshold", 0.1),
+                                            max_query_count=meta.get("maxQueryCount", 20),
+                                            top_k=meta.get("topK", 10))
 
-        meta = refs["meta"]
-        max_query_count = meta.get("maxQueryCount", 10)
-        rerank_threshold = meta.get("rerankThreshold", 0.1)
-        distance_threshold = meta.get("distanceThreshold", 0)
-        top_k = meta.get("topK", 5)
+        response["results"] = query_result["results"]
+        response["all_results"] = query_result["all_results"]
+        response["rw_query"] = rw_query
 
-        # 检索
-        all_kb_res = self.dbm.knowledge_base.search(rw_query, db_name, limit=max_query_count)
-        for r in all_kb_res:
-            r["file"] = kb.id2file(r["entity"]["file_id"])
-
-        kb_res = [r for r in all_kb_res if r["distance"] > distance_threshold]
-
-        # 重排序
-        if self.config.enable_reranker and len(kb_res) > 0:
-            texts = [r["entity"]["text"] for r in kb_res]
-            rerank_scores = self.reranker.compute_score([rw_query, texts], normalize=True)
-            for i, r in enumerate(kb_res):
-                r["rerank_score"] = rerank_scores[i]
-            kb_res.sort(key=lambda x: x["rerank_score"], reverse=True)
-            kb_res = [_res for _res in kb_res if _res["rerank_score"] > rerank_threshold]
-
-        kb_res = kb_res[:top_k]
-
-        return {"results": kb_res, "all_results": all_kb_res, "rw_query": rw_query}
+        return response
 
     def query_web(self, query, history, refs):
         """查询网络"""
 
-        if not (refs["meta"].get("use_web") and self.config.enable_web_search):
+        if not (refs["meta"].get("use_web") and config.enable_web_search):
             return {"results": [], "message": "Web search is disabled"}
 
         try:
@@ -140,10 +131,13 @@ class Retriever:
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
+        model_provider = config.model_provider_lite
+        model_name = config.model_name_lite
+        model = select_model(config, model_provider=model_provider, model_name=model_name)
         if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
             rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
         else:
-            rewrite_query_span = self.config.use_rewrite_query
+            rewrite_query_span = config.use_rewrite_query
 
         if rewrite_query_span == "off":
             rewritten_query = query
@@ -152,10 +146,10 @@ class Retriever:
 
             history_query = [entry["content"] for entry in history if entry["role"] == "user"] if history else ""
             rewritten_query_prompt = rewritten_query_prompt_template.format(history=history_query, query=query)
-            rewritten_query = self.model.predict(rewritten_query_prompt).content
+            rewritten_query = model.predict(rewritten_query_prompt).content
 
         if rewrite_query_span == "hyde":
-            hy_doc = self.model.predict(rewritten_query).content
+            hy_doc = model.predict(rewritten_query).content
             rewritten_query = f"{rewritten_query} {hy_doc}"
 
         return rewritten_query
@@ -163,6 +157,9 @@ class Retriever:
     def reco_entities(self, query, history, refs):
         """识别句子中的实体"""
         query = refs.get("rewritten_query", query)
+        model_provider = config.model_provider_lite
+        model_name = config.model_name_lite
+        model = select_model(config, model_provider=model_provider, model_name=model_name)
 
         entities = []
         if refs["meta"].get("use_graph"):
@@ -170,7 +167,7 @@ class Retriever:
             from src.utils.prompts import keywords_prompt_template as entity_template
 
             entity_extraction_prompt = entity_template.format(text=query)
-            entities = self.model.predict(entity_extraction_prompt).content.split("<->")
+            entities = model.predict(entity_extraction_prompt).content.split("<->")
             # entities = [entity for entity in entities if all(char.isalnum() or char in "汉字" for char in entity)]
 
         return entities

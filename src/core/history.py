@@ -1,8 +1,12 @@
+from src.utils.prompts import get_system_prompt
 from src.utils.logging_config import logger
 
 class HistoryManager():
-    def __init__(self, history=None):
+    def __init__(self, history=None, system_prompt=None):
         self.messages = history or []
+
+        system_prompt = system_prompt or get_system_prompt()
+        self.add_system(system_prompt)
 
     def add(self, role, content):
         self.messages.append({"role": role, "content": content})

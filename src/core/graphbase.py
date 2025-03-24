@@ -1,10 +1,12 @@
 import os
 import json
 import warnings
+import traceback
 
 import torch
 from neo4j import GraphDatabase as GD
 
+from src import config
 from src.utils import logger
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -13,16 +15,13 @@ warnings.filterwarnings("ignore", category=UserWarning)
 UIE_MODEL = None
 
 class GraphDatabase:
-    def __init__(self, config, embed_model=None, kgdb_name="neo4j"):
-        self.config = config
+    def __init__(self):
         self.driver = None
         self.files = []
         self.status = "closed"
-        self.kgdb_name = kgdb_name
-        assert embed_model, "embed_model=None"
-        self.embed_model = embed_model
+        self.kgdb_name = "neo4j"
         self.embed_model_name = None
-        self.work_dir = os.path.join(config.save_dir, "knowledge_graph", kgdb_name)
+        self.work_dir = os.path.join(config.save_dir, "knowledge_graph", self.kgdb_name)
         os.makedirs(self.work_dir, exist_ok=True)
 
         # 尝试加载已保存的图数据库信息
@@ -32,6 +31,8 @@ class GraphDatabase:
         self.start()
 
     def start(self):
+        if not config.enable_knowledge_graph or not config.enable_knowledge_base:
+            return
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
         username = os.environ.get("NEO4J_USERNAME", "neo4j")
         password = os.environ.get("NEO4J_PASSWORD", "0123456789")
@@ -39,9 +40,9 @@ class GraphDatabase:
         try:
             self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
             self.status = "open"
-            logger.info(f"Connected to Neo4j at {uri}/{self.kgdb_name}, {self.get_database_info()}")
+            logger.info(f"Connected to Neo4j at {uri}/{self.kgdb_name}, {self.get_graph_info(self.kgdb_name)}")
             # 连接成功后保存图数据库信息
-            self.save_graph_info()
+            self.save_graph_info(self.kgdb_name)
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}, {uri}, {self.kgdb_name}, {username}, {password}")
             self.config.enable_knowledge_graph = False
@@ -49,6 +50,13 @@ class GraphDatabase:
     def close(self):
         """关闭数据库连接"""
         self.driver.close()
+
+    def is_running(self):
+        """检查图数据库是否正在运行"""
+        if not config.enable_knowledge_graph or not config.enable_knowledge_base:
+            return False
+        else:
+            return self.status == "open"
 
     def get_sample_nodes(self, kgdb_name='neo4j', num=50):
         """获取指定数据库的 num 个节点信息"""
@@ -73,30 +81,6 @@ class GraphDatabase:
             session.run(f"CREATE DATABASE {kgdb_name}")
             print(f"数据库 '{kgdb_name}' 创建成功.")
             return kgdb_name  # 返回创建的数据库名称
-
-    def get_database_info(self, db_name="neo4j"):
-        """获取指定数据库的信息"""
-        self.use_database(db_name)
-        def query(tx):
-            entity_count = tx.run("MATCH (n) RETURN count(n) AS count").single()["count"]
-            relationship_count = tx.run("MATCH ()-[r]->() RETURN count(r) AS count").single()["count"]
-            triples_count = tx.run("MATCH (n)-[r]->(m) RETURN count(n) AS count").single()["count"]
-
-            # 获取所有标签
-            labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
-
-            return {
-                "database_name": db_name,
-                "entity_count": entity_count,
-                "relationship_count": relationship_count,
-                "triples_count": triples_count,
-                "labels": labels,
-                "status": self.status,
-                "embed_model_name": self.embed_model_name
-            }
-
-        with self.driver.session() as session:
-            return session.execute_read(query)
 
     def use_database(self, kgdb_name="neo4j"):
         """切换到指定数据库"""
@@ -158,7 +142,7 @@ class GraphDatabase:
 
         # 判断模型名称是否匹配
         from src.config import EMBED_MODEL_INFO
-        cur_embed_info = EMBED_MODEL_INFO[self.config.embed_model]
+        cur_embed_info = EMBED_MODEL_INFO[config.embed_model]
         self.embed_model_name = self.embed_model_name or cur_embed_info.get('name')
         assert self.embed_model_name == cur_embed_info.get('name') or self.embed_model_name is None, \
             f"embed_model_name={self.embed_model_name}, {cur_embed_info.get('name')=}"
@@ -166,7 +150,7 @@ class GraphDatabase:
         with self.driver.session() as session:
             logger.info(f"Adding entity to {kgdb_name}")
             session.execute_write(_create_graph, triples)
-            logger.info(f"Creating vector index for {kgdb_name} with {self.config.embed_model}")
+            logger.info(f"Creating vector index for {kgdb_name} with {config.embed_model}")
             session.execute_write(_create_vector_index, cur_embed_info['dimension'])
             # NOTE 这里需要异步处理
             for i, entry in enumerate(triples):
@@ -328,7 +312,8 @@ class GraphDatabase:
 
     def get_embedding(self, text):
         with torch.no_grad():
-            outputs = self.embed_model.encode([text])[0]
+            from src import knowledge_base
+            outputs = knowledge_base.embed_model.encode([text])[0]
             return outputs
 
     def set_embedding(self, tx, entity_name, embedding):
@@ -337,34 +322,53 @@ class GraphDatabase:
         CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
         """, name=entity_name, embedding=embedding)
 
-    def save_graph_info(self):
+    def get_graph_info(self, graph_name="neo4j"):
+        self.use_database(graph_name)
+        def query(tx):
+            entity_count = tx.run("MATCH (n) RETURN count(n) AS count").single()["count"]
+            relationship_count = tx.run("MATCH ()-[r]->() RETURN count(r) AS count").single()["count"]
+            triples_count = tx.run("MATCH (n)-[r]->(m) RETURN count(n) AS count").single()["count"]
+
+            # 获取所有标签
+            labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
+
+            return {
+                "graph_name": graph_name,
+                "entity_count": entity_count,
+                "relationship_count": relationship_count,
+                "triples_count": triples_count,
+                "labels": labels,
+                "status": self.status,
+                "embed_model_name": self.embed_model_name,
+                "unindexed_node_count": self.query_nodes_without_embedding(graph_name)
+            }
+
+        try:
+            if self.status == "open" and self.driver and self.is_running():
+                # 获取数据库信息
+                with self.driver.session() as session:
+                    graph_info = session.execute_read(query)
+
+            # 添加时间戳
+            from datetime import datetime
+            graph_info["last_updated"] = datetime.now().isoformat()
+            return graph_info
+
+        except Exception as e:
+            logger.error(f"获取图数据库信息失败：{e}, {traceback.format_exc()}")
+            return None
+
+    def save_graph_info(self, graph_name="neo4j"):
         """
         将图数据库的基本信息保存到工作目录中的JSON文件
         保存的信息包括：数据库名称、状态、嵌入模型名称等
         """
         try:
-            # 获取数据库信息
-            db_info = None
-            if self.status == "open" and self.driver:
-                try:
-                    db_info = self.get_database_info(self.kgdb_name)
-                except Exception as e:
-                    logger.warning(f"无法获取数据库信息：{e}")
+            graph_info = self.get_graph_info(graph_name)
+            if graph_info is None:
+                logger.error(f"图数据库信息为空，无法保存")
+                return False
 
-            # 构建要保存的信息字典
-            graph_info = {
-                "kgdb_name": self.kgdb_name,
-                "status": self.status,
-                "embed_model_name": self.embed_model_name,
-                "last_updated": None,  # 这里可以添加时间戳
-                "database_info": db_info
-            }
-
-            # 添加时间戳
-            from datetime import datetime
-            graph_info["last_updated"] = datetime.now().isoformat()
-
-            # 保存到JSON文件
             info_file_path = os.path.join(self.work_dir, "graph_info.json")
             with open(info_file_path, 'w', encoding='utf-8') as f:
                 json.dump(graph_info, f, ensure_ascii=False, indent=2)
@@ -445,7 +449,7 @@ class GraphDatabase:
                     session.execute_write(self.set_embedding, node_name, embedding)
                     count += 1
                 except Exception as e:
-                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}")
+                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}, {traceback.format_exc()}")
 
         return count
 
