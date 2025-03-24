@@ -2,6 +2,7 @@ import os
 import json
 import time
 import traceback
+import shutil
 
 from pymilvus import MilvusClient, MilvusException
 
@@ -259,6 +260,10 @@ class KnowledgeBase:
 
         self.client.drop_collection(collection_name=db.db_id)
         self.data.remove(db)
+        # 删除数据库对应的文件夹
+        db_folder = os.path.join(self.work_dir, db.db_id)
+        if os.path.exists(db_folder):
+            shutil.rmtree(db_folder)
         self._save_databases()
         return {"message": "删除成功"}
 

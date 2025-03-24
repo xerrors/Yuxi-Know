@@ -19,7 +19,7 @@
       </a-button>
     </template>
   </HeaderComponent>
-  <a-alert v-if="database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
+  <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
   <div class="db-main-container">
     <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
 

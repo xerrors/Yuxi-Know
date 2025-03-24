@@ -365,7 +365,7 @@ const graphStatusText = computed(() => {
 });
 
 const graphDescription = computed(() => {
-  const dbName = graphInfo.value?.database_name || '';
+  const dbName = graphInfo.value?.graph_name || '';
   const entityCount = graphInfo.value?.entity_count || 0;
   const relationCount = graphInfo.value?.relationship_count || 0;
   const modelName = graphInfo.value?.embed_model_name || '未上传文件';
