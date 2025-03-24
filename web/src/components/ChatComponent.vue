@@ -370,7 +370,7 @@ const updateMessage = (info) => {
     try {
       // 只有在 text 不为空时更新
       if (info.text !== null && info.text !== undefined && info.text !== '') {
-        msg.text = info.text;
+        msg.text += info.text;
       }
 
       if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
@@ -463,6 +463,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       history: conv.value.history,
       meta: meta,
       cur_res_id: cur_res_id,
+      thread_id: conv.value.id.toString(),
     }),
     headers: {
       'Content-Type': 'application/json'
@@ -639,6 +640,12 @@ watch(
       display: flex;
       align-items: center;
     }
+
+    .header__left {
+      .close {
+        margin-right: 12px;
+      }
+    }
   }
 
   .nav-btn {
@@ -652,6 +659,7 @@ watch(
     font-size: 1rem;
     width: auto;
     padding: 0.5rem 1rem;
+    transition: background-color 0.3s;
 
     .text {
       margin-left: 10px;
@@ -678,6 +686,7 @@ watch(
   padding: 12px;
   z-index: 11;
   width: 280px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 
   .flex-center {
     display: flex;
@@ -1051,9 +1060,27 @@ watch(
 @keyframes loading {0%,80%,100%{transform:scale(0.5);}40%{transform:scale(1);}}
 
 .slide-out-left{-webkit-animation:slide-out-left .2s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
-.swing-in-top-fwd{-webkit-animation:swing-in-top-fwd .2s ease-out both;animation:swing-in-top-fwd .2s ease-out both}
-@-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
-@-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
+.swing-in-top-fwd {
+  -webkit-animation: swing-in-top-fwd 0.3s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;
+  animation: swing-in-top-fwd 0.3s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;
+}
+
+@keyframes swing-in-top-fwd {
+  0% {
+    -webkit-transform: rotateX(-100deg);
+    transform: rotateX(-100deg);
+    -webkit-transform-origin: top;
+    transform-origin: top;
+    opacity: 0;
+  }
+  100% {
+    -webkit-transform: rotateX(0deg);
+    transform: rotateX(0deg);
+    -webkit-transform-origin: top;
+    transform-origin: top;
+    opacity: 1;
+  }
+}
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

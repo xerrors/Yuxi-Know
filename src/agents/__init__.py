@@ -1,53 +1,39 @@
-from src.agents.registry import BaseAgent
-from src.agents.chatbot.graph import ChatbotAgent
-from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import AIMessageChunk, ToolMessage
-
+from src.agents.chatbot import ChatbotAgent, ChatbotConfiguration
 
 class AgentManager:
     def __init__(self):
         self.agents = {}
 
-    def add_agent(self, agent_id, agent):
+    def add_agent(self, agent_id, agent_class, configuration_class):
         self.agents[agent_id] = {
-            "agent": agent,
-            "configuration": agent.configuration
+            "agent_class": agent_class,
+            "configuration_class": configuration_class
         }
 
-def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
-    config = config or {}
-    if "configurable" not in config:
-        config["configurable"] = {}
+    def get_runnable_agent(self, agent_id, **kwargs):
+        agent_class = self.get_agent(agent_id)
+        configuration_class = self.get_configuration(agent_id)
+        configuration = configuration_class(**kwargs)
+        return agent_class(configuration)
 
-    while True:
-        user_input = input("\nUser: ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
+    def get_agent(self, agent_id):
+        return self.agents[agent_id]["agent_class"]
 
-        stream_flag = False
-        for msg, metadata in agent.stream_messages([{"role": "user", "content": user_input}], config):
-            if isinstance(msg, AIMessageChunk):
-                content = msg.content or msg.tool_calls
+    def get_configuration(self, agent_id):
+        return self.agents[agent_id]["configuration_class"]
 
-                if not content:
-                    if stream_flag == True:
-                        print()
-                        stream_flag = False
-                    continue
 
-                if stream_flag == False and content:
-                    print(f"AI: {content}", end="", flush=True)
-                    stream_flag = True
-                    continue
+agent_manager = AgentManager()
+agent_manager.add_agent("chatbot", ChatbotAgent, ChatbotConfiguration)
 
-                elif content:
-                    print(f"{content}", end="", flush=True)
+__all__ = ["agent_manager"]
 
-            if isinstance(msg, ToolMessage):
-                print(f"Tool: {msg.content}")
 
-def get_agents():
-    agent_manager = AgentManager()
-    agent_manager.add_agent("chatbot", ChatbotAgent())
-    return agent_manager.agents
+if __name__ == "__main__":
+    agent = agent_manager.get_agent("chatbot")
+    conf = agent_manager.get_configuration("chatbot")
+    agent_info = {
+        "name": agent.name,
+        "description": agent.description,
+    }
+    print(agent_info)

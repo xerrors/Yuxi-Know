@@ -31,6 +31,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/agent',
+      name: 'agent',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'AgentComp',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true }
+        }
+      ]
+    },
+    {
       path: '/graph',
       name: 'graph',
       component: AppLayout,

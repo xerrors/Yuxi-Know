@@ -1,12 +1,11 @@
 from typing import Type, Annotated, Optional, TypedDict
 from abc import abstractmethod
 
-from langchain_core.tools import BaseTool
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph.message import add_messages
-from langchain_core.messages import BaseMessage, ToolMessage, AIMessage, filter_messages
+
+from langchain_core.messages import BaseMessage
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.graph.message import add_messages
 
 
 from dataclasses import dataclass
@@ -26,7 +25,8 @@ class Configuration:
     """
     定义一个基础 Configuration 供 各类 graph 继承
     """
-    llm: ChatOpenAI
+    pass
+
 
 
 class BaseAgent():

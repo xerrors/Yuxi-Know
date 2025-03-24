@@ -1,6 +1,6 @@
 <template>
   <div class="chat-container">
-    <div class="conversations" :class="['conversations', { 'is-open': state.isSidebarOpen }]">
+    <div class="conversations" :class="{ 'is-open': state.isSidebarOpen }">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
          <span class="header-title">对话历史</span>
@@ -129,29 +129,24 @@ onMounted(() => {
   position: relative;
 }
 
-.chat-container .conversations {
-  transition: width 0.3s ease, opacity 0.3s ease, flex 0.3s ease;
-  white-space: nowrap; /* 防止文本换行 */
-  overflow: hidden; /* 确保内容不溢出 */
-}
-
-.chat-container .conversations:not(.is-open) {
-  width: 0;
-  opacity: 0;
-  flex: 0 0 0;
-}
-
-.chat-container .conversations.is-open {
-  flex: 1 1 auto; /* 当侧边栏打开时，占据可用空间 */
-  width: 230px;
-  opacity: 1;
-}
 .conversations {
-  width: 230px; /* 初始宽度 */
+  width: 230px;
   max-width: 230px;
   border-right: 1px solid var(--main-light-3);
-  max-height: 100%;
   background-color: var(--bg-sider);
+  transition: all 0.3s ease;
+  white-space: nowrap; /* 防止文本换行 */
+  overflow: hidden; /* 确保内容不溢出 */
+
+  &.is-open {
+    width: 230px;
+  }
+
+  &:not(.is-open) {
+    width: 0;
+    padding: 0;
+    overflow: hidden;
+  }
 
   & .actions {
     height: var(--header-height);
@@ -238,7 +233,6 @@ onMounted(() => {
         display: block;
       }
     }
-
   }
 }
 
@@ -275,6 +269,12 @@ onMounted(() => {
     height: 100%;
     border-radius: 0 16px 16px 0;
     box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
+
+    &:not(.is-open) {
+      width: 0;
+      padding: 0;
+      overflow: hidden;
+    }
   }
 }
 </style>

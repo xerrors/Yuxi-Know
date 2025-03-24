@@ -21,6 +21,8 @@ import {
   StarFilled,
   StarOutlined,
   ExclamationCircleOutlined,
+  RobotOutlined,
+  RobotFilled,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -73,6 +75,37 @@ onMounted(() => {
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
 console.log(route)
+
+// 下面是导航菜单部分，添加智能体项
+const mainList = [{
+    name: '对话',
+    path: '/chat',
+    icon: MessageOutlined,
+    activeIcon: MessageFilled,
+  }, {
+    name: '智能体',
+    path: '/agent',
+    icon: RobotOutlined,
+    activeIcon: RobotFilled,
+  }, {
+    name: '图谱',
+    path: '/graph',
+    icon: ProjectOutlined,
+    activeIcon: ProjectFilled,
+    // hidden: !configStore.config.enable_knowledge_graph,
+  }, {
+    name: '知识库',
+    path: '/database',
+    icon: BookOutlined,
+    activeIcon: BookFilled,
+    // hidden: !configStore.config.enable_knowledge_base,
+  }, {
+    name: '工具',
+    path: '/tools',
+    icon: ToolOutlined,
+    activeIcon: ToolFilled,
+  }
+]
 </script>
 
 <template>
@@ -107,22 +140,18 @@ console.log(route)
         </router-link>
       </div>
       <div class="nav">
-        <RouterLink to="/chat" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path === '/chat' ? MessageFilled : MessageOutlined" />
-          <span class="text">对话</span>
+        <!-- 使用mainList渲染导航项 -->
+        <RouterLink
+          v-for="(item, index) in mainList"
+          :key="index"
+          :to="item.path"
+          v-show="!item.hidden"
+          class="nav-item"
+          active-class="active">
+          <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" />
+          <span class="text">{{item.name}}</span>
         </RouterLink>
-        <RouterLink to="/database" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/database') ? FolderFilled : FolderOutlined" />
-          <span class="text">知识</span>
-        </RouterLink>
-        <RouterLink to="/graph" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/graph') ? ProjectFilled: ProjectOutlined" />
-          <span class="text">图谱</span>
-        </RouterLink>
-        <RouterLink to="/tools" class="nav-item" active-class="active">
-          <component class="icon" :is="route.path.startsWith('/tools') ? ToolFilled: ToolOutlined" />
-          <span class="text">工具</span>
-        </RouterLink>
+
         <a-tooltip placement="right">
           <template #title>后端疑似没有正常启动或者正在繁忙中，请刷新一下或者检查 docker logs api-dev</template>
           <div class="nav-item warning" v-if="!configStore.config._config_items">
@@ -140,7 +169,7 @@ console.log(route)
           </span>
         </a>
       </div>
-      <RouterLink  class="nav-item setting" to="/setting" active-class="active">
+      <RouterLink class="nav-item setting" to="/setting" active-class="active">
         <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
       </RouterLink>
     </div>
