@@ -1,3 +1,3 @@
-from .graph import graph
+from .graph import ChatbotAgent
 
-__all__ = ["graph"]
+__all__ = ["ChatbotAgent"]
