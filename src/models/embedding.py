@@ -4,22 +4,13 @@ import requests
 from FlagEmbedding import FlagModel
 from zhipuai import ZhipuAI
 
-from src import config
 from src.config import EMBED_MODEL_INFO
 from src.utils import hashstr, logger, get_docker_safe_url
 
 
 class BaseEmbeddingModel:
     embed_state = {}
-
-    def get_dimension(self):
-        if hasattr(self, "dimension"):
-            return self.dimension
-
-        if hasattr("embed_model_fullname"):
-            return EMBED_MODEL_INFO[self.embed_model_fullname].get("dimension", None)
-
-        return EMBED_MODEL_INFO[self.model].get("dimension", None)
+    EMBED_MODEL_INFO = EMBED_MODEL_INFO
 
     def encode(self, message):
         return self.predict(message)
@@ -58,8 +49,6 @@ class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
 
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
         self.model = self.model or info["name"]
-        self.dimension = info["dimension"]
-        self.embed_model_fullname = config.embed_model
 
         if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
             self.model = _path
@@ -80,9 +69,7 @@ class ZhipuEmbedding(BaseEmbeddingModel):
     def __init__(self, config) -> None:
         self.config = config
         self.model = EMBED_MODEL_INFO[config.embed_model]["name"]
-        self.dimension = EMBED_MODEL_INFO[config.embed_model]["dimension"]
         self.client = ZhipuAI(api_key=os.getenv("ZHIPUAI_API_KEY"))
-        self.embed_model_fullname = config.embed_model
 
     def predict(self, message):
         response = self.client.embeddings.create(
@@ -99,8 +86,6 @@ class OllamaEmbedding(BaseEmbeddingModel):
         self.model = self.info["name"]
         self.url = self.info.get("url", "http://localhost:11434/api/embed")
         self.url = get_docker_safe_url(self.url)
-        self.dimension = self.info.get("dimension", None)
-        self.embed_model_fullname = config.embed_model
 
     def predict(self, message: list[str] | str):
         if isinstance(message, str):
@@ -120,8 +105,6 @@ class OtherEmbedding(BaseEmbeddingModel):
 
     def __init__(self, config) -> None:
         self.info = EMBED_MODEL_INFO[config.embed_model]
-        self.embed_model_fullname = config.embed_model
-        self.dimension = self.info.get("dimension", None)
         self.model = self.info["name"]
         self.api_key = os.getenv(self.info["api_key"], None)
         self.url = get_docker_safe_url(self.info["url"])

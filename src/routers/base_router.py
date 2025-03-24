@@ -1,10 +1,13 @@
-from fastapi import Request, Body
 from fastapi import APIRouter
-from fastapi import Request, Body
 
 base = APIRouter()
 
-from src import config, retriever, knowledge_base, graph_base
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi import Request, Body
+
+from src.core import HistoryManager
+from src.core.startup import startup
 from src.utils import logger
 
 
@@ -14,22 +17,17 @@ async def route_index():
 
 @base.get("/config")
 def get_config():
-    return config.get_safe_config()
+    return startup.config
 
 @base.post("/config")
 async def update_config(key = Body(...), value = Body(...)):
-    if key == "custom_models":
-        value = config.compare_custom_models(value)
-
-    config[key] = value
-    config.save()
-    return config.get_safe_config()
+    startup.config[key] = value
+    startup.config.save()
+    return startup.config
 
 @base.post("/restart")
 async def restart():
-    knowledge_base.restart()
-    graph_base.restart()
-    retriever.restart()
+    startup.restart()
     return {"message": "Restarted!"}
 
 @base.get("/log")

@@ -5,8 +5,11 @@
         <p>配置文件也可以在 <code>saves/config/base.yaml</code> 中修改</p>
       </template>
       <template #actions>
-        <a-button :type="isNeedRestart ? 'primary' : 'default'" @click="sendRestart" :icon="h(ReloadOutlined)">
-          {{ isNeedRestart ? '需要重启' : '重启服务' }}
+        <a-button type="primary" v-if="isNeedRestart" @click="sendRestart">
+          <ReloadOutlined />需要重启
+        </a-button>
+        <a-button v-else @click="sendRestart">
+          <ReloadOutlined />重启服务
         </a-button>
       </template>
     </HeaderComponent>
@@ -118,12 +121,12 @@
                   >
                     <a-button type="text" :disabled="configStore.config.model_name == item.name"  @click.stop><DeleteOutlined /></a-button>
                   </a-popconfirm>
-                  <a-button type="text" @click.stop="prepareToEditCustomModel(item)"><EditOutlined /></a-button>
+                  <a-button type="text" @click.stop="handleEditCustomModel(item)"><EditOutlined /></a-button>
                 </div>
               </div>
               <div class="api_base">{{ item.api_base }}</div>
             </div>
-            <div class="card-models custom-model" @click="prepareToAddCustomModel">
+            <div class="card-models custom-model" @click="customModel.visible=true">
               <div class="card-models__header">
                 <div class="name"> + 添加模型</div>
               </div>
@@ -132,7 +135,7 @@
                 class="custom-model-modal"
                 v-model:open="customModel.visible"
                 :title="customModel.modelTitle"
-                @ok="handleAddOrEditCustomModel"
+                @ok="handleAddCustomModel"
                 @cancel="handleCancelCustomModel"
                 :okText="'确认'"
                 :cancelText="'取消'"
@@ -142,13 +145,13 @@
                 <p>添加的模型是兼容 OpenAI 的模型，比如 vllm，Ollama。</p>
                 <a-form :model="customModel" layout="vertical" >
                   <a-form-item label="模型名称" name="name" :rules="[{ required: true, message: '请输入模型名称' }]">
-                    <a-input v-model:value="customModel.name" :disabled="customModel.edit_type == 'edit'"/>
+                    <a-input v-model:value="customModel.name" />
                   </a-form-item>
                   <a-form-item label="API Base" name="api_base" :rules="[{ required: true, message: '请输入API Base' }]">
-                    <a-input v-model:value="customModel.api_base" />
+                    <a-input v-model:value="customModel.api_base"/>
                   </a-form-item>
                   <a-form-item label="API KEY" name="api_key">
-                    <a-input-password v-model:value="customModel.api_key" :visibilityToggle="false" autocomplete="new-password"/>
+                    <a-input v-model:value="customModel.api_key" autocomplete="off"/>
                   </a-form-item>
                 </a-form>
               </a-modal>
@@ -156,52 +159,30 @@
           </div>
         </div>
         <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
-          <div class="card-header" @click="toggleExpand(item)">
+          <div class="card-header">
             <!-- <div v-if="modelStatus[item]" class="success"></div> -->
             <div :class="{'model-icon': true, 'available': modelStatus[item]}">
               <img :src="modelIcons[item]" alt="模型图标">
             </div>
-            <div class="model-title-container">
-              <h3>{{ modelNames[item].name }}</h3>
-              <a :href="modelNames[item].url" target="_blank" class="model-url" @click.stop>
-                <InfoCircleOutlined />
-              </a>
-            </div>
-            <a-button 
-              type="text" 
-              class="expand-button" 
-              @click.stop="toggleExpand(item)"
-            >
-              <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
-                <DownOutlined />
-              </span>
-            </a-button>
+            <h3>{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
           </div>
-          <div class="card-body-wrapper" :class="{'expanded': expandedModels[item]}">
-            <div class="card-body" v-if="modelStatus[item]">
-              <div
-                :class="{'model_selected': modelProvider == item && configStore.config.model_name == model, 'card-models': true}"
-                v-for="(model, idx) in modelNames[item].models" :key="idx"
-                @click="handleChange('model_provider', item); handleChange('model_name', model)"
-              >
-                <div class="model_name">{{ model }}</div>
-              </div>
+          <div class="card-body" v-if="modelStatus[item]">
+            <div
+              :class="{'model_selected': modelProvider == item && configStore.config.model_name == model, 'card-models': true}"
+              v-for="(model, idx) in modelNames[item].models" :key="idx"
+              @click="handleChange('model_provider', item); handleChange('model_name', model)"
+            >
+              <div class="model_name">{{ model }}</div>
             </div>
           </div>
         </div>
         <div class="model-provider-card" v-for="(item, key) in notModelKeys" :key="key">
           <div class="card-header">
-            <div class="model-icon">
-              <img :src="modelIcons[item]" alt="模型图标">
-            </div>
-            <div class="model-title-container">
-              <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
-              <a :href="modelNames[item].url" target="_blank" class="model-url">
-                <InfoCircleOutlined />
-              </a>
-            </div>
+            <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank"><InfoCircleOutlined /></a>
             <div class="missing-keys">
-              需配置<span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
+              <small>需配置</small> <span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
             </div>
           </div>
         </div>
@@ -231,8 +212,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   InfoCircleOutlined,
-  DownOutlined,
-  UpOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
@@ -249,7 +228,7 @@ const isNeedRestart = ref(false)
 const customModel = reactive({
   modelTitle: '添加自定义模型',
   visible: false,
-  custom_id: '',
+  custom_id: '', // Add this line
   name: '',
   api_key: '',
   api_base: '',
@@ -269,23 +248,6 @@ const modelKeys = computed(() => {
 const notModelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => !modelStatus.value?.[key])
 })
-
-// 模型展开状态管理
-const expandedModels = reactive({})
-
-// 监听 modelKeys 变化，确保新添加的模型也是默认展开状态
-watch(modelKeys, (newKeys) => {
-  newKeys.forEach(key => {
-    if (expandedModels[key] === undefined) {
-      expandedModels[key] = true
-    }
-  })
-}, { immediate: true })
-
-// 切换展开状态的方法
-const toggleExpand = (item) => {
-  expandedModels[item] = !expandedModels[item]
-}
 
 const generateRandomHash = (length) => {
   let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -316,6 +278,8 @@ const handleChange = (key, e) => {
         || key == 'enable_knowledge_graph'
         || key == 'enable_knowledge_base'
         || key == 'enable_web_search'
+        || key == 'model_provider'
+        || key == 'model_name'
         || key == 'embed_model'
         || key == 'reranker'
         || key == 'model_local_paths') {
@@ -334,35 +298,49 @@ const handleChange = (key, e) => {
   configStore.setConfigValue(key, e)
 }
 
-const handleAddOrEditCustomModel = async () => {
+const handleAddCustomModel = async () => {
   if (!customModel.name || !customModel.api_base) {
-    message.error('请填写完整的模型名称和API Base信息。')
+    message.error('请填写完整模型信息')
     return
   }
 
-  let custom_models = configStore.config.custom_models || [];
+  if (!configStore.config.custom_models) {
+    configStore.config.custom_models = []
+  }
+
 
   const model_info = {
-    custom_id: customModel.custom_id || `${customModel.name}-${generateRandomHash(4)}`,
+    custom_id: customModel.custom_id,
     name: customModel.name,
     api_key: customModel.api_key,
     api_base: customModel.api_base,
   }
 
-  if (customModel.edit_type === 'add') {
-    if (custom_models.find(item => item.custom_id === customModel.custom_id)) {
-      message.error('模型ID已存在')
+  if (customModel.edit_type == 'add') {
+  if (configStore.config.custom_models.find(item => item.custom_id == customModel.custom_id)) {
+    message.error('模型ID已存在')
       return
     }
-    custom_models.push(model_info)
+    const modelHash = generateRandomHash(4)
+    model_info.custom_id = `${customModel.name}-${modelHash}`
+    configStore.config.custom_models.push(model_info)
   } else {
-    // 如果 custom_id 相同，则更新
-    custom_models = custom_models.map(item => item.custom_id === customModel.custom_id ? model_info : item);
+    configStore.config.custom_models = configStore.config.custom_models.map(item => {
+      if (item.custom_id == customModel.custom_id) {
+        if (item.name != customModel.name) {
+          const modelHash = generateRandomHash(4)
+          model_info.custom_id = `${customModel.name}-${modelHash}`
+          configStore.setConfigValue('model_name', model_info.custom_id)
+        }
+        return model_info
+      }
+      return item
+    })
   }
 
-  customModel.visible = false;
-  await configStore.setConfigValue('custom_models', custom_models);
-  message.success(customModel.edit_type === 'add' ? '模型添加成功' : '模型修改成功');
+  customModel.visible = false
+  await configStore.setConfigValue('custom_models', configStore.config.custom_models)
+  message.success('添加自定义模型成功')
 }
 
 const handleDeleteCustomModel = (custom_id) => {
@@ -370,32 +348,21 @@ const handleDeleteCustomModel = (custom_id) => {
   configStore.setConfigValue('custom_models', updatedModels);
 }
 
-const prepareToEditCustomModel = (item) => {
+const handleEditCustomModel = (item) => {
   customModel.modelTitle = '编辑自定义模型'
   customModel.custom_id = item.custom_id
-  customModel.visible = true
-  customModel.edit_type = 'edit'
   customModel.name = item.name
   customModel.api_key = item.api_key
   customModel.api_base = item.api_base
-}
-
-const prepareToAddCustomModel = () => {
-  customModel.modelTitle = '添加自定义模型'
-  customModel.edit_type = 'add'
   customModel.visible = true
-  clearCustomModel()
+  customModel.edit_type = 'edit'
 }
 
-const clearCustomModel = () => {
+const handleCancelCustomModel = () => {
   customModel.custom_id = ''
   customModel.name = ''
   customModel.api_key = ''
   customModel.api_base = ''
-}
-
-const handleCancelCustomModel = () => {
-  clearCustomModel()
   customModel.visible = false
 }
 
@@ -531,33 +498,15 @@ const sendRestart = () => {
       display: flex;
       align-items: center;
       gap: 10px;
-      cursor: pointer;
-
-      .model-title-container {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        gap: 10px;
-        flex: 1;
-      }
-
-      .model-url {
-        font-size: 12px;
-        width: fit-content;
-        color: var(--gray-500);
-      }
 
       .model-icon {
-        width: 28px;
-        height: 28px;
-        
+        width: 24px;
+        height: 24px;
         // 灰度
         filter: grayscale(100%);
         img {
           width: 100%;
           height: 100%;
-          border-radius: 4px;
-          border: 1px solid var(--gray-300);
         }
 
         &.available {
@@ -565,9 +514,10 @@ const sendRestart = () => {
         }
       }
 
+
       h3 {
         margin: 0;
-        font-size: 0.9rem;
+        font-size: 1rem;
         font-weight: bold;
       }
 
@@ -596,52 +546,11 @@ const sendRestart = () => {
       }
 
       .missing-keys {
-        margin-top: 4px;
         color: var(--gray-600);
-        font-size: 12px;
         & > span {
-          margin-left: 6px;
+          margin-left: 10px;
           user-select: all;
-          background-color: var(--gray-100);
-          padding: 2px 6px;
-          border-radius: 4px;
-          color: var(--gray-800);
         }
-      }
-
-      .expand-button {
-        margin-left: auto;
-        height: 32px;
-        width: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0;
-        cursor: pointer;
-        color: var(--gray-500);
-
-        &:hover {
-          background-color: var(--gray-100);
-        }
-
-        .icon-wrapper {
-          display: inline-flex;
-          transition: transform 0.2s ease;
-          
-          &.rotated {
-            transform: rotate(180deg);
-          }
-        }
-      }
-    }
-
-    .card-body-wrapper {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.2s ease-out;  // 先快后慢
-      
-      &.expanded {
-        max-height: 700px; /* 设置一个足够大的值 */
       }
     }
 
@@ -697,7 +606,7 @@ const sendRestart = () => {
           gap: 10px;
           .card-models__header {
             width: 100%;
-            height: 24px;
+            height: 32px;
             display: flex;
             justify-content: flex-start;
             align-items: center;
@@ -722,10 +631,6 @@ const sendRestart = () => {
           .api_base {
             font-size: 12px;
             color: var(--gray-600);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            width: 100%;
           }
 
           &:hover {

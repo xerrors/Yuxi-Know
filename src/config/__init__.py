@@ -11,7 +11,6 @@ MODEL_NAMES = _models["MODEL_NAMES"]
 EMBED_MODEL_INFO = _models["EMBED_MODEL_INFO"]
 RERANKER_LIST = _models["RERANKER_LIST"]
 
-DEFAULT_MOCK_API = 'this_is_mock_api_key_in_frontend'
 
 class SimpleConfig(dict):
 
@@ -175,34 +174,3 @@ class Config(SimpleConfig):
                 json.dump(self, f, indent=4)
 
         logger.info(f"Config file {self.filename} saved")
-
-    def get_safe_config(self):
-        """
-        获取安全的配置，即过滤掉 api_key
-        """
-        
-        config = json.loads(str(self))
-        
-        # 过滤掉 api_key
-        for model in config.get("custom_models", []):
-            model["api_key"] = DEFAULT_MOCK_API if model.get("api_key") else ""
-
-        return config
-    
-    def compare_custom_models(self, value):
-        """
-        比较 custom_models 中的 api_key，如果输入的 api_key 与当前的 api_key 相同，则不修改
-        如果输入的 api_key 为 DEFAULT_MOCK_API，则使用当前的 api_key
-        """
-        current_models_dict = {model["custom_id"]: model.get("api_key") for model in self.custom_models}
-
-        for i, model in enumerate(value):
-            input_custom_id = model.get("custom_id")
-            input_api_key = model.get("api_key")
-
-            if input_custom_id in current_models_dict:
-                current_api_key = current_models_dict[input_custom_id]
-                if input_api_key == DEFAULT_MOCK_API or input_api_key == current_api_key:
-                    value[i]["api_key"] = current_api_key
-
-        return value
