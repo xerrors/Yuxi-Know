@@ -7,10 +7,10 @@
       </div>
       <div class="conversation-list">
         <div class="conversation"
-          v-for="agent in agents"
-          :key="agent.name"
-          :class="{ active: currentAgent === agent.name }"
-          @click="selectAgent(agent.name)">
+          v-for="(agent, name) in agents"
+          :key="name"
+          :class="{ active: currentAgent?.name === name }"
+          @click="selectAgent(name)">
           <div class="conversation__title"><RobotOutlined /> &nbsp;{{ agent.name }}</div>
           <div class="conversation__description">{{ agent.description }}</div>
         </div>
@@ -29,12 +29,12 @@
           <a-dropdown>
             <div class="current-agent nav-btn">
               <RobotOutlined />&nbsp;
-              <span v-if="currentAgent">{{ currentAgent }}</span>
+              <span v-if="currentAgent">{{ currentAgent.name }}</span>
               <span v-else>请选择智能体</span>
             </div>
             <template #overlay>
               <a-menu @click="({key}) => selectAgent(key)">
-                <a-menu-item v-for="agent in agents" :key="agent.name">
+                <a-menu-item v-for="(agent, name) in agents" :key="name">
                   <RobotOutlined /> {{ agent.name }}
                 </a-menu-item>
               </a-menu>
@@ -49,11 +49,11 @@
       </div>
 
       <div v-if="messages.length === 0" class="chat-examples">
-        <h1>选择一个智能体开始对话</h1>
-        <p>不同的智能体有不同的专长和能力</p>
+        <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
+        <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
       </div>
 
-      <div class="chat-box" ref="messagesContainer">
+      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': options.debug_mode }">
         <div
           v-for="(message, index) in messages"
           :key="index"
@@ -61,7 +61,7 @@
           :class="message.role">
           <p v-if="message.role === 'user'" class="message-text">{{ message.content.trim() }}</p>
           <div v-else-if="message.role === 'assistant'" class="assistant-message" @click="handleAssistantClick(message)">
-            <div v-if="options.debug_mode">{{ message }}</div>
+            <div v-if="options.debug_mode" class="status-info">{{ message }}</div>
             <div v-if="message.content" v-html="renderMarkdown(message.content)" class="message-md"></div>
             <div v-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" class="tool-calls-container">
               <div v-for="(toolCall, index) in message.toolCalls || {}"
@@ -222,7 +222,7 @@ const messagesContainer = ref(null);
 const optionsPanel = ref(null);
 
 // 数据状态
-const agents = ref([]);                // 智能体列表
+const agents = ref({});                // 智能体列表
 const currentAgent = ref(null);        // 当前选中的智能体
 const userInput = ref('');             // 用户输入
 const messages = ref([]);              // 消息列表
@@ -351,7 +351,7 @@ const prepareMessageHistory = (msgs) => {
 
 // 选择智能体
 const selectAgent = (agentName) => {
-  currentAgent.value = agentName;
+  currentAgent.value = agents.value[agentName];
   messages.value = [];
   threadId.value = null;
   resetStatusSteps();
@@ -449,7 +449,7 @@ const sendMessageWithText = async (text) => {
     };
 
     // 发送请求
-    const response = await fetch(`/api/chat/agent/${currentAgent.value}`, {
+    const response = await fetch(`/api/chat/agent/${currentAgent.value.name}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestData)
@@ -552,7 +552,7 @@ const handleMessageById = async (data) => {
 
   // 查找现有消息
   const existingMsgIndex = messageMap.value.get(msgId);
-  console.log("existingMsgIndex", existingMsgIndex);
+  // console.log("existingMsgIndex", existingMsgIndex);
 
   if (existingMsgIndex === undefined) {
     // 创建新消息或附加到现有助手消息
@@ -579,7 +579,7 @@ const handleMessageById = async (data) => {
 
 // 创建新的助手消息
 const createAssistantMessage = async (data) => {
-  console.log("createAssistantMessage", data);
+  // console.log("createAssistantMessage", data);
   const msgId = data.msg.id;
   const msgContent = data.response || '';
   const runId = data.metadata?.run_id;
@@ -600,7 +600,7 @@ const createAssistantMessage = async (data) => {
   // 处理工具调用
   const toolCalls = data.msg.additional_kwargs?.tool_calls;
   if (toolCalls && toolCalls.length > 0) {
-    console.log("toolCalls in createAssistantMessage", toolCalls);
+    // console.log("toolCalls in createAssistantMessage", toolCalls);
     for (const toolCall of toolCalls) {
       const toolCallId = toolCall.id;
       const toolIndex = toolCall.index || 0;
@@ -621,7 +621,7 @@ const createAssistantMessage = async (data) => {
 // 更新现有消息
 const updateExistingMessage = async (data, existingMsgIndex) => {
   const msgInstance = messages.value[existingMsgIndex];
-  console.log("updateExistingMessage", msgInstance);
+  // console.log("updateExistingMessage", msgInstance);
 
   // 如果消息状态是loading，更新为processing
   if (msgInstance.status === 'loading') {
@@ -638,7 +638,7 @@ const updateExistingMessage = async (data, existingMsgIndex) => {
 
   const toolCalls = data.msg.additional_kwargs?.tool_calls;
   if (toolCalls && toolCalls.length > 0) {
-    console.log("toolCalls in updateExistingMessage", toolCalls);
+    // console.log("toolCalls in updateExistingMessage", toolCalls);
     for (const toolCall of toolCalls) {
       const toolIndex = toolCall.index || 0;
 
@@ -669,7 +669,7 @@ const handleAssistantClick = (message) => {
 }
 
 const appendToolMessageToExistingAssistant = async (data) => {
-  console.log("appendToolMessageToExistingAssistant", data);
+  // console.log("appendToolMessageToExistingAssistant", data);
   currentToolCallId.value = data.msg.tool_call_id;
   const assignedMsgId = toolCallMap.value.get(currentToolCallId.value);
   if (assignedMsgId === undefined) {
@@ -709,7 +709,11 @@ const fetchAgents = async () => {
     const response = await fetch('/api/chat/agent');
     if (response.ok) {
       const data = await response.json();
-      agents.value = data.agents;
+      // 将数组转换为对象
+      agents.value = data.agents.reduce((acc, agent) => {
+        acc[agent.name] = agent;
+        return acc;
+      }, {});
     } else {
       console.error('获取智能体失败');
     }
@@ -722,8 +726,8 @@ const fetchAgents = async () => {
 const loadState = () => {
   // 加载当前选择的智能体
   const savedAgent = localStorage.getItem('agent-current-agent');
-  if (savedAgent) {
-    currentAgent.value = savedAgent;
+  if (savedAgent && agents.value[savedAgent]) {
+    currentAgent.value = agents.value[savedAgent];
   }
 
   // 加载设置选项
@@ -749,7 +753,7 @@ const loadState = () => {
 const saveState = () => {
   // 保存当前选择的智能体
   if (currentAgent.value) {
-    localStorage.setItem('agent-current-agent', currentAgent.value);
+    localStorage.setItem('agent-current-agent', currentAgent.value.name);
   }
 
   // 保存设置选项
@@ -1142,11 +1146,6 @@ const toggleToolCall = (toolCallId) => {
     font-size: 15px;
     box-sizing: border-box;
     color: black;
-    .status-info {
-      margin-top: 10px;
-      border-top: 1px dashed var(--gray-300);
-      padding-top: 10px;
-    }
 
     .reasoning-box {
       margin-top: 10px;
@@ -1331,6 +1330,23 @@ const toggleToolCall = (toolCallId) => {
 
     &:hover {
       background-color: #fff0ed;
+    }
+  }
+}
+
+.chat-box.is-debug {
+  .message-box .assistant-message {
+    outline: 1px solid red;
+    outline-offset: 10px;
+    outline-style: dashed;
+
+    .status-info {
+      display: block;
+      background-color: var(--gray-50);
+      color: var(--gray-700);
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
     }
   }
 }
