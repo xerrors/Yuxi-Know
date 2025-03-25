@@ -59,44 +59,54 @@
           :key="index"
           class="message-box"
           :class="message.role">
-          <p v-if="message.role === 'user'" class="message-text">{{ message.content }}</p>
-          <div v-else-if="message.role === 'assistant' && message.content" v-html="renderMarkdown(message.content)" class="message-md"></div>
-          <div v-else-if="message.role === 'assistant' && (!message.content || message.content.length === 0) && isProcessing" class="loading-dots">
-            <div></div>
-            <div></div>
-            <div></div>
+          <p v-if="message.role === 'user'" class="message-text">{{ message.content.trim() }}</p>
+          <div v-else-if="message.role === 'assistant'" class="assistant-message" @click="handleAssistantClick(message)">
+            <div v-if="options.debug_mode">{{ message }}</div>
+            <div v-if="message.content" v-html="renderMarkdown(message.content)" class="message-md"></div>
+            <div v-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" class="tool-calls-container">
+              <div v-for="(toolCall, index) in message.toolCalls || {}"
+                   :key="index"
+                   class="tool-call-container">
+                <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
+                  <div class="tool-header" @click="toggleToolCall(toolCall.id)">
+                    <span v-if="!toolCall.toolResultMsg">
+                      <ThunderboltOutlined />
+                      <span>正在调用工具: </span>
+                      <span class="tool-name">{{ toolCall.function.name }}</span>
+                    </span>
+                    <span v-else>
+                      <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.function.name }}</span> 执行完成
+                    </span>
+
+                    <span class="step-badge" v-if="message.step !== undefined">步骤 {{ message.step }}</span>
+                  </div>
+                  <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
+                    <div class="tool-params" v-if="toolCall.function && toolCall.function.arguments">
+                      <div class="tool-params-header">
+                        参数:
+                      </div>
+                      <div class="tool-params-content">
+                        <pre>{{ toolCall.function.arguments }}</pre>
+                      </div>
+                    </div>
+                    <div class="tool-params" v-if="toolCall.toolResultMsg && toolCall.toolResultMsg.content">
+                      <div class="tool-params-header">
+                        执行结果:
+                      </div>
+                      <div class="tool-params-content">{{ toolCall.toolResultMsg.content }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-else-if="isProcessing && (!message.content || message.content.length === 0)" class="loading-dots">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
           </div>
           <div v-else-if="message.status === 'error'" class="err-msg" @click="retryMessage(index)">
             请求错误，请重试。{{ message.message }}
-          </div>
-
-          <!-- 工具调用显示 -->
-          <div v-else-if="message.role === 'tool_call'" class="tool-call-display">
-            <div class="tool-header">
-              <ThunderboltOutlined /> 正在调用工具: {{ message.tool.name }}
-              <span class="step-badge" v-if="message.tool.step !== undefined">步骤 {{ message.tool.step }}</span>
-            </div>
-            <div class="tool-params" v-if="message.tool.params">
-              <pre>{{ JSON.stringify(message.tool.params, null, 2) }}</pre>
-            </div>
-            <div class="meta-info" v-if="options.debug_mode">
-              <div>工具ID: {{ message.tool.id }}</div>
-              <div v-if="message.tool.run_id">运行ID: {{ message.tool.run_id }}</div>
-            </div>
-          </div>
-
-          <!-- 工具结果显示 -->
-          <div v-else-if="message.role === 'tool'" class="tool-result-display">
-            <div class="result-header">
-              工具执行结果:
-              <span class="step-badge" v-if="message.tool.step !== undefined">步骤 {{ message.tool.step }}</span>
-            </div>
-            <div v-html="renderMarkdown(message.content)" class="result-content"></div>
-            <div class="meta-info" v-if="options.debug_mode">
-              <div>工具ID: {{ message.tool.id }}</div>
-              <div v-if="message.tool.run_id">运行ID: {{ message.tool.run_id }}</div>
-              <div v-if="message.tool.tool_call_step !== undefined">对应调用步骤: {{ message.tool.tool_call_step }}</div>
-            </div>
           </div>
         </div>
       </div>
@@ -171,7 +181,8 @@
 import { ref, reactive, onMounted, watch, nextTick } from 'vue';
 import {
   MenuOutlined, RobotOutlined, SendOutlined, LoadingOutlined, SettingOutlined,
-  CloseOutlined, ThunderboltOutlined, ReloadOutlined,
+  CloseOutlined, ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
+  DownOutlined, RightOutlined,
 } from '@ant-design/icons-vue';
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
@@ -223,9 +234,9 @@ const threadId = ref(null);            // 会话线程ID
 // 工具调用相关
 const toolCalls = ref([]);             // 工具调用列表
 const currentToolCallId = ref(null);   // 当前工具调用ID
-const pendingToolCall = ref(null);     // 待处理的工具调用
 const currentRunId = ref(null);        // 当前运行ID
 const messageStepMap = ref({});        // 消息步骤映射
+const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
 // ==================== 基础工具函数 ====================
 
@@ -260,7 +271,6 @@ const toolCallMap = ref(new Map()); // 存储工具调用ID与对应消息ID的�
 const resetStatusSteps = () => {
   toolCalls.value = [];
   currentToolCallId.value = null;
-  pendingToolCall.value = null;
   currentRunId.value = null;
   messageStepMap.value = {};
   messageMap.value.clear();
@@ -272,42 +282,7 @@ const resetThread = () => {
   threadId.value = null;
   messages.value = [];
   resetStatusSteps();
-};
-
-// ==================== 工具调用处理 ====================
-
-// 完成待处理的工具调用
-const finalizePendingToolCall = () => {
-  if (!pendingToolCall.value) return;
-
-  // 标记为完成
-  pendingToolCall.value.isComplete = true;
-
-  // 检查是否已存在消息
-  const existingToolCallMsg = messages.value.find(
-    msg => msg.role === 'tool_call' && msg.tool?.id === pendingToolCall.value.id
-  );
-
-  // 如果尚未添加到消息流，则添加
-  if (!existingToolCallMsg) {
-    messages.value.push({
-      role: 'tool_call',
-      content: null,
-      tool: {
-        id: pendingToolCall.value.id,
-        name: pendingToolCall.value.name,
-        params: pendingToolCall.value.params,
-        run_id: pendingToolCall.value.run_id,
-        step: pendingToolCall.value.step
-      },
-      timestamp: new Date().toISOString(),
-      status: 'tool_calling'
-    });
-  }
-
-  // 重置工具调用状态
-  pendingToolCall.value = null;
-  currentToolCallId.value = null;
+  saveState();
 };
 
 // ==================== 消息历史处理 ====================
@@ -380,6 +355,7 @@ const selectAgent = (agentName) => {
   messages.value = [];
   threadId.value = null;
   resetStatusSteps();
+  saveState();
 };
 
 // 处理键盘事件
@@ -439,12 +415,14 @@ const sendMessageWithText = async (text) => {
     content: userMessage
   });
 
-  // 添加加载中的消息
-  messages.value.push({
-    role: 'assistant',
-    content: '',
-    status: 'loading'
-  });
+  // // 添加加载中的消息
+  // messages.value.push({
+  //   role: 'assistant',
+  //   content: '',
+  //   status: 'loading',
+  //   toolCalls: {},
+  //   toolCallIds: {}
+  // });
 
   isProcessing.value = true;
   await scrollToBottom();
@@ -487,16 +465,15 @@ const sendMessageWithText = async (text) => {
   } catch (error) {
     console.error('发送消息错误:', error);
     // 更新错误状态
-    messages.value[messages.value.length - 1] = {
-      role: 'assistant',
-      content: `发生错误: ${error.message}`,
-      status: 'error'
-    };
-  } finally {
-    // 如果有未完成的工具调用，强制完成它
-    if (pendingToolCall.value) {
-      finalizePendingToolCall();
+    const loadingMsgIndex = messages.value.length - 1;
+    if (loadingMsgIndex >= 0) {
+      messages.value[loadingMsgIndex] = {
+        role: 'assistant',
+        content: `发生错误: ${error.message}`,
+        status: 'error'
+      };
     }
+  } finally {
     isProcessing.value = false;
     await scrollToBottom();
   }
@@ -505,7 +482,18 @@ const sendMessageWithText = async (text) => {
 // 处理流式响应
 const handleStreamResponse = async (response) => {
   const reader = response.body.getReader();
-  let loadingMsgIndex = messages.value.length - 1;
+  // 创建一个初始的助手消息
+  const assistantMsg = {
+    role: 'assistant',
+    content: '',
+    status: 'loading',
+    toolCalls: {},
+    toolCallIds: {}
+  };
+
+  // 添加到消息列表
+  messages.value.push(assistantMsg);
+  await scrollToBottom();
 
   while (true) {
     const { done, value } = await reader.read();
@@ -523,12 +511,12 @@ const handleStreamResponse = async (response) => {
 
         // 基于消息ID处理消息
         if (data.msg?.id) {
-          loadingMsgIndex = await handleMessageById(data, loadingMsgIndex);
+          await handleMessageById(data);
         }
 
         // 处理完成状态
         if (data.status === 'finished') {
-          await handleFinished(data, loadingMsgIndex);
+          await handleFinished(data);
         }
       } catch (error) {
         console.error('解析响应错误:', error);
@@ -537,216 +525,176 @@ const handleStreamResponse = async (response) => {
   }
 };
 
+// 处理完成状态
+const handleFinished = async () => {
+  // 更新最后一条助手消息的状态
+  const lastAssistantMsg = messages.value.find(m => m.role === 'assistant' && m.status === 'loading' || m.status === 'processing');
+  if (lastAssistantMsg) {
+    // 如果既没有内容也没有工具调用，添加一个完成提示
+    if ((!lastAssistantMsg.content || lastAssistantMsg.content.trim().length === 0) &&
+        (!lastAssistantMsg.toolCalls || Object.keys(lastAssistantMsg.toolCalls).length === 0)) {
+      lastAssistantMsg.content = '已完成';
+    }
+    // 更新状态为已完成
+    lastAssistantMsg.status = 'complete';
+  }
+
+  // 标记处理完成
+  isProcessing.value = false;
+  await scrollToBottom();
+};
+
 // 基于ID处理消息
-const handleMessageById = async (data, loadingMsgIndex) => {
+const handleMessageById = async (data) => {
   const msgId = data.msg.id;
   const msgType = data.msg.type;
+  // console.log("data", data);
 
   // 查找现有消息
   const existingMsgIndex = messageMap.value.get(msgId);
+  console.log("existingMsgIndex", existingMsgIndex);
 
-  if (existingMsgIndex !== undefined) {
-    // 更新现有消息
-    if (msgType === 'function' && data.msg.additional_kwargs?.tool_call_chunks) {
-      // 更新工具调用参数
-      return await updateToolCallChunks(data, existingMsgIndex);
-    } else if (msgType === 'tool') {
-      // 更新工具结果
-      return await updateToolResult(data, existingMsgIndex);
+  if (existingMsgIndex === undefined) {
+    // 创建新消息或附加到现有助手消息
+    if (msgType === 'tool') {
+      await appendToolMessageToExistingAssistant(data);
     } else {
-      // 更新普通消息内容
-      return await updateAssistantMessage(data, existingMsgIndex);
-    }
-  } else {
-    // 创建新消息
-    if (msgType === 'function' && data.msg.additional_kwargs?.tool_call_chunks) {
-      // 创建新的工具调用
-      return await createToolCallMessage(data);
-    } else if (msgType === 'tool') {
-      // 创建工具结果，并关联到对应的工具调用
-      return await createToolResultMessage(data);
-    } else {
-      // 创建新的助手消息
-      return await createAssistantMessage(data);
-    }
-  }
-};
-
-// 更新工具调用参数
-const updateToolCallChunks = async (data, existingMsgIndex) => {
-  const toolCall = data.msg.additional_kwargs.tool_call_chunks[0];
-  const toolCallId = toolCall.id;
-  const message = messages.value[existingMsgIndex];
-
-  // 查找当前消息中的对应工具调用
-  const toolInfo = message.toolCalls?.find(tc => tc.id === toolCallId);
-
-  if (toolInfo) {
-    // 更新参数
-    if (toolCall.args) {
-      toolInfo.rawArgs = (toolInfo.rawArgs || '') + toolCall.args;
-
-      // 尝试解析完整JSON
-      try {
-        toolInfo.params = JSON.parse(toolInfo.rawArgs);
-        toolInfo.isComplete = true;
-      } catch (e) {
-        // JSON不完整，继续等待
+      // 查找是否有正在加载的助手消息
+      const loadingAssistantIndex = messages.value.findIndex(m => m.role === 'assistant' && m.status === 'loading');
+      if (loadingAssistantIndex !== -1) {
+        // 更新现有助手消息
+        messages.value[loadingAssistantIndex].id = msgId;
+        messageMap.value.set(msgId, loadingAssistantIndex);
+        await updateExistingMessage(data, loadingAssistantIndex);
+      } else {
+        // 创建新消息
+        await createAssistantMessage(data);
       }
     }
-
-    // 当工具调用完成时更新UI
-    if (toolInfo.isComplete && !toolInfo.isDisplayed) {
-      toolInfo.isDisplayed = true;
-
-      // 在消息流中添加工具调用显示
-      messages.value.push({
-        role: 'tool_call',
-        content: null,
-        tool: {
-          id: toolInfo.id,
-          name: toolInfo.name,
-          params: toolInfo.params,
-          run_id: data.metadata?.run_id,
-          step: data.metadata?.langgraph_step
-        },
-        timestamp: new Date().toISOString()
-      });
-
-      await scrollToBottom();
-      return messages.value.length - 1;
-    }
+  } else {
+    // 更新现有消息
+    await updateExistingMessage(data, existingMsgIndex);
   }
-
-  return existingMsgIndex;
 };
 
-// 创建工具调用消息
-const createToolCallMessage = async (data) => {
-  const toolCall = data.msg.additional_kwargs.tool_call_chunks[0];
-  const toolCallId = toolCall.id;
-  const msgId = data.msg.id;
-
-  // 创建新的消息对象
-  const newMessage = {
-    id: msgId,
-    role: 'assistant',
-    content: '',
-    toolCalls: [{
-      id: toolCallId,
-      name: toolCall.name,
-      rawArgs: toolCall.args || '',
-      isComplete: false,
-      isDisplayed: false
-    }],
-    timestamp: new Date().toISOString(),
-    run_id: data.metadata?.run_id,
-    step: data.metadata?.langgraph_step
-  };
-
-  // 添加到消息映射
-  messageMap.value.set(msgId, messages.value.length);
-  toolCallMap.value.set(toolCallId, msgId);
-
-  // 添加到消息流
-  messages.value.push(newMessage);
-
-  // 尝试解析JSON
-  try {
-    newMessage.toolCalls[0].params = JSON.parse(newMessage.toolCalls[0].rawArgs);
-    newMessage.toolCalls[0].isComplete = true;
-  } catch (e) {
-    // JSON不完整，继续等待
-  }
-
-  return messages.value.length - 1;
-};
-
-// 更新工具结果
-const updateToolResult = async (data, existingMsgIndex) => {
-  // 工具结果通常是独立的消息
-  messages.value[existingMsgIndex].content = data.msg.content;
-  await scrollToBottom();
-  return existingMsgIndex;
-};
-
-// 创建工具结果消息
-const createToolResultMessage = async (data) => {
-  const toolCallId = data.metadata?.tool_call_id;
-  const msgId = data.msg.id;
-
-  // 查找对应的工具调用消息ID
-  const parentMsgId = toolCallMap.value.get(toolCallId);
-  const parentMsgIndex = parentMsgId ? messageMap.value.get(parentMsgId) : undefined;
-
-  // 创建工具结果消息
-  const newMessage = {
-    id: msgId,
-    role: 'tool',
-    content: data.msg.content,
-    tool: {
-      id: toolCallId,
-      run_id: data.metadata?.run_id,
-      step: data.metadata?.langgraph_step
-    },
-    timestamp: new Date().toISOString()
-  };
-
-  // 如果找到父消息，关联结果
-  if (parentMsgIndex !== undefined) {
-    const parentMsg = messages.value[parentMsgIndex];
-    const toolCall = parentMsg.toolCalls?.find(tc => tc.id === toolCallId);
-
-    if (toolCall) {
-      toolCall.result = data.msg.content;
-      newMessage.tool.name = toolCall.name;
-      newMessage.tool.tool_call_step = parentMsg.step;
-    }
-  }
-
-  // 添加到消息映射
-  messageMap.value.set(msgId, messages.value.length);
-
-  // 添加到消息流
-  messages.value.push(newMessage);
-
-  await scrollToBottom();
-  return messages.value.length - 1;
-};
-
-// 更新助手消息
-const updateAssistantMessage = async (data, existingMsgIndex) => {
-  if (data.response) {
-    messages.value[existingMsgIndex].content += data.response;
-    await scrollToBottom();
-  }
-  return existingMsgIndex;
-};
-
-// 创建助手消息
+// 创建新的助手消息
 const createAssistantMessage = async (data) => {
+  console.log("createAssistantMessage", data);
   const msgId = data.msg.id;
+  const msgContent = data.response || '';
+  const runId = data.metadata?.run_id;
+  const step = data.metadata?.langgraph_step;
 
-  // 创建新的助手消息
-  const newMessage = {
+  // 创建新消息
+  const newMsg = {
     id: msgId,
     role: 'assistant',
-    content: data.response || '',
-    status: data.status || 'loading',
-    step: data.metadata?.langgraph_step,
-    run_id: data.metadata?.run_id,
-    timestamp: new Date().toISOString()
+    content: msgContent,
+    run_id: runId,
+    step: step,
+    status: 'processing',
+    toolCalls: {},
+    toolCallIds: {}
   };
 
-  // 添加到消息映射
-  messageMap.value.set(msgId, messages.value.length);
+  // 处理工具调用
+  const toolCalls = data.msg.additional_kwargs?.tool_calls;
+  if (toolCalls && toolCalls.length > 0) {
+    console.log("toolCalls in createAssistantMessage", toolCalls);
+    for (const toolCall of toolCalls) {
+      const toolCallId = toolCall.id;
+      const toolIndex = toolCall.index || 0;
+      newMsg.toolCallIds[toolCallId] = toolIndex;
+      newMsg.toolCalls[toolIndex] = toolCall;
+      toolCallMap.value.set(toolCallId, msgId);
+    }
+  }
 
-  // 添加到消息流
-  messages.value.push(newMessage);
+  // 添加新消息
+  messages.value.push(newMsg);
+  const newIndex = messages.value.length - 1;
+  messageMap.value.set(msgId, newIndex);
 
   await scrollToBottom();
-  return messages.value.length - 1;
 };
+
+// 更新现有消息
+const updateExistingMessage = async (data, existingMsgIndex) => {
+  const msgInstance = messages.value[existingMsgIndex];
+  console.log("updateExistingMessage", msgInstance);
+
+  // 如果消息状态是loading，更新为processing
+  if (msgInstance.status === 'loading') {
+    msgInstance.status = 'processing';
+    msgInstance.run_id = data.metadata?.run_id;
+    msgInstance.step = data.metadata?.langgraph_step;
+  }
+
+  // 添加新的响应内容
+  if (data.response) {
+    msgInstance.content = msgInstance.content || '';
+    msgInstance.content += data.response;
+  }
+
+  const toolCalls = data.msg.additional_kwargs?.tool_calls;
+  if (toolCalls && toolCalls.length > 0) {
+    console.log("toolCalls in updateExistingMessage", toolCalls);
+    for (const toolCall of toolCalls) {
+      const toolIndex = toolCall.index || 0;
+
+      // 创建临时对象
+      const newToolCalls = { ...msgInstance.toolCalls };
+      const newToolCallIds = { ...msgInstance.toolCallIds };
+      if (!newToolCalls[toolIndex]) {
+        newToolCalls[toolIndex] = toolCall;
+        newToolCallIds[toolCall.id] = toolIndex;
+      } else {
+        newToolCalls[toolIndex]['function']['arguments'] += toolCall.function.arguments;
+      }
+      // 整体替换，触发响应式更新
+      msgInstance.toolCalls = newToolCalls;
+      msgInstance.toolCallIds = newToolCallIds;
+
+      toolCallMap.value.set(toolCall.id, msgInstance.id);
+    }
+  }
+
+  // 确保变更生效
+  await nextTick();
+  await scrollToBottom();
+};
+
+const handleAssistantClick = (message) => {
+  console.log(message);
+}
+
+const appendToolMessageToExistingAssistant = async (data) => {
+  console.log("appendToolMessageToExistingAssistant", data);
+  currentToolCallId.value = data.msg.tool_call_id;
+  const assignedMsgId = toolCallMap.value.get(currentToolCallId.value);
+  if (assignedMsgId === undefined) {
+    console.error('未找到关联的消息实例', currentToolCallId.value);
+    return;
+  }
+
+  // 获取消息索引
+  const msgIndex = messageMap.value.get(assignedMsgId);
+  if (msgIndex === undefined) {
+    console.error('未找到关联的消息索引', assignedMsgId);
+    return;
+  }
+
+  const msgInstance = messages.value[msgIndex];
+  const toolCallIndex = msgInstance.toolCallIds[currentToolCallId.value];
+  if (toolCallIndex === undefined) {
+    console.error('未找到工具调用索引', currentToolCallId.value);
+    return;
+  }
+
+  msgInstance.toolCalls[toolCallIndex].toolResultMsg = data.msg;
+  msgInstance.toolCalls[toolCallIndex].toolResultMetadata = data.metadata;
+  await scrollToBottom();
+}
 
 // ==================== 生命周期钩子 ====================
 
@@ -770,17 +718,71 @@ const fetchAgents = async () => {
   }
 };
 
-// 组件挂载时
+// 从localStorage加载状态
+const loadState = () => {
+  // 加载当前选择的智能体
+  const savedAgent = localStorage.getItem('agent-current-agent');
+  if (savedAgent) {
+    currentAgent.value = savedAgent;
+  }
+
+  // 加载设置选项
+  const savedOptions = localStorage.getItem('agent-options');
+  if (savedOptions) {
+    Object.assign(options, JSON.parse(savedOptions));
+  }
+
+  // 加载消息历史
+  const savedMessages = localStorage.getItem('agent-messages');
+  if (savedMessages) {
+    messages.value = JSON.parse(savedMessages);
+  }
+
+  // 加载线程ID
+  const savedThreadId = localStorage.getItem('agent-thread-id');
+  if (savedThreadId) {
+    threadId.value = savedThreadId;
+  }
+};
+
+// 保存状态到localStorage
+const saveState = () => {
+  // 保存当前选择的智能体
+  if (currentAgent.value) {
+    localStorage.setItem('agent-current-agent', currentAgent.value);
+  }
+
+  // 保存设置选项
+  localStorage.setItem('agent-options', JSON.stringify(options));
+
+  // 保存消息历史
+  localStorage.setItem('agent-messages', JSON.stringify(messages.value));
+
+  // 保存线程ID
+  if (threadId.value) {
+    localStorage.setItem('agent-thread-id', threadId.value);
+  }
+};
+
+// 监听状态变化并保存
+watch([currentAgent, options, messages, threadId], () => {
+  saveState();
+}, { deep: true });
+
+// 组件挂载时加载状态
 onMounted(async () => {
   // 获取智能体列表
   await fetchAgents();
+
+  // 加载保存的状态
+  loadState();
 
   // 处理消息历史
   if (messages.value.length > 0) {
     messages.value = prepareMessageHistory(messages.value);
   }
 
-  // 从localStorage加载状态
+  // 从localStorage加载侧边栏状态
   const savedSidebarState = localStorage.getItem('agent-sidebar-open');
   if (savedSidebarState !== null) {
     state.isSidebarOpen = JSON.parse(savedSidebarState);
@@ -795,12 +797,6 @@ onMounted(async () => {
 // 监听消息变化自动滚动
 watch(messages, () => {
   scrollToBottom();
-}, { deep: true });
-
-// 保存状态到localStorage
-watch(state, () => {
-  localStorage.setItem('agent-sidebar-open', JSON.stringify(state.isSidebarOpen));
-  localStorage.setItem('agent-right-sidebar-open', JSON.stringify(state.isRightSidebarOpen));
 }, { deep: true });
 
 // 处理元数据
@@ -822,6 +818,15 @@ const handleMetadata = (data) => {
       type: data.msg?.type || 'unknown',
       timestamp: new Date().toISOString()
     };
+  }
+};
+
+// 在 script setup 部分添加 toggleToolCall 方法
+const toggleToolCall = (toolCallId) => {
+  if (expandedToolCalls.value.has(toolCallId)) {
+    expandedToolCalls.value.delete(toolCallId);
+  } else {
+    expandedToolCalls.value.add(toolCallId);
   }
 };
 </script>
@@ -1137,7 +1142,6 @@ const handleMetadata = (data) => {
     font-size: 15px;
     box-sizing: border-box;
     color: black;
-
     .status-info {
       margin-top: 10px;
       border-top: 1px dashed var(--gray-300);
@@ -1194,27 +1198,14 @@ const handleMetadata = (data) => {
         padding: 8px 12px;
         background-color: var(--gray-50);
 
-        pre {
+        .tool-params-content,
+        .tool-result-content,
+        .tool-params-content pre {
           margin: 0;
           font-size: 12px;
           overflow-x: auto;
-        }
-      }
-
-      .tool-result {
-        padding: 0;
-
-        .result-header {
-          padding: 8px 12px;
-          font-size: 12px;
-          color: var(--gray-700);
-          background-color: var(--gray-50);
-          border-bottom: 1px solid var(--gray-200);
-        }
-
-        .result-content {
-          padding: 10px 12px;
-          font-size: 13px;
+          white-space: pre-wrap;
+          word-break: break-all;
         }
       }
     }
@@ -1229,135 +1220,96 @@ const handleMetadata = (data) => {
 
   .message-box.assistant {
     color: initial;
-    width: fit-content;
+    width: 100%;
     text-align: left;
     word-wrap: break-word;
-    margin: 0;
-    max-width: 100%;
+    margin: 0 0 16px 0;
     padding-bottom: 0;
-    padding-top: 16px;
+    padding-top: 10px;
     padding-left: 0;
     padding-right: 0;
     text-align: justify;
+    background-color: white;
+    border-radius: 12px;
+    position: relative;
   }
 
-  .message-box.tool_call {
+  .tool-calls-container {
+    width: 100%;
+    margin-top: 10px;
+
+    .tool-call-container {
+      margin-bottom: 10px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  .tool-call-display {
     background-color: var(--gray-50);
     border: 1px solid var(--gray-200);
     border-radius: 8px;
-    margin: 10px 0;
-    width: 90%;
-    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(60, 60, 60, 0.05);
+    animation: fadeInUp 0.3s ease-out;
 
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: -10px;
-      left: 20px;
-      width: 2px;
-      height: 10px;
-      background-color: var(--gray-200);
-    }
+    .tool-header {
+      padding: 10px 12px;
+      background-color: var(--gray-100);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-800);
+      border-bottom: 1px solid var(--gray-200);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
 
-    .tool-call-display {
-      .tool-header {
-        padding: 8px 12px;
-        background-color: var(--gray-100);
-        font-size: 13px;
-        color: var(--gray-800);
-        border-bottom: 1px solid var(--gray-200);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-
-        .step-badge {
-          margin-left: auto;
-          background-color: var(--gray-200);
-          color: var(--gray-700);
-          padding: 2px 6px;
-          border-radius: 10px;
-          font-size: 10px;
-          font-weight: 500;
-        }
+      .anticon {
+        color: var(--main-600);
       }
 
+      .step-badge {
+        margin-left: auto;
+        background-color: var(--gray-200);
+        color: var(--gray-700);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+    }
+
+    .tool-content {
+      transition: all 0.3s ease;
       .tool-params {
-        padding: 8px 12px;
+        padding: 10px 12px;
         background-color: var(--gray-50);
 
-        pre {
+        .tool-params-header {
+          background-color: var(--gray-100);
+          font-size: 13px;
+          color: var(--gray-800);
+        }
+
+        .tool-params-content {
           margin: 0;
-          font-size: 12px;
+          font-size: 13px;
+          background-color: var(--gray-100);
+          border-radius: 4px;
+          padding: 8px;
           overflow-x: auto;
         }
       }
-
-      .meta-info {
-        padding: 6px 12px;
-        font-size: 10px;
-        color: var(--gray-500);
-        background-color: var(--gray-100);
-        border-top: 1px dashed var(--gray-200);
-        border-radius: 0 0 8px 8px;
-      }
-    }
-  }
-
-  .message-box.tool {
-    background-color: var(--main-50);
-    border: 1px solid var(--main-100);
-    border-radius: 8px;
-    margin: 10px 0;
-    width: 90%;
-    position: relative;
-    margin-left: 20px;
-
-    &::before {
-      content: '';
-      position: absolute;
-      top: -10px;
-      left: 0;
-      width: 2px;
-      height: 10px;
-      background-color: var(--gray-200);
     }
 
-    .tool-result-display {
-      .result-header {
-        padding: 8px 12px;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--main-700);
-        background-color: var(--main-50);
-        border-bottom: 1px solid var(--main-100);
-        display: flex;
-        align-items: center;
-
-        .step-badge {
-          margin-left: auto;
-          background-color: var(--main-100);
-          color: var(--main-700);
-          padding: 2px 6px;
-          border-radius: 10px;
-          font-size: 10px;
-          font-weight: 500;
-        }
-      }
-
-      .result-content {
-        padding: 10px 12px;
-        font-size: 13px;
-        background-color: white;
-        border-radius: 0 0 8px 8px;
-      }
-
-      .meta-info {
-        padding: 6px 12px;
-        font-size: 10px;
-        color: var(--gray-500);
-        background-color: var(--main-50);
-        border-top: 1px dashed var(--main-100);
-        border-radius: 0 0 8px 8px;
+    &.is-collapsed {
+      .tool-header {
+        border-bottom: none;
       }
     }
   }
@@ -1582,6 +1534,37 @@ const handleMetadata = (data) => {
   }
 }
 
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 520px) {
   .conversations,
   .right-sidebar {
@@ -1634,61 +1617,5 @@ const handleMetadata = (data) => {
       display: none;
     }
   }
-}
-</style>
-
-<style>
-.message-md {
-  color: var(--gray-900);
-  max-width: 100%;
-}
-
-.message-md pre {
-  border-radius: 8px;
-  font-size: 0.9rem;
-  border: 1px solid var(--main-light-3);
-  padding: 1rem;
-}
-
-.message-md pre:has(code.hljs) {
-  padding: 0;
-}
-
-.message-md code.hljs {
-  font-size: 0.8rem;
-  background-color: var(--gray-100);
-}
-
-.message-md strong {
-  color: var(--gray-800);
-}
-
-.message-md h1,
-.message-md h2,
-.message-md h3,
-.message-md h4,
-.message-md h5,
-.message-md h6 {
-  font-size: 1rem;
-}
-
-.message-md li,
-.message-md ol,
-.message-md ul {
-  margin: 0.25rem 0;
-}
-
-.message-md ol,
-.message-md ul {
-  padding-left: 1rem;
-}
-
-.message-md hr {
-  margin-bottom: 1rem;
-}
-
-.message-md a {
-  color: var(--main-800);
-  margin: auto 2px;
 }
 </style>

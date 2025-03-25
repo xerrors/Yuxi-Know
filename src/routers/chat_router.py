@@ -84,8 +84,7 @@ def chat_post(
 
             logger.debug(f"Final response: {content}")
             logger.debug(f"Final reasoning response: {reasoning_content}")
-            yield make_chunk(content=content,
-                            status="finished",
+            yield make_chunk(status="finished",
                             history=history_manager.update_ai(content),
                             refs=refs)
         except Exception as e:
@@ -164,7 +163,7 @@ def chat_agent(agent_name: str,
         content = ""
         yield make_chunk(status="waiting")
         for msg, metadata in agent.stream_messages(messages, runnable_config):
-            # logger.debug(f"msg: {msg.model_dump()}, {metadata=}")
+            logger.debug(f">>>>>    msg: {msg.model_dump()}, >>>>>>>      {metadata=}")
             if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
                 content += msg.content
                 yield make_chunk(content=msg.content,

@@ -9,7 +9,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 
 from src.agents.registry import State, BaseAgent
-from src.agents.chatbot.configuration import ChatbotConfiguration
+from src.agents.chatbot.configuration import ChatbotConfiguration, multiply
 
 class ChatbotAgent(BaseAgent):
     name = "chatbot"
@@ -23,7 +23,7 @@ class ChatbotAgent(BaseAgent):
 
     def _get_tools(self, config: RunnableConfig):
         """根据配置获取工具"""
-        tools = []
+        tools = [multiply]
         if not config:
             return tools
 
