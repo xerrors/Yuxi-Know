@@ -1,31 +1,8 @@
 <template>
   <div class="chat-container">
-    <div class="conversations" :class="{ 'is-open': state.isSidebarOpen }">
-      <div class="actions">
-        <span class="header-title">可用智能体</span>
-        <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
-      </div>
-      <div class="conversation-list">
-        <div class="conversation"
-          v-for="(agent, name) in agents"
-          :key="name"
-          :class="{ active: currentAgent?.name === name }"
-          @click="selectAgent(name)">
-          <div class="conversation__title"><RobotOutlined /> &nbsp;{{ agent.name }}</div>
-          <div class="conversation__description">{{ agent.description }}</div>
-        </div>
-      </div>
-    </div>
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
-          <div
-            v-if="!state.isSidebarOpen"
-            class="nav-btn"
-            @click="state.isSidebarOpen = true"
-          >
-            <MenuOutlined />
-          </div>
           <a-dropdown>
             <div class="current-agent nav-btn">
               <RobotOutlined />&nbsp;
@@ -43,7 +20,8 @@
         </div>
         <div class="header__right">
           <div class="nav-btn text" @click="state.isRightSidebarOpen = !state.isRightSidebarOpen">
-            <SettingOutlined /> <span class="text">设置</span>
+            <!-- <SettingOutlined /> <span class="text">设置</span> -->
+            <img src="@/assets/icons/sidebar_right.svg" class="nav-btn-icon" alt="设置" />
           </div>
         </div>
       </div>
@@ -205,7 +183,6 @@ const marked = new Marked(
 
 // UI状态
 const state = reactive({
-  isSidebarOpen: true,
   isRightSidebarOpen: false,
   showOptions: false,
 });
@@ -747,6 +724,12 @@ const loadState = () => {
   if (savedThreadId) {
     threadId.value = savedThreadId;
   }
+
+  // 从localStorage加载右侧边栏状态
+  const savedRightSidebarState = localStorage.getItem('agent-right-sidebar-open');
+  if (savedRightSidebarState !== null) {
+    state.isRightSidebarOpen = JSON.parse(savedRightSidebarState);
+  }
 };
 
 // 保存状态到localStorage
@@ -784,17 +767,6 @@ onMounted(async () => {
   // 处理消息历史
   if (messages.value.length > 0) {
     messages.value = prepareMessageHistory(messages.value);
-  }
-
-  // 从localStorage加载侧边栏状态
-  const savedSidebarState = localStorage.getItem('agent-sidebar-open');
-  if (savedSidebarState !== null) {
-    state.isSidebarOpen = JSON.parse(savedSidebarState);
-  }
-
-  const savedRightSidebarState = localStorage.getItem('agent-right-sidebar-open');
-  if (savedRightSidebarState !== null) {
-    state.isRightSidebarOpen = JSON.parse(savedRightSidebarState);
   }
 });
 
@@ -843,110 +815,6 @@ const toggleToolCall = (toolCallId) => {
   width: 100%;
   height: 100%;
   position: relative;
-}
-
-.conversations {
-  width: 230px;
-  max-width: 230px;
-  border-right: 1px solid var(--main-light-3);
-  background-color: var(--bg-sider);
-  transition: all 0.3s ease;
-  white-space: nowrap; /* 防止文本换行 */
-  overflow: hidden; /* 确保内容不溢出 */
-
-  &.is-open {
-    width: 230px;
-  }
-
-  &:not(.is-open) {
-    width: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  & .actions {
-    height: var(--header-height);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    z-index: 9;
-    border-bottom: 1px solid var(--main-light-3);
-
-    .header-title {
-      font-weight: bold;
-      user-select: none;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .action {
-      font-size: 1.2rem;
-      width: 2.5rem;
-      height: 2.5rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border-radius: 8px;
-      color: var(--gray-800);
-      cursor: pointer;
-
-      &:hover {
-        background-color: var(--main-light-3);
-      }
-    }
-  }
-
-  .conversation-list {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    max-height: 100%;
-  }
-
-  .conversation-list .conversation {
-    display: flex;
-    flex-direction: column;
-    padding: 16px;
-    cursor: pointer;
-    width: 100%;
-    user-select: none;
-    transition: background-color 0.2s ease-in-out;
-    border-bottom: 1px solid var(--main-light-3);
-    overflow: hidden;
-
-    &__title {
-      color: var(--gray-700);
-      white-space: nowrap; /* 禁止换行 */
-      overflow: hidden;    /* 超出部分隐藏 */
-      text-overflow: ellipsis; /* 显示省略号 */
-      font-weight: bold;
-      margin-bottom: 4px;
-    }
-
-    &__description {
-      color: var(--gray-600);
-      font-size: 12px;
-      white-space: normal;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    &.active {
-      border-right: 3px solid var(--main-500);
-      background-color: var(--main-light-4);
-
-      & .conversation__title {
-        color: var(--main-800);
-      }
-    }
-
-    &:not(.active):hover {
-      background-color: var(--main-light-3);
-    }
-  }
 }
 
 /* 右侧侧边栏样式 */
@@ -1103,6 +971,11 @@ const toggleToolCall = (toolCallId) => {
 
     &:hover {
       background-color: var(--main-light-3);
+    }
+
+    .nav-btn-icon {
+      width: 1.5rem;
+      height: 1.5rem;
     }
   }
 }
@@ -1582,27 +1455,12 @@ const toggleToolCall = (toolCallId) => {
 }
 
 @media (max-width: 520px) {
-  .conversations,
   .right-sidebar {
     position: absolute;
     z-index: 101;
     width: 300px;
     height: 100%;
     box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
-  }
-
-  .conversations {
-    border-radius: 0 16px 16px 0;
-    left: 0;
-
-    &:not(.is-open) {
-      width: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-  }
-
-  .right-sidebar {
     border-radius: 16px 0 0 16px;
     right: 0;
 
