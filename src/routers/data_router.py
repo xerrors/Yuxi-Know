@@ -124,6 +124,7 @@ async def upload_file(
     else:
         upload_dir = os.path.join(config.save_dir, "data", "uploads")
 
+    os.makedirs(upload_dir, exist_ok=True)
     basename, ext = os.path.splitext(file.filename)
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
