@@ -172,7 +172,8 @@ class GraphDatabase:
         def read_triples(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line in file:
-                    yield json.loads(line.strip())
+                    if line.strip():
+                        yield json.loads(line.strip())
 
         triples = list(read_triples(file_path))
 
@@ -340,18 +341,20 @@ class GraphDatabase:
                 "labels": labels,
                 "status": self.status,
                 "embed_model_name": self.embed_model_name,
-                "unindexed_node_count": self.query_nodes_without_embedding(graph_name)
             }
 
         try:
+            graph_info = {}
             if self.status == "open" and self.driver and self.is_running():
                 # 获取数据库信息
                 with self.driver.session() as session:
                     graph_info = session.execute_read(query)
 
-            # 添加时间戳
-            from datetime import datetime
-            graph_info["last_updated"] = datetime.now().isoformat()
+                    # 添加时间戳
+                    from datetime import datetime
+                    graph_info["last_updated"] = datetime.now().isoformat()
+                    graph_info["unindexed_node_count"] = len(self.query_nodes_without_embedding(graph_name))
+
             return graph_info
 
         except Exception as e:
