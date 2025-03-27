@@ -253,7 +253,7 @@ ark:
 
 可在 `docker/docker-compose.yml` 和 `docker/docker-compose.dev.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
 
-目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。
+目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
 
 ## ❓ 常见问题
 
