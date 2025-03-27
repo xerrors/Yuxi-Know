@@ -16,3 +16,28 @@
     margin: 20px 0 10px 0;
   }
 }
+
+.iconfont {
+  max-width: 100%;
+  max-height: 100%;
+
+  &.icon-10 {
+    width: 10px;
+    height: 10px;
+  }
+
+  &.icon-16 {
+    width: 16px;
+    height: 16px;
+  }
+
+  &.icon-20 {
+    width: 20px;
+    height: 20px;
+  }
+
+  &.icon-24 {
+    width: 24px;
+    height: 24px;
+  }
+}

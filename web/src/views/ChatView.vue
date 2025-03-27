@@ -4,7 +4,9 @@
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
          <span class="header-title">对话历史</span>
-        <div class="action close" @click="state.isSidebarOpen = false"><MenuOutlined /></div>
+        <div class="action close" @click="state.isSidebarOpen = false">
+          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-24" alt="设置" />
+        </div>
       </div>
       <div class="conversation-list">
         <div class="conversation"
@@ -177,6 +179,11 @@ onMounted(() => {
 
       &:hover {
         background-color: var(--main-light-3);
+      }
+
+      .nav-btn-icon {
+        width: 1.2rem;
+        height: 1.2rem;
       }
     }
   }

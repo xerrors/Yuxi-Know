@@ -30,19 +30,19 @@ const router = createRouter({
         }
       ]
     },
-    {
-      path: '/agent',
-      name: 'agent',
-      component: AppLayout,
-      children: [
-        {
-          path: '',
-          name: 'AgentComp',
-          component: () => import('../views/AgentView.vue'),
-          meta: { keepAlive: true }
-        }
-      ]
-    },
+    // {
+    //   path: '/agent',
+    //   name: 'agent',
+    //   component: AppLayout,
+    //   children: [
+    //     {
+    //       path: '',
+    //       name: 'AgentComp',
+    //       component: () => import('../views/AgentView.vue'),
+    //       meta: { keepAlive: true }
+    //     }
+    //   ]
+    // },
     {
       path: '/graph',
       name: 'graph',
@@ -109,6 +109,12 @@ const router = createRouter({
           name: 'PDF_to_TXT',
           component: () => import('../components/tools/ConvertToTxtComponent.vue'),
         },
+        {
+          path: 'agent',
+          name: 'Agent',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true }
+        }
       ]
     },
     {

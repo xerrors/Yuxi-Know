@@ -83,11 +83,6 @@ const mainList = [{
     icon: MessageOutlined,
     activeIcon: MessageFilled,
   }, {
-    name: '智能体',
-    path: '/agent',
-    icon: RobotOutlined,
-    activeIcon: RobotFilled,
-  }, {
     name: '图谱',
     path: '/graph',
     icon: ProjectOutlined,

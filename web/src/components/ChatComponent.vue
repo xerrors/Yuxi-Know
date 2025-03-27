@@ -7,8 +7,8 @@
           class="close nav-btn"
           @click="state.isSidebarOpen = true"
         >
-          <MenuOutlined />
-        </div>
+        <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-24" alt="设置" />
+      </div>
         <a-tooltip :title="configStore.config?.model_name" placement="rightTop">
           <div class="newchat nav-btn" @click="$emit('newconv')">
             <PlusCircleOutlined /> <span class="text">新对话</span>

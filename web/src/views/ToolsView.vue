@@ -5,13 +5,9 @@
       description="这里展示了各种可用的工具，重点是为了测试部分功能的页面。(注：不是大模型的工具)"
     >
     </HeaderComponent>
-
     <div class="tools-grid">
       <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.name)">
         <div class="tool-header">
-          <!-- <div class="tool-icon">
-            <component :is="iconMap[tool.name]" />
-          </div> -->
           <h3>{{ tool.title }}</h3>
         </div>
         <div class="tool-info">
@@ -79,19 +75,19 @@ onMounted(() => {
     border: 1px solid var(--gray-300);
     border-radius: 8px;
     padding: 20px;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
     cursor: pointer;
 
     &:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+      // transform: translateY(-1px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
     }
 
     .tool-header {
       display: flex;
       align-items: center;
       margin-bottom: 15px;
-      font-size: 1rem;
+      font-size: 15px;
 
       .tool-icon {
         margin-right: 10px;

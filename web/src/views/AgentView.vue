@@ -48,7 +48,7 @@
                 <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
                   <div class="tool-header" @click="toggleToolCall(toolCall.id)">
                     <span v-if="!toolCall.toolResultMsg">
-                      <ThunderboltOutlined />
+                      <ThunderboltOutlined /> &nbsp;
                       <span>正在调用工具: </span>
                       <span class="tool-name">{{ toolCall.function.name }}</span>
                     </span>
