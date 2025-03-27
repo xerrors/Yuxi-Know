@@ -317,11 +317,28 @@ class GraphDatabase:
             outputs = knowledge_base.embed_model.encode([text])[0]
             return outputs
 
-    def set_embedding(self, tx, entity_name, embedding):
-        tx.run("""
-        MATCH (e:Entity {name: $name})
-        CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
-        """, name=entity_name, embedding=embedding)
+    def set_embedding(self, tx, entity_name, embedding, node_id=None):
+        """为节点设置嵌入向量
+
+        Args:
+            tx: 事务对象
+            entity_name: 实体名称
+            embedding: 嵌入向量
+            node_id: 节点ID，如果提供则使用ID查询，否则使用名称查询
+        """
+        if node_id is not None:
+            # 使用节点ID查询，避免同名节点问题
+            tx.run("""
+            MATCH (e)
+            WHERE id(e) = $node_id
+            CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
+            """, node_id=node_id, embedding=embedding)
+        else:
+            # 向后兼容，使用名称查询（可能有同名问题）
+            tx.run("""
+            MATCH (e:Entity {name: $name})
+            CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
+            """, name=entity_name, embedding=embedding)
 
     def get_graph_info(self, graph_name="neo4j"):
         self.use_database(graph_name)
@@ -386,7 +403,7 @@ class GraphDatabase:
         """查询没有嵌入向量的节点
 
         Returns:
-            list: 没有嵌入向量的节点列表
+            dict: 没有嵌入向量的节点ID和名称的字典 {node_id: node_name}
         """
         self.use_database(kgdb_name)
 
@@ -394,9 +411,9 @@ class GraphDatabase:
             result = tx.run("""
             MATCH (n:Entity)
             WHERE n.embedding IS NULL
-            RETURN n.name AS name
+            RETURN id(n) AS node_id, n.name AS name
             """)
-            return [record["name"] for record in result]
+            return {record["node_id"]: record["name"] for record in result}
 
         with self.driver.session() as session:
             return session.execute_read(query)
@@ -442,18 +459,59 @@ class GraphDatabase:
 
         # 如果node_names为None，则获取所有没有嵌入向量的节点
         if node_names is None:
-            node_names = self.query_nodes_without_embedding(kgdb_name)
+            nodes_dict = self.query_nodes_without_embedding(kgdb_name)
+            if not nodes_dict:
+                logger.info("没有找到需要添加嵌入向量的节点")
+                return 0
+        else:
+            # 手动提供节点名称列表时，需要先查询这些节点的ID
+            def get_node_ids(tx, names):
+                result = tx.run("""
+                    MATCH (n)
+                    WHERE n.name IN $names
+                    RETURN id(n) AS node_id, n.name AS name
+                    """, names=names)
+                return {record["node_id"]: record["name"] for record in result}
 
-        count = 0
+            with self.driver.session() as session:
+                nodes_dict = session.execute_read(get_node_ids, node_names)
+
+                # 检查是否有节点未找到
+                found_names = set(nodes_dict.values())
+                missing_names = set(node_names) - found_names
+                if missing_names:
+                    logger.warning(f"以下节点未在数据库中找到: {missing_names}")
+
+        if not nodes_dict:
+            logger.info("没有找到需要添加嵌入向量的节点")
+            return 0
+
+        # 检查节点是否有Entity标签，如果没有则添加
+        def check_and_add_entity_label(tx, node_ids):
+            for node_id in node_ids:
+                tx.run("""
+                    MATCH (n)
+                    WHERE id(n) = $node_id
+                    SET n:Entity
+                    """, node_id=node_id)
+
         with self.driver.session() as session:
-            for node_name in node_names:
+            # 先检查并添加Entity标签（为了减少潜在的风险，这里暂时注释掉）
+            # session.execute_write(check_and_add_entity_label, list(nodes_dict.keys()))
+
+            # 然后为节点添加嵌入向量
+            count = 0
+            for node_id, node_name in nodes_dict.items():
                 try:
                     embedding = self.get_embedding(node_name)
-                    session.execute_write(self.set_embedding, node_name, embedding)
+                    session.execute_write(self.set_embedding, node_name, embedding, node_id)
                     count += 1
+                    logger.info(f"成功为节点 '{node_name}' (ID: {node_id}) 添加嵌入向量")
                 except Exception as e:
-                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}, {traceback.format_exc()}")
+                    logger.error(f"为节点 '{node_name}' (ID: {node_id}) 添加嵌入向量失败: {e}")
+                    logger.debug(traceback.format_exc())
 
+        logger.info(f"总共为 {count}/{len(nodes_dict)} 个节点添加了嵌入向量")
         return count
 
 
