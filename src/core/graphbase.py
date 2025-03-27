@@ -409,7 +409,7 @@ class GraphDatabase:
 
         def query(tx):
             result = tx.run("""
-            MATCH (n:Entity)
+            MATCH (n)
             WHERE n.embedding IS NULL
             RETURN id(n) AS node_id, n.name AS name
             """)
