@@ -104,18 +104,17 @@
       </div>
     </div>
     <div class="bottom">
-      <div class="input-box" :class="{ 'wide-screen': meta.wideScreen }">
-        <div class="input-area">
-          <a-textarea
-            class="user-input"
-            v-model:value="conv.inputText"
-            @keydown="handleKeyDown"
-            placeholder="输入问题……"
-            :auto-size="{ minRows: 2, maxRows: 10 }"
-          />
-        </div>
-        <div class="input-options">
-          <div class="options__left">
+      <div class="message-input-wrapper">
+        <MessageInputComponent
+          v-model="conv.inputText"
+          :is-loading="isStreaming"
+          :send-button-disabled="!conv.inputText && !isStreaming"
+          :auto-size="{ minRows: 2, maxRows: 10 }"
+          :custom-classes="{ 'wide-screen': meta.wideScreen }"
+          @send="sendMessage"
+          @keydown="handleKeyDown"
+        >
+          <template #options-left>
             <div
               :class="{'switch': true, 'opt-item': true, 'active': meta.use_web}"
               v-if="configStore.config.enable_web_search"
@@ -151,15 +150,10 @@
                 </a-menu>
               </template>
             </a-dropdown>
-          </div>
-          <div class="options__right">
-            <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
-              <template #icon> <ArrowUpOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-            </a-button>
-          </div>
-        </div>
+          </template>
+        </MessageInputComponent>
+        <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
       </div>
-      <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -197,6 +191,7 @@ import { message } from 'ant-design-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
+import MessageInputComponent from '@/components/MessageInputComponent.vue'
 
 const props = defineProps({
   conv: Object,
@@ -618,7 +613,7 @@ watch(
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  background: white;
+  background: var(--main-light-6);
   position: relative;
   box-sizing: border-box;
   flex: 5 5 200px;
@@ -629,7 +624,8 @@ watch(
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
     height: var(--header-height);
     display: flex;
     justify-content: space-between;
@@ -872,123 +868,28 @@ watch(
   width: 100%;
   margin: 0 auto;
   padding: 4px 2rem 0 2rem;
-  background: white;
 
-  .input-box {
-    display: flex;
-    flex-direction: column;
+  .message-input-wrapper {
     width: 100%;
-    height: auto;
     max-width: 800px;
     margin: 0 auto;
-    padding: 0.25rem 0.5rem;
-    border: 2px solid var(--gray-200);
-    border-radius: 1rem;
-    background: var(--gray-50);
-    transition: background, border 0.3s, box-shadow 0.3s, max-width 0.3s ease;
+    background-color: white;
 
     &.wide-screen {
       max-width: 1200px;
     }
 
-    &:focus-within {
-      border: 2px solid var(--main-500);
-      background: white;
+    .note {
+      width: 100%;
+      font-size: small;
+      text-align: center;
+      padding: 0;
+      color: #ccc;
+      margin: 4px 0;
+      user-select: none;
     }
-
-    .input-options {
-      display: flex;
-      padding: 4px 8px;
-
-      .options__left,
-      .options__right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .options__left {
-        flex: 1;
-
-        .opt-item {
-          border-radius: 12px;
-          border: 1px solid var(--gray-300);
-          padding: 4px 8px;
-          cursor: pointer;
-          font-size: 12px;
-          color: var(--gray-700);
-
-          &.active {
-            color: var(--main-600);
-            border: 1px solid var(--main-500);
-            background-color: var(--main-10);
-          }
-        }
-      }
-    }
-
-    .input-area {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-    }
-
-    textarea.user-input {
-      flex: 1;
-      height: 40px;
-      padding: 0.5rem 0.5rem;
-      background-color: transparent;
-      border: none;
-      margin: 0 0;
-      color: #111111;
-      font-size: 16px;
-      font-variation-settings: 'wght' 400, 'opsz' 10.5;
-      outline: none;
-      resize: none;
-      &:focus {
-        outline: none;
-        box-shadow: none;
-      }
-
-      &:active {
-        outline: none;
-      }
-    }
-  }
-
-  button.ant-btn-icon-only {
-    height: 32px;
-    width: 32px;
-    cursor: pointer;
-    background-color: var(--main-color);
-    border-radius: 50%;
-    border: none;
-    transition: color 0.3s;
-    box-shadow: none;
-    color: white;
-    padding: 0;
-
-    &:hover {
-      background-color: var(--main-800);
-    }
-
-    &:disabled {
-      background-color: var(--gray-400);
-      cursor: not-allowed;
-    }
-  }
-  .note {
-    width: 100%;
-    font-size: small;
-    text-align: center;
-    padding: 0rem;
-    color: #ccc;
-    margin: 4px 0;
-    user-select: none;
   }
 }
-
-
 
 .ant-dropdown-link {
   color: var(--gray-900);
