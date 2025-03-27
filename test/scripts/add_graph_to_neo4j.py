@@ -10,13 +10,13 @@ class Neo4jLoader:
 
     def add_relationship(self, head, relation, tail):
         with self.driver.session() as session:
-            # 使用 MERGE 而不是 CREATE 来避免重复节点
+            # 使用 MERGE 来避免重复节点和关系
             cypher_query = (
-                "MERGE (h:Node {name: $head}) "
-                "MERGE (t:Node {name: $tail}) "
-                "MERGE (h)-[r:" + relation + "]->(t)"
+                "MERGE (h:Entity {name: $head}) "
+                "MERGE (t:Entity {name: $tail}) "
+                "MERGE (h)-[r:" + relation + " {type: $relation}]->(t)"
             )
-            session.run(cypher_query, head=head, tail=tail)
+            session.run(cypher_query, head=head, tail=tail, relation=relation)
 
 def load_jsonl(file_path, loader):
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -42,7 +42,7 @@ def main():
 
     try:
         # 加载数据
-        load_jsonl('test/data/citys.jsonl', loader)
+        load_jsonl('tmp/test.jsonl', loader)
         print("数据已成功导入Neo4j")
     except Exception as e:
         print(f"导入过程中出现错误: {str(e)}")
