@@ -108,7 +108,6 @@ const handleSend = () => {
   flex-direction: column;
   width: 100%;
   height: auto;
-  max-width: 800px;
   margin: 0 auto;
   padding: 0.4rem 0.75rem;
   border: 2px solid var(--gray-200);
@@ -120,10 +119,6 @@ const handleSend = () => {
     border-color: var(--main-500);
     background: white;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  }
-
-  &.wide-screen {
-    max-width: 1200px;
   }
 
   .input-area {

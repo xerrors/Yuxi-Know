@@ -57,60 +57,31 @@
       </div>
     </div>
     <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
-      <div
+      <MessageComponent
         v-for="message in conv.messages"
         :key="message.id"
-        class="message-box"
-        :class="message.role"
+        :role="message.role"
+        :content="message.text"
+        :content-html="message.text.length > 0 ? renderMarkdown(message) : ''"
+        :reasoning-content="message.reasoning_content"
+        :reasoning-header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
+        :status="message.status"
+        :is-processing="isStreaming"
+        :error-message="message.message"
+        @retry="retryMessage(message.id)"
       >
-        <div v-if="message.reasoning_content" class="reasoning-msg">
-          <a-collapse
-            v-model:activeKey="message.showThinking"
-            :bordered="false"
-            style="background: rgb(255, 255, 255)"
-          >
-            <template #expandIcon="{ isActive }">
-              <caret-right-outlined :rotate="isActive ? 90 : 0" />
-            </template>
-            <a-collapse-panel
-              key="show"
-              :header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
-              :style="'background: #f7f7f7; border-radius: 8px; margin-bottom: 24px; border: 0; overflow: hidden'"
-            >
-              <p style="color: var(--gray-800)">{{ message.reasoning_content }}</p>
-            </a-collapse-panel>
-          </a-collapse>
-        </div>
-        <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0 && (message.status=='init' || message.status=='reasoning') && isStreaming"  class="loading-dots">
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-        <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
-        <div v-else-if="message.status == 'generating' && isStreaming" class="searching-msg"><i>正在生成……</i></div>
-        <div v-else-if="message.text.length > 0"
-          v-html="renderMarkdown(message)"
-          class="message-md"
-          @click="consoleMsg(message)">
-        </div>
-        <div v-else
-          class="err-msg"
-          @click="retryMessage(message.id)"
-        >
-          请求错误，请重试。{{ message.message }}
-        </div>
-        <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
-      </div>
+        <template #refs v-if="message.role=='received' && message.status=='finished'">
+          <RefsComponent :message="message" />
+        </template>
+      </MessageComponent>
     </div>
     <div class="bottom">
-      <div class="message-input-wrapper">
+      <div class="message-input-wrapper"  :class="{ 'wide-screen': meta.wideScreen}">
         <MessageInputComponent
           v-model="conv.inputText"
           :is-loading="isStreaming"
           :send-button-disabled="!conv.inputText && !isStreaming"
           :auto-size="{ minRows: 2, maxRows: 10 }"
-          :custom-classes="{ 'wide-screen': meta.wideScreen }"
           @send="sendMessage"
           @keydown="handleKeyDown"
         >
@@ -192,6 +163,7 @@ import RefsComponent from '@/components/RefsComponent.vue'
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
+import MessageComponent from '@/components/MessageComponent.vue'
 
 const props = defineProps({
   conv: Object,
@@ -790,76 +762,6 @@ watch(
       font-size: 16px;
     }
   }
-
-  .message-box {
-    display: inline-block;
-    border-radius: 1.5rem;
-    margin: 0.8rem 0;
-    padding: 0.625rem 1.25rem;
-    user-select: text;
-    word-break: break-word;
-    font-size: 15px;
-    font-variation-settings: 'wght' 400, 'opsz' 10.5;
-    font-weight: 400;
-    box-sizing: border-box;
-    color: black;
-    /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
-    /* animation: slideInUp 0.1s ease-in; */
-
-    .err-msg {
-      color: #eb8080;
-      border: 1px solid #eb8080;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      text-align: left;
-      background: #FFF5F5;
-      margin-bottom: 10px;
-      cursor: pointer;
-    }
-
-    .searching-msg {
-      color: var(--gray-500);
-      animation: colorPulse 2s infinite;
-    }
-
-    @keyframes colorPulse {
-      0% { color: var(--gray-700); }
-      50% { color: var(--gray-300); }
-      100% { color: var(--gray-700); }
-    }
-  }
-
-  .message-box.sent {
-    line-height: 24px;
-    max-width: 95%;
-    background: var(--main-light-4);
-    align-self: flex-end;
-  }
-
-  .message-box.received {
-    color: initial;
-    width: fit-content;
-    text-align: left;
-    word-wrap: break-word;
-    margin: 0;
-    max-width: 100%;
-    padding-bottom: 0;
-    padding-top: 16px;
-    padding-left: 0;
-    padding-right: 0;
-    text-align: justify;
-  }
-
-  p.message-text {
-    max-width: 100%;
-    word-wrap: break-word;
-    margin-bottom: 0;
-  }
-
-  p.message-md {
-    word-wrap: break-word;
-    margin-bottom: 0;
-  }
 }
 
 .bottom {
@@ -874,6 +776,7 @@ watch(
     max-width: 800px;
     margin: 0 auto;
     background-color: white;
+    animation: width 0.3s ease-in-out;
 
     &.wide-screen {
       max-width: 1200px;

@@ -32,15 +32,21 @@
       </div>
 
       <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': options.debug_mode }">
-        <div
+        <MessageComponent
           v-for="(message, index) in messages"
           :key="index"
-          class="message-box"
-          :class="message.role">
-          <p v-if="message.role === 'user'" class="message-text">{{ message.content.trim() }}</p>
-          <div v-else-if="message.role === 'assistant'" class="assistant-message" @click="handleAssistantClick(message)">
-            <div v-if="options.debug_mode" class="status-info">{{ message }}</div>
-            <div v-if="message.content" v-html="renderMarkdown(message.content)" class="message-md"></div>
+          :role="message.role"
+          :content="message.content"
+          :content-html="message.content ? renderMarkdown(message.content) : ''"
+          :status="message.status"
+          :is-processing="isProcessing"
+          :error-message="message.message"
+          @retry="retryMessage(index)"
+        >
+          <div v-if="options.debug_mode" class="status-info">{{ message }}</div>
+
+          <!-- 工具调用 -->
+          <template #tool-calls>
             <div v-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" class="tool-calls-container">
               <div v-for="(toolCall, index) in message.toolCalls || {}"
                    :key="index"
@@ -77,16 +83,8 @@
                 </div>
               </div>
             </div>
-            <div v-else-if="isProcessing && (!message.content || message.content.length === 0)" class="loading-dots">
-              <div></div>
-              <div></div>
-              <div></div>
-            </div>
-          </div>
-          <div v-else-if="message.status === 'error'" class="err-msg" @click="retryMessage(index)">
-            请求错误，请重试。{{ message.message }}
-          </div>
-        </div>
+          </template>
+        </MessageComponent>
       </div>
 
       <div class="bottom">
@@ -160,6 +158,7 @@ import { onClickOutside } from '@vueuse/core';
 import 'highlight.js/styles/github.css';
 import hljs from 'highlight.js';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
+import MessageComponent from '@/components/MessageComponent.vue'
 
 // ==================== 初始化配置 ====================
 
@@ -506,7 +505,7 @@ const handleFinished = async () => {
       lastAssistantMsg.content = '已完成';
     }
     // 更新状态为已完成
-    lastAssistantMsg.status = 'complete';
+    lastAssistantMsg.status = 'finished';
   }
 
   // 标记处理完成
@@ -1002,103 +1001,6 @@ const toggleToolCall = (toolCallId) => {
   display: flex;
   flex-direction: column;
 
-  .message-box {
-    display: inline-block;
-    border-radius: 1.5rem;
-    margin: 0.8rem 0;
-    padding: 0.625rem 1.25rem;
-    user-select: text;
-    word-break: break-word;
-    font-size: 15px;
-    box-sizing: border-box;
-    color: black;
-
-    .reasoning-box {
-      margin-top: 10px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-      border: 1px solid var(--main-light-3);
-      overflow: hidden;
-
-      .reasoning-header {
-        padding: 8px 12px;
-        background-color: var(--main-50);
-        font-size: 13px;
-        color: var(--main-700);
-        border-bottom: 1px solid var(--main-light-3);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .reasoning-content {
-        padding: 10px 12px;
-        font-size: 13px;
-        color: var(--gray-700);
-        white-space: pre-wrap;
-        max-height: 200px;
-        overflow-y: auto;
-        background-color: white;
-      }
-    }
-
-    .tool-call-box {
-      margin: 10px 0 15px 0;
-      border-radius: 8px;
-      border: 1px solid var(--main-light-3);
-      overflow: hidden;
-
-      .tool-header {
-        padding: 8px 12px;
-        background-color: var(--gray-100);
-        font-size: 13px;
-        color: var(--gray-800);
-        border-bottom: 1px solid var(--gray-200);
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .tool-params {
-        padding: 8px 12px;
-        background-color: var(--gray-50);
-
-        .tool-params-content,
-        .tool-result-content,
-        .tool-params-content pre {
-          margin: 0;
-          font-size: 12px;
-          overflow-x: auto;
-          white-space: pre-wrap;
-          word-break: break-all;
-        }
-      }
-    }
-  }
-
-  .message-box.user {
-    line-height: 24px;
-    max-width: 95%;
-    background: var(--main-light-4);
-    align-self: flex-end;
-  }
-
-  .message-box.assistant {
-    color: initial;
-    width: 100%;
-    text-align: left;
-    word-wrap: break-word;
-    margin: 0 0 16px 0;
-    padding-bottom: 0;
-    padding-top: 10px;
-    padding-left: 0;
-    padding-right: 0;
-    text-align: justify;
-    background-color: white;
-    border-radius: 12px;
-    position: relative;
-  }
-
   .tool-calls-container {
     width: 100%;
     margin-top: 10px;
@@ -1176,26 +1078,6 @@ const toggleToolCall = (toolCallId) => {
       .tool-header {
         border-bottom: none;
       }
-    }
-  }
-
-  p.message-text {
-    max-width: 100%;
-    word-wrap: break-word;
-    margin-bottom: 0;
-  }
-
-  .err-msg {
-    color: #ff4d4f;
-    padding: 8px 12px;
-    background-color: #fff2f0;
-    border: 1px solid #ffccc7;
-    border-radius: 8px;
-    margin-top: 10px;
-    cursor: pointer;
-
-    &:hover {
-      background-color: #fff0ed;
     }
   }
 }
