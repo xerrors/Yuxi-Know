@@ -15,19 +15,19 @@ class ChatbotAgent(BaseAgent):
     name = "chatbot"
     description = "A chatbot that can answer questions and help with tasks."
     _graph_cache = None
+    config_schema = ChatbotConfiguration
 
-    def __init__(self, configuration: ChatbotConfiguration = None):
-        super().__init__(configuration)
-        self.configuration = configuration or ChatbotConfiguration()
-        self.llm = self.configuration.llm
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-    def _get_tools(self, config: RunnableConfig):
+    def _get_tools(self, config_schema: RunnableConfig):
         """根据配置获取工具"""
+        conf = ChatbotConfiguration.from_runnable_config(config_schema)
         tools = [multiply]
-        if not config:
+        if not conf:
             return tools
 
-        if config.get("configurable", {}).get("use_web", None):
+        if conf.get("use_web", None):
             from langchain_community.tools.tavily_search import TavilySearchResults
             tools.append(TavilySearchResults(max_results=10))
 
@@ -39,11 +39,11 @@ class ChatbotAgent(BaseAgent):
         res = model.invoke(state["messages"])
         return {"messages": [res]}
 
-    def get_graph(self, config: RunnableConfig = None):
+    def get_graph(self, config_schema: RunnableConfig = None):
         """构建图"""
         workflow = StateGraph(State)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=self._get_tools(config)))
+        workflow.add_node("tools", ToolNode(tools=self._get_tools(config_schema)))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",
@@ -55,9 +55,9 @@ class ChatbotAgent(BaseAgent):
         graph = workflow.compile(checkpointer=MemorySaver())
         return graph
 
-    def stream_values(self, messages: list[str], config: RunnableConfig = None):
-        graph = self.get_graph(config)
-        for event in graph.stream({"messages": messages}, stream_mode="values", config=config):
+    def stream_values(self, messages: list[str], config_schema: RunnableConfig = None):
+        graph = self.get_graph(config_schema)
+        for event in graph.stream({"messages": messages}, stream_mode="values", config=config_schema):
             yield event["messages"]
 
     def stream_messages(self, messages: list[str], config: RunnableConfig = None):

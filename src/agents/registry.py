@@ -1,14 +1,15 @@
+from __future__ import annotations
+
 from typing import Type, Annotated, Optional, TypedDict
 from abc import abstractmethod
+from dataclasses import dataclass, fields, field
 
-from langchain_openai import ChatOpenAI
-
+from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 
 
-from dataclasses import dataclass
 class State(TypedDict):
     """
     定义一个基础 State 供 各类 graph 继承, 其中:
@@ -25,14 +26,28 @@ class Configuration:
     """
     定义一个基础 Configuration 供 各类 graph 继承
     """
-    pass
+
+    user_id: str = field(metadata={"description": "Unique identifier for the user."})
+
+    @classmethod
+    def from_runnable_config(
+        cls, config: Optional[RunnableConfig] = None
+    ) -> Configuration:
+        """Create a Configuration instance from a RunnableConfig object."""
+        configurable = (config.get("configurable") or {}) if config else {}
+        _fields = {f.name for f in fields(cls) if f.init}
+        return cls(**{k: v for k, v in configurable.items() if k in _fields})
+
+    @classmethod
+    def to_dict(cls):
+        pass
 
 
 
 class BaseAgent():
 
-    def __init__(self, configuration: Configuration):
-        self.configuration = configuration
+    def __init__(self, **kwargs):
+        pass
 
     @abstractmethod
     def get_graph(self) -> CompiledStateGraph:
