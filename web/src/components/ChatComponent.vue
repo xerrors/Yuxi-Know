@@ -788,7 +788,8 @@ watch(
       text-align: center;
       padding: 0;
       color: #ccc;
-      margin: 4px 0;
+      margin-top: 4px;
+      margin-bottom: 0;
       user-select: none;
     }
   }

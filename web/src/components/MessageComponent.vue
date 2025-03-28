@@ -130,15 +130,16 @@ const isEmptyAndLoading = computed(() => {
   padding: 0.625rem 1.25rem;
   user-select: text;
   word-break: break-word;
+  word-wrap: break-word;
   font-size: 15px;
-  font-weight: 400;
+  line-height: 24px;
   box-sizing: border-box;
   color: black;
   max-width: 100%;
   position: relative;
+  letter-spacing: .25px;
 
   &.user, &.sent {
-    line-height: 24px;
     max-width: 95%;
     color: white;
     background-color: var(--main-color);
@@ -152,7 +153,6 @@ const isEmptyAndLoading = computed(() => {
     color: initial;
     width: 100%;
     text-align: left;
-    word-wrap: break-word;
     margin: 0 0 16px 0;
     padding: 16px 0 0 0;
     text-align: justify;
@@ -162,13 +162,11 @@ const isEmptyAndLoading = computed(() => {
 
   .message-text {
     max-width: 100%;
-    word-wrap: break-word;
     margin-bottom: 0;
     white-space: pre-line;
   }
 
   .message-md {
-    word-wrap: break-word;
     margin-bottom: 0;
 
     :deep(code) {

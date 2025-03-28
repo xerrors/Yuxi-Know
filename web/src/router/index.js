@@ -30,19 +30,25 @@ const router = createRouter({
         }
       ]
     },
-    // {
-    //   path: '/agent',
-    //   name: 'agent',
-    //   component: AppLayout,
-    //   children: [
-    //     {
-    //       path: '',
-    //       name: 'AgentComp',
-    //       component: () => import('../views/AgentView.vue'),
-    //       meta: { keepAlive: true }
-    //     }
-    //   ]
-    // },
+    {
+      path: '/agent',
+      name: 'agent',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'AgentMain',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true }
+        },
+        {
+          path: ':agent_id',
+          name: 'AgentSinglePage',
+          component: () => import('../components/AgentSingleViewComponent.vue'),
+          meta: { keepAlive: false }
+        }
+      ]
+    },
     {
       path: '/graph',
       name: 'graph',
