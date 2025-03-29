@@ -6,7 +6,7 @@
     >
     </HeaderComponent>
     <div class="tools-grid">
-      <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.name)">
+      <div v-for="tool in tools" :key="tool.id" class="tool-card" @click="navigateToTool(tool.url)">
         <div class="tool-header">
           <h3>{{ tool.title }}</h3>
         </div>
@@ -48,8 +48,8 @@ const getTools = () => {
     });
 };
 
-const navigateToTool = (toolName) => {
-  router.push(`/tools/${toolName}`);
+const navigateToTool = (toolUrl) => {
+  router.push(toolUrl);
 };
 
 onMounted(() => {

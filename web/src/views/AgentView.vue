@@ -3,7 +3,7 @@
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
-          <a-dropdown>
+          <a-dropdown v-if="!useSingleMode">
             <div class="current-agent nav-btn">
               <RobotOutlined />&nbsp;
               <span v-if="currentAgent">{{ currentAgent.name }}</span>
@@ -17,6 +17,11 @@
               </a-menu>
             </template>
           </a-dropdown>
+          <div v-else class="current-agent nav-btn">
+            <RobotOutlined />&nbsp;
+            <span v-if="currentAgent">{{ currentAgent.name }}</span>
+            <span v-else>加载中...</span>
+          </div>
         </div>
         <div class="header__right">
           <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
@@ -53,7 +58,7 @@
                 <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
                   <div class="tool-header" @click="toggleToolCall(toolCall.id)">
                     <span v-if="!toolCall.toolResultMsg">
-                      <ThunderboltOutlined /> &nbsp;
+                      <LoadingOutlined /> &nbsp;
                       <span>正在调用工具: </span>
                       <span class="tool-name">{{ toolCall.function.name }}</span>
                     </span>
@@ -107,11 +112,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick } from 'vue';
+import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
-  MenuOutlined, RobotOutlined, SendOutlined, LoadingOutlined,
+  RobotOutlined, SendOutlined, LoadingOutlined,
   ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
-  DownOutlined, RightOutlined, PlusCircleOutlined
+  PlusCircleOutlined
 } from '@ant-design/icons-vue';
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
@@ -120,6 +126,11 @@ import 'highlight.js/styles/github.css';
 import hljs from 'highlight.js';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
+
+// ========= 加载路由参数并获取 agent id ====================
+const route = useRoute();
+const router = useRouter();
+const useSingleMode = computed(() => !!route.params.agent_id);
 
 // ==================== 初始化配置 ====================
 
@@ -171,7 +182,7 @@ const renderMarkdown = (text) => {
   return marked.parse(text);
 };
 
-// 滚动到底部
+// 滚动到底部 TODO: 需要优化
 const scrollToBottom = async () => {
   await nextTick();
   if (!messagesContainer.value) return;
@@ -276,6 +287,7 @@ const prepareMessageHistory = (msgs) => {
 
 // 选择智能体
 const selectAgent = (agentName) => {
+  if (useSingleMode.value) return; // 单页面模式下不允许切换智能体
   currentAgent.value = agents.value[agentName];
   messages.value = [];
   threadId.value = null;
@@ -638,77 +650,53 @@ const fetchAgents = async () => {
   }
 };
 
-// 从localStorage加载状态
-const loadState = () => {
-  // 加载当前选择的智能体
-  const savedAgent = localStorage.getItem('agent-current-agent');
-  if (savedAgent && agents.value[savedAgent]) {
-    currentAgent.value = agents.value[savedAgent];
-  }
-
-  // 加载设置选项
-  const savedOptions = localStorage.getItem('agent-options');
-  if (savedOptions) {
-    Object.assign(options, JSON.parse(savedOptions));
-  }
-
-  // 加载消息历史
-  const savedMessages = localStorage.getItem('agent-messages');
-  if (savedMessages) {
-    messages.value = JSON.parse(savedMessages);
-  }
-
-  // 加载线程ID
-  const savedThreadId = localStorage.getItem('agent-thread-id');
-  if (savedThreadId) {
-    threadId.value = savedThreadId;
-  }
-};
-
-// 保存状态到localStorage
-const saveState = () => {
-  // 保存当前选择的智能体
-  if (currentAgent.value) {
-    localStorage.setItem('agent-current-agent', currentAgent.value.name);
-  }
-
-  // 保存设置选项
-  localStorage.setItem('agent-options', JSON.stringify(options));
-
-  // 保存消息历史
-  localStorage.setItem('agent-messages', JSON.stringify(messages.value));
-
-  // 保存线程ID
-  if (threadId.value) {
-    localStorage.setItem('agent-thread-id', threadId.value);
-  } else {
-    localStorage.removeItem('agent-thread-id');
-  }
-};
-
-// 监听状态变化并保存
-watch([currentAgent, options, messages, threadId], () => {
-  saveState();
-}, { deep: true });
-
-// 组件挂载时加载状态
-onMounted(async () => {
-  // 获取智能体列表
-  await fetchAgents();
-
-  // 加载保存的状态
-  loadState();
-
-  // 处理消息历史
-  if (messages.value.length > 0) {
-    messages.value = prepareMessageHistory(messages.value);
-  }
-});
-
 // 监听消息变化自动滚动
 watch(messages, () => {
   scrollToBottom();
 }, { deep: true });
+
+// 组件挂载时加载状态
+onMounted(async () => {
+  try {
+    console.log("组件挂载");
+    // 获取智能体列表
+    await fetchAgents();
+
+    // 检查加载状态
+    console.log("单页面模式:", useSingleMode.value);
+    console.log("路由参数:", route.params.agent_id);
+    console.log("智能体列表:", Object.keys(agents.value));
+
+    // 初始加载 - 确保使用 Vue Router 的解析后路由
+    // 使用 setTimeout 确保路由完全解析
+    setTimeout(async () => {
+      await loadAgentData();
+      console.log("初始化后消息数量:", messages.value.length);
+    }, 10);
+  } catch (error) {
+    console.error("组件挂载出错:", error);
+  }
+});
+
+// 添加路由参数变化监听
+watch(() => route.params.agent_id, async (newAgentId, oldAgentId) => {
+  try {
+    console.log("路由参数变化", oldAgentId, "->", newAgentId);
+
+    // 如果路由参数变化了（包括从有参数变为无参数的情况）
+    if (oldAgentId !== newAgentId) {
+      // 重置会话
+      messages.value = [];
+      threadId.value = null;
+      resetStatusSteps();
+
+      // 加载新的智能体数据
+      await loadAgentData();
+    }
+  } catch (error) {
+    console.error('路由参数变化处理出错:', error);
+  }
+}, { immediate: true });
 
 // 处理元数据
 const handleMetadata = (data) => {
@@ -740,6 +728,161 @@ const toggleToolCall = (toolCallId) => {
     expandedToolCalls.value.add(toolCallId);
   }
 };
+
+// 从localStorage加载状态
+const loadState = () => {
+  try {
+    // 确定存储前缀
+    const storagePrefix = useSingleMode.value ?
+      (route.params.agent_id ? `agent-single-${route.params.agent_id}` : null) :
+      'agent-multi';
+
+    if (!storagePrefix) {
+      console.error('无法确定存储前缀，agent_id缺失');
+      return;
+    }
+
+    console.log("loadState with prefix:", storagePrefix);
+
+    // 在单页面模式下，直接从路由参数加载智能体
+    if (useSingleMode.value) {
+      // 智能体已在 loadAgentData 中设置，这里不再需要重复设置
+    } else {
+      // 多智能体模式下，从本地存储加载当前选择的智能体
+      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
+      if (savedAgent && agents.value && agents.value[savedAgent]) {
+        currentAgent.value = agents.value[savedAgent];
+      }
+    }
+
+    // 加载设置选项
+    const savedOptions = localStorage.getItem(`${storagePrefix}-options`);
+    if (savedOptions) {
+      try {
+        Object.assign(options, JSON.parse(savedOptions));
+      } catch (e) {
+        console.error('解析选项数据出错:', e);
+      }
+    }
+
+    // 加载消息历史
+    const savedMessages = localStorage.getItem(`${storagePrefix}-messages`);
+    if (savedMessages) {
+      try {
+        const parsedMessages = JSON.parse(savedMessages);
+        console.log(`加载消息历史 (${storagePrefix}):`, parsedMessages ? parsedMessages.length : 0);
+        if (Array.isArray(parsedMessages)) {
+          messages.value = parsedMessages;
+        }
+
+        // 检查消息历史是否成功加载
+        console.log(`消息历史加载后数量:`, messages.value.length);
+      } catch (e) {
+        console.error('解析消息历史出错:', e);
+      }
+    }
+
+    // 加载线程ID
+    const savedThreadId = localStorage.getItem(`${storagePrefix}-thread-id`);
+    if (savedThreadId) {
+      threadId.value = savedThreadId;
+      console.log(`加载线程ID (${storagePrefix}):`, threadId.value);
+    }
+  } catch (error) {
+    console.error('从localStorage加载状态出错:', error);
+  }
+};
+
+// 保存状态到localStorage
+const saveState = () => {
+  try {
+    // 防止初始化阶段保存干扰
+    if (!currentAgent.value) {
+      console.log("当前没有选中智能体，跳过保存");
+      return;
+    }
+
+    // 确定存储前缀 - 确保agent_id总是可用
+    let prefix = 'agent-multi';
+    if (useSingleMode.value) {
+      if (route.params.agent_id) {
+        prefix = `agent-single-${route.params.agent_id}`;
+      } else {
+        console.error("保存状态时缺少agent_id");
+        return; // 不保存
+      }
+    }
+
+    console.log("saveState with prefix:", prefix);
+
+    // 多智能体模式下，保存当前选择的智能体
+    if (!useSingleMode.value && currentAgent.value) {
+      localStorage.setItem(`${prefix}-current-agent`, currentAgent.value.name);
+    }
+
+    // 保存设置选项
+    localStorage.setItem(`${prefix}-options`, JSON.stringify(options));
+
+    // 保存消息历史
+    if (messages.value && messages.value.length > 0) {
+      console.log(`保存消息历史 (${prefix}):`, messages.value.length);
+      localStorage.setItem(`${prefix}-messages`, JSON.stringify(messages.value));
+    } else {
+      localStorage.removeItem(`${prefix}-messages`);
+    }
+
+    // 保存线程ID
+    if (threadId.value) {
+      localStorage.setItem(`${prefix}-thread-id`, threadId.value);
+      console.log(`保存线程ID (${prefix}):`, threadId.value);
+    } else {
+      localStorage.removeItem(`${prefix}-thread-id`);
+    }
+  } catch (error) {
+    console.error('保存状态到localStorage出错:', error);
+  }
+};
+
+// 加载智能体数据的方法
+const loadAgentData = async () => {
+  try {
+    // 确保智能体列表已加载
+    if (Object.keys(agents.value).length === 0) {
+      await fetchAgents();
+    }
+
+    // 在单页面模式下，设置当前智能体
+    if (useSingleMode.value && route.params.agent_id) {
+      const agentId = route.params.agent_id;
+      if (agents.value && agents.value[agentId]) {
+        currentAgent.value = agents.value[agentId];
+        console.log("设置当前智能体", currentAgent.value.name);
+      } else {
+        console.error("未找到指定的智能体:", agentId);
+      }
+    }
+
+    // 加载保存的状态 - 在设置好currentAgent后再加载状态
+    loadState();
+
+    // 处理消息历史
+    if (messages.value && messages.value.length > 0) {
+      console.log("处理消息历史:", messages.value.length);
+      messages.value = prepareMessageHistory(messages.value);
+    }
+  } catch (error) {
+    console.error('加载智能体数据出错:', error);
+  }
+};
+
+// 监听状态变化并保存
+watch([currentAgent, options, messages, threadId], () => {
+  try {
+    saveState();
+  } catch (error) {
+    console.error('保存状态时出错:', error);
+  }
+}, { deep: true });
 </script>
 
 <style lang="less" scoped>
@@ -750,6 +893,7 @@ const toggleToolCall = (toolCallId) => {
   width: 100%;
   height: 100%;
   position: relative;
+  min-height: 100vh;
 }
 
 .chat {

@@ -9,7 +9,8 @@ const router = createRouter({
       path: '/',
       name: 'main',
       component: BlankLayout,
-      children: [        {
+      children: [
+        {
           path: '',
           name: 'Home',
           component: () => import('../views/HomeView.vue'),
@@ -48,6 +49,11 @@ const router = createRouter({
           meta: { keepAlive: false }
         }
       ]
+    },
+    {
+      path: '/agent/:agent_id',
+      name: 'AgentSinglePage',
+      component: () => import('../views/AgentView.vue'),
     },
     {
       path: '/graph',
