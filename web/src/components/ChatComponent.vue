@@ -7,8 +7,8 @@
           class="close nav-btn"
           @click="state.isSidebarOpen = true"
         >
-          <MenuOutlined />
-        </div>
+        <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-24" alt="设置" />
+      </div>
         <a-tooltip :title="configStore.config?.model_name" placement="rightTop">
           <div class="newchat nav-btn" @click="$emit('newconv')">
             <PlusCircleOutlined /> <span class="text">新对话</span>
@@ -57,65 +57,35 @@
       </div>
     </div>
     <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
-      <div
+      <MessageComponent
         v-for="message in conv.messages"
         :key="message.id"
-        class="message-box"
-        :class="message.role"
+        :role="message.role"
+        :content="message.text"
+        :content-html="message.text.length > 0 ? renderMarkdown(message) : ''"
+        :reasoning-content="message.reasoning_content"
+        :reasoning-header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
+        :status="message.status"
+        :is-processing="isStreaming"
+        :error-message="message.message"
+        @retry="retryMessage(message.id)"
       >
-        <div v-if="message.reasoning_content" class="reasoning-msg">
-          <a-collapse
-            v-model:activeKey="message.showThinking"
-            :bordered="false"
-            style="background: rgb(255, 255, 255)"
-          >
-            <template #expandIcon="{ isActive }">
-              <caret-right-outlined :rotate="isActive ? 90 : 0" />
-            </template>
-            <a-collapse-panel
-              key="show"
-              :header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
-              :style="'background: #f7f7f7; border-radius: 8px; margin-bottom: 24px; border: 0; overflow: hidden'"
-            >
-              <p style="color: var(--gray-800)">{{ message.reasoning_content }}</p>
-            </a-collapse-panel>
-          </a-collapse>
-        </div>
-        <p v-if="message.role=='sent'" style="white-space: pre-line" class="message-text">{{ message.text }}</p>
-        <div v-else-if="message.text.length == 0 && (message.status=='init' || message.status=='reasoning') && isStreaming"  class="loading-dots">
-          <div></div>
-          <div></div>
-          <div></div>
-        </div>
-        <div v-else-if="message.status == 'searching' && isStreaming" class="searching-msg"><i>正在检索……</i></div>
-        <div v-else-if="message.status == 'generating' && isStreaming" class="searching-msg"><i>正在生成……</i></div>
-        <div v-else-if="message.text.length > 0"
-          v-html="renderMarkdown(message)"
-          class="message-md"
-          @click="consoleMsg(message)">
-        </div>
-        <div v-else
-          class="err-msg"
-          @click="retryMessage(message.id)"
-        >
-          请求错误，请重试。{{ message.message }}
-        </div>
-        <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
-      </div>
+        <template #refs v-if="message.role=='received' && message.status=='finished'">
+          <RefsComponent :message="message" />
+        </template>
+      </MessageComponent>
     </div>
     <div class="bottom">
-      <div class="input-box" :class="{ 'wide-screen': meta.wideScreen }">
-        <div class="input-area">
-          <a-textarea
-            class="user-input"
-            v-model:value="conv.inputText"
-            @keydown="handleKeyDown"
-            placeholder="输入问题……"
-            :auto-size="{ minRows: 2, maxRows: 10 }"
-          />
-        </div>
-        <div class="input-options">
-          <div class="options__left">
+      <div class="message-input-wrapper"  :class="{ 'wide-screen': meta.wideScreen}">
+        <MessageInputComponent
+          v-model="conv.inputText"
+          :is-loading="isStreaming"
+          :send-button-disabled="!conv.inputText && !isStreaming"
+          :auto-size="{ minRows: 2, maxRows: 10 }"
+          @send="sendMessage"
+          @keydown="handleKeyDown"
+        >
+          <template #options-left>
             <div
               :class="{'switch': true, 'opt-item': true, 'active': meta.use_web}"
               v-if="configStore.config.enable_web_search"
@@ -151,15 +121,10 @@
                 </a-menu>
               </template>
             </a-dropdown>
-          </div>
-          <div class="options__right">
-            <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
-              <template #icon> <ArrowUpOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-            </a-button>
-          </div>
-        </div>
+          </template>
+        </MessageInputComponent>
+        <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
       </div>
-      <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
     </div>
   </div>
 </template>
@@ -197,6 +162,8 @@ import { message } from 'ant-design-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
+import MessageInputComponent from '@/components/MessageInputComponent.vue'
+import MessageComponent from '@/components/MessageComponent.vue'
 
 const props = defineProps({
   conv: Object,
@@ -370,7 +337,7 @@ const updateMessage = (info) => {
     try {
       // 只有在 text 不为空时更新
       if (info.text !== null && info.text !== undefined && info.text !== '') {
-        msg.text = info.text;
+        msg.text += info.text;
       }
 
       if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
@@ -463,6 +430,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       history: conv.value.history,
       meta: meta,
       cur_res_id: cur_res_id,
+      thread_id: conv.value.id.toString(),
     }),
     headers: {
       'Content-Type': 'application/json'
@@ -617,7 +585,7 @@ watch(
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  background: white;
+  background: var(--main-light-6);
   position: relative;
   box-sizing: border-box;
   flex: 5 5 200px;
@@ -628,7 +596,8 @@ watch(
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: white;
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
     height: var(--header-height);
     display: flex;
     justify-content: space-between;
@@ -638,6 +607,12 @@ watch(
     .header__left, .header__right {
       display: flex;
       align-items: center;
+    }
+
+    .header__left {
+      .close {
+        margin-right: 12px;
+      }
     }
   }
 
@@ -652,6 +627,7 @@ watch(
     font-size: 1rem;
     width: auto;
     padding: 0.5rem 1rem;
+    transition: background-color 0.3s;
 
     .text {
       margin-left: 10px;
@@ -678,6 +654,7 @@ watch(
   padding: 12px;
   z-index: 11;
   width: 280px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 
   .flex-center {
     display: flex;
@@ -785,76 +762,6 @@ watch(
       font-size: 16px;
     }
   }
-
-  .message-box {
-    display: inline-block;
-    border-radius: 1.5rem;
-    margin: 0.8rem 0;
-    padding: 0.625rem 1.25rem;
-    user-select: text;
-    word-break: break-word;
-    font-size: 15px;
-    font-variation-settings: 'wght' 400, 'opsz' 10.5;
-    font-weight: 400;
-    box-sizing: border-box;
-    color: black;
-    /* box-shadow: 0px 0.3px 0.9px rgba(0, 0, 0, 0.12), 0px 1.6px 3.6px rgba(0, 0, 0, 0.16); */
-    /* animation: slideInUp 0.1s ease-in; */
-
-    .err-msg {
-      color: #eb8080;
-      border: 1px solid #eb8080;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      text-align: left;
-      background: #FFF5F5;
-      margin-bottom: 10px;
-      cursor: pointer;
-    }
-
-    .searching-msg {
-      color: var(--gray-500);
-      animation: colorPulse 2s infinite;
-    }
-
-    @keyframes colorPulse {
-      0% { color: var(--gray-700); }
-      50% { color: var(--gray-300); }
-      100% { color: var(--gray-700); }
-    }
-  }
-
-  .message-box.sent {
-    line-height: 24px;
-    max-width: 95%;
-    background: var(--main-light-4);
-    align-self: flex-end;
-  }
-
-  .message-box.received {
-    color: initial;
-    width: fit-content;
-    text-align: left;
-    word-wrap: break-word;
-    margin: 0;
-    max-width: 100%;
-    padding-bottom: 0;
-    padding-top: 16px;
-    padding-left: 0;
-    padding-right: 0;
-    text-align: justify;
-  }
-
-  p.message-text {
-    max-width: 100%;
-    word-wrap: break-word;
-    margin-bottom: 0;
-  }
-
-  p.message-md {
-    word-wrap: break-word;
-    margin-bottom: 0;
-  }
 }
 
 .bottom {
@@ -863,123 +770,30 @@ watch(
   width: 100%;
   margin: 0 auto;
   padding: 4px 2rem 0 2rem;
-  background: white;
 
-  .input-box {
-    display: flex;
-    flex-direction: column;
+  .message-input-wrapper {
     width: 100%;
-    height: auto;
     max-width: 800px;
     margin: 0 auto;
-    padding: 0.25rem 0.5rem;
-    border: 2px solid var(--gray-200);
-    border-radius: 1rem;
-    background: var(--gray-50);
-    transition: background, border 0.3s, box-shadow 0.3s, max-width 0.3s ease;
+    background-color: white;
+    animation: width 0.3s ease-in-out;
 
     &.wide-screen {
       max-width: 1200px;
     }
 
-    &:focus-within {
-      border: 2px solid var(--main-500);
-      background: white;
+    .note {
+      width: 100%;
+      font-size: small;
+      text-align: center;
+      padding: 0;
+      color: #ccc;
+      margin-top: 4px;
+      margin-bottom: 0;
+      user-select: none;
     }
-
-    .input-options {
-      display: flex;
-      padding: 4px 8px;
-
-      .options__left,
-      .options__right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      .options__left {
-        flex: 1;
-
-        .opt-item {
-          border-radius: 12px;
-          border: 1px solid var(--gray-300);
-          padding: 4px 8px;
-          cursor: pointer;
-          font-size: 12px;
-          color: var(--gray-700);
-
-          &.active {
-            color: var(--main-600);
-            border: 1px solid var(--main-500);
-            background-color: var(--main-10);
-          }
-        }
-      }
-    }
-
-    .input-area {
-      display: flex;
-      align-items: flex-end;
-      gap: 8px;
-    }
-
-    textarea.user-input {
-      flex: 1;
-      height: 40px;
-      padding: 0.5rem 0.5rem;
-      background-color: transparent;
-      border: none;
-      margin: 0 0;
-      color: #111111;
-      font-size: 16px;
-      font-variation-settings: 'wght' 400, 'opsz' 10.5;
-      outline: none;
-      resize: none;
-      &:focus {
-        outline: none;
-        box-shadow: none;
-      }
-
-      &:active {
-        outline: none;
-      }
-    }
-  }
-
-  button.ant-btn-icon-only {
-    height: 32px;
-    width: 32px;
-    cursor: pointer;
-    background-color: var(--main-color);
-    border-radius: 50%;
-    border: none;
-    transition: color 0.3s;
-    box-shadow: none;
-    color: white;
-    padding: 0;
-
-    &:hover {
-      background-color: var(--main-800);
-    }
-
-    &:disabled {
-      background-color: var(--gray-400);
-      cursor: not-allowed;
-    }
-  }
-  .note {
-    width: 100%;
-    font-size: small;
-    text-align: center;
-    padding: 0rem;
-    color: #ccc;
-    margin: 4px 0;
-    user-select: none;
   }
 }
-
-
 
 .ant-dropdown-link {
   color: var(--gray-900);
@@ -1051,9 +865,27 @@ watch(
 @keyframes loading {0%,80%,100%{transform:scale(0.5);}40%{transform:scale(1);}}
 
 .slide-out-left{-webkit-animation:slide-out-left .2s cubic-bezier(.55,.085,.68,.53) both;animation:slide-out-left .5s cubic-bezier(.55,.085,.68,.53) both}
-.swing-in-top-fwd{-webkit-animation:swing-in-top-fwd .2s ease-out both;animation:swing-in-top-fwd .2s ease-out both}
-@-webkit-keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}@keyframes swing-in-top-fwd{0%{-webkit-transform:rotateX(-100deg);transform:rotateX(-100deg);-webkit-transform-origin:top;transform-origin:top;opacity:0}100%{-webkit-transform:rotateX(0deg);transform:rotateX(0deg);-webkit-transform-origin:top;transform-origin:top;opacity:1}}
-@-webkit-keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}@keyframes slide-out-left{0%{-webkit-transform:translateX(0);transform:translateX(0);opacity:1}100%{-webkit-transform:translateX(-1000px);transform:translateX(-1000px);opacity:0}}
+.swing-in-top-fwd {
+  -webkit-animation: swing-in-top-fwd 0.3s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;
+  animation: swing-in-top-fwd 0.3s cubic-bezier(0.175, 0.885, 0.320, 1.275) both;
+}
+
+@keyframes swing-in-top-fwd {
+  0% {
+    -webkit-transform: rotateX(-100deg);
+    transform: rotateX(-100deg);
+    -webkit-transform-origin: top;
+    transform-origin: top;
+    opacity: 0;
+  }
+  100% {
+    -webkit-transform: rotateX(0deg);
+    transform: rotateX(0deg);
+    -webkit-transform-origin: top;
+    transform-origin: top;
+    opacity: 1;
+  }
+}
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -1110,55 +942,3 @@ watch(
   }
 }
 </style>
-
-<style lang="less">
-.message-md {
-  color: var(--gray-900);
-  max-width: 100%;
-
-  pre {
-    border-radius: 8px;
-    font-size: 0.9rem;
-    border: 1px solid var(--main-light-3);
-    padding: 1rem;
-
-    &:has(code.hljs) {
-      padding: 0;
-    }
-
-    code.hljs {
-      font-size: 0.8rem;
-      background-color: var(--gray-100);
-    }
-  }
-
-  strong {
-    color: var(--gray-800);
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-size: 1rem;
-  }
-
-  li, ol, ul {
-    & > p {
-      margin: 0.25rem 0;
-    }
-  }
-
-  ol, ul {
-    padding-left: 1rem;
-  }
-
-  hr {
-    margin-bottom: 1rem;
-  }
-
-  a {
-    color: var(--main-800);
-    margin: auto 2px;
-  }
-}
-</style>
-
-

@@ -27,3 +27,8 @@ fastapi
 python-multipart
 tavily-python
 rapidocr_onnxruntime
+langchain
+langsmith
+langgraph
+langchain-openai
+langchain-community

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
-from src.utils import logger
+from src.agents import agent_manager
 
 tool = APIRouter(prefix="/tool")
 
@@ -13,8 +13,9 @@ class Tool(BaseModel):
     title: str
     description: str
     url: str
-    method: str
+    method: Optional[str] = "POST"
     params: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 @tool.get("/", response_model=List[Tool])
 async def route_index():
@@ -32,8 +33,26 @@ async def route_index():
             description="将PDF文件转换为文本文件。",
             url="/tools/pdf2txt",
             method="POST",
+        ),
+        Tool(
+            name="agent",
+            title="智能体（Dev）",
+            description="智能体演练平台",
+            url="/tools/agent",
         )
     ]
+
+    for agent in agent_manager.agents.values():
+        tools.append(
+            Tool(
+                name=agent.name,
+                title=agent.name,
+                description=agent.description,
+                url=f"/agent/{agent.name}",
+                method="POST",
+                metadata=agent.config_schema,
+            )
+        )
 
     return tools
 
@@ -48,3 +67,4 @@ async def handle_pdf2txt(file: str = Body(...)):
     from src.plugins import ocr
     text = ocr.process_pdf(file)
     return {"text": text}
+
