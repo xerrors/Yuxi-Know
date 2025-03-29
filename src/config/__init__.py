@@ -108,9 +108,14 @@ class Config(SimpleConfig):
             self.model_name = self.get("model_name") or default_model_name
         else:
             self.model_name = self.get("model_name")
-            if self.model_name not in [item["custom_id"] for item in self.custom_models]:
+            if self.model_name not in [item["custom_id"] for item in self.get("custom_models", [])]:
                 logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
-                self.model_name = self.custom_models[0]["custom_id"]
+                if self.get("custom_models", []):
+                    self.model_name = self.get("custom_models", [])[0]["custom_id"]
+                else:
+                    self.model_name = self._config_items["model_name"]["default"]
+                    self.model_provider = self._config_items["model_provider"]["default"]
+                    logger.error(f"No custom models found, using default model {self.model_name} from {self.model_provider}")
 
         # 检查模型提供商的环境变量
         conds = {}
@@ -194,7 +199,7 @@ class Config(SimpleConfig):
         比较 custom_models 中的 api_key，如果输入的 api_key 与当前的 api_key 相同，则不修改
         如果输入的 api_key 为 DEFAULT_MOCK_API，则使用当前的 api_key
         """
-        current_models_dict = {model["custom_id"]: model.get("api_key") for model in self.custom_models}
+        current_models_dict = {model["custom_id"]: model.get("api_key") for model in self.get("custom_models", [])}
 
         for i, model in enumerate(value):
             input_custom_id = model.get("custom_id")
