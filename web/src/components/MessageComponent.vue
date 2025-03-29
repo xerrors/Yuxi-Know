@@ -106,6 +106,14 @@ const props = defineProps({
   }
 });
 
+const statusDefination = {
+  init: '初始化',
+  loading: '加载中',
+  reasoning: '推理中',
+  generating: '生成中',
+  error: '错误'
+}
+
 const emit = defineEmits(['retry']);
 
 // 推理面板展开状态
@@ -114,10 +122,7 @@ const reasoningActiveKey = ref(['show']);
 // 计算属性：内容为空且正在加载
 const isEmptyAndLoading = computed(() => {
   const isEmpty = !props.content || props.content.length === 0;
-  const isLoading = props.status === 'init' ||
-                    props.status === 'loading' ||
-                    props.status === 'reasoning' ||
-                    props.isProcessing;
+  const isLoading = props.status === 'init'
   return isEmpty && isLoading;
 });
 </script>
@@ -143,6 +148,7 @@ const isEmptyAndLoading = computed(() => {
     max-width: 95%;
     color: white;
     background-color: var(--main-color);
+    // background-color: var(--main-color);
     // background: linear-gradient(90deg, var(--main-light-1) 10.79%, var(--main-color) 87.08%);
     align-self: flex-end;
     border-radius: 1.5rem;
@@ -154,7 +160,7 @@ const isEmptyAndLoading = computed(() => {
     width: 100%;
     text-align: left;
     margin: 0 0 16px 0;
-    padding: 16px 0 0 0;
+    padding: 0px;
     text-align: justify;
     background-color: transparent;
     border-radius: 0;
@@ -209,33 +215,11 @@ const isEmptyAndLoading = computed(() => {
     margin-bottom: 15px;
     border-radius: 8px;
     border: 1px solid var(--main-light-3);
-    overflow: hidden;
-
-    :deep(.ant-collapse) {
-      background: white;
-      border: none;
-    }
-
-    :deep(.ant-collapse-item) {
-      border: none;
-    }
-
-    :deep(.ant-collapse-header) {
-      padding: 8px 12px;
-      background-color: var(--main-50);
-      font-size: 13px;
-      color: var(--main-700);
-      border-bottom: 1px solid var(--main-light-3);
-    }
 
     .reasoning-content {
-      padding: 10px 12px;
       font-size: 13px;
-      color: var(--gray-700);
+      color: var(--gray-800);
       white-space: pre-wrap;
-      max-height: 200px;
-      overflow-y: auto;
-      background-color: white;
       margin: 0;
     }
   }
@@ -275,8 +259,6 @@ const isEmptyAndLoading = computed(() => {
     border: 1px solid var(--gray-200);
     border-radius: 8px;
     overflow: hidden;
-    box-shadow: 0 2px 4px rgba(60, 60, 60, 0.05);
-    animation: fadeInUp 0.3s ease-out;
 
     .tool-header {
       padding: 10px 12px;

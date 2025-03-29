@@ -19,9 +19,8 @@
           </a-dropdown>
         </div>
         <div class="header__right">
-          <div class="nav-btn text" @click="state.isRightSidebarOpen = !state.isRightSidebarOpen">
-            <!-- <SettingOutlined /> <span class="text">设置</span> -->
-            <img src="@/assets/icons/sidebar_right.svg" class="nav-btn-icon" alt="设置" />
+          <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
+            <PlusCircleOutlined /> <span class="text">新对话</span>
           </div>
         </div>
       </div>
@@ -62,7 +61,7 @@
                       <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.function.name }}</span> 执行完成
                     </span>
 
-                    <span class="step-badge" v-if="message.step !== undefined">步骤 {{ message.step }}</span>
+                    <!-- <span class="step-badge" v-if="message.step !== undefined">步骤 {{ message.step }}</span> -->
                   </div>
                   <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
                     <div class="tool-params" v-if="toolCall.function && toolCall.function.arguments">
@@ -98,46 +97,8 @@
             @send="sendMessage"
             @keydown="handleKeyDown"
           />
-          <p class="note">请注意辨别内容的可靠性</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- 右侧侧边栏 -->
-    <div class="right-sidebar" :class="{ 'is-open': state.isRightSidebarOpen }">
-      <div class="actions">
-        <span class="header-title">设置选项</span>
-        <div class="action close" @click="state.isRightSidebarOpen = false"><CloseOutlined /></div>
-      </div>
-      <div class="settings-container">
-        <div class="settings-group">
-          <div class="settings-title">基本设置</div>
-          <div class="settings-item">
-            <div class="settings-label">网络搜索</div>
-            <a-switch v-model:checked="options.use_web" />
-          </div>
-        </div>
-
-        <div class="settings-group">
-          <div class="settings-title">高级设置</div>
-          <div class="settings-item">
-            <div class="settings-label">线程ID</div>
-            <div class="thread-id-container">
-              <div class="settings-value thread-id">{{ threadId || '未生成' }}</div>
-              <a-button
-                type="link"
-                size="small"
-                class="refresh-btn"
-                @click="resetThread"
-                :disabled="!threadId"
-              >
-                <ReloadOutlined />
-              </a-button>
-            </div>
-          </div>
-          <div class="settings-item">
-            <div class="settings-label">显示调试信息</div>
-            <a-switch v-model:checked="options.debug_mode" />
+          <div class="bottom-actions">
+            <p class="note">请注意辨别内容的可靠性</p>
           </div>
         </div>
       </div>
@@ -148,13 +109,13 @@
 <script setup>
 import { ref, reactive, onMounted, watch, nextTick } from 'vue';
 import {
-  MenuOutlined, RobotOutlined, SendOutlined, LoadingOutlined, SettingOutlined,
-  CloseOutlined, ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
-  DownOutlined, RightOutlined,
+  MenuOutlined, RobotOutlined, SendOutlined, LoadingOutlined,
+  ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
+  DownOutlined, RightOutlined, PlusCircleOutlined
 } from '@ant-design/icons-vue';
 import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
-import { onClickOutside } from '@vueuse/core';
+// import { onClickOutside } from '@vueuse/core';
 import 'highlight.js/styles/github.css';
 import hljs from 'highlight.js';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
@@ -174,21 +135,16 @@ const marked = new Marked(
 // ==================== 状态管理 ====================
 
 // UI状态
-const state = reactive({
-  isRightSidebarOpen: false,
-  showOptions: false,
-});
+const state = reactive({});
 
 // 应用选项
 const options = reactive({
   use_web: true,
-  thread_id: null,
   debug_mode: false,
 });
 
 // DOM引用
 const messagesContainer = ref(null);
-const optionsPanel = ref(null);
 
 // 数据状态
 const agents = ref({});                // 智能体列表
@@ -198,7 +154,7 @@ const messages = ref([]);              // 消息列表
 const isProcessing = ref(false);       // 是否正在处理请求
 const threadId = ref(null);            // 会话线程ID
 
-// ==================== 步骤与状态跟踪 ====================
+// ==================== 工具调用相关 ====================
 
 // 工具调用相关
 const toolCalls = ref([]);             // 工具调用列表
@@ -384,15 +340,6 @@ const sendMessageWithText = async (text) => {
     content: userMessage
   });
 
-  // // 添加加载中的消息
-  // messages.value.push({
-  //   role: 'assistant',
-  //   content: '',
-  //   status: 'loading',
-  //   toolCalls: {},
-  //   toolCallIds: {}
-  // });
-
   isProcessing.value = true;
   await scrollToBottom();
 
@@ -410,8 +357,7 @@ const sendMessageWithText = async (text) => {
     const requestData = {
       query: userMessage,
       meta: {
-        use_web: options.use_web,
-        history_round: options.history_round
+        use_web: options.use_web
       },
       history: history.slice(0, -1), // 去掉最后一条刚添加的用户消息
       thread_id: threadId.value
@@ -667,10 +613,10 @@ const appendToolMessageToExistingAssistant = async (data) => {
 
 // ==================== 生命周期钩子 ====================
 
-// 点击外部关闭选项面板
-onClickOutside(optionsPanel, () => {
-  state.showOptions = false;
-});
+// // 点击外部关闭选项面板
+// onClickOutside(optionsPanel, () => {
+//   state.showOptions = false;
+// });
 
 // 获取智能体列表
 const fetchAgents = async () => {
@@ -683,6 +629,7 @@ const fetchAgents = async () => {
         acc[agent.name] = agent;
         return acc;
       }, {});
+      console.log("agents", agents.value);
     } else {
       console.error('获取智能体失败');
     }
@@ -716,12 +663,6 @@ const loadState = () => {
   if (savedThreadId) {
     threadId.value = savedThreadId;
   }
-
-  // 从localStorage加载右侧边栏状态
-  const savedRightSidebarState = localStorage.getItem('agent-right-sidebar-open');
-  if (savedRightSidebarState !== null) {
-    state.isRightSidebarOpen = JSON.parse(savedRightSidebarState);
-  }
 };
 
 // 保存状态到localStorage
@@ -740,6 +681,8 @@ const saveState = () => {
   // 保存线程ID
   if (threadId.value) {
     localStorage.setItem('agent-thread-id', threadId.value);
+  } else {
+    localStorage.removeItem('agent-thread-id');
   }
 };
 
@@ -809,110 +752,6 @@ const toggleToolCall = (toolCallId) => {
   position: relative;
 }
 
-/* 右侧侧边栏样式 */
-.right-sidebar {
-  width: 350px;
-  max-width: 350px;
-  border-left: 1px solid var(--main-light-3);
-  // background-color: var(--bg-sider);
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  overflow: hidden;
-
-  &.is-open {
-    width: 350px;
-  }
-
-  &:not(.is-open) {
-    width: 0;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  & .actions {
-    height: var(--header-height);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    z-index: 9;
-    border-bottom: 1px solid var(--main-light-3);
-
-    .header-title {
-      font-weight: bold;
-      user-select: none;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .action {
-      font-size: 1.2rem;
-      width: 2.5rem;
-      height: 2.5rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      border-radius: 8px;
-      color: var(--gray-800);
-      cursor: pointer;
-
-      &:hover {
-        background-color: var(--main-light-3);
-      }
-    }
-  }
-
-  .settings-container {
-    padding: 16px;
-    overflow-y: auto;
-  }
-
-  .settings-group {
-    margin-bottom: 20px;
-  }
-
-  .settings-title {
-    font-weight: bold;
-    margin-bottom: 12px;
-    color: var(--gray-800);
-    padding-bottom: 6px;
-    border-bottom: 1px solid var(--main-light-3);
-  }
-
-  .settings-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-  }
-
-  .settings-label {
-    color: var(--gray-700);
-  }
-
-  .settings-value {
-    color: var(--gray-600);
-    font-size: 0.9em;
-  }
-
-  .thread-id-container {
-    display: flex;
-    align-items: center;
-  }
-
-  .settings-value.thread-id {
-    max-width: 150px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .refresh-btn {
-    padding: 0 8px;
-    margin-left: 5px;
-  }
-}
-
 .chat {
   position: relative;
   flex: 1;
@@ -952,7 +791,7 @@ const toggleToolCall = (toolCallId) => {
     border-radius: 8px;
     color: var(--gray-900);
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 15px;
     width: auto;
     padding: 0.5rem 1rem;
     transition: background-color 0.3s;
@@ -1013,73 +852,6 @@ const toggleToolCall = (toolCallId) => {
       }
     }
   }
-
-  .tool-call-display {
-    background-color: var(--gray-50);
-    border: 1px solid var(--gray-200);
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(60, 60, 60, 0.05);
-    animation: fadeInUp 0.3s ease-out;
-
-    .tool-header {
-      padding: 10px 12px;
-      background-color: var(--gray-100);
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--gray-800);
-      border-bottom: 1px solid var(--gray-200);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-
-      .anticon {
-        color: var(--main-600);
-      }
-
-      .step-badge {
-        margin-left: auto;
-        background-color: var(--gray-200);
-        color: var(--gray-700);
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 500;
-      }
-    }
-
-    .tool-content {
-      transition: all 0.3s ease;
-      .tool-params {
-        padding: 10px 12px;
-        background-color: var(--gray-50);
-
-        .tool-params-header {
-          background-color: var(--gray-100);
-          font-size: 13px;
-          color: var(--gray-800);
-        }
-
-        .tool-params-content {
-          margin: 0;
-          font-size: 13px;
-          background-color: var(--gray-100);
-          border-radius: 4px;
-          padding: 8px;
-          overflow-x: auto;
-        }
-      }
-    }
-
-    &.is-collapsed {
-      .tool-header {
-        border-bottom: none;
-      }
-    }
-  }
 }
 
 .chat-box.is-debug {
@@ -1112,11 +884,14 @@ const toggleToolCall = (toolCallId) => {
     max-width: 800px;
     margin: 0 auto;
 
+    .bottom-actions {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
     .note {
-      width: 100%;
       font-size: small;
-      text-align: center;
-      padding: 0;
       color: #ccc;
       margin: 4px 0;
       user-select: none;
@@ -1124,27 +899,23 @@ const toggleToolCall = (toolCallId) => {
   }
 }
 
-.conversation-list::-webkit-scrollbar,
-.settings-container::-webkit-scrollbar {
+.conversation-list::-webkit-scrollbar {
   position: absolute;
   width: 4px;
   height: 4px;
 }
 
-.conversation-list::-webkit-scrollbar-track,
-.settings-container::-webkit-scrollbar-track {
+.conversation-list::-webkit-scrollbar-track {
   background: transparent;
   border-radius: 4px;
 }
 
-.conversation-list::-webkit-scrollbar-thumb,
-.settings-container::-webkit-scrollbar-thumb {
+.conversation-list::-webkit-scrollbar-thumb {
   background: var(--gray-400);
   border-radius: 4px;
 }
 
-.conversation-list::-webkit-scrollbar-thumb:hover,
-.settings-container::-webkit-scrollbar-thumb:hover {
+.conversation-list::-webkit-scrollbar-thumb:hover {
   background: rgb(100, 100, 100);
   border-radius: 4px;
 }
@@ -1261,22 +1032,6 @@ const toggleToolCall = (toolCallId) => {
 }
 
 @media (max-width: 520px) {
-  .right-sidebar {
-    position: absolute;
-    z-index: 101;
-    width: 300px;
-    height: 100%;
-    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
-    border-radius: 16px 0 0 16px;
-    right: 0;
-
-    &:not(.is-open) {
-      width: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-  }
-
   .chat {
     height: calc(100vh - 60px);
   }
@@ -1287,6 +1042,15 @@ const toggleToolCall = (toolCallId) => {
 
   .bottom {
     padding: 0.5rem 0.5rem;
+  }
+
+  .chat-header {
+    padding: 0.5rem 1rem !important;
+
+    .nav-btn {
+      font-size: 14px !important;
+      padding: 0.4rem 0.8rem !important;
+    }
   }
 }
 </style>
