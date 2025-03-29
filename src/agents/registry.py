@@ -9,6 +9,8 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 
+from src.config import SimpleConfig
+
 
 class State(TypedDict):
     """
@@ -22,12 +24,10 @@ class State(TypedDict):
 
 
 @dataclass(kw_only=True)
-class Configuration:
+class Configuration(SimpleConfig):
     """
     定义一个基础 Configuration 供 各类 graph 继承
     """
-
-    user_id: str = field(metadata={"description": "Unique identifier for the user."})
 
     @classmethod
     def from_runnable_config(
@@ -40,7 +40,7 @@ class Configuration:
 
     @classmethod
     def to_dict(cls):
-        pass
+        return {f.name: getattr(cls, f.name) for f in fields(cls) if f.init}
 
 
 

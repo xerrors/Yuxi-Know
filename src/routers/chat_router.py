@@ -27,7 +27,7 @@ def chat_post(
         history: list | None = Body(None),
         thread_id: str | None = Body(None)):
 
-    model = select_model(config)
+    model = select_model()
     meta["server_model_name"] = model.model_name
     history_manager = HistoryManager(history)
     logger.debug(f"Received query: {query} with meta: {meta}")
@@ -96,7 +96,7 @@ def chat_post(
 
 @chat.post("/call")
 async def call(query: str = Body(...), meta: dict = Body(None)):
-    model = select_model(config, model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
+    model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
     async def predict_async(query):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(executor, model.predict, query)
@@ -113,7 +113,7 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
         loop = asyncio.get_event_loop()
         model_provider = meta.get("model_provider", config.model_provider_lite)
         model_name = meta.get("model_name", config.model_name_lite)
-        model = select_model(config, model_provider=model_provider, model_name=model_name)
+        model = select_model(model_provider=model_provider, model_name=model_name)
         return await loop.run_in_executor(executor, model.predict, query)
 
     response = await predict_async(query)
@@ -124,8 +124,9 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
 @chat.get("/agent")
 async def get_agent():
     agents = [{
-        "name": agent["agent_class"].name,
-        "description": agent["agent_class"].description
+        "name": agent.name,
+        "description": agent.description,
+        "config_schema": agent.config_schema
     } for agent in agent_manager.agents.values()]
     return {"agents": agents}
 

@@ -16,7 +16,7 @@ DEFAULT_MOCK_API = 'this_is_mock_api_key_in_frontend'
 class SimpleConfig(dict):
 
     def __key(self, key):
-        return "" if key is None else key.lower()  # 目前忘记了这里为什么要 lower 了，只能说配置项最好不要有大写的
+        return "" if key is None else key  # 目前忘记了这里为什么要 lower 了，只能说配置项最好不要有大写的
 
     def __str__(self):
         return json.dumps(self)
@@ -180,15 +180,15 @@ class Config(SimpleConfig):
         """
         获取安全的配置，即过滤掉 api_key
         """
-        
+
         config = json.loads(str(self))
-        
+
         # 过滤掉 api_key
         for model in config.get("custom_models", []):
             model["api_key"] = DEFAULT_MOCK_API if model.get("api_key") else ""
 
         return config
-    
+
     def compare_custom_models(self, value):
         """
         比较 custom_models 中的 api_key，如果输入的 api_key 与当前的 api_key 相同，则不修改

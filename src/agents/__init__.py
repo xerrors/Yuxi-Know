@@ -4,27 +4,19 @@ class AgentManager:
     def __init__(self):
         self.agents = {}
 
-    def add_agent(self, agent_id, agent_class, configuration_class):
-        self.agents[agent_id] = {
-            "agent_class": agent_class,
-            "configuration_class": configuration_class
-        }
+    def add_agent(self, agent_id, agent_class):
+        self.agents[agent_id] = agent_class
 
     def get_runnable_agent(self, agent_id, **kwargs):
         agent_class = self.get_agent(agent_id)
-        configuration_class = self.get_configuration(agent_id)
-        configuration = configuration_class(**kwargs)
-        return agent_class(configuration)
+        return agent_class()
 
     def get_agent(self, agent_id):
-        return self.agents[agent_id]["agent_class"]
-
-    def get_configuration(self, agent_id):
-        return self.agents[agent_id]["configuration_class"]
+        return self.agents[agent_id]
 
 
 agent_manager = AgentManager()
-agent_manager.add_agent("chatbot", ChatbotAgent, ChatbotConfiguration)
+agent_manager.add_agent("chatbot", ChatbotAgent)
 
 __all__ = ["agent_manager"]
 

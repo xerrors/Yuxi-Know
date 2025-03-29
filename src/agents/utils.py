@@ -1,6 +1,20 @@
+from src.models import select_model
 from src.agents.registry import BaseAgent
+from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import AIMessageChunk, ToolMessage
+
+
+
+
+def load_chat_model(fully_specified_name: str) -> BaseChatModel:
+    """Load a chat model from a fully specified name.
+
+    Args:
+        fully_specified_name (str): String in the format 'provider/model'.
+    """
+    provider, model = fully_specified_name.split("/", maxsplit=1)
+    return select_model(model_name=model, model_provider=provider).chat_open_ai
 
 
 def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
