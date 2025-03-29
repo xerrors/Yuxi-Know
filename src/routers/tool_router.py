@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
-from src.utils import logger
+from src.agents import agent_manager
 
 tool = APIRouter(prefix="/tool")
 
@@ -15,6 +15,7 @@ class Tool(BaseModel):
     url: str
     method: Optional[str] = "POST"
     params: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 @tool.get("/", response_model=List[Tool])
 async def route_index():
@@ -40,6 +41,18 @@ async def route_index():
             url="/tools/agent",
         )
     ]
+
+    for agent in agent_manager.agents.values():
+        tools.append(
+            Tool(
+                name=agent.name,
+                title=agent.name,
+                description=agent.description,
+                url=f"/agent/{agent.name}",
+                method="POST",
+                metadata=agent.config_schema,
+            )
+        )
 
     return tools
 

@@ -1,4 +1,5 @@
-from src.agents.chatbot import ChatbotAgent, ChatbotConfiguration
+from src.agents.chatbot import ChatbotAgent
+from src.agents.react import ReActAgent
 
 class AgentManager:
     def __init__(self):
@@ -17,6 +18,7 @@ class AgentManager:
 
 agent_manager = AgentManager()
 agent_manager.add_agent("chatbot", ChatbotAgent)
+agent_manager.add_agent("react", ReActAgent)
 
 __all__ = ["agent_manager"]
 
