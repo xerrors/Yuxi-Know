@@ -122,7 +122,7 @@
           你停止生成了本次回答 
           <span class="retry-link" @click="retryStoppedMessage(message)">重新编辑问题</span>
         </div>
-        <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
+          <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" :conv="conv" @regenerateMessage="regenerateMessage" /> 
       </div>
     </div>
     <div class="bottom">
@@ -220,7 +220,9 @@ import {
   BulbOutlined,
   CaretRightOutlined,
   DeploymentUnitOutlined,
-  StopOutlined
+  StopOutlined,
+  ReloadOutlined,
+  CopyOutlined
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -702,6 +704,24 @@ const selectModel = (provider, name) => {
   message.success(`已切换到模型: ${provider}/${name}`)
 
 }
+
+// 添加重新生成方法
+const regenerateMessage = (message) => {
+  // 找到用户的原始问题
+  const messageIndex = conv.value.messages.findIndex(msg => msg.id === message.id)
+  if (messageIndex > 0) {
+    const userMessage = conv.value.messages[messageIndex - 1]
+    if (userMessage && userMessage.role === 'sent') {
+      // 删除当前AI回复
+      conv.value.messages = conv.value.messages.slice(0, messageIndex)
+      // 重新生成回答
+      appendAiMessage("", null)
+      const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
+      isStreaming.value = true
+      fetchChatResponse(userMessage.text, cur_res_id)
+    }
+  }
+}
 </script>
 
 <style lang="less" scoped>
@@ -950,6 +970,9 @@ const selectModel = (provider, name) => {
     padding-left: 0;
     padding-right: 0;
     text-align: justify;
+    position: relative;
+    
+
   }
 
   p.message-text {

@@ -5,6 +5,7 @@
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
       <span class="item"><BulbOutlined /> {{ msg.meta.server_model_name }}</span>
       <span class="item btn" @click="copyText(msg.text)"><CopyOutlined /></span>
+      <span class="item btn" @click="regenerateMessage(msg)"><ReloadOutlined /></span>
       <span
         class="item btn"
         @click="openSubGraph(msg)"
@@ -112,15 +113,20 @@ import {
   DeploymentUnitOutlined,
   BulbOutlined,
   FileOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons-vue'
 import GraphContainer from './GraphContainer.vue'  // 导入 GraphContainer 组件
 
+
+const emit = defineEmits(['regenerateMessage']);
 const props = defineProps({
   message: Object,
+  conv: Object,
 })
 
 const msg = ref(props.message)
+const conv = ref(props.conv)
 
 // 使用 useClipboard 实现复制功能
 const { copy, isSupported } = useClipboard()
@@ -209,6 +215,11 @@ const formatDate = (timestamp) => {
 // 添加百分比计算函数
 const getPercent = (value) => {
   return parseFloat((value * 100).toFixed(2))
+}
+
+// 添加重新生成方法
+const regenerateMessage = (message) => {
+  emit('regenerateMessage', message)
 }
 </script>
 
