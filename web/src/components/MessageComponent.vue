@@ -41,6 +41,11 @@
       <!-- 消息内容 -->
       <div v-else-if="contentHtml" v-html="contentHtml" class="message-md"></div>
 
+      <div v-if="message.isStoppedByUser" class="retry-hint">
+        你停止生成了本次回答
+        <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
+      </div>
+
       <!-- 工具调用 (AgentView特有) -->
       <slot name="tool-calls"></slot>
 
@@ -60,6 +65,10 @@ import { CaretRightOutlined } from '@ant-design/icons-vue';
 
 const props = defineProps({
   // 消息角色：'user'|'assistant'|'sent'|'received'
+  message: {
+    type: Object,
+    required: true
+  },
   role: {
     type: String,
     required: true
@@ -114,7 +123,7 @@ const statusDefination = {
   error: '错误'
 }
 
-const emit = defineEmits(['retry']);
+const emit = defineEmits(['retry', 'retryStoppedMessage']);
 
 // 推理面板展开状态
 const reasoningActiveKey = ref(['show']);
@@ -318,6 +327,35 @@ const isEmptyAndLoading = computed(() => {
     }
   }
 }
+
+.retry-hint {
+  margin-top: 8px;
+  padding: 8px 16px;
+  color: #666;
+  font-size: 14px;
+  text-align: left;
+}
+
+.retry-link {
+  color: #1890ff;
+  cursor: pointer;
+  margin-left: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.ant-btn-icon-only {
+  &:has(.anticon-stop) {
+    background-color: #ff4d4f !important;
+
+    &:hover {
+      background-color: #ff7875 !important;
+    }
+  }
+}
+
 
 .loading-dots {
   display: inline-flex;

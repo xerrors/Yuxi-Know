@@ -15,11 +15,17 @@
         <slot name="options-left"></slot>
       </div>
       <div class="options__right">
-        <a-button @click="handleSend" :disabled="sendButtonDisabled" type="link">
+        <a-tooltip :title="isLoading ? '停止回答' : ''">
+          <a-button
+            @click="handleSendOrStop"
+            :disabled="sendButtonDisabled"
+            type="link"
+          >
           <template #icon>
-            <component :is="getIcon" />
+            <component :is="getIcon" class="send-btn"/>
           </template>
-        </a-button>
+          </a-button>
+        </a-tooltip>
       </div>
     </div>
   </div>
@@ -30,7 +36,8 @@ import { ref, computed, toRefs } from 'vue';
 import {
   SendOutlined,
   ArrowUpOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  PauseOutlined
 } from '@ant-design/icons-vue';
 
 const props = defineProps({
@@ -74,13 +81,13 @@ const emit = defineEmits(['update:modelValue', 'send', 'keydown']);
 const iconComponents = {
   'SendOutlined': SendOutlined,
   'ArrowUpOutlined': ArrowUpOutlined,
-  'LoadingOutlined': LoadingOutlined
+  'PauseOutlined': PauseOutlined
 };
 
 // 根据传入的图标名动态获取组件
 const getIcon = computed(() => {
   if (props.isLoading) {
-    return LoadingOutlined;
+    return PauseOutlined;
   }
   return iconComponents[props.sendIcon] || ArrowUpOutlined;
 });
@@ -97,7 +104,7 @@ const handleKeyPress = (e) => {
 };
 
 // 处理发送按钮点击
-const handleSend = () => {
+const handleSendOrStop = () => {
   emit('send');
 };
 </script>
@@ -218,6 +225,7 @@ button.ant-btn-icon-only {
   &:hover {
     background-color: var(--main-600);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    color: white;
   }
 
   &:active {
