@@ -1,5 +1,5 @@
 ---
-layout: home
+layout: default
 title: 语析 - 基于大模型的知识库与知识图谱问答系统
 nav_order: 1
 description: "语析是一个强大的问答平台，结合了大模型 RAG 知识库与知识图谱技术，基于 Llamaindex + VueJS + FastAPI + Neo4j 构建。"
@@ -133,4 +133,4 @@ docker tag m.daocloud.io/docker.io/library/neo4j:latest neo4j:latest
 
 ## 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件 
+本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
