@@ -34,6 +34,10 @@
         <i>正在生成……</i>
       </div>
 
+      <div v-else-if="status === 'error'" class="err-msg" @click="$emit('retry')">
+        请求错误，请重试。{{ errorMessage }}
+      </div>
+
       <!-- 消息内容 -->
       <div v-else-if="contentHtml" v-html="contentHtml" class="message-md"></div>
 
@@ -42,11 +46,7 @@
 
       <!-- 引用组件 (ChatComponent特有) -->
       <slot name="refs"></slot>
-    </div>
-
-    <!-- 错误消息 -->
-    <div v-else-if="status === 'error'" class="err-msg" @click="$emit('retry')">
-      请求错误，请重试。{{ errorMessage }}
+      <!-- 错误消息 -->
     </div>
 
     <!-- 自定义内容 -->
@@ -161,7 +161,6 @@ const isEmptyAndLoading = computed(() => {
     text-align: left;
     margin: 0 0 16px 0;
     padding: 0px;
-    text-align: justify;
     background-color: transparent;
     border-radius: 0;
   }
@@ -195,12 +194,12 @@ const isEmptyAndLoading = computed(() => {
   }
 
   .err-msg {
-    color: #eb8080;
-    border: 1px solid #eb8080;
+    color: #d15252;
+    border: 1px solid #f19999;
     padding: 0.5rem 1rem;
     border-radius: 8px;
     text-align: left;
-    background: #FFF5F5;
+    background: #fffbfb;
     margin-bottom: 10px;
     cursor: pointer;
   }

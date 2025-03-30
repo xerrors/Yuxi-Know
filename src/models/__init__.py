@@ -41,7 +41,7 @@ def select_model(model_provider=None, model_name=None):
         return OpenModel(model_name)
 
     elif model_provider == "custom":
-        model_info = next((x for x in conf.custom_models if x["custom_id"] == model_name), None)
+        model_info = next((x for x in config.custom_models if x["custom_id"] == model_name), None)
         if model_info is None:
             raise ValueError(f"Model {model_name} not found in custom models")
 

@@ -545,6 +545,18 @@ onMounted(() => {
 
   chatContainer.value.addEventListener('scroll', handleUserScroll);
 
+  // 检查现有消息中是否有内容为空的情况
+  if (conv.value.messages && conv.value.messages.length > 0) {
+    conv.value.messages.forEach(msg => {
+      if (msg.role === 'received' && (!msg.text || msg.text.trim() === '')) {
+        msg.status = 'error';
+        msg.message = '内容加载失败';
+      }
+    });
+  }
+
+  console.log(conv.value.messages)
+
   // 从本地存储加载数据
   const storedMeta = localStorage.getItem('meta');
   if (storedMeta) {
