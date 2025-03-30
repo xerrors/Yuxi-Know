@@ -1,18 +1,18 @@
 <template>
-  <div class="message-box" :class="[role, customClasses]">
+  <div class="message-box" :class="[message.role, customClasses]">
     <!-- 用户消息 -->
-    <p v-if="role === 'user' || role === 'sent'" class="message-text">{{ content }}</p>
+    <p v-if="message.role === 'user' || message.role === 'sent'" class="message-text">{{ message.content }}</p>
 
     <!-- 助手消息 -->
-    <div v-else-if="role === 'assistant' || role === 'received'" class="assistant-message">
+    <div v-else-if="message.role === 'assistant' || message.role === 'received'" class="assistant-message">
       <!-- 推理过程 (ChatComponent特有) -->
-      <div v-if="reasoningContent" class="reasoning-box">
+      <div v-if="message.reasoning_content" class="reasoning-box">
         <a-collapse v-model:activeKey="reasoningActiveKey" :bordered="false">
           <template #expandIcon="{ isActive }">
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
-          <a-collapse-panel key="show" :header="reasoningHeader" class="reasoning-header">
-            <p class="reasoning-content">{{ reasoningContent }}</p>
+          <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
+            <p class="reasoning-content">{{ message.reasoning_content }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
@@ -25,21 +25,21 @@
       </div>
 
       <!-- 检索中状态 (ChatComponent特有) -->
-      <div v-else-if="status === 'searching' && isProcessing" class="searching-msg">
+      <div v-else-if="message.status === 'searching' && isProcessing" class="searching-msg">
         <i>正在检索……</i>
       </div>
 
       <!-- 生成中状态 (ChatComponent特有) -->
-      <div v-else-if="status === 'generating' && isProcessing" class="searching-msg">
+      <div v-else-if="message.status === 'generating' && isProcessing" class="searching-msg">
         <i>正在生成……</i>
       </div>
 
-      <div v-else-if="status === 'error'" class="err-msg" @click="$emit('retry')">
-        请求错误，请重试。{{ errorMessage }}
+      <div v-else-if="message.status === 'error'" class="err-msg" @click="$emit('retry')">
+        请求错误，请重试。{{ message.message }}
       </div>
 
       <!-- 消息内容 -->
-      <div v-else-if="contentHtml" v-html="contentHtml" class="message-md"></div>
+      <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div>
 
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
@@ -49,8 +49,9 @@
       <!-- 工具调用 (AgentView特有) -->
       <slot name="tool-calls"></slot>
 
-      <!-- 引用组件 (ChatComponent特有) -->
-      <slot name="refs"></slot>
+      <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
+        <RefsComponent :message="message" @retry="emit('retry')" />
+      </div>
       <!-- 错误消息 -->
     </div>
 
@@ -62,6 +63,13 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { CaretRightOutlined } from '@ant-design/icons-vue';
+import RefsComponent from '@/components/RefsComponent.vue'
+
+import { Marked } from 'marked';
+import { markedHighlight } from 'marked-highlight';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github.css';
+
 
 const props = defineProps({
   // 消息角色：'user'|'assistant'|'sent'|'received'
@@ -69,27 +77,8 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  role: {
-    type: String,
-    required: true
-  },
-  // 消息内容
-  content: {
-    type: String,
-    default: ''
-  },
   // 已渲染的HTML内容
   contentHtml: {
-    type: String,
-    default: ''
-  },
-  // 推理内容 (ChatComponent使用)
-  reasoningContent: {
-    type: String,
-    default: ''
-  },
-  // 消息状态
-  status: {
     type: String,
     default: ''
   },
@@ -98,20 +87,15 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
-  // 错误信息
-  errorMessage: {
-    type: String,
-    default: ''
-  },
   // 自定义类
   customClasses: {
     type: Object,
     default: () => ({})
   },
-  // 推理框标题
-  reasoningHeader: {
-    type: String,
-    default: '推理过程'
+  // 是否显示推理过程
+  showRefs: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -128,10 +112,36 @@ const emit = defineEmits(['retry', 'retryStoppedMessage']);
 // 推理面板展开状态
 const reasoningActiveKey = ref(['show']);
 
+
+const renderMarkdown = (msg) => {
+  if (!msg.content) return '';
+
+  if (msg.status === 'loading') {
+    return marked.parse(msg.content + '🟢')
+  } else {
+    return marked.parse(msg.content)
+  }
+}
+
+
+const marked = new Marked(
+  {
+    gfm: true,
+    breaks: true,
+    tables: true,
+  },
+  markedHighlight({
+    langPrefix: 'hljs language-',
+    highlight(code) {
+      return hljs.highlightAuto(code).value;
+    }
+  })
+);
+
 // 计算属性：内容为空且正在加载
 const isEmptyAndLoading = computed(() => {
-  const isEmpty = !props.content || props.content.length === 0;
-  const isLoading = props.status === 'init'
+  const isEmpty = !props.message.content || props.message.content.length === 0;
+  const isLoading = props.message.status === 'init'
   return isEmpty && isLoading;
 });
 </script>

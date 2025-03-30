@@ -38,13 +38,9 @@
       <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': options.debug_mode }">
         <MessageComponent
           v-for="(message, index) in messages"
+          :message="message"
           :key="index"
-          :role="message.role"
-          :content="message.content"
-          :content-html="message.content ? renderMarkdown(message.content) : ''"
-          :status="message.status"
           :is-processing="isProcessing"
-          :error-message="message.message"
           @retry="retryMessage(index)"
         >
           <div v-if="options.debug_mode" class="status-info">{{ message }}</div>

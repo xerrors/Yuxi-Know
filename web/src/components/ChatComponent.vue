@@ -79,20 +79,11 @@
         v-for="message in conv.messages"
         :message="message"
         :key="message.id"
-        :role="message.role"
-        :content="message.text"
-        :content-html="message.text.length > 0 ? renderMarkdown(message) : ''"
-        :reasoning-content="message.reasoning_content"
-        :reasoning-header="message.status=='reasoning' ? '正在思考...' : '推理过程'"
-        :status="message.status"
         :is-processing="isStreaming"
-        :error-message="message.message"
+        :show-refs="true"
         @retry="retryMessage(message.id)"
         @retryStoppedMessage="retryStoppedMessage(message.id)"
       >
-        <template #refs v-if="message.role=='received' && message.status=='finished'">
-          <RefsComponent :message="message" :conv="conv" @retry="retryMessage(message.id)" />
-        </template>
       </MessageComponent>
     </div>
     <div class="bottom">
@@ -178,13 +169,8 @@ import {
   CopyOutlined
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
 import { useConfigStore } from '@/stores/config'
 import { message } from 'ant-design-vue'
-import RefsComponent from '@/components/RefsComponent.vue'
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 
@@ -232,39 +218,18 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   wideScreen: false,
 })
 
-const marked = new Marked(
-  {
-    gfm: true,
-    breaks: true,
-    tables: true,
-  },
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code) {
-      return hljs.highlightAuto(code).value;
-    }
-  })
-);
 
 const consoleMsg = (msg) => console.log(msg)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
 onClickOutside(modelCard, () => setTimeout(() => opts.showModelCard = false, 30))
 
-const renderMarkdown = (msg) => {
-  if (msg.status === 'loading') {
-    return marked.parse(msg.text + '🟢')
-  } else {
-    return marked.parse(msg.text)
-  }
-}
-
 // 从 message 中获取 history 信息，每个消息都是 {role, content} 的格式
 const getHistory = () => {
   const history = conv.value.messages.map((msg) => {
-    if (msg.text) {
+    if (msg.content) {
       return {
         role: msg.role === 'sent' ? 'user' : 'assistant',
-        content: msg.text
+        content: msg.content
       }
     }
   }).reduce((acc, cur) => {
@@ -309,15 +274,15 @@ const handleKeyDown = (e) => {
 const renameTitle = () => {
   if (meta.summary_title) {
     const prompt = '请用一个很短的句子关于下面的对话内容的主题起一个名字，不要带标点符号：'
-    const firstUserMessage = conv.value.messages[0].text
-    const firstAiMessage = conv.value.messages[1].text
+    const firstUserMessage = conv.value.messages[0].content
+    const firstAiMessage = conv.value.messages[1].content
     const context = `${prompt}\n\n问题: ${firstUserMessage}\n\n回复: ${firstAiMessage}，主题是（一句话）：`
     simpleCall(context).then((data) => {
       const response = data.response.split("：")[0].replace(/^["'"']/g, '').replace(/["'"']$/g, '')
       emit('rename-title', response)
     })
   } else {
-    emit('rename-title', conv.value.messages[0].text)
+    emit('rename-title', conv.value.messages[0].content)
   }
 }
 
@@ -353,16 +318,16 @@ const appendUserMessage = (msg) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'sent',
-    text: msg
+    content: msg
   })
   scrollToBottom()
 }
 
-const appendAiMessage = (text, refs=null) => {
+const appendAiMessage = (content, refs=null) => {
   conv.value.messages.push({
     id: generateRandomHash(16),
     role: 'received',
-    text: text,
+    content: content,
     reasoning_content: '',
     refs,
     status: "init",
@@ -377,8 +342,8 @@ const updateMessage = (info) => {
   if (msg) {
     try {
       // 只有在 text 不为空时更新
-      if (info.text !== null && info.text !== undefined && info.text !== '') {
-        msg.text += info.text;
+      if (info.content !== null && info.content !== undefined && info.content !== '') {
+        msg.content += info.content;
       }
 
       if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
@@ -415,7 +380,7 @@ const updateMessage = (info) => {
     } catch (error) {
       console.error('Error updating message:', error);
       msg.status = 'error';
-      msg.text = '消息更新失败';
+      msg.content = '消息更新失败';
     }
   } else {
     console.error('Message not found:', info.id);
@@ -512,13 +477,13 @@ const fetchChatResponse = (user_input, cur_res_id) => {
               const data = JSON.parse(line);
               updateMessage({
                 id: cur_res_id,
-                text: data.response,
+                content: data.response,
                 reasoning_content: data.reasoning_content,
                 status: data.status,
                 meta: data.meta,
                 ...data,
               });
-              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].text)
+              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].content)
               // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
 
               if (data.history) {
@@ -588,7 +553,7 @@ const retryMessage = (id) => {
   const index = conv.value.messages.findIndex(msg => msg.id === id);
   const pastMessage = conv.value.messages[index-1]
   console.log("retryMessage", id, pastMessage)
-  conv.value.inputText = pastMessage.text
+  conv.value.inputText = pastMessage.content
   if (index !== -1) {
     conv.value.messages = conv.value.messages.slice(0, index-1);
   }
@@ -606,7 +571,7 @@ onMounted(() => {
   // 检查现有消息中是否有内容为空的情况
   if (conv.value.messages && conv.value.messages.length > 0) {
     conv.value.messages.forEach(msg => {
-      if (msg.role === 'received' && (!msg.text || msg.text.trim() === '')) {
+      if (msg.role === 'received' && (!msg.content || msg.content.trim() === '')) {
         msg.status = 'error';
         msg.message = '内容加载失败';
       }
@@ -669,7 +634,7 @@ const retryStoppedMessage = (id) => {
   if (messageIndex > 0) {
     const userMessage = conv.value.messages[messageIndex - 1];
     if (userMessage && userMessage.role === 'sent') {
-      conv.value.inputText = userMessage.text;
+      conv.value.inputText = userMessage.content;
       // 删除被停止的消息，以及所有后面的消息
       conv.value.messages = conv.value.messages.slice(0, messageIndex-1);
       // sendMessage();
