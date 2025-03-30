@@ -16,15 +16,17 @@
 
 **核心特点：**
 
-- 🤖 多模型支持：适配 OpenAI、各大国内主流大模型平台，以及本地 vllm 部署
+- 🤖 多模型支持：适配 OpenAI、各大国内主流大模型平台，以及本地 vllm、ollama 部署
 - 📚 灵活知识库：支持 PDF、TXT、MD 等多种格式文档
 - 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力
 - 🚀 简单配置：只需配置对应服务平台的 `API_KEY` 即可使用
+- 🤖 智能体拓展：可以编写自己的智能体代码（Dev过程，非正式版）
 
 ![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
 ## 📋 更新日志
 
+- **2025.03.30** - 系统中集成智能体（WIP， [PR#96](https://github.com/xerrors/Yuxi-Know/pull/96)）
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
 - **2025.02.23** - SiliconFlow 的 Rerank 和 Embedding model 支持，现默认使用 SiliconFlow
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
@@ -254,6 +256,14 @@ ark:
 可在 `docker/docker-compose.yml` 和 `docker/docker-compose.dev.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
 
 目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
+
+## 贡献者名单
+
+感谢以下贡献者的支持！
+
+<a href="https://github.com/xerrors/Yuxi-Know/contributors">
+    <img src="https://contributors.nn.ci/api?repo=xerrors/Yuxi-Know" alt="贡献者名单">
+</a>
 
 ## ❓ 常见问题
 
