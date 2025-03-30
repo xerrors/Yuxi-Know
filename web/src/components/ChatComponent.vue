@@ -703,8 +703,8 @@ const retryStoppedMessage = (message) => {
     const userMessage = conv.value.messages[messageIndex - 1];
     if (userMessage && userMessage.role === 'sent') {
       conv.value.inputText = userMessage.text;
-      // 删除被停止的消息
-      conv.value.messages = conv.value.messages.slice(0, messageIndex);
+      // 删除被停止的消息，以及上次发送的消息
+      conv.value.messages = conv.value.messages.slice(0, messageIndex-1);
     }
   }
 }
@@ -729,19 +729,7 @@ const selectModel = (provider, name) => {
 // 添加重新生成方法
 const regenerateMessage = (message) => {
   // 找到用户的原始问题
-  const messageIndex = conv.value.messages.findIndex(msg => msg.id === message.id)
-  if (messageIndex > 0) {
-    const userMessage = conv.value.messages[messageIndex - 1]
-    if (userMessage && userMessage.role === 'sent') {
-      // 删除当前AI回复
-      conv.value.messages = conv.value.messages.slice(0, messageIndex)
-      // 重新生成回答
-      appendAiMessage("", null)
-      const cur_res_id = conv.value.messages[conv.value.messages.length - 1].id
-      isStreaming.value = true
-      fetchChatResponse(userMessage.text, cur_res_id)
-    }
-  }
+  retryMessage(message.id)
 }
 </script>
 
