@@ -28,7 +28,8 @@ class OpenAIBase():
             stream=True,
         )
         for chunk in response:
-            yield chunk.choices[0].delta
+            if len(chunk.choices) > 0:
+                yield chunk.choices[0].delta
 
     def _get_response(self, messages):
         response = self.client.chat.completions.create(

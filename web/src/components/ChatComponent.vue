@@ -183,7 +183,7 @@
                 type="link"
               >
                 <template #icon>
-                  <StopOutlined v-if="isStreaming" />
+                  <PauseOutlined v-if="isStreaming" />
                   <ArrowUpOutlined v-else />
                 </template>
               </a-button>
@@ -220,7 +220,7 @@ import {
   BulbOutlined,
   CaretRightOutlined,
   DeploymentUnitOutlined,
-  StopOutlined,
+  PauseOutlined,
   ReloadOutlined,
   CopyOutlined
 } from '@ant-design/icons-vue'
