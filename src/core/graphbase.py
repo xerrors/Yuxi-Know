@@ -172,7 +172,8 @@ class GraphDatabase:
         def read_triples(file_path):
             with open(file_path, 'r', encoding='utf-8') as file:
                 for line in file:
-                    yield json.loads(line.strip())
+                    if line.strip():
+                        yield json.loads(line.strip())
 
         triples = list(read_triples(file_path))
 

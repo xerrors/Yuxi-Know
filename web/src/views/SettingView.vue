@@ -106,7 +106,7 @@
               @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.custom_id)"
             >
               <div class="card-models__header">
-                <div class="name">{{ item.name }}</div>
+                <div class="name" :title="item.name">{{ item.name }}</div>
                 <div class="action">
                   <a-popconfirm
                     title="确认删除该模型?"
@@ -704,11 +704,33 @@ const sendRestart = () => {
             .name {
               color: var(--gray-1000);
               font-weight: bold;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+              flex: 1;
+              margin-right: 8px;
+              position: relative;
+              
+              &:hover::after {
+                content: attr(title);
+                position: absolute;
+                left: 0;
+                top: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                white-space: nowrap;
+                z-index: 1000;
+                margin-top: 5px;
+              }
             }
             .action {
               opacity: 0;
               user-select: none;
               margin-left: auto;
+              flex-shrink: 0;
               button {
                 padding: 4px 8px;
               }

@@ -61,7 +61,7 @@ class OpenModel(OpenAIBase):
 class CustomModel(OpenAIBase):
     def __init__(self, model_info):
         model_name = model_info["name"]
-        api_key = model_info.get("api_key", "custom_model")
+        api_key = model_info.get("api_key") or "custom_model"
         base_url = get_docker_safe_url(model_info["api_base"])
         logger.info(f"> Custom model: {model_name}, base_url: {base_url}")
 
