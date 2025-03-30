@@ -656,7 +656,6 @@ watch(
   { deep: true }
 );
 
-<<<<<<< HEAD
 // 处理发送或停止
 const handleSendOrStop = () => {
   if (isStreaming.value) {
@@ -685,7 +684,7 @@ const retryStoppedMessage = (message) => {
       conv.value.messages = conv.value.messages.slice(0, messageIndex);
     }
   }
-=======
+
 const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
 const customModels = computed(() => configStore.config?.custom_models || [])
@@ -700,7 +699,7 @@ const selectModel = (provider, name) => {
   configStore.setConfigValue('model_provider', provider)
   configStore.setConfigValue('model_name', name)
   message.success(`已切换到模型: ${provider}/${name}`)
->>>>>>> 2cec299306b323c10368dd3af82c110753ae963b
+
 }
 </script>
 
@@ -1217,7 +1216,6 @@ const selectModel = (provider, name) => {
   }
 }
 
-<<<<<<< HEAD
 .retry-hint {
   margin-top: 8px;
   padding: 8px 16px;
@@ -1243,7 +1241,6 @@ const selectModel = (provider, name) => {
     &:hover {
       background-color: #ff7875 !important;
     }
-=======
 .scrollable-menu {
   max-height: 300px;
   overflow-y: auto;
@@ -1264,7 +1261,6 @@ const selectModel = (provider, name) => {
 
   &::-webkit-scrollbar-thumb:hover {
     background: var(--gray-500);
->>>>>>> 2cec299306b323c10368dd3af82c110753ae963b
   }
 }
 </style>
