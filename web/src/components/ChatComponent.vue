@@ -7,13 +7,31 @@
           class="close nav-btn"
           @click="state.isSidebarOpen = true"
         >
-        <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-24" alt="设置" />
-      </div>
-        <a-tooltip :title="configStore.config?.model_name" placement="rightTop">
-          <div class="newchat nav-btn" @click="$emit('newconv')">
-            <PlusCircleOutlined /> <span class="text">新对话</span>
-          </div>
-        </a-tooltip>
+          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+        </div>
+
+        <div class="newchat nav-btn" @click="$emit('newconv')">
+          <PlusCircleOutlined /> <span class="text">新对话</span>
+        </div>
+        <a-dropdown>
+          <a class="model-select nav-btn" @click.prevent>
+            <BulbOutlined /> <span class="text">{{ configStore.config?.model_provider }}/{{ configStore.config?.model_name }}</span>
+          </a>
+          <template #overlay>
+            <a-menu class="scrollable-menu">
+              <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
+                <a-menu-item v-for="(model, idx) in modelNames[item]?.models" :key="`${item}-${idx}`" @click="selectModel(item, model)">
+                  {{ item }}/{{ model }}
+                </a-menu-item>
+              </a-menu-item-group>
+              <a-menu-item-group v-if="customModels.length > 0" title="自定义模型">
+                <a-menu-item v-for="(model, idx) in customModels" :key="`custom-${idx}`" @click="selectModel('custom', model.custom_id)">
+                  custom/{{ model.custom_id }}
+                </a-menu-item>
+              </a-menu-item-group>
+            </a-menu>
+          </template>
+        </a-dropdown>
       </div>
       <div class="header__right">
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
@@ -130,7 +148,7 @@
 </template>
 
 <script setup>
-import { reactive, ref, onMounted, toRefs, nextTick, onUnmounted, watch } from 'vue'
+import { reactive, ref, onMounted, toRefs, nextTick, onUnmounted, watch, computed } from 'vue'
 import {
   SendOutlined,
   MenuOutlined,
@@ -150,7 +168,7 @@ import {
   FolderOpenOutlined,
   GlobalOutlined,
   FileTextOutlined,
-  RobotOutlined,
+  BulbOutlined,
   CaretRightOutlined,
   DeploymentUnitOutlined,
 } from '@ant-design/icons-vue'
@@ -587,6 +605,22 @@ watch(
   },
   { deep: true }
 );
+
+const modelNames = computed(() => configStore.config?.model_names)
+const modelStatus = computed(() => configStore.config?.model_provider_status)
+const customModels = computed(() => configStore.config?.custom_models || [])
+
+// 筛选 modelStatus 中为真的key
+const modelKeys = computed(() => {
+  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
+})
+
+// 选择模型的方法
+const selectModel = (provider, name) => {
+  configStore.setConfigValue('model_provider', provider)
+  configStore.setConfigValue('model_name', name)
+  message.success(`已切换到模型: ${provider}/${name}`)
+}
 </script>
 
 <style lang="less" scoped>
@@ -636,10 +670,10 @@ watch(
     border-radius: 8px;
     color: var(--gray-900);
     cursor: pointer;
-    font-size: 1rem;
+    // font-size: 1rem;
     width: auto;
-    padding: 0.5rem 1rem;
     transition: background-color 0.3s;
+    padding: 0.5rem 0.75rem;
 
     .text {
       margin-left: 10px;
@@ -650,6 +684,18 @@ watch(
     }
   }
 
+  .model-select {
+    // color: var(--gray-900);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    .text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
 }
 .metas {
   display: flex;
@@ -953,4 +999,39 @@ watch(
     margin-right: 8px;
   }
 }
+
+.scrollable-menu {
+  max-height: 300px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--gray-400);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--gray-500);
+  }
+}
 </style>
+
+<style lang="less">
+// 添加全局样式以确保滚动功能在dropdown内正常工作
+.ant-dropdown-menu {
+  &.scrollable-menu {
+    max-height: 300px;
+    overflow-y: auto;
+  }
+}
+</style>
+
+

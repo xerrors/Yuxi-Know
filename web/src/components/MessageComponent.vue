@@ -151,8 +151,8 @@ const isEmptyAndLoading = computed(() => {
     // background-color: var(--main-color);
     // background: linear-gradient(90deg, var(--main-light-1) 10.79%, var(--main-color) 87.08%);
     align-self: flex-end;
-    border-radius: 1.5rem;
-    padding: 0.625rem 1.25rem;
+    border-radius: .5rem;
+    padding: 0.5rem 1rem;
   }
 
   &.assistant, &.received {

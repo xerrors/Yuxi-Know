@@ -94,7 +94,7 @@
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'model'">
         <h3>模型配置</h3>
-        <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY</p>
+        <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
         <div class="model-provider-card">
           <div class="card-header">
             <h3>自定义模型</h3>
@@ -167,9 +167,9 @@
                 <InfoCircleOutlined />
               </a>
             </div>
-            <a-button 
-              type="text" 
-              class="expand-button" 
+            <a-button
+              type="text"
+              class="expand-button"
               @click.stop="toggleExpand(item)"
             >
               <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
@@ -550,7 +550,7 @@ const sendRestart = () => {
       .model-icon {
         width: 28px;
         height: 28px;
-        
+
         // 灰度
         filter: grayscale(100%);
         img {
@@ -627,7 +627,7 @@ const sendRestart = () => {
         .icon-wrapper {
           display: inline-flex;
           transition: transform 0.2s ease;
-          
+
           &.rotated {
             transform: rotate(180deg);
           }
@@ -639,7 +639,7 @@ const sendRestart = () => {
       max-height: 0;
       overflow: hidden;
       transition: max-height 0.2s ease-out;  // 先快后慢
-      
+
       &.expanded {
         max-height: 700px; /* 设置一个足够大的值 */
       }
@@ -710,7 +710,7 @@ const sendRestart = () => {
               flex: 1;
               margin-right: 8px;
               position: relative;
-              
+
               &:hover::after {
                 content: attr(title);
                 position: absolute;
