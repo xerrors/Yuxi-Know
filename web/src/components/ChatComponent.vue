@@ -119,10 +119,10 @@
           请求错误，请重试。{{ message.message }}
         </div>
         <div v-if="message.isStoppedByUser" class="retry-hint">
-          你停止生成了本次回答 
+          你停止生成了本次回答
           <span class="retry-link" @click="retryStoppedMessage(message)">重新编辑问题</span>
         </div>
-          <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" :conv="conv" @regenerateMessage="regenerateMessage" /> 
+          <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" :conv="conv" @regenerateMessage="regenerateMessage" />
       </div>
     </div>
     <div class="bottom">
@@ -176,10 +176,10 @@
           </div>
           <div class="options__right">
             <a-tooltip :title="isStreaming ? '停止回答' : ''">
-              <a-button 
-                size="large" 
-                @click="handleSendOrStop" 
-                :disabled="(!conv.inputText && !isStreaming)" 
+              <a-button
+                size="large"
+                @click="handleSendOrStop"
+                :disabled="(!conv.inputText && !isStreaming)"
                 type="link"
               >
                 <template #icon>
@@ -271,7 +271,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   selectedKB: null,
   stream: true,
   summary_title: false,
-  history_round: 5,
+  history_round: 20,
   db_id: null,
   fontSize: 'default',
   wideScreen: false,
@@ -301,6 +301,24 @@ const renderMarkdown = (msg) => {
   } else {
     return marked.parse(msg.text)
   }
+}
+
+// 从 message 中获取 history 信息，每个消息都是 {role, content} 的格式
+const getHistory = () => {
+  const history = conv.value.messages.map((msg) => {
+    if (msg.text) {
+      return {
+        role: msg.role === 'sent' ? 'user' : 'assistant',
+        content: msg.text
+      }
+    }
+  }).reduce((acc, cur) => {
+    if (cur) {
+      acc.push(cur)
+    }
+    return acc
+  }, [])
+  return history.slice(-meta.history_round)
 }
 
 const useDatabase = (index) => {
@@ -494,14 +512,17 @@ const fetchChatResponse = (user_input, cur_res_id) => {
   const controller = new AbortController();
   const signal = controller.signal;
 
+  const params = {
+    query: user_input,
+    history: getHistory(),
+    meta: meta,
+    cur_res_id: cur_res_id,
+  }
+  console.log(params)
+
   fetch('/api/chat/', {
     method: 'POST',
-    body: JSON.stringify({
-      query: user_input,
-      history: conv.value.history,
-      meta: meta,
-      cur_res_id: cur_res_id,
-    }),
+    body: JSON.stringify(params),
     headers: {
       'Content-Type': 'application/json'
     },
@@ -971,7 +992,7 @@ const regenerateMessage = (message) => {
     padding-right: 0;
     text-align: justify;
     position: relative;
-    
+
 
   }
 
