@@ -1,6 +1,7 @@
 import os
 from openai import OpenAI
 from src.utils import logger, get_docker_safe_url
+from langchain_openai import ChatOpenAI
 
 class OpenAIBase():
     def __init__(self, api_key, base_url, model_name):
@@ -8,7 +9,9 @@ class OpenAIBase():
         self.base_url = base_url
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
-        # logger.debug(f"{self.get_models()=}")
+        self.chat_open_ai = ChatOpenAI(model=model_name,
+                                       api_key=api_key,
+                                       base_url=base_url)
 
     def predict(self, message, stream=False):
         if isinstance(message, str):

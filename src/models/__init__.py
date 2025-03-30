@@ -1,14 +1,16 @@
 import os
 
+from src import config
 from src.utils.logging_config import logger
 from src.models.chat_model import OpenAIBase
 
 
-def select_model(config, model_provider=None, model_name=None):
-
+def select_model(model_provider=None, model_name=None):
+    """根据模型提供者选择模型"""
     model_provider = model_provider or config.model_provider
     model_info = config.model_names.get(model_provider, {})
     model_name = model_name or config.model_name or model_info.get("default", "")
+
 
     logger.info(f"Selecting model from `{model_provider}` with `{model_name}`")
 

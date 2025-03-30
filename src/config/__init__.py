@@ -16,7 +16,7 @@ DEFAULT_MOCK_API = 'this_is_mock_api_key_in_frontend'
 class SimpleConfig(dict):
 
     def __key(self, key):
-        return "" if key is None else key.lower()  # 目前忘记了这里为什么要 lower 了，只能说配置项最好不要有大写的
+        return "" if key is None else key  # 目前忘记了这里为什么要 lower 了，只能说配置项最好不要有大写的
 
     def __str__(self):
         return json.dumps(self)

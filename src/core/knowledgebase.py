@@ -275,13 +275,6 @@ class KnowledgeBase:
     #* Below is the code for retriever #
     ###################################
 
-    def get_retriever(self, db_id):
-        db = self.get_kb_by_id(db_id)
-        if db is None:
-            raise Exception(f"database not found, {db_id}")
-
-        return db.retriever
-
     def query(self, query, db_id, **kwargs):
         db = self.get_kb_by_id(db_id)
 

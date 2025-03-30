@@ -9,7 +9,8 @@ const router = createRouter({
       path: '/',
       name: 'main',
       component: BlankLayout,
-      children: [        {
+      children: [
+        {
           path: '',
           name: 'Home',
           component: () => import('../views/HomeView.vue'),
@@ -29,6 +30,30 @@ const router = createRouter({
           meta: { keepAlive: true }
         }
       ]
+    },
+    {
+      path: '/agent',
+      name: 'agent',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'AgentMain',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true }
+        },
+        {
+          path: ':agent_id',
+          name: 'AgentSinglePage',
+          component: () => import('../components/AgentSingleViewComponent.vue'),
+          meta: { keepAlive: false }
+        }
+      ]
+    },
+    {
+      path: '/agent/:agent_id',
+      name: 'AgentSinglePage',
+      component: () => import('../views/AgentView.vue'),
     },
     {
       path: '/graph',
@@ -96,6 +121,12 @@ const router = createRouter({
           name: 'PDF_to_TXT',
           component: () => import('../components/tools/ConvertToTxtComponent.vue'),
         },
+        {
+          path: 'agent',
+          name: 'Agent',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true }
+        }
       ]
     },
     {
