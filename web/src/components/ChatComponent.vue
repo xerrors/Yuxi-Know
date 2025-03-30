@@ -118,7 +118,11 @@
         >
           请求错误，请重试。{{ message.message }}
         </div>
-        <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" />
+        <div v-if="message.isStoppedByUser" class="retry-hint">
+          你停止生成了本次回答
+          <span class="retry-link" @click="retryStoppedMessage(message)">重新编辑问题</span>
+        </div>
+          <RefsComponent v-if="message.role=='received' && message.status=='finished'" :message="message" :conv="conv" @regenerateMessage="regenerateMessage" />
       </div>
     </div>
     <div class="bottom">
@@ -171,9 +175,19 @@
             </a-dropdown>
           </div>
           <div class="options__right">
-            <a-button size="large" @click="sendMessage" :disabled="(!conv.inputText && !isStreaming)" type="link">
-              <template #icon> <ArrowUpOutlined v-if="!isStreaming" /> <LoadingOutlined v-else/> </template>
-            </a-button>
+            <a-tooltip :title="isStreaming ? '停止回答' : ''">
+              <a-button
+                size="large"
+                @click="handleSendOrStop"
+                :disabled="(!conv.inputText && !isStreaming)"
+                type="link"
+              >
+                <template #icon>
+                  <PauseOutlined v-if="isStreaming" />
+                  <ArrowUpOutlined v-else />
+                </template>
+              </a-button>
+            </a-tooltip>
           </div>
         </div>
       </div>
@@ -206,6 +220,9 @@ import {
   BulbOutlined,
   CaretRightOutlined,
   DeploymentUnitOutlined,
+  PauseOutlined,
+  ReloadOutlined,
+  CopyOutlined
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { Marked } from 'marked';
@@ -254,7 +271,7 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   selectedKB: null,
   stream: true,
   summary_title: false,
-  history_round: 5,
+  history_round: 20,
   db_id: null,
   fontSize: 'default',
   wideScreen: false,
@@ -284,6 +301,24 @@ const renderMarkdown = (msg) => {
   } else {
     return marked.parse(msg.text)
   }
+}
+
+// 从 message 中获取 history 信息，每个消息都是 {role, content} 的格式
+const getHistory = () => {
+  const history = conv.value.messages.map((msg) => {
+    if (msg.text) {
+      return {
+        role: msg.role === 'sent' ? 'user' : 'assistant',
+        content: msg.text
+      }
+    }
+  }).reduce((acc, cur) => {
+    if (cur) {
+      acc.push(cur)
+    }
+    return acc
+  }, [])
+  return history.slice(-meta.history_round)
 }
 
 const useDatabase = (index) => {
@@ -474,17 +509,24 @@ const loadDatabases = () => {
 
 // 新函数用于处理 fetch 请求
 const fetchChatResponse = (user_input, cur_res_id) => {
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  const params = {
+    query: user_input,
+    history: getHistory(),
+    meta: meta,
+    cur_res_id: cur_res_id,
+  }
+  console.log(params)
+
   fetch('/api/chat/', {
     method: 'POST',
-    body: JSON.stringify({
-      query: user_input,
-      history: conv.value.history,
-      meta: meta,
-      cur_res_id: cur_res_id,
-    }),
+    body: JSON.stringify(params),
     headers: {
       'Content-Type': 'application/json'
-    }
+    },
+    signal // 添加 signal 用于中断请求
   })
   .then((response) => {
     if (!response.body) throw new Error("ReadableStream not supported.");
@@ -542,12 +584,23 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     readChunk();
   })
   .catch((error) => {
-    console.error(error);
-    updateMessage({
-      id: cur_res_id,
-      status: "error",
-    });
+    if (error.name === 'AbortError') {
+      console.log('Fetch aborted');
+    } else {
+      console.error(error);
+      updateMessage({
+        id: cur_res_id,
+        status: "error",
+      });
+    }
     isStreaming.value = false;
+  });
+
+  // 监听 isStreaming 变化，当为 false 时中断请求
+  watch(isStreaming, (newValue) => {
+    if (!newValue) {
+      controller.abort();
+    }
   });
 }
 
@@ -626,6 +679,36 @@ watch(
   { deep: true }
 );
 
+// 处理发送或停止
+const handleSendOrStop = () => {
+  if (isStreaming.value) {
+    // 停止生成
+    isStreaming.value = false;
+    const lastMessage = conv.value.messages[conv.value.messages.length - 1];
+    if (lastMessage) {
+      lastMessage.isStoppedByUser = true;
+      lastMessage.status = 'stopped';
+    }
+  } else {
+    // 发送消息
+    sendMessage();
+  }
+}
+
+// 重试被停止的消息
+const retryStoppedMessage = (message) => {
+  // 找到用户的原始问题
+  const messageIndex = conv.value.messages.findIndex(msg => msg.id === message.id);
+  if (messageIndex > 0) {
+    const userMessage = conv.value.messages[messageIndex - 1];
+    if (userMessage && userMessage.role === 'sent') {
+      conv.value.inputText = userMessage.text;
+      // 删除被停止的消息，以及上次发送的消息
+      conv.value.messages = conv.value.messages.slice(0, messageIndex-1);
+    }
+  }
+}
+
 const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
 const customModels = computed(() => configStore.config?.custom_models || [])
@@ -640,6 +723,13 @@ const selectModel = (provider, name) => {
   configStore.setConfigValue('model_provider', provider)
   configStore.setConfigValue('model_name', name)
   message.success(`已切换到模型: ${provider}/${name}`)
+
+}
+
+// 添加重新生成方法
+const regenerateMessage = (message) => {
+  // 找到用户的原始问题
+  retryMessage(message.id)
 }
 </script>
 
@@ -889,6 +979,9 @@ const selectModel = (provider, name) => {
     padding-left: 0;
     padding-right: 0;
     text-align: justify;
+    position: relative;
+
+
   }
 
   p.message-text {
@@ -1153,6 +1246,34 @@ const selectModel = (provider, name) => {
   gap: 8px;
   .search-switch {
     margin-right: 8px;
+  }
+}
+
+.retry-hint {
+  margin-top: 8px;
+  padding: 8px 16px;
+  color: #666;
+  font-size: 14px;
+  text-align: left;
+}
+
+.retry-link {
+  color: #1890ff;
+  cursor: pointer;
+  margin-left: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.ant-btn-icon-only {
+  &:has(.anticon-stop) {
+    background-color: #ff4d4f !important;
+
+    &:hover {
+      background-color: #ff7875 !important;
+    }
   }
 }
 
