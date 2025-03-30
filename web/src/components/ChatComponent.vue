@@ -684,6 +684,7 @@ const retryStoppedMessage = (message) => {
       conv.value.messages = conv.value.messages.slice(0, messageIndex);
     }
   }
+}
 
 const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
@@ -1241,6 +1242,9 @@ const selectModel = (provider, name) => {
     &:hover {
       background-color: #ff7875 !important;
     }
+  }
+}
+
 .scrollable-menu {
   max-height: 300px;
   overflow-y: auto;
