@@ -115,11 +115,6 @@ import {
   ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
   PlusCircleOutlined
 } from '@ant-design/icons-vue';
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-// import { onClickOutside } from '@vueuse/core';
-import 'highlight.js/styles/github.css';
-import hljs from 'highlight.js';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 
@@ -127,17 +122,6 @@ import MessageComponent from '@/components/MessageComponent.vue'
 const route = useRoute();
 const router = useRouter();
 const useSingleMode = computed(() => !!route.params.agent_id);
-
-// ==================== 初始化配置 ====================
-
-// Markdown渲染配置
-const marked = new Marked(
-  { gfm: true, breaks: true, tables: true },
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code) { return hljs.highlightAuto(code).value; }
-  })
-);
 
 // ==================== 状态管理 ====================
 
@@ -172,11 +156,6 @@ const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
 // ==================== 基础工具函数 ====================
 
-// 渲染Markdown
-const renderMarkdown = (text) => {
-  if (!text) return '';
-  return marked.parse(text);
-};
 
 // 滚动到底部 TODO: 需要优化
 const scrollToBottom = async () => {
