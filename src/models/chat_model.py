@@ -44,7 +44,11 @@ class OpenAIBase():
 
     def get_models(self):
         try:
-            return self.client.models.list()
+            return self.client.models.list(
+                extra_query={
+                    "type": "text"
+                }
+            )
         except Exception as e:
             logger.error(f"Error getting models: {e}")
             return []

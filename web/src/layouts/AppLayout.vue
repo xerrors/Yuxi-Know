@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, KeepAlive, onMounted } from 'vue'
+import { ref, reactive, KeepAlive, onMounted, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   MessageOutlined,
@@ -23,6 +23,7 @@ import {
   ExclamationCircleOutlined,
   RobotOutlined,
   RobotFilled,
+  ApiOutlined,
 } from '@ant-design/icons-vue'
 import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
@@ -75,6 +76,12 @@ onMounted(() => {
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
 console.log(route)
+
+const apiDocsUrl = computed(() => {
+  // return `${import.meta.env.VITE_API_URL || `http://${window.location.hostname}:${window.location.port}`}/docs`
+  return `http://localhost:5050/docs`
+})
+
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = [{
@@ -157,15 +164,29 @@ const mainList = [{
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
       <div class="github nav-item">
-        <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
-          <GithubOutlined class="icon" style="color: #222;"/>
-          <span v-if="githubStars > 0" class="github-stars">
+        <a-tooltip placement="right">
+          <template #title>GitHub</template>
+          <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
+            <GithubOutlined class="icon" style="color: #222;"/>
+            <span v-if="githubStars > 0" class="github-stars">
             <span class="star-count">{{ githubStars }}</span>
-          </span>
-        </a>
+            </span>
+          </a>
+        </a-tooltip>
+      </div>
+      <div class="nav-item api-docs">
+        <a-tooltip placement="right">
+          <template #title>接口文档 {{ apiDocsUrl }}</template>
+          <a :href="apiDocsUrl" target="_blank" class="github-link">
+            <ApiOutlined class="icon" style="color: #222;"/>
+          </a>
+        </a-tooltip>
       </div>
       <RouterLink class="nav-item setting" to="/setting" active-class="active">
-        <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
+        <a-tooltip placement="right">
+          <template #title>设置</template>
+          <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
+        </a-tooltip>
       </RouterLink>
     </div>
     <div class="header-mobile">
@@ -301,6 +322,10 @@ div.header, #app-router-view {
           font-weight: 600;
         }
       }
+    }
+
+    &.api-docs {
+      padding: 10px 12px;
     }
 
     &.setting {
