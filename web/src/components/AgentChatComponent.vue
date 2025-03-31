@@ -1142,10 +1142,6 @@ watch([currentAgent, options, messages, threadId], () => {
 }
 
 @media (max-width: 520px) {
-  .chat {
-    height: calc(100vh - 60px);
-  }
-
   .chat-box {
     padding: 1rem 1rem;
   }
