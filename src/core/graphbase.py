@@ -218,7 +218,19 @@ class GraphDatabase:
 
     def query_by_vector(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, num_of_res=5):
         self.use_database(kgdb_name)
+        def _index_exists(tx, index_name):
+            """检查索引是否存在"""
+            result = tx.run("SHOW INDEXES")
+            for record in result:
+                if record["name"] == index_name:
+                    return True
+            return False
+
         def query(tx, text):
+            # 首先检查索引是否存在
+            if not _index_exists(tx, "entityEmbeddings"):
+                raise Exception("向量索引不存在，请先创建索引")
+
             embedding = self.get_embedding(text)
             result = tx.run("""
             CALL db.index.vector.queryNodes('entityEmbeddings', 10, $embedding)
@@ -227,9 +239,14 @@ class GraphDatabase:
             """, embedding=embedding)
             return result.values()
 
-        with self.driver.session() as session:
-            results = session.execute_read(query, entity_name)
-
+        try:
+            with self.driver.session() as session:
+                results = session.execute_read(query, entity_name)
+        except Exception as e:
+            if "向量索引不存在" in str(e):
+                logger.error(f"向量索引不存在，请先创建索引: {e}, {traceback.format_exc()}")
+                return []
+            raise e
 
         # 筛选出分数高于阈值的实体
         qualified_entities = [result[0] for result in results[:num_of_res] if result[1] > threshold]
