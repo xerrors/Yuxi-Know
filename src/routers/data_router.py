@@ -72,7 +72,7 @@ async def create_document_by_file(db_id: str = Body(...), files: List[str] = Bod
 
 @data.post("/add-by-chunks")
 async def add_by_chunks(db_id: str = Body(...), file_chunks: dict = Body(...)):
-    logger.debug(f"Add chunks in {db_id}: {file_chunks}")
+    # logger.debug(f"Add chunks in {db_id}: {len(file_chunks)} chunks")
     try:
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(

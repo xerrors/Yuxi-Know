@@ -527,7 +527,7 @@ const updateExistingMessage = async (data, existingMsgIndex) => {
 
   // 如果消息状态是loading，更新为processing
   if (msgInstance.status === 'loading') {
-    msgInstance.status = 'processing';
+    msgInstance.status = 'loading';
     msgInstance.run_id = data.metadata?.run_id;
     msgInstance.step = data.metadata?.langgraph_step;
   }

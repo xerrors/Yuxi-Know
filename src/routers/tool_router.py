@@ -50,7 +50,7 @@ async def route_index():
                 description=agent.description,
                 url=f"/agent/{agent.name}",
                 method="POST",
-                metadata=agent.config_schema,
+                metadata=agent.config_schema.to_dict(),
             )
         )
 

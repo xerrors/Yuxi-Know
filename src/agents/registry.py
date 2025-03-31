@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from typing import Type, Annotated, Optional, TypedDict
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
@@ -46,9 +48,40 @@ class Configuration(SimpleConfig):
 
 class BaseAgent():
 
+    """
+    定义一个基础 Agent 供 各类 graph 继承
+    """
+
+    name: str = field(default="base_agent")
+    description: str = field(default="base_agent")
+    config_schema: Configuration = Configuration
+    requirements: list[str]
+
     def __init__(self, **kwargs):
-        pass
+        self.check_requirements()
+
+    def check_requirements(self):
+        if not hasattr(self, "requirements") or not self.requirements:
+            return
+        for requirement in self.requirements:
+            if requirement not in os.environ:
+                raise ValueError(f"{requirement} is not set")
+
+    def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = self.get_graph(config_schema=config_schema, **kwargs)
+        for event in graph.stream({"messages": messages}, stream_mode="values", config=config_schema):
+            yield event["messages"]
+
+    def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = self.get_graph(config_schema=config_schema, **kwargs)
+        conf = self.config_schema.from_runnable_config(config_schema)
+        for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
+            msg_type = msg.type
+
+            return_keys =conf.return_keys
+            if not return_keys or msg_type in return_keys:
+                yield msg, metadata
 
     @abstractmethod
-    def get_graph(self) -> CompiledStateGraph:
+    def get_graph(self, **kwargs) -> CompiledStateGraph:
         pass

@@ -1,3 +1,4 @@
+import os
 import json
 import asyncio
 import traceback
@@ -126,7 +127,7 @@ async def get_agent():
     agents = [{
         "name": agent.name,
         "description": agent.description,
-        "config_schema": agent.config_schema
+        "config_schema": agent.config_schema.to_dict()
     } for agent in agent_manager.agents.values()]
     return {"agents": agents}
 
@@ -138,19 +139,6 @@ def chat_agent(agent_name: str,
                thread_id: str | None = Body(None)):
 
     meta["server_model_name"] = agent_name
-    agent = agent_manager.get_runnable_agent(agent_name)
-
-    history_manager = HistoryManager(history)
-    messages = history_manager.get_history_with_msg(query, max_rounds=meta.get('history_round'))
-    history_manager.add_user(query)  # 注意这里使用原始查询
-
-    runnable_config = {
-        "configurable": {
-            "thread_id": thread_id or str(uuid.uuid4()),
-            "use_web": meta.get("use_web", False),
-            "return_keys": []
-        }
-    }
 
     def make_chunk(content=None, **kwargs):
         return json.dumps({
@@ -159,6 +147,23 @@ def chat_agent(agent_name: str,
             "meta": meta,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
+
+    try:
+        agent = agent_manager.get_runnable_agent(agent_name)
+    except Exception as e:
+        logger.error(f"Error getting agent {agent_name}: {e}")
+        return StreamingResponse(make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error"), media_type='application/json')
+
+    history_manager = HistoryManager(history)
+    messages = history_manager.get_history_with_msg(query, max_rounds=meta.get('history_round'))
+    history_manager.add_user(query)  # 注意这里使用原始查询
+
+    runnable_config = {
+        "configurable": {
+            "thread_id": thread_id or str(uuid.uuid4()),
+            "return_keys": []
+        }
+    }
 
     def stream_messages():
         content = ""
