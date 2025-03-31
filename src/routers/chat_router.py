@@ -24,12 +24,37 @@ async def chat_get():
 def chat_post(
         query: str = Body(...),
         meta: dict = Body(None),
-        history: list | None = Body(None),
+        history: list[dict] | None = Body(None),
         thread_id: str | None = Body(None)):
+    """处理聊天请求的主要端点。
+
+    Args:
+        query: 用户的输入查询文本
+        meta: 包含请求元数据的字典，可以包含以下字段：
+            - use_web: 是否使用网络搜索
+            - use_graph: 是否使用知识图谱
+            - db_id: 数据库ID
+            - history_round: 历史对话轮数限制
+            - system_prompt: 系统提示词（str，不含变量）
+        history: 对话历史记录列表
+        thread_id: 对话线程ID
+
+    Returns:
+        StreamingResponse: 返回一个流式响应，包含以下状态：
+            - searching: 正在搜索知识库
+            - generating: 正在生成回答
+            - reasoning: 正在推理
+            - loading: 正在加载回答
+            - finished: 回答完成
+            - error: 发生错误
+
+    Raises:
+        HTTPException: 当检索器或模型发生错误时抛出
+    """
 
     model = select_model()
     meta["server_model_name"] = model.model_name
-    history_manager = HistoryManager(history)
+    history_manager = HistoryManager(history, system_prompt=meta.get("system_prompt"))
     logger.debug(f"Received query: {query} with meta: {meta}")
 
     def make_chunk(content=None, **kwargs):
