@@ -184,3 +184,9 @@ def chat_agent(agent_name: str,
         yield make_chunk(status="finished", history=history_manager.update_ai(content))
 
     return StreamingResponse(stream_messages(), media_type='application/json')
+
+@chat.get("/models")
+async def get_chat_models(model_provider: str):
+    """获取指定模型提供商的模型列表"""
+    model = select_model(model_provider=model_provider)
+    return {"models": model.get_models()}
