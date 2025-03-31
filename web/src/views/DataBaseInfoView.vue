@@ -558,29 +558,43 @@ const getDatabaseInfo = () => {
 
 const deleteFile = (fileId) => {
   console.log(fileId)
-  state.lock = true
-  fetch('/api/data/document', {
-    method: "DELETE",
-    headers: {
-      "Content-Type": "application/json"  // 添加 Content-Type 头
+  //删除提示
+  Modal.confirm({
+    title: '删除文件',
+    content: '确定要删除该文件吗？',
+    okText: '确认',
+    cancelText: '取消',
+    onOk: () => { 
+        state.lock = true
+        fetch('/api/data/document', {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json"  // 添加 Content-Type 头
+          },
+          body: JSON.stringify({
+            db_id: databaseId.value,
+            file_id: fileId
+          }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log(data)
+            message.success(data.message)
+            getDatabaseInfo()
+          })
+          .catch(error => {
+            console.error(error)
+              message.error(error.message)
+            })
+            .finally(() => {
+              state.lock = false
+            })
     },
-    body: JSON.stringify({
-      db_id: databaseId.value,
-      file_id: fileId
-    }),
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      message.success(data.message)
-      getDatabaseInfo()
-    })
-    .catch(error => {
-      console.error(error)
-      message.error(error.message)
-    })
+    onCancel: () => {
+      console.log('Cancel');
+    },
+  });
 }
-
 
 const chunkParams = ref({
   chunk_size: 1000,

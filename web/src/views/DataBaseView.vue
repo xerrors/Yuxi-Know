@@ -9,7 +9,7 @@
       </template>
     </HeaderComponent>
 
-    <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase">
+    <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase" @cancel="newDatabase.open=false">
       <h3>数据库名称<span style="color: var(--error-color)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建数据库名称" />
       <h3 style="margin-top: 20px;">数据库描述</h3>
