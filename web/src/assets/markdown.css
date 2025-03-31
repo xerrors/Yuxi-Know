@@ -16,6 +16,11 @@
 
 .message-md pre code.hljs {
     font-size: 0.8rem;
+    font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
+    line-height: 1.5;
+    letter-spacing: 0.025em;
+    tab-size: 4;
+    -moz-tab-size: 4;
     background-color: var(--gray-100);
 }
 

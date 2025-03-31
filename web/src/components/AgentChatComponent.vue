@@ -3,29 +3,31 @@
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
-          <a-dropdown v-if="!useSingleMode">
-            <div class="current-agent nav-btn">
-              <RobotOutlined />&nbsp;
-              <span v-if="currentAgent">{{ currentAgent.name }}</span>
-              <span v-else>请选择智能体</span>
-            </div>
-            <template #overlay>
-              <a-menu @click="({key}) => selectAgent(key)">
-                <a-menu-item v-for="(agent, name) in agents" :key="name">
-                  <RobotOutlined /> {{ agent.name }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+          <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
+            <PlusCircleOutlined /> <span class="text">新对话</span>
+          </div>
+        </div>
+        <div class="header__right">
+          <div v-if="!props.agentId" class="current-agent nav-btn">
+            <a-dropdown>
+              <div class="current-agent nav-btn">
+                <RobotOutlined />&nbsp;
+                <span v-if="currentAgent">{{ currentAgent.name }}</span>
+                <span v-else>请选择智能体</span>
+              </div>
+              <template #overlay>
+                <a-menu @click="({key}) => selectAgent(key)">
+                  <a-menu-item v-for="(agent, name) in agents" :key="name">
+                    <RobotOutlined /> {{ agent.name }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </div>
           <div v-else class="current-agent nav-btn">
             <RobotOutlined />&nbsp;
             <span v-if="currentAgent">{{ currentAgent.name }}</span>
             <span v-else>加载中...</span>
-          </div>
-        </div>
-        <div class="header__right">
-          <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
-            <PlusCircleOutlined /> <span class="text">新对话</span>
           </div>
         </div>
       </div>
@@ -118,10 +120,17 @@ import {
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 
-// ========= 加载路由参数并获取 agent id ====================
+// 新增props属性，允许父组件传入agentId
+const props = defineProps({
+  agentId: {
+    type: String,
+    default: null
+  }
+});
+
+// 移除路由相关逻辑，使用props
 const route = useRoute();
 const router = useRouter();
-const useSingleMode = computed(() => !!route.params.agent_id);
 
 // ==================== 状态管理 ====================
 
@@ -262,7 +271,6 @@ const prepareMessageHistory = (msgs) => {
 
 // 选择智能体
 const selectAgent = (agentName) => {
-  if (useSingleMode.value) return; // 单页面模式下不允许切换智能体
   currentAgent.value = agents.value[agentName];
   messages.value = [];
   threadId.value = null;
@@ -638,8 +646,7 @@ onMounted(async () => {
     await fetchAgents();
 
     // 检查加载状态
-    console.log("单页面模式:", useSingleMode.value);
-    console.log("路由参数:", route.params.agent_id);
+    console.log("路由参数:", props.agentId);
     console.log("智能体列表:", Object.keys(agents.value));
 
     // 初始加载 - 确保使用 Vue Router 的解析后路由
@@ -652,26 +659,6 @@ onMounted(async () => {
     console.error("组件挂载出错:", error);
   }
 });
-
-// 添加路由参数变化监听
-watch(() => route.params.agent_id, async (newAgentId, oldAgentId) => {
-  try {
-    console.log("路由参数变化", oldAgentId, "->", newAgentId);
-
-    // 如果路由参数变化了（包括从有参数变为无参数的情况）
-    if (oldAgentId !== newAgentId) {
-      // 重置会话
-      messages.value = [];
-      threadId.value = null;
-      resetStatusSteps();
-
-      // 加载新的智能体数据
-      await loadAgentData();
-    }
-  } catch (error) {
-    console.error('路由参数变化处理出错:', error);
-  }
-}, { immediate: true });
 
 // 处理元数据
 const handleMetadata = (data) => {
@@ -708,8 +695,8 @@ const toggleToolCall = (toolCallId) => {
 const loadState = () => {
   try {
     // 确定存储前缀
-    const storagePrefix = useSingleMode.value ?
-      (route.params.agent_id ? `agent-single-${route.params.agent_id}` : null) :
+    const storagePrefix = props.agentId ?
+      `agent-${props.agentId}` :
       'agent-multi';
 
     if (!storagePrefix) {
@@ -718,17 +705,6 @@ const loadState = () => {
     }
 
     console.log("loadState with prefix:", storagePrefix);
-
-    // 在单页面模式下，直接从路由参数加载智能体
-    if (useSingleMode.value) {
-      // 智能体已在 loadAgentData 中设置，这里不再需要重复设置
-    } else {
-      // 多智能体模式下，从本地存储加载当前选择的智能体
-      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
-      if (savedAgent && agents.value && agents.value[savedAgent]) {
-        currentAgent.value = agents.value[savedAgent];
-      }
-    }
 
     // 加载设置选项
     const savedOptions = localStorage.getItem(`${storagePrefix}-options`);
@@ -768,6 +744,62 @@ const loadState = () => {
   }
 };
 
+// 监听agentId变化
+watch(() => props.agentId, async (newAgentId, oldAgentId) => {
+  try {
+    console.log("智能体ID变化", oldAgentId, "->", newAgentId);
+
+    // 如果变化了，重置会话并加载新数据
+    if (newAgentId !== oldAgentId) {
+      // 重置会话
+      messages.value = [];
+      threadId.value = null;
+      resetStatusSteps();
+
+      // 加载新的智能体数据
+      await loadAgentData();
+    }
+  } catch (error) {
+    console.error('智能体ID变化处理出错:', error);
+  }
+}, { immediate: true });
+
+// 加载智能体数据的方法
+const loadAgentData = async () => {
+  try {
+    // 确保智能体列表已加载
+    if (Object.keys(agents.value).length === 0) {
+      await fetchAgents();
+    }
+
+    // 设置当前智能体
+    if (props.agentId && agents.value && agents.value[props.agentId]) {
+      // 如果传入了指定的agentId，就加载对应的智能体
+      currentAgent.value = agents.value[props.agentId];
+      console.log("设置当前智能体", currentAgent.value.name);
+    } else if (!props.agentId) {
+      // 多智能体模式下，尝试从本地存储恢复上次选择的智能体
+      const storagePrefix = 'agent-multi';
+      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
+      if (savedAgent && agents.value && agents.value[savedAgent]) {
+        currentAgent.value = agents.value[savedAgent];
+        console.log("从存储中恢复智能体", currentAgent.value.name);
+      }
+    }
+
+    // 加载保存的状态
+    loadState();
+
+    // 处理消息历史
+    if (messages.value && messages.value.length > 0) {
+      console.log("处理消息历史:", messages.value.length);
+      messages.value = prepareMessageHistory(messages.value);
+    }
+  } catch (error) {
+    console.error('加载智能体数据出错:', error);
+  }
+};
+
 // 保存状态到localStorage
 const saveState = () => {
   try {
@@ -777,21 +809,12 @@ const saveState = () => {
       return;
     }
 
-    // 确定存储前缀 - 确保agent_id总是可用
-    let prefix = 'agent-multi';
-    if (useSingleMode.value) {
-      if (route.params.agent_id) {
-        prefix = `agent-single-${route.params.agent_id}`;
-      } else {
-        console.error("保存状态时缺少agent_id");
-        return; // 不保存
-      }
-    }
-
+    // 确定存储前缀
+    const prefix = props.agentId ? `agent-${props.agentId}` : 'agent-multi';
     console.log("saveState with prefix:", prefix);
 
-    // 多智能体模式下，保存当前选择的智能体
-    if (!useSingleMode.value && currentAgent.value) {
+    // 如果是多智能体模式，保存当前选择的智能体
+    if (!props.agentId && currentAgent.value) {
       localStorage.setItem(`${prefix}-current-agent`, currentAgent.value.name);
     }
 
@@ -815,38 +838,6 @@ const saveState = () => {
     }
   } catch (error) {
     console.error('保存状态到localStorage出错:', error);
-  }
-};
-
-// 加载智能体数据的方法
-const loadAgentData = async () => {
-  try {
-    // 确保智能体列表已加载
-    if (Object.keys(agents.value).length === 0) {
-      await fetchAgents();
-    }
-
-    // 在单页面模式下，设置当前智能体
-    if (useSingleMode.value && route.params.agent_id) {
-      const agentId = route.params.agent_id;
-      if (agents.value && agents.value[agentId]) {
-        currentAgent.value = agents.value[agentId];
-        console.log("设置当前智能体", currentAgent.value.name);
-      } else {
-        console.error("未找到指定的智能体:", agentId);
-      }
-    }
-
-    // 加载保存的状态 - 在设置好currentAgent后再加载状态
-    loadState();
-
-    // 处理消息历史
-    if (messages.value && messages.value.length > 0) {
-      console.log("处理消息历史:", messages.value.length);
-      messages.value = prepareMessageHistory(messages.value);
-    }
-  } catch (error) {
-    console.error('加载智能体数据出错:', error);
   }
 };
 
