@@ -10,12 +10,12 @@
     padding: 1rem;
 }
 
-.message-md pre:has(code.hljs) {
+.message-md pre:has(code) {
     padding: 0;
 }
 
-.message-md pre code.hljs {
-    font-size: 0.8rem;
+.message-md pre code {
+    font-size: 13px;
     font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
     line-height: 1.5;
     letter-spacing: 0.025em;
