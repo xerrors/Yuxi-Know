@@ -142,9 +142,11 @@
                 <p>添加的模型是兼容 OpenAI 的模型，比如 vllm，Ollama。</p>
                 <a-form :model="customModel" layout="vertical" >
                   <a-form-item label="模型名称" name="name" :rules="[{ required: true, message: '请输入模型名称' }]">
+                    <p class="form-item-description">调用的模型的名称</p>
                     <a-input v-model:value="customModel.name" :disabled="customModel.edit_type == 'edit'"/>
                   </a-form-item>
                   <a-form-item label="API Base" name="api_base" :rules="[{ required: true, message: '请输入API Base' }]">
+                    <p class="form-item-description">比如 <code>http://localhost:11434/v1</code></p>
                     <a-input v-model:value="customModel.api_base" />
                   </a-form-item>
                   <a-form-item label="API KEY" name="api_key">
@@ -738,6 +740,11 @@ const sendRestart = () => {
             .custom-model-modal {
               .ant-form-item {
                 margin-bottom: 10px;
+                .form-item-description {
+                  font-size: 12px;
+                  color: var(--gray-600);
+                  margin-bottom: 10px;
+                }
               }
             }
           }
