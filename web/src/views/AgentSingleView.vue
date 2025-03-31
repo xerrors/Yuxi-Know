@@ -1,6 +1,6 @@
 <template>
   <div>
-    <h1>Agent</h1>
+    <h1>Agent Single View</h1>
   </div>
 </template>
 

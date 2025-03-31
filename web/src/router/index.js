@@ -31,29 +31,29 @@ const router = createRouter({
         }
       ]
     },
-    {
-      path: '/agent',
-      name: 'agent',
-      component: AppLayout,
-      children: [
-        {
-          path: '',
-          name: 'AgentMain',
-          component: () => import('../views/AgentView.vue'),
-          meta: { keepAlive: true }
-        },
-        {
-          path: ':agent_id',
-          name: 'AgentSinglePage',
-          component: () => import('../components/AgentSingleViewComponent.vue'),
-          meta: { keepAlive: false }
-        }
-      ]
-    },
+    // {
+    //   path: '/agent',
+    //   name: 'agent',
+    //   component: AppLayout,
+    //   children: [
+    //     {
+    //       path: '',
+    //       name: 'AgentMain',
+    //       component: () => import('../views/AgentView.vue'),
+    //       meta: { keepAlive: true }
+    //     },
+    //     {
+    //       path: ':agent_id',
+    //       name: 'AgentSinglePage',
+    //       component: () => import('../components/AgentSingleViewComponent.vue'),
+    //       meta: { keepAlive: false }
+    //     }
+    //   ]
+    // },
     {
       path: '/agent/:agent_id',
       name: 'AgentSinglePage',
-      component: () => import('../views/AgentView.vue'),
+      component: () => import('../components/AgentChatComponent.vue'),
     },
     {
       path: '/graph',
