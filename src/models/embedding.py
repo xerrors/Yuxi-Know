@@ -43,7 +43,7 @@ class BaseEmbeddingModel:
             group_msg = messages[i:i+batch_size]
             logger.info(f"Encoding {i} to {i+batch_size} with {len(messages)} messages")
             response = self.encode(group_msg)
-            logger.debug(f"Response: {len(response)=}, {len(group_msg)=}, {len(response[0])=}")
+            # logger.debug(f"Response: {len(response)=}, {len(group_msg)=}, {len(response[0])=}")
             data.extend(response)
 
         if len(messages) > batch_size:
