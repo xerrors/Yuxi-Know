@@ -3,6 +3,7 @@
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
+          <slot name="header-left" class="nav-btn"></slot>
           <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
             <PlusCircleOutlined /> <span class="text">新对话</span>
           </div>

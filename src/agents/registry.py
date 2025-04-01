@@ -60,6 +60,15 @@ class BaseAgent():
     def __init__(self, **kwargs):
         self.check_requirements()
 
+    @classmethod
+    def get_info(cls):
+        return {
+            "name": cls.name,
+            "description": cls.description,
+            "config_schema": cls.config_schema.to_dict(),
+            "requirements": cls.requirements if hasattr(cls, "requirements") else [],
+        }
+
     def check_requirements(self):
         if not hasattr(self, "requirements") or not self.requirements:
             return

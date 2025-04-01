@@ -124,11 +124,7 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
 
 @chat.get("/agent")
 async def get_agent():
-    agents = [{
-        "name": agent.name,
-        "description": agent.description,
-        "config_schema": agent.config_schema.to_dict()
-    } for agent in agent_manager.agents.values()]
+    agents = [agent.get_info() for agent in agent_manager.agents.values()]
     return {"agents": agents}
 
 @chat.post("/agent/{agent_name}")
