@@ -6,14 +6,13 @@ from datetime import datetime
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langgraph.checkpoint.memory import MemorySaver # 实际上没有起作用
 
 
 from src.agents.registry import State, BaseAgent
 from src.agents.utils import load_chat_model
-from src.agents.tools_factory import multiply, add, subtract, divide
 from src.agents.chatbot.configuration import ChatbotConfiguration
+from src.agents.tools_factory import _TOOLS_REGISTRY
 
 class ChatbotAgent(BaseAgent):
     name = "chatbot"
@@ -27,14 +26,15 @@ class ChatbotAgent(BaseAgent):
 
     def _get_tools(self, config_schema: RunnableConfig):
         """根据配置获取工具"""
-        tools = [multiply, add, subtract, divide, TavilySearchResults(max_results=10)]
-        return tools
+        default_tools_names = config_schema.get("tools", [])
+        default_tools = [_TOOLS_REGISTRY[tool] for tool in default_tools_names]
+        return default_tools
 
     def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
         """调用 llm 模型"""
         config_schema = config or {}
         conf = self.config_schema.from_runnable_config(config_schema)
-        model = load_chat_model(conf.model)
+        model = load_chat_model(conf.model, temperature=conf.temperature)
         model_with_tools = model.bind_tools(self._get_tools(config_schema))
 
         res = model_with_tools.invoke(

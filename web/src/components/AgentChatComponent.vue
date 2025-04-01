@@ -8,28 +8,16 @@
             <PlusCircleOutlined /> <span class="text">新对话</span>
           </div>
         </div>
+        <div class="header__center">
+          <slot name="header-center"></slot>
+        </div>
         <div class="header__right">
-          <div v-if="!props.agentId" class="current-agent nav-btn">
-            <a-dropdown>
-              <div class="current-agent nav-btn">
-                <RobotOutlined />&nbsp;
-                <span v-if="currentAgent">{{ currentAgent.name }}</span>
-                <span v-else>请选择智能体</span>
-              </div>
-              <template #overlay>
-                <a-menu @click="({key}) => selectAgent(key)">
-                  <a-menu-item v-for="(agent, name) in agents" :key="name">
-                    <RobotOutlined /> {{ agent.name }}
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-          <div v-else class="current-agent nav-btn">
+          <div class="current-agent nav-btn" @click="sayHi">
             <RobotOutlined />&nbsp;
             <span v-if="currentAgent">{{ currentAgent.name }}</span>
             <span v-else>加载中...</span>
           </div>
+          <slot name="header-right"></slot>
         </div>
       </div>
 
@@ -38,7 +26,7 @@
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
       </div>
 
-      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': options.debug_mode }">
+      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': config.debug_mode }">
         <MessageComponent
           v-for="(message, index) in messages"
           :message="message"
@@ -46,7 +34,7 @@
           :is-processing="isProcessing"
           @retry="retryMessage(index)"
         >
-          <div v-if="options.debug_mode" class="status-info">{{ message }}</div>
+          <div v-if="config.debug_mode" class="status-info">{{ message }}</div>
 
           <!-- 工具调用 -->
           <template #tool-calls>
@@ -112,12 +100,12 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
 import {
   RobotOutlined, SendOutlined, LoadingOutlined,
   ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
   PlusCircleOutlined
 } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 
@@ -126,23 +114,18 @@ const props = defineProps({
   agentId: {
     type: String,
     default: null
+  },
+  config: {
+    type: Object,
+    default: () => ({})
   }
 });
-
-// 移除路由相关逻辑，使用props
-const route = useRoute();
-const router = useRouter();
 
 // ==================== 状态管理 ====================
 
 // UI状态
 const state = reactive({});
 
-// 应用选项
-const options = reactive({
-  use_web: true,
-  debug_mode: false,
-});
 
 // DOM引用
 const messagesContainer = ref(null);
@@ -153,7 +136,6 @@ const currentAgent = ref(null);        // 当前选中的智能体
 const userInput = ref('');             // 用户输入
 const messages = ref([]);              // 消息列表
 const isProcessing = ref(false);       // 是否正在处理请求
-const threadId = ref(null);            // 会话线程ID
 
 // ==================== 工具调用相关 ====================
 
@@ -200,7 +182,6 @@ const resetStatusSteps = () => {
 
 // 重置线程
 const resetThread = () => {
-  threadId.value = null;
   messages.value = [];
   resetStatusSteps();
   saveState();
@@ -274,7 +255,6 @@ const prepareMessageHistory = (msgs) => {
 const selectAgent = (agentName) => {
   currentAgent.value = agents.value[agentName];
   messages.value = [];
-  threadId.value = null;
   resetStatusSteps();
   saveState();
 };
@@ -352,11 +332,10 @@ const sendMessageWithText = async (text) => {
     // 设置请求参数
     const requestData = {
       query: userMessage,
-      meta: {
-        use_web: options.use_web
-      },
       history: history.slice(0, -1), // 去掉最后一条刚添加的用户消息
-      thread_id: threadId.value
+      config: {
+        ...props.config
+      }
     };
 
     // 发送请求
@@ -663,11 +642,6 @@ onMounted(async () => {
 
 // 处理元数据
 const handleMetadata = (data) => {
-  // 更新线程ID
-  if (data.metadata?.thread_id && !threadId.value) {
-    threadId.value = data.metadata.thread_id;
-  }
-
   // 检查并更新运行ID
   if (data.metadata?.run_id && !currentRunId.value) {
     currentRunId.value = data.metadata.run_id;
@@ -707,16 +681,6 @@ const loadState = () => {
 
     console.log("loadState with prefix:", storagePrefix);
 
-    // 加载设置选项
-    const savedOptions = localStorage.getItem(`${storagePrefix}-options`);
-    if (savedOptions) {
-      try {
-        Object.assign(options, JSON.parse(savedOptions));
-      } catch (e) {
-        console.error('解析选项数据出错:', e);
-      }
-    }
-
     // 加载消息历史
     const savedMessages = localStorage.getItem(`${storagePrefix}-messages`);
     if (savedMessages) {
@@ -737,8 +701,8 @@ const loadState = () => {
     // 加载线程ID
     const savedThreadId = localStorage.getItem(`${storagePrefix}-thread-id`);
     if (savedThreadId) {
-      threadId.value = savedThreadId;
-      console.log(`加载线程ID (${storagePrefix}):`, threadId.value);
+      currentRunId.value = savedThreadId;
+      console.log(`加载线程ID (${storagePrefix}):`, currentRunId.value);
     }
   } catch (error) {
     console.error('从localStorage加载状态出错:', error);
@@ -754,7 +718,7 @@ watch(() => props.agentId, async (newAgentId, oldAgentId) => {
     if (newAgentId !== oldAgentId) {
       // 重置会话
       messages.value = [];
-      threadId.value = null;
+      currentRunId.value = null;
       resetStatusSteps();
 
       // 加载新的智能体数据
@@ -819,9 +783,6 @@ const saveState = () => {
       localStorage.setItem(`${prefix}-current-agent`, currentAgent.value.name);
     }
 
-    // 保存设置选项
-    localStorage.setItem(`${prefix}-options`, JSON.stringify(options));
-
     // 保存消息历史
     if (messages.value && messages.value.length > 0) {
       console.log(`保存消息历史 (${prefix}):`, messages.value.length);
@@ -831,9 +792,9 @@ const saveState = () => {
     }
 
     // 保存线程ID
-    if (threadId.value) {
-      localStorage.setItem(`${prefix}-thread-id`, threadId.value);
-      console.log(`保存线程ID (${prefix}):`, threadId.value);
+    if (currentRunId.value) {
+      localStorage.setItem(`${prefix}-thread-id`, currentRunId.value);
+      console.log(`保存线程ID (${prefix}):`, currentRunId.value);
     } else {
       localStorage.removeItem(`${prefix}-thread-id`);
     }
@@ -842,8 +803,12 @@ const saveState = () => {
   }
 };
 
+const sayHi = () => {
+  message.success(`Hi, I am ${currentAgent.value.name}, ${currentAgent.value.description}`);
+}
+
 // 监听状态变化并保存
-watch([currentAgent, options, messages, threadId], () => {
+watch([currentAgent, messages, currentRunId], () => {
   try {
     saveState();
   } catch (error) {

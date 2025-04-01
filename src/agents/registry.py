@@ -42,7 +42,9 @@ class Configuration(SimpleConfig):
 
     @classmethod
     def to_dict(cls):
-        return {f.name: getattr(cls, f.name) for f in fields(cls) if f.init}
+        # 创建一个实例来处理 default_factory
+        instance = cls()
+        return {f.name: getattr(instance, f.name) for f in fields(cls) if f.init}
 
 
 
@@ -84,12 +86,13 @@ class BaseAgent():
     def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)
         conf = self.config_schema.from_runnable_config(config_schema)
-        for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
-            msg_type = msg.type
 
-            return_keys =conf.return_keys
-            if not return_keys or msg_type in return_keys:
-                yield msg, metadata
+        for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
+            # msg_type = msg.type
+            # return_keys = conf.get("return_keys", [])
+            # if not return_keys or msg_type in return_keys:
+            #     yield msg, metadata
+            yield msg, metadata
 
     @abstractmethod
     def get_graph(self, **kwargs) -> CompiledStateGraph:

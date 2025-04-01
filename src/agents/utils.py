@@ -7,14 +7,23 @@ from langchain_core.messages import AIMessageChunk, ToolMessage
 
 
 
-def load_chat_model(fully_specified_name: str) -> BaseChatModel:
+def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     """Load a chat model from a fully specified name.
 
     Args:
         fully_specified_name (str): String in the format 'provider/model'.
+        **kwargs: Additional parameters to pass to the model.
     """
     provider, model = fully_specified_name.split("/", maxsplit=1)
-    return select_model(model_name=model, model_provider=provider).chat_open_ai
+    model_instance = select_model(model_name=model, model_provider=provider)
+
+    # 配置额外参数，如temperature
+    if kwargs and hasattr(model_instance, 'chat_open_ai'):
+        for key, value in kwargs.items():
+            if value is not None:
+                setattr(model_instance.chat_open_ai, key, value)
+
+    return model_instance.chat_open_ai
 
 
 def agent_cli(agent: BaseAgent, config: RunnableConfig = None):

@@ -130,17 +130,21 @@ async def get_agent():
 @chat.post("/agent/{agent_name}")
 def chat_agent(agent_name: str,
                query: str = Body(...),
-               meta: dict = Body({}),
                history: list = Body(...),
-               thread_id: str | None = Body(None)):
+               config: dict = Body({})):
 
-    meta["server_model_name"] = agent_name
-
+    # 将meta和thread_id整合到config中
     def make_chunk(content=None, **kwargs):
+        chat_metadata = {
+            "agent_name": agent_name,
+            "thread_id": config.get("thread_id"),
+        }
+        if update_metadata := kwargs.get("chat_metadata"):
+            chat_metadata.update(update_metadata)
+
         return json.dumps({
             "response": content,
-            "model_name": agent_name,
-            "meta": meta,
+            "chat_metadata": chat_metadata,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
@@ -150,22 +154,27 @@ def chat_agent(agent_name: str,
         logger.error(f"Error getting agent {agent_name}: {e}")
         return StreamingResponse(make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error"), media_type='application/json')
 
+    # 从config中获取history_round
+    history_round = config.get("history_round")
     history_manager = HistoryManager(history)
-    messages = history_manager.get_history_with_msg(query, max_rounds=meta.get('history_round'))
-    history_manager.add_user(query)  # 注意这里使用原始查询
+    messages = history_manager.get_history_with_msg(query, max_rounds=history_round)
+    history_manager.add_user(query)
 
+    # 如果没有thread_id则生成一个
+    if "thread_id" not in config or not config["thread_id"]:
+        config["thread_id"] = str(uuid.uuid4())
+
+    # 构造运行时配置
     runnable_config = {
         "configurable": {
-            "thread_id": thread_id or str(uuid.uuid4()),
-            "return_keys": []
+            **config
         }
     }
 
     def stream_messages():
         content = ""
-        yield make_chunk(status="waiting")
-        for msg, metadata in agent.stream_messages(messages, runnable_config):
-            # logger.debug(f">>>>>    msg: {msg.model_dump()}, >>>>>>>      {metadata=}")
+        yield make_chunk(status="init")
+        for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
             if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
                 content += msg.content
                 yield make_chunk(content=msg.content,

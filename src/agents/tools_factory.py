@@ -6,9 +6,7 @@ from typing import Any, Callable, Optional, Type, Union
 
 from pydantic import BaseModel, Field
 from langchain_core.tools import tool, BaseTool
-
-
-_TOOLS_REGISTRY = {}
+from langchain_community.tools.tavily_search import TavilySearchResults
 
 # refs https://github.com/chatchat-space/LangGraph-Chatchat chatchat-server/chatchat/server/agent/tools_factory/tools_registry.py
 def regist_tool(
@@ -115,3 +113,12 @@ def subtract(first_int: int, second_int: int) -> int:
 def divide(first_int: int, second_int: int) -> int:
     """Divide two integers."""
     return first_int / second_int
+
+
+_TOOLS_REGISTRY = {
+    "multiply": multiply,
+    "add": add,
+    "subtract": subtract,
+    "divide": divide,
+    "TavilySearchResults": TavilySearchResults(max_results=10),
+}
