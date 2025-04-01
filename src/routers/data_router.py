@@ -127,6 +127,7 @@ async def upload_file(
     basename, ext = os.path.splitext(file.filename)
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
+    os.makedirs(upload_dir, exist_ok=True)
 
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())

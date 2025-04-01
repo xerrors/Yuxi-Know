@@ -350,10 +350,10 @@ class GraphDatabase:
                 with self.driver.session() as session:
                     graph_info = session.execute_read(query)
 
-            # 添加时间戳
-            from datetime import datetime
-            graph_info["last_updated"] = datetime.now().isoformat()
-            return graph_info
+                    # 添加时间戳
+                    from datetime import datetime
+                    graph_info["last_updated"] = datetime.now().isoformat()
+                    return graph_info
 
         except Exception as e:
             logger.error(f"获取图数据库信息失败：{e}, {traceback.format_exc()}")
