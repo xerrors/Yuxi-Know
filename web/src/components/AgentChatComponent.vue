@@ -26,15 +26,16 @@
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
       </div>
 
-      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': config.debug_mode }">
+      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': state.debug_mode }">
         <MessageComponent
           v-for="(message, index) in messages"
           :message="message"
           :key="index"
           :is-processing="isProcessing"
-          @retry="retryMessage(index)"
+          :show-refs="showMsgRefs(message)"
+          @retry="retryMessage(message)"
         >
-          <div v-if="config.debug_mode" class="status-info">{{ message }}</div>
+          <div v-if="state.debug_mode" class="status-info">{{ message }}</div>
 
           <!-- 工具调用 -->
           <template #tool-calls>
@@ -66,7 +67,7 @@
                     </div>
                     <div class="tool-params" v-if="toolCall.toolResultMsg && toolCall.toolResultMsg.content">
                       <div class="tool-params-header">
-                        执行结果:
+                        执行结果
                       </div>
                       <div class="tool-params-content">{{ toolCall.toolResultMsg.content }}</div>
                     </div>
@@ -118,14 +119,23 @@ const props = defineProps({
   config: {
     type: Object,
     default: () => ({})
+  },
+  state: {
+    type: Object,
+    default: () => ({})
   }
 });
 
 // ==================== 状态管理 ====================
 
 // UI状态
-const state = reactive({});
-
+const state = ref(props.state);
+const showMsgRefs = (msg) => {
+  if (msg.isLast) {
+    return ['copy', 'regenerate']
+  }
+  return false
+}
 
 // DOM引用
 const messagesContainer = ref(null);
@@ -251,14 +261,6 @@ const prepareMessageHistory = (msgs) => {
 
 // ==================== 用户交互处理 ====================
 
-// 选择智能体
-const selectAgent = (agentName) => {
-  currentAgent.value = agents.value[agentName];
-  messages.value = [];
-  resetStatusSteps();
-  saveState();
-};
-
 // 处理键盘事件
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -287,16 +289,17 @@ const sendMessage = () => {
 };
 
 // 重试消息
-const retryMessage = (index) => {
-  // 获取用户消息
-  const userMessage = messages.value[index - 1]?.content;
-  if (!userMessage) return;
+const retryMessage = (message) => {
+  // 获取用户消息的request_id
+  const requestId = message.request_id;
+  const sendMessage = messages.value.find(msg => msg.id === requestId);
+  const sendMessageIndex = messages.value.indexOf(sendMessage);
 
-  // 删除错误消息和对应的用户消息
-  messages.value = messages.value.slice(0, index - 1);
+  // 删除包含 request_id 之后的所有消息
+  messages.value = messages.value.slice(0, sendMessageIndex);
 
   // 重新发送消息
-  sendMessageWithText(userMessage);
+  sendMessageWithText(sendMessage.content);
 };
 
 // ==================== 核心消息处理 ====================
@@ -309,11 +312,13 @@ const sendMessageWithText = async (text) => {
   resetStatusSteps();
 
   const userMessage = text.trim();
+  const requestId = currentAgent.value.name + '-' + new Date().getTime();
 
   // 添加用户消息
   messages.value.push({
     role: 'user',
-    content: userMessage
+    content: userMessage,
+    id: requestId
   });
 
   isProcessing.value = true;
@@ -335,6 +340,9 @@ const sendMessageWithText = async (text) => {
       history: history.slice(0, -1), // 去掉最后一条刚添加的用户消息
       config: {
         ...props.config
+      },
+      meta: {
+        request_id: requestId
       }
     };
 
@@ -373,16 +381,16 @@ const sendMessageWithText = async (text) => {
 const handleStreamResponse = async (response) => {
   const reader = response.body.getReader();
   // 创建一个初始的助手消息
-  const assistantMsg = {
-    role: 'assistant',
-    content: '',
-    status: 'loading',
-    toolCalls: {},
-    toolCallIds: {}
-  };
+  // const assistantMsg = {
+  //   role: 'assistant',
+  //   content: '',
+  //   status: 'init',
+  //   toolCalls: {},
+  //   toolCallIds: {}
+  // };
 
-  // 添加到消息列表
-  messages.value.push(assistantMsg);
+  // // 添加到消息列表
+  // messages.value.push(assistantMsg);
   await scrollToBottom();
 
   while (true) {
@@ -395,6 +403,9 @@ const handleStreamResponse = async (response) => {
     for (const line of lines) {
       try {
         const data = JSON.parse(line);
+        if (data.debug_mode) {
+          console.log("debug_mode", data);
+        }
 
         // 处理元数据
         handleMetadata(data);
@@ -416,9 +427,9 @@ const handleStreamResponse = async (response) => {
 };
 
 // 处理完成状态
-const handleFinished = async () => {
+const handleFinished = async (data) => {
   // 更新最后一条助手消息的状态
-  const lastAssistantMsg = messages.value.find(m => m.role === 'assistant' && m.status === 'loading' || m.status === 'processing');
+  const lastAssistantMsg = messages.value[messages.value.length - 1];
   if (lastAssistantMsg) {
     // 如果既没有内容也没有工具调用，添加一个完成提示
     if ((!lastAssistantMsg.content || lastAssistantMsg.content.trim().length === 0) &&
@@ -427,6 +438,8 @@ const handleFinished = async () => {
     }
     // 更新状态为已完成
     lastAssistantMsg.status = 'finished';
+    lastAssistantMsg.isLast = true;
+    lastAssistantMsg.meta = data.meta;
   }
 
   // 标记处理完成
@@ -474,6 +487,7 @@ const createAssistantMessage = async (data) => {
   const msgContent = data.response || '';
   const runId = data.metadata?.run_id;
   const step = data.metadata?.langgraph_step;
+  const requestId = data.metadata?.request_id || data.request_id;
 
   // 创建新消息
   const newMsg = {
@@ -484,7 +498,8 @@ const createAssistantMessage = async (data) => {
     step: step,
     status: 'processing',
     toolCalls: {},
-    toolCallIds: {}
+    toolCallIds: {},
+    request_id: requestId
   };
 
   // 处理工具调用
@@ -514,8 +529,8 @@ const updateExistingMessage = async (data, existingMsgIndex) => {
   // console.log("updateExistingMessage", msgInstance);
 
   // 如果消息状态是loading，更新为processing
-  if (msgInstance.status === 'loading') {
-    msgInstance.status = 'loading';
+  if (msgInstance.status === 'init') {
+    msgInstance.status = data.status || 'loading';
     msgInstance.run_id = data.metadata?.run_id;
     msgInstance.step = data.metadata?.langgraph_step;
   }
@@ -554,9 +569,6 @@ const updateExistingMessage = async (data, existingMsgIndex) => {
   await scrollToBottom();
 };
 
-const handleAssistantClick = (message) => {
-  console.log(message);
-}
 
 const appendToolMessageToExistingAssistant = async (data) => {
   // console.log("appendToolMessageToExistingAssistant", data);
@@ -666,6 +678,42 @@ const toggleToolCall = (toolCallId) => {
   }
 };
 
+// 加载智能体数据的方法
+const loadAgentData = async () => {
+  try {
+    // 确保智能体列表已加载
+    if (Object.keys(agents.value).length === 0) {
+      await fetchAgents();
+    }
+
+    // 设置当前智能体
+    if (props.agentId && agents.value && agents.value[props.agentId]) {
+      // 如果传入了指定的agentId，就加载对应的智能体
+      currentAgent.value = agents.value[props.agentId];
+      console.log("设置当前智能体", currentAgent.value.name);
+    } else if (!props.agentId) {
+      // 多智能体模式下，尝试从本地存储恢复上次选择的智能体
+      const storagePrefix = 'agent-multi';
+      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
+      if (savedAgent && agents.value && agents.value[savedAgent]) {
+        currentAgent.value = agents.value[savedAgent];
+        console.log("从存储中恢复智能体", currentAgent.value.name);
+      }
+    }
+
+    // 加载保存的状态
+    loadState();
+
+    // 处理消息历史
+    if (messages.value && messages.value.length > 0) {
+      console.log("处理消息历史:", messages.value.length);
+      messages.value = prepareMessageHistory(messages.value);
+    }
+  } catch (error) {
+    console.error('加载智能体数据出错:', error);
+  }
+};
+
 // 从localStorage加载状态
 const loadState = () => {
   try {
@@ -729,42 +777,6 @@ watch(() => props.agentId, async (newAgentId, oldAgentId) => {
   }
 }, { immediate: true });
 
-// 加载智能体数据的方法
-const loadAgentData = async () => {
-  try {
-    // 确保智能体列表已加载
-    if (Object.keys(agents.value).length === 0) {
-      await fetchAgents();
-    }
-
-    // 设置当前智能体
-    if (props.agentId && agents.value && agents.value[props.agentId]) {
-      // 如果传入了指定的agentId，就加载对应的智能体
-      currentAgent.value = agents.value[props.agentId];
-      console.log("设置当前智能体", currentAgent.value.name);
-    } else if (!props.agentId) {
-      // 多智能体模式下，尝试从本地存储恢复上次选择的智能体
-      const storagePrefix = 'agent-multi';
-      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
-      if (savedAgent && agents.value && agents.value[savedAgent]) {
-        currentAgent.value = agents.value[savedAgent];
-        console.log("从存储中恢复智能体", currentAgent.value.name);
-      }
-    }
-
-    // 加载保存的状态
-    loadState();
-
-    // 处理消息历史
-    if (messages.value && messages.value.length > 0) {
-      console.log("处理消息历史:", messages.value.length);
-      messages.value = prepareMessageHistory(messages.value);
-    }
-  } catch (error) {
-    console.error('加载智能体数据出错:', error);
-  }
-};
-
 // 保存状态到localStorage
 const saveState = () => {
   try {
@@ -776,7 +788,7 @@ const saveState = () => {
 
     // 确定存储前缀
     const prefix = props.agentId ? `agent-${props.agentId}` : 'agent-multi';
-    console.log("saveState with prefix:", prefix);
+    // console.log("saveState with prefix:", prefix);
 
     // 如果是多智能体模式，保存当前选择的智能体
     if (!props.agentId && currentAgent.value) {
@@ -785,7 +797,7 @@ const saveState = () => {
 
     // 保存消息历史
     if (messages.value && messages.value.length > 0) {
-      console.log(`保存消息历史 (${prefix}):`, messages.value.length);
+      // console.log(`保存消息历史 (${prefix}):`, messages.value.length);
       localStorage.setItem(`${prefix}-messages`, JSON.stringify(messages.value));
     } else {
       localStorage.removeItem(`${prefix}-messages`);
@@ -794,7 +806,7 @@ const saveState = () => {
     // 保存线程ID
     if (currentRunId.value) {
       localStorage.setItem(`${prefix}-thread-id`, currentRunId.value);
-      console.log(`保存线程ID (${prefix}):`, currentRunId.value);
+      // console.log(`保存线程ID (${prefix}):`, currentRunId.value);
     } else {
       localStorage.removeItem(`${prefix}-thread-id`);
     }

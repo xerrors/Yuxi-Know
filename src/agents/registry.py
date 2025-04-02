@@ -12,7 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 
 from src.config import SimpleConfig
-
+from src.utils import logger
 
 class State(TypedDict):
     """
@@ -26,7 +26,7 @@ class State(TypedDict):
 
 
 @dataclass(kw_only=True)
-class Configuration(SimpleConfig):
+class Configuration(dict):
     """
     定义一个基础 Configuration 供 各类 graph 继承
     """
@@ -44,7 +44,26 @@ class Configuration(SimpleConfig):
     def to_dict(cls):
         # 创建一个实例来处理 default_factory
         instance = cls()
-        return {f.name: getattr(instance, f.name) for f in fields(cls) if f.init}
+        confs = {}
+        configurable_items = {}
+        for f in fields(cls):
+            if f.init and not f.metadata.get("hide", False):
+                value = getattr(instance, f.name)
+                if callable(value) and hasattr(value, "__call__"):
+                    confs[f.name] = value()
+                else:
+                    confs[f.name] = value
+
+                if f.metadata.get("configurable"):
+                    configurable_items[f.name] = {
+                        "type": f.type.__name__,
+                        "name": f.metadata.get("name", f.name),
+                        "options": f.metadata.get("options", []),
+                        "default": f.default,
+                        "description": f.metadata.get("description", ""),
+                    }
+        confs["configurable_items"] = configurable_items
+        return confs
 
 
 
@@ -69,6 +88,7 @@ class BaseAgent():
             "description": cls.description,
             "config_schema": cls.config_schema.to_dict(),
             "requirements": cls.requirements if hasattr(cls, "requirements") else [],
+            "all_tools": cls.all_tools if hasattr(cls, "all_tools") else [],
         }
 
     def check_requirements(self):
@@ -85,13 +105,8 @@ class BaseAgent():
 
     def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)
-        conf = self.config_schema.from_runnable_config(config_schema)
 
         for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
-            # msg_type = msg.type
-            # return_keys = conf.get("return_keys", [])
-            # if not return_keys or msg_type in return_keys:
-            #     yield msg, metadata
             yield msg, metadata
 
     @abstractmethod

@@ -4,19 +4,23 @@
       <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
       <span v-if="msg.meta?.server_model_name" class="item"><BulbOutlined /> {{ msg.meta.server_model_name }}</span>
-      <span class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined /></span>
-      <span class="item btn" @click="regenerateMessage()" title="重新生成"><ReloadOutlined /></span>
       <span
+        v-if="showKey('copy')"
+        class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined /></span>
+      <span
+        v-if="showKey('regenerate')"
+        class="item btn" @click="regenerateMessage()" title="重新生成"><ReloadOutlined /></span>
+      <span
+        v-if="showKey('subGraph') && hasSubGraphData(msg)"
         class="item btn"
         @click="openSubGraph(msg)"
-        v-if="hasSubGraphData(msg)"
       >
         <DeploymentUnitOutlined /> 关系图
       </span>
       <span
         class="item btn"
         @click="showWebResult(msg)"
-        v-if="msg.refs?.web_search.results.length > 0"
+        v-if="showKey('webSearch') && msg.refs?.web_search.results.length > 0"
       >
         <GlobalOutlined /> 网页搜索 {{ msg.refs.web_search?.results.length }}
       </span>
@@ -120,12 +124,23 @@ import GraphContainer from './GraphContainer.vue'  // 导入 GraphContainer 组�
 const emit = defineEmits(['retry']);
 const props = defineProps({
   message: Object,
+  showRefs: {
+    type: [Array, Boolean],
+    default: () => false
+  }
 })
 
 const msg = ref(props.message)
 
 // 使用 useClipboard 实现复制功能
 const { copy, isSupported } = useClipboard()
+
+const showKey = (key) => {
+  if (props.showRefs === true) {
+    return true
+  }
+  return props.showRefs.includes(key)
+}
 
 // 定义 copy 方法
 const copyText = async (text) => {

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.models import select_model
 from src.agents.registry import BaseAgent
 from langchain_core.language_models import BaseChatModel
@@ -16,12 +18,6 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     """
     provider, model = fully_specified_name.split("/", maxsplit=1)
     model_instance = select_model(model_name=model, model_provider=provider)
-
-    # 配置额外参数，如temperature
-    if kwargs and hasattr(model_instance, 'chat_open_ai'):
-        for key, value in kwargs.items():
-            if value is not None:
-                setattr(model_instance.chat_open_ai, key, value)
 
     return model_instance.chat_open_ai
 
@@ -58,3 +54,7 @@ def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
 
             if isinstance(msg, ToolMessage):
                 print(f"Tool: {msg.content}")
+
+def get_cur_time_with_utc():
+    return datetime.now(tz=timezone.utc).isoformat()
+

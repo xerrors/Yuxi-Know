@@ -131,20 +131,22 @@ async def get_agent():
 def chat_agent(agent_name: str,
                query: str = Body(...),
                history: list = Body(...),
-               config: dict = Body({})):
+               config: dict = Body({}),
+               meta: dict = Body({})):
+
+    meta.update({
+        "query": query,
+        "agent_name": agent_name,
+        "server_model_name": config["model"] ,
+        "thread_id": config.get("thread_id"),
+    })
 
     # 将meta和thread_id整合到config中
     def make_chunk(content=None, **kwargs):
-        chat_metadata = {
-            "agent_name": agent_name,
-            "thread_id": config.get("thread_id"),
-        }
-        if update_metadata := kwargs.get("chat_metadata"):
-            chat_metadata.update(update_metadata)
 
         return json.dumps({
+            "request_id": meta.get("request_id"),
             "response": content,
-            "chat_metadata": chat_metadata,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
@@ -186,7 +188,9 @@ def chat_agent(agent_name: str,
                                 metadata=metadata,
                                 status="loading")
 
-        yield make_chunk(status="finished", history=history_manager.update_ai(content))
+        yield make_chunk(status="finished",
+                         history=history_manager.update_ai(content),
+                         meta=meta)
 
     return StreamingResponse(stream_messages(), media_type='application/json')
 

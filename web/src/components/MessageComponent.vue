@@ -50,7 +50,7 @@
       <slot name="tool-calls"></slot>
 
       <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
-        <RefsComponent :message="message" @retry="emit('retry')" />
+        <RefsComponent :message="message" :show-refs="showRefs" @retry="emit('retry')" />
       </div>
       <!-- 错误消息 -->
     </div>
@@ -94,8 +94,8 @@ const props = defineProps({
   },
   // 是否显示推理过程
   showRefs: {
-    type: Boolean,
-    default: false
+    type: [Array, Boolean],
+    default: () => false
   }
 });
 

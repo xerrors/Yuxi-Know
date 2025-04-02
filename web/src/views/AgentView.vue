@@ -4,9 +4,9 @@
     <div class="sidebar" :class="{ 'is-open': state.isSidebarOpen }">
       <h2 class="sidebar-title">
         智能体列表
-          <div class="toggle-sidebar" @click="toggleSidebar">
-            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
-          </div>
+        <div class="toggle-sidebar" @click="toggleSidebar">
+          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+        </div>
       </h2>
       <div class="agent-info">
         <a-select
@@ -28,11 +28,21 @@
         </p>
 
         <!-- 添加requirements显示部分 -->
-        <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="requirements-section">
+        <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
           <h3>所需环境变量:</h3>
           <div class="requirements-list">
             <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
               {{ req }}
+            </a-tag>
+          </div>
+        </div>
+
+        <!-- 添加all_tools显示部分 -->
+        <div v-if="agents[selectedAgentId]?.all_tools && agents[selectedAgentId]?.all_tools.length > 0" class="info-section">
+          <h3>可用工具:</h3>
+          <div class="all-tools-list">
+            <a-tag v-for="tool in agents[selectedAgentId].all_tools" :key="tool">
+              {{ tool }}
             </a-tag>
           </div>
         </div>
@@ -44,6 +54,7 @@
       <AgentChatComponent
         :agent-id="selectedAgentId"
         :config="agentConfig"
+        :state="state"
         @open-config="toggleConfigSidebar(true)"
       >
         <template #header-left>
@@ -63,7 +74,7 @@
     <!-- 右侧配置侧边栏 -->
     <div class="config-sidebar" :class="{ 'is-open': state.isConfigSidebarOpen }">
       <h2 class="sidebar-title">
-        智能体配置
+        <div class="sidebar-title-text" @click="toggleDebugMode">智能体配置</div>
         <div class="toggle-sidebar" @click="toggleConfigSidebar(false)">
           <CloseOutlined class="iconfont icon-20" />
         </div>
@@ -72,54 +83,42 @@
         <!-- 配置表单 -->
         <a-form :model="agentConfig" layout="vertical">
           <!-- 系统提示词 -->
-
           <div class="empty-config" v-if="state.isEmptyConfig">
             <a-alert type="warning" message="该智能体没有配置项" show-icon/>
           </div>
-          <a-form-item v-if="configSchema.system_prompt" label="系统提示词" name="system_prompt">
-            <a-textarea
-              v-model:value="agentConfig.system_prompt"
-              :rows="4"
-              placeholder="设置智能体的系统提示词"
-            />
-          </a-form-item>
-
-          <!-- 模型选择 -->
-          <a-form-item v-if="configSchema.model" :label="`模型 (默认: ${configSchema.model})`" name="model">
-            <a-input
-              v-model:value="agentConfig.model"
-              placeholder="provider/model-name"
-            />
-          </a-form-item>
-
-          <!-- 工具选择: 多选，默认全选 -->
-          <a-form-item v-if="configSchema.tools" :label="`工具`" name="tools">
-            <a-select
-              v-model:value="agentConfig.tools"
-              placeholder="选择工具"
-              mode="multiple"
-            >
-              <a-select-option v-for="tool in configSchema.tools" :key="tool">
-                {{ tool }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-
-          <!-- 其他配置项，可按需扩展 -->
-          <div v-if="Object.keys(additionalConfig).length > 0">
-            <a-divider>其他配置</a-divider>
+          <!-- 统一显示所有配置项 -->
+          <template v-for="(value, key) in configurableItems" :key="key">
             <a-form-item
-              v-for="(value, key) in additionalConfig"
-              :key="key"
-              :label="key"
+              :label="getConfigLabel(key, value)"
               :name="key"
+              class="config-item"
             >
+              <!-- <p>{{ value }}</p> -->
+              <!-- 根据值的类型使用不同的输入控件 -->
+              <p v-if="value.description" class="description">{{ value.description }}</p>
+              <a-switch
+                v-if="typeof agentConfig[key] === 'boolean'"
+                v-model:checked="agentConfig[key]"
+              />
+              <a-textarea
+                v-else-if="key === 'system_prompt'"
+                v-model:value="agentConfig[key]"
+                :rows="4"
+                :placeholder="getPlaceholder(key, value)"
+              />
+              <a-select
+                v-else-if="value?.options"
+                v-model:value="agentConfig[key]"
+              >
+                <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+              </a-select>
               <a-input
-                v-model:value="additionalConfig[key]"
-                :placeholder="`设置${key}`"
+                v-else
+                v-model:value="agentConfig[key]"
+                :placeholder="getPlaceholder(key, value)"
               />
             </a-form-item>
-          </div>
+          </template>
 
           <!-- 保存和重置按钮 -->
           <div class="form-actions" v-if="!state.isEmptyConfig">
@@ -151,71 +150,75 @@ import AgentChatComponent from '@/components/AgentChatComponent.vue';
 const agents = ref({});
 const selectedAgentId = ref(null);
 const state = reactive({
+  debug_mode: false,
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
   isConfigSidebarOpen: false,
-  isEmptyConfig: computed(() => Object.keys(agents.value[selectedAgentId.value]?.config_schema || {}).length === 0),
+  isEmptyConfig: computed(() =>
+    !selectedAgentId.value ||
+    Object.keys(configurableItems.value).length === 0
+  )
 });
 const configSchema = computed(() => agents.value[selectedAgentId.value]?.config_schema || {});
+const configurableItems = computed(() => configSchema.value.configurable_items || {});
 
 // 配置状态
-const agentConfig = ref({
-  system_prompt: '',
-  model: '',
-  debug_mode: false,
-});
+const agentConfig = ref({});
 
-// 存储额外配置项
-const additionalConfig = ref({});
+// 调试模式
+const toggleDebugMode = () => {
+  state.debug_mode = !state.debug_mode;
+};
 
 // 根据选中的智能体加载配置
 const loadAgentConfig = () => {
+  // BUG: 目前消息重置有问题，需要重置消息
   if (!selectedAgentId.value || !agents.value[selectedAgentId.value]) return;
 
   const agent = agents.value[selectedAgentId.value];
-  const configSchema = agent.config_schema || {};
+  const schema = agent.config_schema || {};
+  const items = schema.configurable_items || {};
 
   // 重置配置
-  agentConfig.value = {
-    system_prompt: configSchema.system_prompt || '',
-    model: configSchema.model || '',
-    // 默认全选所有工具
-    tools: configSchema.tools || [],
-  };
+  agentConfig.value = {};
 
-  // 清空额外配置
-  additionalConfig.value = {};
+  // 初始化基础配置项
+  if (schema.system_prompt) {
+    agentConfig.value.system_prompt = schema.system_prompt;
+  }
+
+  if (schema.model) {
+    agentConfig.value.model = schema.model;
+  }
+
+  // 初始化可配置项
+  Object.keys(items).forEach(key => {
+    const item = items[key];
+
+    // 根据类型设置默认值
+    if (typeof item.default === 'boolean') {
+      agentConfig.value[key] = item.default;
+    } else {
+      agentConfig.value[key] = item.default || '';
+    }
+  });
 
   // 加载存储的配置
   const savedConfig = JSON.parse(localStorage.getItem(`agent-config-${selectedAgentId.value}`) || '{}');
 
   // 合并已保存的配置
   if (savedConfig) {
-    Object.assign(agentConfig.value, savedConfig);
+    Object.keys(savedConfig).forEach(key => {
+      if (key in agentConfig.value) {
+        agentConfig.value[key] = savedConfig[key];
+      }
+    });
   }
-
-  // 如果没有保存过tools配置，则默认全选
-  if (!savedConfig.tools && configSchema.tools) {
-    agentConfig.value.tools = [...configSchema.tools];
-  }
-
-  // 加载额外配置项
-  Object.keys(configSchema).forEach(key => {
-    if (!['system_prompt', 'model', 'tools'].includes(key)) {
-      additionalConfig.value[key] = savedConfig[key] || configSchema[key] || '';
-    }
-  });
 };
 
 // 保存配置
 const saveConfig = () => {
-  // 合并所有配置
-  const fullConfig = {
-    ...agentConfig.value,
-    ...additionalConfig.value
-  };
-
   // 保存配置到本地存储
-  localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(fullConfig));
+  localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(agentConfig.value));
 
   // 提示保存成功
   message.success('配置已保存');
@@ -223,6 +226,9 @@ const saveConfig = () => {
 
 // 重置配置
 const resetConfig = () => {
+  // 清除本地存储中的配置
+  localStorage.removeItem(`agent-config-${selectedAgentId.value}`);
+  // 重新加载默认配置
   loadAgentConfig();
   message.info('配置已重置');
 };
@@ -308,6 +314,21 @@ onMounted(async () => {
   // 加载配置
   loadAgentConfig();
 });
+
+// 获取配置标签
+const getConfigLabel = (key, value) => {
+  // 根据配置项属性选择合适的显示文本
+  if (value.description) {
+    return `${value.name}（${key}）`;
+  }
+  return key;
+};
+
+// 获取占位符
+const getPlaceholder = (key, value) => {
+  // 返回描述作为占位符
+  return `（默认: ${value.default}）` ;
+};
 </script>
 
 <style lang="less" scoped>
@@ -357,6 +378,11 @@ onMounted(async () => {
     min-width: calc(var(--config-sidebar-width) - 16px);
     overflow-y: auto;
     max-height: calc(100vh - 100px);
+
+    .description {
+      font-size: 12px;
+      color: var(--gray-700);
+    }
   }
 
   .form-actions {
@@ -470,7 +496,7 @@ onMounted(async () => {
 }
 
 // 添加requirements相关样式
-.requirements-section {
+.info-section {
   margin-top: 16px;
   border-top: 1px solid var(--main-light-3);
   padding-top: 12px;
