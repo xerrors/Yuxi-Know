@@ -32,6 +32,7 @@
           :message="message"
           :key="index"
           :is-processing="isProcessing"
+          :debug-mode="state.debug_mode"
           :show-refs="showMsgRefs(message)"
           @retry="retryMessage(message)"
         >
@@ -130,6 +131,7 @@ const props = defineProps({
 
 // UI状态
 const state = ref(props.state);
+const waitingServerResponse = ref(false);
 const showMsgRefs = (msg) => {
   if (msg.isLast) {
     return ['copy', 'regenerate']
@@ -159,12 +161,16 @@ const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 // ==================== 基础工具函数 ====================
 
 
-// 滚动到底部 TODO: 需要优化
+// 滚动到底部 TODO: 需要优化当用户向上滚动的时候，停止滚动，当用户点击回到底部或者滚动到最底部的时候，再滚动到底部
 const scrollToBottom = async () => {
   await nextTick();
   if (!messagesContainer.value) return;
 
-  const container = messagesContainer.value;
+  // 找到真正需要滚动的容器元素
+  const containerBox = messagesContainer.value;
+  const container = document.querySelector('.chat');
+  if (!container) return;
+
   const scrollOptions = { top: container.scrollHeight, behavior: 'smooth' };
 
   // 多次尝试滚动以确保成功
@@ -334,6 +340,7 @@ const sendMessageWithText = async (text) => {
         content: msg.content
       }));
 
+    waitingServerResponse.value = true;
     // 设置请求参数
     const requestData = {
       query: userMessage,
@@ -372,6 +379,7 @@ const sendMessageWithText = async (text) => {
       };
     }
   } finally {
+    waitingServerResponse.value = false;
     isProcessing.value = false;
     await scrollToBottom();
   }
@@ -379,52 +387,145 @@ const sendMessageWithText = async (text) => {
 
 // 处理流式响应
 const handleStreamResponse = async (response) => {
-  const reader = response.body.getReader();
-  // 创建一个初始的助手消息
-  // const assistantMsg = {
-  //   role: 'assistant',
-  //   content: '',
-  //   status: 'init',
-  //   toolCalls: {},
-  //   toolCallIds: {}
-  // };
+  try {
+    await scrollToBottom();
 
-  // // 添加到消息列表
-  // messages.value.push(assistantMsg);
-  await scrollToBottom();
+    // 检查是否支持现代流API
+    if ('TransformStream' in window && 'ReadableStream' in window) {
+      const jsonStream = new TransformStream({
+        start(controller) {
+          this.buffer = '';
+          this.decoder = new TextDecoder();
+        },
+        transform(chunk, controller) {
+          this.buffer += this.decoder.decode(chunk, { stream: true });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+          let position;
+          while ((position = this.buffer.indexOf('\n')) !== -1) {
+            const line = this.buffer.substring(0, position).trim();
+            this.buffer = this.buffer.substring(position + 1);
 
-    const text = new TextDecoder().decode(value);
-    const lines = text.split('\n').filter(line => line.trim());
+            if (line) {
+              try {
+                controller.enqueue(JSON.parse(line));
+              } catch (e) {
+                // 不完整的JSON，保留在缓冲区中
+              }
+            }
+          }
+        },
+        flush(controller) {
+          if (this.buffer.trim()) {
+            try {
+              controller.enqueue(JSON.parse(this.buffer.trim()));
+            } catch (e) {
+              console.warn('最终缓冲区内容无法解析:', this.buffer);
+            }
+          }
+        }
+      });
 
-    for (const line of lines) {
-      try {
-        const data = JSON.parse(line);
-        if (data.debug_mode) {
-          console.log("debug_mode", data);
+      // 通过管道处理响应流
+      const transformedStream = response.body.pipeThrough(jsonStream);
+      const reader = transformedStream.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // 这里的value已经是解析后的JSON对象
+        if (value) {
+          if (value.debug_mode) {
+            console.log("debug_mode", value);
+          }
+
+          // 处理不同状态的消息
+          if (value.status === 'init') {
+            await handleInit(value);
+          } else if (value.status === 'finished') {
+            await handleFinished(value);
+          } else {
+            await handleMessageById(value);
+          }
+
+          await scrollToBottom();
+        }
+      }
+    } else {
+      // 降级方案：使用传统方式处理流数据
+      const reader = response.body.getReader();
+      let buffer = '';
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // 保留最后一行可能不完整的内容
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const data = JSON.parse(line.trim());
+
+              if (data.debug_mode) {
+                console.log("debug_mode", data);
+              }
+
+              if (data.status === 'init') {
+                await handleInit(data);
+              } else if (data.status === 'finished') {
+                await handleFinished(data);
+              } else {
+                await handleMessageById(data);
+              }
+            } catch (e) {
+              console.debug('解析JSON出错:', e.message);
+            }
+          }
         }
 
-        // 处理元数据
-        handleMetadata(data);
+        await scrollToBottom();
+      }
 
-        // 基于消息ID处理消息
-        if (data.msg?.id) {
-          await handleMessageById(data);
+      // 处理缓冲区中可能剩余的内容
+      if (buffer.trim()) {
+        try {
+          const data = JSON.parse(buffer.trim());
+          if (data.status === 'init') {
+            await handleInit(data);
+          } else if (data.status === 'finished') {
+            await handleFinished(data);
+          } else {
+            await handleMessageById(data);
+          }
+        } catch (e) {
+          console.warn('最终缓冲区内容无法解析:', buffer);
         }
-
-        // 处理完成状态
-        if (data.status === 'finished') {
-          await handleFinished(data);
-        }
-      } catch (error) {
-        console.error('解析响应错误:', error);
       }
     }
+  } catch (error) {
+    console.error('流式处理出错:', error);
+    isProcessing.value = false;
   }
 };
+
+const handleInit = async (data) => {
+  waitingServerResponse.value = false;
+  console.log("handleInit", data);
+  const initMsg = {
+    role: 'assistant',
+    content: '',
+    status: 'init',
+    toolCalls: {},
+    toolCallIds: {},
+    request_id: data.request_id
+  }
+  messages.value.push(initMsg);
+  await scrollToBottom();
+}
 
 // 处理完成状态
 const handleFinished = async (data) => {
@@ -463,14 +564,14 @@ const handleMessageById = async (data) => {
       await appendToolMessageToExistingAssistant(data);
     } else {
       // 查找是否有正在加载的助手消息
-      const loadingAssistantIndex = messages.value.findIndex(m => m.role === 'assistant' && m.status === 'loading');
+      const loadingAssistantIndex = messages.value.findIndex(m => m.role === 'assistant' && m.status === 'init');
       if (loadingAssistantIndex !== -1) {
         // 更新现有助手消息
         messages.value[loadingAssistantIndex].id = msgId;
         messageMap.value.set(msgId, loadingAssistantIndex);
+        console.log("更新现有助手消息", messages.value[loadingAssistantIndex]);
         await updateExistingMessage(data, loadingAssistantIndex);
       } else {
-        // 创建新消息
         await createAssistantMessage(data);
       }
     }
@@ -489,18 +590,32 @@ const createAssistantMessage = async (data) => {
   const step = data.metadata?.langgraph_step;
   const requestId = data.metadata?.request_id || data.request_id;
 
-  // 创建新消息
-  const newMsg = {
-    id: msgId,
-    role: 'assistant',
-    content: msgContent,
-    run_id: runId,
-    step: step,
-    status: 'processing',
-    toolCalls: {},
-    toolCallIds: {},
-    request_id: requestId
-  };
+  let currentMsg = null;
+  // 查看最后一个消息是不是 assistant 并且 status 是 init，并且 request_id 是当前的 request_id，而且没有 id
+  const lastMsg = messages.value[messages.value.length - 1];
+  const lastMsgIsInit = lastMsg.role === 'assistant'
+      && lastMsg.status === 'init'
+      && lastMsg.request_id === requestId
+      && !lastMsg.id;
+
+  if (lastMsgIsInit) {
+    currentMsg = lastMsg;
+  } else {
+    // 创建新消息
+    currentMsg = {
+      role: 'assistant',
+      status: 'init',
+      toolCalls: {},
+      toolCallIds: {},
+      request_id: requestId
+    };
+    messages.value.push(currentMsg);
+  }
+
+  currentMsg.id = msgId;
+  currentMsg.content = msgContent;
+  currentMsg.run_id = runId;
+  currentMsg.step = step;
 
   // 处理工具调用
   const toolCalls = data.msg.additional_kwargs?.tool_calls;
@@ -509,14 +624,13 @@ const createAssistantMessage = async (data) => {
     for (const toolCall of toolCalls) {
       const toolCallId = toolCall.id;
       const toolIndex = toolCall.index || 0;
-      newMsg.toolCallIds[toolCallId] = toolIndex;
-      newMsg.toolCalls[toolIndex] = toolCall;
+      currentMsg.toolCallIds[toolCallId] = toolIndex;
+      currentMsg.toolCalls[toolIndex] = toolCall;
       toolCallMap.value.set(toolCallId, msgId);
     }
   }
 
   // 添加新消息
-  messages.value.push(newMsg);
   const newIndex = messages.value.length - 1;
   messageMap.value.set(msgId, newIndex);
 
@@ -633,41 +747,41 @@ watch(messages, () => {
 // 组件挂载时加载状态
 onMounted(async () => {
   try {
-    console.log("组件挂载");
+    // console.log("组件挂载");
     // 获取智能体列表
     await fetchAgents();
 
     // 检查加载状态
-    console.log("路由参数:", props.agentId);
-    console.log("智能体列表:", Object.keys(agents.value));
+    // console.log("路由参数:", props.agentId);
+    // console.log("智能体列表:", Object.keys(agents.value));
 
     // 初始加载 - 确保使用 Vue Router 的解析后路由
     // 使用 setTimeout 确保路由完全解析
     setTimeout(async () => {
       await loadAgentData();
-      console.log("初始化后消息数量:", messages.value.length);
+      // console.log("初始化后消息数量:", messages.value.length);
     }, 10);
   } catch (error) {
     console.error("组件挂载出错:", error);
   }
 });
 
-// 处理元数据
-const handleMetadata = (data) => {
-  // 检查并更新运行ID
-  if (data.metadata?.run_id && !currentRunId.value) {
-    currentRunId.value = data.metadata.run_id;
-  }
+// // 处理元数据
+// const handleMetadata = (data) => {
+//   // 检查并更新运行ID
+//   if (data.metadata?.run_id && !currentRunId.value) {
+//     currentRunId.value = data.metadata.run_id;
+//   }
 
-  // 跟踪步骤信息
-  if (data.metadata?.langgraph_step !== undefined) {
-    const step = data.metadata.langgraph_step;
-    messageStepMap.value[step] = {
-      type: data.msg?.type || 'unknown',
-      timestamp: new Date().toISOString()
-    };
-  }
-};
+//   // 跟踪步骤信息
+//   if (data.metadata?.langgraph_step !== undefined) {
+//     const step = data.metadata.langgraph_step;
+//     messageStepMap.value[step] = {
+//       type: data.msg?.type || 'unknown',
+//       timestamp: new Date().toISOString()
+//     };
+//   }
+// };
 
 // 在 script setup 部分添加 toggleToolCall 方法
 const toggleToolCall = (toolCallId) => {
@@ -690,14 +804,14 @@ const loadAgentData = async () => {
     if (props.agentId && agents.value && agents.value[props.agentId]) {
       // 如果传入了指定的agentId，就加载对应的智能体
       currentAgent.value = agents.value[props.agentId];
-      console.log("设置当前智能体", currentAgent.value.name);
+      // console.log("设置当前智能体", currentAgent.value.name);
     } else if (!props.agentId) {
       // 多智能体模式下，尝试从本地存储恢复上次选择的智能体
       const storagePrefix = 'agent-multi';
       const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
       if (savedAgent && agents.value && agents.value[savedAgent]) {
         currentAgent.value = agents.value[savedAgent];
-        console.log("从存储中恢复智能体", currentAgent.value.name);
+        // console.log("从存储中恢复智能体", currentAgent.value.name);
       }
     }
 
@@ -706,7 +820,7 @@ const loadAgentData = async () => {
 
     // 处理消息历史
     if (messages.value && messages.value.length > 0) {
-      console.log("处理消息历史:", messages.value.length);
+      // console.log("处理消息历史:", messages.value.length);
       messages.value = prepareMessageHistory(messages.value);
     }
   } catch (error) {
@@ -727,20 +841,20 @@ const loadState = () => {
       return;
     }
 
-    console.log("loadState with prefix:", storagePrefix);
+    // console.log("loadState with prefix:", storagePrefix);
 
     // 加载消息历史
     const savedMessages = localStorage.getItem(`${storagePrefix}-messages`);
     if (savedMessages) {
       try {
         const parsedMessages = JSON.parse(savedMessages);
-        console.log(`加载消息历史 (${storagePrefix}):`, parsedMessages ? parsedMessages.length : 0);
+        // console.log(`加载消息历史 (${storagePrefix}):`, parsedMessages ? parsedMessages.length : 0);
         if (Array.isArray(parsedMessages)) {
           messages.value = parsedMessages;
         }
 
         // 检查消息历史是否成功加载
-        console.log(`消息历史加载后数量:`, messages.value.length);
+        // console.log(`消息历史加载后数量:`, messages.value.length);
       } catch (e) {
         console.error('解析消息历史出错:', e);
       }
@@ -750,7 +864,7 @@ const loadState = () => {
     const savedThreadId = localStorage.getItem(`${storagePrefix}-thread-id`);
     if (savedThreadId) {
       currentRunId.value = savedThreadId;
-      console.log(`加载线程ID (${storagePrefix}):`, currentRunId.value);
+      // console.log(`加载线程ID (${storagePrefix}):`, currentRunId.value);
     }
   } catch (error) {
     console.error('从localStorage加载状态出错:', error);
@@ -760,7 +874,7 @@ const loadState = () => {
 // 监听agentId变化
 watch(() => props.agentId, async (newAgentId, oldAgentId) => {
   try {
-    console.log("智能体ID变化", oldAgentId, "->", newAgentId);
+    // console.log("智能体ID变化", oldAgentId, "->", newAgentId);
 
     // 如果变化了，重置会话并加载新数据
     if (newAgentId !== oldAgentId) {
@@ -782,7 +896,7 @@ const saveState = () => {
   try {
     // 防止初始化阶段保存干扰
     if (!currentAgent.value) {
-      console.log("当前没有选中智能体，跳过保存");
+      console.warn("当前没有选中智能体，跳过保存");
       return;
     }
 
@@ -927,6 +1041,7 @@ watch([currentAgent, messages, currentRunId], () => {
   padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
+
 
   .tool-calls-container {
     width: 100%;

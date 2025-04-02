@@ -137,7 +137,7 @@ def chat_agent(agent_name: str,
     meta.update({
         "query": query,
         "agent_name": agent_name,
-        "server_model_name": config["model"] ,
+        "server_model_name": config.get("model", agent_name) ,
         "thread_id": config.get("thread_id"),
     })
 
@@ -175,7 +175,7 @@ def chat_agent(agent_name: str,
 
     def stream_messages():
         content = ""
-        yield make_chunk(status="init")
+        yield make_chunk(status="init", meta=meta)
         for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
             if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
                 content += msg.content
