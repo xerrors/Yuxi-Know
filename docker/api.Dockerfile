@@ -16,4 +16,5 @@ RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
 
 # 复制代码到容器中
 COPY ../src /app/src
+COPY ../server /app/server
 

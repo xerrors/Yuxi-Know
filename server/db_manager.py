@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 
-from src.models.token_model import Base, AgentToken
+from server.models.token_model import Base, AgentToken
 
 class DBManager:
     """数据库管理器"""

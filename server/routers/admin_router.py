@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
-from src.utils.db_manager import db_manager
-from src.models.token_model import AgentToken
+from server.db_manager import db_manager
+from server.models.token_model import AgentToken
 
 admin = APIRouter(prefix="/admin", tags=["admin"])
 
