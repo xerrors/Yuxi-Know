@@ -89,11 +89,15 @@
           打开智能体配置
         </a-button>
 
-        <!-- 添加Token管理组件 -->
-        <div class="token-section">
-          <TokenManagerComponent :agent-id="selectedAgentId" />
-        </div>
-
+        <!-- 添加令牌管理按钮 -->
+        <a-button
+          style="margin-top: 16px;"
+          type="primary"
+          block
+          @click="openTokenModal"
+        >
+          访问令牌管理
+        </a-button>
       </div>
       <div v-else class="no-agent-selected">
         请先选择一个智能体
@@ -155,6 +159,17 @@
         </a-form>
       </div>
     </a-modal>
+
+    <!-- 令牌管理弹窗 -->
+    <a-modal
+      v-model:visible="state.tokenModalVisible"
+      title="访问令牌管理"
+      width="650px"
+      :footer="null"
+      @cancel="closeTokenModal"
+    >
+      <TokenManagerComponent v-if="selectedAgentId" :agent-id="selectedAgentId" />
+    </a-modal>
   </div>
 </template>
 
@@ -179,6 +194,7 @@ const state = reactive({
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
   isConfigSidebarOpen: false,
   configModalVisible: false,
+  tokenModalVisible: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
@@ -203,6 +219,16 @@ const openConfigModal = () => {
 // 关闭配置弹窗
 const closeConfigModal = () => {
   state.configModalVisible = false;
+};
+
+// 打开令牌管理弹窗
+const openTokenModal = () => {
+  state.tokenModalVisible = true;
+};
+
+// 关闭令牌管理弹窗
+const closeTokenModal = () => {
+  state.tokenModalVisible = false;
 };
 
 // 根据选中的智能体加载配置

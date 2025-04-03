@@ -6,46 +6,14 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
 
 from src import executor, config, retriever
 from src.core import HistoryManager
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
-from src.utils.db_manager import db_manager
-from src.models.token_model import AgentToken
 
 chat = APIRouter(prefix="/chat")
-
-# 依赖项：获取数据库会话
-def get_db():
-    db = db_manager.get_session()
-    try:
-        yield db
-    finally:
-        db.close()
-
-class TokenVerify(BaseModel):
-    agent_id: str
-    token: str
-
-@chat.post("/verify_token")
-async def verify_agent_token(
-    token_data: TokenVerify,
-    db: Session = Depends(get_db)
-):
-    """验证智能体访问令牌"""
-    token = db.query(AgentToken).filter(
-        AgentToken.agent_id == token_data.agent_id,
-        AgentToken.token == token_data.token
-    ).first()
-
-    if not token:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    return {"success": True, "message": "Token verified"}
 
 @chat.get("/")
 async def chat_get():

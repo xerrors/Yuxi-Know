@@ -23,6 +23,10 @@ class TokenCreate(BaseModel):
     agent_id: str
     name: str
 
+class TokenVerify(BaseModel):
+    agent_id: str
+    token: str
+
 class TokenResponse(BaseModel):
     id: int
     agent_id: str
@@ -81,3 +85,19 @@ async def delete_token(token_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"success": True, "message": "Token deleted"}
+
+@admin.post("/verify_token")
+async def verify_agent_token(
+    token_data: TokenVerify,
+    db: Session = Depends(get_db)
+):
+    """验证智能体访问令牌"""
+    token = db.query(AgentToken).filter(
+        AgentToken.agent_id == token_data.agent_id,
+        AgentToken.token == token_data.token
+    ).first()
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    return {"success": True, "message": "Token verified"}

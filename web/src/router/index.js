@@ -53,7 +53,7 @@ const router = createRouter({
     {
       path: '/agent/:agent_id',
       name: 'AgentSinglePage',
-      component: () => import('../components/AgentChatComponent.vue'),
+      component: () => import('../views/AgentSingleView.vue'),
     },
     {
       path: '/graph',

@@ -1,9 +1,8 @@
 <template>
   <div class="token-manager">
-    <h2 class="manager-title">访问令牌管理</h2>
     <div class="token-tools">
       <a-button type="primary" size="small" @click="showAddTokenModal">
-        <PlusOutlined /> 创建令牌
+        <PlusOutlined /> 创建 Token
       </a-button>
     </div>
     <!-- 令牌列表 -->
@@ -190,7 +189,7 @@ onMounted(() => {
 <style lang="less" scoped>
 .token-manager {
   margin-top: 1rem;
-  padding: 0 0.5rem;
+  // padding: 0 0.5rem;
 }
 
 .manager-title {
@@ -207,6 +206,12 @@ onMounted(() => {
 .token-list {
   max-height: calc(100vh - 400px);
   overflow-y: auto;
+  li.ant-list-item {
+    background-color: var(--gray-100);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
 }
 
 .token-item {
