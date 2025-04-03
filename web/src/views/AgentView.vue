@@ -79,10 +79,38 @@
           <CloseOutlined class="iconfont icon-20" />
         </div>
       </h2>
-      <div v-if="selectedAgentId && configSchema" class="config-form">
+      <div v-if="selectedAgentId" class="config-form">
+        <!-- 打开配置弹窗的按钮 -->
+        <a-button
+          type="primary"
+          block
+          @click="openConfigModal"
+        >
+          打开智能体配置
+        </a-button>
+
+        <!-- 添加Token管理组件 -->
+        <div class="token-section">
+          <TokenManagerComponent :agent-id="selectedAgentId" />
+        </div>
+
+      </div>
+      <div v-else class="no-agent-selected">
+        请先选择一个智能体
+      </div>
+    </div>
+
+    <!-- 配置弹窗 -->
+    <a-modal
+      v-model:visible="state.configModalVisible"
+      title="智能体配置"
+      width="650px"
+      :footer="null"
+      @cancel="closeConfigModal"
+    >
+      <div v-if="selectedAgentId && configSchema" class="config-modal-content">
         <!-- 配置表单 -->
         <a-form :model="agentConfig" layout="vertical">
-          <!-- 系统提示词 -->
           <div class="empty-config" v-if="state.isEmptyConfig">
             <a-alert type="warning" message="该智能体没有配置项" show-icon/>
           </div>
@@ -93,8 +121,6 @@
               :name="key"
               class="config-item"
             >
-              <!-- <p>{{ value }}</p> -->
-              <!-- 根据值的类型使用不同的输入控件 -->
               <p v-if="value.description" class="description">{{ value.description }}</p>
               <a-switch
                 v-if="typeof agentConfig[key] === 'boolean'"
@@ -120,17 +146,15 @@
             </a-form-item>
           </template>
 
-          <!-- 保存和重置按钮 -->
+          <!-- 弹窗底部按钮 -->
           <div class="form-actions" v-if="!state.isEmptyConfig">
             <a-button type="primary" @click="saveConfig">保存配置</a-button>
             <a-button @click="resetConfig">重置</a-button>
+            <a-button @click="closeConfigModal">取消</a-button>
           </div>
         </a-form>
       </div>
-      <div v-else class="no-agent-selected">
-        请先选择一个智能体
-      </div>
-    </div>
+    </a-modal>
   </div>
 </template>
 
@@ -145,6 +169,7 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
+import TokenManagerComponent from '@/components/TokenManagerComponent.vue';
 
 // 状态
 const agents = ref({});
@@ -153,6 +178,7 @@ const state = reactive({
   debug_mode: false,
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
   isConfigSidebarOpen: false,
+  configModalVisible: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
@@ -167,6 +193,16 @@ const agentConfig = ref({});
 // 调试模式
 const toggleDebugMode = () => {
   state.debug_mode = !state.debug_mode;
+};
+
+// 打开配置弹窗
+const openConfigModal = () => {
+  state.configModalVisible = true;
+};
+
+// 关闭配置弹窗
+const closeConfigModal = () => {
+  state.configModalVisible = false;
 };
 
 // 根据选中的智能体加载配置
@@ -222,6 +258,7 @@ const saveConfig = () => {
 
   // 提示保存成功
   message.success('配置已保存');
+  closeConfigModal();
 };
 
 // 重置配置
@@ -379,16 +416,11 @@ const getPlaceholder = (key, value) => {
     overflow-y: auto;
     max-height: calc(100vh - 100px);
 
-    .description {
-      font-size: 12px;
-      color: var(--gray-700);
+    .token-section {
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--main-light-3);
+      padding-top: 1rem;
     }
-  }
-
-  .form-actions {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 20px;
   }
 
   .no-agent-selected {
@@ -546,6 +578,23 @@ const getPlaceholder = (key, value) => {
       width: 90%;
       max-width: var(--config-sidebar-width);
     }
+  }
+}
+
+.config-modal-content {
+  max-height: 70vh;
+  overflow-y: auto;
+
+  .description {
+    font-size: 12px;
+    color: var(--gray-700);
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    gap: 10px;
   }
 }
 </style>
