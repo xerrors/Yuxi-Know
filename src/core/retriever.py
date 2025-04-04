@@ -76,6 +76,8 @@ class Retriever:
         results = []
         if refs["meta"].get("use_graph") and config.enable_knowledge_base:
             for entity in refs["entities"]:
+                if entity == "":
+                    continue
                 result = graph_base.query_by_vector(entity)
                 if result != []:
                     results.extend(result)
