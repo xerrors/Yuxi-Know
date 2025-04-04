@@ -42,7 +42,7 @@
 
     <!-- 添加令牌弹窗 -->
     <a-modal
-      v-model:visible="addTokenModalVisible"
+      v-model:open="addTokenModalVisible"
       title="添加访问令牌"
       ok-text="创建"
       cancel-text="取消"

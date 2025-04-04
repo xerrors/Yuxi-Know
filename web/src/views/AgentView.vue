@@ -27,6 +27,34 @@
           {{ agents[selectedAgentId]?.description }}
         </p>
 
+        <!-- 添加配置按钮 -->
+        <div class="agent-action-buttons">
+          <a-button
+            class="action-button"
+            @click="openConfigModal"
+          >
+            <template #icon><SettingOutlined /></template>
+            智能体配置
+          </a-button>
+
+          <a-button
+            class="action-button"
+            @click="openTokenModal"
+          >
+            <template #icon><KeyOutlined /></template>
+            访问令牌
+          </a-button>
+
+          <a-button
+            class="action-button"
+            @click="goToAgentPage"
+            v-if="selectedAgentId"
+          >
+            <template #icon><LinkOutlined /></template>
+            打开独立页面
+          </a-button>
+        </div>
+
         <!-- 添加requirements显示部分 -->
         <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
           <h3>所需环境变量:</h3>
@@ -62,12 +90,12 @@
             <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
           </div>
         </template>
-        <template #header-right>
+        <!-- <template #header-right>
           <div class="toggle-sidebar nav-btn" @click="toggleConfigSidebar()">
             <SettingOutlined class="iconfont icon-20" />
             <span class="text">配置</span>
           </div>
-        </template>
+        </template> -->
       </AgentChatComponent>
     </div>
 
@@ -80,33 +108,18 @@
         </div>
       </h2>
       <div v-if="selectedAgentId" class="config-form">
-        <!-- 打开配置弹窗的按钮 -->
-        <a-button
-          type="primary"
-          block
-          @click="openConfigModal"
-        >
-          打开智能体配置
-        </a-button>
-
-        <!-- 添加令牌管理按钮 -->
-        <a-button
-          style="margin-top: 16px;"
-          type="primary"
-          block
-          @click="openTokenModal"
-        >
-          访问令牌管理
-        </a-button>
+        <!-- 已将按钮移至左侧边栏 -->
       </div>
       <div v-else class="no-agent-selected">
         请先选择一个智能体
       </div>
+      <p>你好，智能体</p>
     </div>
+
 
     <!-- 配置弹窗 -->
     <a-modal
-      v-model:visible="state.configModalVisible"
+      v-model:open="state.configModalVisible"
       title="智能体配置"
       width="650px"
       :footer="null"
@@ -162,7 +175,7 @@
 
     <!-- 令牌管理弹窗 -->
     <a-modal
-      v-model:visible="state.tokenModalVisible"
+      v-model:open="state.tokenModalVisible"
       title="访问令牌管理"
       width="650px"
       :footer="null"
@@ -175,16 +188,22 @@
 
 <script setup>
 import { ref, onMounted, reactive, watch, computed, h } from 'vue';
+import { useRouter } from 'vue-router';
 import {
   RobotOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   CloseOutlined,
-  SettingOutlined
+  SettingOutlined,
+  KeyOutlined,
+  LinkOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import TokenManagerComponent from '@/components/TokenManagerComponent.vue';
+
+// 路由
+const router = useRouter();
 
 // 状态
 const agents = ref({});
@@ -323,7 +342,7 @@ const fetchAgents = async () => {
         acc[agent.name] = agent;
         return acc;
       }, {});
-      console.log("agents", agents.value);
+      // console.log("agents", agents.value);
 
       // 加载当前选中智能体的配置
       if (selectedAgentId.value) {
@@ -391,6 +410,13 @@ const getConfigLabel = (key, value) => {
 const getPlaceholder = (key, value) => {
   // 返回描述作为占位符
   return `（默认: ${value.default}）` ;
+};
+
+// 跳转到独立智能体页面
+const goToAgentPage = () => {
+  if (selectedAgentId.value) {
+    window.open(`/agent/${selectedAgentId.value}`, '_blank');
+  }
 };
 </script>
 
@@ -531,6 +557,22 @@ const getPlaceholder = (key, value) => {
 .agent-info {
   padding: 16px;
   min-width: calc(var(--agent-sidebar-width) - 16px);
+  overflow-y: auto;
+  max-height: calc(100vh - 60px); /* 减去标题栏的高度 */
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--main-light-4);
+    border-radius: 4px;
+  }
 }
 
 .agent-name {
@@ -621,6 +663,30 @@ const getPlaceholder = (key, value) => {
     justify-content: space-between;
     margin-top: 20px;
     gap: 10px;
+  }
+}
+
+// 添加新按钮的样式
+.agent-action-buttons {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-button {
+  background-color: white;
+  border: 1px solid var(--main-light-3);
+  text-align: left;
+  height: auto;
+  padding: 8px 12px;
+
+  &:hover {
+    background-color: var(--main-light-4);
+  }
+
+  .anticon {
+    margin-right: 8px;
   }
 }
 </style>

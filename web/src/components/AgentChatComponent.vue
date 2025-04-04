@@ -444,6 +444,8 @@ const handleStreamResponse = async (response) => {
             await handleInit(value);
           } else if (value.status === 'finished') {
             await handleFinished(value);
+          } else if (value.status === 'error') {
+            await handleError(value);
           } else {
             await handleMessageById(value);
           }
@@ -552,7 +554,7 @@ const handleFinished = async (data) => {
 const handleMessageById = async (data) => {
   const msgId = data.msg.id;
   const msgType = data.msg.type;
-  // console.log("data", data);
+  console.log("data", data);
 
   // 查找现有消息
   const existingMsgIndex = messageMap.value.get(msgId);
@@ -678,11 +680,26 @@ const updateExistingMessage = async (data, existingMsgIndex) => {
     }
   }
 
+  // 如果状态是error，则更新为error
+  if (data.status === 'error') {
+    msgInstance.status = 'error';
+    msgInstance.message = data.message;
+  }
+
   // 确保变更生效
   await nextTick();
   await scrollToBottom();
 };
 
+const handleError = async (data) => {
+  console.error('处理错误状态:', data);
+  const lastMsg = messages.value[messages.value.length - 1];
+  if (lastMsg) {
+    lastMsg.status = 'error';
+    lastMsg.message = data.message;
+  }
+  isProcessing.value = false;
+};
 
 const appendToolMessageToExistingAssistant = async (data) => {
   // console.log("appendToolMessageToExistingAssistant", data);

@@ -174,21 +174,25 @@ def chat_agent(agent_name: str,
     def stream_messages():
         content = ""
         yield make_chunk(status="init", meta=meta)
-        for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
-            if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
-                content += msg.content
-                yield make_chunk(content=msg.content,
-                                msg=msg.model_dump(),
-                                metadata=metadata,
-                                status="loading")
-            else:
-                yield make_chunk(msg=msg.model_dump(),
-                                metadata=metadata,
-                                status="loading")
+        try:
+            for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
+                if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
+                    content += msg.content
+                    yield make_chunk(content=msg.content,
+                                    msg=msg.model_dump(),
+                                    metadata=metadata,
+                                    status="loading")
+                else:
+                    yield make_chunk(msg=msg.model_dump(),
+                                    metadata=metadata,
+                                    status="loading")
 
-        yield make_chunk(status="finished",
-                         history=history_manager.update_ai(content),
-                         meta=meta)
+            yield make_chunk(status="finished",
+                            history=history_manager.update_ai(content),
+                            meta=meta)
+        except Exception as e:
+            logger.error(f"Error streaming messages: {e}")
+            yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
     return StreamingResponse(stream_messages(), media_type='application/json')
 
