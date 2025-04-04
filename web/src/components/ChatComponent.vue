@@ -434,7 +434,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
 
   const params = {
     query: user_input,
-    history: getHistory(),
+    history: getHistory().slice(0, -1), // 去掉最后一条刚添加的用户消息,
     meta: meta,
     cur_res_id: cur_res_id,
   }
