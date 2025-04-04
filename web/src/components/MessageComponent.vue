@@ -6,6 +6,9 @@
     <!-- 助手消息 -->
     <div v-else-if="message.role === 'assistant' || message.role === 'received'" class="assistant-message">
       <!-- 推理过程 (ChatComponent特有) -->
+      <p v-if="debugMode">
+        {{ message.status }}
+      </p>
       <div v-if="message.reasoning_content" class="reasoning-box">
         <a-collapse v-model:activeKey="reasoningActiveKey" :bordered="false">
           <template #expandIcon="{ isActive }">
@@ -50,7 +53,7 @@
       <slot name="tool-calls"></slot>
 
       <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
-        <RefsComponent :message="message" @retry="emit('retry')" />
+        <RefsComponent :message="message" :show-refs="showRefs" @retry="emit('retry')" />
       </div>
       <!-- 错误消息 -->
     </div>
@@ -77,11 +80,6 @@ const props = defineProps({
     type: Object,
     required: true
   },
-  // 已渲染的HTML内容
-  contentHtml: {
-    type: String,
-    default: ''
-  },
   // 是否正在处理中
   isProcessing: {
     type: Boolean,
@@ -94,9 +92,13 @@ const props = defineProps({
   },
   // 是否显示推理过程
   showRefs: {
+    type: [Array, Boolean],
+    default: () => false
+  },
+  debugMode: {
     type: Boolean,
     default: false
-  }
+  },
 });
 
 const statusDefination = {

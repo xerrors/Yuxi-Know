@@ -231,7 +231,7 @@ class Retriever:
         return formatted_results
 
     def format_query_results(self, results):
-        logger.debug(f"Graph Query Results: {results}")
+        # logger.debug(f"Graph Query Results: {results}")
         formatted_results = {"nodes": [], "edges": []}
         node_dict = {}
 

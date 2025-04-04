@@ -1,609 +1,335 @@
 <template>
-  <div class="chat-container">
-    <div class="chat">
-      <div class="chat-header">
-        <div class="header__left">
-          <a-dropdown v-if="!useSingleMode">
-            <div class="current-agent nav-btn">
-              <RobotOutlined />&nbsp;
-              <span v-if="currentAgent">{{ currentAgent.name }}</span>
-              <span v-else>请选择智能体</span>
-            </div>
-            <template #overlay>
-              <a-menu @click="({key}) => selectAgent(key)">
-                <a-menu-item v-for="(agent, name) in agents" :key="name">
-                  <RobotOutlined /> {{ agent.name }}
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-          <div v-else class="current-agent nav-btn">
-            <RobotOutlined />&nbsp;
-            <span v-if="currentAgent">{{ currentAgent.name }}</span>
-            <span v-else>加载中...</span>
-          </div>
+  <div class="agent-view">
+    <!-- 左侧智能体列表侧边栏 -->
+    <div class="sidebar" :class="{ 'is-open': state.isSidebarOpen }">
+      <h2 class="sidebar-title">
+        智能体列表
+        <div class="toggle-sidebar" @click="toggleSidebar">
+          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
         </div>
-        <div class="header__right">
-          <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
-            <PlusCircleOutlined /> <span class="text">新对话</span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="messages.length === 0" class="chat-examples">
-        <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
-        <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
-      </div>
-
-      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': options.debug_mode }">
-        <MessageComponent
-          v-for="(message, index) in messages"
-          :message="message"
-          :key="index"
-          :is-processing="isProcessing"
-          @retry="retryMessage(index)"
+      </h2>
+      <div class="agent-info">
+        <a-select
+          v-model:value="selectedAgentId"
+          class="agent-list"
+          style="width: 100%"
+          @change="selectAgent"
         >
-          <div v-if="options.debug_mode" class="status-info">{{ message }}</div>
+          <a-select-option
+            v-for="(agent, name) in agents"
+            :key="name"
+            :value="name"
+          >
+            {{ agent.name }}
+          </a-select-option>
+        </a-select>
+        <p style="padding: 0 4px;">
+          {{ agents[selectedAgentId]?.description }}
+        </p>
 
-          <!-- 工具调用 -->
-          <template #tool-calls>
-            <div v-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" class="tool-calls-container">
-              <div v-for="(toolCall, index) in message.toolCalls || {}"
-                   :key="index"
-                   class="tool-call-container">
-                <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
-                  <div class="tool-header" @click="toggleToolCall(toolCall.id)">
-                    <span v-if="!toolCall.toolResultMsg">
-                      <LoadingOutlined /> &nbsp;
-                      <span>正在调用工具: </span>
-                      <span class="tool-name">{{ toolCall.function.name }}</span>
-                    </span>
-                    <span v-else>
-                      <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.function.name }}</span> 执行完成
-                    </span>
+        <!-- 添加配置按钮 -->
+        <div class="agent-action-buttons">
+          <a-button
+            class="action-button"
+            @click="openConfigModal"
+          >
+            <template #icon><SettingOutlined /></template>
+            智能体配置
+          </a-button>
 
-                    <!-- <span class="step-badge" v-if="message.step !== undefined">步骤 {{ message.step }}</span> -->
-                  </div>
-                  <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
-                    <div class="tool-params" v-if="toolCall.function && toolCall.function.arguments">
-                      <div class="tool-params-header">
-                        参数:
-                      </div>
-                      <div class="tool-params-content">
-                        <pre>{{ toolCall.function.arguments }}</pre>
-                      </div>
-                    </div>
-                    <div class="tool-params" v-if="toolCall.toolResultMsg && toolCall.toolResultMsg.content">
-                      <div class="tool-params-header">
-                        执行结果:
-                      </div>
-                      <div class="tool-params-content">{{ toolCall.toolResultMsg.content }}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </MessageComponent>
-      </div>
+          <a-button
+            class="action-button"
+            @click="openTokenModal"
+          >
+            <template #icon><KeyOutlined /></template>
+            访问令牌
+          </a-button>
 
-      <div class="bottom">
-        <div class="message-input-wrapper">
-          <MessageInputComponent
-            v-model="userInput"
-            :is-loading="isProcessing"
-            :disabled="!currentAgent || isProcessing"
-            :send-button-disabled="!userInput || !currentAgent || isProcessing"
-            :placeholder="'输入问题...'"
-            @send="sendMessage"
-            @keydown="handleKeyDown"
-          />
-          <div class="bottom-actions">
-            <p class="note">请注意辨别内容的可靠性</p>
+          <a-button
+            class="action-button"
+            @click="goToAgentPage"
+            v-if="selectedAgentId"
+          >
+            <template #icon><LinkOutlined /></template>
+            打开独立页面
+          </a-button>
+        </div>
+
+        <!-- 添加requirements显示部分 -->
+        <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
+          <h3>所需环境变量:</h3>
+          <div class="requirements-list">
+            <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
+              {{ req }}
+            </a-tag>
+          </div>
+        </div>
+
+        <!-- 添加all_tools显示部分 -->
+        <div v-if="agents[selectedAgentId]?.all_tools && agents[selectedAgentId]?.all_tools.length > 0" class="info-section">
+          <h3>可用工具:</h3>
+          <div class="all-tools-list">
+            <a-tag v-for="tool in agents[selectedAgentId].all_tools" :key="tool">
+              {{ tool }}
+            </a-tag>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- 中间内容区域 -->
+    <div class="content">
+      <AgentChatComponent
+        :agent-id="selectedAgentId"
+        :config="agentConfig"
+        :state="state"
+        @open-config="toggleConfigSidebar(true)"
+      >
+        <template #header-left>
+          <div class="toggle-sidebar nav-btn" @click="toggleSidebar" v-if="!state.isSidebarOpen">
+            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          </div>
+        </template>
+        <!-- <template #header-right>
+          <div class="toggle-sidebar nav-btn" @click="toggleConfigSidebar()">
+            <SettingOutlined class="iconfont icon-20" />
+            <span class="text">配置</span>
+          </div>
+        </template> -->
+      </AgentChatComponent>
+    </div>
+
+    <!-- 右侧配置侧边栏 -->
+    <div class="config-sidebar" :class="{ 'is-open': state.isConfigSidebarOpen }">
+      <h2 class="sidebar-title">
+        <div class="sidebar-title-text" @click="toggleDebugMode">智能体配置</div>
+        <div class="toggle-sidebar" @click="toggleConfigSidebar(false)">
+          <CloseOutlined class="iconfont icon-20" />
+        </div>
+      </h2>
+      <div v-if="selectedAgentId" class="config-form">
+        <!-- 已将按钮移至左侧边栏 -->
+      </div>
+      <div v-else class="no-agent-selected">
+        请先选择一个智能体
+      </div>
+      <p>你好，智能体</p>
+    </div>
+
+
+    <!-- 配置弹窗 -->
+    <a-modal
+      v-model:open="state.configModalVisible"
+      title="智能体配置"
+      width="650px"
+      :footer="null"
+      @cancel="closeConfigModal"
+    >
+      <div v-if="selectedAgentId && configSchema" class="config-modal-content">
+        <!-- 配置表单 -->
+        <a-form :model="agentConfig" layout="vertical">
+          <div class="empty-config" v-if="state.isEmptyConfig">
+            <a-alert type="warning" message="该智能体没有配置项" show-icon/>
+          </div>
+          <!-- 统一显示所有配置项 -->
+          <template v-for="(value, key) in configurableItems" :key="key">
+            <a-form-item
+              :label="getConfigLabel(key, value)"
+              :name="key"
+              class="config-item"
+            >
+              <p v-if="value.description" class="description">{{ value.description }}</p>
+              <a-switch
+                v-if="typeof agentConfig[key] === 'boolean'"
+                v-model:checked="agentConfig[key]"
+              />
+              <a-textarea
+                v-else-if="key === 'system_prompt'"
+                v-model:value="agentConfig[key]"
+                :rows="4"
+                :placeholder="getPlaceholder(key, value)"
+              />
+              <a-select
+                v-else-if="value?.options"
+                v-model:value="agentConfig[key]"
+              >
+                <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+              </a-select>
+              <a-input
+                v-else
+                v-model:value="agentConfig[key]"
+                :placeholder="getPlaceholder(key, value)"
+              />
+            </a-form-item>
+          </template>
+
+          <!-- 弹窗底部按钮 -->
+          <div class="form-actions" v-if="!state.isEmptyConfig">
+            <a-button type="primary" @click="saveConfig">保存配置</a-button>
+            <a-button @click="resetConfig">重置</a-button>
+            <a-button @click="closeConfigModal">取消</a-button>
+          </div>
+        </a-form>
+      </div>
+    </a-modal>
+
+    <!-- 令牌管理弹窗 -->
+    <a-modal
+      v-model:open="state.tokenModalVisible"
+      title="访问令牌管理"
+      width="650px"
+      :footer="null"
+      @cancel="closeTokenModal"
+    >
+      <TokenManagerComponent v-if="selectedAgentId" :agent-id="selectedAgentId" />
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, onMounted, reactive, watch, computed, h } from 'vue';
+import { useRouter } from 'vue-router';
 import {
-  RobotOutlined, SendOutlined, LoadingOutlined,
-  ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
-  PlusCircleOutlined
+  RobotOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+  CloseOutlined,
+  SettingOutlined,
+  KeyOutlined,
+  LinkOutlined
 } from '@ant-design/icons-vue';
-import MessageInputComponent from '@/components/MessageInputComponent.vue'
-import MessageComponent from '@/components/MessageComponent.vue'
+import { message } from 'ant-design-vue';
+import AgentChatComponent from '@/components/AgentChatComponent.vue';
+import TokenManagerComponent from '@/components/TokenManagerComponent.vue';
 
-// ========= 加载路由参数并获取 agent id ====================
-const route = useRoute();
+// 路由
 const router = useRouter();
-const useSingleMode = computed(() => !!route.params.agent_id);
 
-// ==================== 状态管理 ====================
-
-// UI状态
-const state = reactive({});
-
-// 应用选项
-const options = reactive({
-  use_web: true,
+// 状态
+const agents = ref({});
+const selectedAgentId = ref(null);
+const state = reactive({
   debug_mode: false,
+  isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
+  isConfigSidebarOpen: false,
+  configModalVisible: false,
+  tokenModalVisible: false,
+  isEmptyConfig: computed(() =>
+    !selectedAgentId.value ||
+    Object.keys(configurableItems.value).length === 0
+  )
 });
+const configSchema = computed(() => agents.value[selectedAgentId.value]?.config_schema || {});
+const configurableItems = computed(() => configSchema.value.configurable_items || {});
 
-// DOM引用
-const messagesContainer = ref(null);
+// 配置状态
+const agentConfig = ref({});
 
-// 数据状态
-const agents = ref({});                // 智能体列表
-const currentAgent = ref(null);        // 当前选中的智能体
-const userInput = ref('');             // 用户输入
-const messages = ref([]);              // 消息列表
-const isProcessing = ref(false);       // 是否正在处理请求
-const threadId = ref(null);            // 会话线程ID
-
-// ==================== 工具调用相关 ====================
-
-// 工具调用相关
-const toolCalls = ref([]);             // 工具调用列表
-const currentToolCallId = ref(null);   // 当前工具调用ID
-const currentRunId = ref(null);        // 当前运行ID
-const messageStepMap = ref({});        // 消息步骤映射
-const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
-
-// ==================== 基础工具函数 ====================
-
-
-// 滚动到底部 TODO: 需要优化
-const scrollToBottom = async () => {
-  await nextTick();
-  if (!messagesContainer.value) return;
-
-  const container = messagesContainer.value;
-  const scrollOptions = { top: container.scrollHeight, behavior: 'smooth' };
-
-  // 多次尝试滚动以确保成功
-  container.scrollTo(scrollOptions);
-  setTimeout(() => container.scrollTo(scrollOptions), 50);
-  setTimeout(() => container.scrollTo(scrollOptions), 150);
-  setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'auto' }), 300);
+// 调试模式
+const toggleDebugMode = () => {
+  state.debug_mode = !state.debug_mode;
 };
 
-// ==================== 状态管理函数 ====================
-
-// 添加新的状态管理变量
-const messageMap = ref(new Map()); // 存储消息ID与消息对象的映射
-const toolCallMap = ref(new Map()); // 存储工具调用ID与对应消息ID的映射
-
-// 重置状态
-const resetStatusSteps = () => {
-  toolCalls.value = [];
-  currentToolCallId.value = null;
-  currentRunId.value = null;
-  messageStepMap.value = {};
-  messageMap.value.clear();
-  toolCallMap.value.clear();
+// 打开配置弹窗
+const openConfigModal = () => {
+  state.configModalVisible = true;
 };
 
-// 重置线程
-const resetThread = () => {
-  threadId.value = null;
-  messages.value = [];
-  resetStatusSteps();
-  saveState();
+// 关闭配置弹窗
+const closeConfigModal = () => {
+  state.configModalVisible = false;
 };
 
-// ==================== 消息历史处理 ====================
+// 打开令牌管理弹窗
+const openTokenModal = () => {
+  state.tokenModalVisible = true;
+};
 
-// 过滤和准备消息历史记录
-const prepareMessageHistory = (msgs) => {
-  // 按步骤和运行ID建立索引
-  const toolCallsByRunAndStep = {};
-  const toolResultsByRunAndStep = {};
+// 关闭令牌管理弹窗
+const closeTokenModal = () => {
+  state.tokenModalVisible = false;
+};
 
-  // 收集所有工具调用
-  msgs.filter(msg => msg.role === 'tool_call').forEach(msg => {
-    const runId = msg.tool?.run_id || 'unknown';
-    const step = msg.tool?.step !== undefined ? msg.tool.step : -1;
-    const key = `${runId}:${step}`;
-    toolCallsByRunAndStep[key] = msg;
-  });
+// 根据选中的智能体加载配置
+const loadAgentConfig = () => {
+  // BUG: 目前消息重置有问题，需要重置消息
+  if (!selectedAgentId.value || !agents.value[selectedAgentId.value]) return;
 
-  // 收集所有工具结果
-  msgs.filter(msg => msg.role === 'tool').forEach(msg => {
-    const runId = msg.tool?.run_id || 'unknown';
-    // 尝试使用工具调用步骤（如果可用）或当前步骤
-    const step = msg.tool?.tool_call_step !== undefined ? msg.tool.tool_call_step :
-                (msg.tool?.step !== undefined ? msg.tool.step - 1 : -1);
-    const key = `${runId}:${step}`;
-    toolResultsByRunAndStep[key] = msg;
-  });
+  const agent = agents.value[selectedAgentId.value];
+  const schema = agent.config_schema || {};
+  const items = schema.configurable_items || {};
 
-  // 构建有效的工具调用ID集合
-  const validToolCallKeys = new Set();
+  // 重置配置
+  agentConfig.value = {};
 
-  // 查找所有具有对应结果的工具调用
-  for (const key in toolCallsByRunAndStep) {
-    if (toolResultsByRunAndStep[`${key.split(':')[0]}:${parseInt(key.split(':')[1]) + 1}`] ||
-        toolResultsByRunAndStep[key.replace(/:\d+$/, ':result')]) {
-      validToolCallKeys.add(key);
-    }
+  // 初始化基础配置项
+  if (schema.system_prompt) {
+    agentConfig.value.system_prompt = schema.system_prompt;
   }
 
-  // 过滤消息
-  return msgs.filter(msg => {
-    // 保留用户和助手消息
-    if (msg.role === 'user' || msg.role === 'assistant') return true;
-
-    // 处理工具调用和结果
-    if (msg.role === 'tool_call') {
-      const runId = msg.tool?.run_id || 'unknown';
-      const step = msg.tool?.step !== undefined ? msg.tool.step : -1;
-      const key = `${runId}:${step}`;
-      return validToolCallKeys.has(key);
-    }
-
-    if (msg.role === 'tool') {
-      const runId = msg.tool?.run_id || 'unknown';
-      const callStep = msg.tool?.tool_call_step !== undefined ? msg.tool.tool_call_step :
-                    (msg.tool?.step !== undefined ? msg.tool.step - 1 : -1);
-      const key = `${runId}:${callStep}`;
-      return validToolCallKeys.has(key);
-    }
-
-    return false;
-  });
-};
-
-// ==================== 用户交互处理 ====================
-
-// 选择智能体
-const selectAgent = (agentName) => {
-  if (useSingleMode.value) return; // 单页面模式下不允许切换智能体
-  currentAgent.value = agents.value[agentName];
-  messages.value = [];
-  threadId.value = null;
-  resetStatusSteps();
-  saveState();
-};
-
-// 处理键盘事件
-const handleKeyDown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    // 只有在满足条件时才发送
-    if (userInput.value.trim() && currentAgent.value && !isProcessing.value) {
-      const tempUserInput = userInput.value;
-      userInput.value = ''; // 立即清空输入框
-      // 使用异步调用确保清空先发生
-      setTimeout(() => {
-        sendMessageWithText(tempUserInput);
-      }, 0);
-    }
-  }
-};
-
-// 发送消息
-const sendMessage = () => {
-  if (!userInput.value || !currentAgent.value || isProcessing.value) return;
-  const tempUserInput = userInput.value;
-  userInput.value = ''; // 立即清空输入框
-  // 确保UI更新后再发送消息
-  nextTick(() => {
-    sendMessageWithText(tempUserInput);
-  });
-};
-
-// 重试消息
-const retryMessage = (index) => {
-  // 获取用户消息
-  const userMessage = messages.value[index - 1]?.content;
-  if (!userMessage) return;
-
-  // 删除错误消息和对应的用户消息
-  messages.value = messages.value.slice(0, index - 1);
-
-  // 重新发送消息
-  sendMessageWithText(userMessage);
-};
-
-// ==================== 核心消息处理 ====================
-
-// 使用文本发送消息
-const sendMessageWithText = async (text) => {
-  if (!text || !currentAgent.value || isProcessing.value) return;
-
-  // 重置状态
-  resetStatusSteps();
-
-  const userMessage = text.trim();
-
-  // 添加用户消息
-  messages.value.push({
-    role: 'user',
-    content: userMessage
-  });
-
-  isProcessing.value = true;
-  await scrollToBottom();
-
-  try {
-    // 准备历史消息
-    const history = messages.value
-      .filter(msg => msg.role !== 'assistant' || msg.status !== 'loading')
-      .filter(msg => msg.role !== 'tool_call' && msg.role !== 'tool')
-      .map(msg => ({
-        role: msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'assistant',
-        content: msg.content
-      }));
-
-    // 设置请求参数
-    const requestData = {
-      query: userMessage,
-      meta: {
-        use_web: options.use_web
-      },
-      history: history.slice(0, -1), // 去掉最后一条刚添加的用户消息
-      thread_id: threadId.value
-    };
-
-    // 发送请求
-    const response = await fetch(`/api/chat/agent/${currentAgent.value.name}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestData)
-    });
-
-    if (!response.ok) {
-      throw new Error('请求失败');
-    }
-
-    // 处理流式响应
-    await handleStreamResponse(response);
-
-  } catch (error) {
-    console.error('发送消息错误:', error);
-    // 更新错误状态
-    const loadingMsgIndex = messages.value.length - 1;
-    if (loadingMsgIndex >= 0) {
-      messages.value[loadingMsgIndex] = {
-        role: 'assistant',
-        content: `发生错误: ${error.message}`,
-        status: 'error'
-      };
-    }
-  } finally {
-    isProcessing.value = false;
-    await scrollToBottom();
-  }
-};
-
-// 处理流式响应
-const handleStreamResponse = async (response) => {
-  const reader = response.body.getReader();
-  // 创建一个初始的助手消息
-  const assistantMsg = {
-    role: 'assistant',
-    content: '',
-    status: 'loading',
-    toolCalls: {},
-    toolCallIds: {}
-  };
-
-  // 添加到消息列表
-  messages.value.push(assistantMsg);
-  await scrollToBottom();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const text = new TextDecoder().decode(value);
-    const lines = text.split('\n').filter(line => line.trim());
-
-    for (const line of lines) {
-      try {
-        const data = JSON.parse(line);
-
-        // 处理元数据
-        handleMetadata(data);
-
-        // 基于消息ID处理消息
-        if (data.msg?.id) {
-          await handleMessageById(data);
-        }
-
-        // 处理完成状态
-        if (data.status === 'finished') {
-          await handleFinished(data);
-        }
-      } catch (error) {
-        console.error('解析响应错误:', error);
-      }
-    }
-  }
-};
-
-// 处理完成状态
-const handleFinished = async () => {
-  // 更新最后一条助手消息的状态
-  const lastAssistantMsg = messages.value.find(m => m.role === 'assistant' && m.status === 'loading' || m.status === 'processing');
-  if (lastAssistantMsg) {
-    // 如果既没有内容也没有工具调用，添加一个完成提示
-    if ((!lastAssistantMsg.content || lastAssistantMsg.content.trim().length === 0) &&
-        (!lastAssistantMsg.toolCalls || Object.keys(lastAssistantMsg.toolCalls).length === 0)) {
-      lastAssistantMsg.content = '已完成';
-    }
-    // 更新状态为已完成
-    lastAssistantMsg.status = 'finished';
+  if (schema.model) {
+    agentConfig.value.model = schema.model;
   }
 
-  // 标记处理完成
-  isProcessing.value = false;
-  await scrollToBottom();
-};
+  // 初始化可配置项
+  Object.keys(items).forEach(key => {
+    const item = items[key];
 
-// 基于ID处理消息
-const handleMessageById = async (data) => {
-  const msgId = data.msg.id;
-  const msgType = data.msg.type;
-  // console.log("data", data);
-
-  // 查找现有消息
-  const existingMsgIndex = messageMap.value.get(msgId);
-  // console.log("existingMsgIndex", existingMsgIndex);
-
-  if (existingMsgIndex === undefined) {
-    // 创建新消息或附加到现有助手消息
-    if (msgType === 'tool') {
-      await appendToolMessageToExistingAssistant(data);
+    // 根据类型设置默认值
+    if (typeof item.default === 'boolean') {
+      agentConfig.value[key] = item.default;
     } else {
-      // 查找是否有正在加载的助手消息
-      const loadingAssistantIndex = messages.value.findIndex(m => m.role === 'assistant' && m.status === 'loading');
-      if (loadingAssistantIndex !== -1) {
-        // 更新现有助手消息
-        messages.value[loadingAssistantIndex].id = msgId;
-        messageMap.value.set(msgId, loadingAssistantIndex);
-        await updateExistingMessage(data, loadingAssistantIndex);
-      } else {
-        // 创建新消息
-        await createAssistantMessage(data);
+      agentConfig.value[key] = item.default || '';
+    }
+  });
+
+  // 加载存储的配置
+  const savedConfig = JSON.parse(localStorage.getItem(`agent-config-${selectedAgentId.value}`) || '{}');
+
+  // 合并已保存的配置
+  if (savedConfig) {
+    Object.keys(savedConfig).forEach(key => {
+      if (key in agentConfig.value) {
+        agentConfig.value[key] = savedConfig[key];
       }
-    }
-  } else {
-    // 更新现有消息
-    await updateExistingMessage(data, existingMsgIndex);
+    });
   }
 };
 
-// 创建新的助手消息
-const createAssistantMessage = async (data) => {
-  // console.log("createAssistantMessage", data);
-  const msgId = data.msg.id;
-  const msgContent = data.response || '';
-  const runId = data.metadata?.run_id;
-  const step = data.metadata?.langgraph_step;
+// 保存配置
+const saveConfig = () => {
+  // 保存配置到本地存储
+  localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(agentConfig.value));
 
-  // 创建新消息
-  const newMsg = {
-    id: msgId,
-    role: 'assistant',
-    content: msgContent,
-    run_id: runId,
-    step: step,
-    status: 'processing',
-    toolCalls: {},
-    toolCallIds: {}
-  };
-
-  // 处理工具调用
-  const toolCalls = data.msg.additional_kwargs?.tool_calls;
-  if (toolCalls && toolCalls.length > 0) {
-    // console.log("toolCalls in createAssistantMessage", toolCalls);
-    for (const toolCall of toolCalls) {
-      const toolCallId = toolCall.id;
-      const toolIndex = toolCall.index || 0;
-      newMsg.toolCallIds[toolCallId] = toolIndex;
-      newMsg.toolCalls[toolIndex] = toolCall;
-      toolCallMap.value.set(toolCallId, msgId);
-    }
-  }
-
-  // 添加新消息
-  messages.value.push(newMsg);
-  const newIndex = messages.value.length - 1;
-  messageMap.value.set(msgId, newIndex);
-
-  await scrollToBottom();
+  // 提示保存成功
+  message.success('配置已保存');
+  closeConfigModal();
 };
 
-// 更新现有消息
-const updateExistingMessage = async (data, existingMsgIndex) => {
-  const msgInstance = messages.value[existingMsgIndex];
-  // console.log("updateExistingMessage", msgInstance);
-
-  // 如果消息状态是loading，更新为processing
-  if (msgInstance.status === 'loading') {
-    msgInstance.status = 'processing';
-    msgInstance.run_id = data.metadata?.run_id;
-    msgInstance.step = data.metadata?.langgraph_step;
-  }
-
-  // 添加新的响应内容
-  if (data.response) {
-    msgInstance.content = msgInstance.content || '';
-    msgInstance.content += data.response;
-  }
-
-  const toolCalls = data.msg.additional_kwargs?.tool_calls;
-  if (toolCalls && toolCalls.length > 0) {
-    // console.log("toolCalls in updateExistingMessage", toolCalls);
-    for (const toolCall of toolCalls) {
-      const toolIndex = toolCall.index || 0;
-
-      // 创建临时对象
-      const newToolCalls = { ...msgInstance.toolCalls };
-      const newToolCallIds = { ...msgInstance.toolCallIds };
-      if (!newToolCalls[toolIndex]) {
-        newToolCalls[toolIndex] = toolCall;
-        newToolCallIds[toolCall.id] = toolIndex;
-      } else {
-        newToolCalls[toolIndex]['function']['arguments'] += toolCall.function.arguments;
-      }
-      // 整体替换，触发响应式更新
-      msgInstance.toolCalls = newToolCalls;
-      msgInstance.toolCallIds = newToolCallIds;
-
-      toolCallMap.value.set(toolCall.id, msgInstance.id);
-    }
-  }
-
-  // 确保变更生效
-  await nextTick();
-  await scrollToBottom();
+// 重置配置
+const resetConfig = () => {
+  // 清除本地存储中的配置
+  localStorage.removeItem(`agent-config-${selectedAgentId.value}`);
+  // 重新加载默认配置
+  loadAgentConfig();
+  message.info('配置已重置');
 };
 
-const handleAssistantClick = (message) => {
-  console.log(message);
-}
-
-const appendToolMessageToExistingAssistant = async (data) => {
-  // console.log("appendToolMessageToExistingAssistant", data);
-  currentToolCallId.value = data.msg.tool_call_id;
-  const assignedMsgId = toolCallMap.value.get(currentToolCallId.value);
-  if (assignedMsgId === undefined) {
-    console.error('未找到关联的消息实例', currentToolCallId.value);
-    return;
+// 监听侧边栏状态变化并保存到localStorage
+watch(
+  () => state.isSidebarOpen,
+  (newValue) => {
+    localStorage.setItem('agent-sidebar-open', JSON.stringify(newValue));
   }
+);
 
-  // 获取消息索引
-  const msgIndex = messageMap.value.get(assignedMsgId);
-  if (msgIndex === undefined) {
-    console.error('未找到关联的消息索引', assignedMsgId);
-    return;
+// 监听智能体选择变化
+watch(
+  () => selectedAgentId.value,
+  () => {
+    loadAgentConfig();
   }
-
-  const msgInstance = messages.value[msgIndex];
-  const toolCallIndex = msgInstance.toolCallIds[currentToolCallId.value];
-  if (toolCallIndex === undefined) {
-    console.error('未找到工具调用索引', currentToolCallId.value);
-    return;
-  }
-
-  msgInstance.toolCalls[toolCallIndex].toolResultMsg = data.msg;
-  msgInstance.toolCalls[toolCallIndex].toolResultMetadata = data.metadata;
-  await scrollToBottom();
-}
-
-// ==================== 生命周期钩子 ====================
-
-// // 点击外部关闭选项面板
-// onClickOutside(optionsPanel, () => {
-//   state.showOptions = false;
-// });
+);
 
 // 获取智能体列表
 const fetchAgents = async () => {
@@ -616,7 +342,12 @@ const fetchAgents = async () => {
         acc[agent.name] = agent;
         return acc;
       }, {});
-      console.log("agents", agents.value);
+      // console.log("agents", agents.value);
+
+      // 加载当前选中智能体的配置
+      if (selectedAgentId.value) {
+        loadAgentConfig();
+      }
     } else {
       console.error('获取智能体失败');
     }
@@ -625,284 +356,152 @@ const fetchAgents = async () => {
   }
 };
 
-// 监听消息变化自动滚动
-watch(messages, () => {
-  scrollToBottom();
-}, { deep: true });
+// 切换左侧侧边栏
+const toggleSidebar = () => {
+  state.isSidebarOpen = !state.isSidebarOpen;
+};
 
-// 组件挂载时加载状态
-onMounted(async () => {
-  try {
-    console.log("组件挂载");
-    // 获取智能体列表
-    await fetchAgents();
-
-    // 检查加载状态
-    console.log("单页面模式:", useSingleMode.value);
-    console.log("路由参数:", route.params.agent_id);
-    console.log("智能体列表:", Object.keys(agents.value));
-
-    // 初始加载 - 确保使用 Vue Router 的解析后路由
-    // 使用 setTimeout 确保路由完全解析
-    setTimeout(async () => {
-      await loadAgentData();
-      console.log("初始化后消息数量:", messages.value.length);
-    }, 10);
-  } catch (error) {
-    console.error("组件挂载出错:", error);
+// 切换配置侧边栏
+const toggleConfigSidebar = (forceOpen) => {
+  if (forceOpen !== undefined) {
+    state.isConfigSidebarOpen = forceOpen;
+  } else {
+    state.isConfigSidebarOpen = !state.isConfigSidebarOpen;
   }
+};
+
+// 选择智能体
+const selectAgent = (agentId) => {
+  selectedAgentId.value = agentId;
+  // 保存选择到本地存储
+  localStorage.setItem('last-selected-agent', agentId);
+  // 加载该智能体的配置
+  loadAgentConfig();
+};
+
+// 初始化
+onMounted(async () => {
+  // 获取智能体列表
+  await fetchAgents();
+
+  // 恢复上次选择的智能体
+  const lastSelectedAgent = localStorage.getItem('last-selected-agent');
+  if (lastSelectedAgent && agents.value[lastSelectedAgent]) {
+    selectedAgentId.value = lastSelectedAgent;
+  } else if (Object.keys(agents.value).length > 0) {
+    // 默认选择第一个智能体
+    selectedAgentId.value = Object.keys(agents.value)[0];
+  }
+
+  // 加载配置
+  loadAgentConfig();
 });
 
-// 添加路由参数变化监听
-watch(() => route.params.agent_id, async (newAgentId, oldAgentId) => {
-  try {
-    console.log("路由参数变化", oldAgentId, "->", newAgentId);
-
-    // 如果路由参数变化了（包括从有参数变为无参数的情况）
-    if (oldAgentId !== newAgentId) {
-      // 重置会话
-      messages.value = [];
-      threadId.value = null;
-      resetStatusSteps();
-
-      // 加载新的智能体数据
-      await loadAgentData();
-    }
-  } catch (error) {
-    console.error('路由参数变化处理出错:', error);
+// 获取配置标签
+const getConfigLabel = (key, value) => {
+  // 根据配置项属性选择合适的显示文本
+  if (value.description) {
+    return `${value.name}（${key}）`;
   }
-}, { immediate: true });
-
-// 处理元数据
-const handleMetadata = (data) => {
-  // 更新线程ID
-  if (data.metadata?.thread_id && !threadId.value) {
-    threadId.value = data.metadata.thread_id;
-  }
-
-  // 检查并更新运行ID
-  if (data.metadata?.run_id && !currentRunId.value) {
-    currentRunId.value = data.metadata.run_id;
-  }
-
-  // 跟踪步骤信息
-  if (data.metadata?.langgraph_step !== undefined) {
-    const step = data.metadata.langgraph_step;
-    messageStepMap.value[step] = {
-      type: data.msg?.type || 'unknown',
-      timestamp: new Date().toISOString()
-    };
-  }
+  return key;
 };
 
-// 在 script setup 部分添加 toggleToolCall 方法
-const toggleToolCall = (toolCallId) => {
-  if (expandedToolCalls.value.has(toolCallId)) {
-    expandedToolCalls.value.delete(toolCallId);
-  } else {
-    expandedToolCalls.value.add(toolCallId);
-  }
+// 获取占位符
+const getPlaceholder = (key, value) => {
+  // 返回描述作为占位符
+  return `（默认: ${value.default}）` ;
 };
 
-// 从localStorage加载状态
-const loadState = () => {
-  try {
-    // 确定存储前缀
-    const storagePrefix = useSingleMode.value ?
-      (route.params.agent_id ? `agent-single-${route.params.agent_id}` : null) :
-      'agent-multi';
-
-    if (!storagePrefix) {
-      console.error('无法确定存储前缀，agent_id缺失');
-      return;
-    }
-
-    console.log("loadState with prefix:", storagePrefix);
-
-    // 在单页面模式下，直接从路由参数加载智能体
-    if (useSingleMode.value) {
-      // 智能体已在 loadAgentData 中设置，这里不再需要重复设置
-    } else {
-      // 多智能体模式下，从本地存储加载当前选择的智能体
-      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
-      if (savedAgent && agents.value && agents.value[savedAgent]) {
-        currentAgent.value = agents.value[savedAgent];
-      }
-    }
-
-    // 加载设置选项
-    const savedOptions = localStorage.getItem(`${storagePrefix}-options`);
-    if (savedOptions) {
-      try {
-        Object.assign(options, JSON.parse(savedOptions));
-      } catch (e) {
-        console.error('解析选项数据出错:', e);
-      }
-    }
-
-    // 加载消息历史
-    const savedMessages = localStorage.getItem(`${storagePrefix}-messages`);
-    if (savedMessages) {
-      try {
-        const parsedMessages = JSON.parse(savedMessages);
-        console.log(`加载消息历史 (${storagePrefix}):`, parsedMessages ? parsedMessages.length : 0);
-        if (Array.isArray(parsedMessages)) {
-          messages.value = parsedMessages;
-        }
-
-        // 检查消息历史是否成功加载
-        console.log(`消息历史加载后数量:`, messages.value.length);
-      } catch (e) {
-        console.error('解析消息历史出错:', e);
-      }
-    }
-
-    // 加载线程ID
-    const savedThreadId = localStorage.getItem(`${storagePrefix}-thread-id`);
-    if (savedThreadId) {
-      threadId.value = savedThreadId;
-      console.log(`加载线程ID (${storagePrefix}):`, threadId.value);
-    }
-  } catch (error) {
-    console.error('从localStorage加载状态出错:', error);
+// 跳转到独立智能体页面
+const goToAgentPage = () => {
+  if (selectedAgentId.value) {
+    window.open(`/agent/${selectedAgentId.value}`, '_blank');
   }
 };
-
-// 保存状态到localStorage
-const saveState = () => {
-  try {
-    // 防止初始化阶段保存干扰
-    if (!currentAgent.value) {
-      console.log("当前没有选中智能体，跳过保存");
-      return;
-    }
-
-    // 确定存储前缀 - 确保agent_id总是可用
-    let prefix = 'agent-multi';
-    if (useSingleMode.value) {
-      if (route.params.agent_id) {
-        prefix = `agent-single-${route.params.agent_id}`;
-      } else {
-        console.error("保存状态时缺少agent_id");
-        return; // 不保存
-      }
-    }
-
-    console.log("saveState with prefix:", prefix);
-
-    // 多智能体模式下，保存当前选择的智能体
-    if (!useSingleMode.value && currentAgent.value) {
-      localStorage.setItem(`${prefix}-current-agent`, currentAgent.value.name);
-    }
-
-    // 保存设置选项
-    localStorage.setItem(`${prefix}-options`, JSON.stringify(options));
-
-    // 保存消息历史
-    if (messages.value && messages.value.length > 0) {
-      console.log(`保存消息历史 (${prefix}):`, messages.value.length);
-      localStorage.setItem(`${prefix}-messages`, JSON.stringify(messages.value));
-    } else {
-      localStorage.removeItem(`${prefix}-messages`);
-    }
-
-    // 保存线程ID
-    if (threadId.value) {
-      localStorage.setItem(`${prefix}-thread-id`, threadId.value);
-      console.log(`保存线程ID (${prefix}):`, threadId.value);
-    } else {
-      localStorage.removeItem(`${prefix}-thread-id`);
-    }
-  } catch (error) {
-    console.error('保存状态到localStorage出错:', error);
-  }
-};
-
-// 加载智能体数据的方法
-const loadAgentData = async () => {
-  try {
-    // 确保智能体列表已加载
-    if (Object.keys(agents.value).length === 0) {
-      await fetchAgents();
-    }
-
-    // 在单页面模式下，设置当前智能体
-    if (useSingleMode.value && route.params.agent_id) {
-      const agentId = route.params.agent_id;
-      if (agents.value && agents.value[agentId]) {
-        currentAgent.value = agents.value[agentId];
-        console.log("设置当前智能体", currentAgent.value.name);
-      } else {
-        console.error("未找到指定的智能体:", agentId);
-      }
-    }
-
-    // 加载保存的状态 - 在设置好currentAgent后再加载状态
-    loadState();
-
-    // 处理消息历史
-    if (messages.value && messages.value.length > 0) {
-      console.log("处理消息历史:", messages.value.length);
-      messages.value = prepareMessageHistory(messages.value);
-    }
-  } catch (error) {
-    console.error('加载智能体数据出错:', error);
-  }
-};
-
-// 监听状态变化并保存
-watch([currentAgent, options, messages, threadId], () => {
-  try {
-    saveState();
-  } catch (error) {
-    console.error('保存状态时出错:', error);
-  }
-}, { deep: true });
 </script>
 
 <style lang="less" scoped>
-@import '@/assets/main.css';
-
-.chat-container {
+.agent-view {
   display: flex;
   width: 100%;
-  height: 100%;
-  position: relative;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  --agent-sidebar-width: 230px;
+  --config-sidebar-width: 350px;
 }
 
-.chat {
-  position: relative;
-  flex: 1;
-  max-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow-x: hidden;
-  background: white;
-  position: relative;
-  box-sizing: border-box;
-  overflow-y: scroll;
+.sidebar {
+  width: 0;
+  max-width: var(--agent-sidebar-width);
+  border-right: 1px solid var(--main-light-3);
+  background-color: var(--bg-sider);
+  box-sizing: content-box;
+  overflow-y: auto;
+  transition: width 0.3s ease;
+  overflow: hidden;
 
-  .chat-header {
-    user-select: none;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background-color: white;
-    height: var(--header-height);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1rem;
-    border-bottom: 1px solid var(--main-light-3);
+  &.is-open {
+    width: var(--agent-sidebar-width);
+  }
+}
 
-    .header__left, .header__right {
-      display: flex;
-      align-items: center;
+// 配置侧边栏样式
+.config-sidebar {
+  width: 0;
+  max-width: var(--config-sidebar-width);
+  border-left: 1px solid var(--main-light-3);
+  background-color: var(--bg-sider);
+  box-sizing: content-box;
+  overflow-y: auto;
+  transition: width 0.3s ease;
+  overflow: hidden;
+  position: relative;
+  z-index: 100;
+
+  &.is-open {
+    width: var(--config-sidebar-width);
+  }
+
+  .config-form {
+    padding: 16px;
+    min-width: calc(var(--config-sidebar-width) - 16px);
+    overflow-y: auto;
+    max-height: calc(100vh - 100px);
+
+    .token-section {
+      margin-top: 1.5rem;
+      border-top: 1px solid var(--main-light-3);
+      padding-top: 1rem;
     }
   }
 
-  .nav-btn {
+  .no-agent-selected {
+    padding: 16px;
+    color: var(--gray-500);
+    text-align: center;
+    margin-top: 20px;
+  }
+}
+
+.sidebar-title {
+  font-weight: bold;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  padding-bottom: 1rem;
+  font-size: 1rem;
+  border-bottom: 1px solid var(--main-light-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  margin: 0;
+}
+
+.toggle-sidebar {
+  cursor: pointer;
+
+  &.nav-btn {
     height: 2.5rem;
     display: flex;
     justify-content: center;
@@ -914,6 +513,7 @@ watch([currentAgent, options, messages, threadId], () => {
     width: auto;
     padding: 0.5rem 1rem;
     transition: background-color 0.3s;
+    overflow: hidden;
 
     .text {
       margin-left: 10px;
@@ -930,246 +530,165 @@ watch([currentAgent, options, messages, threadId], () => {
   }
 }
 
-.chat-examples {
-  padding: 0 50px;
-  text-align: center;
-  position: absolute;
-  top: 20%;
-  width: 100%;
-  z-index: 9;
-  animation: slideInUp 0.5s ease-out;
-
-  h1 {
-    margin-bottom: 20px;
-    font-size: 1.2rem;
-    color: var(--gray-900);
-  }
-
-  p {
-    color: var(--gray-700);
-  }
-}
-
-.chat-box {
-  width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  flex-grow: 1;
-  padding: 1rem 2rem;
+.agent-list {
   display: flex;
   flex-direction: column;
-
-  .tool-calls-container {
-    width: 100%;
-    margin-top: 10px;
-
-    .tool-call-container {
-      margin-bottom: 10px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-  }
+  gap: 8px;
+  margin-bottom: 1rem;
 }
 
-.chat-box.is-debug {
-  .message-box .assistant-message {
-    outline: 1px solid red;
-    outline-offset: 10px;
-    outline-style: dashed;
-
-    .status-info {
-      display: block;
-      background-color: var(--gray-50);
-      color: var(--gray-700);
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-  }
-}
-
-.bottom {
-  position: sticky;
-  bottom: 0;
-  width: 100%;
-  margin: 0 auto;
-  padding: 4px 2rem 0 2rem;
-  background: white;
-
-  .message-input-wrapper {
-    width: 100%;
-    max-width: 800px;
-    margin: 0 auto;
-
-    .bottom-actions {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-
-    .note {
-      font-size: small;
-      color: #ccc;
-      margin: 4px 0;
-      user-select: none;
-    }
-  }
-}
-
-.conversation-list::-webkit-scrollbar {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb:hover {
-  background: rgb(100, 100, 100);
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-}
-
-.chat::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar-thumb:hover {
-  background: rgb(100, 100, 100);
-  border-radius: 4px;
-}
-
-.loading-dots {
-  display: inline-flex;
+.agent-item {
+  display: flex;
   align-items: center;
-  justify-content: center;
-}
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s;
 
-.loading-dots div {
-  width: 8px;
-  height: 8px;
-  margin: 0 4px;
-  background-color: var(--gray-700);
-  border-radius: 50%;
-  opacity: 0.3;
-  animation: pulse 0.5s infinite ease-in-out both;
-}
-
-.loading-dots div:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.loading-dots div:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes pulse {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.3;
+  &:hover {
+    background-color: var(--main-light-4);
   }
-  40% {
-    transform: scale(1);
-    opacity: 1;
+
+  &.active {
+    background-color: var(--main-light-3);
   }
 }
 
-@keyframes swing-in-top-fwd {
-  0% {
-    transform: rotateX(-100deg);
-    transform-origin: top;
-    opacity: 0;
+.agent-info {
+  padding: 16px;
+  min-width: calc(var(--agent-sidebar-width) - 16px);
+  overflow-y: auto;
+  max-height: calc(100vh - 60px); /* 减去标题栏的高度 */
+  scrollbar-width: thin;
+
+  &::-webkit-scrollbar {
+    width: 4px;
   }
-  100% {
-    transform: rotateX(0deg);
-    transform-origin: top;
-    opacity: 1;
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--main-light-4);
+    border-radius: 4px;
   }
 }
 
-@keyframes slideInUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+.agent-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-desc {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content {
+  flex: 1;
+  overflow: hidden;
+}
+
+// 添加requirements相关样式
+.info-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--main-light-3);
+  padding-top: 12px;
+
+  h3 {
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 500;
   }
 }
 
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
+.requirements-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
+  .ant-tag {
+    user-select: all;
   }
 }
 
 @media (max-width: 520px) {
-  .chat {
-    height: calc(100vh - 60px);
+  .sidebar {
+    position: absolute;
+    z-index: 101;
+    width: 0;
+    height: 100%;
+    border-radius: 0 16px 16px 0;
+    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
+
+    &.is-open {
+      width: var(--agent-sidebar-width);
+      padding: 16px;
+    }
   }
 
-  .chat-box {
-    padding: 1rem 1rem;
-  }
+  .config-sidebar {
+    position: absolute;
+    z-index: 101;
+    right: 0;
+    width: 0;
+    height: 100%;
+    border-radius: 16px 0 0 16px;
+    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
 
-  .bottom {
-    padding: 0.5rem 0.5rem;
-  }
-
-  .chat-header {
-    padding: 0.5rem 1rem !important;
-
-    .nav-btn {
-      font-size: 14px !important;
-      padding: 0.4rem 0.8rem !important;
+    &.is-open {
+      width: 90%;
+      max-width: var(--config-sidebar-width);
     }
   }
 }
+
+.config-modal-content {
+  max-height: 70vh;
+  overflow-y: auto;
+
+  .description {
+    font-size: 12px;
+    color: var(--gray-700);
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    gap: 10px;
+  }
+}
+
+// 添加新按钮的样式
+.agent-action-buttons {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-button {
+  background-color: white;
+  border: 1px solid var(--main-light-3);
+  text-align: left;
+  height: auto;
+  padding: 8px 12px;
+
+  &:hover {
+    background-color: var(--main-light-4);
+  }
+
+  .anticon {
+    margin-right: 8px;
+  }
+}
 </style>
+
+

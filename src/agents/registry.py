@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from typing import Type, Annotated, Optional, TypedDict
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
@@ -10,7 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 
 from src.config import SimpleConfig
-
+from src.utils import logger
 
 class State(TypedDict):
     """
@@ -24,7 +26,7 @@ class State(TypedDict):
 
 
 @dataclass(kw_only=True)
-class Configuration(SimpleConfig):
+class Configuration(dict):
     """
     定义一个基础 Configuration 供 各类 graph 继承
     """
@@ -40,15 +42,73 @@ class Configuration(SimpleConfig):
 
     @classmethod
     def to_dict(cls):
-        return {f.name: getattr(cls, f.name) for f in fields(cls) if f.init}
+        # 创建一个实例来处理 default_factory
+        instance = cls()
+        confs = {}
+        configurable_items = {}
+        for f in fields(cls):
+            if f.init and not f.metadata.get("hide", False):
+                value = getattr(instance, f.name)
+                if callable(value) and hasattr(value, "__call__"):
+                    confs[f.name] = value()
+                else:
+                    confs[f.name] = value
+
+                if f.metadata.get("configurable"):
+                    configurable_items[f.name] = {
+                        "type": f.type.__name__,
+                        "name": f.metadata.get("name", f.name),
+                        "options": f.metadata.get("options", []),
+                        "default": f.default,
+                        "description": f.metadata.get("description", ""),
+                    }
+        confs["configurable_items"] = configurable_items
+        return confs
 
 
 
 class BaseAgent():
 
+    """
+    定义一个基础 Agent 供 各类 graph 继承
+    """
+
+    name: str = field(default="base_agent")
+    description: str = field(default="base_agent")
+    config_schema: Configuration = Configuration
+    requirements: list[str]
+
     def __init__(self, **kwargs):
-        pass
+        self.check_requirements()
+
+    @classmethod
+    def get_info(cls):
+        return {
+            "name": cls.name,
+            "description": cls.description,
+            "config_schema": cls.config_schema.to_dict(),
+            "requirements": cls.requirements if hasattr(cls, "requirements") else [],
+            "all_tools": cls.all_tools if hasattr(cls, "all_tools") else [],
+        }
+
+    def check_requirements(self):
+        if not hasattr(self, "requirements") or not self.requirements:
+            return
+        for requirement in self.requirements:
+            if requirement not in os.environ:
+                raise ValueError(f"{requirement} is not set")
+
+    def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = self.get_graph(config_schema=config_schema, **kwargs)
+        for event in graph.stream({"messages": messages}, stream_mode="values", config=config_schema):
+            yield event["messages"]
+
+    def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = self.get_graph(config_schema=config_schema, **kwargs)
+
+        for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
+            yield msg, metadata
 
     @abstractmethod
-    def get_graph(self) -> CompiledStateGraph:
+    def get_graph(self, **kwargs) -> CompiledStateGraph:
         pass

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from src.models import select_model
 from src.agents.registry import BaseAgent
 from langchain_core.language_models import BaseChatModel
@@ -7,14 +9,17 @@ from langchain_core.messages import AIMessageChunk, ToolMessage
 
 
 
-def load_chat_model(fully_specified_name: str) -> BaseChatModel:
+def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     """Load a chat model from a fully specified name.
 
     Args:
         fully_specified_name (str): String in the format 'provider/model'.
+        **kwargs: Additional parameters to pass to the model.
     """
     provider, model = fully_specified_name.split("/", maxsplit=1)
-    return select_model(model_name=model, model_provider=provider).chat_open_ai
+    model_instance = select_model(model_name=model, model_provider=provider)
+
+    return model_instance.chat_open_ai
 
 
 def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
@@ -49,3 +54,7 @@ def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
 
             if isinstance(msg, ToolMessage):
                 print(f"Tool: {msg.content}")
+
+def get_cur_time_with_utc():
+    return datetime.now(tz=timezone.utc).isoformat()
+

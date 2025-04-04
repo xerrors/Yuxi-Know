@@ -11,7 +11,8 @@ class OpenAIBase():
         self.model_name = model_name
         self.chat_open_ai = ChatOpenAI(model=model_name,
                                        api_key=api_key,
-                                       base_url=base_url)
+                                       base_url=base_url,
+                                       temperature=0.7)
 
     def predict(self, message, stream=False):
         if isinstance(message, str):
