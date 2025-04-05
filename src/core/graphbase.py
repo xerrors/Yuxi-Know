@@ -209,6 +209,9 @@ class GraphDatabase:
 
     def query_node(self, entity_name, hops=2, **kwargs):
         # TODO 添加判断节点数量为 0 停止检索
+        # 判断是否启动
+        if not self.is_running():
+            raise Exception("图数据库未启动")
 
         logger.debug(f"Query graph node {entity_name} with {hops=}")
         if kwargs.get("exact_match"):
@@ -266,7 +269,7 @@ class GraphDatabase:
         def query(tx, entity_name, hops):
             result = tx.run(f"""
             MATCH (n {{name: $entity_name}})-[r*1..{hops}]-(m)
-            RETURN n, r, m
+            RETURN n {{.*, embedding: null}} AS n, r, m {{.*, embedding: null}} AS m
             """, entity_name=entity_name)
             return result.values()
 
@@ -279,7 +282,7 @@ class GraphDatabase:
         def query(tx, hops):
             result = tx.run(f"""
             MATCH (n)-[r*1..{hops}]->(m)
-            RETURN n, r, m
+            RETURN n {{.*, embedding: null}} AS n, r, m {{.*, embedding: null}} AS m
             """)
             return result.values()
 
@@ -292,7 +295,7 @@ class GraphDatabase:
         def query(tx, relationship_type, hops):
             result = tx.run(f"""
             MATCH (n)-[r:`{relationship_type}`*1..{hops}]->(m)
-            RETURN n, r, m
+            RETURN n {{.*, embedding: null}} AS n, r, m {{.*, embedding: null}} AS m
             """)
             return result.values()
 
@@ -307,7 +310,7 @@ class GraphDatabase:
             MATCH (n:Entity)
             WHERE n.name CONTAINS $keyword
             MATCH (n)-[r*1..{hops}]->(m)
-            RETURN n, r, m
+            RETURN n {{.*, embedding: null}} AS n, r, m {{.*, embedding: null}} AS m
             """, keyword=keyword)
             return result.values()
 
@@ -321,7 +324,7 @@ class GraphDatabase:
             result = tx.run(f"""
             MATCH (n {{name: $node_name}})
             OPTIONAL MATCH (n)-[r*1..{hops}]->(m)
-            RETURN n, r, m
+            RETURN n {{.*, embedding: null}} AS n, r, m {{.*, embedding: null}} AS m
             """, node_name=node_name)
             return result.values()
 

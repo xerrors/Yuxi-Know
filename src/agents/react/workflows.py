@@ -2,6 +2,8 @@ import os
 
 from langchain_openai import ChatOpenAI
 
+from src import graph_base
+
 model = ChatOpenAI(model="glm-4-plus",
                    api_key=os.getenv("ZHIPUAI_API_KEY"),
                    base_url="https://open.bigmodel.cn/api/paas/v4/",
@@ -10,26 +12,14 @@ model = ChatOpenAI(model="glm-4-plus",
 
 # For this tutorial we will use custom tool that returns pre-defined values for weather in two cities (NYC & SF)
 
-from typing import Literal
+from typing import Literal, Annotated
 
-from langchain_core.tools import tool
-
-
-@tool
-def get_weather(city: Literal["nyc", "sf"]):
-    """Use this to get weather information."""
-    if city == "nyc":
-        return "It might be cloudy in nyc"
-    elif city == "sf":
-        return "It's always sunny in sf"
-    else:
-        raise AssertionError("Unknown city")
+from langchain_core.tools import tool, StructuredTool
 
 
-tools = [get_weather]
 
+tools = []
 
-# Define the graph
 
 from langgraph.prebuilt import create_react_agent
 

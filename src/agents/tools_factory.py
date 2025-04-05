@@ -1,12 +1,14 @@
 import json
 import re
 import os
-from typing import Any, Callable, Optional, Type, Union
+from typing import Any, Callable, Optional, Type, Union, Annotated
 
 
 from pydantic import BaseModel, Field
-from langchain_core.tools import tool, BaseTool
+from langchain_core.tools import tool, BaseTool, StructuredTool
 from langchain_community.tools.tavily_search import TavilySearchResults
+
+from src import graph_base, knowledge_base
 
 # refs https://github.com/chatchat-space/LangGraph-Chatchat chatchat-server/chatchat/server/agent/tools_factory/tools_registry.py
 def regist_tool(
@@ -63,6 +65,24 @@ def regist_tool(
         return t
 
 
+class KnowledgeRetrieverModel(BaseModel):
+    query: str = Field(description="The query to get knowledge graph.")
+
+
+
+def get_all_tools():
+    """获取所有工具"""
+    tools = _TOOLS_REGISTRY.copy()
+    for db_Id, retrieve_info in knowledge_base.get_retrievers().items():
+        name = f"retrieve_{retrieve_info['name']}"
+        tools[name] = StructuredTool.from_function(
+            retrieve_info["retriever"],
+            name=name,
+            description=retrieve_info["description"],
+            args_schema=KnowledgeRetrieverModel)
+
+    return tools
+
 class BaseToolOutput:
     """
     LLM 要求 Tool 的输出为 str，但 Tool 用在别处时希望它正常返回结构化数据。
@@ -92,33 +112,30 @@ class BaseToolOutput:
         else:
             return str(self.data)
 
-
+@tool
+def calculator(a: float, b: float, operation: str) -> float:
+    """Calculate two numbers."""
+    if operation == "add":
+        return a + b
+    elif operation == "subtract":
+        return a - b
+    elif operation == "multiply":
+        return a * b
+    elif operation == "divide":
+        return a / b
+    else:
+        raise ValueError(f"Invalid operation: {operation}, only support add, subtract, multiply, divide")
 
 @tool
-def multiply(first_int: int, second_int: int) -> int:
-    """Multiply two integers together."""
-    return first_int * second_int
+def get_knowledge_graph(query: Annotated[str, "The query to get knowledge graph."]):
+    """Use this to get knowledge graph."""
+    return graph_base.query_node(query, hops=2)
 
-@tool
-def add(first_int: int, second_int: int) -> int:
-    """Add two integers together."""
-    return first_int + second_int
 
-@tool
-def subtract(first_int: int, second_int: int) -> int:
-    """Subtract two integers."""
-    return first_int - second_int
-
-@tool
-def divide(first_int: int, second_int: int) -> int:
-    """Divide two integers."""
-    return first_int / second_int
 
 
 _TOOLS_REGISTRY = {
-    "multiply": multiply,
-    "add": add,
-    "subtract": subtract,
-    "divide": divide,
+    "calculator": calculator,
     "TavilySearchResults": TavilySearchResults(max_results=10),
+    "get_knowledge_graph": get_knowledge_graph,
 }

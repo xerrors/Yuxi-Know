@@ -163,6 +163,23 @@
             </a-form-item>
           </template>
 
+          <!-- 添加工具选择部分 -->
+          <a-form-item label="可用工具" name="tools" class="config-item">
+            <p class="description">选择要启用的工具</p>
+            <a-form-item-rest>
+              <div class="tools-switches">
+                <div v-for="tool in availableTools" :key="tool" class="tool-switch-item">
+                  <span class="tool-name">{{ tool }}</span>
+                  <a-switch
+                    size="small"
+                    :checked="isToolActive(tool)"
+                    @change="(checked) => toggleTool(tool, checked)"
+                  />
+                </div>
+              </div>
+            </a-form-item-rest>
+          </a-form-item>
+
           <!-- 弹窗底部按钮 -->
           <div class="form-actions" v-if="!state.isEmptyConfig">
             <a-button type="primary" @click="saveConfig">保存配置</a-button>
@@ -208,6 +225,7 @@ const router = useRouter();
 // 状态
 const agents = ref({});
 const selectedAgentId = ref(null);
+const availableTools = ref([]); // 存储所有可用的工具列表
 const state = reactive({
   debug_mode: false,
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
@@ -250,6 +268,47 @@ const closeTokenModal = () => {
   state.tokenModalVisible = false;
 };
 
+// 获取智能体列表
+const fetchAgents = async () => {
+  try {
+    const response = await fetch('/api/chat/agent');
+    if (response.ok) {
+      const data = await response.json();
+      // 将数组转换为对象
+      agents.value = data.agents.reduce((acc, agent) => {
+        acc[agent.name] = agent;
+        return acc;
+      }, {});
+      // console.log("agents", agents.value);
+
+      // 加载当前选中智能体的配置
+      if (selectedAgentId.value) {
+        loadAgentConfig();
+      }
+    } else {
+      console.error('获取智能体失败');
+    }
+  } catch (error) {
+    console.error('获取智能体错误:', error);
+  }
+};
+
+// 获取所有可用工具
+const fetchTools = async () => {
+  try {
+    const response = await fetch('/api/chat/tools');
+    if (response.ok) {
+      const data = await response.json();
+      availableTools.value = data.tools;
+      console.log("Available tools:", availableTools.value);
+    } else {
+      console.error('获取工具列表失败');
+    }
+  } catch (error) {
+    console.error('获取工具列表错误:', error);
+  }
+};
+
 // 根据选中的智能体加载配置
 const loadAgentConfig = () => {
   // BUG: 目前消息重置有问题，需要重置消息
@@ -269,6 +328,10 @@ const loadAgentConfig = () => {
 
   if (schema.model) {
     agentConfig.value.model = schema.model;
+  }
+
+  if (schema.tools) {
+    agentConfig.value.tools = schema.tools;
   }
 
   // 初始化可配置项
@@ -303,6 +366,7 @@ const saveConfig = () => {
 
   // 提示保存成功
   message.success('配置已保存');
+  console.log("agentConfig.value", agentConfig.value);
   closeConfigModal();
 };
 
@@ -331,31 +395,6 @@ watch(
   }
 );
 
-// 获取智能体列表
-const fetchAgents = async () => {
-  try {
-    const response = await fetch('/api/chat/agent');
-    if (response.ok) {
-      const data = await response.json();
-      // 将数组转换为对象
-      agents.value = data.agents.reduce((acc, agent) => {
-        acc[agent.name] = agent;
-        return acc;
-      }, {});
-      // console.log("agents", agents.value);
-
-      // 加载当前选中智能体的配置
-      if (selectedAgentId.value) {
-        loadAgentConfig();
-      }
-    } else {
-      console.error('获取智能体失败');
-    }
-  } catch (error) {
-    console.error('获取智能体错误:', error);
-  }
-};
-
 // 切换左侧侧边栏
 const toggleSidebar = () => {
   state.isSidebarOpen = !state.isSidebarOpen;
@@ -383,6 +422,8 @@ const selectAgent = (agentId) => {
 onMounted(async () => {
   // 获取智能体列表
   await fetchAgents();
+  // 获取工具列表
+  await fetchTools();
 
   // 恢复上次选择的智能体
   const lastSelectedAgent = localStorage.getItem('last-selected-agent');
@@ -416,6 +457,31 @@ const getPlaceholder = (key, value) => {
 const goToAgentPage = () => {
   if (selectedAgentId.value) {
     window.open(`/agent/${selectedAgentId.value}`, '_blank');
+  }
+};
+
+// 检查工具是否激活
+const isToolActive = (tool) => {
+  if (!agentConfig.value.tools) {
+    agentConfig.value.tools = [];
+  }
+  return agentConfig.value.tools.includes(tool);
+};
+
+// 切换工具状态
+const toggleTool = (tool, checked) => {
+  if (!agentConfig.value.tools) {
+    agentConfig.value.tools = [];
+  }
+
+  if (checked) {
+    // 添加工具到列表
+    if (!agentConfig.value.tools.includes(tool)) {
+      agentConfig.value.tools.push(tool);
+    }
+  } else {
+    // 从列表中移除工具
+    agentConfig.value.tools = agentConfig.value.tools.filter(item => item !== tool);
   }
 };
 </script>
@@ -687,6 +753,22 @@ const goToAgentPage = () => {
 
   .anticon {
     margin-right: 8px;
+  }
+}
+
+.tools-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  .tool-switch-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .tool-name {
+      margin-left: 10px;
+    }
   }
 }
 </style>
