@@ -668,7 +668,7 @@ const selectModel = (provider, name) => {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  background: var(--main-light-6);
+  background: var(--main-light-7);
   position: relative;
   box-sizing: border-box;
   flex: 5 5 200px;
