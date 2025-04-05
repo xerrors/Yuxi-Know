@@ -42,8 +42,8 @@
       </div>
 
       <!-- 消息内容 -->
-      <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div>
-
+      <!--<div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div>-->
+      <MdPreview v-else-if="message.content" ref="editorRef" editorId="preview-only" :modelValue="message.content" :key="index" class="maxkb-md"/>
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
         <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
@@ -73,6 +73,28 @@ import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
 
+import { MdPreview, config } from 'md-editor-v3'
+config({
+  markdownItConfig(md) {
+    md.renderer.rules.image = (tokens, idx, options, env, self) => {
+      tokens[idx].attrSet('style', 'display:inline-block;min-height:33px;padding:0;margin:0')
+      if (tokens[idx].content) {
+        tokens[idx].attrSet('title', tokens[idx].content)
+      }
+      tokens[idx].attrSet(
+        'onerror',
+        'this.src="/ui/assets/load_error.png";this.onerror=null;this.height="33px"'
+      )
+      return md.renderer.renderToken(tokens, idx, options)
+    }
+    md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+      tokens[idx].attrSet('target', '_blank')
+      return md.renderer.renderToken(tokens, idx, options)
+    }
+    document.appendChild
+  }
+})
+
 
 const props = defineProps({
   // 消息角色：'user'|'assistant'|'sent'|'received'
@@ -101,6 +123,7 @@ const props = defineProps({
   },
 });
 
+const editorRef = ref()
 const statusDefination = {
   init: '初始化',
   loading: '加载中',
