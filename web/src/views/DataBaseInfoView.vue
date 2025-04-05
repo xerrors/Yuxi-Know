@@ -7,7 +7,7 @@
       <div class="database-info">
         <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
         <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
-        <span class="row-count">{{ database.metadata?.row_count }} 行 · {{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+        <span class="row-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件 · {{ database.db_id }}</span>
       </div>
     </template>
     <template #actions>
@@ -564,7 +564,7 @@ const deleteFile = (fileId) => {
     content: '确定要删除该文件吗？',
     okText: '确认',
     cancelText: '取消',
-    onOk: () => { 
+    onOk: () => {
         state.lock = true
         fetch('/api/data/document', {
           method: "DELETE",

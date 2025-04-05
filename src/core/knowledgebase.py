@@ -9,24 +9,42 @@ from pymilvus import MilvusClient, MilvusException
 from src import config
 from src.utils import logger, hashstr
 from src.core.indexing import chunk, read_text
-
+from src.core.kb_db_manager import kb_db_manager
 
 
 class KnowledgeBase:
 
     def __init__(self) -> None:
-        self.data = []
         self.client = None
         self.work_dir = os.path.join(config.save_dir, "data")
-        self.database_path = os.path.join(self.work_dir, "database.json")
+
+        # 数据库管理器
+        self.db_manager = kb_db_manager
 
         # Configuration
         self.default_distance_threshold = 0.5
         self.default_rerank_threshold = 0.1
         self.default_max_query_count = 20
 
+        # 检查是否需要从JSON文件迁移到SQLite
+        self._check_migration()
+
         self._load_models()
-        self._load_databases()
+
+    def _check_migration(self):
+        """检查是否需要从JSON文件迁移到SQLite"""
+        json_path = os.path.join(self.work_dir, "database.json")
+        if os.path.exists(json_path):
+            logger.info("检测到旧的JSON格式知识库数据，准备迁移到SQLite...")
+            try:
+                from src.core.migrate_kb_to_sqlite import migrate_json_to_sqlite
+                result = migrate_json_to_sqlite()
+                if result:
+                    logger.info("知识库数据已成功迁移到SQLite")
+                else:
+                    logger.warning("知识库数据迁移失败或无需迁移")
+            except Exception as e:
+                logger.error(f"迁移过程中出错: {e}")
 
     def _load_models(self):
         """所有需要重启的模型"""
@@ -43,44 +61,27 @@ class KnowledgeBase:
         if not self.connect_to_milvus():
             raise ConnectionError("Failed to connect to Milvus")
 
-    def _load_databases(self):
-        """将数据库的信息保存到本地的文件里面"""
-        if not os.path.exists(self.database_path):
-            return
-
-        with open(self.database_path, "r") as f:
-            data = json.load(f)
-            self.data = [DataBaseLite(**db) for db in data["databases"]]
-
-        self._update_database()
-
-    def _save_databases(self):
-        """将数据库的信息保存到本地的文件里面"""
-        self._update_database()
-        os.makedirs(os.path.dirname(self.database_path), exist_ok=True)
-        with open(self.database_path, "w") as f:
-            json.dump({
-                "databases": [db.to_dict() for db in self.data],
-            }, f, ensure_ascii=False, indent=4)
-
-    def _update_database(self):
-        self.id2db = {db.db_id: db for db in self.data}
-        self.name2db = {db.name: db for db in self.data}
-
     def create_database(self, database_name, description, dimension=None):
         """创建一个数据库"""
         dimension = dimension or self.embed_model.get_dimension()
-        db = DataBaseLite(database_name,
-                          description,
-                          embed_model=self.embed_model.embed_model_fullname,
-                          dimension=dimension)
+        db_id = f"kb_{hashstr(database_name, with_salt=True)}"
+
+        # 创建数据库记录
+        db_dict = self.db_manager.create_database(
+            db_id=db_id,
+            name=database_name,
+            description=description,
+            embed_model=self.embed_model.embed_model_fullname,
+            dimension=dimension
+        )
 
         # 创建数据库对应的文件夹
-        self._ensure_db_folders(db.db_id)
+        self._ensure_db_folders(db_id)
 
-        self.add_collection(db.db_id, dimension)
-        self.data.append(db)
-        self._save_databases()
+        # 在Milvus中创建集合
+        self.add_collection(db_id, dimension)
+
+        return db_dict
 
     def _ensure_db_folders(self, db_id):
         """确保数据库文件夹存在"""
@@ -98,33 +99,67 @@ class KnowledgeBase:
     def get_databases(self):
         assert config.enable_knowledge_base, "知识库未启用"
 
-        for db in self.data:
-            db.update(self.get_collection_info(db.db_id))
-            processing_files = [f for fid, f in db.files.items() if f["status"] in ["processing", "waiting"]]
-            if processing_files:
-                logger.info(f"数据库 {db.name} 有 {len(processing_files)} 个文件正在处理中")
+        # 从数据库获取所有知识库
+        databases = self.db_manager.get_all_databases()
 
-        self._save_databases()
-        return {"databases": [db.to_dict() for db in self.data]}
+        # 检查和更新Milvus信息
+        databases_with_milvus = []
+        for db in databases:
+            db_copy = db.copy()  # 创建字典的副本以避免修改原始数据
+            # 更新Milvus集合信息
+            try:
+                milvus_info = self.get_collection_info(db["db_id"])
+                db_copy["metadata"] = milvus_info
+                logger.debug(f"获取知识库 {db['name']} (ID: {db['db_id']}) 的Milvus信息成功: {milvus_info}")
+            except Exception as e:
+                logger.warning(f"获取知识库 {db['name']} (ID: {db['db_id']}) 的Milvus信息失败: {e}")
+                # 添加一个默认的Milvus状态
+                db_copy.update({
+                    "row_count": 0,
+                    "status": "未连接",
+                    "error": str(e)
+                })
+
+            # 检查处理中的文件
+            processing_files = [f for f_id, f in db_copy.get("files", {}).items()
+                               if f["status"] in ["processing", "waiting"]]
+            if processing_files:
+                logger.info(f"数据库 {db['name']} 有 {len(processing_files)} 个文件正在处理中")
+
+            databases_with_milvus.append(db_copy)
+
+        return {"databases": databases_with_milvus}
 
     def get_database_info(self, db_id):
-        db = self.get_kb_by_id(db_id)
-        if db is None:
+        db_dict = self.db_manager.get_database_by_id(db_id)
+        if db_dict is None:
             return None
         else:
-            db.update(self.get_collection_info(db.db_id))
-            return db.to_dict()
+            db_copy = db_dict.copy()
+            try:
+                milvus_info = self.get_collection_info(db_id)
+                db_copy.update(milvus_info)
+            except Exception as e:
+                logger.warning(f"获取知识库 ID: {db_id} 的Milvus信息失败: {e}")
+                # 添加一个默认的Milvus状态
+                db_copy.update({
+                    "row_count": 0,
+                    "status": "未连接",
+                    "error": str(e)
+                })
+            return db_copy
 
     def get_database_id(self):
-        return [db.db_id for db in self.data]
+        databases = self.db_manager.get_all_databases()
+        return [db["db_id"] for db in databases]
 
     def get_file_info(self, db_id, file_id):
-        db = self.get_kb_by_id(db_id)
+        db = self.db_manager.get_database_by_id(db_id)
         if db is None:
             raise Exception(f"database not found, {db_id}")
 
         lines = self.client.query(
-            collection_name=db.db_id,
+            collection_name=db_id,
             filter=f"file_id == '{file_id}'",
             output_fields=None
         )
@@ -133,14 +168,13 @@ class KnowledgeBase:
             line.pop("vector")
 
         lines.sort(key=lambda x: x.get("start_char_idx") or 0)
-        # logger.debug(f"lines[0]: {lines[0]}")
         return {"lines": lines}
 
     def get_kb_by_id(self, db_id):
         if not config.enable_knowledge_base:
             return None
 
-        return next((db for db in self.data if db.db_id == db_id), None)
+        return self.db_manager.get_database_by_id(db_id)
 
     def file_to_chunk(self, files, params=None):
         """将文件转换为分块
@@ -183,93 +217,95 @@ class KnowledgeBase:
         """添加分块"""
         db = self.get_kb_by_id(db_id)
 
-        if db.embed_model != config.embed_model:
-            logger.error(f"Embed model not match, {db.embed_model} != {config.embed_model}")
-            return {"message": f"Embed model not match, cur: {config.embed_model}, req: {db.embed_model}", "status": "failed"}
+        if db["embed_model"] != self.embed_model.embed_model_fullname:
+            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
+            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
 
-        db.files.update(file_chunks)
-        self._save_databases()
-
-        for file_id, chunk in file_chunks.items():
-            db.files[file_id]["status"] = "processing"
-            self._save_databases()
+        for file_id, chunk_info in file_chunks.items():
+            # 在数据库中创建文件记录
+            self.db_manager.add_file(
+                db_id=db_id,
+                file_id=file_id,
+                filename=chunk_info["filename"],
+                path=chunk_info["path"],
+                file_type=chunk_info["type"],
+                status="processing"
+            )
 
             try:
                 self.add_documents(
                     file_id=file_id,
-                    collection_name=db.db_id,
-                    docs=[node["text"] for node in chunk["nodes"]],
-                    chunk_infos=chunk["nodes"])
+                    collection_name=db_id,
+                    docs=[node["text"] for node in chunk_info["nodes"]],
+                    chunk_infos=chunk_info["nodes"])
 
-                db.files[file_id]["status"] = "done"
+                # 更新文件状态为完成
+                self.db_manager.update_file_status(file_id, "done")
 
             except Exception as e:
-                logger.error(f"Failed to add documents to collection {db.db_id}, {e}, {traceback.format_exc()}")
-                db.files[file_id]["status"] = "failed"
-
-            self._save_databases()
+                logger.error(f"Failed to add documents to collection {db_id}, {e}, {traceback.format_exc()}")
+                # 更新文件状态为失败
+                self.db_manager.update_file_status(file_id, "failed")
 
     def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
-        if db.embed_model != config.embed_model:
-            logger.error(f"Embed model not match, {db.embed_model} != {config.embed_model}")
-            return {"message": f"Embed model not match, cur: {config.embed_model}, req: {db.embed_model}", "status": "failed"}
+        if db["embed_model"] != self.embed_model.embed_model_fullname:
+            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
+            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
 
         # Preprocessing the files to the queue
         new_files = self.file_to_chunk(files, params=params)
-        db.files.update(new_files)  # 更新数据库状态
-
-        # 先保存一次数据库状态，确保waiting状态被记录
-        self._save_databases()
 
         for file_id, new_file in new_files.items():
-            db.files[file_id]["status"] = "processing"
-            # 更新处理状态
-            self._save_databases()
+            # 在数据库中创建文件记录
+            self.db_manager.add_file(
+                db_id=db_id,
+                file_id=file_id,
+                filename=new_file["filename"],
+                path=new_file["path"],
+                file_type=new_file["type"],
+                status="processing"
+            )
 
             try:
                 self.add_documents(
                     file_id=file_id,
-                    collection_name=db.db_id,
+                    collection_name=db_id,
                     docs=[node["text"] for node in new_file["nodes"]],
                     chunk_infos=new_file["nodes"])
 
-                db.files[file_id]["status"] = "done"
+                # 更新文件状态为完成
+                self.db_manager.update_file_status(file_id, "done")
 
             except Exception as e:
-                logger.error(f"Failed to add documents to collection {db.db_id}, {e}, {traceback.format_exc()}")
-                db.files[file_id]["status"] = "failed"
-
-            # 每个文件处理完成后立即保存数据库状态
-            self._save_databases()
+                logger.error(f"Failed to add documents to collection {db_id}, {e}, {traceback.format_exc()}")
+                # 更新文件状态为失败
+                self.db_manager.update_file_status(file_id, "failed")
 
     def delete_file(self, db_id, file_id):
-        db = self.get_kb_by_id(db_id)
-        if db is None:
-            raise Exception(f"database not found, {db_id}")
+        # 从Milvus中删除文件的向量
+        self.client.delete(collection_name=db_id, filter=f"file_id == '{file_id}'")
 
-        self.client.delete(collection_name=db.db_id, filter=f"file_id == '{file_id}'")
-        del db.files[file_id]
-        self._save_databases()
+        # 从SQLite中删除文件记录
+        self.db_manager.delete_file(file_id)
 
     def delete_database(self, db_id):
-        db = self.get_kb_by_id(db_id)
-        if db is None:
-            raise Exception(f"database not found, {db_id}")
+        # 从Milvus中删除集合
+        self.client.drop_collection(collection_name=db_id)
 
-        self.client.drop_collection(collection_name=db.db_id)
-        self.data.remove(db)
+        # 从SQLite中删除数据库记录
+        self.db_manager.delete_database(db_id)
+
         # 删除数据库对应的文件夹
-        db_folder = os.path.join(self.work_dir, db.db_id)
+        db_folder = os.path.join(self.work_dir, db_id)
         if os.path.exists(db_folder):
             shutil.rmtree(db_folder)
-        self._save_databases()
+
         return {"message": "删除成功"}
 
     def restart(self):
         self._load_models()
-        self._load_databases()
 
     ###################################
     #* Below is the code for retriever #
@@ -283,8 +319,12 @@ class KnowledgeBase:
         max_query_count = kwargs.get("max_query_count", self.default_max_query_count)
 
         all_db_result = self.search(query, db_id, limit=max_query_count)
+
+        # 获取文件信息并添加到结果中
         for res in all_db_result:
-            res["file"] = db.files[res["entity"]["file_id"]]
+            file = self.db_manager.get_file_by_id(res["entity"]["file_id"])
+            if file:
+                res["file"] = file
 
         db_result = [r for r in all_db_result if r["distance"] > distance_threshold]
 
@@ -318,7 +358,6 @@ class KnowledgeBase:
 
         return retriever
 
-
     ################################
     #* Below is the code for milvus #
     ################################
@@ -351,10 +390,20 @@ class KnowledgeBase:
         return collections
 
     def get_collection_info(self, collection_name):
-        collection = self.client.describe_collection(collection_name)
-        collection.update(self.client.get_collection_stats(collection_name))
-        # collection["id"] = hashstr(collection_name)
-        return collection
+        """获取Milvus集合信息，处理可能的错误"""
+        try:
+            collection = self.client.describe_collection(collection_name)
+            collection.update(self.client.get_collection_stats(collection_name))
+            return collection
+        except MilvusException as e:
+            logger.warning(f"获取集合 {collection_name} 信息失败: {e}")
+            # 返回一个带有错误信息的基本结构
+            return {
+                "name": collection_name,
+                "row_count": 0,
+                "status": "错误",
+                "error_message": str(e)
+            }
 
     def add_collection(self, collection_name, dimension=None):
         if self.client.has_collection(collection_name=collection_name):
@@ -416,46 +465,3 @@ class KnowledgeBase:
     def search_by_id(self, collection_name, id, output_fields=["id", "text"]):
         res = self.client.get(collection_name, id, output_fields=output_fields)
         return res
-
-
-class DataBaseLite:
-    def __init__(self, name, description, dimension=None, **kwargs) -> None:
-        self.name = name
-        self.description = description
-        self.dimension = dimension
-        self.metadata = kwargs.get("metadata", {})
-        # logger.debug(f"DataBaseLite init: {self.metadata}")
-        self.db_id = self.metadata.get("collection_name", kwargs.get("db_id"))  # metaname 的历史遗留问题
-        self.db_id = self.db_id or f"kb_{hashstr(name, with_salt=True)}"
-        self.files = kwargs.get("files", [])
-
-        if isinstance(self.files, list):
-            self.files = {f["file_id"]: f for f in self.files}
-
-        self.embed_model = kwargs.get("embed_model", None)
-
-    def id2file(self, file_id):
-        for f in self.files:
-            if f["file_id"] == file_id:
-                return f
-        return None
-
-    def update(self, metadata):
-        self.metadata = metadata
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "description": self.description,
-            "db_id": self.db_id,
-            "embed_model": self.embed_model,
-            "metadata": self.metadata,
-            "files": self.files,
-            "dimension": self.dimension
-        }
-
-    def to_json(self):
-        return json.dumps(self.to_dict(), ensure_ascii=False)
-
-    def __str__(self):
-        return self.to_json()
