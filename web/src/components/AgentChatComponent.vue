@@ -360,8 +360,7 @@ const sendMessageWithText = async (text) => {
       body: JSON.stringify(requestData)
     });
 
-    console.log("requestData", requestData);
-
+    // console.log("requestData", requestData);
     if (!response.ok) {
       throw new Error('请求失败');
     }
