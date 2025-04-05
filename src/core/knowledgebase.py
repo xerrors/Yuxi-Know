@@ -344,7 +344,7 @@ class KnowledgeBase:
             "all_results": all_db_result,
         }
 
-    def get_retriever(self, db_id):
+    def get_retriever_by_db_id(self, db_id):
         retriever_params = {
             "distance_threshold": self.default_distance_threshold,
             "rerank_threshold": self.default_rerank_threshold,
@@ -357,6 +357,16 @@ class KnowledgeBase:
             return response["results"]
 
         return retriever
+
+    def get_retrievers(self):
+        retrievers = {}
+        for db in self.db_manager.get_all_databases():
+            retrievers[db["db_id"]] = {
+                "name": db["name"],
+                "description": db["description"],
+                "retriever": self.get_retriever_by_db_id(db["db_id"]),
+            }
+        return retrievers
 
     ################################
     #* Below is the code for milvus #

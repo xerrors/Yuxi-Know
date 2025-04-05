@@ -34,3 +34,12 @@ class ChatbotConfiguration(Configuration):
             "description": "智能体的驱动模型"
         },
     )
+
+    tools: list[str] = field(
+        default_factory=list,
+        metadata={
+            "name": "工具",
+            "configurable": False,
+            "description": "工具列表"
+        },
+    )

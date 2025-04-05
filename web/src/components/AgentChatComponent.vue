@@ -360,6 +360,8 @@ const sendMessageWithText = async (text) => {
       body: JSON.stringify(requestData)
     });
 
+    console.log("requestData", requestData);
+
     if (!response.ok) {
       throw new Error('请求失败');
     }
@@ -554,7 +556,7 @@ const handleFinished = async (data) => {
 const handleMessageById = async (data) => {
   const msgId = data.msg.id;
   const msgType = data.msg.type;
-  console.log("data", data);
+  // console.log("data", data);
 
   // 查找现有消息
   const existingMsgIndex = messageMap.value.get(msgId);

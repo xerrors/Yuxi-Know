@@ -12,6 +12,7 @@ from src.core import HistoryManager
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
+from src.agents.tools_factory import get_all_tools
 
 chat = APIRouter(prefix="/chat")
 
@@ -201,3 +202,8 @@ async def get_chat_models(model_provider: str):
     """获取指定模型提供商的模型列表"""
     model = select_model(model_provider=model_provider)
     return {"models": model.get_models()}
+
+@chat.get("/tools")
+async def get_tools():
+    """获取所有工具"""
+    return {"tools": list(get_all_tools().keys())}

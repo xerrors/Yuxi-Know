@@ -28,7 +28,7 @@ async def update_config(key = Body(...), value = Body(...)):
 @base.post("/restart")
 async def restart():
     knowledge_base.restart()
-    graph_base.restart()
+    graph_base.start()
     retriever.restart()
     return {"message": "Restarted!"}
 
