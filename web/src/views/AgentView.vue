@@ -492,7 +492,7 @@ const toggleTool = (tool, checked) => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  --agent-sidebar-width: 230px;
+  --agent-sidebar-width: 300px;
   --config-sidebar-width: 350px;
 }
 
@@ -550,6 +550,7 @@ const toggleTool = (tool, checked) => {
 }
 
 .sidebar-title {
+  height: var(--header-height);
   font-weight: bold;
   user-select: none;
   white-space: nowrap;

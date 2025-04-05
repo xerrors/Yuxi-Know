@@ -42,8 +42,15 @@
       </div>
 
       <!-- 消息内容 -->
-      <!--<div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div>-->
-      <MdPreview v-else-if="message.content" ref="editorRef" editorId="preview-only" :modelValue="message.content" :key="index" class="maxkb-md"/>
+      <!-- <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div> -->
+      <MdPreview v-else-if="message.content" ref="editorRef"
+        editorId="preview-only"
+        previewTheme="github"
+        :showCodeRowNumber="false"
+        :modelValue="message.content"
+        :key="index"
+        class="message-md"/>
+
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
         <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
@@ -68,33 +75,9 @@ import { computed, ref } from 'vue';
 import { CaretRightOutlined } from '@ant-design/icons-vue';
 import RefsComponent from '@/components/RefsComponent.vue'
 
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-import hljs from 'highlight.js';
-import 'highlight.js/styles/github.css';
 
-import { MdPreview, config } from 'md-editor-v3'
-config({
-  markdownItConfig(md) {
-    md.renderer.rules.image = (tokens, idx, options, env, self) => {
-      tokens[idx].attrSet('style', 'display:inline-block;min-height:33px;padding:0;margin:0')
-      if (tokens[idx].content) {
-        tokens[idx].attrSet('title', tokens[idx].content)
-      }
-      tokens[idx].attrSet(
-        'onerror',
-        'this.src="/ui/assets/load_error.png";this.onerror=null;this.height="33px"'
-      )
-      return md.renderer.renderToken(tokens, idx, options)
-    }
-    md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-      tokens[idx].attrSet('target', '_blank')
-      return md.renderer.renderToken(tokens, idx, options)
-    }
-    document.appendChild
-  }
-})
-
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css';
 
 const props = defineProps({
   // 消息角色：'user'|'assistant'|'sent'|'received'
@@ -138,31 +121,6 @@ const emit = defineEmits(['retry', 'retryStoppedMessage']);
 const reasoningActiveKey = ref(['show']);
 
 
-const renderMarkdown = (msg) => {
-  if (!msg.content) return '';
-
-  if (msg.status === 'loading') {
-    return marked.parse(msg.content + '🟢')
-  } else {
-    return marked.parse(msg.content)
-  }
-}
-
-
-const marked = new Marked(
-  {
-    gfm: true,
-    breaks: true,
-    tables: true,
-  },
-  markedHighlight({
-    langPrefix: 'hljs language-',
-    highlight(code) {
-      return hljs.highlightAuto(code).value;
-    }
-  })
-);
-
 // 计算属性：内容为空且正在加载
 const isEmptyAndLoading = computed(() => {
   const isEmpty = !props.message.content || props.message.content.length === 0;
@@ -192,8 +150,6 @@ const isEmptyAndLoading = computed(() => {
     max-width: 95%;
     color: white;
     background-color: var(--main-color);
-    // background-color: var(--main-color);
-    // background: linear-gradient(90deg, var(--main-light-1) 10.79%, var(--main-color) 87.08%);
     align-self: flex-end;
     border-radius: .5rem;
     padding: 0.5rem 1rem;
@@ -213,28 +169,6 @@ const isEmptyAndLoading = computed(() => {
     max-width: 100%;
     margin-bottom: 0;
     white-space: pre-line;
-  }
-
-  .message-md {
-    margin-bottom: 0;
-
-    :deep(code) {
-      padding: 2px 4px;
-      border-radius: 4px;
-      background-color: var(--gray-100);
-    }
-
-    :deep(pre) {
-      padding: 12px;
-      border-radius: 8px;
-      background-color: var(--gray-100);
-      overflow-x: auto;
-
-      code {
-        padding: 0;
-        background-color: transparent;
-      }
-    }
   }
 
   .err-msg {
@@ -441,6 +375,80 @@ const isEmptyAndLoading = computed(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+</style>
+
+<style lang="less">
+.message-md .md-editor-preview-wrapper {
+  color: var(--gray-900);
+  max-width: 100%;
+  padding: 0;
+
+  #preview-only-preview {
+    font-size: 15px;
+  }
+
+  h1, h2 {
+    font-size: 1.2rem;
+  }
+
+  h3, h4 {
+    font-size: 1.1rem;
+  }
+
+  h5, h6 {
+    font-size: 1rem;
+  }
+
+  // li > p, ol > p, ul > p {
+  //   margin: 0.25rem 0;
+  // }
+
+  ol, ul {
+    padding-left: 1rem;
+  }
+
+  code {
+    font-size: 13px;
+    font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
+    line-height: 1.5;
+    letter-spacing: 0.025em;
+    tab-size: 4;
+    -moz-tab-size: 4;
+    background-color: var(--gray-100);
+  }
+}
+
+.chat-box.font-smaller #preview-only-preview {
+  font-size: 14px;
+
+  h1, h2 {
+    font-size: 1.1rem;
+  }
+
+  h3, h4 {
+    font-size: 1rem;
+  }
+}
+
+.chat-box.font-larger #preview-only-preview {
+  font-size: 16px;
+
+  h1, h2 {
+    font-size: 1.3rem;
+  }
+
+  h3, h4 {
+    font-size: 1.2rem;
+  }
+
+  h5, h6 {
+    font-size: 1.1rem;
+  }
+
+  code {
+    font-size: 14px;
   }
 }
 </style>
