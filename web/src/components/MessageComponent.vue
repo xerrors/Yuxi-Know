@@ -43,7 +43,7 @@
 
       <!-- 消息内容 -->
       <!--<div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div>-->
-      <MdPreview ref="editorRef" editorId="preview-only" :modelValue="message.content" :key="index" class="maxkb-md"/>
+      <MdPreview v-else-if="message.content" ref="editorRef" editorId="preview-only" :modelValue="message.content" :key="index" class="maxkb-md"/>
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
         <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
