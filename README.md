@@ -65,11 +65,6 @@ docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
 
 > 添加 `-d` 参数可在后台运行
 
-**生产环境部署**请使用：
-
-```bash
-docker compose -f docker/docker-compose.yml --env-file src/.env up --build -d
-```
 
 成功启动后，会看到以下容器：
 
