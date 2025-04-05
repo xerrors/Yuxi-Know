@@ -26,7 +26,7 @@ services:
       - MILVUS_URI=http://milvus:19530
       - MODEL_DIR=/models  # 优先级高于 .env 中的 MODEL_DIR
       - RUNNING_IN_DOCKER=true
-    command: uvicorn src.main:app --host 0.0.0.0 --port 5050 --reload
+    command: uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
 
   web:
     build:
