@@ -141,8 +141,7 @@ class GraphDatabase:
                 """)
 
         # 判断模型名称是否匹配
-        from src.config import EMBED_MODEL_INFO
-        cur_embed_info = EMBED_MODEL_INFO[config.embed_model]
+        cur_embed_info = config.embed_model_names[config.embed_model]
         self.embed_model_name = self.embed_model_name or cur_embed_info.get('name')
         assert self.embed_model_name == cur_embed_info.get('name') or self.embed_model_name is None, \
             f"embed_model_name={self.embed_model_name}, {cur_embed_info.get('name')=}"

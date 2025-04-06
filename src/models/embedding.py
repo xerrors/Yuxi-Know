@@ -5,7 +5,6 @@ from FlagEmbedding import FlagModel
 from zhipuai import ZhipuAI
 
 from src import config
-from src.config import EMBED_MODEL_INFO
 from src.utils import hashstr, logger, get_docker_safe_url
 
 
@@ -17,9 +16,9 @@ class BaseEmbeddingModel:
             return self.dimension
 
         if hasattr("embed_model_fullname"):
-            return EMBED_MODEL_INFO[self.embed_model_fullname].get("dimension", None)
+            return config.embed_model_names[self.embed_model_fullname].get("dimension", None)
 
-        return EMBED_MODEL_INFO[self.model].get("dimension", None)
+        return config.embed_model_names[self.model].get("dimension", None)
 
     def encode(self, message):
         return self.predict(message)
@@ -54,7 +53,7 @@ class BaseEmbeddingModel:
 
 class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
     def __init__(self, config, **kwargs):
-        info = EMBED_MODEL_INFO[config.embed_model]
+        info = config.embed_model_names[config.embed_model]
 
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
         self.model = self.model or info["name"]
@@ -79,8 +78,8 @@ class ZhipuEmbedding(BaseEmbeddingModel):
 
     def __init__(self, config) -> None:
         self.config = config
-        self.model = EMBED_MODEL_INFO[config.embed_model]["name"]
-        self.dimension = EMBED_MODEL_INFO[config.embed_model]["dimension"]
+        self.model = config.embed_model_names[config.embed_model]["name"]
+        self.dimension = config.embed_model_names[config.embed_model]["dimension"]
         self.client = ZhipuAI(api_key=os.getenv("ZHIPUAI_API_KEY"))
         self.embed_model_fullname = config.embed_model
 
@@ -95,7 +94,7 @@ class ZhipuEmbedding(BaseEmbeddingModel):
 
 class OllamaEmbedding(BaseEmbeddingModel):
     def __init__(self, config) -> None:
-        self.info = EMBED_MODEL_INFO[config.embed_model]
+        self.info = config.embed_model_names[config.embed_model]
         self.model = self.info["name"]
         self.url = self.info.get("url", "http://localhost:11434/api/embed")
         self.url = get_docker_safe_url(self.url)
@@ -119,7 +118,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
 class OtherEmbedding(BaseEmbeddingModel):
 
     def __init__(self, config) -> None:
-        self.info = EMBED_MODEL_INFO[config.embed_model]
+        self.info = config.embed_model_names[config.embed_model]
         self.embed_model_fullname = config.embed_model
         self.dimension = self.info.get("dimension", None)
         self.model = self.info["name"]
@@ -150,7 +149,7 @@ def get_embedding_model(config):
         return None
 
     provider, model_name = config.embed_model.split('/', 1)
-    assert config.embed_model in EMBED_MODEL_INFO.keys(), f"Unsupported embed model: {config.embed_model}, only support {EMBED_MODEL_INFO.keys()}"
+    assert config.embed_model in config.embed_model_names.keys(), f"Unsupported embed model: {config.embed_model}, only support {config.embed_model_names.keys()}"
     logger.debug(f"Loading embedding model {config.embed_model}")
     if provider == "local":
         model = LocalEmbeddingModel(config)
