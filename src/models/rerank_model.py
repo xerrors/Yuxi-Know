@@ -22,7 +22,7 @@ class LocalReranker(FlagReranker):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-class SilconFlowReranker():
+class SiliconFlowReranker():
     def __init__(self, config, **kwargs):
         self.url = "https://api.siliconflow.cn/v1/rerank"
         self.model = config.reranker_names[config.reranker]["name"]
@@ -64,7 +64,7 @@ def get_reranker(config):
     if provider == "local":
         return LocalReranker(config)
     elif provider == "siliconflow":
-        return SilconFlowReranker(config)
+        return SiliconFlowReranker(config)
     else:
         raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}")
 

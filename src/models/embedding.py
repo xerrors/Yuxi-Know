@@ -15,7 +15,7 @@ class BaseEmbeddingModel:
         if hasattr(self, "dimension"):
             return self.dimension
 
-        if hasattr("embed_model_fullname"):
+        if hasattr(self, "embed_model_fullname"):
             return config.embed_model_names[self.embed_model_fullname].get("dimension", None)
 
         return config.embed_model_names[self.model].get("dimension", None)
