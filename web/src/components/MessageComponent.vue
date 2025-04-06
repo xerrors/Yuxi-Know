@@ -405,8 +405,12 @@ const isEmptyAndLoading = computed(() => {
   //   margin: 0.25rem 0;
   // }
 
-  ol, ul {
-    padding-left: 1rem;
+  // ol, ul {
+  //   padding-left: 1rem;
+  // }
+
+  a {
+    color: var(--main-700);
   }
 
   code {
