@@ -4,13 +4,6 @@ import yaml
 from pathlib import Path
 from src.utils.logging_config import logger
 
-with open(Path("src/static/models.yaml"), 'r', encoding='utf-8') as f:
-    _models = yaml.safe_load(f)
-
-MODEL_NAMES = _models["MODEL_NAMES"]
-EMBED_MODEL_INFO = _models["EMBED_MODEL_INFO"]
-RERANKER_LIST = _models["RERANKER_LIST"]
-
 DEFAULT_MOCK_API = 'this_is_mock_api_key_in_frontend'
 
 class SimpleConfig(dict):
@@ -46,6 +39,8 @@ class Config(SimpleConfig):
         self.filename = str(Path("saves/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
+        self._update_models_from_file()
+
         ### >>> 默认配置
         self.add_item("stream", default=True, des="是否开启流式输出")
         # 功能选项
@@ -56,13 +51,13 @@ class Config(SimpleConfig):
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
-        self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(MODEL_NAMES.keys()))
-        self.add_item("model_provider_lite", default="siliconflow", des="模型提供商（用于轻量任务）", choices=list(MODEL_NAMES.keys()))
+        self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(self.model_names.keys()))
+        self.add_item("model_provider_lite", default="siliconflow", des="模型提供商（用于轻量任务）", choices=list(self.model_names.keys()))
         self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
         self.add_item("model_name_lite", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称（用于轻量任务）")
 
-        self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(EMBED_MODEL_INFO.keys()))
-        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(RERANKER_LIST.keys()))
+        self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
+        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
         self.add_item("device", default="cuda", des="运行本地模型的设备", choices=["cpu", "cuda"])
@@ -89,11 +84,40 @@ class Config(SimpleConfig):
         ]
         return {k: v for k, v in self.items() if k not in blocklist}
 
-    def handle_self(self):
-        self.model_names = MODEL_NAMES
-        self.embed_model_names = EMBED_MODEL_INFO
-        self.reranker_names = RERANKER_LIST
+    def _update_models_from_file(self):
+        """
+        从 models.yaml 和 models.private.yml 中更新 MODEL_NAMES
+        """
 
+        with open(Path("src/static/models.yaml"), 'r', encoding='utf-8') as f:
+            _models = yaml.safe_load(f)
+
+        # 尝试打开一个 models.private.yml 文件，用来覆盖 models.yaml 中的配置
+        try:
+            with open(Path("src/static/models.private.yml"), 'r', encoding='utf-8') as f:
+                _models_private = yaml.safe_load(f)
+        except FileNotFoundError:
+            _models_private = {}
+
+        _models = {**_models, **_models_private}
+
+        self.model_names = _models["MODEL_NAMES"]
+        self.embed_model_names = _models["EMBED_MODEL_INFO"]
+        self.reranker_names = _models["RERANKER_LIST"]
+
+    def _save_models_to_file(self):
+        _models = {
+            "MODEL_NAMES": self.model_names,
+            "EMBED_MODEL_INFO": self.embed_model_names,
+            "RERANKER_LIST": self.reranker_names,
+        }
+        with open(Path("src/static/models.private.yml"), 'w', encoding='utf-8') as f:
+            yaml.dump(_models, f, indent=2, allow_unicode=True)
+
+    def handle_self(self):
+        """
+        处理配置
+        """
         model_provider_info = self.model_names.get(self.model_provider, {})
         self.model_dir = os.environ.get("MODEL_DIR", "")
         logger.info(f"MODEL_DIR: {self.model_dir}; 如果是在 docker 中运行，会自动挂载 MODEL_DIR 到 /models 目录，请检查 docker compose 文件")

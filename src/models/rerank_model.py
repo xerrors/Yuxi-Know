@@ -4,13 +4,13 @@ import requests
 import numpy as np
 from FlagEmbedding import FlagReranker
 
-from src.config import RERANKER_LIST
+from src import config
 from src.utils.logging_config import logger
 
 
 class LocalReranker(FlagReranker):
     def __init__(self, config, **kwargs):
-        model_info = RERANKER_LIST[config.reranker]
+        model_info = config.reranker_names[config.reranker]
         model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("local_path"))
         model_name_or_path = model_name_or_path or model_info["name"]
         logger.info(f"Loading Reranker model {config.reranker} from {model_name_or_path}")
@@ -22,10 +22,10 @@ class LocalReranker(FlagReranker):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-class SilconFlowReranker():
+class SiliconFlowReranker():
     def __init__(self, config, **kwargs):
         self.url = "https://api.siliconflow.cn/v1/rerank"
-        self.model = RERANKER_LIST[config.reranker]["name"]
+        self.model = config.reranker_names[config.reranker]["name"]
 
         api_key = os.getenv("SILICONFLOW_API_KEY")
         assert api_key, "SILICONFLOW_API_KEY is required"
@@ -59,12 +59,12 @@ class SilconFlowReranker():
         }
 
 def get_reranker(config):
-    assert config.reranker in RERANKER_LIST.keys(), f"Unsupported Reranker: {config.reranker}, only support {RERANKER_LIST.keys()}"
+    assert config.reranker in config.reranker_names.keys(), f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}"
     provider, model_name = config.reranker.split('/', 1)
     if provider == "local":
         return LocalReranker(config)
     elif provider == "siliconflow":
-        return SilconFlowReranker(config)
+        return SiliconFlowReranker(config)
     else:
-        raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {RERANKER_LIST.keys()}")
+        raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}")
 

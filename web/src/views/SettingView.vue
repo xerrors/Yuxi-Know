@@ -171,6 +171,14 @@
             </div>
             <a-button
               type="text"
+              class="config-button"
+              @click.stop="openProviderConfig(item)"
+              title="配置模型提供商"
+            >
+              <SettingOutlined />
+            </a-button>
+            <a-button
+              type="text"
               class="expand-button"
               @click.stop="toggleExpand(item)"
             >
@@ -202,6 +210,14 @@
                 <InfoCircleOutlined />
               </a>
             </div>
+            <a-button
+              type="text"
+              class="config-button"
+              @click.stop="openProviderConfig(item)"
+              title="配置模型提供商"
+            >
+              <SettingOutlined />
+            </a-button>
             <div class="missing-keys">
               需配置<span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
             </div>
@@ -217,6 +233,43 @@
         />
       </div>
     </div>
+    <a-modal
+      class="provider-config-modal"
+      v-model:open="providerConfig.visible"
+      :title="`配置${providerConfig.providerName}模型`"
+      @ok="saveProviderConfig"
+      @cancel="cancelProviderConfig"
+      :okText="'保存配置'"
+      :cancelText="'取消'"
+      :ok-type="'primary'"
+      :width="800"
+      :bodyStyle="{ padding: '16px 24px' }"
+    >
+      <div v-if="providerConfig.loading" class="modal-loading-container">
+        <a-spin :indicator="h(LoadingOutlined, { style: { fontSize: '32px', color: 'var(--main-color)' }})" />
+        <div class="loading-text">正在获取模型列表...</div>
+      </div>
+      <div v-else class="modal-config-content">
+        <div class="modal-config-header">
+          <h3>选择 {{ providerConfig.providerName }} 的模型</h3>
+          <p class="description">勾选您希望在系统中启用的模型，请注意，列表中可能包含非对话模型，请仔细甄别。</p>
+        </div>
+
+        <div class="modal-models-section">
+          <div class="modal-checkbox-list">
+            <a-checkbox-group v-model:value="providerConfig.selectedModels">
+              <div v-for="(model, index) in providerConfig.allModels" :key="index" class="modal-checkbox-item">
+                <a-checkbox :value="model.id">{{ model.id }}</a-checkbox>
+              </div>
+            </a-checkbox-group>
+          </div>
+          <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
+            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY" />
+            <a-alert v-else type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。" />
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -235,6 +288,7 @@ import {
   InfoCircleOutlined,
   DownOutlined,
   UpOutlined,
+  LoadingOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
@@ -256,6 +310,15 @@ const customModel = reactive({
   api_key: '',
   api_base: '',
   edit_type: 'add',
+})
+const providerConfig = reactive({
+  visible: false,
+  provider: '',
+  providerName: '',
+  models: [],
+  allModels: [], // 所有可用的模型
+  selectedModels: [], // 用户选择的模型
+  loading: false,
 })
 const state = reactive({
   loading: false,
@@ -426,6 +489,99 @@ const sendRestart = () => {
       window.location.reload()
     }, 200)
   })
+}
+
+// 获取模型提供商的模型列表
+const fetchProviderModels = (provider) => {
+  providerConfig.loading = true;
+  fetch(`/api/chat/models?model_provider=${provider}`)
+    .then(response => response.json())
+    .then(data => {
+      console.log(`${provider} 模型列表:`, data);
+
+      // 处理各种可能的API返回格式
+      let modelsList = [];
+
+      // 情况1: { data: [...] }
+      if (data.data && Array.isArray(data.data)) {
+        modelsList = data.data;
+      }
+      // 情况2: { models: [...] } (字符串数组)
+      else if (data.models && Array.isArray(data.models)) {
+        modelsList = data.models.map(model => typeof model === 'string' ? { id: model } : model);
+      }
+      // 情况3: { models: { data: [...] } }
+      else if (data.models && data.models.data && Array.isArray(data.models.data)) {
+        modelsList = data.models.data;
+      }
+
+      console.log("处理后的模型列表:", modelsList);
+      providerConfig.allModels = modelsList;
+      providerConfig.loading = false;
+    })
+    .catch(error => {
+      console.error(`获取${provider}模型列表失败:`, error);
+      message.error({ content: `获取${modelNames.value[provider].name}模型列表失败`, duration: 2 });
+      providerConfig.loading = false;
+    });
+}
+
+const openProviderConfig = (provider) => {
+  providerConfig.provider = provider;
+  providerConfig.providerName = modelNames.value[provider].name;
+  providerConfig.allModels = [];
+  providerConfig.visible = true;
+  providerConfig.loading = true;
+
+  // 获取当前选择的模型作为初始选中值
+  const currentModels = modelNames.value[provider]?.models || [];
+  providerConfig.selectedModels = [...currentModels];
+
+  // 获取所有可用模型
+  fetchProviderModels(provider);
+}
+
+const saveProviderConfig = async () => {
+  if (!modelStatus.value[providerConfig.provider]) {
+    message.error('请在 src/.env 中配置对应的 APIKEY')
+    return
+  }
+
+  message.loading({ content: '保存配置中...', key: 'save-config', duration: 0 });
+
+  try {
+    // 发送选择的模型列表到后端
+    const response = await fetch(`/api/chat/models/update?model_provider=${providerConfig.provider}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(providerConfig.selectedModels),
+    });
+
+    if (!response.ok) {
+      throw new Error('保存模型配置失败');
+    }
+
+    const data = await response.json();
+    console.log('更新后的模型列表:', data.models);
+
+    message.success({ content: '模型配置已保存!', key: 'save-config', duration: 2 });
+
+    // 关闭弹窗
+    providerConfig.visible = false;
+
+    // 刷新配置
+    configStore.refreshConfig();
+
+  } catch (error) {
+    console.error('保存配置失败:', error);
+    message.error({ content: '保存配置失败: ' + error.message, key: 'save-config', duration: 2 });
+  }
+}
+
+const cancelProviderConfig = () => {
+  providerConfig.visible = false;
 }
 </script>
 
@@ -792,3 +948,58 @@ const sendRestart = () => {
 }
 </style>
 
+<style lang="less">
+
+.provider-config-modal {
+  .ant-modal-body {
+    padding: 16px 0 !important;
+    .modal-loading-container {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 200px;
+
+      .loading-text {
+        margin-top: 20px;
+        color: var(--gray-700);
+        font-size: 14px;
+      }
+    }
+
+    .modal-config-content {
+      max-height: 70vh;
+      overflow-y: auto;
+      // padding-right: 10px;
+
+      .modal-config-header {
+        margin-bottom: 20px;
+
+        .description {
+          font-size: 14px;
+          color: var(--gray-600);
+          margin: 0;
+        }
+      }
+
+      .modal-models-section {
+        .modal-checkbox-list {
+          max-height: 50vh;
+          overflow-y: auto;
+          .modal-checkbox-item {
+            margin-bottom: 4px;
+            padding: 4px 6px;
+            border-radius: 6px;
+            background-color: white;
+            border: 1px solid var(--gray-200);
+
+            &:hover {
+              background-color: var(--gray-50);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</style>
