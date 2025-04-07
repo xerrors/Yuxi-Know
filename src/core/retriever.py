@@ -120,7 +120,7 @@ class Retriever:
     def query_web(self, query, history, refs):
         """查询网络"""
 
-        if not (refs["meta"].get("use_web") and config.enable_web_search):
+        if not (refs["meta"].get("use_web") or not config.enable_web_search):
             return {"results": [], "message": "Web search is disabled"}
 
         try:
