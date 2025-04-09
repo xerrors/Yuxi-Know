@@ -384,6 +384,7 @@ const isEmptyAndLoading = computed(() => {
   color: var(--gray-900);
   max-width: 100%;
   padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
 
   #preview-only-preview {
     font-size: 15px;
@@ -415,7 +416,7 @@ const isEmptyAndLoading = computed(() => {
 
   code {
     font-size: 13px;
-    font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
+    font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
     line-height: 1.5;
     letter-spacing: 0.025em;
     tab-size: 4;
