@@ -171,32 +171,34 @@ def chat_agent(agent_name: str,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
-    try:
-        agent = agent_manager.get_runnable_agent(agent_name)
-    except Exception as e:
-        logger.error(f"Error getting agent {agent_name}: {e}")
-        return StreamingResponse(make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error"), media_type='application/json')
 
-    # 从config中获取history_round
-    history_round = config.get("history_round")
-    history_manager = HistoryManager(history)
-    messages = history_manager.get_history_with_msg(query, max_rounds=history_round)
-    history_manager.add_user(query)
-
-    # 如果没有thread_id则生成一个
-    if "thread_id" not in config or not config["thread_id"]:
-        config["thread_id"] = str(uuid.uuid4())
-
-    # 构造运行时配置
-    runnable_config = {
-        "configurable": {
-            **config
-        }
-    }
 
     def stream_messages():
-        content = ""
+
+        # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta)
+
+        try:
+            agent = agent_manager.get_runnable_agent(agent_name)
+        except Exception as e:
+            logger.error(f"Error getting agent {agent_name}: {e}, {traceback.format_exc()}")
+            yield make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error")
+            return
+
+        # 从config中获取history_round
+        history_round = config.get("history_round")
+        history_manager = HistoryManager(history)
+        messages = history_manager.get_history_with_msg(query, max_rounds=history_round)
+        history_manager.add_user(query)
+
+        # 构造运行时配置，如果没有thread_id则生成一个
+        if "thread_id" not in config or not config["thread_id"]:
+            config["thread_id"] = str(uuid.uuid4())
+
+        runnable_config = {"configurable": {**config}}
+
+        content = ""
+
         try:
             for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
                 if isinstance(msg, AIMessageChunk) and msg.content != "<tool_call>":
@@ -214,7 +216,7 @@ def chat_agent(agent_name: str,
                             history=history_manager.update_ai(content),
                             meta=meta)
         except Exception as e:
-            logger.error(f"Error streaming messages: {e}")
+            logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
     return StreamingResponse(stream_messages(), media_type='application/json')

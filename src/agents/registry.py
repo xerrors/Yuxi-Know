@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from typing import Type, Annotated, Optional, TypedDict
+from enum import Enum
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
 
@@ -96,7 +97,7 @@ class BaseAgent():
             return
         for requirement in self.requirements:
             if requirement not in os.environ:
-                raise ValueError(f"{requirement} is not set")
+                raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置")
 
     def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)
