@@ -511,6 +511,18 @@ const handleStreamResponse = async (response) => {
     }
   } catch (error) {
     console.error('流式处理出错:', error);
+    const lastMsg = messages.value[messages.value.length - 1];
+    if (lastMsg.role === 'assistant') {
+      lastMsg.status = 'error';
+      lastMsg.message = error.message;
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        message: `发生错误: ${error.message}`,
+        status: 'error'
+      });
+      await scrollToBottom();
+    }
     isProcessing.value = false;
   }
 };

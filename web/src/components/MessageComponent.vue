@@ -48,7 +48,7 @@
         previewTheme="github"
         :showCodeRowNumber="false"
         :modelValue="message.content"
-        :key="index"
+        :key="message.id"
         class="message-md"/>
 
       <div v-if="message.isStoppedByUser" class="retry-hint">
