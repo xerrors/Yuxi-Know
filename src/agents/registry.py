@@ -97,7 +97,7 @@ class BaseAgent():
             return
         for requirement in self.requirements:
             if requirement not in os.environ:
-                raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置")
+                raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置，并重新启动服务")
 
     def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)

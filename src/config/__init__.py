@@ -47,7 +47,7 @@ class Config(SimpleConfig):
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
-        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（需配置 TAVILY_API_KEY）")
+        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
@@ -150,9 +150,13 @@ class Config(SimpleConfig):
             self.model_provider_status[provider] = all(conds_bool)
 
         # 检查web_search的环境变量
-        if self.enable_web_search and not os.getenv("TAVILY_API_KEY"):
-            logger.warning("TAVILY_API_KEY not set, web search will be disabled")
-            self.enable_web_search = False
+        # if self.enable_web_search and not os.getenv("TAVILY_API_KEY"):
+        #     logger.warning("TAVILY_API_KEY not set, web search will be disabled")
+        #     self.enable_web_search = False
+
+        # 2025.04.08 修改为不手动配置，只要配置了TAVILY_API_KEY，就默认开启web_search
+        if os.getenv("TAVILY_API_KEY"):
+            self.enable_web_search = True
 
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
         assert len(self.valuable_model_provider) > 0, f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"

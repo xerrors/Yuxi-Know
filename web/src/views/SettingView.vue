@@ -6,7 +6,7 @@
       </template>
       <template #actions>
         <a-button :type="isNeedRestart ? 'primary' : 'default'" @click="sendRestart" :icon="h(ReloadOutlined)">
-          {{ isNeedRestart ? '需要重启' : '重启服务' }}
+          {{ isNeedRestart ? '需要刷新' : '重新加载' }}
         </a-button>
       </template>
     </HeaderComponent>
@@ -63,10 +63,11 @@
           </div>
           <div class="card">
             <span class="label">{{ items?.enable_web_search.des }}</span>
-            <a-switch
+            <!-- <a-switch
               :checked="configStore.config.enable_web_search"
               @change="handleChange('enable_web_search', !configStore.config.enable_web_search)"
-            />
+            /> -->
+            <a-switch :checked="configStore.config.enable_web_search" />
           </div>
           <div class="card">
             <span class="label">{{ items?.enable_reranker.des }}</span>
@@ -264,7 +265,7 @@
             </a-checkbox-group>
           </div>
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
-            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY" />
+            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
             <a-alert v-else type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。" />
           </div>
         </div>
@@ -387,11 +388,11 @@ const handleChange = (key, e) => {
     if (!isNeedRestart.value) {
       isNeedRestart.value = true
       notification.info({
-        message: '需要重启服务',
-        description: '请点击右下角按钮重启服务',
+        message: '需要重新加载模型',
+        description: '请点击右下角按钮重新加载模型',
         placement: 'topLeft',
         duration: 0,
-        btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重启')
+        btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
       })
     }
   }
@@ -543,7 +544,7 @@ const openProviderConfig = (provider) => {
 
 const saveProviderConfig = async () => {
   if (!modelStatus.value[providerConfig.provider]) {
-    message.error('请在 src/.env 中配置对应的 APIKEY')
+    message.error('请在 src/.env 中配置对应的 APIKEY，并重新启动服务')
     return
   }
 
