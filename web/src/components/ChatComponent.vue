@@ -407,7 +407,7 @@ const groupRefs = (id) => {
 
 const simpleCall = (msg) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/chat/call_lite', {
+    fetch('/api/chat/call', {
       method: 'POST',
       body: JSON.stringify({ query: msg, }),
       headers: { 'Content-Type': 'application/json' }
@@ -656,7 +656,6 @@ const selectModel = (provider, name) => {
   configStore.setConfigValue('model_provider', provider)
   configStore.setConfigValue('model_name', name)
   message.success(`已切换到模型: ${provider}/${name}`)
-
 }
 </script>
 
