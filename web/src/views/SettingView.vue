@@ -162,7 +162,7 @@
           <div class="card-header" @click="toggleExpand(item)">
             <!-- <div v-if="modelStatus[item]" class="success"></div> -->
             <div :class="{'model-icon': true, 'available': modelStatus[item]}">
-              <img :src="modelIcons[item]" alt="模型图标">
+              <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
             </div>
             <div class="model-title-container">
               <h3>{{ modelNames[item].name }}</h3>
@@ -203,7 +203,7 @@
         <div class="model-provider-card" v-for="(item, key) in notModelKeys" :key="key">
           <div class="card-header">
             <div class="model-icon">
-              <img :src="modelIcons[item]" alt="模型图标">
+              <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
             </div>
             <div class="model-title-container">
               <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
