@@ -118,6 +118,7 @@ def chat_post(
 
 @chat.post("/call")
 async def call(query: str = Body(...), meta: dict = Body(None)):
+    meta = meta or {}
     model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
     async def predict_async(query):
         loop = asyncio.get_event_loop()
@@ -129,7 +130,7 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
     return {"response": response.content}
 
 @chat.post("/call_lite")
-async def call(query: str = Body(...), meta: dict = Body(None)):
+async def call_lite(query: str = Body(...), meta: dict = Body(None)):
     meta = meta or {}
     async def predict_async(query):
         loop = asyncio.get_event_loop()
