@@ -266,7 +266,10 @@
           </div>
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
             <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
-            <a-alert v-else type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。" />
+            <div v-else>
+              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。" />
+              <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%;">
+            </div>
           </div>
         </div>
       </div>
