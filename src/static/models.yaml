@@ -99,6 +99,7 @@ MODEL_NAMES:
       - doubao-1-5-pro-32k-250115
       - doubao-1-5-lite-32k-250115
       - deepseek-r1-250120
+
   lingyiwanwu:
     name: 零一万物
     url: https://platform.lingyiwanwu.com/docs#%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AE%A1%E8%B4%B9
@@ -108,6 +109,24 @@ MODEL_NAMES:
       - LINGYIWANWU_API_KEY
     models:
       - yi-lightning
+
+  openrouter:
+    name: OpenRouter
+    url: https://openrouter.ai/models
+    base_url: https://openrouter.ai/api/v1
+    default: openai/gpt-4o
+    env:
+      - OPENROUTER_API_KEY
+    models:
+      - openai/gpt-4o
+      - openai/gpt-4o-mini
+      - google/gemini-2.5-pro-exp-03-25:free
+      - x-ai/grok-3-beta
+      - meta-llama/llama-4-maverick
+      - meta-llama/llama-4-maverick:free
+      - anthropic/claude-3.7-sonnet
+      - anthropic/claude-3.7-sonnet:thinking
+
 
 EMBED_MODEL_INFO:
   local/BAAI/bge-m3:

@@ -99,11 +99,12 @@ class Config(SimpleConfig):
         except FileNotFoundError:
             _models_private = {}
 
-        _models = {**_models, **_models_private}
+        # 修改为按照子元素合并
+        # _models = {**_models, **_models_private}
 
-        self.model_names = _models["MODEL_NAMES"]
-        self.embed_model_names = _models["EMBED_MODEL_INFO"]
-        self.reranker_names = _models["RERANKER_LIST"]
+        self.model_names = {**_models["MODEL_NAMES"], **_models_private["MODEL_NAMES"]}
+        self.embed_model_names = {**_models["EMBED_MODEL_INFO"], **_models_private["EMBED_MODEL_INFO"]}
+        self.reranker_names = {**_models["RERANKER_LIST"], **_models_private["RERANKER_LIST"]}
 
     def _save_models_to_file(self):
         _models = {
