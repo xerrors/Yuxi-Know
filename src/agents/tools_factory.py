@@ -66,19 +66,25 @@ def regist_tool(
 
 
 class KnowledgeRetrieverModel(BaseModel):
-    query: str = Field(description="The query to get knowledge graph.")
+    query: str = Field(description="查询的关键词，查询的时候，应该尽量以可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。")
 
 
 
 def get_all_tools():
     """获取所有工具"""
     tools = _TOOLS_REGISTRY.copy()
+
+    # 获取所有知识库
     for db_Id, retrieve_info in knowledge_base.get_retrievers().items():
         name = f"retrieve_{retrieve_info['name']}"
+        description = (
+            f"使用 {retrieve_info['name']} 知识库进行检索。\n"
+            f"下面是这个知识库的描述：\n{retrieve_info['description']}"
+        )
         tools[name] = StructuredTool.from_function(
             retrieve_info["retriever"],
             name=name,
-            description=retrieve_info["description"],
+            description=description,
             args_schema=KnowledgeRetrieverModel)
 
     return tools

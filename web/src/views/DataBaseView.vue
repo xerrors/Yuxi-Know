@@ -5,18 +5,19 @@
       description="知识型数据库，主要是非结构化的文本组成，使用向量检索使用。如果出现问题，可以检查 saves/data/database.json 查看配置。"
     >
       <template #actions>
-        <a-button type="primary" @click="newDatabase.open=true">新建数据库</a-button>
+        <a-button type="primary" @click="newDatabase.open=true">新建知识库</a-button>
       </template>
     </HeaderComponent>
 
-    <a-modal :open="newDatabase.open" title="新建数据库" @ok="createDatabase" @cancel="newDatabase.open=false">
-      <h3>数据库名称<span style="color: var(--error-color)">*</span></h3>
-      <a-input v-model:value="newDatabase.name" placeholder="新建数据库名称" />
-      <h3 style="margin-top: 20px;">数据库描述</h3>
+    <a-modal :open="newDatabase.open" title="新建知识库" @ok="createDatabase" @cancel="newDatabase.open=false">
+      <h3>知识库名称<span style="color: var(--error-color)">*</span></h3>
+      <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" />
+      <h3 style="margin-top: 20px;">知识库描述</h3>
+      <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
       <a-textarea
         v-model:value="newDatabase.description"
-        placeholder="新建数据库描述"
-        :auto-size="{ minRows: 2, maxRows: 5 }"
+        placeholder="新建知识库描述"
+        :auto-size="{ minRows: 5, maxRows: 10 }"
       />
       <!-- <h3 style="margin-top: 20px;">向量维度</h3>
       <p>必须与向量模型 {{ configStore.config.embed_model }} 一致</p>
@@ -31,7 +32,7 @@
         <div class="top">
           <div class="icon"><PlusOutlined /></div>
           <div class="info">
-            <h3>新建数据库</h3>
+            <h3>新建知识库</h3>
           </div>
         </div>
         <p>导入您自己的文本数据或通过Webhook实时写入数据以增强 LLM 的上下文。</p>

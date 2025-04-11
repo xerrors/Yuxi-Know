@@ -165,7 +165,7 @@
 
           <!-- 添加工具选择部分 -->
           <a-form-item label="可用工具" name="tools" class="config-item">
-            <p class="description">选择要启用的工具</p>
+            <p class="description">选择要启用的工具（注：retrieve 工具仅展现了与当前向量模型匹配的知识库，详情请查看 docker 日志。）</p>
             <a-form-item-rest>
               <div class="tools-switches">
                 <div v-for="tool in availableTools" :key="tool" class="tool-switch-item">
