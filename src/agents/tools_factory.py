@@ -66,7 +66,7 @@ def regist_tool(
 
 
 class KnowledgeRetrieverModel(BaseModel):
-    query: str = Field(description="查询的关键词，查询的时候，应该尽量以关键词的形式进行查询，不要使用复杂的句子。\n.")
+    query: str = Field(description="查询的关键词，查询的时候，应该尽量以可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。")
 
 
 
