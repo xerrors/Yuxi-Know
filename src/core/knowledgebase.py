@@ -11,7 +11,6 @@ from src.utils import logger, hashstr
 from src.core.indexing import chunk, read_text
 from src.core.kb_db_manager import kb_db_manager
 
-
 class KnowledgeBase:
 
     def __init__(self) -> None:
@@ -250,7 +249,7 @@ class KnowledgeBase:
     def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
-        if db["embed_model"] != self.embed_model.embed_model_fullname:
+        if not self.check_embed_model(db_id):
             logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
             return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
 
@@ -312,7 +311,6 @@ class KnowledgeBase:
     ###################################
 
     def query(self, query, db_id, **kwargs):
-        db = self.get_kb_by_id(db_id)
 
         distance_threshold = kwargs.get("distance_threshold", self.default_distance_threshold)
         rerank_threshold = kwargs.get("rerank_threshold", self.default_rerank_threshold)
@@ -361,11 +359,19 @@ class KnowledgeBase:
     def get_retrievers(self):
         retrievers = {}
         for db in self.db_manager.get_all_databases():
-            retrievers[db["db_id"]] = {
-                "name": db["name"],
-                "description": db["description"],
-                "retriever": self.get_retriever_by_db_id(db["db_id"]),
-            }
+            if self.check_embed_model(db["db_id"]):
+                retrievers[db["db_id"]] = {
+                    "name": db["name"],
+                    "description": db["description"],
+                    "retriever": self.get_retriever_by_db_id(db["db_id"]),
+                    "embed_model": db["embed_model"],
+                }
+            else:
+                logger.warning((
+                    f"无法将知识库 {db['name']} 转换为 Tools, 因为向量模型不匹配，"
+                    f"当前向量模型: {self.embed_model.embed_model_fullname}，"
+                    f"知识库向量模型: {db['embed_model']}。"
+                ))
         return retrievers
 
     ################################
@@ -475,3 +481,8 @@ class KnowledgeBase:
     def search_by_id(self, collection_name, id, output_fields=["id", "text"]):
         res = self.client.get(collection_name, id, output_fields=output_fields)
         return res
+
+    def check_embed_model(self, db_id):
+        db = self.db_manager.get_database_by_id(db_id)
+        return db["embed_model"] == self.embed_model.embed_model_fullname
+
