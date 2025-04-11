@@ -2,6 +2,8 @@ from src import config, knowledge_base, graph_base
 from src.models.rerank_model import get_reranker
 from src.utils.logging_config import logger
 from src.models import select_model
+from src.core.operators import HyDEOperator
+
 
 class Retriever:
 
@@ -151,8 +153,8 @@ class Retriever:
             rewritten_query = model.predict(rewritten_query_prompt).content
 
         if rewrite_query_span == "hyde":
-            hy_doc = model.predict(rewritten_query).content
-            rewritten_query = f"{rewritten_query} {hy_doc}"
+            res = HyDEOperator.call(model_callable=model.predict, query=query, context_str=history_query)
+            rewritten_query = res.content
 
         return rewritten_query
 
