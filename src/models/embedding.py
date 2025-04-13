@@ -62,6 +62,8 @@ class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
 
         if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
             self.model = _path
+        else:
+            logger.warning(f"Local model `{info['name']}` not found in `{self.model}`, using `{info['name']}`")
 
         logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
 
