@@ -1,9 +1,10 @@
+import traceback
+
 from src import config, knowledge_base, graph_base
 from src.models.rerank_model import get_reranker
 from src.utils.logging_config import logger
 from src.models import select_model
 from src.core.operators import HyDEOperator
-
 
 class Retriever:
 
@@ -80,7 +81,7 @@ class Retriever:
             for entity in refs["entities"]:
                 if entity == "":
                     continue
-                result = graph_base.query_by_vector(entity)
+                result = graph_base.query_node(entity)
                 if result != []:
                     results.extend(result)
         return {"results": self.format_query_results(results)}
@@ -256,7 +257,7 @@ class Retriever:
                     # 添加边
                     formatted_results["edges"].append(edge_info)
                 except Exception as e:
-                    logger.error(f"处理关系时出错: {e}, 关系: {relationship}")
+                    logger.error(f"处理关系时出错: {e}, 关系: {relationship}, {traceback.format_exc()}")
                     continue
 
         # 将节点字典转换为列表
