@@ -53,6 +53,19 @@ class BaseEmbeddingModel:
 
 class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
     def __init__(self, config, **kwargs):
+        """
+        对于本地模型，也可以在 src/static/models.private.yaml 中配置对应的 local_path 路径
+
+        ```yaml
+        EMBED_MODEL_INFO:
+            local/BAAI/bge-m3:
+                dimension: 1024
+                name: BAAI/bge-m3
+                local_path: /path/to/bge-m3
+        ```
+
+        但是也要确保在 docker-compose 中映射了 MODEL_DIR 到 /models 目录
+        """
         info = config.embed_model_names[config.embed_model]
 
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
@@ -60,10 +73,17 @@ class LocalEmbeddingModel(FlagModel, BaseEmbeddingModel):
         self.dimension = info["dimension"]
         self.embed_model_fullname = config.embed_model
 
-        if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
-            self.model = _path
+        if os.getenv("MODEL_DIR"):
+            if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
+                self.model = _path
+            else:
+                logger.warning(f"Local model `{info['name']}` not found in `{self.model}`, using `{info['name']}`")
 
-        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
+        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`，"
+                    f"如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
+                    f"如果还是不行，建议手动下载到某个文件夹比如  /path/to/models/BAAI/bge-m3 目录下；"
+                    f"然后配置 src/.env 文件中的 MODEL_DIR 环境变量到 /path/to/models 目录；"
+                    f"如果是在 docker 中运行，请确保 docker-compose 文件（line 12 左右）中映射了 MODEL_DIR 到 /models 目录")
 
         super().__init__(self.model,
                 query_instruction_for_retrieval=info.get("query_instruction", None),
