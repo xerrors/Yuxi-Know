@@ -109,7 +109,7 @@ class KnowledgeBase:
             try:
                 milvus_info = self.get_collection_info(db["db_id"])
                 db_copy["metadata"] = milvus_info
-                logger.debug(f"获取知识库 {db['name']} (ID: {db['db_id']}) 的Milvus信息成功: {milvus_info}")
+                # logger.debug(f"获取知识库 {db['name']} (ID: {db['db_id']}) 的Milvus信息成功: {milvus_info}")
             except Exception as e:
                 logger.warning(f"获取知识库 {db['name']} (ID: {db['db_id']}) 的Milvus信息失败: {e}")
                 # 添加一个默认的Milvus状态
@@ -390,7 +390,7 @@ class KnowledgeBase:
             logger.info(f"Successfully connected to Milvus at {uri}")
             return True
         except MilvusException as e:
-            logger.error(f"Failed to connect to Milvus: {e}")
+            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行，如果已退出，请重新启动 `docker restart milvus-standalone-dev`")
             return False
 
     def get_collection_names(self):

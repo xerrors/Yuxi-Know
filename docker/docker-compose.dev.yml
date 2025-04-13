@@ -12,9 +12,6 @@ services:
       # - ${MODEL_DIR}:/models # 如果出现 undefined volume MODEL_DIR: invalid compose project，请添加此环境变量或者注释此行
     ports:
       - "5050:5050"
-    depends_on:
-      - graph
-      - milvus
     networks:
       - app-network
     extra_hosts:

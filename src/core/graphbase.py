@@ -418,7 +418,7 @@ class GraphDatabase:
             with open(info_file_path, 'w', encoding='utf-8') as f:
                 json.dump(graph_info, f, ensure_ascii=False, indent=2)
 
-            logger.info(f"图数据库信息已保存到：{info_file_path}")
+            # logger.info(f"图数据库信息已保存到：{info_file_path}")
             return True
         except Exception as e:
             logger.error(f"保存图数据库信息失败：{e}")
