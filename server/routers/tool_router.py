@@ -37,7 +37,7 @@ async def route_index():
         Tool(
             name="agent",
             title="智能体（Dev）",
-            description="智能体演练平台",
+            description="智能体演练平台，现在还处于开发预览状态，欢迎提 Issue，但先不要用于正式场景。",
             url="/tools/agent",
         )
     ]

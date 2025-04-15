@@ -41,10 +41,8 @@ MODEL_NAMES:
       - glm-4
       - glm-4-plus
       - glm-4-air
-      - glm-4-airx
-      - glm-4-long
-      - glm-4-flashx
       - glm-4-flash
+      - glm-z1-air
   siliconflow:
     name: SiliconFlow
     url: https://cloud.siliconflow.cn/models

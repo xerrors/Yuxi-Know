@@ -42,7 +42,6 @@ class Config(SimpleConfig):
         self._update_models_from_file()
 
         ### >>> 默认配置
-        self.add_item("stream", default=True, des="是否开启流式输出")
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")

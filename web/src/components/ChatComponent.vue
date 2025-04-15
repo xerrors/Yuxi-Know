@@ -4,24 +4,32 @@
       <div class="header__left">
         <div
           v-if="!state.isSidebarOpen"
-          class="close nav-btn"
+          class="close nav-btn nav-btn-icon-only"
           @click="state.isSidebarOpen = true"
         >
-          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          <a-tooltip title="展开侧边栏" placement="right">
+            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          </a-tooltip>
         </div>
 
-        <div class="newchat nav-btn" @click="$emit('newconv')">
-          <PlusCircleOutlined /> <span class="text">新对话</span>
+        <div class="newchat nav-btn nav-btn-icon-only" @click="$emit('newconv')">
+          <a-tooltip title="新建对话" placement="right">
+            <PlusCircleOutlined />
+          </a-tooltip>
         </div>
         <a-dropdown>
           <a class="model-select nav-btn" @click.prevent>
-            <BulbOutlined /> <span class="text">{{ configStore.config?.model_provider }}/{{ configStore.config?.model_name }}</span>
+            <BulbOutlined />
+            <a-tooltip :title="configStore.config?.model_name" placement="right">
+              <span class="model-text text"> {{ configStore.config?.model_name }} </span>
+            </a-tooltip>
+            <span class="text" style="color: #aaa;">{{ configStore.config?.model_provider }} </span>
           </a>
           <template #overlay>
             <a-menu class="scrollable-menu">
               <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
                 <a-menu-item v-for="(model, idx) in modelNames[item]?.models" :key="`${item}-${idx}`" @click="selectModel(item, model)">
-                  {{ item }}/{{ model }}
+                  {{ model }}
                 </a-menu-item>
               </a-menu-item-group>
               <a-menu-item-group v-if="customModels.length > 0" title="自定义模型">
@@ -38,9 +46,6 @@
           <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
         </div>
         <div v-if="opts.showPanel" class="my-panal r0 top100 swing-in-top-fwd" ref="panel">
-          <div class="flex-center" @click="meta.stream = !meta.stream">
-            流式输出 <div @click.stop><a-switch v-model:checked="meta.stream" /></div>
-          </div>
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
             总结对话标题 <div @click.stop><a-switch v-model:checked="meta.summary_title" /></div>
           </div>
@@ -210,7 +215,6 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   use_web: false,
   graph_name: "neo4j",
   selectedKB: null,
-  stream: true,
   summary_title: false,
   history_round: 20,
   db_id: null,
@@ -655,7 +659,7 @@ const modelKeys = computed(() => {
 const selectModel = (provider, name) => {
   configStore.setConfigValue('model_provider', provider)
   configStore.setConfigValue('model_name', name)
-  message.success(`已切换到模型: ${provider}/${name}`)
+  // message.success(`已切换到模型: ${name} | ${provider}`)
 }
 </script>
 
@@ -690,12 +694,6 @@ const selectModel = (provider, name) => {
       display: flex;
       align-items: center;
     }
-
-    .header__left {
-      .close {
-        margin-right: 12px;
-      }
-    }
   }
 
   .nav-btn {
@@ -720,14 +718,18 @@ const selectModel = (provider, name) => {
     }
   }
 
+  .nav-btn-icon-only {
+    font-size: 1rem;
+  }
+
   .model-select {
     // color: var(--gray-900);
-    max-width: 300px;
+    max-width: 350px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    .text {
+    .model-text {
       overflow: hidden;
       text-overflow: ellipsis;
     }

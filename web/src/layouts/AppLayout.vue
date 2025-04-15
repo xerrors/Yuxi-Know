@@ -208,6 +208,10 @@ const mainList = [{
 <style lang="less" scoped>
 @import '@/assets/main.css';
 
+:root {
+  --header-width: 60px;
+}
+
 .app-layout {
   display: flex;
   flex-direction: row;
@@ -243,18 +247,18 @@ div.header, #app-router-view {
 .header {
   display: flex;
   flex-direction: column;
-  flex: 0 0 70px;
+  flex: 0 0 var(--header-width);
   justify-content: flex-start;
   align-items: center;
   background-color: var(--gray-100);
   height: 100%;
-  width: 74px;
+  width: var(--header-width);
   border-right: 1px solid var(--gray-300);
 
   .logo {
     width: 40px;
     height: 40px;
-    margin: 18px 0 18px 0;
+    margin: 14px 0 14px 0;
 
     img {
       width: 100%;
@@ -288,7 +292,7 @@ div.header, #app-router-view {
     color: #222;
     font-size: 20px;
     transition: background-color 0.2s ease-in-out;
-    margin: 0 10px;
+    margin: 0;
     text-decoration: none;
     cursor: pointer;
 
@@ -327,12 +331,6 @@ div.header, #app-router-view {
     &.api-docs {
       padding: 10px 12px;
     }
-
-    &.setting {
-      padding: 16px 12px;
-      width: 56px;
-    }
-
     &.active {
       font-weight: bold;
       color: var(--main-600);
@@ -362,6 +360,7 @@ div.header, #app-router-view {
     color: #333;
     margin-bottom: 20px;
     margin-top: 10px;
+    padding: 16px 12px;
 
     &:hover {
       cursor: pointer;

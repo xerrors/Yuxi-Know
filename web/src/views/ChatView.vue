@@ -3,7 +3,7 @@
     <div class="conversations" :class="{ 'is-open': state.isSidebarOpen }">
       <div class="actions">
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
-         <span class="header-title">对话历史</span>
+         <span class="header-title">Yuxi-Know</span>
         <div class="action close" @click="state.isSidebarOpen = false">
           <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
         </div>
