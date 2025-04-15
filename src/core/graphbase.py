@@ -498,6 +498,125 @@ class GraphDatabase:
 
         return count
 
+
+    def _extract_relationship_info(self, relationship, source_name=None, target_name=None, node_dict=None):
+        """
+        提取关系信息并返回格式化的节点和边信息
+        """
+        rel_id = relationship.element_id
+        nodes = relationship.nodes
+        if len(nodes) != 2:
+            return None, None
+
+        source, target = nodes
+        source_id = source.element_id
+        target_id = target.element_id
+
+        source_name = node_dict[source_id]["name"] if source_name is None else source_name
+        target_name = node_dict[target_id]["name"] if target_name is None else target_name
+
+        relationship_type = relationship._properties.get("type", "unknown")
+        if relationship_type == "unknown":
+            relationship_type = relationship.type
+
+        edge_info = {
+            "id": rel_id,
+            "type": relationship_type,
+            "source_id": source_id,
+            "target_id": target_id,
+            "source_name": source_name,
+            "target_name": target_name,
+        }
+
+        node_info = [
+            {"id": source_id, "name": source_name},
+            {"id": target_id, "name": target_name},
+        ]
+
+        return node_info, edge_info
+
+    def format_general_results(self, results):
+        formatted_results = {"nodes": [], "edges": []}
+
+        for item in results:
+            relationship = item[1]
+            source_name = item[0]._properties.get("name", "unknown")
+            target_name = item[2]._properties.get("name", "unknown") if len(item) > 2 else "unknown"
+
+            node_info, edge_info = self._extract_relationship_info(relationship, source_name, target_name)
+            if node_info is None or edge_info is None:
+                continue
+
+            for node in node_info:
+                if node["id"] not in [n["id"] for n in formatted_results["nodes"]]:
+                    formatted_results["nodes"].append(node)
+
+            formatted_results["edges"].append(edge_info)
+
+        return formatted_results
+
+    def format_query_result_to_graph(self, query_results):
+        """将检索到的结果转换为 {"nodes": [], "edges": []} 的格式
+
+        例如：
+        {
+            "nodes": [
+                {
+                    "id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:103",
+                    "name": "张若锦"
+                },
+                {
+                    "id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:20",
+                    "name": "贾宝玉"
+                },
+                ....
+            ],
+            "edges": [
+                {
+                    "id": "5:5efbff88-72ef-44f9-b867-6c0e164a4a13:71",
+                    "type": "奴仆",
+                    "source_id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:88",
+                    "target_id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:20",
+                    "source_name": "宋嬷嬷",
+                    "target_name": "贾宝玉"
+                },
+                ....
+            ]
+        }
+        """
+        formatted_results = {"nodes": [], "edges": []}
+        node_dict = {}
+        edge_dict = {}
+
+        for item in query_results:
+            # 检查数据格式
+            if len(item) < 2 or not isinstance(item[1], list):
+                continue
+
+            node_dict[item[0].element_id] = dict(id=item[0].element_id, name=item[0]._properties.get("name", "Unknown"))
+            node_dict[item[2].element_id] = dict(id=item[2].element_id, name=item[2]._properties.get("name", "Unknown"))
+
+            # 处理关系列表中的每个关系
+            for i, relationship in enumerate(item[1]):
+                try:
+                    # 提取关系信息
+                    node_info, edge_info = self._extract_relationship_info(relationship, node_dict=node_dict)
+                    if node_info is None or edge_info is None:
+                        continue
+
+                    # 添加边
+                    edge_dict[edge_info["id"]] = edge_info
+                except Exception as e:
+                    logger.error(f"处理关系时出错: {e}, 关系: {relationship}, {traceback.format_exc()}")
+                    continue
+
+        # 将节点字典转换为列表
+        formatted_results["nodes"] = list(node_dict.values())
+        formatted_results["edges"] = list(edge_dict.values())
+
+
+        return formatted_results
+
 def clean_triples_embedding(triples):
     for item in triples:
         if hasattr(item[0], '_properties'):

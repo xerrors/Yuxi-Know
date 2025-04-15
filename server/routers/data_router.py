@@ -157,7 +157,7 @@ async def index_nodes(data: dict = Body(default={})):
 @data.get("/graph/node")
 async def get_graph_node(entity_name: str):
     result = graph_base.query_node(entity_name=entity_name)
-    return {"result": retriever.format_query_results(result), "message": "success"}
+    return {"result": graph_base.format_query_result_to_graph(result), "message": "success"}
 
 @data.get("/graph/nodes")
 async def get_graph_nodes(kgdb_name: str, num: int):
@@ -166,7 +166,7 @@ async def get_graph_nodes(kgdb_name: str, num: int):
 
     logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
     result = graph_base.get_sample_nodes(kgdb_name, num)
-    return {"result": retriever.format_general_results(result), "message": "success"}
+    return {"result": graph_base.format_general_results(result), "message": "success"}
 
 @data.post("/graph/add-by-jsonl")
 async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None)):
