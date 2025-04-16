@@ -17,7 +17,24 @@
         <a-button type="text" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'base'">
-        <h3>基础模型配置</h3>
+        <h3>功能配置</h3>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_base.des }}</span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_base"
+              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
+            />
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_graph"
+              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
+            />
+          </div>
+        </div>
+        <h3>检索配置</h3>
         <div class="section">
           <div class="card card-select">
             <span class="label">{{ items?.embed_model.des }}</span>
@@ -44,31 +61,6 @@
               </a-select-option>
             </a-select>
           </div>
-        </div>
-        <h3>功能配置</h3>
-        <div class="section">
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_base.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_base"
-              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
-            />
-          </div>
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_graph"
-              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
-            />
-          </div>
-          <div class="card">
-            <span class="label">{{ items?.enable_web_search.des }}</span>
-            <!-- <a-switch
-              :checked="configStore.config.enable_web_search"
-              @change="handleChange('enable_web_search', !configStore.config.enable_web_search)"
-            /> -->
-            <a-switch :checked="configStore.config.enable_web_search" />
-          </div>
           <div class="card">
             <span class="label">{{ items?.enable_reranker.des }}</span>
             <a-switch
@@ -76,9 +68,6 @@
               @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
             />
           </div>
-        </div>
-        <h3>检索配置</h3>
-        <div class="section">
           <div class="card card-select">
             <span class="label">{{ items?.use_rewrite_query.des }}</span>
             <a-select style="width: 200px"
@@ -166,13 +155,13 @@
             </div>
             <div class="model-title-container">
               <h3>{{ modelNames[item].name }}</h3>
-              <a :href="modelNames[item].url" target="_blank" class="model-url" @click.stop>
+              <!-- <a :href="modelNames[item].url" target="_blank" class="model-url" @click.stop>
                 <InfoCircleOutlined />
-              </a>
+              </a> -->
             </div>
             <a-button
               type="text"
-              class="config-button"
+              class="expand-button"
               @click.stop="openProviderConfig(item)"
               title="配置模型提供商"
             >
@@ -184,7 +173,7 @@
               @click.stop="toggleExpand(item)"
             >
               <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
-                <DownOutlined />
+                <DownCircleOutlined />
               </span>
             </a-button>
           </div>
@@ -293,6 +282,8 @@ import {
   DownOutlined,
   UpOutlined,
   LoadingOutlined,
+  UpCircleOutlined,
+  DownCircleOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
@@ -590,8 +581,12 @@ const cancelProviderConfig = () => {
 </script>
 
 <style lang="less" scoped>
+:root {
+  --setting-header-height: 200px;
+}
+
 .setting-header {
-  height: 100px;
+  height: var(--setting-header-height);
 }
 
 .setting-header p {
@@ -603,7 +598,7 @@ const cancelProviderConfig = () => {
   box-sizing: border-box;
   display: flex;
   position: relative;
-  min-height: 100%;
+  min-height: calc(100vh - var(--setting-header-height));
 }
 
 .sider {
@@ -865,7 +860,6 @@ const cancelProviderConfig = () => {
             align-items: center;
             .name {
               color: var(--gray-1000);
-              font-weight: bold;
               overflow: hidden;
               text-overflow: ellipsis;
               white-space: nowrap;
