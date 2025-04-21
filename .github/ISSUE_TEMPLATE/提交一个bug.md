@@ -1,14 +1,14 @@
 ---
 name: 提交一个BUG或者报错
-about: 提交一个 BUG或者报错
-title: "[BUG]"
+about: 无法启动、无法回答、后端报错等等
+title: 'Error: '
 labels: bug
 assignees: xerrors
 
 ---
 
 1️⃣ 描述一下问题
-> 简单描述一下这个 BUG
+> 简单描述一下
 
 
 
