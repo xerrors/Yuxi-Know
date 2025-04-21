@@ -4,7 +4,13 @@ about: 无法启动、无法回答、后端报错等等
 title: 'Error: '
 labels: bug
 assignees: xerrors
-
+body:
+- type: textarea
+  id: repro
+  attributes:
+    label: Reproduction steps
+    description: "描述一下问题"
+    value: |
 ---
 
 1️⃣ 描述一下问题
@@ -13,12 +19,7 @@ assignees: xerrors
 
 
 
-2️⃣ 如何复现
-> 什么情况下出现：
-
-
-
-3️⃣ 报错日志
+2️⃣ 报错日志
 
 请运行以下命令，并提供部分相关日志：
 
@@ -26,12 +27,12 @@ assignees: xerrors
 docker logs --tail=100 api-dev
 ```
 
-4️⃣ 相关截图
+3️⃣ 相关截图
 
 
 
 
-5️⃣其他相关信息
+#️⃣ 其他相关信息
 
 
-✅如果问题与模型调用相关，请尝试切换到其他在线模型
+✅ 如果问题与模型调用相关，请尝试切换到其他在线模型
