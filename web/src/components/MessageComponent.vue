@@ -51,6 +51,10 @@
         :key="message.id"
         class="message-md"/>
 
+      <div v-else class="err-msg" @click="$emit('retry')">
+        请求错误，请重试。{{ message.message }}
+      </div>
+
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
         <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
@@ -124,7 +128,7 @@ const reasoningActiveKey = ref(['show']);
 // 计算属性：内容为空且正在加载
 const isEmptyAndLoading = computed(() => {
   const isEmpty = !props.message.content || props.message.content.length === 0;
-  const isLoading = props.message.status === 'init'
+  const isLoading = props.message.status === 'init' && props.isProcessing
   return isEmpty && isLoading;
 });
 </script>
