@@ -176,6 +176,6 @@ async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] 
     if not file_path.endswith('.jsonl'):
         raise HTTPException(status_code=400, detail="file_path must be a jsonl file")
 
-    graph_base.jsonl_file_add_entity(file_path, kgdb_name)
+    await graph_base.jsonl_file_add_entity(file_path, kgdb_name)
     return {"message": "Entity successfully added"}
 

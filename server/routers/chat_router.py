@@ -21,7 +21,7 @@ async def chat_get():
     return "Chat Get!"
 
 @chat.post("/")
-def chat_post(
+async def chat_post(
         query: str = Body(...),
         meta: dict = Body(None),
         history: list[dict] | None = Body(None),

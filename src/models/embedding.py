@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import asyncio
 from FlagEmbedding import FlagModel
 from zhipuai import ZhipuAI
 
@@ -25,6 +26,15 @@ class BaseEmbeddingModel:
 
     def encode_queries(self, queries):
         return self.predict(queries)
+
+    async def aencode(self, message):
+        return await asyncio.to_thread(self.encode, message)
+
+    async def aencode_queries(self, queries):
+        return await asyncio.to_thread(self.encode_queries, queries)
+
+    async def abatch_encode(self, messages, batch_size=20):
+        return await asyncio.to_thread(self.batch_encode, messages, batch_size)
 
     def batch_encode(self, messages, batch_size=20):
         logger.info(f"Batch encoding {len(messages)} messages")
