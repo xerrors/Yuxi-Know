@@ -171,11 +171,15 @@ async def get_graph_nodes(kgdb_name: str, num: int):
 @data.post("/graph/add-by-jsonl")
 async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None)):
     if not config.enable_knowledge_graph:
-        raise HTTPException(status_code=400, detail="Knowledge graph is not enabled")
+        return {"message": "知识图谱未启用", "status": "failed"}
 
     if not file_path.endswith('.jsonl'):
-        raise HTTPException(status_code=400, detail="file_path must be a jsonl file")
+        return {"message": "文件格式错误，请上传jsonl文件", "status": "failed"}
 
-    await graph_base.jsonl_file_add_entity(file_path, kgdb_name)
-    return {"message": "Entity successfully added"}
+    try:
+        await graph_base.jsonl_file_add_entity(file_path, kgdb_name)
+        return {"message": "实体添加成功", "status": "success"}
+    except Exception as e:
+        logger.error(f"添加实体失败: {e}, {traceback.format_exc()}")
+        return {"message": f"添加实体失败: {e}", "status": "failed"}
 
