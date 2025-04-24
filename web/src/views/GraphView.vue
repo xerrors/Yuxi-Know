@@ -198,10 +198,15 @@ const addDocumentByFile = () => {
   })
   .then(response => response.json())
   .then((data) => {
-    message.success(data.message);
-    state.showModal = false;
+    if (data.status === 'success') {
+      message.success(data.message);
+      state.showModal = false;
+    } else {
+      throw new Error(data.message);
+    }
   })
   .catch((error) => {
+    console.error(error)
     message.error(error.message);
   })
   .finally(() => state.precessing = false)
