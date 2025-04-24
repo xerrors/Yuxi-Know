@@ -140,6 +140,23 @@ class GraphDatabase:
                 }} }};
                 """)
 
+        def _get_nodes_without_embedding(tx, entity_names):
+            """获取没有embedding的节点列表"""
+            # 构建参数字典，将列表转换为"param0"、"param1"等键值对形式
+            params = {f"param{i}": name for i, name in enumerate(entity_names)}
+
+            # 构建查询参数列表
+            param_placeholders = ", ".join([f"${key}" for key in params.keys()])
+
+            # 执行查询
+            result = tx.run(f"""
+            MATCH (n:Entity)
+            WHERE n.name IN [{param_placeholders}] AND n.embedding IS NULL
+            RETURN n.name AS name
+            """, params)
+
+            return [record["name"] for record in result]
+
         def _batch_set_embeddings(tx, entity_embedding_pairs):
             """批量设置实体的嵌入向量"""
             for entity_name, embedding in entity_embedding_pairs:
@@ -168,12 +185,20 @@ class GraphDatabase:
                 if entry['t'] not in all_entities:
                     all_entities.append(entry['t'])
 
+            # 筛选出没有embedding的节点
+            nodes_without_embedding = session.execute_read(_get_nodes_without_embedding, all_entities)
+            if not nodes_without_embedding:
+                logger.info(f"所有实体已有embedding，无需重新计算")
+                return
+
+            logger.info(f"需要为{len(nodes_without_embedding)}/{len(all_entities)}个实体计算embedding")
+
             # 批量处理实体
             max_batch_size = 1024  # 限制此部分的主要是内存大小 1024 * 1024 * 4 / 1024 / 1024 = 4GB
-            total_entities = len(all_entities)
+            total_entities = len(nodes_without_embedding)
 
             for i in range(0, total_entities, max_batch_size):
-                batch_entities = all_entities[i:i+max_batch_size]
+                batch_entities = nodes_without_embedding[i:i+max_batch_size]
                 logger.debug(f"Processing entities batch {i//max_batch_size + 1}/{(total_entities-1)//max_batch_size + 1} ({len(batch_entities)} entities)")
 
                 # 批量获取嵌入向量
