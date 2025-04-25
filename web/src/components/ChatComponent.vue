@@ -347,7 +347,42 @@ const updateMessage = (info) => {
     try {
       // 特殊处理：content需要追加而不是替换
       if (info.content != null && info.content !== '') {
-        msg.content += info.content;
+        // 检查新内容中是否有<think>标签
+        if (info.content.includes('<think>') && !msg.isCollectingThinking) {
+          // 开始收集思考内容
+          msg.isCollectingThinking = true;
+
+          // 分割内容，获取标签前后的部分
+          const parts = info.content.split('<think>');
+          msg.content += parts[0]; // 添加标签前的内容到正文
+
+          // 如果有标签后的内容，添加到思考内容
+          if (parts.length > 1) {
+            if (parts[1].includes('</think>')) {
+              const thinkParts = parts[1].split('</think>');
+              msg.reasoning_content = (msg.reasoning_content || '') + thinkParts[0];
+              msg.content += thinkParts[1]; // 添加结束标签后的内容到正文
+              msg.isCollectingThinking = false;
+            } else {
+              msg.reasoning_content = (msg.reasoning_content || '') + parts[1];
+            }
+          }
+        }
+        // 检查是否正在收集思考内容
+        else if (msg.isCollectingThinking) {
+          if (info.content.includes('</think>')) {
+            const parts = info.content.split('</think>');
+            msg.reasoning_content = (msg.reasoning_content || '') + parts[0];
+            msg.content += parts[1]; // 添加结束标签后的内容到正文
+            msg.isCollectingThinking = false;
+          } else {
+            msg.reasoning_content = (msg.reasoning_content || '') + info.content;
+          }
+        }
+        // 不在收集思考内容，正常追加
+        else {
+          msg.content += info.content;
+        }
       }
 
       // 批量处理其他属性，只有当属性值不为null/undefined且不为空字符串时才更新
