@@ -15,7 +15,7 @@
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
           <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
-            <p class="reasoning-content">{{ message.reasoning_content }}</p>
+            <p class="reasoning-content">{{ message.reasoning_content.trim() }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
@@ -56,7 +56,7 @@
       <!-- 工具调用 (AgentView特有) -->
       <slot v-else-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" name="tool-calls"></slot>
 
-      <div v-else class="err-msg" @click="$emit('retry')">
+      <div v-else-if="!isProcessing" class="err-msg" @click="$emit('retry')">
         请求错误，请重试。{{ message.message }}
       </div>
 
