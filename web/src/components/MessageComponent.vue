@@ -51,9 +51,10 @@
         :key="message.id"
         class="message-md"/>
 
-      <div v-else-if="message.reasoning_content"  class="searching-msg">
-        <!-- <i>正在思考……</i> -->
-      </div>
+      <div v-else-if="message.reasoning_content"  class="empty-block"></div>
+
+      <!-- 工具调用 (AgentView特有) -->
+      <slot v-else-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" name="tool-calls"></slot>
 
       <div v-else class="err-msg" @click="$emit('retry')">
         请求错误，请重试。{{ message.message }}
@@ -64,8 +65,6 @@
         <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
       </div>
 
-      <!-- 工具调用 (AgentView特有) -->
-      <slot name="tool-calls"></slot>
 
       <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
         <RefsComponent :message="message" :show-refs="showRefs" @retry="emit('retry')" />

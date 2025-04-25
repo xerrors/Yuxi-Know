@@ -345,40 +345,21 @@ const updateMessage = (info) => {
   const msg = conv.value.messages.find((msg) => msg.id === info.id);
   if (msg) {
     try {
-      // 只有在 text 不为空时更新
-      if (info.content !== null && info.content !== undefined && info.content !== '') {
+      // 特殊处理：content需要追加而不是替换
+      if (info.content != null && info.content !== '') {
         msg.content += info.content;
       }
 
-      if (info.reasoning_content !== null && info.reasoning_content !== undefined && info.reasoning_content !== '') {
-        msg.reasoning_content = info.reasoning_content;
-      }
+      // 批量处理其他属性，只有当属性值不为null/undefined且不为空字符串时才更新
+      const propertiesToUpdate = [
+        'reasoning_content', 'model_name', 'status', 'message', 'showThinking', 'refs', 'meta'
+      ];
 
-      // 只有在 refs 不为空时更新
-      if (info.refs !== null && info.refs !== undefined) {
-        msg.refs = info.refs;
-      }
-
-      if (info.model_name !== null && info.model_name !== undefined && info.model_name !== '') {
-        msg.model_name = info.model_name;
-      }
-
-      // 只有在 status 不为空时更新
-      if (info.status !== null && info.status !== undefined && info.status !== '') {
-        msg.status = info.status;
-      }
-
-      if (info.meta !== null && info.meta !== undefined) {
-        msg.meta = info.meta;
-      }
-
-      if (info.message !== null && info.message !== undefined) {
-        msg.message = info.message;
-      }
-
-      if (info.showThinking !== null && info.showThinking !== undefined) {
-        msg.showThinking = info.showThinking;
-      }
+      propertiesToUpdate.forEach(prop => {
+        if (info[prop] != null && (typeof info[prop] !== 'string' || info[prop] !== '')) {
+          msg[prop] = info[prop];
+        }
+      });
 
       scrollToBottom();
     } catch (error) {
