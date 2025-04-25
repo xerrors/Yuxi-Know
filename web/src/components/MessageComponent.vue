@@ -51,6 +51,10 @@
         :key="message.id"
         class="message-md"/>
 
+      <div v-else-if="message.reasoning_content"  class="searching-msg">
+        <!-- <i>正在思考……</i> -->
+      </div>
+
       <div v-else class="err-msg" @click="$emit('retry')">
         请求错误，请重试。{{ message.message }}
       </div>
@@ -187,8 +191,8 @@ const isEmptyAndLoading = computed(() => {
   }
 
   .searching-msg {
-    color: var(--gray-500);
-    animation: colorPulse 2s infinite;
+    color: var(--gray-700);
+    animation: colorPulse 1s infinite ease-in-out;
   }
 
   .reasoning-box {
