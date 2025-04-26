@@ -317,6 +317,7 @@ class KnowledgeBase:
         max_query_count = kwargs.get("max_query_count", self.default_max_query_count)
 
         all_db_result = self.search(query, db_id, limit=max_query_count)
+        all_db_result = [dict(r) for r in all_db_result]
 
         # 获取文件信息并添加到结果中
         for res in all_db_result:
