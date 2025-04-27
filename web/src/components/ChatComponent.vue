@@ -81,13 +81,15 @@
     </div>
     <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
       <MessageComponent
-        v-for="message in conv.messages"
+        v-for="(message, index) in conv.messages"
         :message="message"
         :key="message.id"
         :is-processing="isStreaming"
-        :show-refs="true"
+        :show-refs="['copy', 'regenerate', 'subGraph', 'webSearch', 'knowledgeBase']"
+        :is-latest-message="isLatestMessage(index)"
         @retry="retryMessage(message.id)"
         @retryStoppedMessage="retryStoppedMessage(message.id)"
+        @openRefs="handleOpenRefs"
       >
       </MessageComponent>
     </div>
@@ -142,6 +144,13 @@
         <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
       </div>
     </div>
+    <!-- 添加全局Refs侧边栏 -->
+    <RefsSidebar
+      ref="refsSidebarRef"
+      :visible="refsSidebarVisible"
+      :latestRefs="currentRefs"
+      @update:visible="refsSidebarVisible = $event"
+    />
   </div>
 </template>
 
@@ -178,6 +187,7 @@ import { useConfigStore } from '@/stores/config'
 import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
+import RefsSidebar from '@/components/RefsSidebar.vue'
 
 const props = defineProps({
   conv: Object,
@@ -222,6 +232,41 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   wideScreen: false,
 })
 
+// 添加全局refs状态
+const refsSidebarVisible = ref(false)
+const currentRefs = ref({})
+
+// 处理打开refs侧边栏
+const handleOpenRefs = ({ type, refs }) => {
+  console.log('ChatComponent handleOpenRefs called with type:', type);
+  console.log('Refs data structure:', JSON.stringify(refs));
+
+  // 先更新引用数据，确保数据在设置标签页之前已更新
+  currentRefs.value = Object.assign({}, refs);
+
+  // 强制在下一个tick更新，确保数据已经被正确应用
+  nextTick(() => {
+    // 显示抽屉
+    refsSidebarVisible.value = true;
+
+    // 再次检查引用是否正确
+    console.log('Updated refs data:', JSON.stringify(currentRefs.value));
+
+    // 根据type自动选择标签页
+    if (refsSidebarRef.value) {
+      console.log('Setting active tab to:', type);
+      // 延迟50毫秒设置标签页，确保抽屉已打开
+      setTimeout(() => {
+        refsSidebarRef.value.setActiveTab(type);
+      }, 50);
+    } else {
+      console.error('refsSidebarRef is not available');
+    }
+  });
+}
+
+// 添加对RefsSidebar的ref
+const refsSidebarRef = ref(null)
 
 const consoleMsg = (msg) => console.log(msg)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
@@ -393,6 +438,11 @@ const updateMessage = (info) => {
       propertiesToUpdate.forEach(prop => {
         if (info[prop] != null && (typeof info[prop] !== 'string' || info[prop] !== '')) {
           msg[prop] = info[prop];
+
+          // 如果更新了refs，同时更新全局refs
+          if (prop === 'refs' && info.refs) {
+            currentRefs.value = info.refs;
+          }
         }
       });
 
@@ -481,6 +531,12 @@ const fetchChatResponse = (user_input, cur_res_id) => {
           console.log(msg)
           groupRefs(cur_res_id);
           updateMessage({showThinking: "no", id: cur_res_id});
+          // 更新全局refs为最新消息的refs
+          if (msg && msg.refs) {
+            // 深拷贝refs以确保不会出现引用问题
+            currentRefs.value = JSON.parse(JSON.stringify(msg.refs));
+            console.log('Updated currentRefs on response completion:', currentRefs.value);
+          }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
@@ -606,6 +662,11 @@ onMounted(() => {
     const parsedMeta = JSON.parse(storedMeta);
     Object.assign(meta, parsedMeta);
   }
+
+  // 检查refsSidebarRef是否正确挂载
+  nextTick(() => {
+    console.log('Is refsSidebarRef mounted?', !!refsSidebarRef.value);
+  });
 });
 
 onUnmounted(() => {
@@ -676,6 +737,26 @@ const selectModel = (provider, name) => {
   configStore.setConfigValue('model_provider', provider)
   configStore.setConfigValue('model_name', name)
   // message.success(`已切换到模型: ${name} | ${provider}`)
+}
+
+// 判断是否是最新的助手消息
+const isLatestMessage = (index) => {
+  // 找到最后一条助手消息的索引
+  const lastAssistantMsgIndex = findLastIndex(conv.value.messages,
+    msg => (msg.role === 'received' || msg.role === 'assistant') && msg.status === 'finished');
+
+  // 如果当前索引等于最后一条助手消息的索引，则为最新消息
+  return index === lastAssistantMsgIndex;
+}
+
+// 辅助函数：从后向前查找满足条件的元素索引
+const findLastIndex = (array, predicate) => {
+  for (let i = array.length - 1; i >= 0; i--) {
+    if (predicate(array[i])) {
+      return i;
+    }
+  }
+  return -1;
 }
 </script>
 
