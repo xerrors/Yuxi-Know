@@ -67,7 +67,7 @@
 
 
       <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
-        <RefsComponent :message="message" :show-refs="showRefs" @retry="emit('retry')" />
+        <RefsComponent :message="message" :show-refs="showRefs" :is-latest-message="isLatestMessage" @retry="emit('retry')" @openRefs="emit('openRefs', $event)" />
       </div>
       <!-- 错误消息 -->
     </div>
@@ -111,6 +111,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  // 是否为最新消息
+  isLatestMessage: {
+    type: Boolean,
+    default: false
+  }
 });
 
 const editorRef = ref()
@@ -122,7 +127,7 @@ const statusDefination = {
   error: '错误'
 }
 
-const emit = defineEmits(['retry', 'retryStoppedMessage']);
+const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
 
 // 推理面板展开状态
 const reasoningActiveKey = ref(['show']);
