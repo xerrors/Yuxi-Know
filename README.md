@@ -34,7 +34,6 @@
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
 - **2024.10.12** - 后端修改为 [FastAPI](https://github.com/fastapi)，添加 [Milvus-Standalone](https://github.com/milvus-io) 独立部署
 
-
 ### 环境配置
 
 在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中（此文件项目中没有，需要自行参考 [src/.env.template](src/.env.template) 创建）。更多可配置项，可参考 后面**对话模型**部分。
@@ -143,11 +142,36 @@ ark:
 
 对于**向量模型**和**重排序模型**，选择 `local` 前缀的模型会自动下载。如遇下载问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置。
 
-要使用已下载的本地模型，可在 models.yaml 或者网页设置中映射。
+要使用已下载的本地模型：
+
+1. 在网页设置中添加映射：
 
 ![image](https://github.com/user-attachments/assets/ab62ea17-c7d0-4f94-84af-c4bab26865ad)
 
-**添加向量模型**
+2. 将文件夹映射到 docker 内部
+
+```yml
+# docker-compose.yml
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    container_name: api-dev
+    working_dir: /app
+    volumes:
+      - ./server:/app/server
+      - ./src:/app/src
+      - ./saves:/app/saves
+      - ${MODEL_DIR}:/models <== 比如修改为 /hdd/models:models
+    ports:
+
+```
+
+#### 添加向量模型
+
+注：添加本地向量模型由于在 docker 内外的路径差异很大，因此建议参考前面的路径映射之后，在这里添加。
 
 ```yaml
 # src/static/models.yaml
