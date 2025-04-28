@@ -27,17 +27,13 @@
 
 ## 📋 更新日志
 
+- **2025.04.27** - 支持 Ollama 等带有 `<think>Content</think>` 标签的消息解析
 - **2025.03.30** - 系统中集成智能体（WIP， [PR#96](https://github.com/xerrors/Yuxi-Know/pull/96)）
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
 - **2025.02.23** - SiliconFlow 的 Rerank 和 Embedding model 支持，现默认使用 SiliconFlow
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
 - **2024.10.12** - 后端修改为 [FastAPI](https://github.com/fastapi)，添加 [Milvus-Standalone](https://github.com/milvus-io) 独立部署
 
-![功能展示](https://github.com/user-attachments/assets/8416a933-cc43-45d0-bf06-00df0ba6c4fb)
-
-| PC 网页                                                                                 | 小屏设备                                                                                |
-| :-------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
-| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6) | ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a) |
 
 ### 环境配置
 
@@ -61,11 +57,10 @@ ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 
 **开发环境启动**（源代码修改会自动更新）：
 
 ```bash
-docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
+docker compose --env-file src/.env up --build
 ```
 
 > 添加 `-d` 参数可在后台运行
-
 
 成功启动后，会看到以下容器：
 
@@ -84,51 +79,14 @@ docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
 
 ### 系统预览
 
-![系统演示](./images/demo.gif)
-
-问答支持 Deepseek-R1 等推理模型、知识图谱检索、知识库检索、网页检索
-
-![Image](https://github.com/user-attachments/assets/97ad6771-e4a2-4324-a001-ecb0abe40fdd)
-
-网页检索结果：
-
-![Image](https://github.com/user-attachments/assets/20d51700-78d5-48a8-ab16-00bc98a1df37)
-
-知识图谱检索结果：
-
-![Image](https://github.com/user-attachments/assets/61b4e06f-4e6e-4a75-bfcb-b1a424523bb6)
-
-知识库检索结果
-
-![Image](https://github.com/user-attachments/assets/53e786f4-08d7-45c1-bcec-df46d0c3c49b)
-
-知识库管理：
-
-
-![Image](https://github.com/user-attachments/assets/55a6de55-59a0-4636-9c00-e4bfd6573c1b)
-
-![Image](https://github.com/user-attachments/assets/0f4f39ba-e6b7-4f18-a3c3-147477922f58)
-
-
-知识图谱
-
-![Image](https://github.com/user-attachments/assets/5849d875-801c-4d29-9d38-9245685e9d73)
-
-可视化配置：
-
-![Image](https://github.com/user-attachments/assets/5faac8bc-7968-42d0-a77d-5f8881a24de1)
-
-丰富的模型支持：
-
-![Image](https://github.com/user-attachments/assets/7a54ca07-78da-4aef-b0a0-47aa539dae8e)
-
+> 待补充
 
 ### 服务管理
 
 **关闭服务**：
 
 ```bash
-docker compose -f docker/docker-compose.dev.yml --env-file src/.env down
+docker compose --env-file src/.env down
 ```
 
 **查看日志**：
@@ -143,14 +101,14 @@ docker logs <容器名称>  # 例如：docker logs api-dev
 
 本项目支持通过 API 调用的模型，本地模型需使用 vllm、ollama 转成 API 服务后使用。
 
-| 模型供应商             | 默认模型                            | 配置项目                                       |
-| :--------------------- | :---------------------------------- | :--------------------------------------------- |
-| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费) | `SILICONFLOW_API_KEY`                        |
-| `openai`             | `gpt-4o`                          | `OPENAI_API_KEY`                             |
-| `deepseek`           | `deepseek-chat`                   | `DEEPSEEK_API_KEY`                           |
-| `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`                                |
-| `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`                            |
-| `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`                          |
+| 模型供应商             | 默认模型                            | 配置项目                |
+| :--------------------- | :---------------------------------- | :---------------------- |
+| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费) | `SILICONFLOW_API_KEY` |
+| `openai`             | `gpt-4o`                          | `OPENAI_API_KEY`      |
+| `deepseek`           | `deepseek-chat`                   | `DEEPSEEK_API_KEY`    |
+| `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`         |
+| `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`     |
+| `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`   |
 
 #### 添加新模型供应商
 
@@ -189,7 +147,6 @@ ark:
 
 ![image](https://github.com/user-attachments/assets/ab62ea17-c7d0-4f94-84af-c4bab26865ad)
 
-
 **添加向量模型**
 
 ```yaml
@@ -215,20 +172,9 @@ ark:
 
 ## 📚 知识库支持
 
-本项目支持多种格式的知识库文件：
+本项目支持多种格式的知识库文件：PDF、TXT、Markdown、Docx。
 
-- PDF
-- Txt
-- Markdown
-- Docx
-
-文件上传后，系统会：
-
-1. 将文件转换为纯文本
-2. 使用向量模型将文本转换为向量
-3. 存储到向量数据库中
-
-> 此过程可能需要一定时间，请耐心等待。
+文件上传后，系统会 对文件进行分块、索引、存储到向量数据库（Milvus）中，此过程可能需要一定时间，请耐心等待。
 
 ## 🕸️ 知识图谱支持
 
@@ -249,7 +195,7 @@ ark:
 - 默认账户：`neo4j`
 - 默认密码：`0123456789`
 
-可在 `docker/docker-compose.yml` 和 `docker/docker-compose.dev.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
+可在 `docker-compose.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
 
 目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
 
@@ -260,20 +206,6 @@ ark:
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
     <img src="https://contributors.nn.ci/api?repo=xerrors/Yuxi-Know" alt="贡献者名单">
 </a>
-
-## ❓ 常见问题
-
-### 镜像下载问题
-
-如无法直接下载相关镜像，可参考 [DaoCloud/public-image-mirror](https://github.com/DaoCloud/public-image-mirror?tab=readme-ov-file#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)，尝试替换前缀：
-
-```bash
-# 以 neo4j 为例，其余类似
-docker pull m.daocloud.io/docker.io/library/neo4j:latest
-
-# 然后重命名镜像
-docker tag m.daocloud.io/docker.io/library/neo4j:latest neo4j:latest
-```
 
 ## Star History
 
