@@ -46,7 +46,7 @@ services:
     command: npm run server
 
   graph:
-    image: neo4j:latest
+    image: neo4j:5.26
     container_name: graph-dev
     ports:
       - "7474:7474"
@@ -99,7 +99,7 @@ services:
       - app-network
 
   milvus:
-    image: milvusdb/milvus:latest
+    image: milvusdb/milvus:v2.5.6
     container_name: milvus-standalone-dev
     command: ["milvus", "run", "standalone"]
     security_opt:
