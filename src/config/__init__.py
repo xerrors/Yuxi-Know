@@ -190,9 +190,6 @@ class Config(SimpleConfig):
             else:
                 logger.warning(f"Unknown config file type {self.filename}")
 
-        else:
-            logger.warning(f"\n\n{'='*70}\n{'Config file not found':^70}\n{'You can custum your config in `' + self.filename + '`':^70}\n{'='*70}\n\n")
-
     def save(self):
         logger.info(f"Saving config to {self.filename}")
         if self.filename is None:

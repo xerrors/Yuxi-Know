@@ -1,14 +1,14 @@
 services:
   api:
     build:
-      context: ..
+      context: .
       dockerfile: docker/api.Dockerfile
     container_name: api-dev
     working_dir: /app
     volumes:
-      - ../server:/app/server
-      - ../src:/app/src
-      - ../saves_dev:/app/saves
+      - ./server:/app/server
+      - ./src:/app/src
+      - ./saves_dev:/app/saves
       # - ${MODEL_DIR}:/models # 如果出现 undefined volume MODEL_DIR: invalid compose project，请添加此环境变量或者注释此行
     ports:
       - "5050:5050"
@@ -27,12 +27,12 @@ services:
 
   web:
     build:
-      context: ..
+      context: .
       dockerfile: docker/web.Dockerfile
       target: development
     container_name: web-dev
     volumes:
-      - ../web:/app
+      - ./web:/app
       - /app/node_modules
     ports:
       - "5173:5173"
@@ -43,7 +43,7 @@ services:
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://api:5050  # 添加这行
-    command: npm run server
+    command: pnpm run server
 
   graph:
     image: neo4j:5.26

@@ -5,11 +5,14 @@ FROM python:3.12
 WORKDIR /app
 
 # 复制 requirements.txt 文件（这一步如果文件没变，Docker 会使用缓存）
-COPY ../requirements.txt /app/requirements.txt
+# COPY../requirements.txt /app/requirements.txt
+COPY ../pyproject.toml /app/pyproject.toml
+COPY ../uv.lock /app/uv.lock
+COPY ../.python-version /app/.python-version
 
 # 安装依赖（Docker 会缓存这一步，除非 requirements.txt 发生变化）
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-RUN pip install -U gunicorn -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install uv
+RUN uv sync
 
 RUN apt-get clean
 RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
