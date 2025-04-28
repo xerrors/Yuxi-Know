@@ -46,7 +46,7 @@ services:
     command: npm run server
 
   graph:
-    image: neo4j:latest
+    image: neo4j:5.26
     container_name: graph-dev
     ports:
       - "7474:7474"
