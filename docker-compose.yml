@@ -23,7 +23,7 @@ services:
       - MILVUS_URI=http://milvus:19530
       - MODEL_DIR=/models  # 优先级高于 .env 中的 MODEL_DIR
       - RUNNING_IN_DOCKER=true
-    command: uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
+    command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
 
   web:
     build:
@@ -52,8 +52,8 @@ services:
       - "7474:7474"
       - "7687:7687"
     volumes:
-      - ./volumes/neo4j/data:/data
-      - ./volumes/neo4j/logs:/var/lib/neo4j/logs
+      - ./docker/volumes/neo4j/data:/data
+      - ./docker/volumes/neo4j/logs:/var/lib/neo4j/logs
     environment:
       - NEO4J_AUTH=neo4j/0123456789
       - NEO4J_server_bolt_listen__address=0.0.0.0:7687
@@ -71,7 +71,7 @@ services:
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ./volumes/milvus/etcd:/etcd
+      - ./docker/volumes/milvus/etcd:/etcd
     command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
@@ -88,7 +88,7 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
     volumes:
-      - ./volumes/milvus/minio:/minio_data
+      - ./docker/volumes/milvus/minio:/minio_data
     command: minio server /minio_data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -109,8 +109,8 @@ services:
       MINIO_ADDRESS: minio:9000
       MILVUS_LOG_LEVEL: error  # Add this line to reduce log output
     volumes:
-      - ./volumes/milvus/milvus:/var/lib/milvus
-      - ./volumes/milvus/logs:/var/lib/milvus/logs
+      - ./docker/volumes/milvus/milvus:/var/lib/milvus
+      - ./docker/volumes/milvus/logs:/var/lib/milvus/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 30s
