@@ -13,11 +13,54 @@ from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
 from src.agents.tools_factory import get_all_tools
+from server.routers.auth_router import get_admin_user
+from server.utils.auth_middleware import get_required_user
+from server.models.user_model import User
 
 chat = APIRouter(prefix="/chat")
 
+@chat.get("/default_agent")
+async def get_default_agent(current_user: User = Depends(get_required_user)):
+    """获取默认智能体ID（需要登录）"""
+    try:
+        default_agent_id = config.default_agent_id
+        # 如果没有设置默认智能体，尝试获取第一个可用的智能体
+        if not default_agent_id:
+            agents = [agent.get_info() for agent in agent_manager.agents.values()]
+            if agents:
+                default_agent_id = agents[0].get("name", "")
+
+        return {"default_agent_id": default_agent_id}
+    except Exception as e:
+        logger.error(f"获取默认智能体出错: {e}")
+        raise HTTPException(status_code=500, detail=f"获取默认智能体出错: {str(e)}")
+
+@chat.post("/set_default_agent")
+async def set_default_agent(agent_id: str = Body(..., embed=True), current_user = Depends(get_admin_user)):
+    """设置默认智能体ID (仅管理员)"""
+    try:
+        # 验证智能体是否存在
+        agents = [agent.get_info() for agent in agent_manager.agents.values()]
+        agent_ids = [agent.get("name", "") for agent in agents]
+
+        if agent_id not in agent_ids:
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+        # 设置默认智能体ID
+        config.default_agent_id = agent_id
+        # 保存配置
+        config.save()
+
+        return {"success": True, "default_agent_id": agent_id}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"设置默认智能体出错: {e}")
+        raise HTTPException(status_code=500, detail=f"设置默认智能体出错: {str(e)}")
+
 @chat.get("/")
-async def chat_get():
+async def chat_get(current_user: User = Depends(get_required_user)):
+    """聊天服务健康检查（需要登录）"""
     return "Chat Get!"
 
 @chat.post("/")
@@ -25,29 +68,9 @@ async def chat_post(
         query: str = Body(...),
         meta: dict = Body(None),
         history: list[dict] | None = Body(None),
-        thread_id: str | None = Body(None)):
-    """处理聊天请求的主要端点。
-    Args:
-        query: 用户的输入查询文本
-        meta: 包含请求元数据的字典，可以包含以下字段：
-            - use_web: 是否使用网络搜索
-            - use_graph: 是否使用知识图谱
-            - db_id: 数据库ID
-            - history_round: 历史对话轮数限制
-            - system_prompt: 系统提示词（str，不含变量）
-        history: 对话历史记录列表
-        thread_id: 对话线程ID
-    Returns:
-        StreamingResponse: 返回一个流式响应，包含以下状态：
-            - searching: 正在搜索知识库
-            - generating: 正在生成回答
-            - reasoning: 正在推理
-            - loading: 正在加载回答
-            - finished: 回答完成
-            - error: 发生错误
-    Raises:
-        HTTPException: 当检索器或模型发生错误时抛出
-    """
+        thread_id: str | None = Body(None),
+        current_user: User = Depends(get_required_user)):
+    """处理聊天请求的主要端点（需要登录）"""
 
     model = select_model()
     meta["server_model_name"] = model.model_name
@@ -117,7 +140,8 @@ async def chat_post(
     return StreamingResponse(generate_response(), media_type='application/json')
 
 @chat.post("/call")
-async def call(query: str = Body(...), meta: dict = Body(None)):
+async def call(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
+    """调用模型进行简单问答（需要登录）"""
     meta = meta or {}
     model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
     async def predict_async(query):
@@ -130,7 +154,8 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
     return {"response": response.content}
 
 @chat.post("/call_lite")
-async def call_lite(query: str = Body(...), meta: dict = Body(None)):
+async def call_lite(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
+    """使用轻量版模型进行问答（需要登录）"""
     meta = meta or {}
     async def predict_async(query):
         loop = asyncio.get_event_loop()
@@ -145,7 +170,8 @@ async def call_lite(query: str = Body(...), meta: dict = Body(None)):
     return {"response": response.content}
 
 @chat.get("/agent")
-async def get_agent():
+async def get_agent(current_user: User = Depends(get_required_user)):
+    """获取所有可用智能体（需要登录）"""
     agents = [agent.get_info() for agent in agent_manager.agents.values()]
     return {"agents": agents}
 
@@ -154,12 +180,14 @@ def chat_agent(agent_name: str,
                query: str = Body(...),
                history: list = Body(...),
                config: dict = Body({}),
-               meta: dict = Body({})):
+               meta: dict = Body({}),
+               current_user: User = Depends(get_required_user)):
+    """使用特定智能体进行对话（需要登录）"""
 
     meta.update({
         "query": query,
         "agent_name": agent_name,
-        "server_model_name": config.get("model", agent_name) ,
+        "server_model_name": config.get("model", agent_name),
         "thread_id": config.get("thread_id"),
     })
 
@@ -223,19 +251,19 @@ def chat_agent(agent_name: str,
     return StreamingResponse(stream_messages(), media_type='application/json')
 
 @chat.get("/models")
-async def get_chat_models(model_provider: str):
-    """获取指定模型提供商的模型列表"""
+async def get_chat_models(model_provider: str, current_user: User = Depends(get_admin_user)):
+    """获取指定模型提供商的模型列表（需要登录）"""
     model = select_model(model_provider=model_provider)
     return {"models": model.get_models()}
 
 @chat.post("/models/update")
-async def update_chat_models(model_provider: str, model_names: list[str]):
-    """更新指定模型提供商的模型列表"""
+async def update_chat_models(model_provider: str, model_names: list[str], current_user = Depends(get_admin_user)):
+    """更新指定模型提供商的模型列表 (仅管理员)"""
     config.model_names[model_provider]["models"] = model_names
     config._save_models_to_file()
     return {"models": config.model_names[model_provider]["models"]}
 
 @chat.get("/tools")
-async def get_tools():
-    """获取所有工具"""
+async def get_tools(current_user: User = Depends(get_admin_user)):
+    """获取所有可用工具（需要登录）"""
     return {"tools": list(get_all_tools().keys())}

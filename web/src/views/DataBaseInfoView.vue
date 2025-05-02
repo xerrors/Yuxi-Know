@@ -286,6 +286,8 @@ import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'v
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
+import { knowledgeBaseApi } from '@/apis/admin_api'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
   ReadOutlined,
@@ -449,7 +451,6 @@ const handleRefresh = () => {
 }
 
 const deleteDatabse = () => {
-
   Modal.confirm({
     title: '删除数据库',
     content: '确定要删除该数据库吗？',
@@ -457,28 +458,19 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch(`/api/data/?db_id=${databaseId.value}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          db_id: databaseId.value
-        }),
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log(data)
-        message.success(data.message)
-        router.push('/database')
-      })
-      .catch(error => {
-        console.error(error)
-        message.error(error.message)
-      })
-      .finally(() => {
-        state.lock = false
-      })
+      knowledgeBaseApi.deleteDatabase(databaseId.value)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          router.push('/database')
+        })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');
@@ -537,17 +529,14 @@ const getDatabaseInfo = () => {
   }
   state.lock = true
   return new Promise((resolve, reject) => {
-    fetch(`/api/data/info?db_id=${db_id}`, {
-      method: "GET",
-    })
-      .then(response => response.json())
+    knowledgeBaseApi.getDatabaseInfo(db_id)
       .then(data => {
         database.value = data
         resolve(data)
       })
       .catch(error => {
         console.error(error)
-        message.error(error.message)
+        message.error(error.message || '获取数据库信息失败')
         reject(error)
       })
       .finally(() => {
@@ -565,30 +554,20 @@ const deleteFile = (fileId) => {
     okText: '确认',
     cancelText: '取消',
     onOk: () => {
-        state.lock = true
-        fetch('/api/data/document', {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json"  // 添加 Content-Type 头
-          },
-          body: JSON.stringify({
-            db_id: databaseId.value,
-            file_id: fileId
-          }),
+      state.lock = true
+      knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          getDatabaseInfo()
         })
-          .then(response => response.json())
-          .then(data => {
-            console.log(data)
-            message.success(data.message)
-            getDatabaseInfo()
-          })
-          .catch(error => {
-            console.error(error)
-              message.error(error.message)
-            })
-            .finally(() => {
-              state.lock = false
-            })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');

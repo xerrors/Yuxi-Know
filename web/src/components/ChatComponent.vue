@@ -184,10 +184,12 @@ import {
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
 import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 import RefsSidebar from '@/components/RefsSidebar.vue'
+import { chatApi } from '@/apis/auth_api'
 
 const props = defineProps({
   conv: Object,
@@ -196,6 +198,7 @@ const props = defineProps({
 
 const emit = defineEmits(['rename-title', 'newconv']);
 const configStore = useConfigStore()
+const userStore = useUserStore()
 
 const { conv, state } = toRefs(props)
 const chatContainer = ref(null)
@@ -475,50 +478,56 @@ const groupRefs = (id) => {
   scrollToBottom()
 }
 
-const simpleCall = (msg) => {
-  return new Promise((resolve, reject) => {
-    fetch('/api/chat/call', {
-      method: 'POST',
-      body: JSON.stringify({ query: msg, }),
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then((response) => response.json())
-    .then((data) => resolve(data))
-    .catch((error) => reject(error))
-  })
-}
-
 const loadDatabases = () => {
-  fetch('/api/data/', { method: "GET", })
+  fetch('/api/data/', { 
+    method: "GET",
+    headers: userStore.getAuthHeaders()
+  })
     .then(response => response.json())
     .then(data => {
       console.log(data)
       opts.databases = data.databases
     })
+    .catch(error => {
+      console.error('加载数据库列表失败:', error)
+    })
 }
 
-// 新函数用于处理 fetch 请求
+const simpleCall = (msg) => {
+  return new Promise((resolve, reject) => {
+    chatApi.simpleCall(msg)
+      .then(data => resolve(data))
+      .catch(error => reject(error))
+  })
+}
+
+// 替换fetchChatResponse函数
 const fetchChatResponse = (user_input, cur_res_id) => {
   const controller = new AbortController();
   const signal = controller.signal;
 
   const params = {
     query: user_input,
-    history: getHistory().slice(0, -1), // 去掉最后一条刚添加的用户消息,
+    history: getHistory().slice(0, -1), // 去掉最后一条刚添加的用户消息
     meta: meta,
     cur_res_id: cur_res_id,
   }
   console.log(params)
 
+  // 使用fetch带上认证头和信号控制
   fetch('/api/chat/', {
     method: 'POST',
     body: JSON.stringify(params),
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...userStore.getAuthHeaders()
     },
     signal // 添加 signal 用于中断请求
   })
   .then((response) => {
+    if (!response.ok) {
+      throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+    }
     if (!response.body) throw new Error("ReadableStream not supported.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
@@ -587,6 +596,7 @@ const fetchChatResponse = (user_input, cur_res_id) => {
       updateMessage({
         id: cur_res_id,
         status: "error",
+        message: error.message || '请求失败',
       });
     }
     isStreaming.value = false;

@@ -29,6 +29,8 @@ import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import DebugComponent from '@/components/DebugComponent.vue'
+import UserInfoComponent from '@/components/UserInfoComponent.vue'
+import { configApi } from '@/apis/public_api'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
@@ -57,11 +59,12 @@ const getRemoteDatabase = () => {
 const fetchGithubStars = async () => {
   try {
     isLoadingStars.value = true
+    // 公共API，可以直接使用fetch
     const response = await fetch('https://api.github.com/repos/xerrors/Yuxi-Know')
     const data = await response.json()
     githubStars.value = data.stargazers_count
   } catch (error) {
-    console.error('Error fetching GitHub stars:', error)
+    console.error('获取GitHub stars失败:', error)
   } finally {
     isLoadingStars.value = false
   }
@@ -102,8 +105,8 @@ const mainList = [{
     activeIcon: BookFilled,
     // hidden: !configStore.config.enable_knowledge_base,
   }, {
-    name: '工具',
-    path: '/tools',
+    name: '智能体',
+    path: '/agent',
     icon: ToolOutlined,
     activeIcon: ToolFilled,
   }
@@ -163,6 +166,10 @@ const mainList = [{
         </a-tooltip>
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
+
+      <!-- 用户信息组件 -->
+      <UserInfoComponent />
+
       <div class="github nav-item">
         <a-tooltip placement="right">
           <template #title>GitHub</template>
