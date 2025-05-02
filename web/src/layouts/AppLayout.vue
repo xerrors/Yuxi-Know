@@ -169,7 +169,7 @@ const mainList = [{
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
             <GithubOutlined class="icon" style="color: #222;"/>
             <span v-if="githubStars > 0" class="github-stars">
-            <span class="star-count">{{ githubStars }}</span>
+              <span class="star-count">{{ githubStars.toFixed(1) }}</span>
             </span>
           </a>
         </a-tooltip>
