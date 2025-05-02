@@ -61,6 +61,7 @@
 import { ref, onMounted, watch } from 'vue';
 import { message, Empty } from 'ant-design-vue';
 import { PlusOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons-vue';
+import { tokenApi } from '@/apis/admin_api';
 
 const props = defineProps({
   agentId: {
@@ -81,16 +82,11 @@ const newToken = ref({
 const fetchTokens = async () => {
   loading.value = true;
   try {
-    const response = await fetch(`/api/admin/tokens?agent_id=${props.agentId}`);
-    if (response.ok) {
-      const data = await response.json();
-      tokens.value = data;
-    } else {
-      message.error('获取令牌列表失败');
-    }
+    const data = await tokenApi.getTokens(props.agentId);
+    tokens.value = data;
   } catch (error) {
     console.error('获取令牌列表出错:', error);
-    message.error('获取令牌列表出错');
+    message.error(error.message || '获取令牌列表出错');
   } finally {
     loading.value = false;
   }
@@ -104,48 +100,26 @@ const createToken = async () => {
   }
 
   try {
-    const response = await fetch('/api/admin/tokens', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        agent_id: props.agentId,
-        name: newToken.value.name
-      })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      tokens.value.push(data);
-      message.success('令牌创建成功');
-      addTokenModalVisible.value = false;
-      newToken.value.name = '';
-    } else {
-      message.error('创建令牌失败');
-    }
+    const data = await tokenApi.createToken(props.agentId, newToken.value.name);
+    tokens.value.push(data);
+    message.success('令牌创建成功');
+    addTokenModalVisible.value = false;
+    newToken.value.name = '';
   } catch (error) {
     console.error('创建令牌出错:', error);
-    message.error('创建令牌出错');
+    message.error(error.message || '创建令牌出错');
   }
 };
 
 // 删除令牌
 const deleteToken = async (tokenId) => {
   try {
-    const response = await fetch(`/api/admin/tokens/${tokenId}`, {
-      method: 'DELETE'
-    });
-
-    if (response.ok) {
-      tokens.value = tokens.value.filter(token => token.id !== tokenId);
-      message.success('令牌已删除');
-    } else {
-      message.error('删除令牌失败');
-    }
+    await tokenApi.deleteToken(tokenId);
+    tokens.value = tokens.value.filter(token => token.id !== tokenId);
+    message.success('令牌已删除');
   } catch (error) {
     console.error('删除令牌出错:', error);
-    message.error('删除令牌出错');
+    message.error(error.message || '删除令牌出错');
   }
 };
 

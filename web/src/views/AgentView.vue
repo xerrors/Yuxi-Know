@@ -20,7 +20,10 @@
             :key="name"
             :value="name"
           >
-            {{ agent.name }}
+            <div class="agent-option">
+              {{ agent.name }}
+              <StarFilled v-if="name === defaultAgentId" class="default-icon" />
+            </div>
           </a-select-option>
         </a-select>
         <p style="padding: 0 4px;">
@@ -43,6 +46,16 @@
           >
             <template #icon><KeyOutlined /></template>
             访问令牌
+          </a-button>
+
+          <a-button
+            class="action-button primary-action"
+            @click="setAsDefaultAgent"
+            v-if="selectedAgentId && userStore.isAdmin"
+            :disabled="isDefaultAgent"
+          >
+            <template #icon><StarOutlined /></template>
+            {{ isDefaultAgent ? '当前为默认智能体' : '设为默认智能体' }}
           </a-button>
 
           <a-button
@@ -213,19 +226,27 @@ import {
   CloseOutlined,
   SettingOutlined,
   KeyOutlined,
-  LinkOutlined
+  LinkOutlined,
+  StarOutlined,
+  StarFilled
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import TokenManagerComponent from '@/components/TokenManagerComponent.vue';
+import UserInfoComponent from '@/components/UserInfoComponent.vue';
+import { useUserStore } from '@/stores/user';
+import { chatApi } from '@/apis/auth_api';
+import { systemConfigApi } from '@/apis/admin_api';
 
 // 路由
 const router = useRouter();
+const userStore = useUserStore();
 
 // 状态
 const agents = ref({});
 const selectedAgentId = ref(null);
 const availableTools = ref([]); // 存储所有可用的工具列表
+const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
   debug_mode: false,
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
@@ -243,50 +264,50 @@ const configurableItems = computed(() => configSchema.value.configurable_items |
 // 配置状态
 const agentConfig = ref({});
 
-// 调试模式
-const toggleDebugMode = () => {
-  state.debug_mode = !state.debug_mode;
+// 检查是否为默认智能体
+const isDefaultAgent = computed(() => {
+  return selectedAgentId.value === defaultAgentId.value;
+});
+
+// 设置为默认智能体
+const setAsDefaultAgent = async () => {
+  if (!selectedAgentId.value || !userStore.isAdmin) return;
+
+  try {
+    await systemConfigApi.setDefaultAgent(selectedAgentId.value);
+    defaultAgentId.value = selectedAgentId.value;
+    message.success('已将当前智能体设为默认');
+  } catch (error) {
+    console.error('设置默认智能体错误:', error);
+    message.error(error.message || '设置默认智能体时发生错误');
+  }
 };
 
-// 打开配置弹窗
-const openConfigModal = () => {
-  state.configModalVisible = true;
-};
-
-// 关闭配置弹窗
-const closeConfigModal = () => {
-  state.configModalVisible = false;
-};
-
-// 打开令牌管理弹窗
-const openTokenModal = () => {
-  state.tokenModalVisible = true;
-};
-
-// 关闭令牌管理弹窗
-const closeTokenModal = () => {
-  state.tokenModalVisible = false;
+// 获取默认智能体ID
+const fetchDefaultAgent = async () => {
+  try {
+    const data = await chatApi.getDefaultAgent();
+    defaultAgentId.value = data.default_agent_id;
+    console.log("Default agent ID:", defaultAgentId.value);
+  } catch (error) {
+    console.error('获取默认智能体错误:', error);
+  }
 };
 
 // 获取智能体列表
 const fetchAgents = async () => {
   try {
-    const response = await fetch('/api/chat/agent');
-    if (response.ok) {
-      const data = await response.json();
-      // 将数组转换为对象
-      agents.value = data.agents.reduce((acc, agent) => {
-        acc[agent.name] = agent;
-        return acc;
-      }, {});
-      // console.log("agents", agents.value);
+    const data = await chatApi.getAgents();
+    // 将数组转换为对象
+    agents.value = data.agents.reduce((acc, agent) => {
+      acc[agent.name] = agent;
+      return acc;
+    }, {});
+    // console.log("agents", agents.value);
 
-      // 加载当前选中智能体的配置
-      if (selectedAgentId.value) {
-        loadAgentConfig();
-      }
-    } else {
-      console.error('获取智能体失败');
+    // 加载当前选中智能体的配置
+    if (selectedAgentId.value) {
+      loadAgentConfig();
     }
   } catch (error) {
     console.error('获取智能体错误:', error);
@@ -296,14 +317,9 @@ const fetchAgents = async () => {
 // 获取所有可用工具
 const fetchTools = async () => {
   try {
-    const response = await fetch('/api/chat/tools');
-    if (response.ok) {
-      const data = await response.json();
-      availableTools.value = data.tools;
-      console.log("Available tools:", availableTools.value);
-    } else {
-      console.error('获取工具列表失败');
-    }
+    const data = await chatApi.getTools();
+    availableTools.value = data.tools;
+    console.log("Available tools:", availableTools.value);
   } catch (error) {
     console.error('获取工具列表错误:', error);
   }
@@ -420,6 +436,8 @@ const selectAgent = (agentId) => {
 
 // 初始化
 onMounted(async () => {
+  // 获取默认智能体
+  await fetchDefaultAgent();
   // 获取智能体列表
   await fetchAgents();
   // 获取工具列表
@@ -429,6 +447,9 @@ onMounted(async () => {
   const lastSelectedAgent = localStorage.getItem('last-selected-agent');
   if (lastSelectedAgent && agents.value[lastSelectedAgent]) {
     selectedAgentId.value = lastSelectedAgent;
+  } else if (defaultAgentId.value && agents.value[defaultAgentId.value]) {
+    // 如果有默认智能体，优先选择默认智能体
+    selectedAgentId.value = defaultAgentId.value;
   } else if (Object.keys(agents.value).length > 0) {
     // 默认选择第一个智能体
     selectedAgentId.value = Object.keys(agents.value)[0];
@@ -483,6 +504,31 @@ const toggleTool = (tool, checked) => {
     // 从列表中移除工具
     agentConfig.value.tools = agentConfig.value.tools.filter(item => item !== tool);
   }
+};
+
+// 调试模式
+const toggleDebugMode = () => {
+  state.debug_mode = !state.debug_mode;
+};
+
+// 打开配置弹窗
+const openConfigModal = () => {
+  state.configModalVisible = true;
+};
+
+// 关闭配置弹窗
+const closeConfigModal = () => {
+  state.configModalVisible = false;
+};
+
+// 打开令牌管理弹窗
+const openTokenModal = () => {
+  state.tokenModalVisible = true;
+};
+
+// 关闭令牌管理弹窗
+const closeTokenModal = () => {
+  state.tokenModalVisible = false;
 };
 </script>
 
@@ -752,8 +798,31 @@ const toggleTool = (tool, checked) => {
     background-color: var(--main-light-4);
   }
 
+  &.primary-action {
+    color: var(--main-color);
+    border-color: var(--main-color);
+
+    &:disabled {
+      color: var(--main-600);
+      background-color: var(--main-light-4);
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+  }
+
   .anticon {
     margin-right: 8px;
+  }
+}
+
+.agent-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .default-icon {
+    color: #faad14;
+    font-size: 14px;
   }
 }
 

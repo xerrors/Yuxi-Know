@@ -110,6 +110,8 @@ import {
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
+import { useUserStore } from '@/stores/user'
+import { chatApi } from '@/apis/auth_api'
 
 // 新增props属性，允许父组件传入agentId
 const props = defineProps({
@@ -126,6 +128,9 @@ const props = defineProps({
     default: () => ({})
   }
 });
+
+// 初始化userStore
+const userStore = useUserStore();
 
 // ==================== 状态管理 ====================
 
@@ -356,7 +361,10 @@ const sendMessageWithText = async (text) => {
     // 发送请求
     const response = await fetch(`/api/chat/agent/${currentAgent.value.name}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...userStore.getAuthHeaders()
+      },
       body: JSON.stringify(requestData)
     });
 
@@ -752,18 +760,13 @@ const appendToolMessageToExistingAssistant = async (data) => {
 // 获取智能体列表
 const fetchAgents = async () => {
   try {
-    const response = await fetch('/api/chat/agent');
-    if (response.ok) {
-      const data = await response.json();
-      // 将数组转换为对象
-      agents.value = data.agents.reduce((acc, agent) => {
-        acc[agent.name] = agent;
-        return acc;
-      }, {});
-      console.log("agents", agents.value);
-    } else {
-      console.error('获取智能体失败');
-    }
+    const data = await chatApi.getAgents();
+    // 将数组转换为对象
+    agents.value = data.agents.reduce((acc, agent) => {
+      acc[agent.name] = agent;
+      return acc;
+    }, {});
+    console.log("agents", agents.value);
   } catch (error) {
     console.error('获取智能体错误:', error);
   }
