@@ -5,7 +5,7 @@ import { useUserStore } from '@/stores/user'
  * 管理员API模块
  * 只有管理员和超级管理员可以访问的API
  * 权限要求: admin 或 superadmin
- * 
+ *
  * 注意: 请确保在使用这些API之前检查用户是否具有管理员权限
  */
 
@@ -50,7 +50,7 @@ export const userManagementApi = {
 
   /**
    * 更新用户
-   * @param {number} userId - 用户ID 
+   * @param {number} userId - 用户ID
    * @param {Object} userData - 用户数据
    * @returns {Promise} - 更新结果
    */
@@ -137,7 +137,7 @@ export const knowledgeBaseApi = {
 
   /**
    * 删除知识库
-   * @param {string} dbId - 知识库ID 
+   * @param {string} dbId - 知识库ID
    * @returns {Promise} - 删除结果
    */
   deleteDatabase: async (dbId) => {
@@ -165,7 +165,7 @@ export const knowledgeBaseApi = {
   /**
    * 删除文件
    * @param {string} dbId - 知识库ID
-   * @param {string} fileId - 文件ID 
+   * @param {string} fileId - 文件ID
    * @returns {Promise} - 删除结果
    */
   deleteFile: async (dbId, fileId) => {
@@ -204,6 +204,17 @@ export const knowledgeBaseApi = {
     checkAdminPermission()
     return apiPost('/api/data/query-test', data, {}, true)
   },
+
+  /**
+   * 获取文档详情
+   * @param {string} dbId - 知识库ID
+   * @param {string} fileId - 文件ID
+   * @returns {Promise} - 文档详情
+   */
+  getDocumentDetail: async (dbId, fileId) => {
+    checkAdminPermission()
+    return apiGet(`/api/data/document?db_id=${dbId}&file_id=${fileId}`, {}, true)
+  }
 }
 
 // 图数据库管理API
@@ -309,6 +320,6 @@ export const logApi = {
    */
   getLogs: async (params = {}) => {
     checkAdminPermission()
-    return apiGet('/api/admin/logs', { params }, true)
+    return apiGet('/api/log', { params }, true)
   },
-} 
+}

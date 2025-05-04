@@ -91,7 +91,7 @@ const goToChat = async () => {
       } else {
         // 没有可用智能体，回退到chat页面
         router.push("/chat");
-      }
+}
     }
   } catch (error) {
     console.error('跳转到智能体页面失败:', error);

@@ -59,6 +59,14 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Se
             raise credentials_exception
     except JWTError:
         raise credentials_exception
+    except ValueError as e:
+        # 捕获AuthUtils.verify_access_token可能抛出的ValueError
+        # 例如令牌过期或无效
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),  # 将错误信息直接传递给客户端
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # 查找用户
     user = db.query(User).filter(User.id == user_id).first()
@@ -108,13 +116,29 @@ ADMIN_PATHS = [
     r"^/admin/.*$",              # 管理员接口
     r"^/data/.*$",               # 数据操作接口，所有数据操作都需要管理员权限
     r"^/chat/set_default_agent$", # 设置默认智能体
-    r"^/chat/models/update$"      # 更新模型列表
+    r"^/chat/models/update$",     # 更新模型列表
+    r"^/auth/users.*$",           # 用户管理相关API
+    r"^/config$"                  # 系统配置API
+]
+
+# 路径是否需要超级管理员权限
+SUPERADMIN_PATHS = [
+    r"^/restart$",                # 系统重启
+    r"^/auth/users/\d+/role$"     # 修改用户角色（仅超级管理员可操作）
 ]
 
 # 检查路径是否需要管理员权限
 def is_admin_path(path: str) -> bool:
     path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
     for pattern in ADMIN_PATHS:
+        if re.match(pattern, path):
+            return True
+    return False
+
+# 检查路径是否需要超级管理员权限
+def is_superadmin_path(path: str) -> bool:
+    path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
+    for pattern in SUPERADMIN_PATHS:
         if re.match(pattern, path):
             return True
     return False

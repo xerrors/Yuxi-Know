@@ -397,29 +397,29 @@ const onQuery = () => {
     return
   }
   meta.db_id = database.value.db_id
-  fetch('/api/data/query-test', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"  // 添加 Content-Type 头
-    },
-    body: JSON.stringify({
+  
+  try {
+    knowledgeBaseApi.queryTest({
       query: queryText.value.trim(),
       meta: meta
-    }),
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log(data)
-    queryResult.value = data
-    filterQueryResults()
-  })
-  .catch(error => {
+    })
+    .then(data => {
+      console.log(data)
+      queryResult.value = data
+      filterQueryResults()
+    })
+    .catch(error => {
+      console.error(error)
+      message.error(error.message)
+    })
+    .finally(() => {
+      state.searchLoading = false
+    })
+  } catch (error) {
     console.error(error)
     message.error(error.message)
-  })
-  .finally(() => {
     state.searchLoading = false
-  })
+  }
 }
 
 const handleFileUpload = (event) => {
@@ -480,27 +480,31 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  fetch(`/api/data/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
-    method: "GET",
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      if (data.status == "failed") {
-        message.error(data.message)
-        return
-      }
-      state.lock = false
-      selectedFile.value = {
-        ...record,
-        lines: data.lines || []
-      }
-      state.drawer = true
-    })
-    .catch(error => {
-      console.error(error)
-      message.error(error.message)
-    })
+  
+  try {
+    knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
+      .then(data => {
+        console.log(data)
+        if (data.status == "failed") {
+          message.error(data.message)
+          return
+        }
+        state.lock = false
+        selectedFile.value = {
+          ...record,
+          lines: data.lines || []
+        }
+        state.drawer = true
+      })
+      .catch(error => {
+        console.error(error)
+        message.error(error.message)
+      })
+  } catch (error) {
+    console.error(error)
+    message.error('获取文件详情失败')
+    state.lock = false
+  }
 }
 
 const formatRelativeTime = (timestamp) => {
@@ -603,17 +607,10 @@ const chunkFiles = () => {
   state.loading = true
 
   // 调用file-to-chunk接口获取分块信息
-  fetch('/api/data/file-to-chunk', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      files: files,
-      params: chunkParams.value
-    }),
+  knowledgeBaseApi.fileToChunk({
+    files: files,
+    params: chunkParams.value
   })
-  .then(response => response.json())
   .then(data => {
     console.log('文件分块信息:', data)
     chunkResults.value = Object.values(data);
@@ -645,17 +642,10 @@ const addToDatabase = () => {
   });
 
   // 调用add-by-chunks接口将分块添加到数据库
-  fetch('/api/data/add-by-chunks', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      db_id: databaseId.value,
-      file_chunks: fileChunks
-    }),
+  knowledgeBaseApi.addByChunks({
+    db_id: databaseId.value,
+    file_chunks: fileChunks
   })
-  .then(response => response.json())
   .then(data => {
     console.log(data)
 

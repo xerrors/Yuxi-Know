@@ -12,11 +12,11 @@
           <slot name="header-center"></slot>
         </div>
         <div class="header__right">
-          <div class="current-agent nav-btn" @click="sayHi">
+          <!-- <div class="current-agent nav-btn" @click="sayHi">
             <RobotOutlined />&nbsp;
             <span v-if="currentAgent">{{ currentAgent.name }}</span>
             <span v-else>加载中...</span>
-          </div>
+          </div> -->
           <slot name="header-right"></slot>
         </div>
       </div>
@@ -359,14 +359,7 @@ const sendMessageWithText = async (text) => {
     };
 
     // 发送请求
-    const response = await fetch(`/api/chat/agent/${currentAgent.value.name}`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...userStore.getAuthHeaders()
-      },
-      body: JSON.stringify(requestData)
-    });
+    const response = await chatApi.sendAgentMessage(currentAgent.value.name, requestData);
 
     // console.log("requestData", requestData);
     if (!response.ok) {

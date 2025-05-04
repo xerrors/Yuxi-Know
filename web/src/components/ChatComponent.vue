@@ -190,6 +190,7 @@ import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 import RefsSidebar from '@/components/RefsSidebar.vue'
 import { chatApi } from '@/apis/auth_api'
+import { knowledgeBaseApi } from '@/apis/admin_api'
 
 const props = defineProps({
   conv: Object,
@@ -479,18 +480,24 @@ const groupRefs = (id) => {
 }
 
 const loadDatabases = () => {
-  fetch('/api/data/', { 
-    method: "GET",
-    headers: userStore.getAuthHeaders()
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      opts.databases = data.databases
-    })
-    .catch(error => {
-      console.error('加载数据库列表失败:', error)
-    })
+  // 由于这是管理功能，需要检查用户是否有管理权限
+  if (!userStore.isAdmin) {
+    console.log('非管理员用户，跳过加载数据库列表');
+    return;
+  }
+
+  try {
+    knowledgeBaseApi.getDatabases()
+      .then(data => {
+        console.log(data)
+        opts.databases = data.databases
+      })
+      .catch(error => {
+        console.error('加载数据库列表失败:', error)
+      })
+  } catch (error) {
+    console.error('获取数据库列表失败:', error);
+  }
 }
 
 const simpleCall = (msg) => {
@@ -514,20 +521,27 @@ const fetchChatResponse = (user_input, cur_res_id) => {
   }
   console.log(params)
 
-  // 使用fetch带上认证头和信号控制
-  fetch('/api/chat/', {
-    method: 'POST',
-    body: JSON.stringify(params),
-    headers: {
-      'Content-Type': 'application/json',
-      ...userStore.getAuthHeaders()
-    },
-    signal // 添加 signal 用于中断请求
-  })
+  // 使用API函数发送请求
+  chatApi.sendMessageWithAbort(params, signal)
   .then((response) => {
     if (!response.ok) {
-      throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+      // 检查是否是401错误（令牌过期）
+      if (response.status === 401) {
+        const userStore = useUserStore();
+        if (userStore.isLoggedIn) {
+          message.error('登录已过期，请重新登录');
+          userStore.logout();
+
+          // 使用setTimeout确保消息显示后再跳转
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1500);
+        }
+        throw new Error('未授权，请先登录');
+      }
+      throw new Error(`请求失败: ${response.status} ${response.statusText}`);
     }
+
     if (!response.body) throw new Error("ReadableStream not supported.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
@@ -568,8 +582,6 @@ const fetchChatResponse = (user_input, cur_res_id) => {
                 meta: data.meta,
                 ...data,
               });
-              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].content)
-              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
 
               if (data.history) {
                 conv.value.history = data.history;
@@ -592,12 +604,18 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     if (error.name === 'AbortError') {
       console.log('Fetch aborted');
     } else {
-      console.error(error);
-      updateMessage({
-        id: cur_res_id,
-        status: "error",
-        message: error.message || '请求失败',
-      });
+      console.error('聊天请求错误:', error);
+
+      // 检查是否是认证错误
+      if (error.message.includes('未授权') || error.message.includes('令牌已过期')) {
+        // 已在上面处理，这里不需要重复处理
+      } else {
+        updateMessage({
+          id: cur_res_id,
+          status: "error",
+          message: error.message || '请求失败',
+        });
+      }
     }
     isStreaming.value = false;
   });

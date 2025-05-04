@@ -1,12 +1,15 @@
 <template>
   <div class="user-info-component">
     <a-dropdown :trigger="['click']" v-if="userStore.isLoggedIn">
-      <div class="user-avatar">
-        <div class="user-initial">{{ userInitial }}</div>
-        <div class="user-role-badge" :class="userRoleClass"></div>
+      <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
+        <div class="user-avatar">
+          <UserOutlined />
+          <div class="user-role-badge" :class="userRoleClass"></div>
+        </div>
+        <div v-if="showRole">{{ userStore.username }}</div>
       </div>
       <template #overlay>
-        <a-menu>
+          <a-menu>
           <a-menu-item key="username" disabled>
             <span class="user-menu-username">{{ userStore.username }}</span>
           </a-menu-item>
@@ -35,6 +38,13 @@ import { message } from 'ant-design-vue';
 
 const router = useRouter();
 const userStore = useUserStore();
+
+const props = defineProps({
+  showRole: {
+    type: Boolean,
+    default: false
+  }
+})
 
 // 用户名首字母（用于显示在头像中）
 const userInitial = computed(() => {
@@ -84,7 +94,22 @@ const goToLogin = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
+  // margin-bottom: 16px;
+}
+
+.user-info-dropdown {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  &[data-align="center"] {
+    justify-content: center;
+  }
+
+  &[data-align="left"] {
+    justify-content: flex-start;
+  }
 }
 
 .user-avatar {

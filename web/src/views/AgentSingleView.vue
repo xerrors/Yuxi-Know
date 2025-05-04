@@ -1,26 +1,23 @@
 <template>
   <div class="agent-single-view">
     <!-- 侧边栏 -->
-    <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
+    <!-- <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
       <div class="sidebar-content">
         <div class="user-icon">
-          <img :src="sidebarLeftIcon" alt="用户信息" @click="toggleUserInfo" />
+          <UserInfoComponent :show-role="!isSidebarCollapsed" />
         </div>
-        <!-- 这里可以添加更多侧边栏内容 -->
-         <UserInfoComponent />
       </div>
       <div class="toggle-button" @click="toggleSidebar">
         <img :src="isSidebarCollapsed ? sidebarRightIcon : sidebarLeftIcon" alt="折叠/展开" />
       </div>
-    </div>
-
-    <!-- 用户信息组件 -->
-    <div class="user-info-wrapper">
-      <UserInfoComponent />
-    </div>
+    </div> -->
 
     <!-- 智能体聊天界面 -->
-    <AgentChatComponent :agent-id="agentId" />
+    <AgentChatComponent :agent-id="agentId">
+      <template #header-right>
+        <UserInfoComponent />
+      </template>
+    </AgentChatComponent>
   </div>
 </template>
 
@@ -56,6 +53,8 @@ const toggleUserInfo = () => {
   height: 100vh;
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: row;
 }
 
 .user-info-wrapper {
@@ -67,7 +66,7 @@ const toggleUserInfo = () => {
 
 // 侧边栏样式
 .sidebar {
-  position: absolute;
+  // position: absolute;
   left: 0;
   top: 0;
   height: 100%;
@@ -90,6 +89,7 @@ const toggleUserInfo = () => {
   .user-icon {
     cursor: pointer;
     margin-bottom: 20px;
+    padding-left: 4px 8px;
 
     img {
       width: 32px;

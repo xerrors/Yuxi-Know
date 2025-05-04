@@ -30,7 +30,7 @@
           {{ agents[selectedAgentId]?.description }}
         </p>
 
-        <!-- 添加配置按钮 -->
+        <!-- 添加配置按钮 TODO 这里的配置修改还无法影响到独立接口的对话-->
         <div class="agent-action-buttons">
           <a-button
             class="action-button"
@@ -49,6 +49,15 @@
           </a-button>
 
           <a-button
+            class="action-button"
+            @click="goToAgentPage"
+            v-if="selectedAgentId"
+          >
+            <template #icon><LinkOutlined /></template>
+            打开独立页面
+          </a-button>
+
+          <a-button
             class="action-button primary-action"
             @click="setAsDefaultAgent"
             v-if="selectedAgentId && userStore.isAdmin"
@@ -58,14 +67,6 @@
             {{ isDefaultAgent ? '当前为默认智能体' : '设为默认智能体' }}
           </a-button>
 
-          <a-button
-            class="action-button"
-            @click="goToAgentPage"
-            v-if="selectedAgentId"
-          >
-            <template #icon><LinkOutlined /></template>
-            打开独立页面
-          </a-button>
         </div>
 
         <!-- 添加requirements显示部分 -->
