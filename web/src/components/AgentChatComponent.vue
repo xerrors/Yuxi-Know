@@ -110,7 +110,6 @@ import {
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
-import { useUserStore } from '@/stores/user'
 import { chatApi } from '@/apis/auth_api'
 
 // 新增props属性，允许父组件传入agentId
@@ -128,9 +127,6 @@ const props = defineProps({
     default: () => ({})
   }
 });
-
-// 初始化userStore
-const userStore = useUserStore();
 
 // ==================== 状态管理 ====================
 
