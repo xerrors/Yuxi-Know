@@ -91,13 +91,11 @@ import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref } from 'vue';
 import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { useUserStore } from '@/stores/user';
 import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { graphApi } from '@/apis/admin_api';
 
 const configStore = useConfigStore();
-const userStore = useUserStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '');
 const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
 const disabled = computed(() => state.precessing || !modelMatched.value)
