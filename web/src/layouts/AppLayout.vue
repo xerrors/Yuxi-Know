@@ -93,6 +93,11 @@ const mainList = [{
     icon: MessageOutlined,
     activeIcon: MessageFilled,
   }, {
+    name: '智能体',
+    path: '/agent',
+    icon: ToolOutlined,
+    activeIcon: ToolFilled,
+  }, {
     name: '图谱',
     path: '/graph',
     icon: ProjectOutlined,
@@ -104,11 +109,6 @@ const mainList = [{
     icon: BookOutlined,
     activeIcon: BookFilled,
     // hidden: !configStore.config.enable_knowledge_base,
-  }, {
-    name: '智能体',
-    path: '/agent',
-    icon: ToolOutlined,
-    activeIcon: ToolFilled,
   }
 ]
 </script>
@@ -168,7 +168,9 @@ const mainList = [{
       <div class="fill" style="flex-grow: 1;"></div>
 
       <!-- 用户信息组件 -->
-      <UserInfoComponent />
+      <div class="nav-item user-info">
+        <UserInfoComponent />
+      </div>
 
       <div class="github nav-item">
         <a-tooltip placement="right">
@@ -176,19 +178,19 @@ const mainList = [{
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
             <GithubOutlined class="icon" style="color: #222;"/>
             <span v-if="githubStars > 0" class="github-stars">
-              <span class="star-count">{{ githubStars.toFixed(1) }}</span>
+              <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
             </span>
           </a>
         </a-tooltip>
       </div>
-      <div class="nav-item api-docs">
+      <!-- <div class="nav-item api-docs">
         <a-tooltip placement="right">
           <template #title>接口文档 {{ apiDocsUrl }}</template>
           <a :href="apiDocsUrl" target="_blank" class="github-link">
             <ApiOutlined class="icon" style="color: #222;"/>
           </a>
         </a-tooltip>
-      </div>
+      </div> -->
       <RouterLink class="nav-item setting" to="/setting" active-class="active">
         <a-tooltip placement="right">
           <template #title>设置</template>
@@ -365,8 +367,7 @@ div.header, #app-router-view {
     width: auto;
     font-size: 20px;
     color: #333;
-    margin-bottom: 20px;
-    margin-top: 10px;
+    margin-bottom: 8px;
     padding: 16px 12px;
 
     &:hover {

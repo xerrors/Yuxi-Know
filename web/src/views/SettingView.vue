@@ -379,6 +379,7 @@ import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 import { modelIcons } from '@/utils/modelIcon'
+import { systemConfigApi } from '@/apis/admin_api'
 
 
 const configStore = useConfigStore()
@@ -584,15 +585,19 @@ onUnmounted(() => {
 const sendRestart = () => {
   console.log('Restarting...')
   message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
-  fetch('/api/restart', {
-    method: 'POST',
-  }).then(() => {
-    console.log('Restarted')
-    message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
-    setTimeout(() => {
-      window.location.reload()
-    }, 200)
-  })
+  
+  systemConfigApi.restartServer()
+    .then(() => {
+      console.log('Restarted')
+      message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
+      setTimeout(() => {
+        window.location.reload()
+      }, 200)
+    })
+    .catch(error => {
+      console.error('重启服务失败:', error)
+      message.error({ content: `重启失败: ${error.message}`, key: "restart", duration: 2 });
+    });
 }
 
 // 获取模型提供商的模型列表

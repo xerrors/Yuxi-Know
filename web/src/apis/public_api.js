@@ -16,7 +16,7 @@ export const authApi = {
     const formData = new FormData()
     formData.append('username', credentials.username)
     formData.append('password', credentials.password)
-    
+
     return apiRequest('/api/auth/token', {
       method: 'POST',
       body: formData
@@ -56,4 +56,4 @@ export const healthApi = {
 }
 
 // 从base.js导入apiRequest以支持FormData
-import { apiRequest } from './base' 
+import { apiRequest } from './base'

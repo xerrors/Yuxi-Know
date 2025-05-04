@@ -121,7 +121,7 @@ const loadDatabases = () => {
       console.error('加载数据库列表失败:', error);
       if (error.message.includes('权限')) {
         message.error('需要管理员权限访问知识库')
-      }
+    }
     })
 }
 
@@ -135,10 +135,10 @@ const createDatabase = () => {
   }
 
   knowledgeBaseApi.createDatabase({
-    database_name: newDatabase.name,
-    description: newDatabase.description,
-    dimension: newDatabase.dimension ? parseInt(newDatabase.dimension) : null,
-  })
+      database_name: newDatabase.name,
+      description: newDatabase.description,
+      dimension: newDatabase.dimension ? parseInt(newDatabase.dimension) : null,
+    })
   .then(data => {
     console.log(data)
     loadDatabases()

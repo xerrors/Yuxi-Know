@@ -41,8 +41,15 @@ const router = createRouter({
     {
       path: '/agent',
       name: 'AgentMain',
-      component: () => import('../views/AgentView.vue'),
-      meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'AgentComp',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
     },
     {
       path: '/agent/:agent_id',

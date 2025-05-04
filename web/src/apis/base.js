@@ -30,19 +30,21 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
       if (!userStore.isLoggedIn) {
         throw new Error('用户未登录')
       }
-      
+
       Object.assign(requestOptions.headers, userStore.getAuthHeaders())
     }
 
     // 发送请求
     const response = await fetch(url, requestOptions)
-    
+
     // 处理API返回的错误
     if (!response.ok) {
       // 尝试解析错误信息
       let errorMessage = `请求失败: ${response.status}`
+      let errorData = null
+      
       try {
-        const errorData = await response.json()
+        errorData = await response.json()
         errorMessage = errorData.detail || errorData.message || errorMessage
       } catch (e) {
         // 如果无法解析JSON，使用默认错误信息
@@ -54,9 +56,19 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
         const userStore = useUserStore()
         if (userStore.isLoggedIn) {
           // 如果用户认为自己已登录，但收到401，则可能是令牌过期
-          message.error('登录已过期，请重新登录')
+          const isTokenExpired = errorData && 
+            (errorData.detail?.includes('令牌已过期') || 
+             errorData.detail?.includes('token expired') ||
+             errorMessage?.includes('令牌已过期') ||
+             errorMessage?.includes('token expired'))
+          
+          message.error(isTokenExpired ? '登录已过期，请重新登录' : '认证失败，请重新登录')
           userStore.logout()
-          window.location.href = '/login'
+          
+          // 使用setTimeout确保消息显示后再跳转
+          setTimeout(() => {
+            window.location.href = '/login'
+          }, 1500)
         }
         throw new Error('未授权，请先登录')
       } else if (response.status === 403) {
@@ -81,7 +93,7 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
 
 /**
  * 发送GET请求
- * @param {string} url - API端点 
+ * @param {string} url - API端点
  * @param {Object} options - 请求选项
  * @param {boolean} requiresAuth - 是否需要认证
  * @returns {Promise} - 请求结果
@@ -100,12 +112,12 @@ export function apiGet(url, options = {}, requiresAuth = false) {
  */
 export function apiPost(url, data = {}, options = {}, requiresAuth = false) {
   return apiRequest(
-    url, 
-    { 
-      method: 'POST', 
+    url,
+    {
+      method: 'POST',
       body: JSON.stringify(data),
-      ...options 
-    }, 
+      ...options
+    },
     requiresAuth
   )
 }
@@ -120,12 +132,12 @@ export function apiPost(url, data = {}, options = {}, requiresAuth = false) {
  */
 export function apiPut(url, data = {}, options = {}, requiresAuth = false) {
   return apiRequest(
-    url, 
-    { 
-      method: 'PUT', 
+    url,
+    {
+      method: 'PUT',
       body: JSON.stringify(data),
-      ...options 
-    }, 
+      ...options
+    },
     requiresAuth
   )
 }
@@ -139,4 +151,4 @@ export function apiPut(url, data = {}, options = {}, requiresAuth = false) {
  */
 export function apiDelete(url, options = {}, requiresAuth = false) {
   return apiRequest(url, { method: 'DELETE', ...options }, requiresAuth)
-} 
+}
