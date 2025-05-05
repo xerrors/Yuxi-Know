@@ -29,6 +29,10 @@ class SimpleConfig(dict):
     def __dict__(self):
         return {k: v for k, v in self.items()}
 
+    def update(self, other):
+        for key, value in other.items():
+            self[key] = value
+
 
 class Config(SimpleConfig):
 

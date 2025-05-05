@@ -92,7 +92,7 @@
             <div
               :class="{'model_selected': modelProvider == 'custom' && configStore.config.model_name == item.custom_id, 'card-models': true, 'custom-model': true}"
               v-for="(item, key) in configStore.config.custom_models" :key="item.custom_id"
-              @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.custom_id)"
+              @click="handleChanges({ model_provider: 'custom', model_name: item.custom_id })"
             >
               <div class="card-models__header">
                 <div class="name" :title="item.name">{{ item.name }}</div>
@@ -181,7 +181,7 @@
               <div
                 :class="{'model_selected': modelProvider == item && configStore.config.model_name == model, 'card-models': true}"
                 v-for="(model, idx) in modelNames[item].models" :key="idx"
-                @click="handleChange('model_provider', item); handleChange('model_name', model)"
+                @click="handleChanges({ model_provider: item, model_name: model })"
               >
                 <div class="model_name">{{ model }}</div>
               </div>
@@ -470,7 +470,7 @@ const handleModelLocalPathsUpdate = (config) => {
   handleChange('model_local_paths', config)
 }
 
-const handleChange = (key, e) => {
+const preHandleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
     message.error('启动知识图谱必须请先启用知识库功能')
     return
@@ -481,27 +481,43 @@ const handleChange = (key, e) => {
     return
   }
 
-  // 这些都是需要重启的配置
-  if (key == 'enable_reranker'
-        || key == 'enable_knowledge_graph'
-        || key == 'enable_knowledge_base'
-        || key == 'enable_web_search'
-        || key == 'embed_model'
-        || key == 'reranker'
-        || key == 'model_local_paths') {
-    if (!isNeedRestart.value) {
-      isNeedRestart.value = true
-      notification.info({
-        message: '需要重新加载模型',
-        description: '请点击右下角按钮重新加载模型',
-        placement: 'topLeft',
-        duration: 0,
-        btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
-      })
-    }
+  if (key == 'enable_reranker' && e && !configStore.config.enable_reranker) {
+    message.error('启动重排序必须请先启用重排序功能')
+    return
   }
 
+  if (key == 'enable_reranker'
+    || key == 'enable_knowledge_graph'
+    || key == 'enable_knowledge_base'
+    || key == 'embed_model'
+    || key == 'reranker'
+    || key == 'model_local_paths') {
+    isNeedRestart.value = true
+    notification.info({
+      message: '需要重新加载模型',
+      description: '请点击右下角按钮重新加载模型',
+      placement: 'topLeft',
+      duration: 0,
+      btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
+    })
+  }
+  return true
+}
+
+const handleChange = (key, e) => {
+  if (!preHandleChange(key, e)) {
+    return
+  }
   configStore.setConfigValue(key, e)
+}
+
+const handleChanges = (items) => {
+  for (const key in items) {
+    if (!preHandleChange(key, items[key])) {
+      return
+    }
+  }
+  configStore.setConfigValues(items)
 }
 
 const handleAddOrEditCustomModel = async () => {
@@ -585,7 +601,7 @@ onUnmounted(() => {
 const sendRestart = () => {
   console.log('Restarting...')
   message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
-  
+
   systemConfigApi.restartServer()
     .then(() => {
       console.log('Restarted')
