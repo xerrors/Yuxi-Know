@@ -257,14 +257,16 @@ export const systemConfigApi = {
     return apiGet('/api/config', {}, true)
   },
 
+
   /**
-   * 更新系统配置
-   * @param {Object} config - 配置项
+   * 更新某个配置
+   * @param {Object} items - 配置项
    * @returns {Promise} - 更新结果
    */
-  updateSystemConfig: async (config) => {
+  updateConfigItems: async (items) => {
     checkAdminPermission()
-    return apiPut('/api/config', config, {}, true)
+    console.log("updateConfigItems", items)
+    return apiPost('/api/config/update', items, {}, true)
   },
 
   /**

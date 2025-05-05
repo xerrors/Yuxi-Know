@@ -28,6 +28,15 @@ async def update_config(
     config.save()
     return config.dump_config()
 
+@base.post("/config/update")
+async def update_config_item(
+    items: dict = Body(...),
+    current_user: User = Depends(get_admin_user)
+) -> dict:
+    config.update(items)
+    config.save()
+    return config.dump_config()
+
 @base.post("/restart")
 async def restart(current_user: User = Depends(get_superadmin_user)):
     knowledge_base.restart()
