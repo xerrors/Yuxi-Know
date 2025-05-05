@@ -70,40 +70,6 @@ export const userManagementApi = {
   },
 }
 
-// 令牌管理API
-export const tokenApi = {
-  /**
-   * 获取令牌列表
-   * @param {string} agentId - 智能体ID
-   * @returns {Promise} - 令牌列表
-   */
-  getTokens: async (agentId) => {
-    checkAdminPermission()
-    return apiGet(`/api/admin/tokens?agent_id=${agentId}`, {}, true)
-  },
-
-  /**
-   * 创建新令牌
-   * @param {string} agentId - 智能体ID
-   * @param {string} name - 令牌名称
-   * @returns {Promise} - 创建结果
-   */
-  createToken: async (agentId, name) => {
-    checkAdminPermission()
-    return apiPost('/api/admin/tokens', { agent_id: agentId, name }, {}, true)
-  },
-
-  /**
-   * 删除令牌
-   * @param {string} tokenId - 令牌ID
-   * @returns {Promise} - 删除结果
-   */
-  deleteToken: async (tokenId) => {
-    checkAdminPermission()
-    return apiDelete(`/api/admin/tokens/${tokenId}`, {}, true)
-  },
-}
-
 // 知识库管理API
 export const knowledgeBaseApi = {
   /**

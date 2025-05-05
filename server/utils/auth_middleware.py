@@ -1,5 +1,5 @@
-from typing import Optional, List
-from fastapi import Depends, HTTPException, status
+from typing import Optional, List, Callable
+from fastapi import Depends, HTTPException, status, APIRouter
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -14,21 +14,11 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=Fals
 
 # 公开路径列表，无需登录即可访问
 PUBLIC_PATHS = [
-    r"^/auth/token$",            # 登录
-    r"^/auth/check-first-run$",  # 检查是否首次运行
-    r"^/auth/initialize$",       # 初始化系统
-    r"^/docs$", r"^/redoc$", r"^/openapi.json$",  # API文档
-    r"^/static/.*$",                # 静态资源
-    r"^/assets/.*$",                # 前端资源文件
-    r"^/$",                         # 根路径（登录页）
-    r"^/login$",                    # 登录页面
-    r"^/home$",                     # 首页
-    r"^/home/.*$",                  # 首页下的所有路径
-    r"^/favicon\.ico$",             # 网站图标
-    r"^/_nuxt/.*$",                 # Nuxt.js生成的资源文件
-    r"^/js/.*$",                    # JavaScript文件
-    r"^/css/.*$",                   # CSS文件
-    r"^/img/.*$"                    # 图片文件
+    r"^/api/auth/token$",            # 登录
+    r"^/api/auth/check-first-run$",  # 检查是否首次运行
+    r"^/api/auth/initialize$",       # 初始化系统
+    r"^/api$",                      # Health Check
+    r"^/api/login$",                # 登录页面
 ]
 
 # 获取数据库会话
@@ -107,38 +97,6 @@ async def get_superadmin_user(current_user: User = Depends(get_required_user)):
 def is_public_path(path: str) -> bool:
     path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
     for pattern in PUBLIC_PATHS:
-        if re.match(pattern, path):
-            return True
-    return False
-
-# 路径是否需要管理员权限
-ADMIN_PATHS = [
-    r"^/admin/.*$",              # 管理员接口
-    r"^/data/.*$",               # 数据操作接口，所有数据操作都需要管理员权限
-    r"^/chat/set_default_agent$", # 设置默认智能体
-    r"^/chat/models/update$",     # 更新模型列表
-    r"^/auth/users.*$",           # 用户管理相关API
-    r"^/config$"                  # 系统配置API
-]
-
-# 路径是否需要超级管理员权限
-SUPERADMIN_PATHS = [
-    r"^/restart$",                # 系统重启
-    r"^/auth/users/\d+/role$"     # 修改用户角色（仅超级管理员可操作）
-]
-
-# 检查路径是否需要管理员权限
-def is_admin_path(path: str) -> bool:
-    path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
-    for pattern in ADMIN_PATHS:
-        if re.match(pattern, path):
-            return True
-    return False
-
-# 检查路径是否需要超级管理员权限
-def is_superadmin_path(path: str) -> bool:
-    path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
-    for pattern in SUPERADMIN_PATHS:
         if re.match(pattern, path):
             return True
     return False

@@ -30,7 +30,6 @@ import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import DebugComponent from '@/components/DebugComponent.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
-import { configApi } from '@/apis/public_api'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
@@ -79,12 +78,6 @@ onMounted(() => {
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API
 const route = useRoute()
 console.log(route)
-
-const apiDocsUrl = computed(() => {
-  // return `${import.meta.env.VITE_API_URL || `http://${window.location.hostname}:${window.location.port}`}/docs`
-  return `http://localhost:5050/docs`
-})
-
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = [{
@@ -167,10 +160,6 @@ const mainList = [{
       </div>
       <div class="fill" style="flex-grow: 1;"></div>
 
-      <!-- 用户信息组件 -->
-      <div class="nav-item user-info">
-        <UserInfoComponent />
-      </div>
 
       <div class="github nav-item">
         <a-tooltip placement="right">
@@ -191,6 +180,15 @@ const mainList = [{
           </a>
         </a-tooltip>
       </div> -->
+
+      <!-- 用户信息组件 -->
+      <div class="nav-item user-info">
+        <a-tooltip placement="right">
+          <template #title>用户信息</template>
+          <UserInfoComponent />
+        </a-tooltip>
+      </div>
+
       <RouterLink class="nav-item setting" to="/setting" active-class="active">
         <a-tooltip placement="right">
           <template #title>设置</template>

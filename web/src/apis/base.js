@@ -42,7 +42,7 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
       // 尝试解析错误信息
       let errorMessage = `请求失败: ${response.status}`
       let errorData = null
-      
+
       try {
         errorData = await response.json()
         errorMessage = errorData.detail || errorData.message || errorMessage
@@ -56,15 +56,15 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
         const userStore = useUserStore()
         if (userStore.isLoggedIn) {
           // 如果用户认为自己已登录，但收到401，则可能是令牌过期
-          const isTokenExpired = errorData && 
-            (errorData.detail?.includes('令牌已过期') || 
+          const isTokenExpired = errorData &&
+            (errorData.detail?.includes('令牌已过期') ||
              errorData.detail?.includes('token expired') ||
              errorMessage?.includes('令牌已过期') ||
              errorMessage?.includes('token expired'))
-          
+
           message.error(isTokenExpired ? '登录已过期，请重新登录' : '认证失败，请重新登录')
           userStore.logout()
-          
+
           // 使用setTimeout确保消息显示后再跳转
           setTimeout(() => {
             window.location.href = '/login'

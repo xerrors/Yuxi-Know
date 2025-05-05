@@ -214,18 +214,8 @@ class Config(SimpleConfig):
 
         logger.info(f"Config file {self.filename} saved")
 
-    def get_safe_config(self):
-        """
-        获取安全的配置，即过滤掉 api_key
-        """
-
-        config = json.loads(str(self))
-
-        # 过滤掉 api_key
-        for model in config.get("custom_models", []):
-            model["api_key"] = DEFAULT_MOCK_API if model.get("api_key") else ""
-
-        return config
+    def dump_config(self):
+        return json.loads(str(self))
 
     def compare_custom_models(self, value):
         """

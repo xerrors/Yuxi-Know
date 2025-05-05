@@ -286,7 +286,6 @@ import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'v
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
-import { useUserStore } from '@/stores/user'
 import { knowledgeBaseApi } from '@/apis/admin_api'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
@@ -300,7 +299,6 @@ import {
   CloudUploadOutlined,
   SearchOutlined,
   LoadingOutlined,
-  CaretUpOutlined
 } from '@ant-design/icons-vue'
 
 
@@ -397,7 +395,7 @@ const onQuery = () => {
     return
   }
   meta.db_id = database.value.db_id
-  
+
   try {
     knowledgeBaseApi.queryTest({
       query: queryText.value.trim(),
@@ -480,7 +478,7 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  
+
   try {
     knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
       .then(data => {

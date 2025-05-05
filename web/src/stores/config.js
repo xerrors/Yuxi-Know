@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { systemConfigApi } from '@/apis/admin_api'
 
 export const useCounterStore = defineStore('counter', () => {
   const count = ref(0)
@@ -20,27 +21,19 @@ export const useConfigStore = defineStore('config', () => {
 
   function setConfigValue(key, value) {
     config.value[key] = value
-    fetch('/api/config', {
-      method: 'POST',
-      body: JSON.stringify({ key, value }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
-      console.debug('Success:', data)
-      setConfig(data)
-    })
+    systemConfigApi.updateSystemConfig({ key, value })
+      .then(data => {
+        console.debug('Success:', data)
+        setConfig(data)
+      })
   }
 
   function refreshConfig() {
-    fetch('/api/config')
-    .then(response => response.json())
-    .then(data => {
-      console.log("config", data)
-      setConfig(data)
-    })
+    systemConfigApi.getSystemConfig()
+      .then(data => {
+        console.log("config", data)
+        setConfig(data)
+      })
   }
 
   return { config, setConfig, setConfigValue, refreshConfig }
