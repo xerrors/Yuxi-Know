@@ -3,10 +3,13 @@ from src.utils.logging_config import logger
 
 class HistoryManager():
     def __init__(self, history=None, system_prompt=None):
-        self.messages = history or []
+        self.messages = []
 
         system_prompt = system_prompt or get_system_prompt()
         self.add_system(system_prompt)
+
+        if history:
+            self.messages.extend(history)
 
     def add(self, role, content):
         self.messages.append({"role": role, "content": content})
