@@ -1,4 +1,5 @@
 <template>
+  <!-- TODO 优化样式，表格优化，添加一个 utils 的函数，用来把时间戳转换为东 8 区的时间，并格式化显示出来 -->
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
 
@@ -221,6 +222,7 @@
           @update:config="handleModelLocalPathsUpdate"
         />
       </div>
+      <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
       <div class="setting" v-if="state.section === 'user'">
         <div class="section-header">
           <h2>用户管理</h2>

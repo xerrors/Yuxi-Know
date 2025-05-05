@@ -1,4 +1,5 @@
 <template>
+  <!-- TODO 登录页面样式优化；（1）风格和整个系统统一； -->
   <div class="login-view">
     <div class="login-container">
       <div class="login-logo">
@@ -144,7 +145,7 @@ const handleLogin = async () => {
     // 获取重定向路径
     const redirectPath = sessionStorage.getItem('redirect') || '/';
     sessionStorage.removeItem('redirect'); // 清除重定向信息
-    
+
     // 根据用户角色决定重定向目标
     if (redirectPath === '/') {
       // 如果是管理员，直接跳转到/chat页面
@@ -152,7 +153,7 @@ const handleLogin = async () => {
         router.push('/chat');
         return;
       }
-      
+
       // 普通用户跳转到默认智能体
       try {
         // 尝试获取默认智能体
@@ -162,14 +163,14 @@ const handleLogin = async () => {
           router.push(`/agent/${data.default_agent_id}`);
           return;
         }
-        
+
         // 没有默认智能体，获取第一个可用智能体
         const agentData = await chatApi.getAgents();
         if (agentData.agents && agentData.agents.length > 0) {
           router.push(`/agent/${agentData.agents[0].name}`);
           return;
         }
-        
+
         // 没有可用智能体，回退到首页
         router.push('/');
       } catch (error) {
