@@ -92,36 +92,36 @@ export const chatApi = {
    */
   getTools: () => apiGet('/api/chat/tools', {}, true),
 
-  /**
-   * 获取对话历史
-   * @returns {Promise} - 对话历史列表
-   */
-  getConversations: () => apiGet('/api/chat/conversations', {}, true),
+  // /**
+  //  * 获取对话历史
+  //  * @returns {Promise} - 对话历史列表
+  //  */
+  // getConversations: () => apiGet('/api/chat/conversations', {}, true),
 
-  /**
-   * 获取特定对话
-   * @param {string} conversationId - 对话ID
-   * @returns {Promise} - 对话详情
-   */
-  getConversation: (conversationId) =>
-    apiGet(`/api/chat/conversations/${conversationId}`, {}, true),
+  // /**
+  //  * 获取特定对话
+  //  * @param {string} conversationId - 对话ID
+  //  * @returns {Promise} - 对话详情
+  //  */
+  // getConversation: (conversationId) =>
+  //   apiGet(`/api/chat/conversations/${conversationId}`, {}, true),
 
-  /**
-   * 删除对话
-   * @param {string} conversationId - 对话ID
-   * @returns {Promise} - 删除结果
-   */
-  deleteConversation: (conversationId) =>
-    apiDelete(`/api/chat/conversations/${conversationId}`, {}, true),
+  // /**
+  //  * 删除对话
+  //  * @param {string} conversationId - 对话ID
+  //  * @returns {Promise} - 删除结果
+  //  */
+  // deleteConversation: (conversationId) =>
+  //   apiDelete(`/api/chat/conversations/${conversationId}`, {}, true),
 
-  /**
-   * 更新对话标题
-   * @param {string} conversationId - 对话ID
-   * @param {string} title - 新标题
-   * @returns {Promise} - 更新结果
-   */
-  updateConversationTitle: (conversationId, title) =>
-    apiPost(`/api/chat/conversations/${conversationId}/title`, { title }, {}, true),
+  // /**
+  //  * 更新对话标题
+  //  * @param {string} conversationId - 对话ID
+  //  * @param {string} title - 新标题
+  //  * @returns {Promise} - 更新结果
+  //  */
+  // updateConversationTitle: (conversationId, title) =>
+  //   apiPost(`/api/chat/conversations/${conversationId}/title`, { title }, {}, true),
 }
 
 // 用户设置API
