@@ -1,9 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
-from server.models.token_model import Base
+from server.models import Base
 
 class User(Base):
     """用户模型"""

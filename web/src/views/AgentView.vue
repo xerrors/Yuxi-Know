@@ -42,14 +42,6 @@
 
           <a-button
             class="action-button"
-            @click="openTokenModal"
-          >
-            <template #icon><KeyOutlined /></template>
-            访问令牌
-          </a-button>
-
-          <a-button
-            class="action-button"
             @click="goToAgentPage"
             v-if="selectedAgentId"
           >
@@ -204,16 +196,6 @@
       </div>
     </a-modal>
 
-    <!-- 令牌管理弹窗 -->
-    <a-modal
-      v-model:open="state.tokenModalVisible"
-      title="访问令牌管理"
-      width="650px"
-      :footer="null"
-      @cancel="closeTokenModal"
-    >
-      <TokenManagerComponent v-if="selectedAgentId" :agent-id="selectedAgentId" />
-    </a-modal>
   </div>
 </template>
 
@@ -233,8 +215,6 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
-import TokenManagerComponent from '@/components/TokenManagerComponent.vue';
-import UserInfoComponent from '@/components/UserInfoComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { chatApi } from '@/apis/auth_api';
 import { systemConfigApi } from '@/apis/admin_api';
@@ -253,7 +233,6 @@ const state = reactive({
   isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
   isConfigSidebarOpen: false,
   configModalVisible: false,
-  tokenModalVisible: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
@@ -521,16 +500,6 @@ const openConfigModal = () => {
 const closeConfigModal = () => {
   state.configModalVisible = false;
 };
-
-// 打开令牌管理弹窗
-const openTokenModal = () => {
-  state.tokenModalVisible = true;
-};
-
-// 关闭令牌管理弹窗
-const closeTokenModal = () => {
-  state.tokenModalVisible = false;
-};
 </script>
 
 <style lang="less" scoped>
@@ -580,12 +549,6 @@ const closeTokenModal = () => {
     min-width: calc(var(--config-sidebar-width) - 16px);
     overflow-y: auto;
     max-height: calc(100vh - 100px);
-
-    .token-section {
-      margin-top: 1.5rem;
-      border-top: 1px solid var(--main-light-3);
-      padding-top: 1rem;
-    }
   }
 
   .no-agent-selected {

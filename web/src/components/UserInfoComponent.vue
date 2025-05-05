@@ -4,7 +4,7 @@
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
           <UserOutlined />
-          <div class="user-role-badge" :class="userRoleClass"></div>
+          <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
         <div v-if="showRole">{{ userStore.username }}</div>
       </div>
@@ -116,8 +116,6 @@ const goToLogin = () => {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background-color: var(--main-color);
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;

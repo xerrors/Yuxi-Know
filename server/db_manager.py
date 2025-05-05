@@ -1,12 +1,10 @@
 import os
-import sqlite3
 import pathlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 
-from server.models.token_model import Base, AgentToken
-from server.models.user_model import User, OperationLog
+from server.models import Base
+from server.models.user_model import User
 
 class DBManager:
     """数据库管理器"""
