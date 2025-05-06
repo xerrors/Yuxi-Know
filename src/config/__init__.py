@@ -51,9 +51,7 @@ class Config(SimpleConfig):
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
         self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(self.model_names.keys()))
-        self.add_item("model_provider_lite", default="siliconflow", des="模型提供商（用于轻量任务）", choices=list(self.model_names.keys()))
         self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
-        self.add_item("model_name_lite", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称（用于轻量任务）")
 
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))

@@ -136,8 +136,8 @@ class Retriever:
 
     def rewrite_query(self, query, history, refs):
         """重写查询"""
-        model_provider = config.model_provider_lite
-        model_name = config.model_name_lite
+        model_provider = config.model_provider
+        model_name = config.model_name
         model = select_model(model_provider=model_provider, model_name=model_name)
         if refs["meta"].get("mode") == "search":  # 如果是搜索模式，就使用 meta 的配置，否则就使用全局的配置
             rewrite_query_span = refs["meta"].get("use_rewrite_query", "off")
@@ -162,8 +162,8 @@ class Retriever:
     def reco_entities(self, query, history, refs):
         """识别句子中的实体"""
         query = refs.get("rewritten_query", query)
-        model_provider = config.model_provider_lite
-        model_name = config.model_name_lite
+        model_provider = config.model_provider
+        model_name = config.model_name
         model = select_model(model_provider=model_provider, model_name=model_name)
 
         entities = []
