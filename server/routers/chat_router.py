@@ -129,21 +129,6 @@ async def call(query: str = Body(...), meta: dict = Body(None)):
 
     return {"response": response.content}
 
-@chat.post("/call_lite")
-async def call_lite(query: str = Body(...), meta: dict = Body(None)):
-    meta = meta or {}
-    async def predict_async(query):
-        loop = asyncio.get_event_loop()
-        model_provider = meta.get("model_provider", config.model_provider_lite)
-        model_name = meta.get("model_name", config.model_name_lite)
-        model = select_model(model_provider=model_provider, model_name=model_name)
-        return await loop.run_in_executor(executor, model.predict, query)
-
-    response = await predict_async(query)
-    logger.debug({"query": query, "response": response.content})
-
-    return {"response": response.content}
-
 @chat.get("/agent")
 async def get_agent():
     agents = [agent.get_info() for agent in agent_manager.agents.values()]
