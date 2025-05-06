@@ -180,7 +180,17 @@ export const knowledgeBaseApi = {
   getDocumentDetail: async (dbId, fileId) => {
     checkAdminPermission()
     return apiGet(`/api/data/document?db_id=${dbId}&file_id=${fileId}`, {}, true)
-  }
+  },
+
+  /**
+   * 将URL转换为分块
+   * @param {Object} data - 分块参数
+   * @returns {Promise} - 分块结果
+   */
+  urlToChunk: async (data) => {
+    checkAdminPermission()
+    return apiPost('/api/data/url-to-chunk', data, {}, true)
+  },
 }
 
 // 图数据库管理API

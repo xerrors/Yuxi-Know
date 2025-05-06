@@ -40,7 +40,7 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
     // 处理API返回的错误
     if (!response.ok) {
       // 尝试解析错误信息
-      let errorMessage = `请求失败: ${response.status}`
+      let errorMessage = `请求失败: ${response.status}, ${response.statusText}`
       let errorData = null
 
       try {

@@ -30,6 +30,7 @@ dependencies = [
     "rapidocr-onnxruntime>=1.4.4",
     "sentencepiece>=0.2.0",
     "tavily-python>=0.7.0",
+    "unstructured>=0.17.2",
     "uvicorn[standard]>=0.34.2",
     "zhipuai>=2.1.5.20250421",
 ]

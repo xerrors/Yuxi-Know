@@ -107,7 +107,19 @@
               </div>
             </div>
             <div class="upload-main">
-              <div class="upload">
+              <div class="source-selector">
+                <a-radio-group v-model:value="uploadMode" button-style="solid" style="margin-bottom: 16px;">
+                  <a-radio-button value="file">
+                    <FileOutlined /> 上传文件
+                  </a-radio-button>
+                  <a-radio-button value="url">
+                    <LinkOutlined /> 输入网址
+                  </a-radio-button>
+                </a-radio-group>
+              </div>
+
+              <!-- 文件上传区域 -->
+              <div class="upload" v-if="uploadMode === 'file'">
                 <a-upload-dragger
                   class="upload-dragger"
                   v-model:fileList="fileList"
@@ -124,12 +136,30 @@
                   </p>
                 </a-upload-dragger>
               </div>
+
+              <!-- URL 输入区域 -->
+              <div class="url-input" v-else>
+                <a-form layout="vertical">
+                  <a-form-item label="网页链接 (每行一个URL)">
+                    <a-textarea
+                      v-model:value="urlList"
+                      placeholder="请输入网页链接，每行一个"
+                      :rows="6"
+                      :disabled="state.loading"
+                    />
+                  </a-form-item>
+                </a-form>
+                <p class="url-hint">
+                  支持添加网页内容，系统会自动抓取网页文本并进行分块。请确保URL格式正确且可以公开访问。
+                </p>
+              </div>
+
               <div class="actions">
                 <a-button
                   type="primary"
-                  @click="chunkFiles"
+                  @click="chunkData"
                   :loading="state.loading"
-                  :disabled="fileList.length === 0"
+                  :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
                   style="margin: 0px 20px 20px 0;"
                 >
                   生成分块
@@ -299,6 +329,8 @@ import {
   CloudUploadOutlined,
   SearchOutlined,
   LoadingOutlined,
+  FileOutlined,
+  LinkOutlined,
 } from '@ant-design/icons-vue'
 
 
@@ -623,6 +655,39 @@ const chunkFiles = () => {
   })
 }
 
+// 分块预览
+const chunkUrls = () => {
+  // 分割并过滤URL列表
+  const urls = urlList.value.split('\n')
+    .map(url => url.trim())
+    .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
+
+  if (urls.length === 0) {
+    message.error('请输入有效的网页链接（必须以http://或https://开头）');
+    return;
+  }
+
+  state.loading = true;
+
+  // 调用url-to-chunk接口获取分块信息
+  knowledgeBaseApi.urlToChunk({
+    urls: urls,
+    params: chunkParams.value
+  })
+  .then(data => {
+    console.log('URL分块信息:', data);
+    chunkResults.value = Object.values(data);
+    activeFileKeys.value = chunkResults.value.length > 0 ? [0] : []; // 默认展开第一个
+  })
+  .catch(error => {
+    console.error(error);
+    message.error(error.message || '处理URL失败');
+  })
+  .finally(() => {
+    state.loading = false;
+  });
+};
+
 // 添加到数据库
 const addToDatabase = () => {
   if (chunkResults.value.length === 0) {
@@ -723,7 +788,16 @@ onUnmounted(() => {
   }
 })
 
+const uploadMode = ref('file');
+const urlList = ref('');
 
+const chunkData = () => {
+  if (uploadMode.value === 'file') {
+    chunkFiles();
+  } else if (uploadMode.value === 'url') {
+    chunkUrls();
+  }
+}
 
 </script>
 
@@ -1180,6 +1254,29 @@ onUnmounted(() => {
       }
     }
   }
+}
+
+.url-input {
+  margin-bottom: 20px;
+}
+
+.url-input .ant-textarea {
+  border-color: var(--main-light-3);
+  background-color: #fff;
+  font-family: monospace;
+  resize: vertical;
+}
+
+.url-input .ant-textarea:hover,
+.url-input .ant-textarea:focus {
+  border-color: var(--main-color);
+}
+
+.url-hint {
+  font-size: 13px;
+  color: var(--gray-600);
+  margin-top: 5px;
+  line-height: 1.5;
 }
 </style>
 

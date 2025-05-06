@@ -208,9 +208,75 @@ class KnowledgeBase:
 
         return file_infos
 
-    def url_to_chunk(self, url, params=None):
-        """将url转换为分块，读取url的内容，并转换为分块"""
-        raise NotImplementedError("Not implemented")
+    def url_to_chunk(self, urls, params=None):
+        """将url转换为分块，读取url的内容，并转换为分块
+
+        Args:
+            urls: list of urls
+            params: params for chunking
+
+        Returns:
+            dict: 包含分块信息的字典
+        """
+        try:
+            from langchain_community.document_loaders import UnstructuredURLLoader
+        except ImportError:
+            raise ImportError("请安装 langchain_community 和 unstructured 包：pip install langchain-community unstructured")
+
+        file_infos = {}
+
+        # 使用UnstructuredURLLoader加载URL内容
+        loader = UnstructuredURLLoader(urls=urls, continue_on_failure=True)
+
+        for url_idx, url in enumerate(urls):
+            file_id = "url_" + hashstr(url + str(time.time()))
+
+            try:
+                # 加载单个URL内容
+                single_loader = UnstructuredURLLoader(urls=[url], continue_on_failure=False)
+                documents = single_loader.load()
+
+                # 将文档内容合并
+                text_content = "\n\n".join([doc.page_content for doc in documents])
+
+                # 对内容进行分块
+                nodes = chunk(text_content, params=params)
+
+                # 从URL中提取域名作为文件名
+                from urllib.parse import urlparse, unquote
+                parsed_url = urlparse(unquote(url))
+                domain = parsed_url.netloc
+                path = parsed_url.path
+                filename = f"{domain}{path}"
+                if filename.endswith('/'):
+                    filename = filename[:-1]
+                if len(filename) > 100:
+                    filename = filename[:97] + "..."
+                filename = filename.replace('/', '_')
+
+                file_infos[file_id] = {
+                    "file_id": file_id,
+                    "filename": filename,
+                    "path": url,
+                    "type": "url",
+                    "status": "waiting",
+                    "created_at": time.time(),
+                    "nodes": [node.dict() for node in nodes]
+                }
+            except Exception as e:
+                logger.error(f"处理URL {url} 时出错: {e}")
+                file_infos[file_id] = {
+                    "file_id": file_id,
+                    "filename": url[:100] + "..." if len(url) > 100 else url,
+                    "path": url,
+                    "type": "url",
+                    "status": "failed",
+                    "created_at": time.time(),
+                    "error": str(e),
+                    "nodes": []
+                }
+
+        return file_infos
 
     def add_chunks(self, db_id, file_chunks):
         """添加分块"""
