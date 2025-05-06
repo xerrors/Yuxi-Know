@@ -162,8 +162,8 @@ class Retriever:
     def reco_entities(self, query, history, refs):
         """识别句子中的实体"""
         query = refs.get("rewritten_query", query)
-        model_provider = config.model_provider_lite
-        model_name = config.model_name_lite
+        model_provider = config.model_provider
+        model_name = config.model_name
         model = select_model(model_provider=model_provider, model_name=model_name)
 
         entities = []
