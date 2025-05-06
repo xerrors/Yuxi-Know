@@ -140,7 +140,7 @@
                     <a-input v-model:value="customModel.api_base" />
                   </a-form-item>
                   <a-form-item label="API KEY" name="api_key">
-                    <a-input-password v-model:value="customModel.api_key" :visibilityToggle="false" autocomplete="new-password"/>
+                    <a-input-password v-model:value="customModel.api_key" :visibilityToggle="true" autocomplete="new-password"/>
                   </a-form-item>
                 </a-form>
               </a-modal>
@@ -937,8 +937,8 @@ const getRoleColor = (role) => {
 </script>
 
 <style lang="less" scoped>
-:root {
-  --setting-header-height: 200px;
+.setting-container {
+  --setting-header-height: 65px;
 }
 
 .setting-header {
@@ -962,7 +962,7 @@ const getRoleColor = (role) => {
   height: 100%;
   padding: 0 20px;
   position: sticky;
-  top: 100px;
+  top: var(--setting-header-height);
   display: flex;
   flex-direction: column;
   align-items: center;
