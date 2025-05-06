@@ -12,11 +12,10 @@
 
 ## 📝 项目概述
 
-DEV 更新待办：
+DEV 更新待办 TODO：
 
 - 智能体的消息加载有问题
 - 智能体的管理员的配置无法更新到用户层面
-
 
 语析是一个强大的问答平台，结合了大模型 RAG 知识库与知识图谱技术，基于 Llamaindex + VueJS + FastAPI + Neo4j 构建。
 
@@ -26,19 +25,18 @@ DEV 更新待办：
 - 📚 灵活知识库：支持 PDF、TXT、MD 等多种格式文档
 - 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力
 - 🚀 简单配置：只需配置对应服务平台的 `API_KEY` 即可使用
-- 🤖 智能体拓展：可以编写自己的智能体代码（Dev过程，非正式版）
+- 🤖 智能体拓展：可以编写自己的智能体代码
 - ⚒️ 适合二次开发：更多的开发自定义项
 
 ![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
 ## 📋 更新日志
 
-- **2025.04.27** - 支持 Ollama 等带有 `<think>Content</think>` 标签的消息解析
+- **2025.05.07** - 新增权限控制功能，主要角色分为 超级管理员、管理员、普通用户 [PR#173](https://github.com/xerrors/Yuxi-Know/pull/173)
 - **2025.03.30** - 系统中集成智能体（WIP， [PR#96](https://github.com/xerrors/Yuxi-Know/pull/96)）
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
 - **2025.02.23** - SiliconFlow 的 Rerank 和 Embedding model 支持，现默认使用 SiliconFlow
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
-- **2024.10.12** - 后端修改为 [FastAPI](https://github.com/fastapi)，添加 [Milvus-Standalone](https://github.com/milvus-io) 独立部署
 
 ### 环境配置
 
@@ -62,7 +60,7 @@ ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 
 **开发环境启动**（源代码修改会自动更新）：
 
 ```bash
-docker compose --env-file src/.env up --build
+docker compose up --build
 ```
 
 > 添加 `-d` 参数可在后台运行
@@ -80,6 +78,8 @@ docker compose --env-file src/.env up --build
  ✔ Container web-dev                Started
 ```
 
+注：当内存不足的时候，可能会出现 Milvus 没有正常启动的情况。此时需要 `docker compose up milvus -d` 来重新启动，并重启 api-dev `docker restart api-dev`。
+
 访问 [http://localhost:5173/](http://localhost:5173/) 即可使用系统。
 
 ### 系统预览
@@ -91,7 +91,7 @@ docker compose --env-file src/.env up --build
 **关闭服务**：
 
 ```bash
-docker compose --env-file src/.env down
+docker compose down
 ```
 
 **查看日志**：
@@ -133,72 +133,8 @@ ark:
     - deepseek-r1-250120
 ```
 
-#### 本地模型部署
+本地模型部署参考 [how-to.md](./docs/how-to.md)
 
-支持添加以 OpenAI 兼容模式运行的本地模型，可在 Web 设置中直接添加（适用于 vllm 和 Ollama 等）。
-
-> [!注意]
-> 使用 docker 运行此项目时，ollama 或 vllm 需监听 `0.0.0.0`
-
-![本地模型配置](./images/custom_models.png)
-
-### 2. 向量模型与重排序模型
-
-建议使用硅基流动部署的 bge-m3（免费且无需修改）。其他模型配置参考 [src/static/models.yaml](src/static/models.yaml)。
-
-对于**向量模型**和**重排序模型**，选择 `local` 前缀的模型会自动下载。如遇下载问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置。
-
-要使用已下载的本地模型：
-
-1. 在网页设置中添加映射：
-
-![image](https://github.com/user-attachments/assets/ab62ea17-c7d0-4f94-84af-c4bab26865ad)
-
-2. 将文件夹映射到 docker 内部
-
-```yml
-# docker-compose.yml
-
-services:
-  api:
-    build:
-      context: .
-      dockerfile: docker/api.Dockerfile
-    container_name: api-dev
-    working_dir: /app
-    volumes:
-      - ./server:/app/server
-      - ./src:/app/src
-      - ./saves:/app/saves
-      - ${MODEL_DIR}:/models <== 比如修改为 /hdd/models:models
-    ports:
-
-```
-
-#### 添加向量模型
-
-注：添加本地向量模型由于在 docker 内外的路径差异很大，因此建议参考前面的路径映射之后，在这里添加。
-
-```yaml
-# src/static/models.yaml
-  # 添加本地向量模型（所有 FlagEmbedding 支持的模型）
-  local/BAAI/bge-m3:
-    name: BAAI/bge-m3
-    dimension: 1024
-    # local_path: /models/BAAI/bge-m3，也可以在这里配置
-
-  # 添加 OpenAI 兼容的向量模型
-  siliconflow/BAAI/bge-m3:
-    name: BAAI/bge-m3
-    dimension: 1024
-    url: https://api.siliconflow.cn/v1/embeddings
-    api_key: SILICONFLOW_API_KEY
-
-  # 添加 Ollama 模型
-  ollama/nomic-embed-text:
-    name: nomic-embed-text
-    dimension: 768
-```
 
 ## 📚 知识库支持
 
