@@ -258,6 +258,7 @@ class GraphDatabase:
         tx.run(query)
 
     def query_node(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, max_entities=5, **kwargs):
+        """知识图谱查询节点的入口:"""
         # TODO 添加判断节点数量为 0 停止检索
         # 判断是否启动
         if not self.is_running():

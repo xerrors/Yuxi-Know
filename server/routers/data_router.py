@@ -58,6 +58,12 @@ async def file_to_chunk(files: List[str] = Body(...), params: dict = Body(...), 
     result = knowledge_base.file_to_chunk(files, params=params)
     return result
 
+@data.post("/url-to-chunk")
+async def url_to_chunk(urls: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"Url to chunk: {urls}")
+    result = knowledge_base.url_to_chunk(urls, params=params)
+    return result
+
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: List[str] = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Add document in {db_id} by file: {files}")
