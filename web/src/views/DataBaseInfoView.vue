@@ -286,6 +286,7 @@ import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'v
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
+import { knowledgeBaseApi } from '@/apis/admin_api'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
   ReadOutlined,
@@ -298,7 +299,6 @@ import {
   CloudUploadOutlined,
   SearchOutlined,
   LoadingOutlined,
-  CaretUpOutlined
 } from '@ant-design/icons-vue'
 
 
@@ -395,29 +395,29 @@ const onQuery = () => {
     return
   }
   meta.db_id = database.value.db_id
-  fetch('/api/data/query-test', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"  // 添加 Content-Type 头
-    },
-    body: JSON.stringify({
+
+  try {
+    knowledgeBaseApi.queryTest({
       query: queryText.value.trim(),
       meta: meta
-    }),
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log(data)
-    queryResult.value = data
-    filterQueryResults()
-  })
-  .catch(error => {
+    })
+    .then(data => {
+      console.log(data)
+      queryResult.value = data
+      filterQueryResults()
+    })
+    .catch(error => {
+      console.error(error)
+      message.error(error.message)
+    })
+    .finally(() => {
+      state.searchLoading = false
+    })
+  } catch (error) {
     console.error(error)
     message.error(error.message)
-  })
-  .finally(() => {
     state.searchLoading = false
-  })
+  }
 }
 
 const handleFileUpload = (event) => {
@@ -449,7 +449,6 @@ const handleRefresh = () => {
 }
 
 const deleteDatabse = () => {
-
   Modal.confirm({
     title: '删除数据库',
     content: '确定要删除该数据库吗？',
@@ -457,28 +456,19 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch(`/api/data/?db_id=${databaseId.value}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          db_id: databaseId.value
-        }),
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log(data)
-        message.success(data.message)
-        router.push('/database')
-      })
-      .catch(error => {
-        console.error(error)
-        message.error(error.message)
-      })
-      .finally(() => {
-        state.lock = false
-      })
+      knowledgeBaseApi.deleteDatabase(databaseId.value)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          router.push('/database')
+        })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');
@@ -488,27 +478,31 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  fetch(`/api/data/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
-    method: "GET",
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      if (data.status == "failed") {
-        message.error(data.message)
-        return
-      }
-      state.lock = false
-      selectedFile.value = {
-        ...record,
-        lines: data.lines || []
-      }
-      state.drawer = true
-    })
-    .catch(error => {
-      console.error(error)
-      message.error(error.message)
-    })
+
+  try {
+    knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
+      .then(data => {
+        console.log(data)
+        if (data.status == "failed") {
+          message.error(data.message)
+          return
+        }
+        state.lock = false
+        selectedFile.value = {
+          ...record,
+          lines: data.lines || []
+        }
+        state.drawer = true
+      })
+      .catch(error => {
+        console.error(error)
+        message.error(error.message)
+      })
+  } catch (error) {
+    console.error(error)
+    message.error('获取文件详情失败')
+    state.lock = false
+  }
 }
 
 const formatRelativeTime = (timestamp) => {
@@ -537,17 +531,14 @@ const getDatabaseInfo = () => {
   }
   state.lock = true
   return new Promise((resolve, reject) => {
-    fetch(`/api/data/info?db_id=${db_id}`, {
-      method: "GET",
-    })
-      .then(response => response.json())
+    knowledgeBaseApi.getDatabaseInfo(db_id)
       .then(data => {
         database.value = data
         resolve(data)
       })
       .catch(error => {
         console.error(error)
-        message.error(error.message)
+        message.error(error.message || '获取数据库信息失败')
         reject(error)
       })
       .finally(() => {
@@ -565,30 +556,20 @@ const deleteFile = (fileId) => {
     okText: '确认',
     cancelText: '取消',
     onOk: () => {
-        state.lock = true
-        fetch('/api/data/document', {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json"  // 添加 Content-Type 头
-          },
-          body: JSON.stringify({
-            db_id: databaseId.value,
-            file_id: fileId
-          }),
+      state.lock = true
+      knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          getDatabaseInfo()
         })
-          .then(response => response.json())
-          .then(data => {
-            console.log(data)
-            message.success(data.message)
-            getDatabaseInfo()
-          })
-          .catch(error => {
-            console.error(error)
-              message.error(error.message)
-            })
-            .finally(() => {
-              state.lock = false
-            })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');
@@ -624,17 +605,10 @@ const chunkFiles = () => {
   state.loading = true
 
   // 调用file-to-chunk接口获取分块信息
-  fetch('/api/data/file-to-chunk', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      files: files,
-      params: chunkParams.value
-    }),
+  knowledgeBaseApi.fileToChunk({
+    files: files,
+    params: chunkParams.value
   })
-  .then(response => response.json())
   .then(data => {
     console.log('文件分块信息:', data)
     chunkResults.value = Object.values(data);
@@ -666,17 +640,10 @@ const addToDatabase = () => {
   });
 
   // 调用add-by-chunks接口将分块添加到数据库
-  fetch('/api/data/add-by-chunks', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      db_id: databaseId.value,
-      file_chunks: fileChunks
-    }),
+  knowledgeBaseApi.addByChunks({
+    db_id: databaseId.value,
+    file_chunks: fileChunks
   })
-  .then(response => response.json())
   .then(data => {
     console.log(data)
 
