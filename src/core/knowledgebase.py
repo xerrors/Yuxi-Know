@@ -8,7 +8,7 @@ from pymilvus import MilvusClient, MilvusException
 
 from src import config
 from src.utils import logger, hashstr
-from src.core.indexing import chunk, read_text
+from src.core.indexing import chunk, read_text_async
 from src.core.kb_db_manager import kb_db_manager
 
 class KnowledgeBase:
@@ -175,7 +175,7 @@ class KnowledgeBase:
 
         return self.db_manager.get_database_by_id(db_id)
 
-    def file_to_chunk(self, files, params=None):
+    async def file_to_chunk(self, files, params=None):
         """将文件转换为分块
 
         这里主要是将文件转换为分块，但并不保存到数据库，仅仅返回分块后的信息，返回的信息里面也包含文件的id，文件名，文件类型，文件路径，文件状态，文件创建时间等。
@@ -191,7 +191,7 @@ class KnowledgeBase:
             file_type = file.split(".")[-1].lower()
 
             if file_type == "pdf":
-                texts = read_text(file)
+                texts = await read_text_async(file)
                 nodes = chunk(texts, params=params)
             else:
                 nodes = chunk(file, params=params)
@@ -208,7 +208,7 @@ class KnowledgeBase:
 
         return file_infos
 
-    def url_to_chunk(self, urls, params=None):
+    async def url_to_chunk(self, urls, params=None):
         """将url转换为分块，读取url的内容，并转换为分块
 
         Args:
@@ -226,7 +226,7 @@ class KnowledgeBase:
         file_infos = {}
 
         # 使用UnstructuredURLLoader加载URL内容
-        loader = UnstructuredURLLoader(urls=urls, continue_on_failure=True)
+        # loader = UnstructuredURLLoader(urls=urls, continue_on_failure=True)
 
         for url_idx, url in enumerate(urls):
             file_id = "url_" + hashstr(url + str(time.time()))
@@ -234,7 +234,7 @@ class KnowledgeBase:
             try:
                 # 加载单个URL内容
                 single_loader = UnstructuredURLLoader(urls=[url], continue_on_failure=False)
-                documents = single_loader.load()
+                documents = await single_loader.aload()
 
                 # 将文档内容合并
                 text_content = "\n\n".join([doc.page_content for doc in documents])
@@ -278,7 +278,7 @@ class KnowledgeBase:
 
         return file_infos
 
-    def add_chunks(self, db_id, file_chunks):
+    async def add_chunks(self, db_id, file_chunks):
         """添加分块"""
         db = self.get_kb_by_id(db_id)
 
@@ -298,7 +298,7 @@ class KnowledgeBase:
             )
 
             try:
-                self.add_documents(
+                await self.add_documents(
                     file_id=file_id,
                     collection_name=db_id,
                     docs=[node["text"] for node in chunk_info["nodes"]],
@@ -312,7 +312,7 @@ class KnowledgeBase:
                 # 更新文件状态为失败
                 self.db_manager.update_file_status(file_id, "failed")
 
-    def add_files(self, db_id, files, params=None):
+    async def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
         if not self.check_embed_model(db_id):
@@ -320,7 +320,7 @@ class KnowledgeBase:
             return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
 
         # Preprocessing the files to the queue
-        new_files = self.file_to_chunk(files, params=params)
+        new_files = await self.file_to_chunk(files, params=params)
 
         for file_id, new_file in new_files.items():
             # 在数据库中创建文件记录
@@ -334,7 +334,7 @@ class KnowledgeBase:
             )
 
             try:
-                self.add_documents(
+                await self.add_documents(
                     file_id=file_id,
                     collection_name=db_id,
                     docs=[node["text"] for node in new_file["nodes"]],
@@ -498,7 +498,7 @@ class KnowledgeBase:
             dimension= dimension,  # The vectors we will use in this demo has 768 dimensions
         )
 
-    def add_documents(self, docs, collection_name, chunk_infos=None, **kwargs):
+    async def add_documents(self, docs, collection_name, chunk_infos=None, **kwargs):
         """添加已经分块之后的文本"""
         # 检查 collection 是否存在
         import random
@@ -508,7 +508,7 @@ class KnowledgeBase:
 
         chunk_infos = chunk_infos or [{}] * len(docs)
 
-        vectors = self.embed_model.batch_encode(docs)
+        vectors = await self.embed_model.abatch_encode(docs)
 
         data = [{
             "id": int(random.random() * 1e12),
