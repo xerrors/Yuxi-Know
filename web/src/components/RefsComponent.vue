@@ -3,7 +3,9 @@
     <div class="tags">
       <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
       <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
-      <span v-if="msg.meta?.server_model_name" class="item"><BulbOutlined /> {{ msg.meta.server_model_name }}</span>
+      <span v-if="msg.meta?.server_model_name" class="item" @click="console.log(msg)">
+        <BulbOutlined /> {{ msg.meta.server_model_name }}
+      </span>
       <span
         v-if="showKey('copy')"
         class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined /></span>
