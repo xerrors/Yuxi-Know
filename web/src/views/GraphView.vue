@@ -73,6 +73,7 @@
           :max-count="1"
           :disabled="disabled"
           action="/api/data/upload"
+          :headers="getAuthHeaders()"
           @change="handleFileUpload"
           @drop="handleDrop"
         >
@@ -94,6 +95,7 @@ import { useConfigStore } from '@/stores/config';
 import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { graphApi } from '@/apis/admin_api';
+import { useUserStore } from '@/stores/user';
 
 const configStore = useConfigStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '');
@@ -382,6 +384,11 @@ const indexNodes = () => {
     .finally(() => {
       state.indexing = false;
     });
+};
+
+const getAuthHeaders = () => {
+  const userStore = useUserStore();
+  return userStore.getAuthHeaders();
 };
 
 </script>
