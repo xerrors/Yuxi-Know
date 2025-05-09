@@ -10,6 +10,7 @@ dependencies = [
     "fastapi>=0.115.12",
     "flagembedding>=1.3.4",
     "langchain-community>=0.3.22",
+    "langchain-huggingface>=0.2.0",
     "langchain-openai>=0.3.14",
     "langgraph>=0.3.34",
     "langsmith>=0.3.37",

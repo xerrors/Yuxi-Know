@@ -57,6 +57,8 @@ ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 
 
 ### 启动服务
 
+> 确保已经安装了 [docker](https://docs.docker.com/engine/install/ubuntu/) 以及 [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+
 **开发环境启动**（源代码修改会自动更新）：
 
 ```bash
