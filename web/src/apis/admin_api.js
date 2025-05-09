@@ -119,13 +119,21 @@ export const knowledgeBaseApi = {
    */
   uploadFile: async (formData, dbId) => {
     checkAdminPermission()
+    const userStore = useUserStore()
+    const authHeaders = userStore.getAuthHeaders()
+
     return fetch(`/api/data/upload?db_id=${dbId}`, {
       method: 'POST',
       headers: {
-        ...useUserStore().getAuthHeaders()
+        ...authHeaders
       },
       body: formData
-    }).then(res => res.json())
+    }).then(res => {
+      if (!res.ok) {
+        throw new Error(`上传失败: ${res.status} ${res.statusText}`)
+      }
+      return res.json()
+    })
   },
 
   /**
