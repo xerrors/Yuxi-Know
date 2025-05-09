@@ -55,25 +55,20 @@ async def query_test(query: str = Body(...), meta: dict = Body(...), current_use
 @data.post("/file-to-chunk")
 async def file_to_chunk(files: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"File to chunk: {files}")
-    result = knowledge_base.file_to_chunk(files, params=params)
+    result = await knowledge_base.file_to_chunk(files, params=params)
     return result
 
 @data.post("/url-to-chunk")
 async def url_to_chunk(urls: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Url to chunk: {urls}")
-    result = knowledge_base.url_to_chunk(urls, params=params)
+    result = await knowledge_base.url_to_chunk(urls, params=params)
     return result
 
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: List[str] = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Add document in {db_id} by file: {files}")
     try:
-        # 使用线程池执行耗时操作
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            executor,  # 使用与chat_router相同的线程池
-            lambda: knowledge_base.add_files(db_id, files)
-        )
+        await knowledge_base.add_files(db_id, files)
         return {"message": "文件添加完成", "status": "success"}
     except Exception as e:
         logger.error(f"添加文件失败: {e}, {traceback.format_exc()}")
