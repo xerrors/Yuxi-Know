@@ -25,7 +25,6 @@ import {
   RobotFilled,
   ApiOutlined,
 } from '@ant-design/icons-vue'
-import { themeConfig } from '@/assets/theme'
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -201,14 +200,12 @@ const mainList = [{
       <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
       <RouterLink to="/setting" class="nav-item" active-class="active">设置</RouterLink>
     </div>
-    <a-config-provider :theme="themeConfig">
     <router-view v-slot="{ Component, route }" id="app-router-view">
       <keep-alive v-if="route.meta.keepAlive !== false">
         <component :is="Component" />
       </keep-alive>
       <component :is="Component" v-else />
     </router-view>
-    </a-config-provider>
   </div>
 </template>
 

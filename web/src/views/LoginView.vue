@@ -1,6 +1,6 @@
 <template>
   <!-- TODO 登录页面样式优化；（1）风格和整个系统统一； -->
-  <div class="login-view">
+  <div class="login-view" :style="{ backgroundImage: `url(${loginBg})` }">
     <div class="login-container">
       <div class="login-logo">
         <img src="@/assets/logo.png" alt="Logo" v-if="false" />
@@ -22,7 +22,7 @@
             name="username"
             :rules="[{ required: true, message: '请输入用户名' }]"
           >
-            <a-input v-model:value="adminForm.username" />
+            <a-input v-model:value="adminForm.username" prefix-icon="user" />
           </a-form-item>
 
           <a-form-item
@@ -30,7 +30,7 @@
             name="password"
             :rules="[{ required: true, message: '请输入密码' }]"
           >
-            <a-input-password v-model:value="adminForm.password" />
+            <a-input-password v-model:value="adminForm.password" prefix-icon="lock" />
           </a-form-item>
 
           <a-form-item
@@ -41,7 +41,7 @@
               { validator: validateConfirmPassword }
             ]"
           >
-            <a-input-password v-model:value="adminForm.confirmPassword" />
+            <a-input-password v-model:value="adminForm.confirmPassword" prefix-icon="lock" />
           </a-form-item>
 
           <a-form-item>
@@ -64,7 +64,11 @@
             name="username"
             :rules="[{ required: true, message: '请输入用户名' }]"
           >
-            <a-input v-model:value="loginForm.username" />
+            <a-input v-model:value="loginForm.username">
+              <template #prefix>
+                <user-outlined />
+              </template>
+            </a-input>
           </a-form-item>
 
           <a-form-item
@@ -72,18 +76,60 @@
             name="password"
             :rules="[{ required: true, message: '请输入密码' }]"
           >
-            <a-input-password v-model:value="loginForm.password" />
+            <a-input-password v-model:value="loginForm.password">
+              <template #prefix>
+                <lock-outlined />
+              </template>
+            </a-input-password>
+          </a-form-item>
+
+          <a-form-item>
+            <div class="login-options">
+              <a-checkbox v-model:checked="rememberMe" @click="showDevMessage">记住我</a-checkbox>
+              <a class="forgot-password" @click="showDevMessage">忘记密码?</a>
+            </div>
           </a-form-item>
 
           <a-form-item>
             <a-button type="primary" html-type="submit" :loading="loading" block>登录</a-button>
           </a-form-item>
+
+          <!-- 第三方登录选项 -->
+          <div class="third-party-login">
+            <div class="divider">
+              <span>其他登录方式</span>
+            </div>
+            <div class="login-icons">
+              <a-tooltip title="微信登录">
+                <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                  <template #icon><wechat-outlined /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="企业微信登录">
+                <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                  <template #icon><qrcode-outlined /></template>
+                </a-button>
+              </a-tooltip>
+              <a-tooltip title="飞书登录">
+                <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                  <template #icon><thunderbolt-outlined /></template>
+                </a-button>
+              </a-tooltip>
+            </div>
+          </div>
         </a-form>
       </div>
 
       <!-- 错误提示 -->
       <div v-if="errorMessage" class="error-message">
         {{ errorMessage }}
+      </div>
+
+      <!-- 页脚 -->
+      <div class="login-footer">
+        <a @click="showDevMessage">联系我们</a>
+        <a @click="showDevMessage">使用帮助</a>
+        <a @click="showDevMessage">隐私政策</a>
       </div>
     </div>
   </div>
@@ -96,6 +142,8 @@ import { useUserStore } from '@/stores/user';
 import { message } from 'ant-design-vue';
 import { chatApi } from '@/apis/auth_api';
 import { authApi } from '@/apis/public_api';
+import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined } from '@ant-design/icons-vue';
+import loginBg from '@/assets/pics/login_bg.jpg';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -104,6 +152,7 @@ const userStore = useUserStore();
 const isFirstRun = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
+const rememberMe = ref(false);
 
 // 登录表单
 const loginForm = reactive({
@@ -117,6 +166,11 @@ const adminForm = reactive({
   password: '',
   confirmPassword: ''
 });
+
+// 开发中功能提示
+const showDevMessage = () => {
+  message.info('该功能正在开发中，敬请期待！');
+};
 
 // 密码确认验证
 const validateConfirmPassword = (rule, value) => {
@@ -249,15 +303,32 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background-color: #f5f5f5;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.1);
+    z-index: 0;
+  }
 }
 
 .login-container {
-  width: 400px;
+  width: 420px;
   padding: 40px;
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  border: 2px solid white;
 }
 
 .login-logo {
@@ -265,24 +336,55 @@ onMounted(async () => {
   margin-bottom: 30px;
 
   img {
-    height: 60px;
+    height: 70px;
     margin-bottom: 16px;
   }
 
   h1 {
-    font-size: 24px;
+    font-size: 28px;
     font-weight: 600;
-    color: #333;
+    color: var(--main-color);
     margin: 0;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
 }
 
 .login-form {
   h2 {
     text-align: center;
-    margin-bottom: 24px;
-    font-size: 20px;
+    margin-bottom: 30px;
+    font-size: 22px;
     font-weight: 500;
+    color: #333;
+  }
+
+  :deep(.ant-form-item) {
+    margin-bottom: 20px;
+  }
+
+  :deep(.ant-input-affix-wrapper) {
+    padding: 10px 11px;
+    height: auto;
+  }
+
+  :deep(.ant-btn) {
+    font-size: 16px;
+  }
+}
+
+.login-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+
+  .forgot-password {
+    color: #1890ff;
+    font-size: 14px;
+
+    &:hover {
+      color: #40a9ff;
+    }
   }
 }
 
@@ -294,11 +396,83 @@ onMounted(async () => {
 
 .error-message {
   margin-top: 16px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   background-color: #fff2f0;
   border: 1px solid #ffccc7;
   border-radius: 4px;
   color: #ff4d4f;
   font-size: 14px;
+}
+
+.third-party-login {
+  margin-top: 20px;
+
+  .divider {
+    position: relative;
+    text-align: center;
+    margin: 16px 0;
+
+    &::before, &::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: calc(50% - 60px);
+      height: 1px;
+      background-color: #e8e8e8;
+    }
+
+    &::before {
+      left: 0;
+    }
+
+    &::after {
+      right: 0;
+    }
+
+    span {
+      display: inline-block;
+      padding: 0 12px;
+      background-color: #fff;
+      position: relative;
+      color: #999;
+      font-size: 14px;
+    }
+  }
+
+  .login-icons {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+
+    .login-icon {
+      margin: 0 12px;
+      width: 42px;
+      height: 42px;
+      color: #666;
+      border: 1px solid var(--gray-300);
+      transition: all 0.3s;
+
+      &:hover {
+        color: var(--main-color);
+        border-color: var(--main-color);
+      }
+    }
+  }
+}
+
+.login-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 13px;
+
+  a {
+    color: #666;
+    margin: 0 8px;
+    cursor: pointer;
+
+    &:hover {
+      color: var(--main-color);
+    }
+  }
 }
 </style>
