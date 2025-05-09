@@ -762,8 +762,10 @@ const modelKeys = computed(() => {
 
 // 选择模型的方法
 const selectModel = (provider, name) => {
-  configStore.setConfigValue('model_provider', provider)
-  configStore.setConfigValue('model_name', name)
+  configStore.setConfigValues({
+    model_provider: provider,
+    model_name: name,
+  })
   // message.success(`已切换到模型: ${name} | ${provider}`)
 }
 
