@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
+    image: api:0.1.0
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -30,6 +31,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
+    image: web:0.1.0
     container_name: web-dev
     volumes:
       - ./web:/app
