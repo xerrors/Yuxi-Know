@@ -78,11 +78,7 @@ async def create_document_by_file(db_id: str = Body(...), files: List[str] = Bod
 async def add_by_chunks(db_id: str = Body(...), file_chunks: dict = Body(...), current_user: User = Depends(get_admin_user)):
     # logger.debug(f"Add chunks in {db_id}: {len(file_chunks)} chunks")
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            executor,  # 使用与chat_router相同的线程池
-            lambda: knowledge_base.add_chunks(db_id, file_chunks)
-        )
+        await knowledge_base.add_chunks(db_id, file_chunks)
         return {"message": "分块添加完成", "status": "success"}
     except Exception as e:
         logger.error(f"添加分块失败: {e}, {traceback.format_exc()}")
