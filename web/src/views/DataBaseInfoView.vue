@@ -127,6 +127,7 @@
                   :multiple="true"
                   :disabled="state.loading"
                   :action="'/api/data/upload?db_id=' + databaseId"
+                  :headers="getAuthHeaders()"
                   @change="handleFileUpload"
                   @drop="handleDrop"
                 >
@@ -316,6 +317,7 @@ import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'v
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
 import { knowledgeBaseApi } from '@/apis/admin_api'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
@@ -798,6 +800,11 @@ const chunkData = () => {
     chunkUrls();
   }
 }
+
+const getAuthHeaders = () => {
+  const userStore = useUserStore();
+  return userStore.getAuthHeaders();
+};
 
 </script>
 
