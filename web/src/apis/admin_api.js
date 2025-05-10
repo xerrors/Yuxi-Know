@@ -199,6 +199,20 @@ export const knowledgeBaseApi = {
     checkAdminPermission()
     return apiPost('/api/data/url-to-chunk', data, {}, true)
   },
+
+  /**
+   * 更新知识库信息
+   * @param {string} dbId - 知识库ID
+   * @param {Object} data - 包含name和description的数据对象
+   * @returns {Promise} - 更新结果
+   */
+  updateDatabaseInfo: async (dbId, data) => {
+    checkAdminPermission()
+    return apiPost('/api/data/update', {
+      db_id: dbId,
+      ...data
+    }, {}, true)
+  },
 }
 
 // 图数据库管理API

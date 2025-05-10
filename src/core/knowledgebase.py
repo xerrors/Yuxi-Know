@@ -136,8 +136,15 @@ class KnowledgeBase:
         else:
             db_copy = db_dict.copy()
             try:
+                # 保存原始描述
+                original_description = db_copy.get("description")
+
                 milvus_info = self.get_collection_info(db_id)
                 db_copy.update(milvus_info)
+
+                # 如果原始描述不为空，恢复它
+                if original_description:
+                    db_copy["description"] = original_description
             except Exception as e:
                 logger.warning(f"获取知识库 ID: {db_id} 的Milvus信息失败: {e}")
                 # 添加一个默认的Milvus状态
@@ -552,4 +559,15 @@ class KnowledgeBase:
     def check_embed_model(self, db_id):
         db = self.db_manager.get_database_by_id(db_id)
         return db["embed_model"] == self.embed_model.embed_model_fullname
+
+    def update_database(self, db_id, name, description):
+        """更新知识库信息"""
+        # 检查知识库是否存在
+        db = self.db_manager.get_database_by_id(db_id)
+        if db is None:
+            raise Exception(f"数据库不存在: {db_id}")
+
+        # 调用db_manager更新知识库信息
+        updated_db = self.db_manager.update_database(db_id, name, description)
+        return updated_db
 
