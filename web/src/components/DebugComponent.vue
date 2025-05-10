@@ -22,7 +22,7 @@
           {{ state.isFullscreen ? '退出全屏' : '全屏' }}
         </a-button>
         <a-tooltip :title="state.autoRefresh ? '点击停止自动刷新' : '点击开启自动刷新'">
-          <a-button 
+          <a-button
             :type="state.autoRefresh ? 'primary' : 'default'"
             @click="toggleAutoRefresh(!state.autoRefresh)"
           >
@@ -72,9 +72,11 @@
 <script setup>
 import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed } from 'vue';
 import { useConfigStore } from '@/stores/config';
+import { useUserStore } from '@/stores/user';
 import { useThrottleFn } from '@vueuse/core';
-import { 
-  FullscreenOutlined, 
+import { message } from 'ant-design-vue';
+import {
+  FullscreenOutlined,
   FullscreenExitOutlined,
   ReloadOutlined,
   ClearOutlined,
@@ -82,9 +84,20 @@ import {
   SyncOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
+import { logApi } from '@/apis/admin_api';
 
 const configStore = useConfigStore()
+const userStore = useUserStore();
 const config = configStore.config;
+
+// 权限检查
+const checkAdminPermission = () => {
+  if (!userStore.isAdmin) {
+    message.error('需要管理员权限才能查看日志');
+    return false;
+  }
+  return true;
+};
 
 // 定义日志级别
 const logLevels = [
@@ -153,16 +166,13 @@ const processedLogs = computed(() => {
 
 // 获取日志数据
 const fetchLogs = async () => {
+  if (!checkAdminPermission()) return;
+
   state.fetching = true;
   try {
     error.value = '';
-    const response = await fetch('/api/log');
-    if (!response.ok) {
-      throw new Error('获取日志失败');
-    }
-
-    const data = await response.json();
-    state.rawLogs = data.log.split('\n').filter(line => line.trim());
+    const logData = await logApi.getLogs();
+    state.rawLogs = logData.log.split('\n').filter(line => line.trim());
 
     await nextTick();
     const scrollToBottom = useThrottleFn(() => {
@@ -180,6 +190,7 @@ const fetchLogs = async () => {
 
 // 清空日志
 const clearLogs = () => {
+  if (!checkAdminPermission()) return;
   state.rawLogs = [];
 };
 
@@ -195,6 +206,8 @@ const filterLogs = () => {
 
 // 自动刷新
 const toggleAutoRefresh = (value) => {
+  if (!checkAdminPermission()) return;
+
   if (value) {
     autoRefreshInterval = setInterval(fetchLogs, 5000);
     state.autoRefresh = true;
@@ -209,6 +222,8 @@ const toggleAutoRefresh = (value) => {
 
 // 全屏切换
 const toggleFullscreen = async () => {
+  if (!checkAdminPermission()) return;
+
   try {
     if (!state.isFullscreen) {
       if (logViewer.value.requestFullscreen) {
@@ -242,13 +257,17 @@ const handleFullscreenChange = () => {
 };
 
 onMounted(() => {
-  fetchLogs();
+  if (checkAdminPermission()) {
+    fetchLogs();
+  }
   document.addEventListener('fullscreenchange', handleFullscreenChange);
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
   document.addEventListener('msfullscreenchange', handleFullscreenChange);
 });
 
 onActivated(() => {
+  if (!checkAdminPermission()) return;
+
   if (state.autoRefresh) {
     toggleAutoRefresh(true);
   } else {
@@ -267,6 +286,7 @@ onUnmounted(() => {
 });
 
 const printConfig = () => {
+  if (!checkAdminPermission()) return;
   console.log('Current config:', config);
 };
 </script>

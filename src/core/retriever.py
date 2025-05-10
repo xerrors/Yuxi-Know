@@ -145,13 +145,12 @@ class Retriever:
             rewrite_query_span = config.use_rewrite_query
 
         if rewrite_query_span == "off":
-            rewritten_query = query
-        else:
-            from src.utils.prompts import rewritten_query_prompt_template
+            return query
 
-            history_query = [entry["content"] for entry in history if entry["role"] == "user"] if history else ""
-            rewritten_query_prompt = rewritten_query_prompt_template.format(history=history_query, query=query)
-            rewritten_query = model.predict(rewritten_query_prompt).content
+        from src.utils.prompts import rewritten_query_prompt_template2 as rw_template
+        history_query = [entry["content"] for entry in history if entry["role"] == "user"] if history else ""
+        rewritten_query_prompt = rw_template.format(history=history_query, query=query)
+        rewritten_query = model.predict(rewritten_query_prompt).content
 
         if rewrite_query_span == "hyde":
             res = HyDEOperator.call(model_callable=model.predict, query=query, context_str=history_query)

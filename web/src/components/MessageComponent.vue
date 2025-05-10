@@ -15,7 +15,7 @@
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
           <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
-            <p class="reasoning-content">{{ message.reasoning_content }}</p>
+            <p class="reasoning-content">{{ message.reasoning_content.trim() }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
@@ -56,7 +56,7 @@
       <!-- 工具调用 (AgentView特有) -->
       <slot v-else-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" name="tool-calls"></slot>
 
-      <div v-else class="err-msg" @click="$emit('retry')">
+      <div v-else-if="!isProcessing" class="err-msg" @click="$emit('retry')">
         请求错误，请重试。{{ message.message }}
       </div>
 
@@ -67,7 +67,7 @@
 
 
       <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
-        <RefsComponent :message="message" :show-refs="showRefs" @retry="emit('retry')" />
+        <RefsComponent :message="message" :show-refs="showRefs" :is-latest-message="isLatestMessage" @retry="emit('retry')" @openRefs="emit('openRefs', $event)" />
       </div>
       <!-- 错误消息 -->
     </div>
@@ -111,6 +111,11 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  // 是否为最新消息
+  isLatestMessage: {
+    type: Boolean,
+    default: false
+  }
 });
 
 const editorRef = ref()
@@ -122,7 +127,7 @@ const statusDefination = {
   error: '错误'
 }
 
-const emit = defineEmits(['retry', 'retryStoppedMessage']);
+const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
 
 // 推理面板展开状态
 const reasoningActiveKey = ref(['show']);

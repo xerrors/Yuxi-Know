@@ -6,7 +6,8 @@ WORKDIR /app
 COPY ./web/package*.json ./
 
 # 安装依赖
-RUN npm install --verbose --force
+RUN npm install -g pnpm@latest-10
+RUN pnpm install
 # RUN npm install --registry http://mirrors.cloud.tencent.com/npm/ --verbose --force
 
 # 复制源代码

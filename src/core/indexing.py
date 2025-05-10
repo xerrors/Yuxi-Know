@@ -1,4 +1,5 @@
 import os
+import asyncio
 from pathlib import Path
 from llama_index.core import Document
 from llama_index.core.node_parser import SimpleFileNodeParser
@@ -94,3 +95,5 @@ def read_text(file, params=None):
         raise Exception(f"File format not supported, only support {support_format}")
 
 
+async def read_text_async(file):
+    return await asyncio.to_thread(read_text, file)

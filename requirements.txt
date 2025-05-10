@@ -32,3 +32,4 @@ langsmith
 langgraph
 langchain-openai
 langchain-community
+PyJWT>=2.10.1

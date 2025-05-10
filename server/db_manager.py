@@ -1,11 +1,10 @@
 import os
-import sqlite3
 import pathlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 
-from server.models.token_model import Base, AgentToken
+from server.models import Base
+from server.models.user_model import User
 
 class DBManager:
     """数据库管理器"""
@@ -31,6 +30,15 @@ class DBManager:
     def create_tables(self):
         """创建数据库表"""
         Base.metadata.create_all(self.engine)
+
+    def check_first_run(self):
+        """检查是否首次运行"""
+        session = self.get_session()
+        try:
+            # 检查是否有任何用户存在
+            return session.query(User).count() == 0
+        finally:
+            session.close()
 
     def get_session(self):
         """获取数据库会话"""

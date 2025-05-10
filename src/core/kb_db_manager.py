@@ -127,6 +127,21 @@ class KBDBManager:
                 return True
             return False
 
+    def update_database(self, db_id, name, description):
+        """更新知识库信息"""
+        with self.get_session() as session:
+            db = session.query(KnowledgeDatabase).filter_by(db_id=db_id).first()
+            if not db:
+                raise ValueError(f"数据库 {db_id} 不存在")
+
+            # 更新字段
+            db.name = name
+            db.description = description
+            session.commit()
+
+            # 返回更新后的数据库信息
+            return self._to_dict_safely(db)
+
     # 文件操作方法
     def add_file(self, db_id, file_id, filename, path, file_type, status="waiting"):
         """添加文件"""

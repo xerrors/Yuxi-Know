@@ -81,13 +81,15 @@
     </div>
     <div class="chat-box" :class="{ 'wide-screen': meta.wideScreen, 'font-smaller': meta.fontSize === 'smaller', 'font-larger': meta.fontSize === 'larger' }">
       <MessageComponent
-        v-for="message in conv.messages"
+        v-for="(message, index) in conv.messages"
         :message="message"
         :key="message.id"
         :is-processing="isStreaming"
-        :show-refs="true"
+        :show-refs="['copy', 'regenerate', 'subGraph', 'webSearch', 'knowledgeBase']"
+        :is-latest-message="isLatestMessage(index)"
         @retry="retryMessage(message.id)"
         @retryStoppedMessage="retryStoppedMessage(message.id)"
+        @openRefs="handleOpenRefs"
       >
       </MessageComponent>
     </div>
@@ -142,6 +144,13 @@
         <p class="note">请注意辨别内容的可靠性 By {{ configStore.config?.model_provider }}: {{ configStore.config?.model_name }}</p>
       </div>
     </div>
+    <!-- 添加全局Refs侧边栏 -->
+    <RefsSidebar
+      ref="refsSidebarRef"
+      :visible="refsSidebarVisible"
+      :latestRefs="currentRefs"
+      @update:visible="refsSidebarVisible = $event"
+    />
   </div>
 </template>
 
@@ -175,9 +184,13 @@ import {
 } from '@ant-design/icons-vue'
 import { onClickOutside } from '@vueuse/core'
 import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
 import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
+import RefsSidebar from '@/components/RefsSidebar.vue'
+import { chatApi } from '@/apis/auth_api'
+import { knowledgeBaseApi } from '@/apis/admin_api'
 
 const props = defineProps({
   conv: Object,
@@ -186,6 +199,7 @@ const props = defineProps({
 
 const emit = defineEmits(['rename-title', 'newconv']);
 const configStore = useConfigStore()
+const userStore = useUserStore()
 
 const { conv, state } = toRefs(props)
 const chatContainer = ref(null)
@@ -222,6 +236,41 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
   wideScreen: false,
 })
 
+// 添加全局refs状态
+const refsSidebarVisible = ref(false)
+const currentRefs = ref({})
+
+// 处理打开refs侧边栏
+const handleOpenRefs = ({ type, refs }) => {
+  console.log('ChatComponent handleOpenRefs called with type:', type);
+  console.log('Refs data structure:', JSON.stringify(refs));
+
+  // 先更新引用数据，确保数据在设置标签页之前已更新
+  currentRefs.value = Object.assign({}, refs);
+
+  // 强制在下一个tick更新，确保数据已经被正确应用
+  nextTick(() => {
+    // 显示抽屉
+    refsSidebarVisible.value = true;
+
+    // 再次检查引用是否正确
+    console.log('Updated refs data:', JSON.stringify(currentRefs.value));
+
+    // 根据type自动选择标签页
+    if (refsSidebarRef.value) {
+      console.log('Setting active tab to:', type);
+      // 延迟50毫秒设置标签页，确保抽屉已打开
+      setTimeout(() => {
+        refsSidebarRef.value.setActiveTab(type);
+      }, 50);
+    } else {
+      console.error('refsSidebarRef is not available');
+    }
+  });
+}
+
+// 添加对RefsSidebar的ref
+const refsSidebarRef = ref(null)
 
 const consoleMsg = (msg) => console.log(msg)
 onClickOutside(panel, () => setTimeout(() => opts.showPanel = false, 30))
@@ -347,7 +396,42 @@ const updateMessage = (info) => {
     try {
       // 特殊处理：content需要追加而不是替换
       if (info.content != null && info.content !== '') {
-        msg.content += info.content;
+        // 检查新内容中是否有<think>标签
+        if (info.content.includes('<think>') && !msg.isCollectingThinking) {
+          // 开始收集思考内容
+          msg.isCollectingThinking = true;
+
+          // 分割内容，获取标签前后的部分
+          const parts = info.content.split('<think>');
+          msg.content += parts[0]; // 添加标签前的内容到正文
+
+          // 如果有标签后的内容，添加到思考内容
+          if (parts.length > 1) {
+            if (parts[1].includes('</think>')) {
+              const thinkParts = parts[1].split('</think>');
+              msg.reasoning_content = (msg.reasoning_content || '') + thinkParts[0];
+              msg.content += thinkParts[1]; // 添加结束标签后的内容到正文
+              msg.isCollectingThinking = false;
+            } else {
+              msg.reasoning_content = (msg.reasoning_content || '') + parts[1];
+            }
+          }
+        }
+        // 检查是否正在收集思考内容
+        else if (msg.isCollectingThinking) {
+          if (info.content.includes('</think>')) {
+            const parts = info.content.split('</think>');
+            msg.reasoning_content = (msg.reasoning_content || '') + parts[0];
+            msg.content += parts[1]; // 添加结束标签后的内容到正文
+            msg.isCollectingThinking = false;
+          } else {
+            msg.reasoning_content = (msg.reasoning_content || '') + info.content;
+          }
+        }
+        // 不在收集思考内容，正常追加
+        else {
+          msg.content += info.content;
+        }
       }
 
       // 批量处理其他属性，只有当属性值不为null/undefined且不为空字符串时才更新
@@ -358,6 +442,11 @@ const updateMessage = (info) => {
       propertiesToUpdate.forEach(prop => {
         if (info[prop] != null && (typeof info[prop] !== 'string' || info[prop] !== '')) {
           msg[prop] = info[prop];
+
+          // 如果更新了refs，同时更新全局refs
+          if (prop === 'refs' && info.refs) {
+            currentRefs.value = info.refs;
+          }
         }
       });
 
@@ -390,50 +479,69 @@ const groupRefs = (id) => {
   scrollToBottom()
 }
 
+const loadDatabases = () => {
+  // 由于这是管理功能，需要检查用户是否有管理权限
+  if (!userStore.isAdmin) {
+    console.log('非管理员用户，跳过加载数据库列表');
+    return;
+  }
+
+  try {
+    knowledgeBaseApi.getDatabases()
+      .then(data => {
+        console.log(data)
+        opts.databases = data.databases
+      })
+      .catch(error => {
+        console.error('加载数据库列表失败:', error)
+      })
+  } catch (error) {
+    console.error('获取数据库列表失败:', error);
+  }
+}
+
 const simpleCall = (msg) => {
   return new Promise((resolve, reject) => {
-    fetch('/api/chat/call', {
-      method: 'POST',
-      body: JSON.stringify({ query: msg, }),
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then((response) => response.json())
-    .then((data) => resolve(data))
-    .catch((error) => reject(error))
+    chatApi.simpleCall(msg)
+      .then(data => resolve(data))
+      .catch(error => reject(error))
   })
 }
 
-const loadDatabases = () => {
-  fetch('/api/data/', { method: "GET", })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      opts.databases = data.databases
-    })
-}
-
-// 新函数用于处理 fetch 请求
+// 替换fetchChatResponse函数
 const fetchChatResponse = (user_input, cur_res_id) => {
   const controller = new AbortController();
   const signal = controller.signal;
 
   const params = {
     query: user_input,
-    history: getHistory().slice(0, -1), // 去掉最后一条刚添加的用户消息,
+    history: getHistory().slice(0, -1), // 去掉最后一条刚添加的用户消息
     meta: meta,
     cur_res_id: cur_res_id,
   }
   console.log(params)
 
-  fetch('/api/chat/', {
-    method: 'POST',
-    body: JSON.stringify(params),
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    signal // 添加 signal 用于中断请求
-  })
+  // 使用API函数发送请求
+  chatApi.sendMessageWithAbort(params, signal)
   .then((response) => {
+    if (!response.ok) {
+      // 检查是否是401错误（令牌过期）
+      if (response.status === 401) {
+        const userStore = useUserStore();
+        if (userStore.isLoggedIn) {
+          message.error('登录已过期，请重新登录');
+          userStore.logout();
+
+          // 使用setTimeout确保消息显示后再跳转
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 1500);
+        }
+        throw new Error('未授权，请先登录');
+      }
+      throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+    }
+
     if (!response.body) throw new Error("ReadableStream not supported.");
     const reader = response.body.getReader();
     const decoder = new TextDecoder("utf-8");
@@ -446,6 +554,12 @@ const fetchChatResponse = (user_input, cur_res_id) => {
           console.log(msg)
           groupRefs(cur_res_id);
           updateMessage({showThinking: "no", id: cur_res_id});
+          // 更新全局refs为最新消息的refs
+          if (msg && msg.refs) {
+            // 深拷贝refs以确保不会出现引用问题
+            currentRefs.value = JSON.parse(JSON.stringify(msg.refs));
+            console.log('Updated currentRefs on response completion:', currentRefs.value);
+          }
           isStreaming.value = false;
           if (conv.value.messages.length === 2) { renameTitle(); }
           return;
@@ -468,8 +582,6 @@ const fetchChatResponse = (user_input, cur_res_id) => {
                 meta: data.meta,
                 ...data,
               });
-              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].content)
-              // console.log("Last message", conv.value.messages[conv.value.messages.length - 1].status)
 
               if (data.history) {
                 conv.value.history = data.history;
@@ -492,11 +604,18 @@ const fetchChatResponse = (user_input, cur_res_id) => {
     if (error.name === 'AbortError') {
       console.log('Fetch aborted');
     } else {
-      console.error(error);
-      updateMessage({
-        id: cur_res_id,
-        status: "error",
-      });
+      console.error('聊天请求错误:', error);
+
+      // 检查是否是认证错误
+      if (error.message.includes('未授权') || error.message.includes('令牌已过期')) {
+        // 已在上面处理，这里不需要重复处理
+      } else {
+        updateMessage({
+          id: cur_res_id,
+          status: "error",
+          message: error.message || '请求失败',
+        });
+      }
     }
     isStreaming.value = false;
   });
@@ -571,6 +690,11 @@ onMounted(() => {
     const parsedMeta = JSON.parse(storedMeta);
     Object.assign(meta, parsedMeta);
   }
+
+  // 检查refsSidebarRef是否正确挂载
+  nextTick(() => {
+    console.log('Is refsSidebarRef mounted?', !!refsSidebarRef.value);
+  });
 });
 
 onUnmounted(() => {
@@ -638,9 +762,31 @@ const modelKeys = computed(() => {
 
 // 选择模型的方法
 const selectModel = (provider, name) => {
-  configStore.setConfigValue('model_provider', provider)
-  configStore.setConfigValue('model_name', name)
+  configStore.setConfigValues({
+    model_provider: provider,
+    model_name: name,
+  })
   // message.success(`已切换到模型: ${name} | ${provider}`)
+}
+
+// 判断是否是最新的助手消息
+const isLatestMessage = (index) => {
+  // 找到最后一条助手消息的索引
+  const lastAssistantMsgIndex = findLastIndex(conv.value.messages,
+    msg => (msg.role === 'received' || msg.role === 'assistant') && msg.status === 'finished');
+
+  // 如果当前索引等于最后一条助手消息的索引，则为最新消息
+  return index === lastAssistantMsgIndex;
+}
+
+// 辅助函数：从后向前查找满足条件的元素索引
+const findLastIndex = (array, predicate) => {
+  for (let i = array.length - 1; i >= 0; i--) {
+    if (predicate(array[i])) {
+      return i;
+    }
+  }
+  return -1;
 }
 </script>
 

@@ -12,6 +12,11 @@
 
 ## 📝 项目概述
 
+TODO：
+
+- 智能体的消息加载有问题
+- 智能体的管理员的配置无法更新到用户层面
+
 语析是一个强大的问答平台，结合了大模型 RAG 知识库与知识图谱技术，基于 Llamaindex + VueJS + FastAPI + Neo4j 构建。
 
 **核心特点：**
@@ -20,24 +25,18 @@
 - 📚 灵活知识库：支持 PDF、TXT、MD 等多种格式文档
 - 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力
 - 🚀 简单配置：只需配置对应服务平台的 `API_KEY` 即可使用
-- 🤖 智能体拓展：可以编写自己的智能体代码（Dev过程，非正式版）
+- 🤖 智能体拓展：可以编写自己的智能体代码
 - ⚒️ 适合二次开发：更多的开发自定义项
 
 ![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
 ## 📋 更新日志
 
+- **2025.05.07** - 新增权限控制功能，主要角色分为 超级管理员、管理员、普通用户 [PR#173](https://github.com/xerrors/Yuxi-Know/pull/173)
 - **2025.03.30** - 系统中集成智能体（WIP， [PR#96](https://github.com/xerrors/Yuxi-Know/pull/96)）
 - **2025.02.24** - 新增网页检索以及内容展示，需配置 `TAVILY_API_KEY`，感谢 [littlewwwhite](https://github.com/littlewwwhite)
 - **2025.02.23** - SiliconFlow 的 Rerank 和 Embedding model 支持，现默认使用 SiliconFlow
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
-- **2024.10.12** - 后端修改为 [FastAPI](https://github.com/fastapi)，添加 [Milvus-Standalone](https://github.com/milvus-io) 独立部署
-
-![功能展示](https://github.com/user-attachments/assets/8416a933-cc43-45d0-bf06-00df0ba6c4fb)
-
-| PC 网页                                                                                 | 小屏设备                                                                                |
-| :-------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------- |
-| ![image](https://github.com/user-attachments/assets/5f3d7e69-baa8-4c59-90fc-391343e59af6) | ![image](https://github.com/user-attachments/assets/51efabce-a097-47fd-9fca-d3b0943af86a) |
 
 ### 环境配置
 
@@ -58,14 +57,15 @@ ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 
 
 ### 启动服务
 
+> 确保已经安装了 [docker](https://docs.docker.com/engine/install/ubuntu/) 以及 [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+
 **开发环境启动**（源代码修改会自动更新）：
 
 ```bash
-docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
+docker compose up --build
 ```
 
 > 添加 `-d` 参数可在后台运行
-
 
 成功启动后，会看到以下容器：
 
@@ -80,55 +80,20 @@ docker compose -f docker/docker-compose.dev.yml --env-file src/.env up --build
  ✔ Container web-dev                Started
 ```
 
+注：当内存不足的时候，可能会出现 Milvus 没有正常启动的情况。此时需要 `docker compose up milvus -d` 来重新启动，并重启 api-dev `docker restart api-dev`。
+
 访问 [http://localhost:5173/](http://localhost:5173/) 即可使用系统。
 
 ### 系统预览
 
-![系统演示](./images/demo.gif)
-
-问答支持 Deepseek-R1 等推理模型、知识图谱检索、知识库检索、网页检索
-
-![Image](https://github.com/user-attachments/assets/97ad6771-e4a2-4324-a001-ecb0abe40fdd)
-
-网页检索结果：
-
-![Image](https://github.com/user-attachments/assets/20d51700-78d5-48a8-ab16-00bc98a1df37)
-
-知识图谱检索结果：
-
-![Image](https://github.com/user-attachments/assets/61b4e06f-4e6e-4a75-bfcb-b1a424523bb6)
-
-知识库检索结果
-
-![Image](https://github.com/user-attachments/assets/53e786f4-08d7-45c1-bcec-df46d0c3c49b)
-
-知识库管理：
-
-
-![Image](https://github.com/user-attachments/assets/55a6de55-59a0-4636-9c00-e4bfd6573c1b)
-
-![Image](https://github.com/user-attachments/assets/0f4f39ba-e6b7-4f18-a3c3-147477922f58)
-
-
-知识图谱
-
-![Image](https://github.com/user-attachments/assets/5849d875-801c-4d29-9d38-9245685e9d73)
-
-可视化配置：
-
-![Image](https://github.com/user-attachments/assets/5faac8bc-7968-42d0-a77d-5f8881a24de1)
-
-丰富的模型支持：
-
-![Image](https://github.com/user-attachments/assets/7a54ca07-78da-4aef-b0a0-47aa539dae8e)
-
+> 待补充
 
 ### 服务管理
 
 **关闭服务**：
 
 ```bash
-docker compose -f docker/docker-compose.dev.yml --env-file src/.env down
+docker compose down
 ```
 
 **查看日志**：
@@ -143,14 +108,14 @@ docker logs <容器名称>  # 例如：docker logs api-dev
 
 本项目支持通过 API 调用的模型，本地模型需使用 vllm、ollama 转成 API 服务后使用。
 
-| 模型供应商             | 默认模型                            | 配置项目                                       |
-| :--------------------- | :---------------------------------- | :--------------------------------------------- |
-| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费) | `SILICONFLOW_API_KEY`                        |
-| `openai`             | `gpt-4o`                          | `OPENAI_API_KEY`                             |
-| `deepseek`           | `deepseek-chat`                   | `DEEPSEEK_API_KEY`                           |
-| `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`                                |
-| `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`                            |
-| `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`                          |
+| 模型供应商             | 默认模型                            | 配置项目                |
+| :--------------------- | :---------------------------------- | :---------------------- |
+| `siliconflow` (默认) | `Qwen/Qwen2.5-7B-Instruct` (免费) | `SILICONFLOW_API_KEY` |
+| `openai`             | `gpt-4o`                          | `OPENAI_API_KEY`      |
+| `deepseek`           | `deepseek-chat`                   | `DEEPSEEK_API_KEY`    |
+| `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`         |
+| `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`     |
+| `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`   |
 
 #### 添加新模型供应商
 
@@ -170,65 +135,14 @@ ark:
     - deepseek-r1-250120
 ```
 
-#### 本地模型部署
+本地模型部署参考 [how-to.md](./docs/how-to.md)
 
-支持添加以 OpenAI 兼容模式运行的本地模型，可在 Web 设置中直接添加（适用于 vllm 和 Ollama 等）。
-
-> [!注意]
-> 使用 docker 运行此项目时，ollama 或 vllm 需监听 `0.0.0.0`
-
-![本地模型配置](./images/custom_models.png)
-
-### 2. 向量模型与重排序模型
-
-建议使用硅基流动部署的 bge-m3（免费且无需修改）。其他模型配置参考 [src/static/models.yaml](src/static/models.yaml)。
-
-对于**向量模型**和**重排序模型**，选择 `local` 前缀的模型会自动下载。如遇下载问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置。
-
-要使用已下载的本地模型，可在 models.yaml 或者网页设置中映射。
-
-![image](https://github.com/user-attachments/assets/ab62ea17-c7d0-4f94-84af-c4bab26865ad)
-
-
-**添加向量模型**
-
-```yaml
-# src/static/models.yaml
-  # 添加本地向量模型（所有 FlagEmbedding 支持的模型）
-  local/BAAI/bge-m3:
-    name: BAAI/bge-m3
-    dimension: 1024
-    # local_path: /models/BAAI/bge-m3，也可以在这里配置
-
-  # 添加 OpenAI 兼容的向量模型
-  siliconflow/BAAI/bge-m3:
-    name: BAAI/bge-m3
-    dimension: 1024
-    url: https://api.siliconflow.cn/v1/embeddings
-    api_key: SILICONFLOW_API_KEY
-
-  # 添加 Ollama 模型
-  ollama/nomic-embed-text:
-    name: nomic-embed-text
-    dimension: 768
-```
 
 ## 📚 知识库支持
 
-本项目支持多种格式的知识库文件：
+本项目支持多种格式的知识库文件：PDF、TXT、Markdown、Docx。
 
-- PDF
-- Txt
-- Markdown
-- Docx
-
-文件上传后，系统会：
-
-1. 将文件转换为纯文本
-2. 使用向量模型将文本转换为向量
-3. 存储到向量数据库中
-
-> 此过程可能需要一定时间，请耐心等待。
+文件上传后，系统会 对文件进行分块、索引、存储到向量数据库（Milvus）中，此过程可能需要一定时间，请耐心等待。
 
 ## 🕸️ 知识图谱支持
 
@@ -249,7 +163,7 @@ ark:
 - 默认账户：`neo4j`
 - 默认密码：`0123456789`
 
-可在 `docker/docker-compose.yml` 和 `docker/docker-compose.dev.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
+可在 `docker-compose.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
 
 目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
 
@@ -260,20 +174,6 @@ ark:
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
     <img src="https://contributors.nn.ci/api?repo=xerrors/Yuxi-Know" alt="贡献者名单">
 </a>
-
-## ❓ 常见问题
-
-### 镜像下载问题
-
-如无法直接下载相关镜像，可参考 [DaoCloud/public-image-mirror](https://github.com/DaoCloud/public-image-mirror?tab=readme-ov-file#%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)，尝试替换前缀：
-
-```bash
-# 以 neo4j 为例，其余类似
-docker pull m.daocloud.io/docker.io/library/neo4j:latest
-
-# 然后重命名镜像
-docker tag m.daocloud.io/docker.io/library/neo4j:latest neo4j:latest
-```
 
 ## Star History
 

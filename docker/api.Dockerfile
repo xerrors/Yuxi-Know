@@ -1,20 +1,36 @@
 # 使用基础镜像
 FROM python:3.12
+COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 
 # 设置工作目录
 WORKDIR /app
 
-# 复制 requirements.txt 文件（这一步如果文件没变，Docker 会使用缓存）
-COPY ../requirements.txt /app/requirements.txt
+# 设置时区为 UTC+8
+ENV TZ=Asia/Shanghai
+ENV UV_LINK_MODE=copy
 
-# 安装依赖（Docker 会缓存这一步，除非 requirements.txt 发生变化）
-RUN pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-RUN pip install -U gunicorn -i https://pypi.tuna.tsinghua.edu.cn/simple
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt-get clean
-RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    python3-dev \
+    ffmpeg \
+    libsm6 \
+    libxext6
+
+# 安装依赖项
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project
 
 # 复制代码到容器中
 COPY ../src /app/src
 COPY ../server /app/server
+COPY ../pyproject.toml /app/pyproject.toml
+COPY ../.python-version /app/.python-version
+COPY ../uv.lock /app/uv.lock
 
+# 同步项目
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen

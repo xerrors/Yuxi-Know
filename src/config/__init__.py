@@ -29,6 +29,10 @@ class SimpleConfig(dict):
     def __dict__(self):
         return {k: v for k, v in self.items()}
 
+    def update(self, other):
+        for key, value in other.items():
+            self[key] = value
+
 
 class Config(SimpleConfig):
 
@@ -47,6 +51,8 @@ class Config(SimpleConfig):
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_web_search", default=False, des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）")
+        # 默认智能体配置
+        self.add_item("default_agent_id", default="", des="默认智能体ID")
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
@@ -56,7 +62,7 @@ class Config(SimpleConfig):
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))
         self.add_item("model_local_paths", default={}, des="本地模型路径")
-        self.add_item("use_rewrite_query", default="off", des="重写查询", choices=["off", "on", "hyde"])
+        self.add_item("use_rewrite_query", default="on", des="重写查询", choices=["off", "on", "hyde"])
         self.add_item("device", default="cuda", des="运行本地模型的设备", choices=["cpu", "cuda"])
         ### <<< 默认配置结束
 
@@ -190,9 +196,6 @@ class Config(SimpleConfig):
             else:
                 logger.warning(f"Unknown config file type {self.filename}")
 
-        else:
-            logger.warning(f"\n\n{'='*70}\n{'Config file not found':^70}\n{'You can custum your config in `' + self.filename + '`':^70}\n{'='*70}\n\n")
-
     def save(self):
         logger.info(f"Saving config to {self.filename}")
         if self.filename is None:
@@ -213,18 +216,8 @@ class Config(SimpleConfig):
 
         logger.info(f"Config file {self.filename} saved")
 
-    def get_safe_config(self):
-        """
-        获取安全的配置，即过滤掉 api_key
-        """
-
-        config = json.loads(str(self))
-
-        # 过滤掉 api_key
-        for model in config.get("custom_models", []):
-            model["api_key"] = DEFAULT_MOCK_API if model.get("api_key") else ""
-
-        return config
+    def dump_config(self):
+        return json.loads(str(self))
 
     def compare_custom_models(self, value):
         """
