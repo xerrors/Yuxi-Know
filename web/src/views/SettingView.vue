@@ -483,11 +483,6 @@ const preHandleChange = (key, e) => {
     return
   }
 
-  if (key == 'enable_reranker' && e && !configStore.config.enable_reranker) {
-    message.error('启动重排序必须请先启用重排序功能')
-    return
-  }
-
   if (key == 'enable_reranker'
     || key == 'enable_knowledge_graph'
     || key == 'enable_knowledge_base'
