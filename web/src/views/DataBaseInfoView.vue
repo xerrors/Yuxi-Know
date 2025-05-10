@@ -14,12 +14,28 @@
       <a-button type="primary" @click="backToDatabase">
         <LeftOutlined /> 返回
       </a-button>
+      <a-button type="primary" @click="showEditModal">
+        <EditOutlined />
+      </a-button>
       <a-button type="primary" danger @click="deleteDatabse">
-        <DeleteOutlined /> 删除数据库
+        <DeleteOutlined />
       </a-button>
     </template>
   </HeaderComponent>
   <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
+
+  <!-- 添加编辑对话框 -->
+  <a-modal v-model:open="editModalVisible" title="编辑知识库信息" @ok="handleEditSubmit">
+    <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
+      <a-form-item label="知识库名称" name="name" required>
+        <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
+      </a-form-item>
+      <a-form-item label="知识库描述" name="description">
+        <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
   <div class="db-main-container">
     <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
 
@@ -333,6 +349,7 @@ import {
   LoadingOutlined,
   FileOutlined,
   LinkOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue'
 
 
@@ -804,6 +821,54 @@ const chunkData = () => {
 const getAuthHeaders = () => {
   const userStore = useUserStore();
   return userStore.getAuthHeaders();
+};
+
+// 编辑知识库表单
+const editModalVisible = ref(false);
+const editFormRef = ref(null);
+const editForm = reactive({
+  name: '',
+  description: ''
+});
+
+const rules = {
+  name: [{ required: true, message: '请输入知识库名称' }]
+};
+
+// 显示编辑对话框
+const showEditModal = () => {
+  editForm.name = database.value.name || '';
+  editForm.description = database.value.description || '';
+  editModalVisible.value = true;
+};
+
+// 提交编辑表单
+const handleEditSubmit = () => {
+  editFormRef.value.validate().then(() => {
+    updateDatabaseInfo();
+  }).catch(err => {
+    console.error('表单验证失败:', err);
+  });
+};
+
+// 更新知识库信息
+const updateDatabaseInfo = async () => {
+  try {
+    state.lock = true;
+    const response = await knowledgeBaseApi.updateDatabaseInfo(databaseId.value, {
+      name: editForm.name,
+      description: editForm.description
+    });
+
+    message.success('知识库信息更新成功');
+    editModalVisible.value = false;
+    await getDatabaseInfo(); // 刷新数据
+  } catch (error) {
+    console.error(error);
+    message.error(error.message || '更新失败');
+  } finally {
+    state.lock = false;
+  }
 };
 
 </script>

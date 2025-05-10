@@ -184,3 +184,18 @@ async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] 
         logger.error(f"添加实体失败: {e}, {traceback.format_exc()}")
         return {"message": f"添加实体失败: {e}", "status": "failed"}
 
+@data.post("/update")
+async def update_database_info(
+    db_id: str = Body(...),
+    name: str = Body(...),
+    description: str = Body(...),
+    current_user: User = Depends(get_admin_user)
+):
+    logger.debug(f"Update database {db_id} info: {name}, {description}")
+    try:
+        database = knowledge_base.update_database(db_id, name, description)
+        return {"message": "更新成功", "database": database}
+    except Exception as e:
+        logger.error(f"更新数据库失败 {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=400, detail=f"更新数据库失败: {e}")
+
