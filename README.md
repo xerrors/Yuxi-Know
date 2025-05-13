@@ -49,6 +49,7 @@ SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
 OPENAI_API_KEY=<API_KEY> # 如果需要配置 openai 则添加此行，并替换 API_KEY
 DEEPSEEK_API_KEY=<API_KEY>  # 如果配置 DeepSeek 添加此行，并替换 API_KEY
 ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 API_KEY
+TAVILY_API_KEY=<TAVILY_API_KEY>  # 联网搜索需要配置
 ```
 
 需要确保账户有一点点额度供调用，或使用这个链接注册[SiliconFlow 注册（含邀请码）](https://cloud.siliconflow.cn/i/Eo5yTHGJ)获得 14 元的赠送额度。

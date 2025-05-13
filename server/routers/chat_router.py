@@ -184,8 +184,6 @@ def chat_agent(agent_name: str,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
-
-
     def stream_messages():
 
         # 代表服务端已经收到了请求
@@ -251,3 +249,47 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
 async def get_tools(current_user: User = Depends(get_admin_user)):
     """获取所有可用工具（需要登录）"""
     return {"tools": list(get_all_tools().keys())}
+
+@chat.post("/agent/{agent_name}/config")
+async def save_agent_config(
+    agent_name: str,
+    config: dict = Body(...),
+    current_user: User = Depends(get_admin_user)
+):
+    """保存智能体配置到YAML文件（需要管理员权限）"""
+    try:
+        # 获取Agent实例和配置类
+        agent = agent_manager.get_agent(agent_name)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
+
+        # 使用配置类的save_to_file方法保存配置
+        config_cls = agent.config_schema
+        result = config_cls.save_to_file(config, agent_name)
+
+        if result:
+            return {"success": True, "message": f"智能体 {agent_name} 配置已保存"}
+        else:
+            raise HTTPException(status_code=500, detail=f"保存智能体配置失败")
+
+    except Exception as e:
+        logger.error(f"保存智能体配置出错: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"保存智能体配置出错: {str(e)}")
+
+@chat.get("/agent/{agent_name}/config")
+async def get_agent_config(
+    agent_name: str,
+    current_user: User = Depends(get_admin_user)
+):
+    """从YAML文件加载智能体配置（需要管理员权限）"""
+    try:
+        # 检查智能体是否存在
+        if not (agent := agent_manager.get_agent(agent_name)):
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
+
+        config = agent.config_schema.from_runnable_config(config={}, agent_name=agent_name)
+        return {"success": True, "config": config}
+
+    except Exception as e:
+        logger.error(f"加载智能体配置出错: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"加载智能体配置出错: {str(e)}")

@@ -42,8 +42,7 @@ class ChatbotAgent(BaseAgent):
 
     def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
         """调用 llm 模型"""
-        config_schema = config or {}
-        conf = self.config_schema.from_runnable_config(config_schema)
+        conf = self.config_schema.from_runnable_config(config, agent_name=self.name)
 
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
         model = load_chat_model(conf.model)
@@ -57,7 +56,7 @@ class ChatbotAgent(BaseAgent):
 
     def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
         """构建图"""
-        conf = self.config_schema.from_runnable_config(config_schema)
+        conf = self.config_schema.from_runnable_config(config_schema, agent_name=self.name)
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
         workflow.add_node("tools", ToolNode(tools=self._get_tools(conf.tools)))

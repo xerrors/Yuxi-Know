@@ -289,6 +289,26 @@ export const systemConfigApi = {
     return apiGet('/api/config', {}, true)
   },
 
+  /**
+   * 获取智能体配置
+   * @param {string} agentId - 智能体ID
+   * @returns {Promise} - 智能体配置
+   */
+  getAgentConfig: async (agentId) => {
+    checkAdminPermission()
+    return apiGet(`/api/chat/agent/${agentId}/config`, {}, true)
+  },
+
+  /**
+   * 保存智能体配置
+   * @param {string} agentId - 智能体ID
+   * @param {Object} config - 配置内容
+   * @returns {Promise} - 保存结果
+   */
+  saveAgentConfig: async (agentId, config) => {
+    checkAdminPermission()
+    return apiPost(`/api/chat/agent/${agentId}/config`, config, {}, true)
+  },
 
   /**
    * 更新某个配置
@@ -321,5 +341,28 @@ export const logApi = {
   getLogs: async (params = {}) => {
     checkAdminPermission()
     return apiGet('/api/log', { params }, true)
+  },
+}
+
+// 通用admin
+export const adminApi = {
+  /**
+   * 获取所有智能体
+   * @param {Object} params - 查询参数
+   * @returns {Promise} - 查询结果
+   */
+  adminGet: async (params, url) => {
+    checkAdminPermission()
+    return apiGet(url, { params }, true)
+  },
+
+  /**
+   * 更新某个配置
+   * @param {Object} items - 配置项
+   * @returns {Promise} - 更新结果
+   */
+  adminPost: async (data, url) => {
+    checkAdminPermission()
+    return apiPost(url, data, {}, true)
   },
 }

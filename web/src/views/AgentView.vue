@@ -156,8 +156,15 @@
                 :placeholder="getPlaceholder(key, value)"
               />
               <a-select
-                v-else-if="value?.options"
+                v-else-if="value?.options && value?.type === 'str'"
                 v-model:value="agentConfig[key]"
+              >
+                <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+              </a-select>
+              <a-select
+                v-else-if="value?.options && value?.type === 'list'"
+                v-model:value="agentConfig[key]"
+                mode="multiple"
               >
                 <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
               </a-select>
@@ -169,28 +176,15 @@
             </a-form-item>
           </template>
 
-          <!-- 添加工具选择部分 -->
-          <a-form-item label="可用工具" name="tools" class="config-item">
-            <p class="description">选择要启用的工具（注：retrieve 工具仅展现了与当前向量模型匹配的知识库，详情请查看 docker 日志。）</p>
-            <a-form-item-rest>
-              <div class="tools-switches">
-                <div v-for="tool in availableTools" :key="tool" class="tool-switch-item">
-                  <span class="tool-name">{{ tool }}</span>
-                  <a-switch
-                    size="small"
-                    :checked="isToolActive(tool)"
-                    @change="(checked) => toggleTool(tool, checked)"
-                  />
-                </div>
-              </div>
-            </a-form-item-rest>
-          </a-form-item>
-
           <!-- 弹窗底部按钮 -->
           <div class="form-actions" v-if="!state.isEmptyConfig">
-            <a-button type="primary" @click="saveConfig">保存配置</a-button>
-            <a-button @click="resetConfig">重置</a-button>
-            <a-button @click="closeConfigModal">取消</a-button>
+            <div class="form-actions-left">
+              <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
+              <a-button @click="resetConfig">重置</a-button>
+            </div>
+            <div class="form-actions-right">
+              <a-button @click="closeConfigModal">关闭</a-button>
+            </div>
           </div>
         </a-form>
       </div>
@@ -203,12 +197,8 @@
 import { ref, onMounted, reactive, watch, computed, h } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  RobotOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
   CloseOutlined,
   SettingOutlined,
-  KeyOutlined,
   LinkOutlined,
   StarOutlined,
   StarFilled
@@ -226,7 +216,6 @@ const userStore = useUserStore();
 // 状态
 const agents = ref({});
 const selectedAgentId = ref(null);
-const availableTools = ref([]); // 存储所有可用的工具列表
 const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
   debug_mode: false,
@@ -294,19 +283,8 @@ const fetchAgents = async () => {
   }
 };
 
-// 获取所有可用工具
-const fetchTools = async () => {
-  try {
-    const data = await chatApi.getTools();
-    availableTools.value = data.tools;
-    console.log("Available tools:", availableTools.value);
-  } catch (error) {
-    console.error('获取工具列表错误:', error);
-  }
-};
-
 // 根据选中的智能体加载配置
-const loadAgentConfig = () => {
+const loadAgentConfig = async () => {
   // BUG: 目前消息重置有问题，需要重置消息
   if (!selectedAgentId.value || !agents.value[selectedAgentId.value]) return;
 
@@ -326,7 +304,7 @@ const loadAgentConfig = () => {
     agentConfig.value.model = schema.model;
   }
 
-  if (schema.tools) {
+  if (schema.tools && schema.tools.length > 0 && schema.tools[0] != 'undefined') {
     agentConfig.value.tools = schema.tools;
   }
 
@@ -342,37 +320,82 @@ const loadAgentConfig = () => {
     }
   });
 
-  // 加载存储的配置
-  const savedConfig = JSON.parse(localStorage.getItem(`agent-config-${selectedAgentId.value}`) || '{}');
+  try {
+    // 从服务器加载配置
+    const response = await systemConfigApi.getAgentConfig(selectedAgentId.value);
+    if (response.success && response.config) {
+      // 合并服务器配置
+      Object.keys(response.config).forEach(key => {
+        if (key in agentConfig.value) {
+          agentConfig.value[key] = response.config[key];
+        }
+      });
+      console.log(`从服务器加载 ${selectedAgentId.value} 配置成功, ${JSON.stringify(agentConfig.value)}`);
+    }
+  } catch (error) {
+    console.error('从服务器加载配置出错:', error);
+    message.error('从服务器加载配置失败，将使用默认配置');
 
-  // 合并已保存的配置
-  if (savedConfig) {
-    Object.keys(savedConfig).forEach(key => {
-      if (key in agentConfig.value) {
-        agentConfig.value[key] = savedConfig[key];
-      }
-    });
+    // 如果服务器配置加载失败，尝试从本地存储加载
+    // 这是为了兼容之前的配置方式
+    const savedConfig = JSON.parse(localStorage.getItem(`agent-config-${selectedAgentId.value}`) || '{}');
+
+    // 合并已保存的配置
+    if (savedConfig) {
+      Object.keys(savedConfig).forEach(key => {
+        if (key in agentConfig.value) {
+          agentConfig.value[key] = savedConfig[key];
+        }
+      });
+    }
   }
 };
 
 // 保存配置
-const saveConfig = () => {
-  // 保存配置到本地存储
-  localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(agentConfig.value));
+const saveConfig = async () => {
+  if (!selectedAgentId.value) {
+    message.error('没有选择智能体');
+    return;
+  }
 
-  // 提示保存成功
-  message.success('配置已保存');
-  console.log("agentConfig.value", agentConfig.value);
-  closeConfigModal();
+  try {
+    // 保存配置到服务器
+    await systemConfigApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
+
+    // 同时保存到本地存储（可选，为了兼容）
+    localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(agentConfig.value));
+
+    // 提示保存成功
+    message.success('配置已保存到服务器');
+    console.log("保存配置:", agentConfig.value);
+    closeConfigModal();
+  } catch (error) {
+    console.error('保存配置到服务器出错:', error);
+    message.error('保存配置到服务器失败');
+  }
 };
 
 // 重置配置
-const resetConfig = () => {
-  // 清除本地存储中的配置
-  localStorage.removeItem(`agent-config-${selectedAgentId.value}`);
-  // 重新加载默认配置
-  loadAgentConfig();
-  message.info('配置已重置');
+const resetConfig = async () => {
+  if (!selectedAgentId.value) {
+    message.error('没有选择智能体');
+    return;
+  }
+
+  try {
+    // 保存空配置到服务器，相当于重置
+    await systemConfigApi.saveAgentConfig(selectedAgentId.value, {});
+
+    // 清除本地存储中的配置
+    localStorage.removeItem(`agent-config-${selectedAgentId.value}`);
+
+    // 重新加载默认配置
+    await loadAgentConfig();
+    message.info('配置已重置');
+  } catch (error) {
+    console.error('重置配置出错:', error);
+    message.error('重置配置失败');
+  }
 };
 
 // 监听侧边栏状态变化并保存到localStorage
@@ -420,8 +443,6 @@ onMounted(async () => {
   await fetchDefaultAgent();
   // 获取智能体列表
   await fetchAgents();
-  // 获取工具列表
-  await fetchTools();
 
   // 恢复上次选择的智能体
   const lastSelectedAgent = localStorage.getItem('last-selected-agent');
@@ -458,31 +479,6 @@ const getPlaceholder = (key, value) => {
 const goToAgentPage = () => {
   if (selectedAgentId.value) {
     window.open(`/agent/${selectedAgentId.value}`, '_blank');
-  }
-};
-
-// 检查工具是否激活
-const isToolActive = (tool) => {
-  if (!agentConfig.value.tools) {
-    agentConfig.value.tools = [];
-  }
-  return agentConfig.value.tools.includes(tool);
-};
-
-// 切换工具状态
-const toggleTool = (tool, checked) => {
-  if (!agentConfig.value.tools) {
-    agentConfig.value.tools = [];
-  }
-
-  if (checked) {
-    // 添加工具到列表
-    if (!agentConfig.value.tools.includes(tool)) {
-      agentConfig.value.tools.push(tool);
-    }
-  } else {
-    // 从列表中移除工具
-    agentConfig.value.tools = agentConfig.value.tools.filter(item => item !== tool);
   }
 };
 
@@ -740,6 +736,12 @@ const closeConfigModal = () => {
     justify-content: space-between;
     margin-top: 20px;
     gap: 10px;
+
+    .form-actions-left,
+    .form-actions-right {
+      display: flex;
+      gap: 10px;
+    }
   }
 }
 
@@ -787,22 +789,6 @@ const closeConfigModal = () => {
   .default-icon {
     color: #faad14;
     font-size: 14px;
-  }
-}
-
-.tools-switches {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-
-  .tool-switch-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-
-    .tool-name {
-      margin-left: 10px;
-    }
   }
 }
 </style>
