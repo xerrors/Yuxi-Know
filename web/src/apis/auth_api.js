@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from './base'
+import { apiGet, apiPost, apiDelete, apiPut } from './base'
 import { useUserStore } from '@/stores/user'
 
 /**
@@ -87,41 +87,19 @@ export const chatApi = {
   getAgentDetail: (agentId) => apiGet(`/api/chat/agent/${agentId}`, {}, true),
 
   /**
+   * 获取智能体历史消息
+   * @param {string} agentName - 智能体名称
+   * @param {string} threadId - 会话ID
+   * @returns {Promise} - 历史消息
+   */
+  getAgentHistory: (agentName, threadId) => apiGet(`/api/chat/agent/${agentName}/history?thread_id=${threadId}`, {}, true),
+
+  /**
    * 获取可用工具列表
    * @returns {Promise} - 工具列表
    */
   getTools: () => apiGet('/api/chat/tools', {}, true),
 
-  // /**
-  //  * 获取对话历史
-  //  * @returns {Promise} - 对话历史列表
-  //  */
-  // getConversations: () => apiGet('/api/chat/conversations', {}, true),
-
-  // /**
-  //  * 获取特定对话
-  //  * @param {string} conversationId - 对话ID
-  //  * @returns {Promise} - 对话详情
-  //  */
-  // getConversation: (conversationId) =>
-  //   apiGet(`/api/chat/conversations/${conversationId}`, {}, true),
-
-  // /**
-  //  * 删除对话
-  //  * @param {string} conversationId - 对话ID
-  //  * @returns {Promise} - 删除结果
-  //  */
-  // deleteConversation: (conversationId) =>
-  //   apiDelete(`/api/chat/conversations/${conversationId}`, {}, true),
-
-  // /**
-  //  * 更新对话标题
-  //  * @param {string} conversationId - 对话ID
-  //  * @param {string} title - 新标题
-  //  * @returns {Promise} - 更新结果
-  //  */
-  // updateConversationTitle: (conversationId, title) =>
-  //   apiPost(`/api/chat/conversations/${conversationId}/title`, { title }, {}, true),
 }
 
 // 用户设置API
@@ -139,5 +117,50 @@ export const userSettingsApi = {
    */
   updateSettings: (settings) => apiPost('/api/user/settings', settings, {}, true),
 }
+
+// 对话线程相关API
+export const threadApi = {
+  /**
+   * 获取对话线程列表
+   * @param {string} agentId - 智能体ID
+   * @returns {Promise} - 对话线程列表
+   */
+  getThreads: (agentId) => {
+    const url = agentId ? `/api/chat/threads?agent_id=${agentId}` : '/api/chat/threads';
+    return apiGet(url, {}, true);
+  },
+
+  /**
+   * 创建新对话线程
+   * @param {string} agentId - 智能体ID
+   * @param {string} title - 对话标题
+   * @param {Object} metadata - 元数据
+   * @returns {Promise} - 创建结果
+   */
+  createThread: (agentId, title, metadata) => apiPost('/api/chat/thread', {
+    agent_id: agentId,
+    title: title || '新对话',
+    metadata: metadata || {}
+  }, {}, true),
+
+  /**
+   * 更新对话线程
+   * @param {string} threadId - 对话线程ID
+   * @param {string} title - 对话标题
+   * @param {string} description - 对话描述
+   * @returns {Promise} - 更新结果
+   */
+  updateThread: (threadId, title, description) => apiPut(`/api/chat/thread/${threadId}`, {
+    title,
+    description
+  }, {}, true),
+
+  /**
+   * 删除对话线程
+   * @param {string} threadId - 对话线程ID
+   * @returns {Promise} - 删除结果
+   */
+  deleteThread: (threadId) => apiDelete(`/api/chat/thread/${threadId}`, {}, true)
+};
 
 // 其他需要用户认证的API可以继续添加到这里

@@ -1,17 +1,5 @@
 <template>
   <div class="agent-single-view">
-    <!-- 侧边栏 -->
-    <!-- <div class="sidebar" :class="{ 'collapsed': isSidebarCollapsed }">
-      <div class="sidebar-content">
-        <div class="user-icon">
-          <UserInfoComponent :show-role="!isSidebarCollapsed" />
-        </div>
-      </div>
-      <div class="toggle-button" @click="toggleSidebar">
-        <img :src="isSidebarCollapsed ? sidebarRightIcon : sidebarLeftIcon" alt="折叠/展开" />
-      </div>
-    </div> -->
-
     <!-- 智能体聊天界面 -->
     <AgentChatComponent :agent-id="agentId">
       <template #header-right>
