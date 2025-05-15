@@ -555,10 +555,14 @@ const openFileDetail = (record) => {
     state.lock = false
   }
 }
-
 const formatRelativeTime = (timestamp) => {
+    // 调整为东八区时间（UTC+8）
+    const timezoneOffset = 8 * 60 * 60 * 1000; // 东八区偏移量（毫秒）
+    const adjustedTimestamp = timestamp + timezoneOffset;
+
     const now = Date.now();
-    const secondsPast = (now - timestamp) / 1000;
+    const secondsPast = (now - adjustedTimestamp) / 1000;
+
     if (secondsPast < 60) {
         return Math.round(secondsPast) + ' 秒前';
     } else if (secondsPast < 3600) {
@@ -566,7 +570,7 @@ const formatRelativeTime = (timestamp) => {
     } else if (secondsPast < 86400) {
         return Math.round(secondsPast / 3600) + ' 小时前';
     } else {
-        const date = new Date(timestamp);
+        const date = new Date(adjustedTimestamp);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();

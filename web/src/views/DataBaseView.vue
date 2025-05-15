@@ -46,7 +46,9 @@
             <p><span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span></p>
           </div>
         </div>
-        <p class="description">{{ database.description || '暂无描述' }}</p>
+        <a-tooltip :title="database.description || '暂无描述'">
+          <p class="description">{{ database.description || '暂无描述' }}</p>
+        </a-tooltip>
         <div class="tags">
           <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
           <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
