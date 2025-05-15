@@ -281,11 +281,9 @@
           <a-form layout="vertical">
             <a-form-item label="用户名" required>
               <a-input v-model:value="userManagement.form.username" placeholder="请输入用户名" />
-            </a-form-item>
-
-            <template v-if="userManagement.editMode">
+            </a-form-item>            <template v-if="userManagement.editMode">
               <div class="password-toggle">
-                <a-checkbox @change="togglePasswordFields" v-model:checked="userManagement.displayPasswordFields">
+                <a-checkbox v-model:checked="userManagement.displayPasswordFields">
                   修改密码
                 </a-checkbox>
               </div>
@@ -436,6 +434,15 @@ const userManagement = reactive({
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
+})
+
+// 监听密码字段显示状态变化
+watch(() => userManagement.displayPasswordFields, (newVal) => {
+  // 当取消显示密码字段时，清空密码输入
+  if (!newVal) {
+    userManagement.form.password = ''
+    userManagement.form.confirmPassword = ''
+  }
 })
 
 const notModelKeys = computed(() => {
