@@ -25,7 +25,9 @@
           </div>
         </div>
         <div class="header__center">
-          <div @click="console.log(currentChat)">{{ currentChat?.title }}</div>
+          <div @click="console.log(currentChat)" class="center-title">
+            {{ currentChat?.title }}
+          </div>
           <slot name="header-center"></slot>
         </div>
         <div class="header__right">
@@ -302,6 +304,11 @@ const renameChat = async (data) => {
   if (!props.agentId) {
     console.warn("未指定AgentID，无法重命名对话");
     return;
+  }
+
+  // 最长 30个字符，自动截断
+  if (title.length > 30) {
+    title = title.slice(0, 30);
   }
 
   try {
@@ -797,9 +804,16 @@ const mergeMessageChunk = (chunks) => {
     padding: 1rem;
     border-bottom: 1px solid var(--main-light-3);
 
-    .header__left, .header__right {
+    .header__left, .header__right, .header__center {
       display: flex;
       align-items: center;
+    }
+
+    .center-title {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
