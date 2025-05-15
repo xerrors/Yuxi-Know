@@ -1,10 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, JSON, Float, ForeignKey, Text
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.sql import func
 import time
 
-Base = declarative_base()
+from server.models import Base
 
 class KnowledgeDatabase(Base):
     """知识库模型"""

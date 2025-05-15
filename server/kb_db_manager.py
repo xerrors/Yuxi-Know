@@ -6,8 +6,8 @@ from contextlib import contextmanager
 from sqlalchemy.orm.attributes import instance_state
 
 from src import config
-from src.models.kb_models import Base, KnowledgeDatabase, KnowledgeFile, KnowledgeNode
 from src.utils import logger
+from server.models.kb_models import Base, KnowledgeDatabase, KnowledgeFile, KnowledgeNode
 
 class KBDBManager:
     """知识库数据库管理器"""

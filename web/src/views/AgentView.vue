@@ -1,47 +1,38 @@
 <template>
   <div class="agent-view">
-    <!-- 左侧智能体列表侧边栏 -->
-    <div class="sidebar" :class="{ 'is-open': state.isSidebarOpen }">
-      <h2 class="sidebar-title">
-        智能体列表
-        <div class="toggle-sidebar" @click="toggleSidebar">
-          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
-        </div>
-      </h2>
-      <div class="agent-info">
-        <a-select
-          v-model:value="selectedAgentId"
-          class="agent-list"
-          style="width: 100%"
-          @change="selectAgent"
-        >
-          <a-select-option
-            v-for="(agent, name) in agents"
-            :key="name"
-            :value="name"
-          >
-            <div class="agent-option">
-              {{ agent.name }}
-              <StarFilled v-if="name === defaultAgentId" class="default-icon" />
-            </div>
-          </a-select-option>
-        </a-select>
-        <p style="padding: 0 4px;">
-          {{ agents[selectedAgentId]?.description }}
-        </p>
-
-        <!-- 添加配置按钮 TODO 这里的配置修改还无法影响到独立接口的对话-->
-        <div class="agent-action-buttons">
-          <a-button
-            class="action-button"
-            @click="openConfigModal"
-          >
-            <template #icon><SettingOutlined /></template>
-            智能体配置
+    <div class="agent-view-header">
+      <div class="header-left">
+        <div class="header-item">
+          <a-button class="header-button" @click="toggleSidebar">
+            <template #icon><MenuOutlined /></template>
           </a-button>
-
+        </div>
+        <div class="header-item">
+          <a-select
+            v-model:value="selectedAgentId"
+            class="agent-list"
+            style="width: 200px"
+            @change="selectAgent"
+          >
+            <a-select-option
+              v-for="(agent, name) in agents"
+              :key="name"
+              :value="name"
+            >
+              <div class="agent-option">
+                智能体：{{ agent.name }}
+                <StarFilled v-if="name === defaultAgentId" class="default-icon" />
+              </div>
+            </a-select-option>
+          </a-select>
+        </div>
+      </div>
+      <div class="header-center">
+      </div>
+      <div class="header-right">
+        <div class="header-item">
           <a-button
-            class="action-button"
+            class="header-button"
             @click="goToAgentPage"
             v-if="selectedAgentId"
           >
@@ -49,147 +40,105 @@
             打开独立页面
           </a-button>
 
-          <a-button
-            class="action-button primary-action"
-            @click="setAsDefaultAgent"
-            v-if="selectedAgentId && userStore.isAdmin"
-            :disabled="isDefaultAgent"
+          <a-tooltip :title="isDefaultAgent ? '当前为默认智能体' : '设为默认智能体'" placement="left">
+            <a-button
+              class="header-button primary-action"
+              @click="setAsDefaultAgent"
+              v-if="selectedAgentId && userStore.isAdmin"
+              :disabled="isDefaultAgent"
           >
-            <template #icon><StarOutlined /></template>
-            {{ isDefaultAgent ? '当前为默认智能体' : '设为默认智能体' }}
-          </a-button>
+              <template #icon><StarOutlined /></template>
+            </a-button>
+          </a-tooltip>
 
-        </div>
-
-        <!-- 添加requirements显示部分 -->
-        <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
-          <h3>所需环境变量:</h3>
-          <div class="requirements-list">
-            <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
-              {{ req }}
-            </a-tag>
-          </div>
-        </div>
-
-        <!-- 添加all_tools显示部分 -->
-        <div v-if="agents[selectedAgentId]?.all_tools && agents[selectedAgentId]?.all_tools.length > 0" class="info-section">
-          <h3>可用工具:</h3>
-          <div class="all-tools-list">
-            <a-tag v-for="tool in agents[selectedAgentId].all_tools" :key="tool">
-              {{ tool }}
-            </a-tag>
-          </div>
         </div>
       </div>
     </div>
+    <div class="agent-view-body">
+      <!-- 左侧智能体列表侧边栏 -->
+      <div class="sidebar" :class="{ 'is-open': state.agentSiderbarConfigOpen }">
+        <div class="agent-info">
+          <h3 @click="toggleDebugMode">描述</h3>
+          <p>{{ agents[selectedAgentId]?.description }}</p>
 
-    <!-- 中间内容区域 -->
-    <div class="content">
-      <AgentChatComponent
-        :agent-id="selectedAgentId"
-        :config="agentConfig"
-        :state="state"
-        @open-config="toggleConfigSidebar(true)"
-      >
-        <template #header-left>
-          <div class="toggle-sidebar nav-btn" @click="toggleSidebar" v-if="!state.isSidebarOpen">
-            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          <div v-if="selectedAgentId && configSchema" class="config-modal-content">
+            <!-- 配置表单 -->
+            <a-form :model="agentConfig" layout="vertical">
+              <div class="empty-config" v-if="state.isEmptyConfig">
+                <a-alert type="warning" message="该智能体没有配置项" show-icon/>
+              </div>
+              <!-- 统一显示所有配置项 -->
+              <template v-for="(value, key) in configurableItems" :key="key">
+                <a-form-item
+                  :label="getConfigLabel(key, value)"
+                  :name="key"
+                  class="config-item"
+                >
+                  <p v-if="value.description" class="description">{{ value.description }}</p>
+                  <a-switch
+                    v-if="typeof agentConfig[key] === 'boolean'"
+                    v-model:checked="agentConfig[key]"
+                  />
+                  <a-textarea
+                    v-else-if="key === 'system_prompt'"
+                    v-model:value="agentConfig[key]"
+                    :rows="4"
+                    :placeholder="getPlaceholder(key, value)"
+                  />
+                  <a-select
+                    v-else-if="value?.options && value?.type === 'str'"
+                    v-model:value="agentConfig[key]"
+                  >
+                    <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+                  </a-select>
+                  <a-select
+                    v-else-if="value?.options && value?.type === 'list'"
+                    v-model:value="agentConfig[key]"
+                    mode="multiple"
+                  >
+                    <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+                  </a-select>
+                  <a-input
+                    v-else
+                    v-model:value="agentConfig[key]"
+                    :placeholder="getPlaceholder(key, value)"
+                  />
+                </a-form-item>
+              </template>
+
+              <!-- 弹窗底部按钮 -->
+              <div class="form-actions" v-if="!state.isEmptyConfig">
+                <div class="form-actions-left">
+                  <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
+                  <a-button @click="resetConfig">重置</a-button>
+                </div>
+              </div>
+            </a-form>
           </div>
-        </template>
-        <!-- <template #header-right>
-          <div class="toggle-sidebar nav-btn" @click="toggleConfigSidebar()">
-            <SettingOutlined class="iconfont icon-20" />
-            <span class="text">配置</span>
-          </div>
-        </template> -->
-      </AgentChatComponent>
-    </div>
 
-    <!-- 右侧配置侧边栏 -->
-    <div class="config-sidebar" :class="{ 'is-open': state.isConfigSidebarOpen }">
-      <h2 class="sidebar-title">
-        <div class="sidebar-title-text" @click="toggleDebugMode">智能体配置</div>
-        <div class="toggle-sidebar" @click="toggleConfigSidebar(false)">
-          <CloseOutlined class="iconfont icon-20" />
-        </div>
-      </h2>
-      <div v-if="selectedAgentId" class="config-form">
-        <!-- 已将按钮移至左侧边栏 -->
-      </div>
-      <div v-else class="no-agent-selected">
-        请先选择一个智能体
-      </div>
-      <p>你好，智能体</p>
-    </div>
-
-
-    <!-- 配置弹窗 -->
-    <a-modal
-      v-model:open="state.configModalVisible"
-      title="智能体配置"
-      width="650px"
-      :footer="null"
-      @cancel="closeConfigModal"
-    >
-      <div v-if="selectedAgentId && configSchema" class="config-modal-content">
-        <!-- 配置表单 -->
-        <a-form :model="agentConfig" layout="vertical">
-          <div class="empty-config" v-if="state.isEmptyConfig">
-            <a-alert type="warning" message="该智能体没有配置项" show-icon/>
-          </div>
-          <!-- 统一显示所有配置项 -->
-          <template v-for="(value, key) in configurableItems" :key="key">
-            <a-form-item
-              :label="getConfigLabel(key, value)"
-              :name="key"
-              class="config-item"
-            >
-              <p v-if="value.description" class="description">{{ value.description }}</p>
-              <a-switch
-                v-if="typeof agentConfig[key] === 'boolean'"
-                v-model:checked="agentConfig[key]"
-              />
-              <a-textarea
-                v-else-if="key === 'system_prompt'"
-                v-model:value="agentConfig[key]"
-                :rows="4"
-                :placeholder="getPlaceholder(key, value)"
-              />
-              <a-select
-                v-else-if="value?.options && value?.type === 'str'"
-                v-model:value="agentConfig[key]"
-              >
-                <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
-              </a-select>
-              <a-select
-                v-else-if="value?.options && value?.type === 'list'"
-                v-model:value="agentConfig[key]"
-                mode="multiple"
-              >
-                <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
-              </a-select>
-              <a-input
-                v-else
-                v-model:value="agentConfig[key]"
-                :placeholder="getPlaceholder(key, value)"
-              />
-            </a-form-item>
-          </template>
-
-          <!-- 弹窗底部按钮 -->
-          <div class="form-actions" v-if="!state.isEmptyConfig">
-            <div class="form-actions-left">
-              <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
-              <a-button @click="resetConfig">重置</a-button>
-            </div>
-            <div class="form-actions-right">
-              <a-button @click="closeConfigModal">关闭</a-button>
+          <!-- 添加requirements显示部分 -->
+          <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
+            <h3>所需环境变量:</h3>
+            <div class="requirements-list">
+              <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
+                {{ req }}
+              </a-tag>
             </div>
           </div>
-        </a-form>
+        </div>
       </div>
-    </a-modal>
 
+      <!-- 中间内容区域 -->
+      <div class="content">
+        <AgentChatComponent
+          :agent-id="selectedAgentId"
+          :config="agentConfig"
+          :state="state"
+          @open-config="toggleConfigSidebar(true)"
+        >
+        </AgentChatComponent>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -201,6 +150,7 @@ import {
   SettingOutlined,
   LinkOutlined,
   StarOutlined,
+  MenuOutlined,
   StarFilled
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
@@ -218,10 +168,8 @@ const agents = ref({});
 const selectedAgentId = ref(null);
 const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
+  agentSiderbarConfigOpen: true,
   debug_mode: false,
-  isSidebarOpen: JSON.parse(localStorage.getItem('agent-sidebar-open') || 'true'),
-  isConfigSidebarOpen: false,
-  configModalVisible: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
@@ -334,20 +282,6 @@ const loadAgentConfig = async () => {
     }
   } catch (error) {
     console.error('从服务器加载配置出错:', error);
-    message.error('从服务器加载配置失败，将使用默认配置');
-
-    // 如果服务器配置加载失败，尝试从本地存储加载
-    // 这是为了兼容之前的配置方式
-    const savedConfig = JSON.parse(localStorage.getItem(`agent-config-${selectedAgentId.value}`) || '{}');
-
-    // 合并已保存的配置
-    if (savedConfig) {
-      Object.keys(savedConfig).forEach(key => {
-        if (key in agentConfig.value) {
-          agentConfig.value[key] = savedConfig[key];
-        }
-      });
-    }
   }
 };
 
@@ -361,14 +295,9 @@ const saveConfig = async () => {
   try {
     // 保存配置到服务器
     await systemConfigApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
-
-    // 同时保存到本地存储（可选，为了兼容）
-    localStorage.setItem(`agent-config-${selectedAgentId.value}`, JSON.stringify(agentConfig.value));
-
     // 提示保存成功
     message.success('配置已保存到服务器');
     console.log("保存配置:", agentConfig.value);
-    closeConfigModal();
   } catch (error) {
     console.error('保存配置到服务器出错:', error);
     message.error('保存配置到服务器失败');
@@ -385,10 +314,6 @@ const resetConfig = async () => {
   try {
     // 保存空配置到服务器，相当于重置
     await systemConfigApi.saveAgentConfig(selectedAgentId.value, {});
-
-    // 清除本地存储中的配置
-    localStorage.removeItem(`agent-config-${selectedAgentId.value}`);
-
     // 重新加载默认配置
     await loadAgentConfig();
     message.info('配置已重置');
@@ -398,14 +323,6 @@ const resetConfig = async () => {
   }
 };
 
-// 监听侧边栏状态变化并保存到localStorage
-watch(
-  () => state.isSidebarOpen,
-  (newValue) => {
-    localStorage.setItem('agent-sidebar-open', JSON.stringify(newValue));
-  }
-);
-
 // 监听智能体选择变化
 watch(
   () => selectedAgentId.value,
@@ -413,20 +330,6 @@ watch(
     loadAgentConfig();
   }
 );
-
-// 切换左侧侧边栏
-const toggleSidebar = () => {
-  state.isSidebarOpen = !state.isSidebarOpen;
-};
-
-// 切换配置侧边栏
-const toggleConfigSidebar = (forceOpen) => {
-  if (forceOpen !== undefined) {
-    state.isConfigSidebarOpen = forceOpen;
-  } else {
-    state.isConfigSidebarOpen = !state.isConfigSidebarOpen;
-  }
-};
 
 // 选择智能体
 const selectAgent = (agentId) => {
@@ -482,76 +385,79 @@ const goToAgentPage = () => {
   }
 };
 
-// 调试模式
 const toggleDebugMode = () => {
   state.debug_mode = !state.debug_mode;
+  console.log("debug_mode", state.debug_mode);
 };
 
-// 打开配置弹窗
-const openConfigModal = () => {
-  state.configModalVisible = true;
-};
-
-// 关闭配置弹窗
-const closeConfigModal = () => {
-  state.configModalVisible = false;
-};
+const toggleSidebar = () => {
+  state.agentSiderbarConfigOpen = !state.agentSiderbarConfigOpen
+}
 </script>
 
 <style lang="less" scoped>
 .agent-view {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  --agent-sidebar-width: 300px;
-  --config-sidebar-width: 350px;
+  --agent-view-header-height: 60px;
+  --agent-sidebar-width: 450px;
+}
+
+.agent-view-header {
+  height: var(--agent-view-header-height);
+  background-color: var(--bg-sider);
+  border-bottom: 1px solid var(--main-light-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+
+  .header-left,
+  .header-right,
+  .header-center {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .header-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
+.agent-view-body {
+  --gap-radius: 6px;
+  display: flex;
+  width: 100%;
+  flex: 1;
+  min-height: calc(100% - var(--agent-view-header-height));
+  overflow: hidden;
+  padding: var(--gap-radius);
+  gap: var(--gap-radius);
+
+  .sidebar.is-open,
+  .content {
+    border-radius: var(--gap-radius);
+    border: 1px solid var(--gray-300);
+  }
 }
 
 .sidebar {
   width: 0;
   max-width: var(--agent-sidebar-width);
-  border-right: 1px solid var(--main-light-3);
   background-color: var(--bg-sider);
-  box-sizing: content-box;
   overflow-y: auto;
   transition: width 0.3s ease;
   overflow: hidden;
 
   &.is-open {
     width: var(--agent-sidebar-width);
-  }
-}
-
-// 配置侧边栏样式
-.config-sidebar {
-  width: 0;
-  max-width: var(--config-sidebar-width);
-  border-left: 1px solid var(--main-light-3);
-  background-color: var(--bg-sider);
-  box-sizing: content-box;
-  overflow-y: auto;
-  transition: width 0.3s ease;
-  overflow: hidden;
-  position: relative;
-  z-index: 100;
-
-  &.is-open {
-    width: var(--config-sidebar-width);
-  }
-
-  .config-form {
-    padding: 16px;
-    min-width: calc(var(--config-sidebar-width) - 16px);
-    overflow-y: auto;
-    max-height: calc(100vh - 100px);
-  }
-
-  .no-agent-selected {
-    padding: 16px;
-    color: var(--gray-500);
-    text-align: center;
-    margin-top: 20px;
+    box-sizing: content-box;
   }
 }
 
@@ -571,43 +477,11 @@ const closeConfigModal = () => {
   margin: 0;
 }
 
-.toggle-sidebar {
-  cursor: pointer;
-
-  &.nav-btn {
-    height: 2.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    color: var(--gray-900);
-    cursor: pointer;
-    font-size: 15px;
-    width: auto;
-    padding: 0.5rem 1rem;
-    transition: background-color 0.3s;
-    overflow: hidden;
-
-    .text {
-      margin-left: 10px;
-    }
-
-    &:hover {
-      background-color: var(--main-light-3);
-    }
-
-    .nav-btn-icon {
-      width: 1.5rem;
-      height: 1.5rem;
-    }
-  }
-}
 
 .agent-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 1rem;
 }
 
 .agent-item {
@@ -794,3 +668,36 @@ const closeConfigModal = () => {
 </style>
 
 
+<style lang="less">
+.toggle-sidebar {
+  cursor: pointer;
+
+  &.nav-btn {
+    height: 2.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    color: var(--gray-900);
+    cursor: pointer;
+    font-size: 15px;
+    width: auto;
+    padding: 0.5rem 1rem;
+    transition: background-color 0.3s;
+    overflow: hidden;
+
+    .text {
+      margin-left: 10px;
+    }
+
+    &:hover {
+      background-color: var(--main-light-3);
+    }
+
+    .nav-btn-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+  }
+}
+</style>

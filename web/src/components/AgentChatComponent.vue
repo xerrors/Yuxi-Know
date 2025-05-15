@@ -1,94 +1,86 @@
 <template>
-  <div class="chat-container">
+  <div class="chat-container" ref="chatContainerRef">
+    <ChatSidebarComponent
+      :current-agent-id="props.agentId"
+      :current-chat-id="currentChatId"
+      :chats-list="chatsList"
+      :is-sidebar-open="state.isSidebarOpen"
+      @create-chat="createNewChat"
+      @select-chat="selectChat"
+      @delete-chat="deleteChat"
+      @rename-chat="renameChat"
+      @toggle-sidebar="toggleSidebar"
+      :class="{'floating-sidebar': isSmallContainer, 'collapsed': !state.isSidebarOpen && isSmallContainer}"
+    />
+    <div class="sidebar-backdrop" v-if="state.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
-          <div class="newchat nav-btn" @click="resetThread" :disabled="isProcessing">
-            <PlusCircleOutlined /> <span class="text">新对话</span>
+          <div class="toggle-sidebar nav-btn" v-if="!state.isSidebarOpen" @click="toggleSidebar">
+            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          </div>
+          <div class="newchat nav-btn" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
+            <PlusCircleOutlined /> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
         <div class="header__center">
+          <div @click="console.log(currentChat)">{{ currentChat?.title }}</div>
           <slot name="header-center"></slot>
         </div>
         <div class="header__right">
-          <!-- <div class="current-agent nav-btn" @click="sayHi">
-            <RobotOutlined />&nbsp;
-            <span v-if="currentAgent">{{ currentAgent.name }}</span>
-            <span v-else>加载中...</span>
+          <!-- <div class="nav-btn test-history" @click="getAgentHistory" v-if="currentChatId && currentAgent">
+            <ThunderboltOutlined />
           </div> -->
           <slot name="header-right"></slot>
         </div>
       </div>
 
-      <div v-if="messages.length === 0" class="chat-examples">
+      <div v-if="isLoading" class="chat-loading">
+        <LoadingOutlined />
+        <span>正在加载历史记录...</span>
+      </div>
+
+      <div v-else-if="convs.length === 0" class="chat-examples">
         <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
       </div>
 
-      <div class="chat-box" ref="messagesContainer" :class="{ 'is-debug': state.debug_mode }">
-        <MessageComponent
-          v-for="(message, index) in messages"
-          :message="message"
-          :key="index"
-          :is-processing="isProcessing"
-          :debug-mode="state.debug_mode"
-          :show-refs="showMsgRefs(message)"
-          @retry="retryMessage(message)"
-        >
-          <div v-if="state.debug_mode" class="status-info">{{ message }}</div>
-
-          <!-- 工具调用 -->
-          <template #tool-calls>
-            <div v-if="message.toolCalls && Object.keys(message.toolCalls).length > 0" class="tool-calls-container">
-              <div v-for="(toolCall, index) in message.toolCalls || {}"
-                    :key="index"
-                    class="tool-call-container">
-                <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
-                  <div class="tool-header" @click="toggleToolCall(toolCall.id)">
-                    <span v-if="!toolCall.toolResultMsg">
-                      <LoadingOutlined /> &nbsp;
-                      <span>正在调用工具: </span>
-                      <span class="tool-name">{{ toolCall.function.name }}</span>
-                    </span>
-                    <span v-else>
-                      <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.function.name }}</span> 执行完成
-                    </span>
-
-                    <!-- <span class="step-badge" v-if="message.step !== undefined">步骤 {{ message.step }}</span> -->
-                  </div>
-                  <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
-                    <div class="tool-params" v-if="toolCall.function && toolCall.function.arguments">
-                      <div class="tool-params-header">
-                        参数:
-                      </div>
-                      <div class="tool-params-content">
-                        <pre>{{ toolCall.function.arguments }}</pre>
-                      </div>
-                    </div>
-                    <div class="tool-params" v-if="toolCall.toolResultMsg && toolCall.toolResultMsg.content">
-                      <div class="tool-params-header">
-                        执行结果
-                      </div>
-                      <div class="tool-params-content">{{ toolCall.toolResultMsg.content }}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </template>
-        </MessageComponent>
+      <div class="chat-box" ref="messagesContainer">
+        <div class="conv-box" v-for="(conv, index) in convs" :key="index">
+          <AgentMessageComponent
+            v-for="(message, index) in conv.messages"
+            :message="message"
+            :key="index"
+            :is-processing="state.isProcessingRequest"
+            :debug-mode="state.debug_mode"
+            :show-refs="showMsgRefs(message)"
+            @retry="retryMessage(message)"
+          >
+          </AgentMessageComponent>
+        </div>
+        <div class="conv-box" v-if="onGoingConv.messages.length > 0">
+          <AgentMessageComponent
+            v-for="(message, index) in onGoingConv.messages"
+            :message="message"
+            :key="index"
+            :is-processing="state.isProcessingRequest"
+            :debug-mode="state.debug_mode"
+            :show-refs="showMsgRefs(message)"
+            @retry="retryMessage(message)"
+          >
+          </AgentMessageComponent>
+        </div>
       </div>
-
       <div class="bottom">
         <div class="message-input-wrapper">
           <MessageInputComponent
             v-model="userInput"
-            :is-loading="isProcessing"
-            :disabled="!currentAgent || isProcessing"
-            :send-button-disabled="!userInput || !currentAgent || isProcessing"
+            :is-loading="state.isProcessingRequest"
+            :disabled="!currentAgent"
+            :send-button-disabled="!userInput || !currentAgent || state.isProcessingRequest"
             :placeholder="'输入问题...'"
-            @send="sendMessage"
+            @send="handleSendMessage"
             @keydown="handleKeyDown"
           />
           <div class="bottom-actions">
@@ -101,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed } from 'vue';
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
 import {
   RobotOutlined, SendOutlined, LoadingOutlined,
   ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
@@ -109,8 +101,9 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
-import MessageComponent from '@/components/MessageComponent.vue'
-import { chatApi } from '@/apis/auth_api'
+import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
+import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
+import { chatApi, threadApi } from '@/apis/auth_api'
 
 // 新增props属性，允许父组件传入agentId
 const props = defineProps({
@@ -131,11 +124,50 @@ const props = defineProps({
 // ==================== 状态管理 ====================
 
 // UI状态
-const state = ref(props.state);
-const waitingServerResponse = ref(false);
+const state = reactive({
+  ...props.state,
+  debug_mode: computed(() => props.state.debug_mode ?? false),
+  isSidebarOpen: false,
+  waitingServerResponse: false,
+  isProcessingRequest: false,
+  creatingNewChat: false
+});
+
+// 容器宽度检测
+const chatContainerRef = ref(null);
+const containerWidth = ref(0);
+const isSmallContainer = computed(() => containerWidth.value <= 520);
+const isMediumContainer = computed(() => containerWidth.value <= 768);
+let resizeObserver = null;
+
+// 监听容器大小变化
+onMounted(() => {
+  // 初始计算容器宽度
+  nextTick(() => {
+    if (chatContainerRef.value) {
+      // 初始时测量容器宽度
+      containerWidth.value = chatContainerRef.value.offsetWidth;
+
+      resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+          containerWidth.value = entry.contentRect.width;
+        }
+      });
+
+      resizeObserver.observe(chatContainerRef.value);
+    }
+  });
+});
+
+onUnmounted(() => {
+  if (resizeObserver) {
+    resizeObserver.disconnect();
+  }
+});
+
 const showMsgRefs = (msg) => {
   if (msg.isLast) {
-    return ['copy', 'regenerate']
+    return ['copy']
   }
   return false
 }
@@ -145,10 +177,28 @@ const messagesContainer = ref(null);
 
 // 数据状态
 const agents = ref({});                // 智能体列表
-const currentAgent = ref(null);        // 当前选中的智能体
 const userInput = ref('');             // 用户输入
-const messages = ref([]);              // 消息列表
-const isProcessing = ref(false);       // 是否正在处理请求
+const currentChatId = ref(null);       // 当前对话ID
+const chatsList = ref([]);             // 对话列表
+const isLoading = ref(false);          // 是否处于加载状态
+
+const convs = ref([]);
+const currentAgent = computed(() => agents.value[props.agentId]);
+const currentChat = computed(() => chatsList.value.find(chat => chat.id === currentChatId.value));
+
+const onGoingConv = reactive({
+  msgChunks: {},
+  messages: computed(() => {
+    const msgs = Object.values(onGoingConv.msgChunks).map(msgs => {
+      return mergeMessageChunk(msgs)
+    })
+    return msgs.length > 0
+      ? convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
+      : []
+  })
+})
+const lastConv = computed(() => convs.value[convs.value.length - 1]);
+const lastConvMessages = computed(() => lastConv.value.messages[lastConv.value.messages.length - 1]);
 
 // ==================== 工具调用相关 ====================
 
@@ -156,11 +206,441 @@ const isProcessing = ref(false);       // 是否正在处理请求
 const toolCalls = ref([]);             // 工具调用列表
 const currentToolCallId = ref(null);   // 当前工具调用ID
 const currentRunId = ref(null);        // 当前运行ID
-const messageStepMap = ref({});        // 消息步骤映射
 const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
-// ==================== 基础工具函数 ====================
 
+// 创建新对话
+const createNewChat = async () => {
+  // 确保有AgentID
+  if (!props.agentId) {
+    console.warn("未指定AgentID，无法创建对话");
+    return;
+  }
+
+  // 如果当前对话正在创建，则不创建新对话
+  if (state.creatingNewChat || state.isProcessingRequest) {
+    console.warn("正在创建新对话或处理请求，无法创建新对话");
+    return;
+  }
+
+  if (currentChatId.value &&convs.value.length === 0) {
+    return;
+  }
+
+  try {
+    // 调用API创建新对话
+    state.creatingNewChat = true;
+    const response = await threadApi.createThread(props.agentId, '新对话');
+    if (!response || !response.id) {
+      throw new Error('创建对话失败');
+    }
+
+    // 切换到新对话
+    currentChatId.value = response.id;
+    resetThread();
+
+    // 刷新对话列表
+    loadChatsList();
+  } catch (error) {
+    console.error('创建对话失败:', error);
+    message.error('创建对话失败');
+  } finally {
+    state.creatingNewChat = false;
+  }
+};
+
+// 选择已有对话
+const selectChat = async (chatId) => {
+  // 确保有AgentID
+  if (!props.agentId) {
+    console.warn("未指定AgentID，无法选择对话");
+    return;
+  }
+
+  console.log("选择对话:", chatId);
+
+  // 切换到选中的对话
+  currentChatId.value = chatId;
+  await getAgentHistory();
+};
+
+// 删除对话
+const deleteChat = async (chatId) => {
+  if (!props.agentId) {
+    console.warn("未指定AgentID，无法删除对话");
+    return;
+  }
+
+  try {
+    // 调用API删除对话
+    await threadApi.deleteThread(chatId);
+
+    // 如果删除的是当前对话，重置状态
+    if (chatId === currentChatId.value) {
+      resetThread();
+      currentChatId.value = null;
+    }
+
+    // 刷新对话列表
+    loadChatsList();
+  } catch (error) {
+    console.error('删除对话失败:', error);
+    message.error('删除对话失败');
+  }
+};
+
+// 重命名对话
+const renameChat = async (data) => {
+  const { chatId, title } = data;
+
+  if (!chatId || !title) {
+    console.warn("未指定对话ID或标题，无法重命名对话");
+    return;
+  }
+
+  // 确保有AgentID
+  if (!props.agentId) {
+    console.warn("未指定AgentID，无法重命名对话");
+    return;
+  }
+
+  try {
+    // 调用API更新对话
+    await threadApi.updateThread(chatId, title);
+
+    // 刷新对话列表
+    loadChatsList();
+  } catch (error) {
+    console.error('重命名对话失败:', error);
+    message.error('重命名对话失败');
+  }
+};
+
+// ==================== 状态管理函数 ====================
+
+// 重试消息
+const retryMessage = (msg) => {
+  message.info("重试消息开发中");
+  return
+};
+
+// 重置线程
+const resetThread = () => {
+  convs.value = [];
+  toolCalls.value = [];
+  currentToolCallId.value = null;
+  currentRunId.value = null;
+  expandedToolCalls.value.clear();
+};
+
+// ==================== 消息处理 ====================
+
+// 发送消息
+const handleSendMessage = () => {
+  if (!userInput.value || !currentAgent.value || state.isProcessingRequest) return;
+  const tempUserInput = userInput.value;
+  userInput.value = ''; // 立即清空输入框
+  // 确保UI更新后再发送消息
+  nextTick(() => {
+    sendMessageToServer(tempUserInput);
+  });
+};
+
+// 使用文本发送消息
+const sendMessageToServer = async (text) => {
+  if (!text || !currentAgent.value || state.isProcessingRequest) return;
+
+  // 如果是第一条消息，以消息内容重命名对话
+  if (convs.value.length === 0) {
+    renameChat({'chatId': currentChatId.value, 'title': text})
+  }
+
+  state.isProcessingRequest = true;
+  await scrollToBottom();
+
+  // 设置请求参数
+  const requestData = {
+    query: text.trim(),
+    config: {
+      ...props.config,
+      thread_id: currentChatId.value
+    },
+    meta: {
+      request_id: currentAgent.value.name + '-' + new Date().getTime()
+    }
+  };
+
+  try {
+    state.waitingServerResponse = true;
+
+    const response = await chatApi.sendAgentMessage(currentAgent.value.name, requestData);
+    if (!response.ok) {
+      throw new Error('请求失败');
+    }
+    await handleStreamResponse(response);
+  } catch (error) {
+    handleSendMessageToServerError(error)
+  } finally {
+    state.waitingServerResponse = false;
+    state.isProcessingRequest = false;
+    await scrollToBottom();
+  }
+};
+
+const handleSendMessageToServerError = (error) => {
+  console.error('发送消息错误:', error);
+  return
+}
+
+// 处理流式响应
+const handleStreamResponse = async (response) => {
+  try {
+    const reader = response.body.getReader();
+    let buffer = '';
+    const decoder = new TextDecoder();
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // 保留最后一行可能不完整的内容
+
+      for (const line of lines) {
+        if (line.trim()) {
+          try {
+            const data = JSON.parse(line.trim());
+            await processResponseChunk(data);
+          } catch (e) {
+            console.debug('解析JSON出错:', e.message);
+          }
+        }
+      }
+      await scrollToBottom();
+    }
+    // 处理缓冲区中可能剩余的内容
+    if (buffer.trim()) {
+      try {
+        const data = JSON.parse(buffer.trim());
+        await processResponseChunk(data);
+      } catch (e) {
+        console.warn('最终缓冲区内容无法解析:', buffer);
+      }
+    }
+  } catch (error) {
+    handleStreamResponseError(error)
+  } finally {
+    state.isProcessingRequest = false;
+    // await scrollToBottom();
+  }
+};
+
+const handleStreamResponseError = (error) => {
+  console.error('流式处理出错:', error);
+  return
+}
+
+// 处理流数据
+const processResponseChunk = async (data) => {
+  // console.log("处理流数据:", data.msg);
+  if (data.status === 'init') {
+    // 代表服务端收到请求并返回第一个响应
+    state.waitingServerResponse = false;
+    console.log("处理流数据:", data.msg);
+    onGoingConv.msgChunks[data.request_id] = [data.msg];
+
+  } else if (data.status === 'loading') {
+    // 检查lastConv是否存在,避免undefined
+    const lastConv = convs.value.length > 0 ? convs.value[convs.value.length - 1] : null;
+    if (lastConv && lastConv.status === 'finished') {
+      await getAgentHistory();
+    }
+
+    if (data.msg.id) {
+      if (!onGoingConv.msgChunks[data.msg.id]) {
+        onGoingConv.msgChunks[data.msg.id] = []
+      }
+      onGoingConv.msgChunks[data.msg.id].push(data.msg)
+    }
+  } else if (data.status === 'finished') {
+    await getAgentHistory();
+  }
+  // await scrollToBottom();
+};
+
+// 初始化所有数据
+const initAll = async () => {
+  try {
+    isLoading.value = true;
+    // 获取智能体列表
+    setTimeout(async () => {
+      await fetchAgents();  // 加载智能体数据
+      await loadChatsList();     // 加载对话列表以及对话历史
+      isLoading.value = false;
+    }, 100);
+
+  } catch (error) {
+    console.error("组件挂载出错:", error);
+    message.error(`加载数据失败: ${error}`);
+    isLoading.value = false;
+  }
+}
+
+// 获取智能体列表
+const fetchAgents = async () => {
+  try {
+    const data = await chatApi.getAgents();
+    // 将数组转换为对象
+    agents.value = data.agents.reduce((acc, agent) => {
+      acc[agent.name] = agent;
+      return acc;
+    }, {});
+    console.log("agents", agents.value);
+  } catch (error) {
+    console.error('获取智能体错误:', error);
+  }
+};
+
+// 从服务器对话列表
+const loadChatsList = async () => {
+  try {
+    if (!props.agentId) {
+      console.warn("未指定AgentID，无法加载状态");
+      return;
+    }
+
+    // 获取对话列表
+    const threads = await threadApi.getThreads(props.agentId);
+
+    if (threads && Array.isArray(threads) && threads.length > 0) {
+      // 如果有对话，则加载最近的一个
+      chatsList.value = threads;
+      currentChatId.value = threads[0].id; // 假设已按更新时间排序
+      await getAgentHistory()
+    } else {
+      // 如果没有对话，创建新对话
+      await createNewChat();
+    }
+  } catch (error) {
+    console.error('从服务器加载状态出错:', error);
+  }
+};
+
+// 获取智能体历史记录
+const getAgentHistory = async () => {
+  if (!props.agentId || !currentChatId.value) {
+    console.warn('未选择智能体或对话ID');
+    return;
+  }
+
+  try {
+    console.log(`正在获取智能体[${props.agentId}]的历史记录，对话ID: ${currentChatId.value}`);
+    const response = await chatApi.getAgentHistory(props.agentId, currentChatId.value);
+    console.log('智能体历史记录:', response);
+
+    // 如果成功获取历史记录并且是数组
+    if (response && Array.isArray(response.history)) {
+      // 将服务器格式的历史记录转换为组件格式
+      onGoingConv.msgChunks = {};
+      convs.value = convertServerHistoryToMessages(response.history);
+    } else {
+      message.warning('未找到历史记录或格式不正确');
+    }
+  } catch (error) {
+    console.error('获取智能体历史记录出错:', error);
+    message.error('获取历史记录失败');
+  }
+};
+
+const convertToolResultToMessages = (msgs) => {
+  const toolResponseMap = new Map();
+  for (const item of msgs) {
+    if (item.type === 'tool' && item.tool_call_id) {
+      toolResponseMap.set(item.tool_call_id, item);
+    }
+  }
+
+  const convertedMsgs = msgs.map(item => {
+    if (item.type === 'ai' && item.tool_calls && item.tool_calls.length > 0) {
+      return {
+        ...item,
+        tool_calls: item.tool_calls.map(toolCall => {
+          const toolResponse = toolResponseMap.get(toolCall.id);
+          return {
+            ...toolCall,
+            tool_call_result: toolResponse || null
+          };
+        })
+      };
+    }
+    return item;
+  });
+
+  // console.log("convertedMsgs", convertedMsgs);
+  return convertedMsgs;
+}
+
+const convertServerHistoryToMessages = (serverHistory) => {
+  // 第一步：将所有tool消息与对应的tool call合并
+  const mergedHistory = convertToolResultToMessages(serverHistory);
+
+  // 第三步：按照对话分组
+  const conversations = [];
+  let currentConv = null;
+
+  for (const item of mergedHistory) {
+    if (item.type === 'human') {
+      currentConv = {
+        messages: [item],
+        status: 'loading'
+      };
+      conversations.push(currentConv);
+    } else if (item.type === 'ai' && currentConv) {
+      currentConv.messages.push(item);
+
+      if (item.response_metadata?.finish_reason === 'stop') {
+        item.isLast = true;
+        currentConv.status = 'finished';
+        currentConv = null;
+      }
+    }
+  }
+
+  console.log("conversations", conversations);
+  return conversations;
+};
+
+// 组件挂载时加载状态
+onMounted(async () => {
+  await initAll();
+});
+
+
+// 监听agentId变化
+onMounted(() => {
+  watch(() => props.agentId, async (newAgentId, oldAgentId) => {
+    try {
+      console.log("智能体ID变化", oldAgentId, "->", newAgentId);
+
+      // 如果变化了，重置会话并加载新数据
+      if (newAgentId !== oldAgentId) {
+        await initAll();
+      }
+    } catch (error) {
+      console.error('智能体ID变化处理出错:', error);
+      isLoading.value = false;
+    }
+  });
+});
+
+// 监听消息变化自动滚动
+// watch(convs, () => {
+//   scrollToBottom();
+// }, { deep: true });
+
+
+// ==================== 用户交互处理 ====================
 
 // 滚动到底部 TODO: 需要优化当用户向上滚动的时候，停止滚动，当用户点击回到底部或者滚动到最底部的时候，再滚动到底部
 const scrollToBottom = async () => {
@@ -181,788 +661,77 @@ const scrollToBottom = async () => {
   setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'auto' }), 300);
 };
 
-// ==================== 状态管理函数 ====================
 
-// 添加新的状态管理变量
-const messageMap = ref(new Map()); // 存储消息ID与消息对象的映射
-const toolCallMap = ref(new Map()); // 存储工具调用ID与对应消息ID的映射
-
-// 重置状态
-const resetStatusSteps = () => {
-  toolCalls.value = [];
-  currentToolCallId.value = null;
-  currentRunId.value = null;
-  messageStepMap.value = {};
-  messageMap.value.clear();
-  toolCallMap.value.clear();
-};
-
-// 重置线程
-const resetThread = () => {
-  messages.value = [];
-  resetStatusSteps();
-  saveState();
-};
-
-// ==================== 消息历史处理 ====================
-
-// 过滤和准备消息历史记录
-const prepareMessageHistory = (msgs) => {
-  // 按步骤和运行ID建立索引
-  const toolCallsByRunAndStep = {};
-  const toolResultsByRunAndStep = {};
-
-  // 收集所有工具调用
-  msgs.filter(msg => msg.role === 'tool_call').forEach(msg => {
-    const runId = msg.tool?.run_id || 'unknown';
-    const step = msg.tool?.step !== undefined ? msg.tool.step : -1;
-    const key = `${runId}:${step}`;
-    toolCallsByRunAndStep[key] = msg;
-  });
-
-  // 收集所有工具结果
-  msgs.filter(msg => msg.role === 'tool').forEach(msg => {
-    const runId = msg.tool?.run_id || 'unknown';
-    // 尝试使用工具调用步骤（如果可用）或当前步骤
-    const step = msg.tool?.tool_call_step !== undefined ? msg.tool.tool_call_step :
-                (msg.tool?.step !== undefined ? msg.tool.step - 1 : -1);
-    const key = `${runId}:${step}`;
-    toolResultsByRunAndStep[key] = msg;
-  });
-
-  // 构建有效的工具调用ID集合
-  const validToolCallKeys = new Set();
-
-  // 查找所有具有对应结果的工具调用
-  for (const key in toolCallsByRunAndStep) {
-    if (toolResultsByRunAndStep[`${key.split(':')[0]}:${parseInt(key.split(':')[1]) + 1}`] ||
-        toolResultsByRunAndStep[key.replace(/:\d+$/, ':result')]) {
-      validToolCallKeys.add(key);
-    }
-  }
-
-  // 过滤消息
-  return msgs.filter(msg => {
-    // 保留用户和助手消息
-    if (msg.role === 'user' || msg.role === 'assistant') return true;
-
-    // 处理工具调用和结果
-    if (msg.role === 'tool_call') {
-      const runId = msg.tool?.run_id || 'unknown';
-      const step = msg.tool?.step !== undefined ? msg.tool.step : -1;
-      const key = `${runId}:${step}`;
-      return validToolCallKeys.has(key);
-    }
-
-    if (msg.role === 'tool') {
-      const runId = msg.tool?.run_id || 'unknown';
-      const callStep = msg.tool?.tool_call_step !== undefined ? msg.tool.tool_call_step :
-                    (msg.tool?.step !== undefined ? msg.tool.step - 1 : -1);
-      const key = `${runId}:${callStep}`;
-      return validToolCallKeys.has(key);
-    }
-
-    return false;
-  });
-};
-
-// ==================== 用户交互处理 ====================
+const toggleSidebar = () => {
+  state.isSidebarOpen = !state.isSidebarOpen;
+  console.log("toggleSidebar", state.isSidebarOpen);
+}
 
 // 处理键盘事件
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     // 只有在满足条件时才发送
-    if (userInput.value.trim() && currentAgent.value && !isProcessing.value) {
+    if (userInput.value.trim() && currentAgent.value && !state.isProcessingRequest) {
       const tempUserInput = userInput.value;
       userInput.value = ''; // 立即清空输入框
       // 使用异步调用确保清空先发生
       setTimeout(() => {
-        sendMessageWithText(tempUserInput);
+        sendMessageToServer(tempUserInput);
       }, 0);
     }
   }
 };
 
-// 发送消息
-const sendMessage = () => {
-  if (!userInput.value || !currentAgent.value || isProcessing.value) return;
-  const tempUserInput = userInput.value;
-  userInput.value = ''; // 立即清空输入框
-  // 确保UI更新后再发送消息
-  nextTick(() => {
-    sendMessageWithText(tempUserInput);
-  });
-};
 
-// 重试消息
-const retryMessage = (message) => {
-  // 获取用户消息的request_id
-  const requestId = message.request_id;
-  const sendMessage = messages.value.find(msg => msg.id === requestId);
-  const sendMessageIndex = messages.value.indexOf(sendMessage);
+const mergeMessageChunk = (chunks) => {
+  if (chunks.length === 0) return null;
 
-  // 删除包含 request_id 之后的所有消息
-  messages.value = messages.value.slice(0, sendMessageIndex);
+  // 以第一个chunk为基础
+  const result = {...chunks[0]};
+  result.content = result.content || '';
 
-  // 重新发送消息
-  sendMessageWithText(sendMessage.content);
-};
+  // 合并其他chunks
+  for (let i = 1; i < chunks.length; i++) {
+    const chunk = chunks[i];
 
-// ==================== 核心消息处理 ====================
+    // 合并content
+    result.content += chunk.content || '';
 
-// 使用文本发送消息
-const sendMessageWithText = async (text) => {
-  if (!text || !currentAgent.value || isProcessing.value) return;
-
-  // 重置状态
-  resetStatusSteps();
-
-  const userMessage = text.trim();
-  const requestId = currentAgent.value.name + '-' + new Date().getTime();
-
-  // 添加用户消息
-  messages.value.push({
-    role: 'user',
-    content: userMessage,
-    id: requestId
-  });
-
-  isProcessing.value = true;
-  await scrollToBottom();
-
-  try {
-    // 准备历史消息
-    const history = messages.value
-      .filter(msg => msg.role !== 'assistant' || msg.status !== 'loading')
-      .filter(msg => msg.role !== 'tool_call' && msg.role !== 'tool')
-      .map(msg => ({
-        role: msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'assistant',
-        content: msg.content
-      }));
-
-    waitingServerResponse.value = true;
-    // 设置请求参数
-    const requestData = {
-      query: userMessage,
-      history: history.slice(0, -1), // 去掉最后一条刚添加的用户消息
-      config: {
-        ...props.config
-      },
-      meta: {
-        request_id: requestId
+    // 如果是当前chunk没有的 key, value, 或者当前 result[key] 为空，则添加到result中
+    for (const key in chunk) {
+      if (!result[key]) {
+        result[key] = chunk[key]
       }
-    };
-
-    // 发送请求
-    const response = await chatApi.sendAgentMessage(currentAgent.value.name, requestData);
-
-    // console.log("requestData", requestData);
-    if (!response.ok) {
-      throw new Error('请求失败');
     }
 
-    // 处理流式响应
-    await handleStreamResponse(response);
+    // 合并tool_calls (如果存在)
+    if (chunk.additional_kwargs?.tool_calls) {
+      if (!result.additional_kwargs) result.additional_kwargs = {};
+      if (!result.additional_kwargs.tool_calls) result.additional_kwargs.tool_calls = [];
 
-  } catch (error) {
-    console.error('发送消息错误:', error);
-    // 更新错误状态
-    const loadingMsgIndex = messages.value.length - 1;
-    if (loadingMsgIndex >= 0) {
-      messages.value[loadingMsgIndex] = {
-        role: 'assistant',
-        content: `发生错误: ${error.message}`,
-        status: 'error'
-      };
+      for (const toolCall of chunk.additional_kwargs.tool_calls) {
+        const existingToolCall = result.additional_kwargs.tool_calls.find(
+          t => t.id === toolCall.id
+        );
+
+        if (existingToolCall) {
+          // 合并相同ID的tool call
+          existingToolCall.function.arguments += toolCall.function.arguments;
+        } else {
+          // 添加新的tool call
+          result.additional_kwargs.tool_calls.push({...toolCall});
+        }
+      }
     }
-  } finally {
-    waitingServerResponse.value = false;
-    isProcessing.value = false;
-    await scrollToBottom();
   }
-};
 
-// 处理流式响应
-const handleStreamResponse = async (response) => {
-  try {
-    await scrollToBottom();
-
-    // 检查是否支持现代流API
-    if ('TransformStream' in window && 'ReadableStream' in window) {
-      const jsonStream = new TransformStream({
-        start(controller) {
-          this.buffer = '';
-          this.decoder = new TextDecoder();
-        },
-        transform(chunk, controller) {
-          this.buffer += this.decoder.decode(chunk, { stream: true });
-
-          let position;
-          while ((position = this.buffer.indexOf('\n')) !== -1) {
-            const line = this.buffer.substring(0, position).trim();
-            this.buffer = this.buffer.substring(position + 1);
-
-            if (line) {
-              try {
-                controller.enqueue(JSON.parse(line));
-              } catch (e) {
-                // 不完整的JSON，保留在缓冲区中
-              }
-            }
-          }
-        },
-        flush(controller) {
-          if (this.buffer.trim()) {
-            try {
-              controller.enqueue(JSON.parse(this.buffer.trim()));
-            } catch (e) {
-              console.warn('最终缓冲区内容无法解析:', this.buffer);
-            }
-          }
-        }
-      });
-
-      // 通过管道处理响应流
-      const transformedStream = response.body.pipeThrough(jsonStream);
-      const reader = transformedStream.getReader();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // 这里的value已经是解析后的JSON对象
-        if (value) {
-          if (value.debug_mode) {
-            console.log("debug_mode", value);
-          }
-
-          // 处理不同状态的消息
-          if (value.status === 'init') {
-            await handleInit(value);
-          } else if (value.status === 'finished') {
-            await handleFinished(value);
-          } else if (value.status === 'error') {
-            await handleError(value);
-          } else {
-            await handleMessageById(value);
-          }
-
-          await scrollToBottom();
-        }
-      }
-    } else {
-      // 降级方案：使用传统方式处理流数据
-      const reader = response.body.getReader();
-      let buffer = '';
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // 保留最后一行可能不完整的内容
-
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const data = JSON.parse(line.trim());
-
-              if (data.debug_mode) {
-                console.log("debug_mode", data);
-              }
-
-              if (data.status === 'init') {
-                await handleInit(data);
-              } else if (data.status === 'finished') {
-                await handleFinished(data);
-              } else {
-                await handleMessageById(data);
-              }
-            } catch (e) {
-              console.debug('解析JSON出错:', e.message);
-            }
-          }
-        }
-
-        await scrollToBottom();
-      }
-
-      // 处理缓冲区中可能剩余的内容
-      if (buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer.trim());
-          if (data.status === 'init') {
-            await handleInit(data);
-          } else if (data.status === 'finished') {
-            await handleFinished(data);
-          } else {
-            await handleMessageById(data);
-          }
-        } catch (e) {
-          console.warn('最终缓冲区内容无法解析:', buffer);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('流式处理出错:', error);
-    const lastMsg = messages.value[messages.value.length - 1];
-    if (lastMsg.role === 'assistant') {
-      lastMsg.status = 'error';
-      lastMsg.message = error.message;
-    } else {
-      messages.value.push({
-        role: 'assistant',
-        message: `发生错误: ${error.message}`,
-        status: 'error'
-      });
-      await scrollToBottom();
-    }
-    isProcessing.value = false;
+  if (result.type === 'AIMessageChunk') {
+    result.type = 'ai'
   }
-};
-
-const handleInit = async (data) => {
-  waitingServerResponse.value = false;
-  console.log("handleInit", data);
-  const initMsg = {
-    role: 'assistant',
-    content: '',
-    status: 'init',
-    toolCalls: {},
-    toolCallIds: {},
-    request_id: data.request_id
-  }
-  messages.value.push(initMsg);
-  await scrollToBottom();
+  return result;
 }
 
-// 处理完成状态
-const handleFinished = async (data) => {
-  // 更新最后一条助手消息的状态
-  const lastAssistantMsg = messages.value[messages.value.length - 1];
-  if (lastAssistantMsg) {
-    // 如果既没有内容也没有工具调用，添加一个完成提示
-    if ((!lastAssistantMsg.content || lastAssistantMsg.content.trim().length === 0) &&
-        (!lastAssistantMsg.toolCalls || Object.keys(lastAssistantMsg.toolCalls).length === 0)) {
-      lastAssistantMsg.content = '已完成';
-    }
-    // 更新状态为已完成
-    lastAssistantMsg.status = 'finished';
-    lastAssistantMsg.isLast = true;
-    lastAssistantMsg.meta = data.meta;
-  }
-
-  // 标记处理完成
-  isProcessing.value = false;
-  await scrollToBottom();
-};
-
-// 基于ID处理消息
-const handleMessageById = async (data) => {
-  const msgId = data.msg.id;
-  const msgType = data.msg.type;
-  // console.log("data", data);
-
-  // 查找现有消息
-  const existingMsgIndex = messageMap.value.get(msgId);
-  // console.log("existingMsgIndex", existingMsgIndex);
-
-  if (existingMsgIndex === undefined) {
-    // 创建新消息或附加到现有助手消息
-    if (msgType === 'tool') {
-      await appendToolMessageToExistingAssistant(data);
-    } else {
-      // 查找是否有正在加载的助手消息
-      const loadingAssistantIndex = messages.value.findIndex(m => m.role === 'assistant' && m.status === 'init');
-      if (loadingAssistantIndex !== -1) {
-        // 更新现有助手消息
-        messages.value[loadingAssistantIndex].id = msgId;
-        messageMap.value.set(msgId, loadingAssistantIndex);
-        console.log("更新现有助手消息", messages.value[loadingAssistantIndex]);
-        await updateExistingMessage(data, loadingAssistantIndex);
-      } else {
-        await createAssistantMessage(data);
-      }
-    }
-  } else {
-    // 更新现有消息
-    await updateExistingMessage(data, existingMsgIndex);
-  }
-};
-
-// 创建新的助手消息
-const createAssistantMessage = async (data) => {
-  // console.log("createAssistantMessage", data);
-  const msgId = data.msg.id;
-  const msgContent = data.response || '';
-  const runId = data.metadata?.run_id;
-  const step = data.metadata?.langgraph_step;
-  const requestId = data.metadata?.request_id || data.request_id;
-
-  let currentMsg = null;
-  // 查看最后一个消息是不是 assistant 并且 status 是 init，并且 request_id 是当前的 request_id，而且没有 id
-  const lastMsg = messages.value[messages.value.length - 1];
-  const lastMsgIsInit = lastMsg.role === 'assistant'
-      && lastMsg.status === 'init'
-      && lastMsg.request_id === requestId
-      && !lastMsg.id;
-
-  if (lastMsgIsInit) {
-    currentMsg = lastMsg;
-  } else {
-    // 创建新消息
-    currentMsg = {
-      role: 'assistant',
-      status: 'init',
-      toolCalls: {},
-      toolCallIds: {},
-      request_id: requestId
-    };
-    messages.value.push(currentMsg);
-  }
-
-  currentMsg.id = msgId;
-  currentMsg.content = msgContent;
-  currentMsg.run_id = runId;
-  currentMsg.step = step;
-
-  // 处理工具调用
-  const toolCalls = data.msg.additional_kwargs?.tool_calls;
-  if (toolCalls && toolCalls.length > 0) {
-    // console.log("toolCalls in createAssistantMessage", toolCalls);
-    for (const toolCall of toolCalls) {
-      const toolCallId = toolCall.id;
-      const toolIndex = toolCall.index || 0;
-      currentMsg.toolCallIds[toolCallId] = toolIndex;
-      currentMsg.toolCalls[toolIndex] = toolCall;
-      toolCallMap.value.set(toolCallId, msgId);
-    }
-  }
-
-  // 添加新消息
-  const newIndex = messages.value.length - 1;
-  messageMap.value.set(msgId, newIndex);
-
-  await scrollToBottom();
-};
-
-// 更新现有消息
-const updateExistingMessage = async (data, existingMsgIndex) => {
-  const msgInstance = messages.value[existingMsgIndex];
-  // console.log("updateExistingMessage", msgInstance);
-
-  // 如果消息状态是loading，更新为processing
-  if (msgInstance.status === 'init') {
-    msgInstance.status = data.status || 'loading';
-    msgInstance.run_id = data.metadata?.run_id;
-    msgInstance.step = data.metadata?.langgraph_step;
-  }
-
-  // 添加新的响应内容
-  if (data.response) {
-    msgInstance.content = msgInstance.content || '';
-    msgInstance.content += data.response;
-  }
-
-  const toolCalls = data.msg.additional_kwargs?.tool_calls;
-  if (toolCalls && toolCalls.length > 0) {
-    // console.log("toolCalls in updateExistingMessage", toolCalls);
-    for (const toolCall of toolCalls) {
-      const toolIndex = toolCall.index || 0;
-
-      // 创建临时对象
-      const newToolCalls = { ...msgInstance.toolCalls };
-      const newToolCallIds = { ...msgInstance.toolCallIds };
-      if (!newToolCalls[toolIndex]) {
-        newToolCalls[toolIndex] = toolCall;
-        newToolCallIds[toolCall.id] = toolIndex;
-      } else {
-        newToolCalls[toolIndex]['function']['arguments'] += toolCall.function.arguments;
-      }
-      // 整体替换，触发响应式更新
-      msgInstance.toolCalls = newToolCalls;
-      msgInstance.toolCallIds = newToolCallIds;
-
-      toolCallMap.value.set(toolCall.id, msgInstance.id);
-    }
-  }
-
-  // 如果状态是error，则更新为error
-  if (data.status === 'error') {
-    msgInstance.status = 'error';
-    msgInstance.message = data.message;
-  }
-
-  // 确保变更生效
-  await nextTick();
-  await scrollToBottom();
-};
-
-const handleError = async (data) => {
-  console.error('处理错误状态:', data);
-  const lastMsg = messages.value[messages.value.length - 1];
-  if (lastMsg) {
-    lastMsg.status = 'error';
-    lastMsg.message = data.message;
-  }
-  isProcessing.value = false;
-};
-
-const appendToolMessageToExistingAssistant = async (data) => {
-  // console.log("appendToolMessageToExistingAssistant", data);
-  currentToolCallId.value = data.msg.tool_call_id;
-  const assignedMsgId = toolCallMap.value.get(currentToolCallId.value);
-  if (assignedMsgId === undefined) {
-    console.error('未找到关联的消息实例', currentToolCallId.value);
-    return;
-  }
-
-  // 获取消息索引
-  const msgIndex = messageMap.value.get(assignedMsgId);
-  if (msgIndex === undefined) {
-    console.error('未找到关联的消息索引', assignedMsgId);
-    return;
-  }
-
-  const msgInstance = messages.value[msgIndex];
-  const toolCallIndex = msgInstance.toolCallIds[currentToolCallId.value];
-  if (toolCallIndex === undefined) {
-    console.error('未找到工具调用索引', currentToolCallId.value);
-    return;
-  }
-
-  msgInstance.toolCalls[toolCallIndex].toolResultMsg = data.msg;
-  msgInstance.toolCalls[toolCallIndex].toolResultMetadata = data.metadata;
-  await scrollToBottom();
-}
-
-// ==================== 生命周期钩子 ====================
-
-// // 点击外部关闭选项面板
-// onClickOutside(optionsPanel, () => {
-//   state.showOptions = false;
-// });
-
-// 获取智能体列表
-const fetchAgents = async () => {
-  try {
-    const data = await chatApi.getAgents();
-    // 将数组转换为对象
-    agents.value = data.agents.reduce((acc, agent) => {
-      acc[agent.name] = agent;
-      return acc;
-    }, {});
-    console.log("agents", agents.value);
-  } catch (error) {
-    console.error('获取智能体错误:', error);
-  }
-};
-
-// 监听消息变化自动滚动
-watch(messages, () => {
-  scrollToBottom();
-}, { deep: true });
-
-// 组件挂载时加载状态
-onMounted(async () => {
-  try {
-    // console.log("组件挂载");
-    // 获取智能体列表
-    await fetchAgents();
-
-    // 检查加载状态
-    // console.log("路由参数:", props.agentId);
-    // console.log("智能体列表:", Object.keys(agents.value));
-
-    // 初始加载 - 确保使用 Vue Router 的解析后路由
-    // 使用 setTimeout 确保路由完全解析
-    setTimeout(async () => {
-      await loadAgentData();
-      // console.log("初始化后消息数量:", messages.value.length);
-    }, 10);
-  } catch (error) {
-    console.error("组件挂载出错:", error);
-  }
-});
-
-// // 处理元数据
-// const handleMetadata = (data) => {
-//   // 检查并更新运行ID
-//   if (data.metadata?.run_id && !currentRunId.value) {
-//     currentRunId.value = data.metadata.run_id;
-//   }
-
-//   // 跟踪步骤信息
-//   if (data.metadata?.langgraph_step !== undefined) {
-//     const step = data.metadata.langgraph_step;
-//     messageStepMap.value[step] = {
-//       type: data.msg?.type || 'unknown',
-//       timestamp: new Date().toISOString()
-//     };
-//   }
-// };
-
-// 在 script setup 部分添加 toggleToolCall 方法
-const toggleToolCall = (toolCallId) => {
-  if (expandedToolCalls.value.has(toolCallId)) {
-    expandedToolCalls.value.delete(toolCallId);
-  } else {
-    expandedToolCalls.value.add(toolCallId);
-  }
-};
-
-// 加载智能体数据的方法
-const loadAgentData = async () => {
-  try {
-    // 确保智能体列表已加载
-    if (Object.keys(agents.value).length === 0) {
-      await fetchAgents();
-    }
-
-    // 设置当前智能体
-    if (props.agentId && agents.value && agents.value[props.agentId]) {
-      // 如果传入了指定的agentId，就加载对应的智能体
-      currentAgent.value = agents.value[props.agentId];
-      // console.log("设置当前智能体", currentAgent.value.name);
-    } else if (!props.agentId) {
-      // 多智能体模式下，尝试从本地存储恢复上次选择的智能体
-      const storagePrefix = 'agent-multi';
-      const savedAgent = localStorage.getItem(`${storagePrefix}-current-agent`);
-      if (savedAgent && agents.value && agents.value[savedAgent]) {
-        currentAgent.value = agents.value[savedAgent];
-        // console.log("从存储中恢复智能体", currentAgent.value.name);
-      }
-    }
-
-    // 加载保存的状态
-    loadState();
-
-    // 处理消息历史
-    if (messages.value && messages.value.length > 0) {
-      // console.log("处理消息历史:", messages.value.length);
-      messages.value = prepareMessageHistory(messages.value);
-    }
-  } catch (error) {
-    console.error('加载智能体数据出错:', error);
-  }
-};
-
-// 从localStorage加载状态
-const loadState = () => {
-  try {
-    // 确定存储前缀
-    const storagePrefix = props.agentId ?
-      `agent-${props.agentId}` :
-      'agent-multi';
-
-    if (!storagePrefix) {
-      console.error('无法确定存储前缀，agent_id缺失');
-      return;
-    }
-
-    // console.log("loadState with prefix:", storagePrefix);
-
-    // 加载消息历史
-    const savedMessages = localStorage.getItem(`${storagePrefix}-messages`);
-    if (savedMessages) {
-      try {
-        const parsedMessages = JSON.parse(savedMessages);
-        // console.log(`加载消息历史 (${storagePrefix}):`, parsedMessages ? parsedMessages.length : 0);
-        if (Array.isArray(parsedMessages)) {
-          messages.value = parsedMessages;
-        }
-
-        // 检查消息历史是否成功加载
-        // console.log(`消息历史加载后数量:`, messages.value.length);
-      } catch (e) {
-        console.error('解析消息历史出错:', e);
-      }
-    }
-
-    // 加载线程ID
-    const savedThreadId = localStorage.getItem(`${storagePrefix}-thread-id`);
-    if (savedThreadId) {
-      currentRunId.value = savedThreadId;
-      // console.log(`加载线程ID (${storagePrefix}):`, currentRunId.value);
-    }
-  } catch (error) {
-    console.error('从localStorage加载状态出错:', error);
-  }
-};
-
-// 监听agentId变化
-watch(() => props.agentId, async (newAgentId, oldAgentId) => {
-  try {
-    // console.log("智能体ID变化", oldAgentId, "->", newAgentId);
-
-    // 如果变化了，重置会话并加载新数据
-    if (newAgentId !== oldAgentId) {
-      // 重置会话
-      messages.value = [];
-      currentRunId.value = null;
-      resetStatusSteps();
-
-      // 加载新的智能体数据
-      await loadAgentData();
-    }
-  } catch (error) {
-    console.error('智能体ID变化处理出错:', error);
-  }
-}, { immediate: true });
-
-// 保存状态到localStorage
-const saveState = () => {
-  try {
-    // 防止初始化阶段保存干扰
-    if (!currentAgent.value) {
-      console.warn("当前没有选中智能体，跳过保存");
-      return;
-    }
-
-    // 确定存储前缀
-    const prefix = props.agentId ? `agent-${props.agentId}` : 'agent-multi';
-    // console.log("saveState with prefix:", prefix);
-
-    // 如果是多智能体模式，保存当前选择的智能体
-    if (!props.agentId && currentAgent.value) {
-      localStorage.setItem(`${prefix}-current-agent`, currentAgent.value.name);
-    }
-
-    // 保存消息历史
-    if (messages.value && messages.value.length > 0) {
-      // console.log(`保存消息历史 (${prefix}):`, messages.value.length);
-      localStorage.setItem(`${prefix}-messages`, JSON.stringify(messages.value));
-    } else {
-      localStorage.removeItem(`${prefix}-messages`);
-    }
-
-    // 保存线程ID
-    if (currentRunId.value) {
-      localStorage.setItem(`${prefix}-thread-id`, currentRunId.value);
-      // console.log(`保存线程ID (${prefix}):`, currentRunId.value);
-    } else {
-      localStorage.removeItem(`${prefix}-thread-id`);
-    }
-  } catch (error) {
-    console.error('保存状态到localStorage出错:', error);
-  }
-};
-
-const sayHi = () => {
-  message.success(`Hi, I am ${currentAgent.value.name}, ${currentAgent.value.description}`);
-}
-
-// 监听状态变化并保存
-watch([currentAgent, messages, currentRunId], () => {
-  try {
-    saveState();
-  } catch (error) {
-    console.error('保存状态时出错:', error);
-  }
-}, { deep: true });
 </script>
 
 <style lang="less" scoped>
@@ -973,13 +742,39 @@ watch([currentAgent, messages, currentRunId], () => {
   width: 100%;
   height: 100%;
   position: relative;
-  min-height: 100vh;
+}
+
+.sidebar-backdrop {
+  display: none; /* 默认隐藏，通过v-if控制显示 */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  z-index: 99;
+  animation: fadeIn 0.3s ease;
+}
+
+.floating-sidebar {
+  position: absolute !important;
+  z-index: 100;
+  height: 100%;
+  left: 0;
+  top: 0;
+  transform: translateX(0);
+  transition: transform 0.3s ease;
+  width: 80% !important;
+  max-width: 300px;
+
+  &.collapsed {
+    transform: translateX(-100%);
+  }
 }
 
 .chat {
   position: relative;
   flex: 1;
-  max-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
@@ -987,6 +782,7 @@ watch([currentAgent, messages, currentRunId], () => {
   position: relative;
   box-sizing: border-box;
   overflow-y: scroll;
+  transition: all 0.3s ease;
 
   .chat-header {
     user-select: none;
@@ -1055,6 +851,21 @@ watch([currentAgent, messages, currentRunId], () => {
   }
 }
 
+.chat-loading {
+  padding: 0 50px;
+  text-align: center;
+  position: absolute;
+  top: 20%;
+  width: 100%;
+  z-index: 9;
+  animation: slideInUp 0.5s ease-out;
+
+  span {
+    margin-left: 8px;
+    color: var(--gray-700);
+  }
+}
+
 .chat-box {
   width: 100%;
   max-width: 800px;
@@ -1079,21 +890,10 @@ watch([currentAgent, messages, currentRunId], () => {
   }
 }
 
-.chat-box.is-debug {
-  .message-box .assistant-message {
-    outline: 1px solid red;
-    outline-offset: 10px;
-    outline-style: dashed;
-
-    .status-info {
-      display: block;
-      background-color: var(--gray-50);
-      color: var(--gray-700);
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 10px;
-    }
-  }
+.conv-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bottom {
@@ -1190,6 +990,39 @@ watch([currentAgent, messages, currentRunId], () => {
   animation-delay: -0.16s;
 }
 
+
+.toggle-sidebar {
+  cursor: pointer;
+
+  &.nav-btn {
+    height: 2.5rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 8px;
+    color: var(--gray-900);
+    cursor: pointer;
+    font-size: 15px;
+    width: auto;
+    padding: 0.5rem 1rem;
+    transition: background-color 0.3s;
+    overflow: hidden;
+
+    .text {
+      margin-left: 10px;
+    }
+
+    &:hover {
+      background-color: var(--main-light-3);
+    }
+
+    .nav-btn-icon {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+  }
+}
+
 @keyframes pulse {
   0%, 80%, 100% {
     transform: scale(0.8);
@@ -1247,6 +1080,15 @@ watch([currentAgent, messages, currentRunId], () => {
   }
 }
 
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes spin {
   0% {
     transform: rotate(0deg);
@@ -1256,7 +1098,26 @@ watch([currentAgent, messages, currentRunId], () => {
   }
 }
 
+@media (max-width: 768px) {
+  .chat-sidebar.collapsed {
+    width: 0;
+    border: none;
+  }
+
+  .chat-header {
+    .header__left {
+      .text {
+        display: none;
+      }
+    }
+  }
+}
+
 @media (max-width: 520px) {
+  .sidebar-backdrop {
+    display: block;
+  }
+
   .chat-box {
     padding: 1rem 1rem;
   }
@@ -1273,5 +1134,27 @@ watch([currentAgent, messages, currentRunId], () => {
       padding: 0.4rem 0.8rem !important;
     }
   }
+
+  .chat-sidebar {
+    position: fixed;
+    z-index: 100;
+    height: 100%;
+    left: 0;
+    top: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transform: translateX(0);
+    transition: transform 0.3s ease;
+    width: 80% !important;
+    max-width: 300px;
+
+    &.collapsed {
+      transform: translateX(-100%);
+      width: 80% !important;
+    }
+  }
+}
+
+.hide-text {
+  display: none;
 }
 </style>

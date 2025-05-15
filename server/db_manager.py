@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from server.models import Base
 from server.models.user_model import User
+from server.models.thread_model import Thread
 
 class DBManager:
     """数据库管理器"""

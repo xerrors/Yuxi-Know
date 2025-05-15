@@ -9,7 +9,7 @@ from pymilvus import MilvusClient, MilvusException
 from src import config
 from src.utils import logger, hashstr
 from src.core.indexing import chunk, read_text_async
-from src.core.kb_db_manager import kb_db_manager
+from server.kb_db_manager import kb_db_manager
 
 class KnowledgeBase:
 

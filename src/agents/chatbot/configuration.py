@@ -1,3 +1,5 @@
+import uuid
+
 from dataclasses import dataclass, field
 
 from src.agents.registry import Configuration
@@ -12,6 +14,24 @@ class ChatbotConfiguration(Configuration):
     metadata 中 configurable 为 True 的配置项可以被用户配置，
     configurable 为 False 的配置项不能被用户配置，只能由开发者预设。
     """
+
+    thread_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "线程ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
+
+    user_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "用户ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
 
     system_prompt: str = field(
         default="You are a helpful assistant.",

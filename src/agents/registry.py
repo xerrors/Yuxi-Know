@@ -13,18 +13,10 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.graph.message import add_messages
 
-from src.config import SimpleConfig
 from src.utils import logger
 
 class State(TypedDict):
-    """
-    定义一个基础 State 供 各类 graph 继承, 其中:
-    1. messages 为所有 graph 的核心信息队列, 所有聊天工作流均应该将关键信息补充到此队列中;
-    2. history 为所有工作流单次启动时获取 history_len 的 messages 所用(节约成本, 及防止单轮对话 tokens 占用长度达到 llm 支持上限),
-    history 中的信息理应是可以被丢弃的.
-    """
     messages: Annotated[list[BaseMessage], add_messages]
-    history: Optional[list[BaseMessage]]
 
 
 @dataclass(kw_only=True)
@@ -181,14 +173,39 @@ class BaseAgent():
 
     def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)
+        logger.debug(f"stream_values: {config_schema}")
         for event in graph.stream({"messages": messages}, stream_mode="values", config=config_schema):
             yield event["messages"]
 
     def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = self.get_graph(config_schema=config_schema, **kwargs)
+        logger.debug(f"stream_messages: {config_schema}")
 
         for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
             yield msg, metadata
+
+    def get_history(self, user_id, thread_id) -> list[dict]:
+        """获取历史消息"""
+        # 获取LangGraph应用实例
+        app = self.get_graph()
+        # 构建配置信息
+        config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+        # 获取状态
+        state = app.get_state(config)
+        # logger.debug(f"获取历史消息: {state}")
+
+        result = []
+        if state:
+            messages = state.values.get('messages', [])
+            for msg in messages:
+                if hasattr(msg, 'model_dump'):
+                    msg_dict = msg.model_dump()  # 转换成字典
+                else:
+                    # 如果消息没有model_dump方法，尝试转成dict
+                    msg_dict = dict(msg) if hasattr(msg, '__dict__') else {"content": str(msg)}
+                result.append(msg_dict)
+
+        return result
 
     @abstractmethod
     def get_graph(self, **kwargs) -> CompiledStateGraph:
