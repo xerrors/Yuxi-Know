@@ -12,19 +12,15 @@
 
 ## 📝 项目概述
 
-TODO：
-
-- 智能体的消息加载有问题
-- 智能体的管理员的配置无法更新到用户层面
-
 语析是一个强大的问答平台，结合了大模型 RAG 知识库与知识图谱技术，基于 Llamaindex + VueJS + FastAPI + Neo4j 构建。
 
 **核心特点：**
 
 - 🤖 多模型支持：适配 OpenAI、各大国内主流大模型平台，以及本地 vllm、ollama 部署
-- 📚 灵活知识库：支持 PDF、TXT、MD 等多种格式文档
+- 📚 灵活知识库：支持 PDF、TXT、MD、Docx 等多种格式文档，支持通过 URL 添加文件
 - 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力
 - 🚀 简单配置：只需配置对应服务平台的 `API_KEY` 即可使用
+- 🌐 网页检索：支持联网搜索，辅助回答最新信息
 - 🤖 智能体拓展：可以编写自己的智能体代码
 - ⚒️ 适合二次开发：更多的开发自定义项
 
@@ -38,18 +34,24 @@ TODO：
 - **2025.02.23** - SiliconFlow 的 Rerank 和 Embedding model 支持，现默认使用 SiliconFlow
 - **2025.02.20** - DeepSeek-R1 支持，需配置 `DEEPSEEK_API_KEY` 或 `SILICONFLOW_API_KEY`
 
+## 🚀 快速开始
+
 ### 环境配置
 
-在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中（此文件项目中没有，需要自行参考 [src/.env.template](src/.env.template) 创建）。更多可配置项，可参考 后面**对话模型**部分。
+在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中（此文件项目中没有，需要自行参考 [src/.env.template](src/.env.template) 创建）。更多可配置项，可参考下方**对话模型**部分。
 
 默认使用硅基流动的服务，因此**必须**配置：
 
 ```
 SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
-OPENAI_API_KEY=<API_KEY> # 如果需要配置 openai 则添加此行，并替换 API_KEY
-DEEPSEEK_API_KEY=<API_KEY>  # 如果配置 DeepSeek 添加此行，并替换 API_KEY
-ZHIPUAI_API_KEY=<API_KEY>  # 如果配置 智谱清言 添加此行，并替换 API_KEY
-TAVILY_API_KEY=<TAVILY_API_KEY>  # 联网搜索需要配置
+```
+
+其他可选配置：
+```
+OPENAI_API_KEY=<API_KEY>          # OpenAI 服务
+DEEPSEEK_API_KEY=<API_KEY>        # DeepSeek 服务
+ZHIPUAI_API_KEY=<API_KEY>         # 智谱清言服务
+TAVILY_API_KEY=<TAVILY_API_KEY>   # 联网搜索功能
 ```
 
 需要确保账户有一点点额度供调用，或使用这个链接注册[SiliconFlow 注册（含邀请码）](https://cloud.siliconflow.cn/i/Eo5yTHGJ)获得 14 元的赠送额度。
@@ -81,13 +83,9 @@ docker compose up --build
  ✔ Container web-dev                Started
 ```
 
-注：当内存不足的时候，可能会出现 Milvus 没有正常启动的情况。此时需要 `docker compose up milvus -d` 来重新启动，并重启 api-dev `docker restart api-dev`。
+注：当内存不足时，可能会出现 Milvus 没有正常启动的情况。此时需要运行 `docker compose up milvus -d` 重新启动 Milvus，并重启 API 服务 `docker restart api-dev`。
 
 访问 [http://localhost:5173/](http://localhost:5173/) 即可使用系统。
-
-### 系统预览
-
-> 待补充
 
 ### 服务管理
 
@@ -117,10 +115,13 @@ docker logs <容器名称>  # 例如：docker logs api-dev
 | `arc`（豆包方舟）    | `doubao-1-5-pro-32k-250115`       | `ARK_API_KEY`         |
 | `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`     |
 | `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`   |
+| `together.ai`        | `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` | `TOGETHER_API_KEY`   |
+| `lingyiwanwu`（零一）| `yi-lightning`                    | `LINGYIWANWU_API_KEY` |
+| `openrouter`         | `openai/gpt-4o`                   | `OPENROUTER_API_KEY`  |
 
 #### 添加新模型供应商
 
-如需添加供应商模型，了解 OpenAI 调用方法后，只需在 [src/static/models.yaml](src/static/models.yaml) 中添加对应配置：
+如需添加供应商模型，了解 OpenAI 调用方法后，在 [src/static/models.yaml](src/static/models.yaml) 中添加对应配置：
 
 ```yaml
 ark:
@@ -138,14 +139,19 @@ ark:
 
 本地模型部署参考 [how-to.md](./docs/how-to.md)
 
+### 2. 向量模型和重排序模型
 
-## 📚 知识库支持
+强烈建议测试阶段先使用硅基流动部署的 bge-m3（免费且无需修改）。其他模型配置参考 [src/static/models.yaml](src/static/models.yaml)。
 
-本项目支持多种格式的知识库文件：PDF、TXT、Markdown、Docx。
+选择 `local` 前缀的模型会自动下载。如遇下载问题，请参考 [HF-Mirror](https://hf-mirror.com/) 配置。详细配置过程请参考 [how-to.md](./docs/how-to.md)。
 
-文件上传后，系统会 对文件进行分块、索引、存储到向量数据库（Milvus）中，此过程可能需要一定时间，请耐心等待。
+## 📚 知识库功能
 
-## 🕸️ 知识图谱支持
+本项目支持多种格式的知识库文件：PDF、TXT、Markdown、Docx。支持通过 URL 添加文件。
+
+文件上传后，系统会对文件进行分块、索引、存储到向量数据库（Milvus）中，此过程可能需要一定时间，请耐心等待。
+
+## 🕸️ 知识图谱功能
 
 本项目使用 Neo4j 作为知识图谱存储。您需要将图谱整理成 jsonl 格式，每行格式为：
 
@@ -166,7 +172,7 @@ ark:
 
 可在 `docker-compose.yml` 中修改配置（注意同时修改 `api.environment` 和 `graph.environment`）。
 
-目前项目暂不支持同时查询多个知识图谱。如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
+如已有基于 neo4j 的知识图谱，可删除 `docker-compose.yml` 中的 `graph` 配置项，并修改 `api.environment` 中的 `NEO4J_URI` 为您的 neo4j 服务地址。同时，需要确保节点的标签中包含 Entity 标签，才能正常触发索引。
 
 ## 贡献者名单
 

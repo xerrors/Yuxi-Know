@@ -22,7 +22,7 @@ class AgentManager:
 
 agent_manager = AgentManager()
 agent_manager.add_agent("chatbot", ChatbotAgent)
-agent_manager.add_agent("react", ReActAgent)
+# agent_manager.add_agent("react", ReActAgent)  # 暂时屏蔽 ReActAgent
 
 __all__ = ["agent_manager"]
 
