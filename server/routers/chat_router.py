@@ -279,9 +279,9 @@ async def save_agent_config(
 async def get_agent_history(
     agent_name: str,
     thread_id: str,
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_required_user)
 ):
-    """获取智能体历史消息（需要管理员权限）"""
+    """获取智能体历史消息（需要登录）"""
     try:
         # 获取Agent实例和配置类
         agent = agent_manager.get_runnable_agent(agent_name)
@@ -299,9 +299,9 @@ async def get_agent_history(
 @chat.get("/agent/{agent_name}/config")
 async def get_agent_config(
     agent_name: str,
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_required_user)
 ):
-    """从YAML文件加载智能体配置（需要管理员权限）"""
+    """从YAML文件加载智能体配置（需要登录）"""
     try:
         # 检查智能体是否存在
         if not (agent := agent_manager.get_agent(agent_name)):
