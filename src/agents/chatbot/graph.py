@@ -1,16 +1,16 @@
 import os
 import uuid
 from typing import Any
+from pathlib import Path
 from datetime import datetime, timezone
 
+import sqlite3
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 
-# from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
-
-
+from src import config as sys_config
 from src.utils import logger
 from src.agents.registry import State, BaseAgent
 from src.agents.utils import load_chat_model, get_cur_time_with_utc
@@ -26,6 +26,8 @@ class ChatbotAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph = None
+        self.workdir = Path(sys_config.save_dir) / "agents" / self.name
+        self.workdir.mkdir(parents=True, exist_ok=True)
 
     def _get_tools(self, tools: list[str]):
         """根据配置获取工具。
@@ -56,7 +58,7 @@ class ChatbotAgent(BaseAgent):
         )
         return {"messages": [res]}
 
-    def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
+    async def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
         """构建图"""
         if self.graph:
             return self.graph
@@ -73,18 +75,19 @@ class ChatbotAgent(BaseAgent):
         workflow.add_edge("tools", "chatbot")
         workflow.add_edge("chatbot", END)
 
-        mem_checkpointer = InMemorySaver()
-        graph = workflow.compile(checkpointer=mem_checkpointer)
+        # 创建数据库连接
+        sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
+        graph = workflow.compile(checkpointer=sqlite_checkpointer)
         self.graph = graph
         return graph
 
-    # async def get_async_conn(self) -> aiosqlite.Connection:
-    #     """获取异步数据库连接"""
-    #     return await aiosqlite.connect(os.path.join(self.db_dir, "aio_history.db"))
+    async def get_async_conn(self) -> aiosqlite.Connection:
+        """获取异步数据库连接"""
+        return await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
 
-    # async def get_aio_memory(self) -> AsyncSqliteSaver:
-    #     """获取异步存储实例"""
-    #     return AsyncSqliteSaver(await self.get_async_conn())
+    async def get_aio_memory(self) -> AsyncSqliteSaver:
+        """获取异步存储实例"""
+        return AsyncSqliteSaver(await self.get_async_conn())
 
 def main():
     agent = ChatbotAgent(ChatbotConfiguration())

@@ -171,28 +171,27 @@ class BaseAgent():
             if requirement not in os.environ:
                 raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置，并重新启动服务")
 
-    def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
-        graph = self.get_graph(config_schema=config_schema, **kwargs)
+    async def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = await self.get_graph(config_schema=config_schema, **kwargs)
         logger.debug(f"stream_values: {config_schema}")
-        for event in graph.stream({"messages": messages}, stream_mode="values", config=config_schema):
+        for event in graph.astream({"messages": messages}, stream_mode="values", config=config_schema):
             yield event["messages"]
 
-    def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
-        graph = self.get_graph(config_schema=config_schema, **kwargs)
+    async def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
+        graph = await self.get_graph(config_schema=config_schema, **kwargs)
         logger.debug(f"stream_messages: {config_schema}")
 
-        for msg, metadata in graph.stream({"messages": messages}, stream_mode="messages", config=config_schema):
+        async for msg, metadata in graph.astream({"messages": messages}, stream_mode="messages", config=config_schema):
             yield msg, metadata
 
-    def get_history(self, user_id, thread_id) -> list[dict]:
+    async def get_history(self, user_id, thread_id) -> list[dict]:
         """获取历史消息"""
         # 获取LangGraph应用实例
-        app = self.get_graph()
+        app = await self.get_graph()
         # 构建配置信息
         config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
         # 获取状态
-        state = app.get_state(config)
-        # logger.debug(f"获取历史消息: {state}")
+        state = await app.aget_state(config)
 
         result = []
         if state:

@@ -30,7 +30,7 @@ def main():
     config = {"configurable": {"thread_id": thread_id}}
 
     from src.agents.utils import agent_cli
-    agent_cli(agent, config)
+    asyncio.run(agent_cli(agent, config))
 
 
 if __name__ == "__main__":

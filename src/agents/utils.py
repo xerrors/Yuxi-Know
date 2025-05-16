@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import asyncio
 
 from src.models import select_model
 from src.agents.registry import BaseAgent
@@ -22,7 +23,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     return model_instance.chat_open_ai
 
 
-def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
+async def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
     config = config or {}
     if "configurable" not in config:
         config["configurable"] = {}
@@ -34,7 +35,7 @@ def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
             break
 
         stream_flag = False
-        for msg, metadata in agent.stream_messages([{"role": "user", "content": user_input}], config):
+        async for msg, metadata in agent.stream_messages([{"role": "user", "content": user_input}], config):
             if isinstance(msg, AIMessageChunk):
                 content = msg.content or msg.tool_calls
 

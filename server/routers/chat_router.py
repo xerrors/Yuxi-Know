@@ -165,7 +165,7 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     return {"agents": agents}
 
 @chat.post("/agent/{agent_name}")
-def chat_agent(agent_name: str,
+async def chat_agent(agent_name: str,
                query: str = Body(...),
                config: dict = Body({}),
                meta: dict = Body({}),
@@ -189,7 +189,7 @@ def chat_agent(agent_name: str,
             **kwargs
         }, ensure_ascii=False).encode('utf-8') + b"\n"
 
-    def stream_messages():
+    async def stream_messages():
 
         # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
@@ -212,7 +212,7 @@ def chat_agent(agent_name: str,
         runnable_config = {"configurable": {**config}}
 
         try:
-            for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
+            async for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
                 logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
                     yield make_chunk(content=msg.content,
@@ -289,7 +289,7 @@ async def get_agent_history(
             raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
 
         # 获取历史消息
-        history = agent.get_history(user_id=current_user.id, thread_id=thread_id)
+        history = await agent.get_history(user_id=current_user.id, thread_id=thread_id)
         return {"history": history}
 
     except Exception as e:

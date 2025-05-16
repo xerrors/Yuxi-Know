@@ -13,6 +13,7 @@ dependencies = [
     "langchain-huggingface>=0.2.0",
     "langchain-openai>=0.3.14",
     "langgraph>=0.3.34",
+    "langgraph-checkpoint-sqlite>=2.0.7",
     "langsmith>=0.3.37",
     "llama-index>=0.12.33",
     "llama-index-readers-file>=0.4.7",
