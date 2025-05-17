@@ -2,16 +2,18 @@ import os
 import pathlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
 
+from src import config
 from server.models import Base
 from server.models.user_model import User
-from server.models.thread_model import Thread
+from src.utils import logger
 
 class DBManager:
-    """数据库管理器"""
+    """数据库管理器 - 只提供基础的数据库连接和会话管理"""
 
     def __init__(self):
-        self.db_path = os.path.join("saves", "data", "server.db")
+        self.db_path = os.path.join(config.save_dir, "data", "server.db")
         self.ensure_db_dir()
 
         # 创建SQLAlchemy引擎
@@ -30,7 +32,26 @@ class DBManager:
 
     def create_tables(self):
         """创建数据库表"""
+        # 确保所有表都会被创建
         Base.metadata.create_all(self.engine)
+    def get_session(self):
+        """获取数据库会话"""
+        return self.Session()
+
+    @contextmanager
+    def get_session_context(self):
+        """获取数据库会话的上下文管理器"""
+        session = self.Session()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            logger.error(f"数据库操作失败: {e}")
+            raise
+        finally:
+            session.close()
+
 
     def check_first_run(self):
         """检查是否首次运行"""
@@ -40,10 +61,5 @@ class DBManager:
             return session.query(User).count() == 0
         finally:
             session.close()
-
-    def get_session(self):
-        """获取数据库会话"""
-        return self.Session()
-
 # 创建全局数据库管理器实例
 db_manager = DBManager()
