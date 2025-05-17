@@ -120,7 +120,7 @@ class BaseToolOutput:
 
 @tool
 def calculator(a: float, b: float, operation: str) -> float:
-    """Calculate two numbers."""
+    """Calculate two numbers. operation: add, subtract, multiply, divide"""
     if operation == "add":
         return a + b
     elif operation == "subtract":

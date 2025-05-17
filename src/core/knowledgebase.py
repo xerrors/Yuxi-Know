@@ -8,8 +8,8 @@ from pymilvus import MilvusClient, MilvusException
 
 from src import config
 from src.utils import logger, hashstr
-from src.core.indexing import chunk, read_text
-from src.core.kb_db_manager import kb_db_manager
+from src.core.indexing import chunk, read_text_async
+from server.kb_db_manager import kb_db_manager
 
 class KnowledgeBase:
 
@@ -136,8 +136,15 @@ class KnowledgeBase:
         else:
             db_copy = db_dict.copy()
             try:
+                # 保存原始描述
+                original_description = db_copy.get("description")
+
                 milvus_info = self.get_collection_info(db_id)
                 db_copy.update(milvus_info)
+
+                # 如果原始描述不为空，恢复它
+                if original_description:
+                    db_copy["description"] = original_description
             except Exception as e:
                 logger.warning(f"获取知识库 ID: {db_id} 的Milvus信息失败: {e}")
                 # 添加一个默认的Milvus状态
@@ -175,7 +182,7 @@ class KnowledgeBase:
 
         return self.db_manager.get_database_by_id(db_id)
 
-    def file_to_chunk(self, files, params=None):
+    async def file_to_chunk(self, files, params=None):
         """将文件转换为分块
 
         这里主要是将文件转换为分块，但并不保存到数据库，仅仅返回分块后的信息，返回的信息里面也包含文件的id，文件名，文件类型，文件路径，文件状态，文件创建时间等。
@@ -191,7 +198,7 @@ class KnowledgeBase:
             file_type = file.split(".")[-1].lower()
 
             if file_type == "pdf":
-                texts = read_text(file)
+                texts = await read_text_async(file)
                 nodes = chunk(texts, params=params)
             else:
                 nodes = chunk(file, params=params)
@@ -208,11 +215,77 @@ class KnowledgeBase:
 
         return file_infos
 
-    def url_to_chunk(self, url, params=None):
-        """将url转换为分块，读取url的内容，并转换为分块"""
-        raise NotImplementedError("Not implemented")
+    async def url_to_chunk(self, urls, params=None):
+        """将url转换为分块，读取url的内容，并转换为分块
 
-    def add_chunks(self, db_id, file_chunks):
+        Args:
+            urls: list of urls
+            params: params for chunking
+
+        Returns:
+            dict: 包含分块信息的字典
+        """
+        try:
+            from langchain_community.document_loaders import UnstructuredURLLoader
+        except ImportError:
+            raise ImportError("请安装 langchain_community 和 unstructured 包：pip install langchain-community unstructured")
+
+        file_infos = {}
+
+        # 使用UnstructuredURLLoader加载URL内容
+        # loader = UnstructuredURLLoader(urls=urls, continue_on_failure=True)
+
+        for url_idx, url in enumerate(urls):
+            file_id = "url_" + hashstr(url + str(time.time()))
+
+            try:
+                # 加载单个URL内容
+                single_loader = UnstructuredURLLoader(urls=[url], continue_on_failure=False)
+                documents = await single_loader.aload()
+
+                # 将文档内容合并
+                text_content = "\n\n".join([doc.page_content for doc in documents])
+
+                # 对内容进行分块
+                nodes = chunk(text_content, params=params)
+
+                # 从URL中提取域名作为文件名
+                from urllib.parse import urlparse, unquote
+                parsed_url = urlparse(unquote(url))
+                domain = parsed_url.netloc
+                path = parsed_url.path
+                filename = f"{domain}{path}"
+                if filename.endswith('/'):
+                    filename = filename[:-1]
+                if len(filename) > 100:
+                    filename = filename[:97] + "..."
+                filename = filename.replace('/', '_')
+
+                file_infos[file_id] = {
+                    "file_id": file_id,
+                    "filename": filename,
+                    "path": url,
+                    "type": "url",
+                    "status": "waiting",
+                    "created_at": time.time(),
+                    "nodes": [node.dict() for node in nodes]
+                }
+            except Exception as e:
+                logger.error(f"处理URL {url} 时出错: {e}")
+                file_infos[file_id] = {
+                    "file_id": file_id,
+                    "filename": url[:100] + "..." if len(url) > 100 else url,
+                    "path": url,
+                    "type": "url",
+                    "status": "failed",
+                    "created_at": time.time(),
+                    "error": str(e),
+                    "nodes": []
+                }
+
+        return file_infos
+
+    async def add_chunks(self, db_id, file_chunks):
         """添加分块"""
         db = self.get_kb_by_id(db_id)
 
@@ -232,7 +305,7 @@ class KnowledgeBase:
             )
 
             try:
-                self.add_documents(
+                await self.add_documents(
                     file_id=file_id,
                     collection_name=db_id,
                     docs=[node["text"] for node in chunk_info["nodes"]],
@@ -246,7 +319,7 @@ class KnowledgeBase:
                 # 更新文件状态为失败
                 self.db_manager.update_file_status(file_id, "failed")
 
-    def add_files(self, db_id, files, params=None):
+    async def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
 
         if not self.check_embed_model(db_id):
@@ -254,7 +327,7 @@ class KnowledgeBase:
             return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
 
         # Preprocessing the files to the queue
-        new_files = self.file_to_chunk(files, params=params)
+        new_files = await self.file_to_chunk(files, params=params)
 
         for file_id, new_file in new_files.items():
             # 在数据库中创建文件记录
@@ -268,7 +341,7 @@ class KnowledgeBase:
             )
 
             try:
-                self.add_documents(
+                await self.add_documents(
                     file_id=file_id,
                     collection_name=db_id,
                     docs=[node["text"] for node in new_file["nodes"]],
@@ -432,7 +505,7 @@ class KnowledgeBase:
             dimension= dimension,  # The vectors we will use in this demo has 768 dimensions
         )
 
-    def add_documents(self, docs, collection_name, chunk_infos=None, **kwargs):
+    async def add_documents(self, docs, collection_name, chunk_infos=None, **kwargs):
         """添加已经分块之后的文本"""
         # 检查 collection 是否存在
         import random
@@ -442,7 +515,7 @@ class KnowledgeBase:
 
         chunk_infos = chunk_infos or [{}] * len(docs)
 
-        vectors = self.embed_model.batch_encode(docs)
+        vectors = await self.embed_model.abatch_encode(docs)
 
         data = [{
             "id": int(random.random() * 1e12),
@@ -486,4 +559,15 @@ class KnowledgeBase:
     def check_embed_model(self, db_id):
         db = self.db_manager.get_database_by_id(db_id)
         return db["embed_model"] == self.embed_model.embed_model_fullname
+
+    def update_database(self, db_id, name, description):
+        """更新知识库信息"""
+        # 检查知识库是否存在
+        db = self.db_manager.get_database_by_id(db_id)
+        if db is None:
+            raise Exception(f"数据库不存在: {db_id}")
+
+        # 调用db_manager更新知识库信息
+        updated_db = self.db_manager.update_database(db_id, name, description)
+        return updated_db
 

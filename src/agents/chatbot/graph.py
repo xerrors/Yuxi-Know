@@ -1,14 +1,16 @@
-import asyncio
+import os
 import uuid
 from typing import Any
+from pathlib import Path
 from datetime import datetime, timezone
 
+import sqlite3
 from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.memory import MemorySaver # 实际上没有起作用
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 
-
+from src import config as sys_config
 from src.utils import logger
 from src.agents.registry import State, BaseAgent
 from src.agents.utils import load_chat_model, get_cur_time_with_utc
@@ -23,6 +25,9 @@ class ChatbotAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.graph = None
+        self.workdir = Path(sys_config.save_dir) / "agents" / self.name
+        self.workdir.mkdir(parents=True, exist_ok=True)
 
     def _get_tools(self, tools: list[str]):
         """根据配置获取工具。
@@ -42,25 +47,26 @@ class ChatbotAgent(BaseAgent):
 
     def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
         """调用 llm 模型"""
-        config_schema = config or {}
-        conf = self.config_schema.from_runnable_config(config_schema)
+        conf = self.config_schema.from_runnable_config(config, agent_name=self.name)
 
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
         model = load_chat_model(conf.model)
         model_with_tools = model.bind_tools(self._get_tools(conf.tools))
-        logger.info(f"llm_call with config: {conf}, {conf.model}")
 
         res = model_with_tools.invoke(
             [{"role": "system", "content": system_prompt}, *state["messages"]]
         )
         return {"messages": [res]}
 
-    def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
+    async def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
         """构建图"""
-        conf = self.config_schema.from_runnable_config(config_schema)
+        if self.graph:
+            return self.graph
+
+        conf = self.config_schema.from_runnable_config(config_schema, agent_name=self.name)
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=self._get_tools(conf.tools)))
+        workflow.add_node("tools", ToolNode(tools=list(get_all_tools().values())))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",
@@ -69,9 +75,19 @@ class ChatbotAgent(BaseAgent):
         workflow.add_edge("tools", "chatbot")
         workflow.add_edge("chatbot", END)
 
-        graph = workflow.compile(checkpointer=MemorySaver())
+        # 创建数据库连接
+        sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
+        graph = workflow.compile(checkpointer=sqlite_checkpointer)
+        self.graph = graph
         return graph
 
+    async def get_async_conn(self) -> aiosqlite.Connection:
+        """获取异步数据库连接"""
+        return await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
+
+    async def get_aio_memory(self) -> AsyncSqliteSaver:
+        """获取异步存储实例"""
+        return AsyncSqliteSaver(await self.get_async_conn())
 
 def main():
     agent = ChatbotAgent(ChatbotConfiguration())

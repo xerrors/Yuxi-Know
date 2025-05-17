@@ -14,12 +14,28 @@
       <a-button type="primary" @click="backToDatabase">
         <LeftOutlined /> 返回
       </a-button>
+      <a-button type="primary" @click="showEditModal">
+        <EditOutlined />
+      </a-button>
       <a-button type="primary" danger @click="deleteDatabse">
-        <DeleteOutlined /> 删除数据库
+        <DeleteOutlined />
       </a-button>
     </template>
   </HeaderComponent>
   <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
+
+  <!-- 添加编辑对话框 -->
+  <a-modal v-model:open="editModalVisible" title="编辑知识库信息" @ok="handleEditSubmit">
+    <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
+      <a-form-item label="知识库名称" name="name" required>
+        <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
+      </a-form-item>
+      <a-form-item label="知识库描述" name="description">
+        <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+
   <div class="db-main-container">
     <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
 
@@ -107,7 +123,19 @@
               </div>
             </div>
             <div class="upload-main">
-              <div class="upload">
+              <div class="source-selector">
+                <a-radio-group v-model:value="uploadMode" button-style="solid" style="margin-bottom: 16px;">
+                  <a-radio-button value="file">
+                    <FileOutlined /> 上传文件
+                  </a-radio-button>
+                  <a-radio-button value="url">
+                    <LinkOutlined /> 输入网址
+                  </a-radio-button>
+                </a-radio-group>
+              </div>
+
+              <!-- 文件上传区域 -->
+              <div class="upload" v-if="uploadMode === 'file'">
                 <a-upload-dragger
                   class="upload-dragger"
                   v-model:fileList="fileList"
@@ -115,6 +143,7 @@
                   :multiple="true"
                   :disabled="state.loading"
                   :action="'/api/data/upload?db_id=' + databaseId"
+                  :headers="getAuthHeaders()"
                   @change="handleFileUpload"
                   @drop="handleDrop"
                 >
@@ -124,12 +153,30 @@
                   </p>
                 </a-upload-dragger>
               </div>
+
+              <!-- URL 输入区域 -->
+              <div class="url-input" v-else>
+                <a-form layout="vertical">
+                  <a-form-item label="网页链接 (每行一个URL)">
+                    <a-textarea
+                      v-model:value="urlList"
+                      placeholder="请输入网页链接，每行一个"
+                      :rows="6"
+                      :disabled="state.loading"
+                    />
+                  </a-form-item>
+                </a-form>
+                <p class="url-hint">
+                  支持添加网页内容，系统会自动抓取网页文本并进行分块。请确保URL格式正确且可以公开访问。
+                </p>
+              </div>
+
               <div class="actions">
                 <a-button
                   type="primary"
-                  @click="chunkFiles"
+                  @click="chunkData"
                   :loading="state.loading"
-                  :disabled="fileList.length === 0"
+                  :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
                   style="margin: 0px 20px 20px 0;"
                 >
                   生成分块
@@ -286,6 +333,8 @@ import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'v
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
+import { knowledgeBaseApi } from '@/apis/admin_api'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
   ReadOutlined,
@@ -298,7 +347,9 @@ import {
   CloudUploadOutlined,
   SearchOutlined,
   LoadingOutlined,
-  CaretUpOutlined
+  FileOutlined,
+  LinkOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue'
 
 
@@ -395,29 +446,29 @@ const onQuery = () => {
     return
   }
   meta.db_id = database.value.db_id
-  fetch('/api/data/query-test', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"  // 添加 Content-Type 头
-    },
-    body: JSON.stringify({
+
+  try {
+    knowledgeBaseApi.queryTest({
       query: queryText.value.trim(),
       meta: meta
-    }),
-  })
-  .then(response => response.json())
-  .then(data => {
-    console.log(data)
-    queryResult.value = data
-    filterQueryResults()
-  })
-  .catch(error => {
+    })
+    .then(data => {
+      console.log(data)
+      queryResult.value = data
+      filterQueryResults()
+    })
+    .catch(error => {
+      console.error(error)
+      message.error(error.message)
+    })
+    .finally(() => {
+      state.searchLoading = false
+    })
+  } catch (error) {
     console.error(error)
     message.error(error.message)
-  })
-  .finally(() => {
     state.searchLoading = false
-  })
+  }
 }
 
 const handleFileUpload = (event) => {
@@ -449,7 +500,6 @@ const handleRefresh = () => {
 }
 
 const deleteDatabse = () => {
-
   Modal.confirm({
     title: '删除数据库',
     content: '确定要删除该数据库吗？',
@@ -457,28 +507,19 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      fetch(`/api/data/?db_id=${databaseId.value}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          db_id: databaseId.value
-        }),
-      })
-      .then(response => response.json())
-      .then(data => {
-        console.log(data)
-        message.success(data.message)
-        router.push('/database')
-      })
-      .catch(error => {
-        console.error(error)
-        message.error(error.message)
-      })
-      .finally(() => {
-        state.lock = false
-      })
+      knowledgeBaseApi.deleteDatabase(databaseId.value)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          router.push('/database')
+        })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');
@@ -488,32 +529,40 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   state.lock = true
-  fetch(`/api/data/document?db_id=${databaseId.value}&file_id=${record.file_id}`, {
-    method: "GET",
-  })
-    .then(response => response.json())
-    .then(data => {
-      console.log(data)
-      if (data.status == "failed") {
-        message.error(data.message)
-        return
-      }
-      state.lock = false
-      selectedFile.value = {
-        ...record,
-        lines: data.lines || []
-      }
-      state.drawer = true
-    })
-    .catch(error => {
-      console.error(error)
-      message.error(error.message)
-    })
-}
 
+  try {
+    knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
+      .then(data => {
+        console.log(data)
+        if (data.status == "failed") {
+          message.error(data.message)
+          return
+        }
+        state.lock = false
+        selectedFile.value = {
+          ...record,
+          lines: data.lines || []
+        }
+        state.drawer = true
+      })
+      .catch(error => {
+        console.error(error)
+        message.error(error.message)
+      })
+  } catch (error) {
+    console.error(error)
+    message.error('获取文件详情失败')
+    state.lock = false
+  }
+}
 const formatRelativeTime = (timestamp) => {
+    // 调整为东八区时间（UTC+8）
+    const timezoneOffset = 8 * 60 * 60 * 1000; // 东八区偏移量（毫秒）
+    const adjustedTimestamp = timestamp + timezoneOffset;
+
     const now = Date.now();
-    const secondsPast = (now - timestamp) / 1000;
+    const secondsPast = (now - adjustedTimestamp) / 1000;
+
     if (secondsPast < 60) {
         return Math.round(secondsPast) + ' 秒前';
     } else if (secondsPast < 3600) {
@@ -521,7 +570,7 @@ const formatRelativeTime = (timestamp) => {
     } else if (secondsPast < 86400) {
         return Math.round(secondsPast / 3600) + ' 小时前';
     } else {
-        const date = new Date(timestamp);
+        const date = new Date(adjustedTimestamp);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();
@@ -537,17 +586,14 @@ const getDatabaseInfo = () => {
   }
   state.lock = true
   return new Promise((resolve, reject) => {
-    fetch(`/api/data/info?db_id=${db_id}`, {
-      method: "GET",
-    })
-      .then(response => response.json())
+    knowledgeBaseApi.getDatabaseInfo(db_id)
       .then(data => {
         database.value = data
         resolve(data)
       })
       .catch(error => {
         console.error(error)
-        message.error(error.message)
+        message.error(error.message || '获取数据库信息失败')
         reject(error)
       })
       .finally(() => {
@@ -565,30 +611,20 @@ const deleteFile = (fileId) => {
     okText: '确认',
     cancelText: '取消',
     onOk: () => {
-        state.lock = true
-        fetch('/api/data/document', {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json"  // 添加 Content-Type 头
-          },
-          body: JSON.stringify({
-            db_id: databaseId.value,
-            file_id: fileId
-          }),
+      state.lock = true
+      knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+        .then(data => {
+          console.log(data)
+          message.success(data.message || '删除成功')
+          getDatabaseInfo()
         })
-          .then(response => response.json())
-          .then(data => {
-            console.log(data)
-            message.success(data.message)
-            getDatabaseInfo()
-          })
-          .catch(error => {
-            console.error(error)
-              message.error(error.message)
-            })
-            .finally(() => {
-              state.lock = false
-            })
+        .catch(error => {
+          console.error(error)
+          message.error(error.message || '删除失败')
+        })
+        .finally(() => {
+          state.lock = false
+        })
     },
     onCancel: () => {
       console.log('Cancel');
@@ -624,17 +660,10 @@ const chunkFiles = () => {
   state.loading = true
 
   // 调用file-to-chunk接口获取分块信息
-  fetch('/api/data/file-to-chunk', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      files: files,
-      params: chunkParams.value
-    }),
+  knowledgeBaseApi.fileToChunk({
+    files: files,
+    params: chunkParams.value
   })
-  .then(response => response.json())
   .then(data => {
     console.log('文件分块信息:', data)
     chunkResults.value = Object.values(data);
@@ -648,6 +677,39 @@ const chunkFiles = () => {
     state.loading = false
   })
 }
+
+// 分块预览
+const chunkUrls = () => {
+  // 分割并过滤URL列表
+  const urls = urlList.value.split('\n')
+    .map(url => url.trim())
+    .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
+
+  if (urls.length === 0) {
+    message.error('请输入有效的网页链接（必须以http://或https://开头）');
+    return;
+  }
+
+  state.loading = true;
+
+  // 调用url-to-chunk接口获取分块信息
+  knowledgeBaseApi.urlToChunk({
+    urls: urls,
+    params: chunkParams.value
+  })
+  .then(data => {
+    console.log('URL分块信息:', data);
+    chunkResults.value = Object.values(data);
+    activeFileKeys.value = chunkResults.value.length > 0 ? [0] : []; // 默认展开第一个
+  })
+  .catch(error => {
+    console.error(error);
+    message.error(error.message || '处理URL失败');
+  })
+  .finally(() => {
+    state.loading = false;
+  });
+};
 
 // 添加到数据库
 const addToDatabase = () => {
@@ -666,17 +728,10 @@ const addToDatabase = () => {
   });
 
   // 调用add-by-chunks接口将分块添加到数据库
-  fetch('/api/data/add-by-chunks', {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      db_id: databaseId.value,
-      file_chunks: fileChunks
-    }),
+  knowledgeBaseApi.addByChunks({
+    db_id: databaseId.value,
+    file_chunks: fileChunks
   })
-  .then(response => response.json())
   .then(data => {
     console.log(data)
 
@@ -756,7 +811,69 @@ onUnmounted(() => {
   }
 })
 
+const uploadMode = ref('file');
+const urlList = ref('');
 
+const chunkData = () => {
+  if (uploadMode.value === 'file') {
+    chunkFiles();
+  } else if (uploadMode.value === 'url') {
+    chunkUrls();
+  }
+}
+
+const getAuthHeaders = () => {
+  const userStore = useUserStore();
+  return userStore.getAuthHeaders();
+};
+
+// 编辑知识库表单
+const editModalVisible = ref(false);
+const editFormRef = ref(null);
+const editForm = reactive({
+  name: '',
+  description: ''
+});
+
+const rules = {
+  name: [{ required: true, message: '请输入知识库名称' }]
+};
+
+// 显示编辑对话框
+const showEditModal = () => {
+  editForm.name = database.value.name || '';
+  editForm.description = database.value.description || '';
+  editModalVisible.value = true;
+};
+
+// 提交编辑表单
+const handleEditSubmit = () => {
+  editFormRef.value.validate().then(() => {
+    updateDatabaseInfo();
+  }).catch(err => {
+    console.error('表单验证失败:', err);
+  });
+};
+
+// 更新知识库信息
+const updateDatabaseInfo = async () => {
+  try {
+    state.lock = true;
+    const response = await knowledgeBaseApi.updateDatabaseInfo(databaseId.value, {
+      name: editForm.name,
+      description: editForm.description
+    });
+
+    message.success('知识库信息更新成功');
+    editModalVisible.value = false;
+    await getDatabaseInfo(); // 刷新数据
+  } catch (error) {
+    console.error(error);
+    message.error(error.message || '更新失败');
+  } finally {
+    state.lock = false;
+  }
+};
 
 </script>
 
@@ -1213,6 +1330,29 @@ onUnmounted(() => {
       }
     }
   }
+}
+
+.url-input {
+  margin-bottom: 20px;
+}
+
+.url-input .ant-textarea {
+  border-color: var(--main-light-3);
+  background-color: #fff;
+  font-family: monospace;
+  resize: vertical;
+}
+
+.url-input .ant-textarea:hover,
+.url-input .ant-textarea:focus {
+  border-color: var(--main-color);
+}
+
+.url-hint {
+  font-size: 13px;
+  color: var(--gray-600);
+  margin-top: 5px;
+  line-height: 1.5;
 }
 </style>
 

@@ -73,6 +73,7 @@
           :max-count="1"
           :disabled="disabled"
           action="/api/data/upload"
+          :headers="getAuthHeaders()"
           @change="handleFileUpload"
           @drop="handleDrop"
         >
@@ -93,9 +94,11 @@ import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
 import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import { graphApi } from '@/apis/admin_api';
+import { useUserStore } from '@/stores/user';
 
-const configStore = useConfigStore()
-const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '')
+const configStore = useConfigStore();
+const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '');
 const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
 const disabled = computed(() => state.precessing || !modelMatched.value)
 
@@ -127,10 +130,7 @@ const unindexedCount = computed(() => {
 
 const loadGraphInfo = () => {
   state.loadingGraphInfo = true
-  fetch('/api/data/graph', {
-    method: "GET",
-  })
-    .then(response => response.json())
+  graphApi.getGraphInfo()
     .then(data => {
       console.log(data)
       graphInfo.value = data
@@ -138,7 +138,7 @@ const loadGraphInfo = () => {
     })
     .catch(error => {
       console.error(error)
-      message.error(error.message)
+      message.error(error.message || '加载图数据库信息失败')
       state.loadingGraphInfo = false
     })
 }
@@ -187,43 +187,25 @@ const getGraphData = () => {
 const addDocumentByFile = () => {
   state.precessing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  fetch('/api/data/graph/add-by-jsonl', {
-    method: 'POST',
-    headers: {
-      "Content-Type": "application/json"  // 添加 Content-Type 头
-    },
-    body: JSON.stringify({
-      file_path: files[0]
-    }),
-  })
-  .then(response => response.json())
-  .then((data) => {
-    if (data.status === 'success') {
-      message.success(data.message);
-      state.showModal = false;
-    } else {
-      throw new Error(data.message);
-    }
-  })
-  .catch((error) => {
-    console.error(error)
-    message.error(error.message);
-  })
-  .finally(() => state.precessing = false)
+  graphApi.addByJsonl(files[0])
+    .then((data) => {
+      if (data.status === 'success') {
+        message.success(data.message);
+        state.showModal = false;
+      } else {
+        throw new Error(data.message);
+      }
+    })
+    .catch((error) => {
+      console.error(error)
+      message.error(error.message || '添加文件失败');
+    })
+    .finally(() => state.precessing = false)
 };
 
 const loadSampleNodes = () => {
   state.fetching = true
-  fetch(`/api/data/graph/nodes?kgdb_name=neo4j&num=${sampleNodeCount.value}`)
-    .then((res) => {
-      if (res.ok) {
-        return res.json();
-      } else if (configStore?.config && !configStore?.config.enable_knowledge_graph) {
-        throw new Error('请前往设置页面配置启用知识图谱')
-      } else {
-        throw new Error("加载失败");
-      }
-    })
+  graphApi.getNodes('neo4j', sampleNodeCount.value)
     .then((data) => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
@@ -231,7 +213,11 @@ const loadSampleNodes = () => {
       setTimeout(() => randerGraph(), 500)
     })
     .catch((error) => {
-      message.error(error.message);
+      console.error(error)
+      message.error(error.message || '加载节点失败');
+      if (configStore?.config && !configStore?.config.enable_knowledge_graph) {
+        message.error('请前往设置页面配置启用知识图谱')
+      }
     })
     .finally(() => state.fetching = false)
 }
@@ -243,10 +229,10 @@ const onSearch = () => {
   }
 
   if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) {
-    if (!graphInfo?.value?.embed_model_name) {
-      message.error('请先上传文件(jsonl)')
-      return
-    }
+    // if (!graphInfo?.value?.embed_model_name) {
+    //   message.error('请先上传文件(jsonl)')
+    //   return
+    // }
 
     if (!confirm(`构建图数据库时向量模型为 ${graphInfo?.value?.embed_model_name}，当前向量模型为 ${cur_embed_model.value}，是否继续查询？`)) {
       return
@@ -259,15 +245,7 @@ const onSearch = () => {
   }
 
   state.searchLoading = true
-  fetch(`/api/data/graph/node?entity_name=${state.searchInput}`)
-    .then((res) => {
-      if (!res.ok) {
-        return res.json().then(errorData => {
-          throw new Error(errorData.message || `查询失败：${res.status} ${res.statusText}`);
-        });
-      }
-      return res.json();
-    })
+  graphApi.queryNode(state.searchInput)
     .then((data) => {
       if (!data.result || !data.result.nodes || !data.result.edges) {
         throw new Error('返回数据格式不正确');
@@ -283,7 +261,7 @@ const onSearch = () => {
     })
     .catch((error) => {
       console.error('查询错误:', error);
-      message.error(`查询出错：${error.message}`);
+      message.error(`查询出错：${error.message || '未知错误'}`);
     })
     .finally(() => state.searchLoading = false)
 };
@@ -393,35 +371,24 @@ const indexNodes = () => {
   }
 
   state.indexing = true;
-  fetch('/api/data/graph/index-nodes', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      kgdb_name: 'neo4j'
-    }),
-  })
-  .then(response => {
-    if (!response.ok) {
-      return response.json().then(errorData => {
-        throw new Error(errorData.detail || `请求失败：${response.status} ${response.statusText}`);
-      });
-    }
-    return response.json();
-  })
-  .then(data => {
-    message.success(data.message);
-    // 刷新图谱信息
-    loadGraphInfo();
-  })
-  .catch(error => {
-    console.error(error);
-    message.error(error.message || '添加索引失败');
-  })
-  .finally(() => {
-    state.indexing = false;
-  });
+  graphApi.indexNodes('neo4j')
+    .then(data => {
+      message.success(data.message || '索引添加成功');
+      // 刷新图谱信息
+      loadGraphInfo();
+    })
+    .catch(error => {
+      console.error(error);
+      message.error(error.message || '添加索引失败');
+    })
+    .finally(() => {
+      state.indexing = false;
+    });
+};
+
+const getAuthHeaders = () => {
+  const userStore = useUserStore();
+  return userStore.getAuthHeaders();
 };
 
 </script>

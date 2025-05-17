@@ -1,9 +1,6 @@
 <template>
   <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
-    <HeaderComponent
-      title="文档知识库"
-      description="知识型数据库，主要是非结构化的文本组成，使用向量检索使用。如果出现问题，可以检查 saves/data/database.json 查看配置。"
-    >
+    <HeaderComponent title="文档知识库">
       <template #actions>
         <a-button type="primary" @click="newDatabase.open=true">新建知识库</a-button>
       </template>
@@ -49,7 +46,9 @@
             <p><span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span></p>
           </div>
         </div>
-        <p class="description">{{ database.description || '暂无描述' }}</p>
+        <a-tooltip :title="database.description || '暂无描述'">
+          <p class="description">{{ database.description || '暂无描述' }}</p>
+        </a-tooltip>
         <div class="tags">
           <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
           <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
@@ -92,13 +91,16 @@ import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
 import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
 import { useConfigStore } from '@/stores/config';
+import { useUserStore } from '@/stores/user';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import { knowledgeBaseApi } from '@/apis/admin_api';
 
 const route = useRoute()
 const router = useRouter()
 const databases = ref([])
 const graph = ref(null)
 const graphloading = ref(false)
+const userStore = useUserStore()
 
 const indicator = h(LoadingOutlined, {spin: true});
 const configStore = useConfigStore()
@@ -112,15 +114,17 @@ const newDatabase = reactive({
 
 const loadDatabases = () => {
   // loadGraph()
-  fetch('/api/data/', {
-    method: "GET",
-  })
-    .then(response => response.json())
+  knowledgeBaseApi.getDatabases()
     .then(data => {
       console.log(data)
       databases.value = data.databases
+    })
+    .catch(error => {
+      console.error('加载数据库列表失败:', error);
+      if (error.message.includes('权限')) {
+        message.error('需要管理员权限访问知识库')
     }
-  )
+    })
 }
 
 const createDatabase = () => {
@@ -131,18 +135,12 @@ const createDatabase = () => {
     newDatabase.loading = false
     return
   }
-  fetch('/api/data/', {
-    method: "POST",
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
+
+  knowledgeBaseApi.createDatabase({
       database_name: newDatabase.name,
       description: newDatabase.description,
       dimension: newDatabase.dimension ? parseInt(newDatabase.dimension) : null,
     })
-  })
-  .then(response => response.json())
   .then(data => {
     console.log(data)
     loadDatabases()
@@ -150,6 +148,11 @@ const createDatabase = () => {
     newDatabase.name = ''
     newDatabase.description = '',
     newDatabase.dimension = ''
+    message.success('创建成功')
+  })
+  .catch(error => {
+    console.error('创建数据库失败:', error)
+    message.error(error.message || '创建失败')
   })
   .finally(() => {
     newDatabase.loading = false

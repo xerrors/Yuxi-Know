@@ -26,7 +26,7 @@ class GraphDatabase:
 
         # 尝试加载已保存的图数据库信息
         if not self.load_graph_info():
-            logger.info(f"未找到已保存的图数据库信息，将创建新的配置")
+            logger.debug(f"未找到已保存的图数据库信息，将创建新的配置")
 
         self.start()
 
@@ -258,6 +258,7 @@ class GraphDatabase:
         tx.run(query)
 
     def query_node(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, max_entities=5, **kwargs):
+        """知识图谱查询节点的入口:"""
         # TODO 添加判断节点数量为 0 停止检索
         # 判断是否启动
         if not self.is_running():
@@ -516,7 +517,7 @@ class GraphDatabase:
         try:
             info_file_path = os.path.join(self.work_dir, "graph_info.json")
             if not os.path.exists(info_file_path):
-                logger.warning(f"图数据库信息文件不存在：{info_file_path}")
+                logger.debug(f"图数据库信息文件不存在：{info_file_path}")
                 return False
 
             with open(info_file_path, 'r', encoding='utf-8') as f:

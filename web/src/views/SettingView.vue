@@ -1,9 +1,8 @@
 <template>
+  <!-- TODO 优化样式，表格优化，添加一个 utils 的函数，用来把时间戳转换为东 8 区的时间，并格式化显示出来 -->
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
-      <template #description>
-        <p>配置文件也可以在 <code>saves/config/base.yaml</code> 中修改</p>
-      </template>
+
       <template #actions>
         <a-button :type="isNeedRestart ? 'primary' : 'default'" @click="sendRestart" :icon="h(ReloadOutlined)">
           {{ isNeedRestart ? '需要刷新' : '重新加载' }}
@@ -15,6 +14,7 @@
         <a-button type="text" :class="{ activesec: state.section === 'base'}" @click="state.section='base'" :icon="h(SettingOutlined)"> 基本设置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'model'}" @click="state.section='model'" :icon="h(CodeOutlined)"> 模型配置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
+        <a-button type="text" :class="{ activesec: state.section === 'user'}" @click="state.section='user'" :icon="h(UserOutlined)" v-if="userStore.isAdmin"> 用户管理 </a-button>
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'base'">
         <h3>功能配置</h3>
@@ -93,7 +93,7 @@
             <div
               :class="{'model_selected': modelProvider == 'custom' && configStore.config.model_name == item.custom_id, 'card-models': true, 'custom-model': true}"
               v-for="(item, key) in configStore.config.custom_models" :key="item.custom_id"
-              @click="handleChange('model_provider', 'custom'); handleChange('model_name', item.custom_id)"
+              @click="handleChanges({ model_provider: 'custom', model_name: item.custom_id })"
             >
               <div class="card-models__header">
                 <div class="name" :title="item.name">{{ item.name }}</div>
@@ -140,7 +140,7 @@
                     <a-input v-model:value="customModel.api_base" />
                   </a-form-item>
                   <a-form-item label="API KEY" name="api_key">
-                    <a-input-password v-model:value="customModel.api_key" :visibilityToggle="false" autocomplete="new-password"/>
+                    <a-input-password v-model:value="customModel.api_key" :visibilityToggle="true" autocomplete="new-password"/>
                   </a-form-item>
                 </a-form>
               </a-modal>
@@ -182,7 +182,7 @@
               <div
                 :class="{'model_selected': modelProvider == item && configStore.config.model_name == model, 'card-models': true}"
                 v-for="(model, idx) in modelNames[item].models" :key="idx"
-                @click="handleChange('model_provider', item); handleChange('model_name', model)"
+                @click="handleChanges({ model_provider: item, model_name: model })"
               >
                 <div class="model_name">{{ model }}</div>
               </div>
@@ -221,6 +221,93 @@
           :config="configStore.config?.model_local_paths"
           @update:config="handleModelLocalPathsUpdate"
         />
+      </div>
+      <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
+      <div class="setting" v-if="state.section === 'user'">
+        <div class="section-header">
+          <h2>用户管理</h2>
+          <a-button type="primary" @click="showAddUserModal">
+            <template #icon><PlusOutlined /></template>
+            添加用户
+          </a-button>
+        </div>
+
+        <a-spin :spinning="userManagement.loading">
+          <div v-if="userManagement.error" class="error-message">
+            {{ userManagement.error }}
+          </div>
+
+          <a-table
+            :dataSource="userManagement.users"
+            :columns="userColumns"
+            rowKey="id"
+            :pagination="{ pageSize: 10 }"
+          >
+            <!-- 角色列自定义渲染 -->
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'role'">
+                <a-tag :color="getRoleColor(record.role)">{{ getRoleLabel(record.role) }}</a-tag>
+              </template>
+
+              <!-- 操作列 -->
+              <template v-if="column.key === 'action'">
+                <div class="table-actions">
+                  <a-button type="link" @click="showEditUserModal(record)">
+                    <EditOutlined />
+                  </a-button>
+                  <a-button
+                    type="link"
+                    danger
+                    @click="confirmDeleteUser(record)"
+                    :disabled="record.id === userStore.userId || (record.role === 'superadmin' && userStore.userRole !== 'superadmin')"
+                  >
+                    <DeleteOutlined />
+                  </a-button>
+                </div>
+              </template>
+            </template>
+          </a-table>
+        </a-spin>
+
+        <!-- 用户表单模态框 -->
+        <a-modal
+          v-model:visible="userManagement.modalVisible"
+          :title="userManagement.modalTitle"
+          @ok="handleUserFormSubmit"
+          :confirmLoading="userManagement.loading"
+          @cancel="userManagement.modalVisible = false"
+          :maskClosable="false"
+        >
+          <a-form layout="vertical">
+            <a-form-item label="用户名" required>
+              <a-input v-model:value="userManagement.form.username" placeholder="请输入用户名" />
+            </a-form-item>            <template v-if="userManagement.editMode">
+              <div class="password-toggle">
+                <a-checkbox v-model:checked="userManagement.displayPasswordFields">
+                  修改密码
+                </a-checkbox>
+              </div>
+            </template>
+
+            <template v-if="!userManagement.editMode || userManagement.displayPasswordFields">
+              <a-form-item label="密码" required>
+                <a-input-password v-model:value="userManagement.form.password" placeholder="请输入密码" />
+              </a-form-item>
+
+              <a-form-item label="确认密码" required>
+                <a-input-password v-model:value="userManagement.form.confirmPassword" placeholder="请再次输入密码" />
+              </a-form-item>
+            </template>
+
+            <a-form-item label="角色">
+              <a-select v-model:value="userManagement.form.role">
+                <a-select-option value="user">普通用户</a-select-option>
+                <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
+                <a-select-option value="superadmin" v-if="userStore.isSuperAdmin">超级管理员</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-form>
+        </a-modal>
       </div>
     </div>
     <a-modal
@@ -270,6 +357,7 @@
 import { message } from 'ant-design-vue';
 import { computed, reactive, ref, h, watch, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '@/stores/config';
+import { useUserStore } from '@/stores/user'
 import {
   ReloadOutlined,
   SettingOutlined,
@@ -284,14 +372,18 @@ import {
   LoadingOutlined,
   UpCircleOutlined,
   DownCircleOutlined,
+  UserOutlined,
+  PlusOutlined
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 import { modelIcons } from '@/utils/modelIcon'
+import { systemConfigApi } from '@/apis/admin_api'
 
 
 const configStore = useConfigStore()
+const userStore = useUserStore()
 const items = computed(() => configStore.config._config_items)
 const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
@@ -321,9 +413,36 @@ const state = reactive({
   windowWidth: window?.innerWidth || 0
 })
 
+// 用户管理相关状态
+const userManagement = reactive({
+  loading: false,
+  users: [],
+  error: null,
+  modalVisible: false,
+  modalTitle: '添加用户',
+  editMode: false,
+  editUserId: null,
+  form: {
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role: 'user' // 默认角色
+  },
+  displayPasswordFields: true, // 编辑时是否显示密码字段
+})
+
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
+})
+
+// 监听密码字段显示状态变化
+watch(() => userManagement.displayPasswordFields, (newVal) => {
+  // 当取消显示密码字段时，清空密码输入
+  if (!newVal) {
+    userManagement.form.password = ''
+    userManagement.form.confirmPassword = ''
+  }
 })
 
 const notModelKeys = computed(() => {
@@ -360,7 +479,7 @@ const handleModelLocalPathsUpdate = (config) => {
   handleChange('model_local_paths', config)
 }
 
-const handleChange = (key, e) => {
+const preHandleChange = (key, e) => {
   if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
     message.error('启动知识图谱必须请先启用知识库功能')
     return
@@ -371,27 +490,38 @@ const handleChange = (key, e) => {
     return
   }
 
-  // 这些都是需要重启的配置
   if (key == 'enable_reranker'
-        || key == 'enable_knowledge_graph'
-        || key == 'enable_knowledge_base'
-        || key == 'enable_web_search'
-        || key == 'embed_model'
-        || key == 'reranker'
-        || key == 'model_local_paths') {
-    if (!isNeedRestart.value) {
-      isNeedRestart.value = true
-      notification.info({
-        message: '需要重新加载模型',
-        description: '请点击右下角按钮重新加载模型',
-        placement: 'topLeft',
-        duration: 0,
-        btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
-      })
+    || key == 'enable_knowledge_graph'
+    || key == 'enable_knowledge_base'
+    || key == 'embed_model'
+    || key == 'reranker'
+    || key == 'model_local_paths') {
+    isNeedRestart.value = true
+    notification.info({
+      message: '需要重新加载模型',
+      description: '请点击右下角按钮重新加载模型',
+      placement: 'topLeft',
+      duration: 0,
+      btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
+    })
+  }
+  return true
+}
+
+const handleChange = (key, e) => {
+  if (!preHandleChange(key, e)) {
+    return
+  }
+  configStore.setConfigValue(key, e)
+}
+
+const handleChanges = (items) => {
+  for (const key in items) {
+    if (!preHandleChange(key, items[key])) {
+      return
     }
   }
-
-  configStore.setConfigValue(key, e)
+  configStore.setConfigValues(items)
 }
 
 const handleAddOrEditCustomModel = async () => {
@@ -475,15 +605,19 @@ onUnmounted(() => {
 const sendRestart = () => {
   console.log('Restarting...')
   message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
-  fetch('/api/restart', {
-    method: 'POST',
-  }).then(() => {
-    console.log('Restarted')
-    message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
-    setTimeout(() => {
-      window.location.reload()
-    }, 200)
-  })
+
+  systemConfigApi.restartServer()
+    .then(() => {
+      console.log('Restarted')
+      message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
+      setTimeout(() => {
+        window.location.reload()
+      }, 200)
+    })
+    .catch(error => {
+      console.error('重启服务失败:', error)
+      message.error({ content: `重启失败: ${error.message}`, key: "restart", duration: 2 });
+    });
 }
 
 // 获取模型提供商的模型列表
@@ -578,11 +712,235 @@ const saveProviderConfig = async () => {
 const cancelProviderConfig = () => {
   providerConfig.visible = false;
 }
+
+// 获取用户列表
+const fetchUsers = async () => {
+  try {
+    userManagement.loading = true
+    const users = await userStore.getUsers()
+    userManagement.users = users
+    userManagement.error = null
+  } catch (error) {
+    console.error('获取用户列表失败:', error)
+    userManagement.error = '获取用户列表失败'
+  } finally {
+    userManagement.loading = false
+  }
+}
+
+// 打开添加用户模态框
+const showAddUserModal = () => {
+  userManagement.modalTitle = '添加用户'
+  userManagement.editMode = false
+  userManagement.editUserId = null
+  userManagement.form = {
+    username: '',
+    password: '',
+    confirmPassword: '',
+    role: 'user'  // 默认角色为普通用户
+  }
+  userManagement.displayPasswordFields = true
+  userManagement.modalVisible = true
+}
+
+// 打开编辑用户模态框
+const showEditUserModal = (user) => {
+  userManagement.modalTitle = '编辑用户'
+  userManagement.editMode = true
+  userManagement.editUserId = user.id
+  userManagement.form = {
+    username: user.username,
+    password: '',
+    confirmPassword: '',
+    role: user.role
+  }
+  userManagement.displayPasswordFields = true // 默认显示密码字段
+  userManagement.modalVisible = true
+}
+
+// 处理用户表单提交
+const handleUserFormSubmit = async () => {
+  try {
+    // 简单验证
+    if (!userManagement.form.username) {
+      notification.error({ message: '用户名不能为空' })
+      return
+    }
+
+    if (userManagement.displayPasswordFields) {
+      if (!userManagement.form.password) {
+        notification.error({ message: '密码不能为空' })
+        return
+      }
+
+      if (userManagement.form.password !== userManagement.form.confirmPassword) {
+        notification.error({ message: '两次输入的密码不一致' })
+        return
+      }
+    }
+
+    userManagement.loading = true
+
+    // 根据模式决定创建还是更新用户
+    if (userManagement.editMode) {
+      // 创建更新数据对象
+      const updateData = {
+        username: userManagement.form.username,
+        role: userManagement.form.role
+      }
+
+      // 如果显示了密码字段并且填写了密码，才更新密码
+      if (userManagement.displayPasswordFields && userManagement.form.password) {
+        updateData.password = userManagement.form.password
+      }
+
+      await userStore.updateUser(userManagement.editUserId, updateData)
+      notification.success({ message: '用户更新成功' })
+    } else {
+      await userStore.createUser({
+        username: userManagement.form.username,
+        password: userManagement.form.password,
+        role: userManagement.form.role
+      })
+      notification.success({ message: '用户创建成功' })
+    }
+
+    // 重新获取用户列表
+    await fetchUsers()
+    userManagement.modalVisible = false
+  } catch (error) {
+    console.error('用户操作失败:', error)
+    notification.error({
+      message: '操作失败',
+      description: error.message || '请稍后重试'
+    })
+  } finally {
+    userManagement.loading = false
+  }
+}
+
+// 切换是否显示密码字段（编辑用户时使用）
+const togglePasswordFields = () => {
+  userManagement.displayPasswordFields = !userManagement.displayPasswordFields
+  if (!userManagement.displayPasswordFields) {
+    userManagement.form.password = ''
+    userManagement.form.confirmPassword = ''
+  }
+}
+
+// 删除用户
+const confirmDeleteUser = (user) => {
+  // 自己不能删除自己
+  if (user.id === userStore.userId) {
+    notification.error({ message: '不能删除自己的账户' })
+    return
+  }
+
+  // 确认对话框
+  const { modal } = notification
+
+  modal.confirm({
+    title: '确认删除用户',
+    content: `确定要删除用户 "${user.username}" 吗？此操作不可撤销。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        userManagement.loading = true
+        await userStore.deleteUser(user.id)
+        notification.success({ message: '用户删除成功' })
+        // 重新获取用户列表
+        await fetchUsers()
+      } catch (error) {
+        console.error('删除用户失败:', error)
+        notification.error({
+          message: '删除失败',
+          description: error.message || '请稍后重试'
+        })
+      } finally {
+        userManagement.loading = false
+      }
+    }
+  })
+}
+
+// 在组件挂载时，如果选择了用户管理部分，则获取用户列表
+const loadUserManagement = async () => {
+  if (state.section === 'user') {
+    await fetchUsers()
+  }
+}
+
+// 监听部分切换
+watch(() => state.section, async (newSection) => {
+  if (newSection === 'user') {
+    await fetchUsers()
+  }
+})
+
+// 用户表格列定义
+const userColumns = [
+  {
+    title: 'ID',
+    dataIndex: 'id',
+    key: 'id',
+    width: 80
+  },
+  {
+    title: '用户名',
+    dataIndex: 'username',
+    key: 'username'
+  },
+  {
+    title: '角色',
+    dataIndex: 'role',
+    key: 'role',
+    width: 120
+  },
+  {
+    title: '创建时间',
+    dataIndex: 'created_at',
+    key: 'created_at',
+    width: 180
+  },
+  {
+    title: '最后登录',
+    dataIndex: 'last_login',
+    key: 'last_login',
+    width: 180
+  },
+  {
+    title: '操作',
+    key: 'action',
+    width: 120
+  }
+]
+
+// 角色显示辅助函数
+const getRoleLabel = (role) => {
+  switch (role) {
+    case 'superadmin': return '超级管理员'
+    case 'admin': return '管理员'
+    case 'user': return '普通用户'
+    default: return role
+  }
+}
+
+// 角色标签颜色
+const getRoleColor = (role) => {
+  switch (role) {
+    case 'superadmin': return 'red'
+    case 'admin': return 'blue'
+    case 'user': return 'green'
+    default: return 'default'
+  }
+}
 </script>
 
 <style lang="less" scoped>
-:root {
-  --setting-header-height: 200px;
+.setting-container {
+  --setting-header-height: 65px;
 }
 
 .setting-header {
@@ -606,7 +964,7 @@ const cancelProviderConfig = () => {
   height: 100%;
   padding: 0 20px;
   position: sticky;
-  top: 100px;
+  top: var(--setting-header-height);
   display: flex;
   flex-direction: column;
   align-items: center;
