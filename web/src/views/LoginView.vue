@@ -3,8 +3,8 @@
   <div class="login-view" :style="{ backgroundImage: `url(${loginBg})` }">
     <div class="login-container">
       <div class="login-logo">
-        <img src="@/assets/logo.png" alt="Logo" v-if="false" />
-        <h1>知识库管理系统</h1>
+        <!-- <img src="@/assets/logo.svg" alt="Logo" v-if="false" /> -->
+        <h1>知识问答管理系统</h1>
       </div>
 
       <!-- 初始化管理员表单 -->
