@@ -66,7 +66,7 @@ class ChatbotAgent(BaseAgent):
         conf = self.config_schema.from_runnable_config(config_schema, agent_name=self.name)
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=self._get_tools(conf.tools)))
+        workflow.add_node("tools", ToolNode(tools=list(get_all_tools().values())))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",
