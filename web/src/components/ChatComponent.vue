@@ -17,29 +17,7 @@
             <PlusCircleOutlined />
           </a-tooltip>
         </div>
-        <a-dropdown>
-          <a class="model-select nav-btn" @click.prevent>
-            <BulbOutlined />
-            <a-tooltip :title="configStore.config?.model_name" placement="right">
-              <span class="model-text text"> {{ configStore.config?.model_name }} </span>
-            </a-tooltip>
-            <span class="text" style="color: #aaa;">{{ configStore.config?.model_provider }} </span>
-          </a>
-          <template #overlay>
-            <a-menu class="scrollable-menu">
-              <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
-                <a-menu-item v-for="(model, idx) in modelNames[item]?.models" :key="`${item}-${idx}`" @click="selectModel(item, model)">
-                  {{ model }}
-                </a-menu-item>
-              </a-menu-item-group>
-              <a-menu-item-group v-if="customModels.length > 0" title="自定义模型">
-                <a-menu-item v-for="(model, idx) in customModels" :key="`custom-${idx}`" @click="selectModel('custom', model.custom_id)">
-                  custom/{{ model.custom_id }}
-                </a-menu-item>
-              </a-menu-item-group>
-            </a-menu>
-          </template>
-        </a-dropdown>
+        <ModelSelectorComponent @select-model="handleModelSelect" />
       </div>
       <div class="header__right">
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
@@ -189,6 +167,7 @@ import { message } from 'ant-design-vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import MessageComponent from '@/components/MessageComponent.vue'
 import RefsSidebar from '@/components/RefsSidebar.vue'
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import { chatApi } from '@/apis/auth_api'
 import { knowledgeBaseApi } from '@/apis/admin_api'
 
@@ -751,22 +730,12 @@ const retryStoppedMessage = (id) => {
   }
 }
 
-const modelNames = computed(() => configStore.config?.model_names)
-const modelStatus = computed(() => configStore.config?.model_provider_status)
-const customModels = computed(() => configStore.config?.custom_models || [])
-
-// 筛选 modelStatus 中为真的key
-const modelKeys = computed(() => {
-  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
-})
-
-// 选择模型的方法
-const selectModel = (provider, name) => {
+// 处理模型选择
+const handleModelSelect = ({ provider, name }) => {
   configStore.setConfigValues({
     model_provider: provider,
     model_name: name,
   })
-  // message.success(`已切换到模型: ${name} | ${provider}`)
 }
 
 // 判断是否是最新的助手消息
@@ -849,18 +818,7 @@ const findLastIndex = (array, predicate) => {
     font-size: 1rem;
   }
 
-  .model-select {
-    // color: var(--gray-900);
-    max-width: 350px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-
-    .model-text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-  }
+  // Model selection is now handled by ModelSelectorComponent
 }
 .metas {
   display: flex;
@@ -1165,38 +1123,9 @@ const findLastIndex = (array, predicate) => {
   }
 }
 
-.scrollable-menu {
-  max-height: 300px;
-  overflow-y: auto;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-    border-radius: 3px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--gray-400);
-    border-radius: 3px;
-  }
-
-  &::-webkit-scrollbar-thumb:hover {
-    background: var(--gray-500);
-  }
-}
+// Scrollable menu styles moved to ModelSelectorComponent
 </style>
 
-<style lang="less">
-// 添加全局样式以确保滚动功能在dropdown内正常工作
-.ant-dropdown-menu {
-  &.scrollable-menu {
-    max-height: 300px;
-    overflow-y: auto;
-  }
-}
-</style>
+<!-- Global styles for dropdown moved to ModelSelectorComponent -->
 
 
