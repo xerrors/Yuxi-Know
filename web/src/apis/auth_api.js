@@ -100,6 +100,35 @@ export const chatApi = {
    */
   getTools: () => apiGet('/api/chat/tools', {}, true),
 
+  /**
+   * 获取模型提供商的模型列表
+   * @param {string} provider - 模型提供商
+   * @returns {Promise} - 模型列表
+   */
+  getProviderModels: (provider) => {
+    return fetch(`/api/chat/models?model_provider=${provider}`, {
+      headers: {
+        ...useUserStore().getAuthHeaders()
+      }
+    }).then(response => response.json())
+  },
+
+  /**
+   * 更新模型提供商的模型列表
+   * @param {string} provider - 模型提供商
+   * @param {Array} models - 选中的模型列表
+   * @returns {Promise} - 更新结果
+   */
+  updateProviderModels: (provider, models) => {
+    return fetch(`/api/chat/models/update?model_provider=${provider}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...useUserStore().getAuthHeaders()
+      },
+      body: JSON.stringify(models)
+    }).then(response => response.json())
+  }
 }
 
 // 用户设置API

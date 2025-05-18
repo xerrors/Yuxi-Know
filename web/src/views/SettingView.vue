@@ -380,6 +380,7 @@ import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 import { modelIcons } from '@/utils/modelIcon'
 import { systemConfigApi } from '@/apis/admin_api'
+import { chatApi } from '@/apis/auth_api'
 
 
 const configStore = useConfigStore()
@@ -623,8 +624,7 @@ const sendRestart = () => {
 // 获取模型提供商的模型列表
 const fetchProviderModels = (provider) => {
   providerConfig.loading = true;
-  fetch(`/api/chat/models?model_provider=${provider}`)
-    .then(response => response.json())
+  chatApi.getProviderModels(provider)
     .then(data => {
       console.log(`${provider} 模型列表:`, data);
 
@@ -680,19 +680,7 @@ const saveProviderConfig = async () => {
 
   try {
     // 发送选择的模型列表到后端
-    const response = await fetch(`/api/chat/models/update?model_provider=${providerConfig.provider}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(providerConfig.selectedModels),
-    });
-
-    if (!response.ok) {
-      throw new Error('保存模型配置失败');
-    }
-
-    const data = await response.json();
+    const data = await chatApi.updateProviderModels(providerConfig.provider, providerConfig.selectedModels);
     console.log('更新后的模型列表:', data.models);
 
     message.success({ content: '模型配置已保存!', key: 'save-config', duration: 2 });
