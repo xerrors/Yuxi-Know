@@ -17,25 +17,12 @@
         <a-button type="text" :class="{ activesec: state.section === 'user'}" @click="state.section='user'" :icon="h(UserOutlined)" v-if="userStore.isAdmin"> 用户管理 </a-button>
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'base'">
-        <h3>功能配置</h3>
-        <div class="section">
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_base.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_base"
-              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
-            />
-          </div>
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_graph"
-              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
-            />
-          </div>
-        </div>
         <h3>检索配置</h3>
         <div class="section">
+          <div class="card card-select">
+            <span class="label">对话模型</span>
+            <ModelSelectorComponent @select-model="handleChatModelSelect" />
+          </div>
           <div class="card card-select">
             <span class="label">{{ items?.embed_model.des }}</span>
             <a-select style="width: 300px"
@@ -81,6 +68,23 @@
             </a-select>
           </div>
         </div>
+        <h3>功能配置</h3>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_base.des }}</span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_base"
+              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
+            />
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
+            <a-switch
+              :checked="configStore.config.enable_knowledge_graph"
+              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
+            />
+          </div>
+        </div>
       </div>
       <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'model'">
         <h3>模型配置</h3>
@@ -121,6 +125,7 @@ import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue';
 import UserManagementComponent from '@/components/UserManagementComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 import { systemConfigApi } from '@/apis/admin_api'
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 
 const configStore = useConfigStore()
 const userStore = useUserStore()
@@ -183,6 +188,13 @@ const handleChanges = (items) => {
 
 const updateWindowWidth = () => {
   state.windowWidth = window?.innerWidth || 0
+}
+
+const handleChatModelSelect = ({ provider, name }) => {
+  configStore.setConfigValues({
+    model_provider: provider,
+    model_name: name,
+  })
 }
 
 onMounted(() => {

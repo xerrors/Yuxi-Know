@@ -2,6 +2,7 @@
   <div class="input-box" :class="customClasses">
     <div class="input-area">
       <a-textarea
+        ref="inputRef"
         class="user-input"
         v-model:value="inputValue"
         @keydown="handleKeyPress"
@@ -32,7 +33,7 @@
 </template>
 
 <script setup>
-import { ref, computed, toRefs } from 'vue';
+import { ref, computed, toRefs, onMounted } from 'vue';
 import {
   SendOutlined,
   ArrowUpOutlined,
@@ -40,6 +41,8 @@ import {
   PauseOutlined
 } from '@ant-design/icons-vue';
 
+
+const inputRef = ref(null);
 const props = defineProps({
   modelValue: {
     type: String,
@@ -107,6 +110,18 @@ const handleKeyPress = (e) => {
 const handleSendOrStop = () => {
   emit('send');
 };
+
+
+// Wait for component to mount before setting up onStartTyping
+onMounted(() => {
+  // Use the template ref element for onStartTyping
+  setTimeout(() => {
+    if (inputRef.value) {
+      inputRef.value.focus();
+    }
+  }, 100);
+});
+
 </script>
 
 <style lang="less" scoped>

@@ -1,6 +1,6 @@
 <template>
   <a-dropdown>
-    <a class="model-select nav-btn" @click.prevent>
+    <a class="model-select" @click.prevent>
       <BulbOutlined />
       <a-tooltip :title="configStore.config?.model_name" placement="right">
         <span class="model-text text"> {{ configStore.config?.model_name }} </span>
@@ -54,11 +54,25 @@ const handleSelectModel = (provider, name) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: white;
+
+  &.borderless {
+    border: none;
+  }
 
   .model-text {
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+
 }
 
 .nav-btn {

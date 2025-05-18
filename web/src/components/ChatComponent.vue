@@ -17,7 +17,7 @@
             <PlusCircleOutlined />
           </a-tooltip>
         </div>
-        <ModelSelectorComponent @select-model="handleModelSelect" />
+        <ModelSelectorComponent class="nav-btn borderless" @select-model="handleModelSelect" />
       </div>
       <div class="header__right">
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
