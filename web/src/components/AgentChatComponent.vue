@@ -5,12 +5,13 @@
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
       :is-sidebar-open="state.isSidebarOpen"
+      :is-initial-render="state.isInitialRender"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
       @toggle-sidebar="toggleSidebar"
-      :class="{'floating-sidebar': isSmallContainer, 'collapsed': !state.isSidebarOpen && isSmallContainer}"
+      :class="{'floating-sidebar': isSmallContainer, 'sidebar-open': state.isSidebarOpen, 'no-transition': state.isInitialRender}"
     />
     <div class="sidebar-backdrop" v-if="state.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
@@ -129,10 +130,11 @@ const props = defineProps({
 const state = reactive({
   ...props.state,
   debug_mode: computed(() => props.state.debug_mode ?? false),
-  isSidebarOpen: false,
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true' || false,
   waitingServerResponse: false,
   isProcessingRequest: false,
-  creatingNewChat: false
+  creatingNewChat: false,
+  isInitialRender: true
 });
 
 // 容器宽度检测
@@ -159,6 +161,11 @@ onMounted(() => {
       resizeObserver.observe(chatContainerRef.value);
     }
   });
+
+  // 延迟移除初始渲染标记，防止切换动画
+  setTimeout(() => {
+    state.isInitialRender = false;
+  }, 300);
 });
 
 onUnmounted(() => {
@@ -671,6 +678,7 @@ const scrollToBottom = async () => {
 
 const toggleSidebar = () => {
   state.isSidebarOpen = !state.isSidebarOpen;
+  localStorage.setItem('chat_sidebar_open', state.isSidebarOpen);
   console.log("toggleSidebar", state.isSidebarOpen);
 }
 
@@ -773,6 +781,10 @@ const mergeMessageChunk = (chunks) => {
   transition: transform 0.3s ease;
   width: 80% !important;
   max-width: 300px;
+
+  &.no-transition {
+    transition: none !important;
+  }
 
   &.collapsed {
     transform: translateX(-100%);

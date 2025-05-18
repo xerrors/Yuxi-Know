@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-sidebar" :class="{ 'collapsed': !props.isSidebarOpen }">
+  <div class="chat-sidebar" :class="{'sidebar-open': isSidebarOpen, 'no-transition': isInitialRender}">
     <div class="sidebar-header">
       <div class="header-title">{{ currentAgentId }}</div>
       <div class="header-actions">
@@ -78,6 +78,10 @@ const props = defineProps({
   isSidebarOpen: {
     type: Boolean,
     default: false
+  },
+  isInitialRender: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -85,7 +89,6 @@ const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-c
 
 // 状态变量
 const loading = ref(false);
-
 
 // 创建新对话
 const createNewChat = () => {
@@ -157,18 +160,23 @@ const toggleCollapse = () => {
 
 <style lang="less" scoped>
 .chat-sidebar {
-  width: 280px;
+  width: 0;
   height: 100%;
   background-color: #f9f9f9;
-  border-right: 1px solid #e8e8e8;
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
+  border: none;
+  overflow: hidden;
 
-  &.collapsed {
-    width: 0;
-    border: none;
-    overflow: hidden;
+  &.no-transition {
+    transition: none !important;
+  }
+
+  &.sidebar-open {
+    width: 280px;
+    max-width: 300px;
+    border-right: 1px solid #e8e8e8;
   }
 
   .sidebar-header {
