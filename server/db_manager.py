@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from src import config
 from server.models import Base
 from server.models.user_model import User
+from server.models.kb_models import KnowledgeDatabase, KnowledgeFile, KnowledgeNode
 from src.utils import logger
 
 class DBManager:
@@ -34,6 +35,8 @@ class DBManager:
         """创建数据库表"""
         # 确保所有表都会被创建
         Base.metadata.create_all(self.engine)
+        logger.info("数据库表创建/检查完成")
+
     def get_session(self):
         """获取数据库会话"""
         return self.Session()
@@ -52,7 +55,6 @@ class DBManager:
         finally:
             session.close()
 
-
     def check_first_run(self):
         """检查是否首次运行"""
         session = self.get_session()
@@ -61,5 +63,6 @@ class DBManager:
             return session.query(User).count() == 0
         finally:
             session.close()
+
 # 创建全局数据库管理器实例
 db_manager = DBManager()
