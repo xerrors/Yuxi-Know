@@ -21,7 +21,11 @@
         <div class="section">
           <div class="card card-select">
             <span class="label">对话模型</span>
-            <ModelSelectorComponent @select-model="handleChatModelSelect" />
+            <ModelSelectorComponent
+              @select-model="handleChatModelSelect"
+              :model_name="configStore.config?.model_name"
+              :model_provider="configStore.config?.model_provider"
+            />
           </div>
           <div class="card card-select">
             <span class="label">{{ items?.embed_model.des }}</span>

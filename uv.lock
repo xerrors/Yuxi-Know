@@ -426,6 +426,18 @@ wheels = [
 ]
 
 [[package]]
+name = "colorlog"
+version = "6.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d3/7a/359f4d5df2353f26172b3cc39ea32daa39af8de522205f512f458923e677/colorlog-6.9.0.tar.gz", hash = "sha256:bfba54a1b93b94f54e1f4fe48395725a3d92fd2a4af702f6bd70946bdc0c6ac2", size = 16624, upload-time = "2024-10-29T18:34:51.011Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e3/51/9b208e85196941db2f0654ad0357ca6388ab3ed67efdbfc799f35d1f83aa/colorlog-6.9.0-py3-none-any.whl", hash = "sha256:5906e71acd67cb07a71e779c47c4bcb45fb8c2993eebe9e5adcd6a6f1b283eff", size = 11424, upload-time = "2024-10-29T18:34:49.815Z" },
+]
+
+[[package]]
 name = "cryptography"
 version = "44.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1283,6 +1295,19 @@ wheels = [
 ]
 
 [[package]]
+name = "langchain-deepseek"
+version = "0.1.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ed/7f/be5bcf99b3814214a02ac205bda66d49d55a7d5440d47223105cef5df063/langchain_deepseek-0.1.3.tar.gz", hash = "sha256:89dd6aa120fb50dcfcd3d593626d34c1c40deefe4510710d0807fcc19481adf5", size = 7860, upload-time = "2025-03-21T17:11:58.356Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/00/7d/51b60aa91fa77742fc461704e5a8497e856156ae878102e6942799a78915/langchain_deepseek-0.1.3-py3-none-any.whl", hash = "sha256:8588e826371b417fca65c02f4273b4061eb9815a7bfcd5eb05acaa40d603aa89", size = 7123, upload-time = "2025-03-21T17:11:57.481Z" },
+]
+
+[[package]]
 name = "langchain-huggingface"
 version = "0.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1322,6 +1347,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e7/ac/b4a25c5716bb0103b1515f1f52cc69ffb1035a5a225ee5afe3aed28bf57b/langchain_text_splitters-0.3.8.tar.gz", hash = "sha256:116d4b9f2a22dda357d0b79e30acf005c5518177971c66a9f1ab0edfdb0f912e", size = 42128, upload-time = "2025-04-04T14:03:51.521Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8b/a3/3696ff2444658053c01b6b7443e761f28bb71217d82bb89137a978c5f66f/langchain_text_splitters-0.3.8-py3-none-any.whl", hash = "sha256:e75cc0f4ae58dcf07d9f18776400cf8ade27fadd4ff6d264df6278bb302f6f02", size = 32440, upload-time = "2025-04-04T14:03:50.6Z" },
+]
+
+[[package]]
+name = "langchain-together"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "langchain-core" },
+    { name = "langchain-openai" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/24/c4/64b92524121eaf4e805ade7ea68e71d52eab5e8fdad9b6b8e62f5a99eff4/langchain_together-0.3.0.tar.gz", hash = "sha256:c8a96377e49c065526435f766c6e1c7da3f7d054361326f079de8bd368ea76f2", size = 10247, upload-time = "2025-01-10T17:06:08.729Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/69/b3cbcf5b43acbc098c012ef75035fb0dc1e0f227f5161329ef9884a25ba4/langchain_together-0.3.0-py3-none-any.whl", hash = "sha256:4dcb4f6858c910c23d2268da1ed5f54e8cd01224ecf086dc7a8adbacdc6cb686", size = 12338, upload-time = "2025-01-10T17:06:06.678Z" },
 ]
 
 [[package]]
@@ -4515,13 +4555,16 @@ name = "yuxi-know"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "colorlog" },
     { name = "dashscope" },
     { name = "docx2txt" },
     { name = "fastapi" },
     { name = "flagembedding" },
     { name = "langchain-community" },
+    { name = "langchain-deepseek" },
     { name = "langchain-huggingface" },
     { name = "langchain-openai" },
+    { name = "langchain-together" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
     { name = "langsmith" },
@@ -4549,13 +4592,16 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "colorlog", specifier = ">=6.9.0" },
     { name = "dashscope", specifier = ">=1.23.2" },
     { name = "docx2txt", specifier = ">=0.9" },
     { name = "fastapi", specifier = ">=0.115.12" },
     { name = "flagembedding", specifier = ">=1.3.4" },
     { name = "langchain-community", specifier = ">=0.3.22" },
+    { name = "langchain-deepseek", specifier = ">=0.1.3" },
     { name = "langchain-huggingface", specifier = ">=0.2.0" },
     { name = "langchain-openai", specifier = ">=0.3.14" },
+    { name = "langchain-together", specifier = ">=0.3.0" },
     { name = "langgraph", specifier = ">=0.3.34" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=2.0.7" },
     { name = "langsmith", specifier = ">=0.3.37" },

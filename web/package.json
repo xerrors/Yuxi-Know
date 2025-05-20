@@ -23,6 +23,7 @@
     "echarts-gl": "^2.0.9",
     "highlight.js": "^11.11.1",
     "less": "^4.3.0",
+    "lucide-vue-next": "^0.511.0",
     "marked": "^15.0.11",
     "marked-highlight": "^2.2.1",
     "md-editor-v3": "^5.5.1",

@@ -1,5 +1,5 @@
 <template>
-  <div class="chat"  ref="chatContainer">
+  <div class="chat"  ref="chatContainer" :class="{ 'refs-sidebar-open': refsSidebarVisible && refsSidebarPinned }">
     <div class="chat-header">
       <div class="header__left">
         <div
@@ -8,20 +8,26 @@
           @click="state.isSidebarOpen = true"
         >
           <a-tooltip title="展开侧边栏" placement="right">
-            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+            <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </a-tooltip>
         </div>
 
         <div class="newchat nav-btn nav-btn-icon-only" @click="$emit('newconv')">
           <a-tooltip title="新建对话" placement="right">
-            <PlusCircleOutlined />
+            <MessageSquarePlus size="20" color="var(--gray-800)"/>
           </a-tooltip>
         </div>
-        <ModelSelectorComponent class="nav-btn borderless" @select-model="handleModelSelect" />
+        <ModelSelectorComponent
+          class="nav-btn borderless max-width"
+          @select-model="handleModelSelect"
+          :model_name="configStore.config?.model_name"
+          :model_provider="configStore.config?.model_provider"
+        />
       </div>
       <div class="header__right">
         <div class="nav-btn text" @click="opts.showPanel = !opts.showPanel">
-          <component :is="opts.showPanel ? FolderOpenOutlined : FolderOutlined" /> <span class="text">选项</span>
+          <Ellipsis />
+          <!-- <span class="text">选项</span> -->
         </div>
         <div v-if="opts.showPanel" class="my-panal r0 top100 swing-in-top-fwd" ref="panel">
           <div class="flex-center" @click="meta.summary_title = !meta.summary_title">
@@ -128,6 +134,7 @@
       :visible="refsSidebarVisible"
       :latestRefs="currentRefs"
       @update:visible="refsSidebarVisible = $event"
+      @pin-change="handleRefsPinChange"
     />
   </div>
 </template>
@@ -135,31 +142,12 @@
 <script setup>
 import { reactive, ref, onMounted, toRefs, nextTick, onUnmounted, watch, computed } from 'vue'
 import {
-  SendOutlined,
-  MenuOutlined,
-  FormOutlined,
-  LoadingOutlined,
   BookOutlined,
-  BookFilled,
   CompassOutlined,
-  ArrowUpOutlined,
-  CompassFilled,
-  GoldenFilled,
-  GoldOutlined,
-  SettingOutlined,
-  SettingFilled,
   PlusCircleOutlined,
-  FolderOutlined,
-  FolderOpenOutlined,
-  GlobalOutlined,
-  FileTextOutlined,
-  BulbOutlined,
-  CaretRightOutlined,
   DeploymentUnitOutlined,
-  PauseOutlined,
-  ReloadOutlined,
-  CopyOutlined
 } from '@ant-design/icons-vue'
+import { Ellipsis, PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
@@ -218,6 +206,14 @@ const meta = reactive(JSON.parse(localStorage.getItem('meta')) || {
 // 添加全局refs状态
 const refsSidebarVisible = ref(false)
 const currentRefs = ref({})
+
+// 添加侧边栏固定状态
+const refsSidebarPinned = ref(false)
+
+// 处理侧边栏固定状态变化
+const handleRefsPinChange = (pinned) => {
+  refsSidebarPinned.value = pinned
+}
 
 // 处理打开refs侧边栏
 const handleOpenRefs = ({ type, refs }) => {
@@ -759,6 +755,14 @@ const findLastIndex = (array, predicate) => {
 }
 </script>
 
+<style lang="less">
+.chat {
+  --refs-sidebar-floating-width: 700px;
+  --refs-sidebar-pinned-width: min(40%, 450px);
+}
+
+</style>
+
 <style lang="less" scoped>
 .chat {
   position: relative;
@@ -772,6 +776,11 @@ const findLastIndex = (array, predicate) => {
   box-sizing: border-box;
   flex: 5 5 200px;
   overflow-y: scroll;
+  transition: padding-right 0.3s ease;
+
+  &.refs-sidebar-open {
+    padding-right: var(--refs-sidebar-pinned-width); /* 与侧边栏固定时的宽度一致 */
+  }
 
   .chat-header {
     user-select: none;
@@ -1124,6 +1133,18 @@ const findLastIndex = (array, predicate) => {
 }
 
 // Scrollable menu styles moved to ModelSelectorComponent
+
+@media (max-width: 768px) {
+  &.refs-sidebar-open {
+    padding-right: 280px; /* 中等屏幕上固定时的宽度 */
+  }
+}
+
+@media (max-width: 480px) {
+  &.refs-sidebar-open {
+    padding-right: 0; /* 小屏幕上不调整内容区域 */
+  }
+}
 </style>
 
 <!-- Global styles for dropdown moved to ModelSelectorComponent -->

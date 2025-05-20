@@ -30,6 +30,32 @@ def select_model(model_provider=None, model_name=None):
         from src.models.chat_model import OpenModel
         return OpenModel(model_name)
 
+    if model_provider == "deepseek":
+        from langchain_deepseek import ChatDeepSeek
+        return OpenAIBase(
+            api_key=os.getenv(model_info["env"][0]),
+            base_url=model_info["base_url"],
+            model_name=model_name,
+            chat_open_ai=ChatDeepSeek(
+                model=model_name,
+                api_key=os.getenv(model_info["env"][0]),
+                base_url=model_info["base_url"],
+            )
+        )
+
+    if model_provider == "together":
+        from langchain_together import ChatTogether
+        return OpenAIBase(
+            api_key=os.getenv(model_info["env"][0]),
+            base_url=model_info["base_url"],
+            model_name=model_name,
+            chat_open_ai=ChatTogether(
+                model=model_name,
+                api_key=os.getenv(model_info["env"][0]),
+                base_url=model_info["base_url"],
+            )
+        )
+
     if model_provider == "custom":
         model_info = next((x for x in config.custom_models if x["custom_id"] == model_name), None)
         if model_info is None:

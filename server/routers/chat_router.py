@@ -213,7 +213,7 @@ async def chat_agent(agent_name: str,
 
         try:
             async for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
-                logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
+                # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
                     yield make_chunk(content=msg.content,
                                     msg=msg.model_dump(),

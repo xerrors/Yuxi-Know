@@ -75,8 +75,17 @@
                   class="config-item"
                 >
                   <p v-if="value.description" class="description">{{ value.description }}</p>
+
+                  <div v-if="key === 'model'" class="agent-model">
+                    <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p>
+                    <ModelSelectorComponent
+                      @select-model="handleModelChange"
+                      :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
+                      :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
+                    />
+                  </div>
                   <a-switch
-                    v-if="typeof agentConfig[key] === 'boolean'"
+                    v-else-if="typeof agentConfig[key] === 'boolean'"
                     v-model:checked="agentConfig[key]"
                   />
                   <a-textarea
@@ -155,6 +164,7 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { chatApi } from '@/apis/auth_api';
 import { systemConfigApi } from '@/apis/admin_api';
@@ -284,6 +294,10 @@ const loadAgentConfig = async () => {
     console.error('从服务器加载配置出错:', error);
   }
 };
+
+const handleModelChange = (data) => {
+  agentConfig.value.model = `${data.provider}/${data.name}`;
+}
 
 // 保存配置
 const saveConfig = async () => {
@@ -535,6 +549,10 @@ const toggleSidebar = () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.agent-model {
+  width: 100%;
 }
 
 .content {

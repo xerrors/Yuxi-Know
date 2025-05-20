@@ -1,17 +1,19 @@
 <template>
-  <div>
-    <a-drawer
-      :open="visible"
-      title="参考信息"
-      :width="700"
-      :contentWrapperStyle="{ maxWidth: '100%'}"
-      placement="right"
-      class="refs-sidebar"
-      rootClassName="root"
-      @close="$emit('update:visible', false)"
-      @afterOpenChange="handleAfterVisibleChange"
-    >
-      <a-tabs v-model:activeKey="activeTab">
+  <div class="refs-sidebar-container" :class="{ 'visible': visible, 'pinned': isPinned }">
+    <div class="overlay" v-if="visible && !isPinned" @click="$emit('update:visible', false)"></div>
+    <div class="refs-sidebar">
+      <div class="sidebar-header">
+        <h3>参考信息</h3>
+        <div class="sidebar-controls">
+          <a-button type="text" @click="togglePin" class="pin-button">
+            <PushpinOutlined :class="{ 'pinned': isPinned }" />
+          </a-button>
+          <a-button type="text" @click="$emit('update:visible', false)">
+            <CloseOutlined />
+          </a-button>
+        </div>
+      </div>
+      <a-tabs v-model:activeKey="activeTab" class="refs-tabs">
         <!-- 关系图 -->
         <a-tab-pane key="graph" tab="关系图" :disabled="!hasGraphData">
           <div v-if="hasGraphData" class="graph-container">
@@ -24,22 +26,21 @@
 
         <!-- 网页搜索 -->
         <a-tab-pane key="webSearch" tab="网页搜索" :disabled="!hasWebSearchData">
-          <div v-if="hasWebSearchData" class="results-list">
-            <div v-for="result in latestRefs.web_search.results" :key="result.url" class="result-item">
-              <div class="result-meta">
-                <div class="score-info">
-                  <span>
-                    <strong>相关度：</strong>
-                    <a-progress :percent="getPercent(result.score)"/>
-                  </span>
-                </div>
+          <div v-if="hasWebSearchData" class="web-results-list">
+            <div v-for="result in latestRefs.web_search.results" :key="result.url" class="web-result-card">
+              <div class="card-header">
+                <h3 class="result-title">
+                  <a :href="result.url" target="_blank">{{ result.title }}</a>
+                </h3>
               </div>
-              <div class="result-content">
-                <h3 class="result-title">{{ result.title }}</h3>
-                <div class="result-url">
-                  <a :href="result.url" target="_blank">{{ result.url }}</a>
-                </div>
+              <div class="card-body">
                 <div class="result-text">{{ result.content }}</div>
+              </div>
+              <div class="card-footer">
+                <div class="score-info">
+                  <span>相关度：{{ getPercent(result.score) }}%</span>
+                  <span>来源：{{ getDomain(result.url) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -89,7 +90,7 @@
           </div>
         </a-tab-pane>
       </a-tabs>
-    </a-drawer>
+    </div>
   </div>
 </template>
 
@@ -98,6 +99,8 @@ import { ref, computed, reactive, watch, nextTick } from 'vue'
 import {
   FileOutlined,
   ClockCircleOutlined,
+  CloseOutlined,
+  PushpinOutlined
 } from '@ant-design/icons-vue'
 import GraphContainer from './GraphContainer.vue'
 
@@ -112,11 +115,20 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:visible'])
+const emit = defineEmits(['update:visible', 'pin-change'])
 
 // 标签页相关
 const activeTab = ref('graph')
 const activeFiles = ref([])
+
+// 是否固定侧边栏
+const isPinned = ref(false)
+
+// 切换固定状态
+const togglePin = () => {
+  isPinned.value = !isPinned.value
+  emit('pin-change', isPinned.value)
+}
 
 // 计算属性：是否有各类数据
 const hasGraphData = computed(() => {
@@ -217,6 +229,10 @@ const getPercent = (value) => {
   return parseFloat((value * 100).toFixed(2))
 }
 
+const getDomain = (url) => {
+  return url.split('/')[2]
+}
+
 // 日期格式化函数
 const formatDate = (timestamp) => {
   return new Date(timestamp * 1000).toLocaleString()
@@ -258,25 +274,21 @@ const setActiveTab = (tab) => {
 // 图表ref
 const graphContainerRef = ref(null);
 
-// 处理抽屉完全打开后的事件
-const handleAfterVisibleChange = (visible) => {
-  console.log('RefsSidebar afterOpenChange fired, visible:', visible, 'activeTab:', activeTab.value);
-
+// 监听可见性变化后的处理
+watch(() => props.visible, (visible) => {
   if (!visible) return;
 
   // 根据当前活动标签页执行相应的刷新操作
   nextTick(() => {
     if (activeTab.value === 'graph' && hasGraphData.value) {
-      console.log('Refreshing graph after drawer opened');
+      console.log('Refreshing graph after sidebar becomes visible');
       // 触发图表容器的重新布局
       if (graphContainerRef.value && graphContainerRef.value.refreshGraph) {
         graphContainerRef.value.refreshGraph();
       }
-    } else {
-      console.log('Current active tab is', activeTab.value, 'no need to refresh graph');
     }
   });
-};
+});
 
 // 监听标签页变化
 watch(activeTab, (newTab) => {
@@ -309,7 +321,109 @@ defineExpose({
 </script>
 
 <style lang="less" scoped>
-.refs-sidebar {
+.refs-sidebar-container {
+  position: fixed;
+  top: 0;
+  right: calc(-1 * var(--refs-sidebar-floating-width)); /* 初始状态隐藏在右侧 - 使用更大宽度 */
+  width: var(--refs-sidebar-floating-width); /* 未固定时的宽度 */
+  height: 100vh;
+  background: white;
+  z-index: 1000;
+  transition: right 0.3s ease, width 0.3s ease; /* 添加宽度过渡效果 */
+  display: flex;
+  flex-direction: column;
+  user-select: text;
+
+  &::before {
+    z-index: 999; // 降低遮罩层的z-index
+  }
+
+  // 添加遮罩
+  &::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+
+  &.visible:not(.pinned)::before {
+    opacity: 1;
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  &.visible {
+    right: 0; /* 显示时移动到可见区域 */
+  }
+
+  &.pinned {
+    width: var(--refs-sidebar-pinned-width); /* 固定时的宽度 */
+    box-shadow: none;
+    border-left: 1px solid var(--gray-200);
+  }
+
+  &.visible:not(.pinned) {
+    box-shadow: -2px 0 15px rgba(0, 0, 0, 0.15);
+    .refs-sidebar {
+      background-color: white;
+    }
+  }
+
+  .refs-sidebar {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    // padding: 0 16px;
+  }
+
+  .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--gray-200);
+
+    h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .sidebar-controls {
+      display: flex;
+      align-items: center;
+
+      .pin-button {
+        margin-right: 8px;
+
+        .pinned {
+          color: var(--main-color);
+          transform: rotate(45deg);
+        }
+      }
+    }
+  }
+
+  .refs-tabs {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 0 16px;
+  }
+
+  .ant-tabs-content {
+    flex: 1;
+    overflow-y: auto;
+  }
+
   .empty-data {
     display: flex;
     justify-content: center;
@@ -317,7 +431,7 @@ defineExpose({
     height: 200px;
     color: #999;
     font-size: 14px;
-    background-color: #f9f9f9;
+    background-color: var(--gray-100);
     border-radius: 4px;
   }
 
@@ -333,7 +447,7 @@ defineExpose({
     display: flex;
     justify-content: space-between;
     padding: 12px 16px;
-    background-color: #f5f5f5;
+    background-color: var(--gray-100);
     border-radius: 4px;
     margin-bottom: 16px;
 
@@ -343,9 +457,19 @@ defineExpose({
     }
   }
 
+  // 通用结果展示样式的LESS mixin
+  .result-text-mixin() {
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--gray-800);
+  }
+
+  // 知识库结果样式
   .results-list {
     .result-item {
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--gray-200);
       padding: 16px 0;
 
       &:last-child {
@@ -369,7 +493,7 @@ defineExpose({
           strong {
             margin-right: 8px;
             white-space: nowrap;
-            color: #666;
+            color: var(--gray-700);
           }
 
           .ant-progress {
@@ -378,7 +502,7 @@ defineExpose({
             margin-inline: 10px;
 
             .ant-progress-bg {
-              background-color: #666;
+              background-color: var(--gray-500);
             }
           }
         }
@@ -386,7 +510,7 @@ defineExpose({
 
       .result-id {
         font-size: 12px;
-        color: #999;
+        color: var(--gray-600);
         margin-bottom: 8px;
       }
     }
@@ -396,31 +520,110 @@ defineExpose({
         font-size: 16px;
         font-weight: bold;
         margin-bottom: 8px;
-        color: #333;
+        color: var(--gray-800);
       }
-
 
       .result-url {
         font-size: 12px;
-        color: #0563e7;
+        color: var(--main-color);
         margin-bottom: 8px;
+
         a {
-          color: #0563e7;
+          color: var(--main-color);
           word-break: break-all;
         }
       }
 
       .result-text {
-        font-size: 14px;
-        line-height: 1.6;
-        white-space: pre-wrap;
-        word-break: break-word;
-        background-color: #f9f9f9;
+        .result-text-mixin();
+        background-color: var(--gray-100);
         padding: 12px;
         border-radius: 4px;
-        border: 1px solid #e8e8e8;
+        border: 1px solid var(--gray-200);
       }
     }
   }
+
+  // 网页搜索结果卡片样式
+  .web-results-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+
+    .web-result-card {
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+      border: 1px solid var(--gray-200);
+
+      &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      }
+
+      .card-header {
+        padding: 16px 16px 0;
+
+        .result-title {
+          margin-bottom: 8px;
+          line-height: 1.4;
+        }
+      }
+
+      .card-body {
+        padding: 0 16px;
+
+        .result-text {
+          .result-text-mixin();
+          margin-bottom: 16px;
+          max-height: 200px;
+          overflow-y: auto;
+        }
+      }
+
+      .card-footer {
+        background-color: var(--gray-100);
+        padding: 12px 16px;
+        border-top: 1px solid var(--gray-200);
+
+        .score-info {
+          display: flex;
+          justify-content: space-between;
+
+          span {
+            font-size: 13px;
+            color: var(--gray-600);
+          }
+        }
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    width: 500px; /* 中等屏幕上未固定时的宽度 */
+    right: -500px;
+
+    &.pinned {
+      width: 280px; /* 中等屏幕上固定时的宽度 */
+    }
+  }
+
+  @media (max-width: 480px) {
+    width: 100%; /* 小屏幕上的宽度 */
+    right: -100%;
+
+    &.pinned {
+      width: 100%; /* 小屏幕上固定时也是全宽 */
+    }
+  }
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
 }
 </style>

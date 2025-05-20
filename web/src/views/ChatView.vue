@@ -5,7 +5,7 @@
         <!-- <div class="action new" @click="addNewConv"><FormOutlined /></div> -->
          <span class="header-title">Yuxi-Know</span>
         <div class="action close" @click="state.isSidebarOpen = false">
-          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          <PanelLeftClose size="20" color="var(--gray-800)"/>
         </div>
       </div>
       <div class="conversation-list">
@@ -14,7 +14,7 @@
           :key="index"
           :class="{ active: curConvId === index }"
           @click="goToConversation(index)">
-          <div class="conversation__title"><CommentOutlined /> &nbsp;{{ state.title }}</div>
+          <div class="conversation__title">{{ state.title }}</div>
           <div class="conversation__delete" @click.stop="delConv(index)"><DeleteOutlined /></div>
         </div>
       </div>
@@ -29,8 +29,9 @@
 
 <script setup>
 import { reactive, ref, watch, onMounted } from 'vue'
-import { FormOutlined, MenuOutlined, DeleteOutlined, CommentOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined } from '@ant-design/icons-vue'
 import ChatComponent from '@/components/ChatComponent.vue'
+import { MessageSquareMore, PanelLeftClose } from 'lucide-vue-next'
 
 const convs = reactive(JSON.parse(localStorage.getItem('chat-convs')) || [
   {

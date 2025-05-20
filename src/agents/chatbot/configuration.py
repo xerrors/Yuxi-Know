@@ -49,8 +49,8 @@ class ChatbotConfiguration(Configuration):
             "configurable": True,
             "options": [
                 "zhipu/glm-4-plus",
-                "siliconflow/Qwen/QwQ-32B",
-                "siliconflow/deepseek-ai/DeepSeek-V3",
+                "siliconflow/Qwen/Qwen2.5-72B-Instruct",
+                "siliconflow/Qwen/Qwen2.5-7B-Instruct",
             ],
             "description": "智能体的驱动模型"
         },

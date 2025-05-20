@@ -35,19 +35,19 @@
               <span v-if="!toolCall.tool_call_result">
                 <LoadingOutlined /> &nbsp;
                 <span>正在调用工具: </span>
-                <span class="tool-name">{{ toolCall.name }}</span>
+                <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span>
               </span>
               <span v-else>
-                <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.name }}</span> 执行完成
+                <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
-              <div class="tool-params" v-if="toolCall.args">
+              <div class="tool-params" v-if="toolCall.args || toolCall.function.arguments">
                 <div class="tool-params-header">
                   参数:
                 </div>
                 <div class="tool-params-content">
-                  <pre>{{ toolCall.args }}</pre>
+                  <pre>{{ toolCall.args || toolCall.function.arguments }}</pre>
                 </div>
               </div>
               <div class="tool-params" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
@@ -302,6 +302,11 @@ const toggleToolCall = (toolCallId) => {
           border-radius: 4px;
           padding: 8px;
           overflow-x: auto;
+          color: var(--gray-800);
+
+          pre {
+            margin: 0;
+          }
         }
       }
     }

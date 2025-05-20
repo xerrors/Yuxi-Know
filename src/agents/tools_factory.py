@@ -133,17 +133,17 @@ def calculator(a: float, b: float, operation: str) -> float:
         raise ValueError(f"Invalid operation: {operation}, only support add, subtract, multiply, divide")
 
 @tool
-def get_knowledge_graph(query: Annotated[str, "The query to get knowledge graph."]):
-    """Use this to get knowledge graph."""
+def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]):
+    """Use this to query knowledge graph."""
     return graph_base.query_node(query, hops=2)
 
 
 
 
 _TOOLS_REGISTRY = {
-    "calculator": calculator,
-    "get_knowledge_graph": get_knowledge_graph,
+    "Calculator": calculator,
+    "QueryKnowledgeGraph": query_knowledge_graph,
 }
 
 if config.enable_web_search:
-    _TOOLS_REGISTRY["TavilySearchResults"] = TavilySearchResults(max_results=10)
+    _TOOLS_REGISTRY["WebSearchWithTavily"] = TavilySearchResults(max_results=10)

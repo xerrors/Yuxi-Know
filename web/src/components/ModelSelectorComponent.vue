@@ -1,11 +1,11 @@
 <template>
   <a-dropdown>
     <a class="model-select" @click.prevent>
-      <BulbOutlined />
-      <a-tooltip :title="configStore.config?.model_name" placement="right">
-        <span class="model-text text"> {{ configStore.config?.model_name }} </span>
+      <!-- <BulbOutlined /> -->
+      <a-tooltip :title="model_name" placement="right">
+        <span class="model-text text"> {{ model_name }} </span>
       </a-tooltip>
-      <span class="text" style="color: #aaa;">{{ configStore.config?.model_provider }} </span>
+      <span class="text" style="color: #aaa;">{{ model_provider }} </span>
     </a>
     <template #overlay>
       <a-menu class="scrollable-menu">
@@ -29,6 +29,17 @@ import { computed } from 'vue'
 import { BulbOutlined } from '@ant-design/icons-vue'
 import { useConfigStore } from '@/stores/config'
 
+const props = defineProps({
+  model_name: {
+    type: String,
+    default: ''
+  },
+  model_provider: {
+    type: String,
+    default: ''
+  }
+});
+
 const configStore = useConfigStore()
 const emit = defineEmits(['select-model'])
 
@@ -50,7 +61,6 @@ const handleSelectModel = (provider, name) => {
 
 <style lang="less" scoped>
 .model-select {
-  max-width: 350px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -65,6 +75,10 @@ const handleSelectModel = (provider, name) => {
 
   &.borderless {
     border: none;
+  }
+
+  &.max-width {
+    max-width: 380px;
   }
 
   .model-text {

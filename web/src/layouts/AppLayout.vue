@@ -2,29 +2,12 @@
 import { ref, reactive, KeepAlive, onMounted, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
-  MessageOutlined,
-  MessageFilled,
-  SettingOutlined,
-  SettingFilled,
-  BookOutlined,
-  BookFilled,
   GithubOutlined,
-  FolderOutlined,
-  FolderFilled,
-  GoldOutlined,
-  GoldFilled,
-  ToolFilled,
-  ToolOutlined,
   BugOutlined,
-  ProjectFilled,
-  ProjectOutlined,
-  StarFilled,
-  StarOutlined,
   ExclamationCircleOutlined,
-  RobotOutlined,
-  RobotFilled,
-  ApiOutlined,
 } from '@ant-design/icons-vue'
+import { Bot, Waypoints, LibraryBig, MessageSquareMore, Settings } from 'lucide-vue-next';
+
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -82,24 +65,24 @@ console.log(route)
 const mainList = [{
     name: '对话',
     path: '/chat',
-    icon: MessageOutlined,
-    activeIcon: MessageFilled,
+    icon: MessageSquareMore,
+    activeIcon: MessageSquareMore,
   }, {
     name: '智能体',
     path: '/agent',
-    icon: ToolOutlined,
-    activeIcon: ToolFilled,
+    icon: Bot,
+    activeIcon: Bot,
   }, {
     name: '图谱',
     path: '/graph',
-    icon: ProjectOutlined,
-    activeIcon: ProjectFilled,
+    icon: Waypoints,
+    activeIcon: Waypoints,
     // hidden: !configStore.config.enable_knowledge_graph,
   }, {
     name: '知识库',
     path: '/database',
-    icon: BookOutlined,
-    activeIcon: BookFilled,
+    icon: LibraryBig,
+    activeIcon: LibraryBig,
     // hidden: !configStore.config.enable_knowledge_base,
   }
 ]
@@ -145,7 +128,7 @@ const mainList = [{
           v-show="!item.hidden"
           class="nav-item"
           active-class="active">
-          <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" />
+          <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
           <span class="text">{{item.name}}</span>
         </RouterLink>
 
@@ -162,7 +145,7 @@ const mainList = [{
 
       <div class="github nav-item">
         <a-tooltip placement="right">
-          <template #title>GitHub</template>
+          <template #title>欢迎 Star</template>
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
             <GithubOutlined class="icon" style="color: #222;"/>
             <span v-if="githubStars > 0" class="github-stars">
@@ -191,7 +174,7 @@ const mainList = [{
       <RouterLink class="nav-item setting" to="/setting" active-class="active">
         <a-tooltip placement="right">
           <template #title>设置</template>
-          <component class="icon" :is="route.path === '/setting' ? SettingFilled : SettingOutlined" />
+          <Settings />
         </a-tooltip>
       </RouterLink>
     </div>
@@ -484,6 +467,13 @@ div.header, #app-router-view {
     .icon {
       margin-right: 8px;
       font-size: 15px; // 减小图标大小
+      border: none;
+      outline: none;
+
+      &:focus, &:active {
+        border: none;
+        outline: none;
+      }
     }
 
     .text {

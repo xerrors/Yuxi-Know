@@ -1,5 +1,5 @@
 <template>
-  <div class="input-box" :class="customClasses">
+  <div class="input-box" :class="customClasses" @click="focusInput">
     <div class="input-area">
       <a-textarea
         ref="inputRef"
@@ -111,6 +111,12 @@ const handleSendOrStop = () => {
   emit('send');
 };
 
+// 聚焦输入框
+const focusInput = () => {
+  if (inputRef.value && !props.disabled) {
+    inputRef.value.focus();
+  }
+};
 
 // Wait for component to mount before setting up onStartTyping
 onMounted(() => {
@@ -147,13 +153,12 @@ onMounted(() => {
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    margin-bottom: 4px;
   }
 
   .user-input {
     flex: 1;
     min-height: 44px;
-    padding: 0.5rem 0;
+    padding: 0;
     background-color: transparent;
     border: none;
     margin: 0;
@@ -180,7 +185,6 @@ onMounted(() => {
   .input-options {
     display: flex;
     padding: 8px 0 0;
-    margin-top: 6px;
     border-top: 1px solid var(--gray-100);
 
     .options__left,

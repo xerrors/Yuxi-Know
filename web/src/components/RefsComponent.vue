@@ -123,6 +123,7 @@ const regenerateMessage = () => {
 .refs {
   display: flex;
   margin-bottom: 20px;
+  margin-top: 10px;
   color: var(--gray-500);
   font-size: 13px;
   gap: 10px;

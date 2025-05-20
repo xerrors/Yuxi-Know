@@ -4,14 +4,14 @@
       <div class="header-title">{{ currentAgentId }}</div>
       <div class="header-actions">
         <div class="toggle-sidebar nav-btn" v-if="isSidebarOpen" @click="toggleCollapse">
-          <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+          <PanelLeftClose size="20" color="var(--gray-800)"/>
         </div>
       </div>
     </div>
     <div class="conversation-list-top">
-      <a-button type="text" @click="createNewChat" class="new-chat-btn">
-        <PlusCircleOutlined /> 新对话
-      </a-button>
+      <button type="text" @click="createNewChat" class="new-chat-btn">
+        新对话
+      </button>
     </div>
     <div class="conversation-list">
       <a-spin v-if="loading" />
@@ -55,12 +55,12 @@
 <script setup>
 import { ref, computed, onMounted, watch, h } from 'vue';
 import {
-  PlusCircleOutlined,
   DeleteOutlined,
   EditOutlined,
   MoreOutlined
 } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
+import { PanelLeftClose, MessageSquarePlus } from 'lucide-vue-next';
 
 const props = defineProps({
   currentAgentId: {
@@ -214,7 +214,9 @@ const toggleCollapse = () => {
       border-radius: 16px;
       background-color: var(--gray-300);
       color: var(--main-color);
+      border: none;
       transition: all 0.2s ease;
+      font-weight: 500;
 
       &:hover {
         background-color: var(--gray-400);

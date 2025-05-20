@@ -3,7 +3,7 @@
     <a-dropdown :trigger="['click']" v-if="userStore.isLoggedIn">
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
-          <UserOutlined />
+          <CircleUser />
           <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
         <div v-if="showRole">{{ userStore.username }}</div>
@@ -18,13 +18,13 @@
           </a-menu-item>
           <a-menu-divider />
           <a-menu-item key="logout" @click="logout">
-            <LogoutOutlined /> 退出登录
+            <LogoutOutlined /> &nbsp;退出登录
           </a-menu-item>
         </a-menu>
       </template>
     </a-dropdown>
     <a-button v-else type="link" @click="goToLogin">
-      <UserOutlined /> 登录
+      <UserRoundCheck /> 登录
     </a-button>
   </div>
 </template>
@@ -35,6 +35,7 @@ import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { UserOutlined, LogoutOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
+import { CircleUser, LogOut } from 'lucide-vue-next';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -94,6 +95,7 @@ const goToLogin = () => {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--gray-800);
   // margin-bottom: 16px;
 }
 

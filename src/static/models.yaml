@@ -70,6 +70,7 @@ MODEL_NAMES:
       - meta-llama/Llama-3.3-70B-Instruct-Turbo
       - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
       - deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free
+      - Qwen/QwQ-32B
 
   dashscope:
     name: 阿里百炼 (DashScope)

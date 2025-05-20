@@ -5,13 +5,13 @@ from src.utils import logger, get_docker_safe_url
 from langchain_openai import ChatOpenAI
 
 class OpenAIBase():
-    def __init__(self, api_key, base_url, model_name, **kwargs):
+    def __init__(self, api_key, base_url, model_name, chat_open_ai=None, **kwargs):
         self.api_key = api_key
         self.base_url = base_url
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
         self.info = kwargs
-        self.chat_open_ai = ChatOpenAI(model=model_name,
+        self.chat_open_ai = chat_open_ai or ChatOpenAI(model=model_name,
                                        api_key=api_key,
                                        base_url=base_url)
 

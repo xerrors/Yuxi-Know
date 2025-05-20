@@ -19,10 +19,10 @@
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
           <div class="toggle-sidebar nav-btn" v-if="!state.isSidebarOpen" @click="toggleSidebar">
-            <img src="@/assets/icons/sidebar_left.svg" class="iconfont icon-20" alt="设置" />
+            <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </div>
           <div class="newchat nav-btn" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
-            <PlusCircleOutlined /> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
+            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
         <div class="header__center">
@@ -87,7 +87,7 @@
             @keydown="handleKeyDown"
           />
           <div class="bottom-actions">
-            <p class="note">请注意辨别内容的可靠性</p>
+            <p class="note" @click="getAgentHistory">请注意辨别内容的可靠性</p>
           </div>
         </div>
       </div>
@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, toRaw } from 'vue';
 import {
   RobotOutlined, SendOutlined, LoadingOutlined,
   ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
@@ -107,6 +107,7 @@ import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import { chatApi, threadApi } from '@/apis/auth_api'
+import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
 
 // 新增props属性，允许父组件传入agentId
 const props = defineProps({
@@ -458,6 +459,9 @@ const handleStreamResponseError = (error) => {
 // 处理流数据
 const processResponseChunk = async (data) => {
   // console.log("处理流数据:", data.msg);
+  // if (data.msg.additional_kwargs?.tool_calls) {
+  //   console.log("tool_calls", data.msg.additional_kwargs.tool_calls);
+  // }
   if (data.status === 'init') {
     // 代表服务端收到请求并返回第一个响应
     state.waitingServerResponse = false;
@@ -465,12 +469,6 @@ const processResponseChunk = async (data) => {
     onGoingConv.msgChunks[data.request_id] = [data.msg];
 
   } else if (data.status === 'loading') {
-    // 检查lastConv是否存在,避免undefined
-    const lastConv = convs.value.length > 0 ? convs.value[convs.value.length - 1] : null;
-    if (lastConv && lastConv.status === 'finished') {
-      await getAgentHistory();
-    }
-
     if (data.msg.id) {
       if (!onGoingConv.msgChunks[data.msg.id]) {
         onGoingConv.msgChunks[data.msg.id] = []
@@ -478,7 +476,7 @@ const processResponseChunk = async (data) => {
       onGoingConv.msgChunks[data.msg.id].push(data.msg)
     }
   } else if (data.status === 'finished') {
-    await getAgentHistory();
+    // await getAgentHistory();
   }
   // await scrollToBottom();
 };
@@ -698,12 +696,19 @@ const handleKeyDown = (e) => {
   }
 };
 
-
 const mergeMessageChunk = (chunks) => {
   if (chunks.length === 0) return null;
 
   // 以第一个chunk为基础
-  const result = {...chunks[0]};
+  for (const c of chunks) {
+    if (c.additional_kwargs?.tool_calls) {
+      console.warn("chunks", toRaw(c))
+      break;
+    }
+  }
+  // 深拷贝第一个chunk作为结果
+  const result = JSON.parse(JSON.stringify(chunks[0]));
+
   result.content = result.content || '';
 
   // 合并其他chunks
@@ -716,7 +721,7 @@ const mergeMessageChunk = (chunks) => {
     // 如果是当前chunk没有的 key, value, 或者当前 result[key] 为空，则添加到result中
     for (const key in chunk) {
       if (!result[key]) {
-        result[key] = chunk[key]
+        result[key] = JSON.parse(JSON.stringify(chunk[key]));
       }
     }
 
@@ -727,7 +732,7 @@ const mergeMessageChunk = (chunks) => {
 
       for (const toolCall of chunk.additional_kwargs.tool_calls) {
         const existingToolCall = result.additional_kwargs.tool_calls.find(
-          t => t.id === toolCall.id
+          t => (t.id === toolCall.id || t.index === toolCall.index)
         );
 
         if (existingToolCall) {
@@ -735,7 +740,7 @@ const mergeMessageChunk = (chunks) => {
           existingToolCall.function.arguments += toolCall.function.arguments;
         } else {
           // 添加新的tool call
-          result.additional_kwargs.tool_calls.push({...toolCall});
+          result.additional_kwargs.tool_calls.push(JSON.parse(JSON.stringify(toolCall)));
         }
       }
     }
@@ -743,6 +748,9 @@ const mergeMessageChunk = (chunks) => {
 
   if (result.type === 'AIMessageChunk') {
     result.type = 'ai'
+    if (result.additional_kwargs?.tool_calls) {
+      result.tool_calls = result.additional_kwargs.tool_calls;
+    }
   }
   return result;
 }
