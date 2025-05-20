@@ -1,8 +1,7 @@
 import os
 
 from langchain_openai import ChatOpenAI
-
-from src import graph_base
+from langgraph.checkpoint.memory import InMemorySaver
 
 model = ChatOpenAI(model="glm-4-plus",
                    api_key=os.getenv("ZHIPUAI_API_KEY"),
@@ -23,4 +22,4 @@ tools = []
 
 from langgraph.prebuilt import create_react_agent
 
-graph = create_react_agent(model, tools=tools)
+graph = create_react_agent(model, tools=tools, checkpointer=InMemorySaver())

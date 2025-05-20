@@ -59,14 +59,14 @@
       <div class="sidebar" :class="{ 'is-open': state.agentSiderbarConfigOpen }">
         <div class="agent-info">
           <h3 @click="toggleDebugMode">描述</h3>
-          <p>{{ agents[selectedAgentId]?.description }}</p>
+          <p>{{ selectedAgent.description }}</p>
+          <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
 
           <div v-if="selectedAgentId && configSchema" class="config-modal-content">
             <!-- 配置表单 -->
             <a-form :model="agentConfig" layout="vertical">
-              <div class="empty-config" v-if="state.isEmptyConfig">
-                <a-alert type="warning" message="该智能体没有配置项" show-icon/>
-              </div>
+              <a-alert  v-if="state.isEmptyConfig" type="warning" message="该智能体没有配置项" show-icon/>
+              <a-alert v-if="!selectedAgent.has_checkpointer" type="error" message="该智能体没有配置 Checkpointer，功能无法正常使用，参考：https://langchain-ai.github.io/langgraph/concepts/persistence/" show-icon/>
               <!-- 统一显示所有配置项 -->
               <template v-for="(value, key) in configurableItems" :key="key">
                 <a-form-item
@@ -185,7 +185,9 @@ const state = reactive({
     Object.keys(configurableItems.value).length === 0
   )
 });
-const configSchema = computed(() => agents.value[selectedAgentId.value]?.config_schema || {});
+
+const selectedAgent = computed(() => agents.value[selectedAgentId.value] || {});
+const configSchema = computed(() => selectedAgent.value.config_schema || {});
 const configurableItems = computed(() => configSchema.value.configurable_items || {});
 
 // 配置状态
@@ -617,6 +619,11 @@ const toggleSidebar = () => {
 .config-modal-content {
   max-height: 70vh;
   overflow-y: auto;
+  user-select: text;
+
+  div[role="alert"] {
+    margin-bottom: 10px;
+  }
 
   .description {
     font-size: 12px;

@@ -44,7 +44,7 @@
         <span>正在加载历史记录...</span>
       </div>
 
-      <div v-else-if="convs.length === 0" class="chat-examples">
+      <div v-else-if="convs.length === 0 && !onGoingConv.messages.length" class="chat-examples">
         <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
       </div>

@@ -75,11 +75,18 @@ class ChatbotAgent(BaseAgent):
         workflow.add_edge("tools", "chatbot")
         workflow.add_edge("chatbot", END)
 
-        # 创建数据库连接
-        sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
-        graph = workflow.compile(checkpointer=sqlite_checkpointer)
-        self.graph = graph
-        return graph
+        # 创建数据库连接并确保设置 checkpointer
+        try:
+            sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
+            graph = workflow.compile(checkpointer=sqlite_checkpointer)
+            self.graph = graph
+            return graph
+        except Exception as e:
+            logger.error(f"构建 Graph 设置 checkpointer 时出错: {e}")
+            # 即使出错也返回一个可用的图实例，只是无法保存历史
+            graph = workflow.compile()
+            self.graph = graph
+            return graph
 
     async def get_async_conn(self) -> aiosqlite.Connection:
         """获取异步数据库连接"""

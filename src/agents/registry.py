@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import yaml
+import uuid
 from pathlib import Path
 from typing import Type, Annotated, Optional, TypedDict
 from enum import Enum
@@ -139,6 +140,23 @@ class Configuration(dict):
         return confs
 
 
+    thread_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "线程ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
+
+    user_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "用户ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
 
 class BaseAgent():
 
@@ -146,66 +164,85 @@ class BaseAgent():
     定义一个基础 Agent 供 各类 graph 继承
     """
 
-    name: str = field(default="base_agent")
-    description: str = field(default="base_agent")
+    name = "base_agent"
+    description = "base_agent"
     config_schema: Configuration = Configuration
     requirements: list[str]
 
     def __init__(self, **kwargs):
         self.check_requirements()
 
-    @classmethod
-    def get_info(cls):
+    async def get_info(self):
         return {
-            "name": cls.name,
-            "description": cls.description,
-            "config_schema": cls.config_schema.to_dict(),
-            "requirements": cls.requirements if hasattr(cls, "requirements") else [],
-            "all_tools": cls.all_tools if hasattr(cls, "all_tools") else [],
+            "name": self.name if hasattr(self, "name") else "Unknown",
+            "description": self.description if hasattr(self, "description") else "Unknown",
+            "config_schema": self.config_schema.to_dict(),
+            "requirements": self.requirements if hasattr(self, "requirements") else [],
+            "all_tools": self.all_tools if hasattr(self, "all_tools") else [],
+            "has_checkpointer": await self.check_checkpointer(),
+            "met_requirements": self.check_requirements(),
         }
 
     def check_requirements(self):
         if not hasattr(self, "requirements") or not self.requirements:
-            return
+            return True
         for requirement in self.requirements:
             if requirement not in os.environ:
                 raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置，并重新启动服务")
+        return True
 
     async def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
-        graph = await self.get_graph(config_schema=config_schema, **kwargs)
+        graph = await self.get_graph()
         logger.debug(f"stream_values: {config_schema}")
         for event in graph.astream({"messages": messages}, stream_mode="values", config=config_schema):
             yield event["messages"]
 
     async def stream_messages(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
-        graph = await self.get_graph(config_schema=config_schema, **kwargs)
+        graph = await self.get_graph()
         logger.debug(f"stream_messages: {config_schema}")
 
         async for msg, metadata in graph.astream({"messages": messages}, stream_mode="messages", config=config_schema):
             yield msg, metadata
 
+    async def check_checkpointer(self):
+        app = await self.get_graph()
+        if not hasattr(app, "checkpointer") or app.checkpointer is None:
+            logger.warning(f"智能体 {self.name} 的 Graph 未配置 checkpointer，无法获取历史记录")
+            return False
+        return True
+
     async def get_history(self, user_id, thread_id) -> list[dict]:
         """获取历史消息"""
-        # 获取LangGraph应用实例
-        app = await self.get_graph()
-        # 构建配置信息
-        config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-        # 获取状态
-        state = await app.aget_state(config)
+        try:
+            app = await self.get_graph()
 
-        result = []
-        if state:
-            messages = state.values.get('messages', [])
-            for msg in messages:
-                if hasattr(msg, 'model_dump'):
-                    msg_dict = msg.model_dump()  # 转换成字典
-                else:
-                    # 如果消息没有model_dump方法，尝试转成dict
-                    msg_dict = dict(msg) if hasattr(msg, '__dict__') else {"content": str(msg)}
-                result.append(msg_dict)
+            if not await self.check_checkpointer():
+                return []
 
-        return result
+            config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+            state = await app.aget_state(config)
+
+            result = []
+            if state:
+                messages = state.values.get('messages', [])
+                for msg in messages:
+                    if hasattr(msg, 'model_dump'):
+                        msg_dict = msg.model_dump()  # 转换成字典
+                    else:
+                        msg_dict = dict(msg) if hasattr(msg, '__dict__') else {"content": str(msg)}
+                    result.append(msg_dict)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"获取智能体 {self.name} 历史消息出错: {e}")
+            return []
 
     @abstractmethod
-    def get_graph(self, **kwargs) -> CompiledStateGraph:
+    async def get_graph(self, **kwargs) -> CompiledStateGraph:
+        """
+        获取并编译对话图实例。
+        必须确保在编译时设置 checkpointer，否则将无法获取历史记录。
+        例如: graph = workflow.compile(checkpointer=sqlite_checkpointer)
+        """
         pass

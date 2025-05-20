@@ -31,7 +31,7 @@ async def get_default_agent(current_user: User = Depends(get_required_user)):
         default_agent_id = config.default_agent_id
         # 如果没有设置默认智能体，尝试获取第一个可用的智能体
         if not default_agent_id:
-            agents = [agent.get_info() for agent in agent_manager.agents.values()]
+            agents = await agent_manager.get_agents_info()
             if agents:
                 default_agent_id = agents[0].get("name", "")
 
@@ -45,7 +45,7 @@ async def set_default_agent(agent_id: str = Body(..., embed=True), current_user 
     """设置默认智能体ID (仅管理员)"""
     try:
         # 验证智能体是否存在
-        agents = [agent.get_info() for agent in agent_manager.agents.values()]
+        agents = await agent_manager.get_agents_info()
         agent_ids = [agent.get("name", "") for agent in agents]
 
         if agent_id not in agent_ids:
@@ -161,7 +161,8 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 @chat.get("/agent")
 async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体（需要登录）"""
-    agents = [agent.get_info() for agent in agent_manager.agents.values()]
+    agents = await agent_manager.get_agents_info()
+    # logger.debug(f"agents: {agents}")
     return {"agents": agents}
 
 @chat.post("/agent/{agent_name}")
@@ -195,7 +196,7 @@ async def chat_agent(agent_name: str,
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
 
         try:
-            agent = agent_manager.get_runnable_agent(agent_name)
+            agent = agent_manager.get_agent(agent_name)
         except Exception as e:
             logger.error(f"Error getting agent {agent_name}: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error")
@@ -284,7 +285,7 @@ async def get_agent_history(
     """获取智能体历史消息（需要登录）"""
     try:
         # 获取Agent实例和配置类
-        agent = agent_manager.get_runnable_agent(agent_name)
+        agent = agent_manager.get_agent(agent_name)
         if not agent:
             raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
 

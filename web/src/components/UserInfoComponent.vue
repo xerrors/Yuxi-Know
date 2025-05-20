@@ -35,7 +35,7 @@ import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { UserOutlined, LogoutOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
-import { CircleUser, LogOut } from 'lucide-vue-next';
+import { CircleUser, UserRoundCheck } from 'lucide-vue-next';
 
 const router = useRouter();
 const userStore = useUserStore();
