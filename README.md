@@ -26,7 +26,11 @@
 
 V0.1 版本发布：支持多用户、智能体构建～
 
-![系统界面预览](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
+![欢迎 Star](https://github.com/user-attachments/assets/a9ea624a-7b95-4bc1-a3c7-bfec6c587b5c)
+
+
+
+![流程图](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
 ## 📋 更新日志
 
