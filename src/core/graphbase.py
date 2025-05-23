@@ -26,21 +26,22 @@ class GraphDatabase:
 
         # 尝试加载已保存的图数据库信息
         if not self.load_graph_info():
-            logger.debug(f"未找到已保存的图数据库信息，将创建新的配置")
+            logger.debug("创建新的图数据库配置")
 
         self.start()
 
     def start(self):
         if not config.enable_knowledge_graph or not config.enable_knowledge_base:
             return
+
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
         username = os.environ.get("NEO4J_USERNAME", "neo4j")
         password = os.environ.get("NEO4J_PASSWORD", "0123456789")
-        logger.info(f"Connecting to Neo4j at {uri}/{self.kgdb_name}")
+        logger.info(f"Connecting to Neo4j: {uri}/{self.kgdb_name}")
         try:
             self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
             self.status = "open"
-            logger.info(f"Connected to Neo4j at {uri}/{self.kgdb_name}, {self.get_graph_info(self.kgdb_name)}")
+            logger.info(f"Connected to Neo4j: {self.get_graph_info(self.kgdb_name)}")
             # 连接成功后保存图数据库信息
             self.save_graph_info(self.kgdb_name)
         except Exception as e:

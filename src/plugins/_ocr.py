@@ -163,6 +163,11 @@ class OCRPlugin:
         import requests
         import json
 
+        health_check_response = requests.get(f"{mineru_ocr_uri}/health", timeout=5)
+        if health_check_response.status_code != 200 or health_check_response.json().get("status") != "healthy":
+            logger.error("Mineru OCR service health check failed.")
+            raise RuntimeError("Mineru OCR service health check failed. Please check the log use `docker logs mineru-api`")
+
         # 读取PDF文件
         with open(pdf_path, 'rb') as f:
             files = {'file': f}

@@ -4,7 +4,6 @@ import tempfile
 from base64 import b64encode
 from glob import glob
 from io import StringIO
-from typing import Tuple, Union
 
 import magic_pdf.model as model_config
 import uvicorn
@@ -54,9 +53,9 @@ def init_writers(
     file: UploadFile = None,
     output_path: str = None,
     output_image_path: str = None,
-) -> Tuple[
-    Union[S3DataWriter, FileBasedDataWriter],
-    Union[S3DataWriter, FileBasedDataWriter],
+) -> tuple[
+    S3DataWriter | FileBasedDataWriter,
+    S3DataWriter | FileBasedDataWriter,
     bytes,
 ]:
     """
@@ -113,8 +112,8 @@ def process_file(
     file_bytes: bytes,
     file_extension: str,
     parse_method: str,
-    image_writer: Union[S3DataWriter, FileBasedDataWriter],
-) -> Tuple[InferenceResult, PipeResult]:
+    image_writer: S3DataWriter | FileBasedDataWriter,
+) -> tuple[InferenceResult, PipeResult]:
     """
     Process PDF file content
 
@@ -128,7 +127,7 @@ def process_file(
         Tuple[InferenceResult, PipeResult]: Returns inference result and pipeline result
     """
 
-    ds: Union[PymuDocDataset, ImageDataset] = None
+    ds: PymuDocDataset | ImageDataset = None
     if file_extension in pdf_extensions:
         ds = PymuDocDataset(file_bytes)
     elif file_extension in office_extensions:
@@ -169,6 +168,13 @@ def encode_image(image_path: str) -> str:
         return b64encode(f.read()).decode()
 
 
+@app.get("/health", tags=["health"], summary="Health check endpoint")
+async def health_check():
+    """
+    Simple health check endpoint to confirm the API is running.
+    """
+    return JSONResponse(content={"status": "healthy"}, status_code=200)
+
 @app.post(
     "/file_parse",
     tags=["projects"],
@@ -206,9 +212,7 @@ async def file_parse(
         return_content_list: Whether to return parsed PDF content list. Default to False
     """
     try:
-        if (file is None and file_path is None) or (
-            file is not None and file_path is not None
-        ):
+        if (bool(file) == bool(file_path)):
             return JSONResponse(
                 content={"error": "Must provide either file or file_path"},
                 status_code=400,

@@ -150,6 +150,8 @@ services:
       dockerfile: Dockerfile
     image: mineru-api:latest
     container_name: mineru-api
+    profiles:
+      - all
     deploy:
       resources:
         reservations:

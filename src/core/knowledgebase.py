@@ -416,8 +416,10 @@ class KnowledgeBase:
                 logger.error(f"处理文件 {file_path} 时出错: {e}")
                 file_info_dict["status"] = "failed"
                 file_info_dict["error"] = str(e)
+                raise e
 
-            file_infos[file_id] = file_info_dict
+            finally:
+                file_infos[file_id] = file_info_dict
 
         return file_infos
 
