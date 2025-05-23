@@ -127,7 +127,7 @@ class Config(SimpleConfig):
 
         if self.model_dir:
             if os.path.exists(self.model_dir):
-                logger.info(f"MODEL_DIR （{self.model_dir}） 下面的文件夹: {os.listdir(self.model_dir)}")
+                logger.debug(f"MODEL_DIR （{self.model_dir}） 下面的文件夹: {os.listdir(self.model_dir)}")
             else:
                 logger.warning(f"提醒：MODEL_DIR （{self.model_dir}） 不存在，如果未配置，请忽略，如果配置了，请检查是否配置正确，比如 docker-compose 文件中的映射")
 

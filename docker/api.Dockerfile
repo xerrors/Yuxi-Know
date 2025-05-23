@@ -5,9 +5,13 @@ COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 # 设置工作目录
 WORKDIR /app
 
-# 设置时区为 UTC+8
-ENV TZ=Asia/Shanghai
-ENV UV_LINK_MODE=copy
+# 环境变量设置
+ARG http_proxy
+ARG https_proxy
+ENV http_proxy=$http_proxy \
+    https_proxy=$https_proxy \
+    TZ=Asia/Shanghai \
+    UV_LINK_MODE=copy
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 

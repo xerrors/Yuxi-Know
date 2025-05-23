@@ -39,3 +39,12 @@ dependencies = [
     "uvicorn[standard]>=0.34.2",
     "zhipuai>=2.1.5.20250421",
 ]
+[tool.ruff]
+line-length = 140  # 代码最大行宽
+select = [         # 选择的规则
+    "F",
+    "E",
+    "W",
+    "UP",
+]
+ignore = ["F401"]  # 忽略的规则

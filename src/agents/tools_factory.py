@@ -1,14 +1,14 @@
 import json
 import re
-import os
-from typing import Any, Callable, Optional, Type, Union, Annotated
+from collections.abc import Callable
+from typing import Annotated, Any
 
-
-from pydantic import BaseModel, Field
-from langchain_core.tools import tool, BaseTool, StructuredTool
 from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.tools import BaseTool, StructuredTool, tool
+from pydantic import BaseModel, Field
 
-from src import graph_base, knowledge_base, config
+from src import config, graph_base, knowledge_base
+
 
 # refs https://github.com/chatchat-space/LangGraph-Chatchat chatchat-server/chatchat/server/agent/tools_factory/tools_registry.py
 def regist_tool(
@@ -16,9 +16,9 @@ def regist_tool(
     title: str = "",
     description: str = "",
     return_direct: bool = False,
-    args_schema: Optional[Type[BaseModel]] = None,
+    args_schema: type[BaseModel] | None = None,
     infer_schema: bool = True,
-) -> Union[Callable, BaseTool]:
+) -> Callable | BaseTool:
     """
     wrapper of langchain tool decorator
     add tool to registry automatically
@@ -66,7 +66,12 @@ def regist_tool(
 
 
 class KnowledgeRetrieverModel(BaseModel):
-    query: str = Field(description="查询的关键词，查询的时候，应该尽量以可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。")
+    query: str = Field(
+        description=(
+            "查询的关键词，查询的时候，应该尽量以可能帮助回答这个问题的关键词进行查询，"
+            "不要直接使用用户的原始输入去查询。"
+        )
+    )
 
 
 

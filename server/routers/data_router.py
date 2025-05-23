@@ -54,7 +54,7 @@ async def query_test(query: str = Body(...), meta: dict = Body(...), current_use
 
 @data.post("/file-to-chunk")
 async def file_to_chunk(files: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"File to chunk: {files}")
+    logger.debug(f"File to chunk: {files} {params=}")
     result = await knowledge_base.file_to_chunk(files, params=params)
     return result
 

@@ -93,7 +93,7 @@
               v-if="configStore.config.enable_web_search"
               @click="meta.use_web=!meta.use_web"
             >
-              <CompassOutlined style="margin-right: 3px;"/>
+              <Compass style="margin-right: 3px;" size="14"/>
               联网搜索
             </div>
             <div
@@ -101,7 +101,7 @@
               v-if="configStore.config.enable_knowledge_graph"
               @click="meta.use_graph=!meta.use_graph"
             >
-              <DeploymentUnitOutlined style="margin-right: 3px;"/>
+              <Waypoints style="margin-right: 3px;" size="14"/>
               知识图谱
             </div>
             <a-dropdown
@@ -109,7 +109,7 @@
               :class="{'opt-item': true, 'active': meta.selectedKB !== null}"
             >
               <a class="ant-dropdown-link" @click.prevent>
-                <BookOutlined style="margin-right: 3px;"/>
+                <BookCheck style="margin-right: 3px;" size="14"/>
                 <span class="text">{{ meta.selectedKB === null ? '不使用知识库' : opts.databases[meta.selectedKB]?.name }}</span>
               </a>
               <template #overlay>
@@ -147,7 +147,7 @@ import {
   PlusCircleOutlined,
   DeploymentUnitOutlined,
 } from '@ant-design/icons-vue'
-import { Ellipsis, PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next'
+import { Ellipsis, PanelLeftOpen, MessageSquarePlus, Compass, Waypoints, BookCheck } from 'lucide-vue-next'
 import { onClickOutside } from '@vueuse/core'
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
@@ -970,6 +970,13 @@ const findLastIndex = (array, predicate) => {
 
     &.wide-screen {
       max-width: 1200px;
+    }
+
+    .opt-item {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 4px;
     }
 
     .note {

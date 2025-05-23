@@ -82,8 +82,8 @@ class LocalEmbeddingModel(BaseEmbeddingModel):
             else:
                 logger.warning(f"Local model `{info['name']}` not found in `{self.model}`, using `{info['name']}`")
 
-        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`，"
-                    f"如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
+        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
+        logger.debug("如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
                     f"如果还是不行，建议手动下载到某个文件夹，比如  {os.getenv('MODEL_DIR', '/models')}/BAAI/bge-m3 目录下；")
 
         self.model = HuggingFaceEmbeddings(

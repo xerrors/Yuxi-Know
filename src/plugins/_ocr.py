@@ -123,17 +123,23 @@ class OCRPlugin:
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
         try:
-            # 检查是否为文本PDF
-            if is_text_pdf(pdf_path):
-                logger.info(f"PDF file is text, use llama_index.readers.file to read")
-                return pdfreader(pdf_path)
+            # 检查是否为文本PDF，可能会出现错误，比如每一页都有可读取的水印文字，但是内容本身是扫描件，需要使用OCR处理
+            # if is_text_pdf(pdf_path):
+            #     from src.core.indexing import pdfreader
+            #     logger.info("PDF file is text, use llama_index.readers.file to read")
+            #     return pdfreader(pdf_path)
 
-            # 将PDF转换为图像
-            filename = os.path.basename(pdf_path).split('.')[0]
-            output_dir = os.path.join('saves', 'data', 'pdf2txt', filename)
-            os.makedirs(output_dir, exist_ok=True)
+            images = []
 
-            images = self.convert_imgs(pdf_path, output_dir)
+            pdfDoc = fitz.open(pdf_path)
+            totalPage = pdfDoc.page_count
+            for pg in tqdm(range(totalPage), desc='to images', ncols=100):
+                page = pdfDoc[pg]
+                rotate, zoom_x, zoom_y = 0, 2, 2
+                mat = fitz.Matrix(zoom_x, zoom_y).prerotate(rotate)
+                pix = page.get_pixmap(matrix=mat, alpha=False)
+                img_pil = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                images.append(img_pil)
 
             # 处理每个图像并合并文本
             all_text = []
@@ -147,45 +153,57 @@ class OCRPlugin:
             logger.error(f"PDF processing error: {str(e)}")
             return ""
 
+    def process_pdf_mineru(self, pdf_path):
+        """
+        使用Mineru OCR处理PDF文件
+        :param pdf_path: PDF文件路径
+        :return: 提取的文本
+        """
+        mineru_ocr_uri = os.getenv("MINERU_OCR_URI", "http://localhost:5051")
+        import requests
+        import json
 
-    def convert_imgs(self, pdf_path, output_dir):
-        imgs = []
-        img_dir = os.path.join(output_dir, 'imgs')
-        if not os.path.exists(img_dir):
-            os.makedirs(img_dir)
-            pdfDoc = fitz.open(pdf_path)
-            totalPage = pdfDoc.page_count
-            for pg in tqdm(range(totalPage), desc='to imgs', ncols=100):
-                page = pdfDoc[pg]
-                rotate = int(0)
-                zoom_x = 2
-                zoom_y = 2
-                mat = fitz.Matrix(zoom_x, zoom_y).prerotate(rotate)
-                pix = page.get_pixmap(matrix=mat, alpha=False)
-                img_filename = os.path.join(img_dir, f'images_{pg+1}.png')
-                pix.save(img_filename)  # os.sep
-                imgs.append(img_filename)
-        else:
-            img_names = sorted(os.listdir(img_dir))
-            imgs = [os.path.join(img_dir, img_name) for img_name in img_names]
+        # 读取PDF文件
+        with open(pdf_path, 'rb') as f:
+            files = {'file': f}
+            data = {
+                'parse_method': 'ocr',  # 使用OCR模式
+                'is_json_md_dump': False,  # 不需要保存中间文件
+                'return_layout': False,  # 不需要返回布局信息
+                'return_info': False,  # 不需要返回额外信息
+                'return_content_list': False,  # 不需要返回内容列表
+                'return_images': False,  # 不需要返回图片
+            }
 
-        return imgs
+            try:
+                # 发送POST请求到Mineru OCR服务
+                response = requests.post(
+                    f"{mineru_ocr_uri}/file_parse",
+                    files=files,
+                    data=data
+                )
+                response.raise_for_status()  # 检查响应状态
+
+                # 解析响应
+                result = response.json()
+                if 'md_content' in result:
+                    return result['md_content']
+                else:
+                    logger.error("Mineru OCR response does not contain md_content")
+                    return ""
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Mineru OCR request failed: {str(e)}")
+                return ""
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse Mineru OCR response: {str(e)}")
+                return ""
+            except Exception as e:
+                logger.error(f"Unexpected error in Mineru OCR processing: {str(e)}")
+                return ""
 
 def get_state(task_id):
     return GOLBAL_STATE.get(task_id, {})
-
-
-def pdfreader(file_path):
-    """读取PDF文件并返回text文本"""
-    assert os.path.exists(file_path), "File not found"
-    assert file_path.endswith(".pdf"), "File format not supported"
-
-    from llama_index.readers.file import PDFReader
-    doc = PDFReader().load_data(file=Path(file_path))
-
-    # 简单的拼接起来之后返回纯文本
-    text = "\n\n".join([d.get_content() for d in doc])
-    return text
 
 def plainreader(file_path):
     """读取普通文本文件并返回text文本"""

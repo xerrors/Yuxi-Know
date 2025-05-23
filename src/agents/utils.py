@@ -40,12 +40,12 @@ async def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
                 content = msg.content or msg.tool_calls
 
                 if not content:
-                    if stream_flag == True:
+                    if stream_flag:
                         print()
                         stream_flag = False
                     continue
 
-                if stream_flag == False and content:
+                if not stream_flag and content:
                     print(f"AI: {content}", end="", flush=True)
                     stream_flag = True
                     continue

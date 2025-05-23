@@ -2,7 +2,7 @@ import hashlib
 import os
 import jwt
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any
 
 # JWT配置
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "yuxi_know_secure_key")
@@ -38,7 +38,7 @@ class AuthUtils:
         return hashed == check_hash
 
     @staticmethod
-    def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
         """创建JWT访问令牌"""
         to_encode = data.copy()
 
@@ -55,7 +55,7 @@ class AuthUtils:
         return encoded_jwt
 
     @staticmethod
-    def decode_token(token: str) -> Optional[Dict[str, Any]]:
+    def decode_token(token: str) -> dict[str, Any] | None:
         """解码验证JWT令牌"""
         try:
             payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
@@ -64,7 +64,7 @@ class AuthUtils:
             return None
 
     @staticmethod
-    def verify_access_token(token: str) -> Dict[str, Any]:
+    def verify_access_token(token: str) -> dict[str, Any]:
         """验证访问令牌，如果无效则抛出异常"""
         try:
             payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])

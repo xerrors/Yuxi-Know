@@ -1,3 +1,7 @@
+### 如何优雅的拉取镜像？
+
+使用 `bash docker/pull_image.sh python:3.12` 就可以。
+
 ### 如何配置本地大语言模型？
 
 支持添加以 OpenAI 兼容模式运行的本地模型，可在 Web 设置中直接添加（适用于 vllm 和 Ollama 等）。
@@ -44,7 +48,7 @@ services:
 
 ```bash
 docker compose down
-docker compose up --build -d 
+docker compose up --build -d
 ```
 
 注：添加本地向量模型由于在 docker 内外的路径差异很大，因此建议参考前面的路径映射之后，也在这里添加。
@@ -68,4 +72,42 @@ docker compose up --build -d
   ollama/nomic-embed-text:
     name: nomic-embed-text
     dimension: 768
+```
+
+### 如何配置 MinerU 抽取数据
+
+在 PDF 数据处理中，可以选择配置 [MinerU](https://github.com/opendatalab/MinerU) 来实现更快速、更准确的 PDF 识别效果。
+
+```yml
+  mineru-api:
+    build:
+      context: scripts/mineru-api
+      dockerfile: Dockerfile
+    image: mineru-api:latest
+    container_name: mineru-api
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "5051:5051"
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 5051 --app-dir /app
+```
+
+如果要添加代理的话，可以添加 build args
+
+```yml
+  mineru-api:
+    build:
+      context: scripts/mineru-api
+      dockerfile: Dockerfile
+      args:
+        http_proxy: http://宿主机IP:7890
+        https_proxy: http://宿主机IP:7890
 ```

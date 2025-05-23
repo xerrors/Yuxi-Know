@@ -1,5 +1,4 @@
 import os
-from typing import List, Dict
 from tavily import TavilyClient
 from src.utils.logging_config import logger
 
@@ -11,7 +10,7 @@ class WebSearcher:
         self.client = TavilyClient(api_key)
         logger.info("WebSearcher initialized with Tavily client")
 
-    def search(self, query: str, max_results: int = 1) -> List[Dict]:
+    def search(self, query: str, max_results: int = 1) -> list[dict]:
         """
         使用 Tavily 搜索相关内容
 
@@ -45,7 +44,7 @@ class WebSearcher:
             logger.error(f"Error during web search: {str(e)}")
             return []
 
-    def format_search_results(self, results: List[Dict]) -> str:
+    def format_search_results(self, results: list[dict]) -> str:
         """
         将搜索结果格式化为文本
 
