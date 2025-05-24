@@ -1,8 +1,7 @@
 import asyncio
 import aiohttp
 import time
-import json
-from typing import List
+
 
 async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
     """发送单个请求到API"""
@@ -17,6 +16,7 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
     try:
         async with session.post(url, json=payload) as response:
             result = await response.json()
+            print(f"请求 {request_id} 结果: {result}")
             end_time = time.time()
             duration = end_time - start_time
             print(f"请求 {request_id} 完成时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)")
@@ -42,13 +42,13 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
             "error": str(e)
         }
 
-async def run_concurrent_test(num_requests: int = 10) -> List[dict]:
+async def run_concurrent_test(num_requests: int = 10) -> list[dict]:
     """运行并发测试"""
     async with aiohttp.ClientSession() as session:
         tasks = [make_request(session, i) for i in range(num_requests)]
         return await asyncio.gather(*tasks)
 
-def analyze_results(results: List[dict]) -> None:
+def analyze_results(results: list[dict]) -> None:
     """分析并打印测试结果"""
     total_requests = len(results)
     successful_requests = sum(1 for r in results if r["success"])
@@ -62,7 +62,7 @@ def analyze_results(results: List[dict]) -> None:
     else:
         avg_time = max_time = min_time = 0
 
-    print(f"\n=== 并发测试结果 ===")
+    print("\n=== 并发测试结果 ===")
     print(f"总请求数: {total_requests}")
     print(f"成功请求: {successful_requests}")
     print(f"失败请求: {failed_requests}")
@@ -80,6 +80,9 @@ def analyze_results(results: List[dict]) -> None:
     print("\n=== 请求时间线分析 ===")
     sorted_results = sorted(results, key=lambda x: x["start_time"])
     test_start_time = sorted_results[0]["start_time"]
+    test_end_time = sorted_results[-1]["end_time"]
+    print(f"测试开始时间: {time.strftime('%H:%M:%S', time.localtime(test_start_time))}")
+    print(f"测试结束时间: {time.strftime('%H:%M:%S', time.localtime(test_end_time))}")
 
     print("\n时间线详情:")
     print("请求ID  开始时间    结束时间    耗时(秒)  重叠请求数")

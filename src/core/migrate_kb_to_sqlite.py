@@ -21,7 +21,7 @@ def migrate_json_to_sqlite():
 
     try:
         # 读取旧的JSON文件
-        with open(json_path, 'r', encoding='utf-8') as f:
+        with open(json_path, encoding='utf-8') as f:
             old_data = json.load(f)
 
         if not old_data or not isinstance(old_data, dict) or not old_data.get("databases"):
@@ -36,7 +36,7 @@ def migrate_json_to_sqlite():
             logger.info(f"正在迁移知识库: {db_info.get('name')} (ID: {db_id})")
 
             # 创建知识库
-            db_dict = db_manager.create_database(
+            db_manager.create_database(
                 db_id=db_id,
                 name=db_info.get('name', '未命名知识库'),
                 description=db_info.get('description', ''),

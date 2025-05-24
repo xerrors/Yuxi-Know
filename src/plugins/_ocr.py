@@ -24,7 +24,7 @@ class OCRPlugin:
 
     def load_model(self):
         """加载 OCR 模型"""
-        logger.info(f"加载 OCR 模型，仅在第一次调用时加载")
+        logger.info("加载 OCR 模型，仅在第一次调用时加载")
         model_dir = os.path.join(os.getenv("MODEL_DIR", ""), "SWHL/RapidOCR")
         det_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
         rec_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
@@ -75,7 +75,7 @@ class OCRPlugin:
                 text = '\n'.join([line[1] for line in result])
                 return text
             else:
-                logger.warning(f"OCR未能识别出文本内容")
+                logger.warning("OCR未能识别出文本内容")
                 return ""
 
         except Exception as e:
@@ -214,7 +214,7 @@ def plainreader(file_path):
     """读取普通文本文件并返回text文本"""
     assert os.path.exists(file_path), "File not found"
 
-    with open(file_path, "r") as f:
+    with open(file_path) as f:
         text = f.read()
     return text
 

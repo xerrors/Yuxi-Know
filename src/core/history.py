@@ -1,7 +1,6 @@
 from src.utils.prompts import get_system_prompt
-from src.utils.logging_config import logger
 
-class HistoryManager():
+class HistoryManager:
     def __init__(self, history=None, system_prompt=None):
         self.messages = []
 

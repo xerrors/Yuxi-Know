@@ -41,10 +41,10 @@ dependencies = [
 ]
 [tool.ruff]
 line-length = 140  # 代码最大行宽
-select = [         # 选择的规则
+lint.select = [         # 选择的规则
     "F",
     "E",
     "W",
     "UP",
 ]
-ignore = ["F401"]  # 忽略的规则
+lint.ignore = ["F401"]  # 忽略的规则

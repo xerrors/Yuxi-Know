@@ -1,3 +1,3 @@
-from .history import *
+from .history import HistoryManager
 from .knowledgebase import KnowledgeBase
 from .graphbase import GraphDatabase

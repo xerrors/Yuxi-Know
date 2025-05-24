@@ -73,11 +73,11 @@ class KnowledgeBase:
             return
 
         from src.models.embedding import get_embedding_model
-        self.embed_model = get_embedding_model(config)
+        self.embed_model = get_embedding_model()
 
         if config.enable_reranker:
             from src.models.rerank_model import get_reranker
-            self.reranker = get_reranker(config)
+            self.reranker = get_reranker()
 
         if not self.connect_to_milvus():
             raise ConnectionError("Failed to connect to Milvus")
@@ -472,10 +472,7 @@ class KnowledgeBase:
     async def add_chunks(self, db_id, file_chunks):
         """添加分块"""
         db = self.get_kb_by_id(db_id)
-
-        if db["embed_model"] != self.embed_model.embed_model_fullname:
-            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
-            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
+        assert self.check_embed_model(db_id), f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}"
 
         for file_id, chunk_info in file_chunks.items():
             # 在数据库中创建文件记录
@@ -505,10 +502,7 @@ class KnowledgeBase:
 
     async def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
-
-        if not self.check_embed_model(db_id):
-            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
-            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
+        assert self.check_embed_model(db_id), f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}"
 
         # Preprocessing the files to the queue
         new_files = await self.file_to_chunk(files, params=params)
@@ -625,11 +619,11 @@ class KnowledgeBase:
                     "embed_model": db["embed_model"],
                 }
             else:
-                logger.warning((
+                logger.warning(
                     f"无法将知识库 {db['name']} 转换为 Tools, 因为向量模型不匹配，"
                     f"当前向量模型: {self.embed_model.embed_model_fullname}，"
                     f"知识库向量模型: {db['embed_model']}。"
-                ))
+                )
         return retrievers
 
     ################################
@@ -648,7 +642,8 @@ class KnowledgeBase:
             logger.info(f"Successfully connected to Milvus at {uri}")
             return True
         except MilvusException as e:
-            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行，如果已退出，请重新启动 `docker restart milvus-standalone-dev`")
+            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行。")
+            logger.error("如果已退出，请重新启动 `docker restart milvus-standalone-dev`。")
             return False
 
     def get_collection_names(self):

@@ -189,7 +189,7 @@ class GraphDatabase:
             # 筛选出没有embedding的节点
             nodes_without_embedding = session.execute_read(_get_nodes_without_embedding, all_entities)
             if not nodes_without_embedding:
-                logger.info(f"所有实体已有embedding，无需重新计算")
+                logger.info("所有实体已有embedding，无需重新计算")
                 return
 
             logger.info(f"需要为{len(nodes_without_embedding)}/{len(all_entities)}个实体计算embedding")
@@ -200,7 +200,11 @@ class GraphDatabase:
 
             for i in range(0, total_entities, max_batch_size):
                 batch_entities = nodes_without_embedding[i:i+max_batch_size]
-                logger.debug(f"Processing entities batch {i//max_batch_size + 1}/{(total_entities-1)//max_batch_size + 1} ({len(batch_entities)} entities)")
+                logger.debug(
+                    f"Processing entities batch "
+                    f"{i//max_batch_size + 1}/{(total_entities-1)//max_batch_size + 1} "
+                    f"({len(batch_entities)} entities)"
+                )
 
                 # 批量获取嵌入向量
                 batch_embeddings = await self.aget_embedding(batch_entities)
@@ -221,7 +225,7 @@ class GraphDatabase:
         logger.info(f"Start adding entity to {kgdb_name} with {file_path}")
 
         def read_triples(file_path):
-            with open(file_path, 'r', encoding='utf-8') as file:
+            with open(file_path, encoding='utf-8') as file:
                 for line in file:
                     if line.strip():
                         yield json.loads(line.strip())
@@ -478,7 +482,7 @@ class GraphDatabase:
         try:
             graph_info = self.get_graph_info(graph_name)
             if graph_info is None:
-                logger.error(f"图数据库信息为空，无法保存")
+                logger.error("图数据库信息为空，无法保存")
                 return False
 
             info_file_path = os.path.join(self.work_dir, "graph_info.json")
@@ -521,7 +525,7 @@ class GraphDatabase:
                 logger.debug(f"图数据库信息文件不存在：{info_file_path}")
                 return False
 
-            with open(info_file_path, 'r', encoding='utf-8') as f:
+            with open(info_file_path, encoding='utf-8') as f:
                 graph_info = json.load(f)
 
             # 更新对象属性

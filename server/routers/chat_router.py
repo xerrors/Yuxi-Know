@@ -8,7 +8,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage
 from sqlalchemy.orm import Session
-from typing import List, Optional
 from pydantic import BaseModel
 
 from src import executor, config, retriever
@@ -270,7 +269,7 @@ async def save_agent_config(
         if result:
             return {"success": True, "message": f"智能体 {agent_name} 配置已保存"}
         else:
-            raise HTTPException(status_code=500, detail=f"保存智能体配置失败")
+            raise HTTPException(status_code=500, detail="保存智能体配置失败")
 
     except Exception as e:
         logger.error(f"保存智能体配置出错: {e}, {traceback.format_exc()}")
@@ -318,18 +317,18 @@ async def get_agent_config(
 # ==================== 线程管理 API ====================
 
 class ThreadCreate(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
     agent_id: str
-    description: Optional[str] = None
-    metadata: Optional[dict] = None
+    description: str | None = None
+    metadata: dict | None = None
 
 
 class ThreadResponse(BaseModel):
     id: str
     user_id: str
     agent_id: str
-    title: Optional[str]
-    description: Optional[str]
+    title: str | None = None
+    description: str | None = None
     create_at: str
     update_at: str
 
@@ -366,9 +365,9 @@ async def create_thread(
     }
 
 
-@chat.get("/threads", response_model=List[ThreadResponse])
+@chat.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(
-    agent_id: Optional[str] = None,
+    agent_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_required_user)
 ):
@@ -420,8 +419,8 @@ async def delete_thread(
 
 
 class ThreadUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
+    title: str | None = None
+    description: str | None = None
 
 
 @chat.put("/thread/{thread_id}", response_model=ThreadResponse)

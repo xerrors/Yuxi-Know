@@ -4,8 +4,7 @@ import os
 import yaml
 import uuid
 from pathlib import Path
-from typing import Type, Annotated, Optional, TypedDict
-from enum import Enum
+from typing import Annotated, TypedDict
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
 
@@ -33,7 +32,7 @@ class Configuration(dict):
 
     @classmethod
     def from_runnable_config(
-        cls, config: Optional[RunnableConfig] = None, agent_name: str = None
+        cls, config: RunnableConfig | None = None, agent_name: str | None = None
     ) -> Configuration:
         """Create a Configuration instance from a RunnableConfig object.
 
@@ -58,18 +57,18 @@ class Configuration(dict):
 
         # 合并三级配置，注意优先级
         merged_config = {}
-        for field in _fields:
+        for config_field in _fields:
             # 1. 默认使用类默认值
-            if hasattr(instance, field):
-                merged_config[field] = getattr(instance, field)
+            if hasattr(instance, config_field):
+                merged_config[config_field] = getattr(instance, config_field)
 
             # 2. 如果文件配置中有此字段，则覆盖
-            if field in file_config:
-                merged_config[field] = file_config[field]
+            if config_field in file_config:
+                merged_config[config_field] = file_config[config_field]
 
             # 3. 如果运行时配置中有此字段，则覆盖
-            if field in configurable:
-                merged_config[field] = configurable[field]
+            if config_field in configurable:
+                merged_config[config_field] = configurable[config_field]
 
         # 创建并返回配置实例
         # logger.debug(f"合并配置: {merged_config}")
@@ -82,7 +81,7 @@ class Configuration(dict):
         file_config = {}
         if os.path.exists(config_file_path):
             try:
-                with open(config_file_path, 'r', encoding='utf-8') as f:
+                with open(config_file_path, encoding='utf-8') as f:
                     file_config = yaml.safe_load(f) or {}
                     # logger.info(f"从文件加载智能体 {agent_name} 配置: {file_config}")
             except Exception as e:
@@ -158,7 +157,7 @@ class Configuration(dict):
         },
     )
 
-class BaseAgent():
+class BaseAgent:
 
     """
     定义一个基础 Agent 供 各类 graph 继承
