@@ -50,7 +50,7 @@ class Config(SimpleConfig):
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
         self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
-        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）")
+        self.add_item("enable_web_search", default=False, des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）")  # noqa: E501
         # 默认智能体配置
         self.add_item("default_agent_id", default="", des="默认智能体ID")
         # 模型配置
@@ -60,7 +60,7 @@ class Config(SimpleConfig):
         self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
 
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
-        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))
+        self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))  # noqa: E501
         self.add_item("model_local_paths", default={}, des="本地模型路径")
         self.add_item("use_rewrite_query", default="on", des="重写查询", choices=["off", "on", "hyde"])
         self.add_item("device", default="cuda", des="运行本地模型的设备", choices=["cpu", "cuda"])
@@ -92,12 +92,12 @@ class Config(SimpleConfig):
         从 models.yaml 和 models.private.yml 中更新 MODEL_NAMES
         """
 
-        with open(Path("src/static/models.yaml"), 'r', encoding='utf-8') as f:
+        with open(Path("src/static/models.yaml"), encoding='utf-8') as f:
             _models = yaml.safe_load(f)
 
         # 尝试打开一个 models.private.yml 文件，用来覆盖 models.yaml 中的配置
         try:
-            with open(Path("src/static/models.private.yml"), 'r', encoding='utf-8') as f:
+            with open(Path("src/static/models.private.yml"), encoding='utf-8') as f:
                 _models_private = yaml.safe_load(f)
         except FileNotFoundError:
             _models_private = {}
@@ -127,9 +127,10 @@ class Config(SimpleConfig):
 
         if self.model_dir:
             if os.path.exists(self.model_dir):
-                logger.info(f"MODEL_DIR （{self.model_dir}） 下面的文件夹: {os.listdir(self.model_dir)}")
+                logger.debug(f"MODEL_DIR （{self.model_dir}） 下面的文件夹: {os.listdir(self.model_dir)}")
             else:
-                logger.warning(f"提醒：MODEL_DIR （{self.model_dir}） 不存在，如果未配置，请忽略，如果配置了，请检查是否配置正确，比如 docker-compose 文件中的映射")
+                logger.warning(f"提醒：MODEL_DIR （{self.model_dir}） 不存在，如果未配置，请忽略，如果配置了，请检查是否配置正确;"
+                               "比如 docker-compose 文件中的映射")
 
 
         # 检查模型提供商是否存在
@@ -177,7 +178,7 @@ class Config(SimpleConfig):
         if self.filename is not None and os.path.exists(self.filename):
 
             if self.filename.endswith(".json"):
-                with open(self.filename, 'r') as f:
+                with open(self.filename) as f:
                     content = f.read()
                     if content:
                         local_config = json.loads(content)
@@ -186,7 +187,7 @@ class Config(SimpleConfig):
                         print(f"{self.filename} is empty.")
 
             elif self.filename.endswith(".yaml"):
-                with open(self.filename, 'r') as f:
+                with open(self.filename) as f:
                     content = f.read()
                     if content:
                         local_config = yaml.safe_load(content)

@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from typing import List, Optional
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from server.db_manager import db_manager
 from server.models.user_model import User, OperationLog
@@ -27,16 +26,16 @@ class UserCreate(BaseModel):
     role: str = "user"
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    password: Optional[str] = None
-    role: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
+    role: str | None = None
 
 class UserResponse(BaseModel):
     id: int
     username: str
     role: str
     created_at: str
-    last_login: Optional[str] = None
+    last_login: str | None = None
 
 class InitializeAdmin(BaseModel):
     username: str
@@ -202,7 +201,7 @@ async def create_user(
     return new_user.to_dict()
 
 # 路由：获取所有用户（管理员权限）
-@auth.get("/users", response_model=List[UserResponse])
+@auth.get("/users", response_model=list[UserResponse])
 async def read_users(
     skip: int = 0,
     limit: int = 100,

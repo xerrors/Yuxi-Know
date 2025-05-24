@@ -1,7 +1,6 @@
 import os
 import asyncio
 import traceback
-from typing import List, Optional
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body, Form, Query
 
 from src.utils import logger, hashstr
@@ -25,7 +24,7 @@ async def get_databases(current_user: User = Depends(get_admin_user)):
 async def create_database(
     database_name: str = Body(...),
     description: str = Body(...),
-    dimension: Optional[int] = Body(None),
+    dimension: int | None = Body(None),
     current_user: User = Depends(get_admin_user)
 ):
     logger.debug(f"Create database {database_name}")
@@ -53,19 +52,19 @@ async def query_test(query: str = Body(...), meta: dict = Body(...), current_use
     return result
 
 @data.post("/file-to-chunk")
-async def file_to_chunk(files: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"File to chunk: {files}")
+async def file_to_chunk(files: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"File to chunk: {files} {params=}")
     result = await knowledge_base.file_to_chunk(files, params=params)
     return result
 
 @data.post("/url-to-chunk")
-async def url_to_chunk(urls: List[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+async def url_to_chunk(urls: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Url to chunk: {urls}")
     result = await knowledge_base.url_to_chunk(urls, params=params)
     return result
 
 @data.post("/add-by-file")
-async def create_document_by_file(db_id: str = Body(...), files: List[str] = Body(...), current_user: User = Depends(get_admin_user)):
+async def create_document_by_file(db_id: str = Body(...), files: list[str] = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Add document in {db_id} by file: {files}")
     try:
         await knowledge_base.add_files(db_id, files)
@@ -113,7 +112,7 @@ async def get_document_info(db_id: str, file_id: str, current_user: User = Depen
 @data.post("/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    db_id: Optional[str] = Query(None),
+    db_id: str | None = Query(None),
     current_user: User = Depends(get_admin_user)
 ):
     if not file.filename:
@@ -170,7 +169,7 @@ async def get_graph_nodes(kgdb_name: str, num: int, current_user: User = Depends
     return {"result": graph_base.format_general_results(result), "message": "success"}
 
 @data.post("/graph/add-by-jsonl")
-async def add_graph_entity(file_path: str = Body(...), kgdb_name: Optional[str] = Body(None), current_user: User = Depends(get_admin_user)):
+async def add_graph_entity(file_path: str = Body(...), kgdb_name: str | None = Body(None), current_user: User = Depends(get_admin_user)):
     if not config.enable_knowledge_graph:
         return {"message": "知识图谱未启用", "status": "failed"}
 

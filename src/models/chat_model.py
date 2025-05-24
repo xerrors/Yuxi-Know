@@ -4,7 +4,7 @@ from openai import OpenAI
 from src.utils import logger, get_docker_safe_url
 from langchain_openai import ChatOpenAI
 
-class OpenAIBase():
+class OpenAIBase:
     def __init__(self, api_key, base_url, model_name, chat_open_ai=None, **kwargs):
         self.api_key = api_key
         self.base_url = base_url
@@ -60,49 +60,6 @@ class OpenAIBase():
         except Exception as e:
             logger.error(f"Error getting models: {e}")
             return []
-
-    def _get_model_by_model_url(self, model_url):
-        """
-        Refs: https://docs.together.ai/reference/models-1
-
-        Return: [
-            {
-                "id": "meta-llama/Meta-Llama-3-70B-Instruct-Turbo",
-                "object": "model",
-                "created": 0,
-                "type": "chat",
-                "running": false,
-                "display_name": "Meta Llama 3 70B Instruct Turbo",
-                "organization": "Meta",
-                "link": "https://huggingface.co/meta-llama/Meta-Llama-3-70B-Instruct",
-                "license": "Llama-3 (Other)",
-                "context_length": 8192,
-                "config": {
-                    "chat_template": "{% set loop_messages = messages %}{% for message in loop_messages %}{% set content = '<|start_header_id|>' + message['role'] + '<|end_header_id|>\n\n'+ message['content'] | trim + '<|eot_id|>' %}{% if loop.index0 == 0 %}{% set content = bos_token + content %}{% endif %}{{ content }}{% endfor %}{{ '<|start_header_id|>assistant<|end_header_id|>\n\n' }}",
-                    "stop": [
-                        "<|eot_id|>"
-                    ],
-                    "bos_token": "<|begin_of_text|>",
-                    "eos_token": "<|end_of_text|>"
-                },
-                "pricing": {
-                    "hourly": 0,
-                    "input": 0.88,
-                    "output": 0.88,
-                    "base": 0,
-                    "finetune": 0
-                }
-            },
-        ]
-
-        """
-        headers = {
-            "accept": "application/json",
-            "authorization": f"Bearer {self.api_key}"
-        }
-        response = requests.get(model_url, headers=headers)
-        return response.json()
-
 
 
 class OpenModel(OpenAIBase):

@@ -35,7 +35,7 @@ class DBManager:
         """创建数据库表"""
         # 确保所有表都会被创建
         Base.metadata.create_all(self.engine)
-        logger.info("数据库表创建/检查完成")
+        logger.info("Database tables created/checked")
 
     def get_session(self):
         """获取数据库会话"""
@@ -50,7 +50,7 @@ class DBManager:
             session.commit()
         except Exception as e:
             session.rollback()
-            logger.error(f"数据库操作失败: {e}")
+            logger.error(f"Database operation failed: {e}")
             raise
         finally:
             session.close()

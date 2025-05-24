@@ -73,6 +73,8 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
         throw new Error('未授权，请先登录')
       } else if (response.status === 403) {
         throw new Error('没有权限执行此操作')
+      } else if (response.status === 500) {
+        throw new Error('Server 500 Error, please check the log use `docker logs api-dev`')
       }
 
       throw new Error(errorMessage)

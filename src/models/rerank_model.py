@@ -9,7 +9,7 @@ from src.utils.logging_config import logger
 
 
 class LocalReranker(FlagReranker):
-    def __init__(self, config, **kwargs):
+    def __init__(self, **kwargs):
         model_info = config.reranker_names[config.reranker]
         model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("local_path"))
         model_name_or_path = model_name_or_path or model_info["name"]
@@ -22,8 +22,8 @@ class LocalReranker(FlagReranker):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-class SiliconFlowReranker():
-    def __init__(self, config, **kwargs):
+class SiliconFlowReranker:
+    def __init__(self, **kwargs):
         self.url = "https://api.siliconflow.cn/v1/rerank"
         self.model = config.reranker_names[config.reranker]["name"]
 
@@ -58,13 +58,14 @@ class SiliconFlowReranker():
             "max_chunks_per_doc": max_length,
         }
 
-def get_reranker(config):
-    assert config.reranker in config.reranker_names.keys(), f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}"
+def get_reranker():
+    support_rerankers = config.reranker_names.keys()
+    assert config.reranker in support_rerankers, f"Unsupported Reranker: {config.reranker}, only support {support_rerankers}"
     provider, model_name = config.reranker.split('/', 1)
     if provider == "local":
-        return LocalReranker(config)
+        return LocalReranker()
     elif provider == "siliconflow":
-        return SiliconFlowReranker(config)
+        return SiliconFlowReranker()
     else:
         raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}")
 

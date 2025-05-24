@@ -13,7 +13,7 @@ class Retriever:
 
     def _load_models(self):
         if config.enable_reranker:
-            self.reranker = get_reranker(config)
+            self.reranker = get_reranker()
 
         if config.enable_web_search:
             from src.utils.web_search import WebSearcher
@@ -168,7 +168,7 @@ class Retriever:
         entities = []
         if refs["meta"].get("use_graph"):
             from src.utils.prompts import entity_extraction_prompt_template as entity_template
-            from src.utils.prompts import keywords_prompt_template as entity_template
+            # from src.utils.prompts import keywords_prompt_template as entity_templat|e
 
             entity_extraction_prompt = entity_template.format(text=query)
             entities = model.predict(entity_extraction_prompt).content.split("<->")

@@ -1,14 +1,12 @@
 from fastapi import Request, Body, Depends
 from fastapi import APIRouter
-from fastapi import Request, Body
-
-base = APIRouter()
 
 from src import config, retriever, knowledge_base, graph_base
-from src.utils import logger
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
 from server.models.user_model import User
 
+
+base = APIRouter()
 
 @base.get("/")
 async def route_index():
@@ -49,7 +47,7 @@ def get_log(current_user: User = Depends(get_admin_user)):
     from src.utils.logging_config import LOG_FILE
     from collections import deque
 
-    with open(LOG_FILE, 'r') as f:
+    with open(LOG_FILE) as f:
         last_lines = deque(f, maxlen=1000)
 
     log = ''.join(last_lines)

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 import asyncio
 
 from src.models import select_model
@@ -40,12 +40,12 @@ async def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
                 content = msg.content or msg.tool_calls
 
                 if not content:
-                    if stream_flag == True:
+                    if stream_flag:
                         print()
                         stream_flag = False
                     continue
 
-                if stream_flag == False and content:
+                if not stream_flag and content:
                     print(f"AI: {content}", end="", flush=True)
                     stream_flag = True
                     continue
@@ -57,5 +57,5 @@ async def agent_cli(agent: BaseAgent, config: RunnableConfig = None):
                 print(f"Tool: {msg.content}")
 
 def get_cur_time_with_utc():
-    return datetime.now(tz=timezone.utc).isoformat()
+    return datetime.now(tz=UTC).isoformat()
 

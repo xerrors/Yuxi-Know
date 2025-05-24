@@ -1,5 +1,4 @@
-from typing import Optional, List, Callable
-from fastapi import Depends, HTTPException, status, APIRouter
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from jose import JWTError, jwt
@@ -30,7 +29,7 @@ def get_db():
         db.close()
 
 # 获取当前用户
-async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无效的凭证",
@@ -66,7 +65,7 @@ async def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Se
     return user
 
 # 获取已登录用户（抛出401如果未登录）
-async def get_required_user(user: Optional[User] = Depends(get_current_user)):
+async def get_required_user(user: User | None = Depends(get_current_user)):
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

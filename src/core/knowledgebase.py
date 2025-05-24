@@ -4,12 +4,14 @@ import time
 import traceback
 import shutil
 from sqlalchemy.orm import joinedload
+from pathlib import Path
+import asyncio
 
 from pymilvus import MilvusClient, MilvusException
 
 from src import config
 from src.utils import logger, hashstr
-from src.core.indexing import chunk, read_text_async
+from src.core.indexing import chunk_with_parser, chunk_text, parse_pdf_async
 from server.db_manager import db_manager
 from server.models.kb_models import KnowledgeDatabase, KnowledgeFile, KnowledgeNode
 from src.utils.db_migration import migrate_knowledge_db
@@ -71,11 +73,11 @@ class KnowledgeBase:
             return
 
         from src.models.embedding import get_embedding_model
-        self.embed_model = get_embedding_model(config)
+        self.embed_model = get_embedding_model()
 
         if config.enable_reranker:
             from src.models.rerank_model import get_reranker
-            self.reranker = get_reranker(config)
+            self.reranker = get_reranker()
 
         if not self.connect_to_milvus():
             raise ConnectionError("Failed to connect to Milvus")
@@ -367,7 +369,7 @@ class KnowledgeBase:
         for line in lines:
             line.pop("vector")
 
-        lines.sort(key=lambda x: x.get("start_char_idx") or 0)
+        lines.sort(key=lambda x: x.get("start_char_idx") or x.get("metadata", {}).get("chunk_idx", 0))
         return {"lines": lines}
 
     def get_kb_by_id(self, db_id):
@@ -387,25 +389,37 @@ class KnowledgeBase:
         """
         file_infos = {}
         for file in files:
-            file_id = "file_" + hashstr(file + str(time.time()))
-
-            file_type = file.split(".")[-1].lower()
-
-            if file_type == "pdf":
-                texts = await read_text_async(file)
-                nodes = chunk(texts, params=params)
-            else:
-                nodes = chunk(file, params=params)
-
-            file_infos[file_id] = {
+            file_path = Path(file)
+            file_id = "file_" + hashstr(str(file_path) + str(time.time()))
+            file_type = file_path.suffix.lower().replace(".", "")
+            file_info_dict = {
                 "file_id": file_id,
-                "filename": os.path.basename(file),
-                "path": file,
+                "filename": file_path.name,
+                "path": str(file_path),
                 "type": file_type,
                 "status": "waiting",
                 "created_at": time.time(),
-                "nodes": [node.dict() for node in nodes]
+                "nodes": []
             }
+            logger.debug(f"{file_info_dict=}")
+            try:
+                if file_type == "pdf":
+                    texts = await parse_pdf_async(file_path, params=params)
+                    nodes = chunk_text(texts, params=params)
+                else:
+                    nodes = chunk_with_parser(file_path, params=params)
+
+                processed_nodes = [parse_node_data(node) for node in nodes]
+
+                file_info_dict["nodes"] = processed_nodes
+            except Exception as e:
+                logger.error(f"处理文件 {file_path} 时出错: {e}")
+                file_info_dict["status"] = "failed"
+                file_info_dict["error"] = str(e)
+                raise e
+
+            finally:
+                file_infos[file_id] = file_info_dict
 
         return file_infos
 
@@ -426,66 +440,39 @@ class KnowledgeBase:
 
         file_infos = {}
 
-        # 使用UnstructuredURLLoader加载URL内容
-        # loader = UnstructuredURLLoader(urls=urls, continue_on_failure=True)
-
-        for url_idx, url in enumerate(urls):
+        for url in urls:
             file_id = "url_" + hashstr(url + str(time.time()))
-
+            file_info_dict = {
+                "file_id": file_id,
+                "filename": gen_filename_from_url(url),
+                "path": url,
+                "type": "url",
+                "status": "waiting",
+                "created_at": time.time(),
+                "nodes": []
+            }
             try:
                 # 加载单个URL内容
                 single_loader = UnstructuredURLLoader(urls=[url], continue_on_failure=False)
                 documents = await single_loader.aload()
 
-                # 将文档内容合并
+                # 合并文档内容
                 text_content = "\n\n".join([doc.page_content for doc in documents])
+                file_info_dict["nodes"] = chunk_text(text_content, params=params)
 
-                # 对内容进行分块
-                nodes = chunk(text_content, params=params)
-
-                # 从URL中提取域名作为文件名
-                from urllib.parse import urlparse, unquote
-                parsed_url = urlparse(unquote(url))
-                domain = parsed_url.netloc
-                path = parsed_url.path
-                filename = f"{domain}{path}"
-                if filename.endswith('/'):
-                    filename = filename[:-1]
-                if len(filename) > 100:
-                    filename = filename[:97] + "..."
-                filename = filename.replace('/', '_')
-
-                file_infos[file_id] = {
-                    "file_id": file_id,
-                    "filename": filename,
-                    "path": url,
-                    "type": "url",
-                    "status": "waiting",
-                    "created_at": time.time(),
-                    "nodes": [node.dict() for node in nodes]
-                }
             except Exception as e:
                 logger.error(f"处理URL {url} 时出错: {e}")
-                file_infos[file_id] = {
-                    "file_id": file_id,
-                    "filename": url[:100] + "..." if len(url) > 100 else url,
-                    "path": url,
-                    "type": "url",
-                    "status": "failed",
-                    "created_at": time.time(),
-                    "error": str(e),
-                    "nodes": []
-                }
+                file_info_dict["status"] = "failed"
+                file_info_dict["error"] = str(e)
+
+            file_infos[file_id] = file_info_dict
 
         return file_infos
 
     async def add_chunks(self, db_id, file_chunks):
         """添加分块"""
         db = self.get_kb_by_id(db_id)
-
-        if db["embed_model"] != self.embed_model.embed_model_fullname:
-            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
-            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
+        assert self.check_embed_model(db_id), f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}"
 
         for file_id, chunk_info in file_chunks.items():
             # 在数据库中创建文件记录
@@ -515,10 +502,7 @@ class KnowledgeBase:
 
     async def add_files(self, db_id, files, params=None):
         db = self.get_kb_by_id(db_id)
-
-        if not self.check_embed_model(db_id):
-            logger.error(f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}")
-            return {"message": f"Embed model not match, cur: {self.embed_model.embed_model_fullname}, req: {db['embed_model']}", "status": "failed"}
+        assert self.check_embed_model(db_id), f"Embed model not match, {db['embed_model']} != {self.embed_model.embed_model_fullname}"
 
         # Preprocessing the files to the queue
         new_files = await self.file_to_chunk(files, params=params)
@@ -635,11 +619,11 @@ class KnowledgeBase:
                     "embed_model": db["embed_model"],
                 }
             else:
-                logger.warning((
+                logger.warning(
                     f"无法将知识库 {db['name']} 转换为 Tools, 因为向量模型不匹配，"
                     f"当前向量模型: {self.embed_model.embed_model_fullname}，"
                     f"知识库向量模型: {db['embed_model']}。"
-                ))
+                )
         return retrievers
 
     ################################
@@ -658,7 +642,8 @@ class KnowledgeBase:
             logger.info(f"Successfully connected to Milvus at {uri}")
             return True
         except MilvusException as e:
-            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行，如果已退出，请重新启动 `docker restart milvus-standalone-dev`")
+            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行。")
+            logger.error("如果已退出，请重新启动 `docker restart milvus-standalone-dev`。")
             return False
 
     def get_collection_names(self):
@@ -765,3 +750,30 @@ class KnowledgeBase:
         updated_db = self.update_database_record(db_id, name, description)
         return updated_db
 
+
+def parse_node_data(node):
+    node_data = node.model_dump() if hasattr(node, "model_dump") else node
+    node_text = node_data.get("page_content", node_data.get("text", ""))
+    node_dict = {
+        "text": node_text,
+        "hash": hashstr(node_text, with_salt=True),
+        "start_char_idx": node_data.get("start_char_idx", None),
+        "end_char_idx": node_data.get("end_char_idx", None),
+        "metadata": node_data.get("metadata", {}),
+    }
+    return node_dict
+
+
+def gen_filename_from_url(url):
+    # 从URL中提取域名作为文件名
+    from urllib.parse import urlparse, unquote
+    parsed_url = urlparse(unquote(url))
+    domain = parsed_url.netloc
+    path = parsed_url.path
+    filename = f"{domain}{path}"
+    if filename.endswith('/'):
+        filename = filename[:-1]
+    if len(filename) > 100:
+        filename = filename[:97] + "..."
+    filename = filename.replace('/', '_')
+    return filename

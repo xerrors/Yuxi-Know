@@ -2,6 +2,13 @@
 FROM node:latest AS development
 WORKDIR /app
 
+
+ARG http_proxy
+ARG https_proxy
+ENV http_proxy=$http_proxy \
+    https_proxy=$https_proxy \
+    TZ=Asia/Shanghai
+
 # 复制 package.json 和 package-lock.json（如果存在）
 COPY ./web/package*.json ./
 

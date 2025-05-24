@@ -2,7 +2,6 @@ import os
 import json
 import requests
 import asyncio
-import json
 from abc import abstractmethod
 from zhipuai import ZhipuAI
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -68,7 +67,7 @@ class BaseEmbeddingModel:
         return data
 
 class LocalEmbeddingModel(BaseEmbeddingModel):
-    def __init__(self, config, **kwargs):
+    def __init__(self, **kwargs):
         info = config.embed_model_names[config.embed_model]
 
         self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
@@ -82,8 +81,8 @@ class LocalEmbeddingModel(BaseEmbeddingModel):
             else:
                 logger.warning(f"Local model `{info['name']}` not found in `{self.model}`, using `{info['name']}`")
 
-        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`，"
-                    f"如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
+        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
+        logger.debug("如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
                     f"如果还是不行，建议手动下载到某个文件夹，比如  {os.getenv('MODEL_DIR', '/models')}/BAAI/bge-m3 目录下；")
 
         self.model = HuggingFaceEmbeddings(
@@ -104,7 +103,7 @@ class LocalEmbeddingModel(BaseEmbeddingModel):
         return await self.model.aembed_documents(message)
 
     def encode_queries(self, queries):
-        logger.warning(f"Huggingface Model 不支持批量 encode queries，因此使用训练实现")
+        logger.warning("Huggingface Model 不支持批量 encode queries，因此使用训练实现")
         data = []
         for q in queries:
             data.append(self.predict(q))
@@ -114,7 +113,7 @@ class LocalEmbeddingModel(BaseEmbeddingModel):
 
 class ZhipuEmbedding(BaseEmbeddingModel):
 
-    def __init__(self, config) -> None:
+    def __init__(self) -> None:
         self.config = config
         self.model = config.embed_model_names[config.embed_model]["name"]
         self.dimension = config.embed_model_names[config.embed_model]["dimension"]
@@ -131,7 +130,7 @@ class ZhipuEmbedding(BaseEmbeddingModel):
 
 
 class OllamaEmbedding(BaseEmbeddingModel):
-    def __init__(self, config) -> None:
+    def __init__(self) -> None:
         self.info = config.embed_model_names[config.embed_model]
         self.model = self.info["name"]
         self.url = self.info.get("url", "http://localhost:11434/api/embed")
@@ -155,7 +154,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
 
 class OtherEmbedding(BaseEmbeddingModel):
 
-    def __init__(self, config) -> None:
+    def __init__(self) -> None:
         self.info = config.embed_model_names[config.embed_model]
         self.embed_model_fullname = config.embed_model
         self.dimension = self.info.get("dimension", None)
@@ -182,24 +181,25 @@ class OtherEmbedding(BaseEmbeddingModel):
             "input": message,
         }
 
-def get_embedding_model(config):
+def get_embedding_model():
     if not config.enable_knowledge_base:
         return None
 
     provider, model_name = config.embed_model.split('/', 1)
-    assert config.embed_model in config.embed_model_names.keys(), f"Unsupported embed model: {config.embed_model}, only support {config.embed_model_names.keys()}"
+    support_embed_models = config.embed_model_names.keys()
+    assert config.embed_model in support_embed_models, f"Unsupported embed model: {config.embed_model}, only support {support_embed_models}"
     logger.debug(f"Loading embedding model {config.embed_model}")
     if provider == "local":
-        model = LocalEmbeddingModel(config)
+        model = LocalEmbeddingModel()
 
     elif provider == "zhipu":
-        model = ZhipuEmbedding(config)
+        model = ZhipuEmbedding()
 
     elif provider == "ollama":
-        model = OllamaEmbedding(config)
+        model = OllamaEmbedding()
 
     else:
-        model = OtherEmbedding(config)
+        model = OtherEmbedding()
 
     return model
 

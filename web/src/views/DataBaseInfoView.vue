@@ -115,9 +115,9 @@
                     <a-input-number v-model:value="chunkParams.chunk_overlap" :min="0" :max="1000" />
                     <p class="param-description">相邻文本片段间的重叠字符数</p>
                   </a-form-item>
-                  <a-form-item label="使用文件节点解析器" name="use_parser">
-                    <a-switch v-model:checked="chunkParams.use_parser" />
-                    <p class="param-description">启用特定文件格式的智能分析</p>
+                  <a-form-item label="使用OCR" name="enable_ocr">
+                    <a-select v-model:value="chunkParams.enable_ocr" :options="enable_ocr_options" />
+                    <p class="param-description">启用OCR功能，支持PDF文件的文本提取</p>
                   </a-form-item>
                 </a-form>
               </div>
@@ -389,6 +389,12 @@ const meta = reactive({
   sortBy: 'rerank_score',
 });
 
+const enable_ocr_options = ref([
+  { value: 'disable', payload: { title: '不启用' } },
+  { value: 'onnx_rapid_ocr', payload: { title: 'ONNX with RapidOCR' } },
+  { value: 'mineru_ocr', payload: { title: 'MinerU OCR' } },
+])
+
 const use_rewrite_queryOptions = ref([
   { value: 'off', payload: { title: 'off', subTitle: '不启用' } },
   { value: 'on', payload: { title: 'on', subTitle: '启用重写' } },
@@ -635,7 +641,7 @@ const deleteFile = (fileId) => {
 const chunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
-  use_parser: false,
+  enable_ocr: 'disable',
 })
 
 const chunkResults = ref([]);
