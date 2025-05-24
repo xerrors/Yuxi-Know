@@ -143,12 +143,35 @@
         </div>
 
         <div class="modal-models-section">
+          <div class="model-search">
+            <a-input
+              v-model:value="providerConfig.searchQuery"
+              placeholder="搜索模型..."
+              allow-clear
+            >
+              <template #prefix>
+                <SearchOutlined />
+              </template>
+            </a-input>
+          </div>
+
+          <!-- 显示选中统计信息 -->
+          <div class="selection-summary">
+            <span>已选择 {{ providerConfig.selectedModels.length }} 个模型</span>
+            <span v-if="providerConfig.searchQuery" class="filter-info">
+              （当前筛选显示 {{ filteredModels.length }} 个）
+            </span>
+          </div>
+
           <div class="modal-checkbox-list">
-            <a-checkbox-group v-model:value="providerConfig.selectedModels">
-              <div v-for="(model, index) in providerConfig.allModels" :key="index" class="modal-checkbox-item">
-                <a-checkbox :value="model.id">{{ model.id }}</a-checkbox>
-              </div>
-            </a-checkbox-group>
+            <div v-for="(model, index) in filteredModels" :key="index" class="modal-checkbox-item">
+              <a-checkbox
+                :checked="providerConfig.selectedModels.includes(model.id)"
+                @change="(e) => handleModelSelect(model.id, e.target.checked)"
+              >
+                {{ model.id }}
+              </a-checkbox>
+            </div>
           </div>
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
             <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
@@ -172,7 +195,8 @@ import {
   InfoCircleOutlined,
   SettingOutlined,
   DownCircleOutlined,
-  LoadingOutlined
+  LoadingOutlined,
+  SearchOutlined
 } from '@ant-design/icons-vue';
 import { useConfigStore } from '@/stores/config';
 import { modelIcons } from '@/utils/modelIcon';
@@ -204,6 +228,7 @@ const providerConfig = reactive({
   allModels: [], // 所有可用的模型
   selectedModels: [], // 用户选择的模型
   loading: false,
+  searchQuery: '',
 });
 
 // 筛选 modelStatus 中为真的key
@@ -314,6 +339,18 @@ const toggleExpand = (item) => {
   expandedModels[item] = !expandedModels[item];
 };
 
+// 处理模型选择
+const handleModelSelect = (modelId, checked) => {
+  const selectedModels = providerConfig.selectedModels;
+  const index = selectedModels.indexOf(modelId);
+
+  if (checked && index === -1) {
+    selectedModels.push(modelId);
+  } else if (!checked && index > -1) {
+    selectedModels.splice(index, 1);
+  }
+};
+
 // 打开提供商配置
 const openProviderConfig = (provider) => {
   providerConfig.provider = provider;
@@ -321,6 +358,7 @@ const openProviderConfig = (provider) => {
   providerConfig.allModels = [];
   providerConfig.visible = true;
   providerConfig.loading = true;
+  providerConfig.searchQuery = ''; // 重置搜索关键词
 
   // 获取当前选择的模型作为初始选中值
   const currentModels = modelNames.value[provider]?.models || [];
@@ -396,6 +434,13 @@ const saveProviderConfig = async () => {
 const cancelProviderConfig = () => {
   providerConfig.visible = false;
 };
+
+// 计算筛选后的模型列表
+const filteredModels = computed(() => {
+  const allModels = providerConfig.allModels || [];
+  const searchQuery = providerConfig.searchQuery.toLowerCase();
+  return allModels.filter(model => model.id.toLowerCase().includes(searchQuery));
+});
 </script>
 
 <style lang="less" scoped>
@@ -664,10 +709,34 @@ const cancelProviderConfig = () => {
       }
 
       .modal-models-section {
+        .model-search {
+          margin-bottom: 10px;
+          padding: 0 6px;
+
+          .ant-input-affix-wrapper {
+            border-radius: 6px;
+            &:hover, &:focus {
+              border-color: var(--main-color);
+            }
+            .anticon {
+              color: var(--gray-500);
+            }
+          }
+        }
+        .selection-summary {
+          margin: 0 6px 10px;
+          font-size: 14px;
+          color: var(--gray-600);
+
+          .filter-info {
+            color: var(--gray-500);
+          }
+        }
         .modal-checkbox-list {
           max-height: 50vh;
           overflow-y: auto;
           .modal-checkbox-item {
+            display: inline-block;
             margin-bottom: 4px;
             padding: 4px 6px;
             border-radius: 6px;
