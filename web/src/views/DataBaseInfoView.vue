@@ -18,15 +18,19 @@
       <a-button type="primary" @click="showEditModal">
         <EditOutlined />
       </a-button>
-      <a-button type="primary" danger @click="deleteDatabse">
-        <DeleteOutlined />
-      </a-button>
     </template>
   </HeaderComponent>
   <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
 
   <!-- 添加编辑对话框 -->
-  <a-modal v-model:open="editModalVisible" title="编辑知识库信息" @ok="handleEditSubmit">
+  <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
+    <template #footer>
+      <a-button danger @click="deleteDatabse" style="margin-right: auto; margin-left: 0;">
+        <DeleteOutlined /> 删除数据库
+      </a-button>
+      <a-button key="back" @click="editModalVisible = false">取消</a-button>
+      <a-button key="submit" type="primary" :loading="loading" @click="handleEditSubmit">确定</a-button>
+    </template>
     <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
       <a-form-item label="知识库名称" name="name" required>
         <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
@@ -98,14 +102,12 @@
             </div>
             <div class="upload-main">
               <div class="source-selector">
-                <a-radio-group v-model:value="uploadMode" button-style="solid" style="margin-bottom: 16px;">
-                  <a-radio-button value="file">
-                    <FileOutlined /> 上传文件
-                  </a-radio-button>
-                  <a-radio-button value="url">
-                    <LinkOutlined /> 输入网址
-                  </a-radio-button>
-                </a-radio-group>
+                <div class="upload-mode-selector" @click="uploadMode = 'file'" :class="{ active: uploadMode === 'file' }">
+                  <FileOutlined /> 上传文件
+                </div>
+                <div class="upload-mode-selector" @click="uploadMode = 'url'" :class="{ active: uploadMode === 'url' }">
+                  <LinkOutlined /> 输入网址
+                </div>
               </div>
 
               <!-- 文件上传区域 -->
@@ -172,49 +174,37 @@
               getCheckboxProps: getCheckboxProps
             }">
             <template #bodyCell="{ column, text, record }">
-              <template v-if="column.key === 'filename'">
-                <a-tooltip :title="record.file_id" placement="right">
-                  <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
-                </a-tooltip>
-              </template>
-              <template v-else-if="column.key === 'type'">
-                <span :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'done'">
-                <CheckCircleFilled style="color: #41A317;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'failed'">
-                <CloseCircleFilled style="color: #FF4D4F ;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'processing'">
-                <HourglassFilled style="color: #1677FF;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'waiting'">
-                <ClockCircleFilled style="color: #FFCD43;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'pending_indexing'">
-                <HddOutlined style="color: #FFCD43;"/>
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <div style="display: flex; gap: 10px;">
-                  <a-button
-                    v-if="record.status === 'pending_indexing'"
-                    type="link"
-                    @click="handleIndexFile(record.file_id)"
-                    :loading="state.indexingFile === record.file_id"
-                    :disabled="state.lock || state.indexingFile === record.file_id"
+              <a-tooltip v-if="column.key === 'filename'" :title="record.file_id" placement="left">
+                <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
+              </a-tooltip>
+              <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
+              <CheckCircleFilled v-else-if="column.key === 'status' && text === 'done'" style="color: #41A317;"/>
+              <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
+              <HourglassFilled v-else-if="column.key === 'status' && text === 'processing'" style="color: #1677FF;"/>
+              <ClockCircleFilled v-else-if="column.key === 'status' && text === 'waiting'" style="color: #FFCD43;"/>
+              <HddOutlined v-else-if="column.key === 'status' && text === 'pending_indexing'" style="color: #FFCD43;"/>
+
+              <a-tooltip v-else-if="column.key === 'created_at'" :title="record.status" placement="left">
+                <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+              </a-tooltip>
+
+              <div v-else-if="column.key === 'action'" style="display: flex; gap: 10px;">
+                <a-button
+                  v-if="record.status === 'pending_indexing'"
+                  type="link"
+                  @click="handleIndexFile(record.file_id)"
+                  :loading="state.indexingFile === record.file_id"
+                  :disabled="state.lock || state.indexingFile === record.file_id"
+                >
+                  索引
+                </a-button>
+                <a-button class="del-btn" type="link"
+                  @click="handleDeleteFile(record.file_id)"
+                  :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id"
                   >
-                    索引
-                  </a-button>
-                  <a-button class="del-btn" type="link"
-                    @click="deleteFile(text)"
-                    :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id"
-                    >
-                    删除
-                  </a-button>
-                </div>
-              </template>
-              <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+                  删除
+                </a-button>
+              </div>
               <span v-else>{{ text }}</span>
             </template>
           </a-table>
@@ -625,7 +615,7 @@ const openFileDetail = (record) => {
       });
   } catch (error) {
     console.error(error);
-    message.error('获取文件详情失败');
+    message.error('获取文件详情失败!!!!');
     state.fileDetailLoading = false;
     state.lock = false;
     state.fileDetailModalVisible = false;
@@ -682,6 +672,25 @@ const getDatabaseInfo = () => {
 }
 
 const deleteFile = (fileId) => {
+  state.lock = true
+  console.debug("deleteFile", databaseId.value, fileId)
+  knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+    .then(data => {
+      console.log(data)
+      message.success(data.message || '删除成功')
+      getDatabaseInfo()
+    })
+    .catch(error => {
+      console.error(error)
+      message.error(error.message || '删除失败')
+    })
+    .finally(() => {
+      state.lock = false
+    })
+}
+
+
+const handleDeleteFile = (fileId) => {
   console.log(fileId)
   //删除提示
   Modal.confirm({
@@ -689,27 +698,64 @@ const deleteFile = (fileId) => {
     content: '确定要删除该文件吗？',
     okText: '确认',
     cancelText: '取消',
-    onOk: () => {
-      state.lock = true
-      knowledgeBaseApi.deleteFile(databaseId.value, fileId)
-        .then(data => {
-          console.log(data)
-          message.success(data.message || '删除成功')
-          getDatabaseInfo()
-        })
-        .catch(error => {
-          console.error(error)
-          message.error(error.message || '删除失败')
-        })
-        .finally(() => {
-          state.lock = false
-        })
-    },
+    onOk: () => deleteFile(fileId),
     onCancel: () => {
       console.log('Cancel');
     },
   });
 }
+
+
+// 批量删除处理函数
+const handleBatchDelete = () => {
+  if (!canBatchDelete.value) {
+    message.info('没有可删除的文件');
+    return;
+  }
+
+  const files = database.value.files || {};
+  const fileCount = selectedRowKeys.value.length;
+
+  Modal.confirm({
+    title: '批量删除文件',
+    content: `确定要删除选中的 ${fileCount} 个文件吗？`,
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      state.batchDeleting = true;
+      try {
+        const promises = selectedRowKeys.value
+          .filter(fileId => {
+            const file = files[fileId];
+            return !(file.status === 'processing' || file.status === 'waiting');
+          })
+          .map(fileId =>
+            deleteFile(fileId)
+          );
+
+        const results = await Promise.allSettled(promises);
+
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+
+        if (succeeded > 0) {
+          message.success(`成功删除 ${succeeded} 个文件`);
+        }
+        if (failed > 0) {
+          message.error(`${failed} 个文件删除失败`);
+        }
+
+        selectedRowKeys.value = []; // 清空选择
+        getDatabaseInfo(); // 刷新列表状态
+      } catch (error) {
+        console.error('批量删除出错:', error);
+        message.error('批量删除过程中发生错误');
+      } finally {
+        state.batchDeleting = false;
+      }
+    },
+  });
+};
 
 const chunkParams = ref({
   chunk_size: 1000,
@@ -802,55 +848,6 @@ const chunkUrls = () => {
     state.chunkLoading = false;
   });
 };
-
-// 添加到数据库 - 此函数逻辑将被新的 "索引" 按钮替代或移除
-const addToDatabase = () => {
-  // if (chunkResults.value.length === 0) {
-  //   message.error('没有可添加的分块')
-  //   return
-  // }
-  // state.adding = true
-  // state.lock = true
-
-  // // 转换为API需要的格式
-  // const fileChunks = {};
-  // chunkResults.value.forEach(file => {
-  //   fileChunks[file.file_id] = file;
-  // });
-
-  // // 调用add-by-chunks接口将分块添加到数据库
-  // knowledgeBaseApi.addByChunks({
-  //   db_id: databaseId.value,
-  //   file_chunks: fileChunks
-  // })
-  // .then(data => {
-  //   console.log(data)
-
-  //   if (data.status === 'failed') {
-  //     message.error(data.message)
-  //   } else {
-  //     message.success(data.message)
-  //     fileList.value = []
-  //     chunkResults.value = []
-  //     activeFileKeys.value = []
-  //     getDatabaseInfo() // 刷新列表
-  //   }
-  // })
-  // .catch(error => {
-  //   console.error(error)
-  //   message.error(error.message)
-  // })
-  // .finally(() => {
-  //   state.adding = false
-  //   state.lock = false
-  // })
-  message.info("此功能已通过新的索引流程处理。文件分块后将自动出现在列表中，可单独进行索引。");
-}
-
-const addDocumentByFile = () => {
-  // 此函数不再需要，由chunkFiles和addToDatabase替代
-  console.log('此功能已被拆分为两个步骤')
-}
 
 const columns = [
   // { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
@@ -1070,59 +1067,6 @@ const handleBatchIndex = async () => {
   }
 };
 
-// 批量删除处理函数
-const handleBatchDelete = () => {
-  if (!canBatchDelete.value) {
-    message.info('没有可删除的文件');
-    return;
-  }
-
-  const files = database.value.files || {};
-  const fileCount = selectedRowKeys.value.length;
-
-  Modal.confirm({
-    title: '批量删除文件',
-    content: `确定要删除选中的 ${fileCount} 个文件吗？`,
-    okText: '确认',
-    cancelText: '取消',
-    onOk: async () => {
-      state.batchDeleting = true;
-      state.lock = true;
-
-      try {
-        const promises = selectedRowKeys.value
-          .filter(fileId => {
-            const file = files[fileId];
-            return !(state.lock || file.status === 'processing' || file.status === 'waiting' || state.indexingFile === file.file_id);
-          })
-          .map(fileId =>
-            knowledgeBaseApi.deleteFile(databaseId.value, fileId)
-          );
-
-        const results = await Promise.allSettled(promises);
-
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-
-        if (succeeded > 0) {
-          message.success(`成功删除 ${succeeded} 个文件`);
-        }
-        if (failed > 0) {
-          message.error(`${failed} 个文件删除失败`);
-        }
-
-        selectedRowKeys.value = []; // 清空选择
-        getDatabaseInfo(); // 刷新列表状态
-      } catch (error) {
-        console.error('批量删除出错:', error);
-        message.error('批量删除过程中发生错误');
-      } finally {
-        state.batchDeleting = false;
-        state.lock = false;
-      }
-    },
-  });
-};
 
 </script>
 
@@ -1467,6 +1411,7 @@ const handleBatchDelete = () => {
     background-color: var(--main-light-6);
     border-radius: 8px;
     border: 1px solid var(--main-light-3);
+    flex: 0 0 280px;
     // box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 
     .chunking-params {
@@ -1538,6 +1483,26 @@ const handleBatchDelete = () => {
 
   .upload-main {
     flex: 1;
+
+    .source-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+
+      .upload-mode-selector {
+        cursor: pointer;
+        padding: 8px 16px;
+        border-radius: 8px;
+        background-color: var(--main-light-4);
+        border: 1px solid var(--main-light-3);
+        transition: all 0.2s ease;
+        &.active {
+          color: var(--main-color);
+          background-color: var(--main-10);
+          border-color: var(--main-color);
+        }
+      }
+    }
   }
 }
 
@@ -1619,6 +1584,12 @@ const handleBatchDelete = () => {
   justify-content: center;
   align-items: center;
   min-height: 200px;
+}
+
+.ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>
 
