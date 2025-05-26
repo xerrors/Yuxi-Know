@@ -16,19 +16,14 @@
 
 **核心特点：**
 
-- 🤖 多模型支持：适配 OpenAI、各大国内主流大模型平台，以及本地 vllm、ollama 部署
-- 📚 灵活知识库：支持 PDF、TXT、MD、Docx 等多种格式文档，支持通过 URL 添加文件
-- 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力
-- 🚀 简单配置：只需配置对应服务平台的 `API_KEY` 即可使用
-- 🌐 网页检索：支持联网搜索，辅助回答最新信息
-- 🤖 智能体拓展：可以编写自己的智能体代码
-- ⚒️ 适合二次开发：更多的开发自定义项
-
-V0.1 版本发布：支持多用户、智能体构建～
+- 🤖 多模型支持：适配 OpenAI、各大国内主流大模型平台，以及本地 vllm、ollama 部署，只需配置对应服务平台的 `API_KEY` 即可使用。
+- 📚 灵活知识库：支持 PDF、TXT、MD、Docx 等多种格式文档，支持通过 URL 添加文件，支持联网搜索，辅助回答最新信息。
+- 🤖 智能体拓展：可以编写自己的智能体代码，适合二次开发：更多的开发自定义项；兼容 LangGraph 部署方法 WIP。
+- 🕸️ 知识图谱集成：基于 Neo4j 的知识图谱问答能力，可链接已有知识图谱。
 
 ![欢迎 Star](https://github.com/user-attachments/assets/a9ea624a-7b95-4bc1-a3c7-bfec6c587b5c)
 
-
+https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 ![流程图](https://github.com/user-attachments/assets/75010511-4ac5-4924-8268-fea9a589839c)
 
@@ -94,8 +89,6 @@ docker compose up --build
 访问 [http://localhost:5173/](http://localhost:5173/) 即可使用系统。
 
 
-
-https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 
 
