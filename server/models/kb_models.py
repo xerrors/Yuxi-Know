@@ -59,6 +59,11 @@ class KnowledgeFile(Base):
     database = relationship("KnowledgeDatabase", back_populates="files")
     nodes = relationship("KnowledgeNode", back_populates="file", cascade="all, delete-orphan")
 
+    @property
+    def computed_node_count(self):
+        """动态计算节点数量"""
+        return len(self.nodes) if self.nodes is not None else 0
+
     def to_dict(self):
         """转换为字典格式"""
         result = {
@@ -67,6 +72,7 @@ class KnowledgeFile(Base):
             "path": self.path,
             "type": self.file_type,
             "status": self.status,
+            "node_count": self.computed_node_count,  # 使用计算属性
             "created_at": self.created_at.timestamp() if self.created_at else time.time()
         }
 

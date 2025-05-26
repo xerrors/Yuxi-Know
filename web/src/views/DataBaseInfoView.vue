@@ -42,60 +42,11 @@
       <a-tab-pane key="files">
         <template #tab><span><ReadOutlined />文件列表</span></template>
         <div class="db-tab-container">
-          <div class="actions">
+          <div class="actions" style="display: flex; gap: 10px;">
+            <a-button type="primary" @click="handleShowAddFilesBlock" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
             <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
           </div>
-          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table">
-            <template #bodyCell="{ column, text, record }">
-              <template v-if="column.key === 'filename'">
-                <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
-              </template>
-              <template v-else-if="column.key === 'type'">
-                <span :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'done'">
-                <CheckCircleFilled style="color: #41A317;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'failed'">
-                <CloseCircleFilled style="color: #FF4D4F ;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'processing'">
-                <HourglassFilled style="color: #1677FF;"/>
-              </template>
-              <template v-else-if="column.key === 'status' && text === 'waiting'">
-                <ClockCircleFilled style="color: #FFCD43;"/>
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-button class="del-btn" type="link"
-                  @click="deleteFile(text)"
-                  :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' "
-                  >删除
-                </a-button>
-              </template>
-              <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
-              <span v-else>{{ text }}</span>
-            </template>
-          </a-table>
-          <a-drawer
-            width="50%"
-            v-model:open="state.drawer"
-            class="custom-class"
-            :title="selectedFile?.filename || '文件详情'"
-            placement="right"
-            @after-open-change="afterOpenChange"
-          >
-            <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
-            <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
-              {{ line.text }}
-            </p>
-          </a-drawer>
-        </div>
-      </a-tab-pane>
-
-      <a-tab-pane key="add">
-        <template #tab><span><CloudUploadOutlined />添加文件</span></template>
-        <div class="db-tab-container">
-          <div class="upload-section">
+          <div class="upload-section" v-if="state.showAddFilesBlock">
             <div class="upload-sidebar">
               <div class="chunking-params">
                 <div class="params-info">
@@ -184,30 +135,67 @@
               </div>
             </div>
           </div>
-
-          <!-- 分块结果预览区域 -->
-          <div class="chunk-preview" v-if="chunkResults.length > 0">
-            <div class="preview-header">
-              <h3>分块预览 (共 {{ chunkResults.length }} 个文件，{{ getTotalChunks() }} 个分块)</h3>
-              <a-button
-                type="primary"
-                @click="addToDatabase"
-                :loading="state.adding"
-              >
-                添加到数据库
-              </a-button>
-            </div>
-
-            <a-collapse v-model:activeKey="activeFileKeys">
-              <a-collapse-panel v-for="(file, fileIdx) in chunkResults" :key="fileIdx" :header="file.filename + ' (' + file.nodes.length + ' 个分块)'">
-                <div id="result-cards" class="result-cards">
-                  <div v-for="(chunk, index) in file.nodes" :key="index" class="chunk">
-                    <p><strong>#{{ index + 1 }}</strong> {{ chunk.text }}</p>
-                  </div>
+          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table">
+            <template #bodyCell="{ column, text, record }">
+              <template v-if="column.key === 'filename'">
+                <a-tooltip :title="record.file_id" placement="right">
+                  <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
+                </a-tooltip>
+              </template>
+              <template v-else-if="column.key === 'type'">
+                <span :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
+              </template>
+              <template v-else-if="column.key === 'status' && text === 'done'">
+                <CheckCircleFilled style="color: #41A317;"/>
+              </template>
+              <template v-else-if="column.key === 'status' && text === 'failed'">
+                <CloseCircleFilled style="color: #FF4D4F ;"/>
+              </template>
+              <template v-else-if="column.key === 'status' && text === 'processing'">
+                <HourglassFilled style="color: #1677FF;"/>
+              </template>
+              <template v-else-if="column.key === 'status' && text === 'waiting'">
+                <ClockCircleFilled style="color: #FFCD43;"/>
+              </template>
+              <template v-else-if="column.key === 'status' && text === 'pending_indexing'">
+                <HddOutlined style="color: #FFCD43;"/>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <div style="display: flex; gap: 10px;">
+                  <a-button
+                    v-if="record.status === 'pending_indexing'"
+                    type="link"
+                    @click="handleIndexFile(record.file_id)"
+                    :loading="state.indexingFile === record.file_id"
+                    :disabled="state.lock || state.indexingFile === record.file_id"
+                  >
+                    索引
+                  </a-button>
+                  <a-button class="del-btn" type="link"
+                    @click="deleteFile(text)"
+                    :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id"
+                    >
+                    删除
+                  </a-button>
                 </div>
-              </a-collapse-panel>
-            </a-collapse>
-          </div>
+              </template>
+              <span v-else-if="column.key === 'created_at'">{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+              <span v-else>{{ text }}</span>
+            </template>
+          </a-table>
+          <a-drawer
+            width="50%"
+            v-model:open="state.drawer"
+            class="custom-class"
+            :title="selectedFile?.filename || '文件详情'"
+            placement="right"
+            @after-open-change="afterOpenChange"
+          >
+            <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
+            <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
+              {{ line.text }}
+            </p>
+          </a-drawer>
         </div>
       </a-tab-pane>
 
@@ -350,7 +338,10 @@ import {
   FileOutlined,
   LinkOutlined,
   EditOutlined,
+  PlusOutlined,
+  HddOutlined,
 } from '@ant-design/icons-vue'
+import { h } from 'vue';
 
 
 const route = useRoute();
@@ -376,6 +367,8 @@ const state = reactive({
   drawer: false,
   refreshInterval: null,
   curPage: "files",
+  indexingFile: null,
+  showAddFilesBlock: false,
 });
 
 const meta = reactive({
@@ -503,6 +496,10 @@ const handleRefresh = () => {
     state.refrashing = false
     console.log(database.value)
   })
+}
+
+const handleShowAddFilesBlock = () => {
+  state.showAddFilesBlock = !state.showAddFilesBlock
 }
 
 const deleteDatabse = () => {
@@ -652,7 +649,7 @@ const getTotalChunks = () => {
   return chunkResults.value.reduce((total, file) => total + file.nodes.length, 0);
 }
 
-// 分块预览
+// "生成分块" - 修改后的逻辑
 const chunkFiles = () => {
   console.log(fileList.value)
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
@@ -665,28 +662,34 @@ const chunkFiles = () => {
 
   state.loading = true
 
-  // 调用file-to-chunk接口获取分块信息
   knowledgeBaseApi.fileToChunk({
+    db_id: databaseId.value, // 添加 db_id
     files: files,
     params: chunkParams.value
   })
   .then(data => {
-    console.log('文件分块信息:', data)
-    chunkResults.value = Object.values(data);
-    activeFileKeys.value = chunkResults.value.length > 0 ? [0] : []; // 默认展开第一个文件
+    console.log('文件处理结果:', data)
+    if (data.status === 'success') {
+      message.success(data.message || '文件已提交处理，请稍后在列表刷新查看状态');
+      fileList.value = []; // 清空已上传文件列表
+      // chunkResults.value = []; // 清空旧的预览结果
+      // activeFileKeys.value = []; // 清空旧的预览结果
+      getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
+    } else {
+      message.error(data.message || '文件处理失败');
+    }
   })
   .catch(error => {
     console.error(error)
-    message.error(error.message)
+    message.error(error.message || '文件处理请求失败')
   })
   .finally(() => {
     state.loading = false
   })
 }
 
-// 分块预览
+// "生成分块" - 修改后的逻辑
 const chunkUrls = () => {
-  // 分割并过滤URL列表
   const urls = urlList.value.split('\n')
     .map(url => url.trim())
     .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
@@ -698,67 +701,74 @@ const chunkUrls = () => {
 
   state.loading = true;
 
-  // 调用url-to-chunk接口获取分块信息
   knowledgeBaseApi.urlToChunk({
+    db_id: databaseId.value, // 添加 db_id
     urls: urls,
     params: chunkParams.value
   })
   .then(data => {
-    console.log('URL分块信息:', data);
-    chunkResults.value = Object.values(data);
-    activeFileKeys.value = chunkResults.value.length > 0 ? [0] : []; // 默认展开第一个
+    console.log('URL处理结果:', data);
+    if (data.status === 'success') {
+      message.success(data.message || 'URL已提交处理，请稍后在列表刷新查看状态');
+      urlList.value = ''; // 清空URL输入
+      // chunkResults.value = []; // 清空旧的预览结果
+      // activeFileKeys.value = []; // 清空旧的预览结果
+      getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
+    } else {
+      message.error(data.message || 'URL处理失败');
+    }
   })
   .catch(error => {
     console.error(error);
-    message.error(error.message || '处理URL失败');
+    message.error(error.message || '处理URL请求失败');
   })
   .finally(() => {
     state.loading = false;
   });
 };
 
-// 添加到数据库
+// 添加到数据库 - 此函数逻辑将被新的 "索引" 按钮替代或移除
 const addToDatabase = () => {
-  if (chunkResults.value.length === 0) {
-    message.error('没有可添加的分块')
-    return
-  }
+  // if (chunkResults.value.length === 0) {
+  //   message.error('没有可添加的分块')
+  //   return
+  // }
+  // state.adding = true
+  // state.lock = true
 
-  state.adding = true
-  state.lock = true
+  // // 转换为API需要的格式
+  // const fileChunks = {};
+  // chunkResults.value.forEach(file => {
+  //   fileChunks[file.file_id] = file;
+  // });
 
-  // 转换为API需要的格式
-  const fileChunks = {};
-  chunkResults.value.forEach(file => {
-    fileChunks[file.file_id] = file;
-  });
+  // // 调用add-by-chunks接口将分块添加到数据库
+  // knowledgeBaseApi.addByChunks({
+  //   db_id: databaseId.value,
+  //   file_chunks: fileChunks
+  // })
+  // .then(data => {
+  //   console.log(data)
 
-  // 调用add-by-chunks接口将分块添加到数据库
-  knowledgeBaseApi.addByChunks({
-    db_id: databaseId.value,
-    file_chunks: fileChunks
-  })
-  .then(data => {
-    console.log(data)
-
-    if (data.status === 'failed') {
-      message.error(data.message)
-    } else {
-      message.success(data.message)
-      fileList.value = []
-      chunkResults.value = []
-      activeFileKeys.value = []
-    }
-  })
-  .catch(error => {
-    console.error(error)
-    message.error(error.message)
-  })
-  .finally(() => {
-    getDatabaseInfo()
-    state.adding = false
-    state.lock = false
-  })
+  //   if (data.status === 'failed') {
+  //     message.error(data.message)
+  //   } else {
+  //     message.success(data.message)
+  //     fileList.value = []
+  //     chunkResults.value = []
+  //     activeFileKeys.value = []
+  //     getDatabaseInfo() // 刷新列表
+  //   }
+  // })
+  // .catch(error => {
+  //   console.error(error)
+  //   message.error(error.message)
+  // })
+  // .finally(() => {
+  //   state.adding = false
+  //   state.lock = false
+  // })
+  message.info("此功能已通过新的索引流程处理。文件分块后将自动出现在列表中，可单独进行索引。");
 }
 
 const addDocumentByFile = () => {
@@ -879,6 +889,46 @@ const updateDatabaseInfo = async () => {
   } finally {
     state.lock = false;
   }
+};
+
+const handleIndexFile = (fileId) => {
+  if (!fileId) {
+    message.error('无效的文件ID');
+    return;
+  }
+  Modal.confirm({
+    title: '开始索引文件',
+    content: `确定要开始索引文件 ${fileId} 吗？该操作可能需要一些时间。`,
+    okText: '确认索引',
+    cancelText: '取消',
+    onOk: () => {
+      state.indexingFile = fileId; // Set loading state for this specific file
+      state.lock = true;
+      knowledgeBaseApi.indexFile({
+        db_id: databaseId.value,
+        file_id: fileId
+      })
+      .then(response => {
+        if (response.status === 'success') {
+          message.success(response.message || `文件 ${fileId} 已开始索引。`);
+          getDatabaseInfo(); // Refresh to update status
+        } else {
+          message.error(response.message || `文件 ${fileId} 索引启动失败。`);
+        }
+      })
+      .catch(error => {
+        console.error(`索引文件 ${fileId} 失败:`, error);
+        message.error(error.message || `索引文件 ${fileId} 时发生错误。`);
+      })
+      .finally(() => {
+        state.indexingFile = null; // Reset loading state for this file
+        state.lock = false;
+      });
+    },
+    onCancel: () => {
+      console.log('取消索引');
+    },
+  });
 };
 
 </script>

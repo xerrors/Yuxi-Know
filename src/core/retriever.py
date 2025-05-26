@@ -107,7 +107,7 @@ class Retriever:
         rw_query = self.rewrite_query(query, history, refs)
 
         logger.debug(f"{meta=}")
-        query_result = knowledge_base.query(query=rw_query,
+        query_result = knowledge_base.query(query_text=rw_query,
                                             db_id=db_id,
                                             distance_threshold=meta.get("distanceThreshold", 0.5),
                                             rerank_threshold=meta.get("rerankThreshold", 0.1),

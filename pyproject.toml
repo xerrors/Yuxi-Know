@@ -17,6 +17,7 @@ dependencies = [
     "langchain-together>=0.3.0",
     "langgraph>=0.3.34",
     "langgraph-checkpoint-sqlite>=2.0.7",
+    "langgraph-cli[inmem]>=0.1.54",
     "langsmith>=0.3.37",
     "llama-index>=0.12.33",
     "llama-index-readers-file>=0.4.7",

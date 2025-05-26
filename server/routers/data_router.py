@@ -52,36 +52,42 @@ async def query_test(query: str = Body(...), meta: dict = Body(...), current_use
     return result
 
 @data.post("/file-to-chunk")
-async def file_to_chunk(files: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"File to chunk: {files} {params=}")
-    result = await knowledge_base.file_to_chunk(files, params=params)
-    return result
+async def file_to_chunk(db_id: str = Body(...), files: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"File to chunk for db_id {db_id}: {files} {params=}")
+    try:
+        processed_files = await knowledge_base.save_files_for_pending_indexing(db_id, files, params)
+        return {"message": "Files processed and pending indexing", "files": processed_files, "status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to process files for pending indexing: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to process files for pending indexing: {e}", "status": "failed"}
 
 @data.post("/url-to-chunk")
-async def url_to_chunk(urls: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"Url to chunk: {urls}")
-    result = await knowledge_base.url_to_chunk(urls, params=params)
-    return result
+async def url_to_chunk(db_id: str = Body(...), urls: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"Url to chunk for db_id {db_id}: {urls} {params=}")
+    try:
+        processed_urls = await knowledge_base.save_urls_for_pending_indexing(db_id, urls, params)
+        return {"message": "URLs processed and pending indexing", "urls": processed_urls, "status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to process URLs for pending indexing: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to process URLs for pending indexing: {e}", "status": "failed"}
 
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: list[str] = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"Add document in {db_id} by file: {files}")
-    try:
-        await knowledge_base.add_files(db_id, files)
-        return {"message": "文件添加完成", "status": "success"}
-    except Exception as e:
-        logger.error(f"添加文件失败: {e}, {traceback.format_exc()}")
-        return {"message": f"添加文件失败: {e}", "status": "failed"}
+    raise ValueError("This method is deprecated. Use /file-to-chunk and /index-file instead.")
 
 @data.post("/add-by-chunks")
 async def add_by_chunks(db_id: str = Body(...), file_chunks: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    # logger.debug(f"Add chunks in {db_id}: {len(file_chunks)} chunks")
+    raise ValueError("This method is deprecated. Use /file-to-chunk and /index-file instead.")
+
+@data.post("/index-file")
+async def index_file(db_id: str = Body(...), file_id: str = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"Indexing file_id {file_id} in db_id {db_id}")
     try:
-        await knowledge_base.add_chunks(db_id, file_chunks)
-        return {"message": "分块添加完成", "status": "success"}
+        result = await knowledge_base.trigger_file_indexing(db_id, file_id)
+        return {"message": f"File {file_id} indexing initiated", "details": result, "status": "success"}
     except Exception as e:
-        logger.error(f"添加分块失败: {e}, {traceback.format_exc()}")
-        return {"message": f"添加分块失败: {e}", "status": "failed"}
+        logger.error(f"Failed to index file {file_id}: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to index file {file_id}: {e}", "status": "failed"}
 
 @data.get("/info")
 async def get_database_info(db_id: str, current_user: User = Depends(get_admin_user)):

@@ -150,13 +150,33 @@ export const knowledgeBaseApi = {
   },
 
   /**
-   * 将文件分块
-   * @param {Object} data - 分块参数
-   * @returns {Promise} - 分块结果
+   * 将文件分块并保存文件记录以待索引
+   * @param {Object} data - 包含 db_id, files (路径列表), params (分块参数)
+   * @returns {Promise} - 处理结果
    */
-  fileToChunk: async (data) => {
+  fileToChunk: async (data) => { // data: { db_id, files, params }
     checkAdminPermission()
     return apiPost('/api/data/file-to-chunk', data, {}, true)
+  },
+
+  /**
+   * 将URL分块并保存文件记录以待索引
+   * @param {Object} data - 包含 db_id, urls (链接列表), params (分块参数)
+   * @returns {Promise} - 处理结果
+   */
+  urlToChunk: async (data) => { // data: { db_id, urls, params }
+    checkAdminPermission()
+    return apiPost('/api/data/url-to-chunk', data, {}, true)
+  },
+
+  /**
+   * 触发指定文件的索引过程
+   * @param {Object} data - 包含 db_id, file_id
+   * @returns {Promise} - 索引启动结果
+   */
+  indexFile: async (data) => { // data: { db_id, file_id }
+    checkAdminPermission()
+    return apiPost('/api/data/index-file', data, {}, true)
   },
 
   /**
@@ -188,16 +208,6 @@ export const knowledgeBaseApi = {
   getDocumentDetail: async (dbId, fileId) => {
     checkAdminPermission()
     return apiGet(`/api/data/document?db_id=${dbId}&file_id=${fileId}`, {}, true)
-  },
-
-  /**
-   * 将URL转换为分块
-   * @param {Object} data - 分块参数
-   * @returns {Promise} - 分块结果
-   */
-  urlToChunk: async (data) => {
-    checkAdminPermission()
-    return apiPost('/api/data/url-to-chunk', data, {}, true)
   },
 
   /**
