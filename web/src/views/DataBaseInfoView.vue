@@ -2,6 +2,7 @@
 <div>
   <HeaderComponent
     :title="database.name || '数据库信息'"
+    :loading="state.databaseLoading"
   >
     <template #description>
       <div class="database-info">
@@ -42,9 +43,31 @@
       <a-tab-pane key="files">
         <template #tab><span><ReadOutlined />文件列表</span></template>
         <div class="db-tab-container">
-          <div class="actions" style="display: flex; gap: 10px;">
-            <a-button type="primary" @click="handleShowAddFilesBlock" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
-            <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
+          <div class="actions" style="display: flex; gap: 10px; justify-content: space-between;">
+            <div class="left-actions" style="display: flex; gap: 10px;">
+              <a-button type="primary" @click="handleShowAddFilesBlock" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
+              <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
+            </div>
+            <div class="batch-actions" style="display: flex; gap: 10px;" v-if="selectedRowKeys.length > 0">
+              <span style="margin-right: 8px;">已选择 {{ selectedRowKeys.length }} 项</span>
+              <a-button
+                type="primary"
+                @click="handleBatchIndex"
+                :loading="state.batchIndexing"
+                :disabled="!hasSelectedPendingFiles"
+              >
+                批量索引
+              </a-button>
+              <a-button
+                type="primary"
+                danger
+                @click="handleBatchDelete"
+                :loading="state.batchDeleting"
+                :disabled="!canBatchDelete"
+              >
+                批量删除
+              </a-button>
+            </div>
           </div>
           <div class="upload-section" v-if="state.showAddFilesBlock">
             <div class="upload-sidebar">
@@ -92,7 +115,7 @@
                   v-model:fileList="fileList"
                   name="file"
                   :multiple="true"
-                  :disabled="state.loading"
+                  :disabled="state.chunkLoading"
                   :action="'/api/data/upload?db_id=' + databaseId"
                   :headers="getAuthHeaders()"
                   @change="handleFileUpload"
@@ -113,7 +136,7 @@
                       v-model:value="urlList"
                       placeholder="请输入网页链接，每行一个"
                       :rows="6"
-                      :disabled="state.loading"
+                      :disabled="state.chunkLoading"
                     />
                   </a-form-item>
                 </a-form>
@@ -126,7 +149,7 @@
                 <a-button
                   type="primary"
                   @click="chunkData"
-                  :loading="state.loading"
+                  :loading="state.chunkLoading"
                   :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
                   style="margin: 0px 20px 20px 0;"
                 >
@@ -135,7 +158,19 @@
               </div>
             </div>
           </div>
-          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table" size="small" bordered :pagination="pagination" >
+          <a-table
+            :columns="columns"
+            :data-source="Object.values(database.files || {})"
+            row-key="file_id"
+            class="my-table"
+            size="small"
+            bordered
+            :pagination="pagination"
+            :row-selection="{
+              selectedRowKeys: selectedRowKeys,
+              onChange: onSelectChange,
+              getCheckboxProps: getCheckboxProps
+            }">
             <template #bodyCell="{ column, text, record }">
               <template v-if="column.key === 'filename'">
                 <a-tooltip :title="record.file_id" placement="right">
@@ -197,7 +232,7 @@
               </div>
             </template>
             <template v-else>
-              <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
+              <h3>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h3>
               <div class="file-detail-content">
                 <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
                   {{ line.text }}
@@ -368,7 +403,7 @@ const filteredResults = ref([])
 const configStore = useConfigStore()
 
 const state = reactive({
-  loading: false,
+  databaseLoading: false,
   adding: false,
   refrashing: false,
   searchLoading: false,
@@ -379,6 +414,9 @@ const state = reactive({
   curPage: "files",
   indexingFile: null,
   showAddFilesBlock: false,
+  batchIndexing: false,
+  batchDeleting: false,
+  chunkLoading: false,
 });
 
 const meta = reactive({
@@ -405,10 +443,13 @@ const use_rewrite_queryOptions = ref([
 ])
 
 const pagination = ref({
-  pageSize: 30,
+  pageSize: 15,
   current: 1,
-  total: 0,
+  total: computed(() => database.value?.files?.length || 0),
+  showSizeChanger: true,
+  onChange: (page, pageSize) => pagination.value.current = page,
   showTotal: (total, range) => `共 ${total} 条`,
+  onShowSizeChange: (current, pageSize) => pagination.value.pageSize = pageSize,
 })
 
 const filterQueryResults = () => {
@@ -621,6 +662,7 @@ const getDatabaseInfo = () => {
     return
   }
   state.lock = true
+  state.databaseLoading = true
   return new Promise((resolve, reject) => {
     knowledgeBaseApi.getDatabaseInfo(db_id)
       .then(data => {
@@ -634,6 +676,7 @@ const getDatabaseInfo = () => {
       })
       .finally(() => {
         state.lock = false
+        state.databaseLoading = false
       })
   })
 }
@@ -693,7 +736,7 @@ const chunkFiles = () => {
     return
   }
 
-  state.loading = true
+  state.chunkLoading = true
 
   knowledgeBaseApi.fileToChunk({
     db_id: databaseId.value, // 添加 db_id
@@ -717,7 +760,7 @@ const chunkFiles = () => {
     message.error(error.message || '文件处理请求失败')
   })
   .finally(() => {
-    state.loading = false
+    state.chunkLoading = false
   })
 }
 
@@ -732,7 +775,7 @@ const chunkUrls = () => {
     return;
   }
 
-  state.loading = true;
+  state.chunkLoading = true;
 
   knowledgeBaseApi.urlToChunk({
     db_id: databaseId.value, // 添加 db_id
@@ -756,7 +799,7 @@ const chunkUrls = () => {
     message.error(error.message || '处理URL请求失败');
   })
   .finally(() => {
-    state.loading = false;
+    state.chunkLoading = false;
   });
 };
 
@@ -811,11 +854,11 @@ const addDocumentByFile = () => {
 
 const columns = [
   // { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
-  { title: '文件名', dataIndex: 'filename', key: 'filename' },
-  { title: '上传时间', dataIndex: 'created_at', key: 'created_at' },
-  { title: '状态', dataIndex: 'status', key: 'status' },
-  { title: '类型', dataIndex: 'type', key: 'type' },
-  { title: '操作', key: 'action', dataIndex: 'file_id' }
+  { title: '文件名', dataIndex: 'filename', key: 'filename', ellipsis: true },
+  { title: '上传时间', dataIndex: 'created_at', key: 'created_at', width: 150 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 80 },
+  { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
+  { title: '操作', key: 'action', dataIndex: 'file_id', width: 150 }
 ];
 
 watch(() => route.params.database_id, (newId) => {
@@ -929,37 +972,154 @@ const handleIndexFile = (fileId) => {
     message.error('无效的文件ID');
     return;
   }
-  Modal.confirm({
-    title: '开始索引文件',
-    content: `确定要开始索引文件 ${fileId} 吗？该操作可能需要一些时间。`,
-    okText: '确认索引',
-    cancelText: '取消',
-    onOk: () => {
-      state.indexingFile = fileId; // Set loading state for this specific file
-      state.lock = true;
+  state.lock = true;
+  knowledgeBaseApi.indexFile({
+    db_id: databaseId.value,
+    file_id: fileId
+  })
+  .then(response => {
+    if (response.status === 'success') {
+      message.success(response.message || `文件 ${fileId} 已开始索引。`);
+      getDatabaseInfo(); // Refresh to update status
+    } else {
+      message.error(response.message || `文件 ${fileId} 索引启动失败。`);
+    }
+  })
+  .catch(error => {
+    console.error(`索引文件 ${fileId} 失败:`, error);
+    message.error(error.message || `索引文件 ${fileId} 时发生错误。`);
+  })
+  .finally(() => {
+    state.indexingFile = null; // Reset loading state for this file
+    state.lock = false;
+  });
+};
+
+// 计算是否有待索引的文件
+const hasPendingFiles = computed(() => {
+  return Object.values(database.value.files || {}).some(file => file.status === 'pending_indexing');
+});
+
+// 选中的行
+const selectedRowKeys = ref([]);
+
+// 行选择改变处理
+const onSelectChange = (keys) => {
+  selectedRowKeys.value = keys;
+};
+
+// 获取复选框属性
+const getCheckboxProps = (record) => ({
+  disabled: state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id,
+});
+
+// 计算是否有选中的待索引文件
+const hasSelectedPendingFiles = computed(() => {
+  const files = database.value.files || {};
+  return selectedRowKeys.value.some(key => files[key]?.status === 'pending_indexing');
+});
+
+// 计算是否可以批量删除
+const canBatchDelete = computed(() => {
+  const files = database.value.files || {};
+  return selectedRowKeys.value.some(key => {
+    const file = files[key];
+    return !(state.lock || file.status === 'processing' || file.status === 'waiting' || state.indexingFile === file.file_id);
+  });
+});
+
+// 批量索引处理函数
+const handleBatchIndex = async () => {
+  if (!hasSelectedPendingFiles.value) {
+    message.info('没有需要索引的文件');
+    return;
+  }
+
+  state.batchIndexing = true;
+  const files = database.value.files || {};
+  const pendingFiles = selectedRowKeys.value
+    .filter(key => files[key]?.status === 'pending_indexing');
+
+  try {
+    const promises = pendingFiles.map(fileId =>
       knowledgeBaseApi.indexFile({
         db_id: databaseId.value,
         file_id: fileId
       })
-      .then(response => {
-        if (response.status === 'success') {
-          message.success(response.message || `文件 ${fileId} 已开始索引。`);
-          getDatabaseInfo(); // Refresh to update status
-        } else {
-          message.error(response.message || `文件 ${fileId} 索引启动失败。`);
+    );
+
+    const results = await Promise.allSettled(promises);
+
+    const succeeded = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length;
+    const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status !== 'success')).length;
+
+    if (succeeded > 0) {
+      message.success(`成功提交 ${succeeded} 个文件进行索引`);
+    }
+    if (failed > 0) {
+      message.error(`${failed} 个文件提交索引失败`);
+    }
+
+    selectedRowKeys.value = []; // 清空选择
+    getDatabaseInfo(); // 刷新列表状态
+  } catch (error) {
+    console.error('批量索引出错:', error);
+    message.error('批量索引过程中发生错误');
+  } finally {
+    state.batchIndexing = false;
+  }
+};
+
+// 批量删除处理函数
+const handleBatchDelete = () => {
+  if (!canBatchDelete.value) {
+    message.info('没有可删除的文件');
+    return;
+  }
+
+  const files = database.value.files || {};
+  const fileCount = selectedRowKeys.value.length;
+
+  Modal.confirm({
+    title: '批量删除文件',
+    content: `确定要删除选中的 ${fileCount} 个文件吗？`,
+    okText: '确认',
+    cancelText: '取消',
+    onOk: async () => {
+      state.batchDeleting = true;
+      state.lock = true;
+
+      try {
+        const promises = selectedRowKeys.value
+          .filter(fileId => {
+            const file = files[fileId];
+            return !(state.lock || file.status === 'processing' || file.status === 'waiting' || state.indexingFile === file.file_id);
+          })
+          .map(fileId =>
+            knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+          );
+
+        const results = await Promise.allSettled(promises);
+
+        const succeeded = results.filter(r => r.status === 'fulfilled').length;
+        const failed = results.filter(r => r.status === 'rejected').length;
+
+        if (succeeded > 0) {
+          message.success(`成功删除 ${succeeded} 个文件`);
         }
-      })
-      .catch(error => {
-        console.error(`索引文件 ${fileId} 失败:`, error);
-        message.error(error.message || `索引文件 ${fileId} 时发生错误。`);
-      })
-      .finally(() => {
-        state.indexingFile = null; // Reset loading state for this file
+        if (failed > 0) {
+          message.error(`${failed} 个文件删除失败`);
+        }
+
+        selectedRowKeys.value = []; // 清空选择
+        getDatabaseInfo(); // 刷新列表状态
+      } catch (error) {
+        console.error('批量删除出错:', error);
+        message.error('批量删除过程中发生错误');
+      } finally {
+        state.batchDeleting = false;
         state.lock = false;
-      });
-    },
-    onCancel: () => {
-      console.log('取消索引');
+      }
     },
   });
 };
@@ -1259,6 +1419,7 @@ const handleIndexFile = (fileId) => {
   button.main-btn {
     font-weight: bold;
     font-size: 14px;
+    color: var(--gray-800);
     &:hover {
       cursor: pointer;
       color: var(--main-color);
@@ -1281,13 +1442,14 @@ const handleIndexFile = (fileId) => {
 .file-detail-content {
   max-height: 60vh;
   overflow-y: auto;
-  padding: 0 10px;
+  // padding: 0 10px;
 }
 
 .custom-class .line-text {
   padding: 10px;
   border-radius: 4px;
   margin: 8px 0;
+  background-color: var(--gray-200);
 
   &:hover {
     background-color: var(--main-light-4);
@@ -1299,7 +1461,8 @@ const handleIndexFile = (fileId) => {
   gap: 20px;
 
   .upload-sidebar {
-    width: 280px;
+    min-width: 280px;
+    height: fit-content;
     padding: 20px;
     background-color: var(--main-light-6);
     border-radius: 8px;

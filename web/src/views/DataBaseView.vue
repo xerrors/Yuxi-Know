@@ -1,6 +1,6 @@
 <template>
   <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
-    <HeaderComponent title="文档知识库">
+    <HeaderComponent title="文档知识库" :loading="state.loading">
       <template #actions>
         <a-button type="primary" @click="newDatabase.open=true">新建知识库</a-button>
       </template>
@@ -105,6 +105,10 @@ const userStore = useUserStore()
 const indicator = h(LoadingOutlined, {spin: true});
 const configStore = useConfigStore()
 
+const state = reactive({
+  loading: false,
+})
+
 const newDatabase = reactive({
   name: '',
   description: '',
@@ -113,17 +117,20 @@ const newDatabase = reactive({
 })
 
 const loadDatabases = () => {
+  state.loading = true
   // loadGraph()
   knowledgeBaseApi.getDatabases()
     .then(data => {
       console.log(data)
       databases.value = data.databases
+      state.loading = false
     })
     .catch(error => {
       console.error('加载数据库列表失败:', error);
       if (error.message.includes('权限')) {
         message.error('需要管理员权限访问知识库')
-    }
+      }
+      state.loading = false
     })
 }
 

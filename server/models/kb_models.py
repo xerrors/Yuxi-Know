@@ -21,7 +21,7 @@ class KnowledgeDatabase(Base):
     # 关系
     files = relationship("KnowledgeFile", back_populates="database", cascade="all, delete-orphan")
 
-    def to_dict(self):
+    def to_dict(self, with_nodes=True):
         """转换为字典格式，确保meta_info映射为metadata"""
         result = {
             "id": self.id,
@@ -30,16 +30,14 @@ class KnowledgeDatabase(Base):
             "description": self.description,
             "embed_model": self.embed_model,
             "dimension": self.dimension,
-            "metadata": self.meta_info or {},  # 确保映射正确
+            "metadata": self.meta_info or {},
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
-
         # 添加文件信息
         if self.files:
-            result["files"] = {file.file_id: file.to_dict() for file in self.files}
+            result["files"] = {file.file_id: file.to_dict(with_nodes=with_nodes) for file in self.files}
         else:
             result["files"] = {}
-
         return result
 
 class KnowledgeFile(Base):
@@ -64,7 +62,7 @@ class KnowledgeFile(Base):
         """动态计算节点数量"""
         return len(self.nodes) if self.nodes is not None else 0
 
-    def to_dict(self):
+    def to_dict(self, with_nodes=True):
         """转换为字典格式"""
         result = {
             "file_id": self.file_id,
@@ -72,16 +70,11 @@ class KnowledgeFile(Base):
             "path": self.path,
             "type": self.file_type,
             "status": self.status,
-            "node_count": self.computed_node_count,  # 使用计算属性
+            "node_count": self.computed_node_count,
             "created_at": self.created_at.timestamp() if self.created_at else time.time()
         }
-
-        # 添加节点信息
-        if self.nodes:
-            result["nodes"] = [node.to_dict() for node in self.nodes]
-        else:
-            result["nodes"] = []
-
+        if with_nodes:
+            result["nodes"] = [node.to_dict() for node in self.nodes] if self.nodes else []
         return result
 
 class KnowledgeNode(Base):

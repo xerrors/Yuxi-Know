@@ -7,6 +7,8 @@ from sqlalchemy.orm import joinedload
 from pathlib import Path
 import asyncio
 import random
+from functools import lru_cache
+from diskcache import Cache
 
 from pymilvus import MilvusClient, MilvusException
 
@@ -22,6 +24,14 @@ class KnowledgeBase:
     def __init__(self) -> None:
         self.client = None
         self.work_dir = os.path.join(config.save_dir, "data")
+        self.cache_dir = os.path.join(self.work_dir, ".cache")
+        os.makedirs(self.cache_dir, exist_ok=True)
+
+        # 初始化磁盘缓存
+        self.disk_cache = Cache(self.cache_dir)
+
+        # 配置缓存过期时间（秒）
+        self.cache_ttl = 300  # 5分钟
 
         # Configuration
         self.default_distance_threshold = 0.5
@@ -38,7 +48,7 @@ class KnowledgeBase:
         if hasattr(obj, 'to_dict'):
             return obj.to_dict()
         # For SQLAlchemy models not having a to_dict, or to customize
-        if isinstance(obj, (KnowledgeDatabase, KnowledgeFile, KnowledgeNode)):
+        if isinstance(obj, KnowledgeDatabase | KnowledgeFile | KnowledgeNode):
             # Basic serialization, customize as needed
             d = obj.__dict__.copy()
             d.pop('_sa_instance_state', None)
@@ -105,10 +115,8 @@ class KnowledgeBase:
     def get_database_by_id(self, db_id):
         """根据ID获取知识库"""
         with db_manager.get_session_context() as session:
-            db = session.query(KnowledgeDatabase).options(
-                joinedload(KnowledgeDatabase.files)
-            ).filter_by(db_id=db_id).first()
-            return db.to_dict() if db else None # Assuming to_dict handles files and nodes
+            db = session.query(KnowledgeDatabase).options().filter_by(db_id=db_id).first()
+            return db.to_dict(with_nodes=False) if db else None # Assuming to_dict handles files and nodes
 
     def create_database_record(self, db_id, name, description, embed_model=None, dimension=None, metadata=None):
         """在数据库中创建知识库记录"""
@@ -716,27 +724,6 @@ class KnowledgeBase:
         return self.search_by_vector(query_vectors[0], collection_name, limit)
 
     def search_by_vector(self, vector, collection_name, limit=3):
-        # Default output fields for search, can be customized
-        # output_fields = ["text", "file_id", "hash", "start_char_idx", "end_char_idx"]
-        # valid_output_fields = output_fields # Default to all requested fields
-        # try:
-        #     coll_info = self.client.describe_collection(collection_name)
-        #     schema_fields = [field['name'] for field in coll_info.get('fields', [])]
-        #     current_valid_fields = [f for f in output_fields if f in schema_fields]
-        #     if current_valid_fields: # If any of the preferred fields are valid, use them
-        #         valid_output_fields = current_valid_fields
-        #     elif schema_fields: # Fallback: get all scalar fields if preferred are not found
-        #         #This ensures we always try to get some data if the collection exists
-        #         valid_output_fields = [f['name'] for f in coll_info.get('fields', []) if not f.get('is_primary', False) and coll_info.get('fields', [])[schema_fields.index(f)].get('type_name','').find('Vector') == -1 ]
-        #         if not valid_output_fields and "text" in schema_fields: # Minimal fallback
-        #              valid_output_fields = ["text"]
-        #         elif not valid_output_fields and schema_fields: # If still nothing, take the first non-PK scalar field
-        #             valid_output_fields = [schema_fields[0]] if schema_fields else []
-        #     # If schema_fields is empty or no suitable fields, valid_output_fields might be empty; Milvus might error or return default.
-
-        # except Exception as e:
-        #     logger.warning(f"Could not describe collection {collection_name} to validate output fields for search: {e}. Using default output_fields: {output_fields}.")
-        #     # valid_output_fields remains as initially set (all requested output_fields)
 
         res = self.client.search(
             collection_name=collection_name,

@@ -8,6 +8,7 @@
         </slot>
       </div>
       <div class="header-actions" v-if="$slots.actions">
+        <loading-outlined v-if="loading" />
         <slot name="actions"></slot>
       </div>
     </div>
@@ -15,6 +16,7 @@
 </template>
 
 <script setup>
+import { LoadingOutlined } from '@ant-design/icons-vue';
 const props = defineProps({
   title: {
     type: String,
@@ -23,6 +25,10 @@ const props = defineProps({
   description: {
     type: String,
     default: ''
+  },
+  loading: {
+    type: Boolean,
+    default: false
   }
 });
 </script>
