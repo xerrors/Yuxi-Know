@@ -106,7 +106,7 @@ class KnowledgeBase:
         """根据ID获取知识库"""
         with db_manager.get_session_context() as session:
             db = session.query(KnowledgeDatabase).options(
-                joinedload(KnowledgeDatabase.files).joinedload(KnowledgeFile.nodes)
+                joinedload(KnowledgeDatabase.files)
             ).filter_by(db_id=db_id).first()
             return db.to_dict() if db else None # Assuming to_dict handles files and nodes
 

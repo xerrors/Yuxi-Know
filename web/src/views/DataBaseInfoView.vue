@@ -135,7 +135,7 @@
               </div>
             </div>
           </div>
-          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table">
+          <a-table :columns="columns" :data-source="Object.values(database.files || {})" row-key="file_id" class="my-table" size="small" bordered :pagination="pagination" >
             <template #bodyCell="{ column, text, record }">
               <template v-if="column.key === 'filename'">
                 <a-tooltip :title="record.file_id" placement="right">
@@ -183,19 +183,28 @@
               <span v-else>{{ text }}</span>
             </template>
           </a-table>
-          <a-drawer
-            width="50%"
-            v-model:open="state.drawer"
+          <a-modal
+            v-model:open="state.fileDetailModalVisible"
             class="custom-class"
             :title="selectedFile?.filename || '文件详情'"
-            placement="right"
-            @after-open-change="afterOpenChange"
+            width="1000px"
+            @after-open="afterOpenChange"
+            :footer="null"
           >
-            <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
-            <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
-              {{ line.text }}
-            </p>
-          </a-drawer>
+            <template v-if="state.fileDetailLoading">
+              <div class="loading-container">
+                <a-spin tip="加载中..." />
+              </div>
+            </template>
+            <template v-else>
+              <h2>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h2>
+              <div class="file-detail-content">
+                <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
+                  {{ line.text }}
+                </p>
+              </div>
+            </template>
+          </a-modal>
         </div>
       </a-tab-pane>
 
@@ -364,7 +373,8 @@ const state = reactive({
   refrashing: false,
   searchLoading: false,
   lock: false,
-  drawer: false,
+  fileDetailModalVisible: false,
+  fileDetailLoading: false,
   refreshInterval: null,
   curPage: "files",
   indexingFile: null,
@@ -393,6 +403,13 @@ const use_rewrite_queryOptions = ref([
   { value: 'on', payload: { title: 'on', subTitle: '启用重写' } },
   { value: 'hyde', payload: { title: 'hyde', subTitle: '伪文档生成' } },
 ])
+
+const pagination = ref({
+  pageSize: 30,
+  current: 1,
+  total: 0,
+  showTotal: (total, range) => `共 ${total} 条`,
+})
 
 const filterQueryResults = () => {
   if (!queryResult.value || !queryResult.value.all_results) {
@@ -531,33 +548,49 @@ const deleteDatabse = () => {
 }
 
 const openFileDetail = (record) => {
-  state.lock = true
+  // 先打开弹窗
+  state.fileDetailModalVisible = true;
+  selectedFile.value = {
+    ...record,
+    lines: []
+  };
+
+  // 设置加载状态
+  state.fileDetailLoading = true;
+  state.lock = true;
 
   try {
     knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
       .then(data => {
-        console.log(data)
+        console.log(data);
         if (data.status == "failed") {
-          message.error(data.message)
-          return
+          message.error(data.message);
+          state.fileDetailModalVisible = false;
+          return;
         }
-        state.lock = false
         selectedFile.value = {
           ...record,
           lines: data.lines || []
-        }
-        state.drawer = true
+        };
       })
       .catch(error => {
-        console.error(error)
-        message.error(error.message)
+        console.error(error);
+        message.error(error.message);
+        state.fileDetailModalVisible = false;
       })
+      .finally(() => {
+        state.fileDetailLoading = false;
+        state.lock = false;
+      });
   } catch (error) {
-    console.error(error)
-    message.error('获取文件详情失败')
-    state.lock = false
+    console.error(error);
+    message.error('获取文件详情失败');
+    state.fileDetailLoading = false;
+    state.lock = false;
+    state.fileDetailModalVisible = false;
   }
 }
+
 const formatRelativeTime = (timestamp) => {
     // 调整为东八区时间（UTC+8）
     const timezoneOffset = 8 * 60 * 60 * 1000; // 东八区偏移量（毫秒）
@@ -1245,9 +1278,16 @@ const handleIndexFile = (fileId) => {
   }
 }
 
+.file-detail-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 0 10px;
+}
+
 .custom-class .line-text {
   padding: 10px;
   border-radius: 4px;
+  margin: 8px 0;
 
   &:hover {
     background-color: var(--main-light-4);
@@ -1409,6 +1449,13 @@ const handleIndexFile = (fileId) => {
   color: var(--gray-600);
   margin-top: 5px;
   line-height: 1.5;
+}
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
 }
 </style>
 
