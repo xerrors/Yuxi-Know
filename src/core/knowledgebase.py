@@ -43,6 +43,9 @@ class KnowledgeBase:
 
         self._load_models()
 
+        # 检查所有 waiting 状态的文件并标记为 failed
+        self._mark_waiting_files_as_failed()
+
     def _to_dict_safely(self, obj):
         """安全地将对象转换为字典，避免延迟加载问题"""
         if hasattr(obj, 'to_dict'):
@@ -759,6 +762,16 @@ class KnowledgeBase:
             raise Exception(f"数据库不存在: {db_id}")
         updated_db = self.update_database_record(db_id, name, description)
         return updated_db
+
+    def _mark_waiting_files_as_failed(self):
+        """将所有 status 为 'waiting' 的文件标记为 'failed'"""
+        with db_manager.get_session_context() as session:
+            waiting_files = session.query(KnowledgeFile).filter_by(status="waiting").all()
+            if waiting_files:
+                for file_obj in waiting_files:
+                    file_obj.status = "failed"
+                session.commit()
+                logger.info(f"已将 {len(waiting_files)} 个 waiting 状态的文件标记为 failed")
 
 
 def parse_node_data(node):
