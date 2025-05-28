@@ -1,6 +1,20 @@
 <template>
   <!-- TODO 登录页面样式优化；（1）风格和整个系统统一； -->
-  <div class="login-view" :style="{ backgroundImage: `url(${loginBg})` }">
+  <div class="login-view" :style="{ backgroundImage: `url(${loginBg})` }" :class="{ 'has-alert': serverStatus === 'error' }">
+    <!-- 服务状态提示 -->
+    <div v-if="serverStatus === 'error'" class="server-status-alert">
+      <div class="alert-content">
+        <exclamation-circle-outlined class="alert-icon" />
+        <div class="alert-text">
+          <div class="alert-title">服务端连接失败</div>
+          <div class="alert-message">{{ serverError }}</div>
+        </div>
+        <a-button type="link" size="small" @click="checkServerHealth" :loading="healthChecking">
+          重试
+        </a-button>
+      </div>
+    </div>
+
     <div class="login-container">
       <div class="login-logo">
         <!-- <img src="@/assets/logo.svg" alt="Logo" v-if="false" /> -->
@@ -141,8 +155,8 @@ import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { message } from 'ant-design-vue';
 import { chatApi } from '@/apis/auth_api';
-import { authApi } from '@/apis/public_api';
-import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined } from '@ant-design/icons-vue';
+import { authApi, healthApi } from '@/apis/public_api';
+import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
 import loginBg from '@/assets/pics/login_bg.jpg';
 
 const router = useRouter();
@@ -153,6 +167,9 @@ const isFirstRun = ref(false);
 const loading = ref(false);
 const errorMessage = ref('');
 const rememberMe = ref(false);
+const serverStatus = ref('loading');
+const serverError = ref('');
+const healthChecking = ref(false);
 
 // 登录表单
 const loginForm = reactive({
@@ -283,6 +300,27 @@ const checkFirstRunStatus = async () => {
   }
 };
 
+// 检查服务器健康状态
+const checkServerHealth = async () => {
+  try {
+    healthChecking.value = true;
+    const response = await healthApi.check();
+    if (response.status === 'ok') {
+      message.success('服务端连接成功');
+      serverStatus.value = 'ok';
+    } else {
+      serverStatus.value = 'error';
+      serverError.value = response.message || '服务端状态异常';
+    }
+  } catch (error) {
+    console.error('检查服务器健康状态失败:', error);
+    serverStatus.value = 'error';
+    serverError.value = error.message || '无法连接到服务端，请检查网络连接';
+  } finally {
+    healthChecking.value = false;
+  }
+};
+
 // 组件挂载时
 onMounted(async () => {
   // 如果已登录，跳转到首页
@@ -290,6 +328,9 @@ onMounted(async () => {
     router.push('/');
     return;
   }
+
+  // 首先检查服务器健康状态
+  await checkServerHealth();
 
   // 检查是否是首次运行
   await checkFirstRunStatus();
@@ -306,6 +347,11 @@ onMounted(async () => {
   background-size: cover;
   background-position: center;
   position: relative;
+  padding-top: 0;
+
+  &.has-alert {
+    padding-top: 60px;
+  }
 
   &::before {
     content: '';
@@ -472,6 +518,56 @@ onMounted(async () => {
 
     &:hover {
       color: var(--main-color);
+    }
+  }
+}
+
+.server-status-alert {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #ff4d4f, #ff7875);
+  color: white;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+
+  .alert-content {
+    display: flex;
+    align-items: center;
+    max-width: 1200px;
+    margin: 0 auto;
+
+    .alert-icon {
+      font-size: 20px;
+      margin-right: 12px;
+      color: white;
+    }
+
+    .alert-text {
+      flex: 1;
+
+      .alert-title {
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 2px;
+      }
+
+      .alert-message {
+        font-size: 14px;
+        opacity: 0.9;
+      }
+    }
+
+    :deep(.ant-btn-link) {
+      color: white;
+      border-color: white;
+
+      &:hover {
+        color: white;
+        background-color: rgba(255, 255, 255, 0.1);
+      }
     }
   }
 }

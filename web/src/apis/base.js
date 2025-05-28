@@ -154,3 +154,21 @@ export function apiPut(url, data = {}, options = {}, requiresAuth = false) {
 export function apiDelete(url, options = {}, requiresAuth = false) {
   return apiRequest(url, { method: 'DELETE', ...options }, requiresAuth)
 }
+
+/**
+ * 健康检查API
+ */
+export const healthApi = {
+  /**
+   * 检查服务端健康状态
+   * @returns {Promise} - 健康检查结果
+   */
+  async checkHealth() {
+    try {
+      const response = await apiGet('/api/health')
+      return { status: 'ok', data: response }
+    } catch (error) {
+      return { status: 'error', error: error.message }
+    }
+  }
+}

@@ -12,6 +12,11 @@ base = APIRouter()
 async def route_index():
     return {"message": "You Got It!"}
 
+@base.get("/health")
+async def health_check():
+    """简单的健康检查接口"""
+    return {"status": "ok", "message": "服务正常运行"}
+
 @base.get("/config")
 def get_config(current_user: User = Depends(get_admin_user)):
     return config.dump_config()

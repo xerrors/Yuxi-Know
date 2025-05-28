@@ -2,7 +2,12 @@
   <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
     <HeaderComponent title="文档知识库" :loading="state.loading">
       <template #actions>
-        <a-button type="primary" @click="newDatabase.open=true">新建知识库</a-button>
+        <a-button type="primary" @click="newDatabase.open=true">
+          <template #icon>
+            <BookPlus size="16" />
+          </template>
+          新建知识库
+        </a-button>
       </template>
     </HeaderComponent>
 
@@ -27,7 +32,7 @@
     <div class="databases">
       <div class="new-database dbcard" @click="newDatabase.open=true">
         <div class="top">
-          <div class="icon"><PlusOutlined /></div>
+          <div class="icon"><BookPlus /></div>
           <div class="info">
             <h3>新建知识库</h3>
           </div>
@@ -56,23 +61,6 @@
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
-    <!-- <h2>图数据库 &nbsp; <a-spin v-if="graphloading" :indicator="indicator" /></h2>
-    <p>基于 neo4j 构建的图数据库。</p>
-    <div :class="{'graphloading': graphloading, 'databases': true}" v-if="graph">
-      <div class="dbcard graphbase" @click="navigateToGraph">
-        <div class="top">
-          <div class="icon"><AppstoreFilled /></div>
-          <div class="info">
-            <h3>{{ graph?.database_name }}</h3>
-            <p>
-              <span>{{ graph?.status }}</span> ·
-              <span>{{ graph?.entity_count }}实体</span>
-            </p>
-          </div>
-        </div>
-        <p class="description">基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。基于 neo4j 构建的图数据库。</p>
-      </div>
-    </div> -->
   </div>
   <div class="database-empty" v-else>
     <a-empty>
@@ -90,6 +78,7 @@ import { ref, onMounted, reactive, watch, h } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 import { message, Button } from 'ant-design-vue'
 import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
+import { BookPlus } from 'lucide-vue-next';
 import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user';
 import HeaderComponent from '@/components/HeaderComponent.vue';
