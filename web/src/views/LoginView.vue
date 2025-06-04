@@ -306,7 +306,6 @@ const checkServerHealth = async () => {
     healthChecking.value = true;
     const response = await healthApi.check();
     if (response.status === 'ok') {
-      message.success('服务端连接成功');
       serverStatus.value = 'ok';
     } else {
       serverStatus.value = 'error';

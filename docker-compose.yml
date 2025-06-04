@@ -16,7 +16,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['2']
+              device_ids: ['1']
               capabilities: [gpu]
     ports:
       - "5050:5050"
@@ -157,7 +157,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              device_ids: ['2']
+              device_ids: ['0']
               capabilities: [gpu]
     ports:
       - "5051:5051"
