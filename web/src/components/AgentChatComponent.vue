@@ -107,6 +107,7 @@ import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import { chatApi, threadApi } from '@/apis/auth_api'
+import { systemConfigApi } from '@/apis/admin_api'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
 
 // 新增props属性，允许父组件传入agentId
@@ -373,11 +374,24 @@ const sendMessageToServer = async (text) => {
   state.isProcessingRequest = true;
   await scrollToBottom();
 
+  // 获取最新的智能体配置
+  let latestConfig = { ...props.config };
+  try {
+    const configResponse = await systemConfigApi.getAgentConfig(currentAgent.value.name);
+    if (configResponse.success && configResponse.config) {
+      // 合并最新配置，确保使用最新的系统提示词等配置
+      latestConfig = { ...latestConfig, ...configResponse.config };
+      console.log('使用最新智能体配置:', latestConfig);
+    }
+  } catch (error) {
+    console.warn('获取最新配置失败，使用当前配置:', error);
+  }
+
   // 设置请求参数
   const requestData = {
     query: text.trim(),
     config: {
-      ...props.config,
+      ...latestConfig,
       thread_id: currentChatId.value
     },
     meta: {
@@ -644,7 +658,25 @@ onMounted(() => {
       isLoading.value = false;
     }
   });
+
+  // 监听智能体配置更新事件
+  window.addEventListener('agentConfigUpdated', handleAgentConfigUpdated);
 });
+
+onUnmounted(() => {
+  // 清理事件监听器
+  window.removeEventListener('agentConfigUpdated', handleAgentConfigUpdated);
+});
+
+// 处理智能体配置更新事件
+const handleAgentConfigUpdated = (event) => {
+  const { agentId, config } = event.detail;
+  if (currentAgent.value && currentAgent.value.name === agentId) {
+    console.log(`智能体 ${agentId} 配置已更新:`, config);
+    // 可以在这里更新本地配置或显示提示
+    message.info('智能体配置已更新，新对话将使用最新配置');
+  }
+};
 
 // 监听消息变化自动滚动
 // watch(convs, () => {

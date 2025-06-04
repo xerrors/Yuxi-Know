@@ -49,6 +49,9 @@ class ChatbotAgent(BaseAgent):
         """调用 llm 模型"""
         conf = self.config_schema.from_runnable_config(config, agent_name=self.name)
 
+        # 添加调试信息，确保配置正确加载
+        logger.debug(f"智能体 {self.name} 使用配置: system_prompt='{conf.system_prompt[:50]}...', model='{conf.model}', tools={conf.tools}")
+
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
         model = load_chat_model(conf.model)
         model_with_tools = model.bind_tools(self._get_tools(conf.tools))
