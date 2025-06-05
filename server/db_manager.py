@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from src import config
 from server.models import Base
 from server.models.user_model import User
+from server.models.thread_model import Thread
 from server.models.kb_models import KnowledgeDatabase, KnowledgeFile, KnowledgeNode
 from src.utils import logger
 
