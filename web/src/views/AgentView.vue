@@ -312,8 +312,19 @@ const saveConfig = async () => {
     // 保存配置到服务器
     await systemConfigApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
     // 提示保存成功
-    message.success('配置已保存到服务器');
+    message.success('配置已保存到服务器，下次对话将使用新配置');
     console.log("保存配置:", agentConfig.value);
+
+    // 重新加载智能体信息，确保配置同步
+    await fetchAgents();
+
+    // 发出事件通知其他组件配置已更新
+    window.dispatchEvent(new CustomEvent('agentConfigUpdated', {
+      detail: {
+        agentId: selectedAgentId.value,
+        config: agentConfig.value
+      }
+    }));
   } catch (error) {
     console.error('保存配置到服务器出错:', error);
     message.error('保存配置到服务器失败');
