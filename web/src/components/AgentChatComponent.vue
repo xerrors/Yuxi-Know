@@ -301,7 +301,7 @@ const deleteChat = async (chatId) => {
 
 // 重命名对话
 const renameChat = async (data) => {
-  const { chatId, title } = data;
+  let { chatId, title } = data;
 
   if (!chatId || !title) {
     console.warn("未指定对话ID或标题，无法重命名对话");
