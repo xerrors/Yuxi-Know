@@ -3,9 +3,6 @@
     <HeaderComponent title="文档知识库" :loading="state.loading">
       <template #actions>
         <a-button type="primary" @click="newDatabase.open=true">
-          <template #icon>
-            <BookPlus size="16" />
-          </template>
           新建知识库
         </a-button>
       </template>

@@ -57,12 +57,8 @@
                 <a-collapse-panel
                   v-for="(results, filename) in groupedKnowledgeResults"
                   :key="filename"
-                  :header="filename"
+                  :header="filename + '  (' + results.length + ' chunks) '"
                 >
-                  <div class="fileinfo" v-if="results.length > 0">
-                    <p><FileOutlined /> {{ results[0].file.type }}</p>
-                    <p><ClockCircleOutlined /> {{ formatDate(results[0].file.created_at) }}</p>
-                  </div>
                   <div class="results-list">
                     <div v-for="res in results" :key="res.id" class="result-item">
                       <div class="result-meta">
@@ -483,12 +479,12 @@ defineExpose({
       .score-info {
         display: flex;
         flex-wrap: wrap;
-        gap: 2rem;
         margin-bottom: 8px;
 
         span {
           display: flex;
           align-items: center;
+          margin-right: 2rem;
 
           strong {
             margin-right: 8px;

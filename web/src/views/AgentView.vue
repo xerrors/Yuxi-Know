@@ -76,6 +76,7 @@
                 >
                   <p v-if="value.description" class="description">{{ value.description }}</p>
 
+                  <!-- key匹配 -->
                   <div v-if="key === 'model'" class="agent-model">
                     <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p>
                     <ModelSelectorComponent
@@ -84,15 +85,17 @@
                       :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
                     />
                   </div>
-                  <a-switch
-                    v-else-if="typeof agentConfig[key] === 'boolean'"
-                    v-model:checked="agentConfig[key]"
-                  />
                   <a-textarea
                     v-else-if="key === 'system_prompt'"
                     v-model:value="agentConfig[key]"
                     :rows="4"
                     :placeholder="getPlaceholder(key, value)"
+                  />
+
+                  <!-- 数据类型匹配 -->
+                  <a-switch
+                    v-else-if="typeof agentConfig[key] === 'boolean'"
+                    v-model:checked="agentConfig[key]"
                   />
                   <a-select
                     v-else-if="value?.options && value?.type === 'str'"

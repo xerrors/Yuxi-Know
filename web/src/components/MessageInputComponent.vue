@@ -184,8 +184,7 @@ onMounted(() => {
 
   .input-options {
     display: flex;
-    padding: 8px 0 0;
-    border-top: 1px solid var(--gray-100);
+    // border-top: 1px solid var(--gray-100);
 
     .options__left,
     .options__right {

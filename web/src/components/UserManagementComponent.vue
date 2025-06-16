@@ -1,48 +1,78 @@
 <template>
   <div class="user-management">
-    <h3>用户管理</h3>
-    <p>用户管理，请谨慎操作，一旦删除用户，该用户将无法登录。</p>
-    <a-button type="primary" @click="showAddUserModal">
-      <template #icon><PlusOutlined /></template>
-      添加用户
-    </a-button>
-
-    <a-spin :spinning="userManagement.loading">
-      <div v-if="userManagement.error" class="error-message">
-        {{ userManagement.error }}
+    <!-- 头部区域 -->
+    <div class="header-section">
+      <div class="header-content">
+        <h3 class="title">用户管理</h3>
+        <p class="description">管理系统用户，请谨慎操作。删除用户后该用户将无法登录系统。</p>
       </div>
+      <a-button type="primary" size="large" @click="showAddUserModal" class="add-btn">
+        <template #icon><PlusOutlined /></template>
+        添加用户
+      </a-button>
+    </div>
 
-      <a-table
-        :dataSource="userManagement.users"
-        :columns="userColumns"
-        rowKey="id"
-        :pagination="{ pageSize: 10 }"
-      >
-        <!-- 角色列自定义渲染 -->
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'role'">
-            <a-tag :color="getRoleColor(record.role)">{{ getRoleLabel(record.role) }}</a-tag>
-          </template>
+    <!-- 主内容区域 -->
+    <div class="content-section">
+      <a-spin :spinning="userManagement.loading">
+        <div v-if="userManagement.error" class="error-message">
+          <a-alert type="error" :message="userManagement.error" show-icon />
+        </div>
 
-          <!-- 操作列 -->
-          <template v-if="column.key === 'action'">
-            <div class="table-actions">
-              <a-button type="link" @click="showEditUserModal(record)">
-                <EditOutlined />
-              </a-button>
-              <a-button
-                type="link"
-                danger
-                @click="confirmDeleteUser(record)"
-                :disabled="record.id === userStore.userId || (record.role === 'superadmin' && userStore.userRole !== 'superadmin')"
-              >
-                <DeleteOutlined />
-              </a-button>
-            </div>
-          </template>
-        </template>
-      </a-table>
-    </a-spin>
+        <div class="table-container">
+          <a-table
+            :dataSource="userManagement.users"
+            :columns="userColumns"
+            rowKey="id"
+            :pagination="{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total) => `共 ${total} 条记录`
+            }"
+            class="user-table"
+            bordered
+          >
+            <!-- 角色列自定义渲染 -->
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'role'">
+                <a-tag :color="getRoleColor(record.role)" class="role-tag">
+                  {{ getRoleLabel(record.role) }}
+                </a-tag>
+              </template>
+
+              <!-- 时间列格式化 -->
+              <template v-if="column.key === 'created_at' || column.key === 'last_login'">
+                <span class="time-text">{{ formatTime(record[column.key]) }}</span>
+              </template>
+
+              <!-- 操作列 -->
+              <template v-if="column.key === 'action'">
+                <div class="table-actions">
+                  <a-tooltip title="编辑用户">
+                    <a-button type="text" size="small" @click="showEditUserModal(record)" class="action-btn">
+                      <EditOutlined />
+                    </a-button>
+                  </a-tooltip>
+                  <a-tooltip title="删除用户">
+                    <a-button
+                      type="text"
+                      size="small"
+                      danger
+                      @click="confirmDeleteUser(record)"
+                      :disabled="record.id === userStore.userId || (record.role === 'superadmin' && userStore.userRole !== 'superadmin')"
+                      class="action-btn"
+                    >
+                      <DeleteOutlined />
+                    </a-button>
+                  </a-tooltip>
+                </div>
+              </template>
+            </template>
+          </a-table>
+        </div>
+      </a-spin>
+    </div>
 
     <!-- 用户表单模态框 -->
     <a-modal
@@ -52,11 +82,18 @@
       :confirmLoading="userManagement.loading"
       @cancel="userManagement.modalVisible = false"
       :maskClosable="false"
+      width="480px"
+      class="user-modal"
     >
-      <a-form layout="vertical">
-        <a-form-item label="用户名" required>
-          <a-input v-model:value="userManagement.form.username" placeholder="请输入用户名" />
+      <a-form layout="vertical" class="user-form">
+        <a-form-item label="用户名" required class="form-item">
+          <a-input
+            v-model:value="userManagement.form.username"
+            placeholder="请输入用户名"
+            size="large"
+          />
         </a-form-item>
+
         <template v-if="userManagement.editMode">
           <div class="password-toggle">
             <a-checkbox v-model:checked="userManagement.displayPasswordFields">
@@ -66,17 +103,25 @@
         </template>
 
         <template v-if="!userManagement.editMode || userManagement.displayPasswordFields">
-          <a-form-item label="密码" required>
-            <a-input-password v-model:value="userManagement.form.password" placeholder="请输入密码" />
+          <a-form-item label="密码" required class="form-item">
+            <a-input-password
+              v-model:value="userManagement.form.password"
+              placeholder="请输入密码"
+              size="large"
+            />
           </a-form-item>
 
-          <a-form-item label="确认密码" required>
-            <a-input-password v-model:value="userManagement.form.confirmPassword" placeholder="请再次输入密码" />
+          <a-form-item label="确认密码" required class="form-item">
+            <a-input-password
+              v-model:value="userManagement.form.confirmPassword"
+              placeholder="请再次输入密码"
+              size="large"
+            />
           </a-form-item>
         </template>
 
-        <a-form-item label="角色">
-          <a-select v-model:value="userManagement.form.role">
+        <a-form-item label="角色" class="form-item">
+          <a-select v-model:value="userManagement.form.role" size="large">
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
             <a-select-option value="superadmin" v-if="userStore.isSuperAdmin">超级管理员</a-select-option>
@@ -126,6 +171,19 @@ watch(() => userManagement.displayPasswordFields, (newVal) => {
   }
 });
 
+// 格式化时间显示
+const formatTime = (timeStr) => {
+  if (!timeStr) return '-';
+  const date = new Date(timeStr);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 // 获取用户列表
 const fetchUsers = async () => {
   try {
@@ -167,7 +225,7 @@ const showEditUserModal = (user) => {
     confirmPassword: '',
     role: user.role
   };
-  userManagement.displayPasswordFields = true; // 默认显示密码字段
+  userManagement.displayPasswordFields = false; // 默认不显示密码字段
   userManagement.modalVisible = true;
 };
 
@@ -175,7 +233,7 @@ const showEditUserModal = (user) => {
 const handleUserFormSubmit = async () => {
   try {
     // 简单验证
-    if (!userManagement.form.username) {
+    if (!userManagement.form.username.trim()) {
       notification.error({ message: '用户名不能为空' });
       return;
     }
@@ -198,7 +256,7 @@ const handleUserFormSubmit = async () => {
     if (userManagement.editMode) {
       // 创建更新数据对象
       const updateData = {
-        username: userManagement.form.username,
+        username: userManagement.form.username.trim(),
         role: userManagement.form.role
       };
 
@@ -211,7 +269,7 @@ const handleUserFormSubmit = async () => {
       notification.success({ message: '用户更新成功' });
     } else {
       await userStore.createUser({
-        username: userManagement.form.username,
+        username: userManagement.form.username.trim(),
         password: userManagement.form.password,
         role: userManagement.form.role
       });
@@ -229,15 +287,6 @@ const handleUserFormSubmit = async () => {
     });
   } finally {
     userManagement.loading = false;
-  }
-};
-
-// 切换是否显示密码字段（编辑用户时使用）
-const togglePasswordFields = () => {
-  userManagement.displayPasswordFields = !userManagement.displayPasswordFields;
-  if (!userManagement.displayPasswordFields) {
-    userManagement.form.password = '';
-    userManagement.form.confirmPassword = '';
   }
 };
 
@@ -284,35 +333,41 @@ const userColumns = [
     title: 'ID',
     dataIndex: 'id',
     key: 'id',
-    width: 80
+    width: 80,
+    align: 'center'
   },
   {
     title: '用户名',
     dataIndex: 'username',
-    key: 'username'
+    key: 'username',
+    width: 150
   },
   {
     title: '角色',
     dataIndex: 'role',
     key: 'role',
-    width: 120
+    width: 120,
+    align: 'center'
   },
   {
     title: '创建时间',
     dataIndex: 'created_at',
     key: 'created_at',
-    width: 180
+    width: 160,
+    align: 'center'
   },
   {
     title: '最后登录',
     dataIndex: 'last_login',
     key: 'last_login',
-    width: 180
+    width: 160,
+    align: 'center'
   },
   {
     title: '操作',
     key: 'action',
-    width: 120
+    width: 100,
+    align: 'center'
   }
 ];
 
@@ -346,27 +401,135 @@ onMounted(() => {
 .user-management {
   margin-top: 20px;
 
-  h3 {
-    margin-bottom: 10px;
+  .header-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+
+    .header-content {
+      flex: 1;
+
+      .description {
+        font-size: 14px;
+        color: #8c8c8c;
+        margin: 0;
+        line-height: 1.4;
+        margin-bottom: 16px;
+      }
+    }
+
   }
 
-  p {
-    margin-bottom: 20px;
-  }
+  .content-section {
+    overflow: hidden;
 
-  .error-message {
-    color: red;
-    margin: 10px 0;
-  }
+    .error-message {
+      padding: 16px 24px;
+    }
 
-  .table-actions {
-    button {
-      padding: 0 4px;
+    .table-container {
+      .user-table {
+        :deep(.ant-table-thead > tr > th) {
+          background: #fafafa;
+          font-weight: 600;
+          color: #262626;
+          border-bottom: 2px solid #f0f0f0;
+        }
+
+        :deep(.ant-table-tbody > tr > td) {
+          padding: 12px 16px;
+          border-bottom: 1px solid #f5f5f5;
+        }
+
+        :deep(.ant-table-tbody > tr:hover > td) {
+          background: #f8f9ff;
+        }
+
+        :deep(.ant-pagination) {
+          margin: 16px 24px;
+        }
+      }
     }
   }
 
-  .password-toggle {
-    margin-bottom: 16px;
+  .role-tag {
+    font-weight: 500;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+
+  .time-text {
+    font-size: 13px;
+    color: #595959;
+  }
+
+  .table-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+
+    .action-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+
+      &:hover {
+        transform: scale(1.1);
+      }
+
+      &.ant-btn-dangerous:hover {
+        background: #fff2f0;
+        border-color: #ffccc7;
+        color: #ff4d4f;
+      }
+    }
+  }
+}
+
+.user-modal {
+  :deep(.ant-modal-header) {
+    padding: 20px 24px;
+    border-bottom: 1px solid #f0f0f0;
+
+    .ant-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #262626;
+    }
+  }
+
+  :deep(.ant-modal-body) {
+    padding: 24px;
+  }
+
+  .user-form {
+    .form-item {
+      margin-bottom: 20px;
+
+      :deep(.ant-form-item-label) {
+        padding-bottom: 4px;
+
+        label {
+          font-weight: 500;
+          color: #262626;
+        }
+      }
+
+
+    }
+
+    .password-toggle {
+      margin-bottom: 16px;
+
+      :deep(.ant-checkbox-wrapper) {
+        font-weight: 500;
+        color: #495057;
+      }
+    }
   }
 }
 </style>
