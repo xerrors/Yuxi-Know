@@ -111,3 +111,32 @@ docker compose up --build -d
         http_proxy: http://宿主机IP:7890
         https_proxy: http://宿主机IP:7890
 ```
+
+### 如果想要不依赖显卡启动本项目？
+
+只需要修改现在的 docker-compose.yml，删除现有的 deploy 部分代码，但是需要注意的是，这样的话，就无法使用本地模型 [#209](https://github.com/xerrors/Yuxi-Know/issues/209)。
+
+
+
+```yml
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: yuxi-api:0.1.0
+    container_name: api-dev
+    working_dir: /app
+    volumes:
+      - ./server:/app/server
+      - ./src:/app/src
+      - ./saves:/app/saves
+      - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           device_ids: ['1']
+    #           capabilities: [gpu]
+```
