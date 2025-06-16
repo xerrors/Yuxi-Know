@@ -629,6 +629,10 @@ class KnowledgeBase:
         }
 
         def retriever(query_text): # Renamed query to query_text
+            """
+            retriever_params: 检索参数
+            query_text: 查询文本
+            """
             response = self.query(query_text, db_id, **retriever_params) # Use query_text
             return response["results"]
 
