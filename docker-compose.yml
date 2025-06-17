@@ -166,6 +166,39 @@ services:
     restart: unless-stopped
     command: python -m uvicorn app:app --host 0.0.0.0 --port 5051 --app-dir /app
 
+
+  # # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
+  # mineru-sglang:
+  #   build:
+  #     context: scripts/mineru-sglang
+  #     dockerfile: Dockerfile
+  #   image: mineru-sglang:latest
+  #   container_name: mineru-sglang
+  #   ports:
+  #     - 30000:30000
+  #   environment:
+  #     MINERU_MODEL_SOURCE: modelscope
+  #   entrypoint: mineru-sglang-server
+  #   command:
+  #     --host 0.0.0.0
+  #     --port 30000
+  #   ulimits:
+  #     memlock: -1
+  #     stack: 67108864
+  #   ipc: host
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl -f http://localhost:30000/health || exit 1"]
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             device_ids: ["0"]
+  #             capabilities: [gpu]
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge

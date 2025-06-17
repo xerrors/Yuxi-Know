@@ -11,12 +11,12 @@
     </HeaderComponent>
     <div class="setting-container layout-container">
       <div class="sider" v-if="state.windowWidth > 520">
-        <a-button type="text" :class="{ activesec: state.section === 'base'}" @click="state.section='base'" :icon="h(SettingOutlined)"> 基本设置 </a-button>
-        <a-button type="text" :class="{ activesec: state.section === 'model'}" @click="state.section='model'" :icon="h(CodeOutlined)"> 模型配置 </a-button>
-        <a-button type="text" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
+        <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'base'}" @click="state.section='base'" :icon="h(SettingOutlined)"> 基本设置 </a-button>
+        <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'model'}" @click="state.section='model'" :icon="h(CodeOutlined)"> 模型配置 </a-button>
+        <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'user'}" @click="state.section='user'" :icon="h(UserOutlined)" v-if="userStore.isAdmin"> 用户管理 </a-button>
       </div>
-      <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'base'">
+      <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'base') && userStore.isSuperAdmin">
         <h3>检索配置</h3>
         <div class="section">
           <div class="card card-select">
@@ -90,12 +90,12 @@
           </div>
         </div>
       </div>
-      <div class="setting" v-if="state.windowWidth <= 520 || state.section === 'model'">
+      <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'model') && userStore.isSuperAdmin">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
         <ModelProvidersComponent />
       </div>
-      <div class="setting" v-if="state.windowWidth <= 520 || state.section ==='path'">
+      <div class="setting" v-if="(state.windowWidth <= 520 || state.section ==='path') && userStore.isSuperAdmin">
         <h3>本地模型配置</h3>
         <p>如果是 Docker 启动，务必确保在 docker-compose.dev.yaml 中添加了 volumes 映射。</p>
         <TableConfigComponent
@@ -104,7 +104,7 @@
         />
       </div>
       <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
-      <div class="setting" v-if="state.section === 'user'">
+      <div class="setting" v-if="state.section === 'user' && userStore.isAdmin">
          <UserManagementComponent />
       </div>
     </div>
@@ -204,6 +204,7 @@ const handleChatModelSelect = ({ provider, name }) => {
 onMounted(() => {
   updateWindowWidth()
   window.addEventListener('resize', updateWindowWidth)
+  state.section = userStore.isSuperAdmin ? 'base' : 'user'
 })
 
 onUnmounted(() => {

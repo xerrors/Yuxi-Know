@@ -162,7 +162,7 @@ const toggleCollapse = () => {
 .chat-sidebar {
   width: 0;
   height: 100%;
-  background-color: #f9f9f9;
+  background-color: var(--bg-sider);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
