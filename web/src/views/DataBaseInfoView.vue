@@ -99,7 +99,7 @@
           </a-button>
         </div>
       </div>
-      
+
       <div class="ocr-config">
         <a-form layout="horizontal">
           <a-form-item label="使用OCR" name="enable_ocr">
@@ -641,9 +641,9 @@ const openFileDetail = (record) => {
   }
 }
 
-const formatRelativeTime = (timestamp) => {
-    // 调整为东八区时间（UTC+8）
-    const timezoneOffset = 8 * 60 * 60 * 1000; // 东八区偏移量（毫秒）
+const formatRelativeTime = (timestamp, offset = 0) => {
+    // 如果调整为东八区时间（UTC+8），则offset为8，否则为0
+    const timezoneOffset = offset * 60 * 60 * 1000; // 东八区偏移量（毫秒）
     const adjustedTimestamp = timestamp + timezoneOffset;
 
     const now = Date.now();
