@@ -41,6 +41,113 @@
     </a-form>
   </a-modal>
 
+  <!-- 分块参数配置弹窗 -->
+  <a-modal v-model:open="chunkConfigModalVisible" title="分块参数配置" width="500px">
+    <template #footer>
+      <a-button key="back" @click="chunkConfigModalVisible = false">取消</a-button>
+      <a-button key="submit" type="primary" @click="handleChunkConfigSubmit">确定</a-button>
+    </template>
+    <div class="chunk-config-content">
+      <div class="params-info">
+        <p>调整分块参数可以控制文本的切分方式，影响检索质量和文档加载效率。</p>
+      </div>
+      <a-form
+        :model="tempChunkParams"
+        name="chunkConfig"
+        autocomplete="off"
+        layout="vertical"
+      >
+        <a-form-item label="Chunk Size" name="chunk_size">
+          <a-input-number v-model:value="tempChunkParams.chunk_size" :min="100" :max="10000" style="width: 100%;" />
+          <p class="param-description">每个文本片段的最大字符数</p>
+        </a-form-item>
+        <a-form-item label="Chunk Overlap" name="chunk_overlap">
+          <a-input-number v-model:value="tempChunkParams.chunk_overlap" :min="0" :max="1000" style="width: 100%;" />
+          <p class="param-description">相邻文本片段间的重叠字符数</p>
+        </a-form-item>
+      </a-form>
+    </div>
+  </a-modal>
+
+  <!-- 添加文件弹窗 -->
+  <a-modal v-model:open="addFilesModalVisible" title="添加文件" width="800px">
+    <template #footer>
+      <a-button key="back" @click="addFilesModalVisible = false">取消</a-button>
+      <a-button
+        key="submit"
+        type="primary"
+        @click="chunkData"
+        :loading="state.chunkLoading"
+        :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
+      >
+        生成分块
+      </a-button>
+    </template>
+    <div class="add-files-content">
+      <div class="upload-header">
+        <div class="source-selector">
+          <div class="upload-mode-selector" @click="uploadMode = 'file'" :class="{ active: uploadMode === 'file' }">
+            <FileOutlined /> 上传文件
+          </div>
+          <div class="upload-mode-selector" @click="uploadMode = 'url'" :class="{ active: uploadMode === 'url' }">
+            <LinkOutlined /> 输入网址
+          </div>
+        </div>
+        <div class="config-controls">
+          <a-button type="dashed" @click="showChunkConfigModal">
+            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
+          </a-button>
+        </div>
+      </div>
+      
+      <div class="ocr-config">
+        <a-form layout="horizontal">
+          <a-form-item label="使用OCR" name="enable_ocr">
+            <a-select v-model:value="chunkParams.enable_ocr" :options="enable_ocr_options" style="width: 200px;" />
+            <span class="param-description">启用OCR功能，支持PDF文件的文本提取</span>
+          </a-form-item>
+        </a-form>
+      </div>
+
+      <!-- 文件上传区域 -->
+      <div class="upload" v-if="uploadMode === 'file'">
+        <a-upload-dragger
+          class="upload-dragger"
+          v-model:fileList="fileList"
+          name="file"
+          :multiple="true"
+          :disabled="state.chunkLoading"
+          :action="'/api/data/upload?db_id=' + databaseId"
+          :headers="getAuthHeaders()"
+          @change="handleFileUpload"
+          @drop="handleDrop"
+        >
+          <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+          <p class="ant-upload-hint">
+            目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加
+          </p>
+        </a-upload-dragger>
+      </div>
+
+      <!-- URL 输入区域 -->
+      <div class="url-input" v-else>
+        <a-form layout="vertical">
+          <a-form-item label="网页链接 (每行一个URL)">
+            <a-textarea
+              v-model:value="urlList"
+              placeholder="请输入网页链接，每行一个"
+              :rows="6"
+              :disabled="state.chunkLoading"
+            />
+          </a-form-item>
+        </a-form>
+        <p class="url-hint">
+          支持添加网页内容，系统会自动抓取网页文本并进行分块。请确保URL格式正确且可以公开访问。
+        </p>
+      </div>
+    </div>
+  </a-modal>
+
   <div class="db-main-container">
     <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
 
@@ -49,7 +156,7 @@
         <div class="db-tab-container">
           <div class="actions" style="display: flex; gap: 10px; justify-content: space-between;">
             <div class="left-actions" style="display: flex; gap: 10px;">
-              <a-button type="primary" @click="handleShowAddFilesBlock" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
+              <a-button type="primary" @click="showAddFilesModal" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
               <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
             </div>
             <div class="batch-actions" style="display: flex; gap: 10px;" v-if="selectedRowKeys.length > 0">
@@ -73,93 +180,7 @@
               </a-button>
             </div>
           </div>
-          <div class="upload-section" v-if="state.showAddFilesBlock">
-            <div class="upload-sidebar">
-              <div class="chunking-params">
-                <div class="params-info">
-                  <p>调整分块参数可以控制文本的切分方式，影响检索质量和文档加载效率。</p>
-                </div>
-                <a-form
-                  :model="chunkParams"
-                  name="basic"
-                  autocomplete="off"
-                  layout="vertical"
-                >
-                  <a-form-item label="Chunk Size" name="chunk_size">
-                    <a-input-number v-model:value="chunkParams.chunk_size" :min="100" :max="10000" />
-                    <p class="param-description">每个文本片段的最大字符数</p>
-                  </a-form-item>
-                  <a-form-item label="Chunk Overlap" name="chunk_overlap">
-                    <a-input-number v-model:value="chunkParams.chunk_overlap" :min="0" :max="1000" />
-                    <p class="param-description">相邻文本片段间的重叠字符数</p>
-                  </a-form-item>
-                  <a-form-item label="使用OCR" name="enable_ocr">
-                    <a-select v-model:value="chunkParams.enable_ocr" :options="enable_ocr_options" />
-                    <p class="param-description">启用OCR功能，支持PDF文件的文本提取</p>
-                  </a-form-item>
-                </a-form>
-              </div>
-            </div>
-            <div class="upload-main">
-              <div class="source-selector">
-                <div class="upload-mode-selector" @click="uploadMode = 'file'" :class="{ active: uploadMode === 'file' }">
-                  <FileOutlined /> 上传文件
-                </div>
-                <div class="upload-mode-selector" @click="uploadMode = 'url'" :class="{ active: uploadMode === 'url' }">
-                  <LinkOutlined /> 输入网址
-                </div>
-              </div>
 
-              <!-- 文件上传区域 -->
-              <div class="upload" v-if="uploadMode === 'file'">
-                <a-upload-dragger
-                  class="upload-dragger"
-                  v-model:fileList="fileList"
-                  name="file"
-                  :multiple="true"
-                  :disabled="state.chunkLoading"
-                  :action="'/api/data/upload?db_id=' + databaseId"
-                  :headers="getAuthHeaders()"
-                  @change="handleFileUpload"
-                  @drop="handleDrop"
-                >
-                  <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
-                  <p class="ant-upload-hint">
-                    目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加
-                  </p>
-                </a-upload-dragger>
-              </div>
-
-              <!-- URL 输入区域 -->
-              <div class="url-input" v-else>
-                <a-form layout="vertical">
-                  <a-form-item label="网页链接 (每行一个URL)">
-                    <a-textarea
-                      v-model:value="urlList"
-                      placeholder="请输入网页链接，每行一个"
-                      :rows="6"
-                      :disabled="state.chunkLoading"
-                    />
-                  </a-form-item>
-                </a-form>
-                <p class="url-hint">
-                  支持添加网页内容，系统会自动抓取网页文本并进行分块。请确保URL格式正确且可以公开访问。
-                </p>
-              </div>
-
-              <div class="actions">
-                <a-button
-                  type="primary"
-                  @click="chunkData"
-                  :loading="state.chunkLoading"
-                  :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
-                  style="margin: 0px 20px 20px 0;"
-                >
-                  生成分块
-                </a-button>
-              </div>
-            </div>
-          </div>
           <a-table
             :columns="columns"
             :data-source="Object.values(database.files || {})"
@@ -374,6 +395,7 @@ import {
   EditOutlined,
   PlusOutlined,
   HddOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 import { h } from 'vue';
 
@@ -403,7 +425,6 @@ const state = reactive({
   refreshInterval: null,
   curPage: "files",
   indexingFile: null,
-  showAddFilesBlock: false,
   batchIndexing: false,
   batchDeleting: false,
   chunkLoading: false,
@@ -546,9 +567,7 @@ const handleRefresh = () => {
   })
 }
 
-const handleShowAddFilesBlock = () => {
-  state.showAddFilesBlock = !state.showAddFilesBlock
-}
+
 
 const deleteDatabse = () => {
   Modal.confirm({
@@ -794,8 +813,7 @@ const chunkFiles = () => {
     if (data.status === 'success') {
       message.success(data.message || '文件已提交处理，请稍后在列表刷新查看状态');
       fileList.value = []; // 清空已上传文件列表
-      // chunkResults.value = []; // 清空旧的预览结果
-      // activeFileKeys.value = []; // 清空旧的预览结果
+      addFilesModalVisible.value = false; // 关闭弹窗
       getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
     } else {
       message.error(data.message || '文件处理失败');
@@ -833,8 +851,7 @@ const chunkUrls = () => {
     if (data.status === 'success') {
       message.success(data.message || 'URL已提交处理，请稍后在列表刷新查看状态');
       urlList.value = ''; // 清空URL输入
-      // chunkResults.value = []; // 清空旧的预览结果
-      // activeFileKeys.value = []; // 清空旧的预览结果
+      addFilesModalVisible.value = false; // 关闭弹窗
       getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
     } else {
       message.error(data.message || 'URL处理失败');
@@ -928,6 +945,16 @@ const rules = {
   name: [{ required: true, message: '请输入知识库名称' }]
 };
 
+// 分块参数配置弹窗
+const chunkConfigModalVisible = ref(false);
+const tempChunkParams = ref({
+  chunk_size: 1000,
+  chunk_overlap: 200,
+});
+
+// 添加文件弹窗
+const addFilesModalVisible = ref(false);
+
 // 显示编辑对话框
 const showEditModal = () => {
   editForm.name = database.value.name || '';
@@ -962,6 +989,28 @@ const updateDatabaseInfo = async () => {
   } finally {
     state.lock = false;
   }
+};
+
+// 显示分块参数配置弹窗
+const showChunkConfigModal = () => {
+  tempChunkParams.value = {
+    chunk_size: chunkParams.value.chunk_size,
+    chunk_overlap: chunkParams.value.chunk_overlap,
+  };
+  chunkConfigModalVisible.value = true;
+};
+
+// 处理分块参数配置提交
+const handleChunkConfigSubmit = () => {
+  chunkParams.value.chunk_size = tempChunkParams.value.chunk_size;
+  chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
+  chunkConfigModalVisible.value = false;
+  message.success('分块参数配置已更新');
+};
+
+// 显示添加文件弹窗
+const showAddFilesModal = () => {
+  addFilesModalVisible.value = true;
 };
 
 const handleIndexFile = (fileId) => {
@@ -1319,12 +1368,7 @@ const handleBatchIndex = async () => {
   }
 }
 
-.upload {
-  margin-bottom: 20px;
-  .upload-dragger {
-    margin: 0px;
-  }
-}
+
 
 .my-table {
   button.ant-btn-link {
@@ -1400,98 +1444,21 @@ const handleBatchIndex = async () => {
   }
 }
 
-.upload-section {
-  display: flex;
-  gap: 20px;
-
-  .upload-sidebar {
-    min-width: 280px;
-    height: fit-content;
-    padding: 20px;
-    background-color: var(--main-light-6);
-    border-radius: 8px;
-    border: 1px solid var(--main-light-3);
-    flex: 0 0 280px;
-    // box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-
-    .chunking-params {
-      h4 {
-        margin-top: 0;
-        margin-bottom: 16px;
-        color: var(--main-color);
-        font-size: 18px;
-        text-align: center;
-        font-weight: bold;
-        padding-bottom: 10px;
-        border-bottom: 1px dashed var(--main-light-3);
-      }
-
-      .params-info {
-        background-color: var(--main-light-4);
-        border-radius: 6px;
-        padding: 10px 12px;
-        margin-bottom: 16px;
-
-        p {
-          margin: 0;
-          font-size: 13px;
-          line-height: 1.5;
-          color: var(--gray-700);
-        }
-      }
-
-      .ant-form-item {
-        margin-bottom: 16px;
-
-        .ant-form-item-label {
-          padding-bottom: 6px;
-
-          label {
-            color: var(--gray-800);
-            font-weight: 500;
-            font-size: 15px;
-          }
-        }
-      }
-
-      .ant-input-number {
-        width: 100%;
-        border-radius: 6px;
-
-        &:hover, &:focus {
-          border-color: var(--main-color);
-        }
-      }
-
-      .ant-switch {
-        background-color: var(--gray-400);
-
-        &.ant-switch-checked {
-          background-color: var(--main-color);
-        }
-      }
-
-      // 添加参数说明
-      .param-description {
-        color: var(--gray-600);
-        font-size: 12px;
-        margin-top: 4px;
-        margin-bottom: 0;
-      }
-    }
-  }
-
-  .upload-main {
-    flex: 1;
+.add-files-content {
+  .upload-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 20px;
 
     .source-selector {
       display: flex;
       gap: 10px;
-      margin-bottom: 16px;
 
       .upload-mode-selector {
         cursor: pointer;
-        padding: 8px 16px;
+        padding: 4px 16px;
         border-radius: 8px;
         background-color: var(--main-light-4);
         border: 1px solid var(--main-light-3);
@@ -1503,6 +1470,116 @@ const handleBatchIndex = async () => {
         }
       }
     }
+
+    .config-controls {
+      .ant-btn {
+        border-color: var(--main-light-3);
+        color: var(--gray-700);
+        &:hover {
+          border-color: var(--main-color);
+          color: var(--main-color);
+        }
+      }
+    }
+  }
+
+  .ocr-config {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background-color: var(--main-light-6);
+    border-radius: 8px;
+    border: 1px solid var(--main-light-3);
+
+    .ant-form-item {
+      margin-bottom: 0;
+
+      .ant-form-item-label {
+        color: var(--gray-800);
+        font-weight: 500;
+      }
+    }
+
+    .param-description {
+      color: var(--gray-600);
+      font-size: 12px;
+      margin-left: 12px;
+    }
+  }
+
+  .upload {
+    margin-bottom: 20px;
+    .upload-dragger {
+      margin: 0px;
+      min-height: 200px;
+    }
+  }
+
+  .url-input {
+    margin-bottom: 20px;
+
+    .ant-textarea {
+      border-color: var(--main-light-3);
+      background-color: #fff;
+      font-family: monospace;
+      resize: vertical;
+    }
+
+    .ant-textarea:hover,
+    .ant-textarea:focus {
+      border-color: var(--main-color);
+    }
+
+    .url-hint {
+      font-size: 13px;
+      color: var(--gray-600);
+      margin-top: 5px;
+      line-height: 1.5;
+    }
+  }
+}
+
+.chunk-config-content {
+  .params-info {
+    background-color: var(--main-light-4);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+
+    p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--gray-700);
+    }
+  }
+
+  .ant-form-item {
+    margin-bottom: 16px;
+
+    .ant-form-item-label {
+      padding-bottom: 6px;
+
+      label {
+        color: var(--gray-800);
+        font-weight: 500;
+        font-size: 15px;
+      }
+    }
+  }
+
+  .ant-input-number {
+    border-radius: 6px;
+
+    &:hover, &:focus {
+      border-color: var(--main-color);
+    }
+  }
+
+  .param-description {
+    color: var(--gray-600);
+    font-size: 12px;
+    margin-top: 4px;
+    margin-bottom: 0;
   }
 }
 
@@ -1560,24 +1637,7 @@ const handleBatchIndex = async () => {
   margin-bottom: 20px;
 }
 
-.url-input .ant-textarea {
-  border-color: var(--main-light-3);
-  background-color: #fff;
-  font-family: monospace;
-  resize: vertical;
-}
 
-.url-input .ant-textarea:hover,
-.url-input .ant-textarea:focus {
-  border-color: var(--main-color);
-}
-
-.url-hint {
-  font-size: 13px;
-  color: var(--gray-600);
-  margin-top: 5px;
-  line-height: 1.5;
-}
 
 .loading-container {
   display: flex;

@@ -159,53 +159,26 @@ class OCRPlugin:
         :param pdf_path: PDF文件路径
         :return: 提取的文本
         """
-        mineru_ocr_uri = os.getenv("MINERU_OCR_URI", "http://localhost:5051")
+        mineru_ocr_uri = os.getenv("MINERU_OCR_URI", "http://localhost:30000")
+        mineru_ocr_uri_health = f"{mineru_ocr_uri}/health"
         import requests
         import json
+        from .mineru import parse_doc
 
-        health_check_response = requests.get(f"{mineru_ocr_uri}/health", timeout=5)
-        if health_check_response.status_code != 200 or health_check_response.json().get("status") != "healthy":
-            logger.error("Mineru OCR service health check failed.")
+        health_check_response = requests.get(mineru_ocr_uri_health, timeout=5)
+        if health_check_response.status_code != 200:
+            logger.error(f"Mineru OCR service health check failed with {mineru_ocr_uri_health}: {health_check_response.json()}")
             raise RuntimeError("Mineru OCR service health check failed. Please check the log use `docker logs mineru-api`")
 
-        # 读取PDF文件
-        with open(pdf_path, 'rb') as f:
-            files = {'file': f}
-            data = {
-                'parse_method': 'ocr',  # 使用OCR模式
-                'is_json_md_dump': False,  # 不需要保存中间文件
-                'return_layout': False,  # 不需要返回布局信息
-                'return_info': False,  # 不需要返回额外信息
-                'return_content_list': False,  # 不需要返回内容列表
-                'return_images': False,  # 不需要返回图片
-            }
+        pdf_path_list = [pdf_path]
+        output_dir = os.path.join(os.getcwd(), "tmp", "mineru_ocr")
 
-            try:
-                # 发送POST请求到Mineru OCR服务
-                response = requests.post(
-                    f"{mineru_ocr_uri}/file_parse",
-                    files=files,
-                    data=data
-                )
-                response.raise_for_status()  # 检查响应状态
+        pdf_text = parse_doc(pdf_path_list, output_dir,
+                         backend="vlm-sglang-client",
+                         server_url=mineru_ocr_uri)[0]
 
-                # 解析响应
-                result = response.json()
-                if 'md_content' in result:
-                    return result['md_content']
-                else:
-                    logger.error("Mineru OCR response does not contain md_content")
-                    return ""
-
-            except requests.exceptions.RequestException as e:
-                logger.error(f"Mineru OCR request failed: {str(e)}")
-                return ""
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse Mineru OCR response: {str(e)}")
-                return ""
-            except Exception as e:
-                logger.error(f"Unexpected error in Mineru OCR processing: {str(e)}")
-                return ""
+        logger.debug(f"Mineru OCR result: {pdf_text[:50]}(...) total {len(pdf_text)} characters.")
+        return pdf_text
 
 def get_state(task_id):
     return GOLBAL_STATE.get(task_id, {})

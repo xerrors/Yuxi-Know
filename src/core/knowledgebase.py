@@ -668,11 +668,11 @@ class KnowledgeBase:
             logger.info(f"Successfully connected to Milvus at {uri}")
             return True
         except MilvusException as e:
-            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行。")
-            logger.error("如果已退出，请重新启动 `docker restart milvus-standalone-dev`。")
+            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行。{traceback.format_exc()}")
+            logger.error("如果已退出，请重新启动 `docker restart milvus`。")
             return False
         except Exception as e: # Catch other potential errors like requests.exceptions.ConnectionError
-            logger.error(f"An unexpected error occurred while connecting to Milvus at {uri}: {e}")
+            logger.error(f"An unexpected error occurred while connecting to Milvus at {uri}: {e}, {traceback.format_exc()}")
             return False
 
 

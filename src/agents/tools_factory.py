@@ -3,7 +3,7 @@ import re
 from collections.abc import Callable
 from typing import Annotated, Any
 
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_tavily import TavilySearch
 from langchain_core.tools import BaseTool, StructuredTool, tool
 from pydantic import BaseModel, Field
 
@@ -151,4 +151,4 @@ _TOOLS_REGISTRY = {
 }
 
 if config.enable_web_search:
-    _TOOLS_REGISTRY["WebSearchWithTavily"] = TavilySearchResults(max_results=10)
+    _TOOLS_REGISTRY["WebSearchWithTavily"] = TavilySearch(max_results=10)

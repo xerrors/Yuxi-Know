@@ -1,5 +1,5 @@
 # 使用基础镜像
-FROM python:3.12
+FROM nvidia/cuda:12.4.1-cudnn-devel-ubuntu22.04
 COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 
 # 设置工作目录

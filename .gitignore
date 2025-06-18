@@ -20,7 +20,6 @@ logs
 *.log.*
 *.db
 *.lock
-!uv.lock
 tmp
 cache
 
@@ -29,6 +28,7 @@ cache
 .idea
 *.nogit*
 *.private*
+*.local*
 *.secret*
 
 *.pdf
