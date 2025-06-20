@@ -103,8 +103,8 @@ class KnowledgeBase:
             from src.models.rerank_model import get_reranker
             self.reranker = get_reranker()
 
-        if not self.connect_to_milvus():
-            raise ConnectionError("Failed to connect to Milvus")
+        connected = self.connect_to_milvus()
+        assert connected, ConnectionError("Failed to connect to Milvus")
 
     # 知识库数据库操作方法
     def get_all_databases(self):
@@ -661,20 +661,20 @@ class KnowledgeBase:
     #* Below is the code for milvus #
     ################################
     def connect_to_milvus(self):
+        connected = False
         try:
             uri = os.getenv('MILVUS_URI', config.get('milvus_uri', "http://milvus:19530"))
             self.client = MilvusClient(uri=uri)
             self.client.list_collections() # Test connection
             logger.info(f"Successfully connected to Milvus at {uri}")
-            return True
+            connected = True
         except MilvusException as e:
-            logger.error(f"Failed to connect to Milvus: {e}，请检查 milvus 的容器是否正常运行。{traceback.format_exc()}")
-            logger.error("如果已退出，请重新启动 `docker restart milvus`。")
-            return False
+            logger.error(f"Failed to connect to Milvus: {e} with {uri}。{traceback.format_exc()}")
+            logger.error("请检查 milvus 的容器是否正常运行，如果已退出，请重新启动 `docker restart milvus`。")
         except Exception as e: # Catch other potential errors like requests.exceptions.ConnectionError
             logger.error(f"An unexpected error occurred while connecting to Milvus at {uri}: {e}, {traceback.format_exc()}")
-            return False
 
+        return connected
 
     def get_collection_names(self):
         return self.client.list_collections()

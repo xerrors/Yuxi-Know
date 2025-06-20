@@ -34,6 +34,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY ../src /app/src
 COPY ../server /app/server
 
+# 关闭代理设置
+ENV http_proxy="" \
+    https_proxy=""
+
 # 同步项目
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync
