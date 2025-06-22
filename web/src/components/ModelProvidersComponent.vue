@@ -1,6 +1,6 @@
 <template>
   <div>
-    <div class="model-provider-card">
+    <div class="model-provider-card custom-models-card">
       <div class="card-header">
         <h3>自定义模型</h3>
       </div>
@@ -24,7 +24,7 @@
           </div>
           <div class="api_base">{{ item.api_base }}</div>
         </div>
-        <div class="card-models custom-model" @click="prepareToAddCustomModel">
+        <div class="card-models custom-model add-model" @click="prepareToAddCustomModel">
           <div class="card-models__header">
             <div class="name"> + 添加模型</div>
           </div>
@@ -32,7 +32,7 @@
         </div>
       </div>
     </div>
-    <div class="model-provider-card" v-for="(item, key) in modelKeys" :key="key">
+    <div class="model-provider-card configured-provider" v-for="(item, key) in modelKeys" :key="key">
       <div class="card-header" @click="toggleExpand(item)">
         <div :class="{'model-icon': true, 'available': modelStatus[item]}">
           <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
@@ -66,7 +66,7 @@
         </div>
       </div>
     </div>
-    <div class="model-provider-card" v-for="(item, key) in notModelKeys" :key="key">
+    <div class="model-provider-card unconfigured-provider" v-for="(item, key) in notModelKeys" :key="key">
       <div class="card-header">
         <div class="model-icon">
           <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
@@ -130,7 +130,6 @@
       :cancelText="'取消'"
       :ok-type="'primary'"
       :width="800"
-      :bodyStyle="{ padding: '16px 24px' }"
     >
       <div v-if="providerConfig.loading" class="modal-loading-container">
         <a-spin :indicator="h(LoadingOutlined, { style: { fontSize: '32px', color: 'var(--main-color)' }})" />
@@ -445,16 +444,89 @@ const filteredModels = computed(() => {
 
 <style lang="less" scoped>
 .model-provider-card {
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--gray-200);
   background-color: white;
   border-radius: 8px;
   margin-bottom: 12px;
-  padding: 12px;
+  padding: 0;
+  // box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s ease;
+  overflow: hidden;
+
+  &:hover {
+    // box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    border-color: var(--gray-300);
+  }
+
+  // 自定义模型容器特殊样式
+  &.custom-models-card {
+    .card-header {
+      border-bottom: 1px solid var(--gray-200);
+
+      h3 {
+        color: var(--main-color);
+        font-weight: 600;
+      }
+    }
+  }
+
+  // 已配置provider的样式
+  &.configured-provider {
+    .card-header {
+      border-bottom: 1px solid var(--gray-200);
+
+      .model-icon {
+        &.available {
+          position: relative;
+          overflow: visible;
+          &::after {
+            content: '';
+            position: absolute;
+            top: -1px;
+            right: -1px;
+            width: 6px;
+            height: 6px;
+            background: #10b981;
+            border: 1px solid white;
+            border-radius: 50%;
+          }
+        }
+      }
+    }
+  }
+
+  // 未配置provider的样式
+  &.unconfigured-provider {
+    .card-header {
+      background: #fafafa;
+      border-bottom: 1px solid var(--gray-200);
+
+      h3 {
+        color: var(--gray-700);
+      }
+
+      .missing-keys {
+        background: #fff7ed;
+        border: 1px solid #fed7aa;
+        border-radius: 4px;
+        padding: 4px 8px;
+        margin: 0;
+      }
+    }
+  }
+
   .card-header {
     display: flex;
     align-items: center;
     gap: 10px;
     cursor: pointer;
+    padding: 12px 14px;
+    background: white;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: var(--gray-50);
+    }
 
     .model-title-container {
       display: flex;
@@ -468,19 +540,28 @@ const filteredModels = computed(() => {
       font-size: 12px;
       width: fit-content;
       color: var(--gray-500);
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: var(--main-color);
+      }
     }
 
     .model-icon {
       width: 28px;
       height: 28px;
-
-      // 灰度
+      position: relative;
+      border-radius: 6px;
+      overflow: hidden;
       filter: grayscale(100%);
+      transition: filter 0.2s ease;
+
       img {
         width: 100%;
         height: 100%;
-        border-radius: 4px;
-        border: 1px solid var(--gray-300);
+        object-fit: cover;
+        border: 1px solid var(--gray-200);
+        border-radius: 6px;
       }
 
       &.available {
@@ -490,18 +571,19 @@ const filteredModels = computed(() => {
 
     h3 {
       margin: 0;
-      font-size: 0.9rem;
-      font-weight: bold;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--gray-900);
     }
 
     a {
       text-decoration: none;
       color: var(--gray-500);
       font-size: 12px;
-      transition: all 0.1s;
+      transition: all 0.2s ease;
 
       &:hover {
-        color: var(--gray-900);
+        color: var(--main-color);
       }
     }
 
@@ -509,31 +591,25 @@ const filteredModels = computed(() => {
       margin-left: auto;
     }
 
-    .success {
-      width: 0.75rem;
-      height: 0.75rem;
-      background-color: rgb(91, 186, 91);
-      border-radius: 50%;
-      box-shadow: 0 0 10px 1px rgba(0,128,0, 0.1);
-      border: 2px solid white;
-    }
-
     .missing-keys {
-      margin-top: 4px;
-      color: var(--gray-600);
+      color: var(--gray-700);
       font-size: 12px;
+      font-weight: 500;
+
       & > span {
         margin-left: 6px;
         user-select: all;
-        background-color: var(--gray-100);
-        padding: 2px 6px;
-        border-radius: 4px;
-        color: var(--gray-800);
+        background-color: rgba(251, 146, 60, 0.15);
+        color: #d97706;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 11px;
+        border: 1px solid rgba(251, 146, 60, 0.2);
       }
     }
 
-    .expand-button {
-      margin-left: auto;
+    .expand-button, .config-button {
       height: 32px;
       width: 32px;
       display: flex;
@@ -542,14 +618,17 @@ const filteredModels = computed(() => {
       padding: 0;
       cursor: pointer;
       color: var(--gray-500);
+      border-radius: 6px;
+      transition: all 0.2s ease;
 
       &:hover {
         background-color: var(--gray-100);
+        color: var(--gray-700);
       }
 
       .icon-wrapper {
         display: inline-flex;
-        transition: transform 0.2s ease;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
         &.rotated {
           transform: rotate(180deg);
@@ -561,105 +640,178 @@ const filteredModels = computed(() => {
   .card-body-wrapper {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.2s ease-out;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
 
     &.expanded {
-      max-height: 700px;
+      max-height: 800px;
     }
   }
 
   .card-body {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
-    margin-top: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    padding: 12px;
+    background: #fafafa;
+
+    // 普通模型卡片样式
     .card-models {
       width: 100%;
-      border-radius: 8px;
-      border: 1px solid var(--gray-300);
-      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--gray-200);
+      padding: 10px 12px;
       display: flex;
-      gap: 6px;
       justify-content: space-between;
       align-items: center;
       box-sizing: border-box;
-      background-color: var(--gray-50);
-      transition: box-shadow 0.1s;
+      background: white;
+      transition: all 0.2s ease;
+      min-height: 42px;
+
       &:hover {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        border-color: var(--gray-400);
       }
+
       .model_name {
         font-size: 14px;
+        font-weight: 500;
         color: var(--gray-900);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        line-height: 1.4;
       }
+
       .select-btn {
         width: 16px;
         height: 16px;
         flex: 0 0 16px;
         border-radius: 50%;
-      }
-
-      &.custom-model {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        padding-right: 8px;
-        gap: 10px;
-        .card-models__header {
-          width: 100%;
-          height: 24px;
-          display: flex;
-          justify-content: flex-start;
-          align-items: center;
-          .name {
-            color: var(--gray-1000);
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            flex: 1;
-            margin-right: 8px;
-            position: relative;
-
-            &:hover::after {
-              content: attr(title);
-              position: absolute;
-              left: 0;
-              top: 100%;
-              background: rgba(0, 0, 0, 0.8);
-              color: white;
-              padding: 4px 8px;
-              border-radius: 4px;
-              font-size: 12px;
-              white-space: nowrap;
-              z-index: 1000;
-              margin-top: 5px;
-            }
-          }
-          .action {
-            opacity: 0;
-            user-select: none;
-            margin-left: auto;
-            flex-shrink: 0;
-            button {
-              padding: 4px 8px;
-            }
-          }
-        }
-        .api_base {
-          font-size: 12px;
-          color: var(--gray-600);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          width: 100%;
-        }
+        border: 2px solid var(--gray-300);
+        background: white;
+        transition: all 0.2s ease;
 
         &:hover {
-          .card-models__header {
-            .action {
-              opacity: 1;
+          border-color: var(--main-color);
+        }
+      }
+    }
+
+    // 自定义模型卡片样式 - 统一设计
+    .custom-model {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 10px 12px;
+      gap: 8px;
+      cursor: pointer;
+      min-height: 64px;
+      background: white;
+      border-radius: 6px;
+      border: 1px solid var(--gray-200);
+      transition: all 0.2s ease;
+
+      &:hover {
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        border-color: var(--gray-400);
+
+        .card-models__header .action {
+          opacity: 1;
+        }
+      }
+
+        .card-models__header {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        min-height: 18px;
+
+        .name {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--gray-900);
+          line-height: 1.4;
+          flex: 1;
+          margin-right: 8px;
+          word-break: break-word;
+        }
+
+        .action {
+          opacity: 0;
+          transition: opacity 0.2s ease;
+          display: flex;
+          gap: 4px;
+          flex-shrink: 0;
+          margin-top: -1px;
+
+          button {
+            padding: 4px;
+            height: 24px;
+            width: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+
+            &:hover {
+              background-color: var(--gray-100);
+            }
+
+            &:disabled {
+              opacity: 0.4;
+              cursor: not-allowed;
+
+              &:hover {
+                background-color: transparent;
+              }
             }
           }
+        }
+      }
+
+      .api_base {
+        font-size: 12px;
+        color: var(--gray-600);
+        line-height: 1.3;
+        word-break: break-all;
+        margin-top: auto;
+      }
+
+      // 添加模型的special样式
+      &.add-model {
+        border: 2px dashed var(--gray-300);
+        background: white;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        min-height: 64px;
+
+        &:hover {
+          border-color: var(--main-color);
+          background: #fafafa;
+        }
+
+        .card-models__header {
+          justify-content: center;
+          align-items: center;
+          text-align: center;
+
+          .name {
+            color: var(--main-color);
+            font-weight: 600;
+            margin-right: 0;
+            text-align: center;
+          }
+        }
+
+        .api_base {
+          color: var(--gray-500);
+          text-align: center;
+          margin-top: 4px;
         }
       }
     }
@@ -748,6 +900,57 @@ const filteredModels = computed(() => {
             }
           }
         }
+      }
+    }
+  }
+}
+
+// 针对不同状态的额外样式调整
+.unconfigured-provider {
+  .card-body {
+    .card-models {
+      opacity: 0.6;
+      pointer-events: none;
+
+      .model_name {
+        color: var(--gray-500);
+      }
+
+      &:hover {
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+        border-color: var(--gray-300);
+      }
+    }
+  }
+}
+
+// 响应式调整
+@media (max-width: 768px) {
+  .model-provider-card {
+    margin-bottom: 10px;
+
+    .card-body {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 10px;
+    }
+
+    .card-header {
+      padding: 10px;
+      gap: 8px;
+
+      .model-icon {
+        width: 24px;
+        height: 24px;
+      }
+
+      h3 {
+        font-size: 14px;
+      }
+
+      .expand-button, .config-button {
+        height: 30px;
+        width: 30px;
       }
     }
   }
