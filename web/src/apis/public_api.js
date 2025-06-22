@@ -46,6 +46,21 @@ export const configApi = {
   getConfig: () => apiGet('/api/config'),
 }
 
+// 系统信息配置API
+export const infoApi = {
+  /**
+   * 获取系统信息配置
+   * @returns {Promise} - 系统信息配置
+   */
+  getInfoConfig: () => apiGet('/api/info'),
+
+  /**
+   * 重新加载信息配置
+   * @returns {Promise} - 重新加载结果
+   */
+  reloadInfoConfig: () => apiGet('/api/info/reload')
+}
+
 // 健康检查API
 export const healthApi = {
   /**

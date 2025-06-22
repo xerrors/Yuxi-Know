@@ -18,6 +18,8 @@ PUBLIC_PATHS = [
     r"^/api/auth/initialize$",       # 初始化系统
     r"^/api$",                      # Health Check
     r"^/api/login$",                # 登录页面
+    r"^/api/info$",                 # 获取系统信息配置
+    r"^/api/info/.*$",              # 系统信息配置相关接口
 ]
 
 # 获取数据库会话

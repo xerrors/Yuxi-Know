@@ -1,0 +1,26 @@
+# 单位信息配置文件
+# 用于配置网站的基本信息、品牌信息等
+# 修改后需要重启服务生效
+
+# 组织信息
+organization:
+  name: "江南语析"           # 完整组织名称
+  short_name: "语析"         # 简短名称
+  logo: "/favicon.svg"       # Logo文件路径
+  avatar: "/avatar.jpg"      # 头像文件路径
+
+# 品牌信息
+branding:
+  title: "Yuxi-Know"                           # 系统标题
+  subtitle: "大模型驱动的知识库管理工具"          # 副标题
+  description: "结合知识库与知识图谱，提供更准确、更全面的回答"  # 描述信息
+
+# 功能特性
+features:
+  - "📚 灵活知识库"
+  - "🕸️ 知识图谱集成"
+  - "🤖 多模型支持"
+
+# 页脚信息
+footer:
+  copyright: "© 江南语析 2025 [WIP] v0.12.138"

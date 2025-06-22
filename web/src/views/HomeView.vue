@@ -3,8 +3,8 @@
     <div class="hero-section">
       <div class="glass-header">
         <div class="logo">
-          <img src="/favicon.svg" alt="江南语析" class="logo-img" />
-          <span style="font-size: 1.3rem; font-weight: bold;">江南语析</span>
+          <img :src="infoStore.organization.logo" :alt="infoStore.organization.name" class="logo-img" />
+          <span style="font-size: 1.3rem; font-weight: bold;">{{ infoStore.organization.name }}</span>
         </div>
         <div class="github-link">
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
@@ -17,13 +17,11 @@
       </div>
 
       <div class="hero-content">
-        <h1 class="title">{{ title }}</h1>
+        <h1 class="title">{{ infoStore.branding.title }}</h1>
         <div class="description">
-          <p class="subtitle">大模型驱动的知识库管理工具</p>
+          <p class="subtitle">{{ infoStore.branding.subtitle }}</p>
           <p class="features">
-            <span>📚 灵活知识库</span>
-            <span>🕸️ 知识图谱集成</span>
-            <span>🤖 多模型支持</span>
+            <span v-for="feature in infoStore.features" :key="feature">{{ feature }}</span>
           </p>
         </div>
         <button class="start-button" @click="goToChat">开始对话</button>
@@ -36,14 +34,14 @@
         <div class="preview-overlay">
           <div class="overlay-content">
             <h3>强大的问答能力</h3>
-            <p>结合知识库与知识图谱，提供更准确、更全面的回答</p>
+            <p>{{ infoStore.branding.description }}</p>
           </div>
         </div>
       </div>
     </div>
 
     <footer>
-      <p>© 江南语析 2025 [WIP] v0.12.138</p>
+      <p>{{ infoStore.footer.copyright }}</p>
     </footer>
   </div>
 </template>
@@ -52,11 +50,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useInfoStore } from '@/stores/info'
 import { chatApi } from '@/apis/auth_api'
 
-const title = ref('Yuxi-Know')
 const router = useRouter()
 const userStore = useUserStore()
+const infoStore = useInfoStore()
 const githubStars = ref(0)
 const isLoadingStars = ref(false)
 
@@ -113,7 +112,10 @@ const fetchGithubStars = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 加载信息配置
+  await infoStore.loadInfoConfig()
+  // 获取GitHub stars
   fetchGithubStars()
 })
 </script>

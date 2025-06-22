@@ -10,11 +10,13 @@ import { Bot, Waypoints, LibraryBig, MessageSquareMore, Settings } from 'lucide-
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
+import { useInfoStore } from '@/stores/info'
 import DebugComponent from '@/components/DebugComponent.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
+const infoStore = useInfoStore()
 
 const layoutSettings = reactive({
   showDebug: false,
@@ -51,7 +53,10 @@ const fetchGithubStars = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 加载信息配置
+  await infoStore.loadInfoConfig()
+  // 加载其他配置
   getRemoteConfig()
   getRemoteDatabase()
   fetchGithubStars() // Fetch GitHub stars on mount
@@ -115,8 +120,8 @@ const mainList = [{
     <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
       <div class="logo circle">
         <router-link to="/">
-          <img src="/avatar.jpg">
-          <span class="logo-text">语析</span>
+          <img :src="infoStore.organization.avatar">
+          <span class="logo-text">{{ infoStore.organization.short_name }}</span>
         </router-link>
       </div>
       <div class="nav">
