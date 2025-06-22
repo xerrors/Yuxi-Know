@@ -6,28 +6,8 @@
 
     <div class="calc-display">
       <div class="result-container">
-        <div class="result-label">结果:</div>
         <div class="result-value">{{ formatNumber(data) }}</div>
       </div>
-
-      <div class="result-actions">
-        <a-button size="small" @click="copyResult" type="primary" ghost>
-          <CopyOutlined /> 复制结果
-        </a-button>
-      </div>
-    </div>
-
-    <!-- 如果结果很大或很小，显示科学记数法 -->
-    <div v-if="showScientificNotation" class="scientific-notation">
-      <span class="notation-label">科学记数法:</span>
-      <span class="notation-value">{{ data.toExponential(6) }}</span>
-    </div>
-
-    <!-- 显示数字类型信息 -->
-    <div class="number-info">
-      <a-tag :color="getNumberTypeColor()">{{ getNumberType() }}</a-tag>
-      <span v-if="isInteger" class="number-detail">整数</span>
-      <span v-else class="number-detail">{{ getDecimalPlaces() }} 位小数</span>
     </div>
   </div>
 </template>

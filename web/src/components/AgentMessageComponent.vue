@@ -5,28 +5,28 @@
 
     <!-- 助手消息 -->
     <div v-else-if="message.type === 'ai'" class="assistant-message">
-      <div v-if="message.reasoning_content" class="reasoning-box">
+      <div v-if="parsedMessage.reasoning_content" class="reasoning-box">
         <a-collapse v-model:activeKey="reasoningActiveKey" :bordered="false">
           <template #expandIcon="{ isActive }">
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
           <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
-            <p class="reasoning-content">{{ message.reasoning_content.trim() }}</p>
+            <p class="reasoning-content">{{ parsedMessage.reasoning_content.trim() }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
 
       <!-- 消息内容 -->
       <!-- <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div> -->
-      <MdPreview v-else-if="message.content" ref="editorRef"
+      <MdPreview v-if="parsedMessage.content" ref="editorRef"
         editorId="preview-only"
         previewTheme="github"
         :showCodeRowNumber="false"
-        :modelValue="message.content"
+        :modelValue="parsedMessage.content"
         :key="message.id"
         class="message-md"/>
 
-      <div v-else-if="message.reasoning_content"  class="empty-block"></div>
+      <div v-else-if="parsedMessage.reasoning_content"  class="empty-block"></div>
 
       <div v-if="message.tool_calls && Object.keys(message.tool_calls).length > 0" class="tool-calls-container">
         <div v-for="(toolCall, index) in message.tool_calls || {}" :key="index" class="tool-call-container">
@@ -38,13 +38,13 @@
                 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span>
               </span>
               <span v-else>
-                <ThunderboltOutlined /> 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
+                <ThunderboltOutlined /> &nbsp; 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
               <div class="tool-params" v-if="toolCall.args || toolCall.function.arguments">
                 <div class="tool-params-content">
-                  <pre> 参数: {{ toolCall.args || toolCall.function.arguments }}</pre>
+                  <strong>参数:</strong> {{ toolCall.args || toolCall.function.arguments }}
                 </div>
               </div>
               <div class="tool-result" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
@@ -137,6 +137,26 @@ const isEmptyAndLoading = computed(() => {
   return isEmpty && isLoading;
 });
 
+const parsedMessage = computed(() => {
+  const message = props.message;
+  if (message.content) {
+    // 匹配完整的 <think>...</think> 标签
+    const thinkContent = message.content.match(/<think>(.*?)<\/think>/s);
+    if (thinkContent) {
+      message.reasoning_content = thinkContent[1];
+      message.content = message.content.replace(/<think>(.*?)<\/think>/s, '');
+    } else {
+      // 匹配未闭合的 <think> 标签，处理加载中的情况
+      const incompleteThinkContent = message.content.match(/<think>(.*?)$/s);
+      if (incompleteThinkContent) {
+        message.reasoning_content = incompleteThinkContent[1];
+        message.content = message.content.replace(/<think>(.*?)$/s, '');
+      }
+    }
+  }
+  return message;
+});
+
 const toggleToolCall = (toolCallId) => {
   if (expandedToolCalls.value.has(toolCallId)) {
     expandedToolCalls.value.delete(toolCallId);
@@ -207,14 +227,61 @@ const toggleToolCall = (toolCallId) => {
   .reasoning-box {
     margin-top: 10px;
     margin-bottom: 15px;
-    border-radius: 8px;
-    border: 1px solid var(--main-light-3);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
+    background-color: var(--gray-50);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    overflow: hidden;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--main-300);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    :deep(.ant-collapse) {
+      background-color: transparent;
+      border: none;
+
+      .ant-collapse-item {
+        border: none;
+
+        .ant-collapse-header {
+          padding: 12px 16px;
+          background-color: var(--gray-100);
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--gray-800);
+          border-bottom: 1px solid var(--gray-200);
+          transition: all 0.2s ease;
+
+          &:hover {
+            background-color: var(--gray-150);
+          }
+
+          .ant-collapse-expand-icon {
+            color: var(--main-600);
+          }
+        }
+
+        .ant-collapse-content {
+          border: none;
+          background-color: transparent;
+
+          .ant-collapse-content-box {
+            padding: 16px;
+            background-color: var(--gray-50);
+          }
+        }
+      }
+    }
 
     .reasoning-content {
       font-size: 13px;
       color: var(--gray-800);
       white-space: pre-wrap;
       margin: 0;
+      line-height: 1.6;
     }
   }
 
@@ -251,11 +318,18 @@ const toggleToolCall = (toolCallId) => {
   :deep(.tool-call-display) {
     background-color: var(--gray-50);
     border: 1px solid var(--gray-200);
-    border-radius: 8px;
+    border-radius: 12px;
     overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--main-300);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+    }
 
     .tool-header {
-      padding: 10px 12px;
+      padding: 12px 16px;
       background-color: var(--gray-100);
       font-size: 14px;
       font-weight: 500;
@@ -267,9 +341,20 @@ const toggleToolCall = (toolCallId) => {
       cursor: pointer;
       user-select: none;
       position: relative;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: var(--gray-150);
+      }
 
       .anticon {
         color: var(--main-600);
+        font-size: 16px;
+      }
+
+      .tool-name {
+        font-weight: 600;
+        color: var(--main-700);
       }
 
       .step-badge {
@@ -285,27 +370,30 @@ const toggleToolCall = (toolCallId) => {
 
     .tool-content {
       transition: all 0.3s ease;
+
       .tool-params {
-        padding: 10px 12px;
+        padding: 16px;
         background-color: var(--gray-50);
 
         .tool-params-header {
           background-color: var(--gray-100);
           font-size: 13px;
           color: var(--gray-800);
+          margin-bottom: 8px;
+          font-weight: 500;
         }
 
         .tool-params-content {
           margin: 0;
           font-size: 13px;
           background-color: var(--gray-100);
-          border-radius: 4px;
-          padding: 8px;
           overflow-x: auto;
           color: var(--gray-800);
+          line-height: 1.5;
 
           pre {
             margin: 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
           }
         }
       }
@@ -315,7 +403,7 @@ const toggleToolCall = (toolCallId) => {
         background-color: transparent;
 
         .tool-result-header {
-          padding: 10px 12px;
+          padding: 12px 16px;
           background-color: var(--gray-100);
           font-size: 12px;
           color: var(--gray-700);
