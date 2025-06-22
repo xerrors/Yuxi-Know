@@ -43,18 +43,17 @@
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
               <div class="tool-params" v-if="toolCall.args || toolCall.function.arguments">
-                <div class="tool-params-header">
-                  参数:
-                </div>
                 <div class="tool-params-content">
-                  <pre>{{ toolCall.args || toolCall.function.arguments }}</pre>
+                  <pre> 参数: {{ toolCall.args || toolCall.function.arguments }}</pre>
                 </div>
               </div>
-              <div class="tool-params" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
-                <div class="tool-params-header">
-                  执行结果
+              <div class="tool-result" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
+                <div class="tool-result-content">
+                  <ToolResultRenderer
+                    :tool-name="toolCall.name || toolCall.function.name"
+                    :result-content="toolCall.tool_call_result.content"
+                  />
                 </div>
-                <div class="tool-params-content">{{ toolCall.tool_call_result.content }}</div>
               </div>
             </div>
           </div>
@@ -84,6 +83,7 @@
 import { computed, ref } from 'vue';
 import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import RefsComponent from '@/components/RefsComponent.vue'
+import { ToolResultRenderer } from '@/components/ToolCallingResult'
 
 
 import { MdPreview } from 'md-editor-v3'
@@ -307,6 +307,25 @@ const toggleToolCall = (toolCallId) => {
           pre {
             margin: 0;
           }
+        }
+      }
+
+      .tool-result {
+        padding: 0;
+        background-color: transparent;
+
+        .tool-result-header {
+          padding: 10px 12px;
+          background-color: var(--gray-100);
+          font-size: 12px;
+          color: var(--gray-700);
+          font-weight: 500;
+          border-bottom: 1px solid var(--gray-200);
+        }
+
+        .tool-result-content {
+          padding: 0;
+          background-color: transparent;
         }
       }
     }
