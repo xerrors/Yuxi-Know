@@ -11,7 +11,12 @@
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
       @toggle-sidebar="toggleSidebar"
-      :class="{'floating-sidebar': isSmallContainer, 'sidebar-open': state.isSidebarOpen, 'no-transition': state.isInitialRender}"
+      :class="{
+        'floating-sidebar': isSmallContainer,
+        'sidebar-open': state.isSidebarOpen,
+        'no-transition': state.isInitialRender,
+        'collapsed': isSmallContainer && !state.isSidebarOpen
+      }"
     />
     <div class="sidebar-backdrop" v-if="state.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
@@ -1169,7 +1174,7 @@ const mergeMessageChunk = (chunks) => {
     }
   }
 
-  .chat-sidebar {
+  .floating-sidebar {
     position: fixed;
     z-index: 100;
     height: 100%;
@@ -1183,7 +1188,6 @@ const mergeMessageChunk = (chunks) => {
 
     &.collapsed {
       transform: translateX(-100%);
-      width: 80% !important;
     }
   }
 }
