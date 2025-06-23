@@ -154,6 +154,7 @@ const parsedMessage = computed(() => {
       }
     }
   }
+  message.reasoning_content = message.reasoning_content || message.additional_kwargs?.reasoning_content || '';
   return message;
 });
 

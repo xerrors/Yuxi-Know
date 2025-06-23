@@ -66,6 +66,13 @@
             @retry="retryMessage(message)"
           >
           </AgentMessageComponent>
+          <!-- 显示对话最后一个消息使用的模型 -->
+          <RefsComponent
+            v-if="getLastMessage(conv)"
+            :message="getLastMessage(conv)"
+            :show-refs="['model', 'copy']"
+            :is-latest-message="false"
+          />
         </div>
         <div class="conv-box" v-if="onGoingConv.messages.length > 0">
           <AgentMessageComponent
@@ -78,6 +85,18 @@
             @retry="retryMessage(message)"
           >
           </AgentMessageComponent>
+        </div>
+
+        <!-- 生成中的加载状态 -->
+        <div class="generating-status" v-if="state.isProcessingRequest && !state.waitingServerResponse">
+          <div class="generating-indicator">
+            <div class="loading-dots">
+              <div></div>
+              <div></div>
+              <div></div>
+            </div>
+            <span class="generating-text">正在生成回复...</span>
+          </div>
         </div>
       </div>
       <div class="bottom">
@@ -111,6 +130,7 @@ import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
+import RefsComponent from '@/components/RefsComponent.vue'
 import { chatApi, threadApi } from '@/apis/auth_api'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
 
@@ -150,7 +170,12 @@ const isSmallContainer = computed(() => containerWidth.value <= 520);
 const isMediumContainer = computed(() => containerWidth.value <= 768);
 let resizeObserver = null;
 
-// 监听容器大小变化
+// 滚动控制相关
+const shouldAutoScroll = ref(true);  // 是否应该自动滚动
+const isUserScrolling = ref(false);  // 用户是否正在滚动
+let scrollTimer = null;
+
+// 监听容器大小变化和滚动事件
 onMounted(() => {
   // 初始计算容器宽度
   nextTick(() => {
@@ -166,6 +191,12 @@ onMounted(() => {
 
       resizeObserver.observe(chatContainerRef.value);
     }
+
+    // 添加滚动监听
+    const chatContainer = document.querySelector('.chat');
+    if (chatContainer) {
+      chatContainer.addEventListener('scroll', handleScroll, { passive: true });
+    }
   });
 
   // 延迟移除初始渲染标记，防止切换动画
@@ -178,6 +209,16 @@ onUnmounted(() => {
   if (resizeObserver) {
     resizeObserver.disconnect();
   }
+
+  // 清理滚动监听器
+  const chatContainer = document.querySelector('.chat');
+  if (chatContainer) {
+    chatContainer.removeEventListener('scroll', handleScroll);
+  }
+
+  if (scrollTimer) {
+    clearTimeout(scrollTimer);
+  }
 });
 
 const showMsgRefs = (msg) => {
@@ -185,6 +226,21 @@ const showMsgRefs = (msg) => {
     return ['copy']
   }
   return false
+}
+
+// 获取对话的最后一个消息
+const getLastMessage = (conv) => {
+  if (!conv || !conv.messages || conv.messages.length === 0) {
+    return null;
+  }
+  // 查找最后一个AI消息
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    const message = conv.messages[i];
+    if (message.type === 'ai') {
+      return message;
+    }
+  }
+  return null;
 }
 
 // DOM引用
@@ -375,6 +431,8 @@ const sendMessageToServer = async (text) => {
     renameChat({'chatId': currentChatId.value, 'title': text})
   }
 
+  // 发送消息时启用自动滚动
+  shouldAutoScroll.value = true;
   state.isProcessingRequest = true;
   await scrollToBottom();
 
@@ -480,8 +538,11 @@ const processResponseChunk = async (data) => {
       }
       onGoingConv.msgChunks[data.msg.id].push(data.msg)
     }
+  } else if (data.status === 'error') {
+    console.error("流式处理出错:", data.message);
+    message.error(data.message);
   } else if (data.status === 'finished') {
-    // await getAgentHistory();
+    await getAgentHistory();
   }
   // await scrollToBottom();
 };
@@ -561,6 +622,11 @@ const getAgentHistory = async () => {
       // 将服务器格式的历史记录转换为组件格式
       onGoingConv.msgChunks = {};
       convs.value = convertServerHistoryToMessages(response.history);
+
+      // 加载历史记录后，启用自动滚动并滚动到底部
+      shouldAutoScroll.value = true;
+      await nextTick();
+      await scrollToBottom();
     } else {
       message.warning('未找到历史记录或格式不正确');
     }
@@ -652,20 +718,49 @@ onMounted(() => {
 });
 
 // 监听消息变化自动滚动
-// watch(convs, () => {
-//   scrollToBottom();
-// }, { deep: true });
+watch([convs, () => onGoingConv.messages], () => {
+  scrollToBottom();
+}, { deep: true });
 
 
 // ==================== 用户交互处理 ====================
 
-// 滚动到底部 TODO: 需要优化当用户向上滚动的时候，停止滚动，当用户点击回到底部或者滚动到最底部的时候，再滚动到底部
+// 检查是否在底部（允许一定误差）
+const isAtBottom = () => {
+  const container = document.querySelector('.chat');
+  if (!container) return false;
+
+  const threshold = 100; // 距离底部100px内认为是在底部
+  const isBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+  return isBottom;
+};
+
+// 处理滚动事件
+const handleScroll = () => {
+  if (scrollTimer) {
+    clearTimeout(scrollTimer);
+  }
+
+  // 标记用户正在滚动
+  isUserScrolling.value = true;
+
+  // 检查是否在底部
+  const atBottom = isAtBottom();
+  shouldAutoScroll.value = atBottom;
+
+  // 滚动结束后一段时间重置用户滚动状态
+  scrollTimer = setTimeout(() => {
+    isUserScrolling.value = false;
+  }, 150);
+};
+
+// 智能滚动到底部
 const scrollToBottom = async () => {
   await nextTick();
-  if (!messagesContainer.value) return;
 
-  // 找到真正需要滚动的容器元素
-  const containerBox = messagesContainer.value;
+  // 只有在应该自动滚动时才执行
+  if (!shouldAutoScroll.value) return;
+
   const container = document.querySelector('.chat');
   if (!container) return;
 
@@ -673,9 +768,21 @@ const scrollToBottom = async () => {
 
   // 多次尝试滚动以确保成功
   container.scrollTo(scrollOptions);
-  setTimeout(() => container.scrollTo(scrollOptions), 50);
-  setTimeout(() => container.scrollTo(scrollOptions), 150);
-  setTimeout(() => container.scrollTo({ top: container.scrollHeight, behavior: 'auto' }), 300);
+  setTimeout(() => {
+    if (shouldAutoScroll.value) {
+      container.scrollTo(scrollOptions);
+    }
+  }, 50);
+  setTimeout(() => {
+    if (shouldAutoScroll.value) {
+      container.scrollTo(scrollOptions);
+    }
+  }, 150);
+  setTimeout(() => {
+    if (shouldAutoScroll.value) {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+    }
+  }, 300);
 };
 
 
@@ -713,8 +820,11 @@ const mergeMessageChunk = (chunks) => {
   }
   // 深拷贝第一个chunk作为结果
   const result = JSON.parse(JSON.stringify(chunks[0]));
+  console.debug("result", toRaw(result))
 
   result.content = result.content || '';
+  result.additional_kwargs = result.additional_kwargs || {};
+  result.additional_kwargs.reasoning_content = result.additional_kwargs?.reasoning_content || '';
 
   // 合并其他chunks
   for (let i = 1; i < chunks.length; i++) {
@@ -722,6 +832,7 @@ const mergeMessageChunk = (chunks) => {
 
     // 合并content
     result.content += chunk.content || '';
+    result.additional_kwargs.reasoning_content += chunk.additional_kwargs?.reasoning_content || '';
 
     // 如果是当前chunk没有的 key, value, 或者当前 result[key] 为空，则添加到result中
     for (const key in chunk) {
@@ -1027,6 +1138,28 @@ const mergeMessageChunk = (chunks) => {
 
 .loading-dots div:nth-child(2) {
   animation-delay: -0.16s;
+}
+
+.generating-status {
+  display: flex;
+  justify-content: flex-start;
+  padding: 0.8rem 0;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.generating-indicator {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--gray-100);
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+
+  .generating-text {
+    margin-left: 12px;
+    color: var(--gray-700);
+    font-size: 14px;
+  }
 }
 
 

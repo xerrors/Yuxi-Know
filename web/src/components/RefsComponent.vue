@@ -1,10 +1,10 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
-      <!-- <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span> -->
-      <!-- <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span> -->
-      <span v-if="msg.meta?.server_model_name" class="item" @click="console.log(msg)">
-        <BulbOutlined /> {{ msg.meta.server_model_name }}
+      <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span>
+      <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span>
+      <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
+        <BulbOutlined /> {{ getModelName(msg) }}
       </span>
       <span
         v-if="showKey('copy')"
@@ -48,6 +48,8 @@ import {
   DeploymentUnitOutlined,
   BulbOutlined,
   ReloadOutlined,
+  LikeOutlined,
+  DislikeOutlined,
 } from '@ant-design/icons-vue'
 
 const emit = defineEmits(['retry', 'openRefs']);
@@ -91,7 +93,14 @@ const copyText = async (text) => {
   }
 }
 
-const showRefs = computed(() => (msg.value.role=='received' || msg.value.role=='assistant') && msg.value.status=='finished')
+const showRefs = computed(() => {
+  // 如果只是为了显示模型信息，不需要检查状态
+  if (props.showRefs && Array.isArray(props.showRefs) && props.showRefs.includes('model')) {
+    return true;
+  }
+  // 原有的逻辑
+  return (msg.value.role=='received' || msg.value.role=='assistant') && msg.value.status=='finished';
+})
 
 // 打开全局refs抽屉
 const openGlobalRefs = (type) => {
@@ -116,6 +125,27 @@ const hasKnowledgeBaseData = (msg) => {
 // 添加重新生成方法
 const regenerateMessage = () => {
   emit('retry')
+}
+
+// 获取模型名称
+const getModelName = (msg) => {
+  // 优先检查 response_metadata.model_name
+  if (msg.response_metadata?.model_name) {
+    return msg.response_metadata.model_name;
+  }
+  // 兼容旧格式 meta.server_model_name
+  if (msg.meta?.server_model_name) {
+    return msg.meta.server_model_name;
+  }
+  return null;
+}
+
+const likeThisResponse = (msg) => {
+  console.log(msg)
+}
+
+const dislikeThisResponse = (msg) => {
+  console.log(msg)
 }
 </script>
 
