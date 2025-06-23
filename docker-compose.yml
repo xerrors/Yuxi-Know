@@ -28,18 +28,21 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
-      - NEO4J_URI=bolt://graph:7687
+      - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-0123456789}
-      - MILVUS_URI=http://milvus:19530
-      - MINERU_OCR_URI=http://mineru:30000
-      - PADDLEX_URI=http://paddlex:8080
+      - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
+      - MINERU_OCR_URI=${MINERU_OCR_URI:-http://mineru:30000}
+      - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
+      - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
       - MODEL_DIR=/models
       - RUNNING_IN_DOCKER=true
     command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     depends_on:
       milvus:
+        condition: service_healthy
+      minio:
         condition: service_healthy
 
   web:
@@ -117,13 +120,17 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
       - ./docker/volumes/milvus/minio:/minio_data
-    command: minio server /minio_data
+      - ./docker/volumes/milvus/minio_config:/root/.minio
+    command: minio server /minio_data --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 60s
       timeout: 30s
       retries: 5
       start_period: 30s
+    ports:
+      - "9000:9000"
+      - "9001:9001"
     networks:
       - app-network
     restart: unless-stopped
