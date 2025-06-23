@@ -445,6 +445,7 @@ const enable_ocr_options = ref([
   { value: 'disable', payload: { title: '不启用' } },
   { value: 'onnx_rapid_ocr', payload: { title: 'ONNX with RapidOCR' } },
   { value: 'mineru_ocr', payload: { title: 'MinerU OCR' } },
+  { value: 'paddlex_ocr', payload: { title: 'Paddlex OCR' } },
 ])
 
 const use_rewrite_queryOptions = ref([
@@ -811,7 +812,7 @@ const chunkFiles = () => {
   .then(data => {
     console.log('文件处理结果:', data)
     if (data.status === 'success') {
-      message.success(data.message || '文件已提交处理，请稍后在列表刷新查看状态');
+      message.info(data.message || '文件已提交处理，请稍后在列表刷新查看状态');
       fileList.value = []; // 清空已上传文件列表
       addFilesModalVisible.value = false; // 关闭弹窗
       getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态

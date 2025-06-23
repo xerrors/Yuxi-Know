@@ -159,11 +159,10 @@ class OCRPlugin:
         :param pdf_path: PDF文件路径
         :return: 提取的文本
         """
+        import requests
+        from .mineru import parse_doc
         mineru_ocr_uri = os.getenv("MINERU_OCR_URI", "http://localhost:30000")
         mineru_ocr_uri_health = f"{mineru_ocr_uri}/health"
-        import requests
-        import json
-        from .mineru import parse_doc
 
         health_check_response = requests.get(mineru_ocr_uri_health, timeout=5)
         if health_check_response.status_code != 200:
@@ -179,6 +178,28 @@ class OCRPlugin:
 
         logger.debug(f"Mineru OCR result: {pdf_text[:50]}(...) total {len(pdf_text)} characters.")
         return pdf_text
+
+    def process_pdf_paddlex(self, pdf_path):
+        """
+        使用Paddlex OCR处理PDF文件
+        :param pdf_path: PDF文件路径
+        :return: 提取的文本
+        """
+        from .paddlex import analyze_document, check_paddlex_health
+
+        paddlex_uri = os.getenv("PADDLEX_URI", "http://localhost:8080")
+        health_check_response = check_paddlex_health(paddlex_uri)
+        if not health_check_response.ok:
+            logger.error(f"Paddlex OCR service health check failed with {paddlex_uri}: {health_check_response.json()}")
+            raise RuntimeError("Paddlex OCR service health check failed. Please check the log use `docker logs paddlex`")
+
+        result = analyze_document(pdf_path, base_url=paddlex_uri)
+
+        if not result["success"]:
+            logger.error(f"Paddlex OCR failed: {result['error']}")
+            return ""
+
+        return result["full_text"]
 
 def get_state(task_id):
     return GOLBAL_STATE.get(task_id, {})

@@ -4,8 +4,8 @@ import json
 import base64
 import os
 import time
-from typing import Optional, Dict, Any
-
+from typing import Optional, Any
+from src.utils import logger
 
 
 
@@ -24,43 +24,43 @@ class PaddleXLayoutParser:
     def _process_file_input(self, file_input: str) -> str:
         # 检查是否为本地文件路径
         if os.path.exists(file_input):
-            print(f"📁 检测到本地文件: {file_input}")
-            print(f"📏 文件大小: {os.path.getsize(file_input) / 1024 / 1024:.2f} MB")
+            logger.info(f"📁 检测到本地文件: {file_input}")
+            logger.info(f"📏 文件大小: {os.path.getsize(file_input) / 1024 / 1024:.2f} MB")
 
             try:
                 # 将本地文件编码为Base64
                 encoded_content = self.encode_file_to_base64(file_input)
-                print(f"✅ 文件已编码为Base64，长度: {len(encoded_content)} 字符")
+                logger.info(f"✅ 文件已编码为Base64，长度: {len(encoded_content)} 字符")
                 return encoded_content
             except Exception as e:
-                print(f"❌ 文件编码失败: {e}")
+                logger.error(f"❌ 文件编码失败: {e}")
                 raise
 
         # 检查是否为URL
         elif file_input.startswith(('http://', 'https://')):
-            print(f"🌐 检测到URL: {file_input}")
+            logger.info(f"🌐 检测到URL: {file_input}")
             return file_input
 
         # 否则假设为Base64编码内容
         else:
-            print(f"📝 假设为Base64编码内容，长度: {len(file_input)} 字符")
+            logger.info(f"📝 假设为Base64编码内容，长度: {len(file_input)} 字符")
             return file_input
 
     def layout_parsing(self,
             file_input: str,
-            file_type: Optional[int] = None,
-            use_textline_orientation: Optional[bool] = None,
-            use_seal_recognition: Optional[bool] = None,
-            use_table_recognition: Optional[bool] = None,
-            use_formula_recognition: Optional[bool] = None,
-            use_chart_recognition: Optional[bool] = None,
-            use_region_detection: Optional[bool] = None,
-            layout_threshold: Optional[float] = None,
-            layout_nms: Optional[bool] = None,
-            use_doc_orientation_classify: Optional[bool] = True,
-            use_doc_unwarping: Optional[bool] = False,
-            use_wired_table_cells_trans_to_html: Optional[bool] = True, # 是否启用无有线表单元格检测结果直转HTML，默认False，启用则直接基于有线表单元格检测结果的几何关系构建HTML。
-            **kwargs) -> Dict[str, Any]:
+            file_type: int | None = None,
+            use_textline_orientation: bool | None = None,
+            use_seal_recognition: bool | None = None,
+            use_table_recognition: bool | None = None,
+            use_formula_recognition: bool | None = None,
+            use_chart_recognition: bool | None = None,
+            use_region_detection: bool | None = None,
+            layout_threshold: float | None = None,
+            layout_nms: bool | None = None,
+            use_doc_orientation_classify: bool = True,
+            use_doc_unwarping: bool | None = False,
+            use_wired_table_cells_trans_to_html: bool = True, # 启用则直接基于有线表单元格检测结果的几何关系构建HTML。
+            **kwargs) -> dict[str, Any]:
         """
         调用版面解析API：https://paddlepaddle.github.io/PaddleX/latest/pipeline_usage/tutorials/ocr_pipelines/PP-StructureV3.html#22-python
         """
@@ -104,28 +104,30 @@ class PaddleXLayoutParser:
 
             if response.status_code == 200:
                 result = response.json()
-                print("✅ 请求成功!")
+                logger.info("✅ 请求成功!")
                 return result
             else:
-                print("❌ 请求失败!")
+                logger.error("❌ 请求失败!")
                 try:
                     error_result = response.json()
-                    print(f"错误信息: {json.dumps(error_result, indent=2, ensure_ascii=False)}")
+                    logger.error(f"错误信息: {json.dumps(error_result, indent=2, ensure_ascii=False)}")
                     return error_result
-                except:
-                    print(f"响应内容: {response.text}")
-                    return {"error": response.text, "status_code": response.status_code}
+                except Exception as e:
+                    logger.error(f"响应内容: {response.text}")
+                    return {"error": f"{e}: {response.text}", "status_code": response.status_code}
 
         except requests.exceptions.RequestException as e:
-            print(f"❌ 网络请求异常: {e}")
+            health_check_response = requests.get(f"{self.base_url}/health", timeout=5)
+            logger.error(f"❌ 网络请求异常: {e}: {health_check_response.json()}")
             return {"error": str(e)}
+
         except Exception as e:
-            print(f"❌ 其他异常: {e}")
+            logger.error(f"❌ 其他异常: {e}")
             return {"error": str(e)}
 
 
 
-def _parse_recognition_result(api_result: Dict[str, Any], file_path: str) -> Dict[str, Any]:
+def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dict[str, Any]:
     # 基本信息
     parsed_result = {
         "success": True,
@@ -238,7 +240,7 @@ def _parse_recognition_result(api_result: Dict[str, Any], file_path: str) -> Dic
     return parsed_result
 
 
-def analyze_document(file_path: str) -> Dict[str, Any]:
+def analyze_document(file_path: str, base_url: str = "http://localhost:8080") -> dict[str, Any]:
 
     # 检查文件是否存在
     if not os.path.exists(file_path):
@@ -249,7 +251,7 @@ def analyze_document(file_path: str) -> Dict[str, Any]:
         }
 
     # 初始化客户端
-    client = PaddleXLayoutParser()
+    client = PaddleXLayoutParser(base_url=base_url)
 
     # 判断文件类型
     file_ext = os.path.splitext(file_path)[1].lower()
@@ -264,9 +266,9 @@ def analyze_document(file_path: str) -> Dict[str, Any]:
             "file_path": file_path
         }
 
-    print(f"📄 开始分析文档: {os.path.basename(file_path)}")
-    print(f"📏 文件大小: {os.path.getsize(file_path) / 1024 / 1024:.2f} MB")
-    print(f"📋 文件类型: {'PDF' if file_type == 0 else '图片'}")
+    logger.info(f"📄 开始分析文档: {os.path.basename(file_path)}")
+    logger.info(f"📏 文件大小: {os.path.getsize(file_path) / 1024 / 1024:.2f} MB")
+    logger.info(f"📋 文件类型: {'PDF' if file_type == 0 else '图片'}")
 
     try:
         # 调用API进行识别
@@ -291,3 +293,7 @@ def analyze_document(file_path: str) -> Dict[str, Any]:
             "error": f"处理异常: {str(e)}",
             "file_path": file_path
         }
+
+
+def check_paddlex_health(base_url: str = "http://localhost:8080") -> bool:
+    return requests.get(f"{base_url}/health", timeout=5)

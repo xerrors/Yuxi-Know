@@ -133,6 +133,10 @@ def parse_pdf(file, params=None):
         from src.plugins import ocr
         return ocr.process_pdf_mineru(file)
 
+    elif opt_ocr == "paddlex_ocr":
+        from src.plugins import ocr
+        return ocr.process_pdf_paddlex(file)
+
     else:
         return pdfreader(file, params=params)
 

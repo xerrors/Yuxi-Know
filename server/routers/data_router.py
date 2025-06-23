@@ -56,7 +56,9 @@ async def file_to_chunk(db_id: str = Body(...), files: list[str] = Body(...), pa
     logger.debug(f"File to chunk for db_id {db_id}: {files} {params=}")
     try:
         processed_files = await knowledge_base.save_files_for_pending_indexing(db_id, files, params)
-        return {"message": "Files processed and pending indexing", "files": processed_files, "status": "success"}
+        processed_failed_count = len([_p['status'] == 'failed' for _p in processed_files])
+        processed_info = f"Processed {len(processed_files)} files for pending indexing, {processed_failed_count} files failed"
+        return {"message": processed_info, "files": processed_files, "status": "success"}
     except Exception as e:
         logger.error(f"Failed to process files for pending indexing: {e}, {traceback.format_exc()}")
         return {"message": f"Failed to process files for pending indexing: {e}", "status": "failed"}
