@@ -62,6 +62,18 @@
           <p>{{ selectedAgent.description }}</p>
           <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
 
+          <!-- 添加requirements显示部分 -->
+          <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
+            <h3>所需环境变量:</h3>
+            <div class="requirements-list">
+              <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
+                {{ req }}
+              </a-tag>
+            </div>
+          </div>
+
+          <a-divider />
+
           <div v-if="selectedAgentId && configSchema" class="config-modal-content">
             <!-- 配置表单 -->
             <a-form :model="agentConfig" layout="vertical">
@@ -78,7 +90,7 @@
 
                   <!-- key匹配 -->
                   <div v-if="key === 'model'" class="agent-model">
-                    <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p>
+                    <!-- <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p> -->
                     <ModelSelectorComponent
                       @select-model="handleModelChange"
                       :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
@@ -103,13 +115,35 @@
                   >
                     <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
                   </a-select>
-                  <a-select
-                    v-else-if="value?.options && value?.type === 'list'"
-                    v-model:value="agentConfig[key]"
-                    mode="multiple"
-                  >
-                    <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
-                  </a-select>
+                                    <!-- 多选标签卡片 -->
+                  <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
+                    <div class="multi-select-label">
+                      <span>已选择 {{ getSelectedCount(key) }} 项</span>
+                      <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0" >
+                        清空
+                      </a-button>
+                    </div>
+                    <div class="options-grid">
+                      <div
+                        v-for="option in value.options"
+                        :key="option"
+                        class="option-card"
+                        :class="{
+                          'selected': isOptionSelected(key, option),
+                          'unselected': !isOptionSelected(key, option)
+                        }"
+                        @click="toggleOption(key, option)"
+                      >
+                        <div class="option-content">
+                          <span class="option-text">{{ option }}</span>
+                          <div class="option-indicator">
+                            <CheckCircleOutlined v-if="isOptionSelected(key, option)" />
+                            <PlusCircleOutlined v-else />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <a-input
                     v-else
                     v-model:value="agentConfig[key]"
@@ -117,6 +151,8 @@
                   />
                 </a-form-item>
               </template>
+
+              <a-divider />
 
               <!-- 弹窗底部按钮 -->
               <div class="form-actions" v-if="!state.isEmptyConfig">
@@ -128,15 +164,6 @@
             </a-form>
           </div>
 
-          <!-- 添加requirements显示部分 -->
-          <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
-            <h3>所需环境变量:</h3>
-            <div class="requirements-list">
-              <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
-                {{ req }}
-              </a-tag>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -163,7 +190,9 @@ import {
   LinkOutlined,
   StarOutlined,
   MenuOutlined,
-  StarFilled
+  StarFilled,
+  CheckCircleOutlined,
+  PlusCircleOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
@@ -213,6 +242,42 @@ const setAsDefaultAgent = async () => {
     console.error('设置默认智能体错误:', error);
     message.error(error.message || '设置默认智能体时发生错误');
   }
+};
+
+// 多选组件相关方法
+const ensureArray = (key) => {
+  if (!agentConfig.value[key] || !Array.isArray(agentConfig.value[key])) {
+    agentConfig.value[key] = [];
+  }
+};
+
+const isOptionSelected = (key, option) => {
+  ensureArray(key);
+  return agentConfig.value[key].includes(option);
+};
+
+const getSelectedCount = (key) => {
+  ensureArray(key);
+  return agentConfig.value[key].length;
+};
+
+const toggleOption = (key, option) => {
+  ensureArray(key);
+
+  const currentOptions = [...agentConfig.value[key]];
+  const index = currentOptions.indexOf(option);
+
+  if (index > -1) {
+    currentOptions.splice(index, 1);
+  } else {
+    currentOptions.push(option);
+  }
+
+  agentConfig.value[key] = currentOptions;
+};
+
+const clearSelection = (key) => {
+  agentConfig.value[key] = [];
 };
 
 // 获取默认智能体ID
@@ -278,6 +343,9 @@ const loadAgentConfig = async () => {
     // 根据类型设置默认值
     if (typeof item.default === 'boolean') {
       agentConfig.value[key] = item.default;
+    } else if (item.type === 'list') {
+      // 对于 list 类型，确保初始化为数组
+      agentConfig.value[key] = Array.isArray(item.default) ? item.default : [];
     } else {
       agentConfig.value[key] = item.default || '';
     }
@@ -290,7 +358,13 @@ const loadAgentConfig = async () => {
       // 合并服务器配置
       Object.keys(response.config).forEach(key => {
         if (key in agentConfig.value) {
-          agentConfig.value[key] = response.config[key];
+          const item = items[key];
+          // 对于 list 类型，确保是数组
+          if (item && item.type === 'list') {
+            agentConfig.value[key] = Array.isArray(response.config[key]) ? response.config[key] : [];
+          } else {
+            agentConfig.value[key] = response.config[key];
+          }
         }
       });
       console.log(`从服务器加载 ${selectedAgentId.value} 配置成功, ${JSON.stringify(agentConfig.value)}`);
@@ -568,7 +642,6 @@ const toggleSidebar = () => {
 // 添加requirements相关样式
 .info-section {
   margin-top: 16px;
-  border-top: 1px solid var(--main-light-3);
   padding-top: 12px;
 
   h3 {
@@ -691,6 +764,92 @@ const toggleSidebar = () => {
   .default-icon {
     color: #faad14;
     font-size: 14px;
+  }
+}
+
+// 多选卡片样式
+.multi-select-cards {
+  .multi-select-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--gray-600);
+    height: 24px;
+  }
+
+  .options-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 8px;
+  }
+
+  .option-card {
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+    user-select: none;
+
+    &:hover {
+      border-color: var(--main-color);
+    }
+
+    &.selected {
+      border-color: var(--main-color);
+      background: var(--main-10);
+
+      .option-indicator {
+        color: var(--main-color);
+      }
+
+      .option-text {
+        color: var(--main-color);
+        font-weight: 500;
+      }
+    }
+
+    &.unselected {
+      .option-indicator {
+        color: var(--gray-400);
+      }
+
+      .option-text {
+        color: var(--gray-700);
+      }
+    }
+
+    .option-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .option-text {
+      flex: 1;
+      font-size: 14px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .option-indicator {
+      flex-shrink: 0;
+      font-size: 16px;
+      transition: color 0.2s ease;
+    }
+  }
+}
+
+// 响应式适配
+@media (max-width: 768px) {
+  .multi-select-cards {
+    .options-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 </style>

@@ -81,7 +81,7 @@ def get_all_tools():
 
     # 获取所有知识库
     for db_Id, retrieve_info in knowledge_base.get_retrievers().items():
-        name = f"retrieve_{retrieve_info['name']}"
+        name = f"retrieve_{db_Id}" # Deepseek does not support non-alphanumeric characters in tool names
         description = (
             f"使用 {retrieve_info['name']} 知识库进行检索。\n"
             f"下面是这个知识库的描述：\n{retrieve_info['description']}"

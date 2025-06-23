@@ -51,9 +51,11 @@ class ChatbotAgent(BaseAgent):
 
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
         model = load_chat_model(conf.model)
-        model_with_tools = model.bind_tools(self._get_tools(conf.tools))
 
-        res = model_with_tools.invoke(
+        if tools := self._get_tools(conf.tools):
+            model = model.bind_tools(tools)
+
+        res = model.invoke(
             [{"role": "system", "content": system_prompt}, *state["messages"]]
         )
         return {"messages": [res]}
