@@ -1,9 +1,9 @@
 import os
 import traceback
+
 from src import config
 from src.utils.logging_config import logger
 from src.models.chat_model import OpenAIBase
-
 
 def select_model(model_provider=None, model_name=None):
     """根据模型提供者选择模型"""
@@ -22,15 +22,11 @@ def select_model(model_provider=None, model_name=None):
         from src.models.chat_model import Qianfan
         return Qianfan(model_name)
 
-    if model_provider == "dashscope":
-        from src.models.chat_model import DashScope
-        return DashScope(model_name)
-
     if model_provider == "openai":
         from src.models.chat_model import OpenModel
         return OpenModel(model_name)
 
-    if model_provider == "deepseek":
+    if model_provider == "deepseek" or model_provider == "dashscope":
         from langchain_deepseek import ChatDeepSeek
         return OpenAIBase(
             api_key=os.getenv(model_info["env"][0]),
@@ -40,6 +36,7 @@ def select_model(model_provider=None, model_name=None):
                 model=model_name,
                 api_key=os.getenv(model_info["env"][0]),
                 base_url=model_info["base_url"],
+                api_base=model_info["base_url"],
             )
         )
 

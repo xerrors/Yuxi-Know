@@ -121,7 +121,6 @@ docker logs <容器名称>  # 例如：docker logs api-dev
 | `zhipu`（智谱清言）  | `glm-4-flash`                     | `ZHIPUAI_API_KEY`     |
 | `dashscope`（阿里）  | `qwen-max-latest`                 | `DASHSCOPE_API_KEY`   |
 | `together.ai`        | `meta-llama/Llama-3.3-70B-Instruct-Turbo-Free` | `TOGETHER_API_KEY`   |
-| `lingyiwanwu`（零一）| `yi-lightning`                    | `LINGYIWANWU_API_KEY` |
 | `openrouter`         | `openai/gpt-4o`                   | `OPENROUTER_API_KEY`  |
 
 #### 添加新模型供应商

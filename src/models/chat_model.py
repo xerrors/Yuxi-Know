@@ -126,49 +126,5 @@ class Qianfan(OpenAIBase):
         return GeneralResponse(response["body"]["result"])
 
 
-
-class DashScope(OpenAIBase):
-
-    def __init__(self, model_name="qwen-max-latest") -> None:
-        self.model_name = model_name
-        self.api_key= os.getenv("DASHSCOPE_API_KEY")
-
-    def predict(self, message, stream=False):
-        if isinstance(message, str):
-            messages=[{"role": "user", "content": message}]
-        else:
-            messages = message
-
-        if stream:
-            return self._stream_response(messages)
-        else:
-            return self._get_response(messages)
-
-    def _stream_response(self, messages):
-        import dashscope
-        response = dashscope.Generation.call(
-            api_key=self.api_key,
-            model=self.model_name,
-            messages=messages,
-            result_format='message',
-            stream=True,
-        )
-        for chunk in response:
-            message = chunk.output.choices[0].message
-            message.is_full = False
-            yield chunk.output.choices[0].message
-
-    def _get_response(self, messages):
-        import dashscope
-        response = dashscope.Generation.call(
-            api_key=self.api_key,
-            model=self.model_name,
-            messages=messages,
-            result_format='message',
-            stream=False,
-        )
-        return response.output.choices[0].message
-
-
 if __name__ == "__main__":
     pass

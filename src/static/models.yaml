@@ -53,12 +53,8 @@ MODEL_NAMES:
     models:
       - Pro/deepseek-ai/DeepSeek-R1
       - Pro/deepseek-ai/DeepSeek-V3
-      - deepseek-ai/DeepSeek-R1
-      - deepseek-ai/DeepSeek-V3
-      - deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
-      - Qwen/Qwen2.5-72B-Instruct
-      - Qwen/Qwen2.5-7B-Instruct
       - Qwen/QwQ-32B
+
   together.ai:
     name: Together.ai
     url: https://api.together.ai/models
@@ -75,17 +71,14 @@ MODEL_NAMES:
   dashscope:
     name: 阿里百炼 (DashScope)
     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
-    default: qwen2.5-72b-instruct
+    default: qwen3-235b-a22b
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     env:
       - DASHSCOPE_API_KEY
     models:
       - qwen-max-latest
-      - qwen2.5-72b-instruct
-      - qwen2.5-32b-instruct
-      - qwen2.5-7b-instruct
-      - qwen2.5-0.5b-instruct
-      - qwq-plus-latest
-      - qwq-32b
+      - qwen3-235b-a22b
+      - qwen3-32b
 
   ark:
     name: 豆包（Ark）
@@ -98,16 +91,6 @@ MODEL_NAMES:
       - doubao-1-5-pro-32k-250115
       - doubao-1-5-lite-32k-250115
       - deepseek-r1-250120
-
-  lingyiwanwu:
-    name: 零一万物
-    url: https://platform.lingyiwanwu.com/docs#%E6%A8%A1%E5%9E%8B%E4%B8%8E%E8%AE%A1%E8%B4%B9
-    base_url: https://api.lingyiwanwu.com/v1
-    default: yi-lightning
-    env:
-      - LINGYIWANWU_API_KEY
-    models:
-      - yi-lightning
 
   openrouter:
     name: OpenRouter
