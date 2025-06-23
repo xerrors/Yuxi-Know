@@ -211,7 +211,7 @@
 
               <div v-else-if="column.key === 'action'" style="display: flex; gap: 10px;">
                 <a-button
-                  v-if="record.status === 'pending_indexing'"
+                  v-if="record.status === 'pending_indexing' || record.status === 'failed'"
                   type="link"
                   @click="handleIndexFile(record.file_id)"
                   :loading="state.indexingFile === record.file_id"

@@ -502,7 +502,7 @@ class KnowledgeBase:
 
         except Exception as e:
             logger.error(f"文件 {file_id} 索引过程中发生错误: {e}, {traceback.format_exc()}")
-            self.update_file_status(file_id, "failed")
+            self.update_file_status(file_id, "pending_indexing")
             return {"status": "failed", "message": f"索引失败: {str(e)}"}
 
 
