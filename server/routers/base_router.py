@@ -24,7 +24,7 @@ def load_info_config():
             return get_default_info_config()
 
         # 读取配置文件
-        with open(config_path, 'r', encoding='utf-8') as file:
+        with open(config_path, encoding='utf-8') as file:
             config = yaml.safe_load(file)
 
         # logger.info(f"成功加载信息配置文件: {config_path}")
@@ -38,7 +38,7 @@ def get_default_info_config():
     """获取默认信息配置"""
     return {
         "organization": {
-            "name": "江南大学",
+            "name": "江南语析",
             "short_name": "语析",
             "logo": "/favicon.svg",
             "avatar": "/avatar.jpg"
@@ -54,7 +54,7 @@ def get_default_info_config():
             "🤖 多模型支持"
         ],
         "footer": {
-            "copyright": "© 江南大学 2025 [WIP] v0.12.138"
+            "copyright": "© 江南语析 2025 [WIP] v0.12.138"
         }
     }
 

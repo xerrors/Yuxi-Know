@@ -32,7 +32,7 @@ export const useInfoStore = defineStore('info', () => {
 
   // 计算属性 - 页脚信息
   const footer = computed(() => infoConfig.value.footer || {
-    copyright: "© 江南大学 2025 [WIP] v0.12.138"
+    copyright: "© 江南语析 2025 [WIP] v0.12.138"
   })
 
   // 动作方法

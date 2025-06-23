@@ -582,7 +582,7 @@ class KnowledgeBase:
                     for field in ["text", "file_id", "hash", "start_char_idx", "end_char_idx"]:
                         try:
                             item_dict["entity"][field] = getattr(entity_data, field, None)
-                        except:
+                        except Exception:
                             continue
 
             all_db_result_dicts.append(item_dict)

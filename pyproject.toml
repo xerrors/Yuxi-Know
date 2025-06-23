@@ -43,7 +43,7 @@ dependencies = [
     "zhipuai>=2.1.5.20250421",
 ]
 [tool.ruff]
-line-length = 140  # 代码最大行宽
+line-length = 210  # 代码最大行宽
 lint.select = [         # 选择的规则
     "F",
     "E",
