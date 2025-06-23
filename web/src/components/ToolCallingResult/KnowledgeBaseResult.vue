@@ -3,50 +3,54 @@
     <div class="kb-header">
       <h4><FileTextOutlined /> 知识库检索结果</h4>
       <div class="result-summary">
-        找到 {{ data.length }} 个相关文档片段
+        找到 {{ data.length }} 个相关文档片段，来自 {{ fileGroups.length }} 个文件
       </div>
     </div>
 
     <div class="kb-results">
       <div
-        v-for="(result, index) in data"
-        :key="result.id"
-        class="kb-result-item"
-        :class="{ 'high-relevance': result.rerank_score > 0.5 }"
+        v-for="fileGroup in fileGroups"
+        :key="fileGroup.filename"
+        class="file-group"
       >
-        <div class="result-header">
-          <div class="result-index">#{{ index + 1 }}</div>
-          <div class="result-file">
+        <!-- 文件级别的头部 -->
+        <div
+          class="file-header"
+          :class="{ 'expanded': expandedFiles.has(fileGroup.filename) }"
+          @click="toggleFile(fileGroup.filename)"
+        >
+          <div class="file-info">
             <FileOutlined />
-            {{ result.file.filename }}
+            <span class="file-name">{{ fileGroup.filename }}</span>
+            <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
           </div>
-          <div class="result-id">ID: {{ result.id }}</div>
-        </div>
-
-        <div class="result-scores">
-          <div class="score-item">
-            <span class="score-label">相似度:</span>
-            <a-progress
-              :percent="getPercent(result.distance)"
-              size="small"
-              :stroke-color="getScoreColor(result.distance)"
-            />
-            <span class="score-value">{{ result.distance.toFixed(4) }}</span>
-          </div>
-
-          <div v-if="result.rerank_score" class="score-item">
-            <span class="score-label">重排序:</span>
-            <a-progress
-              :percent="getPercent(result.rerank_score)"
-              size="small"
-              :stroke-color="getScoreColor(result.rerank_score)"
-            />
-            <span class="score-value">{{ result.rerank_score.toFixed(4) }}</span>
+          <div class="expand-icon">
+            <DownOutlined :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
           </div>
         </div>
 
-        <div class="result-content">
-          <div class="content-text">{{ result.entity.text }}</div>
+        <!-- 展开的chunks列表 -->
+        <div
+          v-if="expandedFiles.has(fileGroup.filename)"
+          class="chunks-container"
+        >
+          <div
+            v-for="(chunk, index) in fileGroup.chunks"
+            :key="chunk.id"
+            class="chunk-item"
+            :class="{ 'high-relevance': chunk.rerank_score > 0.5 }"
+            @click="showChunkDetail(chunk, index + 1)"
+          >
+            <div class="chunk-summary">
+              <span class="chunk-index">#{{ index + 1 }}</span>
+              <div class="chunk-scores">
+                <span class="score-item">相似度 {{ (chunk.distance * 100).toFixed(0) }}%</span>
+                <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
+              </div>
+              <span class="chunk-preview">{{ getPreviewText(chunk.entity.text) }}</span>
+              <EyeOutlined class="view-icon" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -54,11 +58,56 @@
     <div v-if="data.length === 0" class="no-results">
       <p>未找到相关知识库内容</p>
     </div>
+
+    <!-- 弹窗展示chunk详细信息 -->
+    <a-modal
+      v-model:open="modalVisible"
+      :title="`文档片段 #${selectedChunk?.index} - ${selectedChunk?.data?.file?.filename}`"
+      width="800px"
+      :footer="null"
+      class="chunk-detail-modal"
+    >
+      <div v-if="selectedChunk" class="chunk-detail">
+        <div class="detail-header">
+          <div class="detail-scores">
+            <div class="score-card">
+              <div class="score-label">相似度分数</div>
+              <div class="score-value-large">{{ (selectedChunk.data.distance * 100).toFixed(1) }}%</div>
+              <a-progress
+                :percent="getPercent(selectedChunk.data.distance)"
+                :stroke-color="getScoreColor(selectedChunk.data.distance)"
+                :show-info="false"
+                stroke-width="6"
+              />
+            </div>
+            <div v-if="selectedChunk.data.rerank_score" class="score-card">
+              <div class="score-label">重排序分数</div>
+              <div class="score-value-large">{{ (selectedChunk.data.rerank_score * 100).toFixed(1) }}%</div>
+              <a-progress
+                :percent="getPercent(selectedChunk.data.rerank_score)"
+                :stroke-color="getScoreColor(selectedChunk.data.rerank_score)"
+                :show-info="false"
+                stroke-width="6"
+              />
+            </div>
+          </div>
+          <div class="detail-meta">
+            <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.id }}</span>
+          </div>
+        </div>
+
+        <div class="detail-content">
+          <h5>文档内容</h5>
+          <div class="content-text">{{ selectedChunk.data.entity.text }}</div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { FileTextOutlined, FileOutlined } from '@ant-design/icons-vue'
+import { ref, computed } from 'vue'
+import { FileTextOutlined, FileOutlined, DownOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   data: {
@@ -67,12 +116,60 @@ const props = defineProps({
   }
 })
 
+// 管理展开状态
+const expandedFiles = ref(new Set())
+
+// 弹窗状态
+const modalVisible = ref(false)
+const selectedChunk = ref(null)
+
+// 按文件名聚合数据
+const fileGroups = computed(() => {
+  const groups = new Map()
+
+  props.data.forEach(item => {
+    const filename = item.file.filename
+    if (!groups.has(filename)) {
+      groups.set(filename, {
+        filename,
+        chunks: []
+      })
+    }
+    groups.get(filename).chunks.push(item)
+  })
+
+  // 转换为数组并按文件名排序
+  return Array.from(groups.values()).sort((a, b) => a.filename.localeCompare(b.filename))
+})
+
+// 切换文件展开/折叠状态
+const toggleFile = (filename) => {
+  if (expandedFiles.value.has(filename)) {
+    expandedFiles.value.delete(filename)
+  } else {
+    expandedFiles.value.add(filename)
+  }
+}
+
+// 显示chunk详细信息
+const showChunkDetail = (chunk, index) => {
+  selectedChunk.value = {
+    data: chunk,
+    index: index
+  }
+  modalVisible.value = true
+}
+
+// 获取预览文本
+const getPreviewText = (text) => {
+  if (text.length <= 100) return text
+  return text.substring(0, 100) + '...'
+}
+
 const getPercent = (score) => {
-  // 相似度分数通常在0-1之间，需要转换为百分比
   if (score <= 1) {
     return Math.round(score * 100)
   }
-  // 如果分数大于1，可能需要不同的处理
   return Math.min(Math.round(score * 100), 100)
 }
 
@@ -90,12 +187,12 @@ const getScoreColor = (score) => {
   border: 1px solid var(--gray-200);
 
   .kb-header {
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-bottom: 1px solid var(--gray-200);
     background: var(--gray-50);
 
     h4 {
-      margin: 0 0 4px 0;
+      margin: 0 0 2px 0;
       color: var(--main-color);
       font-size: 14px;
       font-weight: 500;
@@ -105,119 +202,155 @@ const getScoreColor = (score) => {
     }
 
     .result-summary {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--gray-600);
     }
   }
 
   .kb-results {
-    padding: 8px;
+    padding: 6px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
   }
 
-  .kb-result-item {
-    background: var(--gray-0);
-    padding: 12px;
-    border-radius: 6px;
+  .file-group {
     border: 1px solid var(--gray-200);
-    transition: all 0.2s ease;
+    border-radius: 6px;
+    background: var(--gray-0);
+    overflow: hidden;
 
-    &.high-relevance {
-      border-color: var(--main-300);
-      background: var(--main-10);
-    }
-
-    &:hover {
-      border-color: var(--main-200);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-    }
-
-    .result-header {
+    .file-header {
+      padding: 10px 12px;
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 10px;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      background: var(--gray-25);
 
-      .result-index {
-        background: var(--main-color);
-        color: var(--gray-0);
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 11px;
-        font-weight: 500;
-        min-width: 24px;
-        text-align: center;
+      &:hover {
+        background: var(--gray-50);
       }
 
-      .result-file {
-        flex: 1;
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--gray-800);
+      &.expanded {
+        background: var(--main-10);
+        border-bottom: 1px solid var(--gray-200);
+      }
+
+      .file-info {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 8px;
+        flex: 1;
+        min-width: 0;
 
         .anticon {
           color: var(--main-color);
+          font-size: 13px;
+        }
+
+        .file-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--gray-800);
+          flex: 1;
+          min-width: 0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .chunk-count {
+          font-size: 11px;
+          color: var(--gray-500);
+          background: var(--gray-100);
+          padding: 1px 5px;
+          border-radius: 10px;
+          white-space: nowrap;
         }
       }
 
-      .result-id {
-        font-size: 11px;
+      .expand-icon {
         color: var(--gray-500);
-        background: var(--gray-100);
-        padding: 1px 4px;
-        border-radius: 3px;
+        transition: transform 0.15s ease;
+        font-size: 12px;
+
+        .rotated {
+          transform: rotate(180deg);
+        }
       }
     }
 
-    .result-scores {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 10px;
+    .chunks-container {
+      background: var(--gray-10);
+    }
 
-      .score-item {
+    .chunk-item {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--gray-100);
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &.high-relevance {
+        background: var(--main-10);
+      }
+
+      &:hover {
+        background: var(--main-25);
+
+        .view-icon {
+          opacity: 1;
+        }
+      }
+
+      .chunk-summary {
         display: flex;
         align-items: center;
-        gap: 6px;
-        flex: 1;
+        gap: 8px;
 
-        .score-label {
-          font-size: 11px;
-          color: var(--gray-600);
-          min-width: 40px;
-        }
-
-        :deep(.ant-progress) {
-          flex: 1;
-          margin: 0;
-        }
-
-        .score-value {
+        .chunk-index {
+          color: var(--main-color);
           font-size: 10px;
-          color: var(--gray-500);
-          min-width: 40px;
-          text-align: right;
+          font-weight: 500;
+          min-width: 18px;
+          text-align: center;
         }
-      }
-    }
 
-    .result-content {
-      .content-text {
-        font-size: 12px;
-        line-height: 1.5;
-        color: var(--gray-700);
-        white-space: pre-wrap;
-        word-break: break-word;
-        background: var(--gray-50);
-        padding: 10px;
-        border-radius: 4px;
-        border-left: 2px solid var(--main-color);
-        max-height: 160px;
-        overflow-y: auto;
+        .chunk-scores {
+          display: flex;
+          gap: 4px;
+
+          .score-item {
+            font-size: 11px;
+            color: var(--gray-700);
+            background: var(--main-10);
+            padding: 1px 4px;
+            border-radius: 4px;
+            white-space: nowrap;
+          }
+        }
+
+        .chunk-preview {
+          flex: 1;
+          font-size: 11px;
+          color: var(--gray-700);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+
+        .view-icon {
+          color: var(--main-color);
+          font-size: 12px;
+          opacity: 0.6;
+          transition: opacity 0.15s ease;
+        }
       }
     }
   }
@@ -226,7 +359,91 @@ const getScoreColor = (score) => {
     text-align: center;
     color: var(--gray-500);
     padding: 20px;
-    font-size: 13px;
+    font-size: 12px;
+  }
+}
+
+:deep(.chunk-detail-modal) {
+  .ant-modal-header {
+    border-bottom: 1px solid var(--gray-200);
+    margin-bottom: 0;
+  }
+
+  .ant-modal-title {
+    color: var(--main-color);
+    font-weight: 500;
+  }
+}
+
+.chunk-detail {
+  .detail-header {
+    margin-bottom: 16px;
+
+    .detail-scores {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+
+      .score-card {
+        flex: 1;
+        padding: 8px 12px;
+        background: var(--gray-50);
+        border-radius: 6px;
+        border: 1px solid var(--gray-200);
+
+        .score-label {
+          font-size: 14px;
+          color: var(--gray-600);
+          margin-bottom: 4px;
+        }
+
+        .score-value-large {
+          font-size: 18px;
+          font-weight: 600;
+          color: var(--main-color);
+        }
+      }
+    }
+
+    .detail-meta {
+      display: flex;
+      gap: 12px;
+
+      .meta-item {
+        font-size: 11px;
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+
+        .anticon {
+          color: var(--main-color);
+        }
+      }
+    }
+  }
+
+  .detail-content {
+    h5 {
+      margin: 0 0 8px 0;
+      color: var(--gray-800);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .content-text {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--gray-700);
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--gray-50);
+      padding: 16px;
+      border-radius: 6px;
+      border: 1px solid var(--gray-200);
+      max-height: 400px;
+      overflow-y: auto;
+    }
   }
 }
 </style>
