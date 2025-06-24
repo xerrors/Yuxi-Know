@@ -693,8 +693,6 @@ const toggleSidebar = () => {
 }
 
 .config-modal-content {
-  max-height: 70vh;
-  overflow-y: auto;
   user-select: text;
 
   div[role="alert"] {

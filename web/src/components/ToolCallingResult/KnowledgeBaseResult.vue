@@ -328,7 +328,7 @@ const getScoreColor = (score) => {
           .score-item {
             font-size: 11px;
             color: var(--gray-700);
-            background: var(--main-10);
+            // background: var(--main-10);
             padding: 1px 4px;
             border-radius: 4px;
             white-space: nowrap;

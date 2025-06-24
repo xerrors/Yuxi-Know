@@ -1,3 +1,4 @@
+
 /* color palette from <https://github.com/vuejs/theme> */
 /* https://material-foundation.github.io/material-theme-builder/ */
 :root {
@@ -29,6 +30,7 @@
   --gray-200: #EFF1F2;
   --gray-100: #F8FAFB;
   --gray-50: #FBFDFE;
+  --gray-25: #FCFEFF;
   --gray-10: #FDFEFF;
   --gray-0: #FFFFFF;
 
