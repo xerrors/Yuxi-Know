@@ -6,11 +6,9 @@ import shutil
 from sqlalchemy.orm import joinedload
 from pathlib import Path
 import asyncio
-import random
-from functools import lru_cache
-from diskcache import Cache
+from asyncio import Queue, Task
 
-from pymilvus import MilvusClient, MilvusException
+from pymilvus import MilvusClient
 
 from src import config
 from src.utils import logger, hashstr
@@ -24,26 +22,24 @@ class KnowledgeBase:
     def __init__(self) -> None:
         self.client = None
         self.work_dir = os.path.join(config.save_dir, "data")
-        self.cache_dir = os.path.join(self.work_dir, ".cache")
-        os.makedirs(self.cache_dir, exist_ok=True)
-
-        # 初始化磁盘缓存
-        self.disk_cache = Cache(self.cache_dir)
-
-        # 配置缓存过期时间（秒）
-        self.cache_ttl = 300  # 5分钟
 
         # Configuration
         self.default_distance_threshold = 0.5
         self.default_rerank_threshold = 0.1
         self.default_max_query_count = 20
 
+        # 初始化索引队列系统
+        self.indexing_queue: Queue = Queue()
+        self.processing_tasks: dict[str, Task] = {}  # 跟踪处理中的任务
+        self.queue_processor_task: Task | None = None
+        self.is_processing = False
+
         # 检查是否需要从JSON文件迁移到SQLite
         self._check_migration()
 
         self._load_models()
 
-        # 检查所有 waiting 状态的文件并标记为 failed
+                # 检查所有 waiting 状态的文件并标记为 failed
         self._mark_waiting_files_as_failed()
 
     def _to_dict_safely(self, obj):
@@ -483,59 +479,49 @@ class KnowledgeBase:
         return processed_urls_info
 
     async def trigger_file_indexing(self, db_id, file_id):
-        logger.info(f"开始为文件 {file_id} (数据库: {db_id}) 创建索引")
+        """将文件索引任务添加到队列中等待处理"""
+        logger.info(f"将文件 {file_id} (数据库: {db_id}) 添加到索引队列")
+
+        # 检查文件是否已经在处理中
+        if file_id in self.processing_tasks:
+            logger.warning(f"文件 {file_id} 已经在处理队列中，跳过重复添加")
+            return {"status": "queued", "message": "文件已在处理队列中"}
+
+        # 基本检查
         if not self.check_embed_model(db_id):
             logger.error(f"文件 {file_id} 索引失败：向量模型不匹配。")
             self.update_file_status(file_id, "failed")
             return {"status": "failed", "message": "向量模型不匹配"}
 
         try:
-            self.update_file_status(file_id, "processing")
+            # 设置状态为等待
+            self.update_file_status(file_id, "waiting")
 
-            nodes_to_index = self.get_nodes_by_file(file_id)
-            if not nodes_to_index:
-                logger.warning(f"文件 {file_id} 没有找到需要索引的块。")
-                self.update_file_status(file_id, "done") # Or 'failed' if this is an error condition
-                return {"status": "success", "message": "没有需要索引的块"}
+            # 将任务添加到队列
+            task_data = {
+                "db_id": db_id,
+                "file_id": file_id,
+                "timestamp": time.time()
+            }
 
-            docs_text = [node["text"] for node in nodes_to_index]
+            # 添加到处理任务跟踪
+            self.processing_tasks[file_id] = task_data
 
-            logger.info(f"正在为文件 {file_id} 的 {len(docs_text)} 个块生成向量...")
-            vectors = await self.embed_model.abatch_encode(docs_text)
-            logger.info(f"文件 {file_id} 的向量生成完毕。")
+            # 将任务放入队列
+            await self.indexing_queue.put(task_data)
 
-            data_to_insert = []
-            for i, node in enumerate(nodes_to_index):
-                milvus_entry = {
-                    "id": node["id"],  # Using KnowledgeNode.id as Milvus PK
-                    "vector": vectors[i],
-                    "text": node["text"],
-                    "file_id": file_id, # Explicitly ensure file_id is present
-                    "hash": node["hash"],
-                     # Spread other metadata stored in node["meta_info"]
-                    **(node.get("meta_info") if isinstance(node.get("meta_info"), dict) else {})
-                }
-                # Ensure start_char_idx and end_char_idx are included if they exist directly on node dict
-                if "start_char_idx" in node and node["start_char_idx"] is not None:
-                    milvus_entry["start_char_idx"] = node["start_char_idx"]
-                if "end_char_idx" in node and node["end_char_idx"] is not None:
-                    milvus_entry["end_char_idx"] = node["end_char_idx"]
+            # 确保队列处理器正在运行
+            if self.queue_processor_task is None or self.queue_processor_task.done():
+                self._start_queue_processor()
 
-                data_to_insert.append(milvus_entry)
-
-            if data_to_insert:
-                logger.info(f"正在将文件 {file_id} 的 {len(data_to_insert)} 个向量插入 Milvus 集合 {db_id}...")
-                self.client.insert(collection_name=db_id, data=data_to_insert)
-                logger.info(f"文件 {file_id} 的向量成功插入 Milvus。")
-
-            self.update_file_status(file_id, "done")
-            logger.info(f"文件 {file_id} 索引成功完成。")
-            return {"status": "success", "message": "文件索引成功"}
+            logger.info(f"文件 {file_id} 已成功添加到索引队列，当前队列大小: {self.indexing_queue.qsize()}")
+            return {"status": "queued", "message": f"文件已添加到索引队列，队列位置: {self.indexing_queue.qsize()}"}
 
         except Exception as e:
-            logger.error(f"文件 {file_id} 索引过程中发生错误: {e}, {traceback.format_exc()}")
-            self.update_file_status(file_id, "pending_indexing")
-            return {"status": "failed", "message": f"索引失败: {str(e)}"}
+            logger.error(f"添加文件 {file_id} 到索引队列时发生错误: {e}")
+            self.update_file_status(file_id, "failed")
+            self.processing_tasks.pop(file_id, None)
+            return {"status": "failed", "message": f"添加到队列失败: {str(e)}"}
 
 
     def delete_file(self, db_id, file_id):
@@ -585,6 +571,81 @@ class KnowledgeBase:
 
     def restart(self):
         self._load_models()
+        # 重启时也重新启动队列处理器
+        self._start_queue_processor()
+
+    def get_queue_status(self):
+        """获取队列状态信息"""
+        return {
+            "queue_size": self.indexing_queue.qsize(),
+            "processing_count": len(self.processing_tasks),
+            "processor_running": self.queue_processor_task is not None and not self.queue_processor_task.done(),
+            "processing_files": list(self.processing_tasks.keys())
+        }
+
+    async def stop_queue_processor(self):
+        """停止队列处理器"""
+        if self.queue_processor_task and not self.queue_processor_task.done():
+            # 发送停止信号
+            await self.indexing_queue.put(None)
+            try:
+                await asyncio.wait_for(self.queue_processor_task, timeout=30.0)
+                logger.info("索引队列处理器已正常停止")
+            except TimeoutError:
+                logger.warning("索引队列处理器停止超时，强制取消")
+                self.queue_processor_task.cancel()
+                try:
+                    await self.queue_processor_task
+                except asyncio.CancelledError:
+                    pass
+
+    async def clear_queue(self):
+        """清空队列（谨慎使用）"""
+        cleared_count = 0
+        while not self.indexing_queue.empty():
+            try:
+                await asyncio.wait_for(self.indexing_queue.get(), timeout=0.1)
+                self.indexing_queue.task_done()
+                cleared_count += 1
+            except TimeoutError:
+                break
+
+        # 清空处理任务跟踪
+        self.processing_tasks.clear()
+
+        logger.info(f"已清空索引队列，共清除 {cleared_count} 个任务")
+        return cleared_count
+
+    async def restore_waiting_files_to_queue(self):
+        """将状态为waiting的文件重新添加到队列中"""
+        with db_manager.get_session_context() as session:
+            waiting_files = session.query(KnowledgeFile).filter_by(status="waiting").all()
+            restored_count = 0
+
+            for file_obj in waiting_files:
+                # 检查文件是否已经在处理队列中
+                if file_obj.file_id not in self.processing_tasks:
+                    task_data = {
+                        "db_id": file_obj.database_id,
+                        "file_id": file_obj.file_id,
+                        "timestamp": time.time()
+                    }
+
+                    # 添加到处理任务跟踪
+                    self.processing_tasks[file_obj.file_id] = task_data
+
+                    # 将任务放入队列
+                    await self.indexing_queue.put(task_data)
+                    restored_count += 1
+
+                    logger.info(f"已将等待中的文件 {file_obj.file_id} 重新添加到索引队列")
+
+            if restored_count > 0:
+                # 确保队列处理器正在运行
+                self._start_queue_processor()
+                logger.info(f"已恢复 {restored_count} 个等待中的文件到索引队列")
+
+            return restored_count
 
     ###################################
     #* Below is the code for retriever #
@@ -700,7 +761,7 @@ class KnowledgeBase:
             self.client.list_collections() # Test connection
             logger.info(f"Successfully connected to Milvus at {uri}")
             connected = True
-        except MilvusException as e:
+        except Exception as e:
             logger.error(f"Failed to connect to Milvus: {e} with {uri}。{traceback.format_exc()}")
             logger.error("请检查 milvus 的容器是否正常运行，如果已退出，请重新启动 `docker restart milvus`。")
         except Exception as e: # Catch other potential errors like requests.exceptions.ConnectionError
@@ -731,7 +792,7 @@ class KnowledgeBase:
             combined_info = collection_desc.copy() # Start with description
             combined_info.update(collection_stats) # Add/overwrite with stats
             return combined_info
-        except MilvusException as e:
+        except Exception as e:
             logger.warning(f"获取集合 {collection_name} 信息失败: {e}")
             return {"name": collection_name, "row_count": 0, "status": "错误", "error_message": str(e)}
 
@@ -754,8 +815,6 @@ class KnowledgeBase:
             # Ensure vector field is also defined if not using defaults.
         )
         logger.info(f"Milvus collection {collection_name} created with dimension {dimension or self.embed_model.get_dimension()}.")
-
-
 
 
     def search(self, query_text, collection_name, limit=3): # Renamed query to query_text
@@ -800,14 +859,125 @@ class KnowledgeBase:
         return updated_db
 
     def _mark_waiting_files_as_failed(self):
-        """将所有 status 为 'waiting' 的文件标记为 'failed'"""
+        """将所有 status 为 'processing' 的文件标记为 'failed'（因为上次可能异常退出）"""
         with db_manager.get_session_context() as session:
-            waiting_files = session.query(KnowledgeFile).filter_by(status="waiting").all()
-            if waiting_files:
-                for file_obj in waiting_files:
+            # 只将processing状态的文件标记为failed，waiting状态的文件仍然保持等待
+            processing_files = session.query(KnowledgeFile).filter_by(status="processing").all()
+            if processing_files:
+                for file_obj in processing_files:
                     file_obj.status = "failed"
                 session.commit()
-                logger.info(f"已将 {len(waiting_files)} 个 waiting 状态的文件标记为 failed")
+                logger.info(f"已将 {len(processing_files)} 个异常中断的 processing 状态文件标记为 failed")
+
+            # 对于waiting状态的文件，将它们重新添加到队列中
+            waiting_files = session.query(KnowledgeFile).filter_by(status="waiting").all()
+            if waiting_files:
+                logger.info(f"发现 {len(waiting_files)} 个 waiting 状态的文件，将重新添加到处理队列")
+                # 这里我们只是记录，实际的重新排队逻辑可以在后续调用trigger_file_indexing时处理
+
+    def _start_queue_processor(self):
+        """启动队列处理器"""
+        if self.queue_processor_task is None or self.queue_processor_task.done():
+            try:
+                # 尝试获取当前事件循环
+                loop = asyncio.get_running_loop()
+                self.queue_processor_task = loop.create_task(self._process_indexing_queue())
+                logger.info("索引队列处理器已启动")
+            except RuntimeError:
+                # 如果没有运行中的事件循环，延迟启动
+                logger.info("无运行中的事件循环，队列处理器将在首次使用时启动")
+
+    async def _process_indexing_queue(self):
+        """处理索引队列中的任务"""
+        logger.info("开始处理索引队列")
+        while True:
+            try:
+                # 从队列中获取任务
+                task_data = await self.indexing_queue.get()
+
+                if task_data is None:  # 用于停止处理器的信号
+                    break
+
+                db_id = task_data["db_id"]
+                file_id = task_data["file_id"]
+
+                logger.info(f"开始处理队列中的索引任务: 文件 {file_id}, 数据库 {db_id}")
+
+                try:
+                    # 调用实际的索引处理方法
+                    result = await self._do_file_indexing(db_id, file_id)
+                    logger.info(f"队列任务完成: 文件 {file_id}, 结果: {result['status']}")
+                except Exception as e:
+                    logger.error(f"处理队列任务时发生错误: 文件 {file_id}, 错误: {e}")
+                    self.update_file_status(file_id, "failed")
+                finally:
+                    # 从处理中的任务列表中移除
+                    self.processing_tasks.pop(file_id, None)
+                    # 标记任务完成
+                    self.indexing_queue.task_done()
+
+            except asyncio.CancelledError:
+                logger.info("索引队列处理器被取消")
+                break
+            except Exception as e:
+                logger.error(f"索引队列处理器发生未预期的错误: {e}")
+                await asyncio.sleep(1)  # 短暂等待后继续处理
+
+    async def _do_file_indexing(self, db_id, file_id):
+        """实际执行文件索引的方法（从原来的 trigger_file_indexing 分离出来）"""
+        logger.info(f"开始为文件 {file_id} (数据库: {db_id}) 创建索引")
+        if not self.check_embed_model(db_id):
+            logger.error(f"文件 {file_id} 索引失败：向量模型不匹配。")
+            self.update_file_status(file_id, "failed")
+            return {"status": "failed", "message": "向量模型不匹配"}
+
+        try:
+            self.update_file_status(file_id, "processing")
+
+            nodes_to_index = self.get_nodes_by_file(file_id)
+            if not nodes_to_index:
+                logger.warning(f"文件 {file_id} 没有找到需要索引的块。")
+                self.update_file_status(file_id, "done")
+                return {"status": "success", "message": "没有需要索引的块"}
+
+            docs_text = [node["text"] for node in nodes_to_index]
+
+            logger.info(f"正在为文件 {file_id} 的 {len(docs_text)} 个块生成向量...")
+            vectors = await self.embed_model.abatch_encode(docs_text)
+            logger.info(f"文件 {file_id} 的向量生成完毕。")
+
+            data_to_insert = []
+            for i, node in enumerate(nodes_to_index):
+                milvus_entry = {
+                    "id": node["id"],  # Using KnowledgeNode.id as Milvus PK
+                    "vector": vectors[i],
+                    "text": node["text"],
+                    "file_id": file_id, # Explicitly ensure file_id is present
+                    "hash": node["hash"],
+                     # Spread other metadata stored in node["meta_info"]
+                    **(node.get("meta_info") if isinstance(node.get("meta_info"), dict) else {})
+                }
+                # Ensure start_char_idx and end_char_idx are included if they exist directly on node dict
+                if "start_char_idx" in node and node["start_char_idx"] is not None:
+                    milvus_entry["start_char_idx"] = node["start_char_idx"]
+                if "end_char_idx" in node and node["end_char_idx"] is not None:
+                    milvus_entry["end_char_idx"] = node["end_char_idx"]
+
+                data_to_insert.append(milvus_entry)
+
+            if data_to_insert:
+                logger.info(f"正在将文件 {file_id} 的 {len(data_to_insert)} 个向量插入 Milvus 集合 {db_id}...")
+                self.client.insert(collection_name=db_id, data=data_to_insert)
+                logger.info(f"文件 {file_id} 的向量成功插入 Milvus。")
+
+            self.update_file_status(file_id, "done")
+            logger.info(f"文件 {file_id} 索引成功完成。")
+            return {"status": "success", "message": "文件索引成功"}
+
+        except Exception as e:
+            logger.error(f"文件 {file_id} 索引过程中发生错误: {e}, {traceback.format_exc()}")
+            self.update_file_status(file_id, "failed")
+            return {"status": "failed", "message": f"索引失败: {str(e)}"}
 
 
 def parse_node_data(node):
