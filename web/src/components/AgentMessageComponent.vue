@@ -479,34 +479,38 @@ const toggleToolCall = (toolCallId) => {
 }
 
 .message-md .md-editor-preview-wrapper {
-  color: var(--gray-900);
   max-width: 100%;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
 
   #preview-only-preview {
     font-size: 15px;
+    color: var(--gray-900);
   }
 
   h1, h2 {
-    font-size: 1.2rem;
+    font-size: 16px;
   }
 
   h3, h4 {
-    font-size: 1.1rem;
+    font-size: 16px;
   }
 
   h5, h6 {
-    font-size: 1rem;
+    font-size: 15px;
   }
 
-  // li > p, ol > p, ul > p {
-  //   margin: 0.25rem 0;
-  // }
+  strong {
+    font-weight: 600;
+  }
 
-  // ol, ul {
-  //   padding-left: 1rem;
-  // }
+  li > p, ol > p, ul > p {
+    margin: 0.25rem 0;
+  }
+
+  ol, ul {
+    padding-left: 1rem;
+  }
 
   cite {
     font-size: 12px;

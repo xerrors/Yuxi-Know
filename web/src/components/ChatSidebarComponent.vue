@@ -205,14 +205,14 @@ const toggleCollapse = () => {
   }
 
   .conversation-list-top {
-    padding: 16px;
+    padding: 10px;
 
     .new-chat-btn {
       width: 100%;
       padding: 8px 16px;
       height: fit-content;
-      border-radius: 16px;
-      background-color: var(--gray-300);
+      border-radius: 8px;
+      background-color: var(--gray-200);
       color: var(--main-color);
       border: none;
       transition: all 0.2s ease;
@@ -233,7 +233,7 @@ const toggleCollapse = () => {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 4px 16px;
+      padding: 4px 0px 4px 12px;
       border-radius: 8px;
       margin-bottom: 8px;
       cursor: pointer;
