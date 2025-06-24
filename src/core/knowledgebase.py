@@ -118,8 +118,40 @@ class KnowledgeBase:
     def get_database_by_id(self, db_id):
         """根据ID获取知识库"""
         with db_manager.get_session_context() as session:
-            db = session.query(KnowledgeDatabase).options().filter_by(db_id=db_id).first()
-            return db.to_dict(with_nodes=False) if db else None # Assuming to_dict handles files and nodes
+            # 只查询数据库基本信息，不加载关联的文件数据
+            db = session.query(KnowledgeDatabase).filter_by(db_id=db_id).first()
+            if not db:
+                return None
+
+            # 直接构造返回数据，避免调用 to_dict 方法中的关联查询
+            result = {
+                "id": db.id,
+                "db_id": db.db_id,
+                "name": db.name,
+                "description": db.description,
+                "embed_model": db.embed_model,
+                "dimension": db.dimension,
+                "metadata": db.meta_info or {},
+                "created_at": db.created_at.isoformat() if db.created_at else None
+            }
+
+            # 只查询文件的基本信息，不加载节点数据
+            files = session.query(KnowledgeFile).filter_by(database_id=db_id).all()
+            result["files"] = {}
+            for file_obj in files:
+                # 获取节点数量，但不加载节点数据
+                # node_count = session.query(KnowledgeNode).filter_by(file_id=file_obj.file_id).count()
+                result["files"][file_obj.file_id] = {
+                    "file_id": file_obj.file_id,
+                    "filename": file_obj.filename,
+                    "path": file_obj.path,
+                    "type": file_obj.file_type,
+                    "status": file_obj.status,
+                    # "node_count": node_count,  # 太耗时 1.7s 左右
+                    "created_at": file_obj.created_at.timestamp() if file_obj.created_at else time.time()
+                }
+
+            return result
 
     def create_database_record(self, db_id, name, description, embed_model=None, dimension=None, metadata=None):
         """在数据库中创建知识库记录"""
