@@ -106,10 +106,39 @@ class KnowledgeBase:
     def get_all_databases(self):
         """获取所有知识库"""
         with db_manager.get_session_context() as session:
-            databases = session.query(KnowledgeDatabase).options(
-                joinedload(KnowledgeDatabase.files)
-            ).all()
-            return [db.to_dict() for db in databases] # Assuming to_dict handles files correctly
+            # 只查询数据库基本信息，不预加载文件数据
+            databases = session.query(KnowledgeDatabase).all()
+            result = []
+
+            for db in databases:
+                # 直接构造返回数据，避免调用 to_dict 方法中的关联查询
+                db_dict = {
+                    "id": db.id,
+                    "db_id": db.db_id,
+                    "name": db.name,
+                    "description": db.description,
+                    "embed_model": db.embed_model,
+                    "dimension": db.dimension,
+                    "metadata": db.meta_info or {},
+                    "created_at": db.created_at.isoformat() if db.created_at else None
+                }
+
+                # 只查询文件的基本信息，不加载节点数据
+                files = session.query(KnowledgeFile).filter_by(database_id=db.db_id).all()
+                db_dict["files"] = {}
+                for file_obj in files:
+                    db_dict["files"][file_obj.file_id] = {
+                        "file_id": file_obj.file_id,
+                        "filename": file_obj.filename,
+                        "path": file_obj.path,
+                        "type": file_obj.file_type,
+                        "status": file_obj.status,
+                        "created_at": file_obj.created_at.timestamp() if file_obj.created_at else time.time()
+                    }
+
+                result.append(db_dict)
+
+            return result
 
     def get_database_by_id(self, db_id):
         """根据ID获取知识库"""
@@ -310,19 +339,30 @@ class KnowledgeBase:
         assert config.enable_knowledge_base, "知识库未启用"
         databases = self.get_all_databases()
         databases_with_milvus = []
-        for db_data in databases: # db_data is already a dict from to_dict()
-            db_copy = db_data.copy()
-            try:
-                milvus_info = self.get_collection_info(db_copy["db_id"])
-                # Merge Milvus info carefully, avoid overwriting existing keys like 'name', 'description'
-                for k, v in milvus_info.items():
-                    if k not in db_copy or k in ["row_count", "status", "error_message"]: # Milvus specific keys
-                        db_copy[k] = v
-            except Exception as e:
-                logger.warning(f"获取知识库 {db_copy.get('name')} (ID: {db_copy.get('db_id')}) 的Milvus信息失败: {e}")
-                db_copy.update({"row_count": 0, "status": "未连接", "error": str(e)})
 
-            # files should be part of db_copy from to_dict()
+        # 批量获取所有集合信息，避免逐个查询
+        try:
+            all_collections = self.get_collections()
+            collections_dict = {col.get("collection_name", col.get("name")): col for col in all_collections}
+        except Exception as e:
+            logger.warning(f"批量获取Milvus集合信息失败: {e}")
+            collections_dict = {}
+
+        for db_data in databases:
+            db_copy = db_data.copy()
+
+            # 从缓存的集合信息中获取数据，而不是单独查询
+            if db_copy["db_id"] in collections_dict:
+                milvus_info = collections_dict[db_copy["db_id"]]
+                # 只添加Milvus特定的字段，避免覆盖数据库基本信息
+                for k, v in milvus_info.items():
+                    if k in ["row_count", "status", "error_message"]:
+                        db_copy[k] = v
+            else:
+                # 如果集合不存在，设置默认值
+                db_copy.update({"row_count": 0, "status": "未连接"})
+
+            # 统计处理中的文件数量
             db_copy_files = db_copy.get("files", {}).values()
             processing_files_count = sum(1 for file_info in db_copy_files if file_info.get("status") in ["processing", "waiting"])
             if processing_files_count > 0:
