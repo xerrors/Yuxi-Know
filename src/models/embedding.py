@@ -159,7 +159,7 @@ class OtherEmbedding(BaseEmbeddingModel):
         self.embed_model_fullname = config.embed_model
         self.dimension = self.info.get("dimension", None)
         self.model = self.info["name"]
-        self.api_key = os.getenv(self.info["api_key"], None)
+        self.api_key = os.getenv(self.info["api_key"], self.info["api_key"])
         self.url = get_docker_safe_url(self.info["url"])
         assert self.url and self.model, f"URL and model are required. Cur embed model: {config.embed_model}"
         self.headers = {
@@ -190,6 +190,7 @@ def get_embedding_model():
     assert config.embed_model in support_embed_models, f"Unsupported embed model: {config.embed_model}, only support {support_embed_models}"
     logger.debug(f"Loading embedding model {config.embed_model}")
     if provider == "local":
+        logger.warning("[DEPRECATED] Local embedding model will be removed in v0.2, please use other embedding models")
         model = LocalEmbeddingModel()
 
     elif provider == "zhipu":

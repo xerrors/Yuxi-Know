@@ -460,6 +460,9 @@ class KnowledgeBase:
                 self.update_file_status(file_id, "pending_indexing")
                 file_record['status'] = "pending_indexing" # Ensure status is up-to-date
 
+                if params.get("auto_indexing", False):
+                    await self.trigger_file_indexing(db_id, file_id)
+
             except Exception as e:
                 logger.error(f"处理文件 {file_path} 失败，无法保存待索引块: {e}, {traceback.format_exc()}")
                 self.update_file_status(file_id, "failed") # Mark file as failed
@@ -509,6 +512,9 @@ class KnowledgeBase:
 
                 self.update_file_status(file_id, "pending_indexing")
                 file_record['status'] = "pending_indexing"
+
+                if params.get("auto_indexing", False):
+                    await self.trigger_file_indexing(db_id, file_id)
 
             except Exception as e:
                 logger.error(f"处理URL {url} 失败，无法保存待索引块: {e}, {traceback.format_exc()}")

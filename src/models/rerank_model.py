@@ -22,7 +22,7 @@ class LocalReranker(FlagReranker):
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-class SiliconFlowReranker:
+class OnlineRerank:
     def __init__(self, **kwargs):
         model_info = config.reranker_names[config.reranker]
         self.url = get_docker_safe_url(model_info["url"])
@@ -64,9 +64,10 @@ def get_reranker():
     assert config.reranker in support_rerankers, f"Unsupported Reranker: {config.reranker}, only support {support_rerankers}"
     provider, model_name = config.reranker.split('/', 1)
     if provider == "local":
+        logger.warning("[DEPRECATED] Local reranker will be removed in v0.2, please use other reranker")
         return LocalReranker()
     elif provider == "siliconflow":
-        return SiliconFlowReranker()
+        return OnlineRerank()
     else:
         raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}")
 

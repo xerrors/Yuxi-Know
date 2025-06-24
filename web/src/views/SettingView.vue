@@ -96,7 +96,7 @@
         <ModelProvidersComponent />
       </div>
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section ==='path') && userStore.isSuperAdmin">
-        <h3>本地模型配置</h3>
+        <h3>本地模型配置（将在 v0.2 版本移除对本地模型的支持）</h3>
         <p>如果是 Docker 启动，务必确保在 docker-compose.dev.yaml 中添加了 volumes 映射。</p>
         <TableConfigComponent
           :config="configStore.config?.model_local_paths"

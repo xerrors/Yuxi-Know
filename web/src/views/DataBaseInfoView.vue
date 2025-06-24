@@ -65,6 +65,10 @@
           <a-input-number v-model:value="tempChunkParams.chunk_overlap" :min="0" :max="1000" style="width: 100%;" />
           <p class="param-description">相邻文本片段间的重叠字符数</p>
         </a-form-item>
+        <a-form-item label="自动索引" name="auto_indexing">
+          <a-switch v-model:checked="tempChunkParams.auto_indexing" />
+          <p class="param-description">分块完成后自动开始索引，生成向量并写入数据库</p>
+        </a-form-item>
       </a-form>
     </div>
   </a-modal>
@@ -95,7 +99,7 @@
         </div>
         <div class="config-controls">
           <a-button type="dashed" @click="showChunkConfigModal">
-            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
+            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }}{{ chunkParams.auto_indexing ? '/自动索引' : '' }})
           </a-button>
         </div>
       </div>
@@ -781,6 +785,7 @@ const chunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
   enable_ocr: 'disable',
+  auto_indexing: false,
 })
 
 const chunkResults = ref([]);
@@ -812,7 +817,8 @@ const chunkFiles = () => {
   .then(data => {
     console.log('文件处理结果:', data)
     if (data.status === 'success') {
-      message.info(data.message || '文件已提交处理，请稍后在列表刷新查看状态');
+      const autoIndexingInfo = chunkParams.value.auto_indexing ? '，自动索引已启动' : '，请手动点击索引按钮完成索引';
+      message.info(data.message + autoIndexingInfo || '文件已提交处理，请稍后在列表刷新查看状态');
       fileList.value = []; // 清空已上传文件列表
       addFilesModalVisible.value = false; // 关闭弹窗
       getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
@@ -850,7 +856,8 @@ const chunkUrls = () => {
   .then(data => {
     console.log('URL处理结果:', data);
     if (data.status === 'success') {
-      message.success(data.message || 'URL已提交处理，请稍后在列表刷新查看状态');
+      const autoIndexingInfo = chunkParams.value.auto_indexing ? '，自动索引已启动' : '，请手动点击索引按钮完成索引';
+      message.success(data.message + autoIndexingInfo || 'URL已提交处理，请稍后在列表刷新查看状态');
       urlList.value = ''; // 清空URL输入
       addFilesModalVisible.value = false; // 关闭弹窗
       getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
@@ -907,7 +914,7 @@ onMounted(() => {
   getDatabaseInfo();
   state.refreshInterval = setInterval(() => {
     getDatabaseInfo();
-  }, 10000);
+  }, 1000);
 })
 
 // 添加 onUnmounted 钩子，在组件卸载时清除定时器
@@ -951,6 +958,7 @@ const chunkConfigModalVisible = ref(false);
 const tempChunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
+  auto_indexing: false,
 });
 
 // 添加文件弹窗
@@ -997,6 +1005,7 @@ const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
     chunk_overlap: chunkParams.value.chunk_overlap,
+    auto_indexing: chunkParams.value.auto_indexing,
   };
   chunkConfigModalVisible.value = true;
 };
@@ -1005,6 +1014,7 @@ const showChunkConfigModal = () => {
 const handleChunkConfigSubmit = () => {
   chunkParams.value.chunk_size = tempChunkParams.value.chunk_size;
   chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
+  chunkParams.value.auto_indexing = tempChunkParams.value.auto_indexing;
   chunkConfigModalVisible.value = false;
   message.success('分块参数配置已更新');
 };
