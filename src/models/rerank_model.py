@@ -5,7 +5,7 @@ import numpy as np
 from FlagEmbedding import FlagReranker
 
 from src import config
-from src.utils.logging_config import logger
+from src.utils import logger, get_docker_safe_url
 
 
 class LocalReranker(FlagReranker):
@@ -24,11 +24,12 @@ def sigmoid(x):
 
 class SiliconFlowReranker:
     def __init__(self, **kwargs):
-        self.url = "https://api.siliconflow.cn/v1/rerank"
-        self.model = config.reranker_names[config.reranker]["name"]
+        model_info = config.reranker_names[config.reranker]
+        self.url = get_docker_safe_url(model_info["url"])
+        self.model = model_info["name"]
 
-        api_key = os.getenv("SILICONFLOW_API_KEY")
-        assert api_key, "SILICONFLOW_API_KEY is required"
+        api_key = os.getenv(model_info["api_key"], model_info["api_key"])
+        assert api_key, f"{model_info['name']} api_key is required"
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"

@@ -130,6 +130,12 @@ EMBED_MODEL_INFO:
     url: https://api.siliconflow.cn/v1/embeddings
     api_key: SILICONFLOW_API_KEY
 
+  vllm/Qwen/Qwen3-Embedding-0.6B:
+    name: qwen3-embedding-0.6b
+    dimension: 1024
+    url: http://172.19.13.6:8081/v1/embeddings
+    api_key: no_api_key
+
   ollama/nomic-embed-text:
     name: nomic-embed-text
     dimension: 768
@@ -146,3 +152,10 @@ RERANKER_LIST:
 
   siliconflow/BAAI/bge-reranker-v2-m3:
     name: BAAI/bge-reranker-v2-m3
+    url: https://api.siliconflow.cn/v1/rerank
+    api_key: SILICONFLOW_API_KEY
+
+  vllm/Qwen/Qwen3-Reranker-0.6B:
+    name: Qwen/Qwen3-Reranker-0.6B
+    url: http://172.19.13.6:8081/v1/rerank
+    api_key: no_api_key

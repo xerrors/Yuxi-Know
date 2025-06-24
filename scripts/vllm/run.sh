@@ -1,22 +1,47 @@
-MODEL=Meta-Llama-3-8B-Instruct
+MODEL_DIR=/data/public/models
+PORT=8081
+
+TENSOR_PARALLEL_SIZE=1
+export CUDA_VISIBLE_DEVICES="0"
+
+source .venv/bin/activate
 
 if [ -z "$1" ]; then
     echo "Error: No argument provided. Please specify a model name."
     exit 1
 fi
 
-if [ "$1" = "llama" ]; then
-    python -m vllm.entrypoints.openai.api_server \
-        --model="/hdd/zwj/models/meta-llama/Meta-Llama-3-8B-Instruct" \
-        --tensor-parallel-size 2 \
+if [ "$1" = "qwen3:32b" ]; then
+    vllm serve "$MODEL_DIR/Qwen/Qwen3-32B" \
         --trust-remote-code \
-        --device auto \
-        --gpu-memory-utilization 0.8 \
-        --dtype half \
+        --device cuda --dtype auto --tensor-parallel-size $TENSOR_PARALLEL_SIZE \
+        --max_model_len 16384 \
         --served-model-name "$1" \
-        --host 0.0.0.0 \
-        --port 8080
+        --enable-auto-tool-choice \
+        --tool-call-parser hermes \
+        --host 0.0.0.0 --port $PORT
 fi
+
+# Qwen/Qwen3-Embedding-0.6B
+if [ "$1" = "Qwen3-Embedding-0.6B" ]; then
+    vllm serve "$MODEL_DIR/Qwen/Qwen3-Embedding-0.6B"  --task embed \
+        --trust-remote-code --max_model_len 4096 \
+        --device cuda --dtype auto --tensor-parallel-size $TENSOR_PARALLEL_SIZE \
+        --served-model-name "$1" --host 0.0.0.0 --port $PORT
+fi
+
+if [ "$1" = "Qwen3-Reranker-0.6B" ]; then
+    vllm serve "$MODEL_DIR/Qwen/Qwen3-Reranker-0.6B" --task rerank \
+        --trust-remote-code \
+        --device cuda --dtype auto --tensor-parallel-size $TENSOR_PARALLEL_SIZE \
+        --max_model_len 4096 \
+        --served-model-name "$1" --host 0.0.0.0 --port $PORT
+fi
+
+
+
+
+
 
 # https://docs.vllm.ai/en/latest/serving/openai_compatible_server.html#named-arguments
 # model	模型路径，以文件夹结尾
