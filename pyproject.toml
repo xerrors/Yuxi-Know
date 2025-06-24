@@ -22,7 +22,7 @@ dependencies = [
     "langsmith>=0.3.37",
     "llama-index>=0.12.33",
     "llama-index-readers-file>=0.4.7",
-    "mineru[all]>=2.0.3",
+    "mineru>=2.0.6",
     "neo4j>=5.28.1",
     "openai>=1.76.0",
     "opencv-python-headless>=4.11.0.86",
@@ -36,7 +36,6 @@ dependencies = [
     "pyyaml>=6.0.2",
     "qianfan>=0.4.12.3",
     "rapidocr-onnxruntime>=1.4.4",
-    "sentencepiece>=0.2.0",
     "tavily-python>=0.7.0",
     "unstructured>=0.17.2",
     "uvicorn[standard]>=0.34.2",
@@ -51,3 +50,8 @@ lint.select = [         # 选择的规则
     "UP",
 ]
 lint.ignore = ["F401"]  # 忽略的规则
+
+[dependency-groups]
+dev = [
+    "vllm>=0.8.5.post1",
+]
