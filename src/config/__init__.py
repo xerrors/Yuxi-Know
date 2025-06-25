@@ -40,7 +40,7 @@ class Config(SimpleConfig):
         super().__init__()
         self._config_items = {}
         self.save_dir = "saves"
-        self.filename = str(Path("saves/config/base.yaml"))
+        self.filename = str(Path(f"{self.save_dir}/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self._update_models_from_file()

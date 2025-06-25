@@ -1448,7 +1448,7 @@ const handleBatchIndex = async () => {
   padding: 10px;
   border-radius: 4px;
   margin: 8px 0;
-  background-color: var(--gray-200);
+  background-color: var(--gray-100);
 
   &:hover {
     background-color: var(--main-light-4);

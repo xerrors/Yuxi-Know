@@ -13,6 +13,7 @@ services:
       - ./server:/app/server
       - ./src:/app/src
       - ./saves:/app/saves
+      - ./test:/app/test
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
     deploy:
       resources:
