@@ -8,10 +8,12 @@ WORKDIR /app
 # 环境变量设置
 ARG http_proxy
 ARG https_proxy
-ENV http_proxy=$http_proxy \
-    https_proxy=$https_proxy \
-    TZ=Asia/Shanghai \
+ENV TZ=Asia/Shanghai \
     UV_LINK_MODE=copy
+
+# 只有当代理变量不为空时才设置代理
+RUN if [ -n "$http_proxy" ]; then echo "export http_proxy=$http_proxy" >> /etc/environment; fi
+RUN if [ -n "$https_proxy" ]; then echo "export https_proxy=$https_proxy" >> /etc/environment; fi
 
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
@@ -33,9 +35,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # 复制代码到容器中
 COPY ../src /app/src
 COPY ../server /app/server
-
-# 关闭代理设置
-RUN unset http_proxy https_proxy
 
 # 同步项目
 RUN --mount=type=cache,target=/root/.cache/uv \

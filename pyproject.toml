@@ -55,3 +55,7 @@ lint.ignore = ["F401"]  # 忽略的规则
 dev = [
     "vllm>=0.8.5.post1",
 ]
+
+# uv 配置 - 使用阿里云镜像源
+[tool.uv]
+index-url = "https://mirrors.aliyun.com/pypi/simple/"
