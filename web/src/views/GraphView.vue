@@ -120,7 +120,7 @@ const state = reactive({
   showModal: false,
   precessing: false,
   indexing: false,
-  showPage: computed(() => configStore.config.enable_knowledge_base && configStore.config.enable_knowledge_graph),
+  showPage: true,
 })
 
 // 计算未索引节点数量
@@ -215,9 +215,6 @@ const loadSampleNodes = () => {
     .catch((error) => {
       console.error(error)
       message.error(error.message || '加载节点失败');
-      if (configStore?.config && !configStore?.config.enable_knowledge_graph) {
-        message.error('请前往设置页面配置启用知识图谱')
-      }
     })
     .finally(() => state.fetching = false)
 }

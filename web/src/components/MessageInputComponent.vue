@@ -137,7 +137,7 @@ onMounted(() => {
   width: 100%;
   height: auto;
   margin: 0 auto;
-  padding: 0.4rem 0.75rem;
+  padding: 0.6rem 0.75rem 0.4rem 0.75rem;
   border: 2px solid var(--gray-200);
   border-radius: 0.8rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);

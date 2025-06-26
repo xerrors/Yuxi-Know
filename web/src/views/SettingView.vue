@@ -95,14 +95,6 @@
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
         <ModelProvidersComponent />
       </div>
-      <div class="setting" v-if="(state.windowWidth <= 520 || state.section ==='path') && userStore.isSuperAdmin">
-        <h3>本地模型配置（将在 v0.2 版本移除对本地模型的支持）</h3>
-        <p>如果是 Docker 启动，务必确保在 docker-compose.dev.yaml 中添加了 volumes 映射。</p>
-        <TableConfigComponent
-          :config="configStore.config?.model_local_paths"
-          @update:config="handleModelLocalPathsUpdate"
-        />
-      </div>
       <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
       <div class="setting" v-if="state.section === 'user' && userStore.isAdmin">
          <UserManagementComponent />
