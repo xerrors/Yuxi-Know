@@ -13,7 +13,6 @@
       <div class="sider" v-if="state.windowWidth > 520">
         <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'base'}" @click="state.section='base'" :icon="h(SettingOutlined)"> 基本设置 </a-button>
         <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'model'}" @click="state.section='model'" :icon="h(CodeOutlined)"> 模型配置 </a-button>
-        <a-button type="text" v-if="userStore.isSuperAdmin" :class="{ activesec: state.section === 'path'}" @click="state.section='path'" :icon="h(FolderOutlined)"> 路径配置 </a-button>
         <a-button type="text" :class="{ activesec: state.section === 'user'}" @click="state.section='user'" :icon="h(UserOutlined)" v-if="userStore.isAdmin"> 用户管理 </a-button>
       </div>
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'base') && userStore.isSuperAdmin">
@@ -72,23 +71,6 @@
             </a-select>
           </div>
         </div>
-        <h3>功能配置</h3>
-        <div class="section">
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_base.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_base"
-              @change="handleChange('enable_knowledge_base', !configStore.config.enable_knowledge_base)"
-            />
-          </div>
-          <div class="card">
-            <span class="label">{{ items?.enable_knowledge_graph.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_knowledge_graph"
-              @change="handleChange('enable_knowledge_graph', !configStore.config.enable_knowledge_graph)"
-            />
-          </div>
-        </div>
       </div>
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'model') && userStore.isSuperAdmin">
         <h3>模型配置</h3>
@@ -138,19 +120,8 @@ const handleModelLocalPathsUpdate = (config) => {
 }
 
 const preHandleChange = (key, e) => {
-  if (key == 'enable_knowledge_graph' && e && !configStore.config.enable_knowledge_base) {
-    message.error('启动知识图谱必须请先启用知识库功能')
-    return
-  }
-
-  if (key == 'enable_knowledge_base' && !e && configStore.config.enable_knowledge_graph) {
-    message.error('关闭知识库功能必须请先关闭知识图谱功能')
-    return
-  }
 
   if (key == 'enable_reranker'
-    || key == 'enable_knowledge_graph'
-    || key == 'enable_knowledge_base'
     || key == 'embed_model'
     || key == 'reranker'
     || key == 'model_local_paths') {

@@ -27,14 +27,35 @@ const layoutSettings = reactive({
 const githubStars = ref(0)
 const isLoadingStars = ref(false)
 
+// Add state for debug modal
+const showDebugModal = ref(false)
+const htmlRefHook = useTemplateRef('htmlRefHook')
+
+// Setup long press for debug modal
+onLongPress(
+  htmlRefHook,
+  () => {
+    console.log('long press')
+    showDebugModal.value = true
+  },
+  {
+    delay: 1000, // 1秒长按
+    modifiers: {
+      prevent: true
+    }
+  }
+)
+
+// Handle debug modal close
+const handleDebugModalClose = () => {
+  showDebugModal.value = false
+}
+
 const getRemoteConfig = () => {
   configStore.refreshConfig()
 }
 
 const getRemoteDatabase = () => {
-  if (!configStore.config.enable_knowledge_base) {
-    return
-  }
   databaseStore.refreshDatabase()
 }
 
@@ -68,11 +89,6 @@ console.log(route)
 
 // 下面是导航菜单部分，添加智能体项
 const mainList = [{
-    name: '对话',
-    path: '/chat',
-    icon: MessageSquareMore,
-    activeIcon: MessageSquareMore,
-  }, {
     name: '智能体',
     path: '/agent',
     icon: Bot,
@@ -82,13 +98,11 @@ const mainList = [{
     path: '/graph',
     icon: Waypoints,
     activeIcon: Waypoints,
-    // hidden: !configStore.config.enable_knowledge_graph,
   }, {
     name: '知识库',
     path: '/database',
     icon: LibraryBig,
     activeIcon: LibraryBig,
-    // hidden: !configStore.config.enable_knowledge_base,
   }
 ]
 </script>

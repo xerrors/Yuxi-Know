@@ -221,7 +221,7 @@ const handleLogin = async () => {
     if (redirectPath === '/') {
       // 如果是管理员，直接跳转到/chat页面
       if (userStore.isAdmin) {
-        router.push('/chat');
+        router.push('/agent');
         return;
       }
 

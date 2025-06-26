@@ -182,9 +182,6 @@ class OtherEmbedding(BaseEmbeddingModel):
         }
 
 def get_embedding_model():
-    if not config.enable_knowledge_base:
-        return None
-
     provider, model_name = config.embed_model.split('/', 1)
     support_embed_models = config.embed_model_names.keys()
     assert config.embed_model in support_embed_models, f"Unsupported embed model: {config.embed_model}, only support {support_embed_models}"

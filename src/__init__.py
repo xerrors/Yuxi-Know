@@ -13,6 +13,3 @@ knowledge_base = KnowledgeBase()
 
 from src.core import GraphDatabase  # noqa: E402
 graph_base = GraphDatabase()
-
-from src.core.retriever import Retriever  # noqa: E402
-retriever = Retriever()

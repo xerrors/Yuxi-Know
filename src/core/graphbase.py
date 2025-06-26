@@ -31,9 +31,6 @@ class GraphDatabase:
         self.start()
 
     def start(self):
-        if not config.enable_knowledge_graph or not config.enable_knowledge_base:
-            return
-
         uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
         username = os.environ.get("NEO4J_USERNAME", "neo4j")
         password = os.environ.get("NEO4J_PASSWORD", "0123456789")
@@ -46,7 +43,6 @@ class GraphDatabase:
             self.save_graph_info(self.kgdb_name)
         except Exception as e:
             logger.error(f"Failed to connect to Neo4j: {e}, {uri}, {self.kgdb_name}, {username}, {password}")
-            self.config.enable_knowledge_graph = False
 
     def close(self):
         """关闭数据库连接"""
@@ -54,10 +50,7 @@ class GraphDatabase:
 
     def is_running(self):
         """检查图数据库是否正在运行"""
-        if not config.enable_knowledge_graph or not config.enable_knowledge_base:
-            return False
-        else:
-            return self.status == "open"
+        return self.status == "open"
 
     def get_sample_nodes(self, kgdb_name='neo4j', num=50):
         """获取指定数据库的 num 个节点信息"""
