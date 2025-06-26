@@ -4,7 +4,7 @@ import traceback
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body, Form, Query
 
 from src.utils import logger, hashstr
-from src import executor, retriever, config, knowledge_base, graph_base
+from src import executor, config, knowledge_base, graph_base
 from server.utils.auth_middleware import get_admin_user
 from server.models.user_model import User
 
@@ -24,15 +24,16 @@ async def get_databases(current_user: User = Depends(get_admin_user)):
 async def create_database(
     database_name: str = Body(...),
     description: str = Body(...),
-    dimension: int | None = Body(None),
+    embed_model_name: str = Body(...),
     current_user: User = Depends(get_admin_user)
 ):
     logger.debug(f"Create database {database_name}")
     try:
+        embed_info = config.embed_model_info[embed_model_name]
         database_info = knowledge_base.create_database(
             database_name,
             description,
-            dimension=dimension
+            embed_info=embed_info
         )
     except Exception as e:
         logger.error(f"创建数据库失败 {e}, {traceback.format_exc()}")
@@ -48,48 +49,49 @@ async def delete_database(db_id, current_user: User = Depends(get_admin_user)):
 @data.post("/query-test")
 async def query_test(query: str = Body(...), meta: dict = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"Query test in {meta}: {query}")
-    result = retriever.query_knowledgebase(query, history=None, refs={"meta": meta})
+    result = await knowledge_base.aquery(query, **meta)
     return result
+
+@data.post("/add-files")
+async def add_files(db_id: str = Body(...), items: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
+    logger.debug(f"Add files/urls for db_id {db_id}: {items} {params=}")
+
+    # 从 params 中获取 content_type，默认为 'file'
+    content_type = params.get('content_type', 'file')
+
+    try:
+        # 使用统一的 add_content 方法
+        processed_items = await knowledge_base.add_content(db_id, items, params=params)
+
+        item_type = "URLs" if content_type == 'url' else "files"
+        processed_failed_count = len([_p for _p in processed_items if _p['status'] == 'failed'])
+        processed_info = f"Processed {len(processed_items)} {item_type}, {processed_failed_count} {item_type} failed"
+        return {"message": processed_info, "items": processed_items, "status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to process {content_type}s: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to process {content_type}s: {e}", "status": "failed"}
 
 @data.post("/file-to-chunk")
 async def file_to_chunk(db_id: str = Body(...), files: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"File to chunk for db_id {db_id}: {files} {params=}")
-    try:
-        processed_files = await knowledge_base.save_files_for_pending_indexing(db_id, files, params)
-        processed_failed_count = len([_p['status'] == 'failed' for _p in processed_files])
-        processed_info = f"Processed {len(processed_files)} files for pending indexing, {processed_failed_count} files failed"
-        return {"message": processed_info, "files": processed_files, "status": "success"}
-    except Exception as e:
-        logger.error(f"Failed to process files for pending indexing: {e}, {traceback.format_exc()}")
-        return {"message": f"Failed to process files for pending indexing: {e}", "status": "failed"}
+    logger.debug(f"File to chunk for db_id {db_id}: {files} {params=} (deprecated, use /add-files)")
+    # 兼容性路由，转发到新的统一接口
+    params['content_type'] = 'file'
+    return await add_files(db_id, files, params, current_user)
 
 @data.post("/url-to-chunk")
 async def url_to_chunk(db_id: str = Body(...), urls: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"Url to chunk for db_id {db_id}: {urls} {params=}")
-    try:
-        processed_urls = await knowledge_base.save_urls_for_pending_indexing(db_id, urls, params)
-        return {"message": "URLs processed and pending indexing", "urls": processed_urls, "status": "success"}
-    except Exception as e:
-        logger.error(f"Failed to process URLs for pending indexing: {e}, {traceback.format_exc()}")
-        return {"message": f"Failed to process URLs for pending indexing: {e}", "status": "failed"}
+    logger.debug(f"Url to chunk for db_id {db_id}: {urls} {params=} (deprecated, use /add-files)")
+    # 兼容性路由，转发到新的统一接口
+    params['content_type'] = 'url'
+    return await add_files(db_id, urls, params, current_user)
 
 @data.post("/add-by-file")
 async def create_document_by_file(db_id: str = Body(...), files: list[str] = Body(...), current_user: User = Depends(get_admin_user)):
-    raise ValueError("This method is deprecated. Use /file-to-chunk and /index-file instead.")
+    raise ValueError("This method is deprecated. Use /add-files instead.")
 
 @data.post("/add-by-chunks")
 async def add_by_chunks(db_id: str = Body(...), file_chunks: dict = Body(...), current_user: User = Depends(get_admin_user)):
-    raise ValueError("This method is deprecated. Use /file-to-chunk and /index-file instead.")
-
-@data.post("/index-file")
-async def index_file(db_id: str = Body(...), file_id: str = Body(...), current_user: User = Depends(get_admin_user)):
-    logger.debug(f"Indexing file_id {file_id} in db_id {db_id}")
-    try:
-        result = await knowledge_base.trigger_file_indexing(db_id, file_id)
-        return {"message": f"File {file_id} indexing initiated", "details": result, "status": "success"}
-    except Exception as e:
-        logger.error(f"Failed to index file {file_id}: {e}, {traceback.format_exc()}")
-        return {"message": f"Failed to index file {file_id}: {e}", "status": "failed"}
+    raise ValueError("This method is deprecated. Use /add-files instead.")
 
 @data.get("/info")
 async def get_database_info(db_id: str, current_user: User = Depends(get_admin_user)):
@@ -102,7 +104,7 @@ async def get_database_info(db_id: str, current_user: User = Depends(get_admin_u
 @data.delete("/document")
 async def delete_document(db_id: str = Body(...), file_id: str = Body(...), current_user: User = Depends(get_admin_user)):
     logger.debug(f"DELETE document {file_id} info in {db_id}")
-    knowledge_base.delete_file(db_id, file_id)
+    await knowledge_base.delete_file(db_id, file_id)
     return {"message": "删除成功"}
 
 @data.get("/document")
@@ -110,7 +112,7 @@ async def get_document_info(db_id: str, file_id: str, current_user: User = Depen
     logger.debug(f"GET document {file_id} info in {db_id}")
 
     try:
-        info = knowledge_base.get_file_info(db_id, file_id)
+        info = await knowledge_base.get_file_info(db_id, file_id)
     except Exception as e:
         logger.error(f"Failed to get file info, {e}, {db_id=}, {file_id=}, {traceback.format_exc()}")
         info = {"message": "Failed to get file info", "status": "failed"}
@@ -169,8 +171,6 @@ async def get_graph_node(entity_name: str, current_user: User = Depends(get_admi
 
 @data.get("/graph/nodes")
 async def get_graph_nodes(kgdb_name: str, num: int, current_user: User = Depends(get_admin_user)):
-    if not config.enable_knowledge_graph:
-        raise HTTPException(status_code=400, detail="Knowledge graph is not enabled")
 
     logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
     result = graph_base.get_sample_nodes(kgdb_name, num)
@@ -178,8 +178,6 @@ async def get_graph_nodes(kgdb_name: str, num: int, current_user: User = Depends
 
 @data.post("/graph/add-by-jsonl")
 async def add_graph_entity(file_path: str = Body(...), kgdb_name: str | None = Body(None), current_user: User = Depends(get_admin_user)):
-    if not config.enable_knowledge_graph:
-        return {"message": "知识图谱未启用", "status": "failed"}
 
     if not file_path.endswith('.jsonl'):
         return {"message": "文件格式错误，请上传jsonl文件", "status": "failed"}

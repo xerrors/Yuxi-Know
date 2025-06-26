@@ -20,7 +20,7 @@
       </a-button>
     </template>
   </HeaderComponent>
-  <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" />
+  <!-- <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" /> -->
 
   <!-- 添加编辑对话框 -->
   <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
@@ -29,7 +29,7 @@
         <DeleteOutlined /> 删除数据库
       </a-button>
       <a-button key="back" @click="editModalVisible = false">取消</a-button>
-      <a-button key="submit" type="primary" :loading="loading" @click="handleEditSubmit">确定</a-button>
+      <a-button key="submit" type="primary" :loading="state.loading" @click="handleEditSubmit">确定</a-button>
     </template>
     <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
       <a-form-item label="知识库名称" name="name" required>
@@ -65,10 +65,6 @@
           <a-input-number v-model:value="tempChunkParams.chunk_overlap" :min="0" :max="1000" style="width: 100%;" />
           <p class="param-description">相邻文本片段间的重叠字符数</p>
         </a-form-item>
-        <a-form-item label="自动索引" name="auto_indexing">
-          <a-switch v-model:checked="tempChunkParams.auto_indexing" />
-          <p class="param-description">分块完成后自动开始索引，生成向量并写入数据库</p>
-        </a-form-item>
       </a-form>
     </div>
   </a-modal>
@@ -99,7 +95,7 @@
         </div>
         <div class="config-controls">
           <a-button type="dashed" @click="showChunkConfigModal">
-            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }}{{ chunkParams.auto_indexing ? '/自动索引' : '' }})
+            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
           </a-button>
         </div>
       </div>
@@ -159,20 +155,12 @@
         <template #tab><span><ReadOutlined />文件列表</span></template>
         <div class="db-tab-container">
           <div class="actions" style="display: flex; gap: 10px; justify-content: space-between;">
-            <div class="left-actions" style="display: flex; gap: 10px;">
+            <div class="left-actions" style="display: flex; gap: 10px; align-items: center;">
               <a-button type="primary" @click="showAddFilesModal" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
               <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
             </div>
             <div class="batch-actions" style="display: flex; gap: 10px;" v-if="selectedRowKeys.length > 0">
               <span style="margin-right: 8px;">已选择 {{ selectedRowKeys.length }} 项</span>
-              <a-button
-                type="primary"
-                @click="handleBatchIndex"
-                :loading="state.batchIndexing"
-                :disabled="!hasSelectedPendingFiles"
-              >
-                批量索引
-              </a-button>
               <a-button
                 type="primary"
                 danger
@@ -207,25 +195,15 @@
               <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
               <HourglassFilled v-else-if="column.key === 'status' && text === 'processing'" style="color: #1677FF;"/>
               <ClockCircleFilled v-else-if="column.key === 'status' && text === 'waiting'" style="color: #FFCD43;"/>
-              <HddOutlined v-else-if="column.key === 'status' && text === 'pending_indexing'" style="color: #FFCD43;"/>
 
               <a-tooltip v-else-if="column.key === 'created_at'" :title="record.status" placement="left">
                 <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
               </a-tooltip>
 
               <div v-else-if="column.key === 'action'" style="display: flex; gap: 10px;">
-                <a-button
-                  v-if="record.status === 'pending_indexing' || record.status === 'failed'"
-                  type="link"
-                  @click="handleIndexFile(record.file_id)"
-                  :loading="state.indexingFile === record.file_id"
-                  :disabled="state.lock || state.indexingFile === record.file_id"
-                >
-                  索引
-                </a-button>
                 <a-button class="del-btn" type="link"
                   @click="handleDeleteFile(record.file_id)"
-                  :disabled="state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id"
+                  :disabled="state.lock || record.status === 'processing' || record.status === 'waiting'"
                   >
                   删除
                 </a-button>
@@ -250,7 +228,7 @@
               <h3>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h3>
               <div class="file-detail-content">
                 <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
-                  {{ line.text }}
+                  {{ line.content }}
                 </p>
               </div>
             </template>
@@ -261,51 +239,68 @@
       <a-tab-pane key="query-test" force-render>
         <template #tab><span><SearchOutlined />检索测试</span></template>
         <div class="query-test-container db-tab-container">
+          <div class="query-result-container">
+            <div class="query-action">
+              <a-textarea
+                v-model:value="queryText"
+                placeholder="填写需要查询的句子"
+                :auto-size="{ minRows: 1, maxRows: 10 }"
+              />
+              <a-button class="btn-query" @click="onQuery" type="primary">
+                <span v-if="!state.searchLoading"><SearchOutlined /> 检索</span>
+                <span v-else><LoadingOutlined /></span>
+              </a-button>
+            </div>
+
+            <!-- 新增示例按钮 -->
+            <div class="query-examples-container">
+              <div class="examples-title">示例查询：</div>
+              <div class="query-examples">
+                <a-button v-for="example in queryExamples" :key="example" @click="useQueryExample(example)">
+                  {{ example }}
+                </a-button>
+              </div>
+            </div>
+            <div class="query-test" v-if="queryResult">
+              {{ queryResult }}
+            </div>
+          </div>
           <div class="sider">
             <div class="sider-top">
               <div class="query-params" v-if="state.curPage == 'query-test'">
                 <!-- <h3 class="params-title">查询参数</h3> -->
                 <div class="params-group">
                   <div class="params-item">
-                    <p>检索数量：</p>
-                    <a-input-number size="small" v-model:value="meta.maxQueryCount" :min="1" :max="20" />
+                    <p>检索模式：</p>
+                    <a-select v-model:value="meta.mode" :options="modeOptions" style="width: 120px;" />
+                  </div>
+                </div>
+                <div class="params-group">
+                  <div class="params-item">
+                    <p>只使用上下文：</p>
+                    <a-switch v-model:checked="meta.only_need_context" />
                   </div>
                   <div class="params-item">
-                    <p>过滤低质量：</p>
-                    <a-switch v-model:checked="meta.filter" />
+                    <p>只使用上下文：</p>
+                    <a-switch v-model:checked="meta.only_need_prompt" />
                   </div>
                   <div class="params-item">
                     <p>筛选 TopK：</p>
-                    <a-input-number size="small" v-model:value="meta.topK" :min="1" :max="meta.maxQueryCount" />
-                  </div>
-                  <div class="params-item" v-if="configStore.config.enable_reranker">
-                    <p>排序方式：</p>
-                    <a-radio-group v-model:value="meta.sortBy" button-style="solid" size="small">
-                      <a-radio-button value="rerank_score">重排序分</a-radio-button>
-                      <a-radio-button value="distance">相似度</a-radio-button>
-                    </a-radio-group>
+                    <a-input-number size="small" v-model:value="meta.top_k" :min="1" :max="meta.maxQueryCount" />
                   </div>
                 </div>
                 <div class="params-group">
-                  <div class="params-item w100" v-if="configStore.config.enable_reranker">
-                    <p>重排序阈值：</p>
-                    <a-slider v-model:value="meta.rerankThreshold" :min="0" :max="1" :step="0.01" />
+                  <div class="params-item">
+                    <p>片段最大Token数：</p>
+                    <a-input-number size="small" v-model:value="meta.max_token_for_text_unit" :min="1" :max="4000" />
                   </div>
-                  <div class="params-item w100">
-                    <p>距离阈值：</p>
-                    <a-slider v-model:value="meta.distanceThreshold" :min="0" :max="1" :step="0.01" />
+                  <div class="params-item">
+                    <p>关系描述最大Token数：</p>
+                    <a-input-number size="small" v-model:value="meta.max_token_for_global_context" :min="1" :max="4000" />
                   </div>
-                </div>
-                <div class="params-group">
-                  <div class="params-item col">
-                    <p>重写查询<small>（修改后需重新检索）</small>：</p>
-                    <a-segmented v-model:value="meta.use_rewrite_query" :options="use_rewrite_queryOptions">
-                      <template #label="{ payload }">
-                        <div>
-                          <p style="margin: 4px 0">{{ payload.subTitle }}</p>
-                        </div>
-                      </template>
-                    </a-segmented>
+                  <div class="params-item">
+                    <p>实体描述最大Token数：</p>
+                    <a-input-number size="small" v-model:value="meta.max_token_for_local_context" :min="1" :max="4000" />
                   </div>
                 </div>
               </div>
@@ -313,63 +308,15 @@
             <div class="sider-bottom">
             </div>
           </div>
-          <div class="query-result-container">
-            <div class="query-action">
-              <a-textarea
-                v-model:value="queryText"
-                placeholder="填写需要查询的句子"
-                :auto-size="{ minRows: 2, maxRows: 10 }"
-              />
-              <a-button class="btn-query" @click="onQuery" :disabled="queryText.length == 0">
-                <span v-if="!state.searchLoading"><SearchOutlined /> 检索</span>
-                <span v-else><LoadingOutlined /></span>
-              </a-button>
-            </div>
-
-            <!-- 新增示例按钮 -->
-            <!-- <div class="query-examples-container">
-              <div class="examples-title">示例查询：</div>
-              <div class="query-examples">
-                <a-button v-for="example in queryExamples" :key="example" @click="useQueryExample(example)">
-                  {{ example }}
-                </a-button>
-              </div>
-            </div> -->
-            <div class="query-test" v-if="queryResult">
-              <div class="results-overview">
-                <div class="results-stats">
-                  <span class="stat-item">
-                    <strong>总数:</strong> {{ queryResult.all_results.length }}
-                  </span>
-                  <span class="stat-item">
-                    <strong>过滤后:</strong> {{ filteredResults.length }}
-                  </span>
-                  <span class="stat-item">
-                    <strong>TopK:</strong> {{ meta.topK }}
-                  </span>
-                  <span class="stat-item">
-                    <strong>排序:</strong> {{ meta.sortBy === 'rerank_score' ? '重排序分' : '相似度' }}
-                  </span>
-                </div>
-                <div class="rewritten-query" v-if="queryResult.rw_query">
-                  <strong>重写后查询:</strong>
-                  <span class="query-text">{{ queryResult.rw_query }}</span>
-                </div>
-              </div>
-              <div class="query-result-card" v-for="(result, idx) in (filteredResults)" :key="idx">
-                <p>
-                  <strong>#{{ idx + 1 }}&nbsp;&nbsp;&nbsp;</strong>
-                  <span>{{ result.file.filename }}&nbsp;&nbsp;&nbsp;</span>
-                  <span><strong>相似度</strong>：{{ result.distance.toFixed(4) }}&nbsp;&nbsp;&nbsp;</span>
-                  <span v-if="result.rerank_score"><strong>重排序分</strong>：{{ result.rerank_score.toFixed(4) }}</span>
-                </p>
-                <p class="query-text">{{ result.entity.text }}</p>
-              </div>
-            </div>
-          </div>
         </div>
       </a-tab-pane>
       <!-- <a-tab-pane key="3" tab="Tab 3">Content of Tab Pane 3</a-tab-pane> -->
+       <template #rightExtra>
+        <div class="auto-refresh-control">
+          <span>自动刷新：</span>
+          <a-switch v-model:checked="state.autoRefresh" @change="toggleAutoRefresh" size="small" />
+        </div>
+      </template>
     </a-tabs>
   </div>
 </div>
@@ -398,7 +345,6 @@ import {
   LinkOutlined,
   EditOutlined,
   PlusOutlined,
-  HddOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue'
 import { h } from 'vue';
@@ -428,21 +374,20 @@ const state = reactive({
   fileDetailLoading: false,
   refreshInterval: null,
   curPage: "files",
-  indexingFile: null,
-  batchIndexing: false,
   batchDeleting: false,
   chunkLoading: false,
+  autoRefresh: false,
+  loading: false,
 });
 
 const meta = reactive({
-  mode: 'search',
-  maxQueryCount: 30,
-  filter: true,
-  use_rewrite_query: 'off',
-  rerankThreshold: 0.1,
-  distanceThreshold: 0.3,
-  topK: 10,
-  sortBy: 'rerank_score',
+  mode: 'mix',
+  only_need_context: true,
+  only_need_prompt: false,
+  top_k: 10,
+  max_token_for_text_unit: 4000,
+  max_token_for_global_context: 4000,
+  max_token_for_local_context: 4000,
 });
 
 const enable_ocr_options = ref([
@@ -452,10 +397,13 @@ const enable_ocr_options = ref([
   { value: 'paddlex_ocr', payload: { title: 'Paddlex OCR' } },
 ])
 
-const use_rewrite_queryOptions = ref([
-  { value: 'off', payload: { title: 'off', subTitle: '不启用' } },
-  { value: 'on', payload: { title: 'on', subTitle: '启用重写' } },
-  { value: 'hyde', payload: { title: 'hyde', subTitle: '伪文档生成' } },
+const modeOptions = ref([
+  { value: 'local', payload: { title: 'local', subTitle: '上下文相关信息' } },
+  { value: 'global', payload: { title: 'global', subTitle: '全局知识' } },
+  { value: 'hybrid', payload: { title: 'hybrid', subTitle: '本地和全局混合' } },
+  { value: 'naive', payload: { title: 'naive', subTitle: '基本搜索' } },
+  { value: 'mix', payload: { title: 'mix', subTitle: '知识图谱和向量检索混合' } },
+  { value: 'bypass', payload: { title: 'bypass', subTitle: '绕过检索' } },
 ])
 
 const pagination = ref({
@@ -506,10 +454,10 @@ const filterQueryResults = () => {
 }
 
 const onQuery = () => {
-  if (database.value.embed_model != configStore.config.embed_model) {
-    message.error('向量模型不匹配，请重新选择')
-    return
-  }
+  // if (database.value.embed_model != configStore.config.embed_model) {
+  //   message.error('向量模型不匹配，请重新选择')
+  //   return
+  // }
 
   console.log(queryText.value)
   state.searchLoading = true
@@ -604,6 +552,10 @@ const deleteDatabse = () => {
 
 const openFileDetail = (record) => {
   // 先打开弹窗
+  if (record.status !== 'done') {
+    message.error('文件未处理完成，请稍后再试');
+    return;
+  }
   state.fileDetailModalVisible = true;
   selectedFile.value = {
     ...record,
@@ -785,58 +737,66 @@ const chunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
   enable_ocr: 'disable',
-  auto_indexing: false,
 })
 
-const chunkResults = ref([]);
-const activeFileKeys = ref([]);
-
-// 获取所有分块的总数
-const getTotalChunks = () => {
-  return chunkResults.value.reduce((total, file) => total + file.nodes.length, 0);
-}
-
-// "生成分块" - 修改后的逻辑
-const chunkFiles = () => {
-  console.log(fileList.value)
-  const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  console.log(files)
-
-  if (files.length === 0) {
-    message.error('请先上传文件')
-    return
+// "生成分块" - 新的统一方法
+const addFiles = (items, contentType = 'file') => {
+  if (items.length === 0) {
+    message.error(contentType === 'file' ? '请先上传文件' : '请输入有效的网页链接');
+    return;
   }
 
-  state.chunkLoading = true
+  state.chunkLoading = true;
 
-  knowledgeBaseApi.fileToChunk({
-    db_id: databaseId.value, // 添加 db_id
-    files: files,
-    params: chunkParams.value
+  // 设置内容类型
+  const params = {
+    ...chunkParams.value,
+    content_type: contentType
+  };
+
+  knowledgeBaseApi.addFiles({
+    db_id: databaseId.value,
+    items: items,
+    params: params
   })
   .then(data => {
-    console.log('文件处理结果:', data)
+    console.log('处理结果:', data);
     if (data.status === 'success') {
-      const autoIndexingInfo = chunkParams.value.auto_indexing ? '，自动索引已启动' : '，请手动点击索引按钮完成索引';
-      message.info(data.message + autoIndexingInfo || '文件已提交处理，请稍后在列表刷新查看状态');
-      fileList.value = []; // 清空已上传文件列表
-      addFilesModalVisible.value = false; // 关闭弹窗
-      getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
+      const itemType = contentType === 'file' ? '文件' : 'URL';
+      message.success(data.message || `${itemType}已提交处理，请稍后在列表刷新查看状态`);
+
+      // 清空输入
+      if (contentType === 'file') {
+        fileList.value = [];
+      } else {
+        urlList.value = '';
+      }
+
+      addFilesModalVisible.value = false;
+      getDatabaseInfo();
     } else {
-      message.error(data.message || '文件处理失败');
+      message.error(data.message || '处理失败');
     }
   })
   .catch(error => {
-    console.error(error)
-    message.error(error.message || '文件处理请求失败')
+    console.error(error);
+    message.error(error.message || '处理请求失败');
   })
   .finally(() => {
-    state.chunkLoading = false
-  })
+    state.chunkLoading = false;
+  });
+};
+
+// "生成分块" - 修改后的逻辑（文件）
+const handleFiles = () => {
+  console.log(fileList.value);
+  const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path);
+  console.log(files);
+  addFiles(files, 'file');
 }
 
-// "生成分块" - 修改后的逻辑
-const chunkUrls = () => {
+// "生成分块" - 修改后的逻辑（URL）
+const handleUrls = () => {
   const urls = urlList.value.split('\n')
     .map(url => url.trim())
     .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
@@ -846,32 +806,7 @@ const chunkUrls = () => {
     return;
   }
 
-  state.chunkLoading = true;
-
-  knowledgeBaseApi.urlToChunk({
-    db_id: databaseId.value, // 添加 db_id
-    urls: urls,
-    params: chunkParams.value
-  })
-  .then(data => {
-    console.log('URL处理结果:', data);
-    if (data.status === 'success') {
-      const autoIndexingInfo = chunkParams.value.auto_indexing ? '，自动索引已启动' : '，请手动点击索引按钮完成索引';
-      message.success(data.message + autoIndexingInfo || 'URL已提交处理，请稍后在列表刷新查看状态');
-      urlList.value = ''; // 清空URL输入
-      addFilesModalVisible.value = false; // 关闭弹窗
-      getDatabaseInfo(); // 刷新数据库信息以显示新文件及其状态
-    } else {
-      message.error(data.message || 'URL处理失败');
-    }
-  })
-  .catch(error => {
-    console.error(error);
-    message.error(error.message || '处理URL请求失败');
-  })
-  .finally(() => {
-    state.chunkLoading = false;
-  });
+  addFiles(urls, 'url');
 };
 
 const columns = [
@@ -886,8 +821,10 @@ const columns = [
 watch(() => route.params.database_id, (newId) => {
     databaseId.value = newId;
     console.log(newId)
-    clearInterval(state.refreshInterval)
-    getDatabaseInfo()
+    stopAutoRefresh();
+    getDatabaseInfo().then(() => {
+      startAutoRefresh();
+    });
   }
 );
 
@@ -898,10 +835,8 @@ watch(() => meta, () => {
 
 // 添加更多示例查询
 const queryExamples = ref([
-  '贾宝玉的丫鬟有哪些？',
-  '请介绍一下红楼梦的主要人物',
-  '林黛玉是什么性格？',
-  '曹雪芹的创作背景',
+  '孕妇应该避免吃哪些水果？',
+  '荔枝应该怎么清洗？'
 ]);
 
 // 使用示例查询的方法
@@ -912,17 +847,12 @@ const useQueryExample = (example) => {
 
 onMounted(() => {
   getDatabaseInfo();
-  state.refreshInterval = setInterval(() => {
-    getDatabaseInfo();
-  }, 1000);
+  startAutoRefresh();
 })
 
 // 添加 onUnmounted 钩子，在组件卸载时清除定时器
 onUnmounted(() => {
-  if (state.refreshInterval) {
-    clearInterval(state.refreshInterval);
-    state.refreshInterval = null;
-  }
+  stopAutoRefresh();
 })
 
 const uploadMode = ref('file');
@@ -930,9 +860,9 @@ const urlList = ref('');
 
 const chunkData = () => {
   if (uploadMode.value === 'file') {
-    chunkFiles();
+    handleFiles();
   } else if (uploadMode.value === 'url') {
-    chunkUrls();
+    handleUrls();
   }
 }
 
@@ -958,7 +888,6 @@ const chunkConfigModalVisible = ref(false);
 const tempChunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
-  auto_indexing: false,
 });
 
 // 添加文件弹窗
@@ -1005,7 +934,6 @@ const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
     chunk_overlap: chunkParams.value.chunk_overlap,
-    auto_indexing: chunkParams.value.auto_indexing,
   };
   chunkConfigModalVisible.value = true;
 };
@@ -1014,7 +942,6 @@ const showChunkConfigModal = () => {
 const handleChunkConfigSubmit = () => {
   chunkParams.value.chunk_size = tempChunkParams.value.chunk_size;
   chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
-  chunkParams.value.auto_indexing = tempChunkParams.value.auto_indexing;
   chunkConfigModalVisible.value = false;
   message.success('分块参数配置已更新');
 };
@@ -1024,38 +951,9 @@ const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
 };
 
-const handleIndexFile = (fileId) => {
-  if (!fileId) {
-    message.error('无效的文件ID');
-    return;
-  }
-  state.lock = true;
-  knowledgeBaseApi.indexFile({
-    db_id: databaseId.value,
-    file_id: fileId
-  })
-  .then(response => {
-    if (response.status === 'success') {
-      message.success(response.message || `文件 ${fileId} 已开始索引。`);
-      getDatabaseInfo(); // Refresh to update status
-    } else {
-      message.error(response.message || `文件 ${fileId} 索引启动失败。`);
-    }
-  })
-  .catch(error => {
-    console.error(`索引文件 ${fileId} 失败:`, error);
-    message.error(error.message || `索引文件 ${fileId} 时发生错误。`);
-  })
-  .finally(() => {
-    state.indexingFile = null; // Reset loading state for this file
-    state.lock = false;
-  });
-};
 
-// 计算是否有待索引的文件
-const hasPendingFiles = computed(() => {
-  return Object.values(database.value.files || {}).some(file => file.status === 'pending_indexing');
-});
+
+
 
 // 选中的行
 const selectedRowKeys = ref([]);
@@ -1067,63 +965,45 @@ const onSelectChange = (keys) => {
 
 // 获取复选框属性
 const getCheckboxProps = (record) => ({
-  disabled: state.lock || record.status === 'processing' || record.status === 'waiting' || state.indexingFile === record.file_id,
+  disabled: state.lock || record.status === 'processing' || record.status === 'waiting',
 });
 
-// 计算是否有选中的待索引文件
-const hasSelectedPendingFiles = computed(() => {
-  const files = database.value.files || {};
-  return selectedRowKeys.value.some(key => files[key]?.status === 'pending_indexing');
-});
+
 
 // 计算是否可以批量删除
 const canBatchDelete = computed(() => {
   const files = database.value.files || {};
   return selectedRowKeys.value.some(key => {
     const file = files[key];
-    return !(state.lock || file.status === 'processing' || file.status === 'waiting' || state.indexingFile === file.file_id);
+    return !(state.lock || file.status === 'processing' || file.status === 'waiting');
   });
 });
 
-// 批量索引处理函数
-const handleBatchIndex = async () => {
-  if (!hasSelectedPendingFiles.value) {
-    message.info('没有需要索引的文件');
-    return;
+
+
+// 开始自动刷新
+const startAutoRefresh = () => {
+  if (state.autoRefresh && !state.refreshInterval) {
+    state.refreshInterval = setInterval(() => {
+      getDatabaseInfo();
+    }, 1000);
   }
+};
 
-  state.batchIndexing = true;
-  const files = database.value.files || {};
-  const pendingFiles = selectedRowKeys.value
-    .filter(key => files[key]?.status === 'pending_indexing');
+// 停止自动刷新
+const stopAutoRefresh = () => {
+  if (state.refreshInterval) {
+    clearInterval(state.refreshInterval);
+    state.refreshInterval = null;
+  }
+};
 
-  try {
-    const promises = pendingFiles.map(fileId =>
-      knowledgeBaseApi.indexFile({
-        db_id: databaseId.value,
-        file_id: fileId
-      })
-    );
-
-    const results = await Promise.allSettled(promises);
-
-    const succeeded = results.filter(r => r.status === 'fulfilled' && r.value.status === 'success').length;
-    const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status !== 'success')).length;
-
-    if (succeeded > 0) {
-      message.success(`成功提交 ${succeeded} 个文件进行索引`);
-    }
-    if (failed > 0) {
-      message.error(`${failed} 个文件提交索引失败`);
-    }
-
-    selectedRowKeys.value = []; // 清空选择
-    getDatabaseInfo(); // 刷新列表状态
-  } catch (error) {
-    console.error('批量索引出错:', error);
-    message.error('批量索引过程中发生错误');
-  } finally {
-    state.batchIndexing = false;
+// 切换自动刷新状态
+const toggleAutoRefresh = (checked) => {
+  if (checked) {
+    startAutoRefresh();
+  } else {
+    stopAutoRefresh();
   }
 };
 
@@ -1245,24 +1125,21 @@ const handleBatchIndex = async () => {
     margin-bottom: 20px;
 
     textarea {
+      height: 48px;
       padding: 12px 16px;
-      border: 1px solid var(--main-light-2);
+      border: 2px solid var(--main-300);
+      border-radius: 8px;
+      box-shadow: 1px 1px 1px 1px var(--main-light-3);
+
+      &:focus {
+        border-color: var(--main-color);
+        outline: none;
+      }
     }
 
     button.btn-query {
-      height: auto;
+      height: 48px;
       width: 100px;
-      box-shadow: none;
-      border: none;
-      font-weight: bold;
-      background: var(--main-light-3);
-      color: var(--main-color);
-
-      &:disabled {
-        cursor: not-allowed;
-        background: var(--main-light-4);
-        color: var(--gray-700);
-      }
     }
   }
 
@@ -1661,6 +1538,25 @@ const handleBatchIndex = async () => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.auto-refresh-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+
+  span {
+    color: var(--gray-700);
+    font-weight: 500;
+    font-size: 14px;
+  }
+
+  .ant-switch {
+    &.ant-switch-checked {
+      background-color: var(--main-color);
+    }
+  }
 }
 </style>
 

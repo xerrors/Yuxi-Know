@@ -150,33 +150,13 @@ export const knowledgeBaseApi = {
   },
 
   /**
-   * 将文件分块并保存文件记录以待索引
-   * @param {Object} data - 包含 db_id, files (路径列表), params (分块参数)
+   * 添加文件或URL到知识库
+   * @param {Object} data - 包含 db_id, items (文件路径或URL列表), params (包含 content_type 等参数)
    * @returns {Promise} - 处理结果
    */
-  fileToChunk: async (data) => { // data: { db_id, files, params }
+  addFiles: async (data) => { // data: { db_id, items, params }
     checkAdminPermission()
-    return apiPost('/api/data/file-to-chunk', data, {}, true)
-  },
-
-  /**
-   * 将URL分块并保存文件记录以待索引
-   * @param {Object} data - 包含 db_id, urls (链接列表), params (分块参数)
-   * @returns {Promise} - 处理结果
-   */
-  urlToChunk: async (data) => { // data: { db_id, urls, params }
-    checkAdminPermission()
-    return apiPost('/api/data/url-to-chunk', data, {}, true)
-  },
-
-  /**
-   * 触发指定文件的索引过程
-   * @param {Object} data - 包含 db_id, file_id
-   * @returns {Promise} - 索引启动结果
-   */
-  indexFile: async (data) => { // data: { db_id, file_id }
-    checkAdminPermission()
-    return apiPost('/api/data/index-file', data, {}, true)
+    return apiPost('/api/data/add-files', data, {}, true)
   },
 
   /**

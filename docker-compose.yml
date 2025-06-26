@@ -28,6 +28,8 @@ services:
       - app-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    env_file:
+      - src/.env
     environment:
       - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
@@ -36,11 +38,26 @@ services:
       - MINERU_OCR_URI=${MINERU_OCR_URI:-http://mineru:30000}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex-ocr:8080}
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
+      # PostgreSQL 配置
+      - POSTGRES_URI=postgresql://${POSTGRES_USER:-lightrag}:${POSTGRES_PASSWORD:-lightrag}@postgres-lightrag:5432/${POSTGRES_DATABASE:-lightrag}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres-lightrag}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-lightrag}
+      - POSTGRES_USER=${POSTGRES_USER:-lightrag}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lightrag}
       - MODEL_DIR=/models
       - RUNNING_IN_DOCKER=true
     command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5050/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     depends_on:
+      postgres:
+        condition: service_healthy
       milvus:
         condition: service_healthy
       minio:
@@ -67,6 +84,34 @@ services:
       - VITE_API_URL=http://api:5050
     command: pnpm run server
     restart: unless-stopped
+
+  # PostgreSQL 服务 - 基于官方推荐的 shangor/postgres-for-rag 镜像
+  # 提供 KV store, VectorDB (pgvector) 和 GraphDB (Apache AGE) 功能
+  postgres:
+    image: shangor/postgres-for-rag:v1.0
+    container_name: postgres-lightrag
+    environment:
+      - POSTGRES_DATABASE=${POSTGRES_DATABASE:-lightrag}
+      - POSTGRES_USER=${POSTGRES_USER:-lightrag}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lightrag}
+      - POSTGRES_HOST_AUTH_METHOD=md5
+      # 启用必要的扩展
+      - POSTGRES_INITDB_ARGS=--auth-host=md5
+    volumes:
+      - ./docker/volumes/postgres/data:/var/lib/postgresql/data
+      - ./docker/init-postgres.sh:/init-postgres.sh
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=${POSTGRES_PASSWORD:-lightrag} psql -h localhost -U ${POSTGRES_USER:-lightrag} -d ${POSTGRES_DATABASE:-lightrag} -c 'SELECT 1' || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: ["bash", "/init-postgres.sh"]
 
   graph:
     image: neo4j:5.26
