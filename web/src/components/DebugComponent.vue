@@ -10,9 +10,21 @@
           <template #icon><ClearOutlined /></template>
           清空
         </a-button>
-        <a-button @click="printConfig">
+        <a-button @click="printSystemConfig">
           <template #icon><SettingOutlined /></template>
-          打印配置
+          系统配置
+        </a-button>
+        <a-button @click="printUserInfo">
+          <template #icon><UserOutlined /></template>
+          用户信息
+        </a-button>
+        <a-button @click="printDatabaseInfo">
+          <template #icon><DatabaseOutlined /></template>
+          知识库信息
+        </a-button>
+        <a-button @click="printAgentConfig">
+          <template #icon><RobotOutlined /></template>
+          智能体配置
         </a-button>
         <a-button @click="toggleFullscreen">
           <template #icon>
@@ -24,6 +36,7 @@
         <a-tooltip :title="state.autoRefresh ? '点击停止自动刷新' : '点击开启自动刷新'">
           <a-button
             :type="state.autoRefresh ? 'primary' : 'default'"
+            :class="{ 'auto-refresh-button': state.autoRefresh }"
             @click="toggleAutoRefresh(!state.autoRefresh)"
           >
             <template #icon>
@@ -38,16 +51,31 @@
         <a-input-search
           v-model:value="state.searchText"
           placeholder="搜索日志..."
-          style="width: 200px"
+          style="width: 200px; height: 32px;"
           @search="onSearch"
         />
-        <a-select
-          v-model:value="state.selectedLevels"
-          mode="multiple"
-          placeholder="选择日志级别"
-          :options="logLevels"
-          @change="filterLogs"
-        />
+        <div class="log-level-selector">
+          <div class="multi-select-cards">
+            <div
+              v-for="level in logLevels"
+              :key="level.value"
+              class="option-card"
+              :class="{
+                'selected': isLogLevelSelected(level.value),
+                'unselected': !isLogLevelSelected(level.value)
+              }"
+              @click="toggleLogLevel(level.value)"
+            >
+              <div class="option-content">
+                <span class="option-text">{{ level.label }}</span>
+                <div class="option-indicator">
+                  <CheckCircleOutlined v-if="isLogLevelSelected(level.value)" />
+                  <PlusCircleOutlined v-else />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div ref="logContainer" class="log-container">
@@ -73,6 +101,7 @@
 import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed } from 'vue';
 import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user';
+import { useDatabaseStore } from '@/stores/database';
 import { useThrottleFn } from '@vueuse/core';
 import { message } from 'ant-design-vue';
 import {
@@ -81,13 +110,20 @@ import {
   ReloadOutlined,
   ClearOutlined,
   SettingOutlined,
-  SyncOutlined
+  SyncOutlined,
+  CheckCircleOutlined,
+  PlusCircleOutlined,
+  UserOutlined,
+  DatabaseOutlined,
+  RobotOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
-import { logApi } from '@/apis/admin_api';
+import { logApi, systemConfigApi } from '@/apis/admin_api';
+import { chatApi } from '@/apis/auth_api';
 
 const configStore = useConfigStore()
 const userStore = useUserStore();
+const databaseStore = useDatabaseStore();
 const config = configStore.config;
 
 // 权限检查
@@ -126,7 +162,8 @@ let autoRefreshInterval = null;
 
 // 解析日志行
 const parseLogLine = (line) => {
-  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) - (\w+) - ([^-]+) - (.+)$/);
+  // 支持两种时间戳格式：带毫秒和不带毫秒
+  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d{3})?)\s*-\s*(\w+)\s*-\s*([^-]+?)\s*-\s*(.+)$/);
   if (match) {
     return {
       timestamp: match[1],
@@ -142,8 +179,14 @@ const parseLogLine = (line) => {
 // 格式化时间戳
 const formatTimestamp = (timestamp) => {
   try {
-    // 将 "2025-03-10 08:26:37,269" 格式转换为 "2025-03-10 08:26:37.269"
-    const normalizedTimestamp = timestamp.replace(',', '.');
+    // 处理带毫秒的格式：将 "2025-03-10 08:26:37,269" 转换为 "2025-03-10 08:26:37.269"
+    let normalizedTimestamp = timestamp.replace(',', '.');
+
+    // 如果没有毫秒，添加 .000
+    if (!/\.\d{3}$/.test(normalizedTimestamp)) {
+      normalizedTimestamp += '.000';
+    }
+
     const date = dayjs(normalizedTimestamp);
     return date.isValid() ? date.format('HH:mm:ss.SSS') : timestamp;
   } catch (err) {
@@ -202,6 +245,24 @@ const onSearch = () => {
 // 过滤日志
 const filterLogs = () => {
   // 过滤会通过computed自动触发
+};
+
+// 日志级别选择相关方法
+const isLogLevelSelected = (level) => {
+  return state.selectedLevels.includes(level);
+};
+
+const toggleLogLevel = (level) => {
+  const currentLevels = [...state.selectedLevels];
+  const index = currentLevels.indexOf(level);
+
+  if (index > -1) {
+    currentLevels.splice(index, 1);
+  } else {
+    currentLevels.push(level);
+  }
+
+  state.selectedLevels = currentLevels;
 };
 
 // 自动刷新
@@ -285,16 +346,80 @@ onUnmounted(() => {
   document.removeEventListener('msfullscreenchange', handleFullscreenChange);
 });
 
-const printConfig = () => {
+// 打印系统配置
+const printSystemConfig = () => {
   if (!checkAdminPermission()) return;
-  console.log('Current config:', config);
+  console.log('=== 系统配置 ===');
+  console.log(config);
+};
+
+// 打印用户信息
+const printUserInfo = () => {
+  if (!checkAdminPermission()) return;
+  console.log('=== 用户信息 ===');
+  const userInfo = {
+    token: userStore.token ? '*** (已隐藏)' : null,
+    userId: userStore.userId,
+    username: userStore.username,
+    userRole: userStore.userRole,
+    isLoggedIn: userStore.isLoggedIn,
+    isAdmin: userStore.isAdmin,
+    isSuperAdmin: userStore.isSuperAdmin
+  };
+  console.log(JSON.stringify(userInfo, null, 2));
+};
+
+// 打印知识库信息
+const printDatabaseInfo = async () => {
+  if (!checkAdminPermission()) return;
+
+  try {
+    console.log('=== 知识库信息 ===');
+
+    // 直接调用API获取最新的数据库信息
+    await databaseStore.refreshDatabase();
+
+  } catch (error) {
+    console.error('获取知识库信息失败:', error);
+    message.error('获取知识库信息失败: ' + error.message);
+  }
+};
+
+// 打印智能体配置
+const printAgentConfig = async () => {
+  if (!checkAdminPermission()) return;
+
+  try {
+    console.log('=== 智能体配置 ===');
+
+    // 获取智能体列表
+    const agentsData = await chatApi.getAgents();
+    console.log('智能体列表:', JSON.stringify(agentsData.agents, null, 2));
+
+    // 获取默认智能体
+    const defaultAgent = await chatApi.getDefaultAgent();
+    console.log('默认智能体:', JSON.stringify(defaultAgent, null, 2));
+
+    // 获取每个智能体的配置
+    for (const agent of agentsData.agents) {
+      try {
+        const agentConfig = await systemConfigApi.getAgentConfig(agent.name);
+        console.log(`智能体 "${agent.name}" 配置:`, JSON.stringify(agentConfig, null, 2));
+      } catch (err) {
+        console.log(`智能体 "${agent.name}" 配置获取失败:`, err.message);
+      }
+    }
+
+  } catch (error) {
+    console.error('获取智能体配置失败:', error);
+    message.error('获取智能体配置失败: ' + error.message);
+  }
 };
 </script>
 
 <style scoped>
 .log-viewer {
   background: white;
-  height: 100%;
 }
 
 .log-viewer.fullscreen {
@@ -303,24 +428,68 @@ const printConfig = () => {
 
 .control-panel {
   margin-bottom: 16px;
+  padding: 16px;
+  background: var(--gray-50);
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
 }
 
 .button-group {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+
+  .ant-btn {
+    min-width: 80px;
+    height: 32px;
+    padding: 4px 12px;
+    font-size: 13px;
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+
+    &:hover {
+      border-color: var(--main-color);
+      color: var(--main-color);
+    }
+
+    &.ant-btn-primary {
+      background-color: var(--main-color);
+      border-color: var(--main-color);
+
+      &:hover {
+        background-color: var(--main-600);
+        border-color: var(--main-600);
+      }
+    }
+
+    .anticon {
+      font-size: 14px;
+    }
+  }
 
   .refresh-interval {
     font-size: 12px;
     opacity: 0.8;
     margin-left: 2px;
   }
+
+  .auto-refresh-button {
+    color:white;
+  }
 }
 
 .filter-group {
   display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  height: 32px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 .error {
@@ -328,7 +497,7 @@ const printConfig = () => {
 }
 
 .log-container {
-  height: calc(100vh - 200px);
+  height: calc(80vh - 200px);
   overflow-y: auto;
   background: #0C0C0C;
   color: #D1D1D1;
@@ -402,15 +571,95 @@ const printConfig = () => {
 }
 
 :fullscreen .log-container {
-  height: calc(100vh - 120px);
+  height: calc(100vh - 160PX);
 }
 
 :-webkit-full-screen .log-container {
-  height: calc(100vh - 120px);
+  height: calc(100vh - 160PX);
 }
 
 :-ms-fullscreen .log-container {
-  height: calc(100vh - 120px);
+  height: calc(100vh - 160PX);
+}
+
+
+.multi-select-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+
+  .option-card {
+    border: 1px solid var(--gray-300);
+    border-radius: 6px;
+    padding: 0px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--gray-0);
+    user-select: none;
+    height: 32px;
+    display: flex;
+    align-items: center;
+
+    &:hover {
+      border-color: var(--main-color);
+      background: var(--main-5);
+    }
+
+    &.selected {
+      border-color: var(--main-color);
+      background: var(--main-10);
+
+      .option-indicator {
+        color: var(--main-color);
+      }
+
+      .option-text {
+        color: var(--main-color);
+        font-weight: 500;
+      }
+    }
+
+    &.unselected {
+      .option-indicator {
+        color: var(--gray-400);
+      }
+
+      .option-text {
+        color: var(--gray-700);
+      }
+    }
+
+    .option-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .option-text {
+      flex: 1;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .option-indicator {
+      flex-shrink: 0;
+      font-size: 14px;
+      transition: color 0.2s ease;
+    }
+  }
+}
+
+/* 响应式适配 */
+@media (max-width: 768px) {
+  .log-level-selector {
+    min-width: 280px;
+  }
+
+  .multi-select-cards .options-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 </style>

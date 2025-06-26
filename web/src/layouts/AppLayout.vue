@@ -1,18 +1,18 @@
 <script setup>
-import { ref, reactive, KeepAlive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, useTemplateRef, shallowRef } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
-  BugOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, MessageSquareMore, Settings } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings } from 'lucide-vue-next';
+import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
-import DebugComponent from '@/components/DebugComponent.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
+import DebugComponent from '@/components/DebugComponent.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
@@ -109,28 +109,6 @@ const mainList = [{
 
 <template>
   <div class="app-layout" :class="{ 'use-top-bar': layoutSettings.useTopBar }">
-    <div class="debug-panel" >
-      <a-float-button
-        @click="layoutSettings.showDebug = !layoutSettings.showDebug"
-        tooltip="调试面板"
-        :style="{
-          right: '12px',
-        }"
-      >
-        <template #icon>
-          <BugOutlined />
-        </template>
-      </a-float-button>
-      <a-drawer
-        v-model:open="layoutSettings.showDebug"
-        title="调试面板"
-        width="800"
-        :contentWrapperStyle="{ maxWidth: '100%'}"
-        placement="right"
-      >
-        <DebugComponent />
-      </a-drawer>
-    </div>
     <div class="header" :class="{ 'top-bar': layoutSettings.useTopBar }">
       <div class="logo circle">
         <router-link to="/">
@@ -159,7 +137,10 @@ const mainList = [{
           </div>
         </a-tooltip>
       </div>
-      <div class="fill" style="flex-grow: 1;"></div>
+      <div
+        ref="htmlRefHook"
+        class="fill debug-trigger"
+      ></div>
 
 
       <div class="github nav-item">
@@ -208,6 +189,20 @@ const mainList = [{
       </keep-alive>
       <component :is="Component" v-else />
     </router-view>
+
+    <!-- Debug Modal -->
+    <a-modal
+      v-model:open="showDebugModal"
+      title="调试面板"
+      width="90%"
+      :footer="null"
+      @cancel="handleDebugModalClose"
+      :maskClosable="true"
+      :destroyOnClose="true"
+      class="debug-modal"
+    >
+      <DebugComponent />
+    </a-modal>
   </div>
 </template>
 
@@ -260,6 +255,25 @@ div.header, #app-router-view {
   height: 100%;
   width: var(--header-width);
   border-right: 1px solid var(--gray-300);
+
+  .nav {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    // height: 45px;
+    gap: 16px;
+  }
+
+  // 添加debug触发器样式
+  .debug-trigger {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    min-height: 20px;
+    flex-grow: 1;
+  }
 
   .logo {
     width: 40px;
@@ -373,15 +387,6 @@ div.header, #app-router-view {
   }
 }
 
-.header .nav {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: center;
-  position: relative;
-  height: 45px;
-  gap: 16px;
-}
 
 @media (max-width: 520px) {
   .app-layout {
