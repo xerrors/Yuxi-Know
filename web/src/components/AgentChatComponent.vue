@@ -37,6 +37,10 @@
           <slot name="header-center"></slot>
         </div>
         <div class="header__right">
+          <!-- 分享按钮 -->
+          <div class="nav-btn" @click="shareChat" v-if="currentChatId && currentAgent">
+            <ShareAltOutlined style="font-size: 18px;"/>
+          </div>
           <!-- <div class="nav-btn test-history" @click="getAgentHistory" v-if="currentChatId && currentAgent">
             <ThunderboltOutlined />
           </div> -->
@@ -121,11 +125,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, toRaw } from 'vue';
-import {
-  RobotOutlined, SendOutlined, LoadingOutlined,
-  ThunderboltOutlined, ReloadOutlined, CheckCircleOutlined,
-  PlusCircleOutlined
-} from '@ant-design/icons-vue';
+import { ShareAltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
@@ -398,6 +398,449 @@ const renameChat = async (data) => {
 const retryMessage = (msg) => {
   message.info("重试消息开发中");
   return
+};
+
+// 分享对话
+const shareChat = () => {
+  if (!currentChatId.value || !currentAgent.value) {
+    message.warning('请先选择对话');
+    return;
+  }
+
+  try {
+    // 生成HTML内容
+    const htmlContent = generateChatHTML();
+
+    // 创建下载链接
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    // 生成文件名
+    const chatTitle = currentChat.value?.title || '新对话';
+    const timestamp = new Date().toLocaleString('zh-CN').replace(/[:/\s]/g, '-');
+    const filename = `${chatTitle}-${timestamp}.html`;
+
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // 清理URL对象
+    URL.revokeObjectURL(url);
+
+    message.success('对话已导出为HTML文件');
+  } catch (error) {
+    console.error('导出对话失败:', error);
+    message.error('导出对话失败');
+  }
+};
+
+// 生成对话的HTML内容
+const generateChatHTML = () => {
+  const chatTitle = currentChat.value?.title || '新对话';
+  const agentName = currentAgent.value?.name || '智能助手';
+  const agentDescription = currentAgent.value?.description || '';
+  const exportTime = new Date().toLocaleString('zh-CN');
+
+  // 获取所有对话消息
+  const allMessages = [];
+
+  // 添加历史对话消息
+  convs.value.forEach(conv => {
+    conv.messages.forEach(msg => {
+      allMessages.push(msg);
+    });
+  });
+
+  // 添加当前进行中的对话消息
+  onGoingConv.messages.forEach(msg => {
+    allMessages.push(msg);
+  });
+
+  if (allMessages.length === 0) {
+    throw new Error('没有可导出的对话内容');
+  }
+
+  // 生成HTML内容
+  let messagesHTML = '';
+
+  allMessages.forEach((msg, index) => {
+    const isUser = msg.type === 'human';
+    const avatar = isUser ? '👤' : '🤖';
+    const senderName = isUser ? '用户' : agentName;
+    const messageClass = isUser ? 'user-message' : 'ai-message';
+
+    // 处理消息内容
+    let content = msg.content.trim() || '';
+
+    // 处理换行
+    content = content.replace(/\n/g, '<br>');
+
+    // 处理思考过程
+    let reasoningHTML = '';
+    if (!isUser && (msg.additional_kwargs?.reasoning_content || msg.reasoning_content)) {
+      const reasoningContent = (msg.additional_kwargs?.reasoning_content || msg.reasoning_content).trim().replace(/\n/g, '<br>');
+      reasoningHTML = `
+        <div class="reasoning-section">
+          <div class="reasoning-header">💭 思考过程</div>
+          <div class="reasoning-content">${reasoningContent}</div>
+        </div>
+      `;
+    }
+
+    // 处理工具调用
+    let toolCallsHTML = '';
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      toolCallsHTML = '<div class="tool-calls">';
+      msg.tool_calls.forEach(toolCall => {
+        console.log(toolCall)
+        const args = toolCall.function?.arguments ? JSON.parse(toolCall.function?.arguments) : toolCall?.args || '{}'
+        toolCallsHTML += `
+          <div class="tool-call">
+            <div class="tool-call-header">
+              <strong>🔧 ${toolCall.function?.name || '工具调用'}</strong>
+            </div>
+            <div class="tool-call-args">
+              <pre>${JSON.stringify(args, null, 2)}</pre>
+            </div>
+            ${toolCall.tool_call_result ? `
+              <div class="tool-call-result">
+                <div class="tool-result-header">执行结果:</div>
+                <div class="tool-result-content">${toolCall.tool_call_result.content || ''}</div>
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+      toolCallsHTML += '</div>';
+    }
+
+    messagesHTML += `
+      <div class="message ${messageClass}">
+        <div class="message-header">
+          <span class="avatar">${avatar}</span>
+          <span class="sender">${senderName}</span>
+          <span class="time">${new Date().toLocaleString('zh-CN')}</span>
+        </div>
+        <div class="message-content">
+          ${reasoningHTML}
+          ${content}
+          ${toolCallsHTML}
+        </div>
+      </div>
+    `;
+  });
+
+  // 完整的HTML模板
+  return `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${chatTitle} - 对话导出</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: white;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: #212529;
+            font-weight: 600;
+        }
+
+        .header .agent-info {
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 12px;
+        }
+
+        .header .export-info {
+            font-size: 12px;
+            color: #868e96;
+            padding-top: 12px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .messages {
+            padding: 32px 48px;
+            max-width: 100%;
+        }
+
+        .message {
+            margin-bottom: 32px;
+            max-width: 100%;
+        }
+
+        .message:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .avatar {
+            font-size: 16px;
+            margin-right: 8px;
+        }
+
+        .sender {
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        .time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .message-content {
+            padding: 16px 20px;
+            border-radius: 8px;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .user-message .message-content {
+            color: white;
+            background: #1C6586;
+            border: 1px solid #1C6586;
+            width: fit-content;
+        }
+
+        .ai-message .message-content {
+            background: white;
+            border: 1px solid #e9ecef;
+        }
+
+        .reasoning-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+
+        .reasoning-header {
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .reasoning-content {
+            font-size: 14px;
+            color: #6c757d;
+            font-style: italic;
+            line-height: 1.5;
+        }
+
+        .tool-calls {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .tool-call {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .tool-call:last-child {
+            margin-bottom: 0;
+        }
+
+        .tool-call-header {
+            font-size: 14px;
+            color: #f57f17;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .tool-call-args {
+            background: rgba(0,0,0,0.04);
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .tool-call-args pre {
+            font-size: 12px;
+            color: #666;
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        }
+
+        .tool-call-result {
+            background: #e8f5e8;
+            border: 1px solid #c8e6c9;
+            border-radius: 4px;
+            padding: 8px;
+            word-break: break-all;
+        }
+
+        .tool-result-header {
+            font-size: 12px;
+            color: #2e7d32;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .tool-result-content {
+            font-size: 13px;
+            color: #388e3c;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            text-align: center;
+            padding: 16px;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        @media (max-width: 768px) {
+            .messages {
+                padding: 24px 16px;
+            }
+
+            .header {
+                padding: 16px;
+            }
+
+            .user-message .message-content {
+                margin-left: 10%;
+            }
+
+            .ai-message .message-content {
+                margin-right: 10%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .user-message .message-content,
+            .ai-message .message-content {
+                margin-left: 0;
+                margin-right: 0;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+                max-width: 100%;
+            }
+
+            .header {
+                background: #f8f9fa !important;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .messages {
+                padding: 20px;
+            }
+
+            .user-message .message-content {
+                background: #e3f2fd !important;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .reasoning-section {
+                background: #f8f9fa !important;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .tool-call {
+                background: #fff8e1 !important;
+                -webkit-print-color-adjust: exact;
+            }
+
+            .tool-call-result {
+                background: #e8f5e8 !important;
+                -webkit-print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>${chatTitle}</h1>
+            <div class="agent-info">
+                智能体: ${agentName}
+                ${agentDescription ? ` | ${agentDescription}` : ''}
+            </div>
+            <div class="export-info">
+                导出时间: ${exportTime} | 共 ${allMessages.length} 条消息
+            </div>
+        </div>
+
+        <div class="messages">
+            ${messagesHTML}
+        </div>
+
+        <div class="footer">
+            本对话由 Yuxi-Know 智能对话系统导出 | <a href="#">了解更多</a>
+        </div>
+    </div>
+</body>
+</html>
+  `;
 };
 
 // 重置线程
