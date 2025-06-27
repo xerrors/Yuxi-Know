@@ -8,11 +8,11 @@
       </template>
     </HeaderComponent>
 
-    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="createDatabase" @cancel="cancelCreateDatabase">
+    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="createDatabase" @cancel="cancelCreateDatabase" class="new-database-modal">
       <h3>知识库名称<span style="color: var(--error-color)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" />
       <h3>嵌入模型</h3>
-      <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" />
+      <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" style="width: 100%;" />
       <h3 style="margin-top: 20px;">知识库描述</h3>
       <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
       <a-textarea
@@ -85,8 +85,8 @@ const state = reactive({
 })
 
 const embedModelOptions = computed(() => {
-  return Object.keys(configStore.config?.embed_model_info || {}).map(key => ({
-    label: configStore.config?.embed_model_info[key]?.name || key,
+  return Object.keys(configStore.config?.embed_model_names || {}).map(key => ({
+    label: `${key} (${configStore.config?.embed_model_names[key]?.dimension})`,
     value: key,
   }))
 })
@@ -94,7 +94,7 @@ const embedModelOptions = computed(() => {
 const emptyEmbedInfo = {
   name: '',
   description: '',
-  embed_model_name: '',
+  embed_model_name: configStore.config?.embed_model,
 }
 
 const newDatabase = reactive({
@@ -269,5 +269,11 @@ onMounted(() => {
 
 .database-container {
   padding: 0;
+}
+
+.new-database-modal {
+  h3 {
+    margin-top: 10px;
+  }
 }
 </style>

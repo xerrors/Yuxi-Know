@@ -25,7 +25,7 @@ def sigmoid(x):
 class OnlineRerank:
     def __init__(self, **kwargs):
         model_info = config.reranker_names[config.reranker]
-        self.url = get_docker_safe_url(model_info["url"])
+        self.url = get_docker_safe_url(model_info["base_url"])
         self.model = model_info["name"]
 
         api_key = os.getenv(model_info["api_key"], model_info["api_key"])

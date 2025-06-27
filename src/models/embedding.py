@@ -133,7 +133,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
     def __init__(self) -> None:
         self.info = config.embed_model_names[config.embed_model]
         self.model = self.info["name"]
-        self.url = self.info.get("url", "http://localhost:11434/api/embed")
+        self.url = self.info.get("base_url", "http://localhost:11434/api/embed")
         self.url = get_docker_safe_url(self.url)
         self.dimension = self.info.get("dimension", None)
         self.embed_model_fullname = config.embed_model
@@ -160,7 +160,7 @@ class OtherEmbedding(BaseEmbeddingModel):
         self.dimension = self.info.get("dimension", None)
         self.model = self.info["name"]
         self.api_key = os.getenv(self.info["api_key"], self.info["api_key"])
-        self.url = get_docker_safe_url(self.info["url"])
+        self.url = get_docker_safe_url(self.info["base_url"])
         assert self.url and self.model, f"URL and model are required. Cur embed model: {config.embed_model}"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",

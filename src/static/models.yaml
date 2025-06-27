@@ -111,44 +111,36 @@ MODEL_NAMES:
 
 
 EMBED_MODEL_INFO:
-  zhipu/zhipu-embedding-2:
-    name: embedding-2
-    dimension: 1024
-
-  zhipu/zhipu-embedding-3:
-    name: embedding-3
-    dimension: 2048
-
   siliconflow/BAAI/bge-m3:
     name: BAAI/bge-m3
     dimension: 1024
-    url: https://api.siliconflow.cn/v1/embeddings
+    base_url: https://api.siliconflow.cn/v1/embeddings
     api_key: SILICONFLOW_API_KEY
 
   vllm/Qwen/Qwen3-Embedding-0.6B:
     name: Qwen3-Embedding-0.6B
     dimension: 1024
-    url: http://localhost:8081/v1/embeddings
+    base_url: http://localhost:8081/v1/embeddings
     api_key: no_api_key
 
   ollama/nomic-embed-text:
     name: nomic-embed-text
-    url: http://localhost:11434/api/embed
+    base_url: http://localhost:11434/api/embed
     dimension: 768
 
   ollama/bge-m3:
     name: bge-m3
-    url: http://localhost:11434/api/embed
+    base_url: http://localhost:11434/api/embed
     dimension: 1024
 
 RERANKER_LIST:
 
   siliconflow/BAAI/bge-reranker-v2-m3:
     name: BAAI/bge-reranker-v2-m3
-    url: https://api.siliconflow.cn/v1/rerank
+    base_url: https://api.siliconflow.cn/v1/rerank
     api_key: SILICONFLOW_API_KEY
 
   vllm/Qwen/Qwen3-Reranker-0.6B:
     name: Qwen/Qwen3-Reranker-0.6B
-    url: http://localhost:8081/v1/rerank
+    base_url: http://localhost:8081/v1/rerank
     api_key: no_api_key

@@ -29,7 +29,7 @@ async def create_database(
 ):
     logger.debug(f"Create database {database_name}")
     try:
-        embed_info = config.embed_model_info[embed_model_name]
+        embed_info = config.embed_model_names[embed_model_name]
         database_info = knowledge_base.create_database(
             database_name,
             description,

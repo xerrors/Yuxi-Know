@@ -76,6 +76,11 @@ class LightRagBasedKB:
         if db_id not in self.databases_meta:
             return None
 
+        llm_info = self.databases_meta[db_id].get("llm_info", {})
+        embed_info = self.databases_meta[db_id].get("embed_info", {})
+        logger.info(f"LLM info: {llm_info}")
+        logger.info(f"Embed info: {embed_info}")
+
         # 创建 LightRAG 实例
         working_dir = os.path.join(self.work_dir, db_id)
         os.makedirs(working_dir, exist_ok=True)
@@ -84,8 +89,8 @@ class LightRagBasedKB:
             # 使用配置的 LLM 和 embedding 函数
             rag = LightRAG(
                 working_dir=working_dir,
-                llm_model_func=self._get_llm_func(),
-                embedding_func=self._get_embedding_func(),
+                llm_model_func=self._get_llm_func(llm_info),
+                embedding_func=self._get_embedding_func(embed_info),
                 vector_storage="MilvusVectorDBStorage",
                 kv_storage="JsonKVStorage",
                 graph_storage="PGGraphStorage",
@@ -110,30 +115,40 @@ class LightRagBasedKB:
         await rag.initialize_storages()
         await initialize_pipeline_status()
 
-    def _get_llm_func(self):
+    def _get_llm_func(self, llm_info: dict):
         """获取 LLM 函数"""
+        llm_info = llm_info | {
+            "model_name": "qwen3-1.7b",
+            "provider": "dashscope"
+        }
+        provider_info = config.model_names[llm_info.get("provider")]
+        api_key = os.getenv(provider_info.get("env")[0] or "OPENAI_API_KEY") or "no_api_key"
+        base_url = get_docker_safe_url(provider_info.get("base_url", "http://localhost:8081/v1"))
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return await openai_complete_if_cache(
-                "qwen3:32b",
+                llm_info.get("model_name"),
                 prompt,
                 system_prompt=system_prompt,
                 history_messages=history_messages,
-                api_key="no_api_key",
-                base_url="http://172.19.13.7:8080/v1",
+                api_key=api_key,
+                base_url=base_url,
+                extra_body={"enable_thinking": False},
                 **kwargs,
             )
         return llm_model_func
 
-    def _get_embedding_func(self):
+    def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
+        api_key = os.getenv(embed_info.get("api_key", "OPENAI_API_KEY")) or "no_api_key"
+        base_url = embed_info.get("base_url", "http://localhost:8081/v1").replace("/embeddings", "")
         return EmbeddingFunc(
-            embedding_dim=1024,
+            embedding_dim=embed_info.get("dimension") or 1024,
             max_token_size=4096,
             func=lambda texts: openai_embed(
                 texts=texts,
-                model="Qwen3-Embedding-0.6B",
-                api_key="no_api_key",
-                base_url=get_docker_safe_url("http://localhost:8081/v1")
+                model=embed_info.get("model_name") or "Qwen3-Embedding-0.6B",
+                api_key=api_key,
+                base_url=get_docker_safe_url(base_url)
             ),
         )
 
@@ -248,6 +263,7 @@ class LightRagBasedKB:
 
     def delete_database(self, db_id):
         """删除数据库 - data_router.py 使用"""
+        # TODO 删除数据库时，需要删除文件记录，并删除 LightRAG 中的文件
         if db_id in self.databases_meta:
             # 删除相关文件记录
             files_to_delete = [fid for fid, finfo in self.files_meta.items()
@@ -377,6 +393,7 @@ class LightRagBasedKB:
 
     async def delete_file(self, db_id, file_id):
         """删除文件 - data_router.py 使用"""
+        # TODO 删除文件时，需要删除文件记录，并删除 LightRAG 中的文件
         rag = await self._get_lightrag_instance(db_id)
         if rag:
             try:
