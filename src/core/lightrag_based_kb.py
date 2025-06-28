@@ -10,13 +10,16 @@ from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
-from lightrag.utils import EmbeddingFunc
+from lightrag.utils import EmbeddingFunc, setup_logger
 from lightrag.kg.shared_storage import initialize_pipeline_status
 
 from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
 from src.plugins import ocr
 
+work_dir = os.path.join(config.save_dir, "lightrag_data")
+log_dir = os.path.join(work_dir, "logs", "lightrag")
+setup_logger("lightrag", log_file_path=os.path.join(log_dir, f"lightrag_{datetime.now().strftime('%Y-%m-%d')}.log"))
 
 class LightRagBasedKB:
     """基于 LightRAG 的知识库管理类"""
@@ -167,43 +170,35 @@ class LightRagBasedKB:
             # 直接读取文本文件
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            return f"Using f.read() to process {file_path.name}\n\n{content}"
+            return f"# {file_path.name}\n\n{content}"
 
         elif file_ext in ['.doc', '.docx']:
             # 处理 Word 文档
-            try:
-                from docx import Document
-                doc = Document(file_path)
-                text = '\n'.join([para.text for para in doc.paragraphs])
-                return f"Using python-docx to process {file_path.name}\n\n{text}"
-            except ImportError:
-                logger.warning("python-docx not installed, cannot process .docx files")
-                return f"# {file_path.name}\n\n[Cannot process .docx file - python-docx not installed]"
+            from docx import Document
+            doc = Document(file_path)
+            text = '\n'.join([para.text for para in doc.paragraphs])
+            return f"# {file_path.name}\n\n{text}"
 
         elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp']:
             # 使用 OCR 处理图片
             text = ocr.process_image(str(file_path))
-            return f"Using OCR to process {file_path.name}\n\n{text}"
+            return f"# {file_path.name}\n\n{text}"
 
         else:
             # 尝试作为文本文件读取
             import textract
             text = textract.process(file_path)
-            return f"Using textract to process {file_path.name}\n\n{text}"
+            return f"# {file_path.name}\n\n{text}"
 
     async def _process_url_to_markdown(self, url: str, params=None) -> str:
         """将 URL 转换为 markdown 格式"""
-        try:
-            import requests
-            from bs4 import BeautifulSoup
+        import requests
+        from bs4 import BeautifulSoup
 
-            response = requests.get(url, timeout=30)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            text_content = soup.get_text()
-            return f"# {url}\n\n{text_content}"
-        except Exception as e:
-            logger.warning(f"Failed to scrape URL {url}: {e}")
-            return f"# {url}\n\n[Failed to scrape URL: {str(e)}]"
+        response = requests.get(url, timeout=30)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        text_content = soup.get_text()
+        return f"# {url}\n\n{text_content}"
 
     # =============================================================================
     # data_router.py 中使用的核心方法

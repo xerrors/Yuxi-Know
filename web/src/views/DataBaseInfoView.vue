@@ -1181,6 +1181,9 @@ const toggleAutoRefresh = (checked) => {
     display: flex;
     flex-direction: column;
     border-radius: 12px;
+    word-break: break-all;
+    word-break: break-word; /* 非标准，但某些浏览器支持 */
+    overflow-wrap: break-word; /* 标准写法 */
     gap: 20px;
 
     .results-overview {

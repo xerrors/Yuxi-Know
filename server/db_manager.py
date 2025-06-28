@@ -15,7 +15,7 @@ class DBManager:
     """数据库管理器 - 只提供基础的数据库连接和会话管理"""
 
     def __init__(self):
-        self.db_path = os.path.join(config.save_dir, "data", "server.db")
+        self.db_path = os.path.join(config.save_dir, "database", "server.db")
         self.ensure_db_dir()
 
         # 创建SQLAlchemy引擎

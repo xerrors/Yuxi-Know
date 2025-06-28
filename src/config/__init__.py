@@ -39,7 +39,7 @@ class Config(SimpleConfig):
     def __init__(self):
         super().__init__()
         self._config_items = {}
-        self.save_dir = "saves"
+        self.save_dir = os.getenv('SAVE_DIR', 'saves')
         self.filename = str(Path(f"{self.save_dir}/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 

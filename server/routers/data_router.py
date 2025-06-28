@@ -132,7 +132,7 @@ async def upload_file(
     if db_id:
         upload_dir = knowledge_base.get_db_upload_path(db_id)
     else:
-        upload_dir = os.path.join(config.save_dir, "data", "uploads")
+        upload_dir = os.path.join(config.save_dir, "database", "uploads")
 
     basename, ext = os.path.splitext(file.filename)
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()

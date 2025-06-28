@@ -5,12 +5,13 @@ import pytz
 
 from loguru import logger as loguru_logger
 
-DATETIME = datetime.now(pytz.timezone('Asia/Shanghai')).strftime('%Y-%m-%d-%H%M%S')
-# DATETIME = "debug" # 为了方便，调试的时候输出到 debug.log 文件
-LOG_FILE = f'tmp/logs/project-{DATETIME}.log'
+SAVE_DIR = os.getenv('SAVE_DIR', 'saves')
+DATETIME = datetime.now(pytz.timezone('Asia/Shanghai')).strftime('%Y-%m-%d')
+LOG_FILE = f'{SAVE_DIR}/logs/yuxi-{DATETIME}.log'
+
 def setup_logger(name, level="DEBUG", console=True):
     """使用 loguru 设置日志记录器"""
-    os.makedirs("tmp/logs", exist_ok=True)
+    os.makedirs(f"{SAVE_DIR}/logs", exist_ok=True)  # 创建日志目录
 
     # 移除默认的 handler
     loguru_logger.remove()
@@ -31,7 +32,7 @@ def setup_logger(name, level="DEBUG", console=True):
         loguru_logger.add(
             lambda msg: print(msg, end=""),
             level=level,
-            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> - <level>{level}</level> - <cyan>{name}</cyan> - <level>{message}</level>",
+            format="<green>{time:MM-DD HH:mm:ss}</green> <level>{level}</level> <cyan>{name}</cyan>: <level>{message}</level>",
             colorize=True
         )
 
