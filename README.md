@@ -37,6 +37,12 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 ## 🚀 快速开始
 
+> 建议 clone stable 版本的代码
+
+```bash
+git clone -b stable https://github.com/xerrors/Yuxi-Know.git
+```
+
 ### 环境配置
 
 在启动前，您需要提供 API 服务商的 API_KEY，并放置在 `src/.env` 文件中（此文件项目中没有，需要自行参考 [src/.env.template](src/.env.template) 创建）。更多可配置项，可参考下方**对话模型**部分。
