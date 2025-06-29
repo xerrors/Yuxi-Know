@@ -26,19 +26,6 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
-      path: '/chat',
-      name: 'chat',
-      component: AppLayout,
-      children: [
-        {
-          path: '',
-          name: 'ChatComp',
-          component: () => import('../views/ChatView.vue'),
-          meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
-        }
-      ]
-    },
-    {
       path: '/agent',
       name: 'AgentMain',
       component: AppLayout,

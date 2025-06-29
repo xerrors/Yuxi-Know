@@ -2,6 +2,8 @@ import json
 import re
 from collections.abc import Callable
 from typing import Annotated, Any
+import asyncio
+import logging
 
 from langchain_tavily import TavilySearch
 from langchain_core.tools import BaseTool, StructuredTool, tool
@@ -81,16 +83,33 @@ def get_all_tools():
 
     # 获取所有知识库
     for db_Id, retrieve_info in knowledge_base.get_retrievers().items():
-        name = f"retrieve_{db_Id}" # Deepseek does not support non-alphanumeric characters in tool names
+        name = f"retrieve_{db_Id[:8]}" # Deepseek does not support non-alphanumeric characters in tool names
         description = (
             f"使用 {retrieve_info['name']} 知识库进行检索。\n"
             f"下面是这个知识库的描述：\n{retrieve_info['description']}"
         )
+
+        # 创建异步工具，确保正确处理异步检索器
+        async def async_retriever_wrapper(query_text: str, db_id=db_Id):
+            """异步检索器包装函数"""
+            retriever = retrieve_info["retriever"]
+            try:
+                if asyncio.iscoroutinefunction(retriever):
+                    result = await retriever(query_text)
+                else:
+                    result = retriever(query_text)
+                return result
+            except Exception as e:
+                logger.error(f"Error in retriever {db_id}: {e}")
+                return f"检索失败: {str(e)}"
+
+        # 使用 StructuredTool.from_function 创建异步工具
         tools[name] = StructuredTool.from_function(
-            retrieve_info["retriever"],
+            coroutine=async_retriever_wrapper,  # 指定为协程
             name=name,
             description=description,
-            args_schema=KnowledgeRetrieverModel)
+            args_schema=KnowledgeRetrieverModel
+        )
 
     return tools
 

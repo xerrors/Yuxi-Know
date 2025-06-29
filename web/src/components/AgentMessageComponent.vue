@@ -33,12 +33,12 @@
           <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
             <div class="tool-header" @click="toggleToolCall(toolCall.id)">
               <span v-if="!toolCall.tool_call_result">
-                <LoadingOutlined /> &nbsp;
+                <span><Loader size="16" class="tool-loader rotate" /></span> &nbsp;
                 <span>正在调用工具: </span>
                 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span>
               </span>
               <span v-else>
-                <ThunderboltOutlined /> &nbsp; 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
+                <span><CircleCheckBig size="16" class="tool-loader" /></span> &nbsp; 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
@@ -83,6 +83,7 @@
 import { computed, ref } from 'vue';
 import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import RefsComponent from '@/components/RefsComponent.vue'
+import { Loader, CircleCheckBig } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
 
 
@@ -343,6 +344,7 @@ const toggleToolCall = (toolCallId) => {
       user-select: none;
       position: relative;
       transition: all 0.2s ease;
+      align-items: center;
 
       &:hover {
         background-color: var(--gray-150);
@@ -358,14 +360,19 @@ const toggleToolCall = (toolCallId) => {
         color: var(--main-700);
       }
 
-      .step-badge {
-        margin-left: auto;
-        background-color: var(--gray-200);
-        color: var(--gray-700);
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 500;
+      span {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .tool-loader {
+        margin-top: 2px;
+        color: var(--main-700);
+      }
+
+      .tool-loader.rotate {
+        animation: rotate 2s linear infinite;
       }
     }
 
@@ -469,6 +476,15 @@ const toggleToolCall = (toolCallId) => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

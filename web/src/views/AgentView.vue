@@ -58,7 +58,7 @@
       <!-- 左侧智能体列表侧边栏 -->
       <div class="sidebar" :class="{ 'is-open': state.agentSiderbarConfigOpen }">
         <div class="agent-info">
-          <h3 @click="toggleDebugMode">描述</h3>
+          <h3>详细配置信<span @click="toggleDebugMode">息</span></h3>
           <p>{{ selectedAgent.description }}</p>
           <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
 
@@ -115,7 +115,7 @@
                   >
                     <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
                   </a-select>
-                                    <!-- 多选标签卡片 -->
+                  <!-- 多选标签卡片 -->
                   <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
                     <div class="multi-select-label">
                       <span>已选择 {{ getSelectedCount(key) }} 项</span>
@@ -210,7 +210,7 @@ const agents = ref({});
 const selectedAgentId = ref(null);
 const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
-  agentSiderbarConfigOpen: true,
+  agentSiderbarConfigOpen: false,
   debug_mode: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||

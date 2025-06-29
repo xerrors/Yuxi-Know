@@ -1,16 +1,18 @@
 <template>
-  <div class="database-container layout-container" v-if="configStore.config.enable_knowledge_base">
+  <div class="database-container layout-container">
     <HeaderComponent title="文档知识库" :loading="state.loading">
       <template #actions>
-        <a-button type="primary" @click="newDatabase.open=true">
+        <a-button type="primary" @click="state.openNewDatabaseModel=true">
           新建知识库
         </a-button>
       </template>
     </HeaderComponent>
 
-    <a-modal :open="newDatabase.open" title="新建知识库" @ok="createDatabase" @cancel="newDatabase.open=false">
+    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="createDatabase" @cancel="cancelCreateDatabase" class="new-database-modal">
       <h3>知识库名称<span style="color: var(--error-color)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" />
+      <h3>嵌入模型</h3>
+      <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" style="width: 100%;" />
       <h3 style="margin-top: 20px;">知识库描述</h3>
       <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
       <a-textarea
@@ -22,12 +24,12 @@
       <p>必须与向量模型 {{ configStore.config.embed_model }} 一致</p>
       <a-input v-model:value="newDatabase.dimension" placeholder="向量维度 (e.g. 768, 1024)" /> -->
       <template #footer>
-        <a-button key="back" @click="newDatabase.open=false">取消</a-button>
-        <a-button key="submit" type="primary" :loading="newDatabase.loading" @click="createDatabase">创建</a-button>
+        <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
+        <a-button key="submit" type="primary" :loading="state.creating" @click="createDatabase">创建</a-button>
       </template>
     </a-modal>
     <div class="databases">
-      <div class="new-database dbcard" @click="newDatabase.open=true">
+      <div class="new-database dbcard" @click="state.openNewDatabaseModel=true">
         <div class="top">
           <div class="icon"><BookPlus /></div>
           <div class="info">
@@ -52,54 +54,51 @@
           <p class="description">{{ database.description || '暂无描述' }}</p>
         </a-tooltip>
         <div class="tags">
-          <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
-          <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
+          <a-tag color="blue" v-if="database.embed_info?.name">{{ database.embed_info.name }}</a-tag>
+          <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag>
         </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
   </div>
-  <div class="database-empty" v-else>
-    <a-empty>
-      <template #description>
-        <span>
-          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面配置知识库。
-        </span>
-      </template>
-    </a-empty>
-  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch, h } from 'vue'
+import { ref, onMounted, reactive, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
-import { message, Button } from 'ant-design-vue'
-import { ReadFilled, PlusOutlined, AppstoreFilled, LoadingOutlined } from '@ant-design/icons-vue'
-import { BookPlus } from 'lucide-vue-next';
 import { useConfigStore } from '@/stores/config';
-import { useUserStore } from '@/stores/user';
-import HeaderComponent from '@/components/HeaderComponent.vue';
+import { message } from 'ant-design-vue'
+import { ReadFilled } from '@ant-design/icons-vue'
+import { BookPlus } from 'lucide-vue-next';
 import { knowledgeBaseApi } from '@/apis/admin_api';
+import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const route = useRoute()
 const router = useRouter()
 const databases = ref([])
-const graph = ref(null)
-const graphloading = ref(false)
-const userStore = useUserStore()
-
-const indicator = h(LoadingOutlined, {spin: true});
 const configStore = useConfigStore()
 
 const state = reactive({
   loading: false,
+  creating: false,
+  openNewDatabaseModel: false,
 })
 
-const newDatabase = reactive({
+const embedModelOptions = computed(() => {
+  return Object.keys(configStore.config?.embed_model_names || {}).map(key => ({
+    label: `${key} (${configStore.config?.embed_model_names[key]?.dimension})`,
+    value: key,
+  }))
+})
+
+const emptyEmbedInfo = {
   name: '',
   description: '',
-  dimension: '',
-  loading: false,
+  embed_model_name: configStore.config?.embed_model,
+}
+
+const newDatabase = reactive({
+  ...emptyEmbedInfo,
 })
 
 const loadDatabases = () => {
@@ -120,44 +119,47 @@ const loadDatabases = () => {
     })
 }
 
+const resetNewDatabase = () => {
+  Object.assign(newDatabase, { ...emptyEmbedInfo })
+}
+
+const cancelCreateDatabase = () => {
+  state.openNewDatabaseModel = false
+}
+
 const createDatabase = () => {
-  newDatabase.loading = true
-  console.log(newDatabase)
-  if (!newDatabase.name) {
+  if (!newDatabase.name?.trim()) {
     message.error('数据库名称不能为空')
-    newDatabase.loading = false
     return
   }
 
-  knowledgeBaseApi.createDatabase({
-      database_name: newDatabase.name,
-      description: newDatabase.description,
-      dimension: newDatabase.dimension ? parseInt(newDatabase.dimension) : null,
+  state.creating = true
+
+  const requestData = {
+    database_name: newDatabase.name.trim(),
+    description: newDatabase.description?.trim() || '',
+    embed_model_name: newDatabase.embed_model_name || configStore.config.embed_model,
+  }
+
+  knowledgeBaseApi.createDatabase(requestData)
+    .then(data => {
+      console.log('创建成功:', data)
+      loadDatabases()
+      resetNewDatabase()
+      message.success('创建成功')
     })
-  .then(data => {
-    console.log(data)
-    loadDatabases()
-    newDatabase.open = false
-    newDatabase.name = ''
-    newDatabase.description = '',
-    newDatabase.dimension = ''
-    message.success('创建成功')
-  })
-  .catch(error => {
-    console.error('创建数据库失败:', error)
-    message.error(error.message || '创建失败')
-  })
-  .finally(() => {
-    newDatabase.loading = false
-  })
+    .catch(error => {
+      console.error('创建数据库失败:', error)
+      message.error(error.message || '创建失败')
+    })
+    .finally(() => {
+      state.creating = false
+      state.openNewDatabaseModel = false
+    })
 }
 
 const navigateToDatabase = (databaseId) => {
   router.push({ path: `/database/${databaseId}` });
-};
-
-const navigateToGraph = () => {
-  router.push({ path: `/database/graph` });
 };
 
 watch(() => route.path, (newPath, oldPath) => {
@@ -248,17 +250,13 @@ onMounted(() => {
     color: var(--gray-900);
     overflow: hidden;
     display: -webkit-box;
+    line-clamp: 1;
     -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
     margin-bottom: 10px;
   }
 }
-
-// 整个卡片是模糊的
-// .graphloading {
-//   filter: blur(2px);
-// }
 
 .database-empty {
   display: flex;
@@ -271,5 +269,11 @@ onMounted(() => {
 
 .database-container {
   padding: 0;
+}
+
+.new-database-modal {
+  h3 {
+    margin-top: 10px;
+  }
 }
 </style>

@@ -45,8 +45,8 @@ class ChatbotAgent(BaseAgent):
             logger.info(f"使用工具: {tool_names}")
             return [platform_tools[tool] for tool in tool_names]
 
-    def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
-        """调用 llm 模型"""
+    async def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
+        """调用 llm 模型 - 异步版本以支持异步工具"""
         conf = self.config_schema.from_runnable_config(config, agent_name=self.name)
 
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
@@ -55,7 +55,8 @@ class ChatbotAgent(BaseAgent):
         if tools := self._get_tools(conf.tools):
             model = model.bind_tools(tools)
 
-        res = model.invoke(
+        # 使用异步调用
+        res = await model.ainvoke(
             [{"role": "system", "content": system_prompt}, *state["messages"]]
         )
         return {"messages": [res]}

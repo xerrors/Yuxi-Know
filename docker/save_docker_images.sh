@@ -36,4 +36,5 @@ FILE_SIZE=$(du -h $OUTPUT_FILE | cut -f1)
 
 echo "完成！"
 echo "所有 Docker 镜像已保存到: $OUTPUT_FILE"
-echo "文件大小: $FILE_SIZE" 
+echo "文件大小: $FILE_SIZE"
+echo "使用命令: docker load -i $OUTPUT_FILE 加载镜像"

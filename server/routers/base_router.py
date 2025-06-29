@@ -4,7 +4,7 @@ from pathlib import Path
 from fastapi import Request, Body, Depends, HTTPException
 from fastapi import APIRouter
 
-from src import config, retriever, knowledge_base, graph_base
+from src import config, knowledge_base, graph_base
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
 from server.models.user_model import User
 from src.utils.logging_config import logger
@@ -20,18 +20,17 @@ def load_info_config():
 
         # 检查文件是否存在
         if not config_path.exists():
-            logger.warning(f"配置文件 {config_path} 不存在，使用默认配置")
+            logger.debug(f"The config file {config_path} does not exist, using default config")
             return get_default_info_config()
 
         # 读取配置文件
         with open(config_path, encoding='utf-8') as file:
             config = yaml.safe_load(file)
 
-        # logger.info(f"成功加载信息配置文件: {config_path}")
         return config
 
     except Exception as e:
-        logger.error(f"加载信息配置文件失败: {e}")
+        logger.error(f"Failed to load info config: {e}")
         return get_default_info_config()
 
 def get_default_info_config():
@@ -94,7 +93,6 @@ async def update_config_item(
 async def restart(current_user: User = Depends(get_superadmin_user)):
     knowledge_base.restart()
     graph_base.start()
-    retriever.restart()
     return {"message": "Restarted!"}
 
 @base.get("/log")

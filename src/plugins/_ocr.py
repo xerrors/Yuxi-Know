@@ -123,12 +123,6 @@ class OCRPlugin:
             raise FileNotFoundError(f"PDF file not found: {pdf_path}")
 
         try:
-            # 检查是否为文本PDF，可能会出现错误，比如每一页都有可读取的水印文字，但是内容本身是扫描件，需要使用OCR处理
-            # if is_text_pdf(pdf_path):
-            #     from src.core.indexing import pdfreader
-            #     logger.info("PDF file is text, use llama_index.readers.file to read")
-            #     return pdfreader(pdf_path)
-
             images = []
 
             pdfDoc = fitz.open(pdf_path)

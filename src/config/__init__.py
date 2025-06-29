@@ -39,8 +39,8 @@ class Config(SimpleConfig):
     def __init__(self):
         super().__init__()
         self._config_items = {}
-        self.save_dir = "saves"
-        self.filename = str(Path("saves/config/base.yaml"))
+        self.save_dir = os.getenv('SAVE_DIR', 'saves')
+        self.filename = str(Path(f"{self.save_dir}/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
         self._update_models_from_file()
@@ -48,8 +48,6 @@ class Config(SimpleConfig):
         ### >>> 默认配置
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
-        self.add_item("enable_knowledge_base", default=False, des="是否开启知识库")
-        self.add_item("enable_knowledge_graph", default=False, des="是否开启知识图谱")
         self.add_item("enable_web_search", default=False, des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）")  # noqa: E501
         # 默认智能体配置
         self.add_item("default_agent_id", default="", des="默认智能体ID")
@@ -57,7 +55,7 @@ class Config(SimpleConfig):
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
         self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(self.model_names.keys()))
-        self.add_item("model_name", default="Qwen/Qwen2.5-7B-Instruct", des="模型名称")
+        self.add_item("model_name", default="Qwen/Qwen3-32B", des="模型名称")
 
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))  # noqa: E501

@@ -98,14 +98,13 @@
             </div>
             <div
               :class="{'switch': true, 'opt-item': true, 'active': meta.use_graph}"
-              v-if="configStore.config.enable_knowledge_graph"
               @click="meta.use_graph=!meta.use_graph"
             >
               <Waypoints style="margin-right: 3px;" size="14"/>
               知识图谱
             </div>
             <a-dropdown
-              v-if="configStore.config.enable_knowledge_base && opts.databases.length > 0"
+              v-if="opts.databases.length > 0"
               :class="{'opt-item': true, 'active': meta.selectedKB !== null}"
             >
               <a class="ant-dropdown-link" @click.prevent>
