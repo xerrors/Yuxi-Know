@@ -550,6 +550,10 @@ const toggleToolCall = (toolCallId) => {
     -moz-tab-size: 4;
     background-color: var(--gray-100);
   }
+
+  p:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .chat-box.font-smaller #preview-only-preview {

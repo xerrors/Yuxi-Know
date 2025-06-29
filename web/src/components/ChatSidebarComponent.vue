@@ -263,7 +263,6 @@ const toggleCollapse = () => {
         .conversation-title {
           font-size: 14px;
           color: var(--gray-900);
-          margin-bottom: 4px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;

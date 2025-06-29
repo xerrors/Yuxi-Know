@@ -479,17 +479,7 @@ const filteredModels = computed(() => {
         &.available {
           position: relative;
           overflow: visible;
-          &::after {
-            content: '';
-            position: absolute;
-            top: -1px;
-            right: -1px;
-            width: 6px;
-            height: 6px;
-            background: #10b981;
-            border: 1px solid white;
-            border-radius: 50%;
-          }
+          box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.05);
         }
       }
     }

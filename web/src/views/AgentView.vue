@@ -3,8 +3,8 @@
     <div class="agent-view-header">
       <div class="header-left">
         <div class="header-item">
-          <a-button class="header-button" @click="toggleSidebar">
-            <template #icon><MenuOutlined /></template>
+          <a-button class="header-button" @click="toggleConf">
+            <template #icon><SettingOutlined /></template>
           </a-button>
         </div>
         <div class="header-item">
@@ -55,117 +55,126 @@
       </div>
     </div>
     <div class="agent-view-body">
-      <!-- 左侧智能体列表侧边栏 -->
-      <div class="sidebar" :class="{ 'is-open': state.agentSiderbarConfigOpen }">
-        <div class="agent-info">
-          <h3>详细配置信<span @click="toggleDebugMode">息</span></h3>
-          <p>{{ selectedAgent.description }}</p>
-          <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
+      <!-- 配置弹窗 -->
+      <a-modal
+        v-model:open="state.agentConfOpen"
+        title="智能体详细配置"
+        :width="600"
+        :footer="null"
+        :maskClosable="false"
+        class="conf-modal"
+      >
+        <div class="conf-content">
+          <div class="agent-info">
+            <h3>详细配置信<span @click="toggleDebugMode">息</span></h3>
+            <p>{{ selectedAgent.description }}</p>
+            <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
 
-          <!-- 添加requirements显示部分 -->
-          <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
-            <h3>所需环境变量:</h3>
-            <div class="requirements-list">
-              <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
-                {{ req }}
-              </a-tag>
+            <!-- 添加requirements显示部分 -->
+            <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
+              <h3>所需环境变量:</h3>
+              <div class="requirements-list">
+                <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
+                  {{ req }}
+                </a-tag>
+              </div>
             </div>
-          </div>
 
-          <a-divider />
+            <a-divider />
 
-          <div v-if="selectedAgentId && configSchema" class="config-modal-content">
-            <!-- 配置表单 -->
-            <a-form :model="agentConfig" layout="vertical">
-              <a-alert  v-if="state.isEmptyConfig" type="warning" message="该智能体没有配置项" show-icon/>
-              <a-alert v-if="!selectedAgent.has_checkpointer" type="error" message="该智能体没有配置 Checkpointer，功能无法正常使用，参考：https://langchain-ai.github.io/langgraph/concepts/persistence/" show-icon/>
-              <!-- 统一显示所有配置项 -->
-              <template v-for="(value, key) in configurableItems" :key="key">
-                <a-form-item
-                  :label="getConfigLabel(key, value)"
-                  :name="key"
-                  class="config-item"
-                >
-                  <p v-if="value.description" class="description">{{ value.description }}</p>
-
-                  <!-- key匹配 -->
-                  <div v-if="key === 'model'" class="agent-model">
-                    <!-- <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p> -->
-                    <ModelSelectorComponent
-                      @select-model="handleModelChange"
-                      :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
-                      :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
-                    />
-                  </div>
-                  <a-textarea
-                    v-else-if="key === 'system_prompt'"
-                    v-model:value="agentConfig[key]"
-                    :rows="4"
-                    :placeholder="getPlaceholder(key, value)"
-                  />
-
-                  <!-- 数据类型匹配 -->
-                  <a-switch
-                    v-else-if="typeof agentConfig[key] === 'boolean'"
-                    v-model:checked="agentConfig[key]"
-                  />
-                  <a-select
-                    v-else-if="value?.options && value?.type === 'str'"
-                    v-model:value="agentConfig[key]"
+            <div v-if="selectedAgentId && configSchema" class="config-modal-content">
+              <!-- 配置表单 -->
+              <a-form :model="agentConfig" layout="vertical">
+                <a-alert  v-if="state.isEmptyConfig" type="warning" message="该智能体没有配置项" show-icon/>
+                <a-alert v-if="!selectedAgent.has_checkpointer" type="error" message="该智能体没有配置 Checkpointer，功能无法正常使用，参考：https://langchain-ai.github.io/langgraph/concepts/persistence/" show-icon/>
+                <!-- 统一显示所有配置项 -->
+                <template v-for="(value, key) in configurableItems" :key="key">
+                  <a-form-item
+                    :label="getConfigLabel(key, value)"
+                    :name="key"
+                    class="config-item"
                   >
-                    <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
-                  </a-select>
-                  <!-- 多选标签卡片 -->
-                  <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
-                    <div class="multi-select-label">
-                      <span>已选择 {{ getSelectedCount(key) }} 项</span>
-                      <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0" >
-                        清空
-                      </a-button>
+                    <p v-if="value.description" class="description">{{ value.description }}</p>
+
+                    <!-- key匹配 -->
+                    <div v-if="key === 'model'" class="agent-model">
+                      <!-- <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p> -->
+                      <ModelSelectorComponent
+                        @select-model="handleModelChange"
+                        :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
+                        :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
+                      />
                     </div>
-                    <div class="options-grid">
-                      <div
-                        v-for="option in value.options"
-                        :key="option"
-                        class="option-card"
-                        :class="{
-                          'selected': isOptionSelected(key, option),
-                          'unselected': !isOptionSelected(key, option)
-                        }"
-                        @click="toggleOption(key, option)"
-                      >
-                        <div class="option-content">
-                          <span class="option-text">{{ option }}</span>
-                          <div class="option-indicator">
-                            <CheckCircleOutlined v-if="isOptionSelected(key, option)" />
-                            <PlusCircleOutlined v-else />
+                    <a-textarea
+                      v-else-if="key === 'system_prompt'"
+                      v-model:value="agentConfig[key]"
+                      :rows="4"
+                      :placeholder="getPlaceholder(key, value)"
+                    />
+
+                    <!-- 数据类型匹配 -->
+                    <a-switch
+                      v-else-if="typeof agentConfig[key] === 'boolean'"
+                      v-model:checked="agentConfig[key]"
+                    />
+                    <a-select
+                      v-else-if="value?.options && value?.type === 'str'"
+                      v-model:value="agentConfig[key]"
+                    >
+                      <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+                    </a-select>
+                    <!-- 多选标签卡片 -->
+                    <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
+                      <div class="multi-select-label">
+                        <span>已选择 {{ getSelectedCount(key) }} 项</span>
+                        <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0" >
+                          清空
+                        </a-button>
+                      </div>
+                      <div class="options-grid">
+                        <div
+                          v-for="option in value.options"
+                          :key="option"
+                          class="option-card"
+                          :class="{
+                            'selected': isOptionSelected(key, option),
+                            'unselected': !isOptionSelected(key, option)
+                          }"
+                          @click="toggleOption(key, option)"
+                        >
+                          <div class="option-content">
+                            <span class="option-text">{{ option }}</span>
+                            <div class="option-indicator">
+                              <CheckCircleOutlined v-if="isOptionSelected(key, option)" />
+                              <PlusCircleOutlined v-else />
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
+                    <a-input
+                      v-else
+                      v-model:value="agentConfig[key]"
+                      :placeholder="getPlaceholder(key, value)"
+                    />
+                  </a-form-item>
+                </template>
+
+                <a-divider />
+
+                <!-- 弹窗底部按钮 -->
+                <div class="form-actions" v-if="!state.isEmptyConfig">
+                  <div class="form-actions-left">
+                    <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
+                    <a-button @click="resetConfig">重置</a-button>
                   </div>
-                  <a-input
-                    v-else
-                    v-model:value="agentConfig[key]"
-                    :placeholder="getPlaceholder(key, value)"
-                  />
-                </a-form-item>
-              </template>
-
-              <a-divider />
-
-              <!-- 弹窗底部按钮 -->
-              <div class="form-actions" v-if="!state.isEmptyConfig">
-                <div class="form-actions-left">
-                  <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
-                  <a-button @click="resetConfig">重置</a-button>
                 </div>
-              </div>
-            </a-form>
-          </div>
+              </a-form>
+            </div>
 
+          </div>
         </div>
-      </div>
+      </a-modal>
 
       <!-- 中间内容区域 -->
       <div class="content">
@@ -173,7 +182,7 @@
           :agent-id="selectedAgentId"
           :config="agentConfig"
           :state="state"
-          @open-config="toggleConfigSidebar(true)"
+          @open-config="toggleConf"
         >
         </AgentChatComponent>
       </div>
@@ -189,7 +198,6 @@ import {
   SettingOutlined,
   LinkOutlined,
   StarOutlined,
-  MenuOutlined,
   StarFilled,
   CheckCircleOutlined,
   PlusCircleOutlined
@@ -210,7 +218,7 @@ const agents = ref({});
 const selectedAgentId = ref(null);
 const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
-  agentSiderbarConfigOpen: false,
+  agentConfOpen: false,
   debug_mode: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
@@ -483,8 +491,8 @@ const toggleDebugMode = () => {
   console.log("debug_mode", state.debug_mode);
 };
 
-const toggleSidebar = () => {
-  state.agentSiderbarConfigOpen = !state.agentSiderbarConfigOpen
+const toggleConf = () => {
+  state.agentConfOpen = !state.agentConfOpen
 }
 </script>
 
@@ -496,7 +504,6 @@ const toggleSidebar = () => {
   height: 100vh;
   overflow: hidden;
   --agent-view-header-height: 60px;
-  --agent-sidebar-width: 450px;
 }
 
 .agent-view-header {
@@ -533,110 +540,28 @@ const toggleSidebar = () => {
   padding: var(--gap-radius);
   gap: var(--gap-radius);
 
-  .sidebar.is-open,
   .content {
     border-radius: var(--gap-radius);
     border: 1px solid var(--gray-300);
   }
 }
 
-.sidebar {
-  width: 0;
-  max-width: var(--agent-sidebar-width);
-  background-color: var(--bg-sider);
-  overflow-y: auto;
-  transition: width 0.3s ease;
-  overflow: hidden;
-
-  &.is-open {
-    width: var(--agent-sidebar-width);
-    box-sizing: content-box;
-  }
-}
-
-.sidebar-title {
-  height: var(--header-height);
-  font-weight: bold;
-  user-select: none;
-  white-space: nowrap;
-  overflow: hidden;
-  padding-bottom: 1rem;
-  font-size: 1rem;
-  border-bottom: 1px solid var(--main-light-3);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  margin: 0;
-}
-
-
-.agent-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.agent-item {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s;
-
-  &:hover {
-    background-color: var(--main-light-4);
-  }
-
-  &.active {
-    background-color: var(--main-light-3);
-  }
-}
-
-.agent-info {
-  padding: 16px;
-  min-width: calc(var(--agent-sidebar-width) - 16px);
-  overflow-y: auto;
-  max-height: calc(100vh - 60px); /* 减去标题栏的高度 */
-  scrollbar-width: thin;
-
-  &::-webkit-scrollbar {
-    width: 4px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background-color: var(--main-light-4);
-    border-radius: 4px;
-  }
-}
-
-.agent-name {
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.agent-desc {
-  font-size: 12px;
-  color: #666;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.agent-model {
-  width: 100%;
-}
-
 .content {
   flex: 1;
   overflow: hidden;
+}
+
+// 配置弹窗内容样式
+.conf-content {
+  max-height: 70vh;
+  overflow-y: auto;
+
+  .agent-info {
+    padding: 0;
+    width: 100%;
+    overflow-y: visible;
+    max-height: none;
+  }
 }
 
 // 添加requirements相关样式
@@ -661,35 +586,8 @@ const toggleSidebar = () => {
   }
 }
 
-@media (max-width: 520px) {
-  .sidebar {
-    position: absolute;
-    z-index: 101;
-    width: 0;
-    height: 100%;
-    border-radius: 0 16px 16px 0;
-    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
-
-    &.is-open {
-      width: var(--agent-sidebar-width);
-      padding: 16px;
-    }
-  }
-
-  .config-sidebar {
-    position: absolute;
-    z-index: 101;
-    right: 0;
-    width: 0;
-    height: 100%;
-    border-radius: 16px 0 0 16px;
-    box-shadow: 0 0 10px 1px rgba(0, 0, 0, 0.05);
-
-    &.is-open {
-      width: 90%;
-      max-width: var(--config-sidebar-width);
-    }
-  }
+.agent-model {
+  width: 100%;
 }
 
 .config-modal-content {
@@ -849,12 +747,16 @@ const toggleSidebar = () => {
       grid-template-columns: 1fr;
     }
   }
+
+  .conf-content {
+    max-height: 60vh;
+  }
 }
 </style>
 
 
 <style lang="less">
-.toggle-sidebar {
+.toggle-conf {
   cursor: pointer;
 
   &.nav-btn {

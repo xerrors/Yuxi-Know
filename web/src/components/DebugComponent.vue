@@ -2,13 +2,9 @@
   <div :class="['log-viewer', { fullscreen: state.isFullscreen }]" ref="logViewer">
     <div class="control-panel">
       <div class="button-group">
-        <a-button @click="fetchLogs" :loading="state.fetching">
-          <template #icon><ReloadOutlined /></template>
-          刷新
+        <a-button @click="fetchLogs" :loading="state.fetching" :icon="h(ReloadOutlined)" class="icon-only">
         </a-button>
-        <a-button @click="clearLogs">
-          <template #icon><ClearOutlined /></template>
-          清空
+        <a-button @click="clearLogs" :icon="h(ClearOutlined)" class="icon-only">
         </a-button>
         <a-button @click="printSystemConfig">
           <template #icon><SettingOutlined /></template>
@@ -98,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed } from 'vue';
+import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed, h } from 'vue';
 import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
@@ -428,10 +424,6 @@ const printAgentConfig = async () => {
 
 .control-panel {
   margin-bottom: 16px;
-  padding: 16px;
-  background: var(--gray-50);
-  border-radius: 8px;
-  border: 1px solid var(--gray-200);
 }
 
 .button-group {
@@ -447,6 +439,11 @@ const printAgentConfig = async () => {
     font-size: 13px;
     border-color: var(--gray-300);
     color: var(--gray-700);
+
+    &.icon-only {
+      min-width: 32px;
+      padding: 0;
+    }
 
     &:hover {
       border-color: var(--main-color);

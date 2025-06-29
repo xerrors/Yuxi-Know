@@ -7,7 +7,7 @@ from src.agents.registry import BaseAgent
 from src.agents.react.configuration import ReActConfiguration
 
 class ReActAgent(BaseAgent):
-    name = "react"
+    name = "ReAct"
     description = "A react agent that can answer questions and help with tasks."
     config_schema = ReActConfiguration
 
