@@ -1,21 +1,25 @@
 # 开发阶段
-FROM node:latest AS development
+FROM node:20-alpine AS development
 WORKDIR /app
-
 
 ARG http_proxy
 ARG https_proxy
-ENV http_proxy=$http_proxy \
-    https_proxy=$https_proxy \
-    TZ=Asia/Shanghai
+ENV TZ=Asia/Shanghai
 
-# 复制 package.json 和 package-lock.json（如果存在）
+
+# 只有当代理变量不为空时才设置代理
+RUN if [ -n "$http_proxy" ]; then echo "export http_proxy=$http_proxy" >> /etc/environment; fi
+RUN if [ -n "$https_proxy" ]; then echo "export https_proxy=$https_proxy" >> /etc/environment; fi
+
+# 安装 pnpm
+RUN npm install -g pnpm@latest
+
+# 复制 package.json 和 pnpm-lock.yaml
 COPY ./web/package*.json ./
+COPY ./web/pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN npm install -g pnpm@latest-10
 RUN pnpm install
-# RUN npm install --registry http://mirrors.cloud.tencent.com/npm/ --verbose --force
 
 # 复制源代码
 COPY ./web .
@@ -26,15 +30,22 @@ EXPOSE 5173
 # 启动开发服务器的命令在 docker-compose 文件中定义
 
 # 生产阶段
-FROM node:latest AS build-stage
+FROM node:20-alpine AS build-stage
 WORKDIR /app
 
-COPY ./web/package*.json ./
-RUN npm install --force
-# RUN npm install --registry https://registry.npmmirror.com --force
+# 安装 pnpm
+RUN npm install -g pnpm@latest
 
+# 复制依赖文件
+COPY ./web/package*.json ./
+COPY ./web/pnpm-lock.yaml* ./
+
+# 安装依赖
+RUN pnpm install --frozen-lockfile
+
+# 复制源代码并构建
 COPY ./web .
-RUN npm run build
+RUN pnpm run build
 
 # 生产环境运行阶段
 FROM nginx:alpine AS production

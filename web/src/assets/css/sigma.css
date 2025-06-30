@@ -1,0 +1,88 @@
+/* Sigma.js 基础样式 */
+.sigma-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #fafafa;
+}
+
+.sigma-container canvas {
+  outline: none;
+}
+
+/* 节点标签样式 */
+.sigma-labels {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 高亮样式 */
+.node-highlighted {
+  stroke: #ff0000 !important;
+  stroke-width: 3px !important;
+}
+
+.edge-highlighted {
+  stroke: #ff0000 !important;
+  stroke-width: 3px !important;
+}
+
+/* 选中样式 */
+.node-selected {
+  stroke: #1890ff !important;
+  stroke-width: 4px !important;
+}
+
+.edge-selected {
+  stroke: #1890ff !important;
+  stroke-width: 4px !important;
+}
+
+/* 悬停样式 */
+.node-focused {
+  stroke: #52c41a !important;
+  stroke-width: 2px !important;
+}
+
+.edge-focused {
+  stroke: #52c41a !important;
+  stroke-width: 2px !important;
+}
+
+/* 加载动画 */
+.sigma-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+}
+
+/* 工具提示 */
+.sigma-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .sigma-container {
+    font-size: 10px;
+  }
+
+  .sigma-tooltip {
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+}

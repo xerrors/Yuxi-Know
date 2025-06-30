@@ -1,4 +1,6 @@
 @import './base.css';
+@import './sigma.css';
+@import './shorts.css';
 
 :root {
   --header-height: 60px;

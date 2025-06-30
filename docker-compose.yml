@@ -6,7 +6,7 @@ services:
       args:
         http_proxy: ${HTTP_PROXY:-}
         https_proxy: ${HTTPS_PROXY:-}
-    image: yuxi-api:0.1.0
+    image: yuxi-api:0.2.0.dev
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -68,7 +68,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
-    image: yuxi-web:0.1.0
+    image: yuxi-web:0.2.0.dev
     container_name: web-dev
     volumes:
       - ./web:/app

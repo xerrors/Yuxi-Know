@@ -4,18 +4,13 @@
     :title="database.name || '数据库信息'"
     :loading="state.databaseLoading"
   >
-    <template #description>
-      <div class="database-info">
-        <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
-        <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
-        <span class="row-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件 · {{ database.db_id }}</span>
-      </div>
+    <template #left>
+      <a-button type="text" @click="backToDatabase">
+        <LeftOutlined />
+      </a-button>
     </template>
     <template #actions>
-      <a-button type="primary" @click="backToDatabase">
-        <LeftOutlined /> 返回
-      </a-button>
-      <a-button type="primary" @click="showEditModal">
+      <a-button type="text" @click="showEditModal">
         <EditOutlined />
       </a-button>
     </template>
@@ -172,6 +167,12 @@
               </a-button>
             </div>
           </div>
+          <!-- 数据库信息 -->
+          <div class="database-info">
+            <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
+            <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
+            <span class="row-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件 · {{ database.db_id }}</span>
+          </div>
 
           <a-table
             :columns="columns"
@@ -310,6 +311,17 @@
           </div>
         </div>
       </a-tab-pane>
+
+      <a-tab-pane key="knowledge-graph" force-render>
+        <template #tab><span><Waypoints size="14" class="mr-3 bn-1px" />知识图谱（开发中）</span></template>
+        <div class="knowledge-graph-container db-tab-container">
+          <KnowledgeGraphViewer 
+            :initial-database-id="databaseId" 
+            :hide-db-selector="true"
+          />
+        </div>
+      </a-tab-pane>
+
       <!-- <a-tab-pane key="3" tab="Tab 3">Content of Tab Pane 3</a-tab-pane> -->
        <template #rightExtra>
         <div class="auto-refresh-control">
@@ -323,13 +335,12 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed } from 'vue';
+import { onMounted, reactive, ref, watch, toRaw, onUnmounted, computed, h } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
 import { knowledgeBaseApi } from '@/apis/admin_api'
-import HeaderComponent from '@/components/HeaderComponent.vue';
 import {
   ReadOutlined,
   LeftOutlined,
@@ -346,8 +357,12 @@ import {
   EditOutlined,
   PlusOutlined,
   SettingOutlined,
+  ApartmentOutlined,
 } from '@ant-design/icons-vue'
-import { h } from 'vue';
+import HeaderComponent from '@/components/HeaderComponent.vue';
+import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
+import { Waypoints } from 'lucide-vue-next';
+
 
 
 const route = useRoute();
@@ -1026,6 +1041,11 @@ const toggleAutoRefresh = (checked) => {
   gap: 12px;
 }
 
+.knowledge-graph-container {
+  height: calc(100vh - 150px);
+  min-height: 600px;
+}
+
 .query-test-container {
   display: flex;
   flex-direction: row;
@@ -1628,6 +1648,17 @@ const toggleAutoRefresh = (checked) => {
   }
 }
 
+.knowledge-graph-container {
+  height: calc(100vh - 200px);
+  
+  :deep(.knowledge-graph-viewer) {
+    height: 100%;
+    
+    .sigma-container {
+      height: calc(100% - 80px);
+    }
+  }
+}
 
 </style>
 

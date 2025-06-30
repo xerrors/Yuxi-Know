@@ -1317,7 +1317,7 @@ const mergeMessageChunk = (chunks) => {
 </script>
 
 <style lang="less" scoped>
-@import '@/assets/main.css';
+@import '@/assets/css/main.css';
 
 .chat-container {
   display: flex;

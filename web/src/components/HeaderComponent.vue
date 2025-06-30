@@ -1,6 +1,9 @@
 <template>
   <div class="header-container">
     <div class="header-content">
+      <div class="header-actions" v-if="$slots.left">
+        <slot name="left"></slot>
+      </div>
       <div class="header-title">
         <h1>{{ title }}</h1>
         <slot name="description">
@@ -48,9 +51,12 @@ const props = defineProps({
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 10px;
 }
 
 .header-title {
+  flex: 1;
+  width: 100%;
   font-size: 14px;
   color: rgba(0, 0, 0, 0.45);
 

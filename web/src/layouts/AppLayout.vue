@@ -207,7 +207,7 @@ const mainList = [{
 </template>
 
 <style lang="less" scoped>
-@import '@/assets/main.css';
+@import '@/assets/css/main.css';
 
 :root {
   --header-width: 60px;
