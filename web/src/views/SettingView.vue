@@ -43,29 +43,9 @@
             <a-select style="width: 300px"
               :value="configStore.config?.reranker"
               @change="handleChange('reranker', $event)"
-              :disabled="!configStore.config.enable_reranker"
             >
               <a-select-option
                 v-for="(name, idx) in items?.reranker.choices" :key="idx"
-                :value="name">{{ name }}
-              </a-select-option>
-            </a-select>
-          </div>
-          <div class="card">
-            <span class="label">{{ items?.enable_reranker.des }}</span>
-            <a-switch
-              :checked="configStore.config.enable_reranker"
-              @change="handleChange('enable_reranker', !configStore.config.enable_reranker)"
-            />
-          </div>
-          <div class="card card-select">
-            <span class="label">{{ items?.use_rewrite_query.des }}</span>
-            <a-select style="width: 200px"
-              :value="configStore.config?.use_rewrite_query"
-              @change="handleChange('use_rewrite_query', $event)"
-            >
-              <a-select-option
-                v-for="(name, idx) in items?.use_rewrite_query.choices" :key="idx"
                 :value="name">{{ name }}
               </a-select-option>
             </a-select>

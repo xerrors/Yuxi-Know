@@ -1,70 +1,14 @@
 import json
-import re
+import asyncio
 from collections.abc import Callable
 from typing import Annotated, Any
-import asyncio
-import logging
 
-from langchain_tavily import TavilySearch
-from langchain_core.tools import BaseTool, StructuredTool, tool
 from pydantic import BaseModel, Field
+from langchain_core.tools import StructuredTool, tool
+from langchain_tavily import TavilySearch
 
 from src import config, graph_base, knowledge_base
-
-
-# refs https://github.com/chatchat-space/LangGraph-Chatchat chatchat-server/chatchat/server/agent/tools_factory/tools_registry.py
-def regist_tool(
-    *args: Any,
-    title: str = "",
-    description: str = "",
-    return_direct: bool = False,
-    args_schema: type[BaseModel] | None = None,
-    infer_schema: bool = True,
-) -> Callable | BaseTool:
-    """
-    wrapper of langchain tool decorator
-    add tool to registry automatically
-    """
-
-    def _parse_tool(t: BaseTool):
-        nonlocal description, title
-
-        _TOOLS_REGISTRY[t.name] = t
-
-        # change default description
-        if not description:
-            if t.func is not None:
-                description = t.func.__doc__
-            elif t.coroutine is not None:
-                description = t.coroutine.__doc__
-        t.description = " ".join(re.split(r"\n+\s*", description))
-        # set a default title for human
-        if not title:
-            title = "".join([x.capitalize() for x in t.name.split("_")])
-        setattr(t, "_title", title)
-
-    def wrapper(def_func: Callable) -> BaseTool:
-        partial_ = tool(
-            *args,
-            return_direct=return_direct,
-            args_schema=args_schema,
-            infer_schema=infer_schema,
-        )
-        t = partial_(def_func)
-        _parse_tool(t)
-        return t
-
-    if len(args) == 0:
-        return wrapper
-    else:
-        t = tool(
-            *args,
-            return_direct=return_direct,
-            args_schema=args_schema,
-            infer_schema=infer_schema,
-        )
-        _parse_tool(t)
-        return t
+from src.utils import logger
 
 
 class KnowledgeRetrieverModel(BaseModel):
@@ -74,8 +18,6 @@ class KnowledgeRetrieverModel(BaseModel):
             "不要直接使用用户的原始输入去查询。"
         )
     )
-
-
 
 def get_all_tools():
     """获取所有工具"""
@@ -124,7 +66,7 @@ class BaseToolOutput:
     def __init__(
         self,
         data: Any,
-        format: str | Callable = None,
+        format: str | Callable | None = None,
         data_alias: str = "",
         **extras: Any,
     ) -> None:
