@@ -91,7 +91,6 @@ async def update_config_item(
 
 @base.post("/restart")
 async def restart(current_user: User = Depends(get_superadmin_user)):
-    knowledge_base.restart()
     graph_base.start()
     return {"message": "Restarted!"}
 
