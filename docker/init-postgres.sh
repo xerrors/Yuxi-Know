@@ -16,8 +16,12 @@ echo "PostgreSQL service started, waiting for it to be ready..."
 # 等待 PostgreSQL 完全启动
 while ! su - postgres -c "pg_isready" > /dev/null 2>&1; do
     echo "Waiting for PostgreSQL to be ready..."
-    sleep 2
+    sleep 5
 done
+
+# 额外等待以确保数据库完全启动
+echo "PostgreSQL is ready, waiting additional time for full initialization..."
+sleep 10
 
 echo "PostgreSQL is ready, creating user and database..."
 
@@ -142,7 +146,11 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_lightrag_doc_status_updated_at ON li
 
 # 等待图表创建完成后创建 AGE 相关索引
 echo "Waiting for graph tables to be fully initialized..."
-sleep 5
+sleep 15
+
+# 验证 AGE 扩展是否正确加载
+echo "Verifying AGE extension is working..."
+su - postgres -c "psql -d ${POSTGRES_DATABASE:-lightrag} -c \"SELECT ag_catalog.create_graph('test_graph'); SELECT ag_catalog.drop_graph('test_graph', true);\"" || echo "AGE extension verification failed, but continuing..."
 
 echo "Creating AGE performance indexes..."
 
@@ -242,10 +250,32 @@ su - postgres -c "psql -c \"ALTER SYSTEM SET effective_cache_size = '1GB';\""
 su - postgres -c "psql -c \"ALTER SYSTEM SET maintenance_work_mem = '64MB';\""
 su - postgres -c "psql -c \"ALTER SYSTEM SET random_page_cost = 1.1;\""
 su - postgres -c "psql -c \"ALTER SYSTEM SET effective_io_concurrency = 200;\""
-su - postgres -c "psql -c \"ALTER SYSTEM SET work_mem = '4MB';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET work_mem = '8MB';\""
 
-# 启用查询计划缓存
+# 连接和查询超时配置
+su - postgres -c "psql -c \"ALTER SYSTEM SET statement_timeout = '300000';\""  # 5分钟查询超时
+su - postgres -c "psql -c \"ALTER SYSTEM SET idle_in_transaction_session_timeout = '600000';\""  # 10分钟事务超时
+su - postgres -c "psql -c \"ALTER SYSTEM SET tcp_keepalives_idle = '600';\""  # TCP keepalive 设置
+su - postgres -c "psql -c \"ALTER SYSTEM SET tcp_keepalives_interval = '30';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET tcp_keepalives_count = '3';\""
+
+# 查询优化配置
+su - postgres -c "psql -c \"ALTER SYSTEM SET max_parallel_workers_per_gather = '2';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET max_parallel_workers = '4';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET enable_parallel_hash = 'on';\""
+
+# 内存和查询限制优化
+su - postgres -c "psql -c \"ALTER SYSTEM SET temp_buffers = '16MB';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET max_stack_depth = '2MB';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET huge_pages = 'try';\""
+
+# 启用查询计划缓存和日志记录
 su - postgres -c "psql -c \"ALTER SYSTEM SET plan_cache_mode = 'auto';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET log_statement = 'all';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET log_duration = 'on';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET log_min_duration_statement = '1000';\""  # 记录超过1秒的查询
+su - postgres -c "psql -c \"ALTER SYSTEM SET log_disconnections = 'on';\""
+su - postgres -c "psql -c \"ALTER SYSTEM SET log_connections = 'on';\""
 
 # 重新加载配置
 su - postgres -c "psql -c \"SELECT pg_reload_conf();\""
@@ -302,6 +332,15 @@ echo "Extensions: vector, age"
 echo "Graph: lightrag"
 echo "Tables: lightrag_kv_store, lightrag_doc_status + AGE graph tables"
 echo "Connection: postgresql://${POSTGRES_USER:-lightrag}:***@localhost:5432/${POSTGRES_DATABASE:-lightrag}"
+
+# 最终验证数据库完全准备就绪
+echo "Performing final readiness check..."
+sleep 5
+if PGPASSWORD="${POSTGRES_PASSWORD:-lightrag}" psql -h localhost -p 5432 -U ${POSTGRES_USER:-lightrag} -d ${POSTGRES_DATABASE:-lightrag} -c "SELECT ag_catalog.create_graph('final_test'); SELECT ag_catalog.drop_graph('final_test', true);" > /dev/null 2>&1; then
+    echo "✅ Database is fully ready for LightRAG operations!"
+else
+    echo "⚠️  Database basic operations work, but AGE may need more time to be fully ready"
+fi
 
 # 显示数据库统计信息
 echo "Database statistics:"

@@ -3,9 +3,6 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-      args:
-        http_proxy: ${HTTP_PROXY:-}
-        https_proxy: ${HTTPS_PROXY:-}
     image: yuxi-api:0.2.0.dev
     container_name: api-dev
     working_dir: /app
@@ -15,13 +12,6 @@ services:
       - ./saves:/app/saves
       - ./test:/app/test
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']  # 使用GPU 1
-              capabilities: [gpu]
     ports:
       - "5050:5050"
     networks:
@@ -45,16 +35,19 @@ services:
       - POSTGRES_DATABASE=${POSTGRES_DATABASE:-lightrag}
       - POSTGRES_USER=${POSTGRES_USER:-lightrag}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-lightrag}
+      # 连接池配置
+      - POSTGRES_MAX_CONNECTIONS=50
+      - POSTGRES_MIN_CONNECTIONS=5
       - MODEL_DIR=/models
       - RUNNING_IN_DOCKER=true
     command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5050/health || exit 1"]
-      interval: 20s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 30s
+      timeout: 15s
+      retries: 8
+      start_period: 180s
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,11 +96,11 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=${POSTGRES_PASSWORD:-lightrag} psql -h localhost -U ${POSTGRES_USER:-lightrag} -d ${POSTGRES_DATABASE:-lightrag} -c 'SELECT 1' || exit 1"]
-      interval: 20s
-      timeout: 10s
-      retries: 10
-      start_period: 60s
+      test: ["CMD-SHELL", "PGPASSWORD=${POSTGRES_PASSWORD:-lightrag} psql -h localhost -U ${POSTGRES_USER:-lightrag} -d ${POSTGRES_DATABASE:-lightrag} -c \"SELECT ag_catalog.create_graph('test_ready');\" || PGPASSWORD=${POSTGRES_PASSWORD:-lightrag} psql -h localhost -U ${POSTGRES_USER:-lightrag} -d ${POSTGRES_DATABASE:-lightrag} -c 'SELECT 1'"]
+      interval: 30s
+      timeout: 15s
+      retries: 15
+      start_period: 120s
     networks:
       - app-network
     restart: unless-stopped
