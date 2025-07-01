@@ -105,6 +105,10 @@
     >
       <p>添加的模型是兼容 OpenAI 的模型，比如 vllm，Ollama。</p>
       <a-form :model="customModel" layout="vertical">
+        <a-form-item label="模型ID" v-if="customModel.edit_type == 'edit'" name="custom_id">
+          <p class="form-item-description">调用的模型的ID</p>
+          <a-input v-model:value="customModel.custom_id" disabled/>
+        </a-form-item>
         <a-form-item label="模型名称" name="name" :rules="[{ required: true, message: '请输入模型名称' }]">
           <p class="form-item-description">调用的模型的名称</p>
           <a-input v-model:value="customModel.name" :disabled="customModel.edit_type == 'edit'"/>
