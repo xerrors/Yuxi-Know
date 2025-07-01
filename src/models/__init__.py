@@ -54,9 +54,7 @@ def select_model(model_provider=None, model_name=None):
         )
 
     if model_provider == "custom":
-        model_info = next((x for x in config.custom_models if x["custom_id"] == model_name), None)
-        if model_info is None:
-            raise ValueError(f"Model {model_name} not found in custom models")
+        model_info = get_custom_model(model_name)
 
         from src.models.chat_model import CustomModel
         return CustomModel(model_info)
@@ -71,3 +69,12 @@ def select_model(model_provider=None, model_name=None):
         return model
     except Exception as e:
         raise ValueError(f"Model provider {model_provider} load failed, {e} \n {traceback.format_exc()}")
+    
+    
+def get_custom_model(model_id):
+    """return model_info"""
+    assert config.custom_models is not None, "custom_models is not set"
+    modle_info = next((x for x in config.custom_models if x["custom_id"] == model_id), None)
+    if modle_info is None:
+        raise ValueError(f"Model {model_id} not found in custom models")
+    return modle_info
