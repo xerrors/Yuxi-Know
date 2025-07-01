@@ -15,9 +15,8 @@
                 okText="确认删除"
                 cancelText="取消"
                 ok-type="danger"
-                :disabled="configStore.config.model_name == item.name"
               >
-                <a-button type="text" :disabled="configStore.config.model_name == item.name" @click.stop><DeleteOutlined /></a-button>
+                <a-button type="text" @click.stop><DeleteOutlined /></a-button>
               </a-popconfirm>
               <a-button type="text" @click.stop="prepareToEditCustomModel(item)"><EditOutlined /></a-button>
             </div>

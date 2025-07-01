@@ -35,19 +35,19 @@ async def get_subgraph(
     """
     try:
         logger.info(f"获取子图数据 - db_id: {db_id}, node_label: {node_label}, max_depth: {max_depth}, max_nodes: {max_nodes}")
-        
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
             raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
-        
+
         # 使用 LightRAG 的原生 get_knowledge_graph 方法
         knowledge_graph = await rag_instance.get_knowledge_graph(
             node_label=node_label,
             max_depth=max_depth,
             max_nodes=max_nodes
         )
-        
+
         # 将 LightRAG 的 KnowledgeGraph 格式转换为前端需要的格式
         nodes = []
         for node in knowledge_graph.nodes:
@@ -57,7 +57,7 @@ async def get_subgraph(
                 "entity_type": node.properties.get("entity_type", "unknown"),
                 "properties": node.properties
             })
-        
+
         edges = []
         for edge in knowledge_graph.edges:
             edges.append({
@@ -67,7 +67,7 @@ async def get_subgraph(
                 "type": edge.type,
                 "properties": edge.properties
             })
-        
+
         result = {
             "success": True,
             "data": {
@@ -78,10 +78,10 @@ async def get_subgraph(
                 "total_edges": len(edges)
             }
         }
-        
+
         logger.info(f"成功获取子图 - 节点数: {len(nodes)}, 边数: {len(edges)}")
         return result
-        
+
     except Exception as e:
         logger.error(f"获取子图数据失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -104,22 +104,22 @@ async def get_graph_labels(
     """
     try:
         logger.info(f"获取图谱标签 - db_id: {db_id}")
-        
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
             raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
-        
+
         # 使用 LightRAG 的原生方法获取所有标签
         labels = await rag_instance.get_graph_labels()
-        
+
         return {
             "success": True,
             "data": {
                 "labels": labels
             }
         }
-        
+
     except Exception as e:
         logger.error(f"获取图谱标签失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -142,7 +142,7 @@ async def get_available_databases(
             "success": True,
             "data": databases
         }
-        
+
     except Exception as e:
         logger.error(f"获取数据库列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取数据库列表失败: {str(e)}")
@@ -154,8 +154,8 @@ async def get_graph_nodes_legacy(
     db_id: str = Query(..., description="数据库ID"),
     limit: int = Query(500, description="最大节点数量", ge=1, le=2000),
     offset: int = Query(0, description="偏移量", ge=0),
-    entity_type: Optional[str] = Query(None, description="实体类型筛选"),
-    search: Optional[str] = Query(None, description="搜索关键词"),
+    entity_type: str | None = Query(None, description="实体类型筛选"),
+    search: str | None = Query(None, description="搜索关键词"),
     current_user: User = Depends(get_admin_user)
 ):
     """
@@ -173,7 +173,7 @@ async def get_graph_nodes_legacy(
                 "total": 0
             }
         }
-        
+
     except Exception as e:
         logger.error(f"获取图节点数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取图节点数据失败: {str(e)}")
@@ -184,7 +184,7 @@ async def get_graph_edges_legacy(
     db_id: str = Query(..., description="数据库ID"),
     limit: int = Query(500, description="最大边数量", ge=1, le=2000),
     offset: int = Query(0, description="偏移量", ge=0),
-    min_weight: Optional[float] = Query(None, description="最小权重筛选"),
+    min_weight: float | None = Query(None, description="最小权重筛选"),
     current_user: User = Depends(get_admin_user)
 ):
     """
@@ -202,7 +202,7 @@ async def get_graph_edges_legacy(
                 "total": 0
             }
         }
-        
+
     except Exception as e:
         logger.error(f"获取图边数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取图边数据失败: {str(e)}")
@@ -218,30 +218,30 @@ async def get_graph_stats(
     """
     try:
         logger.info(f"获取图谱统计信息 - db_id: {db_id}")
-        
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
             raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
-        
+
         # 通过获取全图来统计节点和边的数量
         knowledge_graph = await rag_instance.get_knowledge_graph(
             node_label="*",
             max_depth=1,
             max_nodes=10000  # 设置较大值以获取完整统计
         )
-        
+
         # 统计实体类型分布
         entity_types = {}
         for node in knowledge_graph.nodes:
             entity_type = node.properties.get("entity_type", "unknown")
             entity_types[entity_type] = entity_types.get(entity_type, 0) + 1
-        
+
         entity_types_list = [
-            {"type": k, "count": v} 
+            {"type": k, "count": v}
             for k, v in sorted(entity_types.items(), key=lambda x: x[1], reverse=True)
         ]
-        
+
         return {
             "success": True,
             "data": {
@@ -251,7 +251,7 @@ async def get_graph_stats(
                 "is_truncated": knowledge_graph.is_truncated
             }
         }
-        
+
     except Exception as e:
         logger.error(f"获取图谱统计信息失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")

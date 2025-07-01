@@ -15,7 +15,6 @@
       </a-button>
     </template>
   </HeaderComponent>
-  <!-- <a-alert v-if="configStore.config.embed_model &&database.embed_model != configStore.config.embed_model" message="向量模型不匹配，请重新选择" type="warning" style="margin: 10px 20px;" /> -->
 
   <!-- 添加编辑对话框 -->
   <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
@@ -282,12 +281,12 @@
                     <a-switch v-model:checked="meta.only_need_context" />
                   </div>
                   <div class="params-item">
-                    <p>只使用上下文：</p>
+                    <p>只使用提示：</p>
                     <a-switch v-model:checked="meta.only_need_prompt" />
                   </div>
                   <div class="params-item">
                     <p>筛选 TopK：</p>
-                    <a-input-number size="small" v-model:value="meta.top_k" :min="1" :max="meta.maxQueryCount" />
+                    <a-input-number size="small" v-model:value="meta.top_k" :min="1" :max="100" />
                   </div>
                 </div>
                 <div class="params-group">
@@ -349,7 +348,6 @@ import {
   CloseCircleFilled,
   ClockCircleFilled,
   DeleteOutlined,
-  CloudUploadOutlined,
   SearchOutlined,
   LoadingOutlined,
   FileOutlined,
@@ -357,7 +355,6 @@ import {
   EditOutlined,
   PlusOutlined,
   SettingOutlined,
-  ApartmentOutlined,
 } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
@@ -376,7 +373,6 @@ const selectedFile = ref(null);
 // 查询测试
 const queryText = ref('');
 const queryResult = ref(null)
-const filteredResults = ref([])
 const configStore = useConfigStore()
 
 const state = reactive({
@@ -431,49 +427,7 @@ const pagination = ref({
   onShowSizeChange: (current, pageSize) => pagination.value.pageSize = pageSize,
 })
 
-const filterQueryResults = () => {
-  if (!queryResult.value || !queryResult.value.all_results) {
-    return;
-  }
-
-  let results = toRaw(queryResult.value.all_results);
-  console.log("results", results);
-
-  if (meta.filter) {
-    results = results.filter(r => r.distance >= meta.distanceThreshold);
-    console.log("before", results);
-
-    // 根据排序方式决定排序逻辑
-    if (configStore.config.enable_reranker) {
-      // 先过滤掉低于阈值的结果
-      results = results.filter(r => r.rerank_score >= meta.rerankThreshold);
-
-      // 根据选择的排序方式进行排序
-      if (meta.sortBy === 'rerank_score') {
-        results = results.sort((a, b) => b.rerank_score - a.rerank_score);
-      } else {
-        // 按距离排序 (数值越大表示越相似)
-        results = results.sort((a, b) => b.distance - a.distance);
-      }
-    } else {
-      // 没有启用重排序时，默认按距离排序
-      results = results.sort((a, b) => b.distance - a.distance);
-    }
-
-    console.log("after", results);
-
-    results = results.slice(0, meta.topK);
-  }
-
-  filteredResults.value = results;
-}
-
 const onQuery = () => {
-  // if (database.value.embed_model != configStore.config.embed_model) {
-  //   message.error('向量模型不匹配，请重新选择')
-  //   return
-  // }
-
   console.log(queryText.value)
   state.searchLoading = true
   if (!queryText.value.trim()) {
@@ -491,7 +445,6 @@ const onQuery = () => {
     .then(data => {
       console.log(data)
       queryResult.value = data
-      filterQueryResults()
     })
     .catch(error => {
       console.error(error)
@@ -665,7 +618,7 @@ const getDatabaseInfo = () => {
 const deleteFile = (fileId) => {
   state.lock = true
   console.debug("deleteFile", databaseId.value, fileId)
-  knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+  return knowledgeBaseApi.deleteFile(databaseId.value, fileId)
     .then(data => {
       console.log(data)
       message.success(data.message || '删除成功')
@@ -674,6 +627,7 @@ const deleteFile = (fileId) => {
     .catch(error => {
       console.error(error)
       message.error(error.message || '删除失败')
+      throw error
     })
     .finally(() => {
       state.lock = false
@@ -802,27 +756,7 @@ const addFiles = (items, contentType = 'file') => {
   });
 };
 
-// "生成分块" - 修改后的逻辑（文件）
-const handleFiles = () => {
-  console.log(fileList.value);
-  const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path);
-  console.log(files);
-  addFiles(files, 'file');
-}
 
-// "生成分块" - 修改后的逻辑（URL）
-const handleUrls = () => {
-  const urls = urlList.value.split('\n')
-    .map(url => url.trim())
-    .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
-
-  if (urls.length === 0) {
-    message.error('请输入有效的网页链接（必须以http://或https://开头）');
-    return;
-  }
-
-  addFiles(urls, 'url');
-};
 
 const columns = [
   // { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
@@ -843,10 +777,6 @@ watch(() => route.params.database_id, (newId) => {
   }
 );
 
-// 检测到 meta 变化时重新查询
-watch(() => meta, () => {
-  filterQueryResults()
-}, { deep: true })
 
 // 添加更多示例查询
 const queryExamples = ref([
@@ -875,9 +805,20 @@ const urlList = ref('');
 
 const chunkData = () => {
   if (uploadMode.value === 'file') {
-    handleFiles();
+    const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path);
+    console.log(files);
+    addFiles(files, 'file');
   } else if (uploadMode.value === 'url') {
-    handleUrls();
+    const urls = urlList.value.split('\n')
+      .map(url => url.trim())
+      .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
+
+    if (urls.length === 0) {
+      message.error('请输入有效的网页链接（必须以http://或https://开头）');
+      return;
+    }
+
+    addFiles(urls, 'url');
   }
 }
 
@@ -1494,59 +1435,9 @@ const toggleAutoRefresh = (checked) => {
   }
 }
 
-.chunk-preview {
-  margin-top: 20px;
 
-  .preview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
 
-    h3 {
-      margin: 0;
-      color: var(--main-color);
-      font-size: 18px;
-    }
-  }
 
-  .result-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
-    gap: 12px;
-    margin-top: 10px;
-  }
-
-  .chunk {
-    background-color: var(--main-light-5);
-    border: 1px solid var(--main-light-3);
-    border-radius: 8px;
-    padding: 16px;
-    word-wrap: break-word;
-    word-break: break-all;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background-color: var(--main-light-4);
-      border-color: var(--main-light-2);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
-    }
-
-    p {
-      margin: 0;
-      line-height: 1.6;
-
-      strong {
-        color: var(--main-color);
-        margin-right: 6px;
-      }
-    }
-  }
-}
-
-.url-input {
-  margin-bottom: 20px;
-}
 
 
 

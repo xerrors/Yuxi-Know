@@ -5,7 +5,7 @@ import traceback
 import shutil
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Optional
 from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
@@ -26,11 +26,11 @@ class LightRagBasedKB:
 
     def __init__(self) -> None:
         # 存储 LightRAG 实例映射 {db_id: LightRAG}
-        self.instances: Dict[str, LightRAG] = {}
+        self.instances: dict[str, LightRAG] = {}
         # 数据库元信息存储 {db_id: metadata}
-        self.databases_meta: Dict[str, dict] = {}
+        self.databases_meta: dict[str, dict] = {}
         # 文件信息存储 {file_id: file_info}
-        self.files_meta: Dict[str, dict] = {}
+        self.files_meta: dict[str, dict] = {}
         # 工作目录
         self.work_dir = os.path.join(config.save_dir, "lightrag_data")
         os.makedirs(self.work_dir, exist_ok=True)
@@ -45,7 +45,7 @@ class LightRagBasedKB:
         meta_file = os.path.join(self.work_dir, "metadata.json")
         if os.path.exists(meta_file):
             try:
-                with open(meta_file, 'r', encoding='utf-8') as f:
+                with open(meta_file, encoding='utf-8') as f:
                     data = json.load(f)
                     self.databases_meta = data.get("databases", {})
                     self.files_meta = data.get("files", {})
@@ -69,7 +69,7 @@ class LightRagBasedKB:
         except Exception as e:
             logger.error(f"Failed to save metadata: {e}")
 
-    async def _get_lightrag_instance(self, db_id: str) -> Optional[LightRAG]:
+    async def _get_lightrag_instance(self, db_id: str) -> LightRAG | None:
         """获取或创建 LightRAG 实例"""
         logger.info(f"Getting or creating LightRAG instance for {db_id}")
 
@@ -170,13 +170,13 @@ class LightRagBasedKB:
 
         elif file_ext in ['.txt', '.md']:
             # 直接读取文本文件
-            with open(file_path_obj, 'r', encoding='utf-8') as f:
+            with open(file_path_obj, encoding='utf-8') as f:
                 content = f.read()
             return f"# {file_path_obj.name}\n\n{content}"
 
         elif file_ext in ['.doc', '.docx']:
             # 处理 Word 文档
-            
+
             from docx import Document  # type: ignore
             doc = Document(file_path_obj)
             text = '\n'.join([para.text for para in doc.paragraphs])
@@ -416,7 +416,7 @@ class LightRagBasedKB:
             try:
                 # 获取文档的所有 chunks
                 assert hasattr(rag.text_chunks, 'get_all'), "text_chunks does not have get_all method"
-                all_chunks = await rag.text_chunks.get_all()
+                all_chunks = await rag.text_chunks.get_all() # type: ignore
 
                 # 筛选属于该文档的 chunks
                 doc_chunks = []

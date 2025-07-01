@@ -29,11 +29,7 @@ class ChatbotConfiguration(Configuration):
         metadata={
             "name": "智能体模型",
             "configurable": True,
-            "options": [
-                "zhipu/glm-4-plus",
-                "siliconflow/Qwen/Qwen2.5-72B-Instruct",
-                "siliconflow/Qwen/Qwen2.5-7B-Instruct",
-            ],
+            "options": [],
             "description": "智能体的驱动模型"
         },
     )

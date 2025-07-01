@@ -5,18 +5,13 @@ from src import config
 from src.utils.logging_config import logger
 from src.models.chat_model import OpenAIBase
 
-def select_model(model_provider=None, model_name=None):
+def select_model(model_provider, model_name=None):
     """根据模型提供者选择模型"""
-    model_provider = model_provider or config.model_provider
+    assert model_provider is not None, "Model provider not specified"
     model_info = config.model_names.get(model_provider, {})
-    model_name = model_name or config.model_name or model_info.get("default", "")
-
+    model_name = model_name or model_info.get("default", "")
 
     logger.info(f"Selecting model from `{model_provider}` with `{model_name}`")
-
-
-    if model_provider is None:
-        raise ValueError("Model provider not specified, please modify `model_provider` in `src/config/base.yaml`")
 
     if model_provider == "qianfan":
         from src.models.chat_model import Qianfan
@@ -25,33 +20,6 @@ def select_model(model_provider=None, model_name=None):
     if model_provider == "openai":
         from src.models.chat_model import OpenModel
         return OpenModel(model_name)
-
-    if model_provider == "deepseek" or model_provider == "dashscope":
-        from langchain_deepseek import ChatDeepSeek
-        return OpenAIBase(
-            api_key=os.getenv(model_info["env"][0]),
-            base_url=model_info["base_url"],
-            model_name=model_name,
-            chat_open_ai=ChatDeepSeek(
-                model=model_name,
-                api_key=os.getenv(model_info["env"][0]),
-                base_url=model_info["base_url"],
-                api_base=model_info["base_url"],
-            )
-        )
-
-    if model_provider == "together":
-        from langchain_together import ChatTogether
-        return OpenAIBase(
-            api_key=os.getenv(model_info["env"][0]),
-            base_url=model_info["base_url"],
-            model_name=model_name,
-            chat_open_ai=ChatTogether(
-                model=model_name,
-                api_key=os.getenv(model_info["env"][0]),
-                base_url=model_info["base_url"],
-            )
-        )
 
     if model_provider == "custom":
         model_info = get_custom_model(model_name)
@@ -69,8 +37,7 @@ def select_model(model_provider=None, model_name=None):
         return model
     except Exception as e:
         raise ValueError(f"Model provider {model_provider} load failed, {e} \n {traceback.format_exc()}")
-    
-    
+
 def get_custom_model(model_id):
     """return model_info"""
     assert config.custom_models is not None, "custom_models is not set"

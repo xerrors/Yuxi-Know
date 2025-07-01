@@ -2,34 +2,18 @@ import os
 import json
 import requests
 import numpy as np
-from FlagEmbedding import FlagReranker
 
 from src import config
 from src.utils import logger, get_docker_safe_url
 
-
-class LocalReranker(FlagReranker):
-    def __init__(self, **kwargs):
-        model_info = config.reranker_names[config.reranker]
-        model_name_or_path = config.model_local_paths.get(model_info["name"], model_info.get("local_path"))
-        model_name_or_path = model_name_or_path or model_info["name"]
-        logger.info(f"Loading Reranker model {config.reranker} from {model_name_or_path}")
-
-        super().__init__(model_name_or_path, use_fp16=True, device=config.device, **kwargs)
-        logger.info(f"Reranker model {config.reranker} loaded")
-
-
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-class OnlineRerank:
-    def __init__(self, **kwargs):
-        model_info = config.reranker_names[config.reranker]
-        self.url = get_docker_safe_url(model_info["base_url"])
-        self.model = model_info["name"]
-
-        api_key = os.getenv(model_info["api_key"], model_info["api_key"])
-        assert api_key, f"{model_info['name']} api_key is required"
+class OnlineReranker:
+    def __init__(self, model_name, api_key, base_url, **kwargs):
+        self.url = get_docker_safe_url(base_url)
+        self.model = model_name
+        self.api_key = api_key
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
@@ -59,15 +43,17 @@ class OnlineRerank:
             "max_chunks_per_doc": max_length,
         }
 
-def get_reranker():
+def get_reranker(model_id, **kwargs):
     support_rerankers = config.reranker_names.keys()
-    assert config.reranker in support_rerankers, f"Unsupported Reranker: {config.reranker}, only support {support_rerankers}"
-    provider, model_name = config.reranker.split('/', 1)
-    if provider == "local":
-        logger.warning("[DEPRECATED] Local reranker will be removed in v0.2, please use other reranker")
-        return LocalReranker()
-    elif provider == "siliconflow":
-        return OnlineRerank()
-    else:
-        raise ValueError(f"Unsupported Reranker: {config.reranker}, only support {config.reranker_names.keys()}")
+    assert model_id in support_rerankers, f"Unsupported Reranker: {model_id}, only support {support_rerankers}"
 
+    model_info = config.reranker_names[model_id]
+    base_url = model_info["base_url"]
+    api_key = os.getenv(model_info["api_key"], model_info["api_key"])
+    assert api_key, f"{model_info['name']} api_key is required"
+    return OnlineReranker(
+        model_name=model_info["name"],
+        api_key=api_key,
+        base_url=base_url,
+        **kwargs
+    )

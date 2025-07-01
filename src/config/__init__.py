@@ -59,9 +59,6 @@ class Config(SimpleConfig):
 
         self.add_item("embed_model", default="siliconflow/BAAI/bge-m3", des="Embedding 模型", choices=list(self.embed_model_names.keys()))
         self.add_item("reranker", default="siliconflow/BAAI/bge-reranker-v2-m3", des="Re-Ranker 模型", choices=list(self.reranker_names.keys()))  # noqa: E501
-        self.add_item("model_local_paths", default={}, des="本地模型路径")
-        self.add_item("use_rewrite_query", default="on", des="重写查询", choices=["off", "on", "hyde"])
-        self.add_item("device", default="cuda", des="运行本地模型的设备", choices=["cpu", "cuda"])
         ### <<< 默认配置结束
 
         self.load()
@@ -120,7 +117,6 @@ class Config(SimpleConfig):
         """
         处理配置
         """
-        model_provider_info = self.model_names.get(self.model_provider, {})
         self.model_dir = os.environ.get("MODEL_DIR", "")
 
         if self.model_dir:
@@ -130,26 +126,6 @@ class Config(SimpleConfig):
                 logger.warning(f"Warning: The model directory （{self.model_dir}） does not exist. If not configured, please ignore it. If configured, please check if the configuration is correct;"
                                "For example, the mapping in the docker-compose file")
 
-
-        # 检查模型提供商是否存在
-        if self.model_provider != "custom":
-            if self.model_name not in model_provider_info["models"]:
-                logger.warning(f"Model name {self.model_name} not in {self.model_provider}, using default model name")
-                self.model_name = model_provider_info["default"]
-
-            default_model_name = model_provider_info["default"]
-            self.model_name = self.get("model_name") or default_model_name
-        else:
-            self.model_name = self.get("model_name")
-            if self.model_name not in [item["custom_id"] for item in self.get("custom_models", [])]:
-                logger.warning(f"Model name {self.model_name} not in custom models, using default model name")
-                if self.get("custom_models", []):
-                    self.model_name = self.get("custom_models", [])[0]["custom_id"]
-                else:
-                    self.model_name = self._config_items["model_name"]["default"]
-                    self.model_provider = self._config_items["model_provider"]["default"]
-                    logger.error(f"No custom models found, using default model {self.model_name} from {self.model_provider}")
-
         # 检查模型提供商的环境变量
         conds = {}
         self.model_provider_status = {}
@@ -158,12 +134,6 @@ class Config(SimpleConfig):
             conds_bool = [bool(os.getenv(_k)) for _k in conds[provider]]
             self.model_provider_status[provider] = all(conds_bool)
 
-        # 检查web_search的环境变量
-        # if self.enable_web_search and not os.getenv("TAVILY_API_KEY"):
-        #     logger.warning("TAVILY_API_KEY not set, web search will be disabled")
-        #     self.enable_web_search = False
-
-        # 2025.04.08 修改为不手动配置，只要配置了TAVILY_API_KEY，就默认开启web_search
         if os.getenv("TAVILY_API_KEY"):
             self.enable_web_search = True
 

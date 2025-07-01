@@ -6,12 +6,11 @@
 #
 #####################################################
 
-
-
 MODEL_NAMES:
   openai:
     name: OpenAI
     url: https://platform.openai.com/docs/models
+    base_url: https://api.openai.com/v1
     default: gpt-3.5-turbo
     env:
       - OPENAI_API_KEY
@@ -20,21 +19,23 @@ MODEL_NAMES:
       - gpt-4o
       - gpt-4o-mini
       - gpt-3.5-turbo
+
   deepseek:
     name: DeepSeek
     url: https://platform.deepseek.com/api-docs/zh-cn/pricing
-    default: deepseek-chat
     base_url: https://api.deepseek.com/v1
+    default: deepseek-chat
     env:
       - DEEPSEEK_API_KEY
     models:
       - deepseek-chat
       - deepseek-reasoner
+
   zhipu:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api
-    default: glm-4-flash
     base_url: https://open.bigmodel.cn/api/paas/v4/
+    default: glm-4-flash
     env:
       - ZHIPUAI_API_KEY
     models:
@@ -43,17 +44,19 @@ MODEL_NAMES:
       - glm-4-air
       - glm-4-flash
       - glm-z1-air
+
   siliconflow:
     name: SiliconFlow
     url: https://cloud.siliconflow.cn/models
-    default: Qwen/Qwen2.5-7B-Instruct
     base_url: https://api.siliconflow.cn/v1
+    default: Qwen/Qwen3-8B
     env:
       - SILICONFLOW_API_KEY
     models:
       - Pro/deepseek-ai/DeepSeek-R1
       - Pro/deepseek-ai/DeepSeek-V3
       - Qwen/QwQ-32B
+      - Qwen/Qwen3-8B
 
   together.ai:
     name: Together.ai
@@ -71,8 +74,8 @@ MODEL_NAMES:
   dashscope:
     name: 阿里百炼 (DashScope)
     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
-    default: qwen3-235b-a22b
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    default: qwen3-235b-a22b
     env:
       - DASHSCOPE_API_KEY
     models:
@@ -83,8 +86,8 @@ MODEL_NAMES:
   ark:
     name: 豆包（Ark）
     url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
-    default: doubao-1-5-pro-32k-250115
     base_url: https://ark.cn-beijing.volces.com/api/v3
+    default: doubao-1-5-pro-32k-250115
     env:
       - ARK_API_KEY
     models:

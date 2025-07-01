@@ -3,7 +3,6 @@ import json
 import warnings
 import traceback
 
-import torch
 from neo4j import GraphDatabase as GD
 
 from src import config

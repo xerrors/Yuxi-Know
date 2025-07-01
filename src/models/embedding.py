@@ -13,18 +13,17 @@ from src.utils import hashstr, logger, get_docker_safe_url
 class BaseEmbeddingModel:
     embed_state = {}
 
+    def __init__(self, model_id):
+        self.model_id = model_id
+        self.info = config.embed_model_names[model_id]
+        self.model = self.info["name"]
+        self.dimension = self.info.get("dimension", None)
+        self.url = get_docker_safe_url(self.info["base_url"])
+        self.api_key = os.getenv(self.info["api_key"], self.info["api_key"])
+
     @abstractmethod
     def predict(self, message):
         raise NotImplementedError("Subclasses must implement this method")
-
-    def get_dimension(self):
-        if hasattr(self, "dimension"):
-            return self.dimension
-
-        if hasattr(self, "embed_model_fullname"):
-            return config.embed_model_names[self.embed_model_fullname].get("dimension", None)
-
-        return config.embed_model_names[self.model].get("dimension", None)
 
     def encode(self, message):
         return self.predict(message)
@@ -66,77 +65,14 @@ class BaseEmbeddingModel:
 
         return data
 
-class LocalEmbeddingModel(BaseEmbeddingModel):
-    def __init__(self, **kwargs):
-        info = config.embed_model_names[config.embed_model]
-
-        self.model = config.model_local_paths.get(info["name"], info.get("local_path"))
-        self.model = self.model or info["name"]
-        self.dimension = info["dimension"]
-        self.embed_model_fullname = config.embed_model
-
-        if os.getenv("MODEL_DIR"):
-            if os.path.exists(_path := os.path.join(os.getenv("MODEL_DIR"), self.model)):
-                self.model = _path
-            else:
-                logger.warning(f"Local model `{info['name']}` not found in `{self.model}`, using `{info['name']}`")
-
-        logger.info(f"Loading local model `{info['name']}` from `{self.model}` with device `{config.device}`")
-        logger.debug("如果没配置任何路径的话，正常情况下会自动从 Huggingface 下载模型，如果遇到下载失败，可以尝试使用 HF_MIRROR 环境变量；"
-                    f"如果还是不行，建议手动下载到某个文件夹，比如  {os.getenv('MODEL_DIR', '/models')}/BAAI/bge-m3 目录下；")
-
-        self.model = HuggingFaceEmbeddings(
-            model_name=self.model,
-            model_kwargs={'device': config.device},
-            encode_kwargs={
-                'normalize_embeddings': True,
-                'prompt_name': info.get("query_instruction", None),
-            },
-        )
-
-        logger.info(f"Embedding model {info['name']} loaded, {self.model=}")
-
-    def predict(self, message):
-        return self.model.embed_documents(message)
-
-    async def aencode(self, message):
-        return await self.model.aembed_documents(message)
-
-    def encode_queries(self, queries):
-        logger.warning("Huggingface Model 不支持批量 encode queries，因此使用训练实现")
-        data = []
-        for q in queries:
-            data.append(self.predict(q))
-
-        return data
-
-
-class ZhipuEmbedding(BaseEmbeddingModel):
-
-    def __init__(self) -> None:
-        self.config = config
-        self.model = config.embed_model_names[config.embed_model]["name"]
-        self.dimension = config.embed_model_names[config.embed_model]["dimension"]
-        self.client = ZhipuAI(api_key=os.getenv("ZHIPUAI_API_KEY"))
-        self.embed_model_fullname = config.embed_model
-
-    def predict(self, message):
-        response = self.client.embeddings.create(
-            model=self.model,
-            input=message,
-        )
-        data = [a.embedding for a in response.data]
-        return data
-
-
 class OllamaEmbedding(BaseEmbeddingModel):
-    def __init__(self) -> None:
-        self.info = config.embed_model_names[config.embed_model]
-        self.model = self.info["name"]
-        self.url = self.info.get("base_url", "http://localhost:11434/api/embed")
-        self.url = get_docker_safe_url(self.url)
-        self.dimension = self.info.get("dimension", None)
-        self.embed_model_fullname = config.embed_model
+    """
+    Ollama Embedding Model
+    """
+
+    def __init__(self, model_id) -> None:
+        super().__init__(model_id)
+        self.url = self.url or get_docker_safe_url("http://localhost:11434/api/embed")
 
     def predict(self, message: list[str] | str):
         if isinstance(message, str):
@@ -154,14 +90,8 @@ class OllamaEmbedding(BaseEmbeddingModel):
 
 class OtherEmbedding(BaseEmbeddingModel):
 
-    def __init__(self) -> None:
-        self.info = config.embed_model_names[config.embed_model]
-        self.embed_model_fullname = config.embed_model
-        self.dimension = self.info.get("dimension", None)
-        self.model = self.info["name"]
-        self.api_key = os.getenv(self.info["api_key"], self.info["api_key"])
-        self.url = get_docker_safe_url(self.info["base_url"])
-        assert self.url and self.model, f"URL and model are required. Cur embed model: {config.embed_model}"
+    def __init__(self, model_id) -> None:
+        super().__init__(model_id)
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -181,26 +111,18 @@ class OtherEmbedding(BaseEmbeddingModel):
             "input": message,
         }
 
-def get_embedding_model():
-    provider, model_name = config.embed_model.split('/', 1)
+def get_embedding_model(model_id):
+    provider, model_name = model_id.split('/', 1) if model_id else ("", "")
     support_embed_models = config.embed_model_names.keys()
-    assert config.embed_model in support_embed_models, f"Unsupported embed model: {config.embed_model}, only support {support_embed_models}"
-    logger.debug(f"Loading embedding model {config.embed_model}")
+    assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
+    logger.debug(f"Loading embedding model {model_id}")
     if provider == "local":
-        logger.warning("[DEPRECATED] Local embedding model will be removed in v0.2, please use other embedding models")
-        model = LocalEmbeddingModel()
-
-    elif provider == "zhipu":
-        model = ZhipuEmbedding()
+        raise ValueError("Local embedding model is not supported, please use other embedding models")
 
     elif provider == "ollama":
-        model = OllamaEmbedding()
+        model = OllamaEmbedding(model_id)
 
     else:
-        model = OtherEmbedding()
+        model = OtherEmbedding(model_id)
 
     return model
-
-def handle_local_model(paths, model_name, default_path):
-    model_path = paths.get(model_name, default_path)
-    return model_path
