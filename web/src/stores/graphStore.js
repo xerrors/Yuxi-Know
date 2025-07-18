@@ -47,19 +47,19 @@ export const useGraphStore = defineStore('graph', {
       // 首先尝试通过dynamicId匹配
       let foundEdge = state.rawGraph.edges.find(edge => edge.dynamicId === state.selectedEdge)
       if (foundEdge) return foundEdge
-      
+
       // 如果没找到，尝试通过原始ID匹配
       foundEdge = state.rawGraph.edges.find(edge => edge.id === state.selectedEdge)
       if (foundEdge) return foundEdge
-      
+
       // 最后尝试通过source->target格式匹配
       const [source, target] = state.selectedEdge.split('->')
       if (source && target) {
-        foundEdge = state.rawGraph.edges.find(edge => 
+        foundEdge = state.rawGraph.edges.find(edge =>
           edge.source === source.trim() && edge.target === target.trim()
         )
       }
-      
+
       return foundEdge || null
     },
 
@@ -200,7 +200,7 @@ export const useGraphStore = defineStore('graph', {
         const nodeId = String(node.id)
         const labels = node.labels || [node.entity_type || 'unknown']
         const entityType = node.entity_type || labels[0] || 'unknown'
-        
+
         const processedNode = {
           id: nodeId,
           labels: Array.isArray(labels) ? labels.map(String) : [String(labels)],
@@ -246,10 +246,10 @@ export const useGraphStore = defineStore('graph', {
         const sourceId = String(edge.source)
         const targetId = String(edge.target)
         const dynamicId = `${sourceId}-${targetId}-${index}`
-        
+
         // 适配新的LightRAG API格式
         const weight = Number(edge.properties?.weight || edge.weight || 1.0)
-        
+
         const processedEdge = {
           id: String(edge.id),
           source: sourceId,
@@ -345,7 +345,7 @@ export const useGraphStore = defineStore('graph', {
           try {
             // 使用动态ID作为Sigma边ID，避免重复
             const sigmaEdgeId = edge.dynamicId || `${edge.source}->${edge.target}`
-            
+
             // 检查是否已存在相同的边
             if (!sigmaGraph.hasEdge(sigmaEdgeId)) {
               sigmaGraph.addEdgeWithKey(sigmaEdgeId, String(edge.source), String(edge.target), edgeAttributes)

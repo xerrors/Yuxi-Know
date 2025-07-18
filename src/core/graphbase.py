@@ -7,7 +7,7 @@ from neo4j import GraphDatabase as GD
 from neo4j import Query
 
 from src import config
-from src.models.embedding import get_embedding_model
+from src.models import select_embedding_model
 from src.utils import logger
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -22,7 +22,7 @@ class GraphDatabase:
         self.status = "closed"
         self.kgdb_name = "neo4j"
         self.embed_model_name = os.getenv("GRAPH_EMBED_MODEL_NAME") or "siliconflow/BAAI/bge-m3"
-        self.embed_model = get_embedding_model(self.embed_model_name)
+        self.embed_model = select_embedding_model(self.embed_model_name)
         self.work_dir = os.path.join(config.save_dir, "knowledge_graph", self.kgdb_name)
         os.makedirs(self.work_dir, exist_ok=True)
 
@@ -590,9 +590,11 @@ class GraphDatabase:
         source_id = source.element_id
         target_id = target.element_id
 
-        assert node_dict is not None, "node_dict is required"
-        source_name = node_dict[source_id]["name"] if source_name is None else source_name
-        target_name = node_dict[target_id]["name"] if target_name is None else target_name
+        # 如果没有提供 source_name 或 target_name，则需要 node_dict
+        if source_name is None or target_name is None:
+            assert node_dict is not None, "node_dict is required when source_name or target_name is None"
+            source_name = node_dict[source_id]["name"] if source_name is None else source_name
+            target_name = node_dict[target_id]["name"] if target_name is None else target_name
 
         relationship_type = relationship._properties.get("type", "unknown")
         if relationship_type == "unknown":

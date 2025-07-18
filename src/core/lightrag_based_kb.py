@@ -92,11 +92,12 @@ class LightRagBasedKB:
             # 使用配置的 LLM 和 embedding 函数
             rag = LightRAG(
                 working_dir=working_dir,
+                workspace=db_id,
                 llm_model_func=self._get_llm_func(llm_info),
                 embedding_func=self._get_embedding_func(embed_info),
                 vector_storage="MilvusVectorDBStorage",
                 kv_storage="JsonKVStorage",
-                graph_storage="PGGraphStorage",
+                graph_storage="Neo4JStorage",
                 doc_status_storage="JsonDocStatusStorage",
                 log_file_path=os.path.join(self.work_dir, db_id, "lightrag.log"),
             )
@@ -127,16 +128,16 @@ class LightRagBasedKB:
         # provider_info = config.model_names[llm_info.get("provider")]
         # api_key = os.getenv(provider_info.get("env")[0] or "OPENAI_API_KEY") or "no_api_key"
         # base_url = get_docker_safe_url(provider_info.get("base_url", "http://localhost:8081/v1"))
-        from src.models import get_custom_model
-        llm_info = get_custom_model("qwen3:32b-RFnC")
+        from src.models import select_model
+        model = select_model("dashscope", "qwen-max-latest")
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return await openai_complete_if_cache(
-                llm_info.get("name", "qwen3-1.7b"),
-                prompt,
+                model=model.model_name,
+                prompt=prompt,
                 system_prompt=system_prompt,
                 history_messages=history_messages,
-                api_key=llm_info.get("api_key"),
-                base_url=get_docker_safe_url(llm_info.get("api_base")),
+                api_key=model.api_key,
+                base_url=model.base_url,
                 extra_body={"enable_thinking": False},
                 **kwargs,
             )
@@ -144,16 +145,16 @@ class LightRagBasedKB:
 
     def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
-        api_key = os.getenv(embed_info.get("api_key", "OPENAI_API_KEY")) or "no_api_key"
-        base_url = embed_info.get("base_url", "http://localhost:8081/v1").replace("/embeddings", "")
+        from src.models import select_embedding_model
+        model = select_embedding_model("siliconflow/BAAI/bge-m3")
         return EmbeddingFunc(
-            embedding_dim=embed_info.get("dimension") or 1024,
+            embedding_dim=model.dimension,
             max_token_size=4096,
             func=lambda texts: openai_embed(
                 texts=texts,
-                model=embed_info.get("model_name") or "Qwen3-Embedding-0.6B",
-                api_key=api_key,
-                base_url=get_docker_safe_url(base_url)
+                model=model.model,
+                api_key=model.api_key,
+                base_url=model.base_url.replace("/embeddings", ""),
             ),
         )
 
@@ -335,7 +336,8 @@ class LightRagBasedKB:
                 # 根据内容类型处理内容
                 if content_type == "file":
                     markdown_content = await self._process_file_to_markdown(item, params=params)
-                    logger.info(f"Markdown content: {markdown_content[:100].replace('\n', ' ')}...")
+                    markdown_content_lines = markdown_content[:100].replace('\n', ' ')
+                    logger.info(f"Markdown content: {markdown_content_lines}...")
                 else:  # URL
                     markdown_content = await self._process_url_to_markdown(item, params=params)
 

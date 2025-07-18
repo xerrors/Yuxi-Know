@@ -4,6 +4,7 @@ import traceback
 from src import config
 from src.utils.logging_config import logger
 from src.models.chat_model import OpenAIBase
+from src.models.embedding import OllamaEmbedding, OtherEmbedding
 
 def select_model(model_provider, model_name=None):
     """根据模型提供者选择模型"""
@@ -37,6 +38,24 @@ def select_model(model_provider, model_name=None):
         return model
     except Exception as e:
         raise ValueError(f"Model provider {model_provider} load failed, {e} \n {traceback.format_exc()}")
+
+
+def select_embedding_model(model_id):
+    provider, model_name = model_id.split('/', 1) if model_id else ("", "")
+    support_embed_models = config.embed_model_names.keys()
+    assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
+    logger.debug(f"Loading embedding model {model_id}")
+    if provider == "local":
+        raise ValueError("Local embedding model is not supported, please use other embedding models")
+
+    elif provider == "ollama":
+        model = OllamaEmbedding(model_id)
+
+    else:
+        model = OtherEmbedding(model_id)
+
+    return model
+
 
 def get_custom_model(model_id):
     """return model_info"""

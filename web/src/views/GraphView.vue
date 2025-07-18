@@ -231,9 +231,9 @@ const onSearch = () => {
     //   return
     // }
 
-    if (!confirm(`构建图数据库时向量模型为 ${graphInfo?.value?.embed_model_name}，当前向量模型为 ${cur_embed_model.value}，是否继续查询？`)) {
-      return
-    }
+    // if (!confirm(`构建图数据库时向量模型为 ${graphInfo?.value?.embed_model_name}，当前向量模型为 ${cur_embed_model.value}，是否继续查询？`)) {
+    //   return
+    // }
   }
 
   if (!state.searchInput) {

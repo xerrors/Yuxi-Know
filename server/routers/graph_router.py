@@ -1,8 +1,4 @@
-import json
-import os
-import asyncio
 import traceback
-from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Query, HTTPException, Depends
 from server.utils.auth_middleware import get_admin_user
 from server.models.user_model import User
@@ -23,13 +19,13 @@ async def get_subgraph(
 ):
     """
     使用 LightRAG 原生方法获取知识图谱子图
-    
+
     Args:
         db_id: LightRAG 数据库实例ID
         node_label: 节点标签，用于查找起始节点，使用 "*" 获取全图
         max_depth: 子图的最大深度
         max_nodes: 返回的最大节点数量
-        
+
     Returns:
         包含节点和边的知识图谱数据
     """
@@ -95,10 +91,10 @@ async def get_graph_labels(
 ):
     """
     获取知识图谱中的所有标签
-    
+
     Args:
         db_id: LightRAG 数据库实例ID
-        
+
     Returns:
         图谱中所有可用的标签列表
     """
@@ -132,7 +128,7 @@ async def get_available_databases(
 ):
     """
     获取所有可用的 LightRAG 数据库
-    
+
     Returns:
         可用的数据库列表
     """

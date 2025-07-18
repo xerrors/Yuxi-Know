@@ -289,20 +289,6 @@
                     <a-input-number size="small" v-model:value="meta.top_k" :min="1" :max="100" />
                   </div>
                 </div>
-                <div class="params-group">
-                  <div class="params-item">
-                    <p>片段最大Token数：</p>
-                    <a-input-number size="small" v-model:value="meta.max_token_for_text_unit" :min="1" :max="4000" />
-                  </div>
-                  <div class="params-item">
-                    <p>关系描述最大Token数：</p>
-                    <a-input-number size="small" v-model:value="meta.max_token_for_global_context" :min="1" :max="4000" />
-                  </div>
-                  <div class="params-item">
-                    <p>实体描述最大Token数：</p>
-                    <a-input-number size="small" v-model:value="meta.max_token_for_local_context" :min="1" :max="4000" />
-                  </div>
-                </div>
               </div>
             </div>
             <div class="sider-bottom">
@@ -314,8 +300,8 @@
       <a-tab-pane key="knowledge-graph" force-render>
         <template #tab><span><Waypoints size="14" class="mr-3 bn-1px" />知识图谱（开发中）</span></template>
         <div class="knowledge-graph-container db-tab-container">
-          <KnowledgeGraphViewer 
-            :initial-database-id="databaseId" 
+          <KnowledgeGraphViewer
+            :initial-database-id="databaseId"
             :hide-db-selector="true"
           />
         </div>
@@ -396,9 +382,6 @@ const meta = reactive({
   only_need_context: true,
   only_need_prompt: false,
   top_k: 10,
-  max_token_for_text_unit: 4000,
-  max_token_for_global_context: 4000,
-  max_token_for_local_context: 4000,
 });
 
 const enable_ocr_options = ref([
@@ -1541,10 +1524,10 @@ const toggleAutoRefresh = (checked) => {
 
 .knowledge-graph-container {
   height: calc(100vh - 200px);
-  
+
   :deep(.knowledge-graph-viewer) {
     height: 100%;
-    
+
     .sigma-container {
       height: calc(100% - 80px);
     }

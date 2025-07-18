@@ -3,7 +3,6 @@ import json
 import requests
 import asyncio
 from abc import abstractmethod
-from zhipuai import ZhipuAI
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from src import config
@@ -19,6 +18,7 @@ class BaseEmbeddingModel:
         self.model = self.info["name"]
         self.dimension = self.info.get("dimension", None)
         self.url = get_docker_safe_url(self.info["base_url"])
+        self.base_url = get_docker_safe_url(self.info["base_url"])
         self.api_key = os.getenv(self.info["api_key"], self.info["api_key"])
 
     @abstractmethod
@@ -110,19 +110,3 @@ class OtherEmbedding(BaseEmbeddingModel):
             "model": self.model,
             "input": message,
         }
-
-def get_embedding_model(model_id):
-    provider, model_name = model_id.split('/', 1) if model_id else ("", "")
-    support_embed_models = config.embed_model_names.keys()
-    assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
-    logger.debug(f"Loading embedding model {model_id}")
-    if provider == "local":
-        raise ValueError("Local embedding model is not supported, please use other embedding models")
-
-    elif provider == "ollama":
-        model = OllamaEmbedding(model_id)
-
-    else:
-        model = OtherEmbedding(model_id)
-
-    return model
