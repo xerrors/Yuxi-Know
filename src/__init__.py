@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 
-load_dotenv("src/.env")
+load_dotenv("src/.env", override=True)
 
 from concurrent.futures import ThreadPoolExecutor  # noqa: E402
 executor = ThreadPoolExecutor()
