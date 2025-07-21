@@ -5,7 +5,13 @@ import base64
 import os
 import time
 from typing import Optional, Any
-from src.utils import logger
+from pathlib import Path
+
+if __name__ == "__main__":
+    from loguru import logger
+    import typer
+else:
+    from src.utils import logger
 
 
 
@@ -297,3 +303,82 @@ def analyze_document(file_path: str, base_url: str = "http://localhost:8080") ->
 
 def check_paddlex_health(base_url: str = "http://localhost:8080") -> bool:
     return requests.get(f"{base_url}/health", timeout=5)
+
+
+def analyze_folder(input_dir: str, output_dir: str, base_url: str = "http://localhost:8080"):
+    """分析文件夹中的所有支持文件，保存为txt格式"""
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+
+    if not input_path.exists():
+        print(f"❌ 输入目录不存在：{input_dir}")
+        return
+
+    # 创建输出目录
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # 获取所有支持的文件
+    supported_extensions = {'.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
+    files = []
+    for root, dirs, filenames in os.walk(input_dir):
+        for filename in filenames:
+            file_path = Path(root) / filename
+            if file_path.suffix.lower() in supported_extensions:
+                files.append(file_path)
+
+    if not files:
+        print(f"⚠️ 没有找到支持的文件")
+        return
+
+    print(f"📁 找到 {len(files)} 个文件")
+
+    success_count = 0
+    for i, file_path in enumerate(files, 1):
+        print(f"🔄 [{i}/{len(files)}] {file_path.name}")
+
+        try:
+            # 分析文档
+            result = analyze_document(str(file_path), base_url)
+
+            if result.get("success"):
+                # 保持目录结构
+                relative_path = file_path.relative_to(input_path)
+                output_file = output_path / relative_path.with_suffix('.txt')
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+
+                # 写入文本内容
+                text_content = result.get("full_text", "未提取到内容") if result.get("success") else f"分析失败：{result.get('error', '未知错误')}"
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(text_content)
+
+                success_count += 1
+                print(f"✅ {output_file.name}")
+            else:
+                print(f"❌ 失败: {result.get('error')}")
+
+        except Exception as e:
+            print(f"❌ 异常: {str(e)}")
+
+        time.sleep(0.5)
+
+    print(f"\n📊 完成！成功: {success_count}, 总计: {len(files)}")
+
+
+if __name__ == "__main__":
+    app = typer.Typer(help="PaddleX 文档分析工具")
+
+    @app.command()
+    def single(file_path: str, base_url: str = "http://172.19.13.5:8080"):
+        """分析单个文件"""
+        result = analyze_document(file_path, base_url)
+        if result["success"]:
+            print(f"✅ 成功提取 {len(result['full_text'])} 个字符")
+        else:
+            print(f"❌ 失败: {result.get('error')}")
+
+    @app.command()
+    def folder(input_dir: str, output_dir: str, base_url: str = "http://172.19.13.5:8080"):
+        """批量分析文件夹"""
+        analyze_folder(input_dir, output_dir, base_url)
+
+    app()
