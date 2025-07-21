@@ -32,10 +32,17 @@ async def get_subgraph(
     try:
         logger.info(f"获取子图数据 - db_id: {db_id}, node_label: {node_label}, max_depth: {max_depth}, max_nodes: {max_nodes}")
 
+        # 检查是否是 LightRAG 数据库
+        if not knowledge_base.is_lightrag_database(db_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"数据库 {db_id} 不是 LightRAG 类型，图谱功能仅支持 LightRAG 知识库"
+            )
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
-            raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
+            raise HTTPException(status_code=404, detail=f"LightRAG 数据库 {db_id} 不存在或无法访问")
 
         # 使用 LightRAG 的原生 get_knowledge_graph 方法
         knowledge_graph = await rag_instance.get_knowledge_graph(
@@ -78,6 +85,9 @@ async def get_subgraph(
         logger.info(f"成功获取子图 - 节点数: {len(nodes)}, 边数: {len(edges)}")
         return result
 
+    except HTTPException:
+        # 重新抛出 HTTP 异常
+        raise
     except Exception as e:
         logger.error(f"获取子图数据失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -101,10 +111,17 @@ async def get_graph_labels(
     try:
         logger.info(f"获取图谱标签 - db_id: {db_id}")
 
+        # 检查是否是 LightRAG 数据库
+        if not knowledge_base.is_lightrag_database(db_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"数据库 {db_id} 不是 LightRAG 类型，图谱功能仅支持 LightRAG 知识库"
+            )
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
-            raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
+            raise HTTPException(status_code=404, detail=f"LightRAG 数据库 {db_id} 不存在或无法访问")
 
         # 使用 LightRAG 的原生方法获取所有标签
         labels = await rag_instance.get_graph_labels()
@@ -116,6 +133,9 @@ async def get_graph_labels(
             }
         }
 
+    except HTTPException:
+        # 重新抛出 HTTP 异常
+        raise
     except Exception as e:
         logger.error(f"获取图谱标签失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
@@ -130,18 +150,20 @@ async def get_available_databases(
     获取所有可用的 LightRAG 数据库
 
     Returns:
-        可用的数据库列表
+        可用的 LightRAG 数据库列表
     """
     try:
-        databases = knowledge_base.get_databases()
+        lightrag_databases = knowledge_base.get_lightrag_databases()
         return {
             "success": True,
-            "data": databases
+            "data": {
+                "databases": lightrag_databases
+            }
         }
 
     except Exception as e:
-        logger.error(f"获取数据库列表失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取数据库列表失败: {str(e)}")
+        logger.error(f"获取 LightRAG 数据库列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取 LightRAG 数据库列表失败: {str(e)}")
 
 
 # 保留原有的直接数据库查询方法作为备用（如果需要的话）
@@ -215,10 +237,17 @@ async def get_graph_stats(
     try:
         logger.info(f"获取图谱统计信息 - db_id: {db_id}")
 
+        # 检查是否是 LightRAG 数据库
+        if not knowledge_base.is_lightrag_database(db_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"数据库 {db_id} 不是 LightRAG 类型，图谱功能仅支持 LightRAG 知识库"
+            )
+
         # 获取 LightRAG 实例
         rag_instance = await knowledge_base._get_lightrag_instance(db_id)
         if not rag_instance:
-            raise HTTPException(status_code=404, detail=f"数据库 {db_id} 不存在")
+            raise HTTPException(status_code=404, detail=f"LightRAG 数据库 {db_id} 不存在或无法访问")
 
         # 通过获取全图来统计节点和边的数量
         knowledge_graph = await rag_instance.get_knowledge_graph(
@@ -248,6 +277,9 @@ async def get_graph_stats(
             }
         }
 
+    except HTTPException:
+        # 重新抛出 HTTP 异常
+        raise
     except Exception as e:
         logger.error(f"获取图谱统计信息失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")

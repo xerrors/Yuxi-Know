@@ -83,12 +83,18 @@ export const knowledgeBaseApi = {
 
   /**
    * 创建知识库
-   * @param {Object} databaseData - 知识库数据
+   * @param {Object} databaseData - 知识库数据 (包含database_name, description, embed_model_name, kb_type等)
    * @returns {Promise} - 创建结果
    */
   createDatabase: async (databaseData) => {
     checkAdminPermission()
-    return apiPost('/api/data/', databaseData, {}, true)
+    return apiPost('/api/data/', {
+      database_name: databaseData.database_name,
+      description: databaseData.description,
+      embed_model_name: databaseData.embed_model_name,
+      kb_type: databaseData.kb_type || 'lightrag', // 默认为lightrag类型
+      ...databaseData.extra_config // 额外配置（如Vector的chunk_size等）
+    }, {}, true)
   },
 
   /**
@@ -202,6 +208,34 @@ export const knowledgeBaseApi = {
       db_id: dbId,
       ...data
     }, {}, true)
+  },
+
+  /**
+   * 获取支持的知识库类型
+   * @returns {Promise} - 支持的知识库类型列表
+   */
+  getSupportedKbTypes: async () => {
+    checkAdminPermission()
+    return apiGet('/api/data/kb-types', {}, true)
+  },
+
+  /**
+   * 获取知识库统计信息
+   * @returns {Promise} - 知识库统计信息
+   */
+  getKbStatistics: async () => {
+    checkAdminPermission()
+    return apiGet('/api/data/stats', {}, true)
+  },
+
+  /**
+   * 获取知识库类型特定的查询参数
+   * @param {string} dbId - 知识库ID
+   * @returns {Promise} - 查询参数配置
+   */
+  getKbQueryParams: async (dbId) => {
+    checkAdminPermission()
+    return apiGet(`/api/data/query-params/${dbId}`, {}, true)
   },
 }
 

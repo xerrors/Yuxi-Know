@@ -1467,20 +1467,6 @@ const mergeMessageChunk = (chunks) => {
   padding: 1rem 2rem;
   display: flex;
   flex-direction: column;
-
-
-  .tool-calls-container {
-    width: 100%;
-    margin-top: 10px;
-
-    .tool-call-container {
-      margin-bottom: 10px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-    }
-  }
 }
 
 .conv-box {

@@ -20,19 +20,194 @@ async def get_databases(current_user: User = Depends(get_admin_user)):
         return {"message": f"获取数据库列表失败 {e}", "databases": []}
     return database
 
+@data.get("/kb-types")
+async def get_knowledge_base_types(current_user: User = Depends(get_admin_user)):
+    """获取支持的知识库类型"""
+    try:
+        kb_types = knowledge_base.get_supported_kb_types()
+        return {"kb_types": kb_types, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取知识库类型失败 {e}, {traceback.format_exc()}")
+        return {"message": f"获取知识库类型失败 {e}", "kb_types": {}}
+
+@data.get("/stats")
+async def get_knowledge_base_statistics(current_user: User = Depends(get_admin_user)):
+    """获取知识库统计信息"""
+    try:
+        stats = knowledge_base.get_statistics()
+        return {"stats": stats, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取知识库统计失败 {e}, {traceback.format_exc()}")
+        return {"message": f"获取知识库统计失败 {e}", "stats": {}}
+
+@data.get("/query-params/{db_id}")
+async def get_knowledge_base_query_params(db_id: str, current_user: User = Depends(get_admin_user)):
+    """获取知识库类型特定的查询参数"""
+    try:
+        # 获取数据库信息
+        db_info = knowledge_base.get_database_info(db_id)
+        if not db_info:
+            raise HTTPException(status_code=404, detail="Database not found")
+
+        kb_type = db_info.get("kb_type", "lightrag")
+
+        # 根据知识库类型返回不同的查询参数
+        if kb_type == "lightrag":
+            params = {
+                "type": "lightrag",
+                "options": [
+                    {
+                        "key": "mode",
+                        "label": "检索模式",
+                        "type": "select",
+                        "default": "mix",
+                        "options": [
+                            {"value": "local", "label": "Local", "description": "上下文相关信息"},
+                            {"value": "global", "label": "Global", "description": "全局知识"},
+                            {"value": "hybrid", "label": "Hybrid", "description": "本地和全局混合"},
+                            {"value": "naive", "label": "Naive", "description": "基本搜索"},
+                            {"value": "mix", "label": "Mix", "description": "知识图谱和向量检索混合"},
+                        ]
+                    },
+                    {
+                        "key": "only_need_context",
+                        "label": "只使用上下文",
+                        "type": "boolean",
+                        "default": True,
+                        "description": "只返回上下文，不生成回答"
+                    },
+                    {
+                        "key": "only_need_prompt",
+                        "label": "只使用提示",
+                        "type": "boolean",
+                        "default": False,
+                        "description": "只返回提示，不进行检索"
+                    },
+                    {
+                        "key": "top_k",
+                        "label": "TopK",
+                        "type": "number",
+                        "default": 10,
+                        "min": 1,
+                        "max": 100,
+                        "description": "返回的最大结果数量"
+                    }
+                ]
+            }
+        elif kb_type == "chroma":
+            params = {
+                "type": "chroma",
+                "options": [
+                    {
+                        "key": "top_k",
+                        "label": "TopK",
+                        "type": "number",
+                        "default": 10,
+                        "min": 1,
+                        "max": 100,
+                        "description": "返回的最大结果数量"
+                    },
+                    {
+                        "key": "similarity_threshold",
+                        "label": "相似度阈值",
+                        "type": "number",
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.1,
+                        "description": "过滤相似度低于此值的结果"
+                    },
+                    {
+                        "key": "include_distances",
+                        "label": "显示相似度",
+                        "type": "boolean",
+                        "default": True,
+                        "description": "在结果中显示相似度分数"
+                    }
+                ]
+            }
+        elif kb_type == "milvus":
+            params = {
+                "type": "milvus",
+                "options": [
+                    {
+                        "key": "top_k",
+                        "label": "TopK",
+                        "type": "number",
+                        "default": 10,
+                        "min": 1,
+                        "max": 100,
+                        "description": "返回的最大结果数量"
+                    },
+                    {
+                        "key": "similarity_threshold",
+                        "label": "相似度阈值",
+                        "type": "number",
+                        "default": 0.0,
+                        "min": 0.0,
+                        "max": 1.0,
+                        "step": 0.1,
+                        "description": "过滤相似度低于此值的结果"
+                    },
+                    {
+                        "key": "include_distances",
+                        "label": "显示相似度",
+                        "type": "boolean",
+                        "default": True,
+                        "description": "在结果中显示相似度分数"
+                    },
+                    {
+                        "key": "metric_type",
+                        "label": "距离度量类型",
+                        "type": "select",
+                        "default": "COSINE",
+                        "options": [
+                            {"value": "COSINE", "label": "余弦相似度", "description": "适合文本语义相似度"},
+                            {"value": "L2", "label": "欧几里得距离", "description": "适合数值型数据"},
+                            {"value": "IP", "label": "内积", "description": "适合标准化向量"}
+                        ],
+                        "description": "向量相似度计算方法"
+                    }
+                ]
+            }
+        else:
+            # 未知类型，返回基本参数
+            params = {
+                "type": "unknown",
+                "options": [
+                    {
+                        "key": "top_k",
+                        "label": "TopK",
+                        "type": "number",
+                        "default": 10,
+                        "min": 1,
+                        "max": 100,
+                        "description": "返回的最大结果数量"
+                    }
+                ]
+            }
+
+        return {"params": params, "message": "success"}
+
+    except Exception as e:
+        logger.error(f"获取知识库查询参数失败 {e}, {traceback.format_exc()}")
+        return {"message": f"获取知识库查询参数失败 {e}", "params": {}}
+
 @data.post("/")
 async def create_database(
     database_name: str = Body(...),
     description: str = Body(...),
     embed_model_name: str = Body(...),
+    kb_type: str = Body("lightrag"),  # 新增：知识库类型参数，默认为lightrag
     current_user: User = Depends(get_admin_user)
 ):
-    logger.debug(f"Create database {database_name}")
+    logger.debug(f"Create database {database_name} with kb_type {kb_type}")
     try:
         embed_info = config.embed_model_names[embed_model_name]
         database_info = knowledge_base.create_database(
             database_name,
             description,
+            kb_type=kb_type,  # 传递知识库类型
             embed_info=embed_info
         )
     except Exception as e:

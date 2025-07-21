@@ -168,6 +168,13 @@
           </div>
           <!-- 数据库信息 -->
           <div class="database-info">
+            <a-tag
+              :color="getKbTypeColor(database.kb_type || 'lightrag')"
+              class="kb-type-tag"
+            >
+              <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" class="type-icon icon-16" />
+              {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
+            </a-tag>
             <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
             <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
             <span class="row-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件 · {{ database.db_id }}</span>
@@ -268,26 +275,71 @@
           <div class="sider">
             <div class="sider-top">
               <div class="query-params" v-if="state.curPage == 'query-test'">
-                <!-- <h3 class="params-title">查询参数</h3> -->
-                <div class="params-group">
+                <h3 class="params-title">
+                  查询参数
+                  <a-tag :color="getKbTypeColor(database.kb_type || 'lightrag')" size="small" style="margin-left: 8px;">
+                    {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
+                  </a-tag>
+                </h3>
+
+                <!-- 加载状态 -->
+                <div v-if="state.queryParamsLoading" class="params-loading">
+                  <a-spin size="small" /> 加载参数中...
+                </div>
+
+                <!-- 动态参数 -->
+                <div v-else class="params-group" v-for="param in queryParams" :key="param.key">
                   <div class="params-item">
-                    <p>检索模式：</p>
-                    <a-select v-model:value="meta.mode" :options="modeOptions" style="width: 120px;" />
+                    <p>{{ param.label }}：</p>
+
+                    <!-- 下拉选择器 -->
+                    <a-select
+                      v-if="param.type === 'select'"
+                      v-model:value="meta[param.key]"
+                      style="width: 120px;"
+                    >
+                      <a-select-option
+                        v-for="option in param.options"
+                        :key="option.value"
+                        :value="option.value"
+                      >
+                        {{ option.label }}
+                      </a-select-option>
+                    </a-select>
+
+                    <!-- 布尔开关 -->
+                    <a-switch
+                      v-else-if="param.type === 'boolean'"
+                      v-model:checked="meta[param.key]"
+                    />
+
+                    <!-- 数字输入 -->
+                    <a-input-number
+                      v-else-if="param.type === 'number'"
+                      size="small"
+                      v-model:value="meta[param.key]"
+                      :min="param.min || 0"
+                      :max="param.max || 100"
+                      :step="param.step || 1"
+                      style="width: 100px;"
+                    />
+
+                    <!-- 文本输入 -->
+                    <a-input
+                      v-else
+                      v-model:value="meta[param.key]"
+                      size="small"
+                      style="width: 120px;"
+                    />
+                  </div>
+                  <div v-if="param.description" class="param-description">
+                    {{ param.description }}
                   </div>
                 </div>
-                <div class="params-group">
-                  <div class="params-item">
-                    <p>只使用上下文：</p>
-                    <a-switch v-model:checked="meta.only_need_context" />
-                  </div>
-                  <div class="params-item">
-                    <p>只使用提示：</p>
-                    <a-switch v-model:checked="meta.only_need_prompt" />
-                  </div>
-                  <div class="params-item">
-                    <p>筛选 TopK：</p>
-                    <a-input-number size="small" v-model:value="meta.top_k" :min="1" :max="100" />
-                  </div>
+
+                <!-- 如果没有参数 -->
+                <div v-if="!state.queryParamsLoading && queryParams.length === 0" class="no-params">
+                  <a-empty :image="false" description="暂无可配置的参数" />
                 </div>
               </div>
             </div>
@@ -297,10 +349,43 @@
         </div>
       </a-tab-pane>
 
-      <a-tab-pane key="knowledge-graph" force-render>
-        <template #tab><span><Waypoints size="14" class="mr-3 bn-1px" />知识图谱（开发中）</span></template>
+      <a-tab-pane
+        key="knowledge-graph"
+        force-render
+        :disabled="(database.kb_type || 'lightrag') !== 'lightrag'"
+      >
+        <template #tab>
+          <span :class="{ 'disabled-tab': (database.kb_type || 'lightrag') !== 'lightrag' }">
+            <Waypoints size="14" class="mr-3 bn-1px" />
+            知识图谱
+            <a-tag
+              v-if="(database.kb_type || 'lightrag') !== 'lightrag'"
+              size="small"
+              color="orange"
+              style="margin-left: 4px;"
+            >
+              仅限LightRAG
+            </a-tag>
+          </span>
+        </template>
         <div class="knowledge-graph-container db-tab-container">
+          <div v-if="(database.kb_type || 'lightrag') !== 'lightrag'" class="feature-disabled">
+            <a-result
+              status="info"
+              title="图谱功能不可用"
+              sub-title="知识图谱功能仅支持 LightRAG 类型的知识库"
+            >
+              <template #icon>
+                <Waypoints size="48" style="color: #1890ff;" />
+              </template>
+              <template #extra>
+                <p>当前知识库类型：{{ getKbTypeLabel(database.kb_type || 'lightrag') }}</p>
+                <p>如需使用图谱功能，请创建 LightRAG 类型的知识库。</p>
+              </template>
+            </a-result>
+          </div>
           <KnowledgeGraphViewer
+            v-else
             :initial-database-id="databaseId"
             :hide-db-selector="true"
           />
@@ -341,10 +426,12 @@ import {
   EditOutlined,
   PlusOutlined,
   SettingOutlined,
+  DatabaseOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
-import { Waypoints } from 'lucide-vue-next';
+import { Waypoints, Database, Zap } from 'lucide-vue-next';
 
 
 
@@ -375,14 +462,12 @@ const state = reactive({
   chunkLoading: false,
   autoRefresh: false,
   loading: false,
+  queryParamsLoading: false,
 });
 
-const meta = reactive({
-  mode: 'mix',
-  only_need_context: true,
-  only_need_prompt: false,
-  top_k: 10,
-});
+// 动态查询参数
+const queryParams = ref([])
+const meta = reactive({});
 
 const enable_ocr_options = ref([
   { value: 'disable', payload: { title: '不启用' } },
@@ -391,14 +476,31 @@ const enable_ocr_options = ref([
   { value: 'paddlex_ocr', payload: { title: 'Paddlex OCR' } },
 ])
 
-const modeOptions = ref([
-  { value: 'local', payload: { title: 'local', subTitle: '上下文相关信息' } },
-  { value: 'global', payload: { title: 'global', subTitle: '全局知识' } },
-  { value: 'hybrid', payload: { title: 'hybrid', subTitle: '本地和全局混合' } },
-  { value: 'naive', payload: { title: 'naive', subTitle: '基本搜索' } },
-  { value: 'mix', payload: { title: 'mix', subTitle: '知识图谱和向量检索混合' } },
-  { value: 'bypass', payload: { title: 'bypass', subTitle: '绕过检索' } },
-])
+// 加载知识库类型特定的查询参数
+const loadQueryParams = async () => {
+  if (!databaseId.value) return
+
+  state.queryParamsLoading = true
+  try {
+    const response = await knowledgeBaseApi.getKbQueryParams(databaseId.value)
+    queryParams.value = response.params?.options || []
+
+    // 初始化meta对象的默认值
+    queryParams.value.forEach(param => {
+      if (!(param.key in meta)) {
+        meta[param.key] = param.default
+      }
+    })
+
+    console.log('Loaded query params:', queryParams.value)
+    console.log('Initialized meta:', meta)
+  } catch (error) {
+    console.error('Failed to load query params:', error)
+    message.error('加载查询参数失败')
+  } finally {
+    state.queryParamsLoading = false
+  }
+}
 
 const pagination = ref({
   pageSize: 15,
@@ -582,8 +684,10 @@ const getDatabaseInfo = () => {
   state.databaseLoading = true
   return new Promise((resolve, reject) => {
     knowledgeBaseApi.getDatabaseInfo(db_id)
-      .then(data => {
+      .then(async data => {
         database.value = data
+        // 加载查询参数
+        await loadQueryParams()
         resolve(data)
       })
       .catch(error => {
@@ -750,13 +854,12 @@ const columns = [
   { title: '操作', key: 'action', dataIndex: 'file_id', width: 150 }
 ];
 
-watch(() => route.params.database_id, (newId) => {
+watch(() => route.params.database_id, async (newId) => {
     databaseId.value = newId;
     console.log(newId)
     stopAutoRefresh();
-    getDatabaseInfo().then(() => {
-      startAutoRefresh();
-    });
+    await getDatabaseInfo();
+    startAutoRefresh();
   }
 );
 
@@ -946,12 +1049,56 @@ const toggleAutoRefresh = (checked) => {
   }
 };
 
+// 知识库类型相关工具方法
+const getKbTypeLabel = (type) => {
+  const labels = {
+    lightrag: 'LightRAG',
+    chroma: 'Chroma',
+    milvus: 'Milvus'
+  }
+  return labels[type] || type
+}
+
+const getKbTypeIcon = (type) => {
+  const icons = {
+    lightrag: Database,
+    chroma: Zap,
+    milvus: ThunderboltOutlined
+  }
+  return icons[type] || Database
+}
+
+const getKbTypeColor = (type) => {
+  const colors = {
+    lightrag: 'purple',
+    chroma: 'orange',
+    milvus: 'red'
+  }
+  return colors[type] || 'blue'
+}
+
 
 </script>
 
 <style lang="less" scoped>
 .database-info {
   margin: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+
+  .kb-type-tag {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    .type-icon {
+      margin-right: 4px;
+      font-size: 12px;
+      width: 14px;
+      height: 14px;
+    }
+  }
 }
 
 .db-main-container {
@@ -1003,9 +1150,17 @@ const toggleAutoRefresh = (checked) => {
           margin-top: 0;
           margin-bottom: 16px;
           color: var(--main-color);
-          font-size: 18px;
-          text-align: center;
+          font-size: 16px;
           font-weight: bold;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .params-loading {
+          text-align: center;
+          color: var(--gray-600);
+          padding: 16px;
         }
 
         .params-group {
@@ -1018,6 +1173,19 @@ const toggleAutoRefresh = (checked) => {
             padding-bottom: 0;
             border-bottom: none;
           }
+        }
+
+        .param-description {
+          font-size: 12px;
+          color: var(--gray-500);
+          margin-top: 4px;
+          line-height: 1.4;
+        }
+
+        .no-params {
+          text-align: center;
+          padding: 20px;
+          color: var(--gray-500);
         }
 
         .params-item {
@@ -1473,6 +1641,11 @@ const toggleAutoRefresh = (checked) => {
   .ant-tabs-content-holder {
     padding: 0 20px;
   }
+
+  .disabled-tab {
+    opacity: 0.5;
+    color: var(--gray-400);
+  }
 }
 
 .params-item.col .ant-segmented {
@@ -1524,6 +1697,20 @@ const toggleAutoRefresh = (checked) => {
 
 .knowledge-graph-container {
   height: calc(100vh - 200px);
+
+  .feature-disabled {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .ant-result {
+      p {
+        margin: 4px 0;
+        color: var(--gray-600);
+      }
+    }
+  }
 
   :deep(.knowledge-graph-viewer) {
     height: 100%;

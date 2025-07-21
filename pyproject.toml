@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "asyncpg>=0.30.0",
+    "chromadb>=1.0.15",
     "colorlog>=6.9.0",
     "dashscope>=1.23.2",
     "docx2txt>=0.9",
