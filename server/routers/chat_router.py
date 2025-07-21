@@ -128,7 +128,7 @@ async def chat_agent(agent_name: str,
         messages = [{"role": "user", "content": query}]
 
         # 构造运行时配置，如果没有thread_id则生成一个
-        config["user_id"] = current_user.id
+        config["user_id"] = str(current_user.id)
         if "thread_id" not in config or not config["thread_id"]:
             config["thread_id"] = str(uuid.uuid4())
             logger.debug(f"没有thread_id，生成一个: {config['thread_id']=}")
@@ -213,7 +213,7 @@ async def get_agent_history(
             raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
 
         # 获取历史消息
-        history = await agent.get_history(user_id=current_user.id, thread_id=thread_id)
+        history = await agent.get_history(user_id=str(current_user.id), thread_id=thread_id)
         return {"history": history}
 
     except Exception as e:
@@ -268,7 +268,7 @@ async def create_thread(
 
     new_thread = Thread(
         id=thread_id,
-        user_id=current_user.id,
+        user_id=str(current_user.id),
         agent_id=thread.agent_id,
         title=thread.title or "新对话",
         description=thread.description,
@@ -297,7 +297,7 @@ async def list_threads(
 ):
     """获取用户的所有对话线程"""
     query = db.query(Thread).filter(
-        Thread.user_id == current_user.id,
+        Thread.user_id == str(current_user.id),
         Thread.status == 1
     )
 
@@ -329,7 +329,7 @@ async def delete_thread(
     """删除对话线程"""
     thread = db.query(Thread).filter(
         Thread.id == thread_id,
-        Thread.user_id == current_user.id
+        Thread.user_id == str(current_user.id)
     ).first()
 
     if not thread:
@@ -357,7 +357,7 @@ async def update_thread(
     """更新对话线程信息"""
     thread = db.query(Thread).filter(
         Thread.id == thread_id,
-        Thread.user_id == current_user.id,
+        Thread.user_id == str(current_user.id),
         Thread.status == 1
     ).first()
 
