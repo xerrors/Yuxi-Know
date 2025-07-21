@@ -390,7 +390,7 @@ class KnowledgeBase(ABC):
             # 使用 OCR 处理 PDF
             from src.core.indexing import parse_pdf_async
             text = await parse_pdf_async(str(file_path_obj), params=params)
-            return f"Using OCR to process {file_path_obj.name}\n\n{text}"
+            return f"# {file_path_obj.name}\n\n{text}"
 
         elif file_ext in ['.txt', '.md']:
             # 直接读取文本文件

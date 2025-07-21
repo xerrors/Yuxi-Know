@@ -213,10 +213,13 @@ class LightRagKB(KnowledgeBase):
                 file_record['status'] = "done"
 
             except Exception as e:
-                logger.error(f"处理{content_type} {item} 失败: {e}, {traceback.format_exc()}")
+                error_msg = str(e)
+                logger.error(f"处理{content_type} {item} 失败: {error_msg}, {traceback.format_exc()}")
                 self.files_meta[file_id]["status"] = "failed"
+                self.files_meta[file_id]["error"] = error_msg
                 self._save_metadata()
                 file_record['status'] = "failed"
+                file_record['error'] = error_msg
 
             processed_items_info.append(file_record)
 

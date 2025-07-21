@@ -122,23 +122,53 @@ def plainreader(file_path):
     return text
 
 def parse_pdf(file, params=None):
+    """
+    解析PDF文件，支持多种OCR方式
+
+    Args:
+        file: PDF文件路径
+        params: 参数字典，包含enable_ocr设置
+
+    Returns:
+        str: 解析得到的文本
+
+    Raises:
+        OCRServiceException: OCR服务不可用时抛出
+    """
+    from src.plugins._ocr import OCRServiceException
+
     params = params or {}
     opt_ocr = params.get("enable_ocr", "disable")
 
-    if opt_ocr == "onnx_rapid_ocr":
-        from src.plugins import ocr
-        return ocr.process_pdf(file)
-
-    elif opt_ocr == "mineru_ocr":
-        from src.plugins import ocr
-        return ocr.process_pdf_mineru(file)
-
-    elif opt_ocr == "paddlex_ocr":
-        from src.plugins import ocr
-        return ocr.process_pdf_paddlex(file)
-
-    else:
+    if opt_ocr == "disable":
         return pdfreader(file, params=params)
+
+    try:
+        if opt_ocr == "onnx_rapid_ocr":
+            from src.plugins import ocr
+            return ocr.process_pdf(file)
+
+        elif opt_ocr == "mineru_ocr":
+            from src.plugins import ocr
+            return ocr.process_pdf_mineru(file)
+
+        elif opt_ocr == "paddlex_ocr":
+            from src.plugins import ocr
+            return ocr.process_pdf_paddlex(file)
+
+        else:
+            return pdfreader(file, params=params)
+
+    except OCRServiceException as e:
+        logger.error(f"OCR service failed: {e.service_name} - {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"PDF parsing failed: {str(e)}")
+        raise OCRServiceException(
+            f"PDF解析失败: {str(e)}",
+            opt_ocr,
+            "parsing_failed"
+        )
 
 async def parse_pdf_async(file, params=None):
     return await asyncio.to_thread(parse_pdf, file, params=params)

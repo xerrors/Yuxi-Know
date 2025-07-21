@@ -97,9 +97,34 @@
       <div class="ocr-config">
         <a-form layout="horizontal">
           <a-form-item label="使用OCR" name="enable_ocr">
-            <a-select v-model:value="chunkParams.enable_ocr" :options="enable_ocr_options" style="width: 200px;" />
-            <span class="param-description">启用OCR功能，支持PDF文件的文本提取</span>
-          </a-form-item>
+            <div class="ocr-controls">
+              <a-select
+                v-model:value="chunkParams.enable_ocr"
+                :options="enable_ocr_options"
+                style="width: 220px; margin-right: 12px;"
+                :disabled="state.ocrHealthChecking"
+              />
+              <a-button
+                size="small"
+                type="dashed"
+                @click="checkOcrHealth"
+                :loading="state.ocrHealthChecking"
+                :icon="h(CheckCircleOutlined)"
+              >
+                检查OCR服务
+              </a-button>
+            </div>
+            <div class="param-description">
+              <div v-if="chunkParams.enable_ocr !== 'disable'" class="ocr-status-info">
+                <span v-if="getSelectedOcrStatus() && getSelectedOcrStatus() !== 'healthy'" class="ocr-warning">
+                  ⚠️ {{ getSelectedOcrMessage() }}
+                </span>
+                <span v-else-if="getSelectedOcrStatus() === 'healthy'" class="ocr-healthy">
+                  ✅ OCR服务运行正常
+                </span>
+              </div>
+            </div>
+                    </a-form-item>
         </a-form>
       </div>
 
@@ -410,11 +435,12 @@ import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
-import { knowledgeBaseApi } from '@/apis/admin_api'
+import { knowledgeBaseApi, ocrApi } from '@/apis/admin_api'
 import {
   ReadOutlined,
   LeftOutlined,
   CheckCircleFilled,
+  CheckCircleOutlined,
   HourglassFilled,
   CloseCircleFilled,
   ClockCircleFilled,
@@ -463,18 +489,146 @@ const state = reactive({
   autoRefresh: false,
   loading: false,
   queryParamsLoading: false,
+  ocrHealthChecking: false,
+});
+
+// OCR服务健康状态
+const ocrHealthStatus = ref({
+  rapid_ocr: { status: 'unknown', message: '' },
+  mineru_ocr: { status: 'unknown', message: '' },
+  paddlex_ocr: { status: 'unknown', message: '' }
 });
 
 // 动态查询参数
 const queryParams = ref([])
 const meta = reactive({});
 
-const enable_ocr_options = ref([
-  { value: 'disable', payload: { title: '不启用' } },
-  { value: 'onnx_rapid_ocr', payload: { title: 'ONNX with RapidOCR' } },
-  { value: 'mineru_ocr', payload: { title: 'MinerU OCR' } },
-  { value: 'paddlex_ocr', payload: { title: 'Paddlex OCR' } },
-])
+// OCR健康检查函数
+const checkOcrHealth = async () => {
+  if (state.ocrHealthChecking) return;
+
+  state.ocrHealthChecking = true;
+  try {
+    const healthData = await ocrApi.checkHealth();
+    ocrHealthStatus.value = healthData.services;
+  } catch (error) {
+    console.error('OCR健康检查失败:', error);
+    message.error('OCR服务健康检查失败');
+  } finally {
+    state.ocrHealthChecking = false;
+  }
+};
+
+// 生成OCR选项的计算属性，包含健康状态信息
+const enable_ocr_options = computed(() => [
+  {
+    value: 'disable',
+    label: '不启用',
+    title: '不启用'
+  },
+  {
+    value: 'onnx_rapid_ocr',
+    label: getRapidOcrLabel(),
+    title: 'ONNX with RapidOCR',
+    disabled: ocrHealthStatus.value.rapid_ocr.status === 'unavailable' || ocrHealthStatus.value.rapid_ocr.status === 'error'
+  },
+  {
+    value: 'mineru_ocr',
+    label: getMinerULabel(),
+    title: 'MinerU OCR',
+    disabled: ocrHealthStatus.value.mineru_ocr.status === 'unavailable' || ocrHealthStatus.value.mineru_ocr.status === 'error'
+  },
+  {
+    value: 'paddlex_ocr',
+    label: getPaddleXLabel(),
+    title: 'PaddleX OCR',
+    disabled: ocrHealthStatus.value.paddlex_ocr.status === 'unavailable' || ocrHealthStatus.value.paddlex_ocr.status === 'error'
+  },
+]);
+
+// OCR选项标签生成函数
+const getRapidOcrLabel = () => {
+  const status = ocrHealthStatus.value.rapid_ocr.status;
+  const statusIcons = {
+    'healthy': '✅',
+    'unavailable': '❌',
+    'error': '⚠️',
+    'unknown': '❓'
+  };
+  return `${statusIcons[status] || '❓'} RapidOCR (ONNX)`;
+};
+
+const getMinerULabel = () => {
+  const status = ocrHealthStatus.value.mineru_ocr.status;
+  const statusIcons = {
+    'healthy': '✅',
+    'unavailable': '❌',
+    'unhealthy': '⚠️',
+    'timeout': '⏰',
+    'error': '⚠️',
+    'unknown': '❓'
+  };
+  return `${statusIcons[status] || '❓'} MinerU OCR`;
+};
+
+const getPaddleXLabel = () => {
+  const status = ocrHealthStatus.value.paddlex_ocr.status;
+  const statusIcons = {
+    'healthy': '✅',
+    'unavailable': '❌',
+    'unhealthy': '⚠️',
+    'timeout': '⏰',
+    'error': '⚠️',
+    'unknown': '❓'
+  };
+  return `${statusIcons[status] || '❓'} PaddleX OCR`;
+};
+
+// 获取当前选中OCR服务的状态
+const getSelectedOcrStatus = () => {
+  switch (chunkParams.value.enable_ocr) {
+    case 'onnx_rapid_ocr':
+      return ocrHealthStatus.value.rapid_ocr.status;
+    case 'mineru_ocr':
+      return ocrHealthStatus.value.mineru_ocr.status;
+    case 'paddlex_ocr':
+      return ocrHealthStatus.value.paddlex_ocr.status;
+    default:
+      return null;
+  }
+};
+
+// 获取当前选中OCR服务的状态消息
+const getSelectedOcrMessage = () => {
+  switch (chunkParams.value.enable_ocr) {
+    case 'onnx_rapid_ocr':
+      return ocrHealthStatus.value.rapid_ocr.message;
+    case 'mineru_ocr':
+      return ocrHealthStatus.value.mineru_ocr.message;
+    case 'paddlex_ocr':
+      return ocrHealthStatus.value.paddlex_ocr.message;
+    default:
+      return '';
+  }
+};
+
+
+
+// 验证OCR服务可用性
+const validateOcrService = () => {
+  if (chunkParams.value.enable_ocr === 'disable') {
+    return true;
+  }
+
+  const status = getSelectedOcrStatus();
+  if (status === 'unavailable' || status === 'error') {
+    const ocrMessage = getSelectedOcrMessage();
+    message.error(`OCR服务不可用: ${ocrMessage}`);
+    return false;
+  }
+
+  return true;
+};
 
 // 加载知识库类型特定的查询参数
 const loadQueryParams = async () => {
@@ -879,6 +1033,8 @@ const useQueryExample = (example) => {
 onMounted(() => {
   getDatabaseInfo();
   startAutoRefresh();
+  // 初始化时检查OCR服务健康状态
+  checkOcrHealth();
 })
 
 // 添加 onUnmounted 钩子，在组件卸载时清除定时器
@@ -890,6 +1046,11 @@ const uploadMode = ref('file');
 const urlList = ref('');
 
 const chunkData = () => {
+  // 验证OCR服务可用性
+  if (!validateOcrService()) {
+    return;
+  }
+
   if (uploadMode.value === 'file') {
     const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path);
     console.log(files);
@@ -1655,6 +1816,39 @@ const getKbTypeColor = (type) => {
     display: flex;
     justify-content: space-around;
   }
+}
+
+// OCR配置相关样式
+.ocr-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ocr-status-info {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.ocr-warning {
+  color: #f5222d;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ocr-healthy {
+  color: #52c41a;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.param-description {
+  color: var(--gray-600);
+  font-size: 12px;
+  margin-left: 8px;
 }
 
 </style>

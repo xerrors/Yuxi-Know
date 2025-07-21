@@ -1,5 +1,7 @@
 import os
 import yaml
+import asyncio
+import requests
 from pathlib import Path
 from fastapi import Request, Body, Depends, HTTPException
 from fastapi import APIRouter
@@ -132,5 +134,112 @@ async def reload_info_config():
     except Exception as e:
         logger.error(f"重新加载信息配置失败: {e}")
         raise HTTPException(status_code=500, detail="重新加载信息配置失败")
+
+@base.get("/ocr/health")
+async def check_ocr_services_health(current_user: User = Depends(get_admin_user)):
+    """
+    检查所有OCR服务的健康状态
+    返回各个OCR服务的可用性信息
+    """
+    health_status = {
+        "rapid_ocr": {"status": "unknown", "message": ""},
+        "mineru_ocr": {"status": "unknown", "message": ""},
+        "paddlex_ocr": {"status": "unknown", "message": ""}
+    }
+
+    # 检查 RapidOCR (ONNX) 模型
+    try:
+        model_dir = os.path.join(os.getenv("MODEL_DIR", ""), "SWHL/RapidOCR")
+        det_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
+        rec_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
+
+        if os.path.exists(model_dir) and os.path.exists(det_model_path) and os.path.exists(rec_model_path):
+            # 尝试初始化RapidOCR
+            from rapidocr_onnxruntime import RapidOCR
+            test_ocr = RapidOCR(det_box_thresh=0.3, det_model_path=det_model_path, rec_model_path=rec_model_path)
+            health_status["rapid_ocr"]["status"] = "healthy"
+            health_status["rapid_ocr"]["message"] = "RapidOCR模型已加载"
+        else:
+            health_status["rapid_ocr"]["status"] = "unavailable"
+            health_status["rapid_ocr"]["message"] = f"模型文件不存在: {model_dir}"
+    except Exception as e:
+        health_status["rapid_ocr"]["status"] = "error"
+        health_status["rapid_ocr"]["message"] = f"RapidOCR初始化失败: {str(e)}"
+
+    # 检查 MinerU OCR 服务
+    try:
+        mineru_uri = os.getenv("MINERU_OCR_URI", "http://localhost:30000")
+        health_url = f"{mineru_uri}/health"
+
+        response = requests.get(health_url, timeout=5)
+        if response.status_code == 200:
+            health_status["mineru_ocr"]["status"] = "healthy"
+            health_status["mineru_ocr"]["message"] = f"MinerU服务运行正常 ({mineru_uri})"
+        else:
+            health_status["mineru_ocr"]["status"] = "unhealthy"
+            health_status["mineru_ocr"]["message"] = f"MinerU服务响应异常: {response.status_code}"
+    except requests.exceptions.ConnectionError:
+        health_status["mineru_ocr"]["status"] = "unavailable"
+        health_status["mineru_ocr"]["message"] = "MinerU服务无法连接，请检查服务是否启动"
+    except requests.exceptions.Timeout:
+        health_status["mineru_ocr"]["status"] = "timeout"
+        health_status["mineru_ocr"]["message"] = "MinerU服务连接超时"
+    except Exception as e:
+        health_status["mineru_ocr"]["status"] = "error"
+        health_status["mineru_ocr"]["message"] = f"MinerU服务检查失败: {str(e)}"
+
+    # 检查 PaddleX OCR 服务
+    try:
+        paddlex_uri = os.getenv("PADDLEX_URI", "http://localhost:8080")
+        health_url = f"{paddlex_uri}/health"
+
+        response = requests.get(health_url, timeout=5)
+        if response.status_code == 200:
+            health_status["paddlex_ocr"]["status"] = "healthy"
+            health_status["paddlex_ocr"]["message"] = f"PaddleX服务运行正常 ({paddlex_uri})"
+        else:
+            health_status["paddlex_ocr"]["status"] = "unhealthy"
+            health_status["paddlex_ocr"]["message"] = f"PaddleX服务响应异常: {response.status_code}"
+    except requests.exceptions.ConnectionError:
+        health_status["paddlex_ocr"]["status"] = "unavailable"
+        health_status["paddlex_ocr"]["message"] = "PaddleX服务无法连接，请检查服务是否启动"
+    except requests.exceptions.Timeout:
+        health_status["paddlex_ocr"]["status"] = "timeout"
+        health_status["paddlex_ocr"]["message"] = "PaddleX服务连接超时"
+    except Exception as e:
+        health_status["paddlex_ocr"]["status"] = "error"
+        health_status["paddlex_ocr"]["message"] = f"PaddleX服务检查失败: {str(e)}"
+
+    # 计算整体健康状态
+    overall_status = "healthy" if any(svc["status"] == "healthy" for svc in health_status.values()) else "unhealthy"
+
+    return {
+        "overall_status": overall_status,
+        "services": health_status,
+        "message": "OCR服务健康检查完成"
+    }
+
+@base.get("/ocr/stats")
+async def get_ocr_stats(current_user: User = Depends(get_admin_user)):
+    """
+    获取OCR服务使用统计信息
+    返回各个OCR服务的处理统计和性能指标
+    """
+    try:
+        from src.plugins._ocr import get_ocr_stats
+        stats = get_ocr_stats()
+
+        return {
+            "status": "success",
+            "stats": stats,
+            "message": "OCR统计信息获取成功"
+        }
+    except Exception as e:
+        logger.error(f"获取OCR统计信息失败: {str(e)}")
+        return {
+            "status": "error",
+            "stats": {},
+            "message": f"获取OCR统计信息失败: {str(e)}"
+        }
 
 

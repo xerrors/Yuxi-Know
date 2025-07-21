@@ -390,3 +390,24 @@ export const adminApi = {
     return apiPost(url, data, {}, true)
   },
 }
+
+// OCR服务管理API
+export const ocrApi = {
+  /**
+   * 检查OCR服务健康状态
+   * @returns {Promise} - OCR服务健康状态信息
+   */
+  checkHealth: async () => {
+    checkAdminPermission()
+    return apiGet('/api/ocr/health', {}, true)
+  },
+
+  /**
+   * 获取OCR服务使用统计
+   * @returns {Promise} - OCR服务统计信息
+   */
+  getStats: async () => {
+    checkAdminPermission()
+    return apiGet('/api/ocr/stats', {}, true)
+  }
+}
