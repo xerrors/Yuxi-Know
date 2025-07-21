@@ -32,9 +32,9 @@ def get_all_tools():
         )
 
         # 创建异步工具，确保正确处理异步检索器
-        async def async_retriever_wrapper(query_text: str, db_id=db_Id):
+        async def async_retriever_wrapper(query_text: str, db_id=db_Id, retriever_info=retrieve_info):
             """异步检索器包装函数"""
-            retriever = retrieve_info["retriever"]
+            retriever = retriever_info["retriever"]
             try:
                 if asyncio.iscoroutinefunction(retriever):
                     result = await retriever(query_text)

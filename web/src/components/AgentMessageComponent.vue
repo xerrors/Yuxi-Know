@@ -318,15 +318,15 @@ const toggleToolCall = (toolCallId) => {
 
   :deep(.tool-call-display) {
     background-color: var(--gray-25);
-    border: 1px solid var(--gray-200);
-    border-radius: 12px;
+    outline: 2px solid var(--gray-200);
+    border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;
 
     &:hover {
       background-color: var(--gray-50);
-      border: 1px solid var(--gray-200);
-      border-color: var(--main-300);
+      outline: 2px solid var(--gray-200);
+      outline-color: var(--main-300);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
     }
 
@@ -343,7 +343,7 @@ const toggleToolCall = (toolCallId) => {
       cursor: pointer;
       user-select: none;
       position: relative;
-      transition: all 0.2s ease;
+      transition: color 0.2s ease;
       align-items: center;
 
       &:hover {
