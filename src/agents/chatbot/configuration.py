@@ -13,13 +13,13 @@ class ChatbotConfiguration(Configuration):
 
     metadata 中 configurable 为 True 的配置项可以被用户配置，
     configurable 为 False 的配置项不能被用户配置，只能由开发者预设。
+    除非显示配置为 False，否则所有配置项都默认可配置。
     """
 
     system_prompt: str = field(
         default="You are a helpful assistant.",
         metadata={
             "name": "系统提示词",
-            "configurable": True,
             "description": "用来描述智能体的角色和行为"
         },
     )
@@ -28,7 +28,6 @@ class ChatbotConfiguration(Configuration):
         default="zhipu/glm-4-plus",
         metadata={
             "name": "智能体模型",
-            "configurable": True,
             "options": [],
             "description": "智能体的驱动模型"
         },
@@ -38,7 +37,6 @@ class ChatbotConfiguration(Configuration):
         default_factory=list,
         metadata={
             "name": "工具",
-            "configurable": True,
             "options": list(get_all_tools().keys()),  # 这里的选择是所有的工具
             "description": "工具列表"
         },

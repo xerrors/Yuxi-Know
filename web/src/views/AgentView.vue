@@ -11,7 +11,7 @@
           <a-select
             v-model:value="selectedAgentId"
             class="agent-list"
-            style="width: 200px"
+            style="width: 300px"
             @change="selectAgent"
           >
             <a-select-option
@@ -20,8 +20,11 @@
               :value="name"
             >
               <div class="agent-option">
-                智能体：{{ agent.name }}
-                <StarFilled v-if="name === defaultAgentId" class="default-icon" />
+                <div class="agent-option-content">
+                  <p class="agent-option-name">{{ agent.name }} <StarFilled v-if="name === defaultAgentId" class="default-icon" /></p>
+                  <p class="agent-option-description">{{ agent.description }}</p>
+                </div>
+
               </div>
             </a-select-option>
           </a-select>
@@ -59,7 +62,7 @@
       <a-modal
         v-model:open="state.agentConfOpen"
         title="智能体详细配置"
-        :width="600"
+        :width="800"
         :footer="null"
         :maskClosable="false"
         class="conf-modal"
@@ -117,13 +120,16 @@
                       v-else-if="typeof agentConfig[key] === 'boolean'"
                       v-model:checked="agentConfig[key]"
                     />
+                    <!-- 单选 -->
                     <a-select
-                      v-else-if="value?.options && value?.type === 'str'"
+                      v-else-if="value?.options && (value?.type === 'str' || value?.type === 'select')"
                       v-model:value="agentConfig[key]"
                     >
-                      <a-select-option v-for="option in value.options" :key="option" :value="option"></a-select-option>
+                      <a-select-option v-for="option in value.options" :key="option" :value="option">
+                        {{ option.label || option }}
+                      </a-select-option>
                     </a-select>
-                    <!-- 多选标签卡片 -->
+                    <!-- 多选 -->
                     <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
                       <div class="multi-select-label">
                         <span>已选择 {{ getSelectedCount(key) }} 项</span>
@@ -152,6 +158,22 @@
                         </div>
                       </div>
                     </div>
+                    <!-- 数字 -->
+                    <a-input-number
+                      v-else-if="value?.type === 'number'"
+                      v-model:value="agentConfig[key]"
+                      :placeholder="getPlaceholder(key, value)"
+                    />
+                    <!-- 滑块 -->
+                    <a-slider
+                      v-else-if="value?.type === 'slider'"
+                      v-model:value="agentConfig[key]"
+                      :min="value.min"
+                      :max="value.max"
+                      :step="value.step"
+                      style="max-width: 300px;"
+                    />
+                    <!-- 其他类型 -->
                     <a-input
                       v-else
                       v-model:value="agentConfig[key]"
@@ -228,7 +250,18 @@ const state = reactive({
 
 const selectedAgent = computed(() => agents.value[selectedAgentId.value] || {});
 const configSchema = computed(() => selectedAgent.value.config_schema || {});
-const configurableItems = computed(() => configSchema.value.configurable_items || {});
+const configurableItems = computed(() => {
+  const items = configSchema.value.configurable_items || {};
+  // 遍历所有的配置项，将所有的 x_oap_ui_config 的层级提升到上一层
+  Object.keys(items).forEach(key => {
+    const item = items[key];
+    if (item.x_oap_ui_config) {
+      items[key] = { ...item, ...item.x_oap_ui_config };
+      delete items[key].x_oap_ui_config;
+    }
+  });
+  return items;
+});
 
 // 配置状态
 const agentConfig = ref({});
@@ -467,7 +500,7 @@ onMounted(async () => {
 // 获取配置标签
 const getConfigLabel = (key, value) => {
   // 根据配置项属性选择合适的显示文本
-  if (value.description) {
+  if (value.description && value.name !== key) {
     return `${value.name}（${key}）`;
   }
   return key;
@@ -655,11 +688,28 @@ const toggleConf = () => {
 .agent-option {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  .agent-option-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    p {
+      margin: 0;
+    }
+
+    .agent-option-description {
+      font-size: 12px;
+      color: var(--gray-700);
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+  }
 
   .default-icon {
     color: #faad14;
     font-size: 14px;
+    margin-left: 4px;
   }
 }
 
@@ -752,6 +802,7 @@ const toggleConf = () => {
     max-height: 60vh;
   }
 }
+
 </style>
 
 
@@ -785,6 +836,16 @@ const toggleConf = () => {
       width: 1.5rem;
       height: 1.5rem;
     }
+  }
+}
+
+
+// 针对 Ant Design Select 组件的深度样式修复
+:deep(.ant-select-item-option-content) {
+  .agent-option-name {
+    color: var(--main-color);
+    font-size: 14px;
+    font-weight: 500;
   }
 }
 </style>

@@ -1,6 +1,8 @@
 ### python gitignore
 __pycache__/
 *.pyc
+.venv
+.ruff_cache
 
 ### Vue gitignore
 dist

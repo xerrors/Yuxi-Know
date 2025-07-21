@@ -4,7 +4,7 @@ import os
 import yaml
 import uuid
 from pathlib import Path
-from typing import Annotated, TypedDict
+from typing import Annotated, TypedDict, Optional, Any
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
 
@@ -29,6 +29,24 @@ class Configuration(dict):
     2. 文件配置(config.private.yaml)：中等优先级，从文件加载
     3. 类默认配置：最低优先级，类中定义的默认值
     """
+
+    thread_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "线程ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
+
+    user_id: str = field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "name": "用户ID",
+            "configurable": False,
+            "description": "用来描述智能体的角色和行为"
+        },
+    )
 
     @classmethod
     def from_runnable_config(
@@ -127,7 +145,7 @@ class Configuration(dict):
                 else:
                     confs[f.name] = value
 
-                if f.metadata.get("configurable"):
+                if f.metadata.get("configurable", True):
                     configurable_items[f.name] = {
                         "type": f.type.__name__,
                         "name": f.metadata.get("name", f.name),
@@ -139,23 +157,6 @@ class Configuration(dict):
         return confs
 
 
-    thread_id: str = field(
-        default_factory=lambda: str(uuid.uuid4()),
-        metadata={
-            "name": "线程ID",
-            "configurable": False,
-            "description": "用来描述智能体的角色和行为"
-        },
-    )
-
-    user_id: str = field(
-        default_factory=lambda: str(uuid.uuid4()),
-        metadata={
-            "name": "用户ID",
-            "configurable": False,
-            "description": "用来描述智能体的角色和行为"
-        },
-    )
 
 class BaseAgent:
 
