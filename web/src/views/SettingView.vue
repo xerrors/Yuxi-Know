@@ -51,14 +51,62 @@
             </a-select>
           </div>
         </div>
+
+        <!-- 服务链接部分 -->
+        <div v-if="userStore.isAdmin">
+          <h3>服务链接</h3>
+          <p>快速访问系统相关的外部服务，需要将 localhost 替换为实际的 IP 地址。</p>
+          <div class="services-grid">
+            <div class="service-link-card">
+              <div class="service-info">
+                <h4>Neo4j 浏览器</h4>
+                <p>图数据库管理界面</p>
+              </div>
+                            <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
+                访问
+              </a-button>
+            </div>
+
+            <div class="service-link-card">
+              <div class="service-info">
+                <h4>API 接口文档</h4>
+                <p>系统接口文档和调试工具</p>
+              </div>
+              <a-button type="default" @click="openLink('http://localhost:5050/docs')" :icon="h(GlobalOutlined)">
+                访问
+              </a-button>
+            </div>
+
+            <div class="service-link-card">
+              <div class="service-info">
+                <h4>MinIO 对象存储</h4>
+                <p>文件存储管理控制台</p>
+              </div>
+              <a-button type="default" @click="openLink('http://localhost:9001')" :icon="h(GlobalOutlined)">
+                访问
+              </a-button>
+            </div>
+
+            <div class="service-link-card">
+              <div class="service-info">
+                <h4>Milvus WebUI</h4>
+                <p>向量数据库管理界面</p>
+              </div>
+              <a-button type="default" @click="openLink('http://localhost:9091/webui/')" :icon="h(GlobalOutlined)">
+                访问
+              </a-button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'model') && userStore.isSuperAdmin">
         <h3>模型配置</h3>
         <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
         <ModelProvidersComponent />
       </div>
+
       <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
-      <div class="setting" v-if="state.section === 'user' && userStore.isAdmin">
+      <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'user') && userStore.isAdmin">
          <UserManagementComponent />
       </div>
     </div>
@@ -75,7 +123,8 @@ import {
   SettingOutlined,
   CodeOutlined,
   FolderOutlined,
-  UserOutlined
+  UserOutlined,
+  GlobalOutlined
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import TableConfigComponent from '@/components/TableConfigComponent.vue';
@@ -170,6 +219,10 @@ const sendRestart = () => {
       console.error('重启服务失败:', error)
       message.error({ content: `重启失败: ${error.message}`, key: "restart", duration: 2 });
     });
+}
+
+const openLink = (url) => {
+  window.open(url, '_blank')
 }
 </script>
 
@@ -270,7 +323,55 @@ const sendRestart = () => {
       }
     }
   }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 20px;
+
+    @media (min-width: 768px) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+    .service-link-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border: 1px solid var(--gray-300);
+    border-radius: 8px;
+    background: white;
+    transition: all 0.2s;
+    min-height: 80px;
+
+    &:hover {
+      box-shadow: 0 1px 8px var(--gray-200);
+    }
+
+    .service-info {
+      flex: 1;
+      margin-right: 16px;
+
+      h4 {
+        margin: 0 0 4px 0;
+        color: var(--gray-900);
+        font-size: 15px;
+        font-weight: 600;
+      }
+
+      p {
+        margin: 0;
+        color: var(--gray-600);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+    }
+  }
 }
+
+
 
 @media (max-width: 520px) {
   .setting-container {
@@ -281,6 +382,24 @@ const sendRestart = () => {
     gap: 0.75rem;
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .services-grid {
+    gap: 12px;
+  }
+
+  .service-link-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: auto;
+    padding: 12px;
+
+    .service-info {
+      text-align: left;
+      margin-bottom: 4px;
+      margin-right: 0;
+    }
   }
 }
 </style>
