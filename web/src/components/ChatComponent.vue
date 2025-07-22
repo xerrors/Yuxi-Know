@@ -156,7 +156,7 @@ import MessageComponent from '@/components/MessageComponent.vue'
 import RefsSidebar from '@/components/RefsSidebar.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import { chatApi } from '@/apis/auth_api'
-import { knowledgeBaseApi } from '@/apis/admin_api'
+import { databaseApi } from '@/apis/knowledge_api'
 
 const props = defineProps({
   conv: Object,
@@ -461,7 +461,7 @@ const loadDatabases = () => {
   }
 
   try {
-    knowledgeBaseApi.getDatabases()
+    databaseApi.getDatabases()
       .then(data => {
         console.log(data)
         opts.databases = data.databases

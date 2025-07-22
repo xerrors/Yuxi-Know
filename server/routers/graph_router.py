@@ -1,16 +1,20 @@
 import traceback
-from fastapi import APIRouter, Query, HTTPException, Depends
+from fastapi import APIRouter, Query, HTTPException, Depends, Body
 from server.utils.auth_middleware import get_admin_user
 from server.models.user_model import User
 
-from src import knowledge_base
+from src import knowledge_base, graph_base
 from src.utils.logging_config import logger
 
-graph = APIRouter()
+graph = APIRouter(prefix="/graph", tags=["graph"])
 
 
-@graph.get("/graph/subgraph")
-async def get_subgraph(
+# =============================================================================
+# === 子图查询分组 ===
+# =============================================================================
+
+@graph.get("/lightrag/subgraph")
+async def get_lightrag_subgraph(
     db_id: str = Query(..., description="数据库ID"),
     node_label: str = Query(..., description="节点标签或实体名称"),
     max_depth: int = Query(2, description="最大深度", ge=1, le=5),
@@ -94,8 +98,35 @@ async def get_subgraph(
         raise HTTPException(status_code=500, detail=f"获取子图数据失败: {str(e)}")
 
 
-@graph.get("/graph/labels")
-async def get_graph_labels(
+@graph.get("/lightrag/databases")
+async def get_lightrag_databases(
+    current_user: User = Depends(get_admin_user)
+):
+    """
+    获取所有可用的 LightRAG 数据库
+
+    Returns:
+        可用的 LightRAG 数据库列表
+    """
+    try:
+        lightrag_databases = knowledge_base.get_lightrag_databases()
+        return {
+            "success": True,
+            "data": {
+                "databases": lightrag_databases
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"获取 LightRAG 数据库列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取 LightRAG 数据库列表失败: {str(e)}")
+
+# =============================================================================
+# === 节点管理分组 ===
+# =============================================================================
+
+@graph.get("/lightrag/labels")
+async def get_lightrag_labels(
     db_id: str = Query(..., description="数据库ID"),
     current_user: User = Depends(get_admin_user)
 ):
@@ -142,92 +173,71 @@ async def get_graph_labels(
         raise HTTPException(status_code=500, detail=f"获取图谱标签失败: {str(e)}")
 
 
-@graph.get("/graph/databases")
-async def get_available_databases(
+@graph.get("/neo4j/nodes")
+async def get_neo4j_nodes(
+    kgdb_name: str = Query(..., description="知识图谱数据库名称"),
+    num: int = Query(100, description="节点数量", ge=1, le=1000),
     current_user: User = Depends(get_admin_user)
 ):
     """
-    获取所有可用的 LightRAG 数据库
-
-    Returns:
-        可用的 LightRAG 数据库列表
+    获取图谱节点样本数据
     """
     try:
-        lightrag_databases = knowledge_base.get_lightrag_databases()
+        logger.debug(f"Get graph nodes in {kgdb_name} with {num} nodes")
+
+        if not graph_base.is_running():
+            raise HTTPException(status_code=400, detail="图数据库未启动")
+
+        result = graph_base.get_sample_nodes(kgdb_name, num)
+        formatted_result = graph_base.format_general_results(result)
+
         return {
             "success": True,
-            "data": {
-                "databases": lightrag_databases
-            }
-        }
-
-    except Exception as e:
-        logger.error(f"获取 LightRAG 数据库列表失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取 LightRAG 数据库列表失败: {str(e)}")
-
-
-# 保留原有的直接数据库查询方法作为备用（如果需要的话）
-@graph.get("/graph/nodes")
-async def get_graph_nodes_legacy(
-    db_id: str = Query(..., description="数据库ID"),
-    limit: int = Query(500, description="最大节点数量", ge=1, le=2000),
-    offset: int = Query(0, description="偏移量", ge=0),
-    entity_type: str | None = Query(None, description="实体类型筛选"),
-    search: str | None = Query(None, description="搜索关键词"),
-    current_user: User = Depends(get_admin_user)
-):
-    """
-    直接查询数据库获取节点数据（备用方法）
-    建议使用 /graph/subgraph 接口
-    """
-    try:
-        # 这里可以添加直接数据库查询的逻辑
-        # 但建议用户使用 get_subgraph 接口
-        return {
-            "success": False,
-            "message": "建议使用 /graph/subgraph 接口获取图谱数据",
-            "data": {
-                "nodes": [],
-                "total": 0
-            }
+            "result": formatted_result,
+            "message": "success"
         }
 
     except Exception as e:
         logger.error(f"获取图节点数据失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取图节点数据失败: {str(e)}")
 
-
-@graph.get("/graph/edges")
-async def get_graph_edges_legacy(
-    db_id: str = Query(..., description="数据库ID"),
-    limit: int = Query(500, description="最大边数量", ge=1, le=2000),
-    offset: int = Query(0, description="偏移量", ge=0),
-    min_weight: float | None = Query(None, description="最小权重筛选"),
+@graph.get("/neo4j/node")
+async def get_neo4j_node(
+    entity_name: str = Query(..., description="实体名称"),
     current_user: User = Depends(get_admin_user)
 ):
     """
-    直接查询数据库获取边数据（备用方法）
-    建议使用 /graph/subgraph 接口
+    根据实体名称查询图节点
     """
     try:
-        # 这里可以添加直接数据库查询的逻辑
-        # 但建议用户使用 get_subgraph 接口
+        if not graph_base.is_running():
+            raise HTTPException(status_code=400, detail="图数据库未启动")
+
+        result = graph_base.query_node(entity_name=entity_name)
+        formatted_result = graph_base.format_query_result_to_graph(result)
+
         return {
-            "success": False,
-            "message": "建议使用 /graph/subgraph 接口获取图谱数据",
-            "data": {
-                "edges": [],
-                "total": 0
-            }
+            "success": True,
+            "result": formatted_result,
+            "message": "success"
         }
 
     except Exception as e:
-        logger.error(f"获取图边数据失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取图边数据失败: {str(e)}")
+        logger.error(f"查询图节点失败: {e}")
+        raise HTTPException(status_code=500, detail=f"查询图节点失败: {str(e)}")
 
+# =============================================================================
+# === 边管理分组 ===
+# =============================================================================
 
-@graph.get("/graph/stats")
-async def get_graph_stats(
+# 可以在这里添加边相关的管理功能
+
+# =============================================================================
+# === 图谱分析分组 ===
+# =============================================================================
+
+@graph.get("/lightrag/stats")
+async def get_lightrag_stats(
     db_id: str = Query(..., description="数据库ID"),
     current_user: User = Depends(get_admin_user)
 ):
@@ -284,3 +294,82 @@ async def get_graph_stats(
         logger.error(f"获取图谱统计信息失败: {e}")
         logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取图谱统计信息失败: {str(e)}")
+
+@graph.get("/neo4j/info")
+async def get_neo4j_info(current_user: User = Depends(get_admin_user)):
+    """获取Neo4j图数据库信息"""
+    try:
+        graph_info = graph_base.get_graph_info()
+        if graph_info is None:
+            raise HTTPException(status_code=400, detail="图数据库获取出错")
+        return {
+            "success": True,
+            "data": graph_info
+        }
+    except Exception as e:
+        logger.error(f"获取图数据库信息失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取图数据库信息失败: {str(e)}")
+
+@graph.post("/neo4j/index-entities")
+async def index_neo4j_entities(
+    data: dict = Body(default={}),
+    current_user: User = Depends(get_admin_user)
+):
+    """为Neo4j图谱节点添加嵌入向量索引"""
+    try:
+        if not graph_base.is_running():
+            raise HTTPException(status_code=400, detail="图数据库未启动")
+
+        # 获取参数或使用默认值
+        kgdb_name = data.get('kgdb_name', 'neo4j')
+
+        # 调用GraphDatabase的add_embedding_to_nodes方法
+        count = graph_base.add_embedding_to_nodes(kgdb_name=kgdb_name)
+
+        return {
+            "success": True,
+            "status": "success",
+            "message": f"已成功为{count}个节点添加嵌入向量",
+            "indexed_count": count
+        }
+    except Exception as e:
+        logger.error(f"索引节点失败: {e}")
+        raise HTTPException(status_code=500, detail=f"索引节点失败: {str(e)}")
+
+@graph.post("/neo4j/add-entities")
+async def add_neo4j_entities(
+    file_path: str = Body(...),
+    kgdb_name: str | None = Body(None),
+    current_user: User = Depends(get_admin_user)
+):
+    """通过JSONL文件添加图谱实体到Neo4j"""
+    try:
+        if not file_path.endswith('.jsonl'):
+            return {
+                "success": False,
+                "message": "文件格式错误，请上传jsonl文件",
+                "status": "failed"
+            }
+
+        await graph_base.jsonl_file_add_entity(file_path, kgdb_name)
+        return {
+            "success": True,
+            "message": "实体添加成功",
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"添加实体失败: {e}, {traceback.format_exc()}")
+        return {
+            "success": False,
+            "message": f"添加实体失败: {e}",
+            "status": "failed"
+        }
+
+# =============================================================================
+# === 兼容性接口 (保持向后兼容) ===
+# =============================================================================
+
+@graph.get("/graph")
+async def get_graph_info_compat(current_user: User = Depends(get_admin_user)):
+    """兼容性接口：获取图数据库信息"""
+    return await get_graph_info(current_user)

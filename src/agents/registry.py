@@ -8,6 +8,7 @@ from typing import Annotated, TypedDict, Optional, Any
 from abc import abstractmethod
 from dataclasses import dataclass, fields, field
 
+from pydantic import BaseModel, Field
 from langchain_core.runnables import RunnableConfig
 from langchain_core.messages import BaseMessage
 from langgraph.graph.state import CompiledStateGraph
@@ -157,6 +158,123 @@ class Configuration(dict):
         return confs
 
 
+
+class BaseModelConfiguration(BaseModel):
+
+    thread_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "title": "线程ID",
+            "description": "用来描述智能体的角色和行为",
+            "configurable": False,
+        },
+    )
+
+    user_id: str = Field(
+        default_factory=lambda: str(uuid.uuid4()),
+        metadata={
+            "title": "用户ID",
+            "description": "用来描述智能体的角色和行为",
+            "configurable": False,
+        },
+    )
+
+    @classmethod
+    def from_runnable_config(
+        cls,
+        config: Optional["RunnableConfig"] = None,
+        agent_name: Optional[str] = None,
+    ) -> "BaseModelConfiguration":
+        """
+        从 RunnableConfig 和 YAML 文件中构建 Configuration 实例
+        """
+        # 默认配置
+        default_instance = cls()
+        default_values = default_instance.dict()
+
+        # 文件配置
+        file_config = cls.from_file(agent_name) if agent_name else {}
+
+        # 运行时配置（最高优先级）
+        runtime_config = config.get("configurable") if config else {}
+
+        merged_config = {
+            **default_values,
+            **file_config,
+            **runtime_config,
+        }
+
+        return cls(**merged_config)
+
+    @classmethod
+    def from_file(cls, agent_name: str) -> dict[str, Any]:
+        """
+        从 YAML 文件加载配置
+        """
+        config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+        if os.path.exists(config_file_path):
+            try:
+                with open(config_file_path, encoding="utf-8") as f:
+                    return yaml.safe_load(f) or {}
+            except Exception as e:
+                logger.error(f"加载配置文件失败: {e}")
+        return {}
+
+    @classmethod
+    def save_to_file(cls, config: dict, agent_name: str) -> bool:
+        """
+        保存配置到 YAML 文件
+        """
+        try:
+            config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+            os.makedirs(config_file_path.parent, exist_ok=True)
+            with open(config_file_path, "w", encoding="utf-8") as f:
+                yaml.dump(config, f, indent=2, allow_unicode=True)
+            return True
+        except Exception as e:
+            logger.error(f"保存配置文件失败: {e}")
+            return False
+
+    @classmethod
+    def to_dict(cls) -> dict[str, Any]:
+        """
+        提取类字段的默认值与字段元数据，主要用于前端动态生成配置项。
+        """
+        # 创建实例以获得 default_factory 值
+        instance = cls()
+
+        confs: dict[str, Any] = {}
+        configurable_items: dict[str, Any] = {}
+
+        for name, field in cls.model_fields.items():
+            value = getattr(instance, name)
+
+            confs[name] = value
+
+            # 安全地处理 Pydantic 字段元数据
+            field_metadata = {}
+            if hasattr(field, 'json_schema_extra') and field.json_schema_extra:
+                if isinstance(field.json_schema_extra, dict):
+                    field_metadata = field.json_schema_extra['metadata']
+                elif isinstance(field.json_schema_extra, (list, tuple)):
+                    # 在 Pydantic v2 中，metadata 可能是列表，合并所有字典项
+                    for item in field.json_schema_extra:
+                        if isinstance(item, dict):
+                            field_metadata.update(item['metadata'])
+
+            # 检查字段是否应该可配置 - 支持不同的元数据格式
+            if field_metadata.get("configurable", True):
+                configurable_items[name] = {
+                    "type": field_metadata.get("type", field.annotation.__name__),
+                    "name": field_metadata.get("name") or name,
+                    "options": field_metadata.get("options") or [],
+                    "default": field.default if field.default is not None else None,
+                    "description": field_metadata.get("description") or "",
+                    "x_oap_ui_config": field_metadata.get("x_oap_ui_config", {}),
+                }
+
+        confs["configurable_items"] = configurable_items
+        return confs
 
 class BaseAgent:
 

@@ -1,10 +1,10 @@
 import os
 import yaml
-import asyncio
 import requests
 from pathlib import Path
 from fastapi import Request, Body, Depends, HTTPException
 from fastapi import APIRouter
+from collections import deque
 
 from src import config, knowledge_base, graph_base
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
@@ -12,7 +12,71 @@ from server.models.user_model import User
 from src.utils.logging_config import logger
 
 
-base = APIRouter()
+system = APIRouter(prefix="/system", tags=["system"])
+
+# =============================================================================
+# === 健康检查分组 ===
+# =============================================================================
+
+@system.get("/health")
+async def health_check():
+    """系统健康检查接口（公开接口）"""
+    return {"status": "ok", "message": "服务正常运行"}
+
+# =============================================================================
+# === 配置管理分组 ===
+# =============================================================================
+
+@system.get("/config")
+def get_config(current_user: User = Depends(get_admin_user)):
+    """获取系统配置"""
+    return config.dump_config()
+
+@system.post("/config")
+async def update_config_single(
+    key = Body(...),
+    value = Body(...),
+    current_user: User = Depends(get_admin_user)
+) -> dict:
+    """更新单个配置项"""
+    config[key] = value
+    config.save()
+    return config.dump_config()
+
+@system.post("/config/update")
+async def update_config_batch(
+    items: dict = Body(...),
+    current_user: User = Depends(get_admin_user)
+) -> dict:
+    """批量更新配置项"""
+    config.update(items)
+    config.save()
+    return config.dump_config()
+
+@system.post("/restart")
+async def restart_system(current_user: User = Depends(get_superadmin_user)):
+    """重启系统（仅超级管理员）"""
+    graph_base.start()
+    return {"message": "系统已重启"}
+
+@system.get("/logs")
+def get_system_logs(current_user: User = Depends(get_admin_user)):
+    """获取系统日志"""
+    try:
+        from src.utils.logging_config import LOG_FILE
+
+        with open(LOG_FILE) as f:
+            last_lines = deque(f, maxlen=1000)
+
+        log = ''.join(last_lines)
+        return {"log": log, "message": "success", "log_file": LOG_FILE}
+    except Exception as e:
+        logger.error(f"获取系统日志失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取系统日志失败: {str(e)}")
+
+# =============================================================================
+# === 信息管理分组 ===
+# =============================================================================
 
 def load_info_config():
     """加载信息配置文件"""
@@ -59,55 +123,7 @@ def get_default_info_config():
         }
     }
 
-@base.get("/")
-async def route_index():
-    return {"message": "You Got It!"}
-
-@base.get("/health")
-async def health_check():
-    """简单的健康检查接口"""
-    return {"status": "ok", "message": "服务正常运行"}
-
-@base.get("/config")
-def get_config(current_user: User = Depends(get_admin_user)):
-    return config.dump_config()
-
-@base.post("/config")
-async def update_config(
-    key = Body(...),
-    value = Body(...),
-    current_user: User = Depends(get_admin_user)
-) -> dict:
-    config[key] = value
-    config.save()
-    return config.dump_config()
-
-@base.post("/config/update")
-async def update_config_item(
-    items: dict = Body(...),
-    current_user: User = Depends(get_admin_user)
-) -> dict:
-    config.update(items)
-    config.save()
-    return config.dump_config()
-
-@base.post("/restart")
-async def restart(current_user: User = Depends(get_superadmin_user)):
-    graph_base.start()
-    return {"message": "Restarted!"}
-
-@base.get("/log")
-def get_log(current_user: User = Depends(get_admin_user)):
-    from src.utils.logging_config import LOG_FILE
-    from collections import deque
-
-    with open(LOG_FILE) as f:
-        last_lines = deque(f, maxlen=1000)
-
-    log = ''.join(last_lines)
-    return {"log": log, "message": "success", "log_file": LOG_FILE}
-
-@base.get("/info")
+@system.get("/info")
 async def get_info_config():
     """获取系统信息配置（公开接口，无需认证）"""
     try:
@@ -120,10 +136,9 @@ async def get_info_config():
         logger.error(f"获取信息配置失败: {e}")
         raise HTTPException(status_code=500, detail="获取信息配置失败")
 
-@base.get("/info/reload")
-async def reload_info_config():
-    """重新加载信息配置（管理员接口）"""
-    # 注：这里暂时不添加权限验证，后续可以根据需要添加
+@system.post("/info/reload")
+async def reload_info_config(current_user: User = Depends(get_admin_user)):
+    """重新加载信息配置"""
     try:
         config = load_info_config()
         return {
@@ -135,7 +150,35 @@ async def reload_info_config():
         logger.error(f"重新加载信息配置失败: {e}")
         raise HTTPException(status_code=500, detail="重新加载信息配置失败")
 
-@base.get("/ocr/health")
+# =============================================================================
+# === OCR服务分组 ===
+# =============================================================================
+
+@system.get("/ocr/stats")
+async def get_ocr_stats(current_user: User = Depends(get_admin_user)):
+    """
+    获取OCR服务使用统计信息
+    返回各个OCR服务的处理统计和性能指标
+    """
+    try:
+        from src.plugins._ocr import get_ocr_stats
+        stats = get_ocr_stats()
+
+        return {
+            "status": "success",
+            "stats": stats,
+            "message": "OCR统计信息获取成功"
+        }
+    except Exception as e:
+        logger.error(f"获取OCR统计信息失败: {str(e)}")
+        return {
+            "status": "error",
+            "stats": {},
+            "message": f"获取OCR统计信息失败: {str(e)}"
+        }
+
+
+@system.get("/ocr/health")
 async def check_ocr_services_health(current_user: User = Depends(get_admin_user)):
     """
     检查所有OCR服务的健康状态
@@ -218,28 +261,3 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
         "services": health_status,
         "message": "OCR服务健康检查完成"
     }
-
-@base.get("/ocr/stats")
-async def get_ocr_stats(current_user: User = Depends(get_admin_user)):
-    """
-    获取OCR服务使用统计信息
-    返回各个OCR服务的处理统计和性能指标
-    """
-    try:
-        from src.plugins._ocr import get_ocr_stats
-        stats = get_ocr_stats()
-
-        return {
-            "status": "success",
-            "stats": stats,
-            "message": "OCR统计信息获取成功"
-        }
-    except Exception as e:
-        logger.error(f"获取OCR统计信息失败: {str(e)}")
-        return {
-            "status": "error",
-            "stats": {},
-            "message": f"获取OCR统计信息失败: {str(e)}"
-        }
-
-

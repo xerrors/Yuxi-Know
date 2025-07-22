@@ -18,8 +18,6 @@ app.use(Antd)
 // 预加载信息配置
 import { useInfoStore } from '@/stores/info'
 const infoStore = useInfoStore()
-infoStore.loadInfoConfig().then(() => {
-  console.log('应用信息配置预加载完成')
-})
+infoStore.loadInfoConfig()
 
 app.mount('#app')

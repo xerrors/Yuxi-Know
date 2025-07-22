@@ -36,7 +36,7 @@ services:
     command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:5050/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:5050/api/system/health || exit 1"]
       interval: 30s
       timeout: 15s
       retries: 8

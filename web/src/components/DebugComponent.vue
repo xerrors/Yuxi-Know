@@ -114,7 +114,7 @@ import {
   RobotOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
-import { logApi, systemConfigApi } from '@/apis/admin_api';
+import { configApi, agentConfigApi } from '@/apis/system_api';
 import { chatApi } from '@/apis/auth_api';
 
 const configStore = useConfigStore()
@@ -210,7 +210,7 @@ const fetchLogs = async () => {
   state.fetching = true;
   try {
     error.value = '';
-    const logData = await logApi.getLogs();
+    const logData = await configApi.getLogs();
     state.rawLogs = logData.log.split('\n').filter(line => line.trim());
 
     await nextTick();
@@ -399,7 +399,7 @@ const printAgentConfig = async () => {
     // 获取每个智能体的配置
     for (const agent of agentsData.agents) {
       try {
-        const agentConfig = await systemConfigApi.getAgentConfig(agent.name);
+        const agentConfig = await agentConfigApi.getAgentConfig(agent.name);
         console.log(`智能体 "${agent.name}" 配置:`, JSON.stringify(agentConfig, null, 2));
       } catch (err) {
         console.log(`智能体 "${agent.name}" 配置获取失败:`, err.message);

@@ -305,26 +305,26 @@ class KnowledgeBaseManager:
         # TODO: 实现数据库迁移逻辑
         raise NotImplementedError("Database migration not implemented yet")
 
-        def get_statistics(self) -> Dict:
-            """获取统计信息"""
-            stats = {
-                "total_databases": len(self.global_databases_meta),
-                "kb_types": {},
-                "total_files": 0
-            }
+    def get_statistics(self) -> Dict:
+        """获取统计信息"""
+        stats = {
+            "total_databases": len(self.global_databases_meta),
+            "kb_types": {},
+            "total_files": 0
+        }
 
-            # 按知识库类型统计
-            for db_meta in self.global_databases_meta.values():
-                kb_type = db_meta.get("kb_type", "lightrag")
-                if kb_type not in stats["kb_types"]:
-                    stats["kb_types"][kb_type] = 0
-                stats["kb_types"][kb_type] += 1
+        # 按知识库类型统计
+        for db_meta in self.global_databases_meta.values():
+            kb_type = db_meta.get("kb_type", "lightrag")
+            if kb_type not in stats["kb_types"]:
+                stats["kb_types"][kb_type] = 0
+            stats["kb_types"][kb_type] += 1
 
-            # 统计文件总数
-            for kb_instance in self.kb_instances.values():
-                stats["total_files"] += len(kb_instance.files_meta)
+        # 统计文件总数
+        for kb_instance in self.kb_instances.values():
+            stats["total_files"] += len(kb_instance.files_meta)
 
-            return stats
+        return stats
 
     # =============================================================================
     # 兼容性方法 - 为了支持现有的 graph_router.py

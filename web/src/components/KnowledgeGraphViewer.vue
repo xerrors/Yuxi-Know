@@ -11,15 +11,15 @@
           :loading="loadingDatabases"
           @change="onDatabaseChange"
         >
-          <a-select-option 
-            v-for="db in availableDatabases" 
-            :key="db.db_id" 
+          <a-select-option
+            v-for="db in availableDatabases"
+            :key="db.db_id"
             :value="db.db_id"
           >
             {{ db.name }} ({{ db.row_count || 0 }} 文件)
           </a-select-option>
         </a-select>
-        
+
         <a-select
           v-model:value="selectedLabel"
           placeholder="选择标签/实体类型"
@@ -101,8 +101,8 @@
     ></div>
 
     <!-- 节点详情面板 -->
-    <div 
-      v-if="selectedNodeData" 
+    <div
+      v-if="selectedNodeData"
       class="detail-panel node-panel"
       :style="{ transform: `translate(${nodePanelPosition.x}px, ${nodePanelPosition.y}px)` }"
       @mousedown="startDragPanel('node', $event)"
@@ -146,8 +146,8 @@
     </div>
 
     <!-- 边详情面板 -->
-    <div 
-      v-if="selectedEdgeData" 
+    <div
+      v-if="selectedEdgeData"
       class="detail-panel edge-panel"
       :style="{ transform: `translate(${edgePanelPosition.x}px, ${edgePanelPosition.y}px)` }"
       @mousedown="startDragPanel('edge', $event)"
@@ -234,28 +234,21 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
-import { 
-  SearchOutlined, 
-  ReloadOutlined, 
+import {
+  SearchOutlined,
+  ReloadOutlined,
   ClearOutlined,
-  CloseOutlined, 
-  PlusOutlined, 
-  MinusOutlined, 
-  HomeOutlined 
+  CloseOutlined,
+  PlusOutlined,
+  MinusOutlined,
+  HomeOutlined
 } from '@ant-design/icons-vue'
 import Sigma from 'sigma'
 import { NodeBorderProgram } from '@sigma/node-border'
 import EdgeCurveProgram, { EdgeCurvedArrowProgram } from '@sigma/edge-curve'
 import { EdgeArrowProgram } from 'sigma/rendering'
 
-import {
-  getAvailableDatabases,
-  getGraphLabels,
-  getSubgraph,
-  getFullGraph,
-  getGraphStats,
-  expandNodeNeighbors
-} from '@/apis/graph_api'
+import { lightragApi } from '@/apis/graph_api'
 import { useGraphStore } from '@/stores/graphStore'
 import '@/assets/css/sigma.css'
 
@@ -340,13 +333,13 @@ const loadAvailableDatabases = async () => {
     await loadGraphLabels(selectedDatabase.value)
     return
   }
-  
+
   loadingDatabases.value = true
   try {
-    const response = await getAvailableDatabases()
+    const response = await lightragApi.getDatabases()
     if (response.success) {
       availableDatabases.value = response.data.databases || []
-      
+
       // 如果有初始数据库 ID，优先选择它
       if (props.initialDatabaseId && availableDatabases.value.some(db => db.db_id === props.initialDatabaseId)) {
         selectedDatabase.value = props.initialDatabaseId
@@ -367,10 +360,10 @@ const loadAvailableDatabases = async () => {
 // 加载图标签
 const loadGraphLabels = async (dbId) => {
   if (!dbId) return
-  
+
   loadingLabels.value = true
   try {
-    const response = await getGraphLabels(dbId)
+    const response = await lightragApi.getLabels(dbId)
     if (response.success) {
       availableLabels.value = response.data.labels || []
     }
@@ -385,16 +378,16 @@ const loadGraphLabels = async (dbId) => {
 // 数据库切换处理
 const onDatabaseChange = async (dbId) => {
   if (!dbId) return
-  
+
   selectedDatabase.value = dbId
   selectedLabel.value = '*'
-  
+
   // 清空当前图谱
   clearGraph()
-  
+
   // 加载新数据库的标签
   await loadGraphLabels(dbId)
-  
+
   message.info(`已切换到数据库: ${availableDatabases.value.find(db => db.db_id === dbId)?.name || dbId}`)
 }
 
@@ -472,14 +465,14 @@ const registerEvents = () => {
       const graph = sigmaInstance.getGraph()
       if (graph.hasNode(node)) {
         console.log('Clicked node:', node)
-        
+
         // 立即设置选中节点，显示详情面板
         graphStore.setSelectedNode(node, false) // 先不移动相机
-        
+
         // 获取节点数据并确保设置成功
         const nodeData = graph.getNodeAttributes(node)
         console.log('Node data:', nodeData)
-        
+
         // 延迟一点后再移动相机，确保详情面板已显示
         setTimeout(() => {
           if (graphStore.selectedNode === node) {
@@ -487,7 +480,7 @@ const registerEvents = () => {
             graphStore.setSelectedNode(node, true) // 现在移动相机
           }
         }, 100)
-        
+
       } else {
         console.warn('Clicked node does not exist in graph:', node)
       }
@@ -629,13 +622,13 @@ const loadGraphData = async () => {
 
   try {
     const [graphResponse, statsResponse] = await Promise.all([
-      getSubgraph({
+      lightragApi.getSubgraph({
         db_id: selectedDatabase.value,
         node_label: selectedLabel.value || '*',
         max_depth: searchParams.max_depth,
         max_nodes: searchParams.max_nodes
       }),
-      getGraphStats(selectedDatabase.value)
+      lightragApi.getStats(selectedDatabase.value)
     ])
 
     if (graphResponse.success && statsResponse.success) {
@@ -798,7 +791,7 @@ const expandNode = async (nodeId) => {
 
   expanding.value = true
   try {
-    const response = await expandNodeNeighbors({
+    const response = await lightragApi.getSubgraph({
       db_id: selectedDatabase.value,
       node_label: nodeId,
       max_depth: 1,
@@ -862,18 +855,18 @@ const resetCamera = () => {
     try {
       const camera = sigmaInstance.getCamera()
       const graph = sigmaInstance.getGraph()
-      
+
       // 如果图为空，直接重置
       if (graph.order === 0) {
         camera.animatedReset({ duration: 500 })
         return
       }
-      
+
       // 计算图的边界以确保所有节点都可见
       const nodes = graph.nodes()
       if (nodes.length > 0) {
         const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity }
-        
+
         nodes.forEach(node => {
           const attrs = graph.getNodeAttributes(node)
           if (typeof attrs.x === 'number' && typeof attrs.y === 'number') {
@@ -883,13 +876,13 @@ const resetCamera = () => {
             bounds.maxY = Math.max(bounds.maxY, attrs.y)
           }
         })
-        
+
         // 只有在边界有效时才使用fitBounds
         if (isFinite(bounds.minX) && isFinite(bounds.maxX) && isFinite(bounds.minY) && isFinite(bounds.maxY)) {
           const centerX = (bounds.minX + bounds.maxX) / 2
           const centerY = (bounds.minY + bounds.maxY) / 2
           const padding = 50
-          
+
           camera.animate({
             x: centerX,
             y: centerY,
@@ -905,7 +898,7 @@ const resetCamera = () => {
       } else {
         camera.animatedReset({ duration: 500 })
       }
-      
+
       console.log('Camera reset completed')
       message.success('视图已重置')
     } catch (error) {
@@ -940,16 +933,16 @@ const getEntityColor = (entityType) => {
 // 面板拖拽功能
 const startDragPanel = (type, event) => {
   event.preventDefault()
-  
+
   if (!sigmaContainer.value) return
-  
+
   const currentPosition = type === 'node' ? nodePanelPosition.value : edgePanelPosition.value
-  
+
   // 获取容器位置，计算相对于容器的鼠标位置
   const containerRect = sigmaContainer.value.getBoundingClientRect()
   const relativeX = event.clientX - containerRect.left
   const relativeY = event.clientY - containerRect.top
-  
+
   dragging.value = {
     active: true,
     type: type,
@@ -958,33 +951,33 @@ const startDragPanel = (type, event) => {
     initialX: currentPosition.x,
     initialY: currentPosition.y
   }
-  
+
   document.addEventListener('mousemove', onDragPanel)
   document.addEventListener('mouseup', stopDragPanel)
 }
 
 const onDragPanel = (event) => {
   if (!dragging.value.active || !sigmaContainer.value) return
-  
+
   // 获取容器位置和尺寸
   const containerRect = sigmaContainer.value.getBoundingClientRect()
-  
+
   // 计算当前鼠标相对于容器的位置
   const currentRelativeX = event.clientX - containerRect.left
   const currentRelativeY = event.clientY - containerRect.top
-  
+
   // 计算拖拽偏移
   const deltaX = currentRelativeX - dragging.value.startX
   const deltaY = currentRelativeY - dragging.value.startY
-  
+
   const maxX = containerRect.width - 320  // 面板宽度为300px + 一些边距
   const maxY = containerRect.height - 200 // 面板高度约为200px
-  
+
   const newPosition = {
     x: Math.max(0, Math.min(maxX, dragging.value.initialX + deltaX)),
     y: Math.max(0, Math.min(maxY, dragging.value.initialY + deltaY))
   }
-  
+
   if (dragging.value.type === 'node') {
     nodePanelPosition.value = newPosition
   } else {
@@ -1008,7 +1001,7 @@ onUnmounted(() => {
   // 清理拖拽事件监听器
   document.removeEventListener('mousemove', onDragPanel)
   document.removeEventListener('mouseup', stopDragPanel)
-  
+
   if (sigmaInstance) {
     sigmaInstance.kill()
     sigmaInstance = null
@@ -1029,7 +1022,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
   if (nodeId && graphStore.moveToSelectedNode && sigmaInstance) {
     try {
       const graph = sigmaInstance.getGraph()
-      
+
       // 检查节点是否存在
       if (!graph.hasNode(nodeId)) {
         console.warn('Selected node does not exist in graph:', nodeId)
@@ -1038,7 +1031,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
       }
 
       const nodeAttributes = graph.getNodeAttributes(nodeId)
-      
+
       // 检查节点属性是否有效
       if (!nodeAttributes || typeof nodeAttributes.x !== 'number' || typeof nodeAttributes.y !== 'number') {
         console.warn('Invalid node attributes for node:', nodeId, nodeAttributes)
@@ -1048,40 +1041,40 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 
       const camera = sigmaInstance.getCamera()
       const currentState = camera.getState()
-      
-      console.log('Moving camera to node:', nodeId, { 
-        x: nodeAttributes.x, 
+
+      console.log('Moving camera to node:', nodeId, {
+        x: nodeAttributes.x,
         y: nodeAttributes.y,
-        currentRatio: currentState.ratio 
+        currentRatio: currentState.ratio
       })
-      
+
       // 计算合适的缩放比例，避免过度缩放
       const currentRatio = currentState.ratio || 1.0
       const targetRatio = Math.max(0.1, Math.min(currentRatio * 0.7, 0.6))
-      
+
       // 验证节点位置是否有效
       const isValidPosition = (
-        typeof nodeAttributes.x === 'number' && 
+        typeof nodeAttributes.x === 'number' &&
         typeof nodeAttributes.y === 'number' &&
-        !isNaN(nodeAttributes.x) && 
+        !isNaN(nodeAttributes.x) &&
         !isNaN(nodeAttributes.y) &&
-        isFinite(nodeAttributes.x) && 
+        isFinite(nodeAttributes.x) &&
         isFinite(nodeAttributes.y)
       )
-      
+
       if (!isValidPosition) {
         console.warn('Invalid node position, skipping camera movement:', nodeAttributes)
         return
       }
-      
+
       // 移动相机到节点位置，使用安全的缩放比例
       camera.animate(
-        { 
-          x: nodeAttributes.x, 
-          y: nodeAttributes.y, 
+        {
+          x: nodeAttributes.x,
+          y: nodeAttributes.y,
           ratio: targetRatio  // 使用计算出的安全缩放比例
         },
-        { 
+        {
           duration: 600  // 适中的动画时间
         }
       )
@@ -1216,7 +1209,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 .detail-item {
   display: flex;
   margin-bottom: 12px;
-  
+
   &:last-child {
     margin-bottom: 0;
   }
@@ -1312,20 +1305,20 @@ watch(() => graphStore.selectedNode, (nodeId) => {
   max-height: 240px;
   overflow-y: auto;
   overflow-x: hidden;
-  
+
   /* 自定义滚动条样式 */
   &::-webkit-scrollbar {
     width: 4px;
   }
-  
+
   &::-webkit-scrollbar-track {
     background: transparent;
   }
-  
+
   &::-webkit-scrollbar-thumb {
     background: #d9d9d9;
     border-radius: 2px;
-    
+
     &:hover {
       background: #bfbfbf;
     }
@@ -1342,7 +1335,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
   font-size: 12px;
   min-width: 0;
   transition: background-color 0.2s ease;
-  
+
   span {
     white-space: nowrap;
     overflow: hidden;
@@ -1351,7 +1344,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
     min-width: 0;
     color: #595959;
   }
-  
+
   &:hover {
     background-color: #f5f5f5;
   }

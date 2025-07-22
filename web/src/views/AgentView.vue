@@ -229,7 +229,7 @@ import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { chatApi } from '@/apis/auth_api';
-import { systemConfigApi } from '@/apis/admin_api';
+import { agentConfigApi } from '@/apis/system_api';
 
 // 路由
 const router = useRouter();
@@ -276,7 +276,7 @@ const setAsDefaultAgent = async () => {
   if (!selectedAgentId.value || !userStore.isAdmin) return;
 
   try {
-    await systemConfigApi.setDefaultAgent(selectedAgentId.value);
+    await agentConfigApi.setDefaultAgent(selectedAgentId.value);
     defaultAgentId.value = selectedAgentId.value;
     message.success('已将当前智能体设为默认');
   } catch (error) {
@@ -326,7 +326,7 @@ const fetchDefaultAgent = async () => {
   try {
     const data = await chatApi.getDefaultAgent();
     defaultAgentId.value = data.default_agent_id;
-    console.log("Default agent ID:", defaultAgentId.value);
+    console.debug("Default agent ID:", defaultAgentId.value);
   } catch (error) {
     console.error('获取默认智能体错误:', error);
   }
@@ -394,7 +394,7 @@ const loadAgentConfig = async () => {
 
   try {
     // 从服务器加载配置
-    const response = await systemConfigApi.getAgentConfig(selectedAgentId.value);
+    const response = await agentConfigApi.getAgentConfig(selectedAgentId.value);
     if (response.success && response.config) {
       // 合并服务器配置
       Object.keys(response.config).forEach(key => {
@@ -408,7 +408,7 @@ const loadAgentConfig = async () => {
           }
         }
       });
-      console.log(`从服务器加载 ${selectedAgentId.value} 配置成功, ${JSON.stringify(agentConfig.value)}`);
+      // console.log(`从服务器加载 ${selectedAgentId.value} 配置成功, ${JSON.stringify(agentConfig.value)}`);
     }
   } catch (error) {
     console.error('从服务器加载配置出错:', error);
@@ -428,7 +428,7 @@ const saveConfig = async () => {
 
   try {
     // 保存配置到服务器
-    await systemConfigApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
+    await agentConfigApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
     // 提示保存成功
     message.success('配置已保存到服务器');
     console.log("保存配置:", agentConfig.value);
@@ -447,7 +447,7 @@ const resetConfig = async () => {
 
   try {
     // 保存空配置到服务器，相当于重置
-    await systemConfigApi.saveAgentConfig(selectedAgentId.value, {});
+    await agentConfigApi.saveAgentConfig(selectedAgentId.value, {});
     // 重新加载默认配置
     await loadAgentConfig();
     message.info('配置已重置');

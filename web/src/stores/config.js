@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { systemConfigApi } from '@/apis/admin_api'
+import { configApi } from '@/apis/system_api'
 
 export const useCounterStore = defineStore('counter', () => {
   const count = ref(0)
@@ -21,7 +21,7 @@ export const useConfigStore = defineStore('config', () => {
 
   function setConfigValue(key, value) {
     config.value[key] = value
-    systemConfigApi.updateConfigItems({ [key]: value })
+    configApi.updateConfigBatch({ [key]: value })
       .then(data => {
         console.debug('Success:', data)
         setConfig(data)
@@ -35,7 +35,7 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     // 发送到服务器
-    systemConfigApi.updateConfigItems(items)
+    configApi.updateConfigBatch(items)
       .then(data => {
         console.debug('Success:', data)
         setConfig(data)
@@ -43,7 +43,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function refreshConfig() {
-    systemConfigApi.getSystemConfig()
+    configApi.getConfig()
       .then(data => {
         console.log("config", data)
         setConfig(data)

@@ -17,9 +17,8 @@ PUBLIC_PATHS = [
     r"^/api/auth/check-first-run$",  # 检查是否首次运行
     r"^/api/auth/initialize$",       # 初始化系统
     r"^/api$",                      # Health Check
-    r"^/api/login$",                # 登录页面
-    r"^/api/info$",                 # 获取系统信息配置
-    r"^/api/info/.*$",              # 系统信息配置相关接口
+    r"^/api/system/health$",        # Health Check
+    r"^/api/system/info$",          # 获取系统信息配置
 ]
 
 # 获取数据库会话

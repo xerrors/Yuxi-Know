@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { knowledgeBaseApi } from '@/apis/admin_api'
+import { databaseApi } from '@/apis/knowledge_api'
 
 export const useDatabaseStore = defineStore('database', () => {
   const db = ref({})
@@ -9,7 +9,7 @@ export const useDatabaseStore = defineStore('database', () => {
   }
 
   async function refreshDatabase() {
-    const res = await knowledgeBaseApi.getDatabases()
+    const res = await databaseApi.getDatabases()
     console.log("database", res)
     setDatabase(res.databases)
   }

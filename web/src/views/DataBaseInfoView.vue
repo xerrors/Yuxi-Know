@@ -136,7 +136,7 @@
           name="file"
           :multiple="true"
           :disabled="state.chunkLoading"
-          :action="'/api/data/upload?db_id=' + databaseId"
+          :action="'/api/knowledge/files/upload?db_id=' + databaseId"
           :headers="getAuthHeaders()"
           @change="handleFileUpload"
           @drop="handleDrop"
@@ -435,7 +435,8 @@ import { message, Modal } from 'ant-design-vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
-import { knowledgeBaseApi, ocrApi } from '@/apis/admin_api'
+import { databaseApi, documentApi, queryApi, fileApi } from '@/apis/knowledge_api'
+import { ocrApi } from '@/apis/system_api'
 import {
   ReadOutlined,
   LeftOutlined,
@@ -509,7 +510,7 @@ const checkOcrHealth = async () => {
 
   state.ocrHealthChecking = true;
   try {
-    const healthData = await ocrApi.checkHealth();
+    const healthData = await ocrApi.getHealth();
     ocrHealthStatus.value = healthData.services;
   } catch (error) {
     console.error('OCR健康检查失败:', error);
@@ -636,7 +637,7 @@ const loadQueryParams = async () => {
 
   state.queryParamsLoading = true
   try {
-    const response = await knowledgeBaseApi.getKbQueryParams(databaseId.value)
+    const response = await queryApi.getKnowledgeBaseQueryParams(databaseId.value)
     queryParams.value = response.params?.options || []
 
     // 初始化meta对象的默认值
@@ -677,10 +678,7 @@ const onQuery = () => {
   meta.db_id = database.value.db_id
 
   try {
-    knowledgeBaseApi.queryTest({
-      query: queryText.value.trim(),
-      meta: meta
-    })
+    queryApi.queryTest(database.value.db_id, queryText.value.trim(), meta)
     .then(data => {
       console.log(data)
       queryResult.value = data
@@ -737,7 +735,7 @@ const deleteDatabse = () => {
     cancelText: '取消',
     onOk: () => {
       state.lock = true
-      knowledgeBaseApi.deleteDatabase(databaseId.value)
+      databaseApi.deleteDatabase(databaseId.value)
         .then(data => {
           console.log(data)
           message.success(data.message || '删除成功')
@@ -774,7 +772,7 @@ const openFileDetail = (record) => {
   state.lock = true;
 
   try {
-    knowledgeBaseApi.getDocumentDetail(databaseId.value, record.file_id)
+    documentApi.getDocumentInfo(databaseId.value, record.file_id)
       .then(data => {
         console.log(data);
         if (data.status == "failed") {
@@ -837,7 +835,7 @@ const getDatabaseInfo = () => {
   state.lock = true
   state.databaseLoading = true
   return new Promise((resolve, reject) => {
-    knowledgeBaseApi.getDatabaseInfo(db_id)
+    databaseApi.getDatabaseInfo(db_id)
       .then(async data => {
         database.value = data
         // 加载查询参数
@@ -859,7 +857,7 @@ const getDatabaseInfo = () => {
 const deleteFile = (fileId) => {
   state.lock = true
   console.debug("deleteFile", databaseId.value, fileId)
-  return knowledgeBaseApi.deleteFile(databaseId.value, fileId)
+  return documentApi.deleteDocument(databaseId.value, fileId)
     .then(data => {
       console.log(data)
       message.success(data.message || '删除成功')
@@ -964,11 +962,7 @@ const addFiles = (items, contentType = 'file') => {
     content_type: contentType
   };
 
-  knowledgeBaseApi.addFiles({
-    db_id: databaseId.value,
-    items: items,
-    params: params
-  })
+  documentApi.addDocuments(databaseId.value, items, params)
   .then(data => {
     console.log('处理结果:', data);
     if (data.status === 'success') {
@@ -1116,7 +1110,7 @@ const handleEditSubmit = () => {
 const updateDatabaseInfo = async () => {
   try {
     state.lock = true;
-    const response = await knowledgeBaseApi.updateDatabaseInfo(databaseId.value, {
+    const response = await databaseApi.updateDatabase(databaseId.value, {
       name: editForm.name,
       description: editForm.description
     });

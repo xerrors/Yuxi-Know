@@ -131,7 +131,7 @@ import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue';
 import UserManagementComponent from '@/components/UserManagementComponent.vue';
 import { notification, Button } from 'ant-design-vue';
-import { systemConfigApi } from '@/apis/admin_api'
+import { configApi } from '@/apis/system_api'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 
 const configStore = useConfigStore()
@@ -207,7 +207,7 @@ const sendRestart = () => {
   console.log('Restarting...')
   message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
 
-  systemConfigApi.restartServer()
+  configApi.restartSystem()
     .then(() => {
       console.log('Restarted')
       message.success({ content: '重新加载完成!', key: "restart", duration: 2 });

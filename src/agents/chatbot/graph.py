@@ -18,7 +18,7 @@ from src.agents.chatbot.configuration import ChatbotConfiguration
 from src.agents.tools_factory import get_all_tools
 
 class ChatbotAgent(BaseAgent):
-    name = "chatbot"
+    name = "对话机器人（Chatbot）"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
     requirements = ["TAVILY_API_KEY", "ZHIPUAI_API_KEY"]
     config_schema = ChatbotConfiguration

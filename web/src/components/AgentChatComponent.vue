@@ -1056,9 +1056,9 @@ const getAgentHistory = async () => {
   }
 
   try {
-    console.log(`正在获取智能体[${props.agentId}]的历史记录，对话ID: ${currentChatId.value}`);
+    console.debug(`正在获取智能体[${props.agentId}]的历史记录，对话ID: ${currentChatId.value}`);
     const response = await chatApi.getAgentHistory(props.agentId, currentChatId.value);
-    console.log('智能体历史记录:', response);
+    console.debug('智能体历史记录:', response);
 
     // 如果成功获取历史记录并且是数组
     if (response && Array.isArray(response.history)) {
@@ -1133,12 +1133,13 @@ const convertServerHistoryToMessages = (serverHistory) => {
     }
   }
 
-  console.log("conversations", conversations);
+  console.debug("conversations", conversations);
   return conversations;
 };
 
 // 组件挂载时加载状态
 onMounted(async () => {
+  // 独立页面模式的时候从这里加载，在AgentView页面可能会重复加载
   await initAll();
 });
 
@@ -1147,7 +1148,7 @@ onMounted(async () => {
 onMounted(() => {
   watch(() => props.agentId, async (newAgentId, oldAgentId) => {
     try {
-      console.log("智能体ID变化", oldAgentId, "->", newAgentId);
+      console.debug("智能体ID变化", oldAgentId, "->", newAgentId);
 
       // 如果变化了，重置会话并加载新数据
       if (newAgentId !== oldAgentId) {

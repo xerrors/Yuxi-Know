@@ -1,203 +1,158 @@
-import { apiGet } from './base'
+import { apiGet, apiPost } from './base'
 
 /**
- * 图数据API调用 - 基于LightRAG的新接口
+ * 图数据库API模块
+ * 包含LightRAG图知识库和Neo4j图数据库两种接口
+ * 采用命名空间分组模式，清晰区分接口类型
  */
 
-/**
- * 获取所有可用的数据库
- * @returns {Promise} - 数据库列表
- */
-export const getAvailableDatabases = async () => {
-  return await apiGet('/api/graph/databases', {}, true)
-}
+// =============================================================================
+// === LightRAG图知识库接口分组 ===
+// =============================================================================
 
-/**
- * 获取图标签列表
- * @param {string} dbId - 数据库ID
- * @returns {Promise} - 标签列表
- */
-export const getGraphLabels = async (dbId) => {
-  if (!dbId) {
-    throw new Error('db_id is required')
-  }
+export const lightragApi = {
+  /**
+   * 获取LightRAG知识图谱子图数据
+   * @param {Object} params - 查询参数
+   * @param {string} params.db_id - LightRAG数据库ID
+   * @param {string} params.node_label - 节点标签（"*"获取全图）
+   * @param {number} params.max_depth - 最大深度
+   * @param {number} params.max_nodes - 最大节点数
+   * @returns {Promise} - 子图数据
+   */
+  getSubgraph: async (params) => {
+    const { db_id, node_label = "*", max_depth = 2, max_nodes = 100 } = params
 
-  const queryParams = new URLSearchParams({
-    db_id: dbId
-  })
+    if (!db_id) {
+      throw new Error('db_id is required')
+    }
 
-  return await apiGet(`/api/graph/labels?${queryParams.toString()}`, {}, true)
-}
-
-/**
- * 获取子图数据 - 主要接口
- * @param {Object} params - 查询参数
- * @param {string} params.db_id - 数据库ID
- * @param {string} params.node_label - 节点标签 (使用 "*" 获取全图)
- * @param {number} params.max_depth - 最大深度
- * @param {number} params.max_nodes - 最大节点数
- * @returns {Promise} - 子图数据
- */
-export const getSubgraph = async (params) => {
-  const { db_id, node_label = "*", max_depth = 2, max_nodes = 100 } = params
-
-  if (!db_id) {
-    throw new Error('db_id is required')
-  }
-
-  const queryParams = new URLSearchParams({
-    db_id: db_id,
-    node_label: node_label,
-    max_depth: max_depth.toString(),
-    max_nodes: max_nodes.toString()
-  })
-
-  return await apiGet(`/api/graph/subgraph?${queryParams.toString()}`, {}, true)
-}
-
-/**
- * 获取图统计信息
- * @param {string} dbId - 数据库ID
- * @returns {Promise} - 统计数据
- */
-export const getGraphStats = async (dbId) => {
-  if (!dbId) {
-    throw new Error('db_id is required')
-  }
-
-  const queryParams = new URLSearchParams({
-    db_id: dbId
-  })
-
-  return await apiGet(`/api/graph/stats?${queryParams.toString()}`, {}, true)
-}
-
-/**
- * 获取完整图数据 - 使用新的子图接口
- * @param {Object} params - 查询参数
- * @param {string} params.db_id - 数据库ID
- * @param {string} params.node_label - 节点标签筛选
- * @param {number} params.max_nodes - 最大节点数
- * @param {number} params.max_depth - 最大深度
- * @returns {Promise} - 完整图数据
- */
-export const getFullGraph = async (params = {}) => {
-  const { db_id, node_label = "*", max_nodes = 200, max_depth = 2 } = params
-
-  if (!db_id) {
-    throw new Error('db_id is required for graph operations')
-  }
-
-  try {
-    // 使用子图接口获取数据
-    const response = await getSubgraph({
-      db_id,
-      node_label,
-      max_nodes,
-      max_depth
+    const queryParams = new URLSearchParams({
+      db_id: db_id,
+      node_label: node_label,
+      max_depth: max_depth.toString(),
+      max_nodes: max_nodes.toString()
     })
 
-    if (!response.success) {
-      throw new Error('获取图数据失败')
+    return await apiGet(`/api/graph/lightrag/subgraph?${queryParams.toString()}`, {}, true)
+  },
+
+  /**
+   * 获取所有可用的LightRAG数据库
+   * @returns {Promise} - LightRAG数据库列表
+   */
+  getDatabases: async () => {
+    return await apiGet('/api/graph/lightrag/databases', {}, true)
+  },
+
+  /**
+   * 获取LightRAG图谱标签列表
+   * @param {string} db_id - LightRAG数据库ID
+   * @returns {Promise} - 标签列表
+   */
+  getLabels: async (db_id) => {
+    if (!db_id) {
+      throw new Error('db_id is required')
     }
 
-    return {
-      success: true,
-      data: {
-        nodes: response.data.nodes,
-        edges: response.data.edges,
-        is_truncated: response.data.is_truncated,
-        stats: {
-          total_nodes: response.data.total_nodes,
-          total_edges: response.data.total_edges,
-          displayed_nodes: response.data.nodes.length,
-          displayed_edges: response.data.edges.length
-        }
-      }
+    const queryParams = new URLSearchParams({
+      db_id: db_id
+    })
+
+    return await apiGet(`/api/graph/lightrag/labels?${queryParams.toString()}`, {}, true)
+  },
+
+  /**
+   * 获取LightRAG图谱统计信息
+   * @param {string} db_id - LightRAG数据库ID
+   * @returns {Promise} - 统计信息
+   */
+  getStats: async (db_id) => {
+    if (!db_id) {
+      throw new Error('db_id is required')
     }
-  } catch (error) {
-    console.error('获取完整图数据失败:', error)
-    throw error
+
+    const queryParams = new URLSearchParams({
+      db_id: db_id
+    })
+
+    return await apiGet(`/api/graph/lightrag/stats?${queryParams.toString()}`, {}, true)
   }
 }
 
-/**
- * 根据特定标签获取子图
- * @param {Object} params - 查询参数
- * @param {string} params.db_id - 数据库ID
- * @param {string} params.entity_type - 实体类型 
- * @param {number} params.max_nodes - 最大节点数
- * @param {number} params.max_depth - 最大深度
- * @returns {Promise} - 子图数据
- */
-export const getGraphByEntityType = async (params = {}) => {
-  const { db_id, entity_type, max_nodes = 100, max_depth = 2 } = params
+// =============================================================================
+// === Neo4j图数据库接口分组 ===
+// =============================================================================
 
-  if (!db_id) {
-    throw new Error('db_id is required')
+export const neo4jApi = {
+  /**
+   * 获取Neo4j图数据库样例节点
+   * @param {string} kgdb_name - Neo4j数据库名称（默认为'neo4j'）
+   * @param {number} num - 节点数量
+   * @returns {Promise} - 样例节点数据
+   */
+  getSampleNodes: async (kgdb_name = 'neo4j', num = 100) => {
+    const queryParams = new URLSearchParams({
+      kgdb_name: kgdb_name,
+      num: num.toString()
+    })
+
+    return await apiGet(`/api/graph/neo4j/nodes?${queryParams.toString()}`, {}, true)
+  },
+
+  /**
+   * 根据实体名称查询Neo4j图节点
+   * @param {string} entity_name - 实体名称
+   * @returns {Promise} - 节点数据
+   */
+  queryNode: async (entity_name) => {
+    if (!entity_name) {
+      throw new Error('entity_name is required')
+    }
+
+    const queryParams = new URLSearchParams({
+      entity_name: entity_name
+    })
+
+    return await apiGet(`/api/graph/neo4j/node?${queryParams.toString()}`, {}, true)
+  },
+
+  /**
+   * 通过JSONL文件添加图谱实体到Neo4j
+   * @param {string} file_path - JSONL文件路径
+   * @param {string} kgdb_name - Neo4j数据库名称（默认为'neo4j'）
+   * @returns {Promise} - 添加结果
+   */
+  addEntities: async (file_path, kgdb_name = 'neo4j') => {
+    return await apiPost('/api/graph/neo4j/add-entities', {
+      file_path: file_path,
+      kgdb_name: kgdb_name
+    }, {}, true)
+  },
+
+  /**
+   * 为Neo4j图谱节点添加嵌入向量索引
+   * @param {string} kgdb_name - Neo4j数据库名称（默认为'neo4j'）
+   * @returns {Promise} - 索引结果
+   */
+  indexEntities: async (kgdb_name = 'neo4j') => {
+    return await apiPost('/api/graph/neo4j/index-entities', {
+      kgdb_name: kgdb_name
+    }, {}, true)
+  },
+
+  /**
+   * 获取Neo4j图数据库信息
+   * @returns {Promise} - 图数据库信息
+   */
+  getInfo: async () => {
+    return await apiGet('/api/graph/neo4j/info', {}, true)
   }
-
-  return await getSubgraph({
-    db_id,
-    node_label: entity_type || "*",
-    max_nodes,
-    max_depth
-  })
 }
 
-/**
- * 展开指定节点的邻居
- * @param {Object} params - 查询参数  
- * @param {string} params.db_id - 数据库ID
- * @param {string} params.node_label - 节点标签
- * @param {number} params.max_depth - 最大深度
- * @param {number} params.max_nodes - 最大节点数
- * @returns {Promise} - 邻居节点数据
- */
-export const expandNodeNeighbors = async (params) => {
-  const { db_id, node_label, max_depth = 1, max_nodes = 50 } = params
-
-  if (!db_id || !node_label) {
-    throw new Error('db_id and node_label are required')
-  }
-
-  return await getSubgraph({
-    db_id,
-    node_label,
-    max_depth,
-    max_nodes
-  })
-}
-
-// ==================== 兼容性方法 ====================
-
-/**
- * 获取图节点数据 (已弃用，建议使用 getSubgraph)
- * @deprecated 请使用 getSubgraph 替代
- */
-export const getGraphNodes = async (params = {}) => {
-  console.warn('getGraphNodes is deprecated, please use getSubgraph instead')
-  const { db_id } = params
-  if (!db_id) {
-    throw new Error('db_id is required. Please provide db_id parameter.')
-  }
-  return await getSubgraph({ ...params, node_label: "*" })
-}
-
-/**
- * 获取图边数据 (已弃用，建议使用 getSubgraph)  
- * @deprecated 请使用 getSubgraph 替代
- */
-export const getGraphEdges = async (params = {}) => {
-  console.warn('getGraphEdges is deprecated, please use getSubgraph instead')
-  const { db_id } = params
-  if (!db_id) {
-    throw new Error('db_id is required. Please provide db_id parameter.')
-  }
-  return await getSubgraph({ ...params, node_label: "*" })
-}
-
-// ==================== 工具函数 ====================
+// =============================================================================
+// === 工具函数分组 ===
+// =============================================================================
 
 /**
  * 根据实体类型获取颜色
@@ -227,7 +182,7 @@ export const getEntityTypeColor = (entityType) => {
  * 根据权重计算边的粗细
  * @param {number} weight - 权重值
  * @param {number} minWeight - 最小权重
- * @param {number} maxWeight - 最大权重  
+ * @param {number} maxWeight - 最大权重
  * @returns {number} - 边的粗细
  */
 export const calculateEdgeWidth = (weight, minWeight = 1, maxWeight = 10) => {
@@ -235,4 +190,43 @@ export const calculateEdgeWidth = (weight, minWeight = 1, maxWeight = 10) => {
   const maxWidth = 5
   const normalizedWeight = (weight - minWeight) / (maxWeight - minWeight)
   return minWidth + normalizedWeight * (maxWidth - minWidth)
+}
+
+// =============================================================================
+// === 兼容性导出（可选，用于平滑迁移）===
+// =============================================================================
+
+// 保持向后兼容的导出，后续可以移除
+export const getGraphNodes = async (params = {}) => {
+  console.warn('getGraphNodes is deprecated, use neo4jApi.getSampleNodes instead')
+  return neo4jApi.getSampleNodes(params.kgdb_name || 'neo4j', params.num || 100)
+}
+
+export const getGraphNode = async (params = {}) => {
+  console.warn('getGraphNode is deprecated, use neo4jApi.queryNode instead')
+  return neo4jApi.queryNode(params.entity_name)
+}
+
+export const addByJsonl = async (file_path, kgdb_name = 'neo4j') => {
+  console.warn('addByJsonl is deprecated, use neo4jApi.addEntities instead')
+  return neo4jApi.addEntities(file_path, kgdb_name)
+}
+
+export const indexNodes = async (kgdb_name = 'neo4j') => {
+  console.warn('indexNodes is deprecated, use neo4jApi.indexEntities instead')
+  return neo4jApi.indexEntities(kgdb_name)
+}
+
+export const getGraphStats = async () => {
+  console.warn('getGraphStats is deprecated, use neo4jApi.getInfo instead')
+  return neo4jApi.getInfo()
+}
+
+// 保持旧的分组导出，便于批量替换
+export const graphApi = {
+  getSubgraph: lightragApi.getSubgraph,
+  getDatabases: lightragApi.getDatabases,
+  getLabels: lightragApi.getLabels,
+  getStats: lightragApi.getStats,
+  ...neo4jApi  // 临时兼容
 }

@@ -72,7 +72,7 @@
           :fileList="fileList"
           :max-count="1"
           :disabled="disabled"
-          action="/api/data/upload"
+          action="/api/knowledge/files/upload"
           :headers="getAuthHeaders()"
           @change="handleFileUpload"
           @drop="handleDrop"
@@ -94,7 +94,7 @@ import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
 import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
-import { graphApi } from '@/apis/admin_api';
+import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 
 const configStore = useConfigStore();
@@ -130,10 +130,10 @@ const unindexedCount = computed(() => {
 
 const loadGraphInfo = () => {
   state.loadingGraphInfo = true
-  graphApi.getGraphInfo()
+  neo4jApi.getInfo()
     .then(data => {
       console.log(data)
-      graphInfo.value = data
+      graphInfo.value = data.data
       state.loadingGraphInfo = false
     })
     .catch(error => {
@@ -187,7 +187,7 @@ const getGraphData = () => {
 const addDocumentByFile = () => {
   state.precessing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  graphApi.addByJsonl(files[0])
+  neo4jApi.addEntities(files[0])
     .then((data) => {
       if (data.status === 'success') {
         message.success(data.message);
@@ -205,7 +205,7 @@ const addDocumentByFile = () => {
 
 const loadSampleNodes = () => {
   state.fetching = true
-  graphApi.getNodes('neo4j', sampleNodeCount.value)
+  neo4jApi.getSampleNodes('neo4j', sampleNodeCount.value)
     .then((data) => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
@@ -242,7 +242,7 @@ const onSearch = () => {
   }
 
   state.searchLoading = true
-  graphApi.queryNode(state.searchInput)
+  neo4jApi.queryNode(state.searchInput)
     .then((data) => {
       if (!data.result || !data.result.nodes || !data.result.edges) {
         throw new Error('返回数据格式不正确');
@@ -368,7 +368,7 @@ const indexNodes = () => {
   }
 
   state.indexing = true;
-  graphApi.indexNodes('neo4j')
+  neo4jApi.indexEntities('neo4j')
     .then(data => {
       message.success(data.message || '索引添加成功');
       // 刷新图谱信息

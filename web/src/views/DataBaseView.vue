@@ -131,7 +131,7 @@ import { useConfigStore } from '@/stores/config';
 import { message } from 'ant-design-vue'
 import { ReadFilled, DatabaseOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 import { BookPlus, Database, Zap } from 'lucide-vue-next';
-import { knowledgeBaseApi } from '@/apis/admin_api';
+import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 
 const route = useRoute()
@@ -172,7 +172,7 @@ const supportedKbTypes = ref({})
 // 加载支持的知识库类型
 const loadSupportedKbTypes = async () => {
   try {
-    const data = await knowledgeBaseApi.getSupportedKbTypes()
+    const data = await typeApi.getKnowledgeBaseTypes()
     supportedKbTypes.value = data.kb_types
     console.log('支持的知识库类型:', supportedKbTypes.value)
   } catch (error) {
@@ -190,7 +190,7 @@ const loadSupportedKbTypes = async () => {
 const loadDatabases = () => {
   state.loading = true
   // loadGraph()
-  knowledgeBaseApi.getDatabases()
+  databaseApi.getDatabases()
     .then(data => {
       console.log(data)
       databases.value = data.databases
@@ -309,7 +309,7 @@ const createDatabase = () => {
     }
   }
 
-  knowledgeBaseApi.createDatabase(requestData)
+  databaseApi.createDatabase(requestData)
     .then(data => {
       console.log('创建成功:', data)
       loadDatabases()

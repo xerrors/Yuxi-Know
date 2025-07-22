@@ -21,7 +21,11 @@ from server.utils.auth_middleware import get_required_user, get_db
 from server.models.user_model import User
 from server.models.thread_model import Thread
 
-chat = APIRouter(prefix="/chat")
+chat = APIRouter(prefix="/chat", tags=["chat"])
+
+# =============================================================================
+# > === 智能体管理分组 ===
+# =============================================================================
 
 @chat.get("/default_agent")
 async def get_default_agent(current_user: User = Depends(get_required_user)):
@@ -61,6 +65,10 @@ async def set_default_agent(agent_id: str = Body(..., embed=True), current_user 
     except Exception as e:
         logger.error(f"设置默认智能体出错: {e}")
         raise HTTPException(status_code=500, detail=f"设置默认智能体出错: {str(e)}")
+
+# =============================================================================
+# > === 对话分组 ===
+# =============================================================================
 
 @chat.get("/")
 async def chat_get(current_user: User = Depends(get_required_user)):
@@ -154,6 +162,10 @@ async def chat_agent(agent_name: str,
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
     return StreamingResponse(stream_messages(), media_type='application/json')
+
+# =============================================================================
+# > === 模型管理分组 ===
+# =============================================================================
 
 @chat.get("/models")
 async def get_chat_models(model_provider: str, current_user: User = Depends(get_admin_user)):
@@ -256,6 +268,10 @@ class ThreadResponse(BaseModel):
     create_at: str
     update_at: str
 
+
+# =============================================================================
+# > === 会话管理分组 ===
+# =============================================================================
 
 @chat.post("/thread", response_model=ThreadResponse)
 async def create_thread(

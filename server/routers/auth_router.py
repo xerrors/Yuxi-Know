@@ -10,7 +10,7 @@ from server.utils.auth_utils import AuthUtils
 from server.utils.auth_middleware import get_db, get_current_user, get_admin_user, get_superadmin_user, oauth2_scheme
 
 # 创建路由器
-auth = APIRouter(prefix="/auth", tags=["auth"])
+auth = APIRouter(prefix="/auth", tags=["authentication"])
 
 # 请求和响应模型
 class Token(BaseModel):
@@ -41,6 +41,10 @@ class InitializeAdmin(BaseModel):
     username: str
     password: str
 
+# =============================================================================
+# === 工具函数 ===
+# =============================================================================
+
 # 记录操作日志
 def log_operation(db: Session, user_id: int, operation: str, details: str = None, request: Request = None):
     ip_address = None
@@ -57,6 +61,10 @@ def log_operation(db: Session, user_id: int, operation: str, details: str = None
     db.commit()
 
 # 路由：登录获取令牌
+# =============================================================================
+# === 认证分组 ===
+# =============================================================================
+
 @auth.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
@@ -141,11 +149,19 @@ async def initialize_admin(
     }
 
 # 路由：获取当前用户信息
+# =============================================================================
+# === 用户信息分组 ===
+# =============================================================================
+
 @auth.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user.to_dict()
 
 # 路由：创建新用户（管理员权限）
+# =============================================================================
+# === 用户管理分组 ===
+# =============================================================================
+
 @auth.post("/users", response_model=UserResponse)
 async def create_user(
     user_data: UserCreate,
