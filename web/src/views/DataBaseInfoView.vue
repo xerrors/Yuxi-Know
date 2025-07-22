@@ -1,18 +1,32 @@
 <template>
-<div>
+<div class="database-info-container">
   <HeaderComponent
     :title="database.name || '数据库信息'"
     :loading="state.databaseLoading"
   >
     <template #left>
-      <a-button type="text" @click="backToDatabase">
+      <a-button type="link" @click="backToDatabase" :style="{ padding: '0px', color: 'inherit' }">
         <LeftOutlined />
       </a-button>
     </template>
-    <template #actions>
-      <a-button type="text" @click="showEditModal">
+    <template #behind-title>
+      <a-button type="link" @click="showEditModal" :style="{ padding: '0px', color: 'inherit' }">
         <EditOutlined />
       </a-button>
+    </template>
+    <template #actions>
+      <div class="header-info">
+        <span class="db-id">ID: {{ database.db_id || 'N/A' }}</span>
+        <span class="file-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+        <a-tag
+          :color="getKbTypeColor(database.kb_type || 'lightrag')"
+          class="kb-type-tag"
+          size="small"
+        >
+          <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" class="type-icon" />
+          {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
+        </a-tag>
+      </div>
     </template>
   </HeaderComponent>
 
@@ -167,264 +181,340 @@
     </div>
   </a-modal>
 
-  <div class="db-main-container">
-    <a-tabs v-model:activeKey="state.curPage" class="atab-container" type="card">
-
-      <a-tab-pane key="files">
-        <template #tab><span><ReadOutlined />文件列表</span></template>
-        <div class="db-tab-container">
-          <div class="actions" style="display: flex; gap: 10px; justify-content: space-between;">
-            <div class="left-actions" style="display: flex; gap: 10px; align-items: center;">
-              <a-button type="primary" @click="showAddFilesModal" :loading="state.refrashing" :icon="h(PlusOutlined)">添加文件</a-button>
-              <a-button @click="handleRefresh" :loading="state.refrashing">刷新</a-button>
-            </div>
-            <div class="batch-actions" style="display: flex; gap: 10px;" v-if="selectedRowKeys.length > 0">
-              <span style="margin-right: 8px;">已选择 {{ selectedRowKeys.length }} 项</span>
-              <a-button
-                type="primary"
-                danger
-                @click="handleBatchDelete"
-                :loading="state.batchDeleting"
-                :disabled="!canBatchDelete"
-              >
-                批量删除
-              </a-button>
-            </div>
-          </div>
-          <!-- 数据库信息 -->
-          <div class="database-info">
-            <a-tag
-              :color="getKbTypeColor(database.kb_type || 'lightrag')"
-              class="kb-type-tag"
-            >
-              <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" class="type-icon icon-16" />
-              {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
-            </a-tag>
-            <a-tag color="blue" v-if="database.embed_model">{{ database.embed_model }}</a-tag>
-            <a-tag color="green" v-if="database.dimension">{{ database.dimension }}</a-tag>
-            <span class="row-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件 · {{ database.db_id }}</span>
-          </div>
-
-          <a-table
-            :columns="columns"
-            :data-source="Object.values(database.files || {})"
-            row-key="file_id"
-            class="my-table"
-            size="small"
-            bordered
-            :pagination="pagination"
-            :row-selection="{
-              selectedRowKeys: selectedRowKeys,
-              onChange: onSelectChange,
-              getCheckboxProps: getCheckboxProps
-            }">
-            <template #bodyCell="{ column, text, record }">
-              <a-tooltip v-if="column.key === 'filename'" :title="record.file_id" placement="left">
-                <a-button class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
-              </a-tooltip>
-              <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
-              <CheckCircleFilled v-else-if="column.key === 'status' && text === 'done'" style="color: #41A317;"/>
-              <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
-              <HourglassFilled v-else-if="column.key === 'status' && text === 'processing'" style="color: #1677FF;"/>
-              <ClockCircleFilled v-else-if="column.key === 'status' && text === 'waiting'" style="color: #FFCD43;"/>
-
-              <a-tooltip v-else-if="column.key === 'created_at'" :title="record.status" placement="left">
-                <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
-              </a-tooltip>
-
-              <div v-else-if="column.key === 'action'" style="display: flex; gap: 10px;">
-                <a-button class="del-btn" type="link"
-                  @click="handleDeleteFile(record.file_id)"
-                  :disabled="state.lock || record.status === 'processing' || record.status === 'waiting'"
-                  >
-                  删除
-                </a-button>
-              </div>
-              <span v-else>{{ text }}</span>
-            </template>
-          </a-table>
-          <a-modal
-            v-model:open="state.fileDetailModalVisible"
-            class="custom-class"
-            :title="selectedFile?.filename || '文件详情'"
-            width="1000px"
-            @after-open="afterOpenChange"
-            :footer="null"
-          >
-            <template v-if="state.fileDetailLoading">
-              <div class="loading-container">
-                <a-spin tip="加载中..." />
-              </div>
-            </template>
-            <template v-else>
-              <h3>共 {{ selectedFile?.lines?.length || 0 }} 个片段</h3>
-              <div class="file-detail-content">
-                <p v-for="line in selectedFile?.lines || []" :key="line.id" class="line-text">
-                  {{ line.content }}
-                </p>
-              </div>
-            </template>
-          </a-modal>
+  <!-- Maximize Graph Modal -->
+  <a-modal
+    v-model:open="state.isGraphMaximized"
+    :footer="null"
+    :closable="false"
+    width="100%"
+    wrap-class-name="full-modal"
+    :mask-closable="false"
+  >
+    <template #title>
+      <div class="maximized-graph-header">
+        <h3>知识图谱 (最大化)</h3>
+        <a-button type="text" @click="toggleGraphMaximize">
+          <CompressOutlined /> 退出最大化
+        </a-button>
+      </div>
+    </template>
+    <div class="maximized-graph-content">
+      <div v-if="!isGraphSupported" class="graph-disabled">
+        <div class="disabled-content">
+          <h4>知识图谱不可用</h4>
+          <p>当前知识库类型 "{{ getKbTypeLabel(database.kb_type || 'lightrag') }}" 不支持知识图谱功能。</p>
+          <p>只有 LightRAG 类型的知识库支持知识图谱。</p>
         </div>
-      </a-tab-pane>
+      </div>
+      <KnowledgeGraphViewer
+        v-else-if="state.isGraphMaximized"
+        :initial-database-id="databaseId"
+        :hide-db-selector="true"
+      />
+    </div>
+  </a-modal>
 
-      <a-tab-pane key="query-test" force-render>
-        <template #tab><span><SearchOutlined />检索测试</span></template>
-        <div class="query-test-container db-tab-container">
-          <div class="query-result-container">
-            <div class="query-action">
-              <a-textarea
-                v-model:value="queryText"
-                placeholder="填写需要查询的句子"
-                :auto-size="{ minRows: 1, maxRows: 10 }"
-              />
-              <a-button class="btn-query" @click="onQuery" type="primary">
-                <span v-if="!state.searchLoading"><SearchOutlined /> 检索</span>
-                <span v-else><LoadingOutlined /></span>
-              </a-button>
-            </div>
-
-            <!-- 新增示例按钮 -->
-            <div class="query-examples-container">
-              <div class="examples-title">示例查询：</div>
-              <div class="query-examples">
-                <a-button v-for="example in queryExamples" :key="example" @click="useQueryExample(example)">
-                  {{ example }}
-                </a-button>
-              </div>
-            </div>
-            <div class="query-test" v-if="queryResult">
-              {{ queryResult }}
-            </div>
-          </div>
-          <div class="sider">
-            <div class="sider-top">
-              <div class="query-params" v-if="state.curPage == 'query-test'">
-                <h3 class="params-title">
-                  查询参数
-                  <a-tag :color="getKbTypeColor(database.kb_type || 'lightrag')" size="small" style="margin-left: 8px;">
-                    {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
-                  </a-tag>
-                </h3>
-
-                <!-- 加载状态 -->
-                <div v-if="state.queryParamsLoading" class="params-loading">
-                  <a-spin size="small" /> 加载参数中...
-                </div>
-
-                <!-- 动态参数 -->
-                <div v-else class="params-group" v-for="param in queryParams" :key="param.key">
-                  <div class="params-item">
-                    <p>{{ param.label }}：</p>
-
-                    <!-- 下拉选择器 -->
-                    <a-select
-                      v-if="param.type === 'select'"
-                      v-model:value="meta[param.key]"
-                      style="width: 120px;"
-                    >
-                      <a-select-option
-                        v-for="option in param.options"
-                        :key="option.value"
-                        :value="option.value"
-                      >
-                        {{ option.label }}
-                      </a-select-option>
-                    </a-select>
-
-                    <!-- 布尔开关 -->
-                    <a-switch
-                      v-else-if="param.type === 'boolean'"
-                      v-model:checked="meta[param.key]"
-                    />
-
-                    <!-- 数字输入 -->
-                    <a-input-number
-                      v-else-if="param.type === 'number'"
-                      size="small"
-                      v-model:value="meta[param.key]"
-                      :min="param.min || 0"
-                      :max="param.max || 100"
-                      :step="param.step || 1"
-                      style="width: 100px;"
-                    />
-
-                    <!-- 文本输入 -->
-                    <a-input
-                      v-else
-                      v-model:value="meta[param.key]"
-                      size="small"
-                      style="width: 120px;"
-                    />
-                  </div>
-                  <div v-if="param.description" class="param-description">
-                    {{ param.description }}
-                  </div>
-                </div>
-
-                <!-- 如果没有参数 -->
-                <div v-if="!state.queryParamsLoading && queryParams.length === 0" class="no-params">
-                  <a-empty :image="false" description="暂无可配置的参数" />
-                </div>
-              </div>
-            </div>
-            <div class="sider-bottom">
-            </div>
-          </div>
+  <!-- 文件详情弹窗 -->
+  <a-modal
+    v-model:open="state.fileDetailModalVisible"
+    :title="selectedFile?.filename || '文件详情'"
+    width="800px"
+    :footer="null"
+  >
+    <div class="file-detail-content" v-if="selectedFile">
+      <div class="file-info-grid">
+        <div class="info-item">
+          <label>文件ID:</label>
+          <span>{{ selectedFile.file_id }}</span>
         </div>
-      </a-tab-pane>
-
-      <a-tab-pane
-        key="knowledge-graph"
-        force-render
-        :disabled="(database.kb_type || 'lightrag') !== 'lightrag'"
-      >
-        <template #tab>
-          <span :class="{ 'disabled-tab': (database.kb_type || 'lightrag') !== 'lightrag' }">
-            <Waypoints size="14" class="mr-3 bn-1px" />
-            知识图谱
-            <a-tag
-              v-if="(database.kb_type || 'lightrag') !== 'lightrag'"
-              size="small"
-              color="orange"
-              style="margin-left: 4px;"
-            >
-              仅限LightRAG
-            </a-tag>
+        <div class="info-item">
+          <label>上传时间:</label>
+          <span>{{ formatRelativeTime(Math.round(selectedFile.created_at*1000)) }}</span>
+        </div>
+        <div class="info-item">
+          <label>处理状态:</label>
+          <span class="status-badge" :class="selectedFile.status">
+            {{ getStatusText(selectedFile.status) }}
           </span>
+        </div>
+      </div>
+
+      <div class="file-content-section" v-if="selectedFile.lines && selectedFile.lines.length > 0">
+        <h4>文件内容预览</h4>
+        <div class="content-lines">
+          <div
+            v-for="(line, index) in selectedFile.lines"
+            :key="index"
+            class="content-line"
+          >
+            <span class="line-number">{{ index + 1 }}</span>
+            <span class="line-text">{{ line.text || line }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="state.fileDetailLoading" class="loading-container">
+        <a-spin />
+      </div>
+
+      <div v-else class="empty-content">
+        <p>暂无文件内容</p>
+      </div>
+    </div>
+  </a-modal>
+
+  <div class="unified-layout">
+    <div class="left-panel" :style="{ width: leftPanelWidth + '%' }">
+      <div class="panel-header">
+        <h3 style="margin-left: 8px;">共 {{ database.files ? Object.keys(database.files).length : 0 }} 个文件</h3>
+        <div class="panel-actions">
+
+          <a-button
+            type="secondary"
+            @click="showAddFilesModal"
+            :loading="state.refrashing"
+            :icon="h(PlusOutlined)"
+            title="添加文件"
+          />
+          <div class="refresh-group">
+            <a-switch
+              v-model:checked="state.autoRefresh"
+              @change="toggleAutoRefresh"
+              size="small"
+              title="自动刷新文件状态"
+            />
+            <a-button
+              type="text"
+              @click="handleRefresh"
+              :loading="state.refrashing"
+              :icon="h(ReloadOutlined)"
+              title="刷新"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="batch-actions-compact" v-if="selectedRowKeys.length > 0">
+        <span>{{ selectedRowKeys.length }} 项</span>
+        <a-button
+          type="text"
+          danger
+          @click="handleBatchDelete"
+          :loading="state.batchDeleting"
+          :disabled="!canBatchDelete"
+          :icon="h(DeleteOutlined)"
+          title="批量删除"
+        />
+      </div>
+
+      <a-table
+        :columns="columnsCompact"
+        :data-source="Object.values(database.files || {})"
+        row-key="file_id"
+        class="my-table-compact"
+        size="small"
+        :pagination="paginationCompact"
+        :scroll="{ y: true }"
+        :row-selection="{
+          selectedRowKeys: selectedRowKeys,
+          onChange: onSelectChange,
+          getCheckboxProps: getCheckboxProps
+        }">
+        <template #bodyCell="{ column, text, record }">
+          <a-button v-if="column.key === 'filename'"  class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
+          <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
+          <CheckCircleFilled v-else-if="column.key === 'status' && text === 'done'" style="color: #41A317;"/>
+          <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
+          <HourglassFilled v-else-if="column.key === 'status' && text === 'processing'" style="color: #1677FF;"/>
+          <ClockCircleFilled v-else-if="column.key === 'status' && text === 'waiting'" style="color: #FFCD43;"/>
+
+          <a-tooltip v-else-if="column.key === 'created_at'" :title="record.status" placement="left">
+            <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+          </a-tooltip>
+
+          <div v-else-if="column.key === 'action'" style="display: flex; gap: 4px;">
+            <a-button class="del-btn" type="text"
+              @click="handleDeleteFile(record.file_id)"
+              :disabled="state.lock || record.status === 'processing' || record.status === 'waiting'"
+              :icon="h(DeleteOutlined)"
+              title="删除"
+              />
+          </div>
+          <span v-else>{{ text }}</span>
         </template>
-        <div class="knowledge-graph-container db-tab-container">
-          <div v-if="(database.kb_type || 'lightrag') !== 'lightrag'" class="feature-disabled">
-            <a-result
-              status="info"
-              title="图谱功能不可用"
-              sub-title="知识图谱功能仅支持 LightRAG 类型的知识库"
+      </a-table>
+    </div>
+
+    <div class="resize-handle" ref="resizeHandle"></div>
+
+    <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
+
+      <div class="graph-section" :class="{ collapsed: !panels.graph.visible }" :style="computePanelStyles().graph">
+        <div class="section-header">
+          <div class="header-left">
+            <h3>知识图谱</h3>
+            <div v-if="graphStats.displayed_nodes > 0 || graphStats.displayed_edges > 0" class="graph-stats">
+              <a-tag color="blue" size="small">节点: {{ graphStats.displayed_nodes }}</a-tag>
+              <a-tag color="green" size="small">边: {{ graphStats.displayed_edges }}</a-tag>
+              <a-tag v-if="graphStats.is_truncated" color="red" size="small">已截断</a-tag>
+            </div>
+          </div>
+          <div class="panel-actions">
+            <a-button
+              type="text"
+              size="small"
+              :icon="h(ReloadOutlined)"
+              title="刷新视图"
+              @click="refreshGraph"
+              :disabled="!isGraphSupported"
             >
-              <template #icon>
-                <Waypoints size="48" style="color: #1890ff;" />
-              </template>
-              <template #extra>
-                <p>当前知识库类型：{{ getKbTypeLabel(database.kb_type || 'lightrag') }}</p>
-                <p>如需使用图谱功能，请创建 LightRAG 类型的知识库。</p>
-              </template>
-            </a-result>
+              刷新视图
+            </a-button>
+            <a-button
+              type="text"
+              size="small"
+              :icon="h(DeleteOutlined)"
+              title="清空视图"
+              @click="clearGraph"
+              :disabled="!isGraphSupported"
+            >
+              清空视图
+            </a-button>
+            <a-button
+              type="text"
+              size="small"
+              :icon="h(ExpandOutlined)"
+              title="最大化"
+              @click="toggleGraphMaximize"
+              :disabled="!isGraphSupported"
+            >
+              最大化
+            </a-button>
+            <a-button
+              type="text"
+              size="small"
+              @click="togglePanel('graph')"
+              title="折叠/展开"
+            >
+              <component :is="panels.graph.visible ? UpOutlined : DownOutlined" />
+            </a-button>
+          </div>
+        </div>
+        <div class="graph-container-compact content" v-show="panels.graph.visible">
+          <div v-if="!isGraphSupported" class="graph-disabled">
+            <div class="disabled-content">
+              <h4>知识图谱不可用</h4>
+              <p>当前知识库类型 "{{ getKbTypeLabel(database.kb_type || 'lightrag') }}" 不支持知识图谱功能。</p>
+              <p>只有 LightRAG 类型的知识库支持知识图谱。</p>
+            </div>
           </div>
           <KnowledgeGraphViewer
             v-else
             :initial-database-id="databaseId"
             :hide-db-selector="true"
+            :hide-stats="true"
+            @update:stats="handleStatsUpdate"
+            ref="graphViewerRef"
           />
         </div>
-      </a-tab-pane>
+      </div>
+      <div class="resize-handle-horizontal" ref="resizeHandleHorizontal" v-show="panels.query.visible && panels.graph.visible"></div>
 
-      <!-- <a-tab-pane key="3" tab="Tab 3">Content of Tab Pane 3</a-tab-pane> -->
-       <template #rightExtra>
-        <div class="auto-refresh-control">
-          <span>自动刷新：</span>
-          <a-switch v-model:checked="state.autoRefresh" @change="toggleAutoRefresh" size="small" />
+      <div class="query-section" :class="{ collapsed: !panels.query.visible }" :style="computePanelStyles().query">
+        <div class="section-header">
+          <h3>检索测试</h3>
+          <div class="panel-actions">
+            <a-popover trigger="click" placement="bottomRight" class="query-params-popover">
+              <template #content>
+                <div class="query-params-compact">
+                  <div v-if="state.queryParamsLoading" class="params-loading">
+                    <a-spin size="small" />
+                  </div>
+                  <div v-else class="params-grid">
+                    <div v-for="param in queryParams" :key="param.key" class="param-item">
+                      <label>{{ param.label }}:</label>
+                      <a-select
+                        v-if="param.type === 'select'"
+                        v-model:value="meta[param.key]"
+                        size="small"
+                        style="width: 80px;"
+                      >
+                        <a-select-option
+                          v-for="option in param.options"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </a-select-option>
+                      </a-select>
+                      <a-switch
+                        v-else-if="param.type === 'boolean'"
+                        v-model:checked="meta[param.key]"
+                        size="small"
+                      />
+                      <a-input-number
+                        v-else-if="param.type === 'number'"
+                        v-model:value="meta[param.key]"
+                        size="small"
+                        style="width: 60px;"
+                        :min="param.min || 0"
+                        :max="param.max || 100"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <a-button
+                type="text"
+                size="small"
+                :icon="h(SettingOutlined)"
+                title="查询参数"
+              >查询参数</a-button>
+            </a-popover>
+            <a-button
+              type="text"
+              size="small"
+              @click="togglePanel('query')"
+              title="折叠/展开"
+            >
+              <component :is="panels.query.visible ? UpOutlined : DownOutlined" />
+            </a-button>
+          </div>
         </div>
-      </template>
-    </a-tabs>
+
+        <div class="query-content content" v-show="panels.query.visible">
+          <div class="query-input-row">
+            <a-input-search
+              v-model:value="queryText"
+              placeholder="输入查询内容"
+              class="compact-query-input"
+              :loading="state.searchLoading"
+              @search="onQuery"
+              @keydown.ctrl.enter="onQuery"
+              enter-button="搜索"
+              size="default"
+            />
+          </div>
+
+          <div class="query-examples-compact">
+            <span class="examples-label">示例：</span>
+            <a-button
+              v-for="example in queryExamples"
+              :key="example"
+              @click="useQueryExample(example)"
+              size="small"
+              class="example-btn"
+            >
+              {{ example }}
+            </a-button>
+          </div>
+
+          <div class="query-results" v-if="queryResult">
+            {{ queryResult }}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </template>
@@ -440,6 +530,7 @@ import { ocrApi } from '@/apis/system_api'
 import {
   ReadOutlined,
   LeftOutlined,
+  RightOutlined,
   CheckCircleFilled,
   CheckCircleOutlined,
   HourglassFilled,
@@ -455,6 +546,11 @@ import {
   SettingOutlined,
   DatabaseOutlined,
   ThunderboltOutlined,
+  ReloadOutlined,
+  UpOutlined,
+  DownOutlined,
+  ExpandOutlined,
+  CompressOutlined,
 } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
@@ -491,7 +587,32 @@ const state = reactive({
   loading: false,
   queryParamsLoading: false,
   ocrHealthChecking: false,
+  isGraphMaximized: false,
 });
+
+// 计算属性：是否支持知识图谱
+const isGraphSupported = computed(() => {
+  const kbType = database.value.kb_type?.toLowerCase();
+  return kbType === 'lightrag';
+});
+
+// 切换图谱最大化状态
+const toggleGraphMaximize = () => {
+  state.isGraphMaximized = !state.isGraphMaximized;
+};
+
+// 图谱相关数据
+const graphViewerRef = ref(null);
+const graphStats = ref({
+  displayed_nodes: 0,
+  displayed_edges: 0,
+  is_truncated: false
+});
+
+// 处理图谱统计信息更新
+const handleStatsUpdate = (stats) => {
+  graphStats.value = stats;
+};
 
 // OCR服务健康状态
 const ocrHealthStatus = ref({
@@ -675,10 +796,12 @@ const onQuery = () => {
     state.searchLoading = false
     return
   }
-  meta.db_id = database.value.db_id
+  // Remove db_id from meta to avoid duplicate parameter error
+  const queryMeta = { ...toRaw(meta) }
+  delete queryMeta.db_id
 
   try {
-    queryApi.queryTest(database.value.db_id, queryText.value.trim(), meta)
+    queryApi.queryTest(database.value.db_id, queryText.value.trim(), queryMeta)
     .then(data => {
       console.log(data)
       queryResult.value = data
@@ -991,17 +1114,6 @@ const addFiles = (items, contentType = 'file') => {
   });
 };
 
-
-
-const columns = [
-  // { title: '文件ID', dataIndex: 'file_id', key: 'file_id' },
-  { title: '文件名', dataIndex: 'filename', key: 'filename', ellipsis: true },
-  { title: '上传时间', dataIndex: 'created_at', key: 'created_at', width: 150 },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 80 },
-  { title: '类型', dataIndex: 'type', key: 'type', width: 80 },
-  { title: '操作', key: 'action', dataIndex: 'file_id', width: 150 }
-];
-
 watch(() => route.params.database_id, async (newId) => {
     databaseId.value = newId;
     console.log(newId)
@@ -1024,17 +1136,101 @@ const useQueryExample = (example) => {
   onQuery();
 };
 
+// 拖拽调整大小功能
+const handleMouseDown = () => {
+  isDragging.value = true;
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('mouseup', handleMouseUp);
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+};
+
+const handleMouseMove = (e) => {
+  if (!isDragging.value) return;
+
+  const container = document.querySelector('.unified-layout');
+  if (!container) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+
+  // 限制最小和最大宽度
+  leftPanelWidth.value = Math.max(20, Math.min(60, newWidth));
+};
+
+const handleMouseUp = () => {
+  isDragging.value = false;
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+};
+
+const handleMouseDownHorizontal = () => {
+  isDraggingVertical.value = true;
+  document.addEventListener('mousemove', handleMouseMoveHorizontal);
+  document.addEventListener('mouseup', handleMouseUpHorizontal);
+  document.body.style.cursor = 'row-resize';
+  document.body.style.userSelect = 'none';
+};
+
+const handleMouseMoveHorizontal = (e) => {
+  if (!isDraggingVertical.value) return;
+
+  const container = document.querySelector('.right-panel');
+  if (!container) return;
+
+  const containerRect = container.getBoundingClientRect();
+  const newHeight = ((e.clientY - containerRect.top) / containerRect.height) * 100;
+
+  rightPanelHeight.graph = Math.max(10, Math.min(90, newHeight));
+  rightPanelHeight.query = 100 - rightPanelHeight.graph;
+};
+
+const handleMouseUpHorizontal = () => {
+  isDraggingVertical.value = false;
+  document.removeEventListener('mousemove', handleMouseMoveHorizontal);
+  document.removeEventListener('mouseup', handleMouseUpHorizontal);
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+};
+
+// 添加事件监听
 onMounted(() => {
   getDatabaseInfo();
   startAutoRefresh();
   // 初始化时检查OCR服务健康状态
   checkOcrHealth();
-})
 
-// 添加 onUnmounted 钩子，在组件卸载时清除定时器
+  setTimeout(() => {
+    if (isGraphSupported.value) {
+      refreshGraph();
+    }
+  }, 800);
+
+  // 添加拖拽事件监听
+  if (resizeHandle.value) {
+    resizeHandle.value.addEventListener('mousedown', handleMouseDown);
+  }
+  if (resizeHandleHorizontal.value) {
+    resizeHandleHorizontal.value.addEventListener('mousedown', handleMouseDownHorizontal);
+  }
+});
+
+// 清理事件监听
 onUnmounted(() => {
   stopAutoRefresh();
-})
+  if (resizeHandle.value) {
+    resizeHandle.value.removeEventListener('mousedown', handleMouseDown);
+  }
+  if (resizeHandleHorizontal.value) {
+    resizeHandleHorizontal.value.removeEventListener('mousedown', handleMouseDownHorizontal);
+  }
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+  document.removeEventListener('mousemove', handleMouseMoveHorizontal);
+  document.removeEventListener('mouseup', handleMouseUpHorizontal);
+});
 
 const uploadMode = ref('file');
 const urlList = ref('');
@@ -1155,6 +1351,76 @@ const showAddFilesModal = () => {
 // 选中的行
 const selectedRowKeys = ref([]);
 
+// 面板可见性控制
+const panels = reactive({
+  query: { visible: true },
+  graph: { visible: true },
+});
+
+const togglePanel = (panel) => {
+  panels[panel].visible = !panels[panel].visible;
+};
+
+// 拖拽调整大小
+const leftPanelWidth = ref(45); // 百分比
+const isDragging = ref(false);
+const resizeHandle = ref(null);
+
+const rightPanelHeight = reactive({ query: 50, graph: 50 });
+const isDraggingVertical = ref(false);
+const resizeHandleHorizontal = ref(null);
+
+// 计算面板样式的方法
+const computePanelStyles = () => {
+  const queryVisible = panels.query.visible;
+  const graphVisible = panels.graph.visible;
+
+  if (queryVisible && graphVisible) {
+    // 两个面板都显示时，按比例分配
+    return {
+      query: { height: rightPanelHeight.query + '%' },
+      graph: { height: rightPanelHeight.graph + '%' }
+    };
+  } else if (queryVisible && !graphVisible) {
+    // 只显示查询面板时，查询面板占满
+    return {
+      query: { height: 'calc(100% - 40px)' },
+      graph: { height: '36px' }
+    };
+  } else if (!queryVisible && graphVisible) {
+    // 只显示图谱面板时，图谱面板占满
+    return {
+      query: { height: '36px' },
+      graph: { height: 'calc(100% - 40px)' }
+    };
+  } else {
+    // 两个面板都折叠时
+    return {
+      query: { height: '36px' },
+      graph: { height: '36px' }
+    };
+  }
+};
+
+// 紧凑表格列定义
+const columnsCompact = [
+  { title: '文件名', dataIndex: 'filename', key: 'filename', ellipsis: true, width: 'auto' },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 60, align: 'center' },
+  { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }
+];
+
+// 紧凑分页配置
+const paginationCompact = ref({
+  pageSize: 20,
+  current: 1,
+  total: computed(() => database.value?.files?.length || 0),
+  showSizeChanger: false,
+  onChange: (page) => paginationCompact.value.current = page,
+  showTotal: (total) => `${total}`,
+  size: 'small',
+  showQuickJumper: false,
+});
+
 // 行选择改变处理
 const onSelectChange = (keys) => {
   selectedRowKeys.value = keys;
@@ -1204,6 +1470,31 @@ const toggleAutoRefresh = (checked) => {
   }
 };
 
+// 获取状态文本
+const getStatusText = (status) => {
+  const statusMap = {
+    'done': '处理完成',
+    'failed': '处理失败',
+    'processing': '处理中',
+    'waiting': '等待处理'
+  }
+  return statusMap[status] || status
+}
+
+// 刷新图谱
+const refreshGraph = () => {
+  if (graphViewerRef.value) {
+    graphViewerRef.value.loadFullGraph();
+  }
+};
+
+// 清空图谱
+const clearGraph = () => {
+  if (graphViewerRef.value) {
+    graphViewerRef.value.clearGraph();
+  }
+};
+
 // 知识库类型相关工具方法
 const getKbTypeLabel = (type) => {
   const labels = {
@@ -1247,6 +1538,7 @@ const getKbTypeColor = (type) => {
     display: flex;
     align-items: center;
     gap: 4px;
+
     .type-icon {
       margin-right: 4px;
       font-size: 12px;
@@ -1256,277 +1548,41 @@ const getKbTypeColor = (type) => {
   }
 }
 
+.header-container {
+  padding: 8px;
+  height: 54px;
+}
+
+.header-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto; /* Push to the right */
+
+  .kb-type-tag {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .type-icon {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+  }
+
+  .db-id,
+  .file-count {
+    font-size: 12px;
+    color: var(--gray-600);
+    font-weight: 500;
+  }
+}
+
 .db-main-container {
   display: flex;
   width: 100%;
 }
-
-.db-tab-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.knowledge-graph-container {
-  height: calc(100vh - 150px);
-  min-height: 600px;
-}
-
-.query-test-container {
-  display: flex;
-  flex-direction: row;
-  gap: 20px;
-
-  .sider {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    width: 325px;
-    height: 100%;
-    padding: 0;
-    flex: 0 0 325px;
-
-    .sider-top {
-      .query-params {
-        display: flex;
-        flex-direction: column;
-        box-sizing: border-box;
-        font-size: 15px;
-        gap: 12px;
-        padding-top: 12px;
-        padding-right: 16px;
-        border: 1px solid var(--main-light-3);
-        background-color: var(--main-light-6);
-        border-radius: 8px;
-        padding: 16px;
-        margin-right: 8px;
-
-        .params-title {
-          margin-top: 0;
-          margin-bottom: 16px;
-          color: var(--main-color);
-          font-size: 16px;
-          font-weight: bold;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .params-loading {
-          text-align: center;
-          color: var(--gray-600);
-          padding: 16px;
-        }
-
-        .params-group {
-          margin-bottom: 16px;
-          padding-bottom: 16px;
-          border-bottom: 1px solid var(--main-light-3);
-
-          &:last-child {
-            margin-bottom: 0;
-            padding-bottom: 0;
-            border-bottom: none;
-          }
-        }
-
-        .param-description {
-          font-size: 12px;
-          color: var(--gray-500);
-          margin-top: 4px;
-          line-height: 1.4;
-        }
-
-        .no-params {
-          text-align: center;
-          padding: 20px;
-          color: var(--gray-500);
-        }
-
-        .params-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 12px;
-
-          &:last-child {
-            margin-bottom: 0;
-          }
-
-          p {
-            margin: 0;
-            color: var(--gray-900);
-          }
-
-          &.col {
-            align-items: flex-start;
-            flex-direction: column;
-            width: 100%;
-            height: auto;
-          }
-
-          &.w100,
-          &.col {
-            & > * {
-              width: 100%;
-            }
-          }
-        }
-
-        .ant-slider {
-          margin: 6px 0px;
-        }
-      }
-    }
-  }
-
-  .query-result-container {
-    flex: 1;
-    padding-bottom: 20px;
-  }
-
-  .query-action {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 20px;
-
-    textarea {
-      height: 48px;
-      padding: 12px 16px;
-      border: 2px solid var(--main-300);
-      border-radius: 8px;
-      box-shadow: 1px 1px 1px 1px var(--main-light-3);
-
-      &:focus {
-        border-color: var(--main-color);
-        outline: none;
-      }
-    }
-
-    button.btn-query {
-      height: 48px;
-      width: 100px;
-    }
-  }
-
-  .query-examples-container {
-    margin-bottom: 20px;
-    padding: 12px;
-    background: var(--main-light-6);
-    border-radius: 8px;
-    border: 1px solid var(--main-light-3);
-
-    .examples-title {
-      font-weight: bold;
-      margin-bottom: 10px;
-      color: var(--main-color);
-    }
-
-    .query-examples {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 10px 0 0;
-
-      .ant-btn {
-        font-size: 14px;
-        padding: 4px 12px;
-        height: auto;
-        background-color: var(--gray-200);
-        border: none;
-        color: var(--gray-800);
-
-        &:hover {
-          color: var(--main-color);
-        }
-      }
-    }
-  }
-
-  .query-test {
-    display: flex;
-    flex-direction: column;
-    border-radius: 12px;
-    word-break: break-all;
-    word-break: break-word; /* 非标准，但某些浏览器支持 */
-    overflow-wrap: break-word; /* 标准写法 */
-    gap: 20px;
-
-    .results-overview {
-      background-color: #fff;
-      border-radius: 8px;
-      padding: 16px;
-      border: 1px solid var(--main-light-3);
-
-      .results-stats {
-        display: flex;
-        justify-content: flex-start;
-
-        .stat-item {
-          border-radius: 4px;
-          font-size: 14px;
-          margin-right: 24px;
-          padding: 4px 8px;
-          strong {
-            color: var(--main-color);
-            margin-right: 4px;
-          }
-        }
-      }
-
-      .rewritten-query {
-        border-radius: 4px;
-        font-size: 14px;
-        padding: 4px 8px;
-        strong {
-          color: var(--main-color);
-          margin-right: 8px;
-        }
-
-        .query-text {
-          font-style: italic;
-          color: var(--gray-900);
-        }
-      }
-    }
-
-    .query-result-card {
-      padding: 20px;
-      border-radius: 8px;
-      background: #fff;
-      border: 1px solid var(--main-light-3);
-      transition: box-shadow 0.3s ease;
-
-      &:hover {
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      }
-
-      p {
-        margin-bottom: 8px;
-        line-height: 1.6;
-        color: var(--gray-900);
-
-        &:last-child {
-          margin-bottom: 0;
-        }
-      }
-
-      strong {
-        color: var(--main-color);
-      }
-
-      .query-text {
-        font-size: 15px;
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px solid var(--main-light-3);
-      }
-    }
-  }
-}
-
-
 
 .my-table {
   button.ant-btn-link {
@@ -1552,25 +1608,13 @@ const getKbTypeColor = (type) => {
     background: #068033;
   }
 
-  .docx, .doc {
+  .docx,
+  .doc {
     background: #2C59B7;
   }
 
   .md {
     background: #020817;
-  }
-
-
-
-  button.main-btn {
-    font-weight: bold;
-    font-size: 14px;
-    color: var(--gray-800);
-    &:hover {
-      cursor: pointer;
-      color: var(--main-color);
-      font-weight: bold;
-    }
   }
 
   button.del-btn {
@@ -1579,6 +1623,7 @@ const getKbTypeColor = (type) => {
     &:hover {
       color: var(--error-color);
     }
+
     &:disabled {
       cursor: not-allowed;
     }
@@ -1589,6 +1634,115 @@ const getKbTypeColor = (type) => {
   max-height: 60vh;
   overflow-y: auto;
   // padding: 0 10px;
+
+  .file-info-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 6px;
+    padding: 12px;
+    background-color: var(--gray-100);
+    border-radius: 6px;
+
+    .info-item {
+      display: contents;
+
+      label {
+        font-weight: 600;
+        color: var(--gray-700);
+        font-size: 13px;
+      }
+
+      span {
+        font-size: 13px;
+        color: var(--gray-800);
+      }
+    }
+
+    .status-badge {
+      font-size: 12px;
+      font-weight: 500;
+
+      &.done {
+        color: #52c41a;
+      }
+
+      &.failed {
+        color: #ff4d4f;
+      }
+
+      &.processing {
+        color: #1890ff;
+      }
+
+      &.waiting {
+        color: #faad14;
+      }
+    }
+  }
+
+  .file-content-section {
+    margin-top: 8px;
+
+    h4 {
+      margin: 0 0 12px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-800);
+    }
+
+    .content-lines {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+
+      .content-line {
+        display: flex;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--gray-100);
+        font-size: 13px;
+        line-height: 1.5;
+
+        &:last-child {
+          border-bottom: none;
+        }
+
+        &:hover {
+          background-color: var(--gray-50);
+        }
+
+        .line-number {
+          flex-shrink: 0;
+          width: 40px;
+          color: var(--gray-500);
+          font-family: monospace;
+          font-size: 12px;
+          text-align: right;
+          margin-right: 12px;
+        }
+
+        .line-text {
+          flex: 1;
+          color: var(--gray-800);
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+      }
+    }
+  }
+
+  .empty-content {
+    text-align: center;
+    padding: 40px;
+    color: var(--gray-500);
+  }
+
+  .loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100px;
+  }
 }
 
 .custom-class .line-text {
@@ -1621,6 +1775,7 @@ const getKbTypeColor = (type) => {
         background-color: var(--main-light-4);
         border: 1px solid var(--main-light-3);
         transition: all 0.2s ease;
+
         &.active {
           color: var(--main-color);
           background-color: var(--main-10);
@@ -1633,6 +1788,7 @@ const getKbTypeColor = (type) => {
       .ant-btn {
         border-color: var(--main-light-3);
         color: var(--gray-700);
+
         &:hover {
           border-color: var(--main-color);
           color: var(--main-color);
@@ -1662,10 +1818,32 @@ const getKbTypeColor = (type) => {
       font-size: 12px;
       margin-left: 12px;
     }
+
+    .ocr-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ocr-status-info {
+      font-size: 11px; /* Reduced from 12px */
+      margin-top: 4px;
+    }
+
+    .ocr-warning {
+      color: #faad14;
+      font-weight: 500;
+    }
+
+    .ocr-healthy {
+      color: #52c41a;
+      font-weight: 500;
+    }
   }
 
   .upload {
     margin-bottom: 20px;
+
     .upload-dragger {
       margin: 0px;
       min-height: 200px;
@@ -1728,7 +1906,8 @@ const getKbTypeColor = (type) => {
   .ant-input-number {
     border-radius: 6px;
 
-    &:hover, &:focus {
+    &:hover,
+    &:focus {
       border-color: var(--main-color);
     }
   }
@@ -1739,19 +1918,6 @@ const getKbTypeColor = (type) => {
     margin-top: 4px;
     margin-bottom: 0;
   }
-}
-
-
-
-
-
-
-
-.loading-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
 }
 
 .ant-modal-footer {
@@ -1778,136 +1944,447 @@ const getKbTypeColor = (type) => {
     }
   }
 }
-</style>
 
-<style lang="less">
-.atab-container {
-  padding: 0;
-  width: 100%;
-  max-height: 100%;
-  overflow: auto;
+/* Unified Layout Styles */
+.unified-layout {
+  display: flex;
+  height: calc(100vh - 54px); /* Adjust based on actual header height */
+  gap: 0;
 
-  div.ant-tabs-nav {
-    background: var(--main-light-5);
-    padding: 8px 20px;
-    padding-bottom: 0;
-  }
-
-  .ant-tabs-content-holder {
-    padding: 0 20px;
-  }
-
-  .disabled-tab {
-    opacity: 0.5;
-    color: var(--gray-400);
-  }
-}
-
-.params-item.col .ant-segmented {
-  width: 100%;
-
-  div.ant-segmented-group {
+  .left-panel,
+  .right-panel {
+    background-color: #fff;
     display: flex;
-    justify-content: space-around;
+    flex-direction: column;
+    overflow: hidden;
   }
-}
 
-// OCR配置相关样式
-.ocr-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+  .left-panel {
+    flex-shrink: 0;
+    border-right: 1px solid var(--gray-200);
+    background-color: var(--bg-sider);
+    padding: 8px;
+  }
 
-.ocr-status-info {
-  margin-top: 8px;
-  font-size: 12px;
-}
+  .right-panel {
+    flex-grow: 1;
+    overflow-y: auto;
+  }
 
-.ocr-warning {
-  color: #f5222d;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+  .resize-handle,
+  .resize-handle-horizontal {
+    width: 2px;
+    cursor: col-resize;
+    background-color: var(--gray-200);
+    transition: background-color 0.2s ease;
+    position: relative;
+    z-index: 10;
 
-.ocr-healthy {
-  color: #52c41a;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.param-description {
-  color: var(--gray-600);
-  font-size: 12px;
-  margin-left: 8px;
-}
-
-</style>
-
-<style lang="less">
-.db-main-container {
-  .atab-container {
-    padding: 0;
-    width: 100%;
-    max-height: 100%;
-    overflow: auto;
-
-    div.ant-tabs-nav {
-      background: var(--main-light-5);
-      padding: 8px 20px;
-      padding-bottom: 0;
-    }
-
-    .ant-tabs-content-holder {
-      padding: 0 20px;
+    &:hover {
+      background-color: var(--main-light-2);
     }
   }
 
-  .params-item.col .ant-segmented {
+  .resize-handle-horizontal {
+    height: 2px;
     width: 100%;
-    font-size: smaller;
-    div.ant-segmented-group {
+    cursor: row-resize;
+    background-color: var(--gray-200);
+    transition: background-color 0.2s ease;
+    z-index: 10;
+
+    &:hover {
+      background-color: var(--main-light-2);
+    }
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    flex-shrink: 0;
+    padding: 4px 2px;
+
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-800);
+
+      &.left-panel-title {
+        margin-left: 8px;
+      }
+    }
+
+    .panel-actions {
       display: flex;
-      justify-content: space-around;
-    }
-    label.ant-segmented-item {
-      flex: 1;
-      text-align: center;
-      div.ant-segmented-item-label > div > p {
-        font-size: small;
+      align-items: center;
+      gap: 6px;
+
+      .refresh-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--gray-50);
+        padding: 2px 6px;
+        border-radius: 12px;
+        border: 1px solid var(--gray-200);
+      }
+
+      .ant-btn {
+        transition: all 0.2s ease;
+        border-radius: 4px;
+
+        &:hover {
+          background-color: var(--main-light-5);
+          color: var(--main-color);
+        }
       }
     }
   }
-}
 
-.knowledge-graph-container {
-  height: calc(100vh - 200px);
+  .batch-actions-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 4px;
+    background-color: var(--main-light-5);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    flex-shrink: 0;
 
-  .feature-disabled {
-    height: 100%;
+    span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+  }
+
+  .my-table-compact {
+    flex: 1;
+    overflow: hidden;
+    background-color: transparent;
+    height: 0; /* 重要：让 flex 子项可以正确缩小 */
+
+    .main-btn {
+      padding: 0;
+      height: auto;
+      line-height: 1.4;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-text);
+      text-decoration: none;
+
+      &:hover {
+        cursor: pointer;
+        color: var(--main-color);
+      }
+    }
+
+    .del-btn {
+      color: var(--gray-500);
+
+      &:hover {
+        color: var(--error-color);
+      }
+
+      &:disabled {
+        cursor: not-allowed;
+      }
+    }
+
+    .span-type {
+      display: inline-block;
+      padding: 1px 5px;
+      font-size: 10px;
+      font-weight: bold;
+      color: white;
+      border-radius: 4px;
+      text-transform: uppercase;
+      opacity: 0.9;
+    }
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 8px;
+    height: 36px;
+    flex-shrink: 0;
+    background-color: var(--gray-200);
+    backdrop-filter: blur(4px);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+
+    h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .graph-stats {
+      display: flex;
+      gap: 4px;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 4px;
+      .ant-btn {
+        transition: all 0.2s ease;
+        border-radius: 4px;
+
+        &:hover {
+          background-color: var(--main-light-5);
+          color: var(--main-color);
+        }
+      }
+    }
+  }
+
+  .graph-disabled {
     display: flex;
     align-items: center;
     justify-content: center;
+    height: 100%;
+    background-color: var(--gray-50);
+    border-radius: 6px;
 
-    .ant-result {
+    .disabled-content {
+      text-align: center;
+      color: var(--gray-600);
+
+      h4 {
+        margin: 0 0 8px 0;
+        color: var(--gray-800);
+        font-size: 16px;
+      }
+
       p {
         margin: 4px 0;
-        color: var(--gray-600);
+        font-size: 13px;
+        line-height: 1.4;
       }
     }
   }
 
-  :deep(.knowledge-graph-viewer) {
-    height: 100%;
+  .query-section {
+    position: relative;
 
-    .sigma-container {
-      height: calc(100% - 80px);
+
+    .query-content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      padding-bottom: 10px;
+    }
+
+    .query-input-row {
+      margin-bottom: 4px;
+      flex-shrink: 0;
+    }
+
+    .compact-query-input {
+      width: 100%;
+      border-radius: 4px;
+      font-size: 12px;
+
+      .ant-input {
+        font-size: 12px;
+      }
+
+      .ant-btn {
+        font-size: 12px;
+      }
+    }
+
+    .query-examples-compact {
+      margin-top: 4px;
+      margin-bottom: 6px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      flex-shrink: 0;
+
+      .examples-label {
+        font-size: 12px;
+        color: var(--gray-600);
+      }
+
+      .example-btn {
+        background-color: var(--gray-100);
+        border: 1px solid var(--gray-200);
+        color: var(--gray-700);
+        font-size: 12px;
+
+        &:hover {
+          background-color: var(--main-light-4);
+          border-color: var(--main-color);
+          color: var(--main-color);
+        }
+      }
+    }
+
+
+    .query-results {
+      margin-top: 6px;
+      padding: 8px;
+      background-color: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 4px;
+      white-space: pre-wrap;
+      font-size: 12px;
+      line-height: 1.5;
+      flex: 1; /* 自动占据剩余所有空间 */
+      overflow-y: auto;
+      min-height: 0; /* 允许 flex 项目缩小 */
+    }
+  }
+
+  .graph-section {
+    flex-grow: 1;
+
+    &.collapsed {
+      flex-grow: 0;
+    }
+
+    .graph-container-compact {
+      flex-grow: 1;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 2px;
+      background-color: #fff;
+      position: relative;
+      max-width: 100%;
+      padding-top: 0;
     }
   }
 }
 
+/* Improve panel transitions */
+.query-section,
+.graph-section {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--gray-300);
+
+  &.collapsed {
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .content {
+    padding: 8px;
+  }
+}
+
+/* Improve the resize handle visibility */
+.resize-handle,
+.resize-handle-horizontal {
+  transition: all 0.2s ease;
+  opacity: 0.6;
+
+  &:hover {
+    opacity: 1;
+    background-color: var(--main-color);
+  }
+}
+
+/* Table row selection styling */
+:deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
+  background-color: var(--main-light-5);
+}
+
+:deep(.ant-table-tbody > tr:hover > td) {
+  background-color: var(--main-light-6);
+}
 </style>
 
+<style lang="less">
+:deep(.full-modal) {
+  .ant-modal {
+    max-width: 100%;
+    top: 0;
+    padding-bottom: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ant-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 200px);
+  }
+
+  .ant-modal-body {
+    flex: 1;
+  }
+}
+
+
+
+.maximized-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  h3 {
+    margin: 0;
+    color: var(--gray-800);
+  }
+}
+
+
+.maximized-graph-content {
+  height: calc(100vh - 300px);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+
+/* 全局样式作为备用方案 */
+.ant-popover .query-params-compact {
+  width: 220px;
+}
+
+.ant-popover .query-params-compact .params-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80px;
+}
+
+.ant-popover .query-params-compact .params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.ant-popover .query-params-compact .param-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.ant-popover .query-params-compact .param-item label {
+  font-weight: 500;
+  color: var(--gray-700);
+  margin-right: 8px;
+}
+
+
+</style>

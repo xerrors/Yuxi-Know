@@ -5,7 +5,10 @@
         <slot name="left"></slot>
       </div>
       <div class="header-title">
-        <h1>{{ title }}</h1>
+        <div class="header-title-block">
+          <h1>{{ title }}</h1>
+          <slot name="behind-title"></slot>
+        </div>
         <slot name="description">
           <p v-if="description">{{ description }}</p>
         </slot>
@@ -38,9 +41,9 @@ const props = defineProps({
 
 <style scoped lang="less">
 .header-container {
-  background-color: rgba(255, 255, 255, 0.8);
+  background-color: var(--bg-sider);
   backdrop-filter: blur(10px);
-  padding: 16px 24px;
+  padding: 10px 24px;
   border-bottom: 1px solid #f0f0f0;
   position: sticky;
   top: 0;
@@ -59,6 +62,12 @@ const props = defineProps({
   width: 100%;
   font-size: 14px;
   color: rgba(0, 0, 0, 0.45);
+
+  .header-title-block {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
 
   h1 {
     margin: 0;

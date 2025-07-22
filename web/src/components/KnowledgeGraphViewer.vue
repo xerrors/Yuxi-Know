@@ -7,7 +7,8 @@
           v-if="!hideDbSelector"
           v-model:value="selectedDatabase"
           placeholder="选择数据库"
-          style="width: 200px; margin-right: 8px"
+          size="small"
+          style="width: 160px; margin-right: 6px"
           :loading="loadingDatabases"
           @change="onDatabaseChange"
         >
@@ -23,7 +24,8 @@
         <a-select
           v-model:value="selectedLabel"
           placeholder="选择标签/实体类型"
-          style="width: 180px"
+          size="small"
+          style="width: 140px"
           :loading="loadingLabels"
           :disabled="!selectedDatabase"
           allow-clear
@@ -46,50 +48,35 @@
           :min="10"
           :max="1000"
           :step="10"
-          addon-before="最大节点数"
-          style="width: 150px"
+          size="small"
+          addon-before="limit"
+          style="width: 140px"
         />
         <a-input-number
           v-model:value="searchParams.max_depth"
           :min="1"
           :max="5"
           :step="1"
-          addon-before="最大深度"
-          style="width: 130px; margin-left: 8px"
+          size="small"
+          addon-before="depth"
+          style="width: 120px; margin-left: 6px"
         />
         <a-button
           type="primary"
+          size="small"
           :loading="loading"
           @click="loadGraphData"
           :disabled="!selectedDatabase"
-          style="margin-left: 8px"
+          style="margin-left: 6px"
         >
           <SearchOutlined v-if="!loading" /> 加载图谱
         </a-button>
       </div>
 
-      <div class="filter-section">
-        <a-button
-          @click="loadFullGraph"
-          :loading="loading"
-          :disabled="!selectedDatabase"
-          style="margin-left: 8px"
-        >
-          <ReloadOutlined /> 刷新全图
-        </a-button>
-        <a-button
-          @click="clearGraph"
-          :disabled="!selectedDatabase"
-          style="margin-left: 8px"
-        >
-          <ClearOutlined /> 清空图谱
-        </a-button>
-      </div>
-
-      <div class="stats-section">
-        <a-tag color="blue">节点: {{ stats.displayed_nodes || 0 }}</a-tag>
-        <a-tag color="green">边: {{ stats.displayed_edges || 0 }}</a-tag>
-        <a-tag v-if="stats.is_truncated" color="red">已截断</a-tag>
+      <div v-if="!props.hideStats" class="stats-section">
+        <a-tag color="blue" size="small">节点: {{ stats.displayed_nodes || 0 }}</a-tag>
+        <a-tag color="green" size="small">边: {{ stats.displayed_edges || 0 }}</a-tag>
+        <a-tag v-if="stats.is_truncated" color="red" size="small">已截断</a-tag>
       </div>
     </div>
 
@@ -261,8 +248,15 @@ const props = defineProps({
   hideDbSelector: {
     type: Boolean,
     default: false
+  },
+  hideStats: {
+    type: Boolean,
+    default: false
   }
 })
+
+// 定义 emits
+const emit = defineEmits(['update:stats', 'refresh-graph', 'clear-graph'])
 
 // 状态管理
 const graphStore = useGraphStore()
@@ -277,8 +271,8 @@ const layoutRunning = ref(false)
 const loadingMessage = ref('加载图数据中...')
 
 // 面板拖拽相关
-const nodePanelPosition = ref({ x: 16, y: 80 })
-const edgePanelPosition = ref({ x: 16, y: 370 })
+const nodePanelPosition = ref({ x: 12, y: 60 })
+const edgePanelPosition = ref({ x: 12, y: 320 })
 const dragging = ref({ active: false, type: '', startX: 0, startY: 0, initialX: 0, initialY: 0 })
 
 // 数据库相关状态
@@ -688,6 +682,7 @@ const loadGraphData = async () => {
 const loadFullGraph = async () => {
   selectedLabel.value = '*'
   await loadGraphData()
+  emit('refresh-graph')
 }
 
 // 清空图谱
@@ -698,6 +693,7 @@ const clearGraph = () => {
     sigmaInstance.refresh()
   }
   graphStore.reset()
+  emit('clear-graph')
 }
 
 // 应用布局算法
@@ -970,7 +966,7 @@ const onDragPanel = (event) => {
   const deltaX = currentRelativeX - dragging.value.startX
   const deltaY = currentRelativeY - dragging.value.startY
 
-  const maxX = containerRect.width - 320  // 面板宽度为300px + 一些边距
+  const maxX = containerRect.width - 260  // 面板宽度为240px + 一些边距
   const maxY = containerRect.height - 200 // 面板高度约为200px
 
   const newPosition = {
@@ -1092,7 +1088,18 @@ watch(() => graphStore.selectedNode, (nodeId) => {
       // 确保重置标志
       graphStore.moveToSelectedNode = false
     }
-  }
+      }
+  })
+
+// 监听统计数据变化，通知父组件
+watch(stats, (newStats) => {
+  emit('update:stats', newStats)
+}, { deep: true, immediate: true })
+
+// 暴露给父组件的方法
+defineExpose({
+  loadFullGraph,
+  clearGraph
 })
 </script>
 
@@ -1100,7 +1107,8 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 .knowledge-graph-viewer {
   position: relative;
   width: 100%;
-  height: 100vh;
+  // height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: #f5f5f5;
@@ -1108,10 +1116,10 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 
 .control-panel {
   background: white;
-  padding: 16px 0;
+  padding: 8px 0; /* Reduced from 16px */
   border-bottom: none;
   display: flex;
-  gap: 16px;
+  gap: 12px; /* Reduced from 16px */
   align-items: center;
   flex-wrap: wrap;
   z-index: 1000;
@@ -1123,7 +1131,7 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 .stats-section {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px; /* Reduced from 8px */
 }
 
 .stats-section {
@@ -1145,17 +1153,17 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 
 .detail-panel {
   position: absolute;
-  width: 300px;
+  width: 240px; /* Reduced from 300px */
   background: white;
   border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-radius: 6px; /* Reduced from 8px */
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* Reduced shadow */
   transition: box-shadow 0.2s ease;
   cursor: move;
   z-index: 1000;
 
   &:hover {
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); /* Reduced shadow */
   }
 
   &.node-panel {
@@ -1170,15 +1178,15 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 6px; /* Reduced from 8px */
+  padding: 8px 12px; /* Reduced from 12px 16px */
   border-bottom: 1px solid #f0f0f0;
   background: #fafafa;
-  border-radius: 8px 8px 0 0;
+  border-radius: 6px 6px 0 0; /* Reduced from 8px */
 
   h4 {
     margin: 0;
-    font-size: 14px;
+    font-size: 12px; /* Reduced from 14px */
     font-weight: 600;
     flex: 1;
     color: #262626;
@@ -1186,8 +1194,8 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 }
 
 .panel-type-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px; /* Reduced from 8px */
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 
@@ -1201,14 +1209,14 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 }
 
 .detail-content {
-  padding: 16px;
-  max-height: 400px;
+  padding: 10px; /* Reduced from 16px */
+  max-height: 300px; /* Reduced from 400px */
   overflow-y: auto;
 }
 
 .detail-item {
   display: flex;
-  margin-bottom: 12px;
+  margin-bottom: 8px; /* Reduced from 12px */
 
   &:last-child {
     margin-bottom: 0;
@@ -1216,30 +1224,30 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 }
 
 .detail-label {
-  min-width: 60px;
+  min-width: 50px; /* Reduced from 60px */
   font-weight: 600;
   color: #595959;
-  font-size: 12px;
+  font-size: 11px; /* Reduced from 12px */
   flex-shrink: 0;
 }
 
 .detail-value {
   color: #262626;
-  font-size: 12px;
+  font-size: 11px; /* Reduced from 12px */
   word-break: break-word;
-  line-height: 1.4;
+  line-height: 1.3; /* Reduced from 1.4 */
 }
 
 .detail-actions {
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 12px; /* Reduced from 16px */
+  padding-top: 8px; /* Reduced from 12px */
   border-top: 1px solid #f0f0f0;
 }
 
 .graph-controls {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
+  bottom: 16px; /* Reduced from 20px */
+  right: 16px;
   z-index: 1000;
 }
 
@@ -1247,17 +1255,17 @@ watch(() => graphStore.selectedNode, (nodeId) => {
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   border: 2px solid white;
-  border-radius: 20px;
-  padding: 4px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 16px; /* Reduced from 20px */
+  padding: 2px; /* Reduced from 4px */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Reduced shadow */
   display: flex;
-  gap: 2px;
+  gap: 1px; /* Reduced from 2px */
 }
 
 .control-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 16px;
+  width: 28px; /* Reduced from 32px */
+  height: 28px;
+  border-radius: 14px; /* Reduced from 16px */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1274,41 +1282,41 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 
 .legend {
   position: absolute;
-  right: 16px;
-  top: 80px;
+  right: 12px; /* Reduced from 16px */
+  top: 60px; /* Reduced from 80px */
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(8px);
   border: 2px solid white;
-  border-radius: 8px;
-  width: 180px;
-  max-height: 300px;
+  border-radius: 6px; /* Reduced from 8px */
+  width: 150px; /* Reduced from 180px */
+  max-height: 250px; /* Reduced from 300px */
   z-index: 1000;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* Reduced shadow */
   overflow: hidden;
 }
 
 .legend-header {
   background: #fafafa;
-  padding: 8px 12px;
+  padding: 6px 10px; /* Reduced from 8px 12px */
   border-bottom: 1px solid #f0f0f0;
 
   h4 {
     margin: 0;
-    font-size: 13px;
+    font-size: 12px; /* Reduced from 13px */
     font-weight: 600;
     color: #262626;
   }
 }
 
 .legend-content {
-  padding: 8px 12px;
-  max-height: 240px;
+  padding: 6px 10px; /* Reduced from 8px 12px */
+  max-height: 200px; /* Reduced from 240px */
   overflow-y: auto;
   overflow-x: hidden;
 
   /* 自定义滚动条样式 */
   &::-webkit-scrollbar {
-    width: 4px;
+    width: 3px; /* Reduced from 4px */
   }
 
   &::-webkit-scrollbar-track {
@@ -1328,11 +1336,11 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 6px;
-  margin: 2px 0;
-  border-radius: 4px;
-  font-size: 12px;
+  gap: 6px; /* Reduced from 8px */
+  padding: 2px 4px; /* Reduced from 4px 6px */
+  margin: 1px 0; /* Reduced from 2px */
+  border-radius: 3px; /* Reduced from 4px */
+  font-size: 11px; /* Reduced from 12px */
   min-width: 0;
   transition: background-color 0.2s ease;
 
@@ -1351,8 +1359,8 @@ watch(() => graphStore.selectedNode, (nodeId) => {
 }
 
 .legend-color {
-  width: 10px;
-  height: 10px;
+  width: 8px; /* Reduced from 10px */
+  height: 8px;
   border-radius: 50%;
   border: 1px solid rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
@@ -1372,8 +1380,9 @@ watch(() => graphStore.selectedNode, (nodeId) => {
   text-align: center;
 
   p {
-    margin-top: 16px;
+    margin-top: 12px; /* Reduced from 16px */
     color: #666;
+    font-size: 12px; /* Added smaller font size */
   }
 }
 </style>
