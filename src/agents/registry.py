@@ -51,13 +51,13 @@ class Configuration(dict):
 
     @classmethod
     def from_runnable_config(
-        cls, config: RunnableConfig | None = None, agent_name: str | None = None
+        cls, config: RunnableConfig | None = None, module_name: str | None = None
     ) -> Configuration:
         """Create a Configuration instance from a RunnableConfig object.
 
         Args:
             config: RunnableConfig object with highest priority
-            agent_name: Name of the agent to load config file for
+            module_name: Name of the agent to load config file for
 
         Returns:
             Configuration instance with merged config values
@@ -68,8 +68,8 @@ class Configuration(dict):
 
         # 尝试加载文件配置(中等优先级)
         file_config = {}
-        if agent_name:
-            file_config = cls.from_file(agent_name)
+        if module_name:
+            file_config = cls.from_file(module_name)
 
         # 获取运行时配置(最高优先级)
         configurable = (config.get("configurable") or {}) if config else {}
@@ -94,39 +94,39 @@ class Configuration(dict):
         return cls(**merged_config)
 
     @classmethod
-    def from_file(cls, agent_name: str) -> Configuration:
+    def from_file(cls, module_name: str) -> Configuration:
         """从文件加载配置"""
-        config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+        config_file_path = Path(f"src/agents/{module_name}/config.private.yaml")
         file_config = {}
         if os.path.exists(config_file_path):
             try:
                 with open(config_file_path, encoding='utf-8') as f:
                     file_config = yaml.safe_load(f) or {}
-                    # logger.info(f"从文件加载智能体 {agent_name} 配置: {file_config}")
+                    # logger.info(f"从文件加载智能体 {module_name} 配置: {file_config}")
             except Exception as e:
                 logger.error(f"加载智能体配置文件出错: {e}")
 
         return file_config
 
     @classmethod
-    def save_to_file(cls, config: dict, agent_name: str) -> bool:
+    def save_to_file(cls, config: dict, module_name: str) -> bool:
         """Save configuration to a YAML file
 
         Args:
             config: Configuration dictionary to save
-            agent_name: Name of the agent to save config for
+            module_name: Name of the agent to save config for
 
         Returns:
             True if saving was successful, False otherwise
         """
         try:
-            config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+            config_file_path = Path(f"src/agents/{module_name}/config.private.yaml")
             # 确保目录存在
             os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
             with open(config_file_path, 'w', encoding='utf-8') as f:
                 yaml.dump(config, f, indent=2, allow_unicode=True)
 
-            # logger.info(f"智能体 {agent_name} 配置已保存到 {config_file_path}")
+            # logger.info(f"智能体 {module_name} 配置已保存到 {config_file_path}")
             return True
         except Exception as e:
             logger.error(f"保存智能体配置文件出错: {e}")
@@ -183,7 +183,7 @@ class BaseModelConfiguration(BaseModel):
     def from_runnable_config(
         cls,
         config: Optional["RunnableConfig"] = None,
-        agent_name: Optional[str] = None,
+        module_name: Optional[str] = None,
     ) -> "BaseModelConfiguration":
         """
         从 RunnableConfig 和 YAML 文件中构建 Configuration 实例
@@ -193,7 +193,7 @@ class BaseModelConfiguration(BaseModel):
         default_values = default_instance.dict()
 
         # 文件配置
-        file_config = cls.from_file(agent_name) if agent_name else {}
+        file_config = cls.from_file(module_name) if module_name else {}
 
         # 运行时配置（最高优先级）
         runtime_config = config.get("configurable") if config else {}
@@ -207,11 +207,11 @@ class BaseModelConfiguration(BaseModel):
         return cls(**merged_config)
 
     @classmethod
-    def from_file(cls, agent_name: str) -> dict[str, Any]:
+    def from_file(cls, module_name: str) -> dict[str, Any]:
         """
         从 YAML 文件加载配置
         """
-        config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+        config_file_path = Path(f"src/agents/{module_name}/config.private.yaml")
         if os.path.exists(config_file_path):
             try:
                 with open(config_file_path, encoding="utf-8") as f:
@@ -221,12 +221,12 @@ class BaseModelConfiguration(BaseModel):
         return {}
 
     @classmethod
-    def save_to_file(cls, config: dict, agent_name: str) -> bool:
+    def save_to_file(cls, config: dict, module_name: str) -> bool:
         """
         保存配置到 YAML 文件
         """
         try:
-            config_file_path = Path(f"src/agents/{agent_name}/config.private.yaml")
+            config_file_path = Path(f"src/agents/{module_name}/config.private.yaml")
             os.makedirs(config_file_path.parent, exist_ok=True)
             with open(config_file_path, "w", encoding="utf-8") as f:
                 yaml.dump(config, f, indent=2, allow_unicode=True)
@@ -290,8 +290,19 @@ class BaseAgent:
     def __init__(self, **kwargs):
         self.check_requirements()
 
+    @property
+    def module_name(self) -> str:
+        """Get the module name of the agent class."""
+        return self.__class__.__module__.split('.')[-2]
+
+    @property
+    def id(self) -> str:
+        """Get the agent's class name."""
+        return self.__class__.__name__
+
     async def get_info(self):
         return {
+            "id": self.id,
             "name": self.name if hasattr(self, "name") else "Unknown",
             "description": self.description if hasattr(self, "description") else "Unknown",
             "config_schema": self.config_schema.to_dict(),

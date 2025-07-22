@@ -92,7 +92,7 @@ export const chatApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - 历史消息
    */
-  getAgentHistory: (agentName, threadId) => apiGet(`/api/chat/agent/${agentName}/history?thread_id=${threadId}`, {}, true),
+  getAgentHistory: (agentId, threadId) => apiGet(`/api/chat/agent/${agentId}/history?thread_id=${threadId}`, {}, true),
 
   /**
    * 获取可用工具列表

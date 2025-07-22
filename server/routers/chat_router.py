@@ -36,7 +36,7 @@ async def get_default_agent(current_user: User = Depends(get_required_user)):
         if not default_agent_id:
             agents = await agent_manager.get_agents_info()
             if agents:
-                default_agent_id = agents[0].get("name", "")
+                default_agent_id = agents[0].get("id", "")
 
         return {"default_agent_id": default_agent_id}
     except Exception as e:
@@ -49,7 +49,7 @@ async def set_default_agent(agent_id: str = Body(..., embed=True), current_user 
     try:
         # 验证智能体是否存在
         agents = await agent_manager.get_agents_info()
-        agent_ids = [agent.get("name", "") for agent in agents]
+        agent_ids = [agent.get("id", "") for agent in agents]
 
         if agent_id not in agent_ids:
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
@@ -96,8 +96,8 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     # logger.debug(f"agents: {agents}")
     return {"agents": agents}
 
-@chat.post("/agent/{agent_name}")
-async def chat_agent(agent_name: str,
+@chat.post("/agent/{agent_id}")
+async def chat_agent(agent_id: str,
                query: str = Body(...),
                config: dict = Body({}),
                meta: dict = Body({}),
@@ -106,8 +106,8 @@ async def chat_agent(agent_name: str,
 
     meta.update({
         "query": query,
-        "agent_name": agent_name,
-        "server_model_name": config.get("model", agent_name),
+        "agent_id": agent_id,
+        "server_model_name": config.get("model", agent_id),
         "thread_id": config.get("thread_id"),
         "user_id": current_user.id
     })
@@ -127,10 +127,10 @@ async def chat_agent(agent_name: str,
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
 
         try:
-            agent = agent_manager.get_agent(agent_name)
+            agent = agent_manager.get_agent(agent_id)
         except Exception as e:
-            logger.error(f"Error getting agent {agent_name}: {e}, {traceback.format_exc()}")
-            yield make_chunk(message=f"Error getting agent {agent_name}: {e}", status="error")
+            logger.error(f"Error getting agent {agent_id}: {e}, {traceback.format_exc()}")
+            yield make_chunk(message=f"Error getting agent {agent_id}: {e}", status="error")
             return
 
         messages = [{"role": "user", "content": query}]
@@ -185,25 +185,25 @@ async def get_tools(current_user: User = Depends(get_admin_user)):
     """获取所有可用工具（需要登录）"""
     return {"tools": list(get_all_tools().keys())}
 
-@chat.post("/agent/{agent_name}/config")
+@chat.post("/agent/{agent_id}/config")
 async def save_agent_config(
-    agent_name: str,
+    agent_id: str,
     config: dict = Body(...),
     current_user: User = Depends(get_admin_user)
 ):
     """保存智能体配置到YAML文件（需要管理员权限）"""
     try:
         # 获取Agent实例和配置类
-        agent = agent_manager.get_agent(agent_name)
+        agent = agent_manager.get_agent(agent_id)
         if not agent:
-            raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         # 使用配置类的save_to_file方法保存配置
         config_cls = agent.config_schema
-        result = config_cls.save_to_file(config, agent_name)
+        result = config_cls.save_to_file(config, agent.module_name)
 
         if result:
-            return {"success": True, "message": f"智能体 {agent_name} 配置已保存"}
+            return {"success": True, "message": f"智能体 {agent.name} 配置已保存"}
         else:
             raise HTTPException(status_code=500, detail="保存智能体配置失败")
 
@@ -211,18 +211,18 @@ async def save_agent_config(
         logger.error(f"保存智能体配置出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"保存智能体配置出错: {str(e)}")
 
-@chat.get("/agent/{agent_name}/history")
+@chat.get("/agent/{agent_id}/history")
 async def get_agent_history(
-    agent_name: str,
+    agent_id: str,
     thread_id: str,
     current_user: User = Depends(get_required_user)
 ):
     """获取智能体历史消息（需要登录）"""
     try:
         # 获取Agent实例和配置类
-        agent = agent_manager.get_agent(agent_name)
+        agent = agent_manager.get_agent(agent_id)
         if not agent:
-            raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         # 获取历史消息
         history = await agent.get_history(user_id=str(current_user.id), thread_id=thread_id)
@@ -232,18 +232,18 @@ async def get_agent_history(
         logger.error(f"获取智能体历史消息出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取智能体历史消息出错: {str(e)}")
 
-@chat.get("/agent/{agent_name}/config")
+@chat.get("/agent/{agent_id}/config")
 async def get_agent_config(
-    agent_name: str,
+    agent_id: str,
     current_user: User = Depends(get_required_user)
 ):
     """从YAML文件加载智能体配置（需要登录）"""
     try:
         # 检查智能体是否存在
-        if not (agent := agent_manager.get_agent(agent_name)):
-            raise HTTPException(status_code=404, detail=f"智能体 {agent_name} 不存在")
+        if not (agent := agent_manager.get_agent(agent_id)):
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
-        config = agent.config_schema.from_runnable_config(config={}, agent_name=agent_name)
+        config = agent.config_schema.from_runnable_config(config={}, module_name=agent.module_name)
         return {"success": True, "config": config}
 
     except Exception as e:

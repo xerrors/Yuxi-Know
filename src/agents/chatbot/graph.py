@@ -26,7 +26,7 @@ class ChatbotAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph = None
-        self.workdir = Path(sys_config.save_dir) / "agents" / self.name
+        self.workdir = Path(sys_config.save_dir) / "agents" / self.id
         self.workdir.mkdir(parents=True, exist_ok=True)
 
     def _get_tools(self, tools: list[str]):
@@ -47,7 +47,7 @@ class ChatbotAgent(BaseAgent):
 
     async def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
         """调用 llm 模型 - 异步版本以支持异步工具"""
-        conf = self.config_schema.from_runnable_config(config, agent_name=self.name)
+        conf = self.config_schema.from_runnable_config(config, module_name=self.module_name)
 
         system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
         model = load_chat_model(conf.model)

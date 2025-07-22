@@ -15,13 +15,13 @@
             @change="selectAgent"
           >
             <a-select-option
-              v-for="(agent, name) in agents"
-              :key="name"
-              :value="name"
+              v-for="(agent, id) in agents"
+              :key="id"
+              :value="id"
             >
               <div class="agent-option">
                 <div class="agent-option-content">
-                  <p class="agent-option-name">{{ agent.name }} <StarFilled v-if="name === defaultAgentId" class="default-icon" /></p>
+                  <p class="agent-option-name">{{ agent.name }} <StarFilled v-if="id === defaultAgentId" class="default-icon" /></p>
                   <p class="agent-option-description">{{ agent.description }}</p>
                 </div>
 
@@ -338,7 +338,7 @@ const fetchAgents = async () => {
     const data = await chatApi.getAgents();
     // 将数组转换为对象
     agents.value = data.agents.reduce((acc, agent) => {
-      acc[agent.name] = agent;
+      acc[agent.id] = agent;
       return acc;
     }, {});
     // console.log("agents", agents.value);

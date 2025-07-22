@@ -1014,7 +1014,7 @@ const fetchAgents = async () => {
     const data = await chatApi.getAgents();
     // 将数组转换为对象
     agents.value = data.agents.reduce((acc, agent) => {
-      acc[agent.name] = agent;
+      acc[agent.id] = agent;
       return acc;
     }, {});
     console.log("agents", agents.value);
