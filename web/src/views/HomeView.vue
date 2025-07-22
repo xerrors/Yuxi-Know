@@ -86,7 +86,7 @@ const goToChat = async () => {
       // 如果没有设置默认智能体，则获取智能体列表选择第一个
       const agentData = await chatApi.getAgents();
       if (agentData.agents && agentData.agents.length > 0) {
-        router.push(`/agent/${agentData.agents[0].name}`);
+        router.push(`/agent/${agentData.agents[0].id}`);
       } else {
         // 没有可用智能体，回退到chat页面
         router.push("/chat");

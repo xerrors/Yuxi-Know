@@ -887,14 +887,14 @@ const sendMessageToServer = async (text) => {
       thread_id: currentChatId.value
     },
     meta: {
-      request_id: currentAgent.value.name + '-' + new Date().getTime()
+      request_id: currentAgent.value.id + '-' + new Date().getTime()
     }
   };
 
   try {
     state.waitingServerResponse = true;
 
-    const response = await chatApi.sendAgentMessage(currentAgent.value.name, requestData);
+    const response = await chatApi.sendAgentMessage(currentAgent.value.id, requestData);
     if (!response.ok) {
       throw new Error('请求失败');
     }

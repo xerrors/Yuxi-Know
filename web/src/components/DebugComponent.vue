@@ -399,7 +399,7 @@ const printAgentConfig = async () => {
     // 获取每个智能体的配置
     for (const agent of agentsData.agents) {
       try {
-        const agentConfig = await agentConfigApi.getAgentConfig(agent.name);
+        const agentConfig = await agentConfigApi.getAgentConfig(agent.id);
         console.log(`智能体 "${agent.name}" 配置:`, JSON.stringify(agentConfig, null, 2));
       } catch (err) {
         console.log(`智能体 "${agent.name}" 配置获取失败:`, err.message);

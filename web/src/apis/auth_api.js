@@ -88,7 +88,7 @@ export const chatApi = {
 
   /**
    * 获取智能体历史消息
-   * @param {string} agentName - 智能体名称
+   * @param {string} agentId - 智能体ID
    * @param {string} threadId - 会话ID
    * @returns {Promise} - 历史消息
    */

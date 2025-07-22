@@ -238,7 +238,7 @@ const handleLogin = async () => {
         // 没有默认智能体，获取第一个可用智能体
         const agentData = await chatApi.getAgents();
         if (agentData.agents && agentData.agents.length > 0) {
-          router.push(`/agent/${agentData.agents[0].name}`);
+          router.push(`/agent/${agentData.agents[0].id}`);
           return;
         }
 
