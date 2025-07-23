@@ -666,7 +666,7 @@ const loadGraphData = async () => {
         await initSigma()
       }
 
-      message.success(`加载成功：${rawGraph.nodes.length} 个节点，${rawGraph.edges.length} 条边${graphResponse.data.is_truncated ? ' (已截断)' : ''}`)
+      // message.success(`加载成功：${rawGraph.nodes.length} 个节点，${rawGraph.edges.length} 条边${graphResponse.data.is_truncated ? ' (已截断)' : ''}`)
     }
   } catch (error) {
     console.error('加载图数据失败:', error)

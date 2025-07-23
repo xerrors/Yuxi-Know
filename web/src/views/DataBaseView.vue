@@ -345,34 +345,6 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .new-database-modal {
-  .kb-type-option {
-    // padding: 4px 0;
-
-    .type-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 2px;
-
-      .type-icon {
-        width: 16px;
-        height: 16px;
-        color: var(--main-color);
-        flex-shrink: 0;
-      }
-
-      .type-title {
-        font-weight: 600;
-      }
-    }
-
-    .type-desc {
-      font-size: 12px;
-      color: var(--gray-600);
-      padding-left: 20px;
-    }
-  }
-
   .kb-type-guide {
     margin: 12px 0;
   }
@@ -536,5 +508,42 @@ onMounted(() => {
   h3 {
     margin-top: 10px;
   }
+}
+</style>
+
+<!-- 为了解决ant-select下拉选项中图标和文本对齐问题，需要使用非scoped样式 -->
+<style lang="less">
+/* 知识库类型选项样式 */
+.kb-type-option {
+  .type-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .type-icon {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .type-title {
+      font-weight: 500;
+    }
+  }
+
+  .type-desc {
+    font-size: 12px;
+    color: #666;
+    margin-left: 24px;
+    margin-top: 2px;
+  }
+}
+
+/* 确保选中项也正确对齐 */
+.ant-select-selection-item .kb-type-option .type-header {
+  align-items: center;
 }
 </style>

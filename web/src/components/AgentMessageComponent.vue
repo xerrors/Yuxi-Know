@@ -500,20 +500,22 @@ const toggleToolCall = (toolCallId) => {
   font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
 
   #preview-only-preview {
-    font-size: 15px;
-    color: var(--gray-900);
+    font-size: 1rem;
+    line-height: 1.75;
+    color: var(--gray-2000);
   }
 
+
   h1, h2 {
-    font-size: 16px;
+    font-size: 1.2rem;
   }
 
   h3, h4 {
-    font-size: 16px;
+    font-size: 1.1rem;
   }
 
   h5, h6 {
-    font-size: 15px;
+    font-size: 1rem;
   }
 
   strong {

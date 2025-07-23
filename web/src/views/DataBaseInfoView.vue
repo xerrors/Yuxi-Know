@@ -1,7 +1,7 @@
 <template>
 <div class="database-info-container">
   <HeaderComponent
-    :title="database.name || '数据库信息'"
+    :title="database.name || '数据库信息加载中'"
     :loading="state.databaseLoading"
   >
     <template #left>
@@ -18,6 +18,7 @@
       <div class="header-info">
         <span class="db-id">ID: {{ database.db_id || 'N/A' }}</span>
         <span class="file-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+        <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
         <a-tag
           :color="getKbTypeColor(database.kb_type || 'lightrag')"
           class="kb-type-tag"
@@ -1556,8 +1557,12 @@ const getKbTypeColor = (type) => {
 .header-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-left: auto; /* Push to the right */
+
+  span {
+    margin: 0;
+  }
 
   .kb-type-tag {
     display: flex;
