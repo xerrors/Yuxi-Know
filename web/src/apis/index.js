@@ -8,6 +8,7 @@ export * from './system_api'      // 系统管理API
 export * from './knowledge_api'   // 知识库管理API
 export * from './auth_api'        // 认证API
 export * from './graph_api'       // 图谱API
+export * from './tools.js'        // 工具API
 
 // 导出基础工具函数
 export { apiRequest, apiGet, apiPost, apiPut, apiDelete } from './base'
@@ -28,6 +29,9 @@ export { apiRequest, apiGet, apiPost, apiPut, apiDelete } from './base'
  *
  * 4. graph_api.js: 图谱API
  *    - 知识图谱相关功能
+ *
+ * 5. tools.js: 工具API
+ *    - 工具信息获取
  *
  * 注意：API模块已处理权限验证和请求头，使用时无需再手动添加认证头
  */

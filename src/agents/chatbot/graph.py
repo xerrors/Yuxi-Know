@@ -15,12 +15,11 @@ from src.utils import logger
 from src.agents.registry import State, BaseAgent
 from src.agents.utils import load_chat_model, get_cur_time_with_utc
 from src.agents.chatbot.configuration import ChatbotConfiguration
-from src.agents.tools_factory import get_all_tools
+from src.agents.tools_factory import get_runnable_tools
 
 class ChatbotAgent(BaseAgent):
     name = "对话机器人（Chatbot）"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
-    requirements = ["TAVILY_API_KEY", "ZHIPUAI_API_KEY"]
     config_schema = ChatbotConfiguration
 
     def __init__(self, **kwargs):
@@ -34,7 +33,7 @@ class ChatbotAgent(BaseAgent):
         默认不使用任何工具。
         如果配置为列表，则使用列表中的工具。
         """
-        platform_tools = get_all_tools()
+        platform_tools = get_runnable_tools()
         if tools is None or not isinstance(tools, list) or len(tools) == 0:
             # 默认不使用任何工具
             logger.info("未配置工具或配置为空，不使用任何工具")
@@ -68,7 +67,7 @@ class ChatbotAgent(BaseAgent):
 
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=list(get_all_tools().values())))
+        workflow.add_node("tools", ToolNode(tools=list(get_runnable_tools().values())))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",

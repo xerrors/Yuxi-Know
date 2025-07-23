@@ -69,19 +69,9 @@
       >
         <div class="conf-content">
           <div class="agent-info">
-            <h3>详细配置信<span @click="toggleDebugMode">息</span></h3>
+            <p>详细配置信<span @click="toggleDebugMode">息</span></p>
             <p>{{ selectedAgent.description }}</p>
             <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
-
-            <!-- 添加requirements显示部分 -->
-            <div v-if="agents[selectedAgentId]?.requirements && agents[selectedAgentId]?.requirements.length > 0" class="info-section">
-              <h3>所需环境变量:</h3>
-              <div class="requirements-list">
-                <a-tag v-for="req in agents[selectedAgentId].requirements" :key="req">
-                  {{ req }}
-                </a-tag>
-              </div>
-            </div>
 
             <a-divider />
 
@@ -111,7 +101,7 @@
                     <a-textarea
                       v-else-if="key === 'system_prompt'"
                       v-model:value="agentConfig[key]"
-                      :rows="4"
+                      :rows="2"
                       :placeholder="getPlaceholder(key, value)"
                     />
 
@@ -129,6 +119,25 @@
                         {{ option.label || option }}
                       </a-select-option>
                     </a-select>
+                    <!-- 工具选择特殊处理 -->
+                    <div v-else-if="key === 'tools'" class="tools-selector">
+                      <div class="tools-summary">
+                        <div class="tools-summary-left">
+                          <span class="tools-count">已选择 {{ getSelectedCount(key) }} 个工具</span>
+                          <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0">
+                            清空
+                          </a-button>
+                        </div>
+                        <a-button type="primary" @click="openToolsModal" class="select-tools-btn">
+                          选择工具
+                        </a-button>
+                      </div>
+                      <div v-if="getSelectedCount(key) > 0" class="selected-tools-preview">
+                        <a-tag v-for="toolId in agentConfig[key]" :key="toolId" closable @close="removeSelectedTool(toolId)">
+                          {{ getToolNameById(toolId) }}
+                        </a-tag>
+                      </div>
+                    </div>
                     <!-- 多选 -->
                     <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
                       <div class="multi-select-label">
@@ -149,7 +158,7 @@
                           @click="toggleOption(key, option)"
                         >
                           <div class="option-content">
-                            <span class="option-text">{{ option }}</span>
+                            <span class="option-text">{{ getToolNameById(toolId) }}</span>
                             <div class="option-indicator">
                               <CheckCircleOutlined v-if="isOptionSelected(key, option)" />
                               <PlusCircleOutlined v-else />
@@ -198,6 +207,56 @@
         </div>
       </a-modal>
 
+      <!-- 工具选择弹窗 -->
+      <a-modal
+        v-model:open="state.toolsModalOpen"
+        title="选择工具"
+        :width="800"
+        :footer="null"
+        :maskClosable="false"
+        class="tools-modal"
+      >
+        <div class="tools-modal-content">
+          <div class="tools-search">
+            <a-input
+              v-model:value="toolsSearchText"
+              placeholder="搜索工具..."
+              allow-clear
+            />
+          </div>
+          <div class="tools-list">
+            <div
+              v-for="tool in filteredTools"
+              :key="tool.id"
+              class="tool-item"
+              :class="{ 'selected': selectedTools.includes(tool.id) }"
+              @click="toggleToolSelection(tool.id)"
+            >
+              <div class="tool-content">
+                <div class="tool-header">
+                  <span class="tool-name">{{ tool.name }}</span>
+                  <div class="tool-indicator">
+                    <CheckCircleOutlined v-if="selectedTools.includes(tool.id)" />
+                    <PlusCircleOutlined v-else />
+                  </div>
+                </div>
+                <div class="tool-description">{{ tool.description }}</div>
+
+              </div>
+            </div>
+          </div>
+          <div class="tools-modal-footer">
+            <div class="selected-count">
+              已选择 {{ selectedTools.length }} 个工具
+            </div>
+            <div class="modal-actions">
+              <a-button @click="cancelToolsSelection">取消</a-button>
+              <a-button type="primary" @click="confirmToolsSelection">确认</a-button>
+            </div>
+          </div>
+        </div>
+      </a-modal>
+
       <!-- 中间内容区域 -->
       <div class="content">
         <AgentChatComponent
@@ -230,6 +289,7 @@ import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { chatApi } from '@/apis/auth_api';
 import { agentConfigApi } from '@/apis/system_api';
+import { toolsApi } from '@/apis/tools';
 
 // 路由
 const router = useRouter();
@@ -242,11 +302,35 @@ const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
   agentConfOpen: false,
   debug_mode: false,
+  toolsModalOpen: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
   )
 });
+
+// 工具相关状态
+const availableTools = ref([]);
+const selectedTools = ref([]);
+const toolsSearchText = ref('');
+
+// 过滤后的工具列表
+const filteredTools = computed(() => {
+  if (!toolsSearchText.value) {
+    return availableTools.value;
+  }
+  const searchLower = toolsSearchText.value.toLowerCase();
+  return availableTools.value.filter(tool =>
+    tool.name.toLowerCase().includes(searchLower) ||
+    tool.description.toLowerCase().includes(searchLower)
+  );
+});
+
+// 根据工具ID获取工具名称
+const getToolNameById = (toolId) => {
+  const tool = availableTools.value.find(t => t.id === toolId);
+  return tool ? tool.name : toolId;
+};
 
 const selectedAgent = computed(() => agents.value[selectedAgentId.value] || {});
 const configSchema = computed(() => selectedAgent.value.config_schema || {});
@@ -319,6 +403,53 @@ const toggleOption = (key, option) => {
 
 const clearSelection = (key) => {
   agentConfig.value[key] = [];
+};
+
+// 工具选择相关方法
+const openToolsModal = async () => {
+  try {
+    // 加载可用工具列表
+    const response = await toolsApi.getTools();
+    // 将工具对象转换为数组格式，保留id和name信息
+    availableTools.value = Object.values(response.tools || {});
+
+    // 初始化已选择的工具
+    selectedTools.value = [...(agentConfig.value.tools || [])];
+
+    // 打开弹窗
+    state.toolsModalOpen = true;
+  } catch (error) {
+    console.error('加载工具列表失败:', error);
+    message.error('加载工具列表失败');
+  }
+};
+
+const toggleToolSelection = (toolId) => {
+  const index = selectedTools.value.indexOf(toolId);
+  if (index > -1) {
+    selectedTools.value.splice(index, 1);
+  } else {
+    selectedTools.value.push(toolId);
+  }
+};
+
+const removeSelectedTool = (toolId) => {
+  const index = agentConfig.value.tools.indexOf(toolId);
+  if (index > -1) {
+    agentConfig.value.tools.splice(index, 1);
+  }
+};
+
+const confirmToolsSelection = () => {
+  agentConfig.value.tools = [...selectedTools.value];
+  state.toolsModalOpen = false;
+  toolsSearchText.value = '';
+};
+
+const cancelToolsSelection = () => {
+  state.toolsModalOpen = false;
+  toolsSearchText.value = '';
+  selectedTools.value = [];
 };
 
 // 获取默认智能体ID
@@ -536,7 +667,7 @@ const toggleConf = () => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  --agent-view-header-height: 60px;
+  --agent-view-header-height: 45px;
 }
 
 .agent-view-header {
@@ -597,27 +728,7 @@ const toggleConf = () => {
   }
 }
 
-// 添加requirements相关样式
-.info-section {
-  margin-top: 16px;
-  padding-top: 12px;
 
-  h3 {
-    font-size: 14px;
-    margin-bottom: 8px;
-    font-weight: 500;
-  }
-}
-
-.requirements-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-
-  .ant-tag {
-    user-select: all;
-  }
-}
 
 .agent-model {
   width: 100%;
@@ -710,6 +821,211 @@ const toggleConf = () => {
     color: #faad14;
     font-size: 14px;
     margin-left: 4px;
+  }
+}
+// 工具选择器样式（与项目风格一致）
+.tools-selector {
+  .tools-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    // margin-bottom: 8px;
+    padding: 8px 12px;
+    background: var(--gray-50);
+    border-radius: 8px;
+    border: 1px solid var(--gray-200);
+    font-size: 14px;
+    color: var(--gray-700);
+    transition: border-color 0.2s ease;
+
+    .tools-summary-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+
+      .tools-count {
+        color: var(--gray-900);
+      }
+    }
+
+    .select-tools-btn {
+      background: var(--main-color);
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      height: 28px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background: var(--main-600);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+    }
+  }
+
+  .selected-tools-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    min-height: 32px;
+    :deep(.ant-tag) {
+      margin: 0;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-300);
+      color: var(--gray-900);
+      font-size: 13px;
+      font-weight: 400;
+      .anticon-close {
+        color: var(--gray-600);
+        margin-left: 4px;
+        &:hover {
+          color: var(--gray-900);
+        }
+      }
+    }
+  }
+}
+
+// 工具选择弹窗样式（与项目风格一致）
+.tools-modal {
+  :deep(.ant-modal-content) {
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  :deep(.ant-modal-header) {
+    background: #fff;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 16px 20px;
+    .ant-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+  }
+  :deep(.ant-modal-body) {
+    padding: 20px;
+    background: #fff;
+  }
+  .tools-modal-content {
+    .tools-search {
+      margin-bottom: 16px;
+      :deep(.ant-input) {
+        border-radius: 8px;
+        border: 1px solid var(--gray-300);
+        padding: 8px 12px;
+        font-size: 14px;
+        &:focus {
+          border-color: var(--main-color);
+          box-shadow: none;
+        }
+      }
+    }
+    .tools-list {
+      max-height: 350px;
+      overflow-y: auto;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      margin-bottom: 16px;
+      background: #fff;
+      .tool-item {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--gray-100);
+        cursor: pointer;
+        transition: background 0.2s, border 0.2s;
+        border-left: 3px solid transparent;
+        &:last-child { border-bottom: none; }
+        &:hover {
+          background: var(--gray-50);
+        }
+        &.selected {
+          background: var(--main-10);
+          border-left: 3px solid var(--main-color);
+        }
+        .tool-content {
+          .tool-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            .tool-name {
+              font-weight: 500;
+              color: var(--gray-900);
+              font-size: 14px;
+            }
+            .tool-indicator { display: none; }
+          }
+          .tool-description {
+            font-size: 13px;
+            color: var(--gray-700);
+            margin-bottom: 6px;
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+        }
+      }
+    }
+    .tools-modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0 0 0;
+      border-top: 1px solid var(--gray-200);
+      .selected-count {
+        font-size: 13px;
+        color: var(--gray-700);
+        background: none;
+        padding: 0;
+        border: none;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        :deep(.ant-btn) {
+          border-radius: 8px;
+          font-weight: 500;
+          padding: 6px 18px;
+          height: 36px;
+          font-size: 14px;
+          &.ant-btn-default {
+            border: 1px solid var(--gray-300);
+            color: var(--gray-900);
+            background: #fff;
+            &:hover {
+              border-color: var(--main-color);
+              color: var(--main-color);
+              background: var(--main-10);
+            }
+          }
+          &.ant-btn-primary {
+            background: var(--main-color);
+            border: none;
+            color: #fff;
+            &:hover {
+              background: var(--main-600);
+            }
+          }
+        }
+      }
+    }
   }
 }
 

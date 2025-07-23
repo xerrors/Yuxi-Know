@@ -15,7 +15,7 @@ from src.knowledge import HistoryManager
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
-from src.agents.tools_factory import get_all_tools
+from src.agents.tools_factory import get_runnable_tools
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_required_user, get_db
 from server.models.user_model import User
@@ -44,9 +44,13 @@ async def get_default_agent(current_user: User = Depends(get_required_user)):
         raise HTTPException(status_code=500, detail=f"获取默认智能体出错: {str(e)}")
 
 @chat.post("/set_default_agent")
-async def set_default_agent(agent_id: str = Body(..., embed=True), current_user = Depends(get_admin_user)):
+async def set_default_agent(request_data: dict = Body(...), current_user = Depends(get_admin_user)):
     """设置默认智能体ID (仅管理员)"""
     try:
+        agent_id = request_data.get("agent_id")
+        if not agent_id:
+            raise HTTPException(status_code=422, detail="缺少必需的 agent_id 字段")
+
         # 验证智能体是否存在
         agents = await agent_manager.get_agents_info()
         agent_ids = [agent.get("id", "") for agent in agents]
@@ -69,11 +73,6 @@ async def set_default_agent(agent_id: str = Body(..., embed=True), current_user 
 # =============================================================================
 # > === 对话分组 ===
 # =============================================================================
-
-@chat.get("/")
-async def chat_get(current_user: User = Depends(get_required_user)):
-    """聊天服务健康检查（需要登录）"""
-    return "Chat Get!"
 
 @chat.post("/call")
 async def call(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
@@ -183,7 +182,7 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
 @chat.get("/tools")
 async def get_tools(current_user: User = Depends(get_admin_user)):
     """获取所有可用工具（需要登录）"""
-    return {"tools": list(get_all_tools().keys())}
+    return {"tools": list(get_runnable_tools().keys())}
 
 @chat.post("/agent/{agent_id}/config")
 async def save_agent_config(
