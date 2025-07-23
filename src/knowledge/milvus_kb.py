@@ -18,7 +18,8 @@ except ImportError:
     utility = None
     Collection = None
 
-from src.core.knowledge_base import KnowledgeBase
+from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
 from src.utils import logger, hashstr
 from src import config
 
@@ -171,16 +172,10 @@ class MilvusKB(KnowledgeBase):
 
     def _get_embedding_function(self, embed_info: Dict):
         """获取 embedding 函数"""
-        if embed_info:
-            model = embed_info["name"]
-            api_key = os.getenv(embed_info["api_key"], embed_info["api_key"])
-            base_url = embed_info["base_url"]
-        else:
-            from src.models import select_embedding_model
-            default_model = select_embedding_model(config.embed_model)
-            model = default_model.model
-            api_key = default_model.api_key
-            base_url = default_model.base_url
+        config_dict = get_embedding_config(embed_info)
+        model = config_dict["model"]
+        api_key = config_dict["api_key"]
+        base_url = config_dict["base_url"]
 
         # 返回同步的嵌入函数
         def embedding_function(texts):
@@ -232,56 +227,7 @@ class MilvusKB(KnowledgeBase):
 
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str) -> List[Dict]:
         """将文本分割成块"""
-        chunks = []
-
-        # 简单的分块策略：按段落和长度分割
-        paragraphs = text.split('\n\n')
-
-        current_chunk = ""
-        chunk_index = 0
-
-        for paragraph in paragraphs:
-            paragraph = paragraph.strip()
-            if not paragraph:
-                continue
-
-            # 如果当前块加上新段落会超过限制，保存当前块
-            if len(current_chunk) + len(paragraph) > self.chunk_size and current_chunk:
-                chunks.append({
-                    "id": f"{file_id}_chunk_{chunk_index}",
-                    "content": current_chunk.strip(),
-                    "file_id": file_id,
-                    "filename": filename,
-                    "chunk_index": chunk_index,
-                    "source": filename,
-                    "chunk_id": f"{file_id}_chunk_{chunk_index}"
-                })
-
-                # 开始新块，包含重叠内容
-                if len(current_chunk) > self.chunk_overlap:
-                    current_chunk = current_chunk[-self.chunk_overlap:] + "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
-                chunk_index += 1
-            else:
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
-
-        # 添加最后一块
-        if current_chunk.strip():
-            chunks.append({
-                "id": f"{file_id}_chunk_{chunk_index}",
-                "content": current_chunk.strip(),
-                "file_id": file_id,
-                "filename": filename,
-                "chunk_index": chunk_index,
-                "source": filename,
-                "chunk_id": f"{file_id}_chunk_{chunk_index}"
-            })
-
-        return chunks
+        return split_text_into_chunks(text, file_id, filename, self.chunk_size, self.chunk_overlap)
 
     async def add_content(self, db_id: str, items: List[str],
                          params: Optional[Dict] = None) -> List[Dict]:
@@ -300,28 +246,15 @@ class MilvusKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            # 根据内容类型生成不同的ID和文件名
-            if content_type == "file":
-                file_path = Path(item)
-                file_id = f"file_{hashstr(str(file_path) + str(time.time()), 6)}"
-                file_type = file_path.suffix.lower().replace(".", "")
-                filename = file_path.name
-                item_path = str(file_path)
-            else:  # URL
-                file_id = f"url_{hashstr(item + str(time.time()), 6)}"
-                file_type = "url"
-                filename = f"webpage_{hashstr(item, 6)}.md"
-                item_path = item
+            # 准备文件元数据
+            metadata = prepare_item_metadata(item, content_type, db_id)
+            file_id = metadata["file_id"]
+            filename = metadata["filename"]
+            item_path = metadata["path"]
 
             # 添加文件记录
-            file_record = {
-                "database_id": db_id,
-                "filename": filename,
-                "path": item_path,
-                "file_type": file_type,
-                "status": "processing",
-                "created_at": time.time()
-            }
+            file_record = metadata.copy()
+            del file_record["file_id"]  # 从记录中移除file_id，因为它是key
             self.files_meta[file_id] = file_record
             self._save_metadata()
 

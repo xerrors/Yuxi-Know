@@ -6,79 +6,17 @@ from pathlib import Path
 from typing import Optional, Dict, List, Any
 from datetime import datetime
 
-try:
-    import chromadb
-    from chromadb.config import Settings
-    from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
-except ImportError:
-    chromadb = None
-    EmbeddingFunction = None
-    Documents = None
-    Embeddings = None
+import chromadb
+from chromadb.config import Settings
+from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
+from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
-from src.core.knowledge_base import KnowledgeBase
+
+
+from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
 from src.utils import logger, hashstr
 from src import config
-
-
-if EmbeddingFunction is not None:
-    class OpenAIEmbeddingFunction(EmbeddingFunction):
-        """
-        符合 ChromaDB 0.4.16+ 接口的 OpenAI 兼容嵌入函数
-        """
-
-        def __init__(self, model: str, api_key: str, base_url: str):
-            self.model = model
-            self.api_key = api_key
-            self.base_url = base_url.replace("/embeddings", "")
-
-        def __call__(self, input: Documents) -> Embeddings:
-            """
-            生成文档嵌入向量
-
-            Args:
-                input: 文档列表（字符串列表）
-
-            Returns:
-                Embeddings: 嵌入向量列表
-            """
-            import asyncio
-            import concurrent.futures
-            from lightrag.llm.openai import openai_embed
-
-            # 确保输入是列表格式
-            if isinstance(input, str):
-                texts = [input]
-            else:
-                texts = list(input)
-
-            # 在新线程中运行异步函数，避免事件循环冲突
-            def run_embedding():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(
-                        openai_embed(
-                            texts=texts,
-                            model=self.model,
-                            api_key=self.api_key,
-                            base_url=self.base_url,
-                        )
-                    )
-                finally:
-                    loop.close()
-
-            # 使用线程池执行异步函数
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_embedding)
-                embeddings = future.result()
-
-            return embeddings
-else:
-    # 如果 ChromaDB 没有安装，提供一个空的类
-    class OpenAIEmbeddingFunction:
-        def __init__(self, *args, **kwargs):
-            pass
 
 
 class ChromaKB(KnowledgeBase):
@@ -136,7 +74,10 @@ class ChromaKB(KnowledgeBase):
 
         try:
             # 尝试获取现有集合
-            collection = self.chroma_client.get_collection(name=collection_name)
+            collection = self.chroma_client.get_collection(
+                name=collection_name,
+                embedding_function=embedding_function
+            )
             logger.info(f"Retrieved existing collection: {collection_name}")
 
             # 检查现有集合的配置是否匹配当前的 embed_info
@@ -144,6 +85,7 @@ class ChromaKB(KnowledgeBase):
             collection_metadata = collection.metadata or {}
             current_model = collection_metadata.get("embedding_model", "unknown")
 
+            logger.debug(f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'.")
             # 如果模型不匹配，删除现有集合并重新创建
             if current_model != expected_model:
                 logger.warning(f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'. Recreating collection.")
@@ -173,22 +115,12 @@ class ChromaKB(KnowledgeBase):
 
     def _get_embedding_function(self, embed_info: Dict):
         """获取 embedding 函数"""
-        if embed_info:
-            model = embed_info["name"]
-            api_key = os.getenv(embed_info["api_key"], embed_info["api_key"])
-            base_url = embed_info["base_url"]
-        else:
-            from src.models import select_embedding_model
-            default_model = select_embedding_model(config.embed_model)
-            model = default_model.model
-            api_key = default_model.api_key
-            base_url = default_model.base_url
+        config_dict = get_embedding_config(embed_info)
 
-        # 返回符合 ChromaDB 0.4.16+ 接口的 EmbeddingFunction 实例
         return OpenAIEmbeddingFunction(
-            model=model,
-            api_key=api_key,
-            base_url=base_url
+            model_name=config_dict["model"],
+            api_key=config_dict["api_key"],
+            api_base=config_dict["base_url"].replace('/embeddings', '')
         )
 
     async def _get_chroma_collection(self, db_id: str):
@@ -214,60 +146,15 @@ class ChromaKB(KnowledgeBase):
 
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str) -> List[Dict]:
         """将文本分割成块"""
-        chunks = []
+        chunks = split_text_into_chunks(text, file_id, filename, self.chunk_size, self.chunk_overlap)
 
-        # 简单的分块策略：按段落和长度分割
-        paragraphs = text.split('\n\n')
-
-        current_chunk = ""
-        chunk_index = 0
-
-        for paragraph in paragraphs:
-            paragraph = paragraph.strip()
-            if not paragraph:
-                continue
-
-            # 如果当前块加上新段落会超过限制，保存当前块
-            if len(current_chunk) + len(paragraph) > self.chunk_size and current_chunk:
-                chunks.append({
-                    "id": f"{file_id}_chunk_{chunk_index}",
-                    "content": current_chunk.strip(),
-                    "file_id": file_id,
-                    "filename": filename,
-                    "chunk_index": chunk_index,
-                    "metadata": {
-                        "source": filename,
-                        "chunk_id": f"{file_id}_chunk_{chunk_index}",
-                        "full_doc_id": file_id
-                    }
-                })
-
-                # 开始新块，包含重叠内容
-                if len(current_chunk) > self.chunk_overlap:
-                    current_chunk = current_chunk[-self.chunk_overlap:] + "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
-                chunk_index += 1
-            else:
-                if current_chunk:
-                    current_chunk += "\n\n" + paragraph
-                else:
-                    current_chunk = paragraph
-
-        # 添加最后一块
-        if current_chunk.strip():
-            chunks.append({
-                "id": f"{file_id}_chunk_{chunk_index}",
-                "content": current_chunk.strip(),
-                "file_id": file_id,
-                "filename": filename,
-                "chunk_index": chunk_index,
-                "metadata": {
-                    "source": filename,
-                    "chunk_id": f"{file_id}_chunk_{chunk_index}",
-                    "full_doc_id": file_id
-                }
-            })
+        # 为 ChromaDB 添加特定的 metadata 格式
+        for chunk in chunks:
+            chunk["metadata"] = {
+                "source": chunk["source"],
+                "chunk_id": chunk["chunk_id"],
+                "full_doc_id": file_id
+            }
 
         return chunks
 
@@ -285,34 +172,16 @@ class ChromaKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            # 根据内容类型生成不同的ID和文件名
-            if content_type == "file":
-                file_path = Path(item)
-                file_id = f"file_{hashstr(str(file_path) + str(time.time()), 6)}"
-                file_type = file_path.suffix.lower().replace(".", "")
-                filename = file_path.name
-                item_path = str(file_path)
-            else:  # URL
-                file_id = f"url_{hashstr(item + str(time.time()), 6)}"
-                file_type = "url"
-                filename = f"webpage_{hashstr(item, 6)}.md"
-                item_path = item
+            # 准备文件元数据
+            metadata = prepare_item_metadata(item, content_type, db_id)
+            file_id = metadata["file_id"]
+            filename = metadata["filename"]
+            item_path = metadata["path"]
 
             # 添加文件记录
-            file_record = {
-                "database_id": db_id,
-                "filename": filename,
-                "path": item_path,
-                "file_type": file_type,
-                "status": "processing",
-                "created_at": time.time()
-            }
+            file_record = metadata.copy()
             self.files_meta[file_id] = file_record
             self._save_metadata()
-
-            # 添加 file_id 到返回数据
-            file_record = file_record.copy()
-            file_record["file_id"] = file_id
 
             try:
                 # 根据内容类型处理内容

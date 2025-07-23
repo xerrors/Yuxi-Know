@@ -10,7 +10,8 @@ from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc, setup_logger
 from lightrag.kg.shared_storage import initialize_pipeline_status
 
-from src.core.knowledge_base import KnowledgeBase
+from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
 from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
 
@@ -126,27 +127,16 @@ class LightRagKB(KnowledgeBase):
 
     def _get_embedding_func(self, embed_info: Dict):
         """获取 embedding 函数"""
-        if embed_info:
-            model = embed_info["name"]
-            api_key = os.getenv(embed_info["api_key"], embed_info["api_key"])
-            base_url = get_docker_safe_url(embed_info["base_url"])
-            dimension = embed_info["dimension"]
-        else:
-            from src.models import select_embedding_model
-            default_model = select_embedding_model(config.embed_model)
-            model = default_model.model
-            api_key = default_model.api_key
-            base_url = default_model.base_url
-            dimension = default_model.dimension
+        config_dict = get_embedding_config(embed_info)
 
         return EmbeddingFunc(
-            embedding_dim=dimension,
+            embedding_dim=config_dict["dimension"],
             max_token_size=4096,
             func=lambda texts: openai_embed(
                 texts=texts,
-                model=model,
-                api_key=api_key,
-                base_url=base_url.replace("/embeddings", ""),
+                model=config_dict["model"],
+                api_key=config_dict["api_key"],
+                base_url=config_dict["base_url"].replace("/embeddings", ""),
             ),
         )
 
@@ -164,34 +154,16 @@ class LightRagKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            # 根据内容类型生成不同的ID和文件名
-            if content_type == "file":
-                file_path = Path(item)
-                file_id = f"file_{hashstr(str(file_path) + str(time.time()), 6)}"
-                file_type = file_path.suffix.lower().replace(".", "")
-                filename = file_path.name
-                item_path = str(file_path)
-            else:  # URL
-                file_id = f"url_{hashstr(item + str(time.time()), 6)}"
-                file_type = "url"
-                filename = f"webpage_{hashstr(item, 6)}.md"
-                item_path = item
+            # 准备文件元数据
+            metadata = prepare_item_metadata(item, content_type, db_id)
+            file_id = metadata["file_id"]
+            filename = metadata["filename"]
+            item_path = metadata["path"]
 
             # 添加文件记录
-            file_record = {
-                "database_id": db_id,
-                "filename": filename,
-                "path": item_path,
-                "file_type": file_type,
-                "status": "processing",
-                "created_at": time.time()
-            }
+            file_record = metadata.copy()
             self.files_meta[file_id] = file_record
             self._save_metadata()
-
-            # 添加 file_id 到返回数据
-            file_record = file_record.copy()
-            file_record["file_id"] = file_id
 
             try:
                 # 根据内容类型处理内容

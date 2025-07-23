@@ -4,8 +4,8 @@ import time
 from typing import Dict, Optional, List, Any
 from datetime import datetime
 
-from src.core.knowledge_base import KnowledgeBase, KBNotFoundError, KBOperationError
-from src.core.kb_factory import KnowledgeBaseFactory
+from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError, KBOperationError
+from src.knowledge.kb_factory import KnowledgeBaseFactory
 from src.utils import logger
 
 

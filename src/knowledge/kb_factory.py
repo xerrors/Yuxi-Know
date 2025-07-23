@@ -1,5 +1,5 @@
 from typing import Dict, Type, Any
-from src.core.knowledge_base import KnowledgeBase, KBNotFoundError
+from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError
 from src.utils import logger
 
 

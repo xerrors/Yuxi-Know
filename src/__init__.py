@@ -10,11 +10,11 @@ from src.config import Config  # noqa: E402
 config = Config()
 
 # 导入知识库相关模块
-from src.core.kb_factory import KnowledgeBaseFactory  # noqa: E402
-from src.core.kb_manager import KnowledgeBaseManager  # noqa: E402
-from src.core.lightrag_kb import LightRagKB  # noqa: E402
-from src.core.chroma_kb import ChromaKB  # noqa: E402
-from src.core.milvus_kb import MilvusKB  # noqa: E402
+from src.knowledge.kb_factory import KnowledgeBaseFactory  # noqa: E402
+from src.knowledge.kb_manager import KnowledgeBaseManager  # noqa: E402
+from src.knowledge.lightrag_kb import LightRagKB  # noqa: E402
+from src.knowledge.chroma_kb import ChromaKB  # noqa: E402
+from src.knowledge.milvus_kb import MilvusKB  # noqa: E402
 
 # 注册知识库类型
 KnowledgeBaseFactory.register("lightrag", LightRagKB, {
@@ -37,5 +37,5 @@ KnowledgeBaseFactory.register("milvus", MilvusKB, {
 work_dir = os.path.join(config.save_dir, "knowledge_base_data")
 knowledge_base = KnowledgeBaseManager(work_dir)
 
-from src.core import GraphDatabase  # noqa: E402
+from src.knowledge import GraphDatabase  # noqa: E402
 graph_base = GraphDatabase()

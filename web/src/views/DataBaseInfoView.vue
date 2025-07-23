@@ -89,7 +89,7 @@
         :loading="state.chunkLoading"
         :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
       >
-        生成分块
+        添加到知识库
       </a-button>
     </template>
     <div class="add-files-content">
@@ -219,7 +219,7 @@
   <a-modal
     v-model:open="state.fileDetailModalVisible"
     :title="selectedFile?.filename || '文件详情'"
-    width="800px"
+    width="1200px"
     :footer="null"
   >
     <div class="file-detail-content" v-if="selectedFile">
@@ -1550,7 +1550,7 @@ const getKbTypeColor = (type) => {
 }
 
 .header-container {
-  padding: 8px;
+  padding: 8px 16px;
   height: 54px;
 }
 

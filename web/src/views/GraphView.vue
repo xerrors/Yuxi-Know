@@ -17,6 +17,9 @@
         <div class="status-wrapper">
           <div class="status-indicator" :class="graphStatusClass"></div>
         </div>
+        <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
+          Neo4j 浏览器
+        </a-button>
         <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
         <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
           <SyncOutlined/> 为{{ unindexedCount }}个节点添加索引
@@ -89,10 +92,10 @@
 
 <script setup>
 import { Graph } from "@antv/g6";
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, h } from 'vue';
 import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { UploadOutlined, SyncOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, SyncOutlined, GlobalOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
@@ -387,6 +390,10 @@ const getAuthHeaders = () => {
   const userStore = useUserStore();
   return userStore.getAuthHeaders();
 };
+
+const openLink = (url) => {
+  window.open(url, '_blank')
+}
 
 </script>
 
