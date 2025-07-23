@@ -179,14 +179,14 @@ export const fileApi = {
    */
   uploadFile: async (file, dbId = null) => {
     checkAdminPermission()
-    
+
     const formData = new FormData()
     formData.append('file', file)
-    
-    const url = dbId 
+
+    const url = dbId
       ? `/api/knowledge/files/upload?db_id=${dbId}`
       : '/api/knowledge/files/upload'
-    
+
     return apiPost(url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
@@ -219,4 +219,3 @@ export const typeApi = {
   }
 }
 
- 

@@ -9,39 +9,6 @@ import { useUserStore } from '@/stores/user'
 
 // 聊天相关API
 export const chatApi = {
-  /**
-   * 发送聊天消息
-   * @param {Object} params - 聊天参数
-   * @returns {Promise} - 聊天响应流
-   */
-  sendMessage: (params) => {
-    return fetch('/api/chat/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...useUserStore().getAuthHeaders()
-      },
-      body: JSON.stringify(params),
-    })
-  },
-
-  /**
-   * 发送可中断的聊天消息
-   * @param {Object} params - 聊天参数
-   * @param {AbortSignal} signal - 用于中断请求的信号控制器
-   * @returns {Promise} - 聊天响应流
-   */
-  sendMessageWithAbort: (params, signal) => {
-    return fetch('/api/chat/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...useUserStore().getAuthHeaders()
-      },
-      body: JSON.stringify(params),
-      signal // 添加 signal 用于中断请求
-    })
-  },
 
   /**
    * 发送聊天消息到指定智能体（流式响应）
@@ -105,13 +72,7 @@ export const chatApi = {
    * @param {string} provider - 模型提供商
    * @returns {Promise} - 模型列表
    */
-  getProviderModels: (provider) => {
-    return fetch(`/api/chat/models?model_provider=${provider}`, {
-      headers: {
-        ...useUserStore().getAuthHeaders()
-      }
-    }).then(response => response.json())
-  },
+  getProviderModels: (provider) => apiGet(`/api/chat/models?model_provider=${provider}`, {}, true),
 
   /**
    * 更新模型提供商的模型列表
@@ -119,16 +80,7 @@ export const chatApi = {
    * @param {Array} models - 选中的模型列表
    * @returns {Promise} - 更新结果
    */
-  updateProviderModels: (provider, models) => {
-    return fetch(`/api/chat/models/update?model_provider=${provider}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...useUserStore().getAuthHeaders()
-      },
-      body: JSON.stringify(models)
-    }).then(response => response.json())
-  }
+  updateProviderModels: (provider, models) => apiPost(`/api/chat/models/update?model_provider=${provider}`, models, {}, true)
 }
 
 // 用户设置API

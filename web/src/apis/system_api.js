@@ -177,7 +177,7 @@ export const agentConfigApi = {
    */
   setDefaultAgent: async (agentId) => {
     checkAdminPermission()
-    return apiPost('/api/chat/agent/default', { agent_id: agentId }, {}, true)
+    return apiPost('/api/chat/set_default_agent', { agent_id: agentId }, {}, true)
   }
 }
 

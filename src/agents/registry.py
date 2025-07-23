@@ -285,10 +285,9 @@ class BaseAgent:
     name = "base_agent"
     description = "base_agent"
     config_schema: Configuration = Configuration
-    requirements: list[str]
 
     def __init__(self, **kwargs):
-        self.check_requirements()
+        pass
 
     @property
     def module_name(self) -> str:
@@ -306,19 +305,11 @@ class BaseAgent:
             "name": self.name if hasattr(self, "name") else "Unknown",
             "description": self.description if hasattr(self, "description") else "Unknown",
             "config_schema": self.config_schema.to_dict(),
-            "requirements": self.requirements if hasattr(self, "requirements") else [],
             "all_tools": self.all_tools if hasattr(self, "all_tools") else [],
             "has_checkpointer": await self.check_checkpointer(),
-            "met_requirements": self.check_requirements(),
         }
 
-    def check_requirements(self):
-        if not hasattr(self, "requirements") or not self.requirements:
-            return True
-        for requirement in self.requirements:
-            if requirement not in os.environ:
-                raise ValueError(f"没有配置{requirement} 环境变量，请在 src/.env 文件中配置，并重新启动服务")
-        return True
+
 
     async def stream_values(self, messages: list[str], config_schema: RunnableConfig = None, **kwargs):
         graph = await self.get_graph()

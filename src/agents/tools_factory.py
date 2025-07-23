@@ -1,5 +1,7 @@
 import json
 import asyncio
+import inspect
+import types
 from collections.abc import Callable
 from typing import Annotated, Any
 
@@ -11,6 +13,10 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
+# 工具注册表 - 移到前面以避免NameError
+_TOOLS_REGISTRY = {}
+
+
 class KnowledgeRetrieverModel(BaseModel):
     query_text: str = Field(
         description=(
@@ -19,13 +25,13 @@ class KnowledgeRetrieverModel(BaseModel):
         )
     )
 
-def get_all_tools():
-    """获取所有工具"""
+def get_runnable_tools():
+    """获取所有可运行的工具（给大模型使用）"""
     tools = _TOOLS_REGISTRY.copy()
 
     # 获取所有知识库
     for db_Id, retrieve_info in knowledge_base.get_retrievers().items():
-        name = f"retrieve_{db_Id[:8]}" # Deepseek does not support non-alphanumeric characters in tool names
+        _id = f"retrieve_{db_Id[:8]}" # Deepseek does not support non-alphanumeric characters in tool names
         description = (
             f"使用 {retrieve_info['name']} 知识库进行检索。\n"
             f"下面是这个知识库的描述：\n{retrieve_info['description']}"
@@ -46,14 +52,47 @@ def get_all_tools():
                 return f"检索失败: {str(e)}"
 
         # 使用 StructuredTool.from_function 创建异步工具
-        tools[name] = StructuredTool.from_function(
+        tools[_id] = StructuredTool.from_function(
             coroutine=async_retriever_wrapper,  # 指定为协程
-            name=name,
+            name=_id,
             description=description,
-            args_schema=KnowledgeRetrieverModel
+            args_schema=KnowledgeRetrieverModel,
+            metadata=retrieve_info
         )
 
     return tools
+
+def get_all_tools_info():
+    """获取所有工具的信息（用于前端展示）"""
+    tools_info = {}
+
+    tools = get_runnable_tools()
+
+    # 获取注册的工具信息
+    for _id, tool_obj in tools.items():
+
+        metadata = getattr(tool_obj, 'metadata', {}) or {}
+        info = {
+            "id": _id,
+            "name": metadata.get('name', _id),
+            "description": metadata.get('description') or getattr(tool_obj, 'description', ''),
+            'metadata': metadata,
+            "args": []
+        }
+
+        # 获取工具参数信息
+        if hasattr(tool_obj, 'args_schema') and tool_obj.args_schema:
+            schema = tool_obj.args_schema.schema()
+            if 'properties' in schema:
+                for arg_name, arg_info in schema['properties'].items():
+                    info["args"].append({
+                        "name": arg_name,
+                        "type": arg_info.get('type', ''),
+                        "description": arg_info.get('description', '')
+                    })
+        tools_info[info['id']] = info
+
+    return tools_info
 
 class BaseToolOutput:
     """
@@ -103,13 +142,11 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
     """Use this to query knowledge graph."""
     return graph_base.query_node(query, hops=2)
 
-
-
-
-_TOOLS_REGISTRY = {
+# 更新工具注册表
+_TOOLS_REGISTRY.update({
     "Calculator": calculator,
     "QueryKnowledgeGraph": query_knowledge_graph,
-}
+})
 
 if config.enable_web_search:
     _TOOLS_REGISTRY["WebSearchWithTavily"] = TavilySearch(max_results=10)

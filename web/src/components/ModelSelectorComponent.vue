@@ -1,5 +1,5 @@
 <template>
-  <a-dropdown>
+  <a-dropdown trigger="click">
     <a class="model-select" @click.prevent>
       <!-- <BulbOutlined /> -->
       <a-tooltip :title="model_name" placement="right">
@@ -84,6 +84,7 @@ const handleSelectModel = (provider, name) => {
   .model-text {
     overflow: hidden;
     text-overflow: ellipsis;
+    color: #000;
   }
 
 
