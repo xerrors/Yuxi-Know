@@ -15,6 +15,10 @@ from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
 
 
+LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "openai")
+LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "gpt-4.1-mini")
+
+
 class LightRagKB(KnowledgeBase):
     """基于 LightRAG 的知识库实现"""
 
@@ -105,7 +109,7 @@ class LightRagKB(KnowledgeBase):
     def _get_llm_func(self, llm_info: Dict):
         """获取 LLM 函数"""
         from src.models import select_model
-        model = select_model("dashscope", "qwen-max-latest")
+        model = select_model(LIGHTRAG_LLM_PROVIDER, LIGHTRAG_LLM_NAME)
 
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return await openai_complete_if_cache(
