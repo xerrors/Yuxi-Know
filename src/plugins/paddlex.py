@@ -327,7 +327,7 @@ def analyze_folder(input_dir: str, output_dir: str, base_url: str = "http://loca
                 files.append(file_path)
 
     if not files:
-        print(f"⚠️ 没有找到支持的文件")
+        print("⚠️ 没有找到支持的文件")
         return
 
     print(f"📁 找到 {len(files)} 个文件")

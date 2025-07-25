@@ -182,9 +182,9 @@ class BaseModelConfiguration(BaseModel):
     @classmethod
     def from_runnable_config(
         cls,
-        config: Optional["RunnableConfig"] = None,
-        module_name: Optional[str] = None,
-    ) -> "BaseModelConfiguration":
+        config: RunnableConfig | None = None,
+        module_name: str | None = None,
+    ) -> BaseModelConfiguration:
         """
         从 RunnableConfig 和 YAML 文件中构建 Configuration 实例
         """
@@ -246,29 +246,30 @@ class BaseModelConfiguration(BaseModel):
         confs: dict[str, Any] = {}
         configurable_items: dict[str, Any] = {}
 
-        for name, field in cls.model_fields.items():
+        for name, _field in cls.model_fields.items():
             value = getattr(instance, name)
 
             confs[name] = value
 
             # 安全地处理 Pydantic 字段元数据
             field_metadata = {}
-            if hasattr(field, 'json_schema_extra') and field.json_schema_extra:
-                if isinstance(field.json_schema_extra, dict):
-                    field_metadata = field.json_schema_extra['metadata']
-                elif isinstance(field.json_schema_extra, (list, tuple)):
+            if hasattr(_field, 'json_schema_extra') and _field.json_schema_extra:
+                if isinstance(_field.json_schema_extra, dict):
+                    field_metadata = _field.json_schema_extra['metadata']
+                elif isinstance(_field.json_schema_extra, list | tuple):
                     # 在 Pydantic v2 中，metadata 可能是列表，合并所有字典项
-                    for item in field.json_schema_extra:
+                    for item in _field.json_schema_extra:
                         if isinstance(item, dict):
                             field_metadata.update(item['metadata'])
 
             # 检查字段是否应该可配置 - 支持不同的元数据格式
             if field_metadata.get("configurable", True):
+                default_type = _field.annotation.__name__ if hasattr(_field.annotation, '__name__') else 'str'
                 configurable_items[name] = {
-                    "type": field_metadata.get("type", field.annotation.__name__),
+                    "type": field_metadata.get("type", default_type),
                     "name": field_metadata.get("name") or name,
                     "options": field_metadata.get("options") or [],
-                    "default": field.default if field.default is not None else None,
+                    "default": _field.default if _field.default is not None else None,
                     "description": field_metadata.get("description") or "",
                     "x_oap_ui_config": field_metadata.get("x_oap_ui_config", {}),
                 }

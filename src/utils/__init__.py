@@ -47,6 +47,9 @@ def hashstr(input_string, length=None, with_salt=False):
 
 
 def get_docker_safe_url(base_url):
+    if not base_url:
+        return base_url
+
     if os.getenv("RUNNING_IN_DOCKER") == "true":
         # 替换所有可能的本地地址形式
         base_url = base_url.replace("http://localhost", "http://host.docker.internal")

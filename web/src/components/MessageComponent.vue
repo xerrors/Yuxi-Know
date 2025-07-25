@@ -264,7 +264,7 @@ const isEmptyAndLoading = computed(() => {
       position: relative;
 
       .anticon {
-        color: var(--main-600);
+        color: var(--main-color);
       }
 
       .step-badge {

@@ -16,9 +16,9 @@ class AgentManager:
         for agent_id in self._classes.keys():
             self.get_agent(agent_id)
 
-    def get_agent(self, agent_id, **kwargs):
+    def get_agent(self, agent_id, reload=False, **kwargs):
         # 检查是否已经创建了该 agent 的实例
-        if agent_id not in self._instances:
+        if reload or agent_id not in self._instances:
             agent_class = self._classes[agent_id]
             self._instances[agent_id] = agent_class()
 
@@ -26,6 +26,10 @@ class AgentManager:
 
     def get_agents(self):
         return list(self._instances.values())
+
+    async def reload_all(self):
+        for agent_id in self._classes.keys():
+            self.get_agent(agent_id, reload=True)
 
     async def get_agents_info(self):
         agents = self.get_agents()

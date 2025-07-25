@@ -2,7 +2,8 @@ import os
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any, AsyncGenerator
+from typing import Any
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from datetime import datetime
 
@@ -35,8 +36,8 @@ class KnowledgeBase(ABC):
             work_dir: 工作目录
         """
         self.work_dir = work_dir
-        self.databases_meta: Dict[str, Dict] = {}
-        self.files_meta: Dict[str, Dict] = {}
+        self.databases_meta: dict[str, dict] = {}
+        self.files_meta: dict[str, dict] = {}
         os.makedirs(work_dir, exist_ok=True)
 
         # 自动加载元数据
@@ -49,7 +50,7 @@ class KnowledgeBase(ABC):
         pass
 
     @abstractmethod
-    async def _create_kb_instance(self, db_id: str, config: Dict) -> Any:
+    async def _create_kb_instance(self, db_id: str, config: dict) -> Any:
         """
         创建底层知识库实例
 
@@ -73,7 +74,7 @@ class KnowledgeBase(ABC):
         pass
 
     def create_database(self, database_name: str, description: str,
-                       embed_info: Optional[Dict] = None, **kwargs) -> Dict:
+                       embed_info: dict | None = None, **kwargs) -> dict:
         """
         创建数据库
 
@@ -112,7 +113,7 @@ class KnowledgeBase(ABC):
 
         return db_dict
 
-    def delete_database(self, db_id: str) -> Dict:
+    def delete_database(self, db_id: str) -> dict:
         """
         删除数据库
 
@@ -145,8 +146,8 @@ class KnowledgeBase(ABC):
         return {"message": "删除成功"}
 
     @abstractmethod
-    async def add_content(self, db_id: str, items: List[str],
-                         params: Optional[Dict] = None) -> List[Dict]:
+    async def add_content(self, db_id: str, items: list[str],
+                         params: dict | None = None) -> list[dict]:
         """
         添加内容（文件/URL）
 
@@ -191,7 +192,7 @@ class KnowledgeBase(ABC):
         logger.warning("query is deprecated, use aquery instead")
         return asyncio.run(self.aquery(query_text, db_id, **kwargs))
 
-    def get_database_info(self, db_id: str) -> Optional[Dict]:
+    def get_database_info(self, db_id: str) -> dict | None:
         """
         获取数据库详细信息
 
@@ -225,7 +226,7 @@ class KnowledgeBase(ABC):
         meta["status"] = "已连接"
         return meta
 
-    def get_databases(self) -> Dict:
+    def get_databases(self) -> dict:
         """
         获取所有数据库信息
 
@@ -269,7 +270,7 @@ class KnowledgeBase(ABC):
         pass
 
     @abstractmethod
-    async def get_file_info(self, db_id: str, file_id: str) -> Dict:
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """
         获取文件信息和chunks
 
@@ -282,7 +283,7 @@ class KnowledgeBase(ABC):
         """
         pass
 
-    def get_db_upload_path(self, db_id: Optional[str] = None) -> str:
+    def get_db_upload_path(self, db_id: str | None = None) -> str:
         """
         获取数据库上传路径
 
@@ -301,7 +302,7 @@ class KnowledgeBase(ABC):
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
-    def update_database(self, db_id: str, name: str, description: str) -> Dict:
+    def update_database(self, db_id: str, name: str, description: str) -> dict:
         """
         更新数据库
 
@@ -322,7 +323,7 @@ class KnowledgeBase(ABC):
 
         return self.get_database_info(db_id)
 
-    def get_retrievers(self) -> Dict[str, Dict]:
+    def get_retrievers(self) -> dict[str, dict]:
         """
         获取所有检索器
 
@@ -371,8 +372,7 @@ class KnowledgeBase(ABC):
         except Exception as e:
             logger.error(f"Failed to save {self.kb_type} metadata: {e}")
 
-    async def _process_file_to_markdown(self, file_path: str,
-                                      params: Optional[Dict] = None) -> str:
+    async def _process_file_to_markdown(self, file_path: str, params: dict | None = None) -> str:
         """
         将不同类型的文件转换为markdown格式
 
@@ -411,18 +411,20 @@ class KnowledgeBase(ABC):
             text = ocr.process_image(str(file_path_obj))
             return f"# {file_path_obj.name}\n\n{text}"
 
+        elif file_ext in ['.html', '.htm']:
+            # 使用 BeautifulSoup 处理 HTML 文件
+            from markdownify import markdownify as md
+            with open(file_path_obj, encoding='utf-8') as f:
+                content = f.read()
+            text = md(content, heading_style="ATX")
+            return f"# {file_path_obj.name}\n\n{text}"
+
         else:
             # 尝试作为文本文件读取
-            try:
-                import textract  # type: ignore
-                text = textract.process(file_path_obj).decode('utf-8')
-                return f"# {file_path_obj.name}\n\n{text}"
-            except Exception as e:
-                logger.error(f"Failed to process file {file_path_obj}: {e}")
-                return f"# {file_path_obj.name}\n\nFailed to process file: {e}"
+            raise ValueError(f"Unsupported file type: {file_ext}")
 
     async def _process_url_to_markdown(self, url: str,
-                                     params: Optional[Dict] = None) -> str:
+                                     params: dict | None = None) -> str:
         """
         将URL转换为markdown格式
 

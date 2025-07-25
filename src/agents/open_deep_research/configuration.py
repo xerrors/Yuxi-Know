@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional
+from typing import Any, Optional
 from langchain_core.runnables import RunnableConfig
 import os
 from enum import Enum
@@ -14,17 +14,17 @@ class SearchAPI(Enum):
     NONE = "none"
 
 class MCPConfig(BaseModel):
-    url: Optional[str] = Field(
+    url: str | None = Field(
         default=None,
         optional=True,
     )
     """The URL of the MCP server"""
-    tools: Optional[List[str]] = Field(
+    tools: list[str] | None = Field(
         default=None,
         optional=True,
     )
     """The tools to make available to the LLM"""
-    auth_required: Optional[bool] = Field(
+    auth_required: bool | None = Field(
         default=False,
         optional=True,
     )
@@ -63,7 +63,7 @@ class OriConfiguration(BaseModel):
                 "min": 1,
                 "max": 20,
                 "step": 1,
-                "description": "Maximum number of research units to run concurrently. This will allow the researcher to use multiple sub-agents to conduct research. Note: with more concurrency, you may run into rate limits."
+                "description": "Maximum number of research units to run concurrently. This will allow the researcher to use multiple sub-agents to conduct research. Note: with more concurrency, you may run into rate limits."  # noqa: E501
             }
         }
     )
@@ -192,7 +192,7 @@ class OriConfiguration(BaseModel):
         }
     )
     # MCP server configuration
-    mcp_config: Optional[MCPConfig] = Field(
+    mcp_config: MCPConfig | None = Field(
         default=None,
         optional=True,
         metadata={
@@ -202,7 +202,7 @@ class OriConfiguration(BaseModel):
             }
         }
     )
-    mcp_prompt: Optional[str] = Field(
+    mcp_prompt: str | None = Field(
         default=None,
         optional=True,
         metadata={
@@ -216,7 +216,7 @@ class OriConfiguration(BaseModel):
 
     @classmethod
     def from_runnable_config(
-        cls, config: Optional[RunnableConfig] = None
+        cls, config: RunnableConfig | None = None
     ) -> "Configuration":
         """Create a Configuration instance from a RunnableConfig."""
         configurable = config.get("configurable", {}) if config else {}

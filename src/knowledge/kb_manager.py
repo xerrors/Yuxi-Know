@@ -1,7 +1,7 @@
 import os
 import json
 import time
-from typing import Dict, Optional, List, Any
+from typing import Any
 from datetime import datetime
 
 from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError, KBOperationError
@@ -27,10 +27,10 @@ class KnowledgeBaseManager:
         os.makedirs(work_dir, exist_ok=True)
 
         # 知识库实例缓存 {kb_type: kb_instance}
-        self.kb_instances: Dict[str, KnowledgeBase] = {}
+        self.kb_instances: dict[str, KnowledgeBase] = {}
 
         # 全局数据库元信息 {db_id: metadata_with_kb_type}
-        self.global_databases_meta: Dict[str, Dict] = {}
+        self.global_databases_meta: dict[str, dict] = {}
 
         # 加载全局元数据
         self._load_global_metadata()
@@ -128,7 +128,7 @@ class KnowledgeBaseManager:
     # 统一的外部接口 - 与原始 LightRagBasedKB 兼容
     # =============================================================================
 
-    def get_databases(self) -> Dict:
+    def get_databases(self) -> dict:
         """获取所有数据库信息"""
         all_databases = []
 
@@ -139,9 +139,7 @@ class KnowledgeBaseManager:
 
         return {"databases": all_databases}
 
-    def create_database(self, database_name: str, description: str,
-                       kb_type: str = "lightrag", embed_info: Optional[Dict] = None,
-                       **kwargs) -> Dict:
+    def create_database(self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs) -> dict:
         """
         创建数据库
 
@@ -150,7 +148,7 @@ class KnowledgeBaseManager:
             description: 数据库描述
             kb_type: 知识库类型，默认为lightrag
             embed_info: 嵌入模型信息
-            **kwargs: 其他配置参数
+            **kwargs: 其他配置参数，包括chunk_size和chunk_overlap
 
         Returns:
             数据库信息字典
@@ -158,8 +156,7 @@ class KnowledgeBaseManager:
         # 验证知识库类型
         if not KnowledgeBaseFactory.is_type_supported(kb_type):
             available_types = list(KnowledgeBaseFactory.get_available_types().keys())
-            raise ValueError(f"Unsupported knowledge base type: {kb_type}. "
-                           f"Available types: {available_types}")
+            raise ValueError(f"Unsupported knowledge base type: {kb_type}. Available types: {available_types}")
 
         # 获取或创建对应类型的知识库实例
         kb_instance = self._get_or_create_kb_instance(kb_type)
@@ -174,14 +171,16 @@ class KnowledgeBaseManager:
             "name": database_name,
             "description": description,
             "kb_type": kb_type,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "additional_params": kwargs.copy()  # 将所有额外参数存储在additional_params中
         }
+
         self._save_global_metadata()
 
-        logger.info(f"Created {kb_type} database: {database_name} ({db_id})")
+        logger.info(f"Created {kb_type} database: {database_name} ({db_id}) with {kwargs}")
         return db_info
 
-    def delete_database(self, db_id: str) -> Dict:
+    def delete_database(self, db_id: str) -> dict:
         """删除数据库"""
         try:
             kb_instance = self._get_kb_for_database(db_id)
@@ -197,11 +196,10 @@ class KnowledgeBaseManager:
             logger.warning(f"Database {db_id} not found during deletion: {e}")
             return {"message": "删除成功"}  # 兼容性：即使不存在也返回成功
 
-    async def add_content(self, db_id: str, items: List[str],
-                         params: Optional[Dict] = None) -> List[Dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
         kb_instance = self._get_kb_for_database(db_id)
-        return await kb_instance.add_content(db_id, items, params)
+        return await kb_instance.add_content(db_id, items, params or {})
 
     async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
         """异步查询知识库"""
@@ -213,11 +211,20 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         return kb_instance.query(query_text, db_id, **kwargs)
 
-    def get_database_info(self, db_id: str) -> Optional[Dict]:
+    def get_database_info(self, db_id: str) -> dict | None:
         """获取数据库详细信息"""
         try:
             kb_instance = self._get_kb_for_database(db_id)
-            return kb_instance.get_database_info(db_id)
+            db_info = kb_instance.get_database_info(db_id)
+
+            # 添加全局元数据中的additional_params信息
+            if db_info and db_id in self.global_databases_meta:
+                global_meta = self.global_databases_meta[db_id]
+                additional_params = global_meta.get("additional_params", {})
+                if additional_params:
+                    db_info["additional_params"] = additional_params
+
+            return db_info
         except KBNotFoundError:
             return None
 
@@ -226,12 +233,12 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
 
-    async def get_file_info(self, db_id: str, file_id: str) -> Dict:
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件信息"""
         kb_instance = self._get_kb_for_database(db_id)
         return await kb_instance.get_file_info(db_id, file_id)
 
-    def get_db_upload_path(self, db_id: Optional[str] = None) -> str:
+    def get_db_upload_path(self, db_id: str | None = None) -> str:
         """获取数据库上传路径"""
         if db_id:
             try:
@@ -246,7 +253,7 @@ class KnowledgeBaseManager:
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
-    def update_database(self, db_id: str, name: str, description: str) -> Dict:
+    def update_database(self, db_id: str, name: str, description: str) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)
         result = kb_instance.update_database(db_id, name, description)
@@ -259,7 +266,7 @@ class KnowledgeBaseManager:
 
         return result
 
-    def get_retrievers(self) -> Dict[str, Dict]:
+    def get_retrievers(self) -> dict[str, dict]:
         """获取所有检索器"""
         all_retrievers = {}
 
@@ -274,11 +281,11 @@ class KnowledgeBaseManager:
     # 管理器特有的方法
     # =============================================================================
 
-    def get_supported_kb_types(self) -> Dict[str, Dict]:
+    def get_supported_kb_types(self) -> dict[str, dict]:
         """获取支持的知识库类型"""
         return KnowledgeBaseFactory.get_available_types()
 
-    def get_kb_instance_info(self) -> Dict[str, Dict]:
+    def get_kb_instance_info(self) -> dict[str, dict]:
         """获取知识库实例信息"""
         info = {}
         for kb_type, kb_instance in self.kb_instances.items():
@@ -289,7 +296,7 @@ class KnowledgeBaseManager:
             }
         return info
 
-    def migrate_database(self, db_id: str, target_kb_type: str) -> Dict:
+    def migrate_database(self, db_id: str, target_kb_type: str) -> dict:
         """
         迁移数据库到不同的知识库类型
 
@@ -305,7 +312,7 @@ class KnowledgeBaseManager:
         # TODO: 实现数据库迁移逻辑
         raise NotImplementedError("Database migration not implemented yet")
 
-    def get_statistics(self) -> Dict:
+    def get_statistics(self) -> dict:
         """获取统计信息"""
         stats = {
             "total_databases": len(self.global_databases_meta),
@@ -386,7 +393,7 @@ class KnowledgeBaseManager:
         kb_type = self.global_databases_meta[db_id].get("kb_type", "lightrag")
         return kb_type == "lightrag"
 
-    def get_lightrag_databases(self) -> List[Dict]:
+    def get_lightrag_databases(self) -> list[dict]:
         """
         获取所有 LightRAG 类型的数据库
 

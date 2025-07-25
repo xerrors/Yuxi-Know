@@ -39,7 +39,7 @@ For the verification message when no clarification is needed:
 """
 
 
-transform_messages_into_research_topic_prompt = """You will be given a set of messages that have been exchanged so far between yourself and the user. 
+transform_messages_into_research_topic_prompt = """You will be given a set of messages that have been exchanged so far between yourself and the user.
 Your job is to translate these messages into a more detailed and concrete research question that will be used to guide the research.
 
 The messages that have been exchanged so far between yourself and the user are:
@@ -78,12 +78,12 @@ Guidelines:
 lead_researcher_prompt = """You are a research supervisor. Your job is to conduct research by calling the "ConductResearch" tool. For context, today's date is {date}.
 
 <Task>
-Your focus is to call the "ConductResearch" tool to conduct research against the overall research question passed in by the user. 
+Your focus is to call the "ConductResearch" tool to conduct research against the overall research question passed in by the user.
 When you are completely satisfied with the research findings returned from the tool calls, then you should call the "ResearchComplete" tool to indicate that you are done with your research.
 </Task>
 
 <Instructions>
-1. When you start, you will be provided a research question from a user. 
+1. When you start, you will be provided a research question from a user.
 2. You should immediately call the "ConductResearch" tool to conduct research for the research question. You can call the tool up to {max_concurrent_research_units} times in a single iteration.
 3. Each ConductResearch tool call will spawn a research agent dedicated to the specific topic that you pass in. You will get back a comprehensive report of research findings on that topic.
 4. Reason carefully about whether all of the returned research findings together are comprehensive enough for a detailed report to answer the overall research question.
@@ -101,13 +101,13 @@ When you are completely satisfied with the research findings returned from the t
 - Do not call the "ConductResearch" tool to synthesize information you have already gathered.
 
 **Parallel research saves the user time, but reason carefully about when you should use it**
-- Calling the "ConductResearch" tool multiple times in parallel can save the user time. 
+- Calling the "ConductResearch" tool multiple times in parallel can save the user time.
 - You should only call the "ConductResearch" tool multiple times in parallel if the different topics that you are researching can be researched independently in parallel with respect to the user's overall question.
 - This can be particularly helpful if the user is asking for a comparison of X and Y, if the user is asking for a list of entities that each can be researched independently, or if the user is asking for multiple perspectives on a topic.
 - Each research agent needs to be provided all of the context that is necessary to focus on a sub-topic.
 - Do not call the "ConductResearch" tool more than {max_concurrent_research_units} times at once. This limit is enforced by the user. It is perfectly fine, and expected, that you return less than this number of tool calls.
 - If you are not confident in how you can parallelize research, you can call the "ConductResearch" tool a single time on a more general topic in order to gather more background information, so you have more context later to reason about if it's necessary to parallelize research.
-- Each parallel "ConductResearch" linearly scales cost. The benefit of parallel research is that it can save the user time, but carefully think about whether the additional cost is worth the benefit. 
+- Each parallel "ConductResearch" linearly scales cost. The benefit of parallel research is that it can save the user time, but carefully think about whether the additional cost is worth the benefit.
 - For example, if you could search three clear topics in parallel, or break them each into two more subtopics to do six total in parallel, you should think about whether splitting into smaller subtopics is worth the cost. The researchers are quite comprehensive, so it's possible that you could get the same information with less cost by only calling the "ConductResearch" tool three times in this case.
 - Also consider where there might be dependencies that cannot be parallelized. For example, if asked for details about some entities, you first need to find the entities before you can research them in detail in parallel.
 
@@ -268,7 +268,7 @@ Make sure that your sections are cohesive, and make sense for the reader.
 For each section of the report, do the following:
 - Use simple, clear language
 - Use ## for section title (Markdown format) for each section of the report
-- Do NOT ever refer to yourself as the writer of the report. This should be a professional report without any self-referential language. 
+- Do NOT ever refer to yourself as the writer of the report. This should be a professional report without any self-referential language.
 - Do not say what you are doing in the report. Just write the report without any commentary from yourself.
 
 Format the report in clear markdown with proper structure and include source references where appropriate.
@@ -336,7 +336,7 @@ Example 2 (for a scientific article):
 ```json
 {{
    "summary": "A new study published in Nature Climate Change reveals that global sea levels are rising faster than previously thought. Researchers analyzed satellite data from 1993 to 2022 and found that the rate of sea-level rise has accelerated by 0.08 mm/year² over the past three decades. This acceleration is primarily attributed to melting ice sheets in Greenland and Antarctica. The study projects that if current trends continue, global sea levels could rise by up to 2 meters by 2100, posing significant risks to coastal communities worldwide.",
-   "key_excerpts": "Our findings indicate a clear acceleration in sea-level rise, which has significant implications for coastal planning and adaptation strategies, lead author Dr. Emily Brown stated. The rate of ice sheet melt in Greenland and Antarctica has tripled since the 1990s, the study reports. Without immediate and substantial reductions in greenhouse gas emissions, we are looking at potentially catastrophic sea-level rise by the end of this century, warned co-author Professor Michael Green."  
+   "key_excerpts": "Our findings indicate a clear acceleration in sea-level rise, which has significant implications for coastal planning and adaptation strategies, lead author Dr. Emily Brown stated. The rate of ice sheet melt in Greenland and Antarctica has tripled since the 1990s, the study reports. Without immediate and substantial reductions in greenhouse gas emissions, we are looking at potentially catastrophic sea-level rise by the end of this century, warned co-author Professor Michael Green."
 }}
 ```
 

@@ -261,7 +261,7 @@ class OCRPlugin:
                 error_detail = "Unknown error"
                 try:
                     error_detail = health_check_response.json()
-                except:
+                except Exception:
                     error_detail = health_check_response.text
 
                 raise OCRServiceException(
@@ -322,7 +322,7 @@ class OCRPlugin:
                 error_detail = "Unknown error"
                 try:
                     error_detail = health_check_response.json()
-                except:
+                except Exception:
                     error_detail = health_check_response.text
 
                 raise OCRServiceException(

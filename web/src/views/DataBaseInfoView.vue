@@ -3,9 +3,10 @@
   <HeaderComponent
     :title="database.name || '数据库信息加载中'"
     :loading="state.databaseLoading"
+    class="database-info-header"
   >
     <template #left>
-      <a-button type="link" @click="backToDatabase" :style="{ padding: '0px', color: 'inherit' }">
+      <a-button @click="backToDatabase">
         <LeftOutlined />
       </a-button>
     </template>
@@ -74,6 +75,14 @@
           <a-input-number v-model:value="tempChunkParams.chunk_overlap" :min="0" :max="1000" style="width: 100%;" />
           <p class="param-description">相邻文本片段间的重叠字符数</p>
         </a-form-item>
+        <a-form-item v-if="isQaSplitSupported" label="QA分割模式" name="use_qa_split">
+          <a-switch v-model:checked="tempChunkParams.use_qa_split" />
+          <p class="param-description">启用后将按QA对分割，忽略上述chunk大小设置</p>
+        </a-form-item>
+        <a-form-item v-if="tempChunkParams.use_qa_split && isQaSplitSupported" label="QA分隔符" name="qa_separator">
+          <a-input v-model:value="tempChunkParams.qa_separator" placeholder="输入QA分隔符" style="width: 100%;" />
+          <p class="param-description">用于分割不同QA对的分隔符</p>
+        </a-form-item>
       </a-form>
     </div>
   </a-modal>
@@ -139,7 +148,37 @@
                 </span>
               </div>
             </div>
-                    </a-form-item>
+          </a-form-item>
+        </a-form>
+      </div>
+
+      <div class="qa-split-config" v-if="isQaSplitSupported">
+        <a-form layout="horizontal">
+          <a-form-item label="QA分割模式" name="use_qa_split">
+            <div class="toggle-controls">
+              <a-switch
+                v-model:checked="chunkParams.use_qa_split"
+                style="margin-right: 12px;"
+              />
+              <span class="param-description">
+                {{ chunkParams.use_qa_split ? '启用QA分割（忽略chunk大小设置）' : '使用普通分割模式' }}
+              </span>
+            </div>
+          </a-form-item>
+          <a-form-item
+            v-if="chunkParams.use_qa_split"
+            label="QA分隔符"
+            name="qa_separator"
+          >
+            <a-input
+              v-model:value="chunkParams.qa_separator"
+              placeholder="输入QA分隔符"
+              style="width: 200px; margin-right: 12px;"
+            />
+            <span class="param-description">
+              用于分割不同QA对的分隔符，默认为3个换行符
+            </span>
+          </a-form-item>
         </a-form>
       </div>
 
@@ -235,7 +274,7 @@
         <div class="info-item">
           <label>处理状态:</label>
           <span class="status-badge" :class="selectedFile.status">
-            {{ getStatusText(selectedFile.status) }}
+            {{ getStatusText(selectedFile.status) }} - {{ selectedFile.lines.length }} 行
           </span>
         </div>
       </div>
@@ -267,23 +306,16 @@
   <div class="unified-layout">
     <div class="left-panel" :style="{ width: leftPanelWidth + '%' }">
       <div class="panel-header">
-        <h3 style="margin-left: 8px;">共 {{ database.files ? Object.keys(database.files).length : 0 }} 个文件</h3>
-        <div class="panel-actions">
-
+        <div class="search-container">
           <a-button
             type="secondary"
             @click="showAddFilesModal"
             :loading="state.refrashing"
             :icon="h(PlusOutlined)"
-            title="添加文件"
-          />
+          >添加文件</a-button>
+        </div>
+        <div class="panel-actions">
           <div class="refresh-group">
-            <a-switch
-              v-model:checked="state.autoRefresh"
-              @change="toggleAutoRefresh"
-              size="small"
-              title="自动刷新文件状态"
-            />
             <a-button
               type="text"
               @click="handleRefresh"
@@ -291,7 +323,21 @@
               :icon="h(ReloadOutlined)"
               title="刷新"
             />
+            <a-switch
+              v-model:checked="state.autoRefresh"
+              @change="toggleAutoRefresh"
+              size="small"
+              title="自动刷新文件状态"
+            />
           </div>
+          <a-input
+            v-model:value="filenameFilter"
+            placeholder="搜索文件名"
+            size="small"
+            style="width: 120px; margin-right: 8px; border-radius: 6px; padding: 4px 8px;"
+            allow-clear
+            @change="onFilterChange"
+          />
         </div>
       </div>
 
@@ -310,7 +356,7 @@
 
       <a-table
         :columns="columnsCompact"
-        :data-source="Object.values(database.files || {})"
+        :data-source="filteredFiles"
         row-key="file_id"
         class="my-table-compact"
         size="small"
@@ -320,6 +366,9 @@
           selectedRowKeys: selectedRowKeys,
           onChange: onSelectChange,
           getCheckboxProps: getCheckboxProps
+        }"
+        :locale="{
+          emptyText: emptyText
         }">
         <template #bodyCell="{ column, text, record }">
           <a-button v-if="column.key === 'filename'"  class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
@@ -567,6 +616,9 @@ const database = ref({});
 const fileList = ref([]);
 const selectedFile = ref(null);
 
+// 文件名过滤
+const filenameFilter = ref('');
+
 // 查询测试
 const queryText = ref('');
 const queryResult = ref(null)
@@ -595,6 +647,12 @@ const state = reactive({
 const isGraphSupported = computed(() => {
   const kbType = database.value.kb_type?.toLowerCase();
   return kbType === 'lightrag';
+});
+
+// 计算属性：是否支持QA分割
+const isQaSplitSupported = computed(() => {
+  const kbType = database.value.kb_type?.toLowerCase();
+  return kbType === 'chroma' || kbType === 'milvus';
 });
 
 // 切换图谱最大化状态
@@ -962,6 +1020,13 @@ const getDatabaseInfo = () => {
     databaseApi.getDatabaseInfo(db_id)
       .then(async data => {
         database.value = data
+
+        // 如果当前知识库类型不支持QA分割，重置相关参数
+        const kbType = data.kb_type?.toLowerCase();
+        if (kbType !== 'chroma' && kbType !== 'milvus') {
+          chunkParams.value.use_qa_split = false;
+        }
+
         // 加载查询参数
         await loadQueryParams()
         resolve(data)
@@ -1069,6 +1134,8 @@ const chunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
   enable_ocr: 'disable',
+  use_qa_split: false,
+  qa_separator: '\n\n\n',
 })
 
 // "生成分块" - 新的统一方法
@@ -1123,6 +1190,14 @@ watch(() => route.params.database_id, async (newId) => {
     startAutoRefresh();
   }
 );
+
+// 监听数据库信息变化，重置过滤条件
+watch(() => database.value, () => {
+  // 当数据库信息更新时，重置过滤条件和分页
+  filenameFilter.value = '';
+  paginationCompact.value.current = 1;
+  selectedRowKeys.value = [];
+}, { deep: true });
 
 
 // 添加更多示例查询
@@ -1216,7 +1291,20 @@ onMounted(() => {
   if (resizeHandleHorizontal.value) {
     resizeHandleHorizontal.value.addEventListener('mousedown', handleMouseDownHorizontal);
   }
+
+  // 添加键盘事件监听
+  document.addEventListener('keydown', handleKeyDown);
 });
+
+// 键盘事件处理
+const handleKeyDown = (e) => {
+  // 当按下ESC键时清空过滤条件
+  if (e.key === 'Escape' && filenameFilter.value) {
+    filenameFilter.value = '';
+    selectedRowKeys.value = [];
+    paginationCompact.value.current = 1;
+  }
+};
 
 // 清理事件监听
 onUnmounted(() => {
@@ -1231,6 +1319,7 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', handleMouseUp);
   document.removeEventListener('mousemove', handleMouseMoveHorizontal);
   document.removeEventListener('mouseup', handleMouseUpHorizontal);
+  document.removeEventListener('keydown', handleKeyDown);
 });
 
 const uploadMode = ref('file');
@@ -1258,6 +1347,10 @@ const chunkData = () => {
 
     addFiles(urls, 'url');
   }
+  setTimeout(() => {
+    addFilesModalVisible.value = false;
+    getDatabaseInfo();
+  }, 1000);
 }
 
 const getAuthHeaders = () => {
@@ -1282,6 +1375,8 @@ const chunkConfigModalVisible = ref(false);
 const tempChunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
+  use_qa_split: false,
+  qa_separator: '\n\n\n',
 });
 
 // 添加文件弹窗
@@ -1328,6 +1423,8 @@ const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
     chunk_overlap: chunkParams.value.chunk_overlap,
+    use_qa_split: isQaSplitSupported.value ? chunkParams.value.use_qa_split : false,
+    qa_separator: chunkParams.value.qa_separator,
   };
   chunkConfigModalVisible.value = true;
 };
@@ -1336,6 +1433,13 @@ const showChunkConfigModal = () => {
 const handleChunkConfigSubmit = () => {
   chunkParams.value.chunk_size = tempChunkParams.value.chunk_size;
   chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
+  // 只有支持QA分割的知识库类型才保存QA分割配置
+  if (isQaSplitSupported.value) {
+    chunkParams.value.use_qa_split = tempChunkParams.value.use_qa_split;
+    chunkParams.value.qa_separator = tempChunkParams.value.qa_separator;
+  } else {
+    chunkParams.value.use_qa_split = false;
+  }
   chunkConfigModalVisible.value = false;
   message.success('分块参数配置已更新');
 };
@@ -1410,11 +1514,29 @@ const columnsCompact = [
   { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }
 ];
 
+// 过滤后的文件列表
+const filteredFiles = computed(() => {
+  const files = Object.values(database.value.files || {});
+  if (!filenameFilter.value.trim()) {
+    return files;
+  }
+
+  const filterText = filenameFilter.value.toLowerCase().trim();
+  return files.filter(file =>
+    file.filename && file.filename.toLowerCase().includes(filterText)
+  );
+});
+
+// 空状态文本
+const emptyText = computed(() => {
+  return filenameFilter.value ? `没有找到包含"${filenameFilter.value}"的文件` : '暂无文件';
+});
+
 // 紧凑分页配置
 const paginationCompact = ref({
   pageSize: 20,
   current: 1,
-  total: computed(() => database.value?.files?.length || 0),
+  total: computed(() => filteredFiles.value.length),
   showSizeChanger: false,
   onChange: (page) => paginationCompact.value.current = page,
   showTotal: (total) => `${total}`,
@@ -1432,14 +1554,28 @@ const getCheckboxProps = (record) => ({
   disabled: state.lock || record.status === 'processing' || record.status === 'waiting',
 });
 
+// 过滤相关方法
+const onFilterSearch = (value) => {
+  filenameFilter.value = value;
+  // 重置分页到第一页
+  paginationCompact.value.current = 1;
+  // 清空选中的行，因为过滤后选中的行可能不在当前视图中
+  selectedRowKeys.value = [];
+};
 
+const onFilterChange = (e) => {
+  filenameFilter.value = e.target.value;
+  // 重置分页到第一页
+  paginationCompact.value.current = 1;
+  // 清空选中的行，因为过滤后选中的行可能不在当前视图中
+  selectedRowKeys.value = [];
+};
 
 // 计算是否可以批量删除
 const canBatchDelete = computed(() => {
-  const files = database.value.files || {};
   return selectedRowKeys.value.some(key => {
-    const file = files[key];
-    return !(state.lock || file.status === 'processing' || file.status === 'waiting');
+    const file = filteredFiles.value.find(f => f.file_id === key);
+    return file && !(state.lock || file.status === 'processing' || file.status === 'waiting');
   });
 });
 
@@ -1528,6 +1664,11 @@ const getKbTypeColor = (type) => {
 </script>
 
 <style lang="less" scoped>
+.database-info-header {
+  padding: 8px 16px 6px 16px;
+  height: 50px;
+}
+
 .database-info {
   margin: 8px 0 0;
   display: flex;
@@ -1547,11 +1688,6 @@ const getKbTypeColor = (type) => {
       height: 14px;
     }
   }
-}
-
-.header-container {
-  padding: 8px 16px;
-  height: 54px;
 }
 
 .header-info {
@@ -1696,7 +1832,6 @@ const getKbTypeColor = (type) => {
     }
 
     .content-lines {
-      max-height: 400px;
       overflow-y: auto;
       border: 1px solid var(--gray-200);
       border-radius: 4px;
@@ -1843,6 +1978,54 @@ const getKbTypeColor = (type) => {
     .ocr-healthy {
       color: #52c41a;
       font-weight: 500;
+    }
+  }
+
+  .qa-split-config {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background-color: var(--main-light-6);
+    border-radius: 8px;
+    border: 1px solid var(--main-light-3);
+
+    .ant-form-item {
+      margin-bottom: 12px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .ant-form-item-label {
+        color: var(--gray-800);
+        font-weight: 500;
+      }
+    }
+
+    .toggle-controls {
+      display: flex;
+      align-items: center;
+    }
+
+    .param-description {
+      color: var(--gray-600);
+      font-size: 12px;
+      margin-left: 0;
+      margin-top: 4px;
+    }
+
+    .ant-input {
+      border-color: var(--main-light-3);
+
+      &:hover,
+      &:focus {
+        border-color: var(--main-color);
+      }
+    }
+
+    .ant-switch {
+      &.ant-switch-checked {
+        background-color: var(--main-color);
+      }
     }
   }
 
@@ -2027,14 +2210,52 @@ const getKbTypeColor = (type) => {
       align-items: center;
       gap: 6px;
 
+      .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+
+        .search-hint {
+          position: absolute;
+          right: -60px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-size: 10px;
+          color: var(--gray-500);
+          white-space: nowrap;
+        }
+      }
+
+      .ant-input-search {
+        .ant-input {
+          font-size: 12px;
+          border-radius: 4px;
+
+          &:hover,
+          &:focus {
+            border-color: var(--main-color);
+          }
+        }
+
+        .ant-btn {
+          font-size: 12px;
+          border-radius: 0 4px 4px 0;
+
+          &:hover {
+            border-color: var(--main-color);
+            color: var(--main-color);
+          }
+        }
+      }
+
       .refresh-group {
         display: flex;
         align-items: center;
         gap: 4px;
-        background: var(--gray-50);
-        padding: 2px 6px;
-        border-radius: 12px;
-        border: 1px solid var(--gray-200);
+        background: var(--gray-100);
+        padding: 0px 6px;
+        border-radius: 8px;
+        border: 1px solid var(--gray-300);
       }
 
       .ant-btn {
@@ -2119,7 +2340,7 @@ const getKbTypeColor = (type) => {
     padding: 8px;
     height: 36px;
     flex-shrink: 0;
-    background-color: var(--gray-200);
+    background-color: var(--gray-100);
     backdrop-filter: blur(4px);
     position: sticky;
     top: 0;

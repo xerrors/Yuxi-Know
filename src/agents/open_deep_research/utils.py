@@ -3,8 +3,8 @@ import aiohttp
 import asyncio
 import logging
 import warnings
-from datetime import datetime, timedelta, timezone
-from typing import Annotated, List, Literal, Dict, Optional, Any
+from datetime import datetime, timedelta, timezone, UTC
+from typing import Annotated, Literal, Optional, Any
 from langchain_core.tools import BaseTool, StructuredTool, tool, ToolException, InjectedToolArg
 from langchain_core.messages import HumanMessage, AIMessage, MessageLikeRepresentation, filter_messages
 from langchain_core.runnables import RunnableConfig
@@ -28,7 +28,7 @@ TAVILY_SEARCH_DESCRIPTION = (
 )
 @tool(description=TAVILY_SEARCH_DESCRIPTION)
 async def tavily_search(
-    queries: List[str],
+    queries: list[str],
     max_results: Annotated[int, InjectedToolArg] = 5,
     topic: Annotated[Literal["general", "news", "finance"], InjectedToolArg] = "general",
     config: RunnableConfig = None
@@ -52,7 +52,7 @@ async def tavily_search(
         config=config
     )
     # Format the search results and deduplicate results by URL
-    formatted_output = f"Search results: \n\n"
+    formatted_output = "Search results: \n\n"
     unique_results = {}
     for response in search_results:
         for result in response['results']:
@@ -116,7 +116,7 @@ async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
             timeout=60.0
         )
         return f"""<summary>\n{summary.summary}\n</summary>\n\n<key_excerpts>\n{summary.key_excerpts}\n</key_excerpts>"""
-    except (asyncio.TimeoutError, Exception) as e:
+    except (TimeoutError, Exception) as e:
         print(f"Failed to summarize webpage: {str(e)}")
         return webpage_content
 
@@ -127,7 +127,7 @@ async def summarize_webpage(model: BaseChatModel, webpage_content: str) -> str:
 async def get_mcp_access_token(
     supabase_token: str,
     base_mcp_url: str,
-) -> Optional[Dict[str, Any]]:
+) -> dict[str, Any] | None:
     try:
         form_data = {
             "client_id": "mcp_default",
@@ -165,7 +165,7 @@ async def get_tokens(config: RunnableConfig):
         return None
     expires_in = tokens.value.get("expires_in")  # seconds until expiration
     created_at = tokens.created_at  # datetime of token creation
-    current_time = datetime.now(timezone.utc)
+    current_time = datetime.now(UTC)
     expiration_time = created_at + timedelta(seconds=expires_in)
     if current_time > expiration_time:
         await store.adelete((user_id, "tokens"), "data")
@@ -260,7 +260,7 @@ async def load_mcp_tools(
     except Exception as e:
         print(f"Error loading MCP tools: {e}")
         return []
-    for tool in mcp_tools:
+    for tool in mcp_tools:  # noqa: F402
         if tool.name in existing_tool_names:
             warnings.warn(
                 f"Trying to add MCP tool with a name {tool.name} that is already in use - this tool will be ignored."

@@ -245,7 +245,7 @@ const totalRelations = computed(() => graphData.value.edges.length)
           }
 
           .relation-type {
-            color: var(--main-600);
+            color: var(--main-color);
             font-weight: 500;
             background: var(--gray-100);
             padding: 2px 6px;

@@ -12,61 +12,53 @@
 
       <!-- 知识库类型选择 -->
       <h3>知识库类型<span style="color: var(--error-color)">*</span></h3>
-      <a-select v-model:value="newDatabase.kb_type" @change="handleKbTypeChange" style="width: 100%;" size="large">
-        <a-select-option v-for="(typeInfo, typeKey) in supportedKbTypes" :key="typeKey" :value="typeKey">
-          <div class="kb-type-option">
-            <div class="type-header">
-              <component :is="getKbTypeIcon(typeKey)" class="type-icon" />
-              <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
-            </div>
-            <div class="type-desc">{{ typeInfo.description }}</div>
+      <div class="kb-type-cards">
+        <div
+          v-for="(typeInfo, typeKey) in supportedKbTypes"
+          :key="typeKey"
+          class="kb-type-card"
+          :class="{ active: newDatabase.kb_type === typeKey }"
+          @click="handleKbTypeChange(typeKey)"
+        >
+          <div class="card-header">
+            <component :is="getKbTypeIcon(typeKey)" class="type-icon" />
+            <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
           </div>
-        </a-select-option>
-      </a-select>
+          <div class="card-description">{{ typeInfo.description }}</div>
+          <div class="card-features">
+            <span class="feature-tag">{{ getKbTypeFeature(typeKey) }}</span>
+          </div>
+        </div>
+      </div>
 
       <!-- 类型说明 -->
-      <div class="kb-type-guide" v-if="newDatabase.kb_type">
+      <!-- <div class="kb-type-guide" v-if="newDatabase.kb_type">
         <a-alert
           :message="getKbTypeDescription(newDatabase.kb_type)"
           :type="getKbTypeAlertType(newDatabase.kb_type)"
           show-icon
           style="margin: 12px 0;"
         />
-      </div>
+      </div> -->
 
       <h3>知识库名称<span style="color: var(--error-color)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" size="large" />
 
       <h3>嵌入模型</h3>
       <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" style="width: 100%;" size="large" />
+
       <!-- 根据类型显示不同配置 -->
-        <div v-if="newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus'" class="chunk-config">
-          <h3>分块配置</h3>
-          <div class="chunk-params">
-          <div class="param-row">
-            <label>分块大小：</label>
-            <a-input-number
-              v-model:value="newDatabase.chunk_size"
-              :min="100"
-              :max="5000"
-              :step="100"
-              style="width: 120px;"
-            />
-            <span class="param-hint">每个文本片段的最大字符数（100-5000）</span>
-          </div>
-          <div class="param-row">
-            <label>重叠长度：</label>
-            <a-input-number
-              v-model:value="newDatabase.chunk_overlap"
-              :min="0"
-              :max="500"
-              :step="50"
-              style="width: 120px;"
-            />
-            <span class="param-hint">相邻片段间的重叠字符数（0-500）</span>
-          </div>
+      <!-- <div v-if="newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus'" class="storage-config">
+        <h3>存储配置</h3>
+        <div class="param-row">
+          <label>存储方式：</label>
+          <a-select v-model:value="newDatabase.storage" style="width: 200px;">
+            <a-select-option value="DemoA">DemoA</a-select-option>
+            <a-select-option value="DemoB">DemoB</a-select-option>
+          </a-select>
+          <span class="param-hint">存储方式配置（功能预留）</span>
         </div>
-      </div>
+      </div> -->
 
       <h3 style="margin-top: 20px;">知识库描述</h3>
       <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
@@ -101,12 +93,18 @@
           </div>
           <div class="info">
             <h3>{{ database.name }}</h3>
-            <p><span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span></p>
+            <p>
+              <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+              <span class="created-time-inline" v-if="database.created_at">
+                • {{ formatCreatedTime(database.created_at) }}
+              </span>
+            </p>
           </div>
         </div>
-        <a-tooltip :title="database.description || '暂无描述'">
+        <!-- <a-tooltip :title="database.description || '暂无描述'">
           <p class="description">{{ database.description || '暂无描述' }}</p>
-        </a-tooltip>
+        </a-tooltip> -->
+        <p class="description">{{ database.description || '暂无描述' }}</p>
         <div class="tags">
           <a-tag color="blue" v-if="database.embed_info?.name">{{ database.embed_info.name }}</a-tag>
           <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag>
@@ -118,6 +116,7 @@
             {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
           </a-tag>
         </div>
+
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>
@@ -129,8 +128,7 @@ import { ref, onMounted, reactive, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 import { useConfigStore } from '@/stores/config';
 import { message } from 'ant-design-vue'
-import { ReadFilled, DatabaseOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
-import { BookPlus, Database, Zap } from 'lucide-vue-next';
+import { BookPlus, Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 
@@ -156,10 +154,9 @@ const emptyEmbedInfo = {
   name: '',
   description: '',
   embed_model_name: configStore.config?.embed_model,
-  kb_type: 'lightrag', // 默认为 LightRAG
+  kb_type: 'chroma', // 默认为 Milvus
   // Vector 知识库特有配置
-  chunk_size: 1000,
-  chunk_overlap: 200,
+  storage: '', // 存储方式配置
 }
 
 const newDatabase = reactive({
@@ -193,7 +190,12 @@ const loadDatabases = () => {
   databaseApi.getDatabases()
     .then(data => {
       console.log(data)
-      databases.value = data.databases
+      // 按照创建时间排序，最新的在前面
+      databases.value = data.databases.sort((a, b) => {
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+        return timeB - timeA // 降序排列，最新的在前面
+      })
       state.loading = false
     })
     .catch(error => {
@@ -225,21 +227,21 @@ const getKbTypeLabel = (type) => {
 
 const getKbTypeIcon = (type) => {
   const icons = {
-    lightrag: Database,
-    chroma: Zap,
-    milvus: ThunderboltOutlined
+    lightrag: Waypoints,
+    chroma: FileDigit,
+    milvus: Building2
   }
   return icons[type] || Database
 }
 
-const getKbTypeDescription = (type) => {
-  const descriptions = {
-    lightrag: '🔥 图结构索引 • 智能查询 • 关系挖掘 • 复杂推理',
-    chroma: '⚡ 轻量向量 • 快速开发 • 本地部署 • 简单易用',
-    milvus: '🚀 生产级 • 高性能 • 分布式 • 企业级部署'
-  }
-  return descriptions[type] || ''
-}
+// const getKbTypeDescription = (type) => {
+//   const descriptions = {
+//     lightrag: '🔥 图结构索引 • 智能查询 • 关系挖掘 • 复杂推理',
+//     chroma: '⚡ 轻量向量 • 快速开发 • 本地部署 • 简单易用',
+//     milvus: '🚀 生产级 • 高性能 • 分布式 • 企业级部署'
+//   }
+//   return descriptions[type] || ''
+// }
 
 const getKbTypeAlertType = (type) => {
   const types = {
@@ -259,14 +261,47 @@ const getKbTypeColor = (type) => {
   return colors[type] || 'blue'
 }
 
+const getKbTypeFeature = (type) => {
+  const features = {
+    lightrag: '图结构索引',
+    chroma: '轻量向量',
+    milvus: '生产级部署'
+  }
+  return features[type] || ''
+}
+
+// 格式化创建时间
+const formatCreatedTime = (createdAt) => {
+  if (!createdAt) return ''
+
+  const now = new Date()
+  const createdTime = new Date(createdAt)
+  const diffInMs = now.getTime() - createdTime.getTime()
+  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+
+  if (diffInDays === 0) {
+    return '今天创建'
+  } else if (diffInDays === 1) {
+    return '昨天创建'
+  } else if (diffInDays < 7) {
+    return `${diffInDays} 天前创建`
+  } else if (diffInDays < 30) {
+    const weeks = Math.floor(diffInDays / 7)
+    return `${weeks} 周前创建`
+  } else if (diffInDays < 365) {
+    const months = Math.floor(diffInDays / 30)
+    return `${months} 个月前创建`
+  } else {
+    const years = Math.floor(diffInDays / 365)
+    return `${years} 年前创建`
+  }
+}
+
 // 处理知识库类型改变
 const handleKbTypeChange = (type) => {
   console.log('知识库类型改变:', type)
-  // 可以在这里根据类型设置默认值
-  if (type === 'chroma' || type === 'milvus') {
-    newDatabase.chunk_size = 1000
-    newDatabase.chunk_overlap = 200
-  }
+  resetNewDatabase()
+  newDatabase.kb_type = type
 }
 
 const createDatabase = () => {
@@ -280,18 +315,6 @@ const createDatabase = () => {
     return
   }
 
-  // 向量类型的额外验证（Chroma 和 Milvus）
-  if (newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus') {
-    if (!newDatabase.chunk_size || newDatabase.chunk_size < 100) {
-      message.error('分块大小不能小于100')
-      return
-    }
-    if (newDatabase.chunk_overlap < 0) {
-      message.error('重叠长度不能小于0')
-      return
-    }
-  }
-
   state.creating = true
 
   const requestData = {
@@ -299,14 +322,12 @@ const createDatabase = () => {
     description: newDatabase.description?.trim() || '',
     embed_model_name: newDatabase.embed_model_name || configStore.config.embed_model,
     kb_type: newDatabase.kb_type,
+    additional_params: {}
   }
 
   // 添加类型特有的配置
   if (newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus') {
-    requestData.extra_config = {
-      chunk_size: newDatabase.chunk_size,
-      chunk_overlap: newDatabase.chunk_overlap,
-    }
+    requestData.additional_params.storage = newDatabase.storage || 'DemoA'
   }
 
   databaseApi.createDatabase(requestData)
@@ -347,6 +368,150 @@ onMounted(() => {
 .new-database-modal {
   .kb-type-guide {
     margin: 12px 0;
+  }
+
+  .kb-type-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 16px 0;
+
+    @media (max-width: 768px) {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .kb-type-card {
+      border: 2px solid #f0f0f0;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: white;
+      position: relative;
+      overflow: hidden;
+
+      &:hover {
+        border-color: var(--main-color);
+        transform: translateY(-1px);
+      }
+
+      // 为不同知识库类型设置不同的悬停颜色
+      &:nth-child(1):hover {
+        border-color: #d3adf7;
+      }
+
+      &:nth-child(2):hover {
+        border-color: #ffd591;
+      }
+
+      &:nth-child(3):hover {
+        border-color: #ffadd2;
+      }
+
+      &.active {
+        border-color: var(--main-color);
+        background: #f8faff;
+
+        .type-icon {
+          color: var(--main-color);
+        }
+
+        .feature-tag {
+          background: rgba(24, 144, 255, 0.1);
+          color: var(--main-color);
+        }
+      }
+
+      // 为不同知识库类型设置不同的主题色
+      &:nth-child(1) {
+        &.active {
+          border-color: #d3adf7;
+          background: #f9f0ff;
+
+          .type-icon {
+            color: #722ed1;
+          }
+
+          .feature-tag {
+            background: rgba(114, 46, 209, 0.1);
+            color: #722ed1;
+          }
+        }
+      }
+
+      &:nth-child(2) {
+        &.active {
+          border-color: #ffd591;
+          background: #fff7e6;
+
+          .type-icon {
+            color: #fa8c16;
+          }
+
+          .feature-tag {
+            background: rgba(250, 140, 22, 0.1);
+            color: #fa8c16;
+          }
+        }
+      }
+
+      &:nth-child(3) {
+        &.active {
+          border-color: #ffadd2;
+          background: #fff1f0;
+
+          .type-icon {
+            color: #f5222d;
+          }
+
+          .feature-tag {
+            background: rgba(245, 34, 45, 0.1);
+            color: #f5222d;
+          }
+        }
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+
+        .type-icon {
+          width: 24px;
+          height: 24px;
+          color: var(--main-color);
+          flex-shrink: 0;
+        }
+
+        .type-title {
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--gray-800);
+        }
+      }
+
+      .card-description {
+        font-size: 13px;
+        color: var(--gray-600);
+        line-height: 1.5;
+        margin-bottom: 12px;
+        min-height: 40px;
+      }
+
+      .card-features {
+        .feature-tag {
+          display: inline-block;
+          padding: 4px 8px;
+          background: rgba(24, 144, 255, 0.1);
+          color: var(--main-color);
+          border-radius: 6px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+      }
+    }
   }
 
   .chunk-config {
@@ -440,6 +605,8 @@ onMounted(() => {
   height: 160px;
   padding: 20px;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
 
   .top {
     display: flex;
@@ -475,6 +642,15 @@ onMounted(() => {
       p {
         color: var(--gray-900);
         font-size: small;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+
+        .created-time-inline {
+          color: var(--gray-500);
+          font-size: 12px;
+        }
       }
     }
   }
@@ -489,6 +665,8 @@ onMounted(() => {
     text-overflow: ellipsis;
     margin-bottom: 10px;
   }
+
+
 }
 
 .database-empty {
@@ -511,39 +689,4 @@ onMounted(() => {
 }
 </style>
 
-<!-- 为了解决ant-select下拉选项中图标和文本对齐问题，需要使用非scoped样式 -->
-<style lang="less">
-/* 知识库类型选项样式 */
-.kb-type-option {
-  .type-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
 
-    .type-icon {
-      width: 16px;
-      height: 16px;
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .type-title {
-      font-weight: 500;
-    }
-  }
-
-  .type-desc {
-    font-size: 12px;
-    color: #666;
-    margin-left: 24px;
-    margin-top: 2px;
-  }
-}
-
-/* 确保选中项也正确对齐 */
-.ant-select-selection-item .kb-type-option .type-header {
-  align-items: center;
-}
-</style>

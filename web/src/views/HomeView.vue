@@ -252,7 +252,7 @@ onMounted(async () => {
   font-size: 1.2rem;
   font-weight: 600;
   color: white;
-  background: linear-gradient(135deg, var(--main-500), var(--main-600));
+  background: linear-gradient(135deg, var(--main-500), var(--main-color));
   border: none;
   border-radius: 3rem;
   cursor: pointer;
@@ -262,7 +262,7 @@ onMounted(async () => {
   &:hover {
     transform: translateY(-3px);
     box-shadow: 0 7px 20px rgba(0, 0, 0, 0.15);
-    background: linear-gradient(135deg, var(--main-600), var(--main-700));
+    background: linear-gradient(135deg, var(--main-color), var(--main-700));
   }
 
   &:active {

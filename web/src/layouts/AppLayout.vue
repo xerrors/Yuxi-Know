@@ -251,7 +251,7 @@ div.header, #app-router-view {
   flex: 0 0 var(--header-width);
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--gray-100);
+  background-color: var(--main-10);
   height: 100%;
   width: var(--header-width);
   border-right: 1px solid var(--gray-300);
@@ -353,7 +353,7 @@ div.header, #app-router-view {
     }
     &.active {
       font-weight: bold;
-      color: var(--main-600);
+      color: var(--main-color);
       background-color: white;
       border: 1px solid white;
     }
@@ -471,7 +471,7 @@ div.header, #app-router-view {
       font-size: 16px;
       font-weight: 600;
       letter-spacing: 0.5px;
-      color: var(--main-600);
+      color: var(--main-color);
       white-space: nowrap;
     }
   }
@@ -514,7 +514,7 @@ div.header, #app-router-view {
       }
 
       &.active {
-        color: var(--main-600);
+        color: var(--main-color);
       }
     }
 

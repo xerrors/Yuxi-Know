@@ -455,8 +455,8 @@ const printAgentConfig = async () => {
       border-color: var(--main-color);
 
       &:hover {
-        background-color: var(--main-600);
-        border-color: var(--main-600);
+        background-color: var(--main-color);
+        border-color: var(--main-color);
       }
     }
 

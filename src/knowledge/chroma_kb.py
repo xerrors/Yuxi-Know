@@ -3,7 +3,7 @@ import time
 import traceback
 import json
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Any
 from datetime import datetime
 
 import chromadb
@@ -11,10 +11,8 @@ from chromadb.config import Settings
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
-
-
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
+from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
 from src.utils import logger, hashstr
 from src import config
 
@@ -46,12 +44,7 @@ class ChromaKB(KnowledgeBase):
         )
 
         # 存储集合映射 {db_id: collection}
-        self.collections: Dict[str, Any] = {}
-
-        # 分块配置
-        self.chunk_size = kwargs.get('chunk_size', 1000)
-        self.chunk_overlap = kwargs.get('chunk_overlap', 200)
-
+        self.collections: dict[str, Any] = {}
         logger.info("ChromaKB initialized")
 
     @property
@@ -59,7 +52,7 @@ class ChromaKB(KnowledgeBase):
         """知识库类型标识"""
         return "chroma"
 
-    async def _create_kb_instance(self, db_id: str, config: Dict) -> Any:
+    async def _create_kb_instance(self, db_id: str, kb_config: dict) -> Any:
         """创建向量数据库集合"""
         logger.info(f"Creating ChromaDB collection for {db_id}")
 
@@ -92,7 +85,7 @@ class ChromaKB(KnowledgeBase):
                 self.chroma_client.delete_collection(name=collection_name)
                 raise Exception("Model mismatch, recreating collection")
 
-        except Exception as e:
+        except Exception:
             # 创建新集合
             logger.info(f"Creating new collection with embedding model: {embed_info.get('name', 'default')}")
             collection_metadata = {
@@ -113,7 +106,7 @@ class ChromaKB(KnowledgeBase):
         """初始化向量数据库集合（无需特殊初始化）"""
         pass
 
-    def _get_embedding_function(self, embed_info: Dict):
+    def _get_embedding_function(self, embed_info: dict):
         """获取 embedding 函数"""
         config_dict = get_embedding_config(embed_info)
 
@@ -144,22 +137,32 @@ class ChromaKB(KnowledgeBase):
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
-    def _split_text_into_chunks(self, text: str, file_id: str, filename: str) -> List[Dict]:
+    def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
-        chunks = split_text_into_chunks(text, file_id, filename, self.chunk_size, self.chunk_overlap)
+        # 检查是否使用QA分割模式
+        use_qa_split = params.get('use_qa_split', False)
+
+        if use_qa_split:
+            # 使用QA分割模式
+            qa_separator = params.get('qa_separator', '\n\n\n')
+            chunks = split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
+        else:
+            # 使用传统分割模式
+            chunks = split_text_into_chunks(text, file_id, filename, params)
 
         # 为 ChromaDB 添加特定的 metadata 格式
         for chunk in chunks:
             chunk["metadata"] = {
                 "source": chunk["source"],
                 "chunk_id": chunk["chunk_id"],
-                "full_doc_id": file_id
+                "full_doc_id": file_id,
+                "chunk_type": chunk.get("chunk_type", "normal")  # 添加chunk类型标识
             }
 
         return chunks
 
-    async def add_content(self, db_id: str, items: List[str],
-                         params: Optional[Dict] = None) -> List[Dict]:
+    async def add_content(self, db_id: str, items: list[str],
+                         params:dict | None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -176,7 +179,6 @@ class ChromaKB(KnowledgeBase):
             metadata = prepare_item_metadata(item, content_type, db_id)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
-            item_path = metadata["path"]
 
             # 添加文件记录
             file_record = metadata.copy()
@@ -191,7 +193,7 @@ class ChromaKB(KnowledgeBase):
                     markdown_content = await self._process_url_to_markdown(item, params=params)
 
                 # 分割文本成块
-                chunks = self._split_text_into_chunks(markdown_content, file_id, filename)
+                chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
                 logger.info(f"Split {filename} into {len(chunks)} chunks")
 
                 # 准备向量数据库插入的数据
@@ -302,7 +304,7 @@ class ChromaKB(KnowledgeBase):
             del self.files_meta[file_id]
             self._save_metadata()
 
-    async def get_file_info(self, db_id: str, file_id: str) -> Dict:
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件信息和chunks"""
         if file_id not in self.files_meta:
             raise Exception(f"File not found: {file_id}")

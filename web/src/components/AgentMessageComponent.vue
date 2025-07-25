@@ -261,7 +261,7 @@ const toggleToolCall = (toolCallId) => {
           }
 
           .ant-collapse-expand-icon {
-            color: var(--main-600);
+            color: var(--main-color);
           }
         }
 
@@ -351,7 +351,7 @@ const toggleToolCall = (toolCallId) => {
       }
 
       .anticon {
-        color: var(--main-600);
+        color: var(--main-color);
         font-size: 16px;
       }
 

@@ -49,10 +49,10 @@ def select_embedding_model(model_id):
         raise ValueError("Local embedding model is not supported, please use other embedding models")
 
     elif provider == "ollama":
-        model = OllamaEmbedding(model_id)
+        model = OllamaEmbedding(**config.embed_model_names[model_id])
 
     else:
-        model = OtherEmbedding(model_id)
+        model = OtherEmbedding(**config.embed_model_names[model_id])
 
     return model
 

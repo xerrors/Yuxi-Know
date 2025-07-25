@@ -364,12 +364,3 @@ async def add_neo4j_entities(
             "message": f"添加实体失败: {e}",
             "status": "failed"
         }
-
-# =============================================================================
-# === 兼容性接口 (保持向后兼容) ===
-# =============================================================================
-
-@graph.get("/graph")
-async def get_graph_info_compat(current_user: User = Depends(get_admin_user)):
-    """兼容性接口：获取图数据库信息"""
-    return await get_graph_info(current_user)

@@ -65,9 +65,14 @@ class ChatbotAgent(BaseAgent):
         if self.graph:
             return self.graph
 
+        runnable_tools = get_runnable_tools()
+        tools = list(runnable_tools.values())
+        tools_name = list(runnable_tools.keys())
+        logger.debug(f"build graph `{self.id}` with tools: {tools_name}")
+
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=list(get_runnable_tools().values())))
+        workflow.add_node("tools", ToolNode(tools=tools))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",

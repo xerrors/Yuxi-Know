@@ -199,7 +199,7 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
         if os.path.exists(model_dir) and os.path.exists(det_model_path) and os.path.exists(rec_model_path):
             # 尝试初始化RapidOCR
             from rapidocr_onnxruntime import RapidOCR
-            test_ocr = RapidOCR(det_box_thresh=0.3, det_model_path=det_model_path, rec_model_path=rec_model_path)
+            test_ocr = RapidOCR(det_box_thresh=0.3, det_model_path=det_model_path, rec_model_path=rec_model_path)  # noqa: F841
             health_status["rapid_ocr"]["status"] = "healthy"
             health_status["rapid_ocr"]["message"] = "RapidOCR模型已加载"
         else:

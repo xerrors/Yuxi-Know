@@ -30,18 +30,25 @@ async def create_database(
     description: str = Body(...),
     embed_model_name: str = Body(...),
     kb_type: str = Body("lightrag"),
+    additional_params: dict = Body({}),
     current_user: User = Depends(get_admin_user)
 ):
     """创建知识库"""
-    logger.debug(f"Create database {database_name} with kb_type {kb_type}")
+    logger.debug(f"Create database {database_name} with kb_type {kb_type}, additional_params {additional_params}")
     try:
         embed_info = config.embed_model_names[embed_model_name]
         database_info = knowledge_base.create_database(
             database_name,
             description,
             kb_type=kb_type,
-            embed_info=embed_info
+            embed_info=embed_info,
+            **additional_params
         )
+
+        # 需要重新加载所有智能体，因为工具刷新了
+        from src.agents import agent_manager
+        await agent_manager.reload_all()
+
         return database_info
     except Exception as e:
         logger.error(f"创建数据库失败 {e}, {traceback.format_exc()}")
@@ -77,6 +84,11 @@ async def delete_database(db_id: str, current_user: User = Depends(get_admin_use
     logger.debug(f"Delete database {db_id}")
     try:
         knowledge_base.delete_database(db_id)
+
+        # 需要重新加载所有智能体，因为工具刷新了
+        from src.agents import agent_manager
+        await agent_manager.reload_all()
+
         return {"message": "删除成功"}
     except Exception as e:
         logger.error(f"删除数据库失败 {e}, {traceback.format_exc()}")

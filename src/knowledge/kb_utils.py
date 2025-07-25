@@ -1,44 +1,35 @@
 import os
 import time
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any
+from langchain_text_splitters import MarkdownTextSplitter
 from src.utils import hashstr, get_docker_safe_url, logger
 from src import config
 
 
-def split_text_into_chunks(text: str, file_id: str, filename: str,
-                          chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Dict]:
+def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict = {}) -> list[dict]:
     """
-    将文本分割成块
-
-    Args:
-        text: 要分割的文本
-        file_id: 文件ID
-        filename: 文件名
-        chunk_size: 块大小
-        chunk_overlap: 块重叠大小
-
-    Returns:
-        List[Dict]: 分割后的文本块列表
+    将文本分割成块，使用 LangChain 的 MarkdownTextSplitter 进行智能分割
     """
     chunks = []
+    chunk_size = params.get('chunk_size', 1000)
+    chunk_overlap = params.get('chunk_overlap', 200)
 
-    # 简单的分块策略：按段落和长度分割
-    paragraphs = text.split('\n\n')
+    # 使用 MarkdownTextSplitter 进行智能分割
+    # MarkdownTextSplitter 会尝试沿着 Markdown 格式的标题进行分割
+    text_splitter = MarkdownTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
 
-    current_chunk = ""
-    chunk_index = 0
+    text_chunks = text_splitter.split_text(text)
 
-    for paragraph in paragraphs:
-        paragraph = paragraph.strip()
-        if not paragraph:
-            continue
-
-        # 如果当前块加上新段落会超过限制，保存当前块
-        if len(current_chunk) + len(paragraph) > chunk_size and current_chunk:
+    # 转换为标准格式
+    for chunk_index, chunk_content in enumerate(text_chunks):
+        if chunk_content.strip():  # 跳过空块
             chunks.append({
                 "id": f"{file_id}_chunk_{chunk_index}",
-                "content": current_chunk.strip(),
+                "content": chunk_content.strip(),
                 "file_id": file_id,
                 "filename": filename,
                 "chunk_index": chunk_index,
@@ -46,44 +37,13 @@ def split_text_into_chunks(text: str, file_id: str, filename: str,
                 "chunk_id": f"{file_id}_chunk_{chunk_index}"
             })
 
-            # 开始新块，包含重叠内容
-            if len(current_chunk) > chunk_overlap:
-                current_chunk = current_chunk[-chunk_overlap:] + "\n\n" + paragraph
-            else:
-                current_chunk = paragraph
-            chunk_index += 1
-        else:
-            if current_chunk:
-                current_chunk += "\n\n" + paragraph
-            else:
-                current_chunk = paragraph
-
-    # 添加最后一块
-    if current_chunk.strip():
-        chunks.append({
-            "id": f"{file_id}_chunk_{chunk_index}",
-            "content": current_chunk.strip(),
-            "file_id": file_id,
-            "filename": filename,
-            "chunk_index": chunk_index,
-            "source": filename,
-            "chunk_id": f"{file_id}_chunk_{chunk_index}"
-        })
-
+    logger.debug(f"Successfully split text into {len(chunks)} chunks using MarkdownTextSplitter")
     return chunks
 
 
-def prepare_item_metadata(item: str, content_type: str, db_id: str) -> Dict:
+def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
     """
     准备文件或URL的元数据
-
-    Args:
-        item: 文件路径或URL
-        content_type: 内容类型 ('file' 或 'url')
-        db_id: 数据库ID
-
-    Returns:
-        Dict: 包含元数据的字典
     """
     if content_type == "file":
         file_path = Path(item)
@@ -108,7 +68,35 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> Dict:
     }
 
 
-def get_embedding_config(embed_info: Dict) -> Dict:
+def split_text_into_qa_chunks(text: str, file_id: str, filename: str,
+                             qa_separator: None | str = None, params: dict = {}) -> list[dict]:
+    """
+    将文本按QA对分割成块，使用 LangChain 的 CharacterTextSplitter 进行分割"""
+    qa_separator = qa_separator or '\n\n'
+    text_chunks = text.split(qa_separator)
+
+    # 转换为标准格式
+    chunks = []
+    for chunk_index, chunk_content in enumerate(text_chunks):
+        if chunk_content.strip():  # 跳过空块
+            chunk_content = chunk_content.strip()[:4096]
+            chunks.append({
+                "id": f"{file_id}_qa_chunk_{chunk_index}",
+                "content": chunk_content.strip(),
+                "file_id": file_id,
+                "filename": filename,
+                "chunk_index": chunk_index,
+                "source": filename,
+                "chunk_id": f"{file_id}_qa_chunk_{chunk_index}",
+                "chunk_type": "qa"  # 标识为QA类型的chunk
+            })
+
+    logger.debug(f"QA chunks: {chunks[0]}")
+    logger.debug(f"Successfully split QA text into {len(chunks)} chunks using CharacterTextSplitter with `{qa_separator=}`")
+    return chunks
+
+
+def get_embedding_config(embed_info: dict) -> dict:
     """
     获取嵌入模型配置
 
@@ -116,7 +104,7 @@ def get_embedding_config(embed_info: Dict) -> Dict:
         embed_info: 嵌入信息字典
 
     Returns:
-        Dict: 标准化的嵌入配置
+        dict: 标准化的嵌入配置
     """
     config_dict = {}
 

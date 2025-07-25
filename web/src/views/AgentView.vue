@@ -11,7 +11,7 @@
           <a-select
             v-model:value="selectedAgentId"
             class="agent-list"
-            style="width: 300px"
+            style="width: 240px"
             @change="selectAgent"
           >
             <a-select-option
@@ -105,20 +105,6 @@
                       :placeholder="getPlaceholder(key, value)"
                     />
 
-                    <!-- 数据类型匹配 -->
-                    <a-switch
-                      v-else-if="typeof agentConfig[key] === 'boolean'"
-                      v-model:checked="agentConfig[key]"
-                    />
-                    <!-- 单选 -->
-                    <a-select
-                      v-else-if="value?.options && (value?.type === 'str' || value?.type === 'select')"
-                      v-model:value="agentConfig[key]"
-                    >
-                      <a-select-option v-for="option in value.options" :key="option" :value="option">
-                        {{ option.label || option }}
-                      </a-select-option>
-                    </a-select>
                     <!-- 工具选择特殊处理 -->
                     <div v-else-if="key === 'tools'" class="tools-selector">
                       <div class="tools-summary">
@@ -138,6 +124,25 @@
                         </a-tag>
                       </div>
                     </div>
+
+                    <!-- 数据类型匹配 -->
+
+                    <!-- 布尔类型 -->
+                    <a-switch
+                      v-else-if="typeof agentConfig[key] === 'boolean'"
+                      v-model:checked="agentConfig[key]"
+                    />
+
+                    <!-- 单选 -->
+                    <a-select
+                      v-else-if="value?.options && (value?.type === 'str' || value?.type === 'select')"
+                      v-model:value="agentConfig[key]"
+                    >
+                      <a-select-option v-for="option in value.options" :key="option" :value="option">
+                        {{ option.label || option }}
+                      </a-select-option>
+                    </a-select>
+
                     <!-- 多选 -->
                     <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
                       <div class="multi-select-label">
@@ -167,12 +172,14 @@
                         </div>
                       </div>
                     </div>
+
                     <!-- 数字 -->
                     <a-input-number
                       v-else-if="value?.type === 'number'"
                       v-model:value="agentConfig[key]"
                       :placeholder="getPlaceholder(key, value)"
                     />
+
                     <!-- 滑块 -->
                     <a-slider
                       v-else-if="value?.type === 'slider'"
@@ -182,6 +189,7 @@
                       :step="value.step"
                       style="max-width: 300px;"
                     />
+
                     <!-- 其他类型 -->
                     <a-input
                       v-else
@@ -408,10 +416,10 @@ const clearSelection = (key) => {
 // 工具选择相关方法
 const openToolsModal = async () => {
   try {
-    // 加载可用工具列表
-    const response = await toolsApi.getTools();
-    // 将工具对象转换为数组格式，保留id和name信息
-    availableTools.value = Object.values(response.tools || {});
+    // 如果工具列表还没有加载，则加载
+    if (availableTools.value.length === 0) {
+      await loadAvailableTools();
+    }
 
     // 初始化已选择的工具
     selectedTools.value = [...(agentConfig.value.tools || [])];
@@ -419,8 +427,8 @@ const openToolsModal = async () => {
     // 打开弹窗
     state.toolsModalOpen = true;
   } catch (error) {
-    console.error('加载工具列表失败:', error);
-    message.error('加载工具列表失败');
+    console.error('打开工具选择弹窗失败:', error);
+    message.error('打开工具选择弹窗失败');
   }
 };
 
@@ -605,12 +613,24 @@ const selectAgent = (agentId) => {
   loadAgentConfig();
 };
 
+// 加载工具列表
+const loadAvailableTools = async () => {
+  try {
+    const response = await toolsApi.getTools();
+    availableTools.value = Object.values(response.tools || {});
+  } catch (error) {
+    console.error('加载工具列表失败:', error);
+  }
+};
+
 // 初始化
 onMounted(async () => {
   // 获取默认智能体
   await fetchDefaultAgent();
   // 获取智能体列表
   await fetchAgents();
+  // 加载工具列表
+  await loadAvailableTools();
 
   // 恢复上次选择的智能体
   const lastSelectedAgent = localStorage.getItem('last-selected-agent');
@@ -677,7 +697,7 @@ const toggleConf = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 16px;
+  padding: 2px 8px;
 
   .header-left,
   .header-right,
@@ -784,7 +804,7 @@ const toggleConf = () => {
     border-color: var(--main-color);
 
     &:disabled {
-      color: var(--main-600);
+      color: var(--main-color);
       background-color: var(--main-light-4);
       cursor: not-allowed;
       opacity: 0.7;
@@ -860,7 +880,7 @@ const toggleConf = () => {
       transition: all 0.2s ease;
 
       &:hover {
-        background: var(--main-600);
+        background: var(--main-color);
         transform: translateY(-1px);
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       }
@@ -1020,7 +1040,7 @@ const toggleConf = () => {
             border: none;
             color: #fff;
             &:hover {
-              background: var(--main-600);
+              background: var(--main-color);
             }
           }
         }

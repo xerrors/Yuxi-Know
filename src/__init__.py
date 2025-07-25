@@ -17,10 +17,6 @@ from src.knowledge.chroma_kb import ChromaKB  # noqa: E402
 from src.knowledge.milvus_kb import MilvusKB  # noqa: E402
 
 # 注册知识库类型
-KnowledgeBaseFactory.register("lightrag", LightRagKB, {
-    "description": "基于图检索的知识库，支持实体关系构建和复杂查询"
-})
-
 KnowledgeBaseFactory.register("chroma", ChromaKB, {
     "chunk_size": 1000,
     "chunk_overlap": 200,
@@ -32,6 +28,12 @@ KnowledgeBaseFactory.register("milvus", MilvusKB, {
     "chunk_overlap": 200,
     "description": "基于 Milvus 的生产级向量知识库，适合大规模高性能部署"
 })
+
+
+KnowledgeBaseFactory.register("lightrag", LightRagKB, {
+    "description": "基于图检索的知识库，支持实体关系构建和复杂查询"
+})
+
 
 # 创建知识库管理器
 work_dir = os.path.join(config.save_dir, "knowledge_base_data")

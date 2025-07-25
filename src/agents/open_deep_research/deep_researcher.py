@@ -245,7 +245,7 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
     most_recent_message = researcher_messages[-1]
     # Early Exit Criteria: No tool calls (or native web search calls)were made by the researcher
     if not most_recent_message.tool_calls and not (openai_websearch_called(most_recent_message) or anthropic_websearch_called(most_recent_message)):
-        logger.info(f"researcher_tools: no tool calls")
+        logger.info("researcher_tools: no tool calls")
         return Command(
             goto="compress_research",
         )
@@ -264,14 +264,14 @@ async def researcher_tools(state: ResearcherState, config: RunnableConfig) -> Co
     # Late Exit Criteria: We have exceeded our max guardrail tool call iterations or the most recent message contains a ResearchComplete tool call
     # These are late exit criteria because we need to add ToolMessages
     if state.get("tool_call_iterations", 0) >= configurable.max_react_tool_calls or any(tool_call["name"] == "ResearchComplete" for tool_call in most_recent_message.tool_calls):
-        logger.info(f"researcher_tools: max_react_tool_calls or ResearchComplete")
+        logger.info("researcher_tools: max_react_tool_calls or ResearchComplete")
         return Command(
             goto="compress_research",
             update={
                 "researcher_messages": tool_outputs,
             }
         )
-    logger.info(f"researcher_tools: goto researcher")
+    logger.info("researcher_tools: goto researcher")
     return Command(
         goto="researcher",
         update={
@@ -309,7 +309,7 @@ async def compress_research(state: ResearcherState, config: RunnableConfig):
                 print(f"Token limit exceeded while synthesizing: {e}. Pruning the messages to try again.")
                 continue
             print(f"Error synthesizing research report: {e}")
-    logger.info(f"compress_research: Error synthesizing research report: Maximum retries exceeded")
+    logger.info("compress_research: Error synthesizing research report: Maximum retries exceeded")
     return {
         "compressed_research": "Error synthesizing research report: Maximum retries exceeded",
         "raw_notes": ["\n".join([str(m.content) for m in filter_messages(researcher_messages, include_types=["tool", "ai"])])]
@@ -376,7 +376,7 @@ async def final_report_generation(state: AgentState, config: RunnableConfig):
                     "final_report": f"Error generating final report: {e}",
                     **cleared_state
                 }
-    logger.info(f"final_report_generation: Error generating final report: Maximum retries exceeded")
+    logger.info("final_report_generation: Error generating final report: Maximum retries exceeded")
     return {
         "final_report": "Error generating final report: Maximum retries exceeded",
         "messages": [final_report],

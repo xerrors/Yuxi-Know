@@ -1,4 +1,4 @@
-from typing import Dict, Type, Any
+from typing import Any
 from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError
 from src.utils import logger
 
@@ -7,14 +7,14 @@ class KnowledgeBaseFactory:
     """知识库工厂类，负责创建不同类型的知识库实例"""
 
     # 注册的知识库类型映射 {kb_type: kb_class}
-    _kb_types: Dict[str, Type[KnowledgeBase]] = {}
+    _kb_types: dict[str, type[KnowledgeBase]] = {}
 
     # 每种类型的默认配置
-    _default_configs: Dict[str, Dict] = {}
+    _default_configs: dict[str, dict] = {}
 
     @classmethod
-    def register(cls, kb_type: str, kb_class: Type[KnowledgeBase],
-                default_config: Dict = None):
+    def register(cls, kb_type: str, kb_class: type[KnowledgeBase],
+                default_config: dict = None):
         """
         注册知识库类型
 
@@ -24,7 +24,7 @@ class KnowledgeBaseFactory:
             default_config: 默认配置
         """
         if not issubclass(kb_class, KnowledgeBase):
-            raise ValueError(f"Knowledge base class must inherit from KnowledgeBase")
+            raise ValueError("Knowledge base class must inherit from KnowledgeBase")
 
         cls._kb_types[kb_type] = kb_class
         cls._default_configs[kb_type] = default_config or {}
@@ -67,7 +67,7 @@ class KnowledgeBaseFactory:
             raise
 
     @classmethod
-    def get_available_types(cls) -> Dict[str, Dict]:
+    def get_available_types(cls) -> dict[str, dict]:
         """
         获取所有可用的知识库类型
 
@@ -97,7 +97,7 @@ class KnowledgeBaseFactory:
         return kb_type in cls._kb_types
 
     @classmethod
-    def get_default_config(cls, kb_type: str) -> Dict:
+    def get_default_config(cls, kb_type: str) -> dict:
         """
         获取指定类型的默认配置
 

@@ -134,7 +134,7 @@ const formatDate = (dateString) => {
           font-weight: 500;
 
           &:hover {
-            color: var(--main-600);
+            color: var(--main-color);
             text-decoration: underline;
           }
         }

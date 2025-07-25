@@ -3,25 +3,22 @@ import time
 import traceback
 import json
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Any
 from datetime import datetime
+from functools import partial
 
-try:
-    from pymilvus import (
-        connections, utility, Collection, CollectionSchema,
-        FieldSchema, DataType, db
-    )
-    MILVUS_AVAILABLE = True
-except ImportError:
-    MILVUS_AVAILABLE = False
-    connections = None
-    utility = None
-    Collection = None
+from pymilvus import (
+    connections, utility, Collection, CollectionSchema,
+    FieldSchema, DataType, db
+)
 
-from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
-from src.utils import logger, hashstr
 from src import config
+from src.models.embedding import OtherEmbedding
+from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
+from src.utils import logger, hashstr
+
+MILVUS_AVAILABLE = True
 
 
 class MilvusKB(KnowledgeBase):
@@ -51,7 +48,7 @@ class MilvusKB(KnowledgeBase):
         self.connection_alias = f"milvus_{hashstr(work_dir, 6)}"
 
         # 存储集合映射 {db_id: Collection}
-        self.collections: Dict[str, Any] = {}
+        self.collections: dict[str, Any] = {}
 
         # 分块配置
         self.chunk_size = kwargs.get('chunk_size', 1000)
@@ -91,7 +88,7 @@ class MilvusKB(KnowledgeBase):
             logger.error(f"Failed to connect to Milvus: {e}")
             raise
 
-    async def _create_kb_instance(self, db_id: str, config: Dict) -> Any:
+    async def _create_kb_instance(self, db_id: str, kb_config: dict) -> Any:
         """创建 Milvus 集合"""
         logger.info(f"Creating Milvus collection for {db_id}")
 
@@ -170,39 +167,27 @@ class MilvusKB(KnowledgeBase):
         except Exception as e:
             logger.warning(f"Failed to load collection into memory: {e}")
 
-    def _get_embedding_function(self, embed_info: Dict):
+    def _get_async_embedding_function(self, embed_info: dict):
         """获取 embedding 函数"""
         config_dict = get_embedding_config(embed_info)
-        model = config_dict["model"]
-        api_key = config_dict["api_key"]
-        base_url = config_dict["base_url"]
+        embedding_model = OtherEmbedding(
+            model=config_dict.get("model"),
+            base_url=config_dict.get("base_url"),
+            api_key=config_dict.get("api_key"),
+        )
 
-        # 返回同步的嵌入函数
-        def embedding_function(texts):
-            import asyncio
-            import concurrent.futures
-            from lightrag.llm.openai import openai_embed
+        return partial(embedding_model.abatch_encode, batch_size=40)
 
-            def run_embedding():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(
-                        openai_embed(
-                            texts=texts,
-                            model=model,
-                            api_key=api_key,
-                            base_url=base_url.replace("/embeddings", ""),
-                        )
-                    )
-                finally:
-                    loop.close()
+    def _get_embedding_function(self, embed_info: dict):
+        """获取 embedding 函数"""
+        config_dict = get_embedding_config(embed_info)
+        embedding_model = OtherEmbedding(
+            model=config_dict.get("model"),
+            base_url=config_dict.get("base_url"),
+            api_key=config_dict.get("api_key"),
+        )
 
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(run_embedding)
-                return future.result()
-
-        return embedding_function
+        return partial(embedding_model.batch_encode, batch_size=40)
 
     async def _get_milvus_collection(self, db_id: str):
         """获取或创建 Milvus 集合"""
@@ -225,12 +210,21 @@ class MilvusKB(KnowledgeBase):
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
-    def _split_text_into_chunks(self, text: str, file_id: str, filename: str) -> List[Dict]:
+    def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
-        return split_text_into_chunks(text, file_id, filename, self.chunk_size, self.chunk_overlap)
+        # 检查是否使用QA分割模式
+        use_qa_split = params.get('use_qa_split', False)
 
-    async def add_content(self, db_id: str, items: List[str],
-                         params: Optional[Dict] = None) -> List[Dict]:
+        if use_qa_split:
+            # 使用QA分割模式
+            qa_separator = params.get('qa_separator', '\n\n\n')
+            return split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
+        else:
+            # 使用传统分割模式
+            return split_text_into_chunks(text, file_id, filename, params)
+
+    async def add_content(self, db_id: str, items: list[str],
+                         params: dict | None = {}) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -240,7 +234,7 @@ class MilvusKB(KnowledgeBase):
             raise ValueError(f"Failed to get Milvus collection for {db_id}")
 
         embed_info = self.databases_meta[db_id].get("embed_info", {})
-        embedding_function = self._get_embedding_function(embed_info)
+        embedding_function = self._get_async_embedding_function(embed_info)
 
         content_type = params.get('content_type', 'file') if params else 'file'
         processed_items_info = []
@@ -250,7 +244,6 @@ class MilvusKB(KnowledgeBase):
             metadata = prepare_item_metadata(item, content_type, db_id)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
-            item_path = metadata["path"]
 
             # 添加文件记录
             file_record = metadata.copy()
@@ -270,14 +263,14 @@ class MilvusKB(KnowledgeBase):
                     markdown_content = await self._process_url_to_markdown(item, params=params)
 
                 # 分割文本成块
-                chunks = self._split_text_into_chunks(markdown_content, file_id, filename)
+                chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
                 logger.info(f"Split {filename} into {len(chunks)} chunks")
 
                 # 准备 Milvus 插入的数据
                 if chunks:
                     # 生成嵌入向量
                     texts = [chunk["content"] for chunk in chunks]
-                    embeddings = embedding_function(texts)
+                    embeddings = await embedding_function(texts)
 
                     # 准备插入数据
                     entities = [
@@ -390,7 +383,7 @@ class MilvusKB(KnowledgeBase):
             del self.files_meta[file_id]
             self._save_metadata()
 
-    async def get_file_info(self, db_id: str, file_id: str) -> Dict:
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件信息和chunks"""
         if file_id not in self.files_meta:
             raise Exception(f"File not found: {file_id}")
@@ -431,5 +424,5 @@ class MilvusKB(KnowledgeBase):
         try:
             if hasattr(self, 'connection_alias'):
                 connections.disconnect(self.connection_alias)
-        except:
+        except Exception:
             pass

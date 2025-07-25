@@ -2,7 +2,6 @@ import os
 import time
 import traceback
 from pathlib import Path
-from typing import Optional, Dict, List, Any
 from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
@@ -11,7 +10,7 @@ from lightrag.utils import EmbeddingFunc, setup_logger
 from lightrag.kg.shared_storage import initialize_pipeline_status
 
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.kb_utils import split_text_into_chunks, prepare_item_metadata, get_embedding_config
+from src.knowledge.kb_utils import prepare_item_metadata, get_embedding_config
 from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
 
@@ -34,7 +33,7 @@ class LightRagKB(KnowledgeBase):
         super().__init__(work_dir)
 
         # 存储 LightRAG 实例映射 {db_id: LightRAG}
-        self.instances: Dict[str, LightRAG] = {}
+        self.instances: dict[str, LightRAG] = {}
 
         # 设置 LightRAG 日志
         log_dir = os.path.join(work_dir, "logs", "lightrag")
@@ -49,7 +48,7 @@ class LightRagKB(KnowledgeBase):
         """知识库类型标识"""
         return "lightrag"
 
-    async def _create_kb_instance(self, db_id: str, config: Dict) -> LightRAG:
+    async def _create_kb_instance(self, db_id: str, kb_config: dict) -> LightRAG:
         """创建 LightRAG 实例"""
         logger.info(f"Creating LightRAG instance for {db_id}")
 
@@ -84,7 +83,7 @@ class LightRagKB(KnowledgeBase):
         await instance.initialize_storages()
         await initialize_pipeline_status()
 
-    async def _get_lightrag_instance(self, db_id: str) -> Optional[LightRAG]:
+    async def _get_lightrag_instance(self, db_id: str) -> LightRAG | None:
         """获取或创建 LightRAG 实例"""
         if db_id in self.instances:
             return self.instances[db_id]
@@ -107,7 +106,7 @@ class LightRagKB(KnowledgeBase):
             logger.error(f"Traceback: {traceback.format_exc()}")
             return None
 
-    def _get_llm_func(self, llm_info: Dict):
+    def _get_llm_func(self, llm_info: dict):
         """获取 LLM 函数"""
         from src.models import select_model
         model = select_model(LIGHTRAG_LLM_PROVIDER, LIGHTRAG_LLM_NAME)
@@ -125,7 +124,7 @@ class LightRagKB(KnowledgeBase):
             )
         return llm_model_func
 
-    def _get_embedding_func(self, embed_info: Dict):
+    def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
         config_dict = get_embedding_config(embed_info)
 
@@ -140,8 +139,8 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
-    async def add_content(self, db_id: str, items: List[str],
-                         params: Optional[Dict] = None) -> List[Dict]:
+    async def add_content(self, db_id: str, items: list[str],
+                         params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -157,7 +156,6 @@ class LightRagKB(KnowledgeBase):
             # 准备文件元数据
             metadata = prepare_item_metadata(item, content_type, db_id)
             file_id = metadata["file_id"]
-            filename = metadata["filename"]
             item_path = metadata["path"]
 
             # 添加文件记录
@@ -241,7 +239,7 @@ class LightRagKB(KnowledgeBase):
             del self.files_meta[file_id]
             self._save_metadata()
 
-    async def get_file_info(self, db_id: str, file_id: str) -> Dict:
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件信息和chunks"""
         if file_id not in self.files_meta:
             raise Exception(f"File not found: {file_id}")

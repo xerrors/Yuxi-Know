@@ -211,11 +211,11 @@ onMounted(() => {
 
         &:hover {
           background-color: var(--main-10);
-          color: var(--main-600);
+          color: var(--main-color);
         }
 
         &.active {
-          color: var(--main-600);
+          color: var(--main-color);
           border: 1px solid var(--main-500);
           background-color: var(--main-10);
         }
@@ -241,7 +241,7 @@ button.ant-btn-icon-only {
   font-size: 14px;
 
   &:hover {
-    background-color: var(--main-600);
+    background-color: var(--main-color);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     color: white;
   }

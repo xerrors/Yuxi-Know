@@ -120,6 +120,12 @@ EMBED_MODEL_INFO:
     base_url: https://api.siliconflow.cn/v1/embeddings
     api_key: SILICONFLOW_API_KEY
 
+  siliconflow/Qwen/Qwen3-Embedding-0.6B:
+    name: Qwen/Qwen3-Embedding-0.6B
+    dimension: 1024
+    base_url: https://api.siliconflow.cn/v1/embeddings
+    api_key: SILICONFLOW_API_KEY
+
   vllm/Qwen/Qwen3-Embedding-0.6B:
     name: Qwen3-Embedding-0.6B
     dimension: 1024

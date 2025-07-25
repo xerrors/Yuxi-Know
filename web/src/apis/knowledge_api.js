@@ -36,13 +36,7 @@ export const databaseApi = {
    */
   createDatabase: async (databaseData) => {
     checkAdminPermission()
-    return apiPost('/api/knowledge/databases', {
-      database_name: databaseData.database_name,
-      description: databaseData.description,
-      embed_model_name: databaseData.embed_model_name,
-      kb_type: databaseData.kb_type || 'lightrag',
-      ...databaseData.extra_config
-    }, {}, true)
+    return apiPost('/api/knowledge/databases', databaseData, {}, true)
   },
 
   /**

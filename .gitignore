@@ -28,6 +28,7 @@ cache
 ### IDE
 .vscode
 .idea
+.vibe
 *.nogit*
 *.private*
 *.local*
