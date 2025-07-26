@@ -317,21 +317,22 @@
           >添加文件</a-button>
         </div>
         <div class="panel-actions">
-          <div class="refresh-group">
-            <a-button
-              type="text"
-              @click="handleRefresh"
-              :loading="state.refrashing"
-              :icon="h(ReloadOutlined)"
-              title="刷新"
-            />
-            <a-switch
-              v-model:checked="state.autoRefresh"
-              @change="toggleAutoRefresh"
-              size="small"
-              title="自动刷新文件状态"
-            />
-          </div>
+          <a-button
+            type="text"
+            @click="handleRefresh"
+            :loading="state.refrashing"
+            :icon="h(ReloadOutlined)"
+            title="刷新"
+          />
+          <a-button
+            @click="toggleAutoRefresh"
+            size="small"
+            :type="state.autoRefresh ? 'primary' : 'default'"
+            title="自动刷新文件状态"
+            class="auto-refresh-btn panel-action-btn"
+          >
+            Auto
+          </a-button>
           <a-input
             v-model:value="filenameFilter"
             placeholder="搜索文件名"
@@ -345,7 +346,7 @@
             @click="toggleRightPanel"
             :icon="h(ChevronLast)"
             title="切换右侧面板"
-            class="panel-action-btn"
+            class="panel-action-btn expanded"
             :class="{ 'active': state.rightPanelVisible }"
           />
         </div>
@@ -425,7 +426,7 @@
 
     <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%', display: state.rightPanelVisible ? 'flex' : 'none' }">
 
-      <div class="graph-section" :class="{ collapsed: !panels.graph.visible }" :style="computePanelStyles().graph">
+      <div class="graph-section" :class="{ collapsed: !panels.graph.visible }" :style="computePanelStyles().graph" v-if="isGraphSupported" >
         <div class="section-header">
           <div class="header-left">
             <h3>知识图谱</h3>
@@ -560,29 +561,41 @@
 
         <div class="query-content content" v-show="panels.query.visible">
           <div class="query-input-row">
-            <a-input-search
+            <a-textarea
               v-model:value="queryText"
               placeholder="输入查询内容"
-              class="compact-query-input"
-              :loading="state.searchLoading"
-              @search="onQuery"
-              @keydown.ctrl.enter="onQuery"
-              enter-button="搜索"
-              size="default"
+              :auto-size="{ minRows: 3, maxRows: 6 }"
+              class="compact-query-textarea"
             />
-          </div>
-
-          <div class="query-examples-compact">
-            <span class="examples-label">示例：</span>
-            <a-button
-              v-for="example in queryExamples"
-              :key="example"
-              @click="useQueryExample(example)"
-              size="small"
-              class="example-btn"
-            >
-              {{ example }}
-            </a-button>
+            <div class="query-actions">
+              <div class="search-row">
+                <a-button
+                  @click="onQuery"
+                  :loading="state.searchLoading"
+                  class="search-button"
+                >
+                  <template #icon>
+                    <SearchOutlined />
+                  </template>
+                  搜索
+                </a-button>
+                <div class="query-examples-compact">
+                  <span class="examples-label">示例：</span>
+                  <div class="examples-container">
+                    <transition name="fade" mode="out-in">
+                      <a-button
+                        :key="currentExampleIndex"
+                        @click="useQueryExample(queryExamples[currentExampleIndex])"
+                        size="small"
+                        class="example-btn"
+                      >
+                        {{ queryExamples[currentExampleIndex] }}
+                      </a-button>
+                    </transition>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="query-results" v-if="queryResult">
@@ -1272,14 +1285,87 @@ watch(() => database.value, () => {
 // 添加更多示例查询
 const queryExamples = ref([
   '孕妇应该避免吃哪些水果？',
-  '荔枝应该怎么清洗？'
+  '荔枝应该怎么清洗？',
+  '如何判断西瓜是否成熟？',
+  '苹果有哪些营养价值？',
+  '什么季节最适合吃梨？',
+  '如何保存草莓以延长保质期？',
+  '香蕉变黑后还能吃吗？',
+  '橙子皮可以用来做什么？'
 ]);
+
+// 当前示例索引
+const currentExampleIndex = ref(0);
 
 // 使用示例查询的方法
 const useQueryExample = (example) => {
   queryText.value = example;
   onQuery();
 };
+
+// 示例轮播相关
+let exampleCarouselInterval = null;
+const startExampleCarousel = () => {
+  if (exampleCarouselInterval) return;
+
+  exampleCarouselInterval = setInterval(() => {
+    currentExampleIndex.value = (currentExampleIndex.value + 1) % queryExamples.value.length;
+  }, 6000); // 每6秒切换一次
+};
+
+const stopExampleCarousel = () => {
+  if (exampleCarouselInterval) {
+    clearInterval(exampleCarouselInterval);
+    exampleCarouselInterval = null;
+  }
+};
+
+// 组件挂载时启动示例轮播
+onMounted(() => {
+  getDatabaseInfo();
+  startAutoRefresh();
+  // 初始化时检查OCR服务健康状态
+  checkOcrHealth();
+
+  setTimeout(() => {
+    if (isGraphSupported.value) {
+      refreshGraph();
+    }
+  }, 800);
+
+  // 添加拖拽事件监听
+  if (resizeHandle.value) {
+    resizeHandle.value.addEventListener('mousedown', handleMouseDown);
+  }
+  if (resizeHandleHorizontal.value) {
+    resizeHandleHorizontal.value.addEventListener('mousedown', handleMouseDownHorizontal);
+  }
+
+  // 添加键盘事件监听
+  document.addEventListener('keydown', handleKeyDown);
+
+  // 启动示例轮播
+  startExampleCarousel();
+});
+
+// 组件卸载时停止示例轮播
+onUnmounted(() => {
+  stopAutoRefresh();
+  if (resizeHandle.value) {
+    resizeHandle.value.removeEventListener('mousedown', handleMouseDown);
+  }
+  if (resizeHandleHorizontal.value) {
+    resizeHandleHorizontal.value.removeEventListener('mousedown', handleMouseDownHorizontal);
+  }
+  document.removeEventListener('mousemove', handleMouseMove);
+  document.removeEventListener('mouseup', handleMouseUp);
+  document.removeEventListener('mousemove', handleMouseMoveHorizontal);
+  document.removeEventListener('mouseup', handleMouseUpHorizontal);
+  document.removeEventListener('keydown', handleKeyDown);
+
+  // 停止示例轮播
+  stopExampleCarousel();
+});
 
 // 拖拽调整大小功能
 const handleMouseDown = () => {
@@ -1340,30 +1426,6 @@ const handleMouseUpHorizontal = () => {
   document.body.style.userSelect = '';
 };
 
-// 添加事件监听
-onMounted(() => {
-  getDatabaseInfo();
-  startAutoRefresh();
-  // 初始化时检查OCR服务健康状态
-  checkOcrHealth();
-
-  setTimeout(() => {
-    if (isGraphSupported.value) {
-      refreshGraph();
-    }
-  }, 800);
-
-  // 添加拖拽事件监听
-  if (resizeHandle.value) {
-    resizeHandle.value.addEventListener('mousedown', handleMouseDown);
-  }
-  if (resizeHandleHorizontal.value) {
-    resizeHandleHorizontal.value.addEventListener('mousedown', handleMouseDownHorizontal);
-  }
-
-  // 添加键盘事件监听
-  document.addEventListener('keydown', handleKeyDown);
-});
 
 // 键盘事件处理
 const handleKeyDown = (e) => {
@@ -1772,8 +1834,9 @@ const stopAutoRefresh = () => {
 };
 
 // 切换自动刷新状态
-const toggleAutoRefresh = (checked) => {
-  if (checked) {
+const toggleAutoRefresh = () => {
+  state.autoRefresh = !state.autoRefresh; // Toggle the state directly
+  if (state.autoRefresh) {
     startAutoRefresh();
   } else {
     stopAutoRefresh();
@@ -1979,6 +2042,7 @@ const getFileIconColor = (filename) => {
   display: flex;
   width: 100%;
 }
+
 
 .my-table {
   button.ant-btn-link {
@@ -2504,16 +2568,6 @@ const getFileIconColor = (filename) => {
         }
       }
 
-      .refresh-group {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        background: var(--gray-100);
-        padding: 0px 6px;
-        border-radius: 8px;
-        border: 1px solid var(--gray-300);
-      }
-
       .ant-btn {
         transition: all 0.2s ease;
         border-radius: 4px;
@@ -2693,48 +2747,95 @@ const getFileIconColor = (filename) => {
     .query-input-row {
       margin-bottom: 4px;
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
-    .compact-query-input {
+    .compact-query-textarea {
       width: 100%;
-      border-radius: 4px;
-      font-size: 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      border: 1px solid var(--gray-300);
+      box-shadow: 0 0 4px 0px rgba(2, 10, 15, 0.05);
+      transition: border-color 0.2s ease;
+      padding: 8px 12px;
 
-      .ant-input {
-        font-size: 12px;
+      &:focus {
+        border-color: var(--main-color);
+        box-shadow: 0 0 4px 0px rgba(2, 10, 15, 0.05);
       }
 
-      .ant-btn {
-        font-size: 12px;
+      :deep(.ant-input) {
+        font-size: 13px;
+        padding: 8px 12px;
       }
+
+      :deep(.ant-input:focus) {
+        border-color: var(--main-color);
+        box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+      }
+    }
+
+    .query-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .search-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .search-button {
+      font-size: 13px;
+      height: 32px;
+      padding: 4px 16px;
+      border-color: var(--gray-300);
+      border-radius: 6px;
     }
 
     .query-examples-compact {
-      margin-top: 4px;
-      margin-bottom: 6px;
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
       align-items: center;
+      gap: 6px;
       flex-shrink: 0;
 
       .examples-label {
         font-size: 12px;
         color: var(--gray-600);
+        white-space: nowrap;
       }
 
-      .example-btn {
-        background-color: var(--gray-100);
-        border: 1px solid var(--gray-200);
-        color: var(--gray-700);
-        font-size: 12px;
+      .examples-container {
+        position: relative;
+        height: 26px;
+        min-width: 150px;
+        font-size: 13px;
 
-        &:hover {
-          background-color: var(--main-light-4);
-          border-color: var(--main-color);
-          color: var(--main-color);
+        .example-btn {
+          background-color: var(--gray-100);
+          border: 1px solid var(--gray-200);
+          color: var(--gray-700);
+          font-size: 13px;
+
+          &:hover {
+            background-color: var(--main-light-5);
+            border-color: var(--main-color);
+            color: var(--main-400);
+          }
         }
       }
+    }
+
+    // 轮播动画
+    .fade-enter-active, .fade-leave-active {
+      transition: opacity 0.2s;
+    }
+    .fade-enter-from, .fade-leave-to {
+      opacity: 0;
     }
 
 
@@ -2813,18 +2914,30 @@ const getFileIconColor = (filename) => {
 }
 
 .panel-action-btn {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border-radius: 6px;
   border: 1px solid var(--gray-300);
   background-color: var(--gray-50);
-  transition: all 0.1s ease;
   color: var(--gray-700);
-  transform: scaleX(-1);
-  padding: 4px;
+  transition: all 0.1s ease;
+
+  &.expanded {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: scaleX(-1);
+    padding: 4px;
+  }
+
+
+  &.auto-refresh-btn {
+    &.ant-btn-primary {
+      background-color: var(--main-color); /* Ant Design primary color */
+      border-color: var(--main-color);
+      color: #fff;
+    }
+  }
 
   &:hover {
     background-color: var(--main-light-5);
@@ -2832,7 +2945,7 @@ const getFileIconColor = (filename) => {
     color: var(--main-color);
   }
 
-  &.active {
+  &.active.expanded {
     transform: scaleX(1);
   }
 }
