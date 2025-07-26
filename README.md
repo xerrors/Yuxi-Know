@@ -32,6 +32,8 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 ### 系统要求
 
+项目本身不需要显卡支持，可以运行在任何设备上。对于模型推理或者文档解析服务都可以和项目本身解耦，通过环境变量配置对应的服务即可。同时项目也提供了本地部署基于 vllm 的脚本。
+
 - Docker 和 Docker Compose
 - 2GB+ 可用内存
 - （可选）CUDA 支持的 GPU（用于 OCR 服务）
@@ -71,16 +73,13 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 ### 故障排除
 
+- **镜像拉取失败**：如果拉取镜像失败，可以尝试手动拉取：
+  ```bash
+  bash docker/pull_image.sh python:3.13-slim  # 替换后面的 repo_name 即可
+  ```
 - **内存不足**：如果 Milvus 启动失败，执行 `docker compose up milvus -d && docker restart api-dev`
 - **查看日志**：`docker logs api-dev -f`
 
-## 📋 更新日志
-
-- **2025.05.07** - 新增三级权限控制系统 [PR#173](https://github.com/xerrors/Yuxi-Know/pull/173)
-- **2025.03.30** - 智能体功能集成 [PR#96](https://github.com/xerrors/Yuxi-Know/pull/96)
-- **2025.02.24** - 新增网页检索功能，支持实时信息获取
-- **2025.02.23** - SiliconFlow Rerank 和 Embedding 模型支持
-- **2025.02.20** - DeepSeek-R1 模型支持
 
 ## 🤖 模型配置
 
@@ -108,10 +107,15 @@ DEEPSEEK_API_KEY=sk-your-deepseek-key
 TAVILY_API_KEY=your-tavily-key          # 联网搜索功能
 ```
 
-### 本地模型部署
+### OpenAI 兼容模型
 
-支持通过 vLLM 或 Ollama 部署本地模型：
-然后在 Web 界面的"设置"中添加本地模型地址。
+项目理论上兼容任何 OpenAI 兼容的模型，包括但不限于：
+
+- vLLM
+- Ollama
+- 其他 API 中转或者代理服务
+
+在 Web 界面的"设置"中添加本地模型地址。
 
 ![本地模型配置](./docs/images/custom_models.png)
 
@@ -140,18 +144,19 @@ TAVILY_API_KEY=your-tavily-key          # 联网搜索功能
 
 3. **现有图谱接入**：修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置
 
-### 高级功能
-
-- **联网搜索**：配置 `TAVILY_API_KEY` 获取实时信息
-- **智能体开发**：支持自定义智能体逻辑
-- **权限管理**：三级用户权限体系
-- **OCR 增强**：可选 MinerU 或 PP-Structure-V3 服务
-
 ## 🔧 高级配置
 
 ### OCR 服务（可选）
 
-提升 PDF 解析准确性，需要 GPU 支持：
+对于基础的 OCR 服务（RapidOCR onnx 版本），可以使用 SWHL/RapidOCR 的 onnx 版本，但是需要提前将模型下载到 `$MODEL_DIR` 目录下。
+
+```bash
+huggingface-cli download SWHL/RapidOCR --local-dir ${MODEL_DIR:-./models}/SWHL/RapidOCR
+```
+
+*如果提示 `[Errno 13] Permission denied` 则需要使用 sudo 修改权限之后再执行*
+
+提升 PDF 解析准确性，可以选择使用 MinerU 或 PP-Structure-V3 服务，但是需要 GPU 支持：
 
 ```bash
 # MinerU（需要 CUDA 12.4+）
@@ -191,13 +196,7 @@ your_provider:
 
 ## ❓ 常见问题
 
-### 安装和部署
-
-**Q: 如何优雅拉取镜像？**
-```bash
-bash docker/pull_image.sh python:3.12
-```
-
+暂无
 
 ## 🤝 参与贡献
 

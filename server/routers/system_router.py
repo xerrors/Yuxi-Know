@@ -220,7 +220,7 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
             health_status["mineru_ocr"]["message"] = f"MinerU服务运行正常 ({mineru_uri})"
         else:
             health_status["mineru_ocr"]["status"] = "unhealthy"
-            health_status["mineru_ocr"]["message"] = f"MinerU服务响应异常: {response.status_code}"
+            health_status["mineru_ocr"]["message"] = f"MinerU服务响应异常({mineru_uri}): {response.status_code}"
     except requests.exceptions.ConnectionError:
         health_status["mineru_ocr"]["status"] = "unavailable"
         health_status["mineru_ocr"]["message"] = "MinerU服务无法连接，请检查服务是否启动"
@@ -239,16 +239,16 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
         response = requests.get(health_url, timeout=5)
         if response.status_code == 200:
             health_status["paddlex_ocr"]["status"] = "healthy"
-            health_status["paddlex_ocr"]["message"] = f"PaddleX服务运行正常 ({paddlex_uri})"
+            health_status["paddlex_ocr"]["message"] = f"PaddleX服务运行正常({paddlex_uri})"
         else:
             health_status["paddlex_ocr"]["status"] = "unhealthy"
-            health_status["paddlex_ocr"]["message"] = f"PaddleX服务响应异常: {response.status_code}"
+            health_status["paddlex_ocr"]["message"] = f"PaddleX服务响应异常({paddlex_uri}): {response.status_code}"
     except requests.exceptions.ConnectionError:
         health_status["paddlex_ocr"]["status"] = "unavailable"
-        health_status["paddlex_ocr"]["message"] = "PaddleX服务无法连接，请检查服务是否启动"
+        health_status["paddlex_ocr"]["message"] = "PaddleX服务无法连接，请检查服务是否启动({paddlex_uri})"
     except requests.exceptions.Timeout:
         health_status["paddlex_ocr"]["status"] = "timeout"
-        health_status["paddlex_ocr"]["message"] = "PaddleX服务连接超时"
+        health_status["paddlex_ocr"]["message"] = "PaddleX服务连接超时({paddlex_uri})"
     except Exception as e:
         health_status["paddlex_ocr"]["status"] = "error"
         health_status["paddlex_ocr"]["message"] = f"PaddleX服务检查失败: {str(e)}"

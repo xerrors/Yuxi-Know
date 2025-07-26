@@ -71,7 +71,7 @@ const props = defineProps({
 
   h1 {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 500;
     color: rgba(0, 0, 0, 0.85);
   }

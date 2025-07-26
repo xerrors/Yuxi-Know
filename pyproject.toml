@@ -29,7 +29,6 @@ dependencies = [
     "llama-index-readers-file>=0.4.7",
     "markdownify>=1.1.0",
     "mcp>=1.12.0",
-    "mineru>=2.0.6",
     "neo4j>=5.28.1",
     "networkx>=3.5",
     "openai>=1.76.0",
@@ -48,6 +47,11 @@ dependencies = [
     "tavily-python>=0.7.0",
     "unstructured>=0.17.2",
     "uvicorn[standard]>=0.34.2",
+    "httpx>=0.27.0",
+    "tqdm>=4.66.4",
+    "rich>=13.7.1",
+    "typer>=0.16.0",
+    "mineru>=2.1.6",
 ]
 [tool.ruff]
 line-length = 210  # 代码最大行宽
