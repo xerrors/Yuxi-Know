@@ -371,7 +371,10 @@
           emptyText: emptyText
         }">
         <template #bodyCell="{ column, text, record }">
-          <a-button v-if="column.key === 'filename'"  class="main-btn" type="link" @click="openFileDetail(record)">{{ text }}</a-button>
+          <a-button v-if="column.key === 'filename'"  class="main-btn" type="link" @click="openFileDetail(record)">
+            <component :is="getFileIcon(text)" :style="{ marginRight: '6px', color: getFileIconColor(text) }" />
+            {{ text }}
+          </a-button>
           <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
           <CheckCircleFilled v-else-if="column.key === 'status' && text === 'done'" style="color: #41A317;"/>
           <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
@@ -601,6 +604,13 @@ import {
   DownOutlined,
   ExpandOutlined,
   CompressOutlined,
+  FileTextFilled,
+  FileImageFilled,
+  FileMarkdownFilled,
+  FilePdfFilled,
+  FileWordFilled,
+  FileExcelFilled,
+  FileUnknownFilled,
 } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
@@ -1658,6 +1668,88 @@ const getKbTypeColor = (type) => {
     milvus: 'red'
   }
   return colors[type] || 'blue'
+}
+
+// 根据文件扩展名获取文件图标
+const getFileIcon = (filename) => {
+  if (!filename) return FileUnknownFilled
+  
+  const extension = filename.toLowerCase().split('.').pop()
+  
+  const iconMap = {
+    // 文本文件
+    'txt': FileTextFilled,
+    'text': FileTextFilled,
+    'log': FileTextFilled,
+    
+    // Markdown文件
+    'md': FileMarkdownFilled,
+    'markdown': FileMarkdownFilled,
+    
+    // PDF文件
+    'pdf': FilePdfFilled,
+    
+    // Word文档
+    'doc': FileWordFilled,
+    'docx': FileWordFilled,
+    
+    // Excel文档
+    'xls': FileExcelFilled,
+    'xlsx': FileExcelFilled,
+    'csv': FileExcelFilled,
+    
+    // 图片文件
+    'jpg': FileImageFilled,
+    'jpeg': FileImageFilled,
+    'png': FileImageFilled,
+    'gif': FileImageFilled,
+    'bmp': FileImageFilled,
+    'svg': FileImageFilled,
+    'webp': FileImageFilled,
+  }
+  
+  return iconMap[extension] || FileUnknownFilled
+}
+
+// 根据文件扩展名获取文件图标颜色
+const getFileIconColor = (filename) => {
+  if (!filename) return '#8c8c8c'
+  
+  const extension = filename.toLowerCase().split('.').pop()
+  
+  const colorMap = {
+    // 文本文件 - 蓝色
+    'txt': '#1890ff',
+    'text': '#1890ff',
+    'log': '#1890ff',
+    
+    // Markdown文件 - 深蓝色
+    'md': '#0050b3',
+    'markdown': '#0050b3',
+    
+    // PDF文件 - 红色
+    'pdf': '#ff4d4f',
+    
+    // Word文档 - 深蓝色
+    'doc': '#2f54eb',
+    'docx': '#2f54eb',
+    
+    // Excel文档 - 绿色
+    'xls': '#52c41a',
+    'xlsx': '#52c41a',
+    'csv': '#52c41a',
+    
+    // 图片文件 - 紫色
+    'jpg': '#722ed1',
+    'jpeg': '#722ed1',
+    'png': '#722ed1',
+    'gif': '#722ed1',
+    'bmp': '#722ed1',
+    'svg': '#722ed1',
+    'webp': '#722ed1',
+  }
+  
+  return colorMap[extension] || '#8c8c8c'
 }
 
 
