@@ -72,7 +72,7 @@ async def update_database_info(
     """更新知识库信息"""
     logger.debug(f"Update database {db_id} info: {name}, {description}")
     try:
-        database = knowledge_base.update_database(db_id, name, description)
+        database = await knowledge_base.update_database(db_id, name, description)
         return {"message": "更新成功", "database": database}
     except Exception as e:
         logger.error(f"更新数据库失败 {e}, {traceback.format_exc()}")
@@ -83,7 +83,7 @@ async def delete_database(db_id: str, current_user: User = Depends(get_admin_use
     """删除知识库"""
     logger.debug(f"Delete database {db_id}")
     try:
-        knowledge_base.delete_database(db_id)
+        await knowledge_base.delete_database(db_id)
 
         # 需要重新加载所有智能体，因为工具刷新了
         from src.agents import agent_manager

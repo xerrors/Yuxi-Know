@@ -2,6 +2,7 @@ import os
 import time
 import traceback
 import json
+import asyncio
 from pathlib import Path
 from typing import Any
 from datetime import datetime
@@ -53,6 +54,9 @@ class MilvusKB(KnowledgeBase):
         # 分块配置
         self.chunk_size = kwargs.get('chunk_size', 1000)
         self.chunk_overlap = kwargs.get('chunk_overlap', 200)
+
+        # 元数据锁
+        self._metadata_lock = asyncio.Lock()
 
         # 初始化连接
         self._init_connection()
@@ -240,64 +244,59 @@ class MilvusKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            # 准备文件元数据
             metadata = prepare_item_metadata(item, content_type, db_id)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
 
-            # 添加文件记录
             file_record = metadata.copy()
-            del file_record["file_id"]  # 从记录中移除file_id，因为它是key
-            self.files_meta[file_id] = file_record
-            self._save_metadata()
+            del file_record["file_id"]
+            async with self._metadata_lock:
+                self.files_meta[file_id] = file_record
+                self._save_metadata()
 
-            # 添加 file_id 到返回数据
-            file_record = file_record.copy()
             file_record["file_id"] = file_id
 
             try:
-                # 根据内容类型处理内容
                 if content_type == "file":
                     markdown_content = await self._process_file_to_markdown(item, params=params)
-                else:  # URL
+                else:
                     markdown_content = await self._process_url_to_markdown(item, params=params)
 
-                # 分割文本成块
                 chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
                 logger.info(f"Split {filename} into {len(chunks)} chunks")
 
-                # 准备 Milvus 插入的数据
                 if chunks:
-                    # 生成嵌入向量
                     texts = [chunk["content"] for chunk in chunks]
                     embeddings = await embedding_function(texts)
 
-                    # 准备插入数据
                     entities = [
-                        [chunk["id"] for chunk in chunks],                    # id
-                        [chunk["content"] for chunk in chunks],              # content
-                        [chunk["source"] for chunk in chunks],               # source
-                        [chunk["chunk_id"] for chunk in chunks],             # chunk_id
-                        [chunk["file_id"] for chunk in chunks],              # file_id
-                        [chunk["chunk_index"] for chunk in chunks],          # chunk_index
-                        embeddings                                            # embedding
+                        [chunk["id"] for chunk in chunks], 
+                        [chunk["content"] for chunk in chunks], 
+                        [chunk["source"] for chunk in chunks], 
+                        [chunk["chunk_id"] for chunk in chunks], 
+                        [chunk["file_id"] for chunk in chunks], 
+                        [chunk["chunk_index"] for chunk in chunks], 
+                        embeddings
                     ]
 
-                    # 插入到 Milvus
-                    collection.insert(entities)
-                    collection.flush()
+                    def _insert_and_flush():
+                        collection.insert(entities)
+                        collection.flush()
+
+                    await asyncio.to_thread(_insert_and_flush)
 
                 logger.info(f"Inserted {content_type} {item} into Milvus. Done.")
 
-                # 更新状态为完成
-                self.files_meta[file_id]["status"] = "done"
-                self._save_metadata()
+                async with self._metadata_lock:
+                    self.files_meta[file_id]["status"] = "done"
+                    self._save_metadata()
                 file_record['status'] = "done"
 
             except Exception as e:
                 logger.error(f"处理{content_type} {item} 失败: {e}, {traceback.format_exc()}")
-                self.files_meta[file_id]["status"] = "failed"
-                self._save_metadata()
+                async with self._metadata_lock:
+                    self.files_meta[file_id]["status"] = "failed"
+                    self._save_metadata()
                 file_record['status'] = "failed"
 
             processed_items_info.append(file_record)
@@ -367,21 +366,25 @@ class MilvusKB(KnowledgeBase):
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""
         collection = await self._get_milvus_collection(db_id)
-        if collection:
+
+        def _delete_from_milvus():
+            """同步执行 Milvus 删除操作的辅助函数"""
             try:
-                # 删除所有相关chunks
                 expr = f'file_id == "{file_id}"'
                 collection.delete(expr)
                 collection.flush()
                 logger.info(f"Deleted chunks for file {file_id} from Milvus")
-
             except Exception as e:
                 logger.error(f"Error deleting file {file_id} from Milvus: {e}")
 
-        # 删除文件记录
-        if file_id in self.files_meta:
-            del self.files_meta[file_id]
-            self._save_metadata()
+        if collection:
+            await asyncio.to_thread(_delete_from_milvus)
+
+        # 使用锁确保元数据操作的原子性
+        async with self._metadata_lock:
+            if file_id in self.files_meta:
+                del self.files_meta[file_id]
+                self._save_metadata()
 
     async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件信息和chunks"""

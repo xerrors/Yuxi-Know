@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import asyncio
 from typing import Any
 from datetime import datetime
 
@@ -32,6 +33,9 @@ class KnowledgeBaseManager:
         # 全局数据库元信息 {db_id: metadata_with_kb_type}
         self.global_databases_meta: dict[str, dict] = {}
 
+        # 元数据锁
+        self._metadata_lock = asyncio.Lock()
+
         # 加载全局元数据
         self._load_global_metadata()
 
@@ -55,16 +59,13 @@ class KnowledgeBaseManager:
     def _save_global_metadata(self):
         """保存全局元数据"""
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
-        try:
-            data = {
-                "databases": self.global_databases_meta,
-                "updated_at": datetime.now().isoformat(),
-                "version": "2.0"  # 标识新版本
-            }
-            with open(meta_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save global metadata: {e}")
+        data = {
+            "databases": self.global_databases_meta,
+            "updated_at": datetime.now().isoformat(),
+            "version": "2.0"
+        }
+        with open(meta_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _initialize_existing_kbs(self):
         """初始化已存在的知识库实例"""
@@ -139,7 +140,7 @@ class KnowledgeBaseManager:
 
         return {"databases": all_databases}
 
-    def create_database(self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs) -> dict:
+    async def create_database(self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs) -> dict:
         """
         创建数据库
 
@@ -153,48 +154,44 @@ class KnowledgeBaseManager:
         Returns:
             数据库信息字典
         """
-        # 验证知识库类型
         if not KnowledgeBaseFactory.is_type_supported(kb_type):
             available_types = list(KnowledgeBaseFactory.get_available_types().keys())
             raise ValueError(f"Unsupported knowledge base type: {kb_type}. Available types: {available_types}")
 
-        # 获取或创建对应类型的知识库实例
         kb_instance = self._get_or_create_kb_instance(kb_type)
 
-        # 在知识库实例中创建数据库
         db_info = kb_instance.create_database(database_name, description,
                                             embed_info, **kwargs)
         db_id = db_info["db_id"]
 
-        # 在全局元数据中记录
-        self.global_databases_meta[db_id] = {
-            "name": database_name,
-            "description": description,
-            "kb_type": kb_type,
-            "created_at": datetime.now().isoformat(),
-            "additional_params": kwargs.copy()  # 将所有额外参数存储在additional_params中
-        }
-
-        self._save_global_metadata()
+        async with self._metadata_lock:
+            self.global_databases_meta[db_id] = {
+                "name": database_name,
+                "description": description,
+                "kb_type": kb_type,
+                "created_at": datetime.now().isoformat(),
+                "additional_params": kwargs.copy()
+            }
+            self._save_global_metadata()
 
         logger.info(f"Created {kb_type} database: {database_name} ({db_id}) with {kwargs}")
         return db_info
 
-    def delete_database(self, db_id: str) -> dict:
+    async def delete_database(self, db_id: str) -> dict:
         """删除数据库"""
         try:
             kb_instance = self._get_kb_for_database(db_id)
             result = kb_instance.delete_database(db_id)
 
-            # 从全局元数据中删除
-            if db_id in self.global_databases_meta:
-                del self.global_databases_meta[db_id]
-                self._save_global_metadata()
+            async with self._metadata_lock:
+                if db_id in self.global_databases_meta:
+                    del self.global_databases_meta[db_id]
+                    self._save_global_metadata()
 
             return result
         except KBNotFoundError as e:
             logger.warning(f"Database {db_id} not found during deletion: {e}")
-            return {"message": "删除成功"}  # 兼容性：即使不存在也返回成功
+            return {"message": "删除成功"}
 
     async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
@@ -253,16 +250,16 @@ class KnowledgeBaseManager:
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
-    def update_database(self, db_id: str, name: str, description: str) -> dict:
+    async def update_database(self, db_id: str, name: str, description: str) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)
         result = kb_instance.update_database(db_id, name, description)
 
-        # 同时更新全局元数据
-        if db_id in self.global_databases_meta:
-            self.global_databases_meta[db_id]["name"] = name
-            self.global_databases_meta[db_id]["description"] = description
-            self._save_global_metadata()
+        async with self._metadata_lock:
+            if db_id in self.global_databases_meta:
+                self.global_databases_meta[db_id]["name"] = name
+                self.global_databases_meta[db_id]["description"] = description
+                self._save_global_metadata()
 
         return result
 
