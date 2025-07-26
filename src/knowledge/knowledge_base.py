@@ -221,8 +221,11 @@ class KnowledgeBase(ABC):
                     "created_at": file_info.get("created_at", time.time())
                 }
 
-        meta["files"] = db_files
-        meta["row_count"] = len(db_files)
+        # 按创建时间倒序排序文件列表
+        sorted_files = dict(sorted(db_files.items(), key=lambda x: x[1].get("created_at", 0), reverse=True))
+
+        meta["files"] = sorted_files
+        meta["row_count"] = len(sorted_files)
         meta["status"] = "已连接"
         return meta
 
@@ -251,8 +254,11 @@ class KnowledgeBase(ABC):
                         "created_at": file_info.get("created_at", time.time())
                     }
 
-            db_dict["files"] = db_files
-            db_dict["row_count"] = len(db_files)
+            # 按创建时间倒序排序文件列表
+            sorted_files = dict(sorted(db_files.items(), key=lambda x: x[1].get("created_at", 0), reverse=True))
+
+            db_dict["files"] = sorted_files
+            db_dict["row_count"] = len(sorted_files)
             db_dict["status"] = "已连接"
             databases.append(db_dict)
 
