@@ -270,12 +270,12 @@ class MilvusKB(KnowledgeBase):
                     embeddings = await embedding_function(texts)
 
                     entities = [
-                        [chunk["id"] for chunk in chunks], 
-                        [chunk["content"] for chunk in chunks], 
-                        [chunk["source"] for chunk in chunks], 
-                        [chunk["chunk_id"] for chunk in chunks], 
-                        [chunk["file_id"] for chunk in chunks], 
-                        [chunk["chunk_index"] for chunk in chunks], 
+                        [chunk["id"] for chunk in chunks],
+                        [chunk["content"] for chunk in chunks],
+                        [chunk["source"] for chunk in chunks],
+                        [chunk["chunk_id"] for chunk in chunks],
+                        [chunk["file_id"] for chunk in chunks],
+                        [chunk["chunk_index"] for chunk in chunks],
                         embeddings
                     ]
 

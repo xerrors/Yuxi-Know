@@ -146,18 +146,18 @@ def parse_pdf(file, params=None):
     try:
         if opt_ocr == "onnx_rapid_ocr":
             from src.plugins import ocr
-            return ocr.process_pdf(file)
+            return ocr.process_pdf(file, params=params)
 
         elif opt_ocr == "mineru_ocr":
             from src.plugins import ocr
-            return ocr.process_pdf_mineru(file)
+            return ocr.process_file_mineru(file, params=params)
 
         elif opt_ocr == "paddlex_ocr":
             from src.plugins import ocr
-            return ocr.process_pdf_paddlex(file)
+            return ocr.process_file_paddlex(file, params=params)
 
         else:
-            return pdfreader(file, params=params)
+            raise ValueError(f"不支持的OCR方式: {opt_ocr}")
 
     except OCRServiceException as e:
         logger.error(f"OCR service failed: {e.service_name} - {str(e)}")
@@ -170,5 +170,49 @@ def parse_pdf(file, params=None):
             "parsing_failed"
         )
 
+
+def parse_image(file, params=None):
+    """
+    解析图像文件，支持多种OCR方式
+    """
+    from src.plugins._ocr import OCRServiceException
+
+    params = params or {}
+    opt_ocr = params.get("enable_ocr", "disable")
+
+    if opt_ocr == "disable":
+        logger.warning(f"OCR is disabled for image file: {file}, Using `onnx_rapid_ocr` instead")
+        opt_ocr = "onnx_rapid_ocr"
+
+    try:
+        if opt_ocr == "onnx_rapid_ocr":
+            from src.plugins import ocr
+            return ocr.process_image(file, params=params)
+
+        elif opt_ocr == "mineru_ocr":
+            from src.plugins import ocr
+            return ocr.process_file_mineru(file, params=params)
+
+        elif opt_ocr == "paddlex_ocr":
+            from src.plugins import ocr
+            return ocr.process_file_paddlex(file, params=params)
+
+        else:
+            raise ValueError(f"不支持的OCR方式: {opt_ocr}")
+
+    except OCRServiceException as e:
+        logger.error(f"OCR service failed: {e.service_name} - {str(e)}")
+        raise
+    except Exception as e:
+        logger.error(f"Image parsing failed: {str(e)}")
+        raise OCRServiceException(
+            f"Image解析失败: {str(e)}",
+            opt_ocr,
+            "parsing_failed"
+        )
+
 async def parse_pdf_async(file, params=None):
     return await asyncio.to_thread(parse_pdf, file, params=params)
+
+async def parse_image_async(file, params=None):
+    return await asyncio.to_thread(parse_image, file, params=params)

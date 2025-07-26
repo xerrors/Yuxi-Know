@@ -411,10 +411,10 @@ class KnowledgeBase(ABC):
             text = '\n'.join([para.text for para in doc.paragraphs])
             return f"# {file_path_obj.name}\n\n{text}"
 
-        elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp']:
+        elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']:
             # 使用 OCR 处理图片
-            from src.plugins import ocr
-            text = ocr.process_image(str(file_path_obj))
+            from src.knowledge.indexing import parse_image_async
+            text = await parse_image_async(str(file_path_obj), params=params)
             return f"# {file_path_obj.name}\n\n{text}"
 
         elif file_ext in ['.html', '.htm']:

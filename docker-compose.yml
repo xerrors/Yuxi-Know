@@ -29,7 +29,7 @@ services:
       - MINERU_OCR_URI=${MINERU_OCR_URI:-http://mineru:30000}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
-      - MODEL_DIR=/models
+      - MODEL_DIR_IN_DOCKER=/models
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex

@@ -2933,20 +2933,24 @@ const getFileIconColor = (filename) => {
 
   &.auto-refresh-btn {
     &.ant-btn-primary {
-      background-color: var(--main-color); /* Ant Design primary color */
+      background-color: var(--main-color);
       border-color: var(--main-color);
       color: #fff;
-    }
-  }
 
-  &:hover {
-    background-color: var(--main-light-5);
-    border-color: var(--main-color);
-    color: var(--main-color);
+      &:hover {
+        background-color: var(--main-color) !important;
+        color: #fff !important;
+      }
+    }
   }
 
   &.active.expanded {
     transform: scaleX(1);
+    &:hover {
+      background-color: var(--main-light-5);
+      border-color: var(--main-color);
+      color: var(--main-color);
+    }
   }
 }
 </style>

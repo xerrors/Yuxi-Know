@@ -70,11 +70,12 @@ class OCRPlugin:
     def __init__(self, **kwargs):
         self.ocr = None
         self.det_box_thresh = kwargs.get('det_box_thresh', 0.3)
+        self.model_dir_root = os.getenv("MODEL_DIR") if not os.getenv("RUNNING_IN_DOCKER") else os.getenv("MODEL_DIR_IN_DOCKER")
 
     def _check_rapid_ocr_availability(self):
         """检查RapidOCR模型是否可用"""
         try:
-            model_dir = os.path.join(os.getenv("MODEL_DIR", ""), "SWHL/RapidOCR")
+            model_dir = os.path.join(self.model_dir_root, "SWHL/RapidOCR")
             det_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
             rec_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
 
@@ -111,7 +112,7 @@ class OCRPlugin:
         # 先检查模型可用性
         self._check_rapid_ocr_availability()
 
-        model_dir = os.path.join(os.getenv("MODEL_DIR", ""), "SWHL/RapidOCR")
+        model_dir = os.path.join(self.model_dir_root, "SWHL/RapidOCR")
         det_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
         rec_model_dir = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
 
@@ -125,7 +126,7 @@ class OCRPlugin:
                 "load_failed"
             )
 
-    def process_image(self, image):
+    def process_image(self, image, params=None):
         """
         对单张图像执行OCR并提取文本
 
@@ -134,7 +135,7 @@ class OCRPlugin:
                   - str: 图像文件路径
                   - PIL.Image: PIL图像对象
                   - numpy.ndarray: numpy图像数组
-
+            params: 参数
         Returns:
             str: 提取的文本内容
         """
@@ -207,10 +208,11 @@ class OCRPlugin:
 
         return image_path
 
-    def process_pdf(self, pdf_path):
+    def process_pdf(self, pdf_path, params=None):
         """
         处理PDF文件并提取文本
         :param pdf_path: PDF文件路径
+        :param params: 参数
         :return: 提取的文本
         """
 
@@ -242,10 +244,11 @@ class OCRPlugin:
             logger.error(f"PDF processing error: {str(e)}")
             return ""
 
-    def process_pdf_mineru(self, pdf_path):
+    def process_file_mineru(self, file_path, params=None):
         """
-        使用Mineru OCR处理PDF文件
-        :param pdf_path: PDF文件路径
+        使用Mineru OCR处理文件
+        :param file_path: 文件路径
+        :param params: 参数
         :return: 提取的文本
         """
         import requests
@@ -281,23 +284,23 @@ class OCRPlugin:
 
         try:
             start_time = time.time()
-            pdf_path_list = [pdf_path]
+            file_path_list = [file_path]
             output_dir = os.path.join(os.getcwd(), "tmp", "mineru_ocr")
 
-            pdf_text = parse_doc(pdf_path_list, output_dir,
+            text = parse_doc(file_path_list, output_dir,
                              backend="vlm-sglang-client",
                              server_url=mineru_ocr_uri)[0]
 
             processing_time = time.time() - start_time
-            log_ocr_request("mineru_ocr", pdf_path, True, processing_time)
+            log_ocr_request("mineru_ocr", file_path, True, processing_time)
 
-            logger.debug(f"Mineru OCR result: {pdf_text[:50]}(...) total {len(pdf_text)} characters.")
-            return pdf_text
+            logger.debug(f"Mineru OCR result: {text[:50]}(...) total {len(text)} characters.")
+            return text
 
         except Exception as e:
             processing_time = time.time() - start_time
             error_msg = f"MinerU OCR处理失败: {str(e)}"
-            log_ocr_request("mineru_ocr", pdf_path, False, processing_time, error_msg)
+            log_ocr_request("mineru_ocr", file_path, False, processing_time, error_msg)
 
             raise OCRServiceException(
                 error_msg,
@@ -305,10 +308,11 @@ class OCRPlugin:
                 "processing_failed"
             )
 
-    def process_pdf_paddlex(self, pdf_path):
+    def process_file_paddlex(self, pdf_path, params=None):
         """
         使用Paddlex OCR处理PDF文件
         :param pdf_path: PDF文件路径
+        :param params: 参数
         :return: 提取的文本
         """
         from .paddlex import analyze_document, check_paddlex_health
@@ -380,7 +384,6 @@ def plainreader(file_path):
     with open(file_path) as f:
         text = f.read()
     return text
-
 
 
 if __name__ == "__main__":

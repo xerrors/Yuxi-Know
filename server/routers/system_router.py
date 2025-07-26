@@ -192,7 +192,8 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
 
     # 检查 RapidOCR (ONNX) 模型
     try:
-        model_dir = os.path.join(os.getenv("MODEL_DIR", ""), "SWHL/RapidOCR")
+        model_dir_root = os.getenv("MODEL_DIR") if not os.getenv("RUNNING_IN_DOCKER") else os.getenv("MODEL_DIR_IN_DOCKER")
+        model_dir = os.path.join(model_dir_root, "SWHL/RapidOCR")
         det_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
         rec_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
 
