@@ -61,12 +61,27 @@ async def process_document(
     base_url: str,
     db_id: str,
     server_file_path: str,
+    enable_ocr: str = "paddlex_ocr",
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    use_qa_split: bool = False,
+    qa_separator: str = "\n\n\n",
 ) -> bool:
     """Triggers the processing of an uploaded file in the knowledge base."""
+    # Prepare processing parameters
+    params = {
+        "chunk_size": chunk_size,
+        "chunk_overlap": chunk_overlap,
+        "enable_ocr": enable_ocr,
+        "use_qa_split": use_qa_split,
+        "qa_separator": qa_separator,
+        "content_type": "file"
+    }
+
     try:
         response = await client.post(
             f"{base_url}/knowledge/databases/{db_id}/documents",
-            json={"items": [server_file_path], "params": {"content_type": "file"}},
+            json={"items": [server_file_path], "params": params},
             timeout=600, # 10 minutes timeout for processing
         )
         response.raise_for_status()
@@ -131,6 +146,11 @@ async def worker(
     progress: Progress,
     upload_task_id: int,
     process_task_id: int,
+    enable_ocr: str = "paddlex_ocr",
+    chunk_size: int = 1000,
+    chunk_overlap: int = 200,
+    use_qa_split: bool = False,
+    qa_separator: str = "\n\n\n",
 ):
     """A worker task that uploads and then processes a single file."""
     async with semaphore:
@@ -143,7 +163,14 @@ async def worker(
             return file_path, file_hash, "upload_failed"
 
         # 2. Process file
-        success = await process_document(client, base_url, db_id, server_file_path)
+        success = await process_document(
+            client, base_url, db_id, server_file_path,
+            enable_ocr=enable_ocr,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            use_qa_split=use_qa_split,
+            qa_separator=qa_separator
+        )
         progress.update(process_task_id, advance=1, postfix=f"Processed {file_path.name}")
 
         return file_path, file_hash, "success" if success else "processing_failed"
@@ -195,6 +222,11 @@ def main(
     concurrency: int = typer.Option(4, help="The number of concurrent upload/process tasks."),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Search for files recursively in subdirectories."),
     record_file: pathlib.Path = typer.Option("scripts/tmp/batch_processed_files.txt", help="File to store processed files record."),
+    chunk_size: int = typer.Option(1000, help="Chunk size for document processing."),
+    chunk_overlap: int = typer.Option(200, help="Chunk overlap for document processing."),
+    enable_ocr: str = typer.Option("paddlex_ocr", help="OCR engine to use (paddlex_ocr, mineru_ocr, disable)."),
+    use_qa_split: bool = typer.Option(False, help="Whether to use QA splitting."),
+    qa_separator: str = typer.Option("\n\n\n", help="Separator for QA splitting."),
 ):
     """
     Batch upload and process files into a Yuxi-Know knowledge base.
@@ -259,7 +291,15 @@ def main(
 
                 for file_path, file_hash in files_to_upload:
                     task = asyncio.create_task(
-                        worker(semaphore, client, base_url, db_id, file_path, file_hash, progress, upload_task_id, process_task_id)
+                        worker(
+                            semaphore, client, base_url, db_id, file_path, file_hash,
+                            progress, upload_task_id, process_task_id,
+                            enable_ocr=enable_ocr,
+                            chunk_size=chunk_size,
+                            chunk_overlap=chunk_overlap,
+                            use_qa_split=use_qa_split,
+                            qa_separator=qa_separator
+                        )
                     )
                     tasks.append(task)
 
@@ -303,12 +343,12 @@ def main(
 """
 uv run scripts/batch_upload.py \
     --db-id kb_845a9eedb211b349ddb3127ae9be2bfa \
-    --directory data.local/XXXX/ \
-    --pattern "*.html" \
+    --directory data.local/农业农村局/无锡市农业农村局政府信息公开/ \
+    --pattern "*.docx" \
     --base-url http://172.19.13.5:5050/api \
     --username zwj \
     --password zwj12138 \
-    --concurrency 4 \
+    --concurrency 1 \
     --recursive \
     --record-file scripts/tmp/batch_processed_files.txt
 """
