@@ -146,7 +146,7 @@
                   ⚠️ {{ getSelectedOcrMessage() }}
                 </span>
                 <span v-else-if="getSelectedOcrStatus() === 'healthy'" class="ocr-healthy">
-                  ✅ OCR服务运行正常
+                  ✅ {{ getSelectedOcrMessage() }}
                 </span>
               </div>
             </div>
@@ -352,7 +352,18 @@
       </div>
 
       <div class="batch-actions-compact" v-if="selectedRowKeys.length > 0">
-        <span>{{ selectedRowKeys.length }} 项</span>
+        <div class="batch-info">
+          <span>{{ selectedRowKeys.length }} 项</span>
+          <a-button
+            type="text"
+            size="small"
+            @click="selectAllFailedFiles"
+            :disabled="state.lock"
+            title="选择所有失败的文件"
+          >
+            选择失败
+          </a-button>
+        </div>
         <a-button
           type="text"
           danger
@@ -657,6 +668,7 @@ const state = reactive({
   refreshInterval: null,
   curPage: "files",
   batchDeleting: false,
+  batchDeleteProgress: { current: 0, total: 0 }, // 批量删除进度
   chunkLoading: false,
   autoRefresh: false,
   loading: false,
@@ -1072,7 +1084,7 @@ const deleteFile = (fileId) => {
   return documentApi.deleteDocument(databaseId.value, fileId)
     .then(data => {
       console.log(data)
-      message.success(data.message || '删除成功')
+      // message.success(data.message || '删除成功')
       getDatabaseInfo()
     })
     .catch(error => {
@@ -1110,44 +1122,75 @@ const handleBatchDelete = () => {
   }
 
   const files = database.value.files || {};
-  const fileCount = selectedRowKeys.value.length;
+  const validFileIds = selectedRowKeys.value.filter(fileId => {
+    const file = files[fileId];
+    return file && !(file.status === 'processing' || file.status === 'waiting');
+  });
+
+  if (validFileIds.length === 0) {
+    message.info('没有可删除的文件');
+    return;
+  }
 
   Modal.confirm({
     title: '批量删除文件',
-    content: `确定要删除选中的 ${fileCount} 个文件吗？`,
+    content: `确定要删除选中的 ${validFileIds.length} 个文件吗？`,
     okText: '确认',
     cancelText: '取消',
     onOk: async () => {
       state.batchDeleting = true;
+      state.batchDeleteProgress.current = 0;
+      state.batchDeleteProgress.total = validFileIds.length;
+
+      let successCount = 0;
+      let failureCount = 0;
+
+      // 显示初始进度
+      let progressMessage = message.loading(`正在删除文件 0/${validFileIds.length}`, 0);
+
       try {
-        const promises = selectedRowKeys.value
-          .filter(fileId => {
-            const file = files[fileId];
-            return !(file.status === 'processing' || file.status === 'waiting');
-          })
-          .map(fileId =>
-            deleteFile(fileId)
-          );
+        // 逐个删除文件以显示进度
+        for (let i = 0; i < validFileIds.length; i++) {
+          const fileId = validFileIds[i];
+          try {
+            await deleteFile(fileId);
+            successCount++;
+          } catch (error) {
+            console.error(`删除文件 ${fileId} 失败:`, error);
+            failureCount++;
+          }
 
-        const results = await Promise.allSettled(promises);
+          // 更新进度
+          state.batchDeleteProgress.current = i + 1;
+          progressMessage?.();
 
-        const succeeded = results.filter(r => r.status === 'fulfilled').length;
-        const failed = results.filter(r => r.status === 'rejected').length;
-
-        if (succeeded > 0) {
-          message.success(`成功删除 ${succeeded} 个文件`);
+          // 显示当前进度，如果不是最后一个文件
+          if (i + 1 < validFileIds.length) {
+            progressMessage = message.loading(`正在删除文件 ${i + 1}/${validFileIds.length}`, 0);
+          }
         }
-        if (failed > 0) {
-          message.error(`${failed} 个文件删除失败`);
+
+        // 显示最终结果
+        progressMessage?.();
+
+        if (successCount > 0 && failureCount === 0) {
+          message.success(`成功删除 ${successCount} 个文件`);
+        } else if (successCount > 0 && failureCount > 0) {
+          message.warning(`成功删除 ${successCount} 个文件，${failureCount} 个文件删除失败`);
+        } else if (failureCount > 0) {
+          message.error(`${failureCount} 个文件删除失败`);
         }
 
         selectedRowKeys.value = []; // 清空选择
         getDatabaseInfo(); // 刷新列表状态
       } catch (error) {
+        progressMessage?.();
         console.error('批量删除出错:', error);
         message.error('批量删除过程中发生错误');
       } finally {
         state.batchDeleting = false;
+        state.batchDeleteProgress.current = 0;
+        state.batchDeleteProgress.total = 0;
       }
     },
   });
@@ -1216,13 +1259,13 @@ watch(() => route.params.database_id, async (newId) => {
 
 // 监听数据库信息变化，重置过滤条件
 watch(() => database.value, () => {
-  // 当数据库信息更新时，重置过滤条件和分页
+  // 当数据库信息更新时，重置过滤条件和选中状态
   filenameFilter.value = '';
-  paginationCompact.value.current = 1;
   selectedRowKeys.value = [];
   // 重置排序状态
   sortState.value.field = null;
   sortState.value.order = null;
+  // 分页重置由 filteredFiles 计算属性自动处理
 }, { deep: true });
 
 
@@ -1328,7 +1371,7 @@ const handleKeyDown = (e) => {
   if (e.key === 'Escape' && filenameFilter.value) {
     filenameFilter.value = '';
     selectedRowKeys.value = [];
-    paginationCompact.value.current = 1;
+    // 分页重置由 filteredFiles 计算属性自动处理
   }
 };
 
@@ -1604,6 +1647,16 @@ const filteredFiles = computed(() => {
     });
   }
 
+  // 同步分页状态 - 确保当前页码在有效范围内
+  const totalPages = Math.ceil(filtered.length / paginationCompact.value.pageSize);
+  if (totalPages > 0 && paginationCompact.value.current > totalPages) {
+    // 如果当前页超出范围，调整到最后一页
+    paginationCompact.value.current = totalPages;
+  } else if (filtered.length === 0) {
+    // 如果没有数据，重置到第一页
+    paginationCompact.value.current = 1;
+  }
+
   return filtered;
 });
 
@@ -1627,15 +1680,18 @@ const paginationCompact = ref({
   showTotal: (total) => `${total}`,
   size: 'small',
   showQuickJumper: false,
+  onChange: (page, pageSize) => {
+    paginationCompact.value.current = page;
+    paginationCompact.value.pageSize = pageSize;
+    // 清空选中的行，因为分页后选中的行可能不在当前视图中
+    selectedRowKeys.value = [];
+  },
 });
 
 // 监听过滤后的文件列表变化，更新分页总数
 watch(filteredFiles, (newFiles) => {
   paginationCompact.value.total = newFiles.length;
-  // 如果当前页超出范围，重置到第一页
-  if (paginationCompact.value.current > Math.ceil(newFiles.length / paginationCompact.value.pageSize)) {
-    paginationCompact.value.current = 1;
-  }
+  // filteredFiles 计算属性已经处理了分页范围检查，这里不需要重复处理
 }, { immediate: true });
 
 // 行选择改变处理
@@ -1649,49 +1705,43 @@ const getCheckboxProps = (record) => ({
 });
 
 // 排序事件处理
-const handleTableChange = (pagination, filters, sorter) => {
+const handleTableChange = (_, __, sorter) => {
   // 处理排序
   if (sorter && sorter.field) {
     sortState.value.field = sorter.field;
     sortState.value.order = sorter.order;
+    // 清空选中的行，因为排序后选中的行可能不在当前视图中
+    selectedRowKeys.value = [];
+    // 不再强制重置到第一页，让 filteredFiles 计算属性自动处理分页调整
   }
-
-  // 处理分页
-  if (pagination) {
-    paginationCompact.value.current = pagination.current;
-    paginationCompact.value.pageSize = pagination.pageSize;
-  }
-
-  // 如果是排序操作，重置分页到第一页
-  if (sorter && sorter.field) {
-    paginationCompact.value.current = 1;
-  }
-
-  // 清空选中的行，因为排序或分页后选中的行可能不在当前视图中
-  selectedRowKeys.value = [];
 };
 
 // 过滤相关方法
-const onFilterSearch = (value) => {
-  filenameFilter.value = value;
-  // 重置分页到第一页
-  paginationCompact.value.current = 1;
-  // 清空选中的行，因为过滤后选中的行可能不在当前视图中
-  selectedRowKeys.value = [];
-  // 重置排序状态
-  sortState.value.field = null;
-  sortState.value.order = null;
-};
-
 const onFilterChange = (e) => {
   filenameFilter.value = e.target.value;
-  // 重置分页到第一页
-  paginationCompact.value.current = 1;
   // 清空选中的行，因为过滤后选中的行可能不在当前视图中
   selectedRowKeys.value = [];
   // 重置排序状态
   sortState.value.field = null;
   sortState.value.order = null;
+  // 分页调整由 filteredFiles 计算属性自动处理
+};
+
+// 选择所有失败的文件
+const selectAllFailedFiles = () => {
+  const failedFiles = filteredFiles.value
+    .filter(file => file.status === 'failed')
+    .map(file => file.file_id);
+
+  // 合并当前选中的文件ID和失败的文件ID，去重
+  const newSelectedKeys = [...new Set([...selectedRowKeys.value, ...failedFiles])];
+  selectedRowKeys.value = newSelectedKeys;
+
+  if (failedFiles.length > 0) {
+    message.success(`已选择 ${failedFiles.length} 个失败的文件`);
+  } else {
+    message.info('当前没有失败的文件');
+  }
 };
 
 // 计算是否可以批量删除
@@ -2486,10 +2536,28 @@ const getFileIconColor = (filename) => {
     margin-bottom: 4px;
     flex-shrink: 0;
 
+    .batch-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     span {
       font-size: 11px;
       font-weight: 500;
       color: var(--gray-700);
+    }
+
+    .ant-btn {
+      font-size: 11px;
+      padding: 0 6px;
+      height: 22px;
+      border-radius: 3px;
+
+      &:hover {
+        background-color: var(--main-light-4);
+        color: var(--main-color);
+      }
     }
   }
 
@@ -2745,8 +2813,8 @@ const getFileIconColor = (filename) => {
 }
 
 .panel-action-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2756,6 +2824,7 @@ const getFileIconColor = (filename) => {
   transition: all 0.1s ease;
   color: var(--gray-700);
   transform: scaleX(-1);
+  padding: 4px;
 
   &:hover {
     background-color: var(--main-light-5);

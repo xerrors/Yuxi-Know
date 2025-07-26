@@ -1256,15 +1256,15 @@ const mergeMessageChunk = (chunks) => {
   if (chunks.length === 0) return null;
 
   // 以第一个chunk为基础
-  for (const c of chunks) {
-    if (c.additional_kwargs?.tool_calls) {
-      console.warn("chunks", toRaw(c))
-      break;
-    }
-  }
+  // for (const c of chunks) {
+  //   if (c.additional_kwargs?.tool_calls) {
+  //     console.warn("chunks", toRaw(c))
+  //     break;
+  //   }
+  // }
   // 深拷贝第一个chunk作为结果
   const result = JSON.parse(JSON.stringify(chunks[0]));
-  console.debug("result", toRaw(result))
+  // console.debug("result", toRaw(result))
 
   result.content = result.content || '';
   result.additional_kwargs = result.additional_kwargs || {};
