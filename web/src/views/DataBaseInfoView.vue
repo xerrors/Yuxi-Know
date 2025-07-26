@@ -17,7 +17,9 @@
     </template>
     <template #actions>
       <div class="header-info">
-        <span class="db-id">ID: {{ database.db_id || 'N/A' }}</span>
+        <span class="db-id">ID:
+          <span style="user-select: all;">{{ database.db_id || 'N/A' }}</span>
+        </span>
         <span class="file-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
         <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
         <a-tag
@@ -338,6 +340,14 @@
             allow-clear
             @change="onFilterChange"
           />
+          <a-button
+            type="text"
+            @click="toggleRightPanel"
+            :icon="h(ChevronLast)"
+            title="切换右侧面板"
+            class="panel-action-btn"
+            :class="{ 'active': state.rightPanelVisible }"
+          />
         </div>
       </div>
 
@@ -361,7 +371,6 @@
         class="my-table-compact"
         size="small"
         :pagination="paginationCompact"
-        :scroll="{ y: true }"
         :row-selection="{
           selectedRowKeys: selectedRowKeys,
           onChange: onSelectChange,
@@ -369,19 +378,22 @@
         }"
         :locale="{
           emptyText: emptyText
-        }">
+        }"
+        @change="handleTableChange">
         <template #bodyCell="{ column, text, record }">
           <a-button v-if="column.key === 'filename'"  class="main-btn" type="link" @click="openFileDetail(record)">
             <component :is="getFileIcon(text)" :style="{ marginRight: '6px', color: getFileIconColor(text) }" />
             {{ text }}
           </a-button>
           <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
-          <CheckCircleFilled v-else-if="column.key === 'status' && text === 'done'" style="color: #41A317;"/>
-          <CloseCircleFilled v-else-if="column.key === 'status' && text === 'failed'" style="color: #FF4D4F ;"/>
-          <HourglassFilled v-else-if="column.key === 'status' && text === 'processing'" style="color: #1677FF;"/>
-          <ClockCircleFilled v-else-if="column.key === 'status' && text === 'waiting'" style="color: #FFCD43;"/>
+          <div v-else-if="column.key === 'status'" style="display: flex; align-items: center; justify-content: flex-end;">
+            <CheckCircleFilled v-if="text === 'done'" style="color: #41A317;"/>
+            <CloseCircleFilled v-else-if="text === 'failed'" style="color: #FF4D4F;"/>
+            <HourglassFilled v-else-if="text === 'processing'" style="color: #1677FF;"/>
+            <ClockCircleFilled v-else-if="text === 'waiting'" style="color: #FFCD43;"/>
+          </div>
 
-          <a-tooltip v-else-if="column.key === 'created_at'" :title="record.status" placement="left">
+          <a-tooltip v-else-if="column.key === 'created_at'" :title="formatRelativeTime(Math.round(text*1000))" placement="left">
             <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
           </a-tooltip>
 
@@ -400,7 +412,7 @@
 
     <div class="resize-handle" ref="resizeHandle"></div>
 
-    <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%' }">
+    <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%', display: state.rightPanelVisible ? 'flex' : 'none' }">
 
       <div class="graph-section" :class="{ collapsed: !panels.graph.visible }" :style="computePanelStyles().graph">
         <div class="section-header">
@@ -614,7 +626,7 @@ import {
 } from '@ant-design/icons-vue'
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
-import { Waypoints, Database, Zap } from 'lucide-vue-next';
+import { Waypoints, Database, Zap, ChevronLast } from 'lucide-vue-next';
 
 
 
@@ -651,6 +663,7 @@ const state = reactive({
   queryParamsLoading: false,
   ocrHealthChecking: false,
   isGraphMaximized: false,
+  rightPanelVisible: true, // 添加这一行
 });
 
 // 计算属性：是否支持知识图谱
@@ -1207,6 +1220,9 @@ watch(() => database.value, () => {
   filenameFilter.value = '';
   paginationCompact.value.current = 1;
   selectedRowKeys.value = [];
+  // 重置排序状态
+  sortState.value.field = null;
+  sortState.value.order = null;
 }, { deep: true });
 
 
@@ -1476,6 +1492,11 @@ const togglePanel = (panel) => {
   panels[panel].visible = !panels[panel].visible;
 };
 
+// 切换右侧面板显示/隐藏
+const toggleRightPanel = () => {
+  state.rightPanelVisible = !state.rightPanelVisible;
+};
+
 // 拖拽调整大小
 const leftPanelWidth = ref(45); // 百分比
 const isDragging = ref(false);
@@ -1519,22 +1540,71 @@ const computePanelStyles = () => {
 
 // 紧凑表格列定义
 const columnsCompact = [
-  { title: '文件名', dataIndex: 'filename', key: 'filename', ellipsis: true, width: 'auto' },
-  { title: '状态', dataIndex: 'status', key: 'status', width: 60, align: 'center' },
+  {
+    title: '文件名',
+    dataIndex: 'filename',
+    key: 'filename',
+    ellipsis: true,
+    width: undefined, // 不设置宽度，让它占据剩余空间
+    sorter: (a, b) => (a.filename || '').localeCompare(b.filename || ''),
+    sortDirections: ['ascend', 'descend']
+  },
+  {
+    title: '状态',
+    dataIndex: 'status',
+    key: 'status',
+    width: 60,
+    align: 'right',
+    sorter: (a, b) => {
+      const statusOrder = { 'done': 1, 'processing': 2, 'waiting': 3, 'failed': 4 };
+      return (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
+    },
+    sortDirections: ['ascend', 'descend']
+  },
+  {
+    title: '时间',
+    dataIndex: 'created_at',
+    key: 'created_at',
+    width: 80,
+    align: 'right',
+    sorter: (a, b) => (a.created_at || 0) - (b.created_at || 0),
+    sortDirections: ['ascend', 'descend']
+  },
   { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }
 ];
 
 // 过滤后的文件列表
 const filteredFiles = computed(() => {
   const files = Object.values(database.value.files || {});
-  if (!filenameFilter.value.trim()) {
-    return files;
+  let filtered = files;
+
+  // 应用文件名过滤
+  if (filenameFilter.value.trim()) {
+    const filterText = filenameFilter.value.toLowerCase().trim();
+    filtered = files.filter(file =>
+      file.filename && file.filename.toLowerCase().includes(filterText)
+    );
   }
 
-  const filterText = filenameFilter.value.toLowerCase().trim();
-  return files.filter(file =>
-    file.filename && file.filename.toLowerCase().includes(filterText)
-  );
+  // 应用排序
+  if (sortState.value.field && sortState.value.order) {
+    filtered = [...filtered].sort((a, b) => {
+      let result = 0;
+
+      if (sortState.value.field === 'status') {
+        const statusOrder = { 'done': 1, 'processing': 2, 'waiting': 3, 'failed': 4 };
+        result = (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
+      } else if (sortState.value.field === 'filename') {
+        result = (a.filename || '').localeCompare(b.filename || '');
+      } else if (sortState.value.field === 'created_at') {
+        result = (a.created_at || 0) - (b.created_at || 0);
+      }
+
+      return sortState.value.order === 'descend' ? -result : result;
+    });
+  }
+
+  return filtered;
 });
 
 // 空状态文本
@@ -1542,17 +1612,31 @@ const emptyText = computed(() => {
   return filenameFilter.value ? `没有找到包含"${filenameFilter.value}"的文件` : '暂无文件';
 });
 
+// 排序状态
+const sortState = ref({
+  field: null,
+  order: null
+});
+
 // 紧凑分页配置
 const paginationCompact = ref({
   pageSize: 20,
   current: 1,
-  total: computed(() => filteredFiles.value.length),
+  total: 0,
   showSizeChanger: false,
-  onChange: (page) => paginationCompact.value.current = page,
   showTotal: (total) => `${total}`,
   size: 'small',
   showQuickJumper: false,
 });
+
+// 监听过滤后的文件列表变化，更新分页总数
+watch(filteredFiles, (newFiles) => {
+  paginationCompact.value.total = newFiles.length;
+  // 如果当前页超出范围，重置到第一页
+  if (paginationCompact.value.current > Math.ceil(newFiles.length / paginationCompact.value.pageSize)) {
+    paginationCompact.value.current = 1;
+  }
+}, { immediate: true });
 
 // 行选择改变处理
 const onSelectChange = (keys) => {
@@ -1564,6 +1648,29 @@ const getCheckboxProps = (record) => ({
   disabled: state.lock || record.status === 'processing' || record.status === 'waiting',
 });
 
+// 排序事件处理
+const handleTableChange = (pagination, filters, sorter) => {
+  // 处理排序
+  if (sorter && sorter.field) {
+    sortState.value.field = sorter.field;
+    sortState.value.order = sorter.order;
+  }
+
+  // 处理分页
+  if (pagination) {
+    paginationCompact.value.current = pagination.current;
+    paginationCompact.value.pageSize = pagination.pageSize;
+  }
+
+  // 如果是排序操作，重置分页到第一页
+  if (sorter && sorter.field) {
+    paginationCompact.value.current = 1;
+  }
+
+  // 清空选中的行，因为排序或分页后选中的行可能不在当前视图中
+  selectedRowKeys.value = [];
+};
+
 // 过滤相关方法
 const onFilterSearch = (value) => {
   filenameFilter.value = value;
@@ -1571,6 +1678,9 @@ const onFilterSearch = (value) => {
   paginationCompact.value.current = 1;
   // 清空选中的行，因为过滤后选中的行可能不在当前视图中
   selectedRowKeys.value = [];
+  // 重置排序状态
+  sortState.value.field = null;
+  sortState.value.order = null;
 };
 
 const onFilterChange = (e) => {
@@ -1579,6 +1689,9 @@ const onFilterChange = (e) => {
   paginationCompact.value.current = 1;
   // 清空选中的行，因为过滤后选中的行可能不在当前视图中
   selectedRowKeys.value = [];
+  // 重置排序状态
+  sortState.value.field = null;
+  sortState.value.order = null;
 };
 
 // 计算是否可以批量删除
@@ -1673,31 +1786,31 @@ const getKbTypeColor = (type) => {
 // 根据文件扩展名获取文件图标
 const getFileIcon = (filename) => {
   if (!filename) return FileUnknownFilled
-  
+
   const extension = filename.toLowerCase().split('.').pop()
-  
+
   const iconMap = {
     // 文本文件
     'txt': FileTextFilled,
     'text': FileTextFilled,
     'log': FileTextFilled,
-    
+
     // Markdown文件
     'md': FileMarkdownFilled,
     'markdown': FileMarkdownFilled,
-    
+
     // PDF文件
     'pdf': FilePdfFilled,
-    
+
     // Word文档
     'doc': FileWordFilled,
     'docx': FileWordFilled,
-    
+
     // Excel文档
     'xls': FileExcelFilled,
     'xlsx': FileExcelFilled,
     'csv': FileExcelFilled,
-    
+
     // 图片文件
     'jpg': FileImageFilled,
     'jpeg': FileImageFilled,
@@ -1707,38 +1820,38 @@ const getFileIcon = (filename) => {
     'svg': FileImageFilled,
     'webp': FileImageFilled,
   }
-  
+
   return iconMap[extension] || FileUnknownFilled
 }
 
 // 根据文件扩展名获取文件图标颜色
 const getFileIconColor = (filename) => {
   if (!filename) return '#8c8c8c'
-  
+
   const extension = filename.toLowerCase().split('.').pop()
-  
+
   const colorMap = {
     // 文本文件 - 蓝色
     'txt': '#1890ff',
     'text': '#1890ff',
     'log': '#1890ff',
-    
+
     // Markdown文件 - 深蓝色
     'md': '#0050b3',
     'markdown': '#0050b3',
-    
+
     // PDF文件 - 红色
     'pdf': '#ff4d4f',
-    
+
     // Word文档 - 深蓝色
     'doc': '#2f54eb',
     'docx': '#2f54eb',
-    
+
     // Excel文档 - 绿色
     'xls': '#52c41a',
     'xlsx': '#52c41a',
     'csv': '#52c41a',
-    
+
     // 图片文件 - 紫色
     'jpg': '#722ed1',
     'jpeg': '#722ed1',
@@ -1748,7 +1861,7 @@ const getFileIconColor = (filename) => {
     'svg': '#722ed1',
     'webp': '#722ed1',
   }
-  
+
   return colorMap[extension] || '#8c8c8c'
 }
 
@@ -2241,6 +2354,7 @@ const getFileIconColor = (filename) => {
 
   .left-panel {
     flex-shrink: 0;
+    flex-grow: 1;
     border-right: 1px solid var(--gray-200);
     background-color: var(--bg-sider);
     padding: 8px;
@@ -2381,9 +2495,9 @@ const getFileIconColor = (filename) => {
 
   .my-table-compact {
     flex: 1;
-    overflow: hidden;
+    overflow: auto;
     background-color: transparent;
-    height: 0; /* 重要：让 flex 子项可以正确缩小 */
+    min-height: 0; /* 让 flex 子项可以正确缩小 */
 
     .main-btn {
       padding: 0;
@@ -2628,6 +2742,30 @@ const getFileIconColor = (filename) => {
 
 :deep(.ant-table-tbody > tr:hover > td) {
   background-color: var(--main-light-6);
+}
+
+.panel-action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: 1px solid var(--gray-300);
+  background-color: var(--gray-50);
+  transition: all 0.1s ease;
+  color: var(--gray-700);
+  transform: scaleX(-1);
+
+  &:hover {
+    background-color: var(--main-light-5);
+    border-color: var(--main-color);
+    color: var(--main-color);
+  }
+
+  &.active {
+    transform: scaleX(1);
+  }
 }
 </style>
 
