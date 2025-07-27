@@ -51,7 +51,7 @@ dependencies = [
     "tqdm>=4.66.4",
     "rich>=13.7.1",
     "typer>=0.16.0",
-    "mineru>=2.1.6",
+    "mineru[core]>=2.1.6",
 ]
 [tool.ruff]
 line-length = 210  # 代码最大行宽

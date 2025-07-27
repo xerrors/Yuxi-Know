@@ -206,33 +206,29 @@ def parse_doc(
             Adapted only for the case where the backend is set to "pipeline".
         server_url: When the backend is `sglang-client`, you need to specify the server_url, for example:`http://127.0.0.1:30000`
     """
-    try:
-        file_name_list = []
-        pdf_bytes_list = []
-        lang_list = []
-        for path in tqdm(path_list, desc="Parsing documents"):
-            file_name = str(Path(path).stem)
-            pdf_bytes = read_fn(path)
-            file_name_list.append(file_name)
-            pdf_bytes_list.append(pdf_bytes)
-            lang_list.append(lang)
+    file_name_list = []
+    pdf_bytes_list = []
+    lang_list = []
+    for path in tqdm(path_list, desc="Parsing documents"):
+        file_name = str(Path(path).stem)
+        pdf_bytes = read_fn(path)
+        file_name_list.append(file_name)
+        pdf_bytes_list.append(pdf_bytes)
+        lang_list.append(lang)
 
-        result = do_parse(
-            output_dir=output_dir,
-            pdf_file_names=file_name_list,
-            pdf_bytes_list=pdf_bytes_list,
-            p_lang_list=lang_list,
-            backend=backend,
-            parse_method=method,
-            server_url=server_url,
-            start_page_id=start_page_id,
-            end_page_id=end_page_id
-        )
-        return result if result else [""]
+    result = do_parse(
+        output_dir=output_dir,
+        pdf_file_names=file_name_list,
+        pdf_bytes_list=pdf_bytes_list,
+        p_lang_list=lang_list,
+        backend=backend,
+        parse_method=method,
+        server_url=server_url,
+        start_page_id=start_page_id,
+        end_page_id=end_page_id
+    )
+    return result if result else [""]
 
-    except Exception as e:
-        logger.exception(e)
-        return [""]
 
 if __name__ == "__main__":
 
