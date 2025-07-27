@@ -271,7 +271,7 @@
         </div>
         <div class="info-item">
           <label>上传时间:</label>
-          <span>{{ formatRelativeTime(Math.round(selectedFile.created_at*1000)) }}</span>
+          <span>{{ formatStandardTime(Math.round(selectedFile.created_at*1000)) }}</span>
         </div>
         <div class="info-item">
           <label>处理状态:</label>
@@ -1033,9 +1033,10 @@ const openFileDetail = (record) => {
   }
 }
 
+// Format relative time with more granularity: days ago, weeks ago, months ago
 const formatRelativeTime = (timestamp, offset = 0) => {
-    // 如果调整为东八区时间（UTC+8），则offset为8，否则为0
-    const timezoneOffset = offset * 60 * 60 * 1000; // 东八区偏移量（毫秒）
+    // If you want to adjust to UTC+8, set offset to 8, otherwise 0
+    const timezoneOffset = offset * 60 * 60 * 1000; // offset in milliseconds
     const adjustedTimestamp = timestamp + timezoneOffset;
 
     const now = Date.now();
@@ -1047,13 +1048,34 @@ const formatRelativeTime = (timestamp, offset = 0) => {
         return Math.round(secondsPast / 60) + ' 分钟前';
     } else if (secondsPast < 86400) {
         return Math.round(secondsPast / 3600) + ' 小时前';
+    } else if (secondsPast < 86400 * 7) {
+        // Less than 7 days
+        return Math.round(secondsPast / 86400) + ' 天前';
+    } else if (secondsPast < 86400 * 30) {
+        // Less than 30 days, show in weeks
+        return Math.round(secondsPast / (86400 * 7)) + ' 周前';
+    } else if (secondsPast < 86400 * 365) {
+        // Less than 1 year, show in months
+        return Math.round(secondsPast / (86400 * 30)) + ' 月前';
     } else {
+        // More than 1 year, show full date
         const date = new Date(adjustedTimestamp);
         const year = date.getFullYear();
         const month = date.getMonth() + 1;
         const day = date.getDate();
         return `${year} 年 ${month} 月 ${day} 日`;
     }
+}
+
+const formatStandardTime = (timestamp) => {
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hour = date.getHours();
+  const minute = date.getMinutes();
+  const second = date.getSeconds();
+  return `${year} 年 ${month} 月 ${day} 日 ${hour}:${minute}:${second}`;
 }
 
 
@@ -1655,6 +1677,15 @@ const columnsCompact = [
     sortDirections: ['ascend', 'descend']
   },
   {
+    title: '时间',
+    dataIndex: 'created_at',
+    key: 'created_at',
+    width: 120,
+    align: 'right',
+    sorter: (a, b) => (a.created_at || 0) - (b.created_at || 0),
+    sortDirections: ['ascend', 'descend']
+  },
+  {
     title: '状态',
     dataIndex: 'status',
     key: 'status',
@@ -1664,15 +1695,6 @@ const columnsCompact = [
       const statusOrder = { 'done': 1, 'processing': 2, 'waiting': 3, 'failed': 4 };
       return (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
     },
-    sortDirections: ['ascend', 'descend']
-  },
-  {
-    title: '时间',
-    dataIndex: 'created_at',
-    key: 'created_at',
-    width: 80,
-    align: 'right',
-    sorter: (a, b) => (a.created_at || 0) - (b.created_at || 0),
     sortDirections: ['ascend', 'descend']
   },
   { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }

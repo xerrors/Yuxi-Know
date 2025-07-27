@@ -311,8 +311,8 @@ class MilvusKB(KnowledgeBase):
 
         try:
             # 设置查询参数 - Milvus 知识库特有的参数
-            top_k = kwargs.get("top_k", 10)
-            similarity_threshold = kwargs.get("similarity_threshold", 0.0)  # 相似度阈值
+            top_k = kwargs.get("top_k", 30)
+            similarity_threshold = kwargs.get("similarity_threshold", 0.2)  # 相似度阈值
             include_distances = kwargs.get("include_distances", True)  # 是否包含距离信息
             metric_type = kwargs.get("metric_type", "COSINE")  # 距离度量类型
 
@@ -367,19 +367,31 @@ class MilvusKB(KnowledgeBase):
         """删除文件"""
         collection = await self._get_milvus_collection(db_id)
 
-        def _delete_from_milvus():
-            """同步执行 Milvus 删除操作的辅助函数"""
+        if collection:
+            # 先查询文件是否存在，避免不必要的删除操作
             try:
                 expr = f'file_id == "{file_id}"'
-                collection.delete(expr)
-                collection.flush()
-                logger.info(f"Deleted chunks for file {file_id} from Milvus")
+                results = collection.query(
+                    expr=expr,
+                    output_fields=["id"],
+                    limit=1
+                )
+
+                if not results:
+                    logger.info(f"File {file_id} not found in Milvus, skipping delete operation")
+                else:
+                    # 只有在文件确实存在时才执行删除
+                    def _delete_from_milvus():
+                        try:
+                            collection.delete(expr)
+                            collection.flush()
+                            logger.info(f"Deleted chunks for file {file_id} from Milvus")
+                        except Exception as e:
+                            logger.error(f"Error deleting file {file_id} from Milvus: {e}")
+
+                    await asyncio.to_thread(_delete_from_milvus)
             except Exception as e:
-                logger.error(f"Error deleting file {file_id} from Milvus: {e}")
-
-        if collection:
-            await asyncio.to_thread(_delete_from_milvus)
-
+                logger.error(f"Error checking file existence in Milvus: {e}")
         # 使用锁确保元数据操作的原子性
         async with self._metadata_lock:
             if file_id in self.files_meta:
