@@ -119,7 +119,7 @@ class LightRagKB(KnowledgeBase):
                 history_messages=history_messages,
                 api_key=model.api_key,
                 base_url=model.base_url,
-                extra_body={"enable_thinking": False},
+                # extra_body={"enable_thinking": False},
                 **kwargs,
             )
         return llm_model_func

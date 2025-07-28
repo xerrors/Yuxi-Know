@@ -14,14 +14,16 @@ Write-Host "开始导出Docker镜像到 $OutputFile..." -ForegroundColor Cyan
 
 # 从各个文件中提取的基础镜像列表
 $Images = @(
-    "python:3.12",
+    "python:3.11-slim",
     "ghcr.io/astral-sh/uv:0.7.2",
-    "node:latest",
+    "node:20-alpine",
     "nginx:alpine",
     "neo4j:5.26",
     "quay.io/coreos/etcd:v3.5.5",
     "minio/minio:RELEASE.2023-03-20T20-16-18Z",
-    "milvusdb/milvus:v2.5.6"
+    "milvusdb/milvus:v2.5.6",
+    # "lmsysorg/sglang:v0.4.9.post3-cu126",
+    # "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlex/paddlex:paddlex3.0.1-paddlepaddle3.0.0-gpu-cuda11.8-cudnn8.9-trt8.6"
 )
 
 # 确保所有镜像都已下载
@@ -48,4 +50,4 @@ if ($FileSizeGB -ge 1) {
 }
 
 Write-Host "`n要在另一台机器上加载这些镜像，请使用命令:" -ForegroundColor Cyan
-Write-Host "docker load -i $OutputFile" -ForegroundColor White 
+Write-Host "docker load -i $OutputFile" -ForegroundColor White
