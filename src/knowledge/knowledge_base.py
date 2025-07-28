@@ -425,6 +425,50 @@ class KnowledgeBase(ABC):
             text = md(content, heading_style="ATX")
             return f"# {file_path_obj.name}\n\n{text}"
 
+        elif file_ext == '.csv':
+            # 处理 CSV 文件
+            import pandas as pd
+            df = pd.read_csv(file_path_obj)
+            # 将每一行数据与表头组合成独立的表格
+            markdown_content = f"# {file_path_obj.name}\n\n"
+
+            for index, row in df.iterrows():
+                # 创建包含表头和当前行的小表格
+                row_df = pd.DataFrame([row], columns=df.columns)
+                markdown_table = row_df.to_markdown(index=False)
+                markdown_content += f"{markdown_table}\n\n"
+
+            return markdown_content.strip()
+
+        elif file_ext in ['.xls', '.xlsx']:
+            # 处理 Excel 文件
+            import pandas as pd
+            # 读取所有工作表
+            excel_file = pd.ExcelFile(file_path_obj)
+            markdown_content = f"# {file_path_obj.name}\n\n"
+
+            for sheet_name in excel_file.sheet_names:
+                df = pd.read_excel(file_path_obj, sheet_name=sheet_name)
+                markdown_content += f"## {sheet_name}\n\n"
+
+                # 将每一行数据与表头组合成独立的表格
+                for index, row in df.iterrows():
+                    # 创建包含表头和当前行的小表格
+                    row_df = pd.DataFrame([row], columns=df.columns)
+                    markdown_table = row_df.to_markdown(index=False)
+                    markdown_content += f"{markdown_table}\n\n"
+
+            return markdown_content.strip()
+
+        elif file_ext == '.json':
+            # 处理 JSON 文件
+            import json
+            with open(file_path_obj, encoding='utf-8') as f:
+                data = json.load(f)
+            # 将 JSON 数据格式化为 markdown 代码块
+            json_str = json.dumps(data, ensure_ascii=False, indent=2)
+            return f"# {file_path_obj.name}\n\n```json\n{json_str}\n```"
+
         else:
             # 尝试作为文本文件读取
             raise ValueError(f"Unsupported file type: {file_ext}")
