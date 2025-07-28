@@ -57,8 +57,10 @@ services:
     image: yuxi-web:0.2.0.dev
     container_name: web-dev
     volumes:
-      - ./web:/app
-      - /app/node_modules
+      - ./web/src:/app/src
+      - ./web/public:/app/public
+      - ./web/index.html:/app/index.html
+      - ./web/vite.config.js:/app/vite.config.js
     ports:
       - "5173:5173"
     depends_on:
