@@ -57,7 +57,6 @@
       @ok="addDocumentByFile"
       @cancel="() => state.showModal = false"
       ok-text="添加到图数据库" cancel-text="取消"
-      :ok-button-props="{ disabled: disabled }"
       :confirm-loading="state.precessing">
       <div v-if="graphInfo?.embed_model_name">
         <a-alert v-if="!modelMatched" message="模型不匹配，构建索引可能会出现无法检索到的情况！" type="warning" />
@@ -74,7 +73,6 @@
           name="file"
           :fileList="fileList"
           :max-count="1"
-          :disabled="disabled"
           action="/api/knowledge/files/upload"
           :headers="getAuthHeaders()"
           @change="handleFileUpload"
@@ -101,9 +99,8 @@ import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 
 const configStore = useConfigStore();
-const cur_embed_model = computed(() => configStore.config?.embed_model_names?.[configStore.config?.embed_model]?.name || '');
+const cur_embed_model = computed(() => configStore.config?.embed_model);
 const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
-const disabled = computed(() => state.precessing || !modelMatched.value)
 
 let graphInstance
 const graphInfo = ref(null)
