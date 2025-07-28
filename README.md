@@ -136,9 +136,9 @@ custom-provider-name-here:
 项目理论上兼容任何 OpenAI 兼容的模型，包括但不限于 vLLM、Ollama 或者其他 API 中转或者代理服务。在 Web 界面的"设置"中添加本地模型地址。
 
 
-|模型选择|自定义模型地址|
+<!-- |模型选择|自定义模型地址|
 |--|--|
-|![知识库可视化](./docs/images/select_model.png)|![本地模型配置](./docs/images/custom_models.png)|
+|![知识库可视化](./docs/images/select_model.png)|![本地模型配置](./docs/images/add_custom_model.png)| -->
 
 
 
