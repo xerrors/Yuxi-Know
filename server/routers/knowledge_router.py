@@ -37,7 +37,7 @@ async def create_database(
     logger.debug(f"Create database {database_name} with kb_type {kb_type}, additional_params {additional_params}")
     try:
         embed_info = config.embed_model_names[embed_model_name]
-        database_info = knowledge_base.create_database(
+        database_info = await knowledge_base.create_database(
             database_name,
             description,
             kb_type=kb_type,
