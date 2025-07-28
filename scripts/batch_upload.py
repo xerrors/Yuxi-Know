@@ -244,6 +244,9 @@ def main(
         console.print(f"[bold yellow]No files found in '{directory}' matching '{pattern}'. Aborting.[/bold yellow]")
         raise typer.Exit()
 
+    # 过滤掉macos的隐藏文件
+    all_files = [f for f in all_files if not f.name.startswith("._")]
+
     # Filter out already processed files
     files_to_upload = []
     skipped_files = []
