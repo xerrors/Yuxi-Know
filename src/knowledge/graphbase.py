@@ -53,14 +53,15 @@ class GraphDatabase:
 
     def is_running(self):
         """检查图数据库是否正在运行"""
-        return self.status == "open"
+        return self.status == "open" or self.status == "processing"
 
     def get_sample_nodes(self, kgdb_name='neo4j', num=50):
         """获取指定数据库的 num 个节点信息"""
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
         def query(tx, num):
-            result = tx.run("MATCH (n)-[r]->(m) RETURN n, r, m LIMIT $num", num=int(num))
+            """Note: 这里只查询带有 Entity 标签的节点"""
+            result = tx.run("MATCH (n:Entity)-[r]->(m:Entity) RETURN n, r, m LIMIT $num", num=int(num))
             return result.values()
 
         with self.driver.session() as session:
@@ -97,8 +98,8 @@ class GraphDatabase:
                 t = triple['t']
                 r = triple['r']
                 query = (
-                    "MERGE (a:Entity {name: $h}) "
-                    "MERGE (b:Entity {name: $t}) "
+                    "MERGE (a:Entity:Upload {name: $h}) "
+                    "MERGE (b:Entity:Upload {name: $t}) "
                     "MERGE (a)-[:" + r.replace(" ", "_") + "]->(b)"
                 )
                 tx.run(query, h=h, t=t)
@@ -122,8 +123,8 @@ class GraphDatabase:
             """添加一个三元组"""
             for entry in data:
                 tx.run("""
-                MERGE (h:Entity {name: $h})
-                MERGE (t:Entity {name: $t})
+                MERGE (h:Entity:Upload {name: $h})
+                MERGE (t:Entity:Upload {name: $t})
                 MERGE (h)-[r:RELATION {type: $r}]->(t)
                 """, h=entry['h'], t=entry['t'], r=entry['r'])
 
@@ -167,10 +168,11 @@ class GraphDatabase:
                 """, name=entity_name, embedding=embedding)
 
         # 判断模型名称是否匹配
-        cur_embed_info = config.embed_model_names[config.embed_model]
-        self.embed_model_name = self.embed_model_name or cur_embed_info.get('name')
-        assert self.embed_model_name == cur_embed_info.get('name') or self.embed_model_name is None, \
-            f"embed_model_name={self.embed_model_name}, {cur_embed_info.get('name')=}"
+        self.embed_model_name = self.embed_model_name or config.embed_model
+        cur_embed_info = config.embed_model_names.get(self.embed_model_name)
+        logger.warning(f"embed_model_name={self.embed_model_name}, {cur_embed_info=}")
+        assert self.embed_model_name == config.embed_model or self.embed_model_name is None, \
+            f"embed_model_name={self.embed_model_name}, {config.embed_model=}"
 
         with self.driver.session() as session:
             logger.info(f"Adding entity to {kgdb_name}")
@@ -267,12 +269,48 @@ class GraphDatabase:
     def query_node(self, entity_name, threshold=0.9, kgdb_name='neo4j', hops=2, max_entities=5, **kwargs):
         """知识图谱查询节点的入口:"""
         assert self.driver is not None, "Database is not connected"
-        # TODO 添加判断节点数量为 0 停止检索
-        # 判断是否启动
-        if not self.is_running():
-            raise Exception("图数据库未启动")
+        assert self.is_running(), "图数据库未启动"
 
         self.use_database(kgdb_name)
+
+        # 使用向量索引进行查询
+        results_sim = self._query_with_vector_sim(entity_name, kgdb_name, hops, threshold)
+        results_fuzzy = self._query_with_fuzzy_match(entity_name, kgdb_name, hops)
+        results = results_sim + results_fuzzy
+        qualified_entities = [result[0] for result in results][:max_entities]
+
+        logger.debug(f"Graph Query Entities: {entity_name}, {qualified_entities=}")
+
+        # 对每个合格的实体进行查询
+        all_query_results = []
+        for entity in qualified_entities:
+            query_result = self._query_specific_entity(entity_name=entity, hops=hops, kgdb_name=kgdb_name)
+            all_query_results.extend(query_result)
+
+        return all_query_results
+
+    def _query_with_fuzzy_match(self, keyword, kgdb_name='neo4j', hops = 2):
+        """模糊查询"""
+        assert self.driver is not None, "Database is not connected"
+        self.use_database(kgdb_name)
+        def query_fuzzy_match(tx, keyword, hops):
+            result = tx.run("""
+            MATCH (n:Entity)
+            WHERE n.name CONTAINS $keyword
+            RETURN DISTINCT n.name AS name
+            """, keyword=keyword)
+            values = result.values()
+            logger.debug(f"Fuzzy Query Results: {values}")
+            return values
+
+        with self.driver.session() as session:
+            return session.execute_read(query_fuzzy_match, keyword, hops)
+
+    def _query_with_vector_sim(self, keyword, kgdb_name='neo4j', hops = 2, threshold=0.9):
+        """向量查询"""
+        assert self.driver is not None, "Database is not connected"
+        self.use_database(kgdb_name)
+
         def _index_exists(tx, index_name):
             """检查索引是否存在"""
             result = tx.run("SHOW INDEXES")
@@ -281,7 +319,7 @@ class GraphDatabase:
                     return True
             return False
 
-        def query(tx, text):
+        def query_by_vector(tx, text, threshold):
             # 首先检查索引是否存在
             if not _index_exists(tx, "entityEmbeddings"):
                 raise Exception("向量索引不存在，请先创建索引")
@@ -292,30 +330,15 @@ class GraphDatabase:
             YIELD node AS similarEntity, score
             RETURN similarEntity.name AS name, score
             """, embedding=embedding)
-            return result.values()
+            return [r for r in result if r["score"] > threshold]
 
-        try:
-            with self.driver.session() as session:
-                results = session.execute_read(query, entity_name)
-        except Exception as e:
-            if "向量索引不存在" in str(e):
-                logger.error(f"向量索引不存在，请先创建索引: {e}, {traceback.format_exc()}")
-                return []
-            raise e
+        with self.driver.session() as session:
+            results = session.execute_read(query_by_vector, keyword, threshold=threshold)
+            results = clean_triples_embedding(results)
+            return results
 
-        # 筛选出分数高于阈值的实体
-        qualified_entities = [result[0] for result in results[:max_entities] if result[1] > threshold]
-        logger.debug(f"Graph Query Entities: {entity_name}, {qualified_entities=}")
 
-        # 对每个合格的实体进行查询
-        all_query_results = []
-        for entity in qualified_entities:
-            query_result = self.query_specific_entity(entity_name=entity, hops=hops, kgdb_name=kgdb_name)
-            all_query_results.extend(query_result)
-
-        return all_query_results
-
-    def query_specific_entity(self, entity_name, kgdb_name='neo4j', hops=2, limit=100):
+    def _query_specific_entity(self, entity_name, kgdb_name='neo4j', hops=2, limit=100):
         """查询指定实体三元组信息（无向关系）"""
         assert self.driver is not None, "Database is not connected"
         if not entity_name:
@@ -355,6 +378,7 @@ class GraphDatabase:
 
     def query_all_nodes_and_relationships(self, kgdb_name='neo4j', hops = 2):
         """查询图数据库中所有三元组信息 NEVER USE"""
+        raise Exception("NEVER USE")
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
         def query(tx, hops):
@@ -371,6 +395,7 @@ class GraphDatabase:
 
     def query_by_relationship_type(self, relationship_type, kgdb_name='neo4j', hops = 2):
         """查询指定关系三元组信息 NEVER USE"""
+        raise Exception("NEVER USE")
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
         def query(tx, relationship_type, hops):
@@ -385,26 +410,9 @@ class GraphDatabase:
         with self.driver.session() as session:
             return session.execute_read(query, relationship_type, hops)
 
-    def query_entity_like(self, keyword, kgdb_name='neo4j', hops = 2):
-        """模糊查询 NEVER USE"""
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(kgdb_name)
-        def query(tx, keyword, hops):
-            result = tx.run(f"""
-            MATCH (n:Entity)
-            WHERE n.name CONTAINS $keyword
-            MATCH (n)-[r*1..{hops}]->(m)
-            RETURN n AS n, r, m AS m
-            """, keyword=keyword)
-            values = result.values()
-            values = clean_triples_embedding(values)
-            return values
-
-        with self.driver.session() as session:
-            return session.execute_read(query, keyword, hops)
-
     def query_node_info(self, node_name, kgdb_name='neo4j', hops = 2):
         """查询指定节点的详细信息返回信息 NEVER USE"""
+        raise Exception("NEVER USE")
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)  # 切换到指定数据库
         def query(tx, node_name, hops):
@@ -465,7 +473,7 @@ class GraphDatabase:
             }
 
         try:
-            if self.status == "open" and self.driver and self.is_running():
+            if self.is_running():
                 # 获取数据库信息
                 with self.driver.session() as session:
                     graph_info = session.execute_read(query)
@@ -474,6 +482,9 @@ class GraphDatabase:
                     from datetime import datetime
                     graph_info["last_updated"] = datetime.now().isoformat()
                     return graph_info
+            else:
+                logger.warning(f"图数据库未连接或未运行:{self.status=}")
+                return None
 
         except Exception as e:
             logger.error(f"获取图数据库信息失败：{e}, {traceback.format_exc()}")

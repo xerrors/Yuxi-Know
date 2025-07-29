@@ -223,7 +223,7 @@ async def get_neo4j_node(
         }
 
     except Exception as e:
-        logger.error(f"查询图节点失败: {e}")
+        logger.error(f"查询图节点失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"查询图节点失败: {str(e)}")
 
 # =============================================================================

@@ -153,19 +153,23 @@ custom-provider-name-here:
 
 ### 知识图谱
 
-在 v0.2 版本中，项目支持了基于 [LightRAG](https://github.com/HKUDS/LightRAG) 的知识图谱构建方法。需要在知识库中创建一个基于 LightRAG 的知识库，然后上传文档。构建的知识图谱会自动导入到 Neo4j 中，并使用不同的 label 做区分。
+在 v0.2 版本中，项目支持了基于 [LightRAG](https://github.com/HKUDS/LightRAG) 的知识图谱构建方法。需要在知识库中创建一个基于 LightRAG 的知识库，然后上传文档。构建的知识图谱会自动导入到 Neo4j 中，并使用不同的 label 做区分。需要说明的是，基于 LightRAG 的知识库，可以在知识库详情中可视化，但是不能在侧边栏的图谱中检索，知识图谱检索工具也不支持基于 LightRAG 的知识库进行检索。基于 LightRAG 方法构建的图谱的查询，需要使用对应的知识库作为查询工具。
 
 |知识库可视化|Neo4J管理端|
 |--|--|
 |![知识库可视化](./docs/images/lightrag_kb.png)|![Neo4J管理端](./docs/images/neo4j_browser.png)|
 
-除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，或者通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例。默认账户密码是`neo4j` / `0123456789`。
+除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是`neo4j` / `0123456789`。
 
 **数据格式**：支持 JSONL 格式导入
 ```jsonl
 {"h": "北京", "t": "中国", "r": "首都"}
 {"h": "上海", "t": "中国", "r": "直辖市"}
 ```
+
+此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，但是最好确保每个节点都有 Entity 标签，否则会影响到图的检索与构建。
+
+
 ## 🔧 高级配置
 
 ### OCR 服务（可选）
