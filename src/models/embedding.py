@@ -48,7 +48,7 @@ class BaseEmbeddingModel:
         return await asyncio.to_thread(self.batch_encode, messages, batch_size)
 
     def batch_encode(self, messages, batch_size=40):
-        logger.info(f"Batch encoding {len(messages)} messages")
+        # logger.info(f"Batch encoding {len(messages)} messages")
         data = []
 
         if len(messages) > batch_size:
@@ -61,7 +61,7 @@ class BaseEmbeddingModel:
 
         for i in range(0, len(messages), batch_size):
             group_msg = messages[i:i+batch_size]
-            logger.info(f"Encoding {i} to {i+batch_size} with {len(messages)} messages")
+            logger.info(f"Encoding [{i}/{len(messages)}] messages (bsz={batch_size})")
             response = self.encode(group_msg)
             # logger.debug(f"Response: {len(response)=}, {len(group_msg)=}, {len(response[0])=}")
             data.extend(response)

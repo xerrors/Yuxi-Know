@@ -16,6 +16,7 @@ from pymilvus import (
 from src import config
 from src.models.embedding import OtherEmbedding
 from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
 from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
 from src.utils import logger, hashstr
 
@@ -258,9 +259,9 @@ class MilvusKB(KnowledgeBase):
 
             try:
                 if content_type == "file":
-                    markdown_content = await self._process_file_to_markdown(item, params=params)
+                    markdown_content = await process_file_to_markdown(item, params=params)
                 else:
-                    markdown_content = await self._process_url_to_markdown(item, params=params)
+                    markdown_content = await process_url_to_markdown(item, params=params)
 
                 chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
                 logger.info(f"Split {filename} into {len(chunks)} chunks")

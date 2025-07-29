@@ -10,6 +10,7 @@ from lightrag.utils import EmbeddingFunc, setup_logger
 from lightrag.kg.shared_storage import initialize_pipeline_status
 
 from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
 from src.knowledge.kb_utils import prepare_item_metadata, get_embedding_config
 from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
@@ -166,11 +167,11 @@ class LightRagKB(KnowledgeBase):
             try:
                 # 根据内容类型处理内容
                 if content_type == "file":
-                    markdown_content = await self._process_file_to_markdown(item, params=params)
+                    markdown_content = await process_file_to_markdown(item, params=params)
                     markdown_content_lines = markdown_content[:100].replace('\n', ' ')
                     logger.info(f"Markdown content: {markdown_content_lines}...")
                 else:  # URL
-                    markdown_content = await self._process_url_to_markdown(item, params=params)
+                    markdown_content = await process_url_to_markdown(item, params=params)
 
                 # 使用 LightRAG 插入内容
                 await rag.ainsert(

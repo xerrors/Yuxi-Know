@@ -216,3 +216,120 @@ async def parse_pdf_async(file, params=None):
 
 async def parse_image_async(file, params=None):
     return await asyncio.to_thread(parse_image, file, params=params)
+
+async def process_file_to_markdown(file_path: str, params: dict | None = None) -> str:
+    """
+    将不同类型的文件转换为markdown格式
+
+    Args:
+        file_path: 文件路径
+        params: 处理参数
+
+    Returns:
+        markdown格式内容
+    """
+    file_path_obj = Path(file_path)
+    file_ext = file_path_obj.suffix.lower()
+
+    if file_ext == '.pdf':
+        # 使用 OCR 处理 PDF
+        text = await parse_pdf_async(str(file_path_obj), params=params)
+        return f"# {file_path_obj.name}\n\n{text}"
+
+    elif file_ext in ['.txt', '.md']:
+        # 直接读取文本文件
+        with open(file_path_obj, encoding='utf-8') as f:
+            content = f.read()
+        return f"# {file_path_obj.name}\n\n{content}"
+
+    elif file_ext in ['.doc', '.docx']:
+        # 处理 Word 文档
+        from docx import Document  # type: ignore
+        doc = Document(file_path_obj)
+        text = '\n'.join([para.text for para in doc.paragraphs])
+        return f"# {file_path_obj.name}\n\n{text}"
+
+    elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']:
+        # 使用 OCR 处理图片
+        text = await parse_image_async(str(file_path_obj), params=params)
+        return f"# {file_path_obj.name}\n\n{text}"
+
+    elif file_ext in ['.html', '.htm']:
+        # 使用 BeautifulSoup 处理 HTML 文件
+        from markdownify import markdownify as md
+        with open(file_path_obj, encoding='utf-8') as f:
+            content = f.read()
+        text = md(content, heading_style="ATX")
+        return f"# {file_path_obj.name}\n\n{text}"
+
+    elif file_ext == '.csv':
+        # 处理 CSV 文件
+        import pandas as pd
+        df = pd.read_csv(file_path_obj)
+        # 将每一行数据与表头组合成独立的表格
+        markdown_content = f"# {file_path_obj.name}\n\n"
+
+        for index, row in df.iterrows():
+            # 创建包含表头和当前行的小表格
+            row_df = pd.DataFrame([row], columns=df.columns)
+            markdown_table = row_df.to_markdown(index=False)
+            markdown_content += f"{markdown_table}\n\n"
+
+        return markdown_content.strip()
+
+    elif file_ext in ['.xls', '.xlsx']:
+        # 处理 Excel 文件
+        import pandas as pd
+        # 读取所有工作表
+        excel_file = pd.ExcelFile(file_path_obj)
+        markdown_content = f"# {file_path_obj.name}\n\n"
+
+        for sheet_name in excel_file.sheet_names:
+            df = pd.read_excel(file_path_obj, sheet_name=sheet_name)
+            markdown_content += f"## {sheet_name}\n\n"
+
+            # 将每一行数据与表头组合成独立的表格
+            for index, row in df.iterrows():
+                # 创建包含表头和当前行的小表格
+                row_df = pd.DataFrame([row], columns=df.columns)
+                markdown_table = row_df.to_markdown(index=False)
+                markdown_content += f"{markdown_table}\n\n"
+
+        return markdown_content.strip()
+
+    elif file_ext == '.json':
+        # 处理 JSON 文件
+        import json
+        with open(file_path_obj, encoding='utf-8') as f:
+            data = json.load(f)
+        # 将 JSON 数据格式化为 markdown 代码块
+        json_str = json.dumps(data, ensure_ascii=False, indent=2)
+        return f"# {file_path_obj.name}\n\n```json\n{json_str}\n```"
+
+    else:
+        # 尝试作为文本文件读取
+        raise ValueError(f"Unsupported file type: {file_ext}")
+
+async def process_url_to_markdown(url: str, params: dict | None = None) -> str:
+    """
+    将URL转换为markdown格式
+
+    Args:
+        url: URL地址
+        params: 处理参数
+
+    Returns:
+        markdown格式内容
+    """
+    import requests
+    from bs4 import BeautifulSoup
+
+    try:
+        response = requests.get(url, timeout=30)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        text_content = soup.get_text()
+        return f"# {url}\n\n{text_content}"
+    except Exception as e:
+        logger.error(f"Failed to process URL {url}: {e}")
+        return f"# {url}\n\nFailed to process URL: {e}"
+

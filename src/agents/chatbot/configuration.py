@@ -25,7 +25,7 @@ class ChatbotConfiguration(Configuration):
     )
 
     model: str = field(
-        default="zhipu/glm-4-plus",
+        default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
         metadata={
             "name": "智能体模型",
             "options": [],

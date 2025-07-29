@@ -11,6 +11,7 @@ from chromadb.config import Settings
 from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
+from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
 from src.knowledge.knowledge_base import KnowledgeBase
 from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
 from src.utils import logger, hashstr
@@ -188,9 +189,9 @@ class ChromaKB(KnowledgeBase):
             try:
                 # 根据内容类型处理内容
                 if content_type == "file":
-                    markdown_content = await self._process_file_to_markdown(item, params=params)
+                    markdown_content = await process_file_to_markdown(item, params=params)
                 else:  # URL
-                    markdown_content = await self._process_url_to_markdown(item, params=params)
+                    markdown_content = await process_url_to_markdown(item, params=params)
 
                 # 分割文本成块
                 chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)

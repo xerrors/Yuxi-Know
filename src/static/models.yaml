@@ -11,14 +11,13 @@ MODEL_NAMES:
     name: OpenAI
     url: https://platform.openai.com/docs/models
     base_url: https://api.openai.com/v1
-    default: gpt-3.5-turbo
+    default: gpt-4o-mini
     env:
       - OPENAI_API_KEY
     models:
       - gpt-4
       - gpt-4o
       - gpt-4o-mini
-      - gpt-3.5-turbo
 
   deepseek:
     name: DeepSeek
@@ -35,15 +34,13 @@ MODEL_NAMES:
     name: 智谱AI (Zhipu)
     url: https://open.bigmodel.cn/dev/api
     base_url: https://open.bigmodel.cn/api/paas/v4/
-    default: glm-4-flash
+    default: glm-4.5-flash
     env:
       - ZHIPUAI_API_KEY
     models:
-      - glm-4
-      - glm-4-plus
-      - glm-4-air
-      - glm-4-flash
-      - glm-z1-air
+      - glm-4.5
+      - glm-4.5-air
+      - glm-4.5-flash
 
   siliconflow:
     name: SiliconFlow
@@ -55,8 +52,10 @@ MODEL_NAMES:
     models:
       - Pro/deepseek-ai/DeepSeek-R1
       - Pro/deepseek-ai/DeepSeek-V3
-      - Qwen/QwQ-32B
-      - Qwen/Qwen3-8B
+      - Qwen/Qwen3-235B-A22B-Thinking-2507
+      - Qwen/Qwen3-235B-A22B-Instruct-2507
+      - moonshotai/Kimi-K2-Instruct
+      - zai-org/GLM-4.5
 
   together.ai:
     name: Together.ai
@@ -66,34 +65,33 @@ MODEL_NAMES:
     env:
       - TOGETHER_API_KEY
     models:
-      - meta-llama/Llama-3.3-70B-Instruct-Turbo
       - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
-      - deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free
-      - Qwen/QwQ-32B
 
   dashscope:
     name: 阿里百炼 (DashScope)
     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    default: qwen3-235b-a22b
+    default: qwen-max-latest
     env:
       - DASHSCOPE_API_KEY
     models:
       - qwen-max-latest
-      - qwen3-235b-a22b
-      - qwen3-32b
+      - qwen-plus-latest
+      - qwen-turbo-latest
+      - qwen3-235b-a22b-thinking-2507
+      - qwen3-235b-a22b-instruct-2507
 
   ark:
     name: 豆包（Ark）
     url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
     base_url: https://ark.cn-beijing.volces.com/api/v3
-    default: doubao-1-5-pro-32k-250115
+    default: doubao-seed-1-6-250615
     env:
       - ARK_API_KEY
     models:
-      - doubao-1-5-pro-32k-250115
-      - doubao-1-5-lite-32k-250115
-      - deepseek-r1-250120
+      - doubao-seed-1-6-250615
+      - doubao-seed-1-6-thinking-250715
+      - doubao-seed-1-6-flash-250715
 
   openrouter:
     name: OpenRouter
@@ -104,14 +102,9 @@ MODEL_NAMES:
       - OPENROUTER_API_KEY
     models:
       - openai/gpt-4o
-      - openai/gpt-4o-mini
-      - google/gemini-2.5-pro-exp-03-25:free
-      - x-ai/grok-3-beta
-      - meta-llama/llama-4-maverick
-      - meta-llama/llama-4-maverick:free
-      - anthropic/claude-3.7-sonnet
-      - anthropic/claude-3.7-sonnet:thinking
-
+      - x-ai/grok-4
+      - google/gemini-2.5-pro
+      - anthropic/claude-sonnet-4
 
 EMBED_MODEL_INFO:
   siliconflow/BAAI/bge-m3:

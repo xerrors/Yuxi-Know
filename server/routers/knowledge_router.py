@@ -3,8 +3,9 @@ import asyncio
 import traceback
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body, Form, Query
 
-from src.utils import logger, hashstr
 from src import executor, config, knowledge_base
+from src.utils import logger, hashstr
+from src.knowledge.indexing import process_file_to_markdown
 from server.utils.auth_middleware import get_admin_user
 from server.models.user_model import User
 
@@ -372,6 +373,20 @@ async def upload_file(
         buffer.write(await file.read())
 
     return {"message": "File successfully uploaded", "file_path": file_path, "db_id": db_id}
+
+@knowledge.post("/files/markdown")
+async def mark_it_down(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_admin_user)
+):
+    """调用 src.knowledge.indexing 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
+    try:
+        content = await file.read()
+        markdown_content = await process_file_to_markdown(content)
+        return {"markdown_content": markdown_content, "message": "success"}
+    except Exception as e:
+        logger.error(f"文件解析失败 {e}, {traceback.format_exc()}")
+        return {"message": f"文件解析失败 {e}", "markdown_content": ""}
 
 # =============================================================================
 # === 知识库类型分组 ===
