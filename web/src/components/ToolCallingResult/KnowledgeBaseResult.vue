@@ -301,7 +301,7 @@ const getScoreColor = (score) => {
       }
 
       &:hover {
-        background: var(--main-25);
+        background: var(--main-30);
 
         .view-icon {
           opacity: 1;

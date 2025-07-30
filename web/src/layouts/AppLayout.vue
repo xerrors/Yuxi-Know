@@ -352,10 +352,9 @@ div.header, #app-router-view {
       padding: 10px 12px;
     }
     &.active {
+      text-shadow: 0 0 15px var(--main-300);
       font-weight: bold;
       color: var(--main-color);
-      background-color: white;
-      border: 1px solid white;
     }
 
     &.warning {
@@ -363,8 +362,7 @@ div.header, #app-router-view {
     }
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.8);
-      backdrop-filter: blur(10px);
+      color: var(--main-color);
     }
 
     .text {
@@ -441,8 +439,8 @@ div.header, #app-router-view {
   width: 100%;
   height: 50px;
   border-right: none;
-  border-bottom: 1px solid var(--main-light-2);
-  background-color: var(--main-light-3);
+  border-bottom: 1px solid var(--main-40);
+  background-color: var(--main-20);
   padding: 0 20px;
   gap: 24px;
 

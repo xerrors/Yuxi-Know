@@ -107,7 +107,7 @@ const handleSelectModel = (provider, name) => {
   }
 
   &:hover {
-    background-color: var(--main-light-3);
+    background-color: var(--main-20);
   }
 }
 

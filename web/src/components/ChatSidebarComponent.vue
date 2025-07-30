@@ -10,50 +10,52 @@
     </div>
     <div class="conversation-list-top">
       <button type="text" @click="createNewChat" class="new-chat-btn">
-        新对话
+       <MessageSquarePlus size="20" /> 创建新对话
       </button>
     </div>
     <div class="conversation-list">
       <a-spin v-if="loading" />
-      <template v-else>
-        <div
-          v-for="chat in chatsList"
-          :key="chat.id"
-          class="conversation-item"
-          :class="{ 'active': currentChatId === chat.id }"
-          @click="selectChat(chat.id)"
-        >
-          <div class="conversation-info">
+      <template v-else-if="Object.keys(groupedChats).length > 0">
+        <div v-for="(group, groupName) in groupedChats" :key="groupName" class="chat-group">
+          <div class="chat-group-title">{{ groupName }}</div>
+          <div
+            v-for="chat in group"
+            :key="chat.id"
+            class="conversation-item"
+            :class="{ 'active': currentChatId === chat.id }"
+            @click="selectChat(chat)"
+          >
             <div class="conversation-title">{{ chat.title || '新对话' }}</div>
+            <div class="actions-mask"></div>
+            <div class="conversation-actions">
+              <a-dropdown :trigger="['click']" @click.stop>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
+                      <EditOutlined /> 重命名
+                    </a-menu-item>
+                    <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" v-if="chat.id !== currentChatId">
+                      <DeleteOutlined /> 删除
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+                <a-button type="text" class="more-btn" @click.stop>
+                  <MoreOutlined />
+                </a-button>
+              </a-dropdown>
+            </div>
           </div>
-          <div class="conversation-actions">
-            <a-dropdown :trigger="['click']" @click.stop>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
-                    <EditOutlined /> 重命名
-                  </a-menu-item>
-                  <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" v-if="chat.id !== currentChatId">
-                    <DeleteOutlined /> 删除
-                  </a-menu-item>
-                </a-menu>
-              </template>
-              <a-button type="text" class="more-btn" @click.stop>
-                <MoreOutlined />
-              </a-button>
-            </a-dropdown>
-          </div>
-        </div>
-        <div v-if="chatsList.length === 0" class="empty-list">
-          暂无对话历史
         </div>
       </template>
+      <div v-else class="empty-list">
+        暂无对话历史
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, h } from 'vue';
+import { ref, computed, h } from 'vue';
 import {
   DeleteOutlined,
   EditOutlined,
@@ -61,6 +63,12 @@ import {
 } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
 import { PanelLeftClose, MessageSquarePlus } from 'lucide-vue-next';
+import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
+dayjs.locale('zh-cn');
 
 const props = defineProps({
   currentAgentId: {
@@ -87,72 +95,95 @@ const props = defineProps({
 
 const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar']);
 
-// 状态变量
 const loading = ref(false);
 
-// 创建新对话
+const groupedChats = computed(() => {
+  const groups = {
+    '今天': [],
+    '七天内': [],
+    '三十天内': [],
+  };
+
+  const now = dayjs();
+  const today = now.startOf('day');
+  const sevenDaysAgo = now.subtract(7, 'day').startOf('day');
+  const thirtyDaysAgo = now.subtract(30, 'day').startOf('day');
+
+  // Sort chats by creation date, newest first
+  const sortedChats = [...props.chatsList].sort((a, b) => dayjs(b.create_at).diff(dayjs(a.create_at)));
+
+  sortedChats.forEach(chat => {
+    const chatDate = dayjs(chat.create_at);
+    if (chatDate.isAfter(today)) {
+      groups['今天'].push(chat);
+    } else if (chatDate.isAfter(sevenDaysAgo)) {
+      groups['七天内'].push(chat);
+    } else if (chatDate.isAfter(thirtyDaysAgo)) {
+      groups['三十天内'].push(chat);
+    } else {
+      const monthKey = chatDate.format('YYYY-MM');
+      if (!groups[monthKey]) {
+        groups[monthKey] = [];
+      }
+      groups[monthKey].push(chat);
+    }
+  });
+
+  // Remove empty groups
+  for (const key in groups) {
+    if (groups[key].length === 0) {
+      delete groups[key];
+    }
+  }
+
+  return groups;
+});
+
+
 const createNewChat = () => {
   emit('create-chat');
 };
 
-// 选择对话
-const selectChat = (chatId) => {
-  emit('select-chat', chatId);
+const selectChat = (chat) => {
+  console.log(chat);
+  emit('select-chat', chat.id);
 };
 
-// 删除对话
 const deleteChat = (chatId) => {
   emit('delete-chat', chatId);
 };
 
-// 重命名对话
 const renameChat = async (chatId) => {
   try {
-    // 找到当前对话
     const chat = props.chatsList.find(c => c.id === chatId);
     if (!chat) return;
 
-    // 获取新标题
-    let newTitle = '';
-    let modalInstance = null;
-
-    await new Promise((resolve, reject) => {
-      modalInstance = Modal.confirm({
-        title: '重命名对话',
-        content: h('div', {}, [
-          h('input', {
-            value: chat.title,
-            style: { width: '100%', marginTop: '10px' },
-            onInput: (e) => { newTitle = e.target.value; }
-          })
-        ]),
-        okText: '确认',
-        cancelText: '取消',
-        onOk: () => {
-          resolve();
-        },
-        onCancel: () => {
-          reject();
+    let newTitle = chat.title;
+    Modal.confirm({
+      title: '重命名对话',
+      content: h('div', { style: { marginTop: '12px' } }, [
+        h('input', {
+          value: newTitle,
+          style: { width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px' },
+          onInput: (e) => { newTitle = e.target.value; }
+        })
+      ]),
+      okText: '确认',
+      cancelText: '取消',
+      onOk: () => {
+        if (!newTitle.trim()) {
+          message.warning('标题不能为空');
+          return Promise.reject();
         }
-      });
+        emit('rename-chat', { chatId, title: newTitle });
+      },
+      onCancel: () => {}
     });
-
-    // 确保有标题
-    if (!newTitle.trim()) {
-      message.warning('标题不能为空');
-      return;
-    }
-
-    // 通知父组件
-    emit('rename-chat', { chatId, title: newTitle });
-
   } catch (error) {
     console.error('重命名对话失败:', error);
   }
 };
 
-
-// 折叠侧边栏
 const toggleCollapse = () => {
   emit('toggle-sidebar');
 };
@@ -176,7 +207,7 @@ const toggleCollapse = () => {
   &.sidebar-open {
     width: 280px;
     max-width: 300px;
-    border-right: 1px solid #e8e8e8;
+    border-right: 1px solid var(--gray-200);
   }
 
   .sidebar-header {
@@ -185,7 +216,8 @@ const toggleCollapse = () => {
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    border-bottom: 1px solid #e8e8e8;
+    border-bottom: 1px solid var(--gray-200);
+    flex-shrink: 0;
 
     .header-title {
       font-weight: 500;
@@ -205,21 +237,26 @@ const toggleCollapse = () => {
   }
 
   .conversation-list-top {
-    padding: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--gray-200);
 
     .new-chat-btn {
       width: 100%;
-      padding: 8px 16px;
-      height: fit-content;
-      border-radius: 8px;
-      background-color: var(--gray-200);
+      padding: 8px 12px;
+      border-radius: 6px;
+      background-color: var(--main-50);
       color: var(--main-color);
       border: none;
       transition: all 0.2s ease;
       font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
 
       &:hover {
-        background-color: var(--gray-400);
+        background-color: var(--main-100);
       }
     }
   }
@@ -227,128 +264,134 @@ const toggleCollapse = () => {
   .conversation-list {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    padding: 8px;
+
+    .chat-group {
+      margin-bottom: 16px;
+    }
+
+    .chat-group-title {
+      padding: 4px 8px;
+      font-size: 12px;
+      color: var(--gray-500);
+      font-weight: 500;
+      text-transform: uppercase;
+    }
 
     .conversation-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 4px 0px 4px 12px;
-      border-radius: 8px;
-      margin-bottom: 8px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin: 4px 0;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: background-color 0.2s ease;
+      position: relative;
+      overflow: hidden;
+
+      .conversation-title {
+        flex: 1;
+        font-size: 14px;
+        color: var(--gray-800);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        transition: color 0.2s ease;
+      }
+
+      .actions-mask {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        width: 60px;
+        background: linear-gradient(to right, transparent, var(--bg-sider) 20px);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        pointer-events: none;
+      }
+
+      .conversation-actions {
+        display: flex;
+        align-items: center;
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+
+        .more-btn {
+          color: var(--gray-600);
+          background-color: transparent !important;
+          &:hover {
+            color: var(--main-500);
+            background-color: transparent !important;
+          }
+        }
+      }
 
       &:hover {
-        background-color: #f0f0f0;
+        background-color: var(--gray-100);
 
-        .conversation-actions {
+        .actions-mask {
+            background: linear-gradient(to right, transparent, var(--gray-100) 20px);
+        }
+
+        .actions-mask, .conversation-actions {
           opacity: 1;
         }
       }
 
       &.active {
-        background-color: var(--gray-300);
+        background-color: var(--main-50);
 
         .conversation-title {
-          color: var(--main-700);
+          color: var(--main-600);
           font-weight: 500;
         }
-      }
-
-      .conversation-info {
-        flex: 1;
-        min-width: 0;
-
-        .conversation-title {
-          font-size: 14px;
-          color: var(--gray-900);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .conversation-time {
-          font-size: 12px;
-          color: var(--gray-500);
-        }
-      }
-
-      .conversation-actions {
-        opacity: 0;
-        transition: opacity 0.2s ease;
-
-        .more-btn {
-          color: var(--gray-500);
-
-          &:hover {
-            color: var(--main-500);
-          }
+        .actions-mask {
+          background: linear-gradient(to right, transparent, var(--main-50) 20px);
         }
       }
     }
 
     .empty-list {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100px;
+      text-align: center;
+      margin-top: 20px;
       color: var(--gray-500);
       font-size: 14px;
     }
   }
 }
 
-// 滚动条美化
+// Scrollbar styling
 .conversation-list::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
-
 .conversation-list::-webkit-scrollbar-track {
   background: transparent;
 }
-
 .conversation-list::-webkit-scrollbar-thumb {
   background: var(--gray-300);
-  border-radius: 4px;
+  border-radius: 5px;
 }
-
 .conversation-list::-webkit-scrollbar-thumb:hover {
   background: var(--gray-400);
 }
-</style>
 
-
-<style lang="less">
-.toggle-sidebar {
+.toggle-sidebar.nav-btn {
   cursor: pointer;
-
-  &.nav-btn {
-    height: 2.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    color: var(--gray-900);
-    cursor: pointer;
-    font-size: 15px;
-    width: auto;
-    padding: 0.5rem 1rem;
-    transition: background-color 0.3s;
-    overflow: hidden;
-
-    .text {
-      margin-left: 10px;
-    }
-
-    &:hover {
-      background-color: var(--main-light-3);
-    }
-
-    .nav-btn-icon {
-      width: 1.5rem;
-      height: 1.5rem;
-    }
+  height: 2.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  color: var(--gray-900);
+  padding: 0.5rem;
+  transition: background-color 0.3s;
+  &:hover {
+    background-color: var(--gray-100);
   }
 }
 </style>

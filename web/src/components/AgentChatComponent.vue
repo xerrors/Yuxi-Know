@@ -1382,7 +1382,7 @@ const mergeMessageChunk = (chunks) => {
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    border-bottom: 1px solid var(--main-light-3);
+    border-bottom: 1px solid var(--main-20);
 
     .header__left, .header__right, .header__center {
       display: flex;
@@ -1415,7 +1415,7 @@ const mergeMessageChunk = (chunks) => {
     }
 
     &:hover {
-      background-color: var(--main-light-3);
+      background-color: var(--main-20);
     }
 
     .nav-btn-icon {
@@ -1580,7 +1580,7 @@ const mergeMessageChunk = (chunks) => {
 .generating-indicator {
   display: flex;
   align-items: center;
-  padding: 0.75rem 1rem;
+  padding: 0.5rem 1rem 0.5rem 0.5rem;
   background: var(--gray-100);
   border-radius: 12px;
   border: 1px solid var(--gray-200);
@@ -1615,7 +1615,7 @@ const mergeMessageChunk = (chunks) => {
     }
 
     &:hover {
-      background-color: var(--main-light-3);
+      background-color: var(--main-20);
     }
 
     .nav-btn-icon {

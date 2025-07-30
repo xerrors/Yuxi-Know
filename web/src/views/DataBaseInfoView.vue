@@ -2233,7 +2233,7 @@ const getFileIconColor = (filename) => {
   background-color: var(--gray-100);
 
   &:hover {
-    background-color: var(--main-light-4);
+    background-color: var(--main-20);
   }
 }
 
@@ -2253,8 +2253,8 @@ const getFileIconColor = (filename) => {
         cursor: pointer;
         padding: 4px 16px;
         border-radius: 8px;
-        background-color: var(--main-light-4);
-        border: 1px solid var(--main-light-3);
+        background-color: var(--main-20);
+        border: 1px solid var(--main-20);
         transition: all 0.2s ease;
 
         &.active {
@@ -2267,7 +2267,7 @@ const getFileIconColor = (filename) => {
 
     .config-controls {
       .ant-btn {
-        border-color: var(--main-light-3);
+        border-color: var(--main-20);
         color: var(--gray-700);
 
         &:hover {
@@ -2281,9 +2281,9 @@ const getFileIconColor = (filename) => {
   .ocr-config {
     margin-bottom: 16px;
     padding: 12px 16px;
-    background-color: var(--main-light-6);
+    background-color: var(--main-5);
     border-radius: 8px;
-    border: 1px solid var(--main-light-3);
+    border: 1px solid var(--main-20);
 
     .ant-form-item {
       margin-bottom: 0;
@@ -2325,9 +2325,9 @@ const getFileIconColor = (filename) => {
   .qa-split-config {
     margin-bottom: 16px;
     padding: 12px 16px;
-    background-color: var(--main-light-6);
+    background-color: var(--main-5);
     border-radius: 8px;
-    border: 1px solid var(--main-light-3);
+    border: 1px solid var(--main-20);
 
     .ant-form-item {
       margin-bottom: 12px;
@@ -2355,7 +2355,7 @@ const getFileIconColor = (filename) => {
     }
 
     .ant-input {
-      border-color: var(--main-light-3);
+      border-color: var(--main-20);
 
       &:hover,
       &:focus {
@@ -2383,7 +2383,7 @@ const getFileIconColor = (filename) => {
     margin-bottom: 20px;
 
     .ant-textarea {
-      border-color: var(--main-light-3);
+      border-color: var(--main-20);
       background-color: #fff;
       font-family: monospace;
       resize: vertical;
@@ -2405,7 +2405,7 @@ const getFileIconColor = (filename) => {
 
 .chunk-config-content {
   .params-info {
-    background-color: var(--main-light-4);
+    background-color: var(--main-20);
     border-radius: 6px;
     padding: 10px 12px;
     margin-bottom: 16px;
@@ -2511,7 +2511,7 @@ const getFileIconColor = (filename) => {
     z-index: 10;
 
     &:hover {
-      background-color: var(--main-light-2);
+      background-color: var(--main-40);
     }
   }
 
@@ -2524,7 +2524,7 @@ const getFileIconColor = (filename) => {
     z-index: 10;
 
     &:hover {
-      background-color: var(--main-light-2);
+      background-color: var(--main-40);
     }
   }
 
@@ -2595,7 +2595,7 @@ const getFileIconColor = (filename) => {
         border-radius: 4px;
 
         &:hover {
-          background-color: var(--main-light-5);
+          background-color: var(--main-5);
           color: var(--main-color);
         }
       }
@@ -2607,7 +2607,7 @@ const getFileIconColor = (filename) => {
     align-items: center;
     justify-content: space-between;
     padding: 2px 4px;
-    background-color: var(--main-light-5);
+    background-color: var(--main-5);
     border-radius: 4px;
     margin-bottom: 4px;
     flex-shrink: 0;
@@ -2631,7 +2631,7 @@ const getFileIconColor = (filename) => {
       border-radius: 3px;
 
       &:hover {
-        background-color: var(--main-light-4);
+        background-color: var(--main-20);
         color: var(--main-color);
       }
     }
@@ -2721,7 +2721,7 @@ const getFileIconColor = (filename) => {
         border-radius: 4px;
 
         &:hover {
-          background-color: var(--main-light-5);
+          background-color: var(--main-5);
           color: var(--main-color);
         }
       }
@@ -2844,7 +2844,7 @@ const getFileIconColor = (filename) => {
           font-size: 13px;
 
           &:hover {
-            background-color: var(--main-light-5);
+            background-color: var(--main-5);
             border-color: var(--main-color);
             color: var(--main-400);
           }
@@ -2928,11 +2928,11 @@ const getFileIconColor = (filename) => {
 
 /* Table row selection styling */
 :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
-  background-color: var(--main-light-5);
+  background-color: var(--main-5);
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {
-  background-color: var(--main-light-6);
+  background-color: var(--main-5);
 }
 
 .panel-action-btn {
@@ -2969,7 +2969,7 @@ const getFileIconColor = (filename) => {
   &.active.expanded {
     transform: scaleX(1);
     &:hover {
-      background-color: var(--main-light-5);
+      background-color: var(--main-5);
       border-color: var(--main-color);
       color: var(--main-color);
     }

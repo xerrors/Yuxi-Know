@@ -2,48 +2,45 @@
 /* color palette from <https://github.com/vuejs/theme> */
 /* https://material-foundation.github.io/material-theme-builder/ */
 :root {
-  --main-1000: #011A26;
-  --main-900: #034A51;
-  --main-800: #034F69;
-  --main-700: #03637F;
-  --main-600: #1D7796;
-  --main-500: #2F86A8;
-  --main-400: #5099B9;
-  --main-300: #6CADCB;
-  --main-200: #8EC6E1;
-  --main-100: #ADE0F7;
-  --main-50: #CFF5FF;
-  --main-25: #E8FAFF;
-  --main-10: #F8FDFF;
-  --main-5: #FAFCFD;
+  --main-1000: #01151f;  /* 更深沉的深蓝黑 */
+  --main-900:  #023944;  /* 深海蓝 */
+  --main-800:  #035065;  /* 深蓝绿 */
+  --main-700:  #046a82;  /* 增加明度的蓝青色 */
+  --main-600:  #24839a;  /* 冷色调中略带灰 */
+  --main-500:  #3996ae;  /* 平衡且主色调友好 */
+  --main-400:  #5faec2;  /* 更加柔和的中亮蓝 */
+  --main-300:  #82c3d6;  /* 明亮通透，视觉清爽 */
+  --main-200:  #a3d8e8;  /* 比原先更清澈淡蓝 */
+  --main-100:  #c4eaf5;  /* 接近原色，但稍微柔和 */
+  --main-50:   #e1f6fb;  /* 极浅天蓝，适合背景过渡 */
+  --main-40:   #eaf3f5;  /* 淡灰蓝调 */
+  --main-30:   #f2fbfd;  /* 几近白的蓝调提示 */
+  --main-20:   #f5f9fa;  /* 比原配色更均匀些 */
+  --main-10:   #fafcfd;
+  --main-5:    #fcfefe;
+  --main-1:    #fefefe;
+  --main-0:    #ffffff;
 
-  --gray-10000: #000000;
-  --gray-2000: #0F0F0F;
-  --gray-1000: #171717;
-  --gray-900: #212121;
-  --gray-800: #424242;
-  --gray-700: #616161;
-  --gray-600: #8C8C8C;
-  --gray-500: #A7A7A7;
-  --gray-400: #C4C4C4;
-  --gray-300: #EFEFEF;
-  --gray-200: #EFEFEF;
-  --gray-100: #F8F8F8;
-  --gray-50: #FBFBFB;
-  --gray-25: #FCFCFC;
-  --gray-10: #FDFDFD;
-  --gray-0: #FFFFFF;
+
+  --gray-10000: #000000; /* 保持纯黑 */
+  --gray-2000:  #0d0d0d; /* 更精致的暗灰，用于极深背景 */
+  --gray-1000:  #161616; /* 深灰黑，适用于主文本 */
+  --gray-900:   #1f1f1f;
+  --gray-800:   #333333; /* 标准深灰，适合背景 */
+  --gray-700:   #4d4d4d;
+  --gray-600:   #707070; /* 调和中灰，适合次要文本 */
+  --gray-500:   #999999; /* 更柔和的中灰色 */
+  --gray-400:   #bfbfbf;
+  --gray-300:   #d9d9d9; /* 修正了原300/200重复 */
+  --gray-200:   #e6e6e6; /* 稍微加深一点，便于分层 */
+  --gray-100:   #f2f2f2;
+  --gray-50:    #f7f7f7;
+  --gray-25:    #fafafa;
+  --gray-10:    #fcfcfc;
+  --gray-0:     #ffffff;
+
 
   --main-color: #016179;
-  --main-color-dark: #004d5c;
-  --main-color-text: #104461;
-  --main-light-1: #0076AB;
-  --main-light-2: #DAEAED;
-  --main-light-3: #EDF0F1;
-  --main-light-4: #F2F5F5;
-  --main-light-5: #F7FAFB;
-  --main-light-6: #FAFDFD;
-  --main-light-7: #FEFFFF;
   --secondry-color: #4e616d;
   --error-color: #ba1a1a;
 
@@ -52,25 +49,4 @@
   --color-text: var(--c-black);
 
   --min-width: 400px;
-}
-
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  position: relative;
-  font-weight: normal;
-}
-
-body {
-  display: flow-root;
-  min-height: 100vh;
-  color: var(--gray-900);
-  line-height: 1.6;
-  font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Roboto', 'HarmonyOS Sans SC', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }

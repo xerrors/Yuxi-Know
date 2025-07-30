@@ -203,7 +203,7 @@ const isEmptyAndLoading = computed(() => {
     margin-top: 10px;
     margin-bottom: 15px;
     border-radius: 8px;
-    border: 1px solid var(--main-light-3);
+    border: 1px solid var(--main-20);
 
     .reasoning-content {
       font-size: 13px;

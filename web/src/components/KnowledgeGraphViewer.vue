@@ -1142,7 +1142,7 @@ defineExpose({
   flex: 1;
   background: white;
   position: relative; /* 确保子元素可以相对于此容器定位 */
-  border: 1px solid var(--main-light-3);
+  border: 1px solid var(--main-20);
   border-radius: 8px;
   overflow: hidden;
 

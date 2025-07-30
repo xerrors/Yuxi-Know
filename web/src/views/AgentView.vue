@@ -3,15 +3,10 @@
     <div class="agent-view-header">
       <div class="header-left">
         <div class="header-item">
-          <a-button class="header-button" @click="toggleConf">
-            <template #icon><SettingOutlined /></template>
-          </a-button>
-        </div>
-        <div class="header-item">
           <a-select
             v-model:value="selectedAgentId"
             class="agent-list"
-            style="width: 240px"
+            style="width: 220px"
             @change="selectAgent"
           >
             <a-select-option
@@ -28,6 +23,9 @@
               </div>
             </a-select-option>
           </a-select>
+        </div>
+        <div class="header-item">
+          <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
         </div>
       </div>
       <div class="header-center">
@@ -693,7 +691,7 @@ const toggleConf = () => {
 .agent-view-header {
   height: var(--agent-view-header-height);
   background-color: var(--bg-sider);
-  border-bottom: 1px solid var(--main-light-3);
+  border-bottom: 1px solid var(--main-20);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -790,13 +788,13 @@ const toggleConf = () => {
 
 .action-button {
   background-color: white;
-  border: 1px solid var(--main-light-3);
+  border: 1px solid var(--main-20);
   text-align: left;
   height: auto;
   padding: 8px 12px;
 
   &:hover {
-    background-color: var(--main-light-4);
+    background-color: var(--main-20);
   }
 
   &.primary-action {
@@ -805,7 +803,7 @@ const toggleConf = () => {
 
     &:disabled {
       color: var(--main-color);
-      background-color: var(--main-light-4);
+      background-color: var(--main-20);
       cursor: not-allowed;
       opacity: 0.7;
     }
@@ -1165,7 +1163,7 @@ const toggleConf = () => {
     }
 
     &:hover {
-      background-color: var(--main-light-3);
+      background-color: var(--main-20);
     }
 
     .nav-btn-icon {

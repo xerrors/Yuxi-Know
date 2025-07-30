@@ -256,7 +256,7 @@ const openLink = (url) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  border-right: 1px solid var(--main-light-3);
+  border-right: 1px solid var(--main-20);
   gap: 8px;
   padding-top: 20px;
 
