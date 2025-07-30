@@ -18,7 +18,7 @@ from src.agents.chatbot.configuration import ChatbotConfiguration
 from src.agents.tools_factory import get_runnable_tools
 
 class ChatbotAgent(BaseAgent):
-    name = "对话机器人（Chatbot）"
+    name = "问答助手"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
     config_schema = ChatbotConfiguration
 

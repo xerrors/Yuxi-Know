@@ -189,16 +189,15 @@ async def get_neo4j_nodes(
             raise HTTPException(status_code=400, detail="图数据库未启动")
 
         result = graph_base.get_sample_nodes(kgdb_name, num)
-        formatted_result = graph_base.format_general_results(result)
 
         return {
             "success": True,
-            "result": formatted_result,
+            "result": result,
             "message": "success"
         }
 
     except Exception as e:
-        logger.error(f"获取图节点数据失败: {e}")
+        logger.error(f"获取图节点数据失败: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取图节点数据失败: {str(e)}")
 
 @graph.get("/neo4j/node")
@@ -214,11 +213,10 @@ async def get_neo4j_node(
             raise HTTPException(status_code=400, detail="图数据库未启动")
 
         result = graph_base.query_node(entity_name=entity_name)
-        formatted_result = graph_base.format_query_result_to_graph(result)
 
         return {
             "success": True,
-            "result": formatted_result,
+            "result": result,
             "message": "success"
         }
 

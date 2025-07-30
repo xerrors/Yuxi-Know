@@ -139,8 +139,8 @@ def calculator(a: float, b: float, operation: str) -> float:
 
 @tool
 def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]):
-    """Use this to query knowledge graph."""
-    return graph_base.query_node(query, hops=2)
+    """Use this to query knowledge graph, which include some food domain knowledge."""
+    return graph_base.query_node(query, hops=2, return_format='triples')
 
 # 更新工具注册表
 _TOOLS_REGISTRY.update({
