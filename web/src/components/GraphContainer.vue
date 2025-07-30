@@ -17,22 +17,38 @@ const props = defineProps({
 const container = ref(null);
 let graphInstance = null;
 let resizeObserver = null;
+let renderTimeout = null;
+let retryCount = 0;
+const MAX_RETRIES = 5;
 
 const initGraph = () => {
+  // 确保容器存在
+  if (!container.value) {
+    console.warn('GraphContainer: container is not available');
+    return;
+  }
+
   // 确保容器大小已经稳定
   const width = container.value.offsetWidth;
   const height = container.value.offsetHeight;
 
-  if (width < 100) {
-    // 如果容器宽度太小，可能是抽屉还在展开中，稍后重试
-    setTimeout(initGraph, 100);
-    return;
+  // 如果容器尺寸为0，增加重试次数
+  if (width === 0 && height === 0) {
+    if (retryCount < MAX_RETRIES) {
+      retryCount++;
+      // console.log(`GraphContainer: Container size is 0, retrying (${retryCount}/${MAX_RETRIES})`);
+      setTimeout(initGraph, 200);
+      return;
+    } else {
+      console.warn('GraphContainer: Container size remains 0 after maximum retries');
+      return;
+    }
   }
 
+  retryCount = 0; // 重置重试计数
+
   // 确保容器干净，没有残留元素
-  if (container.value) {
-    container.value.innerHTML = '';
-  }
+  container.value.innerHTML = '';
 
   // 确保没有已存在的实例
   if (graphInstance) {
@@ -81,9 +97,19 @@ const initGraph = () => {
     },
     behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
   });
+
+  // console.log(`GraphContainer: Graph initialized with dimensions ${width}x${height}`);
 };
 
 const renderGraph = () => {
+  // 检查数据是否有效
+  if (!props.graphData || !props.graphData.nodes || !props.graphData.edges) {
+    console.warn('GraphContainer: Invalid graphData provided');
+    return;
+  }
+
+  // console.log('GraphContainer: Rendering graph with', props.graphData.nodes.length, 'nodes and', props.graphData.edges.length, 'edges');
+
   // 如果已有实例且容器大小发生明显变化，则销毁重建
   if (graphInstance && container.value) {
     const currentWidth = container.value.offsetWidth;
@@ -110,6 +136,7 @@ const renderGraph = () => {
 
     // 如果宽度变化超过50px，重新初始化图表
     if (Math.abs(currentWidth - graphWidth) > 50 || Math.abs(currentHeight - graphHeight) > 50) {
+      // console.log('GraphContainer: Container size changed significantly, reinitializing graph');
       graphInstance.destroy();
       graphInstance = null;
 
@@ -120,12 +147,14 @@ const renderGraph = () => {
     }
   }
 
+  // 如果没有图表实例，尝试初始化
   if (!graphInstance) {
     initGraph();
   }
 
+  // 如果仍然没有图表实例，直接返回
   if (!graphInstance) {
-    // 初始化可能推迟执行，此时直接返回
+    // console.warn('GraphContainer: Failed to initialize graph instance');
     return;
   }
 
@@ -141,7 +170,10 @@ const renderGraph = () => {
     }))
   };
 
+  // console.log('GraphContainer: Setting data and rendering graph');
   graphInstance.setData(formattedData);
+
+  // 强制刷新视图
   graphInstance.render();
 
   // 确保图表正确居中和适应视图
@@ -149,12 +181,15 @@ const renderGraph = () => {
     if (graphInstance) {
       graphInstance.fitCenter();
       graphInstance.fitView();
+      // console.log('GraphContainer: Graph rendered and fitted');
     }
-  }, 300);
+  }, 100);
 };
 
 // 添加供父组件调用的刷新方法
 const refreshGraph = () => {
+  // console.log('GraphContainer: refreshGraph called');
+
   // 销毁现有图表实例
   if (graphInstance) {
     graphInstance.destroy();
@@ -166,10 +201,15 @@ const refreshGraph = () => {
     container.value.innerHTML = '';
   }
 
+  // 重置重试计数
+  retryCount = 0;
+
   // 延迟重新渲染，确保容器大小已经稳定
-  setTimeout(() => {
+  // 增加延迟时间确保窗口完全打开
+  clearTimeout(renderTimeout);
+  renderTimeout = setTimeout(() => {
     renderGraph();
-  }, 100);
+  }, 300);
 };
 
 // 向父组件暴露方法
@@ -183,6 +223,7 @@ onMounted(() => {
     resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.target === container.value) {
+          // console.log('GraphContainer: Container resized to', entry.contentRect.width, 'x', entry.contentRect.height);
           renderGraph();
         }
       }
@@ -193,13 +234,20 @@ onMounted(() => {
     }
   }
 
-  renderGraph();
+  // 初始渲染，增加延迟确保容器完全展开
+  clearTimeout(renderTimeout);
+  renderTimeout = setTimeout(() => {
+    renderGraph();
+  }, 300);
+
   window.addEventListener('resize', renderGraph);
 });
 
 // 添加组件卸载时的清理
 onUnmounted(() => {
   window.removeEventListener('resize', renderGraph);
+
+  clearTimeout(renderTimeout);
 
   if (resizeObserver) {
     resizeObserver.disconnect();
@@ -220,6 +268,7 @@ onUnmounted(() => {
 watch(() => props.graphData, (newData, oldData) => {
   // 强制重新渲染图表
   if (newData !== oldData) {
+    // console.log('GraphContainer: graphData changed, refreshing graph');
     refreshGraph();
   }
 }, { deep: true });
@@ -230,7 +279,8 @@ watch(() => props.graphData, (newData, oldData) => {
   background: #F7F7F7;
   border-radius: 16px;
   width: 100%;
-  height: 600px;
+  min-height: 400px;
+  height: 100%;
   overflow: hidden;
 }
 </style>

@@ -48,7 +48,7 @@
                 </div>
               </div>
               <div class="tool-result" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
-                <div class="tool-result-content">
+                <div class="tool-result-content" :data-tool-call-id="toolCall.id">
                   <ToolResultRenderer
                     :tool-name="toolCall.name || toolCall.function.name"
                     :result-content="toolCall.tool_call_result.content"

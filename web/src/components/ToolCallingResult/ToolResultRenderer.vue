@@ -16,6 +16,7 @@
     <KnowledgeGraphResult
       v-else-if="isKnowledgeGraphResult"
       :data="parsedData"
+      ref="graphResultRef"
     />
 
     <!-- 计算器结果 -->
@@ -37,7 +38,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { ToolOutlined } from '@ant-design/icons-vue'
 import WebSearchResult from './WebSearchResult.vue'
 import KnowledgeBaseResult from './KnowledgeBaseResult.vue'
@@ -115,17 +116,8 @@ const isKnowledgeGraphResult = computed(() => {
   if (!isGraphTool) return false
 
   const data = parsedData.value
-  return Array.isArray(data) &&
-         data.length > 0 &&
-         data.some(item =>
-           Array.isArray(item) &&
-           item.length >= 3 &&
-           item.some(subItem =>
-             subItem &&
-             typeof subItem === 'object' &&
-             ('element_id' in subItem || 'properties' in subItem)
-           )
-         )
+  // 支持新格式：包含nodes、edges、triples的对象
+  return data && typeof data === 'object' && 'triples' in data && Array.isArray(data.triples)
 })
 
 // 判断是否为计算器结果
@@ -147,11 +139,27 @@ const formatData = (data) => {
   }
   return String(data)
 }
+
+// 图表结果的引用
+const graphResultRef = ref(null)
+
+// 提供给父组件调用的刷新方法
+const refreshGraph = () => {
+  if (graphResultRef.value && typeof graphResultRef.value.refreshGraph === 'function') {
+    graphResultRef.value.refreshGraph()
+  }
+}
+
+// 向父组件暴露方法
+defineExpose({
+  refreshGraph
+})
 </script>
 
 <style lang="less" scoped>
 .tool-result-renderer {
   width: 100%;
+  height: 100%;
 
   .default-result {
     background: var(--gray-0);
