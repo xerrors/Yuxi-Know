@@ -238,6 +238,7 @@ class OCRPlugin:
                 text = self.process_image(img_path)
                 all_text.append(text)
 
+            logger.debug(f"PDF OCR result: {all_text[:50]}(...) total {len(all_text)} pages.")
             return '\n\n'.join(all_text)
 
         except Exception as e:
