@@ -227,59 +227,53 @@ class ChromaKB(KnowledgeBase):
 
         return processed_items_info
 
-    async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
+    async def aquery(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """异步查询知识库"""
         collection = await self._get_chroma_collection(db_id)
         if not collection:
             raise ValueError(f"Database {db_id} not found")
 
         try:
-            # 设置查询参数 - ChromaDB 知识库特有的参数
             top_k = kwargs.get("top_k", 10)
-            similarity_threshold = kwargs.get("similarity_threshold", 0.0)  # 相似度阈值
-            include_distances = kwargs.get("include_distances", True)  # 是否包含距离信息
+            similarity_threshold = kwargs.get("similarity_threshold", 0.0)
 
-            # 执行相似性搜索
             results = collection.query(
                 query_texts=[query_text],
                 n_results=top_k,
-                include=["documents", "metadatas", "distances"] if include_distances else ["documents", "metadatas"]
+                include=["documents", "metadatas", "distances"]
             )
 
-            # 处理结果
-            if results and results.get("documents") and results["documents"][0]:
-                documents = results["documents"][0]
-                metadatas = results["metadatas"][0] if results.get("metadatas") else []
-                distances = results["distances"][0] if results.get("distances") else []
+            if not results or not results.get("documents") or not results["documents"][0]:
+                return []
 
-                # 构建上下文，应用相似度阈值过滤
-                contexts = []
-                for i, doc in enumerate(documents):
-                    # 计算相似度（距离越小相似度越高）
-                    similarity = 1 - distances[i] if i < len(distances) else 1.0
+            documents = results["documents"][0]
+            metadatas = results["metadatas"][0] if results.get("metadatas") else []
+            distances = results["distances"][0] if results.get("distances") else []
 
-                    # 应用相似度阈值过滤
-                    if similarity < similarity_threshold:
-                        continue
+            retrieved_chunks = []
+            for i, doc in enumerate(documents):
+                similarity = 1 - distances[i] if i < len(distances) else 1.0
 
-                    context = f"[文档片段 {i+1}]:\n{doc}\n"
-                    if i < len(metadatas) and metadatas[i]:
-                        source = metadatas[i].get("source", "未知来源")
-                        chunk_id = metadatas[i].get("chunk_id", f"chunk_{i}")
-                        context += f"来源: {source} ({chunk_id})\n"
-                    if include_distances and i < len(distances):
-                        context += f"相似度: {similarity:.3f}\n"
-                    contexts.append(context)
+                if similarity < similarity_threshold:
+                    continue
 
-                response = "\n".join(contexts)
-                logger.debug(f"ChromaDB query response: {len(contexts)} chunks found (after similarity filtering)")
-                return response
+                metadata = metadatas[i] if i < len(metadatas) else {}
+                # 确保 file_id 在元数据中，并使用统一的键名
+                if 'full_doc_id' in metadata:
+                    metadata['file_id'] = metadata.pop('full_doc_id')
 
-            return ""
+                retrieved_chunks.append({
+                    "content": doc,
+                    "metadata": metadata,
+                    "score": similarity
+                })
+
+            logger.debug(f"ChromaDB query response: {len(retrieved_chunks)} chunks found (after similarity filtering)")
+            return retrieved_chunks
 
         except Exception as e:
             logger.error(f"ChromaDB query error: {e}, {traceback.format_exc()}")
-            return ""
+            return []
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""

@@ -304,25 +304,21 @@ class MilvusKB(KnowledgeBase):
 
         return processed_items_info
 
-    async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
+    async def aquery(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """异步查询知识库"""
         collection = await self._get_milvus_collection(db_id)
         if not collection:
             raise ValueError(f"Database {db_id} not found")
 
         try:
-            # 设置查询参数 - Milvus 知识库特有的参数
             top_k = kwargs.get("top_k", 30)
-            similarity_threshold = kwargs.get("similarity_threshold", 0.2)  # 相似度阈值
-            include_distances = kwargs.get("include_distances", True)  # 是否包含距离信息
-            metric_type = kwargs.get("metric_type", "COSINE")  # 距离度量类型
+            similarity_threshold = kwargs.get("similarity_threshold", 0.2)
+            metric_type = kwargs.get("metric_type", "COSINE")
 
-            # 生成查询向量
             embed_info = self.databases_meta[db_id].get("embed_info", {})
             embedding_function = self._get_embedding_function(embed_info)
             query_embedding = embedding_function([query_text])
 
-            # 执行相似性搜索
             search_params = {"metric_type": metric_type, "params": {"nprobe": 10}}
             results = collection.search(
                 data=query_embedding,
@@ -332,37 +328,36 @@ class MilvusKB(KnowledgeBase):
                 output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"]
             )
 
-            # 处理结果
-            if results and len(results) > 0 and len(results[0]) > 0:
-                contexts = []
-                for i, hit in enumerate(results[0]):
-                    # 计算相似度
-                    similarity = 1 - hit.distance if metric_type == "COSINE" else 1 / (1 + hit.distance)
+            if not results or len(results) == 0 or len(results[0]) == 0:
+                return []
 
-                    # 应用相似度阈值过滤
-                    if similarity < similarity_threshold:
-                        continue
+            retrieved_chunks = []
+            for hit in results[0]:
+                similarity = 1 - hit.distance if metric_type == "COSINE" else 1 / (1 + hit.distance)
 
-                    entity = hit.entity
-                    content = entity.get("content", "")
-                    source = entity.get("source", "未知来源")
-                    chunk_id = entity.get("chunk_id", f"chunk_{i}")
+                if similarity < similarity_threshold:
+                    continue
 
-                    context = f"[文档片段 {i+1}]:\n{content}\n"
-                    context += f"来源: {source} ({chunk_id})\n"
-                    if include_distances:
-                        context += f"相似度: {similarity:.3f}\n"
-                    contexts.append(context)
+                entity = hit.entity
+                metadata = {
+                    "source": entity.get("source", "未知来源"),
+                    "chunk_id": entity.get("chunk_id"),
+                    "file_id": entity.get("file_id"),
+                    "chunk_index": entity.get("chunk_index")
+                }
 
-                response = "\n".join(contexts)
-                logger.debug(f"Milvus query response: {len(contexts)} chunks found (after similarity filtering)")
-                return response
+                retrieved_chunks.append({
+                    "content": entity.get("content", ""),
+                    "metadata": metadata,
+                    "score": similarity
+                })
 
-            return ""
+            logger.debug(f"Milvus query response: {len(retrieved_chunks)} chunks found (after similarity filtering)")
+            return retrieved_chunks
 
         except Exception as e:
             logger.error(f"Milvus query error: {e}, {traceback.format_exc()}")
-            return ""
+            return []
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""

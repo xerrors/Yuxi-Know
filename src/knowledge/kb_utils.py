@@ -49,7 +49,7 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         file_path = Path(item)
         file_id = f"file_{hashstr(str(file_path) + str(time.time()), 6)}"
         file_type = file_path.suffix.lower().replace(".", "")
-        filename = file_path.name
+        filename = os.path.relpath(file_path, Path.cwd())
         item_path = str(file_path)
     else:  # URL
         file_id = f"url_{hashstr(item + str(time.time()), 6)}"

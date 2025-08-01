@@ -162,7 +162,7 @@ class KnowledgeBase(ABC):
         pass
 
     @abstractmethod
-    async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
+    async def aquery(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """
         异步查询知识库
 
@@ -172,11 +172,11 @@ class KnowledgeBase(ABC):
             **kwargs: 查询参数
 
         Returns:
-            查询结果
+            一个包含字典的列表，每个字典代表一个检索到的文档块。
         """
         pass
 
-    def query(self, query_text: str, db_id: str, **kwargs) -> str:
+    def query(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """
         同步查询知识库（兼容性方法）
 
@@ -186,7 +186,7 @@ class KnowledgeBase(ABC):
             **kwargs: 查询参数
 
         Returns:
-            查询结果
+            一个包含字典的列表，每个字典代表一个检索到的文档块。
         """
         import asyncio
         logger.warning("query is deprecated, use aquery instead")
