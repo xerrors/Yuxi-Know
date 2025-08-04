@@ -23,9 +23,12 @@
         </a-menu>
       </template>
     </a-dropdown>
-    <a-button v-else type="link" @click="goToLogin">
-      <UserRoundCheck /> 登录
+    <a-button v-else-if="showButton" type="primary" @click="goToLogin">
+      登录
     </a-button>
+    <div v-else class="login-icon" @click="goToLogin">
+      <UserRoundCheck />
+    </div>
   </div>
 </template>
 
@@ -42,6 +45,10 @@ const userStore = useUserStore();
 
 const props = defineProps({
   showRole: {
+    type: Boolean,
+    default: false
+  },
+  showButton: {
     type: Boolean,
     default: false
   }
@@ -160,5 +167,20 @@ const goToLogin = () => {
 .user-menu-role {
   font-size: 12px;
   color: rgba(0, 0, 0, 0.45);
+}
+
+.login-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
 }
 </style>
