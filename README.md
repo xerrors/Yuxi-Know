@@ -93,6 +93,19 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
   docker load -i docker_images_xxx.tar
    ```
 </details>
+<details>
+  <summary>镜像拉取完成，但是构建失败</summary>
+
+如果拉取镜像完成，但是构建失败，基本都是因为依赖的镜像问题，可以尝试修改 `docker/api.Dockerfile` （第 31 行左右）中的环境变量，替换为本机的代理地址后，尝试构建。
+
+```dockerfile
+# 安装依赖项，如果无法成功安装，则尝试是设置此处的代理
+ENV HTTP_PROXY=http://IP:PORT \
+    HTTPS_PROXY=http://IP:PORT \
+    http_proxy=http://IP:PORT \
+    https_proxy=http://IP:PORT
+```
+</details>
 
 <details>
   <summary>Milvus 启动失败，执行 `docker compose up milvus -d && docker restart api-dev`</summary>
