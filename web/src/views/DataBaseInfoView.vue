@@ -1636,7 +1636,7 @@ const resizeHandleHorizontal = ref(null);
 // 计算面板样式的方法
 const computePanelStyles = () => {
   const queryVisible = panels.query.visible;
-  const graphVisible = panels.graph.visible;
+  const graphVisible = panels.graph.visible && isGraphSupported.value;
 
   if (queryVisible && graphVisible) {
     // 两个面板都显示时，按比例分配
@@ -1645,22 +1645,22 @@ const computePanelStyles = () => {
       graph: { height: rightPanelHeight.graph + '%' }
     };
   } else if (queryVisible && !graphVisible) {
-    // 只显示查询面板时，查询面板占满
+    // 只显示查询面板时（图谱不支持或折叠），查询面板占满
     return {
-      query: { height: 'calc(100% - 40px)' },
-      graph: { height: '36px' }
+      query: { height: '100%', flex: '1' },
+      graph: { height: '36px', flex: 'none' }
     };
   } else if (!queryVisible && graphVisible) {
     // 只显示图谱面板时，图谱面板占满
     return {
-      query: { height: '36px' },
-      graph: { height: 'calc(100% - 40px)' }
+      query: { height: '36px', flex: 'none' },
+      graph: { height: '100%', flex: '1' }
     };
   } else {
-    // 两个面板都折叠时
+    // 两个面板都折叠时或图谱不支持时
     return {
-      query: { height: '36px' },
-      graph: { height: '36px' }
+      query: { height: '36px', flex: 'none' },
+      graph: { height: '36px', flex: 'none' }
     };
   }
 };
@@ -2498,7 +2498,9 @@ const getFileIconColor = (filename) => {
 
   .right-panel {
     flex-grow: 1;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
   .resize-handle,
@@ -2756,7 +2758,8 @@ const getFileIconColor = (filename) => {
 
   .query-section {
     position: relative;
-
+    display: flex;
+    flex-direction: column;
 
     .query-content {
       display: flex;
@@ -2764,6 +2767,7 @@ const getFileIconColor = (filename) => {
       flex: 1;
       overflow: hidden;
       padding-bottom: 10px;
+      height: 100%;
     }
 
     .query-input-row {
@@ -2873,6 +2877,7 @@ const getFileIconColor = (filename) => {
       flex: 1; /* 自动占据剩余所有空间 */
       overflow-y: auto;
       min-height: 0; /* 允许 flex 项目缩小 */
+      height: 0; /* 强制flex子项正确计算高度 */
     }
   }
 
@@ -2907,10 +2912,13 @@ const getFileIconColor = (filename) => {
   &.collapsed {
     height: 36px;
     min-height: 36px;
+    flex: none;
   }
 
   .content {
     padding: 8px;
+    flex: 1;
+    overflow: hidden;
   }
 }
 
