@@ -28,12 +28,6 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
 COPY ../pyproject.toml /app/pyproject.toml
 COPY ../.python-version /app/.python-version
 
-# 安装依赖项
-ENV HTTP_PROXY=http://172.19.13.5:7890 \
-    HTTPS_PROXY=http://172.19.13.5:7890 \
-    http_proxy=http://172.19.13.5:7890 \
-    https_proxy=http://172.19.13.5:7890
-
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-install-project
 
