@@ -28,6 +28,10 @@ class KBOperationError(KnowledgeBaseException):
 class KnowledgeBase(ABC):
     """知识库抽象基类，定义统一接口"""
 
+    # 类级别的处理队列，跟踪所有正在处理的文件
+    _processing_files = set()
+    _processing_lock = None
+
     def __init__(self, work_dir: str):
         """
         初始化知识库
@@ -35,9 +39,16 @@ class KnowledgeBase(ABC):
         Args:
             work_dir: 工作目录
         """
+        import threading
+
         self.work_dir = work_dir
         self.databases_meta: dict[str, dict] = {}
         self.files_meta: dict[str, dict] = {}
+
+        # 初始化类级别的锁
+        if KnowledgeBase._processing_lock is None:
+            KnowledgeBase._processing_lock = threading.Lock()
+
         os.makedirs(work_dir, exist_ok=True)
 
         # 自动加载元数据
@@ -208,6 +219,9 @@ class KnowledgeBase(ABC):
         meta = self.databases_meta[db_id].copy()
         meta["db_id"] = db_id
 
+        # 检查并修复异常的processing状态
+        self._check_and_fix_processing_status(db_id)
+
         # 获取文件信息
         db_files = {}
         for file_id, file_info in self.files_meta.items():
@@ -238,6 +252,9 @@ class KnowledgeBase(ABC):
         """
         databases = []
         for db_id, meta in self.databases_meta.items():
+            # 检查并修复异常的processing状态
+            self._check_and_fix_processing_status(db_id)
+
             db_dict = meta.copy()
             db_dict["db_id"] = db_id
 
@@ -263,6 +280,77 @@ class KnowledgeBase(ABC):
             databases.append(db_dict)
 
         return {"databases": databases}
+
+    @classmethod
+    def _add_to_processing_queue(cls, file_id: str) -> None:
+        """
+        将文件添加到处理队列
+        
+        Args:
+            file_id: 文件ID
+        """
+        with cls._processing_lock:
+            cls._processing_files.add(file_id)
+            logger.debug(f"Added file {file_id} to processing queue")
+    
+    @classmethod
+    def _remove_from_processing_queue(cls, file_id: str) -> None:
+        """
+        从处理队列中移除文件
+        
+        Args:
+            file_id: 文件ID
+        """
+        with cls._processing_lock:
+            cls._processing_files.discard(file_id)
+            logger.debug(f"Removed file {file_id} from processing queue")
+    
+    @classmethod
+    def _is_file_in_processing_queue(cls, file_id: str) -> bool:
+        """
+        检查文件是否在处理队列中
+        
+        Args:
+            file_id: 文件ID
+            
+        Returns:
+            bool: 文件是否在处理队列中
+        """
+        with cls._processing_lock:
+            return file_id in cls._processing_files
+    
+
+
+    def _check_and_fix_processing_status(self, db_id: str) -> None:
+        """
+        检查并修复异常的processing状态
+        如果文件状态为processing但实际不在处理队列中，则修改为error状态
+
+        Args:
+            db_id: 数据库ID
+        """
+        try:
+            status_changed = False
+
+            # 检查该数据库下所有processing状态的文件
+            for file_id, file_info in self.files_meta.items():
+                if (file_info.get("database_id") == db_id and
+                    file_info.get("status") == "processing"):
+
+                    # 检查文件是否真的在处理队列中
+                    if not self._is_file_in_processing_queue(file_id):
+                        logger.warning(f"File {file_id} has processing status but is not in processing queue, marking as error")
+                        self.files_meta[file_id]["status"] = "error"
+                        self.files_meta[file_id]["error"] = "Processing interrupted - file not found in processing queue"
+                        status_changed = True
+
+            # 如果有状态变更，保存元数据
+            if status_changed:
+                self._save_metadata()
+                logger.info(f"Fixed processing status for database {db_id}")
+
+        except Exception as e:
+            logger.error(f"Error checking processing status for database {db_id}: {e}")
 
     @abstractmethod
     async def delete_file(self, db_id: str, file_id: str) -> None:

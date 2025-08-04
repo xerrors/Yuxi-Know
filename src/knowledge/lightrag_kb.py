@@ -164,6 +164,7 @@ class LightRagKB(KnowledgeBase):
             self.files_meta[file_id] = file_record
             self._save_metadata()
 
+            self._add_to_processing_queue(file_id)
             try:
                 # 根据内容类型处理内容
                 if content_type == "file":
@@ -195,6 +196,8 @@ class LightRagKB(KnowledgeBase):
                 self._save_metadata()
                 file_record['status'] = "failed"
                 file_record['error'] = error_msg
+            finally:
+                self._remove_from_processing_queue(file_id)
 
             processed_items_info.append(file_record)
 

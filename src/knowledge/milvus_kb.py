@@ -256,6 +256,9 @@ class MilvusKB(KnowledgeBase):
                 self._save_metadata()
 
             file_record["file_id"] = file_id
+            
+            # 添加到处理队列
+            self._add_to_processing_queue(file_id)
 
             try:
                 if content_type == "file":
@@ -292,6 +295,8 @@ class MilvusKB(KnowledgeBase):
                     self.files_meta[file_id]["status"] = "done"
                     self._save_metadata()
                 file_record['status'] = "done"
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
 
             except Exception as e:
                 logger.error(f"处理{content_type} {item} 失败: {e}, {traceback.format_exc()}")
@@ -299,6 +304,10 @@ class MilvusKB(KnowledgeBase):
                     self.files_meta[file_id]["status"] = "failed"
                     self._save_metadata()
                 file_record['status'] = "failed"
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
+            finally:
+                pass
 
             processed_items_info.append(file_record)
 
