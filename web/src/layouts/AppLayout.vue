@@ -56,7 +56,7 @@ const getRemoteConfig = () => {
 }
 
 const getRemoteDatabase = () => {
-  databaseStore.refreshDatabase()
+  databaseStore.getDatabaseInfo()
 }
 
 // Fetch GitHub stars count

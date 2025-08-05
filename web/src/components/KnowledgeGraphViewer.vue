@@ -76,7 +76,7 @@
       <div v-if="!props.hideStats" class="stats-section">
         <a-tag color="blue" size="small">节点: {{ stats.displayed_nodes || 0 }}</a-tag>
         <a-tag color="green" size="small">边: {{ stats.displayed_edges || 0 }}</a-tag>
-        <a-tag v-if="stats.is_truncated" color="red" size="small">已截断</a-tag>
+        <!-- <a-tag v-if="stats.is_truncated" color="red" size="small">已截断</a-tag> -->
       </div>
     </div>
 
@@ -419,6 +419,10 @@ const sigmaSettings = {
   edgeClickTolerance: 10, // 边点击容差，增加点击检测区域
   edgeHoverTolerance: 8,  // 边悬停容差
   zoomToSizeRatioFunction: (x) => x, // 确保缩放时边的厚度保持合理
+  eventListenerOptions: {
+    wheel: { passive: true },
+    touchstart: { passive: true },
+  },
 }
 
 // 初始化Sigma.js

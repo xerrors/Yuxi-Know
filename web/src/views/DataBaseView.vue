@@ -72,7 +72,15 @@
         <a-button key="submit" type="primary" :loading="state.creating" @click="createDatabase">创建</a-button>
       </template>
     </a-modal>
-    <div class="databases">
+    
+    <!-- 加载状态 -->
+    <div v-if="state.loading" class="loading-container">
+      <a-spin size="large" />
+      <p>正在加载知识库...</p>
+    </div>
+    
+    <!-- 数据库列表 -->
+    <div v-else class="databases">
       <div class="new-database dbcard" @click="state.openNewDatabaseModel=true">
         <div class="top">
           <div class="icon"><BookPlus /></div>
@@ -680,6 +688,15 @@ onMounted(() => {
 
 .database-container {
   padding: 0;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+  gap: 16px;
 }
 
 .new-database-modal {
