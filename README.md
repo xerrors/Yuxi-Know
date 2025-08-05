@@ -40,7 +40,7 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
    git clone -b stable https://github.com/xerrors/Yuxi-Know.git
    cd Yuxi-Know
    ```
-   如果想要使用 v0.2 预览版，可以使用分支：`v0.2.0.preview`
+   如果想要使用 v0.2 预览版，可以使用分支：`0.2.0.preview`
 
 2. **配置 API 密钥**
 
