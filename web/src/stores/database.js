@@ -12,7 +12,7 @@ export const useDatabaseStore = defineStore('database', () => {
   const database = ref({});
   const databaseId = ref(null);
   const selectedFile = ref(null);
-  const queryResult = ref('');
+
   const queryParams = ref([]);
   const meta = reactive({});
   const graphStats = ref({
@@ -266,43 +266,7 @@ export const useDatabaseStore = defineStore('database', () => {
     }
   }
 
-  async function onQuery(queryText) {
-    state.searchLoading = true;
-    queryResult.value = '';
-    
-    // 确保只传递当前知识库类型支持的参数
-    const supportedParamKeys = new Set(queryParams.value.map(param => param.key));
-    const queryMeta = {};
-    
-    console.log('Supported param keys:', Array.from(supportedParamKeys));
-    console.log('All meta params:', meta);
-    console.log('Database info:', database.value);
-    
-    // 遍历 meta 中的参数，只保留当前知识库类型支持的参数
-    for (const [key, value] of Object.entries(meta)) {
-      // 跳过 db_id 参数
-      if (key === 'db_id') continue;
-      
-      // 只保留当前知识库类型支持的参数
-      if (supportedParamKeys.has(key)) {
-        queryMeta[key] = value;
-      } else {
-        console.log(`Skipping unsupported parameter: ${key}`);
-      }
-    }
-    
-    console.log('Filtered query meta:', queryMeta);
 
-    try {
-      const data = await queryApi.queryTest(database.value.db_id, queryText, queryMeta);
-      queryResult.value = data;
-    } catch (error) {
-      console.error(error);
-      message.error(error.message);
-    } finally {
-      state.searchLoading = false;
-    }
-  }
 
   function startAutoRefresh() {
     if (state.autoRefresh && !refreshInterval) {
@@ -348,7 +312,6 @@ export const useDatabaseStore = defineStore('database', () => {
     database,
     databaseId,
     selectedFile,
-    queryResult,
     queryParams,
     meta,
     graphStats,
@@ -363,7 +326,7 @@ export const useDatabaseStore = defineStore('database', () => {
     addFiles,
     openFileDetail,
     loadQueryParams,
-    onQuery,
+
     startAutoRefresh,
     stopAutoRefresh,
     toggleAutoRefresh,

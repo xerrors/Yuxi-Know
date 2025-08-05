@@ -455,12 +455,16 @@ const chunkData = async () => {
 
 </script>
 
-<style scoped>
+<style lang="less" scoped>
 .add-files-content {
   padding: 16px 0;
   display: flex;
   flex-direction: column;
   height: 100%;
+
+  .ant-form-item {
+    margin: 0;
+  }
 }
 
 .upload-header {
@@ -477,20 +481,20 @@ const chunkData = async () => {
 
 .upload-mode-selector {
   padding: 8px 16px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.3s;
 }
 
 .upload-mode-selector:hover {
-  border-color: #1890ff;
+  border-color: var(--main-color);
 }
 
 .upload-mode-selector.active {
-  border-color: #1890ff;
-  background-color: #e6f7ff;
-  color: #1890ff;
+  border-color: var(--main-color);
+  background-color: var(--main-30);
+  color: var(--main-color);
 }
 
 .config-controls {
@@ -502,8 +506,8 @@ const chunkData = async () => {
 .qa-split-config {
   margin-bottom: 20px;
   padding: 16px;
-  background-color: #fafafa;
-  border-radius: 4px;
+  background-color: var(--gray-50);
+  border-radius: 6px;
 }
 
 .toggle-controls {
@@ -513,7 +517,7 @@ const chunkData = async () => {
 
 .param-description {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--gray-600);
   margin-top: 4px;
 }
 
@@ -531,7 +535,7 @@ const chunkData = async () => {
 
 .url-hint {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--gray-600);
   margin-top: 8px;
 }
 

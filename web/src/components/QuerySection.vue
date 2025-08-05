@@ -110,6 +110,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { message } from 'ant-design-vue';
+import { queryApi } from '@/apis/knowledge_api';
 import {
   SearchOutlined,
   SettingOutlined,
@@ -144,7 +145,7 @@ const meta = computed({
   get: () => store.meta,
   set: (value) => Object.assign(store.meta, value)
 });
-const queryResult = computed(() => store.queryResult);
+const queryResult = ref('');
 
 // 查询测试
 const queryText = ref('');
@@ -171,12 +172,47 @@ const toggleVisible = () => {
   emit('toggleVisible');
 };
 
-const onQuery = () => {
+const onQuery = async () => {
   if (!queryText.value.trim()) {
     message.error('请输入查询内容');
     return;
   }
-  store.onQuery(queryText.value.trim());
+
+  store.state.searchLoading = true;
+
+  // 确保只传递当前知识库类型支持的参数
+  const supportedParamKeys = new Set(queryParams.value.map(param => param.key));
+  const queryMeta = {};
+
+  console.log('Supported param keys:', Array.from(supportedParamKeys));
+  console.log('All meta params:', meta.value);
+  console.log('Database info:', store.database);
+
+  // 遍历 meta 中的参数，只保留当前知识库类型支持的参数
+  for (const [key, value] of Object.entries(meta.value)) {
+    // 跳过 db_id 参数
+    if (key === 'db_id') continue;
+
+    // 只保留当前知识库类型支持的参数
+    if (supportedParamKeys.has(key)) {
+      queryMeta[key] = value;
+    } else {
+      console.log(`Skipping unsupported parameter: ${key}`);
+    }
+  }
+
+  console.log('Filtered query meta:', queryMeta);
+
+  try {
+    const data = await queryApi.queryTest(store.database.db_id, queryText.value.trim(), queryMeta);
+    queryResult.value = data;
+  } catch (error) {
+    console.error(error);
+    message.error(error.message);
+    queryResult.value = '';
+  } finally {
+    store.state.searchLoading = false;
+  }
 };
 
 const useQueryExample = (example) => {
