@@ -46,12 +46,10 @@ MODEL_NAMES:
     name: SiliconFlow
     url: https://cloud.siliconflow.cn/models
     base_url: https://api.siliconflow.cn/v1
-    default: Qwen/Qwen3-8B
+    default: zai-org/GLM-4.5
     env:
       - SILICONFLOW_API_KEY
     models:
-      - Pro/deepseek-ai/DeepSeek-R1
-      - Pro/deepseek-ai/DeepSeek-V3
       - Qwen/Qwen3-235B-A22B-Thinking-2507
       - Qwen/Qwen3-235B-A22B-Instruct-2507
       - moonshotai/Kimi-K2-Instruct

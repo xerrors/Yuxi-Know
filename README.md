@@ -54,7 +54,7 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
    SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
    ```
    > 💡 [免费获取 SiliconFlow API Key](https://cloud.siliconflow.cn/i/Eo5yTHGJ)（注册即送 14 元额度）
-   > 💡 [免费获取 智谱 API Key](https://www.bigmodel.cn/invite?icode=6BruxYJDdROL5pQX%2FOeYvA%3D%3D)（注册即送 2000 万Tokens）
+   > 💡 [免费获取 智谱 API Key](https://www.bigmodel.cn/invite?icode=6BruxYJDdROL5pQX%2FOeYvA%3D%3D)（注册即送 2000 万Tokens，限 GLM-4.5-air）
 
 3. **启动服务**
    ```bash
@@ -117,15 +117,14 @@ ENV HTTP_PROXY=http://IP:PORT \
 ### 对话模型
 
 支持多种 API 服务商，配置对应的 `API_KEY` 即可使用：
-
-| 服务商 | 推荐模型 | 环境变量 | 备注 |
-|--------|---------|----------|------|
-| 硅基流动 | `Qwen2.5-7B-Instruct` | `SILICONFLOW_API_KEY` | 🆓 免费，默认 |
-| OpenAI | `gpt-4o` | `OPENAI_API_KEY` | |
-| DeepSeek | `deepseek-chat` | `DEEPSEEK_API_KEY` | |
-| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | |
-| 智谱清言 | `glm-4-flash` | `ZHIPUAI_API_KEY` | |
-| 阿里云百炼 | `qwen-max-latest` | `DASHSCOPE_API_KEY` | |
+| 服务商 | 环境变量 | 备注 |
+|--------|----------|------|
+| 硅基流动 | `SILICONFLOW_API_KEY` | 🆓 免费，默认 |
+| OpenAI | `OPENAI_API_KEY` | |
+| DeepSeek | `DEEPSEEK_API_KEY` | |
+| OpenRouter | `OPENROUTER_API_KEY` | |
+| 智谱清言 | `ZHIPUAI_API_KEY` | |
+| 阿里云百炼 | `DASHSCOPE_API_KEY` | |
 
 <details>
   <summary>自定义模型供应商</summary>
@@ -151,12 +150,6 @@ custom-provider-name-here:
 项目理论上兼容任何 OpenAI 兼容的模型，包括但不限于 vLLM、Ollama 或者其他 API 中转或者代理服务。在 Web 界面的"设置"中添加本地模型地址。
 
 
-<!-- |模型选择|自定义模型地址|
-|--|--|
-|![知识库可视化](./docs/images/select_model.png)|![本地模型配置](./docs/images/add_custom_model.png)| -->
-
-
-
 ## 📚 功能详解
 
 ### 知识库管理
@@ -169,11 +162,14 @@ custom-provider-name-here:
 
 在 v0.2 版本中，项目支持了基于 [LightRAG](https://github.com/HKUDS/LightRAG) 的知识图谱构建方法。需要在知识库中创建一个基于 LightRAG 的知识库，然后上传文档。构建的知识图谱会自动导入到 Neo4j 中，并使用不同的 label 做区分。需要说明的是，基于 LightRAG 的知识库，可以在知识库详情中可视化，但是不能在侧边栏的图谱中检索，知识图谱检索工具也不支持基于 LightRAG 的知识库进行检索。基于 LightRAG 方法构建的图谱的查询，需要使用对应的知识库作为查询工具。
 
+默认使用的图谱构建模式是 `siliconflow` 的 `Qwen/Qwen3-30B-A3B-Instruct-2507`，可以使用 `LIGHTRAG_LLM_PROVIDER` 和 `LIGHTRAG_LLM_NAME` 覆盖。
+
 |知识库可视化|Neo4J管理端|
 |--|--|
 |![知识库可视化](./docs/images/lightrag_kb.png)|![Neo4J管理端](./docs/images/neo4j_browser.png)|
 
 除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是`neo4j` / `0123456789`。
+
 
 **数据格式**：支持 JSONL 格式导入
 ```jsonl
@@ -183,6 +179,7 @@ custom-provider-name-here:
 
 此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，但是最好确保每个节点都有 Entity 标签，否则会影响到图的检索与构建。
 
+注：在“图谱”页面，只能看到上传的节点和边，基于 LightRAG 构建的图谱不会展示在里面，完整的图谱可以去 Neo4j 管理页面查看。
 
 ## 🔧 高级配置
 

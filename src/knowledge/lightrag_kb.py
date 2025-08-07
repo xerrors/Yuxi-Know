@@ -16,8 +16,8 @@ from src import config
 from src.utils import logger, hashstr, get_docker_safe_url
 
 
-LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "openai")
-LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "gpt-4.1-mini")
+LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
+LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "Qwen/Qwen3-30B-A3B-Instruct-2507")
 
 
 class LightRagKB(KnowledgeBase):
@@ -120,7 +120,6 @@ class LightRagKB(KnowledgeBase):
                 history_messages=history_messages,
                 api_key=model.api_key,
                 base_url=model.base_url,
-                # extra_body={"enable_thinking": False},
                 **kwargs,
             )
         return llm_model_func
