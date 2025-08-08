@@ -351,7 +351,7 @@ const graphDescription = computed(() => {
   const modelName = graphInfo.value?.embed_model_name || '未上传文件';
   const unindexed = unindexedCount.value > 0 ? `，${unindexedCount.value}个节点未索引` : '';
 
-  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系。向量模型：${modelName}${unindexed}`;
+  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系（不含知识库创建的图谱）。向量模型：${modelName}${unindexed}`;
 });
 
 // 为未索引节点添加索引

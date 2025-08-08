@@ -343,7 +343,7 @@ class GraphDatabase:
         def query_by_vector(tx, text, threshold):
             # 首先检查索引是否存在
             if not _index_exists(tx, "entityEmbeddings"):
-                raise Exception("向量索引不存在，请先创建索引")
+                raise Exception("向量索引不存在，请先创建索引，或当前图谱中未上传任何三元组（知识库中自动构建的，不会在此处展示和检索）。")
 
             embedding = self.get_embedding(text)
             result = tx.run("""
@@ -437,9 +437,11 @@ class GraphDatabase:
         assert self.driver is not None, "Database is not connected"
         self.use_database(graph_name)
         def query(tx):
-            entity_count = tx.run("MATCH (n) RETURN count(n) AS count").single()["count"]
-            relationship_count = tx.run("MATCH ()-[r]->() RETURN count(r) AS count").single()["count"]
-            triples_count = tx.run("MATCH (n)-[r]->(m) RETURN count(n) AS count").single()["count"]
+            # 只统计包含Entity标签的节点
+            entity_count = tx.run("MATCH (n:Entity) RETURN count(n) AS count").single()["count"]
+            # 只统计包含RELATION标签的关系
+            relationship_count = tx.run("MATCH ()-[r:RELATION]->() RETURN count(r) AS count").single()["count"]
+            triples_count = tx.run("MATCH (n:Entity)-[r:RELATION]->(m:Entity) RETURN count(n) AS count").single()["count"]
 
             # 获取所有标签
             labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
