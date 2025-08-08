@@ -1,6 +1,5 @@
 <template>
-  <!-- TODO 登录页面样式优化；（1）风格和整个系统统一； -->
-  <div class="login-view" :style="{ backgroundImage: `url(${loginBg})` }" :class="{ 'has-alert': serverStatus === 'error' }">
+  <div class="login-view" :class="{ 'has-alert': serverStatus === 'error' }">
     <!-- 服务状态提示 -->
     <div v-if="serverStatus === 'error'" class="server-status-alert">
       <div class="alert-content">
@@ -15,10 +14,28 @@
       </div>
     </div>
 
-    <div class="login-container">
+    <div class="login-layout">
+      <!-- 左侧图片区域 -->
+      <div class="login-image-section">
+        <img :src="loginBgImage" alt="登录背景" class="login-bg-image" />
+        <div class="image-overlay">
+          <div class="brand-info">
+             <h1 class="brand-title">{{ infoStore.branding?.name || 'Yuxi-Know' }}</h1>
+             <p class="brand-subtitle">{{ infoStore.branding?.subtitle || '大模型驱动的知识库管理工具' }}</p>
+             <p class="brand-description">{{ infoStore.branding?.description || '结合知识库与知识图谱，提供更准确、更全面的回答' }}</p>
+           </div>
+          <div class="brand-copyright">
+            <p>{{ infoStore.footer?.copyright || 'Yuxi-Know' }}. {{ infoStore.branding?.copyright || '版权所有' }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧登录表单区域 -->
+      <div class="login-form-section">
+        <div class="login-container">
       <div class="login-logo">
         <!-- <img src="@/assets/logo.svg" alt="Logo" v-if="false" /> -->
-        <h1>知识问答管理系统</h1>
+        <h1>欢迎登录 {{ infoStore.branding.name }}</h1>
       </div>
 
       <!-- 初始化管理员表单 -->
@@ -66,8 +83,6 @@
 
       <!-- 登录表单 -->
       <div v-else class="login-form">
-        <h2>用户登录</h2>
-
         <a-form
           :model="loginForm"
           @finish="handleLogin"
@@ -139,28 +154,35 @@
         {{ errorMessage }}
       </div>
 
-      <!-- 页脚 -->
-      <div class="login-footer">
-        <a @click="showDevMessage">联系我们</a>
-        <a @click="showDevMessage">使用帮助</a>
-        <a @click="showDevMessage">隐私政策</a>
+          <!-- 页脚 -->
+          <div class="login-footer">
+            <a href="https://github.com/xerrors" target="_blank">联系我们</a>
+            <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">使用帮助</a>
+            <a href="https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE" target="_blank">隐私政策</a>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
+import { useInfoStore } from '@/stores/info';
 import { message } from 'ant-design-vue';
 import { chatApi } from '@/apis/auth_api';
 import { healthApi } from '@/apis/system_api';
 import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
-import loginBg from '@/assets/pics/login_bg.jpg';
-
 const router = useRouter();
 const userStore = useUserStore();
+const infoStore = useInfoStore();
+
+// 从infoStore获取登录背景图片
+const loginBgImage = computed(() => {
+  return infoStore.organization?.login_bg || '/login_bg.jpg';
+});
 
 // 状态
 const isFirstRun = ref(false);
@@ -340,40 +362,108 @@ onMounted(async () => {
 .login-view {
   height: 100vh;
   width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-size: cover;
-  background-position: center;
   position: relative;
   padding-top: 0;
 
   &.has-alert {
     padding-top: 60px;
   }
+}
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.1);
-    z-index: 0;
+.login-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.login-image-section {
+  flex: 0 0 55%;
+  position: relative;
+  overflow: hidden;
+
+  .login-bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 80px 60px 40px 60px;
+}
+
+  .brand-info {
+     text-align: left;
+     color: white;
+     max-width: 600px;
+
+     .brand-title {
+       font-size: 64px;
+       font-weight: 800;
+       margin-bottom: 24px;
+       text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+       letter-spacing: -1px;
+     }
+
+     .brand-subtitle {
+       font-size: 28px;
+       font-weight: 500;
+       margin-bottom: 32px;
+       opacity: 0.95;
+       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+       line-height: 1.3;
+     }
+
+     .brand-description {
+       font-size: 20px;
+       line-height: 1.6;
+       margin-bottom: 0;
+       opacity: 0.85;
+       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+     }
+   }
+
+  .brand-copyright {
+    align-self: flex-start;
+
+    p {
+      margin: 0;
+      font-size: 14px;
+      color: rgba(255, 255, 255, 0.7);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      font-weight: 400;
+    }
   }
 }
 
-.login-container {
-  width: 420px;
+.login-form-section {
+  flex: 1;
+  min-width: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #ffffff;
   padding: 40px;
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  position: relative;
-  z-index: 1;
-  backdrop-filter: blur(8px);
-  border: 2px solid white;
+}
+
+.login-container {
+  width: 100%;
+  max-width: 420px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  border: none;
 }
 
 .login-logo {
@@ -414,6 +504,8 @@ onMounted(async () => {
 
   :deep(.ant-btn) {
     font-size: 16px;
+    padding: 0.5rem;
+    height: auto;
   }
 }
 

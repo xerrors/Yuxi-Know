@@ -3,7 +3,7 @@
 @import './shorts.css';
 
 :root {
-  --header-height: 60px;
+  --header-height: 45px;
   --min-width: 450px;
 }
 

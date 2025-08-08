@@ -113,7 +113,6 @@ const mainList = [{
       <div class="logo circle">
         <router-link to="/">
           <img :src="infoStore.organization.avatar">
-          <span class="logo-text">{{ infoStore.organization.short_name }}</span>
         </router-link>
       </div>
       <div class="nav">
@@ -278,16 +277,12 @@ div.header, #app-router-view {
   .logo {
     width: 40px;
     height: 40px;
-    margin: 14px 0 14px 0;
+    margin: 8px 0 14px 0;
 
     img {
       width: 100%;
       height: 100%;
       border-radius: 4px;  // 50% for circle
-    }
-
-    .logo-text {
-      display: none;
     }
 
     & > a {
@@ -464,14 +459,6 @@ div.header, #app-router-view {
       margin-right: 8px;
     }
 
-    .logo-text {
-      display: block;
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      color: var(--main-color);
-      white-space: nowrap;
-    }
   }
 
   .nav {

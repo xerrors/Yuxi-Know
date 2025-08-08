@@ -297,14 +297,14 @@ const openLink = (url) => {
 
   .section {
     margin-top: 20px;
-    background-color: var(--gray-10);
+    background-color: var(--gray-0);
     padding: 20px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
     gap: 16px;
     // box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    border: 1px solid var(--gray-300);
+    border: 1px solid var(--gray-200);
   }
 
   .card {

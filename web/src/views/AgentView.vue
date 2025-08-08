@@ -685,13 +685,13 @@ const toggleConf = () => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  --agent-view-header-height: 45px;
+  --agent-view-header-height: 54px;
 }
 
 .agent-view-header {
   height: var(--agent-view-header-height);
   background-color: var(--bg-sider);
-  border-bottom: 1px solid var(--main-20);
+  border-bottom: 1px solid var(--gray-200);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -719,13 +719,13 @@ const toggleConf = () => {
   flex: 1;
   min-height: calc(100% - var(--agent-view-header-height));
   overflow: hidden;
-  padding: var(--gap-radius);
-  gap: var(--gap-radius);
+  // padding: var(--gap-radius);
+  // gap: var(--gap-radius);
 
-  .content {
-    border-radius: var(--gap-radius);
-    border: 1px solid var(--gray-300);
-  }
+  // .content {
+  //   border-radius: var(--gap-radius);
+  //   border: 1px solid var(--gray-300);
+  // }
 }
 
 .content {

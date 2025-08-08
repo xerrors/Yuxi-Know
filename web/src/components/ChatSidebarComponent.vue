@@ -238,7 +238,7 @@ const toggleCollapse = () => {
 
   .conversation-list-top {
     padding: 8px 12px;
-    border-bottom: 1px solid var(--gray-200);
+    // border-bottom: 1px solid var(--gray-200);
 
     .new-chat-btn {
       width: 100%;

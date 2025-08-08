@@ -1381,7 +1381,7 @@ const mergeMessageChunk = (chunks) => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1rem;
+    padding: 1rem 8px;
     border-bottom: 1px solid var(--main-20);
 
     .header__left, .header__right, .header__center {
