@@ -28,22 +28,19 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
 COPY ../pyproject.toml /app/pyproject.toml
 COPY ../.python-version /app/.python-version
 
-# 安装依赖项，如果无法成功安装，则尝试是设置此处的代理
-# ENV HTTP_PROXY=http://172.19.13.5:7890 \
-#     HTTPS_PROXY=http://172.19.13.5:7890 \
-#     http_proxy=http://172.19.13.5:7890 \
-#     https_proxy=http://172.19.13.5:7890
+# 接收构建参数
+ARG HTTP_PROXY=""
+ARG HTTPS_PROXY=""
+
+# 设置环境变量（这些值可能是空的）
+ENV HTTP_PROXY=$HTTP_PROXY \
+    HTTPS_PROXY=$HTTPS_PROXY \
+    http_proxy=$HTTP_PROXY \
+    https_proxy=$HTTPS_PROXY
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-install-project
+    uv sync --no-dev --no-install-project
 
 # 复制代码到容器中
 COPY ../src /app/src
 COPY ../server /app/server
-
-# 同步项目
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync
-
-# 取消代理
-RUN unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy

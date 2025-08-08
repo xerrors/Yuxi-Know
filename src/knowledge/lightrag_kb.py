@@ -17,7 +17,7 @@ from src.utils import logger, hashstr, get_docker_safe_url
 
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
-LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "Qwen/Qwen3-30B-A3B-Instruct-2507")
+LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "zai-org/GLM-4.5-Air")
 
 
 class LightRagKB(KnowledgeBase):

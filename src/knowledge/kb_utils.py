@@ -108,18 +108,23 @@ def get_embedding_config(embed_info: dict) -> dict:
     """
     config_dict = {}
 
-    if embed_info:
-        config_dict['model'] = embed_info["name"]
-        config_dict['api_key'] = os.getenv(embed_info["api_key"], embed_info["api_key"])
-        config_dict['base_url'] = embed_info["base_url"]
-        config_dict['dimension'] = embed_info.get("dimension", 1024)
-    else:
-        from src.models import select_embedding_model
-        default_model = select_embedding_model(config.embed_model)
-        config_dict['model'] = default_model.model
-        config_dict['api_key'] = default_model.api_key
-        config_dict['base_url'] = default_model.base_url
-        config_dict['dimension'] = getattr(default_model, 'dimension', 1024)
+    try:
+        if embed_info:
+            config_dict['model'] = embed_info["name"]
+            config_dict['api_key'] = os.getenv(embed_info["api_key"], embed_info["api_key"])
+            config_dict['base_url'] = embed_info["base_url"]
+            config_dict['dimension'] = embed_info.get("dimension", 1024)
+        else:
+            from src.models import select_embedding_model
+            default_model = select_embedding_model(config.embed_model)
+            config_dict['model'] = default_model.model
+            config_dict['api_key'] = default_model.api_key
+            config_dict['base_url'] = default_model.base_url
+            config_dict['dimension'] = getattr(default_model, 'dimension', 1024)
+
+    except Exception as e:
+        logger.error(f"Error in get_embedding_config: {e}, {embed_info}")
+        raise ValueError(f"Error in get_embedding_config: {e}")
 
     logger.debug(f"Embedding config: {config_dict}")
     return config_dict

@@ -156,7 +156,7 @@ const props = defineProps({
 const state = reactive({
   ...props.state,
   debug_mode: computed(() => props.state.debug_mode ?? false),
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true' || false,
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true' || true,
   waitingServerResponse: false,
   isProcessingRequest: false,
   creatingNewChat: false,

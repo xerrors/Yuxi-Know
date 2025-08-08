@@ -68,5 +68,4 @@ lint.ignore = ["F401", "E501"]  # 忽略的规则
 dev = [
     "ipykernel>=6.30.0",
     "ruff>=0.12.1",
-    "vllm>=0.8.5.post1",
 ]

@@ -1,7 +1,7 @@
 目前已有的开发计划包括：
 
 
-### v2.0 Prerelease
+### v2.0 PreRelease
 
 💭 **Features Todo**
 - [x] 知识库使用 LightRAG（GraphRAG 轻量版）重构（🌟🌟🌟🌟🌟）

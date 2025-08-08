@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
     image: yuxi-api:0.2.0.dev
     container_name: api-dev
     working_dir: /app
@@ -33,7 +36,7 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
-    command: uv run uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
+    command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5050/api/system/health || exit 1"]
