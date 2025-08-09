@@ -120,7 +120,7 @@ export const threadApi = {
    */
   createThread: (agentId, title, metadata) => apiPost('/api/chat/thread', {
     agent_id: agentId,
-    title: title || '新对话',
+    title: title || '新的对话',
     metadata: metadata || {}
   }, {}, true),
 

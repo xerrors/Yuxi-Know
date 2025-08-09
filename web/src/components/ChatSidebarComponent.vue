@@ -25,7 +25,7 @@
             :class="{ 'active': currentChatId === chat.id }"
             @click="selectChat(chat)"
           >
-            <div class="conversation-title">{{ chat.title || '新对话' }}</div>
+            <div class="conversation-title">{{ chat.title || '新的对话' }}</div>
             <div class="actions-mask"></div>
             <div class="conversation-actions">
               <a-dropdown :trigger="['click']" @click.stop>
@@ -244,7 +244,7 @@ const toggleCollapse = () => {
       width: 100%;
       padding: 8px 12px;
       border-radius: 6px;
-      background-color: var(--main-50);
+      background-color: var(--gray-50);
       color: var(--main-color);
       border: none;
       transition: all 0.2s ease;
@@ -332,7 +332,7 @@ const toggleCollapse = () => {
       }
 
       &:hover {
-        background-color: var(--gray-100);
+        background-color: var(--gray-50);
 
         .actions-mask {
             background: linear-gradient(to right, transparent, var(--gray-100) 20px);
@@ -344,14 +344,14 @@ const toggleCollapse = () => {
       }
 
       &.active {
-        background-color: var(--main-50);
+        background-color: var(--gray-100);
 
         .conversation-title {
           color: var(--main-600);
           font-weight: 500;
         }
         .actions-mask {
-          background: linear-gradient(to right, transparent, var(--main-50) 20px);
+          background: linear-gradient(to right, transparent, var(--gray-100) 20px);
         }
       }
     }

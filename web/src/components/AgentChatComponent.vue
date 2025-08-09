@@ -27,7 +27,7 @@
             <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </div>
           <div class="newchat nav-btn" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
-            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
+            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新的对话</span>
           </div>
         </div>
         <div class="header__center">
@@ -56,7 +56,20 @@
       <div v-else-if="convs.length === 0 && !onGoingConv.messages.length" class="chat-examples">
         <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
+        <div class="inputer-init">
+          <MessageInputComponent
+            v-model="userInput"
+            :is-loading="state.isProcessingRequest"
+            :disabled="!currentAgent"
+            :send-button-disabled="!userInput || !currentAgent || state.isProcessingRequest"
+            :placeholder="'输入问题...'"
+            @send="handleSendMessage"
+            @keydown="handleKeyDown"
+          />
+        </div>
       </div>
+
+
 
       <div class="chat-box" ref="messagesContainer">
         <div class="conv-box" v-for="(conv, index) in convs" :key="index">
@@ -104,7 +117,7 @@
         </div>
       </div>
       <div class="bottom">
-        <div class="message-input-wrapper">
+        <div class="message-input-wrapper" v-if="convs.length > 0 || onGoingConv.messages.length > 0">
           <MessageInputComponent
             v-model="userInput"
             :is-loading="state.isProcessingRequest"
@@ -301,7 +314,7 @@ const createNewChat = async () => {
   try {
     // 调用API创建新对话
     state.creatingNewChat = true;
-    const response = await threadApi.createThread(props.agentId, '新对话');
+    const response = await threadApi.createThread(props.agentId, '新的对话');
     if (!response || !response.id) {
       throw new Error('创建对话失败');
     }
@@ -1436,12 +1449,19 @@ const mergeMessageChunk = (chunks) => {
 
   h1 {
     margin-bottom: 20px;
-    font-size: 1.2rem;
-    color: var(--gray-900);
+    font-size: 1.3rem;
+    color: var(--gray-1000);
   }
 
   p {
+    font-size: 1.1rem;
     color: var(--gray-700);
+  }
+
+  .inputer-init {
+    margin: 40px auto;
+    width: 80%;
+    max-width: 800px;
   }
 }
 
@@ -1550,16 +1570,16 @@ const mergeMessageChunk = (chunks) => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 3px;
 }
 
 .loading-dots div {
-  width: 8px;
-  height: 8px;
-  margin: 0 4px;
-  background-color: var(--gray-700);
+  width: 6px;
+  height: 6px;
+  background: linear-gradient(135deg, var(--main-color), var(--main-700));
   border-radius: 50%;
-  opacity: 0.3;
-  animation: pulse 0.5s infinite ease-in-out both;
+  animation: dotPulse 1.4s infinite ease-in-out both;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
 }
 
 .loading-dots div:nth-child(1) {
@@ -1570,25 +1590,29 @@ const mergeMessageChunk = (chunks) => {
   animation-delay: -0.16s;
 }
 
+.loading-dots div:nth-child(3) {
+  animation-delay: 0s;
+}
+
 .generating-status {
   display: flex;
   justify-content: flex-start;
-  padding: 0.8rem 0;
-  animation: fadeInUp 0.3s ease-out;
+  padding: 1rem 0;
+  animation: fadeInUp 0.4s ease-out;
+  transition: all 0.2s;
 }
 
 .generating-indicator {
   display: flex;
   align-items: center;
-  padding: 0.5rem 1rem 0.5rem 0.5rem;
-  background: var(--gray-100);
-  border-radius: 12px;
-  border: 1px solid var(--gray-200);
+  padding: 0.75rem 0rem;
 
   .generating-text {
     margin-left: 12px;
     color: var(--gray-700);
     font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.025em;
   }
 }
 
@@ -1625,14 +1649,23 @@ const mergeMessageChunk = (chunks) => {
   }
 }
 
-@keyframes pulse {
+@keyframes dotPulse {
   0%, 80%, 100% {
     transform: scale(0.8);
-    opacity: 0.3;
+    opacity: 0.5;
   }
   40% {
-    transform: scale(1);
+    transform: scale(1.1);
     opacity: 1;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
   }
 }
 

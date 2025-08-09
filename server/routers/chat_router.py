@@ -285,7 +285,7 @@ async def create_thread(
         id=thread_id,
         user_id=str(current_user.id),
         agent_id=thread.agent_id,
-        title=thread.title or "新对话",
+        title=thread.title or "新的对话",
         description=thread.description,
     )
 

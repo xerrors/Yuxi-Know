@@ -3,34 +3,23 @@
     <div class="agent-view-header">
       <div class="header-left">
         <div class="header-item">
-          <a-select
-            v-model:value="selectedAgentId"
-            class="agent-list"
-            style="width: 220px"
-            @change="selectAgent"
+          <div
+            class="agent-selector"
+            @click="openAgentModal"
+            style="width: 220px; cursor: pointer;"
           >
-            <a-select-option
-              v-for="(agent, id) in agents"
-              :key="id"
-              :value="id"
-            >
-              <div class="agent-option">
-                <div class="agent-option-content">
-                  <p class="agent-option-name">{{ agent.name }} <StarFilled v-if="id === defaultAgentId" class="default-icon" /></p>
-                  <p class="agent-option-description">{{ agent.description }}</p>
-                </div>
-
-              </div>
-            </a-select-option>
-          </a-select>
-        </div>
-        <div class="header-item">
-          <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
+            <div class="selected-agent-display">
+              <span class="agent-name">{{ selectedAgent.name || '选择智能体' }}</span>
+            </div>
+          </div>
         </div>
       </div>
       <div class="header-center">
       </div>
       <div class="header-right">
+        <div class="header-item">
+          <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
+        </div>
         <div class="header-item">
           <a-button
             class="header-button"
@@ -263,6 +252,39 @@
         </div>
       </a-modal>
 
+      <!-- 智能体选择弹窗 -->
+      <a-modal
+        v-model:open="state.agentModalOpen"
+        title="选择智能体"
+        :width="800"
+        :footer="null"
+        :maskClosable="true"
+        class="agent-modal"
+      >
+        <div class="agent-modal-content">
+          <div class="agents-grid">
+            <div
+              v-for="(agent, id) in agents"
+              :key="id"
+              class="agent-card"
+              :class="{ 'selected': id === selectedAgentId }"
+              @click="selectAgentFromModal(id)"
+            >
+              <div class="agent-card-header">
+                <div class="agent-card-title">
+                  <span class="agent-card-name">{{ agent.name }}</span>
+                  <StarFilled v-if="id === defaultAgentId" class="default-icon" />
+                </div>
+                <div class="agent-card-indicator">
+                  <CheckCircleOutlined v-if="id === selectedAgentId" />
+                </div>
+              </div>
+              <div class="agent-card-description">{{ agent.description }}</div>
+            </div>
+          </div>
+        </div>
+      </a-modal>
+
       <!-- 中间内容区域 -->
       <div class="content">
         <AgentChatComponent
@@ -309,6 +331,7 @@ const state = reactive({
   agentConfOpen: false,
   debug_mode: false,
   toolsModalOpen: false,
+  agentModalOpen: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
@@ -609,6 +632,17 @@ const selectAgent = (agentId) => {
   localStorage.setItem('last-selected-agent', agentId);
   // 加载该智能体的配置
   loadAgentConfig();
+};
+
+// 打开智能体选择弹窗
+const openAgentModal = () => {
+  state.agentModalOpen = true;
+};
+
+// 从弹窗中选择智能体
+const selectAgentFromModal = (agentId) => {
+  selectAgent(agentId);
+  state.agentModalOpen = false;
 };
 
 // 加载工具列表
@@ -1134,6 +1168,149 @@ const toggleConf = () => {
 
   .conf-content {
     max-height: 60vh;
+  }
+}
+
+// 智能体选择器样式
+.agent-selector {
+  border: 1px solid var(--gray-300);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: white;
+  transition: border-color 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-color);
+  }
+
+  .selected-agent-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .agent-name {
+      font-size: 14px;
+      color: var(--gray-900);
+      font-weight: 500;
+    }
+
+    .default-icon {
+      color: #faad14;
+      font-size: 14px;
+    }
+  }
+}
+
+// 智能体选择弹窗样式
+.agent-modal {
+  :deep(.ant-modal-content) {
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  :deep(.ant-modal-header) {
+    background: #fff;
+    border-bottom: 1px solid var(--gray-200);
+    padding: 16px 20px;
+
+    .ant-modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+  }
+
+  :deep(.ant-modal-body) {
+    padding: 20px;
+    background: #fff;
+  }
+
+  .agent-modal-content {
+    .agents-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .agent-card {
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 0.2s ease;
+      background: white;
+
+      &:hover {
+        border-color: var(--main-color);
+      }
+
+      &.selected {
+        border-color: var(--main-color);
+        background: var(--main-10);
+
+        .agent-card-indicator {
+          color: var(--main-color);
+        }
+      }
+
+      .agent-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+
+        .agent-card-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+
+          .agent-card-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--gray-900);
+            line-height: 1.4;
+          }
+
+          .default-icon {
+            color: #faad14;
+            font-size: 16px;
+            flex-shrink: 0;
+          }
+        }
+
+        .agent-card-indicator {
+          font-size: 20px;
+          color: var(--gray-400);
+          transition: color 0.2s ease;
+          flex-shrink: 0;
+        }
+      }
+
+      .agent-card-description {
+        font-size: 14px;
+        color: var(--gray-700);
+        line-height: 1.5;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+  }
+}
+
+// 响应式适配智能体弹窗
+@media (max-width: 768px) {
+  .agent-modal {
+    .agent-modal-content {
+      .agents-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   }
 }
 
