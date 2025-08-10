@@ -27,7 +27,7 @@
             <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </div>
           <div class="newchat nav-btn" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
-            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新的对话</span>
+            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
         <div class="header__center">
