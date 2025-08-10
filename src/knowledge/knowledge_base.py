@@ -187,6 +187,10 @@ class KnowledgeBase(ABC):
         """
         pass
 
+    @abstractmethod
+    async def export_data(self, db_id: str, format: str = 'zip', **kwargs) -> str:
+        pass
+
     def query(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """
         同步查询知识库（兼容性方法）
@@ -285,40 +289,40 @@ class KnowledgeBase(ABC):
     def _add_to_processing_queue(cls, file_id: str) -> None:
         """
         将文件添加到处理队列
-        
+
         Args:
             file_id: 文件ID
         """
         with cls._processing_lock:
             cls._processing_files.add(file_id)
             logger.debug(f"Added file {file_id} to processing queue")
-    
+
     @classmethod
     def _remove_from_processing_queue(cls, file_id: str) -> None:
         """
         从处理队列中移除文件
-        
+
         Args:
             file_id: 文件ID
         """
         with cls._processing_lock:
             cls._processing_files.discard(file_id)
             logger.debug(f"Removed file {file_id} from processing queue")
-    
+
     @classmethod
     def _is_file_in_processing_queue(cls, file_id: str) -> bool:
         """
         检查文件是否在处理队列中
-        
+
         Args:
             file_id: 文件ID
-            
+
         Returns:
             bool: 文件是否在处理队列中
         """
         with cls._processing_lock:
             return file_id in cls._processing_files
-    
+
 
 
     def _check_and_fix_processing_status(self, db_id: str) -> None:

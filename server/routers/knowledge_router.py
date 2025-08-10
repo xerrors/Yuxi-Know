@@ -2,6 +2,7 @@ import os
 import asyncio
 import traceback
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Body, Form, Query
+from fastapi.responses import FileResponse
 
 from src import executor, config, knowledge_base
 from src.utils import logger, hashstr
@@ -94,6 +95,43 @@ async def delete_database(db_id: str, current_user: User = Depends(get_admin_use
     except Exception as e:
         logger.error(f"删除数据库失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=f"删除数据库失败: {e}")
+
+@knowledge.get("/databases/{db_id}/export")
+async def export_database(
+    db_id: str,
+    format: str = Query("csv", enum=["csv", "xlsx", "md", "txt"]),
+    include_vectors: bool = Query(False, description="是否在导出中包含向量数据"),
+    current_user: User = Depends(get_admin_user)
+):
+    """导出知识库数据"""
+    logger.debug(f"Exporting database {db_id} with format {format}")
+    try:
+        file_path = await knowledge_base.export_data(
+            db_id, format=format, include_vectors=include_vectors
+        )
+
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Exported file not found.")
+
+        media_types = {
+            "csv": "text/csv",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "md": "text/markdown",
+            "txt": "text/plain"
+        }
+        media_type = media_types.get(format, "application/octet-stream")
+
+        return FileResponse(
+            path=file_path,
+            filename=os.path.basename(file_path),
+            media_type=media_type
+        )
+    except NotImplementedError as e:
+        logger.warning(f"A disabled feature was accessed: {e}")
+        raise HTTPException(status_code=501, detail=str(e))
+    except Exception as e:
+        logger.error(f"导出数据库失败 {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"导出数据库失败: {e}")
 
 # =============================================================================
 # === 文档管理分组 ===
@@ -411,4 +449,3 @@ async def get_knowledge_base_statistics(current_user: User = Depends(get_admin_u
     except Exception as e:
         logger.error(f"获取知识库统计失败 {e}, {traceback.format_exc()}")
         return {"message": f"获取知识库统计失败 {e}", "stats": {}}
-

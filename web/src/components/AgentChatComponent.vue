@@ -26,13 +26,16 @@
           <div class="toggle-sidebar nav-btn" v-if="!state.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </div>
-          <div class="newchat nav-btn" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
+          <div class="newchat nav-btn" v-if="!state.isSidebarOpen" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
             <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
-        <div class="header__center">
+        <div class="header__center" @mouseenter="showRenameButton = true" @mouseleave="showRenameButton = false">
           <div @click="console.log(currentChat)" class="center-title">
             {{ currentChat?.title }}
+          </div>
+          <div class="rename-button" v-if="currentChatId" :class="{ 'visible': showRenameButton }" @click="handleRenameChat">
+            <EditOutlined style="font-size: 14px; color: var(--gray-600);"/>
           </div>
           <slot name="header-center"></slot>
         </div>
@@ -137,9 +140,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, toRaw } from 'vue';
-import { ShareAltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
-import { message } from 'ant-design-vue';
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, toRaw, h } from 'vue';
+import { ShareAltOutlined, LoadingOutlined, EditOutlined } from '@ant-design/icons-vue';
+import { message, Modal } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
@@ -175,6 +178,9 @@ const state = reactive({
   creatingNewChat: false,
   isInitialRender: true
 });
+
+// 重命名按钮显示状态
+const showRenameButton = ref(false);
 
 // 容器宽度检测
 const chatContainerRef = ref(null);
@@ -403,6 +409,37 @@ const renameChat = async (data) => {
     console.error('重命名对话失败:', error);
     message.error('重命名对话失败');
   }
+};
+
+// 处理重命名对话点击事件
+const handleRenameChat = () => {
+  if (!currentChatId.value || !currentChat.value) {
+    message.warning('请先选择对话');
+    return;
+  }
+  
+  let newTitle = currentChat.value.title;
+  
+  Modal.confirm({
+    title: '重命名对话',
+    content: h('div', { style: { marginTop: '12px' } }, [
+      h('input', {
+        value: newTitle,
+        style: { width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px' },
+        onInput: (e) => { newTitle = e.target.value; }
+      })
+    ]),
+    okText: '确认',
+    cancelText: '取消',
+    onOk: () => {
+      if (!newTitle.trim()) {
+        message.warning('标题不能为空');
+        return Promise.reject();
+      }
+      renameChat({ chatId: currentChatId.value, title: newTitle });
+    },
+    onCancel: () => {}
+  });
 };
 
 // ==================== 状态管理函数 ====================
@@ -1402,11 +1439,38 @@ const mergeMessageChunk = (chunks) => {
       align-items: center;
     }
 
-    .center-title {
-      max-width: 200px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .header__center {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      
+      .center-title {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      
+      .rename-button {
+         display: flex;
+         align-items: center;
+         justify-content: center;
+         width: 24px;
+         height: 24px;
+         border-radius: 4px;
+         cursor: pointer;
+         opacity: 0;
+         transition: all 0.2s ease;
+         
+         &.visible {
+           opacity: 1;
+         }
+         
+         &:hover {
+           background-color: var(--gray-100);
+         }
+       }
     }
   }
 

@@ -1,7 +1,5 @@
 import os
-import time
 import traceback
-from pathlib import Path
 from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
@@ -12,8 +10,7 @@ from lightrag.kg.shared_storage import initialize_pipeline_status
 from src.knowledge.knowledge_base import KnowledgeBase
 from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
 from src.knowledge.kb_utils import prepare_item_metadata, get_embedding_config
-from src import config
-from src.utils import logger, hashstr, get_docker_safe_url
+from src.utils import logger
 
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
@@ -271,3 +268,40 @@ class LightRagKB(KnowledgeBase):
                 logger.error(f"Error getting chunks for file {file_id}: {e}")
 
         return {"lines": []}
+
+    async def export_data(self, db_id: str, format: str = 'csv', **kwargs) -> str:
+        """
+        使用 LightRAG 原生功能导出知识库数据。
+        [注意] 此功能当前已禁用。
+        """
+        # TODO: 修复 LightRAG 库与 Milvus 后端不兼容的问题
+        # 当前调用 aexport_data 会导致 "'MilvusVectorDBStorage' object has no attribute 'client_storage'" 错误。
+        # 在 lightrag 库修复此问题前，暂时禁用此功能。
+        raise NotImplementedError("由于 LightRAG 库与 Milvus 后端不兼容，原生导出功能暂不可用。等待上游库修复。")
+
+        # --- 以下为待修复后启用的代码 ---
+        # logger.info(f"Exporting data for db_id {db_id} in format {format} with options {kwargs}")
+
+        # rag = await self._get_lightrag_instance(db_id)
+        # if not rag:
+        #     raise ValueError(f"Failed to get LightRAG instance for {db_id}")
+
+        # export_dir = os.path.join(self.work_dir, db_id, "exports")
+        # os.makedirs(export_dir, exist_ok=True)
+
+        # timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # output_filename = f"export_{db_id}_{timestamp}.{format}"
+        # output_filepath = os.path.join(export_dir, output_filename)
+
+        # include_vectors = kwargs.get('include_vectors', False)
+
+        # # 直接调用 lightrag 的异步导出功能
+        # # 之前的测试表明 aexport_data 确实存在，并且 to_thread 会导致 loop 问题
+        # await rag.aexport_data(
+        #     output_path=output_filepath,
+        #     file_format=format,
+        #     include_vector_data=include_vectors
+        # )
+
+        # logger.info(f"Successfully created export file: {output_filepath}")
+        # return output_filepath

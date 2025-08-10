@@ -1,7 +1,7 @@
 <template>
   <div class="knowledge-graph-viewer">
     <!-- 控制面板 -->
-    <div class="control-panel">
+    <div class="control-panel" v-if="!props.hideControls">
       <div class="database-section">
         <a-select
           v-if="!hideDbSelector"
@@ -252,6 +252,18 @@ const props = defineProps({
   hideStats: {
     type: Boolean,
     default: false
+  },
+  hideControls: {
+    type: Boolean,
+    default: false
+  },
+  initialLimit: {
+    type: Number,
+    default: 200
+  },
+  initialDepth: {
+    type: Number,
+    default: 2
   }
 })
 
@@ -287,8 +299,8 @@ let layoutWorker = null
 
 // 搜索和筛选参数
 const searchParams = reactive({
-  max_nodes: 200,
-  max_depth: 2
+  max_nodes: props.initialLimit,
+  max_depth: props.initialDepth
 })
 
 // 计算属性

@@ -318,7 +318,7 @@ const toggleToolCall = (toolCallId) => {
 
   :deep(.tool-call-display) {
     background-color: var(--gray-25);
-    outline: 2px solid var(--gray-200);
+    outline: 1px solid var(--gray-200);
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;

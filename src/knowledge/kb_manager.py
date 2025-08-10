@@ -203,6 +203,11 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         return await kb_instance.aquery(query_text, db_id, **kwargs)
 
+    async def export_data(self, db_id: str, format: str = 'zip', **kwargs) -> str:
+        """导出知识库数据"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.export_data(db_id, format=format, **kwargs)
+
     def query(self, query_text: str, db_id: str, **kwargs) -> str:
         """同步查询知识库（兼容性方法）"""
         kb_instance = self._get_kb_for_database(db_id)
