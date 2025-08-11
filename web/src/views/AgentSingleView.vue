@@ -1,7 +1,7 @@
 <template>
   <div class="agent-single-view">
     <!-- 智能体聊天界面 -->
-    <AgentChatComponent :agent-id="agentId">
+    <AgentChatComponent :agent-id="agentId" :single-mode="true">
       <template #header-right>
         <UserInfoComponent />
       </template>

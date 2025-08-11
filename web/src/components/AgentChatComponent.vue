@@ -1,16 +1,19 @@
 <template>
   <div class="chat-container" ref="chatContainerRef">
     <ChatSidebarComponent
-      :current-agent-id="props.agentId"
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
       :is-sidebar-open="state.isSidebarOpen"
       :is-initial-render="state.isInitialRender"
+      :single-mode="props.singleMode"
+      :agents="agents"
+      :selected-agent-id="props.agentId"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
       @toggle-sidebar="toggleSidebar"
+      @open-agent-modal="openAgentModal"
       :class="{
         'floating-sidebar': isSmallContainer,
         'sidebar-open': state.isSidebarOpen,
@@ -71,9 +74,6 @@
           />
         </div>
       </div>
-
-
-
       <div class="chat-box" ref="messagesContainer">
         <div class="conv-box" v-for="(conv, index) in convs" :key="index">
           <AgentMessageComponent
@@ -163,8 +163,14 @@ const props = defineProps({
   state: {
     type: Object,
     default: () => ({})
+  },
+  singleMode: {
+    type: Boolean,
+    default: true
   }
 });
+
+const emit = defineEmits(['open-config', 'open-agent-modal']);
 
 // ==================== 状态管理 ====================
 
@@ -417,9 +423,9 @@ const handleRenameChat = () => {
     message.warning('请先选择对话');
     return;
   }
-  
+
   let newTitle = currentChat.value.title;
-  
+
   Modal.confirm({
     title: '重命名对话',
     content: h('div', { style: { marginTop: '12px' } }, [
@@ -1286,6 +1292,11 @@ const toggleSidebar = () => {
   console.log("toggleSidebar", state.isSidebarOpen);
 }
 
+const openAgentModal = () => {
+  // 发送事件给父组件，让父组件处理打开智能体选择弹窗的逻辑
+  emit('open-agent-modal');
+}
+
 // 处理键盘事件
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -1444,14 +1455,14 @@ const mergeMessageChunk = (chunks) => {
       display: flex;
       align-items: center;
       gap: 8px;
-      
+
       .center-title {
         max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      
+
       .rename-button {
          display: flex;
          align-items: center;
@@ -1462,11 +1473,11 @@ const mergeMessageChunk = (chunks) => {
          cursor: pointer;
          opacity: 0;
          transition: all 0.2s ease;
-         
+
          &.visible {
            opacity: 1;
          }
-         
+
          &:hover {
            background-color: var(--gray-100);
          }

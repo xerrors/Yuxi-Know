@@ -3,15 +3,9 @@
     <div class="agent-view-header">
       <div class="header-left">
         <div class="header-item">
-          <div
-            class="agent-selector"
-            @click="openAgentModal"
-            style="width: 220px; cursor: pointer;"
-          >
-            <div class="selected-agent-display">
-              <span class="agent-name">{{ selectedAgent.name || '选择智能体' }}</span>
-            </div>
-          </div>
+          <a-button class="header-button" @click="openAgentModal">
+            选择：{{ selectedAgent.name || '选择智能体' }}
+          </a-button>
         </div>
       </div>
       <div class="header-center">
@@ -27,9 +21,10 @@
             v-if="selectedAgentId"
           >
             <template #icon><LinkOutlined /></template>
-            打开独立页面
+            独立页面
           </a-button>
-
+        </div>
+        <div class="header-item">
           <a-tooltip :title="isDefaultAgent ? '当前为默认智能体' : '设为默认智能体'" placement="left">
             <a-button
               class="header-button primary-action"
@@ -291,7 +286,9 @@
           :agent-id="selectedAgentId"
           :config="agentConfig"
           :state="state"
+          :single-mode="false"
           @open-config="toggleConf"
+          @open-agent-modal="openAgentModal"
         >
         </AgentChatComponent>
       </div>
@@ -743,6 +740,10 @@ const toggleConf = () => {
     display: flex;
     align-items: center;
     gap: 10px;
+
+    button {
+      border-radius: 6px;
+    }
   }
 }
 

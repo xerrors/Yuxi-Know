@@ -1,7 +1,12 @@
 <template>
   <div class="chat-sidebar" :class="{'sidebar-open': isSidebarOpen, 'no-transition': isInitialRender}">
     <div class="sidebar-header">
-      <div class="header-title">{{ currentAgentId }}</div>
+      <div class="header-title" v-if="singleMode">{{ selectedAgentName }}</div>
+      <div
+        v-else
+        class="agent-selector"
+        @click="openAgentModal"
+      > {{ selectedAgentName || '选择智能体' }}</div>
       <div class="header-actions">
         <div class="toggle-sidebar nav-btn" v-if="isSidebarOpen" @click="toggleCollapse">
           <PanelLeftClose size="20" color="var(--gray-800)"/>
@@ -90,12 +95,31 @@ const props = defineProps({
   isInitialRender: {
     type: Boolean,
     default: false
+  },
+  singleMode: {
+    type: Boolean,
+    default: true
+  },
+  agents: {
+    type: Object,
+    default: () => ({})
+  },
+  selectedAgentId: {
+    type: String,
+    default: null
   }
 });
 
-const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar']);
+const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar', 'open-agent-modal']);
 
 const loading = ref(false);
+
+const selectedAgentName = computed(() => {
+  if (props.selectedAgentId && props.agents && props.agents[props.selectedAgentId]) {
+    return props.agents[props.selectedAgentId].name;
+  }
+  return '';
+});
 
 const groupedChats = computed(() => {
   const groups = {
@@ -186,6 +210,10 @@ const renameChat = async (chatId) => {
 
 const toggleCollapse = () => {
   emit('toggle-sidebar');
+};
+
+const openAgentModal = () => {
+  emit('open-agent-modal');
 };
 </script>
 
@@ -392,6 +420,18 @@ const toggleCollapse = () => {
   transition: background-color 0.3s;
   &:hover {
     background-color: var(--gray-100);
+  }
+}
+
+// 智能体选择器样式
+.agent-selector {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--gray-900);
+  transition: color 0.2s ease;
+
+  &:hover {
+    color: var(--main-500);
   }
 }
 </style>
