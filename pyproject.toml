@@ -42,7 +42,6 @@ dependencies = [
     "python-jose[cryptography]>=3.4.0",
     "python-multipart>=0.0.20",
     "pyyaml>=6.0.2",
-    "qianfan>=0.4.12.3",
     "rapidocr-onnxruntime>=1.4.4",
     "tavily-python>=0.7.0",
     "unstructured>=0.17.2",

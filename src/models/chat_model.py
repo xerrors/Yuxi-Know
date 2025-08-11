@@ -83,45 +83,5 @@ class GeneralResponse:
         self.content = content
         self.is_full = False
 
-
-class Qianfan(OpenAIBase):
-    """弃用"""
-
-    def __init__(self, model_name="ernie_speed") -> None:
-        import qianfan
-        self.model_name = model_name
-        access_key = os.getenv("QIANFAN_ACCESS_KEY")
-        secret_key = os.getenv("QIANFAN_SECRET_KEY")
-        self.client = qianfan.ChatCompletion(ak=access_key, sk=secret_key)
-
-    def predict(self, message, stream=False):
-        if isinstance(message, str):
-            messages=[{"role": "user", "content": message}]
-        else:
-            messages = message
-
-        if stream:
-            return self._stream_response(messages)
-        else:
-            return self._get_response(messages)
-
-    def _stream_response(self, messages):
-        response = self.client.do(
-            model=self.model_name,
-            messages=messages,
-            stream=True,
-        )
-        for chunk in response:
-            yield GeneralResponse(chunk["body"]["result"])
-
-    def _get_response(self, messages):
-        response = self.client.do(
-            model=self.model_name,
-            messages=messages,
-            stream=False,
-        )
-        return GeneralResponse(response["body"]["result"])
-
-
 if __name__ == "__main__":
     pass

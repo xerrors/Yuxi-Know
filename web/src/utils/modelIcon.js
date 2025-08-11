@@ -1,5 +1,4 @@
 import openaiIcon from '@/assets/providers/openai.png'
-import qianfanIcon from '@/assets/providers/qianfan.png'
 import dashscopeIcon from '@/assets/providers/dashscope.png'
 import togetherIcon from '@/assets/providers/together.ai.png'
 import deepseekIcon from '@/assets/providers/deepseek.png'
@@ -11,7 +10,6 @@ import defaultIcon from '@/assets/providers/default.png'
 
 export const modelIcons = {
   openai: openaiIcon,
-  qianfan: qianfanIcon,
   dashscope: dashscopeIcon,
   together: togetherIcon,
   deepseek: deepseekIcon,

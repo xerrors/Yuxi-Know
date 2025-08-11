@@ -14,10 +14,6 @@ def select_model(model_provider, model_name=None):
 
     logger.info(f"Selecting model from `{model_provider}` with `{model_name}`")
 
-    if model_provider == "qianfan":
-        from src.models.chat_model import Qianfan
-        return Qianfan(model_name)
-
     if model_provider == "openai":
         from src.models.chat_model import OpenModel
         return OpenModel(model_name)
