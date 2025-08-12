@@ -29,7 +29,7 @@
           </div>
         </div>
         <div class="config-controls">
-          <a-button type="dashed" @click="showChunkConfigModal">
+          <a-button type="dashed" @click="showChunkConfigModal" v-if="!isGraphBased">
             <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
           </a-button>
         </div>
@@ -112,7 +112,7 @@
         >
           <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
           <p class="ant-upload-hint">
-            目前仅支持上传文本文件，如 .pdf, .txt, .md。且同名文件无法重复添加
+            目前仅支持上传文本、图片文件，如 .pdf, .txt, .md, .docx, png, jpg等。
           </p>
         </a-upload-dragger>
       </div>
@@ -250,6 +250,11 @@ const tempChunkParams = ref({
 const isQaSplitSupported = computed(() => {
   const type = kbType.value?.toLowerCase();
   return type === 'chroma' || type === 'milvus';
+});
+
+const isGraphBased = computed(() => {
+  const type = kbType.value?.toLowerCase();
+  return type === 'lightrag';
 });
 
 // 计算属性：OCR选项

@@ -24,19 +24,6 @@
             独立页面
           </a-button>
         </div>
-        <div class="header-item">
-          <a-tooltip :title="isDefaultAgent ? '当前为默认智能体' : '设为默认智能体'" placement="left">
-            <a-button
-              class="header-button primary-action"
-              @click="setAsDefaultAgent"
-              v-if="selectedAgentId && userStore.isAdmin"
-              :disabled="isDefaultAgent"
-          >
-              <template #icon><StarOutlined /></template>
-            </a-button>
-          </a-tooltip>
-
-        </div>
       </div>
     </div>
     <div class="agent-view-body">
@@ -269,9 +256,7 @@
                 <div class="agent-card-title">
                   <span class="agent-card-name">{{ agent.name }}</span>
                   <StarFilled v-if="id === defaultAgentId" class="default-icon" />
-                </div>
-                <div class="agent-card-indicator">
-                  <CheckCircleOutlined v-if="id === selectedAgentId" />
+                  <StarOutlined v-else @click.prevent="setAsDefaultAgent" class="default-icon" />
                 </div>
               </div>
               <div class="agent-card-description">{{ agent.description }}</div>
@@ -1247,15 +1232,6 @@ const toggleConf = () => {
         border-color: var(--main-color);
       }
 
-      &.selected {
-        border-color: var(--main-color);
-        background: var(--main-10);
-
-        .agent-card-indicator {
-          color: var(--main-color);
-        }
-      }
-
       .agent-card-header {
         display: flex;
         justify-content: space-between;
@@ -1281,13 +1257,6 @@ const toggleConf = () => {
             flex-shrink: 0;
           }
         }
-
-        .agent-card-indicator {
-          font-size: 20px;
-          color: var(--gray-400);
-          transition: color 0.2s ease;
-          flex-shrink: 0;
-        }
       }
 
       .agent-card-description {
@@ -1300,6 +1269,22 @@ const toggleConf = () => {
         overflow: hidden;
         text-overflow: ellipsis;
       }
+
+
+      &.selected {
+        border-color: var(--main-color);
+        background: var(--main-20);
+        // outline: 2px solid var(--main-color);
+
+        .agent-card-header .agent-card-title .agent-card-name {
+          color: var(--main-color);
+        }
+
+        .agent-card-description {
+          color: var(--gray-900);
+        }
+      }
+
     }
   }
 }

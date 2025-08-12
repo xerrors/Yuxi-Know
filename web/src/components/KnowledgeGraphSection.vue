@@ -36,7 +36,7 @@
           <SettingOutlined />
           查询参数
         </a-button>
-        <a-button
+        <!-- <a-button
           type="text"
           size="small"
           :icon="h(DeleteOutlined)"
@@ -45,7 +45,7 @@
           :disabled="!isGraphSupported"
         >
           清空
-        </a-button>
+        </a-button> -->
         <a-button
           type="text"
           size="small"

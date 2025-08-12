@@ -80,7 +80,7 @@
         >
           <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
           <p class="ant-upload-hint">
-            目前仅支持上传 jsonl 文件。且同名文件无法重复添加。
+            目前仅支持上传 jsonl 文件。
           </p>
         </a-upload-dragger>
       </div>
