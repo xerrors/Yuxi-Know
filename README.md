@@ -206,6 +206,12 @@ docker compose up mineru --build
 docker compose up paddlex --build
 ```
 
+### 自定义智能体应用开发
+
+目前该项目默认集成了三个 Demo 智能体，包含基础智能体、ReAct、DeepResearch 三个案例Demo，均是使用 [LangGraph](https://github.com/langchain-ai/langgraph) 开发的。代码均可以在 [src/agent](src/agent) 目录下找到。
+
+如果需要自定义智能体应用，需要在 [src/agent](src/agent) 目录下新建一个文件夹，文件夹的名字就是智能体的名字，然后在文件夹中新建一个 `.py` 文件（比如 `workflow.py` 等），重点是该文件能够暴露出来一个 graph 实例。
+
 ### 服务端口说明
 
 | 端口 | 服务 | 说明 |
