@@ -18,8 +18,8 @@
 ### ✨ 核心特性
 
 - 🤖 **多模型支持** - 适配主流大模型平台及本地部署（vLLM、Ollama），支持自定义智能体开发，兼容 LangGraph 部署
-- 📚 **灵活知识库** - 支持 LightRAG、Milvus、Chroma 等存储形式，配置 MinerU、PP-Structure-V3的文档解析引擎
-- 🕸️ **知识图谱** - 支持LightRAG的自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
+- 📚 **灵活知识库** - 支持 LightRAG、Milvus、Chroma 等存储形式，配置 MinerU、PP-Structure-V3 的文档解析引擎
+- 🕸️ **知识图谱** - 支持 LightRAG 的自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
 - 👥 **权限控制** - 支持超级管理员、管理员、普通用户三级权限体系
 
 ![欢迎 Star](https://github.com/user-attachments/assets/a9ea624a-7b95-4bc1-a3c7-bfec6c587b5c)
@@ -80,7 +80,7 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 ```bash
   bash docker/pull_image.sh python:3.11-slim  # 替换后面的 repo_name 即可
   ```
-  **如果**依然存在镜像拉取问题，可以现在另外一个可访问 Docker 的设备上执行拉取镜像后，使用下面的脚本保存为 tar 文件，再拷贝到开发设备使用。
+  **如果**依然存在镜像拉取问题，可以先在另一个可访问 Docker 的设备上拉取镜像后，使用下面的脚本保存为 tar 文件，再拷贝到开发设备使用。
   ```bash
   # 保存镜像，会生成 docker_images_xxx.tar
   bash docker/save_docker_images.sh # Linux 或 macOS
@@ -168,13 +168,14 @@ custom-provider-name-here:
 除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是`neo4j` / `0123456789`。
 
 
-**数据格式**：支持 JSONL 格式导入
+**数据格式**：支持 JSONL 格式导入，可以先尝试 [test/data/A_Dream_of_Red_Mansions_tiny.jsonl](test/data/A_Dream_of_Red_Mansions_tiny.jsonl) 文件。
+
 ```jsonl
 {"h": "北京", "t": "中国", "r": "首都"}
 {"h": "上海", "t": "中国", "r": "直辖市"}
 ```
 
-此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，但是最好确保每个节点都有 Entity 标签，否则会影响到图的检索与构建。
+此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，**但是**最好确保每个节点都有 Entity 标签，否则会影响到图的检索与构建。
 
 注：在“图谱”页面，只能看到上传的节点和边，基于 LightRAG 构建的图谱不会展示在里面，完整的图谱可以去 Neo4j 管理页面查看。
 
@@ -182,24 +183,25 @@ custom-provider-name-here:
 
 ### OCR 服务（可选）
 
-对于**基础的 OCR 服务**（RapidOCR onnx 版本），可以使用 SWHL/RapidOCR 的 onnx 版本，但是需要提前将模型下载到 `$MODEL_DIR` 目录下。
+对于**基础的 OCR 服务**（RapidOCR onnx 版本），可以使用 SWHL/RapidOCR 的 onnx 版本，但是需要提前将模型下载到 `$MODEL_DIR` 目录下（默认 `src/.env.template` 中为 `models`）。在容器内实际路径为 `/models`（由 `MODEL_DIR_IN_DOCKER` 指向）。
 
 ```bash
 huggingface-cli download SWHL/RapidOCR --local-dir ${MODEL_DIR:-./models}/SWHL/RapidOCR
 ```
 
-*如果提示 `[Errno 13] Permission denied` 则需要使用 sudo 修改权限之后再执行*
+- 模型完整性要求：需要存在 `PP-OCRv4/ch_PP-OCRv4_det_infer.onnx` 和 `PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx`
+- 如果提示 `[Errno 13] Permission denied` 则需要使用 sudo 修改权限之后再执行
 
-提升 PDF 解析准确性，可以选择使用 MinerU 或 PP-Structure-V3 服务，但是需要 GPU 支持。
+提升 PDF 解析准确性，可以选择使用 MinerU 或 PP-Structure-V3 服务（需要 NVIDIA GPU）。
 
 启用**MinerU**服务：
 
 ```bash
-# MinerU（需要 CUDA 12.4+）
+# MinerU（需要 CUDA 12.6+ 的 sglang 镜像）
 docker compose up mineru --build
 ```
 
-启用**PP-Structure-V3**服务，配置文件可以在 [docker/PP-StructureV3.yaml](docker/PP-StructureV3.yaml) 中修改。
+启用**PP-Structure-V3**服务，配置文件可在 [docker/PP-StructureV3.yaml](docker/PP-StructureV3.yaml) 中修改。
 
 ```bash
 # PP-Structure-V3（需要 CUDA 11.8+）
@@ -208,22 +210,32 @@ docker compose up paddlex --build
 
 ### 自定义智能体应用开发
 
-目前该项目默认集成了三个 Demo 智能体，包含基础智能体、ReAct、DeepResearch 三个案例Demo，均是使用 [LangGraph](https://github.com/langchain-ai/langgraph) 开发的。代码均可以在 [src/agent](src/agent) 目录下找到。
+目前该项目默认集成了三个 Demo 智能体，包含基础智能体、ReAct、DeepResearch 三个案例 Demo，均使用 [LangGraph](https://github.com/langchain-ai/langgraph) 开发。代码位于 [src/agents](src/agents) 目录。在 [src/agents/react/graph.py](src/agents/react/graph.py) 中定义了 `ReActAgent` 示例。
 
-如果需要自定义智能体应用，需要在 [src/agent](src/agent) 目录下新建一个文件夹，文件夹的名字就是智能体的名字，然后在文件夹中新建一个 `.py` 文件（比如 `workflow.py` 等），重点是该文件能够暴露出来一个 graph 实例。
+如果需要自定义智能体应用，实现一个继承于 `BaseAgent` 的类，并实现 `get_graph` 方法返回一个 graph 实例。智能体的 `config_schema` 定义了配置参数，可继承 `Configuration` 定义。
+
+注册智能体的方式请参考已有实现：[src/agents/__init__.py](src/agents/__init__.py)。例如：
+
+```python
+from .chatbot import ChatbotAgent
+
+agent_manager = AgentManager()
+agent_manager.register_agent(ChatbotAgent)
+agent_manager.init_all_agents()
+```
 
 ### 服务端口说明
 
 | 端口 | 服务 | 说明 |
 |------|------|------|
-| 5173 | Web 前端 | 用户界面 |
-| 5050 | API 后端 | 核心服务 |
-| 7474/7687 | Neo4j | 图数据库 |
-| 9000/9001 | MinIO | 对象存储 |
-| 19530/9091 | Milvus | 向量数据库 |
-| 30000 | MinerU | PDF 解析（可选）|
-| 8080 | PaddleX | OCR 服务（可选）|
-| 8081 | vLLM | 本地推理（可选）|
+| 5173 | Web 前端 | 用户界面（容器名：web-dev） |
+| 5050 | API 后端 | 核心服务（容器名：api-dev） |
+| 7474/7687 | Neo4j | 图数据库（容器名：graph） |
+| 9000/9001 | MinIO | 对象存储（容器名：milvus-minio） |
+| 19530/9091 | Milvus | 向量数据库（容器名：milvus） |
+| 30000 | MinerU | PDF 解析（容器名：mineru，可选）|
+| 8080 | PaddleX | OCR 服务（容器名：paddlex-ocr，可选）|
+| 8081 | vLLM | 本地推理（可选，scripts/vllm/run.sh 默认端口）|
 
 
 ### 品牌信息配置
@@ -235,7 +247,9 @@ docker compose up paddlex --build
 
 ## ❓ 常见问题
 
-暂无
+- 如何查看后端日志？运行 `docker logs api-dev -f`
+- RapidOCR 模型未找到怎么办？确认 `MODEL_DIR` 指向的目录存在 `SWHL/RapidOCR`，且包含 `PP-OCRv4` 下的 det/rec onnx 文件。
+- MinerU/PaddleX 健康检查失败？分别检查 `http://localhost:30000/health` 与 `http://localhost:8080/` 是否 200，确认 GPU/驱动与 CUDA 版本匹配。
 
 ## 🤝 参与贡献
 
