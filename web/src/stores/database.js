@@ -241,17 +241,17 @@ export const useDatabaseStore = defineStore('database', () => {
     try {
       const response = await queryApi.getKnowledgeBaseQueryParams(db_id);
       queryParams.value = response.params?.options || [];
-      
+
       // Create a set of currently supported parameter keys
       const supportedParamKeys = new Set(queryParams.value.map(param => param.key));
-      
+
       // Remove unsupported parameters from meta
       for (const key in meta) {
         if (key !== 'db_id' && !supportedParamKeys.has(key)) {
           delete meta[key];
         }
       }
-      
+
       // Add default values for supported parameters that are not in meta
       queryParams.value.forEach(param => {
         if (!(param.key in meta)) {
@@ -291,16 +291,16 @@ export const useDatabaseStore = defineStore('database', () => {
       stopAutoRefresh();
     }
   }
-  
+
   function selectAllFailedFiles() {
     const files = Object.values(database.value.files || {});
     const failedFiles = files
       .filter(file => file.status === 'failed')
       .map(file => file.file_id);
-  
+
     const newSelectedKeys = [...new Set([...selectedRowKeys.value, ...failedFiles])];
     selectedRowKeys.value = newSelectedKeys;
-  
+
     if (failedFiles.length > 0) {
       message.success(`已选择 ${failedFiles.length} 个失败的文件`);
     } else {

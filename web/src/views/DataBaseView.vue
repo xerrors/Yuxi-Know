@@ -47,18 +47,26 @@
       <h3>嵌入模型</h3>
       <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" style="width: 100%;" size="large" />
 
-      <!-- 根据类型显示不同配置 -->
-      <!-- <div v-if="newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus'" class="storage-config">
-        <h3>存储配置</h3>
-        <div class="param-row">
-          <label>存储方式：</label>
-          <a-select v-model:value="newDatabase.storage" style="width: 200px;">
-            <a-select-option value="DemoA">DemoA</a-select-option>
-            <a-select-option value="DemoB">DemoB</a-select-option>
-          </a-select>
-          <span class="param-hint">存储方式配置（功能预留）</span>
-        </div>
-      </div> -->
+      <!-- 仅对 LightRAG 提供语言选择和LLM选择 -->
+      <div v-if="newDatabase.kb_type === 'lightrag'">
+        <h3 style="margin-top: 20px;">语言</h3>
+        <a-select
+          v-model:value="newDatabase.language"
+          :options="languageOptions"
+          style="width: 100%;"
+          size="large"
+          :dropdown-match-select-width="false"
+        />
+
+        <h3 style="margin-top: 20px;">语言模型 (LLM)</h3>
+        <p style="color: var(--gray-700); font-size: 14px;">可以在设置中配置语言模型</p>
+        <ModelSelectorComponent
+          :model_name="newDatabase.llm_info.model_name || '请选择模型'"
+          :model_provider="newDatabase.llm_info.provider || ''"
+          @select-model="handleLLMSelect"
+          style="width: 100%; height: 60px;"
+        />
+      </div>
 
       <h3 style="margin-top: 20px;">知识库描述</h3>
       <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
@@ -72,13 +80,13 @@
         <a-button key="submit" type="primary" :loading="state.creating" @click="createDatabase">创建</a-button>
       </template>
     </a-modal>
-    
+
     <!-- 加载状态 -->
     <div v-if="state.loading" class="loading-container">
       <a-spin size="large" />
       <p>正在加载知识库...</p>
     </div>
-    
+
     <!-- 数据库列表 -->
     <div v-else class="databases">
       <div class="new-database dbcard" @click="state.openNewDatabaseModel=true">
@@ -115,7 +123,7 @@
         <p class="description">{{ database.description || '暂无描述' }}</p>
         <div class="tags">
           <a-tag color="blue" v-if="database.embed_info?.name">{{ database.embed_info.name }}</a-tag>
-          <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag>
+          <!-- <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag> -->
           <a-tag
             :color="getKbTypeColor(database.kb_type || 'lightrag')"
             class="kb-type-tag"
@@ -139,6 +147,7 @@ import { message } from 'ant-design-vue'
 import { BookPlus, Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 
 const route = useRoute()
 const router = useRouter()
@@ -158,6 +167,21 @@ const embedModelOptions = computed(() => {
   }))
 })
 
+// 语言选项（值使用英文，以保证后端/LightRAG 兼容；标签为中英文方便理解）
+const languageOptions = [
+  { label: '英语 English', value: 'English' },
+  { label: '中文 Chinese', value: 'Chinese' },
+  { label: '日语 Japanese', value: 'Japanese' },
+  { label: '韩语 Korean', value: 'Korean' },
+  { label: '德语 German', value: 'German' },
+  { label: '法语 French', value: 'French' },
+  { label: '西班牙语 Spanish', value: 'Spanish' },
+  { label: '葡萄牙语 Portuguese', value: 'Portuguese' },
+  { label: '俄语 Russian', value: 'Russian' },
+  { label: '阿拉伯语 Arabic', value: 'Arabic' },
+  { label: '印地语 Hindi', value: 'Hindi' },
+]
+
 const emptyEmbedInfo = {
   name: '',
   description: '',
@@ -165,6 +189,12 @@ const emptyEmbedInfo = {
   kb_type: 'chroma', // 默认为 Milvus
   // Vector 知识库特有配置
   storage: '', // 存储方式配置
+  // LightRAG 特有配置
+  language: 'English',
+  llm_info: {
+    provider: '',
+    model_name: ''
+  },
 }
 
 const newDatabase = reactive({
@@ -312,6 +342,13 @@ const handleKbTypeChange = (type) => {
   newDatabase.kb_type = type
 }
 
+// 处理LLM选择
+const handleLLMSelect = (selection) => {
+  console.log('LLM选择:', selection)
+  newDatabase.llm_info.provider = selection.provider
+  newDatabase.llm_info.model_name = selection.name
+}
+
 const createDatabase = () => {
   if (!newDatabase.name?.trim()) {
     message.error('数据库名称不能为空')
@@ -336,6 +373,17 @@ const createDatabase = () => {
   // 添加类型特有的配置
   if (newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus') {
     requestData.additional_params.storage = newDatabase.storage || 'DemoA'
+  }
+
+  if (newDatabase.kb_type === 'lightrag') {
+    requestData.additional_params.language = newDatabase.language || 'English'
+    // 添加LLM信息到请求数据
+    if (newDatabase.llm_info.provider && newDatabase.llm_info.model_name) {
+      requestData.llm_info = {
+        provider: newDatabase.llm_info.provider,
+        model_name: newDatabase.llm_info.model_name
+      }
+    }
   }
 
   databaseApi.createDatabase(requestData)

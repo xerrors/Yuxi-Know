@@ -64,7 +64,7 @@ class ChromaKB(KnowledgeBase):
         embedding_function = self._get_embedding_function(embed_info)
 
         # 创建或获取集合
-        collection_name = f"kb_{db_id}"
+        collection_name = db_id
 
         try:
             # 尝试获取现有集合

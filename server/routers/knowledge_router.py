@@ -33,10 +33,11 @@ async def create_database(
     embed_model_name: str = Body(...),
     kb_type: str = Body("lightrag"),
     additional_params: dict = Body({}),
+    llm_info: dict = Body(None),
     current_user: User = Depends(get_admin_user)
 ):
     """创建知识库"""
-    logger.debug(f"Create database {database_name} with kb_type {kb_type}, additional_params {additional_params}")
+    logger.debug(f"Create database {database_name} with kb_type {kb_type}, additional_params {additional_params}, llm_info {llm_info}")
     try:
         embed_info = config.embed_model_names[embed_model_name]
         database_info = await knowledge_base.create_database(
@@ -44,6 +45,7 @@ async def create_database(
             description,
             kb_type=kb_type,
             embed_info=embed_info,
+            llm_info=llm_info,
             **additional_params
         )
 

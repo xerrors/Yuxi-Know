@@ -55,6 +55,16 @@ class LightRagKB(KnowledgeBase):
 
         llm_info = self.databases_meta[db_id].get("llm_info", {})
         embed_info = self.databases_meta[db_id].get("embed_info", {})
+        # 读取在创建数据库时透传的附加参数（包括语言）
+        metadata = self.databases_meta[db_id].get("metadata", {}) or {}
+        addon_params = {}
+        if isinstance(metadata.get("addon_params"), dict):
+            addon_params.update(metadata.get("addon_params", {}))
+        # 兼容直接放在 metadata 下的 language
+        if isinstance(metadata.get("language"), str) and metadata.get("language"):
+            addon_params.setdefault("language", metadata.get("language"))
+        # 默认语言从环境变量读取，默认 English
+        addon_params.setdefault("language", os.getenv("SUMMARY_LANGUAGE", "English"))
 
         # 创建工作目录
         working_dir = os.path.join(self.work_dir, db_id)
@@ -71,6 +81,7 @@ class LightRagKB(KnowledgeBase):
             graph_storage="Neo4JStorage",
             doc_status_storage="JsonDocStatusStorage",
             log_file_path=os.path.join(working_dir, "lightrag.log"),
+            addon_params=addon_params,
         )
 
         return rag
@@ -107,7 +118,18 @@ class LightRagKB(KnowledgeBase):
     def _get_llm_func(self, llm_info: dict):
         """获取 LLM 函数"""
         from src.models import select_model
-        model = select_model(LIGHTRAG_LLM_PROVIDER, LIGHTRAG_LLM_NAME)
+
+        # 如果用户选择了LLM，使用用户选择的；否则使用环境变量默认值
+        if llm_info and llm_info.get("provider") and llm_info.get("model_name"):
+            provider = llm_info["provider"]
+            model_name = llm_info["model_name"]
+            logger.info(f"Using user-selected LLM: {provider}/{model_name}")
+        else:
+            provider = LIGHTRAG_LLM_PROVIDER
+            model_name = LIGHTRAG_LLM_NAME
+            logger.info(f"Using default LLM from environment: {provider}/{model_name}")
+
+        model = select_model(provider, model_name)
 
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return await openai_complete_if_cache(

@@ -15,6 +15,7 @@
           size="small"
           @click="loadGraph"
           :disabled="!isGraphSupported"
+          :icon='h(ReloadOutlined)'
         >
           加载图谱
         </a-button>
@@ -153,7 +154,6 @@
 import { ref, computed, watch } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { useUserStore } from '@/stores/user';
-import { getKbTypeLabel } from '@/utils/kb_utils';
 import { ReloadOutlined, DeleteOutlined, ExpandOutlined, UpOutlined, DownOutlined, SettingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
@@ -208,6 +208,9 @@ const toggleVisible = () => {
 };
 
 const loadGraph = () => {
+  if (!(Object.keys(store.database?.files).length > 0)) {
+    return;
+  }
   if (graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function') {
     graphViewerRef.value.loadFullGraph();
   }

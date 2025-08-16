@@ -37,10 +37,10 @@ https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
 
 1. **克隆项目**
    ```bash
-   git clone -b stable https://github.com/xerrors/Yuxi-Know.git
+   git clone -b 0.2.0.preview https://github.com/xerrors/Yuxi-Know.git
    cd Yuxi-Know
    ```
-   如果想要使用 v0.2 预览版，可以使用分支：`0.2.0.preview`
+   如果想要使用之前的稳定版，可以使用分支：`stable` 分支，`main` 分支是最新的开发版本。
 
 2. **配置 API 密钥**
 

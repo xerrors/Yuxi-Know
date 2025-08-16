@@ -85,7 +85,7 @@ class KnowledgeBase(ABC):
         pass
 
     def create_database(self, database_name: str, description: str,
-                       embed_info: dict | None = None, **kwargs) -> dict:
+                       embed_info: dict | None = None, llm_info: dict | None = None, **kwargs) -> dict:
         """
         创建数据库
 
@@ -108,6 +108,7 @@ class KnowledgeBase(ABC):
             "description": description,
             "kb_type": self.kb_type,
             "embed_info": embed_info,
+            "llm_info": llm_info,
             "metadata": kwargs,
             "created_at": datetime.now().isoformat()
         }
@@ -187,7 +188,6 @@ class KnowledgeBase(ABC):
         """
         pass
 
-    @abstractmethod
     async def export_data(self, db_id: str, format: str = 'zip', **kwargs) -> str:
         pass
 

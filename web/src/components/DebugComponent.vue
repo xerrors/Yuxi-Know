@@ -370,10 +370,7 @@ const printDatabaseInfo = async () => {
   if (!checkAdminPermission()) return;
 
   try {
-    console.log('=== 知识库信息 ===');
-
-    // 直接调用API获取最新的数据库信息
-    await databaseStore.refreshDatabase();
+    console.log('知识库信息', databaseStore.database);
 
   } catch (error) {
     console.error('获取知识库信息失败:', error);

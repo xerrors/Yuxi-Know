@@ -101,7 +101,7 @@ class MilvusKB(KnowledgeBase):
             raise ValueError(f"Database {db_id} not found")
 
         embed_info = self.databases_meta[db_id].get("embed_info", {})
-        collection_name = f"kb_{db_id}"
+        collection_name = db_id
 
         try:
             # 检查集合是否存在
@@ -256,7 +256,7 @@ class MilvusKB(KnowledgeBase):
                 self._save_metadata()
 
             file_record["file_id"] = file_id
-            
+
             # 添加到处理队列
             self._add_to_processing_queue(file_id)
 
