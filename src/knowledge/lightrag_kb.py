@@ -6,11 +6,13 @@ from lightrag import LightRAG, QueryParam
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc, setup_logger
 from lightrag.kg.shared_storage import initialize_pipeline_status
+from pymilvus import connections, utility
+from neo4j import GraphDatabase
 
 from src.knowledge.knowledge_base import KnowledgeBase
 from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
 from src.knowledge.kb_utils import prepare_item_metadata, get_embedding_config
-from src.utils import logger
+from src.utils import logger, hashstr
 
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
@@ -45,6 +47,57 @@ class LightRagKB(KnowledgeBase):
     def kb_type(self) -> str:
         """知识库类型标识"""
         return "lightrag"
+
+    def delete_database(self, db_id: str) -> dict:
+        """删除数据库，同时清除Milvus和Neo4j中的数据"""
+        # Drop Milvus collection
+        try:
+            milvus_uri = os.getenv('MILVUS_URI', 'http://localhost:19530')
+            milvus_token = os.getenv('MILVUS_TOKEN', '')
+            connection_alias = f"lightrag_{hashstr(db_id, 6)}"
+
+            connections.connect(
+                alias=connection_alias,
+                uri=milvus_uri,
+                token=milvus_token
+            )
+
+            # 删除 LightRAG 创建的三个集合
+            collection_names = [f"{db_id}_chunks", f"{db_id}_relationships", f"{db_id}_entities"]
+            for collection_name in collection_names:
+                if utility.has_collection(collection_name, using=connection_alias):
+                    utility.drop_collection(collection_name, using=connection_alias)
+                    logger.info(f"Dropped Milvus collection {collection_name}")
+                else:
+                    logger.info(f"Milvus collection {collection_name} does not exist, skipping")
+
+            connections.disconnect(connection_alias)
+        except Exception as e:
+            logger.error(f"Failed to drop Milvus collection {db_id}: {e}")
+
+        # Delete Neo4j data
+        neo4j_uri = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
+        neo4j_username = os.getenv('NEO4J_USERNAME', 'neo4j')
+        neo4j_password = os.getenv('NEO4J_PASSWORD', '0123456789')
+
+        try:
+            driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_username, neo4j_password))
+            with driver.session() as session:
+                # 删除带有特定 db_id 标签的节点和关系
+                session.run("""
+                    MATCH (n:`""" + db_id + """`)
+                    DETACH DELETE n
+                """)
+
+                logger.info(f"Deleted Neo4j nodes and relationships for workspace {db_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete Neo4j data for {db_id}: {e}")
+        finally:
+            if 'driver' in locals():
+                driver.close()
+
+        # Delete local files and metadata
+        return super().delete_database(db_id)
 
     async def _create_kb_instance(self, db_id: str, kb_config: dict) -> LightRAG:
         """创建 LightRAG 实例"""

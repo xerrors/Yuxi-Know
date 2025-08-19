@@ -103,24 +103,6 @@ class GraphDatabase:
         if self.status == "closed":
             self.start()
 
-    def txt_add_entity(self, triples, kgdb_name='neo4j'):
-        """添加实体三元组"""
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(kgdb_name)
-        def create(tx, triples):
-            for triple in triples:
-                h = triple['h']
-                t = triple['t']
-                r = triple['r']
-                query = (
-                    "MERGE (a:Entity:Upload {name: $h}) "
-                    "MERGE (b:Entity:Upload {name: $t}) "
-                    "MERGE (a)-[:" + r.replace(" ", "_") + "]->(b)"
-                )
-                tx.run(query, h=h, t=t)
-
-        with self.driver.session() as session:
-            session.execute_write(create, triples)
 
     async def txt_add_vector_entity(self, triples, kgdb_name='neo4j'):
         """添加实体三元组"""
@@ -583,67 +565,6 @@ class GraphDatabase:
         formatted_results = {"nodes": nodes, "edges": edges}
         return formatted_results
 
-    def format_query_result_to_graph(self, query_results):
-        """将检索到的结果转换为 {"nodes": [], "edges": []} 的格式
-
-        例如：
-        {
-            "nodes": [
-                {
-                    "id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:103",
-                    "name": "张若锦"
-                },
-                {
-                    "id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:20",
-                    "name": "贾宝玉"
-                },
-                ....
-            ],
-            "edges": [
-                {
-                    "id": "5:5efbff88-72ef-44f9-b867-6c0e164a4a13:71",
-                    "type": "奴仆",
-                    "source_id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:88",
-                    "target_id": "4:5efbff88-72ef-44f9-b867-6c0e164a4a13:20",
-                    "source_name": "宋嬷嬷",
-                    "target_name": "贾宝玉"
-                },
-                ....
-            ]
-        }
-        """
-        formatted_results = {"nodes": [], "edges": []}
-        node_dict = {}
-        edge_dict = {}
-
-        for item in query_results:
-            # 检查数据格式
-            if len(item) < 2 or not isinstance(item[1], list):
-                continue
-
-            node_dict[item[0].element_id] = dict(id=item[0].element_id, name=item[0]._properties.get("name", "Unknown"))
-            node_dict[item[2].element_id] = dict(id=item[2].element_id, name=item[2]._properties.get("name", "Unknown"))
-
-            # 处理关系列表中的每个关系
-            for i, relationship in enumerate(item[1]):
-                try:
-                    # 提取关系信息
-                    node_info, edge_info = self._extract_relationship_info(relationship, node_dict=node_dict)
-                    if node_info is None or edge_info is None:
-                        continue
-
-                    # 添加边
-                    edge_dict[edge_info["id"]] = edge_info
-                except Exception as e:
-                    logger.error(f"处理关系时出错: {e}, 关系: {relationship}, {traceback.format_exc()}")
-                    continue
-
-        # 将节点字典转换为列表
-        formatted_results["nodes"] = list(node_dict.values())
-        formatted_results["edges"] = list(edge_dict.values())
-
-
-        return formatted_results
 
     def _extract_relationship_info(self, relationship, source_name=None, target_name=None, node_dict=None):
         """

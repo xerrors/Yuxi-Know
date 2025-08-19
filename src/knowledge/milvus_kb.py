@@ -439,10 +439,25 @@ class MilvusKB(KnowledgeBase):
 
         return {"lines": []}
 
+    def delete_database(self, db_id: str) -> dict:
+        """删除数据库，同时清除Milvus中的集合"""
+        # Drop Milvus collection
+        try:
+            if utility.has_collection(db_id, using=self.connection_alias):
+                utility.drop_collection(db_id, using=self.connection_alias)
+                logger.info(f"Dropped Milvus collection for {db_id}")
+            else:
+                logger.info(f"Milvus collection {db_id} does not exist, skipping")
+        except Exception as e:
+            logger.error(f"Failed to drop Milvus collection {db_id}: {e}")
+
+        # Call base method to delete local files and metadata
+        return super().delete_database(db_id)
+
     def __del__(self):
         """清理连接"""
         try:
             if hasattr(self, 'connection_alias'):
                 connections.disconnect(self.connection_alias)
-        except Exception:
+        except Exception:  # noqa: S110
             pass

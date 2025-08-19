@@ -175,7 +175,7 @@ custom-provider-name-here:
 {"h": "上海", "t": "中国", "r": "直辖市"}
 ```
 
-此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，**但是**最好确保每个节点都有 Entity 标签，否则会影响到图的检索与构建。
+此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，**但是**最好确保每个节点都有 Entity 标签，每个关系都有 `RELATION` 类型，否则会影响到图的检索与构建。
 
 注：在“图谱”页面，只能看到上传的节点和边，基于 LightRAG 构建的图谱不会展示在里面，完整的图谱可以去 Neo4j 管理页面查看。
 
