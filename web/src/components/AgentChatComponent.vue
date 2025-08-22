@@ -1222,7 +1222,6 @@ watch([convs, () => onGoingConv.messages], () => {
   scrollToBottom();
 }, { deep: true });
 
-
 // ==================== 用户交互处理 ====================
 
 // 检查是否在底部（允许一定误差）
@@ -1289,6 +1288,10 @@ const scrollToBottom = async () => {
 const toggleSidebar = () => {
   state.isSidebarOpen = !state.isSidebarOpen;
   localStorage.setItem('chat_sidebar_open', state.isSidebarOpen);
+  // 当打开聊天侧边栏时，关闭配置侧边栏
+  if (state.isSidebarOpen) {
+    emit('close-config-sidebar');
+  }
   console.log("toggleSidebar", state.isSidebarOpen);
 }
 

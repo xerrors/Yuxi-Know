@@ -4,6 +4,7 @@
       <div class="header-left">
         <div class="header-item">
           <a-button class="header-button" @click="openAgentModal">
+            <Bot size="18" stroke-width="1.75" />
             选择：{{ selectedAgent.name || '选择智能体' }}
           </a-button>
         </div>
@@ -27,213 +28,6 @@
       </div>
     </div>
     <div class="agent-view-body">
-      <!-- 配置弹窗 -->
-      <a-modal
-        v-model:open="state.agentConfOpen"
-        title="智能体详细配置"
-        :width="800"
-        :footer="null"
-        :maskClosable="false"
-        class="conf-modal"
-      >
-        <div class="conf-content">
-          <div class="agent-info">
-            <p>详细配置信<span @click="toggleDebugMode">息</span></p>
-            <p>{{ selectedAgent.description }}</p>
-            <pre v-if="state.debug_mode">{{ selectedAgent }}</pre>
-
-            <a-divider />
-
-            <div v-if="selectedAgentId && configSchema" class="config-modal-content">
-              <!-- 配置表单 -->
-              <a-form :model="agentConfig" layout="vertical">
-                <a-alert  v-if="state.isEmptyConfig" type="warning" message="该智能体没有配置项" show-icon/>
-                <a-alert v-if="!selectedAgent.has_checkpointer" type="error" message="该智能体没有配置 Checkpointer，功能无法正常使用，参考：https://langchain-ai.github.io/langgraph/concepts/persistence/" show-icon/>
-                <!-- 统一显示所有配置项 -->
-                <template v-for="(value, key) in configurableItems" :key="key">
-                  <a-form-item
-                    :label="getConfigLabel(key, value)"
-                    :name="key"
-                    class="config-item"
-                  >
-                    <p v-if="value.description" class="description">{{ value.description }}</p>
-
-                    <!-- key匹配 -->
-                    <div v-if="key === 'model'" class="agent-model">
-                      <!-- <p><small>注意，部分模型对于 Tool Calling 的支持不稳定，建议采用{{ value.options }} </small></p> -->
-                      <ModelSelectorComponent
-                        @select-model="handleModelChange"
-                        :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
-                        :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
-                      />
-                    </div>
-                    <a-textarea
-                      v-else-if="key === 'system_prompt'"
-                      v-model:value="agentConfig[key]"
-                      :rows="2"
-                      :placeholder="getPlaceholder(key, value)"
-                    />
-
-                    <!-- 工具选择特殊处理 -->
-                    <div v-else-if="key === 'tools'" class="tools-selector">
-                      <div class="tools-summary">
-                        <div class="tools-summary-left">
-                          <span class="tools-count">已选择 {{ getSelectedCount(key) }} 个工具</span>
-                          <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0">
-                            清空
-                          </a-button>
-                        </div>
-                        <a-button type="primary" @click="openToolsModal" class="select-tools-btn">
-                          选择工具
-                        </a-button>
-                      </div>
-                      <div v-if="getSelectedCount(key) > 0" class="selected-tools-preview">
-                        <a-tag v-for="toolId in agentConfig[key]" :key="toolId" closable @close="removeSelectedTool(toolId)">
-                          {{ getToolNameById(toolId) }}
-                        </a-tag>
-                      </div>
-                    </div>
-
-                    <!-- 数据类型匹配 -->
-
-                    <!-- 布尔类型 -->
-                    <a-switch
-                      v-else-if="typeof agentConfig[key] === 'boolean'"
-                      v-model:checked="agentConfig[key]"
-                    />
-
-                    <!-- 单选 -->
-                    <a-select
-                      v-else-if="value?.options && (value?.type === 'str' || value?.type === 'select')"
-                      v-model:value="agentConfig[key]"
-                    >
-                      <a-select-option v-for="option in value.options" :key="option" :value="option">
-                        {{ option.label || option }}
-                      </a-select-option>
-                    </a-select>
-
-                    <!-- 多选 -->
-                    <div v-else-if="value?.options && value?.type === 'list'" class="multi-select-cards">
-                      <div class="multi-select-label">
-                        <span>已选择 {{ getSelectedCount(key) }} 项</span>
-                        <a-button type="link" size="small" @click="clearSelection(key)" v-if="getSelectedCount(key) > 0" >
-                          清空
-                        </a-button>
-                      </div>
-                      <div class="options-grid">
-                        <div
-                          v-for="option in value.options"
-                          :key="option"
-                          class="option-card"
-                          :class="{
-                            'selected': isOptionSelected(key, option),
-                            'unselected': !isOptionSelected(key, option)
-                          }"
-                          @click="toggleOption(key, option)"
-                        >
-                          <div class="option-content">
-                            <span class="option-text">{{ getToolNameById(toolId) }}</span>
-                            <div class="option-indicator">
-                              <CheckCircleOutlined v-if="isOptionSelected(key, option)" />
-                              <PlusCircleOutlined v-else />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- 数字 -->
-                    <a-input-number
-                      v-else-if="value?.type === 'number'"
-                      v-model:value="agentConfig[key]"
-                      :placeholder="getPlaceholder(key, value)"
-                    />
-
-                    <!-- 滑块 -->
-                    <a-slider
-                      v-else-if="value?.type === 'slider'"
-                      v-model:value="agentConfig[key]"
-                      :min="value.min"
-                      :max="value.max"
-                      :step="value.step"
-                      style="max-width: 300px;"
-                    />
-
-                    <!-- 其他类型 -->
-                    <a-input
-                      v-else
-                      v-model:value="agentConfig[key]"
-                      :placeholder="getPlaceholder(key, value)"
-                    />
-                  </a-form-item>
-                </template>
-
-                <a-divider />
-
-                <!-- 弹窗底部按钮 -->
-                <div class="form-actions" v-if="!state.isEmptyConfig">
-                  <div class="form-actions-left">
-                    <a-button type="primary" @click="saveConfig">保存并发布配置</a-button>
-                    <a-button @click="resetConfig">重置</a-button>
-                  </div>
-                </div>
-              </a-form>
-            </div>
-
-          </div>
-        </div>
-      </a-modal>
-
-      <!-- 工具选择弹窗 -->
-      <a-modal
-        v-model:open="state.toolsModalOpen"
-        title="选择工具"
-        :width="800"
-        :footer="null"
-        :maskClosable="false"
-        class="tools-modal"
-      >
-        <div class="tools-modal-content">
-          <div class="tools-search">
-            <a-input
-              v-model:value="toolsSearchText"
-              placeholder="搜索工具..."
-              allow-clear
-            />
-          </div>
-          <div class="tools-list">
-            <div
-              v-for="tool in filteredTools"
-              :key="tool.id"
-              class="tool-item"
-              :class="{ 'selected': selectedTools.includes(tool.id) }"
-              @click="toggleToolSelection(tool.id)"
-            >
-              <div class="tool-content">
-                <div class="tool-header">
-                  <span class="tool-name">{{ tool.name }}</span>
-                  <div class="tool-indicator">
-                    <CheckCircleOutlined v-if="selectedTools.includes(tool.id)" />
-                    <PlusCircleOutlined v-else />
-                  </div>
-                </div>
-                <div class="tool-description">{{ tool.description }}</div>
-
-              </div>
-            </div>
-          </div>
-          <div class="tools-modal-footer">
-            <div class="selected-count">
-              已选择 {{ selectedTools.length }} 个工具
-            </div>
-            <div class="modal-actions">
-              <a-button @click="cancelToolsSelection">取消</a-button>
-              <a-button type="primary" @click="confirmToolsSelection">确认</a-button>
-            </div>
-          </div>
-        </div>
-      </a-modal>
-
       <!-- 智能体选择弹窗 -->
       <a-modal
         v-model:open="state.agentModalOpen"
@@ -274,9 +68,22 @@
           :single-mode="false"
           @open-config="toggleConf"
           @open-agent-modal="openAgentModal"
+          @close-config-sidebar="() => state.isConfigSidebarOpen = false"
         >
         </AgentChatComponent>
       </div>
+
+      <!-- 配置侧边栏 -->
+      <AgentConfigSidebar
+        :isOpen="state.isConfigSidebarOpen"
+        :selectedAgent="selectedAgent"
+        :selectedAgentId="selectedAgentId"
+        :agentConfig="agentConfig"
+        @close="() => state.isConfigSidebarOpen = false"
+        @update:agentConfig="(config) => agentConfig = config"
+        @config-saved="loadAgentConfig"
+        @config-reset="loadAgentConfig"
+      />
     </div>
   </div>
 </template>
@@ -294,12 +101,13 @@ import {
   PlusCircleOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
+import { Bot } from 'lucide-vue-next';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
 import { useUserStore } from '@/stores/user';
 import { chatApi } from '@/apis/auth_api';
 import { agentConfigApi } from '@/apis/system_api';
-import { toolsApi } from '@/apis/tools';
 
 // 路由
 const router = useRouter();
@@ -310,38 +118,16 @@ const agents = ref({});
 const selectedAgentId = ref(null);
 const defaultAgentId = ref(null); // 存储默认智能体ID
 const state = reactive({
-  agentConfOpen: false,
   debug_mode: false,
-  toolsModalOpen: false,
   agentModalOpen: false,
+  isConfigSidebarOpen: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
     Object.keys(configurableItems.value).length === 0
   )
 });
 
-// 工具相关状态
-const availableTools = ref([]);
-const selectedTools = ref([]);
-const toolsSearchText = ref('');
 
-// 过滤后的工具列表
-const filteredTools = computed(() => {
-  if (!toolsSearchText.value) {
-    return availableTools.value;
-  }
-  const searchLower = toolsSearchText.value.toLowerCase();
-  return availableTools.value.filter(tool =>
-    tool.name.toLowerCase().includes(searchLower) ||
-    tool.description.toLowerCase().includes(searchLower)
-  );
-});
-
-// 根据工具ID获取工具名称
-const getToolNameById = (toolId) => {
-  const tool = availableTools.value.find(t => t.id === toolId);
-  return tool ? tool.name : toolId;
-};
 
 const selectedAgent = computed(() => agents.value[selectedAgentId.value] || {});
 const configSchema = computed(() => selectedAgent.value.config_schema || {});
@@ -380,88 +166,9 @@ const setAsDefaultAgent = async () => {
   }
 };
 
-// 多选组件相关方法
-const ensureArray = (key) => {
-  if (!agentConfig.value[key] || !Array.isArray(agentConfig.value[key])) {
-    agentConfig.value[key] = [];
-  }
-};
 
-const isOptionSelected = (key, option) => {
-  ensureArray(key);
-  return agentConfig.value[key].includes(option);
-};
 
-const getSelectedCount = (key) => {
-  ensureArray(key);
-  return agentConfig.value[key].length;
-};
 
-const toggleOption = (key, option) => {
-  ensureArray(key);
-
-  const currentOptions = [...agentConfig.value[key]];
-  const index = currentOptions.indexOf(option);
-
-  if (index > -1) {
-    currentOptions.splice(index, 1);
-  } else {
-    currentOptions.push(option);
-  }
-
-  agentConfig.value[key] = currentOptions;
-};
-
-const clearSelection = (key) => {
-  agentConfig.value[key] = [];
-};
-
-// 工具选择相关方法
-const openToolsModal = async () => {
-  try {
-    // 如果工具列表还没有加载，则加载
-    if (availableTools.value.length === 0) {
-      await loadAvailableTools();
-    }
-
-    // 初始化已选择的工具
-    selectedTools.value = [...(agentConfig.value.tools || [])];
-
-    // 打开弹窗
-    state.toolsModalOpen = true;
-  } catch (error) {
-    console.error('打开工具选择弹窗失败:', error);
-    message.error('打开工具选择弹窗失败');
-  }
-};
-
-const toggleToolSelection = (toolId) => {
-  const index = selectedTools.value.indexOf(toolId);
-  if (index > -1) {
-    selectedTools.value.splice(index, 1);
-  } else {
-    selectedTools.value.push(toolId);
-  }
-};
-
-const removeSelectedTool = (toolId) => {
-  const index = agentConfig.value.tools.indexOf(toolId);
-  if (index > -1) {
-    agentConfig.value.tools.splice(index, 1);
-  }
-};
-
-const confirmToolsSelection = () => {
-  agentConfig.value.tools = [...selectedTools.value];
-  state.toolsModalOpen = false;
-  toolsSearchText.value = '';
-};
-
-const cancelToolsSelection = () => {
-  state.toolsModalOpen = false;
-  toolsSearchText.value = '';
-  selectedTools.value = [];
-};
 
 // 获取默认智能体ID
 const fetchDefaultAgent = async () => {
@@ -627,15 +334,7 @@ const selectAgentFromModal = (agentId) => {
   state.agentModalOpen = false;
 };
 
-// 加载工具列表
-const loadAvailableTools = async () => {
-  try {
-    const response = await toolsApi.getTools();
-    availableTools.value = Object.values(response.tools || {});
-  } catch (error) {
-    console.error('加载工具列表失败:', error);
-  }
-};
+
 
 // 初始化
 onMounted(async () => {
@@ -644,7 +343,7 @@ onMounted(async () => {
   // 获取智能体列表
   await fetchAgents();
   // 加载工具列表
-  await loadAvailableTools();
+
 
   // 恢复上次选择的智能体
   const lastSelectedAgent = localStorage.getItem('last-selected-agent');
@@ -690,7 +389,11 @@ const toggleDebugMode = () => {
 };
 
 const toggleConf = () => {
-  state.agentConfOpen = !state.agentConfOpen
+  state.isConfigSidebarOpen = !state.isConfigSidebarOpen
+  // 当打开配置侧边栏时，关闭聊天侧边栏
+  if (state.isConfigSidebarOpen) {
+    state.isChatSidebarOpen = false
+  }
 }
 </script>
 
@@ -726,8 +429,11 @@ const toggleConf = () => {
     align-items: center;
     gap: 10px;
 
-    button {
+    button.header-button {
       border-radius: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
   }
 }
@@ -735,10 +441,12 @@ const toggleConf = () => {
 .agent-view-body {
   --gap-radius: 6px;
   display: flex;
+  flex-direction: row;
   width: 100%;
   flex: 1;
   min-height: calc(100% - var(--agent-view-header-height));
   overflow: hidden;
+  position: relative;
   // padding: var(--gap-radius);
   // gap: var(--gap-radius);
 
