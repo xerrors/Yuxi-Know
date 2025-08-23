@@ -244,6 +244,39 @@ agent_manager.init_all_agents()
 
 系统的配色方面，主要保存在 [web/src/assets/css/base.css](web/src/assets/css/base.css) 中。只要替换其中的 `--main-*` 相关的变量，就可以改变系统的配色。
 
+### 预设脚本
+
+**文件上传脚本**，使用 `scripts/batch_upload.py` 脚本上传文件到知识库中，调用示例如下，会将 `path/to/your/data` 目录下所有 `*.docx` 文件上传到 `your_kb_id` 知识库中。
+
+```bash
+# 上传知识库文件
+uv run scripts/batch_upload.py upload \
+    --db-id your_kb_id \
+    --directory path/to/your/data \
+    --pattern "*.docx" \
+    --base-url http://127.0.0.1:5050/api \
+    --username your_username \
+    --password your_password \
+    --concurrency 4 \
+    --recursive \
+    --record-file scripts/tmp/batch_processed_files.txt
+```
+
+**文件解析脚本**，还可以使用 `scripts/batch_upload.py trans` 脚本将文件解析成 markdown 文件，调用示例如下，会将 `path/to/your/data` 目录下所有 `*.docx` 文件解析成 markdown 文件，输出到 `path/to/output_markdown` 目录中。
+
+```bash
+# 文件解析成 markdown
+uv run scripts/batch_upload.py trans \
+    --db-id your_kb_id \
+    --directory path/to/your/data \
+    --output-dir path/to/output_markdown \
+    --pattern "*.docx" \
+    --base-url http://127.0.0.1:5050/api \
+    --username your_username \
+    --password your_password \
+    --concurrency 4 \
+    --recursive
+```
 
 ## ❓ 常见问题
 
