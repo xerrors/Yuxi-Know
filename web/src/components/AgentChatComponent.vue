@@ -1288,10 +1288,6 @@ const scrollToBottom = async () => {
 const toggleSidebar = () => {
   state.isSidebarOpen = !state.isSidebarOpen;
   localStorage.setItem('chat_sidebar_open', state.isSidebarOpen);
-  // 当打开聊天侧边栏时，关闭配置侧边栏
-  if (state.isSidebarOpen) {
-    emit('close-config-sidebar');
-  }
   console.log("toggleSidebar", state.isSidebarOpen);
 }
 

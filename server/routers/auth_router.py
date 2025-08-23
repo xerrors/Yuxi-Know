@@ -8,6 +8,7 @@ from server.db_manager import db_manager
 from server.models.user_model import User, OperationLog
 from server.utils.auth_utils import AuthUtils
 from server.utils.auth_middleware import get_db, get_current_user, get_admin_user, get_superadmin_user, oauth2_scheme
+from server.utils.common_utils import log_operation
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -45,20 +46,6 @@ class InitializeAdmin(BaseModel):
 # === 工具函数 ===
 # =============================================================================
 
-# 记录操作日志
-def log_operation(db: Session, user_id: int, operation: str, details: str = None, request: Request = None):
-    ip_address = None
-    if request:
-        ip_address = request.client.host if request.client else None
-
-    log = OperationLog(
-        user_id=user_id,
-        operation=operation,
-        details=details,
-        ip_address=ip_address
-    )
-    db.add(log)
-    db.commit()
 
 # 路由：登录获取令牌
 # =============================================================================

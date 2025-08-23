@@ -1,5 +1,4 @@
 <template>
-  <!-- TODO 优化样式，表格优化，添加一个 utils 的函数，用来把时间戳转换为东 8 区的时间，并格式化显示出来 -->
   <div class="">
     <HeaderComponent title="设置" class="setting-header">
 

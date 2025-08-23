@@ -390,10 +390,6 @@ const toggleDebugMode = () => {
 
 const toggleConf = () => {
   state.isConfigSidebarOpen = !state.isConfigSidebarOpen
-  // 当打开配置侧边栏时，关闭聊天侧边栏
-  if (state.isConfigSidebarOpen) {
-    state.isChatSidebarOpen = false
-  }
 }
 </script>
 

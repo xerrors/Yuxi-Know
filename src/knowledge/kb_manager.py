@@ -298,22 +298,6 @@ class KnowledgeBaseManager:
             }
         return info
 
-    def migrate_database(self, db_id: str, target_kb_type: str) -> dict:
-        """
-        迁移数据库到不同的知识库类型
-
-        Args:
-            db_id: 数据库ID
-            target_kb_type: 目标知识库类型
-
-        Returns:
-            迁移结果
-
-        注意：这是一个复杂的操作，需要重新索引所有数据
-        """
-        # TODO: 实现数据库迁移逻辑
-        raise NotImplementedError("Database migration not implemented yet")
-
     def get_statistics(self) -> dict:
         """获取统计信息"""
         stats = {
