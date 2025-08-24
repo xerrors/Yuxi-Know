@@ -16,9 +16,13 @@
       <template #actions>
         <div class="status-wrapper">
           <div class="status-indicator" :class="graphStatusClass"></div>
+          <span class="status-text">{{ graphStatusText }}</span>
         </div>
         <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
           Neo4j 浏览器
+        </a-button>
+        <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
+          说明
         </a-button>
         <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
         <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
@@ -32,7 +36,7 @@
         <input
           v-model="state.searchInput"
           placeholder="输入要查询的实体"
-          style="width: 200px"
+          style="width: 300px"
           @keydown.enter="onSearch"
         />
         <a-button
@@ -57,15 +61,7 @@
       @ok="addDocumentByFile"
       @cancel="() => state.showModal = false"
       ok-text="添加到图数据库" cancel-text="取消"
-      :confirm-loading="state.precessing">
-      <div v-if="graphInfo?.embed_model_name">
-        <a-alert v-if="!modelMatched" message="模型不匹配，构建索引可能会出现无法检索到的情况！" type="warning" />
-        <p>
-          当前图数据库向量模型：{{ graphInfo?.embed_model_name }}，
-          当前所选择的向量模型是 {{ cur_embed_model }}
-        </p>
-      </div>
-      <p v-else>第一次创建之后将无法修改向量模型，当前向量模型 {{ cur_embed_model }}</p>
+      :confirm-loading="state.processing">
       <div class="upload">
         <a-upload-dragger
           class="upload-dragger"
@@ -85,6 +81,36 @@
         </a-upload-dragger>
       </div>
     </a-modal>
+
+    <!-- 说明弹窗 -->
+    <a-modal
+      :open="state.showInfoModal"
+      title="图数据库说明"
+      @cancel="() => state.showInfoModal = false"
+      :footer="null"
+      width="600px"
+    >
+      <div class="info-content">
+        <p>本页面展示的是 Neo4j 图数据库中的知识图谱信息。</p>
+        <p>具体展示内容包括：</p>
+        <ul>
+          <li>带有 <code>Entity</code> 标签的节点</li>
+          <li>带有 <code>RELATION</code> 类型的关系边</li>
+        </ul>
+        <p>注意：</p>
+        <ul>
+          <li>这里仅展示用户上传的实体和关系，不包含知识库中自动创建的图谱。</li>
+          <li>查询逻辑基于 <code>graphbase.py</code> 中的 <code>get_sample_nodes</code> 方法实现：</li>
+        </ul>
+        <pre><code>MATCH (n:Entity)-[r]-&gt;(m:Entity)
+RETURN
+    {id: elementId(n), name: n.name} AS h,
+    {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
+    {id: elementId(m), name: m.name} AS t
+LIMIT $num</code></pre>
+        <p>如需查看完整的 Neo4j 数据库内容，请使用 "Neo4j 浏览器" 按钮访问原生界面。</p>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -93,7 +119,7 @@ import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref, h } from 'vue';
 import { message, Button as AButton } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { UploadOutlined, SyncOutlined, GlobalOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
@@ -118,6 +144,7 @@ const state = reactive({
   searchInput: '',
   searchLoading: false,
   showModal: false,
+  showInfoModal: false,
   precessing: false,
   indexing: false,
   showPage: true,
@@ -185,7 +212,7 @@ const getGraphData = () => {
 }
 
 const addDocumentByFile = () => {
-  state.precessing = true
+  state.processing = true
   const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
   neo4jApi.addEntities(files[0])
     .then((data) => {
@@ -200,7 +227,7 @@ const addDocumentByFile = () => {
       console.error(error)
       message.error(error.message || '添加文件失败');
     })
-    .finally(() => state.precessing = false)
+    .finally(() => state.processing = false)
 };
 
 const loadSampleNodes = () => {
@@ -210,7 +237,7 @@ const loadSampleNodes = () => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
       console.log(graphData)
-      setTimeout(() => randerGraph(), 500)
+      setTimeout(() => renderGraph(), 500)
     })
     .catch((error) => {
       console.error(error)
@@ -263,7 +290,7 @@ const onSearch = () => {
     .finally(() => state.searchLoading = false)
 };
 
-const randerGraph = () => {
+const renderGraph = () => {
 
   if (graphInstance) {
     graphInstance.destroy();
@@ -315,7 +342,7 @@ const initGraph = () => {
     },
     behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
   });
-  window.addEventListener('resize', randerGraph);
+  window.addEventListener('resize', renderGraph);
 }
 
 onMounted(() => {
@@ -348,10 +375,9 @@ const graphDescription = computed(() => {
   const dbName = graphInfo.value?.graph_name || '';
   const entityCount = graphInfo.value?.entity_count || 0;
   const relationCount = graphInfo.value?.relationship_count || 0;
-  const modelName = graphInfo.value?.embed_model_name || '未上传文件';
   const unindexed = unindexedCount.value > 0 ? `，${unindexedCount.value}个节点未索引` : '';
 
-  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系（不含知识库创建的图谱）。向量模型：${modelName}${unindexed}`;
+  return `${dbName} - 共 ${entityCount} 实体，${relationCount} 个关系；${unindexed}`;
 });
 
 // 为未索引节点添加索引
@@ -362,7 +388,7 @@ const indexNodes = () => {
     return
   }
 
-  if (state.precessing) {
+  if (state.processing) {
     message.error('后台正在处理，请稍后再试')
     return
   }
@@ -405,6 +431,10 @@ const openLink = (url) => {
   margin-right: 16px;
   font-size: 14px;
   color: rgba(0, 0, 0, 0.65);
+}
+
+.status-text {
+  margin-left: 8px;
 }
 
 .status-indicator {
@@ -501,5 +531,34 @@ const openLink = (url) => {
   height: 100%;
   flex-direction: column;
   color: var(--gray-900);
+}
+
+.info-content {
+  line-height: 1.6;
+
+  ul {
+    padding-left: 20px;
+    margin: 10px 0;
+  }
+
+  li {
+    margin: 8px 0;
+  }
+
+  code {
+    background-color: #f0f0f0;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
+
+  pre {
+    background-color: #f8f8f8;
+    padding: 12px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 15px 0;
+    font-size: 13px;
+  }
 }
 </style>
