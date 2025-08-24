@@ -15,7 +15,7 @@ from src.utils import logger
 from src.agents.registry import State, BaseAgent
 from src.agents.utils import load_chat_model, get_cur_time_with_utc
 from src.agents.chatbot.configuration import ChatbotConfiguration
-from src.agents.tools_factory import get_runnable_tools
+from src.agents.tools_factory import get_buildin_tools
 
 class ChatbotAgent(BaseAgent):
     name = "智能体助手"
@@ -33,7 +33,7 @@ class ChatbotAgent(BaseAgent):
         默认不使用任何工具。
         如果配置为列表，则使用列表中的工具。
         """
-        platform_tools = get_runnable_tools()
+        platform_tools = get_buildin_tools()
         if tools is None or not isinstance(tools, list) or len(tools) == 0:
             # 默认不使用任何工具
             logger.info("未配置工具或配置为空，不使用任何工具")
@@ -65,7 +65,7 @@ class ChatbotAgent(BaseAgent):
         if self.graph:
             return self.graph
 
-        runnable_tools = get_runnable_tools()
+        runnable_tools = get_buildin_tools()
         tools = list(runnable_tools.values())
         tools_name = list(runnable_tools.keys())
         logger.debug(f"build graph `{self.id}` with tools: {tools_name}")

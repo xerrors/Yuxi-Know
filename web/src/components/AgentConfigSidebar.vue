@@ -894,7 +894,7 @@ watch(() => props.isOpen, (newVal) => {
         &:focus-within {
           border-color: var(--main-color);
           box-shadow: 0 0 0 2px rgba(var(--main-color-rgb), 0.1);
-          
+
           .search-icon {
             color: var(--main-color);
           }
@@ -907,13 +907,19 @@ watch(() => props.isOpen, (newVal) => {
     }
 
     .tools-list {
-      max-height: 300px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      max-height: max(60vh, 800px);
       overflow-y: auto;
-      border: 1px solid var(--gray-200);
       border-radius: 8px;
       margin-bottom: 16px;
       background: white;
-      padding: 4px;
+
+      // 在小屏幕下调整为单列布局
+      @media (max-width: 480px) {
+        grid-template-columns: 1fr;
+      }
 
       &::-webkit-scrollbar {
         width: 6px;
@@ -943,38 +949,14 @@ watch(() => props.isOpen, (newVal) => {
         background: white;
         border: 1px solid var(--gray-200);
 
-        &:last-child {
-          margin-bottom: 0;
-        }
-
         &:hover {
-          border-color: var(--main-color);
-          background: var(--gray-50);
+          border-color: var(--gray-300);
+          background: var(--gray-20);
         }
-
-        &.selected {
-          background: var(--main-10);
-          border-color: var(--main-color);
-
-          .tool-name {
-            color: var(--main-color);
-            font-weight: 600;
-          }
-
-          .tool-description {
-            color: var(--gray-700);
-          }
-
-          .tool-indicator {
-            color: var(--main-color);
-          }
-        }
-
         .tool-content {
           .tool-header {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             margin-bottom: 6px;
             gap: 8px;
 
@@ -1005,6 +987,25 @@ watch(() => props.isOpen, (newVal) => {
             text-overflow: ellipsis;
           }
         }
+
+        &.selected {
+          background: var(--main-30);
+          // border-color: var(--main-color);
+
+          .tool-content {
+            .tool-name {
+              color: var(--main-color);
+            }
+            .tool-indicator {
+              color: var(--main-color);
+            }
+          }
+          .tool-description {
+            color: var(--gray-700);
+          }
+
+        }
+
       }
     }
 

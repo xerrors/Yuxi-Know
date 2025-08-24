@@ -3,7 +3,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from src.agents.registry import Configuration
-from src.agents.tools_factory import get_runnable_tools
+from src.agents.tools_factory import get_buildin_tools
 
 @dataclass(kw_only=True)
 class ChatbotConfiguration(Configuration):
@@ -37,7 +37,7 @@ class ChatbotConfiguration(Configuration):
         default_factory=list,
         metadata={
             "name": "工具",
-            "options": list(get_runnable_tools().keys()),  # 这里的选择是所有的工具
+            "options": list(get_buildin_tools().keys()),  # 这里的选择是所有的工具
             "description": "工具列表"
         },
     )
