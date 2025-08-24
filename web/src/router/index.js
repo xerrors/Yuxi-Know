@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue';
 import BlankLayout from '@/layouts/BlankLayout.vue';
 import { useUserStore } from '@/stores/user';
-import { agentApi } from '@/apis/agent';
+import { useAgentStore } from '@/stores/agent';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -121,21 +121,24 @@ router.beforeEach(async (to, from, next) => {
   if (requiresAdmin && !isAdmin) {
     // 如果是普通用户，跳转到默认智能体页面
     try {
-      // 先尝试获取默认智能体
-      const data = await agentApi.getDefaultAgent();
-      if (data && data.default_agent_id) {
-        // 如果存在默认智能体，直接跳转
-        next(`/agent/${data.default_agent_id}`);
-        return;
+      const agentStore = useAgentStore();
+      // 等待 store 初始化完成
+      if (!agentStore.isInitialized) {
+        await agentStore.initialize();
       }
-
-      // 如果没有默认智能体，则获取第一个可用智能体
-      const agentData = await agentApi.getAgents();
-      if (agentData && agentData.agents && agentData.agents.length > 0) {
-        const firstAgentId = agentData.agents[0].name;
-        next(`/agent/${firstAgentId}`);
+      
+      const defaultAgent = agentStore.defaultAgent;
+      if (defaultAgent && defaultAgent.id) {
+        next(`/agent/${defaultAgent.id}`);
       } else {
-        next('/');
+        // 如果没有默认智能体，可以考虑跳转到第一个可用的智能体，或者一个特定的页面
+        const agentIds = Object.keys(agentStore.agents);
+        if (agentIds.length > 0) {
+          next(`/agent/${agentIds[0]}`);
+        } else {
+          // 没有可用的智能体，跳转到首页
+          next('/');
+        }
       }
     } catch (error) {
       console.error('获取智能体信息失败:', error);

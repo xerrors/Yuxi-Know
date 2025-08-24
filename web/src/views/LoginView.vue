@@ -170,13 +170,14 @@ import { ref, reactive, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { useInfoStore } from '@/stores/info';
+import { useAgentStore } from '@/stores/agent';
 import { message } from 'ant-design-vue';
-import { agentApi } from '@/apis/agent';
 import { healthApi } from '@/apis/system_api';
 import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
 const router = useRouter();
 const userStore = useUserStore();
 const infoStore = useInfoStore();
+const agentStore = useAgentStore();
 
 // 从infoStore获取登录背景图片
 const loginBgImage = computed(() => {
@@ -248,18 +249,20 @@ const handleLogin = async () => {
 
       // 普通用户跳转到默认智能体
       try {
+        // 初始化agentStore并获取智能体信息
+        await agentStore.initialize();
+        
         // 尝试获取默认智能体
-        const data = await agentApi.getDefaultAgent();
-        if (data.default_agent_id) {
+        if (agentStore.defaultAgentId) {
           // 如果存在默认智能体，直接跳转
-          router.push(`/agent/${data.default_agent_id}`);
+          router.push(`/agent/${agentStore.defaultAgentId}`);
           return;
         }
 
         // 没有默认智能体，获取第一个可用智能体
-        const agentData = await agentApi.getAgents();
-        if (agentData.agents && agentData.agents.length > 0) {
-          router.push(`/agent/${agentData.agents[0].id}`);
+        const agentIds = Object.keys(agentStore.agents);
+        if (agentIds.length > 0) {
+          router.push(`/agent/${agentIds[0]}`);
           return;
         }
 

@@ -35,10 +35,10 @@
               <span v-if="!toolCall.tool_call_result">
                 <span><Loader size="16" class="tool-loader rotate" /></span> &nbsp;
                 <span>正在调用工具: </span>
-                <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span>
+                <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span>
               </span>
               <span v-else>
-                <span><CircleCheckBig size="16" class="tool-loader" /></span> &nbsp; 工具 <span class="tool-name">{{ toolCall.name || toolCall.function.name }}</span> 执行完成
+                <span><CircleCheckBig size="16" class="tool-loader" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
@@ -85,6 +85,8 @@ import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-d
 import RefsComponent from '@/components/RefsComponent.vue'
 import { Loader, CircleCheckBig } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
+import { useAgentStore } from '@/stores/agent'
+import { storeToRefs } from 'pinia'
 
 
 import { MdPreview } from 'md-editor-v3'
@@ -137,6 +139,18 @@ const isEmptyAndLoading = computed(() => {
   const isLoading = props.message.status === 'init' && props.isProcessing
   return isEmpty && isLoading;
 });
+
+// 引入智能体 store
+const agentStore = useAgentStore();
+const { availableTools } = storeToRefs(agentStore);
+
+// 工具相关方法
+const getToolNameByToolCall = (toolCall) => {
+  const toolId = toolCall.name || toolCall.function.name;
+  const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
+  const tool = toolsList.find(t => t.id === toolId);
+  return tool ? tool.name : toolId;
+};
 
 const parsedMessage = computed(() => {
   const message = props.message;

@@ -5,7 +5,7 @@
         <div class="header-item">
           <a-button class="header-button" @click="openAgentModal">
             <Bot size="18" stroke-width="1.75" />
-            选择：{{ selectedAgent.name || '选择智能体' }}
+            选择：{{ selectedAgent?.name || '选择智能体' }}
           </a-button>
         </div>
       </div>
@@ -62,8 +62,6 @@
       <!-- 中间内容区域 -->
       <div class="content">
         <AgentChatComponent
-          :agent-id="selectedAgentId"
-          :config="agentConfig"
           :state="state"
           :single-mode="false"
           @open-config="toggleConf"
@@ -76,13 +74,7 @@
       <!-- 配置侧边栏 -->
       <AgentConfigSidebar
         :isOpen="state.isConfigSidebarOpen"
-        :selectedAgent="selectedAgent"
-        :selectedAgentId="selectedAgentId"
-        :agentConfig="agentConfig"
         @close="() => state.isConfigSidebarOpen = false"
-        @update:agentConfig="(config) => agentConfig = config"
-        @config-saved="loadAgentConfig"
-        @config-reset="loadAgentConfig"
       />
     </div>
   </div>
@@ -92,72 +84,53 @@
 import { ref, onMounted, reactive, watch, computed, h } from 'vue';
 import { useRouter } from 'vue-router';
 import {
-  CloseOutlined,
   SettingOutlined,
   LinkOutlined,
   StarOutlined,
   StarFilled,
-  CheckCircleOutlined,
-  PlusCircleOutlined
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { Bot } from 'lucide-vue-next';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
 import { useUserStore } from '@/stores/user';
-import { agentApi } from '@/apis/agent';
+import { useAgentStore } from '@/stores/agent';
+import { storeToRefs } from 'pinia';
 
-// 路由
+// 路由和stores
 const router = useRouter();
 const userStore = useUserStore();
+const agentStore = useAgentStore();
 
-// 状态
-const agents = ref({});
-const selectedAgentId = ref(null);
-const defaultAgentId = ref(null); // 存储默认智能体ID
+// 从store中获取响应式状态
+const {
+  agents,
+  selectedAgentId,
+  defaultAgentId,
+  agentConfig,
+  selectedAgent,
+  configurableItems,
+} = storeToRefs(agentStore);
 const state = reactive({
   debug_mode: false,
   agentModalOpen: false,
   isConfigSidebarOpen: false,
   isEmptyConfig: computed(() =>
     !selectedAgentId.value ||
-    Object.keys(configurableItems.value).length === 0
+    Object.keys(configurableItems.value || {}).length === 0
   )
 });
 
 
 
-const selectedAgent = computed(() => agents.value[selectedAgentId.value] || {});
-const configSchema = computed(() => selectedAgent.value.config_schema || {});
-const configurableItems = computed(() => {
-  const items = configSchema.value.configurable_items || {};
-  // 遍历所有的配置项，将所有的 x_oap_ui_config 的层级提升到上一层
-  Object.keys(items).forEach(key => {
-    const item = items[key];
-    if (item.x_oap_ui_config) {
-      items[key] = { ...item, ...item.x_oap_ui_config };
-      delete items[key].x_oap_ui_config;
-    }
-  });
-  return items;
-});
-
-// 配置状态
-const agentConfig = ref({});
-
-// 检查是否为默认智能体
-const isDefaultAgent = computed(() => {
-  return selectedAgentId.value === defaultAgentId.value;
-});
+// 本地状态（仅UI相关）
 
 // 设置为默认智能体
 const setAsDefaultAgent = async () => {
   if (!selectedAgentId.value || !userStore.isAdmin) return;
 
   try {
-    await agentApi.setDefaultAgent(selectedAgentId.value);
-    defaultAgentId.value = selectedAgentId.value;
+    await agentStore.setDefaultAgent(selectedAgentId.value);
     message.success('已将当前智能体设为默认');
   } catch (error) {
     console.error('设置默认智能体错误:', error);
@@ -169,97 +142,15 @@ const setAsDefaultAgent = async () => {
 
 
 
-// 获取默认智能体ID
-const fetchDefaultAgent = async () => {
-  try {
-    const data = await agentApi.getDefaultAgent();
-    defaultAgentId.value = data.default_agent_id;
-    console.debug("Default agent ID:", defaultAgentId.value);
-  } catch (error) {
-    console.error('获取默认智能体错误:', error);
-  }
-};
+// 这些方法现在由agentStore处理，无需在组件中定义
 
-// 获取智能体列表
-const fetchAgents = async () => {
-  try {
-    const data = await agentApi.getAgents();
-    // 将数组转换为对象
-    agents.value = data.agents.reduce((acc, agent) => {
-      acc[agent.id] = agent;
-      return acc;
-    }, {});
-    // console.log("agents", agents.value);
-
-    // 加载当前选中智能体的配置
-    if (selectedAgentId.value) {
-      loadAgentConfig();
-    }
-  } catch (error) {
-    console.error('获取智能体错误:', error);
-  }
-};
-
-// 根据选中的智能体加载配置
+// 加载智能体配置（使用store方法）
 const loadAgentConfig = async () => {
-  // BUG: 目前消息重置有问题，需要重置消息
-  if (!selectedAgentId.value || !agents.value[selectedAgentId.value]) return;
-
-  const agent = agents.value[selectedAgentId.value];
-  const schema = agent.config_schema || {};
-  const items = schema.configurable_items || {};
-
-  // 重置配置
-  agentConfig.value = {};
-
-  // 初始化基础配置项
-  if (schema.system_prompt) {
-    agentConfig.value.system_prompt = schema.system_prompt;
-  }
-
-  if (schema.model) {
-    agentConfig.value.model = schema.model;
-  }
-
-  if (schema.tools && schema.tools.length > 0 && schema.tools[0] != 'undefined') {
-    agentConfig.value.tools = schema.tools;
-  }
-
-  // 初始化可配置项
-  Object.keys(items).forEach(key => {
-    const item = items[key];
-
-    // 根据类型设置默认值
-    if (typeof item.default === 'boolean') {
-      agentConfig.value[key] = item.default;
-    } else if (item.type === 'list') {
-      // 对于 list 类型，确保初始化为数组
-      agentConfig.value[key] = Array.isArray(item.default) ? item.default : [];
-    } else {
-      agentConfig.value[key] = item.default || '';
-    }
-  });
-
   try {
-    // 从服务器加载配置
-    const response = await agentApi.getAgentConfig(selectedAgentId.value);
-    if (response.success && response.config) {
-      // 合并服务器配置
-      Object.keys(response.config).forEach(key => {
-        if (key in agentConfig.value) {
-          const item = items[key];
-          // 对于 list 类型，确保是数组
-          if (item && item.type === 'list') {
-            agentConfig.value[key] = Array.isArray(response.config[key]) ? response.config[key] : [];
-          } else {
-            agentConfig.value[key] = response.config[key];
-          }
-        }
-      });
-      // console.log(`从服务器加载 ${selectedAgentId.value} 配置成功, ${JSON.stringify(agentConfig.value)}`);
-    }
+    await agentStore.loadAgentConfig();
   } catch (error) {
-    console.error('从服务器加载配置出错:', error);
+    console.error('加载配置出错:', error);
+    message.error('加载配置失败');
   }
 };
 
@@ -267,43 +158,6 @@ const handleModelChange = (data) => {
   agentConfig.value.model = `${data.provider}/${data.name}`;
 }
 
-// 保存配置
-const saveConfig = async () => {
-  if (!selectedAgentId.value) {
-    message.error('没有选择智能体');
-    return;
-  }
-
-  try {
-    // 保存配置到服务器
-    await agentApi.saveAgentConfig(selectedAgentId.value, agentConfig.value);
-    // 提示保存成功
-    message.success('配置已保存到服务器');
-    console.log("保存配置:", agentConfig.value);
-  } catch (error) {
-    console.error('保存配置到服务器出错:', error);
-    message.error('保存配置到服务器失败');
-  }
-};
-
-// 重置配置
-const resetConfig = async () => {
-  if (!selectedAgentId.value) {
-    message.error('没有选择智能体');
-    return;
-  }
-
-  try {
-    // 保存空配置到服务器，相当于重置
-    await agentApi.saveAgentConfig(selectedAgentId.value, {});
-    // 重新加载默认配置
-    await loadAgentConfig();
-    message.info('配置已重置');
-  } catch (error) {
-    console.error('重置配置出错:', error);
-    message.error('重置配置失败');
-  }
-};
 
 // 监听智能体选择变化
 watch(
@@ -313,11 +167,9 @@ watch(
   }
 );
 
-// 选择智能体
+// 选择智能体（使用store方法）
 const selectAgent = (agentId) => {
-  selectedAgentId.value = agentId;
-  // 保存选择到本地存储
-  localStorage.setItem('last-selected-agent', agentId);
+  agentStore.selectAgent(agentId);
   // 加载该智能体的配置
   loadAgentConfig();
 };
@@ -335,29 +187,27 @@ const selectAgentFromModal = (agentId) => {
 
 
 
-// 初始化
+// 初始化（使用store方法）
 onMounted(async () => {
-  // 获取默认智能体
-  await fetchDefaultAgent();
-  // 获取智能体列表
-  await fetchAgents();
-  // 加载工具列表
+  try {
+    // 恢复上次选择的智能体
+    const lastSelectedAgent = localStorage.getItem('last-selected-agent');
+    if (lastSelectedAgent && agents.value[lastSelectedAgent]) {
+      agentStore.selectAgent(lastSelectedAgent);
+    } else if (defaultAgentId.value && agents.value[defaultAgentId.value]) {
+      // 如果有默认智能体，优先选择默认智能体
+      agentStore.selectAgent(defaultAgentId.value);
+    } else if (Object.keys(agents.value).length > 0) {
+      // 默认选择第一个智能体
+      agentStore.selectAgent(Object.keys(agents.value)[0]);
+    }
 
-
-  // 恢复上次选择的智能体
-  const lastSelectedAgent = localStorage.getItem('last-selected-agent');
-  if (lastSelectedAgent && agents.value[lastSelectedAgent]) {
-    selectedAgentId.value = lastSelectedAgent;
-  } else if (defaultAgentId.value && agents.value[defaultAgentId.value]) {
-    // 如果有默认智能体，优先选择默认智能体
-    selectedAgentId.value = defaultAgentId.value;
-  } else if (Object.keys(agents.value).length > 0) {
-    // 默认选择第一个智能体
-    selectedAgentId.value = Object.keys(agents.value)[0];
+    // 加载配置
+    await loadAgentConfig();
+  } catch (error) {
+    console.error('初始化失败:', error);
+    message.error('初始化失败');
   }
-
-  // 加载配置
-  loadAgentConfig();
 });
 
 // 获取配置标签
@@ -444,6 +294,35 @@ const toggleConf = () => {
   position: relative;
   // padding: var(--gap-radius);
   // gap: var(--gap-radius);
+
+  .content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .no-agent-selected {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--bg-content);
+  }
+
+  .no-agent-content {
+    text-align: center;
+    color: var(--text-secondary);
+
+    svg {
+      margin-bottom: 16px;
+      opacity: 0.6;
+    }
+
+    h3 {
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+  }
 
   // .content {
   //   border-radius: var(--gap-radius);

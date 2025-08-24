@@ -18,7 +18,7 @@
 
     <!-- 侧边栏内容 -->
     <div class="sidebar-content">
-      <div class="agent-info">
+      <div class="agent-info" v-if="selectedAgent">
         <div class="agent-basic-info">
           <h4>{{ selectedAgent.name || '未选择智能体' }}</h4>
           <p class="agent-description">{{ selectedAgent.description }}</p>
@@ -70,7 +70,8 @@
                 <!-- 系统提示词 -->
                 <a-textarea
                   v-else-if="key === 'system_prompt'"
-                  v-model:value="agentConfig[key]"
+                  :value="agentConfig[key]"
+                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
                   :rows="3"
                   :placeholder="getPlaceholder(key, value)"
                   class="system-prompt-input"
@@ -116,13 +117,15 @@
                 <!-- 布尔类型 -->
                 <a-switch
                   v-else-if="typeof agentConfig[key] === 'boolean'"
-                  v-model:checked="agentConfig[key]"
+                  :checked="agentConfig[key]"
+                  @update:checked="(val) => agentStore.updateAgentConfig({ [key]: val })"
                 />
 
                 <!-- 单选 -->
                 <a-select
                   v-else-if="value?.options && (value?.type === 'str' || value?.type === 'select')"
-                  v-model:value="agentConfig[key]"
+                  :value="agentConfig[key]"
+                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
                   class="config-select"
                 >
                   <a-select-option v-for="option in value.options" :key="option" :value="option">
@@ -168,7 +171,8 @@
                 <!-- 数字 -->
                 <a-input-number
                   v-else-if="value?.type === 'number'"
-                  v-model:value="agentConfig[key]"
+                  :value="agentConfig[key]"
+                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
                   :placeholder="getPlaceholder(key, value)"
                   class="config-input-number"
                 />
@@ -176,7 +180,8 @@
                 <!-- 滑块 -->
                 <a-slider
                   v-else-if="value?.type === 'slider'"
-                  v-model:value="agentConfig[key]"
+                  :value="agentConfig[key]"
+                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
                   :min="value.min"
                   :max="value.max"
                   :step="value.step"
@@ -186,7 +191,8 @@
                 <!-- 其他类型 -->
                 <a-input
                   v-else
-                  v-model:value="agentConfig[key]"
+                  :value="agentConfig[key]"
+                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
                   :placeholder="getPlaceholder(key, value)"
                   class="config-input"
                 />
@@ -279,45 +285,41 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
-import { agentApi } from '@/apis/agent';
+import { useAgentStore } from '@/stores/agent';
+import { storeToRefs } from 'pinia';
 
 // Props
 const props = defineProps({
   isOpen: {
     type: Boolean,
     default: false
-  },
-  selectedAgent: {
-    type: Object,
-    default: () => ({})
-  },
-  selectedAgentId: {
-    type: String,
-    default: null
-  },
-  agentConfig: {
-    type: Object,
-    default: () => ({})
   }
 });
 
 // Emits
 const emit = defineEmits([
-  'close',
-  'update:agentConfig',
-  'config-saved',
-  'config-reset'
+  'close'
 ]);
+
+// Store 管理
+const agentStore = useAgentStore();
+const {
+  availableTools,
+  selectedAgent,
+  selectedAgentId,
+  agentConfig
+} = storeToRefs(agentStore);
+
+// console.log(availableTools.value)
 
 // 本地状态
 const debugMode = ref(false);
 const toolsModalOpen = ref(false);
-const availableTools = ref([]);
 const selectedTools = ref([]);
 const toolsSearchText = ref('');
 
 // 计算属性
-const configSchema = computed(() => props.selectedAgent.config_schema || {});
+const configSchema = computed(() => selectedAgent.value?.config_schema || {});
 
 const configurableItems = computed(() => {
   const items = configSchema.value.configurable_items || {};
@@ -333,15 +335,16 @@ const configurableItems = computed(() => {
 });
 
 const isEmptyConfig = computed(() => {
-  return !props.selectedAgentId || Object.keys(configurableItems.value).length === 0;
+  return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0;
 });
 
 const filteredTools = computed(() => {
+  const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
   if (!toolsSearchText.value) {
-    return availableTools.value;
+    return toolsList;
   }
   const searchLower = toolsSearchText.value.toLowerCase();
-  return availableTools.value.filter(tool =>
+  return toolsList.filter(tool =>
     tool.name.toLowerCase().includes(searchLower) ||
     tool.description.toLowerCase().includes(searchLower)
   );
@@ -357,6 +360,7 @@ const toggleDebugMode = () => {
 };
 
 const getConfigLabel = (key, value) => {
+  // console.log(configurableItems)
   if (value.description && value.name !== key) {
     return `${value.name}（${key}）`;
   }
@@ -368,33 +372,32 @@ const getPlaceholder = (key, value) => {
 };
 
 const handleModelChange = (data) => {
-  const newConfig = { ...props.agentConfig };
-  newConfig.model = `${data.provider}/${data.name}`;
-  emit('update:agentConfig', newConfig);
+  agentStore.updateAgentConfig({
+    model: `${data.provider}/${data.name}`
+  });
 };
 
 // 多选相关方法
 const ensureArray = (key) => {
-  const config = { ...props.agentConfig };
+  const config = agentConfig.value || {};
   if (!config[key] || !Array.isArray(config[key])) {
-    config[key] = [];
+    return [];
   }
-  return config;
+  return config[key];
 };
 
 const isOptionSelected = (key, option) => {
-  const config = ensureArray(key);
-  return config[key].includes(option);
+  const currentOptions = ensureArray(key);
+  return currentOptions.includes(option);
 };
 
 const getSelectedCount = (key) => {
-  const config = ensureArray(key);
-  return config[key].length;
+  const currentOptions = ensureArray(key);
+  return currentOptions.length;
 };
 
 const toggleOption = (key, option) => {
-  const config = ensureArray(key);
-  const currentOptions = [...config[key]];
+  const currentOptions = [...ensureArray(key)];
   const index = currentOptions.indexOf(option);
 
   if (index > -1) {
@@ -403,26 +406,27 @@ const toggleOption = (key, option) => {
     currentOptions.push(option);
   }
 
-  config[key] = currentOptions;
-  emit('update:agentConfig', config);
+  agentStore.updateAgentConfig({
+    [key]: currentOptions
+  });
 };
 
 const clearSelection = (key) => {
-  const config = { ...props.agentConfig };
-  config[key] = [];
-  emit('update:agentConfig', config);
+  agentStore.updateAgentConfig({
+    [key]: []
+  });
 };
 
 // 工具相关方法
 const getToolNameById = (toolId) => {
-  const tool = availableTools.value.find(t => t.id === toolId);
+  const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
+  const tool = toolsList.find(t => t.id === toolId);
   return tool ? tool.name : toolId;
 };
 
 const loadAvailableTools = async () => {
   try {
-    const response = await agentApi.getTools();
-    availableTools.value = Object.values(response.tools || {});
+    await agentStore.fetchTools();
   } catch (error) {
     console.error('加载工具列表失败:', error);
   }
@@ -430,10 +434,10 @@ const loadAvailableTools = async () => {
 
 const openToolsModal = async () => {
   try {
-    if (availableTools.value.length === 0) {
+    if (!availableTools.value || Object.keys(availableTools.value).length === 0) {
       await loadAvailableTools();
     }
-    selectedTools.value = [...(props.agentConfig.tools || [])];
+    selectedTools.value = [...(agentConfig.value?.tools || [])];
     toolsModalOpen.value = true;
   } catch (error) {
     console.error('打开工具选择弹窗失败:', error);
@@ -451,18 +455,20 @@ const toggleToolSelection = (toolId) => {
 };
 
 const removeSelectedTool = (toolId) => {
-  const config = { ...props.agentConfig };
-  const index = config.tools.indexOf(toolId);
+  const currentTools = [...(agentConfig.value?.tools || [])];
+  const index = currentTools.indexOf(toolId);
   if (index > -1) {
-    config.tools.splice(index, 1);
-    emit('update:agentConfig', config);
+    currentTools.splice(index, 1);
+    agentStore.updateAgentConfig({
+      tools: currentTools
+    });
   }
 };
 
 const confirmToolsSelection = () => {
-  const config = { ...props.agentConfig };
-  config.tools = [...selectedTools.value];
-  emit('update:agentConfig', config);
+  agentStore.updateAgentConfig({
+    tools: [...selectedTools.value]
+  });
   toolsModalOpen.value = false;
   toolsSearchText.value = '';
 };
@@ -475,15 +481,14 @@ const cancelToolsSelection = () => {
 
 // 配置保存和重置
 const saveConfig = async () => {
-  if (!props.selectedAgentId) {
+  if (!selectedAgentId.value) {
     message.error('没有选择智能体');
     return;
   }
 
   try {
-    await agentApi.saveAgentConfig(props.selectedAgentId, props.agentConfig);
+    await agentStore.saveAgentConfig();
     message.success('配置已保存到服务器');
-    emit('config-saved');
   } catch (error) {
     console.error('保存配置到服务器出错:', error);
     message.error('保存配置到服务器失败');
@@ -491,14 +496,13 @@ const saveConfig = async () => {
 };
 
 const resetConfig = async () => {
-  if (!props.selectedAgentId) {
+  if (!selectedAgentId.value) {
     message.error('没有选择智能体');
     return;
   }
 
   try {
-    await agentApi.saveAgentConfig(props.selectedAgentId, {});
-    emit('config-reset');
+    agentStore.resetAgentConfig();
     message.info('配置已重置');
   } catch (error) {
     console.error('重置配置出错:', error);
@@ -508,7 +512,7 @@ const resetConfig = async () => {
 
 // 监听器
 watch(() => props.isOpen, (newVal) => {
-  if (newVal && availableTools.value.length === 0) {
+  if (newVal && (!availableTools.value || Object.keys(availableTools.value).length === 0)) {
     loadAvailableTools();
   }
 });

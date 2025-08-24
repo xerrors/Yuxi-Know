@@ -7,7 +7,7 @@
       :is-initial-render="state.isInitialRender"
       :single-mode="props.singleMode"
       :agents="agents"
-      :selected-agent-id="props.agentId"
+      :selected-agent-id="agentStore.selectedAgentId"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
@@ -34,8 +34,8 @@
           </div>
         </div>
         <div class="header__center" @mouseenter="showRenameButton = true" @mouseleave="showRenameButton = false">
-          <div @click="console.log(currentChat)" class="center-title">
-            {{ currentChat?.title }}
+          <div @click="console.log(agentStore.currentThread)" class="center-title">
+            {{ agentStore.currentThread?.title }}
           </div>
           <div class="rename-button" v-if="currentChatId" :class="{ 'visible': showRenameButton }" @click="handleRenameChat">
             <EditOutlined style="font-size: 14px; color: var(--gray-600);"/>
@@ -54,7 +54,7 @@
         </div>
       </div>
 
-      <div v-if="isLoading" class="chat-loading">
+      <div v-if="isLoadingThreads || isLoadingMessages" class="chat-loading">
         <LoadingOutlined />
         <span>正在加载历史记录...</span>
       </div>
@@ -147,19 +147,12 @@ import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { agentApi, threadApi } from '@/apis/agent'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
+import { useAgentStore } from '@/stores/agent';
+import { storeToRefs } from 'pinia';
 
 // 新增props属性，允许父组件传入agentId
 const props = defineProps({
-  agentId: {
-    type: String,
-    default: null
-  },
-  config: {
-    type: Object,
-    default: () => ({})
-  },
   state: {
     type: Object,
     default: () => ({})
@@ -171,6 +164,19 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['open-config', 'open-agent-modal']);
+
+// ==================== Store 管理 ====================
+const agentStore = useAgentStore();
+const {
+  agents,
+  currentAgentThreads,
+  currentThread,
+  currentThreadMessages,
+  isLoadingThreads,
+  isLoadingMessages,
+  selectedAgent,
+  configSchema
+} = storeToRefs(agentStore);
 
 // ==================== 状态管理 ====================
 
@@ -272,15 +278,17 @@ const getLastMessage = (conv) => {
 const messagesContainer = ref(null);
 
 // 数据状态
-const agents = ref({});                // 智能体列表
 const userInput = ref('');             // 用户输入
-const currentChatId = ref(null);       // 当前对话ID
-const chatsList = ref([]);             // 对话列表
-const isLoading = ref(false);          // 是否处于加载状态
 
 const convs = ref([]);
-const currentAgent = computed(() => agents.value[props.agentId]);
-const currentChat = computed(() => chatsList.value.find(chat => chat.id === currentChatId.value));
+const currentAgent = computed(() => {
+  if (!agentStore.selectedAgentId || !agents.value) return null;
+  return agents.value[agentStore.selectedAgentId];
+});
+
+// 使用 agentStore 的线程相关计算属性
+const currentChatId = computed(() => agentStore.currentThreadId);
+const chatsList = computed(() => currentAgentThreads.value || []);
 
 const onGoingConv = reactive({
   msgChunks: {},
@@ -308,7 +316,7 @@ const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 // 创建新对话
 const createNewChat = async () => {
   // 确保有AgentID
-  if (!props.agentId) {
+  if (!agentStore.selectedAgentId) {
     console.warn("未指定AgentID，无法创建对话");
     return;
   }
@@ -319,24 +327,20 @@ const createNewChat = async () => {
     return;
   }
 
-  if (currentChatId.value &&convs.value.length === 0) {
+  if (currentChatId.value && convs.value.length === 0) {
     return;
   }
 
   try {
-    // 调用API创建新对话
+    // 使用 agentStore 创建新对话
     state.creatingNewChat = true;
-    const response = await threadApi.createThread(props.agentId, '新的对话');
-    if (!response || !response.id) {
+    const thread = await agentStore.createThread(agentStore.selectedAgentId, '新的对话');
+    if (!thread || !thread.id) {
       throw new Error('创建对话失败');
     }
 
-    // 切换到新对话
-    currentChatId.value = response.id;
+    // 重置线程状态
     resetThread();
-
-    // 刷新对话列表
-    loadChatsList();
   } catch (error) {
     console.error('创建对话失败:', error);
     message.error('创建对话失败');
@@ -348,37 +352,33 @@ const createNewChat = async () => {
 // 选择已有对话
 const selectChat = async (chatId) => {
   // 确保有AgentID
-  if (!props.agentId) {
+  if (!agentStore.selectedAgentId) {
     console.warn("未指定AgentID，无法选择对话");
     return;
   }
 
   console.log("选择对话:", chatId);
 
-  // 切换到选中的对话
-  currentChatId.value = chatId;
+  // 使用 agentStore 选择线程
+  agentStore.selectThread(chatId);
   await getAgentHistory();
 };
 
 // 删除对话
 const deleteChat = async (chatId) => {
-  if (!props.agentId) {
+  if (!agentStore.selectedAgentId) {
     console.warn("未指定AgentID，无法删除对话");
     return;
   }
 
   try {
-    // 调用API删除对话
-    await threadApi.deleteThread(chatId);
+    // 使用 agentStore 删除对话
+    await agentStore.deleteThread(chatId);
 
     // 如果删除的是当前对话，重置状态
     if (chatId === currentChatId.value) {
       resetThread();
-      currentChatId.value = null;
     }
-
-    // 刷新对话列表
-    loadChatsList();
   } catch (error) {
     console.error('删除对话失败:', error);
     message.error('删除对话失败');
@@ -395,7 +395,7 @@ const renameChat = async (data) => {
   }
 
   // 确保有AgentID
-  if (!props.agentId) {
+  if (!agentStore.selectedAgentId) {
     console.warn("未指定AgentID，无法重命名对话");
     return;
   }
@@ -406,11 +406,8 @@ const renameChat = async (data) => {
   }
 
   try {
-    // 调用API更新对话
-    await threadApi.updateThread(chatId, title);
-
-    // 刷新对话列表
-    loadChatsList();
+    // 使用 agentStore 更新对话
+    await agentStore.updateThread(chatId, title);
   } catch (error) {
     console.error('重命名对话失败:', error);
     message.error('重命名对话失败');
@@ -419,12 +416,12 @@ const renameChat = async (data) => {
 
 // 处理重命名对话点击事件
 const handleRenameChat = () => {
-  if (!currentChatId.value || !currentChat.value) {
+  if (!currentChatId.value || !currentThread.value) {
     message.warning('请先选择对话');
     return;
   }
 
-  let newTitle = currentChat.value.title;
+  let newTitle = currentThread.value.title;
 
   Modal.confirm({
     title: '重命名对话',
@@ -473,7 +470,7 @@ const shareChat = () => {
     const link = document.createElement('a');
 
     // 生成文件名
-    const chatTitle = currentChat.value?.title || '新对话';
+    const chatTitle = currentThread.value?.title || '新对话';
     const timestamp = new Date().toLocaleString('zh-CN').replace(/[:/\s]/g, '-');
     const filename = `${chatTitle}-${timestamp}.html`;
 
@@ -497,7 +494,7 @@ const shareChat = () => {
 
 // 生成对话的HTML内容
 const generateChatHTML = () => {
-  const chatTitle = currentChat.value?.title || '新对话';
+  const chatTitle = agentStore.currentThread.value?.title || '新对话';
   const agentName = currentAgent.value?.name || '智能助手';
   const agentDescription = currentAgent.value?.description || '';
   const exportTime = new Date().toLocaleString('zh-CN');
@@ -939,7 +936,7 @@ const sendMessageToServer = async (text) => {
   const requestData = {
     query: text.trim(),
     config: {
-      ...props.config,
+      ...agentStore.agentConfig,
       thread_id: currentChatId.value
     },
     meta: {
@@ -950,7 +947,7 @@ const sendMessageToServer = async (text) => {
   try {
     state.waitingServerResponse = true;
 
-    const response = await agentApi.sendAgentMessage(currentAgent.value.id, requestData);
+    const response = await agentStore.sendMessage(currentAgent.value.id, requestData);
     if (!response.ok) {
       throw new Error('请求失败');
     }
@@ -1049,52 +1046,37 @@ const processResponseChunk = async (data) => {
 // 初始化所有数据
 const initAll = async () => {
   try {
-    isLoading.value = true;
-    // 获取智能体列表
+    // 使用 agentStore 的加载状态
+    // 初始化agent store（如果还未初始化）
+    if (!agentStore.agents || Object.keys(agentStore.agents).length === 0) {
+      await agentStore.initialize();
+    }
+    // 加载对话列表以及对话历史
     setTimeout(async () => {
-      await fetchAgents();  // 加载智能体数据
-      await loadChatsList();     // 加载对话列表以及对话历史
-      isLoading.value = false;
+      await loadChatsList();
     }, 100);
 
   } catch (error) {
     console.error("组件挂载出错:", error);
     message.error(`加载数据失败: ${error}`);
-    isLoading.value = false;
   }
 }
-
-// 获取智能体列表
-const fetchAgents = async () => {
-  try {
-    const data = await agentApi.getAgents();
-    // 将数组转换为对象
-    agents.value = data.agents.reduce((acc, agent) => {
-      acc[agent.id] = agent;
-      return acc;
-    }, {});
-    console.log("agents", agents.value);
-  } catch (error) {
-    console.error('获取智能体错误:', error);
-  }
-};
 
 // 从服务器对话列表
 const loadChatsList = async () => {
   try {
-    if (!props.agentId) {
+    if (!agentStore.selectedAgentId) {
       console.warn("未指定AgentID，无法加载状态");
       return;
     }
 
-    // 获取对话列表
-    const threads = await threadApi.getThreads(props.agentId);
+    // 使用 agentStore 获取对话列表
+    await agentStore.fetchThreads(agentStore.selectedAgentId);
 
-    if (threads && Array.isArray(threads) && threads.length > 0) {
-      // 如果有对话，则加载最近的一个
-      chatsList.value = threads;
-      currentChatId.value = threads[0].id; // 假设已按更新时间排序
-      await getAgentHistory()
+    if (currentAgentThreads.value && currentAgentThreads.value.length > 0) {
+      // 如果有对话，则选择最近的一个
+      await agentStore.selectThread(currentAgentThreads.value[0].id);
+      await getAgentHistory();
     } else {
       // 如果没有对话，创建新对话
       await createNewChat();
@@ -1106,21 +1088,22 @@ const loadChatsList = async () => {
 
 // 获取智能体历史记录
 const getAgentHistory = async () => {
-  if (!props.agentId || !currentChatId.value) {
+  if (!agentStore.selectedAgentId || !currentChatId.value) {
     console.warn('未选择智能体或对话ID');
     return;
   }
 
   try {
-    console.debug(`正在获取智能体[${props.agentId}]的历史记录，对话ID: ${currentChatId.value}`);
-    const response = await agentApi.getAgentHistory(props.agentId, currentChatId.value);
-    console.debug('智能体历史记录:', response);
+    console.debug(`正在获取智能体[${agentStore.selectedAgentId}]的历史记录，对话ID: ${currentChatId.value}`);
 
-    // 如果成功获取历史记录并且是数组
-    if (response && Array.isArray(response.history)) {
+
+    // 使用 agentStore 获取线程消息
+    await agentStore.fetchThreadMessages(currentChatId.value);
+    // 从 store 获取消息并转换格式
+    if (currentThreadMessages.value && Array.isArray(currentThreadMessages.value)) {
       // 将服务器格式的历史记录转换为组件格式
       onGoingConv.msgChunks = {};
-      convs.value = convertServerHistoryToMessages(response.history);
+      convs.value = convertServerHistoryToMessages(currentThreadMessages.value);
 
       // 加载历史记录后，启用自动滚动并滚动到底部
       shouldAutoScroll.value = true;
@@ -1202,7 +1185,7 @@ onMounted(async () => {
 
 // 监听agentId变化
 onMounted(() => {
-  watch(() => props.agentId, async (newAgentId, oldAgentId) => {
+  watch(() => agentStore.selectedAgentId, async (newAgentId, oldAgentId) => {
     try {
       console.debug("智能体ID变化", oldAgentId, "->", newAgentId);
 

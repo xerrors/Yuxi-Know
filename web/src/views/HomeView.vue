@@ -64,12 +64,13 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
-import { agentApi } from '@/apis/agent'
+import { useAgentStore } from '@/stores/agent'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
+const agentStore = useAgentStore()
 
 const goToChat = async () => {
   // 检查用户是否登录
@@ -90,23 +91,11 @@ const goToChat = async () => {
   // 普通用户跳转到默认智能体
   try {
     // 获取默认智能体
-    const data = await agentApi.getDefaultAgent();
-    if (data.default_agent_id) {
-      // 使用后端设置的默认智能体
-      router.push(`/agent/${data.default_agent_id}`);
-    } else {
-      // 如果没有设置默认智能体，则获取智能体列表选择第一个
-      const agentData = await agentApi.getAgents();
-      if (agentData.agents && agentData.agents.length > 0) {
-        router.push(`/agent/${agentData.agents[0].id}`);
-      } else {
-        // 没有可用智能体，回退到chat页面
-        router.push("/chat");
-}
-    }
+    const defaultAgent = agentStore.defaultAgent;
+    router.push(`/agent/${defaultAgent.id}`);
   } catch (error) {
     console.error('跳转到智能体页面失败:', error);
-    router.push("/chat");
+    router.push("/");
   }
 };
 
