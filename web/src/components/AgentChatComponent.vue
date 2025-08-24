@@ -178,7 +178,7 @@ const emit = defineEmits(['open-config', 'open-agent-modal']);
 const state = reactive({
   ...props.state,
   debug_mode: computed(() => props.state.debug_mode ?? false),
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true' || true,
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
   waitingServerResponse: false,
   isProcessingRequest: false,
   creatingNewChat: false,
@@ -226,7 +226,7 @@ onMounted(() => {
 
   // 延迟移除初始渲染标记，防止切换动画
   setTimeout(() => {
-    state.isInitialRender = false;
+  state.isInitialRender = false;
   }, 300);
 });
 

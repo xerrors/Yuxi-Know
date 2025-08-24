@@ -76,7 +76,7 @@
 
     <!-- 用户表单模态框 -->
     <a-modal
-      v-model:visible="userManagement.modalVisible"
+      v-model:open="userManagement.modalVisible"
       :title="userManagement.modalTitle"
       @ok="handleUserFormSubmit"
       :confirmLoading="userManagement.loading"

@@ -178,8 +178,8 @@
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
             <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
             <div v-else>
-              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。" />
-              <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%;">
+              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。（如没有此文件，则需要手动创建一个）" />
+              <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%; margin-top: 16px;">
             </div>
           </div>
         </div>
@@ -450,14 +450,12 @@ const filteredModels = computed(() => {
   border: 1px solid var(--gray-200);
   background-color: white;
   border-radius: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   padding: 0;
-  // box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   overflow: hidden;
 
   &:hover {
-    // box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
     border-color: var(--gray-300);
   }
 
@@ -511,11 +509,11 @@ const filteredModels = computed(() => {
   .card-header {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     cursor: pointer;
-    padding: 12px 14px;
+    padding: 16px 20px;
     background: white;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 
     &:hover {
       background: var(--gray-50);
@@ -644,8 +642,8 @@ const filteredModels = computed(() => {
   .card-body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 10px;
-    padding: 12px;
+    gap: 12px;
+    padding: 16px;
     background: #fafafa;
 
     // 普通模型卡片样式
@@ -653,17 +651,17 @@ const filteredModels = computed(() => {
       width: 100%;
       border-radius: 6px;
       border: 1px solid var(--gray-200);
-      padding: 10px 12px;
+      padding: 12px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       box-sizing: border-box;
       background: white;
-      transition: all 0.2s ease;
-      min-height: 42px;
+      transition: all 0.3s ease;
+      min-height: 48px;
 
       &:hover {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         border-color: var(--gray-400);
       }
 
@@ -697,17 +695,17 @@ const filteredModels = computed(() => {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      padding: 10px 12px;
+      padding: 12px 16px;
       gap: 8px;
       cursor: pointer;
-      min-height: 64px;
+      min-height: 72px;
       background: white;
       border-radius: 6px;
       border: 1px solid var(--gray-200);
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
 
       &:hover {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
         border-color: var(--gray-400);
 
         .card-models__header .action {

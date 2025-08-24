@@ -527,7 +527,7 @@ const toggleToolCall = (toolCallId) => {
   }
 
   ol, ul {
-    padding-left: 1rem;
+    padding-left: 1.2rem;
   }
 
   cite {

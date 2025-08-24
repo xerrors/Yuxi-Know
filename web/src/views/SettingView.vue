@@ -126,7 +126,6 @@ import {
   GlobalOutlined
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
-import TableConfigComponent from '@/components/TableConfigComponent.vue';
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue';
 import UserManagementComponent from '@/components/UserManagementComponent.vue';
 import { notification, Button } from 'ant-design-vue';
@@ -302,7 +301,6 @@ const openLink = (url) => {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    // box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border: 1px solid var(--gray-200);
   }
 
@@ -310,9 +308,12 @@ const openLink = (url) => {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    // padding: 12px 0;
 
     .label {
       margin-right: 20px;
+      font-weight: 500;
+      color: var(--gray-800);
 
       button {
         margin-left: 10px;
@@ -325,13 +326,9 @@ const openLink = (url) => {
 
   .services-grid {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 16px;
     margin-top: 20px;
-
-    @media (min-width: 768px) {
-      grid-template-columns: repeat(2, 1fr);
-    }
   }
 
     .service-link-card {

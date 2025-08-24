@@ -135,9 +135,9 @@ const handleSelectModel = (provider, name) => {
 }
 </style>
 
-<style lang="less">
-// 添加全局样式以确保滚动功能在dropdown内正常工作
-.ant-dropdown-menu {
+<style lang="less" scoped>
+// 将全局样式移到scoped中以避免样式污染
+:deep(.ant-dropdown-menu) {
   &.scrollable-menu {
     max-height: 300px;
     overflow-y: auto;
