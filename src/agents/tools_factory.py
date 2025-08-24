@@ -173,7 +173,7 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
     try:
         logger.debug(f"Querying knowledge graph with: {query}")
         result = graph_base.query_node(query, hops=2, return_format='triples')
-        logger.debug(f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, d) else 'N/A'} triples")
+        logger.debug(f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples")
         return result
     except Exception as e:
         logger.error(f"Knowledge graph query error: {e}")
