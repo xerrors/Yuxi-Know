@@ -114,22 +114,15 @@ import {
   RobotOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
-import { configApi, agentConfigApi } from '@/apis/system_api';
-import { chatApi } from '@/apis/auth_api';
+import { configApi } from '@/apis/system_api';
+import { agentApi } from '@/apis/agent';
+import { checkAdminPermission } from '@/stores/user';
 
 const configStore = useConfigStore()
 const userStore = useUserStore();
 const databaseStore = useDatabaseStore();
 const config = configStore.config;
 
-// 权限检查
-const checkAdminPermission = () => {
-  if (!userStore.isAdmin) {
-    message.error('需要管理员权限才能查看日志');
-    return false;
-  }
-  return true;
-};
 
 // 定义日志级别
 const logLevels = [
@@ -386,17 +379,17 @@ const printAgentConfig = async () => {
     console.log('=== 智能体配置 ===');
 
     // 获取智能体列表
-    const agentsData = await chatApi.getAgents();
+    const agentsData = await agentApi.getAgents();
     console.log('智能体列表:', JSON.stringify(agentsData.agents, null, 2));
 
     // 获取默认智能体
-    const defaultAgent = await chatApi.getDefaultAgent();
+    const defaultAgent = await agentApi.getDefaultAgent();
     console.log('默认智能体:', JSON.stringify(defaultAgent, null, 2));
 
     // 获取每个智能体的配置
     for (const agent of agentsData.agents) {
       try {
-        const agentConfig = await agentConfigApi.getAgentConfig(agent.id);
+        const agentConfig = await agentApi.getAgentConfig(agent.id);
         console.log(`智能体 "${agent.name}" 配置:`, JSON.stringify(agentConfig, null, 2));
       } catch (err) {
         console.log(`智能体 "${agent.name}" 配置获取失败:`, err.message);

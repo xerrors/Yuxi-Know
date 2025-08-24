@@ -8,7 +8,7 @@
     </div>
 
     <!-- 图谱可视化容器 -->
-    <div class="graph-visualization" ref="graphContainerRef">
+    <div class="graph-visualization" ref="graphContainerRef" v-if="totalNodes > 0 || totalRelations > 0">
       <GraphContainer :graph-data="graphData" ref="graphContainer" />
     </div>
 

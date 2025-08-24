@@ -147,7 +147,7 @@ import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { chatApi, threadApi } from '@/apis/auth_api'
+import { agentApi, threadApi } from '@/apis/agent'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
 
 // 新增props属性，允许父组件传入agentId
@@ -950,7 +950,7 @@ const sendMessageToServer = async (text) => {
   try {
     state.waitingServerResponse = true;
 
-    const response = await chatApi.sendAgentMessage(currentAgent.value.id, requestData);
+    const response = await agentApi.sendAgentMessage(currentAgent.value.id, requestData);
     if (!response.ok) {
       throw new Error('请求失败');
     }
@@ -1067,7 +1067,7 @@ const initAll = async () => {
 // 获取智能体列表
 const fetchAgents = async () => {
   try {
-    const data = await chatApi.getAgents();
+    const data = await agentApi.getAgents();
     // 将数组转换为对象
     agents.value = data.agents.reduce((acc, agent) => {
       acc[agent.id] = agent;
@@ -1113,7 +1113,7 @@ const getAgentHistory = async () => {
 
   try {
     console.debug(`正在获取智能体[${props.agentId}]的历史记录，对话ID: ${currentChatId.value}`);
-    const response = await chatApi.getAgentHistory(props.agentId, currentChatId.value);
+    const response = await agentApi.getAgentHistory(props.agentId, currentChatId.value);
     console.debug('智能体历史记录:', response);
 
     // 如果成功获取历史记录并且是数组
@@ -1836,7 +1836,7 @@ const mergeMessageChunk = (chunks) => {
   }
 
   .chat-header {
-    padding: 0.5rem 1rem !important;
+    padding: 0.5rem 0 !important;
 
     .nav-btn {
       font-size: 14px !important;

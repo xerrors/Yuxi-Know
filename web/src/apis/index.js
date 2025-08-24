@@ -9,9 +9,12 @@ export * from './knowledge_api'   // 知识库管理API
 export * from './auth_api'        // 认证API
 export * from './graph_api'       // 图谱API
 export * from './tools.js'        // 工具API
+export * from './agent.js'        // 智能体API
 
 // 导出基础工具函数
-export { apiRequest, apiGet, apiPost, apiPut, apiDelete } from './base'
+export { apiGet, apiPost, apiPut, apiDelete,
+    apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete,
+    apiSuperAdminGet, apiSuperAdminPost, apiSuperAdminPut, apiSuperAdminDelete } from './base'
 
 /**
  * API模块说明:
@@ -32,6 +35,9 @@ export { apiRequest, apiGet, apiPost, apiPut, apiDelete } from './base'
  *
  * 5. tools.js: 工具API
  *    - 工具信息获取
+ *
+ * 6. agent.js: 智能体API
+ *    - 智能体管理、聊天、配置等功能
  *
  * 注意：API模块已处理权限验证和请求头，使用时无需再手动添加认证头
  */

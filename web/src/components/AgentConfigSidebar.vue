@@ -279,8 +279,7 @@ import {
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
-import { agentConfigApi } from '@/apis/system_api';
-import { toolsApi } from '@/apis/tools';
+import { agentApi } from '@/apis/agent';
 
 // Props
 const props = defineProps({
@@ -422,7 +421,7 @@ const getToolNameById = (toolId) => {
 
 const loadAvailableTools = async () => {
   try {
-    const response = await toolsApi.getTools();
+    const response = await agentApi.getTools();
     availableTools.value = Object.values(response.tools || {});
   } catch (error) {
     console.error('加载工具列表失败:', error);
@@ -482,7 +481,7 @@ const saveConfig = async () => {
   }
 
   try {
-    await agentConfigApi.saveAgentConfig(props.selectedAgentId, props.agentConfig);
+    await agentApi.saveAgentConfig(props.selectedAgentId, props.agentConfig);
     message.success('配置已保存到服务器');
     emit('config-saved');
   } catch (error) {
@@ -498,7 +497,7 @@ const resetConfig = async () => {
   }
 
   try {
-    await agentConfigApi.saveAgentConfig(props.selectedAgentId, {});
+    await agentApi.saveAgentConfig(props.selectedAgentId, {});
     emit('config-reset');
     message.info('配置已重置');
   } catch (error) {
@@ -1067,7 +1066,7 @@ watch(() => props.isOpen, (newVal) => {
 
 // 响应式适配
 @media (max-width: 768px) {
-  .agent-config-sidebar {
+  .agent-config-sidebar.open {
     width: 100vw;
   }
 }

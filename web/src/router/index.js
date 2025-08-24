@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue';
 import BlankLayout from '@/layouts/BlankLayout.vue';
 import { useUserStore } from '@/stores/user';
+import { agentApi } from '@/apis/agent';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -121,26 +122,18 @@ router.beforeEach(async (to, from, next) => {
     // 如果是普通用户，跳转到默认智能体页面
     try {
       // 先尝试获取默认智能体
-      const response = await fetch('/api/chat/default_agent');
-      if (response.ok) {
-        const data = await response.json();
-        if (data.default_agent_id) {
-          // 如果存在默认智能体，直接跳转
-          next(`/agent/${data.default_agent_id}`);
-          return;
-        }
+      const data = await agentApi.getDefaultAgent();
+      if (data && data.default_agent_id) {
+        // 如果存在默认智能体，直接跳转
+        next(`/agent/${data.default_agent_id}`);
+        return;
       }
 
       // 如果没有默认智能体，则获取第一个可用智能体
-      const agentResponse = await fetch('/api/chat/agent');
-      if (agentResponse.ok) {
-        const agentData = await agentResponse.json();
-        if (agentData.agents && agentData.agents.length > 0) {
-          const firstAgentId = agentData.agents[0].name;
-          next(`/agent/${firstAgentId}`);
-        } else {
-          next('/');
-        }
+      const agentData = await agentApi.getAgents();
+      if (agentData && agentData.agents && agentData.agents.length > 0) {
+        const firstAgentId = agentData.agents[0].name;
+        next(`/agent/${firstAgentId}`);
       } else {
         next('/');
       }

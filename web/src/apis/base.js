@@ -1,4 +1,4 @@
-import { useUserStore } from '@/stores/user'
+import { useUserStore, checkAdminPermission, checkSuperAdminPermission } from '@/stores/user'
 import { message } from 'ant-design-vue'
 
 /**
@@ -13,7 +13,7 @@ import { message } from 'ant-design-vue'
  * @param {boolean} requiresAuth - 是否需要认证头
  * @returns {Promise} - 请求结果
  */
-export async function apiRequest(url, options = {}, requiresAuth = false) {
+export async function apiRequest(url, options = {}, requiresAuth = true) {
   try {
     // 默认请求配置
     const requestOptions = {
@@ -100,8 +100,18 @@ export async function apiRequest(url, options = {}, requiresAuth = false) {
  * @param {boolean} requiresAuth - 是否需要认证
  * @returns {Promise} - 请求结果
  */
-export function apiGet(url, options = {}, requiresAuth = false) {
+export function apiGet(url, options = {}, requiresAuth = true) {
   return apiRequest(url, { method: 'GET', ...options }, requiresAuth)
+}
+
+export function apiAdminGet(url, options = {}) {
+  checkAdminPermission()
+  return apiGet(url, options, true)
+}
+
+export function apiSuperAdminGet(url, options = {}) {
+  checkSuperAdminPermission()
+  return apiGet(url, options, true)
 }
 
 /**
@@ -112,7 +122,7 @@ export function apiGet(url, options = {}, requiresAuth = false) {
  * @param {boolean} requiresAuth - 是否需要认证
  * @returns {Promise} - 请求结果
  */
-export function apiPost(url, data = {}, options = {}, requiresAuth = false) {
+export function apiPost(url, data = {}, options = {}, requiresAuth = true) {
   return apiRequest(
     url,
     {
@@ -124,6 +134,16 @@ export function apiPost(url, data = {}, options = {}, requiresAuth = false) {
   )
 }
 
+export function apiAdminPost(url, data = {}, options = {}) {
+  checkAdminPermission()
+  return apiPost(url, data, options, true)
+}
+
+export function apiSuperAdminPost(url, data = {}, options = {}) {
+  checkSuperAdminPermission()
+  return apiPost(url, data, options, true)
+}
+
 /**
  * 发送PUT请求
  * @param {string} url - API端点
@@ -132,7 +152,7 @@ export function apiPost(url, data = {}, options = {}, requiresAuth = false) {
  * @param {boolean} requiresAuth - 是否需要认证
  * @returns {Promise} - 请求结果
  */
-export function apiPut(url, data = {}, options = {}, requiresAuth = false) {
+export function apiPut(url, data = {}, options = {}, requiresAuth = true) {
   return apiRequest(
     url,
     {
@@ -142,6 +162,16 @@ export function apiPut(url, data = {}, options = {}, requiresAuth = false) {
     },
     requiresAuth
   )
+}
+
+export function apiAdminPut(url, data = {}, options = {}) {
+  checkAdminPermission()
+  return apiPut(url, data, options, true)
+}
+
+export function apiSuperAdminPut(url, data = {}, options = {}) {
+  checkSuperAdminPermission()
+  return apiPut(url, data, options, true)
 }
 
 /**
@@ -155,3 +185,12 @@ export function apiDelete(url, options = {}, requiresAuth = false) {
   return apiRequest(url, { method: 'DELETE', ...options }, requiresAuth)
 }
 
+export function apiAdminDelete(url, options = {}) {
+  checkAdminPermission()
+  return apiDelete(url, options, true)
+}
+
+export function apiSuperAdminDelete(url, options = {}) {
+  checkSuperAdminPermission()
+  return apiDelete(url, options, true)
+}

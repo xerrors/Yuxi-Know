@@ -240,7 +240,7 @@ agent_manager.init_all_agents()
 
 ### 品牌信息配置
 
-在主页和登录页面的很多信息，比如 Logo，组织名称，版权信息等，都可以复制 [src/static/info.template.yaml](src/static/info.template.yaml)，并新建一个 `src/static/info.local.yaml`，在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置，渲染到前端页面中。如果 `src/static/info.local.yaml` 不存在，会使用 [src/static/info.template.yaml](src/static/info.template.yaml) 中的配置。
+在主页和登录页面的很多信息，比如 Logo，组织名称，版权信息等，都可以复制 [src/static/info.template.yaml](src/static/info.template.yaml)，并新建一个 `src/static/info.local.yaml`（或者在 .env 文件中配置 `YUXI_BRAND_FILE_PATH` 指向这个文件），在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置，渲染到前端页面中。如果 `src/static/info.local.yaml` 不存在，会默认使用 [src/static/info.template.yaml](src/static/info.template.yaml) 中的配置。
 
 系统的配色方面，主要保存在 [web/src/assets/css/base.css](web/src/assets/css/base.css) 中。只要替换其中的 `--main-*` 相关的变量，就可以改变系统的配色。
 

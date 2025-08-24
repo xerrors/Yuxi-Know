@@ -202,7 +202,7 @@ import {
 } from '@ant-design/icons-vue';
 import { useConfigStore } from '@/stores/config';
 import { modelIcons } from '@/utils/modelIcon';
-import { chatApi } from '@/apis/auth_api';
+import { agentApi } from '@/apis/agent';
 
 const configStore = useConfigStore();
 
@@ -373,7 +373,7 @@ const openProviderConfig = (provider) => {
 // 获取模型提供商的模型列表
 const fetchProviderModels = (provider) => {
   providerConfig.loading = true;
-  chatApi.getProviderModels(provider)
+  agentApi.getProviderModels(provider)
     .then(data => {
       console.log(`${provider} 模型列表:`, data);
 
@@ -415,7 +415,7 @@ const saveProviderConfig = async () => {
 
   try {
     // 发送选择的模型列表到后端
-    const data = await chatApi.updateProviderModels(providerConfig.provider, providerConfig.selectedModels);
+    const data = await agentApi.updateProviderModels(providerConfig.provider, providerConfig.selectedModels);
     console.log('更新后的模型列表:', data.models);
 
     message.success({ content: '模型配置已保存!', key: 'save-config', duration: 2 });

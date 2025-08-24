@@ -34,7 +34,6 @@
       <div class="login-form-section">
         <div class="login-container">
       <div class="login-logo">
-        <!-- <img src="@/assets/logo.svg" alt="Logo" v-if="false" /> -->
         <h1>欢迎登录 {{ infoStore.branding.name }}</h1>
       </div>
 
@@ -172,7 +171,7 @@ import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { useInfoStore } from '@/stores/info';
 import { message } from 'ant-design-vue';
-import { chatApi } from '@/apis/auth_api';
+import { agentApi } from '@/apis/agent';
 import { healthApi } from '@/apis/system_api';
 import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
 const router = useRouter();
@@ -250,7 +249,7 @@ const handleLogin = async () => {
       // 普通用户跳转到默认智能体
       try {
         // 尝试获取默认智能体
-        const data = await chatApi.getDefaultAgent();
+        const data = await agentApi.getDefaultAgent();
         if (data.default_agent_id) {
           // 如果存在默认智能体，直接跳转
           router.push(`/agent/${data.default_agent_id}`);
@@ -258,7 +257,7 @@ const handleLogin = async () => {
         }
 
         // 没有默认智能体，获取第一个可用智能体
-        const agentData = await chatApi.getAgents();
+        const agentData = await agentApi.getAgents();
         if (agentData.agents && agentData.agents.length > 0) {
           router.push(`/agent/${agentData.agents[0].id}`);
           return;

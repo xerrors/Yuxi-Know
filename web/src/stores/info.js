@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { infoApi } from '@/apis/system_api'
+import { brandAPi } from '@/apis/system_api'
 
 export const useInfoStore = defineStore('info', () => {
   // 状态
@@ -49,7 +49,7 @@ export const useInfoStore = defineStore('info', () => {
 
     try {
       isLoading.value = true
-      const response = await infoApi.getInfoConfig()
+      const response = await brandAPi.getInfoConfig()
 
       if (response.success && response.data) {
         setInfoConfig(response.data)
@@ -70,7 +70,7 @@ export const useInfoStore = defineStore('info', () => {
   async function reloadInfoConfig() {
     try {
       isLoading.value = true
-      const response = await infoApi.reloadInfoConfig()
+      const response = await brandAPi.reloadInfoConfig()
 
       if (response.success && response.data) {
         setInfoConfig(response.data)

@@ -1,19 +1,9 @@
-import { apiGet, apiPost, apiPut, apiDelete } from './base'
-import { useUserStore } from '@/stores/user'
+import { apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
 
 /**
  * 知识库管理API模块
  * 包含数据库管理、文档管理、查询接口等功能
  */
-
-// 检查当前用户是否有管理员权限
-const checkAdminPermission = () => {
-  const userStore = useUserStore()
-  if (!userStore.isAdmin) {
-    throw new Error('需要管理员权限')
-  }
-  return true
-}
 
 // =============================================================================
 // === 数据库管理分组 ===
@@ -25,8 +15,7 @@ export const databaseApi = {
    * @returns {Promise} - 知识库列表
    */
   getDatabases: async () => {
-    checkAdminPermission()
-    return apiGet('/api/knowledge/databases', {}, true)
+    return apiAdminGet('/api/knowledge/databases')
   },
 
   /**
@@ -35,8 +24,7 @@ export const databaseApi = {
    * @returns {Promise} - 创建结果
    */
   createDatabase: async (databaseData) => {
-    checkAdminPermission()
-    return apiPost('/api/knowledge/databases', databaseData, {}, true)
+    return apiAdminPost('/api/knowledge/databases', databaseData)
   },
 
   /**
@@ -45,8 +33,7 @@ export const databaseApi = {
    * @returns {Promise} - 知识库信息
    */
   getDatabaseInfo: async (dbId) => {
-    checkAdminPermission()
-    return apiGet(`/api/knowledge/databases/${dbId}`, {}, true)
+    return apiAdminGet(`/api/knowledge/databases/${dbId}`)
   },
 
   /**
@@ -56,8 +43,7 @@ export const databaseApi = {
    * @returns {Promise} - 更新结果
    */
   updateDatabase: async (dbId, updateData) => {
-    checkAdminPermission()
-    return apiPut(`/api/knowledge/databases/${dbId}`, updateData, {}, true)
+    return apiAdminPut(`/api/knowledge/databases/${dbId}`, updateData)
   },
 
   /**
@@ -66,8 +52,7 @@ export const databaseApi = {
    * @returns {Promise} - 删除结果
    */
   deleteDatabase: async (dbId) => {
-    checkAdminPermission()
-    return apiDelete(`/api/knowledge/databases/${dbId}`, {}, true)
+    return apiAdminDelete(`/api/knowledge/databases/${dbId}`)
   }
 }
 
@@ -84,11 +69,10 @@ export const documentApi = {
    * @returns {Promise} - 添加结果
    */
   addDocuments: async (dbId, items, params = {}) => {
-    checkAdminPermission()
-    return apiPost(`/api/knowledge/databases/${dbId}/documents`, {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/documents`, {
       items,
       params
-    }, {}, true)
+    })
   },
 
   /**
@@ -98,8 +82,7 @@ export const documentApi = {
    * @returns {Promise} - 文档信息
    */
   getDocumentInfo: async (dbId, docId) => {
-    checkAdminPermission()
-    return apiGet(`/api/knowledge/databases/${dbId}/documents/${docId}`, {}, true)
+    return apiAdminGet(`/api/knowledge/databases/${dbId}/documents/${docId}`)
   },
 
   /**
@@ -109,8 +92,7 @@ export const documentApi = {
    * @returns {Promise} - 删除结果
    */
   deleteDocument: async (dbId, docId) => {
-    checkAdminPermission()
-    return apiDelete(`/api/knowledge/databases/${dbId}/documents/${docId}`, {}, true)
+    return apiAdminDelete(`/api/knowledge/databases/${dbId}/documents/${docId}`)
   }
 }
 
@@ -127,11 +109,10 @@ export const queryApi = {
    * @returns {Promise} - 查询结果
    */
   queryKnowledgeBase: async (dbId, query, meta = {}) => {
-    checkAdminPermission()
-    return apiPost(`/api/knowledge/databases/${dbId}/query`, {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/query`, {
       query,
       meta
-    }, {}, true)
+    })
   },
 
   /**
@@ -142,11 +123,10 @@ export const queryApi = {
    * @returns {Promise} - 测试结果
    */
   queryTest: async (dbId, query, meta = {}) => {
-    checkAdminPermission()
-    return apiPost(`/api/knowledge/databases/${dbId}/query-test`, {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/query-test`, {
       query,
       meta
-    }, {}, true)
+    })
   },
 
   /**
@@ -155,8 +135,7 @@ export const queryApi = {
    * @returns {Promise} - 查询参数
    */
   getKnowledgeBaseQueryParams: async (dbId) => {
-    checkAdminPermission()
-    return apiGet(`/api/knowledge/databases/${dbId}/query-params`, {}, true)
+    return apiAdminGet(`/api/knowledge/databases/${dbId}/query-params`)
   }
 }
 
@@ -172,8 +151,6 @@ export const fileApi = {
    * @returns {Promise} - 上传结果
    */
   uploadFile: async (file, dbId = null) => {
-    checkAdminPermission()
-
     const formData = new FormData()
     formData.append('file', file)
 
@@ -181,11 +158,11 @@ export const fileApi = {
       ? `/api/knowledge/files/upload?db_id=${dbId}`
       : '/api/knowledge/files/upload'
 
-    return apiPost(url, formData, {
+    return apiAdminPost(url, formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
-    }, true)
+    })
   }
 }
 
@@ -199,8 +176,7 @@ export const typeApi = {
    * @returns {Promise} - 知识库类型列表
    */
   getKnowledgeBaseTypes: async () => {
-    checkAdminPermission()
-    return apiGet('/api/knowledge/types', {}, true)
+    return apiAdminGet('/api/knowledge/types')
   },
 
   /**
@@ -208,8 +184,7 @@ export const typeApi = {
    * @returns {Promise} - 统计信息
    */
   getStatistics: async () => {
-    checkAdminPermission()
-    return apiGet('/api/knowledge/stats', {}, true)
+    return apiAdminGet('/api/knowledge/stats')
   }
 }
 

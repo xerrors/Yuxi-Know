@@ -235,51 +235,51 @@ const applySettings = () => {
   // 设置已通过props传递给子组件，不需要额外操作
 };
 
-const handleExport = async () => {
-  const dbId = store.databaseId;
-  if (!dbId) {
-    message.error('请先选择一个知识库');
-    return;
-  }
-  try {
-    const response = await fetch(`/api/knowledge/databases/${dbId}/export?format=${exportOptions.value.format}`, {
-      headers: {
-        ...userStore.getAuthHeaders()
-      }
-    });
+// const handleExport = async () => {
+//   const dbId = store.databaseId;
+//   if (!dbId) {
+//     message.error('请先选择一个知识库');
+//     return;
+//   }
+//   try {
+//     const response = await fetch(`/api/knowledge/databases/${dbId}/export?format=${exportOptions.value.format}`, {
+//       headers: {
+//         ...userStore.getAuthHeaders()
+//       }
+//     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.detail || `导出失败: ${response.statusText}`);
-    }
+//     if (!response.ok) {
+//       const errorData = await response.json();
+//       throw new Error(errorData.detail || `导出失败: ${response.statusText}`);
+//     }
 
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = url;
+//     const blob = await response.blob();
+//     const url = window.URL.createObjectURL(blob);
+//     const a = document.createElement('a');
+//     a.style.display = 'none';
+//     a.href = url;
 
-    const disposition = response.headers.get('content-disposition');
-    let filename = `export_${dbId}.zip`;
-    if (disposition) {
-        const filenameMatch = disposition.match(/filename="([^"]+)"/);
-        if (filenameMatch && filenameMatch[1]) {
-            filename = filenameMatch[1];
-        }
-    }
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+//     const disposition = response.headers.get('content-disposition');
+//     let filename = `export_${dbId}.zip`;
+//     if (disposition) {
+//         const filenameMatch = disposition.match(/filename="([^"]+)"/);
+//         if (filenameMatch && filenameMatch[1]) {
+//             filename = filenameMatch[1];
+//         }
+//     }
+//     a.download = filename;
+//     document.body.appendChild(a);
+//     a.click();
+//     window.URL.revokeObjectURL(url);
+//     document.body.removeChild(a);
 
-    message.success('导出任务已开始');
-    showExportModal.value = false;
-  } catch (error) {
-    console.error('导出图谱失败:', error);
-    message.error(error.message || '导出图谱失败');
-  }
-};
+//     message.success('导出任务已开始');
+//     showExportModal.value = false;
+//   } catch (error) {
+//     console.error('导出图谱失败:', error);
+//     message.error(error.message || '导出图谱失败');
+//   }
+// };
 
 watch(isGraphSupported, (supported) => {
     if (supported) {
