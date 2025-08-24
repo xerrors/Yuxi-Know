@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from src import executor, config
-from src.knowledge import HistoryManager
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
