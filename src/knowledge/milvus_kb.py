@@ -342,7 +342,7 @@ class MilvusKB(KnowledgeBase):
 
             retrieved_chunks = []
             for hit in results[0]:
-                similarity = 1 - hit.distance if metric_type == "COSINE" else 1 / (1 + hit.distance)
+                similarity = hit.distance if metric_type == "COSINE" else 1 / (1 + hit.distance)
 
                 if similarity < similarity_threshold:
                     continue

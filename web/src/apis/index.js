@@ -6,7 +6,6 @@
 // 导出API模块
 export * from './system_api'      // 系统管理API
 export * from './knowledge_api'   // 知识库管理API
-export * from './auth_api'        // 认证API
 export * from './graph_api'       // 图谱API
 export * from './tools.js'        // 工具API
 export * from './agent.js'        // 智能体API
@@ -27,8 +26,6 @@ export { apiGet, apiPost, apiPut, apiDelete,
  *    - 数据库管理、文档管理、查询接口、文件管理
  *    - 权限要求: 管理员权限
  *
- * 3. auth_api.js: 认证API
- *    - 用户认证、用户管理
  *
  * 4. graph_api.js: 图谱API
  *    - 知识图谱相关功能
