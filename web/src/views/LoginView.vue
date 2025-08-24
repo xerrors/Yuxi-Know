@@ -181,7 +181,7 @@ const infoStore = useInfoStore();
 
 // 从infoStore获取登录背景图片
 const loginBgImage = computed(() => {
-  return infoStore.organization?.login_bg || '/login_bg.jpg';
+  return infoStore.organization?.login_bg || '/login-bg.jpg';
 });
 
 // 状态
