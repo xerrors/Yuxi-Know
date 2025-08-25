@@ -269,7 +269,7 @@ onBeforeUnmount(() => {
   display: grid;
   width: 100%;
   margin: 0 auto;
-  border: 2px solid var(--gray-200);
+  border: 1px solid var(--gray-200);
   border-radius: 0.8rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
@@ -290,11 +290,11 @@ onBeforeUnmount(() => {
     justify-self: end;
   }
 
-  &:focus-within {
-    border-color: var(--main-500);
-    background: white;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  }
+  // &:focus-within {
+  //   border-color: var(--main-500);
+  //   background: white;
+  //   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  // }
 
   &.single-line {
     padding: 0.75rem 0.75rem;

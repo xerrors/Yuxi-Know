@@ -5,9 +5,7 @@
     class="database-info-header"
   >
     <template #left>
-      <a-button @click="backToDatabase">
-        <LeftOutlined />
-      </a-button>
+      <a-button @click="backToDatabase" shape="circle" :icon="h(LeftOutlined)" type="text"></a-button>
     </template>
     <template #behind-title>
       <a-button type="link" @click="showEditModal" :style="{ padding: '0px', color: 'inherit' }">
@@ -64,6 +62,7 @@ import {
   DeleteOutlined,
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
+import { h } from 'vue';
 
 const router = useRouter();
 const store = useDatabaseStore();
@@ -111,7 +110,7 @@ const deleteDatabase = () => {
 
 <style scoped>
 .database-info-header {
-  padding: 8px 16px 6px 16px;
+  padding: 8px;
   height: 50px;
 }
 

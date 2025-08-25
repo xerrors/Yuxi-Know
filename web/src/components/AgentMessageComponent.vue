@@ -5,28 +5,28 @@
 
     <!-- 助手消息 -->
     <div v-else-if="message.type === 'ai'" class="assistant-message">
-      <div v-if="parsedMessage.reasoning_content" class="reasoning-box">
+      <div v-if="parsedData.reasoning_content" class="reasoning-box">
         <a-collapse v-model:activeKey="reasoningActiveKey" :bordered="false">
           <template #expandIcon="{ isActive }">
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
           <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
-            <p class="reasoning-content">{{ parsedMessage.reasoning_content.trim() }}</p>
+            <p class="reasoning-content">{{ parsedData.reasoning_content }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
 
       <!-- 消息内容 -->
       <!-- <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div> -->
-      <MdPreview v-if="parsedMessage.content" ref="editorRef"
+      <MdPreview v-if="parsedData.content" ref="editorRef"
         editorId="preview-only"
         previewTheme="github"
         :showCodeRowNumber="false"
-        :modelValue="parsedMessage.content"
+        :modelValue="parsedData.content"
         :key="message.id"
         class="message-md"/>
 
-      <div v-else-if="parsedMessage.reasoning_content"  class="empty-block"></div>
+      <div v-else-if="parsedData.reasoning_content"  class="empty-block"></div>
 
       <div v-if="message.tool_calls && Object.keys(message.tool_calls).length > 0" class="tool-calls-container">
         <div v-for="(toolCall, index) in message.tool_calls || {}" :key="index" class="tool-call-container">
@@ -132,14 +132,6 @@ const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
 const reasoningActiveKey = ref(['show']);
 const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
-
-// 计算属性：内容为空且正在加载
-const isEmptyAndLoading = computed(() => {
-  const isEmpty = !props.message.content || props.message.content.length === 0;
-  const isLoading = props.message.status === 'init' && props.isProcessing
-  return isEmpty && isLoading;
-});
-
 // 引入智能体 store
 const agentStore = useAgentStore();
 const { availableTools } = storeToRefs(agentStore);
@@ -152,25 +144,26 @@ const getToolNameByToolCall = (toolCall) => {
   return tool ? tool.name : toolId;
 };
 
-const parsedMessage = computed(() => {
-  const message = props.message;
-  if (message.content) {
-    // 匹配完整的 <think>...</think> 标签
-    const thinkContent = message.content.match(/<think>(.*?)<\/think>/s);
-    if (thinkContent) {
-      message.reasoning_content = thinkContent[1];
-      message.content = message.content.replace(/<think>(.*?)<\/think>/s, '');
-    } else {
-      // 匹配未闭合的 <think> 标签，处理加载中的情况
-      const incompleteThinkContent = message.content.match(/<think>(.*?)$/s);
-      if (incompleteThinkContent) {
-        message.reasoning_content = incompleteThinkContent[1];
-        message.content = message.content.replace(/<think>(.*?)$/s, '');
-      }
-    }
+const parsedData = computed(() => {
+  // Start with default values from the prop to avoid mutation.
+  let content = props.message.content || '';
+  let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';
+
+  // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
+  const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s;
+  const thinkMatch = content.match(thinkRegex);
+
+  if (thinkMatch) {
+    // The captured reasoning is in either group 1 (closed tag) or 2 (unclosed tag).
+    reasoning_content = (thinkMatch[1] || thinkMatch[2] || '').trim();
+    // Remove the entire matched <think> block from the original content.
+    content = content.replace(thinkMatch[0], '').trim();
   }
-  message.reasoning_content = message.reasoning_content || message.additional_kwargs?.reasoning_content || '';
-  return message;
+
+  return {
+    content,
+    reasoning_content,
+  };
 });
 
 const toggleToolCall = (toolCallId) => {
@@ -503,12 +496,12 @@ const toggleToolCall = (toolCallId) => {
 }
 </style>
 
-<style lang="less">
-.message-md {
+<style lang="less" scoped>
+:deep(.message-md) {
   margin: 8px 0;
 }
 
-.message-md .md-editor-preview-wrapper {
+:deep(.message-md .md-editor-preview-wrapper) {
   max-width: 100%;
   padding: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
@@ -516,7 +509,7 @@ const toggleToolCall = (toolCallId) => {
   #preview-only-preview {
     font-size: 1rem;
     line-height: 1.75;
-    color: var(--gray-2000);
+    color: var(--gray-1000);
   }
 
 
@@ -533,15 +526,19 @@ const toggleToolCall = (toolCallId) => {
   }
 
   strong {
-    font-weight: 600;
+    font-weight: 500;
   }
 
   li > p, ol > p, ul > p {
     margin: 0.25rem 0;
   }
 
-  ol, ul {
-    padding-left: 1.2rem;
+  ol li::marker {
+    color: var(--main-color);
+  }
+
+  ul li::marker {
+    color: var(--main-bright);
   }
 
   cite {
@@ -572,7 +569,7 @@ const toggleToolCall = (toolCallId) => {
   }
 }
 
-.chat-box.font-smaller #preview-only-preview {
+:deep(.chat-box.font-smaller #preview-only-preview) {
   font-size: 14px;
 
   h1, h2 {
@@ -584,7 +581,7 @@ const toggleToolCall = (toolCallId) => {
   }
 }
 
-.chat-box.font-larger #preview-only-preview {
+:deep(.chat-box.font-larger #preview-only-preview) {
   font-size: 16px;
 
   h1, h2 {

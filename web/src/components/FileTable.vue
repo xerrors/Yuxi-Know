@@ -310,6 +310,15 @@ import { getFileIcon, getFileIconColor, formatRelativeTime } from '@/utils/file_
 .search-container {
   display: flex;
   align-items: center;
+
+  button {
+    padding: 0 8px;
+  }
+
+  button:hover {
+    background-color: var(--gray-50);
+    color: var(--main-color);
+  }
 }
 
 .panel-actions {

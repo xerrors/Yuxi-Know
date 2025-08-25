@@ -33,11 +33,11 @@
             <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
-        <div class="header__center" @mouseenter="showRenameButton = true" @mouseleave="showRenameButton = false">
+        <div class="header__center" @mouseenter="uiState.showRenameButton = true" @mouseleave="uiState.showRenameButton = false">
           <div @click="console.log(agentStore.currentThread)" class="center-title">
             {{ agentStore.currentThread?.title }}
           </div>
-          <div class="rename-button" v-if="currentChatId" :class="{ 'visible': showRenameButton }" @click="handleRenameChat">
+          <div class="rename-button" v-if="currentChatId" :class="{ 'visible': uiState.showRenameButton }" @click="handleRenameChat">
             <EditOutlined style="font-size: 14px; color: var(--gray-600);"/>
           </div>
           <slot name="header-center"></slot>
@@ -59,15 +59,15 @@
         <span>正在加载历史记录...</span>
       </div>
 
-      <div v-else-if="convs.length === 0 && !onGoingConv.messages.length" class="chat-examples">
+      <div v-else-if="!conversations.length" class="chat-examples">
         <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
         <div class="inputer-init">
           <MessageInputComponent
             v-model="userInput"
-            :is-loading="state.isProcessingRequest"
+            :is-loading="isProcessing"
             :disabled="!currentAgent"
-            :send-button-disabled="!userInput || !currentAgent || state.isProcessingRequest"
+            :send-button-disabled="!userInput || !currentAgent || isProcessing"
             :placeholder="'输入问题...'"
             @send="handleSendMessage"
             @keydown="handleKeyDown"
@@ -75,12 +75,12 @@
         </div>
       </div>
       <div class="chat-box" ref="messagesContainer">
-        <div class="conv-box" v-for="(conv, index) in convs" :key="index">
+        <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
           <AgentMessageComponent
-            v-for="(message, index) in conv.messages"
+            v-for="(message, msgIndex) in conv.messages"
             :message="message"
-            :key="index"
-            :is-processing="state.isProcessingRequest"
+            :key="msgIndex"
+            :is-processing="isProcessing && conv.status === 'streaming' && msgIndex === conv.messages.length - 1"
             :debug-mode="state.debug_mode"
             :show-refs="showMsgRefs(message)"
             @retry="retryMessage(message)"
@@ -88,27 +88,15 @@
           </AgentMessageComponent>
           <!-- 显示对话最后一个消息使用的模型 -->
           <RefsComponent
-            v-if="getLastMessage(conv)"
+            v-if="getLastMessage(conv) && conv.status !== 'streaming'"
             :message="getLastMessage(conv)"
             :show-refs="['model', 'copy']"
             :is-latest-message="false"
           />
         </div>
-        <div class="conv-box" v-if="onGoingConv.messages.length > 0">
-          <AgentMessageComponent
-            v-for="(message, index) in onGoingConv.messages"
-            :message="message"
-            :key="index"
-            :is-processing="state.isProcessingRequest"
-            :debug-mode="state.debug_mode"
-            :show-refs="showMsgRefs(message)"
-            @retry="retryMessage(message)"
-          >
-          </AgentMessageComponent>
-        </div>
 
         <!-- 生成中的加载状态 -->
-        <div class="generating-status" v-if="state.isProcessingRequest && !state.waitingServerResponse">
+        <div class="generating-status" v-if="isProcessing && conversations.length > 0">
           <div class="generating-indicator">
             <div class="loading-dots">
               <div></div>
@@ -120,18 +108,18 @@
         </div>
       </div>
       <div class="bottom">
-        <div class="message-input-wrapper" v-if="convs.length > 0 || onGoingConv.messages.length > 0">
+        <div class="message-input-wrapper" v-if="conversations.length > 0">
           <MessageInputComponent
             v-model="userInput"
-            :is-loading="state.isProcessingRequest"
+            :is-loading="isProcessing"
             :disabled="!currentAgent"
-            :send-button-disabled="!userInput || !currentAgent || state.isProcessingRequest"
+            :send-button-disabled="!userInput || !currentAgent || isProcessing"
             :placeholder="'输入问题...'"
             @send="handleSendMessage"
             @keydown="handleKeyDown"
           />
           <div class="bottom-actions">
-            <p class="note" @click="getAgentHistory">请注意辨别内容的可靠性</p>
+            <p class="note">请注意辨别内容的可靠性</p>
           </div>
         </div>
       </div>
@@ -140,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, toRaw, h } from 'vue';
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, h } from 'vue';
 import { ShareAltOutlined, LoadingOutlined, EditOutlined } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
@@ -148,281 +136,151 @@ import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
+import { ChatExporter } from '@/utils/chatExporter';
+import { ErrorHandler, handleChatError, handleValidationError } from '@/utils/errorHandler';
+import { ScrollController } from '@/utils/scrollController';
+import { AgentValidator } from '@/utils/agentValidator';
 import { useAgentStore } from '@/stores/agent';
 import { storeToRefs } from 'pinia';
 
-// 新增props属性，允许父组件传入agentId
+// ==================== PROPS & EMITS ====================
 const props = defineProps({
-  state: {
-    type: Object,
-    default: () => ({})
-  },
-  singleMode: {
-    type: Boolean,
-    default: true
-  }
+  state: { type: Object, default: () => ({}) },
+  singleMode: { type: Boolean, default: true }
 });
-
 const emit = defineEmits(['open-config', 'open-agent-modal']);
 
-// ==================== Store 管理 ====================
+// ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore();
 const {
   agents,
   currentAgentThreads,
   currentThread,
-  currentThreadMessages,
   isLoadingThreads,
   isLoadingMessages,
-  selectedAgent,
-  configSchema
+  conversations, // New getter from store
+  isStreaming,   // New state from store
 } = storeToRefs(agentStore);
 
-// ==================== 状态管理 ====================
-
-// UI状态
+// ==================== LOCAL UI STATE ====================
+const userInput = ref('');
 const state = reactive({
   ...props.state,
   debug_mode: computed(() => props.state.debug_mode ?? false),
   isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
-  waitingServerResponse: false,
-  isProcessingRequest: false,
   creatingNewChat: false,
   isInitialRender: true
 });
 
-// 重命名按钮显示状态
-const showRenameButton = ref(false);
+const uiState = reactive({
+  showRenameButton: false,
+  containerWidth: 0,
+});
 
-// 容器宽度检测
+// ==================== COMPUTED PROPERTIES ====================
+const currentAgent = computed(() => agentStore.selectedAgent);
+const currentChatId = computed(() => agentStore.currentThreadId);
+const chatsList = computed(() => currentAgentThreads.value || []);
+const isProcessing = computed(() => isStreaming.value || state.creatingNewChat);
+const isSmallContainer = computed(() => uiState.containerWidth <= 520);
+const isMediumContainer = computed(() => uiState.containerWidth <= 768);
+
+// ==================== SCROLL & RESIZE HANDLING ====================
 const chatContainerRef = ref(null);
-const containerWidth = ref(0);
-const isSmallContainer = computed(() => containerWidth.value <= 520);
-const isMediumContainer = computed(() => containerWidth.value <= 768);
+const scrollController = new ScrollController('.chat');
 let resizeObserver = null;
 
-// 滚动控制相关
-const shouldAutoScroll = ref(true);  // 是否应该自动滚动
-const isUserScrolling = ref(false);  // 用户是否正在滚动
-let scrollTimer = null;
-
-// 监听容器大小变化和滚动事件
 onMounted(() => {
-  // 初始计算容器宽度
   nextTick(() => {
     if (chatContainerRef.value) {
-      // 初始时测量容器宽度
-      containerWidth.value = chatContainerRef.value.offsetWidth;
-
+      uiState.containerWidth = chatContainerRef.value.offsetWidth;
       resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
-          containerWidth.value = entry.contentRect.width;
+          uiState.containerWidth = entry.contentRect.width;
         }
       });
-
       resizeObserver.observe(chatContainerRef.value);
     }
-
-    // 添加滚动监听
     const chatContainer = document.querySelector('.chat');
     if (chatContainer) {
-      chatContainer.addEventListener('scroll', handleScroll, { passive: true });
+      chatContainer.addEventListener('scroll', scrollController.handleScroll, { passive: true });
     }
   });
-
-  // 延迟移除初始渲染标记，防止切换动画
-  setTimeout(() => {
-  state.isInitialRender = false;
-  }, 300);
+  setTimeout(() => { state.isInitialRender = false; }, 300);
 });
 
 onUnmounted(() => {
-  if (resizeObserver) {
-    resizeObserver.disconnect();
-  }
-
-  // 清理滚动监听器
-  const chatContainer = document.querySelector('.chat');
-  if (chatContainer) {
-    chatContainer.removeEventListener('scroll', handleScroll);
-  }
-
-  if (scrollTimer) {
-    clearTimeout(scrollTimer);
-  }
+  if (resizeObserver) resizeObserver.disconnect();
+  scrollController.cleanup();
 });
 
-const showMsgRefs = (msg) => {
-  if (msg.isLast) {
-    return ['copy']
-  }
-  return false
-}
+// ==================== CHAT ACTIONS (DELEGATE TO STORE) ====================
 
-// 获取对话的最后一个消息
-const getLastMessage = (conv) => {
-  if (!conv || !conv.messages || conv.messages.length === 0) {
-    return null;
-  }
-  // 查找最后一个AI消息
-  for (let i = conv.messages.length - 1; i >= 0; i--) {
-    const message = conv.messages[i];
-    if (message.type === 'ai') {
-      return message;
-    }
-  }
-  return null;
-}
-
-// DOM引用
-const messagesContainer = ref(null);
-
-// 数据状态
-const userInput = ref('');             // 用户输入
-
-const convs = ref([]);
-const currentAgent = computed(() => {
-  if (!agentStore.selectedAgentId || !agents.value) return null;
-  return agents.value[agentStore.selectedAgentId];
-});
-
-// 使用 agentStore 的线程相关计算属性
-const currentChatId = computed(() => agentStore.currentThreadId);
-const chatsList = computed(() => currentAgentThreads.value || []);
-
-const onGoingConv = reactive({
-  msgChunks: {},
-  messages: computed(() => {
-    const msgs = Object.values(onGoingConv.msgChunks).map(msgs => {
-      return mergeMessageChunk(msgs)
-    })
-    return msgs.length > 0
-      ? convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
-      : []
-  })
-})
-const lastConv = computed(() => convs.value[convs.value.length - 1]);
-const lastConvMessages = computed(() => lastConv.value.messages[lastConv.value.messages.length - 1]);
-
-// ==================== 工具调用相关 ====================
-
-// 工具调用相关
-const toolCalls = ref([]);             // 工具调用列表
-const currentToolCallId = ref(null);   // 当前工具调用ID
-const currentRunId = ref(null);        // 当前运行ID
-const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
-
-
-// 创建新对话
 const createNewChat = async () => {
-  // 确保有AgentID
-  if (!agentStore.selectedAgentId) {
-    console.warn("未指定AgentID，无法创建对话");
-    return;
-  }
+  if (!AgentValidator.validateAgentId(agentStore.selectedAgentId, '创建对话') || isProcessing.value) return;
+  if (currentChatId.value && conversations.value.length === 0) return;
 
-  // 如果当前对话正在创建，则不创建新对话
-  if (state.creatingNewChat || state.isProcessingRequest) {
-    console.warn("正在创建新对话或处理请求，无法创建新对话");
-    return;
-  }
-
-  if (currentChatId.value && convs.value.length === 0) {
-    return;
-  }
-
+  state.creatingNewChat = true;
   try {
-    // 使用 agentStore 创建新对话
-    state.creatingNewChat = true;
-    const thread = await agentStore.createThread(agentStore.selectedAgentId, '新的对话');
-    if (!thread || !thread.id) {
-      throw new Error('创建对话失败');
-    }
-
-    // 重置线程状态
-    resetThread();
+    await agentStore.createThread(agentStore.selectedAgentId, '新的对话');
   } catch (error) {
-    console.error('创建对话失败:', error);
-    message.error('创建对话失败');
+    handleChatError(error, 'create');
   } finally {
     state.creatingNewChat = false;
   }
 };
 
-// 选择已有对话
 const selectChat = async (chatId) => {
-  // 确保有AgentID
-  if (!agentStore.selectedAgentId) {
-    console.warn("未指定AgentID，无法选择对话");
-    return;
-  }
-
-  console.log("选择对话:", chatId);
-
-  // 使用 agentStore 选择线程
+  if (!AgentValidator.validateAgentIdWithError(agentStore.selectedAgentId, '选择对话', handleValidationError)) return;
   agentStore.selectThread(chatId);
-  await getAgentHistory();
+  await agentStore.fetchThreadMessages(chatId);
 };
 
-// 删除对话
 const deleteChat = async (chatId) => {
-  if (!agentStore.selectedAgentId) {
-    console.warn("未指定AgentID，无法删除对话");
-    return;
-  }
-
+  if (!AgentValidator.validateAgentIdWithError(agentStore.selectedAgentId, '删除对话', handleValidationError)) return;
   try {
-    // 使用 agentStore 删除对话
     await agentStore.deleteThread(chatId);
-
-    // 如果删除的是当前对话，重置状态
-    if (chatId === currentChatId.value) {
-      resetThread();
-    }
   } catch (error) {
-    console.error('删除对话失败:', error);
-    message.error('删除对话失败');
+    handleChatError(error, 'delete');
   }
 };
 
-// 重命名对话
 const renameChat = async (data) => {
   let { chatId, title } = data;
-
-  if (!chatId || !title) {
-    console.warn("未指定对话ID或标题，无法重命名对话");
-    return;
-  }
-
-  // 确保有AgentID
-  if (!agentStore.selectedAgentId) {
-    console.warn("未指定AgentID，无法重命名对话");
-    return;
-  }
-
-  // 最长 30个字符，自动截断
-  if (title.length > 30) {
-    title = title.slice(0, 30);
-  }
-
+  if (!AgentValidator.validateRenameOperation(chatId, title, agentStore.selectedAgentId, handleValidationError)) return;
+  if (title.length > 30) title = title.slice(0, 30);
   try {
-    // 使用 agentStore 更新对话
     await agentStore.updateThread(chatId, title);
   } catch (error) {
-    console.error('重命名对话失败:', error);
-    message.error('重命名对话失败');
+    handleChatError(error, 'rename');
   }
 };
 
-// 处理重命名对话点击事件
+const handleSendMessage = async () => {
+  const text = userInput.value.trim();
+  if (!text || !currentAgent.value || isProcessing.value) return;
+
+  userInput.value = '';
+  // Enable auto scroll before sending message to ensure proper scrolling during streaming
+  scrollController.enableAutoScroll();
+  await nextTick();
+  await scrollController.scrollToBottom(true);
+
+  try {
+    await agentStore.sendMessage(text);
+  } catch (error) {
+    // Error is already handled in the store, but you could add UI feedback here if needed
+  }
+};
+
+// ==================== UI HANDLERS ====================
+
 const handleRenameChat = () => {
   if (!currentChatId.value || !currentThread.value) {
-    message.warning('请先选择对话');
+    handleValidationError('请先选择对话');
     return;
   }
-
   let newTitle = currentThread.value.title;
-
   Modal.confirm({
     title: '重命名对话',
     content: h('div', { style: { marginTop: '12px' } }, [
@@ -434,929 +292,98 @@ const handleRenameChat = () => {
     ]),
     okText: '确认',
     cancelText: '取消',
-    onOk: () => {
-      if (!newTitle.trim()) {
-        message.warning('标题不能为空');
-        return Promise.reject();
-      }
-      renameChat({ chatId: currentChatId.value, title: newTitle });
-    },
-    onCancel: () => {}
+    onOk: () => renameChat({ chatId: currentChatId.value, title: newTitle }),
   });
 };
 
-// ==================== 状态管理函数 ====================
-
-// 重试消息
-const retryMessage = (msg) => {
-  message.info("重试消息开发中");
-  return
+const handleKeyDown = (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSendMessage();
+  }
 };
 
-// 分享对话
-const shareChat = () => {
-  if (!currentChatId.value || !currentAgent.value) {
-    message.warning('请先选择对话');
-    return;
-  }
-
+const shareChat = async () => {
+  if (!AgentValidator.validateShareOperation(currentChatId.value, currentAgent.value, handleValidationError)) return;
   try {
-    // 生成HTML内容
-    const htmlContent = generateChatHTML();
-
-    // 创建下载链接
-    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    // 生成文件名
-    const chatTitle = currentThread.value?.title || '新对话';
-    const timestamp = new Date().toLocaleString('zh-CN').replace(/[:/\s]/g, '-');
-    const filename = `${chatTitle}-${timestamp}.html`;
-
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    // 清理URL对象
-    URL.revokeObjectURL(url);
-
-    message.success('对话已导出为HTML文件');
-  } catch (error) {
-    console.error('导出对话失败:', error);
-    message.error('导出对话失败');
-  }
-};
-
-// 生成对话的HTML内容
-const generateChatHTML = () => {
-  const chatTitle = agentStore.currentThread.value?.title || '新对话';
-  const agentName = currentAgent.value?.name || '智能助手';
-  const agentDescription = currentAgent.value?.description || '';
-  const exportTime = new Date().toLocaleString('zh-CN');
-
-  // 获取所有对话消息
-  const allMessages = [];
-
-  // 添加历史对话消息
-  convs.value.forEach(conv => {
-    conv.messages.forEach(msg => {
-      allMessages.push(msg);
+    const result = await ChatExporter.exportToHTML({
+      chatTitle: agentStore.currentThread?.title || '新对话',
+      agentName: currentAgent.value?.name || '智能助手',
+      agentDescription: currentAgent.value?.description || '',
+      messages: conversations.value, // Use the getter from store
+      onGoingMessages: [] // This is now part of conversations
     });
-  });
-
-  // 添加当前进行中的对话消息
-  onGoingConv.messages.forEach(msg => {
-    allMessages.push(msg);
-  });
-
-  if (allMessages.length === 0) {
-    throw new Error('没有可导出的对话内容');
-  }
-
-  // 生成HTML内容
-  let messagesHTML = '';
-
-  allMessages.forEach((msg, index) => {
-    const isUser = msg.type === 'human';
-    const avatar = isUser ? '👤' : '🤖';
-    const senderName = isUser ? '用户' : agentName;
-    const messageClass = isUser ? 'user-message' : 'ai-message';
-
-    // 处理消息内容
-    let content = msg.content.trim() || '';
-
-    // 处理换行
-    content = content.replace(/\n/g, '<br>');
-
-    // 处理思考过程
-    let reasoningHTML = '';
-    if (!isUser && (msg.additional_kwargs?.reasoning_content || msg.reasoning_content)) {
-      const reasoningContent = (msg.additional_kwargs?.reasoning_content || msg.reasoning_content).trim().replace(/\n/g, '<br>');
-      reasoningHTML = `
-        <div class="reasoning-section">
-          <div class="reasoning-header">💭 思考过程</div>
-          <div class="reasoning-content">${reasoningContent}</div>
-        </div>
-      `;
-    }
-
-    // 处理工具调用
-    let toolCallsHTML = '';
-    if (msg.tool_calls && msg.tool_calls.length > 0) {
-      toolCallsHTML = '<div class="tool-calls">';
-      msg.tool_calls.forEach(toolCall => {
-        console.log(toolCall)
-        const args = toolCall.function?.arguments ? JSON.parse(toolCall.function?.arguments) : toolCall?.args || '{}'
-        toolCallsHTML += `
-          <div class="tool-call">
-            <div class="tool-call-header">
-              <strong>🔧 ${toolCall.function?.name || '工具调用'}</strong>
-            </div>
-            <div class="tool-call-args">
-              <pre>${JSON.stringify(args, null, 2)}</pre>
-            </div>
-            ${toolCall.tool_call_result ? `
-              <div class="tool-call-result">
-                <div class="tool-result-header">执行结果:</div>
-                <div class="tool-result-content">${toolCall.tool_call_result.content || ''}</div>
-              </div>
-            ` : ''}
-          </div>
-        `;
-      });
-      toolCallsHTML += '</div>';
-    }
-
-    messagesHTML += `
-      <div class="message ${messageClass}">
-        <div class="message-header">
-          <span class="avatar">${avatar}</span>
-          <span class="sender">${senderName}</span>
-          <span class="time">${new Date().toLocaleString('zh-CN')}</span>
-        </div>
-        <div class="message-content">
-          ${reasoningHTML}
-          ${content}
-          ${toolCallsHTML}
-        </div>
-      </div>
-    `;
-  });
-
-  // 完整的HTML模板
-  return `
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${chatTitle} - 对话导出</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: white;
-            margin: 0;
-            padding: 0;
-        }
-
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            min-height: 100vh;
-        }
-
-        .header {
-            background: #f8f9fa;
-            border-bottom: 2px solid #e9ecef;
-            padding: 24px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 8px;
-            color: #212529;
-            font-weight: 600;
-        }
-
-        .header .agent-info {
-            font-size: 14px;
-            color: #6c757d;
-            margin-bottom: 12px;
-        }
-
-        .header .export-info {
-            font-size: 12px;
-            color: #868e96;
-            padding-top: 12px;
-            border-top: 1px solid #dee2e6;
-        }
-
-        .messages {
-            padding: 32px 48px;
-            max-width: 100%;
-        }
-
-        .message {
-            margin-bottom: 32px;
-            max-width: 100%;
-        }
-
-        .message:last-child {
-            margin-bottom: 0;
-        }
-
-        .message-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 12px;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .avatar {
-            font-size: 16px;
-            margin-right: 8px;
-        }
-
-        .sender {
-            font-weight: 600;
-            margin-right: 12px;
-        }
-
-        .time {
-            font-size: 12px;
-            color: #999;
-        }
-
-        .message-content {
-            padding: 16px 20px;
-            border-radius: 8px;
-            width: 100%;
-            max-width: 100%;
-        }
-
-        .user-message .message-content {
-            color: white;
-            background: #1C6586;
-            border: 1px solid #1C6586;
-            width: fit-content;
-        }
-
-        .ai-message .message-content {
-            background: white;
-            border: 1px solid #e9ecef;
-        }
-
-        .reasoning-section {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 16px;
-        }
-
-        .reasoning-header {
-            font-size: 13px;
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-        }
-
-        .reasoning-content {
-            font-size: 14px;
-            color: #6c757d;
-            font-style: italic;
-            line-height: 1.5;
-        }
-
-        .tool-calls {
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid #e9ecef;
-        }
-
-        .tool-call {
-            background: #fff8e1;
-            border: 1px solid #ffe082;
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 12px;
-        }
-
-        .tool-call:last-child {
-            margin-bottom: 0;
-        }
-
-        .tool-call-header {
-            font-size: 14px;
-            color: #f57f17;
-            margin-bottom: 8px;
-            font-weight: 600;
-        }
-
-        .tool-call-args {
-            background: rgba(0,0,0,0.04);
-            border-radius: 4px;
-            padding: 8px;
-            margin-bottom: 8px;
-        }
-
-        .tool-call-args pre {
-            font-size: 12px;
-            color: #666;
-            white-space: pre-wrap;
-            word-break: break-all;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        }
-
-        .tool-call-result {
-            background: #e8f5e8;
-            border: 1px solid #c8e6c9;
-            border-radius: 4px;
-            padding: 8px;
-            word-break: break-all;
-        }
-
-        .tool-result-header {
-            font-size: 12px;
-            color: #2e7d32;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .tool-result-content {
-            font-size: 13px;
-            color: #388e3c;
-        }
-
-        .footer {
-            background: #f8f9fa;
-            text-align: center;
-            padding: 16px;
-            font-size: 12px;
-            color: #666;
-            border-top: 1px solid #e9ecef;
-        }
-
-        .footer a {
-            color: #007bff;
-            text-decoration: none;
-        }
-
-        @media (max-width: 768px) {
-            .messages {
-                padding: 24px 16px;
-            }
-
-            .header {
-                padding: 16px;
-            }
-
-            .user-message .message-content {
-                margin-left: 10%;
-            }
-
-            .ai-message .message-content {
-                margin-right: 10%;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .user-message .message-content,
-            .ai-message .message-content {
-                margin-left: 0;
-                margin-right: 0;
-            }
-        }
-
-        @media print {
-            body {
-                background: white;
-                margin: 0;
-                padding: 0;
-            }
-
-            .container {
-                box-shadow: none;
-                border-radius: 0;
-                max-width: 100%;
-            }
-
-            .header {
-                background: #f8f9fa !important;
-                -webkit-print-color-adjust: exact;
-            }
-
-            .messages {
-                padding: 20px;
-            }
-
-            .user-message .message-content {
-                background: #e3f2fd !important;
-                -webkit-print-color-adjust: exact;
-            }
-
-            .reasoning-section {
-                background: #f8f9fa !important;
-                -webkit-print-color-adjust: exact;
-            }
-
-            .tool-call {
-                background: #fff8e1 !important;
-                -webkit-print-color-adjust: exact;
-            }
-
-            .tool-call-result {
-                background: #e8f5e8 !important;
-                -webkit-print-color-adjust: exact;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>${chatTitle}</h1>
-            <div class="agent-info">
-                智能体: ${agentName}
-                ${agentDescription ? ` | ${agentDescription}` : ''}
-            </div>
-            <div class="export-info">
-                导出时间: ${exportTime} | 共 ${allMessages.length} 条消息
-            </div>
-        </div>
-
-        <div class="messages">
-            ${messagesHTML}
-        </div>
-
-        <div class="footer">
-            本对话由 Yuxi-Know 智能对话系统导出 | <a href="#">了解更多</a>
-        </div>
-    </div>
-</body>
-</html>
-  `;
-};
-
-// 重置线程
-const resetThread = () => {
-  convs.value = [];
-  toolCalls.value = [];
-  currentToolCallId.value = null;
-  currentRunId.value = null;
-  expandedToolCalls.value.clear();
-};
-
-// ==================== 消息处理 ====================
-
-// 发送消息
-const handleSendMessage = () => {
-  if (!userInput.value || !currentAgent.value || state.isProcessingRequest) return;
-  const tempUserInput = userInput.value;
-  userInput.value = ''; // 立即清空输入框
-  // 确保UI更新后再发送消息
-  nextTick(() => {
-    sendMessageToServer(tempUserInput);
-  });
-};
-
-// 使用文本发送消息
-const sendMessageToServer = async (text) => {
-  if (!text || !currentAgent.value || state.isProcessingRequest) return;
-
-  // 如果是第一条消息，以消息内容重命名对话
-  if (convs.value.length === 0) {
-    renameChat({'chatId': currentChatId.value, 'title': text})
-  }
-
-  // 发送消息时启用自动滚动
-  shouldAutoScroll.value = true;
-  state.isProcessingRequest = true;
-  await scrollToBottom();
-
-  // 设置请求参数
-  const requestData = {
-    query: text.trim(),
-    config: {
-      ...agentStore.agentConfig,
-      thread_id: currentChatId.value
-    },
-    meta: {
-      request_id: currentAgent.value.id + '-' + new Date().getTime()
-    }
-  };
-
-  try {
-    state.waitingServerResponse = true;
-
-    const response = await agentStore.sendMessage(currentAgent.value.id, requestData);
-    if (!response.ok) {
-      throw new Error('请求失败');
-    }
-    await handleStreamResponse(response);
+    message.success(`对话已导出为HTML文件: ${result.filename}`);
   } catch (error) {
-    handleSendMessageToServerError(error)
-  } finally {
-    state.waitingServerResponse = false;
-    state.isProcessingRequest = false;
-    await scrollToBottom();
+    handleChatError(error, 'export');
   }
 };
 
-const handleSendMessageToServerError = (error) => {
-  console.error('发送消息错误:', error);
-  return
-}
-
-// 处理流式响应
-const handleStreamResponse = async (response) => {
-  try {
-    const reader = response.body.getReader();
-    let buffer = '';
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // 保留最后一行可能不完整的内容
-
-      for (const line of lines) {
-        if (line.trim()) {
-          try {
-            const data = JSON.parse(line.trim());
-            await processResponseChunk(data);
-          } catch (e) {
-            console.debug('解析JSON出错:', e.message);
-          }
-        }
-      }
-      await scrollToBottom();
-    }
-    // 处理缓冲区中可能剩余的内容
-    if (buffer.trim()) {
-      try {
-        const data = JSON.parse(buffer.trim());
-        await processResponseChunk(data);
-      } catch (e) {
-        console.warn('最终缓冲区内容无法解析:', buffer);
-      }
-    }
-  } catch (error) {
-    handleStreamResponseError(error)
-  } finally {
-    state.isProcessingRequest = false;
-    // await scrollToBottom();
-  }
-};
-
-const handleStreamResponseError = (error) => {
-  console.error('流式处理出错:', error);
-  return
-}
-
-// 处理流数据
-const processResponseChunk = async (data) => {
-  // console.log("处理流数据:", data.msg);
-  // if (data.msg.additional_kwargs?.tool_calls) {
-  //   console.log("tool_calls", data.msg.additional_kwargs.tool_calls);
-  // }
-  if (data.status === 'init') {
-    // 代表服务端收到请求并返回第一个响应
-    state.waitingServerResponse = false;
-    console.log("处理流数据:", data.msg);
-    onGoingConv.msgChunks[data.request_id] = [data.msg];
-
-  } else if (data.status === 'loading') {
-    if (data.msg.id) {
-      if (!onGoingConv.msgChunks[data.msg.id]) {
-        onGoingConv.msgChunks[data.msg.id] = []
-      }
-      onGoingConv.msgChunks[data.msg.id].push(data.msg)
-    }
-  } else if (data.status === 'error') {
-    console.error("流式处理出错:", data.message);
-    message.error(data.message);
-  } else if (data.status === 'finished') {
-    await getAgentHistory();
-  }
-  // await scrollToBottom();
-};
-
-// 初始化所有数据
-const initAll = async () => {
-  try {
-    // 使用 agentStore 的加载状态
-    // 初始化agent store（如果还未初始化）
-    if (!agentStore.agents || Object.keys(agentStore.agents).length === 0) {
-      await agentStore.initialize();
-    }
-    // 加载对话列表以及对话历史
-    setTimeout(async () => {
-      await loadChatsList();
-    }, 100);
-
-  } catch (error) {
-    console.error("组件挂载出错:", error);
-    message.error(`加载数据失败: ${error}`);
-  }
-}
-
-// 从服务器对话列表
-const loadChatsList = async () => {
-  try {
-    if (!agentStore.selectedAgentId) {
-      console.warn("未指定AgentID，无法加载状态");
-      return;
-    }
-
-    // 使用 agentStore 获取对话列表
-    await agentStore.fetchThreads(agentStore.selectedAgentId);
-
-    if (currentAgentThreads.value && currentAgentThreads.value.length > 0) {
-      // 如果有对话，则选择最近的一个
-      await agentStore.selectThread(currentAgentThreads.value[0].id);
-      await getAgentHistory();
-    } else {
-      // 如果没有对话，创建新对话
-      await createNewChat();
-    }
-  } catch (error) {
-    console.error('从服务器加载状态出错:', error);
-  }
-};
-
-// 获取智能体历史记录
-const getAgentHistory = async () => {
-  if (!agentStore.selectedAgentId || !currentChatId.value) {
-    console.warn('未选择智能体或对话ID');
-    return;
-  }
-
-  try {
-    console.debug(`正在获取智能体[${agentStore.selectedAgentId}]的历史记录，对话ID: ${currentChatId.value}`);
-
-
-    // 使用 agentStore 获取线程消息
-    await agentStore.fetchThreadMessages(currentChatId.value);
-    // 从 store 获取消息并转换格式
-    if (currentThreadMessages.value && Array.isArray(currentThreadMessages.value)) {
-      // 将服务器格式的历史记录转换为组件格式
-      onGoingConv.msgChunks = {};
-      convs.value = convertServerHistoryToMessages(currentThreadMessages.value);
-
-      // 加载历史记录后，启用自动滚动并滚动到底部
-      shouldAutoScroll.value = true;
-      await nextTick();
-      await scrollToBottom();
-    } else {
-      message.warning('未找到历史记录或格式不正确');
-    }
-  } catch (error) {
-    console.error('获取智能体历史记录出错:', error);
-    message.error('获取历史记录失败');
-  }
-};
-
-const convertToolResultToMessages = (msgs) => {
-  const toolResponseMap = new Map();
-  for (const item of msgs) {
-    if (item.type === 'tool' && item.tool_call_id) {
-      toolResponseMap.set(item.tool_call_id, item);
-    }
-  }
-
-  const convertedMsgs = msgs.map(item => {
-    if (item.type === 'ai' && item.tool_calls && item.tool_calls.length > 0) {
-      return {
-        ...item,
-        tool_calls: item.tool_calls.map(toolCall => {
-          const toolResponse = toolResponseMap.get(toolCall.id);
-          return {
-            ...toolCall,
-            tool_call_result: toolResponse || null
-          };
-        })
-      };
-    }
-    return item;
-  });
-
-  // console.log("convertedMsgs", convertedMsgs);
-  return convertedMsgs;
-}
-
-const convertServerHistoryToMessages = (serverHistory) => {
-  // 第一步：将所有tool消息与对应的tool call合并
-  const mergedHistory = convertToolResultToMessages(serverHistory);
-
-  // 第三步：按照对话分组
-  const conversations = [];
-  let currentConv = null;
-
-  for (const item of mergedHistory) {
-    if (item.type === 'human') {
-      currentConv = {
-        messages: [item],
-        status: 'loading'
-      };
-      conversations.push(currentConv);
-    } else if (item.type === 'ai' && currentConv) {
-      currentConv.messages.push(item);
-
-      if (item.response_metadata?.finish_reason === 'stop') {
-        item.isLast = true;
-        currentConv.status = 'finished';
-        currentConv = null;
-      }
-    }
-  }
-
-  console.debug("conversations", conversations);
-  return conversations;
-};
-
-// 组件挂载时加载状态
-onMounted(async () => {
-  // 独立页面模式的时候从这里加载，在AgentView页面可能会重复加载
-  await initAll();
-});
-
-
-// 监听agentId变化
-onMounted(() => {
-  watch(() => agentStore.selectedAgentId, async (newAgentId, oldAgentId) => {
-    try {
-      console.debug("智能体ID变化", oldAgentId, "->", newAgentId);
-
-      // 如果变化了，重置会话并加载新数据
-      if (newAgentId !== oldAgentId) {
-        await initAll();
-      }
-    } catch (error) {
-      console.error('智能体ID变化处理出错:', error);
-      isLoading.value = false;
-    }
-  });
-});
-
-// 监听消息变化自动滚动
-watch([convs, () => onGoingConv.messages], () => {
-  scrollToBottom();
-}, { deep: true });
-
-// ==================== 用户交互处理 ====================
-
-// 检查是否在底部（允许一定误差）
-const isAtBottom = () => {
-  const container = document.querySelector('.chat');
-  if (!container) return false;
-
-  const threshold = 100; // 距离底部100px内认为是在底部
-  const isBottom = container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
-  return isBottom;
-};
-
-// 处理滚动事件
-const handleScroll = () => {
-  if (scrollTimer) {
-    clearTimeout(scrollTimer);
-  }
-
-  // 标记用户正在滚动
-  isUserScrolling.value = true;
-
-  // 检查是否在底部
-  const atBottom = isAtBottom();
-  shouldAutoScroll.value = atBottom;
-
-  // 滚动结束后一段时间重置用户滚动状态
-  scrollTimer = setTimeout(() => {
-    isUserScrolling.value = false;
-  }, 150);
-};
-
-// 智能滚动到底部
-const scrollToBottom = async () => {
-  await nextTick();
-
-  // 只有在应该自动滚动时才执行
-  if (!shouldAutoScroll.value) return;
-
-  const container = document.querySelector('.chat');
-  if (!container) return;
-
-  const scrollOptions = { top: container.scrollHeight, behavior: 'smooth' };
-
-  // 多次尝试滚动以确保成功
-  container.scrollTo(scrollOptions);
-  setTimeout(() => {
-    if (shouldAutoScroll.value) {
-      container.scrollTo(scrollOptions);
-    }
-  }, 50);
-  setTimeout(() => {
-    if (shouldAutoScroll.value) {
-      container.scrollTo(scrollOptions);
-    }
-  }, 150);
-  setTimeout(() => {
-    if (shouldAutoScroll.value) {
-      container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
-    }
-  }, 300);
-};
-
+const retryMessage = (msg) => { /* TODO */ };
 
 const toggleSidebar = () => {
   state.isSidebarOpen = !state.isSidebarOpen;
   localStorage.setItem('chat_sidebar_open', state.isSidebarOpen);
-  console.log("toggleSidebar", state.isSidebarOpen);
-}
+};
 
-const openAgentModal = () => {
-  // 发送事件给父组件，让父组件处理打开智能体选择弹窗的逻辑
-  emit('open-agent-modal');
-}
+const openAgentModal = () => emit('open-agent-modal');
 
-// 处理键盘事件
-const handleKeyDown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    // 只有在满足条件时才发送
-    if (userInput.value.trim() && currentAgent.value && !state.isProcessingRequest) {
-      const tempUserInput = userInput.value;
-      userInput.value = ''; // 立即清空输入框
-      // 使用异步调用确保清空先发生
-      setTimeout(() => {
-        sendMessageToServer(tempUserInput);
-      }, 0);
+// ==================== HELPER FUNCTIONS ====================
+
+const getLastMessage = (conv) => {
+  if (!conv?.messages?.length) return null;
+  for (let i = conv.messages.length - 1; i >= 0; i--) {
+    if (conv.messages[i].type === 'ai') return conv.messages[i];
+  }
+  return null;
+};
+
+const showMsgRefs = (msg) => {
+  if (msg.isLast) return ['copy'];
+  return false;
+};
+
+// ==================== LIFECYCLE & WATCHERS ====================
+
+const initAll = async () => {
+  try {
+    if (!agentStore.isInitialized) {
+      await agentStore.initialize();
     }
+    await loadChatsList();
+  } catch (error) {
+    handleChatError(error, 'load');
   }
 };
 
-const mergeMessageChunk = (chunks) => {
-  if (chunks.length === 0) return null;
+const loadChatsList = async () => {
+  try {
+    if (!AgentValidator.validateLoadOperation(agentStore.selectedAgentId, '加载对话列表')) return;
+    await agentStore.fetchThreads(agentStore.selectedAgentId);
 
-  // 以第一个chunk为基础
-  // for (const c of chunks) {
-  //   if (c.additional_kwargs?.tool_calls) {
-  //     console.warn("chunks", toRaw(c))
-  //     break;
-  //   }
-  // }
-  // 深拷贝第一个chunk作为结果
-  const result = JSON.parse(JSON.stringify(chunks[0]));
-  // console.debug("result", toRaw(result))
-
-  result.content = result.content || '';
-  result.additional_kwargs = result.additional_kwargs || {};
-  result.additional_kwargs.reasoning_content = result.additional_kwargs?.reasoning_content || '';
-
-  // 合并其他chunks
-  for (let i = 1; i < chunks.length; i++) {
-    const chunk = chunks[i];
-
-    // 合并content
-    result.content += chunk.content || '';
-    result.additional_kwargs.reasoning_content += chunk.additional_kwargs?.reasoning_content || '';
-
-    // 如果是当前chunk没有的 key, value, 或者当前 result[key] 为空，则添加到result中
-    for (const key in chunk) {
-      if (!result[key]) {
-        result[key] = JSON.parse(JSON.stringify(chunk[key]));
-      }
+    if (currentAgentThreads.value && currentAgentThreads.value.length > 0) {
+      const threadToSelect = currentAgentThreads.value[0].id;
+      agentStore.selectThread(threadToSelect);
+      await agentStore.fetchThreadMessages(threadToSelect);
+    } else {
+      await createNewChat();
     }
-
-    // 合并tool_calls (如果存在)
-    if (chunk.additional_kwargs?.tool_calls) {
-      if (!result.additional_kwargs) result.additional_kwargs = {};
-      if (!result.additional_kwargs.tool_calls) result.additional_kwargs.tool_calls = [];
-
-      for (const toolCall of chunk.additional_kwargs.tool_calls) {
-        const existingToolCall = result.additional_kwargs.tool_calls.find(
-          t => (t.id === toolCall.id || t.index === toolCall.index)
-        );
-
-        if (existingToolCall) {
-          // 合并相同ID的tool call
-          existingToolCall.function.arguments += toolCall.function.arguments;
-        } else {
-          // 添加新的tool call
-          result.additional_kwargs.tool_calls.push(JSON.parse(JSON.stringify(toolCall)));
-        }
-      }
-    }
+  } catch (error) {
+    handleChatError(error, 'load');
   }
+};
 
-  if (result.type === 'AIMessageChunk') {
-    result.type = 'ai'
-    if (result.additional_kwargs?.tool_calls) {
-      result.tool_calls = result.additional_kwargs.tool_calls;
+onMounted(async () => {
+  await initAll();
+  watch(() => agentStore.selectedAgentId, (newAgentId, oldAgentId) => {
+    if (newAgentId && newAgentId !== oldAgentId) {
+      initAll();
     }
-  }
-  return result;
-}
+  });
+  watch(conversations, () => {
+    scrollController.scrollToBottom();
+  }, { deep: true });
+});
 
 </script>
 
@@ -1517,7 +544,7 @@ const mergeMessageChunk = (chunks) => {
 
   .inputer-init {
     margin: 40px auto;
-    width: 80%;
+    width: 90%;
     max-width: 800px;
   }
 }

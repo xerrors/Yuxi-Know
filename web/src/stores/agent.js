@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { agentApi, threadApi } from '@/apis/agent';
+import { MessageProcessor } from '@/utils/messageProcessor';
+import { handleChatError } from '@/utils/errorHandler';
 
 export const useAgentStore = defineStore('agent', {
   state: () => ({
@@ -20,6 +22,10 @@ export const useAgentStore = defineStore('agent', {
     currentThreadId: null, // 当前选中的线程ID
     threadMessages: {}, // 以线程ID为键的消息列表
 
+    // 对话状态
+    onGoingConv: { msgChunks: {} }, // 正在进行的对话（流式）
+    isStreaming: false, // 是否正在接收流式响应
+
     // 加载状态
     isLoadingAgents: false,
     isLoadingConfig: false,
@@ -35,75 +41,61 @@ export const useAgentStore = defineStore('agent', {
   }),
 
   getters: {
-    // 获取当前选中的智能体
-    selectedAgent() {
-      return this.selectedAgentId ? this.agents[this.selectedAgentId] : null;
-    },
-
-    // 获取默认智能体，默认取第一个
-    defaultAgent() {
-      return this.defaultAgentId ? this.agents[this.defaultAgentId] : this.agents[Object.keys(this.agents)[0]];
-    },
-
-    // 获取智能体列表（数组形式）
-    agentsList() {
-      return Object.values(this.agents);
-    },
-
-    // 判断当前智能体是否为默认智能体
-    isDefaultAgent() {
-      return this.selectedAgentId === this.defaultAgentId;
-    },
-
-    // 获取当前智能体的配置schema
-    configSchema() {
-      const agent = this.selectedAgentId ? this.agents[this.selectedAgentId] : null;
+    // --- 智能体相关 Getters ---
+    selectedAgent: (state) => state.selectedAgentId ? state.agents[state.selectedAgentId] : null,
+    defaultAgent: (state) => state.defaultAgentId ? state.agents[state.defaultAgentId] : state.agents[Object.keys(state.agents)[0]],
+    agentsList: (state) => Object.values(state.agents),
+    isDefaultAgent: (state) => state.selectedAgentId === state.defaultAgentId,
+    configSchema: (state) => {
+      const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
       return agent?.config_schema || {};
     },
-
-    // 获取可配置项（处理x_oap_ui_config）
-    configurableItems() {
-      const schema = this.configSchema || {};
+    configurableItems: (state) => {
+      const schema = state.configSchema || {};
       if (!schema || !schema.configurable_items) return {};
-
       const items = { ...schema.configurable_items };
-
-      // 处理x_oap_ui_config，将其提升到上一层
       Object.keys(items).forEach(key => {
         const item = items[key];
         if (item && item.x_oap_ui_config) {
-          items[key] = {
-            ...item,
-            ...item.x_oap_ui_config
-          };
+          items[key] = { ...item, ...item.x_oap_ui_config };
           delete items[key].x_oap_ui_config;
         }
       });
-
       return items;
     },
+    hasConfigChanges: (state) => JSON.stringify(state.agentConfig) !== JSON.stringify(state.originalAgentConfig),
 
-    // 检查配置是否有变更
-    hasConfigChanges() {
-      return JSON.stringify(this.agentConfig) !== JSON.stringify(this.originalAgentConfig);
+    // --- 线程与消息相关 Getters ---
+    currentAgentThreads: (state) => state.selectedAgentId ? (state.threads[state.selectedAgentId] || []) : [],
+    currentThread: (state) => {
+      if (!state.currentThreadId || !state.selectedAgentId) return null;
+      const agentThreads = state.threads[state.selectedAgentId] || [];
+      return agentThreads.find(thread => thread.id === state.currentThreadId);
     },
+    currentThreadMessages: (state) => state.currentThreadId ? (state.threadMessages[state.currentThreadId] || []) : [],
 
-    // 获取当前智能体的线程列表
-    currentAgentThreads() {
-      return this.selectedAgentId ? (this.threads[this.selectedAgentId] || []) : [];
+    // --- 对话UI Getters ---
+    onGoingConvMessages: (state) => {
+      const msgs = Object.values(state.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
+      return msgs.length > 0
+        ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
+        : [];
     },
+    conversations: (state) => {
+      const historyConvs = MessageProcessor.convertServerHistoryToMessages(state.currentThreadMessages);
+      // Access onGoingConvMessages getter through state
+      const onGoingMessages = state.onGoingConvMessages;
 
-    // 获取当前线程
-    currentThread() {
-      if (!this.currentThreadId || !this.selectedAgentId) return null;
-      const agentThreads = this.threads[this.selectedAgentId] || [];
-      return agentThreads.find(thread => thread.id === this.currentThreadId);
+      if (onGoingMessages.length > 0) {
+        // Create a new conversation object for the ongoing messages
+        const onGoingConv = {
+          messages: onGoingMessages,
+          status: 'streaming'
+        };
+        return [...historyConvs, onGoingConv];
+      }
+      return historyConvs;
     },
-
-    // 获取当前线程的消息
-    currentThreadMessages() {
-      return this.currentThreadId ? (this.threadMessages[this.currentThreadId] || []) : [];
-    }
   },
 
   actions: {
@@ -355,6 +347,7 @@ export const useAgentStore = defineStore('agent', {
     // 选择线程
     selectThread(threadId) {
       this.currentThreadId = threadId;
+      this.resetOnGoingConv();
 
       // 如果没有该线程的消息，初始化空数组
       if (threadId && !this.threadMessages[threadId]) {
@@ -368,30 +361,110 @@ export const useAgentStore = defineStore('agent', {
 
       this.isLoadingMessages = true;
       this.error = null;
+      this.resetOnGoingConv();
 
       try {
         const response = await agentApi.getAgentHistory(this.selectedAgentId, threadId);
         this.threadMessages[threadId] = response.history || [];
       } catch (error) {
-        console.error('Failed to fetch thread messages:', error);
-        this.error = error.message;
+        handleChatError(error, 'load');
         throw error;
       } finally {
         this.isLoadingMessages = false;
       }
     },
 
-    // 发送消息
-    async sendMessage(agentId, requestData) {
-      if (!agentId) return null;
+    // --- 流式对话 Actions ---
+
+    resetOnGoingConv() {
+      this.onGoingConv = { msgChunks: {} };
+    },
+
+    _processStreamChunk(chunk) {
+      const { status, msg, request_id, message } = chunk;
+      switch (status) {
+        case 'init':
+          this.onGoingConv.msgChunks[request_id] = [msg];
+          break;
+        case 'loading':
+          if (msg.id) {
+            if (!this.onGoingConv.msgChunks[msg.id]) {
+              this.onGoingConv.msgChunks[msg.id] = [];
+            }
+            this.onGoingConv.msgChunks[msg.id].push(msg);
+          }
+          break;
+        case 'error':
+          handleChatError({ message }, 'stream');
+          break;
+        case 'finished':
+          this.fetchThreadMessages(this.currentThreadId);
+          break;
+      }
+    },
+
+    // 发送消息并处理流式响应
+    async sendMessage(text) {
+      if (!this.selectedAgentId || !this.currentThreadId || !text) {
+        handleChatError({ message: "Missing agent, thread, or message text" }, 'send');
+        return;
+      }
+
+      this.isStreaming = true;
+      this.resetOnGoingConv();
+
+      // 如果是新对话，用消息内容作为标题
+      if (this.currentThreadMessages.length === 0) {
+        this.updateThread(this.currentThreadId, text);
+      }
+
+      const requestData = {
+        query: text,
+        config: {
+          thread_id: this.currentThreadId,
+        },
+      };
 
       try {
-        const response = await agentApi.sendAgentMessage(agentId, requestData);
-        return response;
+        const response = await agentApi.sendAgentMessage(this.selectedAgentId, requestData);
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const chunk = JSON.parse(line.trim());
+                this._processStreamChunk(chunk);
+              } catch (e) {
+                console.warn('Failed to parse stream chunk JSON:', e);
+              }
+            }
+          }
+        }
+        // Process any remaining data in the buffer
+        if (buffer.trim()) {
+          try {
+            const chunk = JSON.parse(buffer.trim());
+            this._processStreamChunk(chunk);
+          } catch (e) {
+            console.warn('Failed to parse final stream chunk JSON:', e);
+          }
+        }
+
       } catch (error) {
-        console.error('Failed to send message:', error);
-        this.error = error.message;
-        throw error;
+        handleChatError(error, 'send');
+      } finally {
+        this.isStreaming = false;
       }
     },
 

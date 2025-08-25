@@ -181,7 +181,7 @@ export function apiSuperAdminPut(url, data = {}, options = {}) {
  * @param {boolean} requiresAuth - 是否需要认证
  * @returns {Promise} - 请求结果
  */
-export function apiDelete(url, options = {}, requiresAuth = false) {
+export function apiDelete(url, options = {}, requiresAuth = true) {
   return apiRequest(url, { method: 'DELETE', ...options }, requiresAuth)
 }
 

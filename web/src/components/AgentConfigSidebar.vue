@@ -4,7 +4,7 @@
     <div class="sidebar-header">
       <div class="sidebar-title">
         <SettingOutlined class="title-icon" />
-        <span>智能体配置</span>
+        <span>{{ selectedAgent.name || '未选择智能体' }} 配置</span>
       </div>
       <a-button
         type="text"
@@ -20,13 +20,12 @@
     <div class="sidebar-content">
       <div class="agent-info" v-if="selectedAgent">
         <div class="agent-basic-info">
-          <h4>{{ selectedAgent.name || '未选择智能体' }}</h4>
           <p class="agent-description">{{ selectedAgent.description }}</p>
-          <div class="debug-toggle" v-if="selectedAgent.name">
+          <!-- <div class="debug-toggle" v-if="selectedAgent.name">
             <span class="debug-text">调试信息</span>
             <a-switch v-model:checked="debugMode" size="small" />
           </div>
-          <pre v-if="debugMode && selectedAgent.name" class="debug-info">{{ selectedAgent }}</pre>
+          <pre v-if="debugMode && selectedAgent.name" class="debug-info">{{ selectedAgent }}</pre> -->
         </div>
 
         <a-divider />
@@ -72,7 +71,7 @@
                   v-else-if="key === 'system_prompt'"
                   :value="agentConfig[key]"
                   @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
-                  :rows="3"
+                  :rows="10"
                   :placeholder="getPlaceholder(key, value)"
                   class="system-prompt-input"
                 />
@@ -209,9 +208,10 @@
           <a-button type="primary" @click="saveConfig" class="save-btn">
             保存配置
           </a-button>
-          <a-button @click="resetConfig" class="reset-btn">
+          <!-- TODO：BUG 目前有 bug 暂时不展示 -->
+          <!-- <a-button @click="resetConfig" class="reset-btn">
             重置
-          </a-button>
+          </a-button> -->
         </div>
       </div>
     </div>
@@ -581,14 +581,6 @@ watch(() => props.isOpen, (newVal) => {
 
     .agent-info {
       .agent-basic-info {
-        margin-bottom: 16px;
-
-        h4 {
-          margin: 0 0 8px 0;
-          font-size: 18px;
-          font-weight: 600;
-          color: var(--gray-900);
-        }
 
         .agent-description {
           margin: 0 0 12px 0;
@@ -688,6 +680,13 @@ watch(() => props.isOpen, (newVal) => {
 
           .system-prompt-input {
             resize: vertical;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            padding: 8px 12px;
+
+            &:focus {
+              outline: none;
+            }
           }
 
           .config-select,

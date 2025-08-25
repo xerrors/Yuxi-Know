@@ -284,7 +284,7 @@ const openAgentModal = () => {
       gap: 8px;
 
       &:hover {
-        background-color: var(--main-100);
+        background-color: var(--gray-100);
       }
     }
   }
@@ -415,11 +415,11 @@ const openAgentModal = () => {
   justify-content: center;
   align-items: center;
   border-radius: 8px;
-  color: var(--gray-900);
-  padding: 0.5rem;
+  color: var(--gray-500);
+  // padding: 0.5rem;
   transition: background-color 0.3s;
   &:hover {
-    background-color: var(--gray-100);
+    color: var(--main-color);
   }
 }
 

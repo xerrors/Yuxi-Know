@@ -63,6 +63,9 @@
       ok-text="添加到图数据库" cancel-text="取消"
       :confirm-loading="state.processing">
       <div class="upload">
+        <div class="note">
+          <p>上传的文件内容参考 test/data/A_Dream_of_Red_Mansions_tiny.jsonl 中的格式：</p>
+        </div>
         <a-upload-dragger
           class="upload-dragger"
           v-model:fileList="fileList"

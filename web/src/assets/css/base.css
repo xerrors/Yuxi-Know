@@ -41,6 +41,8 @@
 
 
   --main-color: #016179;
+  /* 鲜艳一点的 */
+  --main-bright: #0188a6;
   --secondry-color: #4e616d;
   --error-color: #ba1a1a;
 
