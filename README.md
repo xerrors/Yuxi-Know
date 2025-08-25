@@ -8,8 +8,10 @@
 ![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
 ![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)
 ![](https://img.shields.io/github/stars/xerrors/Yuxi-Know)
+[![Bilibili](https://img.shields.io/badge/bilibili-00A1D6.svg?style=flat&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8)
 
 </div>
+
 
 ## 📖 简介
 
@@ -22,9 +24,19 @@
 - 🕸️ **知识图谱** - 支持 LightRAG 的自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
 - 👥 **权限控制** - 支持超级管理员、管理员、普通用户三级权限体系
 
-![欢迎 Star](https://github.com/user-attachments/assets/a9ea624a-7b95-4bc1-a3c7-bfec6c587b5c)
-
-https://github.com/user-attachments/assets/15f7f315-003d-4e41-a260-739c2529f824
+<div align="center">
+  <!-- 视频缩略图 -->
+  <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank">
+    <img width="3651" height="1933" alt="视频演示缩略图" src="https://github.com/user-attachments/assets/eac4fa89-2176-46ae-a649-45a125cb6ed1" />
+  </a>
+  
+  <!-- 视频链接文字 -->
+  <p style="margin-top: 12px;">
+    <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank" style="text-decoration: none; color: #23ade5; font-weight: 500;">
+      📽️ 点击查看视频演示 <i class="fa fa-external-link" style="margin-left: 4px;"></i>
+    </a>
+  </p>
+</div>
 
 
 ## 🚀 快速开始
