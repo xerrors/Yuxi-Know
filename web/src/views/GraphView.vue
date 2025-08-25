@@ -284,7 +284,7 @@ const onSearch = () => {
       }
       console.log(data)
       console.log(graphData)
-      randerGraph()
+      renderGraph()
     })
     .catch((error) => {
       console.error('查询错误:', error);
