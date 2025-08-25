@@ -17,7 +17,6 @@
       </div>
 
       <!-- 消息内容 -->
-      <!-- <div v-else-if="message.content" v-html="renderMarkdown(message)" class="message-md"></div> -->
       <MdPreview v-if="parsedData.content" ref="editorRef"
         editorId="preview-only"
         previewTheme="github"
@@ -146,7 +145,7 @@ const getToolNameByToolCall = (toolCall) => {
 
 const parsedData = computed(() => {
   // Start with default values from the prop to avoid mutation.
-  let content = props.message.content || '';
+  let content = props.message.content.trim() || '';
   let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';
 
   // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
