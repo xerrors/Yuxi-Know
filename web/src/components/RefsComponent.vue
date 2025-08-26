@@ -159,7 +159,7 @@ const dislikeThisResponse = (msg) => {
   gap: 10px;
 
   .item {
-    background: var(--gray-100);
+    background: var(--gray-50);
     color: var(--gray-700);
     padding: 2px 8px;
     border-radius: 8px;
@@ -169,10 +169,10 @@ const dislikeThisResponse = (msg) => {
     &.btn {
       cursor: pointer;
       &:hover {
-        background: var(--gray-200);
+        background: var(--gray-100);
       }
       &:active {
-        background: var(--gray-300);
+        background: var(--gray-200);
       }
     }
   }

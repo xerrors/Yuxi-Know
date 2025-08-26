@@ -136,7 +136,7 @@
     <div
       v-if="selectedEdgeData"
       class="detail-panel edge-panel"
-      :style="{ transform: `translate(${edgePanelPosition.x}px, ${edgePanelPosition.y}px)` }"
+      :style="{ transform: `translate(${intelligentEdgePanelPosition.x}px, ${intelligentEdgePanelPosition.y}px)` }"
       @mousedown="startDragPanel('edge', $event)"
     >
       <div class="detail-header">
@@ -284,7 +284,7 @@ const loadingMessage = ref('加载图数据中...')
 
 // 面板拖拽相关
 const nodePanelPosition = ref({ x: 12, y: 60 })
-const edgePanelPosition = ref({ x: 12, y: 320 })
+const edgePanelPosition = ref({ x: 12, y: 150 }) // 降低初始Y位置以适应紧凑模式
 const dragging = ref({ active: false, type: '', startX: 0, startY: 0, initialX: 0, initialY: 0 })
 
 // 数据库相关状态
@@ -308,6 +308,29 @@ const entityTypes = computed(() => graphStore.entityTypes)
 const stats = computed(() => graphStore.stats)
 const selectedNodeData = computed(() => graphStore.selectedNodeData)
 const selectedEdgeData = computed(() => graphStore.selectedEdgeData)
+
+// 智能边面板位置 - 确保在紧凑模式下也能正确显示
+const intelligentEdgePanelPosition = computed(() => {
+  if (!sigmaContainer.value) return edgePanelPosition.value
+  
+  const containerHeight = sigmaContainer.value.clientHeight
+  const panelHeight = 200 // 估计的面板高度
+  const nodePanelBottom = selectedNodeData.value ? nodePanelPosition.value.y + 200 : 0
+  
+  // 如果有节点面板显示，将边面板放在节点面板下方
+  if (selectedNodeData.value) {
+    return {
+      x: edgePanelPosition.value.x + 260, // 在节点面板右侧
+      y: Math.min(nodePanelPosition.value.y, containerHeight - panelHeight - 20)
+    }
+  }
+  
+  // 确保边面板在容器范围内
+  return {
+    x: edgePanelPosition.value.x,
+    y: Math.min(edgePanelPosition.value.y, Math.max(60, containerHeight - panelHeight - 20))
+  }
+})
 
 // 获取节点显示名称
 const getNodeDisplayName = (node) => {
@@ -425,11 +448,11 @@ const sigmaSettings = {
   edgeLabelColor: {
     color: '#666'
   },
-  minEdgeThickness: 3, // 增加最小边厚度，提高点击性
-  maxEdgeThickness: 8, // 增加最大边厚度
+  minEdgeThickness: 4, // 增加最小边厚度，提高点击性
+  maxEdgeThickness: 10, // 增加最大边厚度
   // 添加边点击相关配置
-  edgeClickTolerance: 10, // 边点击容差，增加点击检测区域
-  edgeHoverTolerance: 8,  // 边悬停容差
+  edgeClickTolerance: 15, // 增加边点击容差，增加点击检测区域
+  edgeHoverTolerance: 12,  // 增加边悬停容差
   zoomToSizeRatioFunction: (x) => x, // 确保缩放时边的厚度保持合理
   eventListenerOptions: {
     wheel: { passive: true },
@@ -522,18 +545,45 @@ const registerEvents = () => {
   // 边点击事件
   sigmaInstance.on('clickEdge', ({ edge }) => {
     try {
-      console.log('边被点击:', edge)
+      console.log('边被点击 - Sigma边ID:', edge)
       const graph = sigmaInstance.getGraph()
       if (graph.hasEdge(edge)) {
+        // 获取Sigma边的属性，其中包含原始数据
+        const sigmaEdgeData = graph.getEdgeAttributes(edge)
+        console.log('Sigma边属性:', sigmaEdgeData)
+        
+        // 立即设置选中的边 - 使用Sigma边ID
         graphStore.setSelectedEdge(edge)
-        const edgeData = graph.getEdgeAttributes(edge)
-        console.log('边数据:', edgeData)
-        message.success(`已选中边: ${edge}`)
+        
+        // 确保边面板显示
+        nextTick(() => {
+          if (selectedEdgeData.value) {
+            console.log('边面板应该显示:', selectedEdgeData.value)
+            message.success(`已选中边: ${getEdgeDisplayName(selectedEdgeData.value)}`)
+          } else {
+            console.warn('selectedEdgeData为空，尝试使用Sigma边数据')
+            // 如果无法从rawGraph中找到，直接使用Sigma边的原始数据
+            const fallbackData = sigmaEdgeData.originalData || {
+              id: edge,
+              source: graph.source(edge),
+              target: graph.target(edge),
+              properties: {
+                keywords: sigmaEdgeData.label || '',
+                description: sigmaEdgeData.label || '',
+                weight: sigmaEdgeData.originalWeight || 1
+              }
+            }
+            console.log('使用回退边数据:', fallbackData)
+            message.success(`已选中边: ${getEdgeDisplayName(fallbackData)}`)
+          }
+        })
       } else {
         console.warn('点击的边不存在于图中:', edge)
+        message.warning('点击的边不存在于图中')
       }
     } catch (error) {
       console.error('处理边点击事件时出错:', error)
+      message.error('处理边点击事件时出错')
     }
   })
 
@@ -1027,6 +1077,14 @@ onUnmounted(() => {
 // 监听选中节点数据变化，用于调试
 watch(() => graphStore.selectedNodeData, (nodeData) => {
   console.log('Selected node data changed:', nodeData)
+})
+
+// 监听选中边数据变化，用于调试和确保面板显示
+watch(() => graphStore.selectedEdgeData, (edgeData) => {
+  console.log('Selected edge data changed:', edgeData)
+  if (edgeData) {
+    console.log('边面板应该显示，当前位置:', intelligentEdgePanelPosition.value)
+  }
 })
 
 // 监听选中节点变化，移动相机

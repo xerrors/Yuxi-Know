@@ -44,23 +44,53 @@ export const useGraphStore = defineStore('graph', {
     // 获取选中边的详细信息
     selectedEdgeData: (state) => {
       if (!state.selectedEdge || !state.rawGraph) return null
-      // 首先尝试通过dynamicId匹配
+      
+      console.log('查找边数据，选中边ID:', state.selectedEdge)
+      
+      // 首先尝试通过dynamicId匹配（Sigma使用的ID格式）
       let foundEdge = state.rawGraph.edges.find(edge => edge.dynamicId === state.selectedEdge)
-      if (foundEdge) return foundEdge
+      if (foundEdge) {
+        console.log('通过dynamicId找到边:', foundEdge)
+        return foundEdge
+      }
 
       // 如果没找到，尝试通过原始ID匹配
       foundEdge = state.rawGraph.edges.find(edge => edge.id === state.selectedEdge)
-      if (foundEdge) return foundEdge
+      if (foundEdge) {
+        console.log('通过id找到边:', foundEdge)
+        return foundEdge
+      }
+
+      // 对于格式为 source-target-index 的dynamicId，也尝试解析
+      const dynamicIdPattern = /^(.+)-(.+)-(\d+)$/
+      const match = state.selectedEdge.match(dynamicIdPattern)
+      if (match) {
+        const [, source, target, index] = match
+        foundEdge = state.rawGraph.edges.find(edge => 
+          edge.source === source && edge.target === target
+        )
+        if (foundEdge) {
+          console.log('通过解析dynamicId找到边:', foundEdge)
+          return foundEdge
+        }
+      }
 
       // 最后尝试通过source->target格式匹配
-      const [source, target] = state.selectedEdge.split('->')
-      if (source && target) {
+      const arrowPattern = /^(.+)->(.+)$/
+      const arrowMatch = state.selectedEdge.match(arrowPattern)
+      if (arrowMatch) {
+        const [, source, target] = arrowMatch
         foundEdge = state.rawGraph.edges.find(edge =>
           edge.source === source.trim() && edge.target === target.trim()
         )
+        if (foundEdge) {
+          console.log('通过箭头格式找到边:', foundEdge)
+          return foundEdge
+        }
       }
 
-      return foundEdge || null
+      console.warn('未找到匹配的边数据，选中边ID:', state.selectedEdge)
+      return null
     },
 
     // 检查图是否为空
