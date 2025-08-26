@@ -94,10 +94,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed, h } from 'vue';
+import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed, h, toRaw } from 'vue';
 import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
+import { useAgentStore } from '@/stores/agent';
 import { useThrottleFn } from '@vueuse/core';
 import { message } from 'ant-design-vue';
 import {
@@ -121,6 +122,7 @@ import { checkAdminPermission } from '@/stores/user';
 const configStore = useConfigStore()
 const userStore = useUserStore();
 const databaseStore = useDatabaseStore();
+const agentStore = useAgentStore();
 const config = configStore.config;
 
 
@@ -144,7 +146,6 @@ const state = reactive({
   isFullscreen: false,
 });
 
-const logs = ref('');
 const error = ref('');
 const logContainer = ref(null);
 let autoRefreshInterval = null;
@@ -229,11 +230,6 @@ const clearLogs = () => {
 // 搜索功能
 const onSearch = () => {
   // 搜索会通过computed自动触发
-};
-
-// 过滤日志
-const filterLogs = () => {
-  // 过滤会通过computed自动触发
 };
 
 // 日志级别选择相关方法
@@ -376,24 +372,67 @@ const printAgentConfig = async () => {
   if (!checkAdminPermission()) return;
 
   try {
-    console.log('=== 智能体配置 ===');
+    console.log('=== 智能体配置信息 ===');
 
-    // 获取智能体列表
-    const agentsData = await agentApi.getAgents();
-    console.log('智能体列表:', JSON.stringify(agentsData.agents, null, 2));
+    // 从store 获取状态信息
+    console.log('Store 状态:', {
+      isInitialized: agentStore.isInitialized,
+      selectedAgentId: agentStore.selectedAgentId,
+      defaultAgentId: agentStore.defaultAgentId,
+      currentThreadId: agentStore.currentThreadId,
+      isStreaming: agentStore.isStreaming,
+      loadingStates: {
+        isLoadingAgents: agentStore.isLoadingAgents,
+        isLoadingConfig: agentStore.isLoadingConfig,
+        isLoadingTools: agentStore.isLoadingTools,
+        isLoadingThreads: agentStore.isLoadingThreads,
+        isLoadingMessages: agentStore.isLoadingMessages
+      },
+      error: agentStore.error
+    });
 
-    // 获取默认智能体
-    const defaultAgent = await agentApi.getDefaultAgent();
-    console.log('默认智能体:', JSON.stringify(defaultAgent, null, 2));
+    // 智能体列表信息
+    console.log('智能体列表 (从store):', {
+      count: agentStore.agentsList.length,
+      agents: toRaw(agentStore.agentsList)
+    });
 
-    // 获取每个智能体的配置
-    for (const agent of agentsData.agents) {
-      try {
-        const agentConfig = await agentApi.getAgentConfig(agent.id);
-        console.log(`智能体 "${agent.name}" 配置:`, JSON.stringify(agentConfig, null, 2));
-      } catch (err) {
-        console.log(`智能体 "${agent.name}" 配置获取失败:`, err.message);
-      }
+    // 当前选中智能体信息
+    if (agentStore.selectedAgent) {
+      console.log('当前选中智能体:', {
+        agent: toRaw(agentStore.selectedAgent),
+        isDefault: agentStore.isDefaultAgent,
+        configSchema: toRaw(agentStore.configSchema),
+        configurableItems: Object.keys(agentStore.configurableItems).length
+      });
+
+      // 当前智能体配置
+      console.log('当前智能体配置:', {
+        current: toRaw(agentStore.agentConfig),
+        original: toRaw(agentStore.originalAgentConfig),
+        hasChanges: agentStore.hasConfigChanges
+      });
+    }
+
+    // 工具信息
+    console.log('可用工具:', toRaw(agentStore.availableTools));
+
+    // 线程信息
+    console.log('线程信息:', {
+      currentAgentThreads: agentStore.currentAgentThreads.length,
+      currentThread: agentStore.currentThread ? toRaw(agentStore.currentThread) : null,
+      currentThreadMessages: agentStore.currentThreadMessages.length
+    });
+
+    // 对话状态
+    if (agentStore.isStreaming || Object.keys(agentStore.onGoingConv.msgChunks).length > 0) {
+      console.log('当前对话状态:', {
+        isStreaming: agentStore.isStreaming,
+        ongoingChunks: Object.keys(agentStore.onGoingConv.msgChunks).length,
+        ongoingMessages: agentStore.onGoingConvMessages.length,
+        conversations: agentStore.conversations.length,
+        detail: toRaw(agentStore.conversations)
+      });
     }
 
   } catch (error) {
@@ -462,7 +501,7 @@ const printAgentConfig = async () => {
   }
 
   .auto-refresh-button {
-    color:white;
+    color: white;
   }
 }
 

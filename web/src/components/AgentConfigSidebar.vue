@@ -205,7 +205,7 @@
       <!-- 固定在底部的操作按钮 -->
       <div class="sidebar-footer" v-if="!isEmptyConfig">
         <div class="form-actions">
-          <a-button type="primary" @click="saveConfig" class="save-btn">
+          <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
             保存配置
           </a-button>
           <!-- TODO：BUG 目前有 bug 暂时不展示 -->
@@ -631,14 +631,18 @@ watch(() => props.isOpen, (newVal) => {
 
         .save-btn {
           flex: 1;
-          background: var(--main-color);
+          background-color: var(--gray-100);
           border: none;
           border-radius: 6px;
           font-weight: 500;
           font-size: 14px;
 
+          &.changed {
+            background-color: var(--main-color);
+            color: #fff;
+          }
+
           &:hover {
-            background: var(--main-color);
             opacity: 0.9;
           }
         }

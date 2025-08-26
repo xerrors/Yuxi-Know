@@ -38,16 +38,16 @@
             v-for="(chunk, index) in fileGroup.chunks"
             :key="chunk.id"
             class="chunk-item"
-            :class="{ 'high-relevance': chunk.rerank_score > 0.5 }"
+            :class="{ 'high-relevance': chunk.score > 0.5 }"
             @click="showChunkDetail(chunk, index + 1)"
           >
             <div class="chunk-summary">
               <span class="chunk-index">#{{ index + 1 }}</span>
               <div class="chunk-scores">
-                <span class="score-item">相似度 {{ (chunk.distance * 100).toFixed(0) }}%</span>
+                <span class="score-item">相似度 {{ (chunk.score * 100).toFixed(0) }}%</span>
                 <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
               </div>
-              <span class="chunk-preview">{{ getPreviewText(chunk.entity.text) }}</span>
+              <span class="chunk-preview">{{ getPreviewText(chunk.content) }}</span>
               <EyeOutlined class="view-icon" />
             </div>
           </div>
@@ -62,7 +62,7 @@
     <!-- 弹窗展示chunk详细信息 -->
     <a-modal
       v-model:open="modalVisible"
-      :title="`文档片段 #${selectedChunk?.index} - ${selectedChunk?.data?.file?.filename}`"
+      :title="`文档片段 #${selectedChunk?.index} - ${selectedChunk?.data?.metadata?.source}`"
       width="800px"
       :footer="null"
       class="chunk-detail-modal"
@@ -72,10 +72,10 @@
           <div class="detail-scores">
             <div class="score-card">
               <div class="score-label">相似度分数</div>
-              <div class="score-value-large">{{ (selectedChunk.data.distance * 100).toFixed(1) }}%</div>
+              <div class="score-value-large">{{ (selectedChunk.data.score * 100).toFixed(1) }}%</div>
               <a-progress
-                :percent="getPercent(selectedChunk.data.distance)"
-                :stroke-color="getScoreColor(selectedChunk.data.distance)"
+                :percent="getPercent(selectedChunk.data.score)"
+                :stroke-color="getScoreColor(selectedChunk.data.score)"
                 :show-info="false"
                 stroke-width="6"
               />
@@ -92,13 +92,13 @@
             </div>
           </div>
           <div class="detail-meta">
-            <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.id }}</span>
+            <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
           </div>
         </div>
 
         <div class="detail-content">
           <h5>文档内容</h5>
-          <div class="content-text">{{ selectedChunk.data.entity.text }}</div>
+          <div class="content-text">{{ selectedChunk.data.content }}</div>
         </div>
       </div>
     </a-modal>
@@ -128,7 +128,7 @@ const fileGroups = computed(() => {
   const groups = new Map()
 
   props.data.forEach(item => {
-    const filename = item.file.filename
+    const filename = item.metadata.source
     if (!groups.has(filename)) {
       groups.set(filename, {
         filename,
@@ -187,66 +187,71 @@ const getScoreColor = (score) => {
   border: 1px solid var(--gray-200);
 
   .kb-header {
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--gray-200);
-    background: var(--gray-50);
+    background: var(--gray-25);
 
     h4 {
-      margin: 0 0 2px 0;
-      color: var(--main-color);
+      margin: 0 0 4px 0;
+      color: var(--gray-800);
       font-size: 14px;
       font-weight: 500;
       display: flex;
       align-items: center;
       gap: 6px;
+
+      .anticon {
+        color: var(--main-color);
+        font-size: 13px;
+      }
     }
 
     .result-summary {
-      font-size: 11px;
-      color: var(--gray-600);
+      font-size: 12px;
+      color: var(--gray-500);
     }
   }
 
   .kb-results {
-    padding: 6px;
+    padding: 8px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
   }
 
   .file-group {
-    border: 1px solid var(--gray-200);
-    border-radius: 6px;
+    border: 1px solid var(--gray-150);
+    border-radius: 8px;
     background: var(--gray-0);
     overflow: hidden;
 
     .file-header {
-      padding: 10px 12px;
+      padding: 12px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
-      transition: all 0.15s ease;
-      background: var(--gray-25);
+      transition: all 0.2s ease;
+      background: var(--gray-10);
 
       &:hover {
-        background: var(--gray-50);
+        background: var(--gray-25);
       }
 
       &.expanded {
-        background: var(--main-10);
-        border-bottom: 1px solid var(--gray-200);
+        background: var(--gray-50);
+        border-bottom: 1px solid var(--gray-150);
       }
 
       .file-info {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
         flex: 1;
         min-width: 0;
 
         .anticon {
-          color: var(--main-color);
+          color: var(--gray-500);
           font-size: 13px;
         }
 
@@ -263,17 +268,18 @@ const getScoreColor = (score) => {
 
         .chunk-count {
           font-size: 11px;
-          color: var(--gray-500);
-          background: var(--gray-100);
-          padding: 1px 5px;
-          border-radius: 10px;
+          color: var(--gray-400);
+          background: var(--gray-50);
+          padding: 2px 6px;
+          border-radius: 12px;
+          border: 1px solid var(--gray-150);
           white-space: nowrap;
         }
       }
 
       .expand-icon {
-        color: var(--gray-500);
-        transition: transform 0.15s ease;
+        color: var(--gray-400);
+        transition: transform 0.2s ease;
         font-size: 12px;
 
         .rotated {
@@ -283,25 +289,25 @@ const getScoreColor = (score) => {
     }
 
     .chunks-container {
-      background: var(--gray-10);
+      background: var(--gray-0);
     }
 
     .chunk-item {
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-bottom: 1px solid var(--gray-100);
       cursor: pointer;
-      transition: all 0.15s ease;
+      transition: all 0.2s ease;
 
       &:last-child {
         border-bottom: none;
       }
 
       &.high-relevance {
-        background: var(--main-10);
+        background: var(--main-5);
       }
 
       &:hover {
-        background: var(--main-30);
+        background: var(--gray-25);
 
         .view-icon {
           opacity: 1;
@@ -311,34 +317,38 @@ const getScoreColor = (score) => {
       .chunk-summary {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
 
         .chunk-index {
-          color: var(--main-color);
-          font-size: 10px;
+          color: var(--gray-500);
+          font-size: 11px;
           font-weight: 500;
-          min-width: 18px;
+          min-width: 20px;
           text-align: center;
+          background: var(--gray-25);
+          padding: 1px 4px;
+          border-radius: 4px;
         }
 
         .chunk-scores {
           display: flex;
-          gap: 4px;
+          gap: 6px;
 
           .score-item {
             font-size: 11px;
-            color: var(--gray-700);
-            // background: var(--main-10);
-            padding: 1px 4px;
+            color: var(--gray-600);
+            background: var(--gray-25);
+            padding: 1px 5px;
             border-radius: 4px;
+            border: 1px solid var(--gray-100);
             white-space: nowrap;
           }
         }
 
         .chunk-preview {
           flex: 1;
-          font-size: 11px;
-          color: var(--gray-700);
+          font-size: 12px;
+          color: var(--gray-600);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -346,10 +356,10 @@ const getScoreColor = (score) => {
         }
 
         .view-icon {
-          color: var(--main-color);
+          color: var(--gray-400);
           font-size: 12px;
-          opacity: 0.6;
-          transition: opacity 0.15s ease;
+          opacity: 0.5;
+          transition: opacity 0.2s ease;
         }
       }
     }
@@ -386,21 +396,23 @@ const getScoreColor = (score) => {
 
       .score-card {
         flex: 1;
-        padding: 8px 12px;
-        background: var(--gray-50);
-        border-radius: 6px;
-        border: 1px solid var(--gray-200);
+        padding: 12px 14px;
+        background: var(--gray-25);
+        border-radius: 8px;
+        border: 1px solid var(--gray-150);
 
         .score-label {
-          font-size: 14px;
-          color: var(--gray-600);
-          margin-bottom: 4px;
+          font-size: 12px;
+          color: var(--gray-500);
+          margin-bottom: 6px;
+          font-weight: 500;
         }
 
         .score-value-large {
           font-size: 18px;
           font-weight: 600;
-          color: var(--main-color);
+          color: var(--gray-800);
+          margin-bottom: 8px;
         }
       }
     }
@@ -411,13 +423,13 @@ const getScoreColor = (score) => {
 
       .meta-item {
         font-size: 11px;
-        color: var(--gray-500);
+        color: var(--gray-400);
         display: flex;
         align-items: center;
         gap: 4px;
 
         .anticon {
-          color: var(--main-color);
+          color: var(--gray-500);
         }
       }
     }
@@ -437,10 +449,10 @@ const getScoreColor = (score) => {
       color: var(--gray-700);
       white-space: pre-wrap;
       word-break: break-word;
-      background: var(--gray-50);
+      background: var(--gray-25);
       padding: 16px;
-      border-radius: 6px;
-      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      border: 1px solid var(--gray-150);
       max-height: 400px;
       overflow-y: auto;
     }

@@ -44,6 +44,9 @@ import WebSearchResult from './WebSearchResult.vue'
 import KnowledgeBaseResult from './KnowledgeBaseResult.vue'
 import KnowledgeGraphResult from './KnowledgeGraphResult.vue'
 import CalculatorResult from './CalculatorResult.vue'
+import { useAgentStore } from '@/stores/agent';
+
+const agentStore = useAgentStore()
 
 const props = defineProps({
   toolName: {
@@ -55,6 +58,11 @@ const props = defineProps({
     required: true
   }
 })
+
+const tool = computed(() => {
+  return agentStore?.availableTools?.[props.toolName] || null
+})
+
 
 // 解析数据
 const parsedData = computed(() => {
@@ -87,23 +95,28 @@ const isWebSearchResult = computed(() => {
 
 // 判断是否为知识库检索结果
 const isKnowledgeBaseResult = computed(() => {
-  const toolNameLower = props.toolName.toLowerCase()
-  const isKnowledgeBaseTool = toolNameLower.includes('retrieve') ||
-                             toolNameLower.includes('knowledge')
+  // 首先检查工具的 metadata
+  const currentTool = tool.value
+  if (currentTool && currentTool.metadata) {
+    const metadata = currentTool.metadata
+    const hasKnowledgebaseTag = metadata.tag && metadata.tag.includes('knowledgebase')
+    const isNotLightrag = metadata.kb_type !== 'lightrag'
 
-  if (!isKnowledgeBaseTool) return false
+    if (hasKnowledgebaseTag && isNotLightrag) {
+      const data = parsedData.value
+      return Array.isArray(data) &&
+             data.length > 0 &&
+             data.every(item =>
+               item &&
+               typeof item === 'object' &&
+               'content' in item &&
+               'score' in item &&
+               'metadata' in item
+             )
+    }
+  }
 
-  const data = parsedData.value
-  return Array.isArray(data) &&
-         data.length > 0 &&
-         data.every(item =>
-           item &&
-           typeof item === 'object' &&
-           'id' in item &&
-           'distance' in item &&
-           'entity' in item &&
-           'file' in item
-         )
+  return false
 })
 
 // 判断是否为知识图谱查询结果

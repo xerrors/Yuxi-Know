@@ -439,6 +439,7 @@ class KnowledgeBase(ABC):
                 "name": meta["name"],
                 "description": meta["description"],
                 "retriever": make_retriever(db_id),
+                "metadata": meta
             }
         return retrievers
 

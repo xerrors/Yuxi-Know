@@ -128,7 +128,7 @@ const editorRef = ref()
 const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
 
 // 推理面板展开状态
-const reasoningActiveKey = ref(['show']);
+const reasoningActiveKey = ref(['hide']);
 const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
 // 引入智能体 store
@@ -235,7 +235,7 @@ const toggleToolCall = (toolCallId) => {
   .reasoning-box {
     margin-top: 10px;
     margin-bottom: 15px;
-    border-radius: 12px;
+    border-radius: 8px;
     border: 1px solid var(--gray-200);
     background-color: var(--gray-25);
     overflow: hidden;
@@ -258,7 +258,7 @@ const toggleToolCall = (toolCallId) => {
           // background-color: var(--gray-100);
           font-size: 14px;
           font-weight: 500;
-          color: var(--gray-800);
+          color: var(--gray-700);
           // border-bottom: 1px solid var(--gray-200);
           transition: all 0.2s ease;
 
@@ -267,7 +267,7 @@ const toggleToolCall = (toolCallId) => {
           }
 
           .ant-collapse-expand-icon {
-            color: var(--main-color);
+            color: var(--gray-400);
           }
         }
 

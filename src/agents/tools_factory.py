@@ -84,8 +84,8 @@ def get_kb_based_tools() -> dict[str, Any]:
                 name=tool_id,
                 description=description,
                 args_schema=KnowledgeRetrieverModel,
-                metadata=retrieve_info | {
-                    "tag": "knowledgebase"
+                metadata=retrieve_info["metadata"] | {
+                    "tag": ["knowledgebase"]
                 }
             )
 
