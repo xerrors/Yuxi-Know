@@ -2,13 +2,13 @@
 
 <div align="center">
 
-![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)
-![Vue.js](https://img.shields.io/badge/vuejs-%2335495e.svg?style=flat&logo=vuedotjs&logoColor=%234FC08D)
-![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat&logo=fastapi)
-![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)
-![](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)
+[![Version](https://img.shields.io/badge/version-v0.2.0-blue.svg)](https://github.com/xerrors/Yuxi-Know/issues)
+[![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
+[![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
+[![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-blue.svg)](https://deepwiki.com/xerrors/Yuxi-Know)
+[![demo](https://img.shields.io/badge/demo-00A1D6.svg?style=flat&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8)
 ![](https://img.shields.io/github/stars/xerrors/Yuxi-Know)
-[![Bilibili](https://img.shields.io/badge/bilibili-00A1D6.svg?style=flat&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8)
 
 </div>
 
