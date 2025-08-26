@@ -4,7 +4,7 @@
     <div class="sidebar-header">
       <div class="sidebar-title">
         <SettingOutlined class="title-icon" />
-        <span>{{ selectedAgent.name || '未选择智能体' }} 配置</span>
+        <span>{{ selectedAgent?.name || '未选择智能体' }} 配置</span>
       </div>
       <a-button
         type="text"
