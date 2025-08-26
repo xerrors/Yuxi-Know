@@ -32,12 +32,12 @@
           <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
             <div class="tool-header" @click="toggleToolCall(toolCall.id)">
               <span v-if="!toolCall.tool_call_result">
-                <span><Loader size="16" class="tool-loader rotate" /></span> &nbsp;
+                <span><Loader size="16" class="tool-loader rotate tool-loading" /></span> &nbsp;
                 <span>正在调用工具: </span>
                 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span>
               </span>
               <span v-else>
-                <span><CircleCheckBig size="16" class="tool-loader" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行完成
+                <span><CircleCheckBig size="16" class="tool-loader tool-success" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
@@ -242,8 +242,8 @@ const toggleToolCall = (toolCallId) => {
     transition: all 0.2s ease;
 
     &:hover {
-      border-color: var(--main-300);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+      border-color: var(--main-500);
+      // box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
     }
 
     :deep(.ant-collapse) {
@@ -331,9 +331,9 @@ const toggleToolCall = (toolCallId) => {
 
     &:hover {
       background-color: var(--gray-50);
-      outline: 2px solid var(--gray-200);
-      outline-color: var(--main-300);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+      outline: 1px solid var(--gray-200);
+      outline-color: var(--main-500);
+      // box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
     }
 
     .tool-header {
@@ -380,6 +380,18 @@ const toggleToolCall = (toolCallId) => {
       .tool-loader.rotate {
         animation: rotate 2s linear infinite;
       }
+
+      .tool-loader.tool-success {
+        color: var(--color-success);
+      }
+
+      .tool-loader.tool-error {
+        color: var(--color-error);
+      }
+
+      .tool-loader.tool-loading {
+        color: var(--color-info);
+      }
     }
 
     .tool-content {
@@ -400,7 +412,7 @@ const toggleToolCall = (toolCallId) => {
         .tool-params-content {
           margin: 0;
           font-size: 13px;
-          background-color: var(--gray-100);
+          // background-color: var(--gray-100);
           overflow-x: auto;
           color: var(--gray-800);
           line-height: 1.5;
@@ -532,12 +544,13 @@ const toggleToolCall = (toolCallId) => {
     margin: 0.25rem 0;
   }
 
+  ul li::marker,
   ol li::marker {
-    color: var(--main-color);
+    color: var(--main-bright);
   }
 
-  ul li::marker {
-    color: var(--main-bright);
+  ul, ol {
+    padding-left: 1.625rem;
   }
 
   cite {
@@ -566,6 +579,51 @@ const toggleToolCall = (toolCallId) => {
   p:last-child {
     margin-bottom: 0;
   }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 16px;
+    display: table;
+
+
+    thead th,
+    tbody th {
+      border: none;
+      border-bottom: 1.5px solid var(--gray-400);
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 1.5px solid var(--gray-300);
+      border: none;
+    }
+  }
+
+  th,
+  td {
+    padding: 0.5rem 0rem;
+    text-align: left;
+    border: none;
+  }
+
+  td {
+    border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-800);
+  }
+
+  th {
+    font-weight: 600;
+    color: var(--gray-800);
+  }
+
+  tr {
+    background-color: var(--gray-0);
+  }
+
+  // tbody tr:last-child td {
+  //   border-bottom: none;
+  // }
 }
 
 :deep(.chat-box.font-smaller #preview-only-preview) {
