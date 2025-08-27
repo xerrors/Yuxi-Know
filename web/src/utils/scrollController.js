@@ -8,14 +8,15 @@ export class ScrollController {
     this.containerSelector = containerSelector;
     this.options = {
       threshold: 100,
-      scrollDelay: 150,
-      retryDelays: [50, 150, 300],
+      scrollDelay: 100,
+      retryDelays: [50, 150],
       ...options
     };
-    
+
     this.scrollTimer = null;
     this.isUserScrolling = false;
     this.shouldAutoScroll = true;
+    this.isProgrammaticScroll = false;
 
     // Bind the context of 'this' for the event handler
     this.handleScroll = this.handleScroll.bind(this);
@@ -49,12 +50,17 @@ export class ScrollController {
       clearTimeout(this.scrollTimer);
     }
 
+    // 如果是程序性滚动，忽略此次事件
+    if (this.isProgrammaticScroll) {
+      this.isProgrammaticScroll = false;
+      return;
+    }
+
     // 标记用户正在滚动
     this.isUserScrolling = true;
 
     // 检查是否在底部
-    const atBottom = this.isAtBottom();
-    this.shouldAutoScroll = atBottom;
+    this.shouldAutoScroll = this.isAtBottom();
 
     // 滚动结束后一段时间重置用户滚动状态
     this.scrollTimer = setTimeout(() => {
@@ -75,9 +81,12 @@ export class ScrollController {
     const container = this.getContainer();
     if (!container) return;
 
-    const scrollOptions = { 
-      top: container.scrollHeight, 
-      behavior: 'smooth' 
+    // 标记为程序性滚动
+    this.isProgrammaticScroll = true;
+
+    const scrollOptions = {
+      top: container.scrollHeight,
+      behavior: 'smooth'
     };
 
     // 立即滚动
@@ -87,14 +96,30 @@ export class ScrollController {
     this.options.retryDelays.forEach((delay, index) => {
       setTimeout(() => {
         if (force || this.shouldAutoScroll) {
+          this.isProgrammaticScroll = true;
           const behavior = index === this.options.retryDelays.length - 1 ? 'auto' : 'smooth';
-          container.scrollTo({ 
-            top: container.scrollHeight, 
-            behavior 
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior
           });
         }
       }, delay);
     });
+  }
+
+  async scrollToBottomStaticForce() {
+    const container = this.getContainer();
+    if (!container) return;
+
+    // 标记为程序性滚动
+    this.isProgrammaticScroll = true;
+
+    const scrollOptions = {
+      top: container.scrollHeight,
+      behavior: 'auto'
+    };
+
+    container.scrollTo(scrollOptions);
   }
 
   /**
@@ -139,6 +164,7 @@ export class ScrollController {
     this.cleanup();
     this.isUserScrolling = false;
     this.shouldAutoScroll = true;
+    this.isProgrammaticScroll = false;
   }
 }
 

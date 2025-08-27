@@ -546,6 +546,19 @@ const toggleToolCall = (toolCallId) => {
     color: var(--main-700);
   }
 
+  .md-editor-code {
+    border: var(--gray-50);
+    border-radius: 8px;
+
+    .md-editor-code-head {
+      background-color: var(--gray-50);
+
+      .md-editor-collapse-tips {
+        color: var(--gray-400);
+      }
+    }
+  }
+
   code {
     font-size: 13px;
     font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
@@ -553,7 +566,7 @@ const toggleToolCall = (toolCallId) => {
     letter-spacing: 0.025em;
     tab-size: 4;
     -moz-tab-size: 4;
-    background-color: var(--gray-100);
+    background-color: var(--gray-25);
   }
 
   p:last-child {

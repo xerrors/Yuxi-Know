@@ -241,7 +241,7 @@ watch(inputValue, () => {
 
 // Wait for component to mount before setting up onStartTyping
 onMounted(() => {
-  console.log('Component mounted');
+  // console.log('Component mounted');
   checkOptionsLeft();
   nextTick(() => {
     if (inputRef.value) {

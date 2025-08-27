@@ -34,7 +34,7 @@
           </div>
         </div>
         <div class="header__center" @mouseenter="uiState.showRenameButton = true" @mouseleave="uiState.showRenameButton = false">
-          <div @click="console.log(agentStore.currentThread)" class="center-title">
+          <div @click="logConversationInfo" class="center-title">
             {{ agentStore.currentThread?.title }}
           </div>
           <div class="rename-button" v-if="currentChatId" :class="{ 'visible': uiState.showRenameButton }" @click="handleRenameChat">
@@ -234,6 +234,8 @@ const selectChat = async (chatId) => {
   if (!AgentValidator.validateAgentIdWithError(agentStore.selectedAgentId, '选择对话', handleValidationError)) return;
   agentStore.selectThread(chatId);
   await agentStore.fetchThreadMessages(chatId);
+  await nextTick();
+  scrollController.scrollToBottomStaticForce();
 };
 
 const deleteChat = async (chatId) => {
@@ -262,7 +264,6 @@ const handleSendMessage = async () => {
 
   userInput.value = '';
   // Enable auto scroll before sending message to ensure proper scrolling during streaming
-  scrollController.enableAutoScroll();
   await nextTick();
   await scrollController.scrollToBottom(true);
 
@@ -328,6 +329,27 @@ const toggleSidebar = () => {
 
 const openAgentModal = () => emit('open-agent-modal');
 
+// ==================== CONVERSATION INFO LOGGING ====================
+
+const logConversationInfo = () => {
+  console.log(agentStore.currentThread);
+
+  // 输出对话历史消息
+  console.group('📜 对话历史消息');
+  console.log('原始消息数组:', agentStore.currentThreadMessages);
+  console.log('消息总数:', agentStore.currentThreadMessages.length);
+  console.groupEnd();
+
+  // 输出流式对话状态
+  if (agentStore.isStreaming || agentStore.onGoingConvMessages.length > 0) {
+    console.log('进行中的消息:', agentStore.onGoingConvMessages);
+    console.log('消息块:', agentStore.onGoingConv.msgChunks);
+    console.groupEnd();
+  }
+
+  console.groupEnd();
+};
+
 // ==================== HELPER FUNCTIONS ====================
 
 const getLastMessage = (conv) => {
@@ -375,14 +397,19 @@ const loadChatsList = async () => {
 
 onMounted(async () => {
   await initAll();
+  scrollController.enableAutoScroll();
   watch(() => agentStore.selectedAgentId, (newAgentId, oldAgentId) => {
     if (newAgentId && newAgentId !== oldAgentId) {
       initAll();
     }
   });
+
+  // 只监听streaming状态，用于流式消息的智能滚动
   watch(conversations, () => {
-    scrollController.scrollToBottom();
-  }, { deep: true });
+    if (isProcessing.value) {
+      scrollController.scrollToBottom();
+    }
+  }, { deep: true, flush: 'post' });
 });
 
 </script>
