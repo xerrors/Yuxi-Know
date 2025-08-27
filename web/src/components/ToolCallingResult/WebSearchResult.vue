@@ -67,12 +67,10 @@ const formatDate = (dateString) => {
 .web-search-result {
   background: var(--gray-0);
   border-radius: 8px;
-  border: 1px solid var(--gray-200);
 
   .search-header {
     padding: 12px 16px;
-    border-bottom: 1px solid var(--gray-200);
-    background: var(--gray-50);
+    background: var(--gray-25);
 
     h4 {
       margin: 0 0 6px 0;
@@ -111,16 +109,10 @@ const formatDate = (dateString) => {
     border: 1px solid var(--gray-200);
     transition: all 0.2s ease;
 
-    &:hover {
-      border-color: var(--main-200);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
-    }
-
     .result-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 8px;
 
       .result-title {
         margin: 0;
@@ -143,7 +135,7 @@ const formatDate = (dateString) => {
       .result-score {
         font-size: 11px;
         color: var(--gray-600);
-        background: var(--gray-100);
+        background: var(--gray-50);
         padding: 2px 6px;
         border-radius: 10px;
         margin-left: 8px;

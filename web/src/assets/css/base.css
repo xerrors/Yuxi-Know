@@ -33,6 +33,7 @@
   --gray-400:   #bfbfbf;
   --gray-300:   #d9d9d9; /* 修正了原300/200重复 */
   --gray-200:   #e6e6e6; /* 稍微加深一点，便于分层 */
+  --gray-150:   #f0f0f0;
   --gray-100:   #f2f2f2;
   --gray-50:    #f7f7f7;
   --gray-25:    #fafafa;

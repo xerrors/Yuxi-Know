@@ -241,11 +241,6 @@ const toggleToolCall = (toolCallId) => {
     overflow: hidden;
     transition: all 0.2s ease;
 
-    &:hover {
-      border-color: var(--main-500);
-      // box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-    }
-
     :deep(.ant-collapse) {
       background-color: transparent;
       border: none;
@@ -259,12 +254,7 @@ const toggleToolCall = (toolCallId) => {
           font-size: 14px;
           font-weight: 500;
           color: var(--gray-700);
-          // border-bottom: 1px solid var(--gray-200);
           transition: all 0.2s ease;
-
-          &:hover {
-            background-color: var(--gray-150);
-          }
 
           .ant-collapse-expand-icon {
             color: var(--gray-400);
@@ -277,7 +267,7 @@ const toggleToolCall = (toolCallId) => {
 
           .ant-collapse-content-box {
             padding: 16px;
-            background-color: var(--gray-50);
+            background-color: var(--gray-25);
           }
         }
       }
@@ -329,20 +319,13 @@ const toggleToolCall = (toolCallId) => {
     overflow: hidden;
     transition: all 0.2s ease;
 
-    &:hover {
-      background-color: var(--gray-50);
-      outline: 1px solid var(--gray-200);
-      outline-color: var(--main-500);
-      // box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
-    }
-
     .tool-header {
       padding: 8px 12px;
       // background-color: var(--gray-100);
       font-size: 14px;
       font-weight: 500;
       color: var(--gray-800);
-      border-bottom: 1px solid var(--gray-200);
+      border-bottom: 1px solid var(--gray-100);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -351,10 +334,6 @@ const toggleToolCall = (toolCallId) => {
       position: relative;
       transition: color 0.2s ease;
       align-items: center;
-
-      &:hover {
-        background-color: var(--gray-150);
-      }
 
       .anticon {
         color: var(--main-color);
@@ -398,10 +377,12 @@ const toggleToolCall = (toolCallId) => {
       transition: all 0.3s ease;
 
       .tool-params {
-        padding: 16px;
-        background-color: var(--gray-50);
+        padding: 10px 16px;
+        background-color: var(--gray-25);
+        border-bottom: 1px solid var(--gray-150);
 
         .tool-params-header {
+          // unused
           background-color: var(--gray-100);
           font-size: 13px;
           color: var(--gray-800);
@@ -412,9 +393,8 @@ const toggleToolCall = (toolCallId) => {
         .tool-params-content {
           margin: 0;
           font-size: 13px;
-          // background-color: var(--gray-100);
           overflow-x: auto;
-          color: var(--gray-800);
+          color: var(--gray-700);
           line-height: 1.5;
 
           pre {

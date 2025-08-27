@@ -184,11 +184,11 @@ const getScoreColor = (score) => {
 .knowledge-base-result {
   background: var(--gray-0);
   border-radius: 8px;
-  border: 1px solid var(--gray-200);
+  // border: 1px solid var(--gray-200);
 
   .kb-header {
     padding: 12px 16px;
-    border-bottom: 1px solid var(--gray-200);
+    // border-bottom: 1px solid var(--gray-200);
     background: var(--gray-25);
 
     h4 {
@@ -226,7 +226,7 @@ const getScoreColor = (score) => {
     overflow: hidden;
 
     .file-header {
-      padding: 12px 14px;
+      padding: 8px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -239,8 +239,8 @@ const getScoreColor = (score) => {
       }
 
       &.expanded {
-        background: var(--gray-50);
-        border-bottom: 1px solid var(--gray-150);
+        background: var(--gray-25);
+        border-bottom: 1px solid var(--gray-100);
       }
 
       .file-info {
@@ -258,7 +258,7 @@ const getScoreColor = (score) => {
         .file-name {
           font-size: 13px;
           font-weight: 500;
-          color: var(--gray-800);
+          color: var(--gray-700);
           flex: 1;
           min-width: 0;
           white-space: nowrap;
@@ -268,12 +268,9 @@ const getScoreColor = (score) => {
 
         .chunk-count {
           font-size: 11px;
-          color: var(--gray-400);
-          background: var(--gray-50);
-          padding: 2px 6px;
-          border-radius: 12px;
-          border: 1px solid var(--gray-150);
+          color: var(--gray-500);
           white-space: nowrap;
+          margin-right: 4px;
         }
       }
 

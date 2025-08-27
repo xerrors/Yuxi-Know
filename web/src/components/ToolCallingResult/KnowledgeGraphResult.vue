@@ -243,12 +243,12 @@ defineExpose({
 .knowledge-graph-result {
   background: var(--gray-0);
   border-radius: 8px;
-  border: 1px solid var(--gray-200);
+  // border: 1px solid var(--gray-200);
 
   .kg-header {
     padding: 12px 16px;
-    border-bottom: 1px solid var(--gray-200);
-    background: var(--gray-50);
+    // border-bottom: 1px solid var(--gray-200);
+    background: var(--gray-25);
 
     h4 {
       margin: 0 0 4px 0;

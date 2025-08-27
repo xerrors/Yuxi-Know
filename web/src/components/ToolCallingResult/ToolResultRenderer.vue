@@ -177,12 +177,11 @@ defineExpose({
   .default-result {
     background: var(--gray-0);
     border-radius: 8px;
-    border: 1px solid var(--gray-200);
 
     .default-header {
       padding: 12px 16px;
-      border-bottom: 1px solid var(--gray-200);
-      background: var(--gray-50);
+      border-bottom: 1px solid var(--gray-100);
+      background: var(--gray-25);
 
       h4 {
         margin: 0;
@@ -211,7 +210,7 @@ defineExpose({
         background: var(--gray-50);
         padding: 10px;
         border-radius: 4px;
-        border-left: 2px solid var(--main-color);
+        // border-left: 2px solid var(--main-color);
       }
     }
   }
