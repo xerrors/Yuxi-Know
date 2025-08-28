@@ -7,8 +7,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.routers import router
 from server.utils.auth_middleware import is_public_path
-from src.utils.logging_config import logger
+from server.utils.common_utils import setup_logging
 
+# 设置日志配置
+setup_logging()
 
 app = FastAPI()
 app.include_router(router, prefix="/api")
