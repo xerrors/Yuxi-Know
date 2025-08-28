@@ -66,7 +66,6 @@
    SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
    ```
    > 💡 [免费获取 SiliconFlow API Key](https://cloud.siliconflow.cn/i/Eo5yTHGJ)（注册即送 14 元额度）
-   > 💡 [免费获取 智谱 API Key](https://www.bigmodel.cn/invite?icode=6BruxYJDdROL5pQX%2FOeYvA%3D%3D)（注册即送 2000 万Tokens，限 GLM-4.5-air）
 
 3. **启动服务**
    ```bash
