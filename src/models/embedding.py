@@ -1,16 +1,15 @@
 import os
 import json
+import httpx
 import requests
 import asyncio
-from abc import abstractmethod
-from langchain_huggingface import HuggingFaceEmbeddings
+from abc import abstractmethod, ABC
 
 from src import config
 from src.utils import hashstr, logger, get_docker_safe_url
 
 
-class BaseEmbeddingModel:
-    embed_state = {}
+class BaseEmbeddingModel(ABC):
 
     def __init__(self, model=None, name=None, dimension=None, url=None, base_url=None, api_key=None):
         """
@@ -27,30 +26,38 @@ class BaseEmbeddingModel:
         self.dimension = dimension
         self.base_url = get_docker_safe_url(base_url)
         self.api_key = os.getenv(api_key, api_key)
+        self.embed_state = {}
 
     @abstractmethod
-    def predict(self, message):
+    def predict(self, message: list[str] | str) -> list[list[float]]:
+        """同步编码"""
         raise NotImplementedError("Subclasses must implement this method")
 
-    def encode(self, message):
+    @abstractmethod
+    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+        """异步编码"""
+        raise NotImplementedError("Subclasses must implement this method")
+
+    def encode(self, message: list[str] | str) -> list[list[float]]:
+        """等同于predict"""
         return self.predict(message)
 
-    def encode_queries(self, queries):
+    def encode_queries(self, queries: list[str] | str) -> list[list[float]]:
+        """等同于predict"""
         return self.predict(queries)
 
-    async def aencode(self, message):
-        return await asyncio.to_thread(self.encode, message)
+    async def aencode(self, message: list[str] | str) -> list[list[float]]:
+        """等同于apredict"""
+        return await self.apredict(message)
 
-    async def aencode_queries(self, queries):
-        return await asyncio.to_thread(self.encode_queries, queries)
+    async def aencode_queries(self, queries: list[str] | str) -> list[list[float]]:
+        """等同于apredict"""
+        return await self.apredict(queries)
 
-    async def abatch_encode(self, messages, batch_size=40):
-        return await asyncio.to_thread(self.batch_encode, messages, batch_size)
-
-    def batch_encode(self, messages, batch_size=40):
+    def batch_encode(self, messages: list[str], batch_size: int = 40) -> list[list[float]]:
         # logger.info(f"Batch encoding {len(messages)} messages")
         data = []
-
+        task_id = None
         if len(messages) > batch_size:
             task_id = hashstr(messages)
             self.embed_state[task_id] = {
@@ -63,10 +70,36 @@ class BaseEmbeddingModel:
             group_msg = messages[i:i+batch_size]
             logger.info(f"Encoding [{i}/{len(messages)}] messages (bsz={batch_size})")
             response = self.encode(group_msg)
-            # logger.debug(f"Response: {len(response)=}, {len(group_msg)=}, {len(response[0])=}")
             data.extend(response)
+            if task_id:
+                self.embed_state[task_id]['progress'] = i + len(group_msg)
 
+        if task_id:
+            self.embed_state[task_id]['status'] = 'completed'
+
+        return data
+
+    async def abatch_encode(self, messages: list[str], batch_size: int = 40) -> list[list[float]]:
+        data = []
+        task_id = None
         if len(messages) > batch_size:
+            task_id = hashstr(messages)
+            self.embed_state[task_id] = {
+                'status': 'in-progress',
+                'total': len(messages),
+                'progress': 0
+            }
+
+        tasks = []
+        for i in range(0, len(messages), batch_size):
+            group_msg = messages[i:i+batch_size]
+            tasks.append(self.aencode(group_msg))
+
+        results = await asyncio.gather(*tasks)
+        for res in results:
+            data.extend(res)
+
+        if task_id:
             self.embed_state[task_id]['progress'] = len(messages)
             self.embed_state[task_id]['status'] = 'completed'
 
@@ -81,18 +114,38 @@ class OllamaEmbedding(BaseEmbeddingModel):
         super().__init__(**kwargs)
         self.base_url = self.base_url or get_docker_safe_url("http://localhost:11434/api/embed")
 
-    def predict(self, message: list[str] | str):
+    def predict(self, message: list[str] | str) -> list[list[float]]:
         if isinstance(message, str):
             message = [message]
 
-        payload = {
-            "model": self.model,
-            "input": message,
-        }
-        response = requests.request("POST", self.base_url, json=payload)
-        response = json.loads(response.text)
-        assert response.get("embeddings"), f"Ollama Embedding failed: {response}"
-        return response["embeddings"]
+        payload = {"model": self.model, "input": message}
+        try:
+            response = requests.post(self.base_url, json=payload, timeout=60)
+            response.raise_for_status()
+            result = response.json()
+            if "embeddings" not in result:
+                raise ValueError(f"Ollama Embedding failed: Invalid response format {result}")
+            return result["embeddings"]
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            logger.error(f"Ollama Embedding request failed: {e}")
+            raise ValueError(f"Ollama Embedding request failed: {e}")
+
+    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+        if isinstance(message, str):
+            message = [message]
+
+        payload = {"model": self.model, "input": message}
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(self.base_url, json=payload, timeout=60)
+                response.raise_for_status()
+                result = response.json()
+                if "embeddings" not in result:
+                    raise ValueError(f"Ollama Embedding failed: Invalid response format {result}")
+                return result["embeddings"]
+            except (httpx.RequestError, json.JSONDecodeError) as e:
+                logger.error(f"Ollama Embedding async request failed: {e}")
+                raise ValueError(f"Ollama Embedding async request failed: {e}")
 
 
 class OtherEmbedding(BaseEmbeddingModel):
@@ -104,16 +157,32 @@ class OtherEmbedding(BaseEmbeddingModel):
             "Content-Type": "application/json"
         }
 
-    def predict(self, message):
-        payload = self.build_payload(message)
-        response = requests.request("POST", self.base_url, json=payload, headers=self.headers)
-        response = json.loads(response.text)
-        assert response["data"], f"Other Embedding failed: {response}"
-        data = [a["embedding"] for a in response["data"]]
-        return data
+    def build_payload(self, message: list[str] | str) -> dict:
+        return {"model": self.model, "input": message}
 
-    def build_payload(self, message):
-        return {
-            "model": self.model,
-            "input": message,
-        }
+    def predict(self, message: list[str] | str) -> list[list[float]]:
+        payload = self.build_payload(message)
+        try:
+            response = requests.post(self.base_url, json=payload, headers=self.headers, timeout=60)
+            response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict) or "data" not in result:
+                raise ValueError(f"Other Embedding failed: Invalid response format {result}")
+            return [item["embedding"] for item in result["data"]]
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            logger.error(f"Other Embedding request failed: {e}")
+            raise ValueError(f"Other Embedding request failed: {e}")
+
+    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+        payload = self.build_payload(message)
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(self.base_url, json=payload, headers=self.headers, timeout=60)
+                response.raise_for_status()
+                result = response.json()
+                if not isinstance(result, dict) or "data" not in result:
+                    raise ValueError(f"Other Embedding failed: Invalid response format {result}")
+                return [item["embedding"] for item in result["data"]]
+            except (httpx.RequestError, json.JSONDecodeError) as e:
+                logger.error(f"Other Embedding async request failed: {e}")
+                raise ValueError(f"Other Embedding async request failed: {e}")

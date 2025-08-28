@@ -100,6 +100,9 @@ def chunk(text_or_path, params=None):
 
 def pdfreader(file_path, params=None):
     """读取PDF文件并返回text文本"""
+    if isinstance(file_path, str):
+        file_path = Path(file_path)
+
     assert file_path.exists(), "File not found"
     assert file_path.suffix.lower() == ".pdf", "File format not supported"
 
