@@ -1,6 +1,5 @@
 import asyncio
-import hashlib
-import os
+import traceback
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
@@ -90,10 +89,10 @@ def get_kb_based_tools() -> dict[str, Any]:
             )
 
             kb_tools[tool_id] = tool
-            logger.debug(f"Successfully created tool {tool_id} for database {db_id}")
+            # logger.debug(f"Successfully created tool {tool_id} for database {db_id}")
 
         except Exception as e:
-            logger.error(f"Failed to create tool for database {db_id}: {e}")
+            logger.error(f"Failed to create tool for database {db_id}: {e}, \n{traceback.format_exc()}")
             continue
 
     return kb_tools
@@ -176,7 +175,7 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
         logger.debug(f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples")
         return result
     except Exception as e:
-        logger.error(f"Knowledge graph query error: {e}")
+        logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
         return f"知识图谱查询失败: {str(e)}"
 
 def get_static_tools() -> dict[str, Any]:

@@ -18,8 +18,23 @@ assignees: ''
 请运行以下命令，并提供部分相关日志：
 
 ```sh
+# macOS / Linux
+make logs
+
+# Windows
 docker logs --tail=100 api-dev
+git rev-parse HEAD
 ```
+
+<!-- 在下面粘贴日志的输出 -->
+
+```
+make logs 的输出：
+
+
+
+```
+
 
 3️⃣ 相关截图
 
