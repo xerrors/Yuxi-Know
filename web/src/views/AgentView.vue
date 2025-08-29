@@ -2,6 +2,9 @@
   <div class="agent-view">
     <div class="agent-view-header">
       <div class="header-left">
+      <div class="header-item">
+        <span class="brandname">{{ infoStore.branding?.title }}</span>
+      </div>
         <div class="header-item">
           <a-button class="header-button" @click="openAgentModal">
             <Bot size="18" stroke-width="1.75" />
@@ -95,12 +98,15 @@ import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
 import { useUserStore } from '@/stores/user';
 import { useAgentStore } from '@/stores/agent';
+import { useInfoStore } from '@/stores/info';
+
 import { storeToRefs } from 'pinia';
 
 // 路由和stores
 const router = useRouter();
 const userStore = useUserStore();
 const agentStore = useAgentStore();
+const infoStore = useInfoStore();
 
 // 从store中获取响应式状态
 const {
@@ -259,7 +265,7 @@ const toggleConf = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 2px 8px;
+  padding: 2px 16px;
 
   .header-left,
   .header-right,
@@ -273,6 +279,13 @@ const toggleConf = () => {
     display: flex;
     align-items: center;
     gap: 10px;
+
+    span.brandname {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-right: 16px;
+    }
 
     button.header-button {
       border-radius: 6px;

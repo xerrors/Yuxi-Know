@@ -14,7 +14,7 @@ from src import executor, config
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
-from src.agents.tools_factory import get_buildin_tools
+from src.agents.tools_factory import get_buildin_tools_info
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_required_user, get_db
 from server.models.user_model import User
@@ -181,7 +181,7 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
 @chat.get("/tools")
 async def get_tools(current_user: User = Depends(get_admin_user)):
     """获取所有可用工具（需要登录）"""
-    return {"tools": list(get_buildin_tools().keys())}
+    return {"tools": [t.name for t in get_buildin_tools_info()]}
 
 @chat.post("/agent/{agent_id}/config")
 async def save_agent_config(

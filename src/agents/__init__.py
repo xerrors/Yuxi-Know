@@ -2,7 +2,6 @@ import asyncio
 
 from .chatbot import ChatbotAgent
 from .react.graph import ReActAgent
-from .open_deep_research.graph import OpenDeepResearchAgent
 
 class AgentManager:
     def __init__(self):
@@ -39,7 +38,6 @@ class AgentManager:
 agent_manager = AgentManager()
 agent_manager.register_agent(ChatbotAgent)
 agent_manager.register_agent(ReActAgent)
-agent_manager.register_agent(OpenDeepResearchAgent)
 agent_manager.init_all_agents()
 
 __all__ = ["agent_manager"]

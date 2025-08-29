@@ -40,9 +40,9 @@ class ChatbotAgent(BaseAgent):
             return []
         else:
             # 使用配置中指定的工具
-            tool_names = [tool for tool in platform_tools.keys() if tool in tools]
-            logger.info(f"使用工具: {tool_names}")
-            return [platform_tools[tool] for tool in tool_names]
+            tools = [tool for tool in platform_tools if tool.name in tools]
+            logger.info(f"使用工具: {[tool.name for tool in tools]}")
+            return tools
 
     async def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
         """调用 llm 模型 - 异步版本以支持异步工具"""
@@ -66,13 +66,11 @@ class ChatbotAgent(BaseAgent):
             return self.graph
 
         runnable_tools = get_buildin_tools()
-        tools = list(runnable_tools.values())
-        tools_name = list(runnable_tools.keys())
-        logger.debug(f"build graph `{self.id}` with tools: {tools_name}")
+        logger.debug(f"build graph `{self.id}` with {len(runnable_tools)} tools")
 
         workflow = StateGraph(State, config_schema=self.config_schema)
         workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=tools))
+        workflow.add_node("tools", ToolNode(tools=runnable_tools))
         workflow.add_edge(START, "chatbot")
         workflow.add_conditional_edges(
             "chatbot",

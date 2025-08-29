@@ -37,7 +37,7 @@ class ChatbotConfiguration(Configuration):
         default_factory=list,
         metadata={
             "name": "工具",
-            "options": list(get_buildin_tools().keys()),  # 这里的选择是所有的工具
+            "options": [t.name for t in get_buildin_tools()],  # 这里的选择是所有的工具
             "description": "工具列表"
         },
     )

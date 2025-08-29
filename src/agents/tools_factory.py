@@ -40,15 +40,12 @@ def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
 
 def get_buildin_tools() -> dict[str, Any]:
     """获取所有可运行的工具（给大模型使用）"""
-    tools = {}
+    tools = []
 
     try:
         # 获取所有知识库基于的工具
-        kb_tools = get_kb_based_tools()
-        static_tools = get_static_tools()
-
-        tools.update(kb_tools)
-        tools.update(static_tools)
+        tools.extend(get_kb_based_tools())
+        tools.extend(get_static_tools())
 
     except Exception as e:
         logger.error(f"Failed to get knowledge base retrievers: {e}")
@@ -59,7 +56,7 @@ def get_buildin_tools() -> dict[str, Any]:
 def get_kb_based_tools() -> dict[str, Any]:
     """获取所有知识库基于的工具"""
     # 获取所有知识库
-    kb_tools = {}
+    kb_tools = []
     retrievers = knowledge_base.get_retrievers()
     logger.debug(f"Found {len(retrievers)} knowledge base retrievers")
 
@@ -88,7 +85,7 @@ def get_kb_based_tools() -> dict[str, Any]:
                 }
             )
 
-            kb_tools[tool_id] = tool
+            kb_tools.append(tool)
             # logger.debug(f"Successfully created tool {tool_id} for database {db_id}")
 
         except Exception as e:
@@ -99,43 +96,37 @@ def get_kb_based_tools() -> dict[str, Any]:
 
 def get_buildin_tools_info() -> dict[str, dict[str, Any]]:
     """获取所有工具的信息（用于前端展示）"""
-    tools_info = {}
+    tools_info = []
 
     try:
         tools = get_buildin_tools()
         logger.debug(f"Processing {len(tools)} tools for info extraction")
 
         # 获取注册的工具信息
-        for tool_id, tool_obj in tools.items():
+        for tool_obj in tools:
             try:
                 metadata = getattr(tool_obj, 'metadata', {}) or {}
                 info = {
-                    "id": tool_id,
-                    "name": metadata.get('name', tool_id),
-                    "description": metadata.get('description') or getattr(tool_obj, 'description', ''),
+                    "id": tool_obj.name,
+                    "name": metadata.get('name', tool_obj.name),
+                    "description": tool_obj.description,
                     'metadata': metadata,
                     "args": []
                 }
 
-                # 获取工具参数信息
-                try:
-                    if hasattr(tool_obj, 'args_schema') and tool_obj.args_schema:
-                        schema = tool_obj.args_schema.schema()
-                        if 'properties' in schema:
-                            for arg_name, arg_info in schema['properties'].items():
-                                info["args"].append({
-                                    "name": arg_name,
-                                    "type": arg_info.get('type', ''),
-                                    "description": arg_info.get('description', '')
-                                })
-                except Exception as e:
-                    logger.warning(f"Failed to extract args schema for tool {tool_id}: {e}")
+                schema = tool_obj.args_schema.schema()
+                for arg_name, arg_info in schema['properties'].items():
+                    info["args"].append({
+                        "name": arg_name,
+                        "type": arg_info.get('type', ''),
+                        "description": arg_info.get('description', '')
+                    })
 
-                tools_info[tool_id] = info
-                logger.debug(f"Successfully processed tool info for {tool_id}")
+                tools_info.append(info)
+                logger.debug(f"Successfully processed tool info for {tool_obj.name}")
 
             except Exception as e:
-                logger.error(f"Failed to process tool {tool_id}: {e}")
+                logger.error(f"Failed to process tool {tool_obj.name}: {e}")
                 continue
 
     except Exception as e:
@@ -180,14 +171,15 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
 
 def get_static_tools() -> dict[str, Any]:
     """注册静态工具"""
-    static_tools = {
-        "Calculator": calculator,
-        "QueryKnowledgeGraph": query_knowledge_graph,
-    }
+    static_tools = [
+        calculator,
+        query_knowledge_graph,
+    ]
 
     # 检查是否启用网页搜索
     if config.enable_web_search:
-        static_tools["WebSearchWithTavily"] = TavilySearch(max_results=10)
-
+        static_tools.append(TavilySearch(max_results=10))
 
     return static_tools
+
+

@@ -10,6 +10,6 @@ async def get_tools(current_user: User = Depends(get_required_user)):
     """获取所有可用工具的信息"""
     try:
         tools_info = get_buildin_tools_info()
-        return {"tools": tools_info}
+        return {"tools": {tool["id"]: tool for tool in tools_info}}
     except Exception as e:
         return {"error": str(e)}
