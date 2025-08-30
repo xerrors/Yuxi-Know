@@ -25,6 +25,7 @@ export const useAgentStore = defineStore('agent', {
     // 对话状态
     onGoingConv: { msgChunks: {} }, // 正在进行的对话（流式）
     isStreaming: false, // 是否正在接收流式响应
+    streamAbortController: null, // 流式对话取消控制器
 
     // 加载状态
     isLoadingAgents: false,
@@ -48,8 +49,9 @@ export const useAgentStore = defineStore('agent', {
     isDefaultAgent: (state) => state.selectedAgentId === state.defaultAgentId,
     configurableItems: (state) => {
       const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
-      const agentConfigurableItems = agent.configurable_items || {};
-      if (!agentConfigurableItems) return {};
+      if (!agent || !agent.configurable_items) return {};
+      
+      const agentConfigurableItems = agent.configurable_items;
       const items = { ...agentConfigurableItems };
       Object.keys(items).forEach(key => {
         const item = items[key];
@@ -80,8 +82,11 @@ export const useAgentStore = defineStore('agent', {
     },
     conversations: (state) => {
       const historyConvs = MessageProcessor.convertServerHistoryToMessages(state.currentThreadMessages);
-      // Access onGoingConvMessages getter through state
-      const onGoingMessages = state.onGoingConvMessages;
+      // Compute ongoing messages directly from state to avoid circular reference
+      const msgs = Object.values(state.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
+      const onGoingMessages = msgs.length > 0
+        ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
+        : [];
 
       if (onGoingMessages.length > 0) {
         // Create a new conversation object for the ongoing messages
@@ -101,14 +106,19 @@ export const useAgentStore = defineStore('agent', {
       if (this.isInitialized) return;
 
       try {
-        await Promise.all([
-          this.fetchAgents(),
-          this.fetchDefaultAgent(),
-          this.fetchTools()
-        ]);
+        // 首先加载智能体列表
+        await this.fetchAgents();
+        
+        // 然后设置默认智能体
+        await this.fetchDefaultAgent();
+        
+        // 最后加载工具
+        await this.fetchTools();
+        
         this.isInitialized = true;
       } catch (error) {
         console.error('Failed to initialize agent store:', error);
+        handleChatError(error, 'initialize');
         this.error = error.message;
       }
     },
@@ -127,6 +137,7 @@ export const useAgentStore = defineStore('agent', {
         }, {});
       } catch (error) {
         console.error('Failed to fetch agents:', error);
+        handleChatError(error, 'fetch');
         this.error = error.message;
         throw error;
       } finally {
@@ -140,12 +151,13 @@ export const useAgentStore = defineStore('agent', {
         const response = await agentApi.getDefaultAgent();
         this.defaultAgentId = response.default_agent_id;
 
-        // 如果没有选中的智能体，则选择默认智能体
-        if (!this.selectedAgentId && this.defaultAgentId) {
+        // 如果没有选中的智能体且默认智能体存在于智能体列表中，则选择默认智能体
+        if (!this.selectedAgentId && this.defaultAgentId && this.agents[this.defaultAgentId]) {
           this.selectedAgentId = this.defaultAgentId;
         }
       } catch (error) {
         console.error('Failed to fetch default agent:', error);
+        handleChatError(error, 'fetch');
         this.error = error.message;
       }
     },
@@ -157,6 +169,7 @@ export const useAgentStore = defineStore('agent', {
         this.defaultAgentId = agentId;
       } catch (error) {
         console.error('Failed to set default agent:', error);
+        handleChatError(error, 'save');
         this.error = error.message;
         throw error;
       }
@@ -186,6 +199,7 @@ export const useAgentStore = defineStore('agent', {
         this.originalAgentConfig = { ...response.config };
       } catch (error) {
         console.error('Failed to load agent config:', error);
+        handleChatError(error, 'load');
         this.error = error.message;
         throw error;
       } finally {
@@ -203,6 +217,7 @@ export const useAgentStore = defineStore('agent', {
         this.originalAgentConfig = { ...this.agentConfig };
       } catch (error) {
         console.error('Failed to save agent config:', error);
+        handleChatError(error, 'save');
         this.error = error.message;
         throw error;
       }
@@ -233,6 +248,7 @@ export const useAgentStore = defineStore('agent', {
         this.availableTools = response.tools;
       } catch (error) {
         console.error('Failed to fetch tools:', error);
+        handleChatError(error, 'fetch');
         this.error = error.message;
         throw error;
       } finally {
@@ -260,6 +276,7 @@ export const useAgentStore = defineStore('agent', {
         this.threads[targetAgentId] = threads || [];
       } catch (error) {
         console.error('Failed to fetch threads:', error);
+        handleChatError(error, 'fetch');
         this.error = error.message;
         throw error;
       } finally {
@@ -289,6 +306,7 @@ export const useAgentStore = defineStore('agent', {
         return thread;
       } catch (error) {
         console.error('Failed to create thread:', error);
+        handleChatError(error, 'create');
         this.error = error.message;
         throw error;
       }
@@ -315,6 +333,7 @@ export const useAgentStore = defineStore('agent', {
         }
       } catch (error) {
         console.error('Failed to delete thread:', error);
+        handleChatError(error, 'delete');
         this.error = error.message;
         throw error;
       }
@@ -336,6 +355,7 @@ export const useAgentStore = defineStore('agent', {
         });
       } catch (error) {
         console.error('Failed to update thread:', error);
+        handleChatError(error, 'update');
         this.error = error.message;
         throw error;
       }
@@ -374,6 +394,11 @@ export const useAgentStore = defineStore('agent', {
     // --- 流式对话 Actions ---
 
     resetOnGoingConv() {
+      // 取消之前的请求（如果存在）
+      if (this.streamAbortController) {
+        this.streamAbortController.abort();
+        this.streamAbortController = null;
+      }
       this.onGoingConv = { msgChunks: {} };
     },
 
@@ -400,6 +425,16 @@ export const useAgentStore = defineStore('agent', {
       }
     },
 
+    // 取消流式对话
+    cancelStreaming() {
+      if (this.streamAbortController && this.isStreaming) {
+        this.streamAbortController.abort();
+        this.streamAbortController = null;
+        this.isStreaming = false;
+        this.resetOnGoingConv();
+      }
+    },
+
     // 发送消息并处理流式响应
     async sendMessage(text) {
       if (!this.selectedAgentId || !this.currentThreadId || !text) {
@@ -409,6 +444,9 @@ export const useAgentStore = defineStore('agent', {
 
       this.isStreaming = true;
       this.resetOnGoingConv();
+      
+      // 创建新的 AbortController
+      this.streamAbortController = new AbortController();
 
       // 如果是新对话，用消息内容作为标题
       if (this.currentThreadMessages.length === 0) {
@@ -430,6 +468,11 @@ export const useAgentStore = defineStore('agent', {
         let buffer = '';
 
         while (true) {
+          // 检查是否被取消
+          if (this.streamAbortController && this.streamAbortController.signal.aborted) {
+            break;
+          }
+          
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -438,7 +481,7 @@ export const useAgentStore = defineStore('agent', {
           buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.trim()) {
+            if (line.trim() && (!this.streamAbortController || !this.streamAbortController.signal.aborted)) {
               try {
                 const chunk = JSON.parse(line.trim());
                 this._processStreamChunk(chunk);
@@ -448,8 +491,9 @@ export const useAgentStore = defineStore('agent', {
             }
           }
         }
+        
         // Process any remaining data in the buffer
-        if (buffer.trim()) {
+        if (buffer.trim() && (!this.streamAbortController || !this.streamAbortController.signal.aborted)) {
           try {
             const chunk = JSON.parse(buffer.trim());
             this._processStreamChunk(chunk);
@@ -459,9 +503,15 @@ export const useAgentStore = defineStore('agent', {
         }
 
       } catch (error) {
-        handleChatError(error, 'send');
+        // 如果是取消错误，不显示错误信息
+        if (error.name === 'AbortError') {
+          console.log('Stream was cancelled');
+        } else {
+          handleChatError(error, 'send');
+        }
       } finally {
         this.isStreaming = false;
+        this.streamAbortController = null;
       }
     },
 
@@ -487,6 +537,12 @@ export const useAgentStore = defineStore('agent', {
 
     // 重置store状态
     reset() {
+      // 取消正在进行的流式对话
+      if (this.streamAbortController) {
+        this.streamAbortController.abort();
+        this.streamAbortController = null;
+      }
+      
       this.agents = {};
       this.selectedAgentId = null;
       this.defaultAgentId = null;
@@ -496,6 +552,8 @@ export const useAgentStore = defineStore('agent', {
       this.threads = {};
       this.currentThreadId = null;
       this.threadMessages = {};
+      this.onGoingConv = { msgChunks: {} };
+      this.isStreaming = false;
       this.isLoadingAgents = false;
       this.isLoadingConfig = false;
       this.isLoadingTools = false;
