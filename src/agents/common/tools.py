@@ -10,6 +10,31 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
+@tool
+def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
+    """Use this to query knowledge graph, which include some food domain knowledge."""
+    try:
+        logger.debug(f"Querying knowledge graph with: {query}")
+        result = graph_base.query_node(query, hops=2, return_format='triples')
+        logger.debug(f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples")
+        return result
+    except Exception as e:
+        logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
+        return f"知识图谱查询失败: {str(e)}"
+
+def get_static_tools() -> dict[str, Any]:
+    """注册静态工具"""
+    static_tools = [
+        query_knowledge_graph,
+    ]
+
+    # 检查是否启用网页搜索
+    if config.enable_web_search:
+        static_tools.append(TavilySearch(max_results=10))
+
+    return static_tools
+
+
 class KnowledgeRetrieverModel(BaseModel):
     query_text: str = Field(
         description=(
@@ -19,46 +44,33 @@ class KnowledgeRetrieverModel(BaseModel):
     )
 
 
-def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
-    """创建检索器包装函数的工厂函数，避免闭包变量捕获问题"""
-    async def async_retriever_wrapper(query_text: str) -> Any:
-        """异步检索器包装函数"""
-        retriever = retriever_info["retriever"]
-        try:
-            logger.debug(f"Retrieving from database {db_id} with query: {query_text}")
-            if asyncio.iscoroutinefunction(retriever):
-                result = await retriever(query_text)
-            else:
-                result = retriever(query_text)
-            logger.debug(f"Retrieved {len(result) if isinstance(result, list) else 'N/A'} results from {db_id}")
-            return result
-        except Exception as e:
-            logger.error(f"Error in retriever {db_id}: {e}")
-            return f"检索失败: {str(e)}"
 
-    return async_retriever_wrapper
-
-def get_buildin_tools() -> dict[str, Any]:
-    """获取所有可运行的工具（给大模型使用）"""
-    tools = []
-
-    try:
-        # 获取所有知识库基于的工具
-        tools.extend(get_kb_based_tools())
-        tools.extend(get_static_tools())
-
-    except Exception as e:
-        logger.error(f"Failed to get knowledge base retrievers: {e}")
-
-    logger.info(f"Total tools available: {len(tools)}")
-    return tools
 
 def get_kb_based_tools() -> dict[str, Any]:
     """获取所有知识库基于的工具"""
     # 获取所有知识库
     kb_tools = []
     retrievers = knowledge_base.get_retrievers()
-    logger.debug(f"Found {len(retrievers)} knowledge base retrievers")
+
+    def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
+        """创建检索器包装函数的工厂函数，避免闭包变量捕获问题"""
+        async def async_retriever_wrapper(query_text: str) -> Any:
+            """异步检索器包装函数"""
+            retriever = retriever_info["retriever"]
+            try:
+                logger.debug(f"Retrieving from database {db_id} with query: {query_text}")
+                if asyncio.iscoroutinefunction(retriever):
+                    result = await retriever(query_text)
+                else:
+                    result = retriever(query_text)
+                logger.debug(f"Retrieved {len(result) if isinstance(result, list) else 'N/A'} results from {db_id}")
+                return result
+            except Exception as e:
+                logger.error(f"Error in retriever {db_id}: {e}")
+                return f"检索失败: {str(e)}"
+
+        return async_retriever_wrapper
+
 
     for db_id, retrieve_info in retrievers.items():
         try:
@@ -94,14 +106,28 @@ def get_kb_based_tools() -> dict[str, Any]:
 
     return kb_tools
 
-def get_buildin_tools_info() -> dict[str, dict[str, Any]]:
+
+def get_buildin_tools() -> dict[str, Any]:
+    """获取所有可运行的工具（给大模型使用）"""
+    tools = []
+
+    try:
+        # 获取所有知识库基于的工具
+        tools.extend(get_kb_based_tools())
+        tools.extend(get_static_tools())
+
+    except Exception as e:
+        logger.error(f"Failed to get knowledge base retrievers: {e}")
+
+    logger.info(f"Total tools available: {len(tools)}")
+    return tools
+
+
+def gen_tool_info(tools) -> dict[str, dict[str, Any]]:
     """获取所有工具的信息（用于前端展示）"""
     tools_info = []
 
     try:
-        tools = get_buildin_tools()
-        logger.debug(f"Processing {len(tools)} tools for info extraction")
-
         # 获取注册的工具信息
         for tool_obj in tools:
             try:
@@ -123,7 +149,7 @@ def get_buildin_tools_info() -> dict[str, dict[str, Any]]:
                     })
 
                 tools_info.append(info)
-                logger.debug(f"Successfully processed tool info for {tool_obj.name}")
+                # logger.debug(f"Successfully processed tool info for {tool_obj.name}")
 
             except Exception as e:
                 logger.error(f"Failed to process tool {tool_obj.name}: {e}")
@@ -135,51 +161,5 @@ def get_buildin_tools_info() -> dict[str, dict[str, Any]]:
 
     logger.info(f"Successfully extracted info for {len(tools_info)} tools")
     return tools_info
-
-@tool
-def calculator(a: float, b: float, operation: str) -> float:
-    """Calculate two numbers. operation: add, subtract, multiply, divide"""
-    try:
-        if operation == "add":
-            return a + b
-        elif operation == "subtract":
-            return a - b
-        elif operation == "multiply":
-            return a * b
-        elif operation == "divide":
-            if b == 0:
-                raise ZeroDivisionError("除数不能为零")
-            return a / b
-        else:
-            raise ValueError(f"不支持的运算类型: {operation}，仅支持 add, subtract, multiply, divide")
-    except Exception as e:
-        logger.error(f"Calculator error: {e}")
-        raise
-
-
-@tool
-def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
-    """Use this to query knowledge graph, which include some food domain knowledge."""
-    try:
-        logger.debug(f"Querying knowledge graph with: {query}")
-        result = graph_base.query_node(query, hops=2, return_format='triples')
-        logger.debug(f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples")
-        return result
-    except Exception as e:
-        logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
-        return f"知识图谱查询失败: {str(e)}"
-
-def get_static_tools() -> dict[str, Any]:
-    """注册静态工具"""
-    static_tools = [
-        calculator,
-        query_knowledge_graph,
-    ]
-
-    # 检查是否启用网页搜索
-    if config.enable_web_search:
-        static_tools.append(TavilySearch(max_results=10))
-
-    return static_tools
 
 

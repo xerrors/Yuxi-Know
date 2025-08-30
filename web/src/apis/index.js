@@ -7,8 +7,7 @@
 export * from './system_api'      // 系统管理API
 export * from './knowledge_api'   // 知识库管理API
 export * from './graph_api'       // 图谱API
-export * from './tools.js'        // 工具API
-export * from './agent.js'        // 智能体API
+export * from './agent_api'        // 智能体API
 
 // 导出基础工具函数
 export { apiGet, apiPost, apiPut, apiDelete,

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { agentApi, threadApi } from '@/apis/agent';
+import { agentApi, threadApi } from '@/apis/agent_api';
 import { MessageProcessor } from '@/utils/messageProcessor';
 import { handleChatError } from '@/utils/errorHandler';
 
@@ -46,14 +46,11 @@ export const useAgentStore = defineStore('agent', {
     defaultAgent: (state) => state.defaultAgentId ? state.agents[state.defaultAgentId] : state.agents[Object.keys(state.agents)[0]],
     agentsList: (state) => Object.values(state.agents),
     isDefaultAgent: (state) => state.selectedAgentId === state.defaultAgentId,
-    configSchema: (state) => {
-      const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
-      return agent?.config_schema || {};
-    },
     configurableItems: (state) => {
-      const schema = state.configSchema || {};
-      if (!schema || !schema.configurable_items) return {};
-      const items = { ...schema.configurable_items };
+      const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
+      const agentConfigurableItems = agent.configurable_items || {};
+      if (!agentConfigurableItems) return {};
+      const items = { ...agentConfigurableItems };
       Object.keys(items).forEach(key => {
         const item = items[key];
         if (item && item.x_oap_ui_config) {
@@ -156,7 +153,7 @@ export const useAgentStore = defineStore('agent', {
     // 设置默认智能体
     async setDefaultAgent(agentId) {
       try {
-        await agentConfigApi.setDefaultAgent(agentId);
+        await agentApi.setDefaultAgent(agentId);
         this.defaultAgentId = agentId;
       } catch (error) {
         console.error('Failed to set default agent:', error);
@@ -427,7 +424,7 @@ export const useAgentStore = defineStore('agent', {
 
       try {
         const response = await agentApi.sendAgentMessage(this.selectedAgentId, requestData);
-        
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';

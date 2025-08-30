@@ -14,7 +14,7 @@ from src import executor, config
 from src.agents import agent_manager
 from src.models import select_model
 from src.utils.logging_config import logger
-from src.agents.tools_factory import get_buildin_tools_info
+from src.agents.common.tools import get_buildin_tools, gen_tool_info
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_required_user, get_db
 from server.models.user_model import User
@@ -102,6 +102,8 @@ async def chat_agent(agent_id: str,
                current_user: User = Depends(get_required_user)):
     """使用特定智能体进行对话（需要登录）"""
 
+    logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
+
     meta.update({
         "query": query,
         "agent_id": agent_id,
@@ -134,15 +136,13 @@ async def chat_agent(agent_id: str,
         messages = [{"role": "user", "content": query}]
 
         # 构造运行时配置，如果没有thread_id则生成一个
-        config["user_id"] = str(current_user.id)
-        if "thread_id" not in config or not config["thread_id"]:
-            config["thread_id"] = str(uuid.uuid4())
-            logger.debug(f"没有thread_id，生成一个: {config['thread_id']=}")
+        user_id = str(current_user.id)
+        thread_id = config.get("thread_id")
 
-        runnable_config = {"configurable": {**config}}
+        input_context = {"user_id": user_id, "thread_id": thread_id}
 
         try:
-            async for msg, metadata in agent.stream_messages(messages, config_schema=runnable_config):
+            async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
                     yield make_chunk(content=msg.content,
@@ -179,9 +179,12 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
     return {"models": config.model_names[model_provider]["models"]}
 
 @chat.get("/tools")
-async def get_tools(current_user: User = Depends(get_admin_user)):
+async def get_tools(agent_id: str, current_user: User = Depends(get_admin_user)):
     """获取所有可用工具（需要登录）"""
-    return {"tools": [t.name for t in get_buildin_tools_info()]}
+    logger.info(f"agent_id: {agent_id}")
+    tools = get_buildin_tools()
+    tools_info = gen_tool_info(tools)
+    return {"tools": {tool["id"]: tool for tool in tools_info}}
 
 @chat.post("/agent/{agent_id}/config")
 async def save_agent_config(
@@ -192,13 +195,11 @@ async def save_agent_config(
     """保存智能体配置到YAML文件（需要管理员权限）"""
     try:
         # 获取Agent实例和配置类
-        agent = agent_manager.get_agent(agent_id)
-        if not agent:
+        if not (agent := agent_manager.get_agent(agent_id)):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         # 使用配置类的save_to_file方法保存配置
-        config_cls = agent.config_schema
-        result = config_cls.save_to_file(config, agent.module_name)
+        result = agent.context_schema.save_to_file(config, agent.module_name)
 
         if result:
             return {"success": True, "message": f"智能体 {agent.name} 配置已保存"}
@@ -218,8 +219,7 @@ async def get_agent_history(
     """获取智能体历史消息（需要登录）"""
     try:
         # 获取Agent实例和配置类
-        agent = agent_manager.get_agent(agent_id)
-        if not agent:
+        if not (agent := agent_manager.get_agent(agent_id)):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         # 获取历史消息
@@ -241,7 +241,8 @@ async def get_agent_config(
         if not (agent := agent_manager.get_agent(agent_id)):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
-        config = agent.config_schema.from_runnable_config(config={}, module_name=agent.module_name)
+        config = await agent.get_config()
+        logger.debug(f"config: {config}, ContextClass: {agent.context_schema=}")
         return {"success": True, "config": config}
 
     except Exception as e:
@@ -279,6 +280,7 @@ async def create_thread(
 ):
     """创建新对话线程"""
     thread_id = str(uuid.uuid4())
+    logger.debug(f"thread.agent_id: {thread.agent_id}")
 
     new_thread = Thread(
         id=thread_id,
@@ -305,18 +307,19 @@ async def create_thread(
 
 @chat.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(
-    agent_id: str | None = None,
+    agent_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_required_user)
 ):
     """获取用户的所有对话线程"""
+    assert agent_id, "agent_id 不能为空"
     query = db.query(Thread).filter(
         Thread.user_id == str(current_user.id),
-        Thread.status == 1
+        Thread.status == 1,
+        Thread.agent_id == agent_id,
     )
 
-    if agent_id:
-        query = query.filter(Thread.agent_id == agent_id)
+    logger.debug(f"agent_id: {agent_id}")
 
     threads = query.order_by(Thread.update_at.desc()).all()
 

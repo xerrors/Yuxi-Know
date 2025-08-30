@@ -202,7 +202,7 @@ import {
 } from '@ant-design/icons-vue';
 import { useConfigStore } from '@/stores/config';
 import { modelIcons } from '@/utils/modelIcon';
-import { agentApi } from '@/apis/agent';
+import { agentApi } from '@/apis/agent_api';
 
 const configStore = useConfigStore();
 

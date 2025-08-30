@@ -68,7 +68,7 @@ export const configApi = {
 // === 信息管理分组 ===
 // =============================================================================
 
-export const brandAPi = {
+export const brandApi = {
   /**
    * 获取系统信息配置（公开接口）
    * @returns {Promise} - 系统信息配置

@@ -1,31 +1,38 @@
 import os
 import uuid
-from typing import Any
+from typing import Any, cast, Annotated
 from pathlib import Path
 from datetime import datetime, timezone
 
-import sqlite3
-from langchain_core.runnables import RunnableConfig
+from dataclasses import dataclass, field, fields
+from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
+from langgraph.runtime import Runtime
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
+from langgraph.checkpoint.memory import InMemorySaver
 
 from src import config as sys_config
 from src.utils import logger
-from src.agents.registry import State, BaseAgent
-from src.agents.utils import load_chat_model, get_cur_time_with_utc
-from src.agents.chatbot.configuration import ChatbotConfiguration
-from src.agents.tools_factory import get_buildin_tools
+from src.agents.common.utils import get_cur_time_with_utc
+from src.agents.common.base import BaseAgent
+from src.agents.common.models import load_chat_model
+
+from .state import State
+from .context import Context
+from .tools import get_tools
+
+
 
 class ChatbotAgent(BaseAgent):
     name = "智能体助手"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
-    config_schema = ChatbotConfiguration
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph = None
-        self.workdir = Path(sys_config.save_dir) / "agents" / self.id
+        self.context_schema = Context
+        self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
 
     def _get_tools(self, tools: list[str]):
@@ -33,7 +40,7 @@ class ChatbotAgent(BaseAgent):
         默认不使用任何工具。
         如果配置为列表，则使用列表中的工具。
         """
-        platform_tools = get_buildin_tools()
+        platform_tools = get_tools()
         if tools is None or not isinstance(tools, list) or len(tools) == 0:
             # 默认不使用任何工具
             logger.info("未配置工具或配置为空，不使用任何工具")
@@ -44,51 +51,74 @@ class ChatbotAgent(BaseAgent):
             logger.info(f"使用工具: {[tool.name for tool in tools]}")
             return tools
 
-    async def llm_call(self, state: State, config: RunnableConfig = None) -> dict[str, Any]:
+    async def llm_call(self, state: State, runtime: Runtime[Context] = None) -> dict[str, Any]:
         """调用 llm 模型 - 异步版本以支持异步工具"""
-        conf = self.config_schema.from_runnable_config(config, module_name=self.module_name)
+        system_prompt = f"{runtime.context.system_prompt}. Current time is {get_cur_time_with_utc()}"
+        model = load_chat_model(runtime.context.model)
 
-        system_prompt = f"{conf.system_prompt} Now is {get_cur_time_with_utc()}"
-        model = load_chat_model(conf.model)
-
-        if tools := self._get_tools(conf.tools):
+        # 这里要根据配置动态获取工具
+        if tools := self._get_tools(runtime.context.tools):
             model = model.bind_tools(tools)
 
         # 使用异步调用
-        res = await model.ainvoke(
-            [{"role": "system", "content": system_prompt}, *state["messages"]]
+        response = cast(
+            AIMessage,
+            await model.ainvoke(
+                [{"role": "system", "content": system_prompt}, *state.messages]
+            ),
         )
-        return {"messages": [res]}
+        return {"messages": [response]}
 
-    async def get_graph(self, config_schema: RunnableConfig = None, **kwargs):
+
+    async def dynamic_tools_node(
+        self, state: State, runtime: Runtime[Context]
+    ) -> dict[str, list[ToolMessage]]:
+        """Execute tools dynamically based on configuration.
+
+        This function gets the available tools based on the current configuration
+        and executes the requested tool calls from the last message.
+        """
+        # Get available tools based on configuration
+        available_tools = get_tools()
+
+        # Create a ToolNode with the available tools
+        tool_node = ToolNode(available_tools)
+
+        # Execute the tool node
+        result = await tool_node.ainvoke(state)
+
+        return cast(dict[str, list[ToolMessage]], result)
+
+    async def get_graph(self, **kwargs):
         """构建图"""
         if self.graph:
             return self.graph
 
-        runnable_tools = get_buildin_tools()
+        runnable_tools = get_tools()
         logger.debug(f"build graph `{self.id}` with {len(runnable_tools)} tools")
 
-        workflow = StateGraph(State, config_schema=self.config_schema)
-        workflow.add_node("chatbot", self.llm_call)
-        workflow.add_node("tools", ToolNode(tools=runnable_tools))
-        workflow.add_edge(START, "chatbot")
-        workflow.add_conditional_edges(
+        builder = StateGraph(State, context_schema=self.context_schema)
+        builder.add_node("chatbot", self.llm_call)
+        builder.add_node("tools", self.dynamic_tools_node)
+        builder.add_edge(START, "chatbot")
+        builder.add_conditional_edges(
             "chatbot",
             tools_condition,
         )
-        workflow.add_edge("tools", "chatbot")
-        workflow.add_edge("chatbot", END)
+        builder.add_edge("tools", "chatbot")
+        builder.add_edge("chatbot", END)
 
         # 创建数据库连接并确保设置 checkpointer
         try:
             sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
-            graph = workflow.compile(checkpointer=sqlite_checkpointer)
+            graph = builder.compile(checkpointer=sqlite_checkpointer, name=self.name)
             self.graph = graph
             return graph
         except Exception as e:
-            logger.error(f"构建 Graph 设置 checkpointer 时出错: {e}")
+            logger.error(f"构建 Graph 设置 checkpointer 时出错: {e}, 尝试使用内存存储")
             # 即使出错也返回一个可用的图实例，只是无法保存历史
-            graph = workflow.compile()
+            checkpointer = InMemorySaver()
+            graph = builder.compile(checkpointer=checkpointer, name=self.name)
             self.graph = graph
             return graph
 
@@ -101,7 +131,7 @@ class ChatbotAgent(BaseAgent):
         return AsyncSqliteSaver(await self.get_async_conn())
 
 def main():
-    agent = ChatbotAgent(ChatbotConfiguration())
+    agent = ChatbotAgent(Context)
 
     thread_id = str(uuid.uuid4())
     config = {"configurable": {"thread_id": thread_id}}

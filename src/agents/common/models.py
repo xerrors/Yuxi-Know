@@ -1,15 +1,10 @@
-from datetime import datetime, timezone, UTC
-import asyncio
 import os
 import traceback
 
 from src import config
-from src.utils import logger, get_docker_safe_url
+from src.utils import get_docker_safe_url
 from src.models import get_custom_model
-from src.agents.registry import BaseAgent
 from langchain_core.language_models import BaseChatModel
-from langchain_core.runnables import RunnableConfig
-from langchain_core.messages import AIMessageChunk, ToolMessage
 from pydantic import SecretStr
 
 
@@ -64,42 +59,3 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             )
         except Exception as e:
             raise ValueError(f"Model provider {provider} load failed, {e} \n {traceback.format_exc()}")
-
-
-
-async def agent_cli(agent: BaseAgent, config: RunnableConfig | None = None):
-    config = config or {}
-    if "configurable" not in config:
-        config["configurable"] = {}
-
-    while True:
-        user_input = input("\nUser: ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye!")
-            break
-
-        stream_flag = False
-        async for msg, metadata in agent.stream_messages([{"role": "user", "content": user_input}], config):
-            if isinstance(msg, AIMessageChunk):
-                content = msg.content or msg.tool_calls
-
-                if not content:
-                    if stream_flag:
-                        print()
-                        stream_flag = False
-                    continue
-
-                if not stream_flag and content:
-                    print(f"AI: {content}", end="", flush=True)
-                    stream_flag = True
-                    continue
-
-                elif content:
-                    print(f"{content}", end="", flush=True)
-
-            if isinstance(msg, ToolMessage):
-                print(f"Tool: {msg.content}")
-
-def get_cur_time_with_utc():
-    return datetime.now(tz=UTC).isoformat()
-

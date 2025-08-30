@@ -312,11 +312,11 @@ const selectedEdgeData = computed(() => graphStore.selectedEdgeData)
 // 智能边面板位置 - 确保在紧凑模式下也能正确显示
 const intelligentEdgePanelPosition = computed(() => {
   if (!sigmaContainer.value) return edgePanelPosition.value
-  
+
   const containerHeight = sigmaContainer.value.clientHeight
   const panelHeight = 200 // 估计的面板高度
   const nodePanelBottom = selectedNodeData.value ? nodePanelPosition.value.y + 200 : 0
-  
+
   // 如果有节点面板显示，将边面板放在节点面板下方
   if (selectedNodeData.value) {
     return {
@@ -324,7 +324,7 @@ const intelligentEdgePanelPosition = computed(() => {
       y: Math.min(nodePanelPosition.value.y, containerHeight - panelHeight - 20)
     }
   }
-  
+
   // 确保边面板在容器范围内
   return {
     x: edgePanelPosition.value.x,
@@ -551,10 +551,10 @@ const registerEvents = () => {
         // 获取Sigma边的属性，其中包含原始数据
         const sigmaEdgeData = graph.getEdgeAttributes(edge)
         console.log('Sigma边属性:', sigmaEdgeData)
-        
+
         // 立即设置选中的边 - 使用Sigma边ID
         graphStore.setSelectedEdge(edge)
-        
+
         // 确保边面板显示
         nextTick(() => {
           if (selectedEdgeData.value) {

@@ -112,7 +112,7 @@ export const agentApi = {
    * 获取所有可用工具的信息
    * @returns {Promise} - 工具信息列表
    */
-  getTools: () => apiGet('/api/tool/tools')
+  getTools: (agentId) => apiGet(`/api/chat/tools?agent_id=${agentId}`)
 }
 
 
@@ -127,7 +127,7 @@ export const threadApi = {
    * @returns {Promise} - 对话线程列表
    */
   getThreads: (agentId) => {
-    const url = agentId ? `/api/chat/threads?agent_id=${agentId}` : '/api/chat/threads';
+    const url = `/api/chat/threads?agent_id=${agentId}`;
     return apiGet(url);
   },
 

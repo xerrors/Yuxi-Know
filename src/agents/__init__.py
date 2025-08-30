@@ -1,6 +1,6 @@
 import asyncio
 
-from .chatbot import ChatbotAgent
+from .chatbot.graph import ChatbotAgent
 from .react.graph import ReActAgent
 
 class AgentManager:

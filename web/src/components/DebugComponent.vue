@@ -116,7 +116,6 @@ import {
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
 import { configApi } from '@/apis/system_api';
-import { agentApi } from '@/apis/agent';
 import { checkAdminPermission } from '@/stores/user';
 
 const configStore = useConfigStore()
@@ -402,7 +401,6 @@ const printAgentConfig = async () => {
       console.log('当前选中智能体:', {
         agent: toRaw(agentStore.selectedAgent),
         isDefault: agentStore.isDefaultAgent,
-        configSchema: toRaw(agentStore.configSchema),
         configurableItems: Object.keys(agentStore.configurableItems).length
       });
 
@@ -419,7 +417,7 @@ const printAgentConfig = async () => {
 
     // 线程信息
     console.log('线程信息:', {
-      currentAgentThreads: agentStore.currentAgentThreads.length,
+      currentAgentThreads: agentStore.currentAgentThreads,
       currentThread: agentStore.currentThread ? toRaw(agentStore.currentThread) : null,
       currentThreadMessages: agentStore.currentThreadMessages.length
     });

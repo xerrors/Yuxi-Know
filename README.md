@@ -29,7 +29,7 @@
   <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank">
     <img width="3651" height="1933" alt="视频演示缩略图" src="https://github.com/user-attachments/assets/eac4fa89-2176-46ae-a649-45a125cb6ed1" />
   </a>
-  
+
   <!-- 视频链接文字 -->
   <p style="margin-top: 12px;">
     <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank" style="text-decoration: none; color: #23ade5; font-weight: 500;">
@@ -223,7 +223,7 @@ docker compose up paddlex --build
 
 目前该项目默认集成了三个 Demo 智能体，包含基础智能体、ReAct、DeepResearch 三个案例 Demo，均使用 [LangGraph](https://github.com/langchain-ai/langgraph) 开发。代码位于 [src/agents](src/agents) 目录。在 [src/agents/react/graph.py](src/agents/react/graph.py) 中定义了 `ReActAgent` 示例。
 
-如果需要自定义智能体应用，实现一个继承于 `BaseAgent` 的类，并实现 `get_graph` 方法返回一个 graph 实例。智能体的 `config_schema` 定义了配置参数，可继承 `Configuration` 定义。
+如果需要自定义智能体应用，实现一个继承于 `BaseAgent` 的类，并实现 `get_graph` 方法返回一个 graph 实例。智能体的 `context_schema` 定义了配置参数。
 
 注册智能体的方式请参考已有实现：[src/agents/__init__.py](src/agents/__init__.py)。例如：
 

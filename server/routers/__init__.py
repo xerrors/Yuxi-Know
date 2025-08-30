@@ -4,7 +4,6 @@ from server.routers.auth_router import auth
 from server.routers.chat_router import chat
 from server.routers.knowledge_router import knowledge
 from server.routers.graph_router import graph
-from server.routers.tool_router import tool
 
 router = APIRouter()
 
@@ -14,4 +13,3 @@ router.include_router(auth)        # /api/auth/*
 router.include_router(chat)        # /api/chat/*
 router.include_router(knowledge)   # /api/knowledge/*
 router.include_router(graph)       # /api/graph/*
-router.include_router(tool)        # /api/tool/*

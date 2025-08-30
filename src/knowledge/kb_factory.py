@@ -28,7 +28,7 @@ class KnowledgeBaseFactory:
 
         cls._kb_types[kb_type] = kb_class
         cls._default_configs[kb_type] = default_config or {}
-        logger.info(f"Registered knowledge base type: {kb_type}")
+        # logger.info(f"Registered knowledge base type: {kb_type}")
 
     @classmethod
     def create(cls, kb_type: str, work_dir: str, **kwargs) -> KnowledgeBase:

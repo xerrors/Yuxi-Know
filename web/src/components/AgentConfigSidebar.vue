@@ -30,7 +30,7 @@
 
         <a-divider />
 
-        <div v-if="selectedAgentId && configSchema" class="config-form-content">
+        <div v-if="selectedAgentId && configurableItems" class="config-form-content">
           <!-- 配置表单 -->
           <a-form :model="agentConfig" layout="vertical" class="config-form">
             <a-alert
@@ -57,8 +57,9 @@
               >
                 <p v-if="value.description" class="config-description">{{ value.description }}</p>
 
+                <!-- <div>{{ value }}</div> -->
                 <!-- 模型选择 -->
-                <div v-if="key === 'model'" class="model-selector">
+                <div v-if="value.template_metadata.kind === 'llm'" class="model-selector">
                   <ModelSelectorComponent
                     @select-model="handleModelChange"
                     :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
@@ -77,7 +78,7 @@
                 />
 
                 <!-- 工具选择 -->
-                <div v-else-if="key === 'tools'" class="tools-selector">
+                <div v-else-if="value.template_metadata.kind === 'tools'" class="tools-selector">
                   <div class="tools-summary">
                     <div class="tools-summary-info">
                       <span class="tools-count">已选择 {{ getSelectedCount(key) }} 个工具</span>
@@ -307,7 +308,8 @@ const {
   availableTools,
   selectedAgent,
   selectedAgentId,
-  agentConfig
+  agentConfig,
+  configurableItems
 } = storeToRefs(agentStore);
 
 // console.log(availableTools.value)
@@ -318,21 +320,6 @@ const toolsModalOpen = ref(false);
 const selectedTools = ref([]);
 const toolsSearchText = ref('');
 
-// 计算属性
-const configSchema = computed(() => selectedAgent.value?.config_schema || {});
-
-const configurableItems = computed(() => {
-  const items = configSchema.value.configurable_items || {};
-  // 遍历所有的配置项，将所有的 x_oap_ui_config 的层级提升到上一层
-  Object.keys(items).forEach(key => {
-    const item = items[key];
-    if (item.x_oap_ui_config) {
-      items[key] = { ...item, ...item.x_oap_ui_config };
-      delete items[key].x_oap_ui_config;
-    }
-  });
-  return items;
-});
 
 const isEmptyConfig = computed(() => {
   return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0;
