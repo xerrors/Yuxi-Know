@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, useTemplateRef, shallowRef } from 'vue'
+import { ref, reactive, onMounted, useTemplateRef, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
@@ -127,14 +127,6 @@ const mainList = [{
           <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
           <span class="text">{{item.name}}</span>
         </RouterLink>
-
-        <a-tooltip placement="right">
-          <template #title>后端疑似没有正常启动或者正在繁忙中，请刷新一下或者检查 docker logs api-dev</template>
-          <div class="nav-item warning" v-if="!configStore.config._config_items">
-            <component class="icon" :is="ExclamationCircleOutlined" />
-            <span class="text">警告</span>
-          </div>
-        </a-tooltip>
       </div>
       <div
         ref="htmlRefHook"
