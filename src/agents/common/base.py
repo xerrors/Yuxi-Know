@@ -36,7 +36,6 @@ class BaseAgent:
             "name": self.name if hasattr(self, "name") else "Unknown",
             "description": self.description if hasattr(self, "description") else "Unknown",
             "configurable_items": self.context_schema.get_configurable_items(),
-            "all_tools": self.all_tools if hasattr(self, "all_tools") else [],
             "has_checkpointer": await self.check_checkpointer(),
         }
 
@@ -51,9 +50,8 @@ class BaseAgent:
 
     async def stream_messages(self, messages: list[str], input_context = None, **kwargs):
         graph = await self.get_graph()
-        logger.debug(f"stream_messages: {input_context}")
-
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
+        logger.debug(f"stream_messages: {context}")
         # TODO 的 Checkpointer 似乎还没有适配最新的 Context API
         async for msg, metadata in graph.astream({"messages": messages}, stream_mode="messages", context=context, config={"configurable": input_context}):
             yield msg, metadata

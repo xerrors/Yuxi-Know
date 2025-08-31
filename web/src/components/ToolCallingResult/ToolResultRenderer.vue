@@ -27,9 +27,9 @@
 
     <!-- 默认的原始数据展示 -->
     <div v-else class="default-result">
-      <div class="default-header">
+      <!-- <div class="default-header">
         <h4><ToolOutlined /> {{ toolName }} 执行结果</h4>
-      </div>
+      </div> -->
       <div class="default-content">
         <pre>{{ formatData(parsedData) }}</pre>
       </div>

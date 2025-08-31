@@ -1,7 +1,7 @@
+import inspect
 import asyncio
 import traceback
 from typing import Annotated, Any
-
 from pydantic import BaseModel, Field
 from langchain_core.tools import StructuredTool, tool
 from langchain_tavily import TavilySearch
@@ -22,7 +22,7 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
         logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
         return f"知识图谱查询失败: {str(e)}"
 
-def get_static_tools() -> dict[str, Any]:
+def get_static_tools() -> list:
     """注册静态工具"""
     static_tools = [
         query_knowledge_graph,
@@ -45,8 +45,7 @@ class KnowledgeRetrieverModel(BaseModel):
 
 
 
-
-def get_kb_based_tools() -> dict[str, Any]:
+def get_kb_based_tools() -> list:
     """获取所有知识库基于的工具"""
     # 获取所有知识库
     kb_tools = []
@@ -80,7 +79,7 @@ def get_kb_based_tools() -> dict[str, Any]:
             # 构建工具描述
             description = (
                 f"使用 {retrieve_info['name']} 知识库进行检索。\n"
-                f"下面是这个知识库的描述：\n{retrieve_info['description'] or '没有描述。'}"
+                f"下面是这个知识库的描述：\n{retrieve_info['description'] or '没有描述。'} "
             )
 
             # 使用工厂函数创建检索器包装函数，避免闭包问题
@@ -107,7 +106,7 @@ def get_kb_based_tools() -> dict[str, Any]:
     return kb_tools
 
 
-def get_buildin_tools() -> dict[str, Any]:
+def get_buildin_tools() -> list:
     """获取所有可运行的工具（给大模型使用）"""
     tools = []
 
@@ -119,11 +118,10 @@ def get_buildin_tools() -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Failed to get knowledge base retrievers: {e}")
 
-    logger.info(f"Total tools available: {len(tools)}")
     return tools
 
 
-def gen_tool_info(tools) -> dict[str, dict[str, Any]]:
+def gen_tool_info(tools) -> list[dict[str, Any]]:
     """获取所有工具的信息（用于前端展示）"""
     tools_info = []
 
@@ -137,29 +135,29 @@ def gen_tool_info(tools) -> dict[str, dict[str, Any]]:
                     "name": metadata.get('name', tool_obj.name),
                     "description": tool_obj.description,
                     'metadata': metadata,
-                    "args": []
+                    "args": [],
+                    # "is_async": is_async  # Include async information
                 }
 
-                schema = tool_obj.args_schema.schema()
-                for arg_name, arg_info in schema['properties'].items():
-                    info["args"].append({
-                        "name": arg_name,
-                        "type": arg_info.get('type', ''),
-                        "description": arg_info.get('description', '')
-                    })
+                if hasattr(tool_obj, 'args_schema') and tool_obj.args_schema:
+                    schema = tool_obj.args_schema.schema()
+                    for arg_name, arg_info in schema.get('properties', {}).items():
+                        info["args"].append({
+                            "name": arg_name,
+                            "type": arg_info.get('type', ''),
+                            "description": arg_info.get('description', '')
+                        })
 
                 tools_info.append(info)
                 # logger.debug(f"Successfully processed tool info for {tool_obj.name}")
 
             except Exception as e:
-                logger.error(f"Failed to process tool {tool_obj.name}: {e}")
+                logger.error(f"Failed to process tool {getattr(tool_obj, 'name', 'unknown')}: {e}\n{traceback.format_exc()}")
                 continue
 
     except Exception as e:
-        logger.error(f"Failed to get tools info: {e}")
-        return {}
+        logger.error(f"Failed to get tools info: {e}\n{traceback.format_exc()}")
+        return []
 
     logger.info(f"Successfully extracted info for {len(tools_info)} tools")
     return tools_info
-
-

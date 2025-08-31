@@ -17,6 +17,8 @@ from src.utils import logger
 from src.agents.common.utils import get_cur_time_with_utc
 from src.agents.common.base import BaseAgent
 from src.agents.common.models import load_chat_model
+from src.agents.common.mcp import get_mcp_tools
+
 
 from .state import State
 from .context import Context
@@ -34,38 +36,44 @@ class ChatbotAgent(BaseAgent):
         self.context_schema = Context
         self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
-        self.agent_tools = get_tools()
+        self.agent_tools = None
 
-    def _get_tools(self, tools: list[str]):
+    def get_tools(self):
+        return get_tools()
+
+    async def _get_invoke_tools(self, selected_tools: list[str], selected_mcps: list[str]):
         """根据配置获取工具。
         默认不使用任何工具。
         如果配置为列表，则使用列表中的工具。
         """
-        self.agent_tools = get_tools()
-        if tools is None or not isinstance(tools, list) or len(tools) == 0:
-            # 默认不使用任何工具
-            logger.info("未配置工具或配置为空，不使用任何工具")
-            return []
-        else:
+        enabled_tools = []
+        self.agent_tools = self.agent_tools or self.get_tools()
+        if selected_tools and isinstance(selected_tools, list) and len(selected_tools) > 0:
             # 使用配置中指定的工具
-            tools = [tool for tool in self.agent_tools if tool.name in tools]
-            logger.info(f"使用工具: {[tool.name for tool in tools]}")
-            return tools
+            enabled_tools = [tool for tool in self.agent_tools if tool.name in selected_tools]
+
+        if selected_mcps and isinstance(selected_mcps, list) and len(selected_mcps) > 0:
+            for mcp in selected_mcps:
+                enabled_tools.extend(await get_mcp_tools(mcp))
+
+        return enabled_tools
 
     async def llm_call(self, state: State, runtime: Runtime[Context] = None) -> dict[str, Any]:
         """调用 llm 模型 - 异步版本以支持异步工具"""
-        system_prompt = f"{runtime.context.system_prompt}. Current time is {get_cur_time_with_utc()}"
         model = load_chat_model(runtime.context.model)
 
         # 这里要根据配置动态获取工具
-        if tools := self._get_tools(runtime.context.tools):
-            model = model.bind_tools(tools)
+        available_tools = await self._get_invoke_tools(runtime.context.tools, runtime.context.mcps)
+        logger.info(f"LLM binded ({len(available_tools)}) available_tools: {[tool.name for tool in available_tools]}")
+
+        if available_tools:
+            model = model.bind_tools(available_tools)
 
         # 使用异步调用
         response = cast(
             AIMessage,
             await model.ainvoke(
-                [{"role": "system", "content": system_prompt}, *state.messages]
+                [{"role": "system", "content": runtime.context.system_prompt}, *state.messages]
             ),
         )
         return {"messages": [response]}
@@ -80,7 +88,7 @@ class ChatbotAgent(BaseAgent):
         and executes the requested tool calls from the last message.
         """
         # Get available tools based on configuration
-        available_tools = get_tools()
+        available_tools = await self._get_invoke_tools(runtime.context.tools, runtime.context.mcps)
 
         # Create a ToolNode with the available tools
         tool_node = ToolNode(available_tools)
@@ -92,11 +100,8 @@ class ChatbotAgent(BaseAgent):
 
     async def get_graph(self, **kwargs):
         """构建图"""
-        if self.graph:
-            return self.graph
-
-        runnable_tools = get_tools()
-        logger.debug(f"build graph `{self.id}` with {len(runnable_tools)} tools")
+        # if self.graph:
+        #     return self.graph
 
         builder = StateGraph(State, context_schema=self.context_schema)
         builder.add_node("chatbot", self.llm_call)

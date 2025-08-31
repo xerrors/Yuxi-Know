@@ -185,8 +185,8 @@ async def get_tools(agent_id: str, current_user: User = Depends(get_required_use
     if not (agent := agent_manager.get_agent(agent_id)):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
-    if hasattr(agent, "agent_tools"):
-        tools = agent.agent_tools
+    if hasattr(agent, "get_tools"):
+        tools = agent.get_tools()
     else:
         tools = get_buildin_tools()
 

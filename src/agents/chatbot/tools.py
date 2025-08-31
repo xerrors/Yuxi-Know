@@ -30,5 +30,5 @@ def get_tools() -> dict[str, Any]:
     """获取所有可运行的工具（给大模型使用）"""
     tools = get_buildin_tools()
     tools.append(calculator)
-
     return tools
+

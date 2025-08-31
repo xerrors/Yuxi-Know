@@ -52,3 +52,14 @@ def log_operation(db: Session, user_id: int, operation: str, details: str = None
 def get_user_dict(user: User, include_password: bool = False) -> dict:
     """获取用户字典表示"""
     return user.to_dict(include_password)
+
+
+def convert_serializable(obj):
+    """将对象转换为可序列化的格式"""
+    if isinstance(obj, list | tuple):
+        return [convert_serializable(item) for item in obj]
+    if isinstance(obj, dict):
+        return {k: convert_serializable(v) for k, v in obj.items()}
+    if hasattr(obj, '__dict__'):
+        return convert_serializable(vars(obj))
+    return obj
