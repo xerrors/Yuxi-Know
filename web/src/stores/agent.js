@@ -50,7 +50,7 @@ export const useAgentStore = defineStore('agent', {
     configurableItems: (state) => {
       const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
       if (!agent || !agent.configurable_items) return {};
-      
+
       const agentConfigurableItems = agent.configurable_items;
       const items = { ...agentConfigurableItems };
       Object.keys(items).forEach(key => {
@@ -108,13 +108,13 @@ export const useAgentStore = defineStore('agent', {
       try {
         // 首先加载智能体列表
         await this.fetchAgents();
-        
+
         // 然后设置默认智能体
         await this.fetchDefaultAgent();
-        
+
         // 最后加载工具
         await this.fetchTools();
-        
+
         this.isInitialized = true;
       } catch (error) {
         console.error('Failed to initialize agent store:', error);
@@ -244,7 +244,7 @@ export const useAgentStore = defineStore('agent', {
       this.error = null;
 
       try {
-        const response = await agentApi.getTools();
+        const response = await agentApi.getTools(this.selectedAgentId);
         this.availableTools = response.tools;
       } catch (error) {
         console.error('Failed to fetch tools:', error);
@@ -444,7 +444,7 @@ export const useAgentStore = defineStore('agent', {
 
       this.isStreaming = true;
       this.resetOnGoingConv();
-      
+
       // 创建新的 AbortController
       this.streamAbortController = new AbortController();
 
@@ -472,7 +472,7 @@ export const useAgentStore = defineStore('agent', {
           if (this.streamAbortController && this.streamAbortController.signal.aborted) {
             break;
           }
-          
+
           const { done, value } = await reader.read();
           if (done) break;
 
@@ -491,7 +491,7 @@ export const useAgentStore = defineStore('agent', {
             }
           }
         }
-        
+
         // Process any remaining data in the buffer
         if (buffer.trim() && (!this.streamAbortController || !this.streamAbortController.signal.aborted)) {
           try {
@@ -542,7 +542,7 @@ export const useAgentStore = defineStore('agent', {
         this.streamAbortController.abort();
         this.streamAbortController = null;
       }
-      
+
       this.agents = {};
       this.selectedAgentId = null;
       this.defaultAgentId = null;

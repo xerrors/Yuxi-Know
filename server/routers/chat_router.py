@@ -179,10 +179,17 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
     return {"models": config.model_names[model_provider]["models"]}
 
 @chat.get("/tools")
-async def get_tools(agent_id: str, current_user: User = Depends(get_admin_user)):
+async def get_tools(agent_id: str, current_user: User = Depends(get_required_user)):
     """获取所有可用工具（需要登录）"""
-    logger.info(f"agent_id: {agent_id}")
-    tools = get_buildin_tools()
+    # 获取Agent实例和配置类
+    if not (agent := agent_manager.get_agent(agent_id)):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    if hasattr(agent, "agent_tools"):
+        tools = agent.agent_tools
+    else:
+        tools = get_buildin_tools()
+
     tools_info = gen_tool_info(tools)
     return {"tools": {tool["id"]: tool for tool in tools_info}}
 
@@ -190,9 +197,9 @@ async def get_tools(agent_id: str, current_user: User = Depends(get_admin_user))
 async def save_agent_config(
     agent_id: str,
     config: dict = Body(...),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_required_user)
 ):
-    """保存智能体配置到YAML文件（需要管理员权限）"""
+    """保存智能体配置到YAML文件（需要登录）"""
     try:
         # 获取Agent实例和配置类
         if not (agent := agent_manager.get_agent(agent_id)):

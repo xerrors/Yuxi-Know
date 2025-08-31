@@ -34,20 +34,21 @@ class ChatbotAgent(BaseAgent):
         self.context_schema = Context
         self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
+        self.agent_tools = get_tools()
 
     def _get_tools(self, tools: list[str]):
         """根据配置获取工具。
         默认不使用任何工具。
         如果配置为列表，则使用列表中的工具。
         """
-        platform_tools = get_tools()
+        self.agent_tools = get_tools()
         if tools is None or not isinstance(tools, list) or len(tools) == 0:
             # 默认不使用任何工具
             logger.info("未配置工具或配置为空，不使用任何工具")
             return []
         else:
             # 使用配置中指定的工具
-            tools = [tool for tool in platform_tools if tool.name in tools]
+            tools = [tool for tool in self.agent_tools if tool.name in tools]
             logger.info(f"使用工具: {[tool.name for tool in tools]}")
             return tools
 
