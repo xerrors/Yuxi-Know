@@ -106,13 +106,20 @@ export const useAgentStore = defineStore('agent', {
       if (this.isInitialized) return;
 
       try {
-        // 首先加载智能体列表
         await this.fetchAgents();
-
-        // 然后设置默认智能体
         await this.fetchDefaultAgent();
 
-        // 最后加载工具
+        if (!this.selectedAgentId || !this.agents[this.selectedAgentId]) {
+          if (this.defaultAgentId && this.agents[this.defaultAgentId]) {
+            this.selectAgent(this.defaultAgentId);
+          } else if (Object.keys(this.agents).length > 0) {
+            const firstAgentId = Object.keys(this.agents)[0];
+            this.selectAgent(firstAgentId);
+          }
+        } else {
+          console.log('Condition FALSE: Persisted selected agent is valid. Keeping it.');
+        }
+
         await this.fetchTools();
 
         this.isInitialized = true;
@@ -150,11 +157,6 @@ export const useAgentStore = defineStore('agent', {
       try {
         const response = await agentApi.getDefaultAgent();
         this.defaultAgentId = response.default_agent_id;
-
-        // 如果没有选中的智能体且默认智能体存在于智能体列表中，则选择默认智能体
-        if (!this.selectedAgentId && this.defaultAgentId && this.agents[this.defaultAgentId]) {
-          this.selectedAgentId = this.defaultAgentId;
-        }
       } catch (error) {
         console.error('Failed to fetch default agent:', error);
         handleChatError(error, 'fetch');

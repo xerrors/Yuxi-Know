@@ -146,6 +146,7 @@ import { storeToRefs } from 'pinia';
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
   state: { type: Object, default: () => ({}) },
+  agentId: { type: String, default: '' },
   singleMode: { type: Boolean, default: true }
 });
 const emit = defineEmits(['open-config', 'open-agent-modal']);
@@ -380,8 +381,15 @@ const initAll = async () => {
 
 const loadChatsList = async () => {
   try {
-    if (!AgentValidator.validateLoadOperation(agentStore.selectedAgentId, '加载对话列表')) return;
-    await agentStore.fetchThreads(agentStore.selectedAgentId);
+    const agentId = agentStore.selectedAgentId;
+    if (!AgentValidator.validateLoadOperation(agentId, '加载对话列表')) return;
+
+    await agentStore.fetchThreads(agentId);
+
+    // If selected agent changed during fetch, abort. The watcher will trigger a new load.
+    if (agentStore.selectedAgentId !== agentId) {
+      return;
+    }
 
     if (currentAgentThreads.value && currentAgentThreads.value.length > 0) {
       const threadToSelect = currentAgentThreads.value[0].id;
@@ -398,19 +406,20 @@ const loadChatsList = async () => {
 onMounted(async () => {
   await initAll();
   scrollController.enableAutoScroll();
-  watch(() => agentStore.selectedAgentId, (newAgentId, oldAgentId) => {
-    if (newAgentId && newAgentId !== oldAgentId) {
-      initAll();
-    }
-  });
-
-  // 只监听streaming状态，用于流式消息的智能滚动
-  watch(conversations, () => {
-    if (isProcessing.value) {
-      scrollController.scrollToBottom();
-    }
-  }, { deep: true, flush: 'post' });
 });
+
+watch(() => agentStore.selectedAgentId, (newAgentId, oldAgentId) => {
+  if (newAgentId && newAgentId !== oldAgentId) {
+    loadChatsList();
+  }
+});
+
+// 只监听streaming状态，用于流式消息的智能滚动
+watch(conversations, () => {
+  if (isProcessing.value) {
+    scrollController.scrollToBottom();
+  }
+}, { deep: true, flush: 'post' });
 
 </script>
 

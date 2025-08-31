@@ -53,7 +53,7 @@
                 <div class="agent-card-title">
                   <span class="agent-card-name">{{ agent.name }}</span>
                   <StarFilled v-if="id === defaultAgentId" class="default-icon" />
-                  <StarOutlined v-else @click.prevent="setAsDefaultAgent" class="default-icon" />
+                  <StarOutlined v-else @click.prevent="setAsDefaultAgent(id)" class="default-icon" />
                 </div>
               </div>
               <div class="agent-card-description">{{ agent.description }}</div>
@@ -132,11 +132,11 @@ const state = reactive({
 // 本地状态（仅UI相关）
 
 // 设置为默认智能体
-const setAsDefaultAgent = async () => {
-  if (!selectedAgentId.value || !userStore.isAdmin) return;
+const setAsDefaultAgent = async (agentId) => {
+  if (!agentId || !userStore.isAdmin) return;
 
   try {
-    await agentStore.setDefaultAgent(selectedAgentId.value);
+    await agentStore.setDefaultAgent(agentId);
     message.success('已将当前智能体设为默认');
   } catch (error) {
     console.error('设置默认智能体错误:', error);
@@ -193,28 +193,7 @@ const selectAgentFromModal = (agentId) => {
 
 
 
-// 初始化（使用store方法）
-onMounted(async () => {
-  try {
-    // 恢复上次选择的智能体
-    const lastSelectedAgent = localStorage.getItem('last-selected-agent');
-    if (lastSelectedAgent && agents.value[lastSelectedAgent]) {
-      agentStore.selectAgent(lastSelectedAgent);
-    } else if (defaultAgentId.value && agents.value[defaultAgentId.value]) {
-      // 如果有默认智能体，优先选择默认智能体
-      agentStore.selectAgent(defaultAgentId.value);
-    } else if (Object.keys(agents.value).length > 0) {
-      // 默认选择第一个智能体
-      agentStore.selectAgent(Object.keys(agents.value)[0]);
-    }
 
-    // 加载配置
-    await loadAgentConfig();
-  } catch (error) {
-    console.error('初始化失败:', error);
-    message.error('初始化失败');
-  }
-});
 
 // 获取配置标签
 const getConfigLabel = (key, value) => {

@@ -14,25 +14,9 @@ import { computed, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import UserInfoComponent from '@/components/UserInfoComponent.vue';
-import sidebarLeftIcon from '@/assets/icons/sidebar_left.svg';
-import sidebarRightIcon from '@/assets/icons/sidebar_right.svg';
 
 const route = useRoute();
 const agentId = computed(() => route.params.agent_id);
-
-// 侧边栏状态
-const isSidebarCollapsed = ref(false);
-
-// 切换侧边栏展开/折叠状态
-const toggleSidebar = () => {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value;
-};
-
-// 用户信息点击事件
-const toggleUserInfo = () => {
-  // 此处可以添加用户信息相关的逻辑
-  console.log('用户信息图标被点击');
-};
 </script>
 
 <style lang="less" scoped>
