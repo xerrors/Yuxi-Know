@@ -378,16 +378,13 @@ const printAgentConfig = async () => {
       isInitialized: agentStore.isInitialized,
       selectedAgentId: agentStore.selectedAgentId,
       defaultAgentId: agentStore.defaultAgentId,
-      currentThreadId: agentStore.currentThreadId,
-      isStreaming: agentStore.isStreaming,
       loadingStates: {
         isLoadingAgents: agentStore.isLoadingAgents,
         isLoadingConfig: agentStore.isLoadingConfig,
-        isLoadingTools: agentStore.isLoadingTools,
-        isLoadingThreads: agentStore.isLoadingThreads,
-        isLoadingMessages: agentStore.isLoadingMessages
+        isLoadingTools: agentStore.isLoadingTools
       },
-      error: agentStore.error
+      error: agentStore.error,
+      note: '线程相关状态已迁移到组件级别'
     });
 
     // 智能体列表信息
@@ -415,23 +412,8 @@ const printAgentConfig = async () => {
     // 工具信息
     console.log('可用工具:', toRaw(agentStore.availableTools));
 
-    // 线程信息
-    console.log('线程信息:', {
-      currentAgentThreads: agentStore.currentAgentThreads,
-      currentThread: agentStore.currentThread ? toRaw(agentStore.currentThread) : null,
-      currentThreadMessages: agentStore.currentThreadMessages.length
-    });
-
-    // 对话状态
-    if (agentStore.isStreaming || Object.keys(agentStore.onGoingConv.msgChunks).length > 0) {
-      console.log('当前对话状态:', {
-        isStreaming: agentStore.isStreaming,
-        ongoingChunks: Object.keys(agentStore.onGoingConv.msgChunks).length,
-        ongoingMessages: agentStore.onGoingConvMessages.length,
-        conversations: agentStore.conversations.length,
-        detail: toRaw(agentStore.conversations)
-      });
-    }
+    // 注意：线程和对话相关信息已迁移到AgentChatComponent组件级别
+    console.log('注意: 线程和对话状态已迁移到组件级别，请在AgentChatComponent中查看相关信息');
 
   } catch (error) {
     console.error('获取智能体配置失败:', error);

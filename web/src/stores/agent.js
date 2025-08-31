@@ -17,22 +17,12 @@ export const useAgentStore = defineStore('agent', {
     // 工具相关状态
     availableTools: [], // 所有可用工具列表
 
-    // 线程相关状态
-    threads: {}, // 以智能体ID为键的线程列表
-    currentThreadId: null, // 当前选中的线程ID
-    threadMessages: {}, // 以线程ID为键的消息列表
-
-    // 对话状态
-    onGoingConv: { msgChunks: {} }, // 正在进行的对话（流式）
-    isStreaming: false, // 是否正在接收流式响应
-    streamAbortController: null, // 流式对话取消控制器
+    // 线程相关状态已迁移到组件级别
 
     // 加载状态
     isLoadingAgents: false,
     isLoadingConfig: false,
     isLoadingTools: false,
-    isLoadingThreads: false,
-    isLoadingMessages: false,
 
     // 错误状态
     error: null,
@@ -64,40 +54,7 @@ export const useAgentStore = defineStore('agent', {
     },
     hasConfigChanges: (state) => JSON.stringify(state.agentConfig) !== JSON.stringify(state.originalAgentConfig),
 
-    // --- 线程与消息相关 Getters ---
-    currentAgentThreads: (state) => state.selectedAgentId ? (state.threads[state.selectedAgentId] || []) : [],
-    currentThread: (state) => {
-      if (!state.currentThreadId || !state.selectedAgentId) return null;
-      const agentThreads = state.threads[state.selectedAgentId] || [];
-      return agentThreads.find(thread => thread.id === state.currentThreadId);
-    },
-    currentThreadMessages: (state) => state.currentThreadId ? (state.threadMessages[state.currentThreadId] || []) : [],
-
-    // --- 对话UI Getters ---
-    onGoingConvMessages: (state) => {
-      const msgs = Object.values(state.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
-      return msgs.length > 0
-        ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
-        : [];
-    },
-    conversations: (state) => {
-      const historyConvs = MessageProcessor.convertServerHistoryToMessages(state.currentThreadMessages);
-      // Compute ongoing messages directly from state to avoid circular reference
-      const msgs = Object.values(state.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
-      const onGoingMessages = msgs.length > 0
-        ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
-        : [];
-
-      if (onGoingMessages.length > 0) {
-        // Create a new conversation object for the ongoing messages
-        const onGoingConv = {
-          messages: onGoingMessages,
-          status: 'streaming'
-        };
-        return [...historyConvs, onGoingConv];
-      }
-      return historyConvs;
-    },
+    // --- 线程与消息相关 Getters (MOVED TO COMPONENT) ---
   },
 
   actions: {
@@ -120,7 +77,10 @@ export const useAgentStore = defineStore('agent', {
           console.log('Condition FALSE: Persisted selected agent is valid. Keeping it.');
         }
 
-        await this.fetchTools();
+        if (this.selectedAgentId) {
+          await this.loadAgentConfig();
+          await this.fetchTools();
+        }
 
         this.isInitialized = true;
       } catch (error) {
@@ -263,304 +223,19 @@ export const useAgentStore = defineStore('agent', {
       this.error = null;
     },
 
-    // ==================== 线程管理方法 ====================
-
-    // 获取智能体的线程列表
-    async fetchThreads(agentId = null) {
-      const targetAgentId = agentId || this.selectedAgentId;
-      if (!targetAgentId) return;
-
-      this.isLoadingThreads = true;
-      this.error = null;
-
-      try {
-        const threads = await threadApi.getThreads(targetAgentId);
-        this.threads[targetAgentId] = threads || [];
-      } catch (error) {
-        console.error('Failed to fetch threads:', error);
-        handleChatError(error, 'fetch');
-        this.error = error.message;
-        throw error;
-      } finally {
-        this.isLoadingThreads = false;
-      }
-    },
-
-    // 创建新线程
-    async createThread(agentId, title = '新的对话') {
-      if (!agentId) return null;
-
-      try {
-        const thread = await threadApi.createThread(agentId, title);
-        if (thread) {
-          // 更新线程列表
-          if (!this.threads[agentId]) {
-            this.threads[agentId] = [];
-          }
-          this.threads[agentId].unshift(thread);
-
-          // 设置为当前线程
-          this.currentThreadId = thread.id;
-
-          // 初始化消息列表
-          this.threadMessages[thread.id] = [];
-        }
-        return thread;
-      } catch (error) {
-        console.error('Failed to create thread:', error);
-        handleChatError(error, 'create');
-        this.error = error.message;
-        throw error;
-      }
-    },
-
-    // 删除线程
-    async deleteThread(threadId) {
-      if (!threadId) return;
-
-      try {
-        await threadApi.deleteThread(threadId);
-
-        // 从所有智能体的线程列表中移除
-        Object.keys(this.threads).forEach(agentId => {
-          this.threads[agentId] = this.threads[agentId].filter(thread => thread.id !== threadId);
-        });
-
-        // 清理消息
-        delete this.threadMessages[threadId];
-
-        // 如果删除的是当前线程，重置当前线程ID
-        if (this.currentThreadId === threadId) {
-          this.currentThreadId = null;
-        }
-      } catch (error) {
-        console.error('Failed to delete thread:', error);
-        handleChatError(error, 'delete');
-        this.error = error.message;
-        throw error;
-      }
-    },
-
-    // 更新线程标题
-    async updateThread(threadId, title) {
-      if (!threadId || !title) return;
-
-      try {
-        await threadApi.updateThread(threadId, title);
-
-        // 更新本地线程列表中的标题
-        Object.keys(this.threads).forEach(agentId => {
-          const thread = this.threads[agentId].find(t => t.id === threadId);
-          if (thread) {
-            thread.title = title;
-          }
-        });
-      } catch (error) {
-        console.error('Failed to update thread:', error);
-        handleChatError(error, 'update');
-        this.error = error.message;
-        throw error;
-      }
-    },
-
-    // 选择线程
-    selectThread(threadId) {
-      this.currentThreadId = threadId;
-      this.resetOnGoingConv();
-
-      // 如果没有该线程的消息，初始化空数组
-      if (threadId && !this.threadMessages[threadId]) {
-        this.threadMessages[threadId] = [];
-      }
-    },
-
-    // 获取线程消息
-    async fetchThreadMessages(threadId) {
-      if (!threadId) return;
-
-      this.isLoadingMessages = true;
-      this.error = null;
-      this.resetOnGoingConv();
-
-      try {
-        const response = await agentApi.getAgentHistory(this.selectedAgentId, threadId);
-        this.threadMessages[threadId] = response.history || [];
-      } catch (error) {
-        handleChatError(error, 'load');
-        throw error;
-      } finally {
-        this.isLoadingMessages = false;
-      }
-    },
-
-    // --- 流式对话 Actions ---
-
-    resetOnGoingConv() {
-      // 取消之前的请求（如果存在）
-      if (this.streamAbortController) {
-        this.streamAbortController.abort();
-        this.streamAbortController = null;
-      }
-      this.onGoingConv = { msgChunks: {} };
-    },
-
-    _processStreamChunk(chunk) {
-      const { status, msg, request_id, message } = chunk;
-      switch (status) {
-        case 'init':
-          this.onGoingConv.msgChunks[request_id] = [msg];
-          break;
-        case 'loading':
-          if (msg.id) {
-            if (!this.onGoingConv.msgChunks[msg.id]) {
-              this.onGoingConv.msgChunks[msg.id] = [];
-            }
-            this.onGoingConv.msgChunks[msg.id].push(msg);
-          }
-          break;
-        case 'error':
-          handleChatError({ message }, 'stream');
-          break;
-        case 'finished':
-          this.fetchThreadMessages(this.currentThreadId);
-          break;
-      }
-    },
-
-    // 取消流式对话
-    cancelStreaming() {
-      if (this.streamAbortController && this.isStreaming) {
-        this.streamAbortController.abort();
-        this.streamAbortController = null;
-        this.isStreaming = false;
-        this.resetOnGoingConv();
-      }
-    },
-
-    // 发送消息并处理流式响应
-    async sendMessage(text) {
-      if (!this.selectedAgentId || !this.currentThreadId || !text) {
-        handleChatError({ message: "Missing agent, thread, or message text" }, 'send');
-        return;
-      }
-
-      this.isStreaming = true;
-      this.resetOnGoingConv();
-
-      // 创建新的 AbortController
-      this.streamAbortController = new AbortController();
-
-      // 如果是新对话，用消息内容作为标题
-      if (this.currentThreadMessages.length === 0) {
-        this.updateThread(this.currentThreadId, text);
-      }
-
-      const requestData = {
-        query: text,
-        config: {
-          thread_id: this.currentThreadId,
-        },
-      };
-
-      try {
-        const response = await agentApi.sendAgentMessage(this.selectedAgentId, requestData);
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          // 检查是否被取消
-          if (this.streamAbortController && this.streamAbortController.signal.aborted) {
-            break;
-          }
-
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.trim() && (!this.streamAbortController || !this.streamAbortController.signal.aborted)) {
-              try {
-                const chunk = JSON.parse(line.trim());
-                this._processStreamChunk(chunk);
-              } catch (e) {
-                console.warn('Failed to parse stream chunk JSON:', e);
-              }
-            }
-          }
-        }
-
-        // Process any remaining data in the buffer
-        if (buffer.trim() && (!this.streamAbortController || !this.streamAbortController.signal.aborted)) {
-          try {
-            const chunk = JSON.parse(buffer.trim());
-            this._processStreamChunk(chunk);
-          } catch (e) {
-            console.warn('Failed to parse final stream chunk JSON:', e);
-          }
-        }
-
-      } catch (error) {
-        // 如果是取消错误，不显示错误信息
-        if (error.name === 'AbortError') {
-          console.log('Stream was cancelled');
-        } else {
-          handleChatError(error, 'send');
-        }
-      } finally {
-        this.isStreaming = false;
-        this.streamAbortController = null;
-      }
-    },
-
-    // 添加消息到线程
-    addMessageToThread(threadId, message) {
-      if (!threadId || !message) return;
-
-      if (!this.threadMessages[threadId]) {
-        this.threadMessages[threadId] = [];
-      }
-
-      this.threadMessages[threadId].push(message);
-    },
-
-    // 更新线程中的消息
-    updateMessageInThread(threadId, messageIndex, updatedMessage) {
-      if (!threadId || messageIndex < 0 || !this.threadMessages[threadId]) return;
-
-      if (messageIndex < this.threadMessages[threadId].length) {
-        this.threadMessages[threadId][messageIndex] = updatedMessage;
-      }
-    },
+    // ==================== 线程管理方法已迁移到组件级别 ====================
 
     // 重置store状态
     reset() {
-      // 取消正在进行的流式对话
-      if (this.streamAbortController) {
-        this.streamAbortController.abort();
-        this.streamAbortController = null;
-      }
-
       this.agents = {};
       this.selectedAgentId = null;
       this.defaultAgentId = null;
       this.agentConfig = {};
       this.originalAgentConfig = {};
       this.availableTools = [];
-      this.threads = {};
-      this.currentThreadId = null;
-      this.threadMessages = {};
-      this.onGoingConv = { msgChunks: {} };
-      this.isStreaming = false;
       this.isLoadingAgents = false;
       this.isLoadingConfig = false;
       this.isLoadingTools = false;
-      this.isLoadingThreads = false;
-      this.isLoadingMessages = false;
       this.error = null;
       this.isInitialized = false;
     }

@@ -3,11 +3,11 @@
     <ChatSidebarComponent
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
-      :is-sidebar-open="state.isSidebarOpen"
-      :is-initial-render="state.isInitialRender"
+      :is-sidebar-open="uiState.isSidebarOpen"
+      :is-initial-render="uiState.isInitialRender"
       :single-mode="props.singleMode"
       :agents="agents"
-      :selected-agent-id="agentStore.selectedAgentId"
+      :selected-agent-id="currentAgentId"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
@@ -16,26 +16,26 @@
       @open-agent-modal="openAgentModal"
       :class="{
         'floating-sidebar': isSmallContainer,
-        'sidebar-open': state.isSidebarOpen,
-        'no-transition': state.isInitialRender,
-        'collapsed': isSmallContainer && !state.isSidebarOpen
+        'sidebar-open': uiState.isSidebarOpen,
+        'no-transition': uiState.isInitialRender,
+        'collapsed': isSmallContainer && !uiState.isSidebarOpen
       }"
     />
-    <div class="sidebar-backdrop" v-if="state.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
+    <div class="sidebar-backdrop" v-if="uiState.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
-          <div class="toggle-sidebar nav-btn" v-if="!state.isSidebarOpen" @click="toggleSidebar">
+          <div class="toggle-sidebar nav-btn" v-if="!uiState.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen size="20" color="var(--gray-800)"/>
           </div>
-          <div class="newchat nav-btn" v-if="!state.isSidebarOpen" @click="createNewChat" :disabled="state.isProcessingRequest || state.creatingNewChat">
+          <div class="newchat nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="isProcessing">
             <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
         <div class="header__center" @mouseenter="uiState.showRenameButton = true" @mouseleave="uiState.showRenameButton = false">
           <div @click="logConversationInfo" class="center-title">
-            {{ agentStore.currentThread?.title }}
+            {{ currentThread?.title }}
           </div>
           <div class="rename-button" v-if="currentChatId" :class="{ 'visible': uiState.showRenameButton }" @click="handleRenameChat">
             <EditOutlined style="font-size: 14px; color: var(--gray-600);"/>
@@ -137,11 +137,13 @@ import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
 import { ChatExporter } from '@/utils/chatExporter';
-import { ErrorHandler, handleChatError, handleValidationError } from '@/utils/errorHandler';
+import { handleChatError, handleValidationError } from '@/utils/errorHandler';
 import { ScrollController } from '@/utils/scrollController';
 import { AgentValidator } from '@/utils/agentValidator';
 import { useAgentStore } from '@/stores/agent';
 import { storeToRefs } from 'pinia';
+import { MessageProcessor } from '@/utils/messageProcessor';
+import { agentApi, threadApi } from '@/apis';
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
@@ -155,34 +157,88 @@ const emit = defineEmits(['open-config', 'open-agent-modal']);
 const agentStore = useAgentStore();
 const {
   agents,
-  currentAgentThreads,
-  currentThread,
-  isLoadingThreads,
-  isLoadingMessages,
-  conversations, // New getter from store
-  isStreaming,   // New state from store
+  selectedAgentId,
+  defaultAgentId,
 } = storeToRefs(agentStore);
 
-// ==================== LOCAL UI STATE ====================
+// ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('');
-const state = reactive({
-  ...props.state,
-  debug_mode: computed(() => props.state.debug_mode ?? false),
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
+
+const chatState = reactive({
+  currentThreadId: null,
+  isLoadingThreads: false,
+  isLoadingMessages: false,
   creatingNewChat: false,
-  isInitialRender: true
+  // 以threadId为键的线程状态
+  threadStates: {}
 });
 
+// 组件级别的线程和消息状态
+const threads = ref([]);
+const threadMessages = ref({});
+
 const uiState = reactive({
+  ...props.state,
+  debug_mode: computed(() => props.state.debug_mode ?? false),
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true',
+  isInitialRender: true,
   showRenameButton: false,
   containerWidth: 0,
 });
 
 // ==================== COMPUTED PROPERTIES ====================
-const currentAgent = computed(() => agentStore.selectedAgent);
-const currentChatId = computed(() => agentStore.currentThreadId);
-const chatsList = computed(() => currentAgentThreads.value || []);
-const isProcessing = computed(() => isStreaming.value || state.creatingNewChat);
+const currentAgentId = computed(() => {
+  if (props.singleMode) {
+    return props.agentId || defaultAgentId.value;
+  } else {
+    return selectedAgentId.value;
+  }
+});
+
+const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
+const chatsList = computed(() => threads.value || []);
+const currentChatId = computed(() => chatState.currentThreadId);
+const currentThread = computed(() => {
+  if (!currentChatId.value) return null;
+  return threads.value.find(thread => thread.id === currentChatId.value) || null;
+});
+
+const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || []);
+
+// 当前线程状态的computed属性
+const currentThreadState = computed(() => {
+  return getThreadState(currentChatId.value);
+});
+
+const onGoingConvMessages = computed(() => {
+  const threadState = currentThreadState.value;
+  if (!threadState || !threadState.onGoingConv) return [];
+  
+  const msgs = Object.values(threadState.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
+  return msgs.length > 0
+    ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
+    : [];
+});
+
+const conversations = computed(() => {
+  const historyConvs = MessageProcessor.convertServerHistoryToMessages(currentThreadMessages.value);
+  if (onGoingConvMessages.value.length > 0) {
+    const onGoingConv = {
+      messages: onGoingConvMessages.value,
+      status: 'streaming'
+    };
+    return [...historyConvs, onGoingConv];
+  }
+  return historyConvs;
+});
+
+const isLoadingThreads = computed(() => chatState.isLoadingThreads);
+const isLoadingMessages = computed(() => chatState.isLoadingMessages);
+const isStreaming = computed(() => {
+  const threadState = currentThreadState.value;
+  return threadState ? threadState.isStreaming : false;
+});
+const isProcessing = computed(() => isStreaming.value || chatState.creatingNewChat);
 const isSmallContainer = computed(() => uiState.containerWidth <= 520);
 const isMediumContainer = computed(() => uiState.containerWidth <= 768);
 
@@ -207,42 +263,294 @@ onMounted(() => {
       chatContainer.addEventListener('scroll', scrollController.handleScroll, { passive: true });
     }
   });
-  setTimeout(() => { state.isInitialRender = false; }, 300);
+  setTimeout(() => { uiState.isInitialRender = false; }, 300);
 });
 
 onUnmounted(() => {
   if (resizeObserver) resizeObserver.disconnect();
   scrollController.cleanup();
+  // 清理所有线程状态
+  resetOnGoingConv();
 });
 
-// ==================== CHAT ACTIONS (DELEGATE TO STORE) ====================
+// ==================== THREAD STATE MANAGEMENT ====================
+// 获取指定线程的状态，如果不存在则创建
+const getThreadState = (threadId) => {
+  if (!threadId) return null;
+  if (!chatState.threadStates[threadId]) {
+    chatState.threadStates[threadId] = {
+      isStreaming: false,
+      streamAbortController: null,
+      onGoingConv: { msgChunks: {} }
+    };
+  }
+  return chatState.threadStates[threadId];
+};
 
+// 清理指定线程的状态
+const cleanupThreadState = (threadId) => {
+  if (!threadId) return;
+  const threadState = chatState.threadStates[threadId];
+  if (threadState) {
+    if (threadState.streamAbortController) {
+      threadState.streamAbortController.abort();
+    }
+    delete chatState.threadStates[threadId];
+  }
+};
+
+// ==================== STREAM HANDLING LOGIC ====================
+const resetOnGoingConv = (threadId = null) => {
+  if (threadId) {
+    // 清理指定线程的状态
+    const threadState = getThreadState(threadId);
+    if (threadState) {
+      if (threadState.streamAbortController) {
+        threadState.streamAbortController.abort();
+        threadState.streamAbortController = null;
+      }
+      threadState.onGoingConv = { msgChunks: {} };
+    }
+  } else {
+    // 清理当前线程或所有线程的状态
+    const targetThreadId = currentChatId.value;
+    if (targetThreadId) {
+      const threadState = getThreadState(targetThreadId);
+      if (threadState) {
+        if (threadState.streamAbortController) {
+          threadState.streamAbortController.abort();
+          threadState.streamAbortController = null;
+        }
+        threadState.onGoingConv = { msgChunks: {} };
+      }
+    } else {
+      // 如果没有当前线程，清理所有线程状态
+      Object.keys(chatState.threadStates).forEach(tid => {
+        cleanupThreadState(tid);
+      });
+    }
+  }
+};
+
+const _processStreamChunk = (chunk, threadId) => {
+  const { status, msg, request_id, message } = chunk;
+  const threadState = getThreadState(threadId);
+  
+  if (!threadState) return;
+  
+  switch (status) {
+    case 'init':
+      threadState.onGoingConv.msgChunks[request_id] = [msg];
+      break;
+    case 'loading':
+      if (msg.id) {
+        if (!threadState.onGoingConv.msgChunks[msg.id]) {
+          threadState.onGoingConv.msgChunks[msg.id] = [];
+        }
+        threadState.onGoingConv.msgChunks[msg.id].push(msg);
+      }
+      break;
+    case 'error':
+      handleChatError({ message }, 'stream');
+      resetOnGoingConv(threadId);
+      break;
+    case 'finished':
+          fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+          resetOnGoingConv(threadId);
+          break;
+  }
+};
+
+// ==================== 线程管理方法 ====================
+// 获取当前智能体的线程列表
+const fetchThreads = async (agentId = null) => {
+  const targetAgentId = agentId || currentAgentId.value;
+  if (!targetAgentId) return;
+
+  chatState.isLoadingThreads = true;
+  try {
+    const fetchedThreads = await threadApi.getThreads(targetAgentId);
+    threads.value = fetchedThreads || [];
+  } catch (error) {
+    console.error('Failed to fetch threads:', error);
+    handleChatError(error, 'fetch');
+    throw error;
+  } finally {
+    chatState.isLoadingThreads = false;
+  }
+};
+
+// 创建新线程
+const createThread = async (agentId, title = '新的对话') => {
+  if (!agentId) return null;
+
+  chatState.isCreatingThread = true;
+  try {
+    const thread = await threadApi.createThread(agentId, title);
+    if (thread) {
+      threads.value.unshift(thread);
+      threadMessages.value[thread.id] = [];
+    }
+    return thread;
+  } catch (error) {
+    console.error('Failed to create thread:', error);
+    handleChatError(error, 'create');
+    throw error;
+  } finally {
+    chatState.isCreatingThread = false;
+  }
+};
+
+// 删除线程
+const deleteThread = async (threadId) => {
+  if (!threadId) return;
+
+  chatState.isDeletingThread = true;
+  try {
+    await threadApi.deleteThread(threadId);
+    threads.value = threads.value.filter(thread => thread.id !== threadId);
+    delete threadMessages.value[threadId];
+
+    if (chatState.currentThreadId === threadId) {
+      chatState.currentThreadId = null;
+    }
+  } catch (error) {
+    console.error('Failed to delete thread:', error);
+    handleChatError(error, 'delete');
+    throw error;
+  } finally {
+    chatState.isDeletingThread = false;
+  }
+};
+
+// 更新线程标题
+const updateThread = async (threadId, title) => {
+  if (!threadId || !title) return;
+
+  chatState.isRenamingThread = true;
+  try {
+    await threadApi.updateThread(threadId, title);
+    const thread = threads.value.find(t => t.id === threadId);
+    if (thread) {
+      thread.title = title;
+    }
+  } catch (error) {
+    console.error('Failed to update thread:', error);
+    handleChatError(error, 'update');
+    throw error;
+  } finally {
+    chatState.isRenamingThread = false;
+  }
+};
+
+// 获取线程消息
+const fetchThreadMessages = async ({ agentId, threadId }) => {
+  if (!threadId || !agentId) return;
+
+  try {
+    const response = await agentApi.getAgentHistory(agentId, threadId);
+    threadMessages.value[threadId] = response.history || [];
+  } catch (error) {
+    handleChatError(error, 'load');
+    throw error;
+  }
+};
+
+// 发送消息并处理流式响应
+const sendMessage = async ({ agentId, threadId, text }) => {
+  if (!agentId || !threadId || !text) {
+    const error = new Error("Missing agent, thread, or message text");
+    handleChatError(error, 'send');
+    return Promise.reject(error);
+  }
+
+  // 如果是新对话，用消息内容作为标题
+  if ((threadMessages.value[threadId] || []).length === 0) {
+    updateThread(threadId, text);
+  }
+
+  const requestData = {
+    query: text,
+    config: {
+      thread_id: threadId,
+    },
+  };
+
+  try {
+    return await agentApi.sendAgentMessage(agentId, requestData);
+  } catch (error) {
+    handleChatError(error, 'send');
+    throw error;
+  }
+};
+
+// 添加消息到线程
+const addMessageToThread = (threadId, message) => {
+  if (!threadId || !message) return;
+
+  if (!threadMessages.value[threadId]) {
+    threadMessages.value[threadId] = [];
+  }
+
+  threadMessages.value[threadId].push(message);
+};
+
+// 更新线程中的消息
+const updateMessageInThread = (threadId, messageIndex, updatedMessage) => {
+  if (!threadId || messageIndex < 0 || !threadMessages.value[threadId]) return;
+
+  if (messageIndex < threadMessages.value[threadId].length) {
+    threadMessages.value[threadId][messageIndex] = updatedMessage;
+  }
+};
+
+// ==================== CHAT ACTIONS ====================
 const createNewChat = async () => {
-  if (!AgentValidator.validateAgentId(agentStore.selectedAgentId, '创建对话') || isProcessing.value) return;
+  if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || isProcessing.value) return;
   if (currentChatId.value && conversations.value.length === 0) return;
 
-  state.creatingNewChat = true;
+  chatState.creatingNewChat = true;
   try {
-    await agentStore.createThread(agentStore.selectedAgentId, '新的对话');
+    const newThread = await createThread(currentAgentId.value, '新的对话');
+    if (newThread) {
+      chatState.currentThreadId = newThread.id;
+    }
   } catch (error) {
     handleChatError(error, 'create');
   } finally {
-    state.creatingNewChat = false;
+    chatState.creatingNewChat = false;
   }
 };
 
 const selectChat = async (chatId) => {
-  if (!AgentValidator.validateAgentIdWithError(agentStore.selectedAgentId, '选择对话', handleValidationError)) return;
-  agentStore.selectThread(chatId);
-  await agentStore.fetchThreadMessages(chatId);
+  if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '选择对话', handleValidationError)) return;
+
+  // 切换线程时，不再中断上一个线程的流式输出
+  // resetOnGoingConv(chatState.currentThreadId);
+  chatState.currentThreadId = chatId;
+  chatState.isLoadingMessages = true;
+  try {
+    await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId });
+  } catch (error) {
+    handleChatError(error, 'load');
+  } finally {
+    chatState.isLoadingMessages = false;
+  }
+
   await nextTick();
   scrollController.scrollToBottomStaticForce();
 };
 
 const deleteChat = async (chatId) => {
-  if (!AgentValidator.validateAgentIdWithError(agentStore.selectedAgentId, '删除对话', handleValidationError)) return;
+  if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '删除对话', handleValidationError)) return;
   try {
-    await agentStore.deleteThread(chatId);
+    await deleteThread(chatId);
+    if (chatState.currentThreadId === chatId) {
+      chatState.currentThreadId = null;
+      if (chatsList.value.length > 0) {
+        await selectChat(chatsList.value[0].id);
+      }
+    }
   } catch (error) {
     handleChatError(error, 'delete');
   }
@@ -250,10 +558,10 @@ const deleteChat = async (chatId) => {
 
 const renameChat = async (data) => {
   let { chatId, title } = data;
-  if (!AgentValidator.validateRenameOperation(chatId, title, agentStore.selectedAgentId, handleValidationError)) return;
+  if (!AgentValidator.validateRenameOperation(chatId, title, currentAgentId.value, handleValidationError)) return;
   if (title.length > 30) title = title.slice(0, 30);
   try {
-    await agentStore.updateThread(chatId, title);
+    await updateThread(chatId, title);
   } catch (error) {
     handleChatError(error, 'rename');
   }
@@ -263,20 +571,81 @@ const handleSendMessage = async () => {
   const text = userInput.value.trim();
   if (!text || !currentAgent.value || isProcessing.value) return;
 
+  // 如果没有当前线程，先创建一个新线程
+  if (!currentChatId.value) {
+    try {
+      const newThread = await createThread(currentAgentId.value, text);
+      if (newThread) {
+        chatState.currentThreadId = newThread.id;
+      } else {
+        message.error('创建对话失败，请重试');
+        return;
+      }
+    } catch (error) {
+      handleChatError(error, 'create');
+      return;
+    }
+  }
+
   userInput.value = '';
-  // Enable auto scroll before sending message to ensure proper scrolling during streaming
   await nextTick();
-  await scrollController.scrollToBottom(true);
+  scrollController.scrollToBottom(true);
+
+  const threadId = currentChatId.value;
+  const threadState = getThreadState(threadId);
+  if (!threadState) return;
+
+  threadState.isStreaming = true;
+  resetOnGoingConv(threadId);
+  threadState.streamAbortController = new AbortController();
 
   try {
-    await agentStore.sendMessage(text);
+    const response = await sendMessage({
+      agentId: currentAgentId.value,
+      threadId: currentChatId.value,
+      text: text
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      if (!threadState.streamAbortController || threadState.streamAbortController.signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.trim() && threadState.streamAbortController && !threadState.streamAbortController.signal.aborted) {
+          try {
+            const chunk = JSON.parse(line.trim());
+            _processStreamChunk(chunk, threadId);
+          } catch (e) { console.warn('Failed to parse stream chunk JSON:', e); }
+        }
+      }
+    }
+    if (buffer.trim() && threadState.streamAbortController && !threadState.streamAbortController.signal.aborted) {
+      try {
+        const chunk = JSON.parse(buffer.trim());
+        _processStreamChunk(chunk, threadId);
+      } catch (e) { console.warn('Failed to parse final stream chunk JSON:', e); }
+    }
   } catch (error) {
-    // Error is already handled in the store, but you could add UI feedback here if needed
+    if (error.name !== 'AbortError') {
+      handleChatError(error, 'send');
+    }
+  } finally {
+    threadState.isStreaming = false;
+    threadState.streamAbortController = null;
+    resetOnGoingConv(threadId);
   }
 };
 
 // ==================== UI HANDLERS ====================
-
 const handleRenameChat = () => {
   if (!currentChatId.value || !currentThread.value) {
     handleValidationError('请先选择对话');
@@ -309,11 +678,11 @@ const shareChat = async () => {
   if (!AgentValidator.validateShareOperation(currentChatId.value, currentAgent.value, handleValidationError)) return;
   try {
     const result = await ChatExporter.exportToHTML({
-      chatTitle: agentStore.currentThread?.title || '新对话',
+      chatTitle: currentThread.value?.title || '新对话',
       agentName: currentAgent.value?.name || '智能助手',
       agentDescription: currentAgent.value?.description || '',
-      messages: conversations.value, // Use the getter from store
-      onGoingMessages: [] // This is now part of conversations
+      messages: conversations.value,
+      onGoingMessages: []
     });
     message.success(`对话已导出为HTML文件: ${result.filename}`);
   } catch (error) {
@@ -322,37 +691,22 @@ const shareChat = async () => {
 };
 
 const retryMessage = (msg) => { /* TODO */ };
-
 const toggleSidebar = () => {
-  state.isSidebarOpen = !state.isSidebarOpen;
-  localStorage.setItem('chat_sidebar_open', state.isSidebarOpen);
+  uiState.isSidebarOpen = !uiState.isSidebarOpen;
+  localStorage.setItem('chat_sidebar_open', uiState.isSidebarOpen);
 };
-
 const openAgentModal = () => emit('open-agent-modal');
 
 // ==================== CONVERSATION INFO LOGGING ====================
-
 const logConversationInfo = () => {
-  console.log(agentStore.currentThread);
-
-  // 输出对话历史消息
+  console.log(currentThread.value);
   console.group('📜 对话历史消息');
-  console.log('原始消息数组:', agentStore.currentThreadMessages);
-  console.log('消息总数:', agentStore.currentThreadMessages.length);
-  console.groupEnd();
-
-  // 输出流式对话状态
-  if (agentStore.isStreaming || agentStore.onGoingConvMessages.length > 0) {
-    console.log('进行中的消息:', agentStore.onGoingConvMessages);
-    console.log('消息块:', agentStore.onGoingConv.msgChunks);
-    console.groupEnd();
-  }
-
+  console.log('原始消息数组:', currentThreadMessages.value);
+  console.log('消息总数:', currentThreadMessages.value.length);
   console.groupEnd();
 };
 
 // ==================== HELPER FUNCTIONS ====================
-
 const getLastMessage = (conv) => {
   if (!conv?.messages?.length) return null;
   for (let i = conv.messages.length - 1; i >= 0; i--) {
@@ -367,36 +721,37 @@ const showMsgRefs = (msg) => {
 };
 
 // ==================== LIFECYCLE & WATCHERS ====================
+const loadChatsList = async () => {
+  const agentId = currentAgentId.value;
+  if (!agentId) {
+    console.warn('No agent selected, cannot load chats list');
+    threads.value = [];
+    chatState.currentThreadId = null;
+    return;
+  }
 
-const initAll = async () => {
   try {
-    if (!agentStore.isInitialized) {
-      await agentStore.initialize();
+    await fetchThreads(agentId);
+    if (currentAgentId.value !== agentId) return;
+
+    // 如果当前线程不在线程列表中，清空当前线程
+    if (chatState.currentThreadId && !threads.value.find(t => t.id === chatState.currentThreadId)) {
+      chatState.currentThreadId = null;
     }
-    await loadChatsList();
+
+    // 如果有线程但没有选中任何线程，自动选择第一个
+    if (threads.value.length > 0 && !chatState.currentThreadId) {
+      await selectChat(threads.value[0].id);
+    }
   } catch (error) {
     handleChatError(error, 'load');
   }
 };
 
-const loadChatsList = async () => {
+const initAll = async () => {
   try {
-    const agentId = agentStore.selectedAgentId;
-    if (!AgentValidator.validateLoadOperation(agentId, '加载对话列表')) return;
-
-    await agentStore.fetchThreads(agentId);
-
-    // If selected agent changed during fetch, abort. The watcher will trigger a new load.
-    if (agentStore.selectedAgentId !== agentId) {
-      return;
-    }
-
-    if (currentAgentThreads.value && currentAgentThreads.value.length > 0) {
-      const threadToSelect = currentAgentThreads.value[0].id;
-      agentStore.selectThread(threadToSelect);
-      await agentStore.fetchThreadMessages(threadToSelect);
-    } else {
-      await createNewChat();
+    if (!agentStore.isInitialized) {
+      await agentStore.initialize();
     }
   } catch (error) {
     handleChatError(error, 'load');
@@ -408,13 +763,22 @@ onMounted(async () => {
   scrollController.enableAutoScroll();
 });
 
-watch(() => agentStore.selectedAgentId, (newAgentId, oldAgentId) => {
-  if (newAgentId && newAgentId !== oldAgentId) {
-    loadChatsList();
-  }
-});
+watch(currentAgentId, async (newAgentId, oldAgentId) => {
+  if (newAgentId !== oldAgentId) {
+    // 清理当前线程状态
+    chatState.currentThreadId = null;
+    threadMessages.value = {};
+    // 清理所有线程状态
+    resetOnGoingConv();
 
-// 只监听streaming状态，用于流式消息的智能滚动
+    if (newAgentId) {
+      await loadChatsList();
+    } else {
+      threads.value = [];
+    }
+  }
+}, { immediate: true });
+
 watch(conversations, () => {
   if (isProcessing.value) {
     scrollController.scrollToBottom();
