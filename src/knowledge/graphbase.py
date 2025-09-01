@@ -56,27 +56,111 @@ class GraphDatabase:
         return self.status == "open" or self.status == "processing"
 
     def get_sample_nodes(self, kgdb_name='neo4j', num=50):
-        """获取指定数据库的 num 个节点信息"""
+        """获取指定数据库的 num 个节点信息，优先返回连通的节点子图"""
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
         def query(tx, num):
-            """Note: 这里只查询带有 Entity 标签的节点"""
+            """Note: 使用连通性查询获取集中的节点子图"""
+            # 首先尝试获取一个连通的子图
             query_str = """
-            MATCH (n:Entity)-[r]->(m:Entity)
-            RETURN
-                {id: elementId(n), name: n.name} AS h,
-                {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
-                {id: elementId(m), name: m.name} AS t
-            LIMIT $num
-            """
-            results = tx.run(query_str, num=int(num))
-            formatted_results = {'nodes': [], 'edges': []}
+                 // 获取高度数节点作为种子节点
+                 MATCH (seed:Entity)
+                 WITH seed, COUNT{(seed)-[]->()} + COUNT{(seed)<-[]-()} as degree
+                 WHERE degree > 0
+                 ORDER BY degree DESC
+                 LIMIT 5
 
-            for item in results:
-                formatted_results['nodes'].extend([item['h'], item['t']])
-                formatted_results['edges'].append(item['r'])
+                 // 为每个种子节点控制连接数量，避免过度集中
+                 UNWIND seed as s
+                 MATCH (s)-[*1..1]-(neighbor:Entity)
+                 WITH s, neighbor, COUNT{(s)-[]->()} + COUNT{(s)<-[]-()} as s_degree
+                 WITH s, s_degree, collect(neighbor) as neighbors
+                 WITH s, s_degree, neighbors[0..toInteger($num * 0.1)] as limited_neighbors
 
-            return formatted_results
+                 // 从邻居节点扩展到二跳节点，形成开枝散叶结构
+                 UNWIND limited_neighbors as neighbor
+                 OPTIONAL MATCH (neighbor)-[*1..1]-(second_hop:Entity)
+                 WHERE second_hop <> s
+                 WITH s, limited_neighbors, neighbor, collect(DISTINCT second_hop)[0..2] as second_hops
+
+                 // 收集所有连通节点
+                 WITH collect(DISTINCT s) as seeds,
+                      collect(DISTINCT neighbor) as neighbors,
+                      reduce(acc = [], x IN collect(second_hops) | acc + x) as second_hop_nodes
+                 WITH seeds + neighbors + second_hop_nodes as connected_nodes
+
+                 // 只使用连接的节点，不添加随机节点
+                 WITH connected_nodes[0..$num] as final_nodes
+
+                 // 获取这些节点之间的关系，避免双向边
+                 UNWIND final_nodes as n
+                 MATCH (n)-[rel]-(m)
+                 WHERE m IN final_nodes AND elementId(n) < elementId(m)
+                 RETURN
+                     {id: elementId(n), name: n.name} AS h,
+                     {type: rel.type, source_id: elementId(n), target_id: elementId(m)} AS r,
+                     {id: elementId(m), name: m.name} AS t
+                 """
+
+            try:
+                results = tx.run(query_str, num=int(num))
+                formatted_results = {'nodes': [], 'edges': []}
+                node_ids = set()
+
+                for item in results:
+                    h_node = item['h']
+                    t_node = item['t']
+
+                    # 避免重复添加节点
+                    if h_node['id'] not in node_ids:
+                        formatted_results['nodes'].append(h_node)
+                        node_ids.add(h_node['id'])
+                    if t_node['id'] not in node_ids:
+                        formatted_results['nodes'].append(t_node)
+                        node_ids.add(t_node['id'])
+
+                    formatted_results['edges'].append(item['r'])
+
+                # 如果连通查询没有返回足够的结果，回退到原始查询
+                if len(formatted_results['nodes']) < num // 2:
+                    fallback_query = """
+                    MATCH (n:Entity)-[r]-(m:Entity)
+                    WHERE elementId(n) < elementId(m)
+                    RETURN
+                        {id: elementId(n), name: n.name} AS h,
+                        {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
+                        {id: elementId(m), name: m.name} AS t
+                    LIMIT $num
+                    """
+                    fallback_results = tx.run(fallback_query, num=int(num))
+                    formatted_results = {'nodes': [], 'edges': []}
+
+                    for item in fallback_results:
+                        formatted_results['nodes'].extend([item['h'], item['t']])
+                        formatted_results['edges'].append(item['r'])
+
+                return formatted_results
+
+            except Exception as e:
+                # 如果连通查询失败，使用原始查询作为备选
+                logger.warning(f"Connected subgraph query failed, falling back to simple query: {e}")
+                fallback_query = """
+                MATCH (n:Entity)-[r]-(m:Entity)
+                WHERE elementId(n) < elementId(m)
+                RETURN
+                    {id: elementId(n), name: n.name} AS h,
+                    {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
+                    {id: elementId(m), name: m.name} AS t
+                LIMIT $num
+                """
+                results = tx.run(fallback_query, num=int(num))
+                formatted_results = {'nodes': [], 'edges': []}
+
+                for item in results:
+                    formatted_results['nodes'].extend([item['h'], item['t']])
+                    formatted_results['edges'].append(item['r'])
+
+                return formatted_results
 
         with self.driver.session() as session:
             results = session.execute_read(query, num)
@@ -352,17 +436,29 @@ class GraphDatabase:
         def query(tx, entity_name, hops, limit):
             try:
                 query_str = """
-                MATCH (n {name: $entity_name})-[r1]-(m1)
+                MATCH (n {name: $entity_name})-[r1]->(m1)
                 RETURN
                 {id: elementId(n), name: n.name} AS h,
                 {type: r1.type, source_id: elementId(n), target_id: elementId(m1)} AS r,
                 {id: elementId(m1), name: m1.name} AS t
                 UNION
-                MATCH (n {name: $entity_name})-[r1]-(m1)-[r2]-(m2)
+                MATCH (n {name: $entity_name})-[r1]->(m1)-[r2]->(m2)
                 RETURN
                 {id: elementId(m1), name: m1.name} AS h,
                 {type: r2.type, source_id: elementId(m1), target_id: elementId(m2)} AS r,
                 {id: elementId(m2), name: m2.name} AS t
+                UNION
+                MATCH (m1)-[r1]->(n {name: $entity_name})
+                RETURN
+                {id: elementId(m1), name: m1.name} AS h,
+                {type: r1.type, source_id: elementId(m1), target_id: elementId(n)} AS r,
+                {id: elementId(n), name: n.name} AS t
+                UNION
+                MATCH (m2)-[r2]->(m1)-[r1]->(n {name: $entity_name})
+                RETURN
+                {id: elementId(m2), name: m2.name} AS h,
+                {type: r2.type, source_id: elementId(m2), target_id: elementId(m1)} AS r,
+                {id: elementId(m1), name: m1.name} AS t
                 LIMIT $limit
                 """
                 results = tx.run(query_str, entity_name=entity_name, limit=limit)

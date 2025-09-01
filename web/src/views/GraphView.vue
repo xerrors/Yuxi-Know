@@ -314,9 +314,34 @@ const initGraph = () => {
     layout: {
       type: 'd3-force',
       preventOverlap: true,
+      // 优化布局性能参数
+      alphaDecay: 0.08, // 增加衰减率，加快收敛速度
+      alphaMin: 0.01, // 提高最小alpha值，更早停止模拟
+      velocityDecay: 0.8, // 增加速度衰减，减少震荡
+      iterations: 100, // 限制最大迭代次数
+      // 力的配置
+      force: {
+        // 中心力 - 将节点拉向中心
+        center: {
+          x: 0.5,
+          y: 0.5,
+          strength: 0.1
+        },
+        // 排斥力 - 节点间相互排斥
+        charge: {
+          strength: -300, // 负值表示排斥力
+          distanceMax: 400 // 限制力的作用距离
+        },
+        // 链接力 - 连接的节点相互吸引
+        link: {
+          distance: 100, // 理想链接距离
+          strength: 0.8 // 链接强度
+        }
+      },
       collide: {
         radius: 40,
-        strength: 0.5, // 碰撞强度
+        strength: 0.8, // 增加碰撞强度，减少重叠
+        iterations: 3 // 限制碰撞检测迭代次数
       },
     },
     node: {
