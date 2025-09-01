@@ -23,5 +23,5 @@ lint:
 	uv run python -m ruff check --select I src
 
 format format_diff:
-	uv run ruff format
-	uv run ruff check --select I --fix
+	uv run ruff format .
+	uv run ruff check . --fix

@@ -1,7 +1,5 @@
 import os
 
-import requests
-from langchain_openai import ChatOpenAI
 from openai import OpenAI
 
 from src.utils import get_docker_safe_url, logger
@@ -38,7 +36,10 @@ class OpenAIBase:
                     yield chunk.choices[0].delta
 
         except Exception as e:
-            err = f"Error streaming response: {e}, URL: {self.base_url}, API Key: {self.api_key[:5]}***, Model: {self.model_name}"
+            err = (
+                f"Error streaming response: {e}, URL: {self.base_url}, "
+                f"API Key: {self.api_key[:5]}***, Model: {self.model_name}"
+            )
             logger.error(err)
             raise Exception(err)
 

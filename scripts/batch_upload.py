@@ -418,7 +418,8 @@ def upload(
                 all_processed_files = processed_files | newly_processed_hashes
                 save_processed_files(record_file, all_processed_files)
                 console.print(
-                    f"[bold green]Updated processed files record with {len(newly_processed_hashes)} new entries.[/bold green]"
+                    f"[bold green]Updated processed files record with "
+                    f"{len(newly_processed_hashes)} new entries.[/bold green]"
                 )
 
             console.print("[bold green]Batch operation complete.[/bold green]")

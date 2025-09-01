@@ -52,8 +52,10 @@ class Config(SimpleConfig):
         self.add_item(
             "enable_web_search",
             default=False,
-            des="是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）",
-        )  # noqa: E501
+            des=(
+                "是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）"
+            ),
+        )
         # 默认智能体配置
         self.add_item("default_agent_id", default="", des="默认智能体ID")
         # 模型配置
@@ -133,11 +135,14 @@ class Config(SimpleConfig):
         if self.model_dir:
             if os.path.exists(self.model_dir):
                 logger.debug(
-                    f"The model directory （{self.model_dir}） contains the following folders: {os.listdir(self.model_dir)}"
+                    f"The model directory （{self.model_dir}） "
+                    f"contains the following folders: {os.listdir(self.model_dir)}"
                 )
             else:
                 logger.warning(
-                    f"Warning: The model directory （{self.model_dir}） does not exist. If not configured, please ignore it. If configured, please check if the configuration is correct;"
+                    f"Warning: The model directory （{self.model_dir}） does not exist. "
+                    "If not configured, please ignore it. "
+                    "If configured, please check if the configuration is correct; "
                     "For example, the mapping in the docker-compose file"
                 )
 

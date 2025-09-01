@@ -6,8 +6,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from server.db_manager import db_manager
-from server.models.user_model import OperationLog, User
-from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_superadmin_user, oauth2_scheme
+from server.models.user_model import User
+from server.utils.auth_middleware import get_admin_user, get_current_user, get_db
 from server.utils.auth_utils import AuthUtils
 from server.utils.common_utils import log_operation
 

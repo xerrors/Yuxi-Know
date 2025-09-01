@@ -1,12 +1,10 @@
 import asyncio
 import json
 import os
-import time
 from datetime import datetime
-from typing import Any
 
 from src.knowledge.kb_factory import KnowledgeBaseFactory
-from src.knowledge.knowledge_base import KBNotFoundError, KBOperationError, KnowledgeBase
+from src.knowledge.knowledge_base import KBNotFoundError, KnowledgeBase
 from src.utils import logger
 
 

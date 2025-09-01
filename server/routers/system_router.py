@@ -4,11 +4,11 @@ from pathlib import Path
 
 import requests
 import yaml
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from server.models.user_model import User
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
-from src import config, graph_base, knowledge_base
+from src import config, graph_base
 from src.utils.logging_config import logger
 
 system = APIRouter(prefix="/system", tags=["system"])

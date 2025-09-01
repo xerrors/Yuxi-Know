@@ -2,7 +2,6 @@ import asyncio
 import os
 from pathlib import Path
 
-from langchain.schema.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     CSVLoader,
@@ -14,7 +13,7 @@ from langchain_community.document_loaders import (
     UnstructuredMarkdownLoader,
 )
 
-from src.utils import hashstr, logger
+from src.utils import logger
 
 
 def chunk_with_parser(file_path, params=None):

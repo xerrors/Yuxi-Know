@@ -1,5 +1,3 @@
-from typing import Any
-
 from src.knowledge.knowledge_base import KBNotFoundError, KnowledgeBase
 from src.utils import logger
 

@@ -1,12 +1,11 @@
 import os
 import time
 from pathlib import Path
-from typing import Any
 
 from langchain_text_splitters import MarkdownTextSplitter
 
 from src import config
-from src.utils import get_docker_safe_url, hashstr, logger
+from src.utils import hashstr, logger
 
 
 def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict = {}) -> list[dict]:

@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 import traceback
 from typing import Annotated, Any
 
@@ -18,7 +17,8 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
         logger.debug(f"Querying knowledge graph with: {query}")
         result = graph_base.query_node(query, hops=2, return_format="triples")
         logger.debug(
-            f"Knowledge graph query returned {len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples"
+            f"Knowledge graph query returned "
+            f"{len(result.get('triples', [])) if isinstance(result, dict) else 'N/A'} triples"
         )
         return result
     except Exception as e:
@@ -79,7 +79,10 @@ def get_kb_based_tools() -> list:
             tool_id = f"query_{db_id[:8]}"
 
             # 构建工具描述
-            description = f"使用 {retrieve_info['name']} 知识库进行检索。\n下面是这个知识库的描述：\n{retrieve_info['description'] or '没有描述。'} "
+            description = (
+                f"使用 {retrieve_info['name']} 知识库进行检索。\n"
+                f"下面是这个知识库的描述：\n{retrieve_info['description'] or '没有描述。'} "
+            )
 
             # 使用工厂函数创建检索器包装函数，避免闭包问题
             retriever_wrapper = _create_retriever_wrapper(db_id, retrieve_info)

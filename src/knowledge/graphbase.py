@@ -4,7 +4,6 @@ import traceback
 import warnings
 
 from neo4j import GraphDatabase as GD
-from neo4j import Query
 
 from src import config
 from src.models import select_embedding_model
@@ -301,7 +300,8 @@ class GraphDatabase:
             for i in range(0, total_entities, max_batch_size):
                 batch_entities = nodes_without_embedding[i : i + max_batch_size]
                 logger.debug(
-                    f"Processing entities batch {i // max_batch_size + 1}/{(total_entities - 1) // max_batch_size + 1} ({len(batch_entities)} entities)"
+                    f"Processing entities batch {i // max_batch_size + 1}/"
+                    f"{(total_entities - 1) // max_batch_size + 1} ({len(batch_entities)} entities)"
                 )
 
                 # 批量获取嵌入向量

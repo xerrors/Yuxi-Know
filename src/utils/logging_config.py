@@ -32,7 +32,12 @@ def setup_logger(name, level="DEBUG", console=True):
         loguru_logger.add(
             lambda msg: print(msg, end=""),
             level=level,
-            format="<green>{time:MM-DD HH:mm:ss}</green> <level>{level}</level> <cyan>{name}:{line}</cyan>: <level>{message}</level>",
+            format=(
+                "<green>{time:MM-DD HH:mm:ss}</green> "
+                "<level>{level}</level> "
+                "<cyan>{name}:{line}</cyan>: "
+                "<level>{message}</level>"
+            ),
             colorize=True,
         )
 

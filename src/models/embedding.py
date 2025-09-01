@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 import httpx
 import requests
 
-from src import config
 from src.utils import get_docker_safe_url, hashstr, logger
 
 

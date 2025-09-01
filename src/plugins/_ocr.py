@@ -3,7 +3,6 @@ import time
 import uuid
 from argparse import ArgumentParser
 from collections import defaultdict
-from pathlib import Path
 
 import fitz  # fitz就是pip install PyMuPDF
 import numpy as np  # Added import for numpy
@@ -11,7 +10,7 @@ from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 from tqdm import tqdm
 
-from src.utils import is_text_pdf, logger
+from src.utils import logger
 
 GOLBAL_STATE = {}
 

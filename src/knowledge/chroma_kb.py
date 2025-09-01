@@ -1,17 +1,12 @@
-import json
 import os
-import time
 import traceback
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import chromadb
-from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
-from src import config
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.kb_utils import (
     get_embedding_config,
@@ -20,7 +15,7 @@ from src.knowledge.kb_utils import (
     split_text_into_qa_chunks,
 )
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.utils import hashstr, logger
+from src.utils import logger
 
 
 class ChromaKB(KnowledgeBase):
@@ -84,7 +79,8 @@ class ChromaKB(KnowledgeBase):
             # 如果模型不匹配，删除现有集合并重新创建
             if current_model != expected_model:
                 logger.warning(
-                    f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'. Recreating collection."
+                    f"Collection {collection_name} uses model '{current_model}', "
+                    f"but expected '{expected_model}'. Recreating collection."
                 )
                 self.chroma_client.delete_collection(name=collection_name)
                 raise Exception("Model mismatch, recreating collection")

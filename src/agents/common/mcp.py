@@ -1,13 +1,11 @@
 """MCP Client setup and management for LangGraph ReAct Agent."""
 
-import traceback
 from collections.abc import Callable
 from typing import Any, cast
 
 from langchain_mcp_adapters.client import (  # type: ignore[import-untyped]
     MultiServerMCPClient,
 )
-from langchain_mcp_adapters.tools import load_mcp_tools
 
 from src.utils import logger
 

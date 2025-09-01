@@ -5,7 +5,7 @@ import numpy as np
 import requests
 
 from src import config
-from src.utils import get_docker_safe_url, logger
+from src.utils import get_docker_safe_url
 
 
 def sigmoid(x):

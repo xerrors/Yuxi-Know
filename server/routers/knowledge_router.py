@@ -1,13 +1,12 @@
-import asyncio
 import os
 import traceback
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 
 from server.models.user_model import User
 from server.utils.auth_middleware import get_admin_user
-from src import config, executor, knowledge_base
+from src import config, knowledge_base
 from src.knowledge.indexing import process_file_to_markdown
 from src.utils import hashstr, logger
 
@@ -41,7 +40,8 @@ async def create_database(
 ):
     """创建知识库"""
     logger.debug(
-        f"Create database {database_name} with kb_type {kb_type}, additional_params {additional_params}, llm_info {llm_info}"
+        f"Create database {database_name} with kb_type {kb_type}, "
+        f"additional_params {additional_params}, llm_info {llm_info}"
     )
     try:
         embed_info = config.embed_model_names[embed_model_name]

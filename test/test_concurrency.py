@@ -18,7 +18,9 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
             end_time = time.time()
             duration = end_time - start_time
             print(
-                f"请求 {request_id} 完成时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)"
+                f"请求 {request_id} 完成时间: "
+                f"{time.strftime('%H:%M:%S', time.localtime(end_time))} "
+                f"(耗时: {duration:.2f}秒)"
             )
             return {
                 "request_id": request_id,
@@ -32,7 +34,9 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
         end_time = time.time()
         duration = end_time - start_time
         print(
-            f"请求 {request_id} 失败时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)"
+            f"请求 {request_id} 失败时间: "
+            f"{time.strftime('%H:%M:%S', time.localtime(end_time))} "
+            f"(耗时: {duration:.2f}秒)"
         )
         return {
             "request_id": request_id,
@@ -102,7 +106,10 @@ def analyze_results(results: list[dict]) -> None:
         active_requests.append(end_time)
 
         print(
-            f"{result['request_id']:^7} {time.strftime('%H:%M:%S', time.localtime(start_time))}  {time.strftime('%H:%M:%S', time.localtime(end_time))}  {result['time']:^8.2f}  {len(active_requests):^6}"
+            f"{result['request_id']:^7} "
+            f"{time.strftime('%H:%M:%S', time.localtime(start_time))} "
+            f"{time.strftime('%H:%M:%S', time.localtime(end_time))} "
+            f"{result['time']:^8.2f}  {len(active_requests):^6}"
         )
 
     # 计算最大并发数

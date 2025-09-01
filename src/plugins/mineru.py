@@ -196,7 +196,10 @@ def parse_doc(
     Parameter description:
     path_list: List of document paths to be parsed, can be PDF or image files.
     output_dir: Output directory for storing parsing results.
-    lang: Language option, default is 'ch', optional values include['ch', 'ch_server', 'ch_lite', 'en', 'korean', 'japan', 'chinese_cht', 'ta', 'te', 'ka']。
+    lang: Language option, default is 'ch',
+        optional values include[
+            'ch', 'ch_server', 'ch_lite', 'en', 'korean', 'japan', 'chinese_cht', 'ta', 'te', 'ka'
+        ]。
         Input the languages in the pdf (if known) to improve OCR accuracy.  Optional.
         Adapted only for the case where the backend is set to "pipeline"
     backend: the backend for parsing pdf:

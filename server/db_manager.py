@@ -6,8 +6,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from server.models import Base
-from server.models.kb_models import KnowledgeDatabase, KnowledgeFile, KnowledgeNode
-from server.models.thread_model import Thread
 from server.models.user_model import User
 from src import config
 from src.utils import logger

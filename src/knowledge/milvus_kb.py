@@ -1,16 +1,11 @@
 import asyncio
-import json
 import os
-import time
 import traceback
-from datetime import datetime
 from functools import partial
-from pathlib import Path
 from typing import Any
 
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
-from src import config
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.kb_utils import (
     get_embedding_config,
