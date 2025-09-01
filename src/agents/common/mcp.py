@@ -16,11 +16,6 @@ _mcp_tools_cache: dict[str, list[Callable[..., Any]]] = {}
 
 # MCP Server configurations
 MCP_SERVERS = {
-    "deepwiki": {
-        "url": "https://mcp.deepwiki.com/mcp",
-        "transport": "streamable_http",
-    },
-    # Add more MCP servers here as needed
     "sequentialthinking": {
         "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
         "transport": "streamable_http",
