@@ -466,6 +466,49 @@ const cancelToolsSelection = () => {
   selectedTools.value = [];
 };
 
+// 验证和过滤配置项
+const validateAndFilterConfig = () => {
+  const validatedConfig = { ...agentConfig.value };
+  const configItems = configurableItems.value;
+  
+  // 遍历所有配置项
+  Object.keys(configItems).forEach(key => {
+    const configItem = configItems[key];
+    const currentValue = validatedConfig[key];
+    
+    // 检查工具配置
+    if (configItem.template_metadata?.kind === 'tools' && Array.isArray(currentValue)) {
+      const availableToolIds = availableTools.value ? Object.values(availableTools.value).map(tool => tool.id) : [];
+      validatedConfig[key] = currentValue.filter(toolId => availableToolIds.includes(toolId));
+      
+      if (validatedConfig[key].length !== currentValue.length) {
+        console.warn(`工具配置 ${key} 中包含无效的工具ID，已自动过滤`);
+      }
+    }
+    
+    // 检查多选配置项 (type === 'list' 且有 options)
+    else if (configItem.type === 'list' && configItem.options && Array.isArray(currentValue)) {
+      const validOptions = configItem.options;
+      validatedConfig[key] = currentValue.filter(value => validOptions.includes(value));
+      
+      if (validatedConfig[key].length !== currentValue.length) {
+        console.warn(`配置项 ${key} 中包含无效的选项，已自动过滤`);
+      }
+    }
+    
+    // 检查单选配置项 (有 options 且不是 list 类型)
+    else if (configItem.options && configItem.type !== 'list' && currentValue !== undefined) {
+      const validOptions = configItem.options;
+      if (!validOptions.includes(currentValue)) {
+        console.warn(`配置项 ${key} 的值 "${currentValue}" 不在有效选项中，将重置为默认值`);
+        validatedConfig[key] = configItem.default || validOptions[0] || null;
+      }
+    }
+  });
+  
+  return validatedConfig;
+};
+
 // 配置保存和重置
 const saveConfig = async () => {
   if (!selectedAgentId.value) {
@@ -474,6 +517,15 @@ const saveConfig = async () => {
   }
 
   try {
+    // 验证和过滤配置
+    const validatedConfig = validateAndFilterConfig();
+    
+    // 如果配置有变化，先更新到store
+    if (JSON.stringify(validatedConfig) !== JSON.stringify(agentConfig.value)) {
+      agentStore.updateAgentConfig(validatedConfig);
+      message.info('检测到无效配置项，已自动过滤');
+    }
+    
     await agentStore.saveAgentConfig();
     message.success('配置已保存到服务器');
   } catch (error) {
