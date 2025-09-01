@@ -1,4 +1,3 @@
-
 import asyncio
 import hashlib
 import json
@@ -7,7 +6,7 @@ import pathlib
 import httpx
 import typer
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 
 app = typer.Typer()
 console = Console()
@@ -44,12 +43,14 @@ async def upload_file(
                 f"{base_url}/knowledge/files/upload",
                 params={"db_id": db_id},
                 files=files,
-                timeout=300, # 5 minutes timeout for large files
+                timeout=300,  # 5 minutes timeout for large files
             )
         response.raise_for_status()
         return response.json().get("file_path")
     except httpx.HTTPStatusError as e:
-        console.print(f"[bold red]Failed to upload {file_path.name}: {e.response.status_code} - {e.response.text}[/bold red]")
+        console.print(
+            f"[bold red]Failed to upload {file_path.name}: {e.response.status_code} - {e.response.text}[/bold red]"
+        )
         return None
     except httpx.RequestError as e:
         console.print(f"[bold red]Failed to upload {file_path.name}: {e}[/bold red]")
@@ -75,21 +76,23 @@ async def process_document(
         "enable_ocr": enable_ocr,
         "use_qa_split": use_qa_split,
         "qa_separator": qa_separator,
-        "content_type": "file"
+        "content_type": "file",
     }
 
     try:
         response = await client.post(
             f"{base_url}/knowledge/databases/{db_id}/documents",
             json={"items": [server_file_path], "params": params},
-            timeout=600, # 10 minutes timeout for processing
+            timeout=600,  # 10 minutes timeout for processing
         )
         response.raise_for_status()
         result = response.json()
 
         # Check if the overall request was successful
         if result.get("status") != "success":
-            console.print(f"[bold yellow]Processing warning for {server_file_path}: {result.get('message')}[/bold yellow]")
+            console.print(
+                f"[bold yellow]Processing warning for {server_file_path}: {result.get('message')}[/bold yellow]"
+            )
             return False
 
         # Check the specific file's processing status in the items array
@@ -129,7 +132,9 @@ async def process_document(
             return False
 
     except httpx.HTTPStatusError as e:
-        console.print(f"[bold red]Failed to process {server_file_path}: {e.response.status_code} - {e.response.text}[/bold red]")
+        console.print(
+            f"[bold red]Failed to process {server_file_path}: {e.response.status_code} - {e.response.text}[/bold red]"
+        )
         return False
     except httpx.RequestError as e:
         console.print(f"[bold red]Failed to process {server_file_path}: {e}[/bold red]")
@@ -159,17 +164,20 @@ async def worker(
         progress.update(upload_task_id, advance=1, postfix=f"Uploaded {file_path.name}")
 
         if not server_file_path:
-            progress.update(process_task_id, advance=1) # Mark as processed to not hang the progress bar
+            progress.update(process_task_id, advance=1)  # Mark as processed to not hang the progress bar
             return file_path, file_hash, "upload_failed"
 
         # 2. Process file
         success = await process_document(
-            client, base_url, db_id, server_file_path,
+            client,
+            base_url,
+            db_id,
+            server_file_path,
             enable_ocr=enable_ocr,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
             use_qa_split=use_qa_split,
-            qa_separator=qa_separator
+            qa_separator=qa_separator,
         )
         progress.update(process_task_id, advance=1, postfix=f"Processed {file_path.name}")
 
@@ -193,7 +201,7 @@ def load_processed_files(record_file: pathlib.Path) -> set[str]:
     try:
         with open(record_file) as f:
             data = json.load(f)
-            return set(data.get('processed_files', []))
+            return set(data.get("processed_files", []))
     except (OSError, json.JSONDecodeError) as e:
         console.print(f"[bold yellow]Warning: Could not load processed files record: {e}[/bold yellow]")
         return set()
@@ -205,8 +213,8 @@ def save_processed_files(record_file: pathlib.Path, processed_files: set[str]):
     record_file.parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        with open(record_file, 'w') as f:
-            json.dump({'processed_files': list(processed_files)}, f, indent=2)
+        with open(record_file, "w") as f:
+            json.dump({"processed_files": list(processed_files)}, f, indent=2)
     except OSError as e:
         console.print(f"[bold red]Error: Could not save processed files record: {e}[/bold red]")
 
@@ -232,7 +240,9 @@ async def convert_to_markdown(
             console.print(f"[bold red]Failed to convert {server_file_path}: {result.get('message')}[/bold red]")
             return None
     except httpx.HTTPStatusError as e:
-        console.print(f"[bold red]Failed to convert {server_file_path}: {e.response.status_code} - {e.response.text}[/bold red]")
+        console.print(
+            f"[bold red]Failed to convert {server_file_path}: {e.response.status_code} - {e.response.text}[/bold red]"
+        )
         return None
     except httpx.RequestError as e:
         console.print(f"[bold red]Request failed for {server_file_path}: {e}[/bold red]")
@@ -267,7 +277,7 @@ async def trans_worker(
         try:
             output_path = output_dir / file_path.with_suffix(".md").name
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, 'w', encoding='utf-8') as f:
+            with open(output_path, "w", encoding="utf-8") as f:
                 f.write(markdown_content)
             progress.update(task_id, advance=1, postfix=f"[green]Converted {file_path.name}[/green]")
             return file_path, "success"
@@ -280,14 +290,18 @@ async def trans_worker(
 @app.command()
 def upload(
     db_id: str = typer.Option(..., help="The ID of the knowledge base."),
-    directory: pathlib.Path = typer.Option(..., help="The directory containing files to upload.", exists=True, file_okay=False),
+    directory: pathlib.Path = typer.Option(
+        ..., help="The directory containing files to upload.", exists=True, file_okay=False
+    ),
     pattern: str = typer.Option("*.md", help="The glob pattern for files to upload (e.g., '*.pdf', '**/*.txt')."),
     base_url: str = typer.Option("http://127.0.0.1:5050/api", help="The base URL of the API server."),
     username: str = typer.Option(..., help="Admin username for login."),
     password: str = typer.Option(..., help="Admin password for login."),
     concurrency: int = typer.Option(1, help="The number of concurrent upload/process tasks."),
     recursive: bool = typer.Option(False, "--recursive", "-r", help="Search for files recursively in subdirectories."),
-    record_file: pathlib.Path = typer.Option("scripts/tmp/batch_processed_files.txt", help="File to store processed files record."),
+    record_file: pathlib.Path = typer.Option(
+        "scripts/tmp/batch_processed_files.txt", help="File to store processed files record."
+    ),
     chunk_size: int = typer.Option(1000, help="Chunk size for document processing."),
     chunk_overlap: int = typer.Option(200, help="Chunk overlap for document processing."),
     enable_ocr: str = typer.Option("paddlex_ocr", help="OCR engine to use (paddlex_ocr, mineru_ocr, disable)."),
@@ -325,7 +339,9 @@ def upload(
             files_to_upload.append((file_path, file_hash))
 
     if not files_to_upload:
-        console.print(f"[bold green]All {len(all_files)} files have already been processed. Nothing to do.[/bold green]")
+        console.print(
+            f"[bold green]All {len(all_files)} files have already been processed. Nothing to do.[/bold green]"
+        )
         raise typer.Exit()
 
     console.print(f"Found {len(all_files)} total files:")
@@ -361,13 +377,20 @@ def upload(
                 for file_path, file_hash in files_to_upload:
                     task = asyncio.create_task(
                         worker(
-                            semaphore, client, base_url, db_id, file_path, file_hash,
-                            progress, upload_task_id, process_task_id,
+                            semaphore,
+                            client,
+                            base_url,
+                            db_id,
+                            file_path,
+                            file_hash,
+                            progress,
+                            upload_task_id,
+                            process_task_id,
                             enable_ocr=enable_ocr,
                             chunk_size=chunk_size,
                             chunk_overlap=chunk_overlap,
                             use_qa_split=use_qa_split,
-                            qa_separator=qa_separator
+                            qa_separator=qa_separator,
                         )
                     )
                     tasks.append(task)
@@ -381,12 +404,12 @@ def upload(
             newly_processed_hashes = set()
 
             for file_path, file_hash, status in results:
-                if status == 'success':
+                if status == "success":
                     successful_files.append(file_path)
                     newly_processed_hashes.add(file_hash)
-                elif status == 'upload_failed':
+                elif status == "upload_failed":
                     upload_failures.append(file_path)
-                elif status == 'processing_failed':
+                elif status == "processing_failed":
                     processing_failures.append(file_path)
                     # Don't add to processed files if processing failed
 
@@ -394,7 +417,9 @@ def upload(
             if newly_processed_hashes:
                 all_processed_files = processed_files | newly_processed_hashes
                 save_processed_files(record_file, all_processed_files)
-                console.print(f"[bold green]Updated processed files record with {len(newly_processed_hashes)} new entries.[/bold green]")
+                console.print(
+                    f"[bold green]Updated processed files record with {len(newly_processed_hashes)} new entries.[/bold green]"
+                )
 
             console.print("[bold green]Batch operation complete.[/bold green]")
             console.print(f"  - [green]Successful:[/green] {len(successful_files)}")
@@ -413,7 +438,9 @@ def upload(
 @app.command()
 def trans(
     db_id: str = typer.Option(..., help="The ID of the knowledge base (for temporary file upload)."),
-    directory: pathlib.Path = typer.Option(..., help="The directory containing files to convert.", exists=True, file_okay=False),
+    directory: pathlib.Path = typer.Option(
+        ..., help="The directory containing files to convert.", exists=True, file_okay=False
+    ),
     output_dir: pathlib.Path = typer.Option("output_markdown", help="The directory to save converted markdown files."),
     pattern: str = typer.Option("*.docx", help="The glob pattern for files to convert (e.g., '*.pdf', '*.docx')."),
     base_url: str = typer.Option("http://127.0.0.1:5050/api", help="The base URL of the API server."),
@@ -467,10 +494,7 @@ def trans(
 
                 for file_path in files_to_convert:
                     task = asyncio.create_task(
-                        trans_worker(
-                            semaphore, client, base_url, db_id, file_path,
-                            output_dir, progress, task_id
-                        )
+                        trans_worker(semaphore, client, base_url, db_id, file_path, output_dir, progress, task_id)
                     )
                     tasks.append(task)
 
@@ -481,7 +505,7 @@ def trans(
             failed_files = []
 
             for file_path, status in results:
-                if status == 'success':
+                if status == "success":
                     successful_files.append(file_path)
                 else:
                     failed_files.append((file_path, status))

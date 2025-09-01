@@ -1,15 +1,13 @@
 import asyncio
-import aiohttp
 import time
+
+import aiohttp
 
 
 async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
     """发送单个请求到API"""
     url = "http://localhost:5000/chat/call"
-    payload = {
-        "query": "写一个冒泡排序",
-        "meta": {}
-    }
+    payload = {"query": "写一个冒泡排序", "meta": {}}
 
     start_time = time.time()
     print(f"请求 {request_id} 开始时间: {time.strftime('%H:%M:%S', time.localtime(start_time))}")
@@ -19,19 +17,23 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
             print(f"请求 {request_id} 结果: {result}")
             end_time = time.time()
             duration = end_time - start_time
-            print(f"请求 {request_id} 完成时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)")
+            print(
+                f"请求 {request_id} 完成时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)"
+            )
             return {
                 "request_id": request_id,
                 "status": response.status,
                 "time": duration,
                 "start_time": start_time,
                 "end_time": end_time,
-                "success": True
+                "success": True,
             }
     except Exception as e:
         end_time = time.time()
         duration = end_time - start_time
-        print(f"请求 {request_id} 失败时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)")
+        print(
+            f"请求 {request_id} 失败时间: {time.strftime('%H:%M:%S', time.localtime(end_time))} (耗时: {duration:.2f}秒)"
+        )
         return {
             "request_id": request_id,
             "status": None,
@@ -39,14 +41,16 @@ async def make_request(session: aiohttp.ClientSession, request_id: int) -> dict:
             "start_time": start_time,
             "end_time": end_time,
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
+
 
 async def run_concurrent_test(num_requests: int = 10) -> list[dict]:
     """运行并发测试"""
     async with aiohttp.ClientSession() as session:
         tasks = [make_request(session, i) for i in range(num_requests)]
         return await asyncio.gather(*tasks)
+
 
 def analyze_results(results: list[dict]) -> None:
     """分析并打印测试结果"""
@@ -97,9 +101,9 @@ def analyze_results(results: list[dict]) -> None:
         active_requests = [t for t in active_requests if t > start_time]
         active_requests.append(end_time)
 
-        print(f"{result['request_id']:^7} {time.strftime('%H:%M:%S', time.localtime(start_time))}  "
-              f"{time.strftime('%H:%M:%S', time.localtime(end_time))}  "
-              f"{result['time']:^8.2f}  {len(active_requests):^6}")
+        print(
+            f"{result['request_id']:^7} {time.strftime('%H:%M:%S', time.localtime(start_time))}  {time.strftime('%H:%M:%S', time.localtime(end_time))}  {result['time']:^8.2f}  {len(active_requests):^6}"
+        )
 
     # 计算最大并发数
     max_concurrent = 0
@@ -115,6 +119,7 @@ def analyze_results(results: list[dict]) -> None:
         max_concurrent = max(max_concurrent, current_concurrent)
 
     print(f"\n最大并发请求数: {max_concurrent}")
+
 
 if __name__ == "__main__":
     NUM_REQUESTS = 100  # 设置并发请求数

@@ -1,30 +1,32 @@
-import os
-import json
 import asyncio
+import json
+import os
+import time
 import traceback
 import uuid
-import time
+
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessageChunk, HumanMessage
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
-from src import executor, config
+from server.models.thread_model import Thread
+from server.models.user_model import User
+from server.routers.auth_router import get_admin_user
+from server.utils.auth_middleware import get_db, get_required_user
+from src import config, executor
 from src.agents import agent_manager
+from src.agents.common.tools import gen_tool_info, get_buildin_tools
 from src.models import select_model
 from src.utils.logging_config import logger
-from src.agents.common.tools import get_buildin_tools, gen_tool_info
-from server.routers.auth_router import get_admin_user
-from server.utils.auth_middleware import get_required_user, get_db
-from server.models.user_model import User
-from server.models.thread_model import Thread
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
 
 # =============================================================================
 # > === 智能体管理分组 ===
 # =============================================================================
+
 
 @chat.get("/default_agent")
 async def get_default_agent(current_user: User = Depends(get_required_user)):
@@ -42,8 +44,9 @@ async def get_default_agent(current_user: User = Depends(get_required_user)):
         logger.error(f"获取默认智能体出错: {e}")
         raise HTTPException(status_code=500, detail=f"获取默认智能体出错: {str(e)}")
 
+
 @chat.post("/set_default_agent")
-async def set_default_agent(request_data: dict = Body(...), current_user = Depends(get_admin_user)):
+async def set_default_agent(request_data: dict = Body(...), current_user=Depends(get_admin_user)):
     """设置默认智能体ID (仅管理员)"""
     try:
         agent_id = request_data.get("agent_id")
@@ -69,15 +72,18 @@ async def set_default_agent(request_data: dict = Body(...), current_user = Depen
         logger.error(f"设置默认智能体出错: {e}")
         raise HTTPException(status_code=500, detail=f"设置默认智能体出错: {str(e)}")
 
+
 # =============================================================================
 # > === 对话分组 ===
 # =============================================================================
+
 
 @chat.post("/call")
 async def call(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
     """调用模型进行简单问答（需要登录）"""
     meta = meta or {}
     model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
+
     async def predict_async(query):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(executor, model.predict, query)
@@ -87,6 +93,7 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 
     return {"response": response.content}
 
+
 @chat.get("/agent")
 async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体（需要登录）"""
@@ -94,35 +101,39 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     # logger.debug(f"agents: {agents}")
     return {"agents": agents}
 
+
 @chat.post("/agent/{agent_id}")
-async def chat_agent(agent_id: str,
-               query: str = Body(...),
-               config: dict = Body({}),
-               meta: dict = Body({}),
-               current_user: User = Depends(get_required_user)):
+async def chat_agent(
+    agent_id: str,
+    query: str = Body(...),
+    config: dict = Body({}),
+    meta: dict = Body({}),
+    current_user: User = Depends(get_required_user),
+):
     """使用特定智能体进行对话（需要登录）"""
 
     logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
 
-    meta.update({
-        "query": query,
-        "agent_id": agent_id,
-        "server_model_name": config.get("model", agent_id),
-        "thread_id": config.get("thread_id"),
-        "user_id": current_user.id
-    })
+    meta.update(
+        {
+            "query": query,
+            "agent_id": agent_id,
+            "server_model_name": config.get("model", agent_id),
+            "thread_id": config.get("thread_id"),
+            "user_id": current_user.id,
+        }
+    )
 
     # 将meta和thread_id整合到config中
     def make_chunk(content=None, **kwargs):
-
-        return json.dumps({
-            "request_id": meta.get("request_id"),
-            "response": content,
-            **kwargs
-        }, ensure_ascii=False).encode('utf-8') + b"\n"
+        return (
+            json.dumps(
+                {"request_id": meta.get("request_id"), "response": content, **kwargs}, ensure_ascii=False
+            ).encode("utf-8")
+            + b"\n"
+        )
 
     async def stream_messages():
-
         # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
 
@@ -145,25 +156,22 @@ async def chat_agent(agent_id: str,
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
-                    yield make_chunk(content=msg.content,
-                                    msg=msg.model_dump(),
-                                    metadata=metadata,
-                                    status="loading")
+                    yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
                 else:
-                    yield make_chunk(msg=msg.model_dump(),
-                                    metadata=metadata,
-                                    status="loading")
+                    yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
 
             yield make_chunk(status="finished", meta=meta)
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
-    return StreamingResponse(stream_messages(), media_type='application/json')
+    return StreamingResponse(stream_messages(), media_type="application/json")
+
 
 # =============================================================================
 # > === 模型管理分组 ===
 # =============================================================================
+
 
 @chat.get("/models")
 async def get_chat_models(model_provider: str, current_user: User = Depends(get_admin_user)):
@@ -171,12 +179,14 @@ async def get_chat_models(model_provider: str, current_user: User = Depends(get_
     model = select_model(model_provider=model_provider)
     return {"models": model.get_models()}
 
+
 @chat.post("/models/update")
-async def update_chat_models(model_provider: str, model_names: list[str], current_user = Depends(get_admin_user)):
+async def update_chat_models(model_provider: str, model_names: list[str], current_user=Depends(get_admin_user)):
     """更新指定模型提供商的模型列表 (仅管理员)"""
     config.model_names[model_provider]["models"] = model_names
     config._save_models_to_file()
     return {"models": config.model_names[model_provider]["models"]}
+
 
 @chat.get("/tools")
 async def get_tools(agent_id: str, current_user: User = Depends(get_required_user)):
@@ -193,12 +203,9 @@ async def get_tools(agent_id: str, current_user: User = Depends(get_required_use
     tools_info = gen_tool_info(tools)
     return {"tools": {tool["id"]: tool for tool in tools_info}}
 
+
 @chat.post("/agent/{agent_id}/config")
-async def save_agent_config(
-    agent_id: str,
-    config: dict = Body(...),
-    current_user: User = Depends(get_required_user)
-):
+async def save_agent_config(agent_id: str, config: dict = Body(...), current_user: User = Depends(get_required_user)):
     """保存智能体配置到YAML文件（需要登录）"""
     try:
         # 获取Agent实例和配置类
@@ -217,12 +224,9 @@ async def save_agent_config(
         logger.error(f"保存智能体配置出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"保存智能体配置出错: {str(e)}")
 
+
 @chat.get("/agent/{agent_id}/history")
-async def get_agent_history(
-    agent_id: str,
-    thread_id: str,
-    current_user: User = Depends(get_required_user)
-):
+async def get_agent_history(agent_id: str, thread_id: str, current_user: User = Depends(get_required_user)):
     """获取智能体历史消息（需要登录）"""
     try:
         # 获取Agent实例和配置类
@@ -237,11 +241,9 @@ async def get_agent_history(
         logger.error(f"获取智能体历史消息出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取智能体历史消息出错: {str(e)}")
 
+
 @chat.get("/agent/{agent_id}/config")
-async def get_agent_config(
-    agent_id: str,
-    current_user: User = Depends(get_required_user)
-):
+async def get_agent_config(agent_id: str, current_user: User = Depends(get_required_user)):
     """从YAML文件加载智能体配置（需要登录）"""
     try:
         # 检查智能体是否存在
@@ -256,7 +258,9 @@ async def get_agent_config(
         logger.error(f"加载智能体配置出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"加载智能体配置出错: {str(e)}")
 
+
 # ==================== 线程管理 API ====================
+
 
 class ThreadCreate(BaseModel):
     title: str | None = None
@@ -279,11 +283,10 @@ class ThreadResponse(BaseModel):
 # > === 会话管理分组 ===
 # =============================================================================
 
+
 @chat.post("/thread", response_model=ThreadResponse)
 async def create_thread(
-    thread: ThreadCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user)
+    thread: ThreadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)
 ):
     """创建新对话线程"""
     thread_id = str(uuid.uuid4())
@@ -313,11 +316,7 @@ async def create_thread(
 
 
 @chat.get("/threads", response_model=list[ThreadResponse])
-async def list_threads(
-    agent_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user)
-):
+async def list_threads(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
     """获取用户的所有对话线程"""
     assert agent_id, "agent_id 不能为空"
     query = db.query(Thread).filter(
@@ -345,16 +344,9 @@ async def list_threads(
 
 
 @chat.delete("/thread/{thread_id}")
-async def delete_thread(
-    thread_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user)
-):
+async def delete_thread(thread_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
     """删除对话线程"""
-    thread = db.query(Thread).filter(
-        Thread.id == thread_id,
-        Thread.user_id == str(current_user.id)
-    ).first()
+    thread = db.query(Thread).filter(Thread.id == thread_id, Thread.user_id == str(current_user.id)).first()
 
     if not thread:
         raise HTTPException(status_code=404, detail="对话线程不存在")
@@ -376,14 +368,14 @@ async def update_thread(
     thread_id: str,
     thread_update: ThreadUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_required_user)
+    current_user: User = Depends(get_required_user),
 ):
     """更新对话线程信息"""
-    thread = db.query(Thread).filter(
-        Thread.id == thread_id,
-        Thread.user_id == str(current_user.id),
-        Thread.status == 1
-    ).first()
+    thread = (
+        db.query(Thread)
+        .filter(Thread.id == thread_id, Thread.user_id == str(current_user.id), Thread.status == 1)
+        .first()
+    )
 
     if not thread:
         raise HTTPException(status_code=404, detail="对话线程不存在")

@@ -1,27 +1,22 @@
 import os
-import uuid
 import time
-from pathlib import Path
+import uuid
 from argparse import ArgumentParser
 from collections import defaultdict
+from pathlib import Path
 
 import fitz  # fitz就是pip install PyMuPDF
 import numpy as np  # Added import for numpy
 from PIL import Image
-from tqdm import tqdm
 from rapidocr_onnxruntime import RapidOCR
+from tqdm import tqdm
 
-from src.utils import logger, is_text_pdf
-
+from src.utils import is_text_pdf, logger
 
 GOLBAL_STATE = {}
 
 # OCR服务监控统计
-OCR_STATS = {
-    "requests": defaultdict(int),
-    "failures": defaultdict(int),
-    "service_status": defaultdict(str)
-}
+OCR_STATS = {"requests": defaultdict(int), "failures": defaultdict(int), "service_status": defaultdict(str)}
 
 
 def log_ocr_request(service_name: str, file_path: str, success: bool, processing_time: float, error_msg: str = None):
@@ -50,7 +45,7 @@ def get_ocr_stats():
             "success_count": success_count,
             "failure_count": OCR_STATS["failures"][service],
             "success_rate": f"{success_rate:.2%}",
-            "status": OCR_STATS["service_status"][service]
+            "status": OCR_STATS["service_status"][service],
         }
 
     return stats
@@ -58,6 +53,7 @@ def get_ocr_stats():
 
 class OCRServiceException(Exception):
     """OCR服务异常"""
+
     def __init__(self, message, service_name=None, status_code=None):
         super().__init__(message)
         self.service_name = service_name
@@ -69,8 +65,10 @@ class OCRPlugin:
 
     def __init__(self, **kwargs):
         self.ocr = None
-        self.det_box_thresh = kwargs.get('det_box_thresh', 0.3)
-        self.model_dir_root = os.getenv("MODEL_DIR") if not os.getenv("RUNNING_IN_DOCKER") else os.getenv("MODEL_DIR_IN_DOCKER")
+        self.det_box_thresh = kwargs.get("det_box_thresh", 0.3)
+        self.model_dir_root = (
+            os.getenv("MODEL_DIR") if not os.getenv("RUNNING_IN_DOCKER") else os.getenv("MODEL_DIR_IN_DOCKER")
+        )
 
     def _check_rapid_ocr_availability(self):
         """检查RapidOCR模型是否可用"""
@@ -81,16 +79,14 @@ class OCRPlugin:
 
             if not os.path.exists(model_dir):
                 raise OCRServiceException(
-                    f"模型目录不存在: {model_dir}。请下载 SWHL/RapidOCR 模型",
-                    "rapid_ocr",
-                    "model_not_found"
+                    f"模型目录不存在: {model_dir}。请下载 SWHL/RapidOCR 模型", "rapid_ocr", "model_not_found"
                 )
 
             if not os.path.exists(det_model_dir) or not os.path.exists(rec_model_dir):
                 raise OCRServiceException(
                     f"模型文件缺失。请确认模型文件完整: {det_model_dir}, {rec_model_dir}",
                     "rapid_ocr",
-                    "model_incomplete"
+                    "model_incomplete",
                 )
 
             return True
@@ -99,11 +95,7 @@ class OCRPlugin:
             if isinstance(e, OCRServiceException):
                 raise
             else:
-                raise OCRServiceException(
-                    f"RapidOCR模型检查失败: {str(e)}",
-                    "rapid_ocr",
-                    "check_failed"
-                )
+                raise OCRServiceException(f"RapidOCR模型检查失败: {str(e)}", "rapid_ocr", "check_failed")
 
     def load_model(self):
         """加载 OCR 模型"""
@@ -120,11 +112,7 @@ class OCRPlugin:
             self.ocr = RapidOCR(det_box_thresh=0.3, det_model_path=det_model_dir, rec_model_path=rec_model_dir)
             logger.info(f"OCR Plugin for det_box_thresh = {self.det_box_thresh} loaded.")
         except Exception as e:
-            raise OCRServiceException(
-                f"RapidOCR模型加载失败: {str(e)}",
-                "rapid_ocr",
-                "load_failed"
-            )
+            raise OCRServiceException(f"RapidOCR模型加载失败: {str(e)}", "rapid_ocr", "load_failed")
 
     def process_image(self, image, params=None):
         """
@@ -165,7 +153,7 @@ class OCRPlugin:
 
             # 提取文本
             if result:
-                text = '\n'.join([line[1] for line in result])
+                text = "\n".join([line[1] for line in result])
                 log_ocr_request("rapid_ocr", image_path, True, processing_time)
                 return text
             else:
@@ -189,11 +177,11 @@ class OCRPlugin:
             str: 临时文件路径
         """
         # 为临时文件创建目录（如果不存在）
-        tmp_dir = os.path.join(os.getcwd(), 'tmp')
+        tmp_dir = os.path.join(os.getcwd(), "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
 
         # 生成临时文件路径
-        temp_filename = f'ocr_temp_{uuid.uuid4().hex[:8]}.png'
+        temp_filename = f"ocr_temp_{uuid.uuid4().hex[:8]}.png"
         image_path = os.path.join(tmp_dir, temp_filename)
 
         # 根据图像类型保存文件
@@ -224,7 +212,7 @@ class OCRPlugin:
 
             pdfDoc = fitz.open(pdf_path)
             totalPage = pdfDoc.page_count
-            for pg in tqdm(range(totalPage), desc='to images', ncols=100):
+            for pg in tqdm(range(totalPage), desc="to images", ncols=100):
                 page = pdfDoc[pg]
                 rotate, zoom_x, zoom_y = 0, 2, 2
                 mat = fitz.Matrix(zoom_x, zoom_y).prerotate(rotate)
@@ -234,12 +222,12 @@ class OCRPlugin:
 
             # 处理每个图像并合并文本
             all_text = []
-            for img_path in tqdm(images, desc='to txt', ncols=100):
+            for img_path in tqdm(images, desc="to txt", ncols=100):
                 text = self.process_image(img_path)
                 all_text.append(text)
 
             logger.debug(f"PDF OCR result: {all_text[:50]}(...) total {len(all_text)} pages.")
-            return '\n\n'.join(all_text)
+            return "\n\n".join(all_text)
 
         except Exception as e:
             logger.error(f"PDF processing error: {str(e)}")
@@ -253,6 +241,7 @@ class OCRPlugin:
         :return: 提取的文本
         """
         import requests
+
         from .mineru import parse_doc
 
         mineru_ocr_uri = os.getenv("MINERU_OCR_URI", "http://localhost:30000")
@@ -269,28 +258,20 @@ class OCRPlugin:
                     error_detail = health_check_response.text
 
                 raise OCRServiceException(
-                    f"MinerU OCR服务健康检查失败: {error_detail}",
-                    "mineru_ocr",
-                    "health_check_failed"
+                    f"MinerU OCR服务健康检查失败: {error_detail}", "mineru_ocr", "health_check_failed"
                 )
 
         except Exception as e:
             if isinstance(e, OCRServiceException):
                 raise
-            raise OCRServiceException(
-                f"MinerU OCR服务检查失败: {str(e)}",
-                "mineru_ocr",
-                "service_error"
-            )
+            raise OCRServiceException(f"MinerU OCR服务检查失败: {str(e)}", "mineru_ocr", "service_error")
 
         try:
             start_time = time.time()
             file_path_list = [file_path]
             output_dir = os.path.join(os.getcwd(), "tmp", "mineru_ocr")
 
-            text = parse_doc(file_path_list, output_dir,
-                             backend="vlm-sglang-client",
-                             server_url=mineru_ocr_uri)[0]
+            text = parse_doc(file_path_list, output_dir, backend="vlm-sglang-client", server_url=mineru_ocr_uri)[0]
 
             processing_time = time.time() - start_time
             log_ocr_request("mineru_ocr", file_path, True, processing_time)
@@ -303,11 +284,7 @@ class OCRPlugin:
             error_msg = f"MinerU OCR处理失败: {str(e)}"
             log_ocr_request("mineru_ocr", file_path, False, processing_time, error_msg)
 
-            raise OCRServiceException(
-                error_msg,
-                "mineru_ocr",
-                "processing_failed"
-            )
+            raise OCRServiceException(error_msg, "mineru_ocr", "processing_failed")
 
     def process_file_paddlex(self, pdf_path, params=None):
         """
@@ -331,18 +308,12 @@ class OCRPlugin:
                     error_detail = health_check_response.text
 
                 raise OCRServiceException(
-                    f"PaddleX OCR服务健康检查失败: {error_detail}",
-                    "paddlex_ocr",
-                    "health_check_failed"
+                    f"PaddleX OCR服务健康检查失败: {error_detail}", "paddlex_ocr", "health_check_failed"
                 )
         except Exception as e:
             if isinstance(e, OCRServiceException):
                 raise
-            raise OCRServiceException(
-                f"PaddleX OCR服务检查失败: {str(e)}",
-                "paddlex_ocr",
-                "service_error"
-            )
+            raise OCRServiceException(f"PaddleX OCR服务检查失败: {str(e)}", "paddlex_ocr", "service_error")
 
         try:
             start_time = time.time()
@@ -353,11 +324,7 @@ class OCRPlugin:
                 error_msg = f"PaddleX OCR处理失败: {result['error']}"
                 log_ocr_request("paddlex_ocr", pdf_path, False, processing_time, error_msg)
 
-                raise OCRServiceException(
-                    error_msg,
-                    "paddlex_ocr",
-                    "processing_failed"
-                )
+                raise OCRServiceException(error_msg, "paddlex_ocr", "processing_failed")
 
             log_ocr_request("paddlex_ocr", pdf_path, True, processing_time)
             return result["full_text"]
@@ -365,18 +332,16 @@ class OCRPlugin:
         except Exception as e:
             if isinstance(e, OCRServiceException):
                 raise
-            processing_time = time.time() - start_time if 'start_time' in locals() else 0
+            processing_time = time.time() - start_time if "start_time" in locals() else 0
             error_msg = f"PaddleX OCR处理失败: {str(e)}"
             log_ocr_request("paddlex_ocr", pdf_path, False, processing_time, error_msg)
 
-            raise OCRServiceException(
-                error_msg,
-                "paddlex_ocr",
-                "processing_failed"
-            )
+            raise OCRServiceException(error_msg, "paddlex_ocr", "processing_failed")
+
 
 def get_state(task_id):
     return GOLBAL_STATE.get(task_id, {})
+
 
 def plainreader(file_path):
     """读取普通文本文件并返回text文本"""
@@ -389,8 +354,8 @@ def plainreader(file_path):
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--pdf-path', type=str, required=True, help='Path to the PDF file')
-    parser.add_argument('--return-text', action='store_true', help='Return the extracted text')
+    parser.add_argument("--pdf-path", type=str, required=True, help="Path to the PDF file")
+    parser.add_argument("--return-text", action="store_true", help="Return the extracted text")
     args = parser.parse_args()
 
     ocr = OCRPlugin()

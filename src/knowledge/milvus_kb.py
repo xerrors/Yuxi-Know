@@ -1,24 +1,26 @@
+import asyncio
+import json
 import os
 import time
 import traceback
-import json
-import asyncio
-from pathlib import Path
-from typing import Any
 from datetime import datetime
 from functools import partial
+from pathlib import Path
+from typing import Any
 
-from pymilvus import (
-    connections, utility, Collection, CollectionSchema,
-    FieldSchema, DataType, db
-)
+from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
 from src import config
-from src.models.embedding import OtherEmbedding
+from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
+from src.knowledge.kb_utils import (
+    get_embedding_config,
+    prepare_item_metadata,
+    split_text_into_chunks,
+    split_text_into_qa_chunks,
+)
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
-from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
-from src.utils import logger, hashstr
+from src.models.embedding import OtherEmbedding
+from src.utils import hashstr, logger
 
 MILVUS_AVAILABLE = True
 
@@ -42,9 +44,9 @@ class MilvusKB(KnowledgeBase):
         # Milvus 配置
         # self.milvus_host = kwargs.get('milvus_host', os.getenv('MILVUS_HOST', 'localhost'))
         # self.milvus_port = kwargs.get('milvus_port', int(os.getenv('MILVUS_PORT', '19530')))
-        self.milvus_token = kwargs.get('milvus_token', os.getenv('MILVUS_TOKEN', ''))
-        self.milvus_uri = kwargs.get('milvus_uri', os.getenv('MILVUS_URI', 'http://localhost:19530'))
-        self.milvus_db = kwargs.get('milvus_db', 'yuxi_know')
+        self.milvus_token = kwargs.get("milvus_token", os.getenv("MILVUS_TOKEN", ""))
+        self.milvus_uri = kwargs.get("milvus_uri", os.getenv("MILVUS_URI", "http://localhost:19530"))
+        self.milvus_db = kwargs.get("milvus_db", "yuxi_know")
 
         # 连接名称
         self.connection_alias = f"milvus_{hashstr(work_dir, 6)}"
@@ -53,8 +55,8 @@ class MilvusKB(KnowledgeBase):
         self.collections: dict[str, Any] = {}
 
         # 分块配置
-        self.chunk_size = kwargs.get('chunk_size', 1000)
-        self.chunk_overlap = kwargs.get('chunk_overlap', 200)
+        self.chunk_size = kwargs.get("chunk_size", 1000)
+        self.chunk_overlap = kwargs.get("chunk_overlap", 200)
 
         # 元数据锁
         self._metadata_lock = asyncio.Lock()
@@ -73,11 +75,7 @@ class MilvusKB(KnowledgeBase):
         """初始化 Milvus 连接"""
         try:
             # 连接到 Milvus
-            connections.connect(
-                alias=self.connection_alias,
-                uri=self.milvus_uri,
-                token=self.milvus_token
-            )
+            connections.connect(alias=self.connection_alias, uri=self.milvus_uri, token=self.milvus_token)
 
             # 创建数据库（如果不存在）
             try:
@@ -106,10 +104,7 @@ class MilvusKB(KnowledgeBase):
         try:
             # 检查集合是否存在
             if utility.has_collection(collection_name, using=self.connection_alias):
-                collection = Collection(
-                    name=collection_name,
-                    using=self.connection_alias
-                )
+                collection = Collection(name=collection_name, using=self.connection_alias)
 
                 # 检查嵌入模型是否匹配
                 description = collection.description
@@ -137,27 +132,18 @@ class MilvusKB(KnowledgeBase):
                 FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
                 FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
                 FieldSchema(name="chunk_index", dtype=DataType.INT64),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim)
+                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim),
             ]
 
             schema = CollectionSchema(
-                fields=fields,
-                description=f"Knowledge base collection for {db_id} using {model_name}"
+                fields=fields, description=f"Knowledge base collection for {db_id} using {model_name}"
             )
 
             # 创建集合
-            collection = Collection(
-                name=collection_name,
-                schema=schema,
-                using=self.connection_alias
-            )
+            collection = Collection(name=collection_name, schema=schema, using=self.connection_alias)
 
             # 创建索引
-            index_params = {
-                "metric_type": "COSINE",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 1024}
-            }
+            index_params = {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
             collection.create_index("embedding", index_params)
 
             logger.info(f"Created new Milvus collection: {collection_name}")
@@ -218,18 +204,17 @@ class MilvusKB(KnowledgeBase):
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
         # 检查是否使用QA分割模式
-        use_qa_split = params.get('use_qa_split', False)
+        use_qa_split = params.get("use_qa_split", False)
 
         if use_qa_split:
             # 使用QA分割模式
-            qa_separator = params.get('qa_separator', '\n\n\n')
+            qa_separator = params.get("qa_separator", "\n\n\n")
             return split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
         else:
             # 使用传统分割模式
             return split_text_into_chunks(text, file_id, filename, params)
 
-    async def add_content(self, db_id: str, items: list[str],
-                         params: dict | None = {}) -> list[dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None = {}) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -241,7 +226,7 @@ class MilvusKB(KnowledgeBase):
         embed_info = self.databases_meta[db_id].get("embed_info", {})
         embedding_function = self._get_async_embedding_function(embed_info)
 
-        content_type = params.get('content_type', 'file') if params else 'file'
+        content_type = params.get("content_type", "file") if params else "file"
         processed_items_info = []
 
         for item in items:
@@ -280,7 +265,7 @@ class MilvusKB(KnowledgeBase):
                         [chunk["chunk_id"] for chunk in chunks],
                         [chunk["file_id"] for chunk in chunks],
                         [chunk["chunk_index"] for chunk in chunks],
-                        embeddings
+                        embeddings,
                     ]
 
                     def _insert_and_flush():
@@ -294,7 +279,7 @@ class MilvusKB(KnowledgeBase):
                 async with self._metadata_lock:
                     self.files_meta[file_id]["status"] = "done"
                     self._save_metadata()
-                file_record['status'] = "done"
+                file_record["status"] = "done"
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
 
@@ -303,7 +288,7 @@ class MilvusKB(KnowledgeBase):
                 async with self._metadata_lock:
                     self.files_meta[file_id]["status"] = "failed"
                     self._save_metadata()
-                file_record['status'] = "failed"
+                file_record["status"] = "failed"
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
             finally:
@@ -334,7 +319,7 @@ class MilvusKB(KnowledgeBase):
                 anns_field="embedding",
                 param=search_params,
                 limit=top_k,
-                output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"]
+                output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"],
             )
 
             if not results or len(results) == 0 or len(results[0]) == 0:
@@ -352,14 +337,12 @@ class MilvusKB(KnowledgeBase):
                     "source": entity.get("source", "未知来源"),
                     "chunk_id": entity.get("chunk_id"),
                     "file_id": entity.get("file_id"),
-                    "chunk_index": entity.get("chunk_index")
+                    "chunk_index": entity.get("chunk_index"),
                 }
 
-                retrieved_chunks.append({
-                    "content": entity.get("content", ""),
-                    "metadata": metadata,
-                    "score": similarity
-                })
+                retrieved_chunks.append(
+                    {"content": entity.get("content", ""), "metadata": metadata, "score": similarity}
+                )
 
             logger.debug(f"Milvus query response: {len(retrieved_chunks)} chunks found (after similarity filtering)")
             return retrieved_chunks
@@ -376,11 +359,7 @@ class MilvusKB(KnowledgeBase):
             # 先查询文件是否存在，避免不必要的删除操作
             try:
                 expr = f'file_id == "{file_id}"'
-                results = collection.query(
-                    expr=expr,
-                    output_fields=["id"],
-                    limit=1
-                )
+                results = collection.query(expr=expr, output_fields=["id"], limit=1)
 
                 if not results:
                     logger.info(f"File {file_id} not found in Milvus, skipping delete operation")
@@ -417,7 +396,7 @@ class MilvusKB(KnowledgeBase):
                 results = collection.query(
                     expr=expr,
                     output_fields=["content", "chunk_id", "chunk_index"],
-                    limit=10000  # 假设单个文件不会超过10000个chunks
+                    limit=10000,  # 假设单个文件不会超过10000个chunks
                 )
 
                 # 构建chunks数据
@@ -426,7 +405,7 @@ class MilvusKB(KnowledgeBase):
                     chunk_data = {
                         "id": result.get("chunk_id", ""),
                         "content": result.get("content", ""),
-                        "chunk_order_index": result.get("chunk_index", 0)
+                        "chunk_order_index": result.get("chunk_index", 0),
                     }
                     doc_chunks.append(chunk_data)
 
@@ -457,7 +436,7 @@ class MilvusKB(KnowledgeBase):
     def __del__(self):
         """清理连接"""
         try:
-            if hasattr(self, 'connection_alias'):
+            if hasattr(self, "connection_alias"):
                 connections.disconnect(self.connection_alias)
         except Exception:  # noqa: S110
             pass

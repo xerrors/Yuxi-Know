@@ -1,6 +1,5 @@
 import uvicorn
-
-from fastapi import FastAPI, Request, HTTPException, status, Depends
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -23,6 +22,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # 鉴权中间件
 class AuthMiddleware(BaseHTTPMiddleware):
@@ -56,9 +56,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # 继续处理请求
         return await call_next(request)
 
+
 # 添加鉴权中间件
 app.add_middleware(AuthMiddleware)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5050, threads=10, workers=10, reload=True)
-

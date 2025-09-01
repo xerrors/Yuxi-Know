@@ -1,5 +1,7 @@
 import os
-from pymilvus import utility, connections, Collection
+
+from pymilvus import Collection, connections, utility
+
 
 def get_collection_info(collection_name, alias):
     """Safely gets a collection object and its number of entities."""
@@ -11,13 +13,14 @@ def get_collection_info(collection_name, alias):
         print(f"Error getting info for collection '{collection_name}': {e}")
         return None, 0
 
+
 def rename_and_resolve_duplicates():
     """
     Connects to Milvus, renames collections from 'kb_kb_' to 'kb_',
     and resolves duplicates by keeping the collection with more rows.
     """
-    milvus_uri = os.getenv('MILVUS_URI', 'http://localhost:19530')
-    milvus_token = os.getenv('MILVUS_TOKEN', '')
+    milvus_uri = os.getenv("MILVUS_URI", "http://localhost:19530")
+    milvus_token = os.getenv("MILVUS_TOKEN", "")
     connection_alias = "rename_script"
 
     try:
@@ -26,7 +29,7 @@ def rename_and_resolve_duplicates():
         print("Successfully connected to Milvus.")
 
         all_collections = utility.list_collections(using=connection_alias)
-        collections_to_rename = [c for c in all_collections if c.startswith('kb_kb_')]
+        collections_to_rename = [c for c in all_collections if c.startswith("kb_kb_")]
 
         if not collections_to_rename:
             print("No collections with the prefix 'kb_kb_' found. Nothing to do.")
@@ -35,7 +38,7 @@ def rename_and_resolve_duplicates():
         print(f"Found {len(collections_to_rename)} collections with 'kb_kb_' prefix to process.")
 
         for old_name in collections_to_rename:
-            new_name = old_name.replace('kb_kb_', 'kb_', 1)
+            new_name = old_name.replace("kb_kb_", "kb_", 1)
             try:
                 print(f"Attempting to rename '{old_name}' to '{new_name}'...")
                 utility.rename_collection(old_name, new_name, using=connection_alias)
@@ -73,6 +76,7 @@ def rename_and_resolve_duplicates():
         if connection_alias in connections.list_connections():
             connections.disconnect(connection_alias)
             print("Disconnected from Milvus.")
+
 
 if __name__ == "__main__":
     rename_and_resolve_duplicates()

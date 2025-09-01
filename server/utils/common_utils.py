@@ -1,19 +1,18 @@
 """通用工具函数"""
 
 import logging
-from sqlalchemy.orm import Session
+
 from fastapi import Request
-from server.models.user_model import User, OperationLog
+from sqlalchemy.orm import Session
+
+from server.models.user_model import OperationLog, User
 
 
 def setup_logging():
     """配置应用程序日志格式"""
     # 配置日志格式
     logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        force=True
+        level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S", force=True
     )
 
     # 确保uvicorn的日志也使用相同格式
@@ -21,10 +20,7 @@ def setup_logging():
     uvicorn_access_logger = logging.getLogger("uvicorn.access")
 
     # 创建格式化器
-    formatter = logging.Formatter(
-        fmt="%(asctime)s %(levelname)s: %(message)s",
-        datefmt="%m-%d %H:%M:%S"
-    )
+    formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s: %(message)s", datefmt="%m-%d %H:%M:%S")
 
     # 为所有处理器设置格式化器
     for handler in uvicorn_logger.handlers:
@@ -39,12 +35,7 @@ def log_operation(db: Session, user_id: int, operation: str, details: str = None
     if request:
         ip_address = request.client.host if request.client else None
 
-    log = OperationLog(
-        user_id=user_id,
-        operation=operation,
-        details=details,
-        ip_address=ip_address
-    )
+    log = OperationLog(user_id=user_id, operation=operation, details=details, ip_address=ip_address)
     db.add(log)
     db.commit()
 
@@ -60,6 +51,6 @@ def convert_serializable(obj):
         return [convert_serializable(item) for item in obj]
     if isinstance(obj, dict):
         return {k: convert_serializable(v) for k, v in obj.items()}
-    if hasattr(obj, '__dict__'):
+    if hasattr(obj, "__dict__"):
         return convert_serializable(vars(obj))
     return obj

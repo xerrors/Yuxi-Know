@@ -2,9 +2,10 @@ import os
 import traceback
 
 from src import config
-from src.utils.logging_config import logger
 from src.models.chat_model import OpenAIBase
 from src.models.embedding import OllamaEmbedding, OtherEmbedding
+from src.utils.logging_config import logger
+
 
 def select_model(model_provider, model_name=None):
     """根据模型提供者选择模型"""
@@ -16,12 +17,14 @@ def select_model(model_provider, model_name=None):
 
     if model_provider == "openai":
         from src.models.chat_model import OpenModel
+
         return OpenModel(model_name)
 
     if model_provider == "custom":
         model_info = get_custom_model(model_name)
 
         from src.models.chat_model import CustomModel
+
         return CustomModel(model_info)
 
     # 其他模型，默认使用OpenAIBase
@@ -37,7 +40,7 @@ def select_model(model_provider, model_name=None):
 
 
 def select_embedding_model(model_id):
-    provider, model_name = model_id.split('/', 1) if model_id else ("", "")
+    provider, model_name = model_id.split("/", 1) if model_id else ("", "")
     support_embed_models = config.embed_model_names.keys()
     assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
     logger.debug(f"Loading embedding model {model_id}")

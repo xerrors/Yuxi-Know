@@ -1,8 +1,9 @@
+import re
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.orm import Session
 from jose import JWTError, jwt
-import re
+from sqlalchemy.orm import Session
 
 from server.db_manager import db_manager
 from server.models.user_model import User
@@ -13,13 +14,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token", auto_error=Fals
 
 # 公开路径列表，无需登录即可访问
 PUBLIC_PATHS = [
-    r"^/api/auth/token$",            # 登录
+    r"^/api/auth/token$",  # 登录
     r"^/api/auth/check-first-run$",  # 检查是否首次运行
-    r"^/api/auth/initialize$",       # 初始化系统
-    r"^/api$",                      # Health Check
-    r"^/api/system/health$",        # Health Check
-    r"^/api/system/info$",          # 获取系统信息配置
+    r"^/api/auth/initialize$",  # 初始化系统
+    r"^/api$",  # Health Check
+    r"^/api/system/health$",  # Health Check
+    r"^/api/system/info$",  # 获取系统信息配置
 ]
+
 
 # 获取数据库会话
 def get_db():
@@ -28,6 +30,7 @@ def get_db():
         yield db
     finally:
         db.close()
+
 
 # 获取当前用户
 async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -65,6 +68,7 @@ async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Sessi
 
     return user
 
+
 # 获取已登录用户（抛出401如果未登录）
 async def get_required_user(user: User | None = Depends(get_current_user)):
     if user is None:
@@ -75,6 +79,7 @@ async def get_required_user(user: User | None = Depends(get_current_user)):
         )
     return user
 
+
 # 获取管理员用户
 async def get_admin_user(current_user: User = Depends(get_required_user)):
     if current_user.role not in ["admin", "superadmin"]:
@@ -83,6 +88,7 @@ async def get_admin_user(current_user: User = Depends(get_required_user)):
             detail="需要管理员权限",
         )
     return current_user
+
 
 # 获取超级管理员用户
 async def get_superadmin_user(current_user: User = Depends(get_required_user)):
@@ -93,9 +99,10 @@ async def get_superadmin_user(current_user: User = Depends(get_required_user)):
         )
     return current_user
 
+
 # 检查路径是否为公开路径
 def is_public_path(path: str) -> bool:
-    path = path.rstrip('/')  # 去除尾部斜杠以便于匹配
+    path = path.rstrip("/")  # 去除尾部斜杠以便于匹配
     for pattern in PUBLIC_PATHS:
         if re.match(pattern, path):
             return True

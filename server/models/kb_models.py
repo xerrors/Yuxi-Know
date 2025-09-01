@@ -1,13 +1,16 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, Text
+import time
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import time
 
 from server.models import Base
 
+
 class KnowledgeDatabase(Base):
     """知识库模型"""
-    __tablename__ = 'knowledge_databases'
+
+    __tablename__ = "knowledge_databases"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     db_id = Column(String, nullable=False, unique=True, index=True)  # 数据库ID
@@ -31,7 +34,7 @@ class KnowledgeDatabase(Base):
             "embed_model": self.embed_model,
             "dimension": self.dimension,
             "metadata": self.meta_info or {},
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
         # 添加文件信息
         if self.files:
@@ -40,13 +43,15 @@ class KnowledgeDatabase(Base):
             result["files"] = {}
         return result
 
+
 class KnowledgeFile(Base):
     """知识库文件模型"""
-    __tablename__ = 'knowledge_files'
+
+    __tablename__ = "knowledge_files"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(String, nullable=False, index=True)  # 文件ID
-    database_id = Column(String, ForeignKey('knowledge_databases.db_id'), nullable=False)  # 所属数据库ID
+    database_id = Column(String, ForeignKey("knowledge_databases.db_id"), nullable=False)  # 所属数据库ID
     filename = Column(String, nullable=False)  # 文件名
     path = Column(String, nullable=False)  # 文件路径
     file_type = Column(String, nullable=False)  # 文件类型
@@ -71,18 +76,20 @@ class KnowledgeFile(Base):
             "type": self.file_type,
             "status": self.status,
             "node_count": self.computed_node_count,
-            "created_at": self.created_at.timestamp() if self.created_at else time.time()
+            "created_at": self.created_at.timestamp() if self.created_at else time.time(),
         }
         if with_nodes:
             result["nodes"] = [node.to_dict() for node in self.nodes] if self.nodes else []
         return result
 
+
 class KnowledgeNode(Base):
     """知识块模型"""
-    __tablename__ = 'knowledge_nodes'
+
+    __tablename__ = "knowledge_nodes"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    file_id = Column(String, ForeignKey('knowledge_files.file_id'), nullable=False)  # 所属文件ID
+    file_id = Column(String, ForeignKey("knowledge_files.file_id"), nullable=False)  # 所属文件ID
     text = Column(Text, nullable=False)  # 文本内容
     hash = Column(String, nullable=True)  # 文本哈希值
     start_char_idx = Column(Integer, nullable=True)  # 开始字符索引
@@ -101,5 +108,5 @@ class KnowledgeNode(Base):
             "hash": self.hash,
             "start_char_idx": self.start_char_idx,
             "end_char_idx": self.end_char_idx,
-            "metadata": self.meta_info or {}  # 确保映射正确
+            "metadata": self.meta_info or {},  # 确保映射正确
         }

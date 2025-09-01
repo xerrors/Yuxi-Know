@@ -1,5 +1,6 @@
 from typing import Any
-from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError
+
+from src.knowledge.knowledge_base import KBNotFoundError, KnowledgeBase
 from src.utils import logger
 
 
@@ -13,8 +14,7 @@ class KnowledgeBaseFactory:
     _default_configs: dict[str, dict] = {}
 
     @classmethod
-    def register(cls, kb_type: str, kb_class: type[KnowledgeBase],
-                default_config: dict = None):
+    def register(cls, kb_type: str, kb_class: type[KnowledgeBase], default_config: dict = None):
         """
         注册知识库类型
 
@@ -48,8 +48,7 @@ class KnowledgeBaseFactory:
         """
         if kb_type not in cls._kb_types:
             available_types = list(cls._kb_types.keys())
-            raise KBNotFoundError(f"Unknown knowledge base type: {kb_type}. "
-                                f"Available types: {available_types}")
+            raise KBNotFoundError(f"Unknown knowledge base type: {kb_type}. Available types: {available_types}")
 
         kb_class = cls._kb_types[kb_type]
 
@@ -79,7 +78,7 @@ class KnowledgeBaseFactory:
             result[kb_type] = {
                 "class_name": kb_class.__name__,
                 "description": kb_class.__doc__ or "",
-                "default_config": cls._default_configs[kb_type]
+                "default_config": cls._default_configs[kb_type],
             }
         return result
 

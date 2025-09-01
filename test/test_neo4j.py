@@ -1,7 +1,8 @@
 from neo4j import GraphDatabase
-from neo4j.exceptions import ServiceUnavailable, AuthError
+from neo4j.exceptions import AuthError, ServiceUnavailable
 
 # sudo ln -s /snap/core22/1586/usr/sbin/iptables /usr/sbin/iptables
+
 
 def check_neo4j_status(uri="bolt://localhost:7687", username="neo4j", password="0123456789"):
     """
@@ -30,7 +31,7 @@ def check_neo4j_status(uri="bolt://localhost:7687", username="neo4j", password="
         # 确保关闭驱动
         driver.close()
 
+
 # 测试函数
 status = check_neo4j_status()
 print(f"Neo4j status: {status}")
-

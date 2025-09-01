@@ -3,17 +3,16 @@ import traceback
 from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
+from lightrag.kg.shared_storage import initialize_pipeline_status
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
 from lightrag.utils import EmbeddingFunc, setup_logger
-from lightrag.kg.shared_storage import initialize_pipeline_status
-from pymilvus import connections, utility
 from neo4j import GraphDatabase
+from pymilvus import connections, utility
 
+from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
+from src.knowledge.kb_utils import get_embedding_config, prepare_item_metadata
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
-from src.knowledge.kb_utils import prepare_item_metadata, get_embedding_config
-from src.utils import logger, hashstr
-
+from src.utils import hashstr, logger
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
 LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "zai-org/GLM-4.5-Air")
@@ -38,8 +37,9 @@ class LightRagKB(KnowledgeBase):
         # 设置 LightRAG 日志
         log_dir = os.path.join(work_dir, "logs", "lightrag")
         os.makedirs(log_dir, exist_ok=True)
-        setup_logger("lightrag", log_file_path=os.path.join(
-            log_dir, f"lightrag_{datetime.now().strftime('%Y-%m-%d')}.log"))
+        setup_logger(
+            "lightrag", log_file_path=os.path.join(log_dir, f"lightrag_{datetime.now().strftime('%Y-%m-%d')}.log")
+        )
 
         logger.info("LightRagKB initialized")
 
@@ -52,15 +52,11 @@ class LightRagKB(KnowledgeBase):
         """删除数据库，同时清除Milvus和Neo4j中的数据"""
         # Drop Milvus collection
         try:
-            milvus_uri = os.getenv('MILVUS_URI', 'http://localhost:19530')
-            milvus_token = os.getenv('MILVUS_TOKEN', '')
+            milvus_uri = os.getenv("MILVUS_URI", "http://localhost:19530")
+            milvus_token = os.getenv("MILVUS_TOKEN", "")
             connection_alias = f"lightrag_{hashstr(db_id, 6)}"
 
-            connections.connect(
-                alias=connection_alias,
-                uri=milvus_uri,
-                token=milvus_token
-            )
+            connections.connect(alias=connection_alias, uri=milvus_uri, token=milvus_token)
 
             # 删除 LightRAG 创建的三个集合
             collection_names = [f"{db_id}_chunks", f"{db_id}_relationships", f"{db_id}_entities"]
@@ -76,24 +72,28 @@ class LightRagKB(KnowledgeBase):
             logger.error(f"Failed to drop Milvus collection {db_id}: {e}")
 
         # Delete Neo4j data
-        neo4j_uri = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-        neo4j_username = os.getenv('NEO4J_USERNAME', 'neo4j')
-        neo4j_password = os.getenv('NEO4J_PASSWORD', '0123456789')
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_username = os.getenv("NEO4J_USERNAME", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "0123456789")
 
         try:
             driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_username, neo4j_password))
             with driver.session() as session:
                 # 删除带有特定 db_id 标签的节点和关系
-                session.run("""
-                    MATCH (n:`""" + db_id + """`)
+                session.run(
+                    """
+                    MATCH (n:`"""
+                    + db_id
+                    + """`)
                     DETACH DELETE n
-                """)
+                """
+                )
 
                 logger.info(f"Deleted Neo4j nodes and relationships for workspace {db_id}")
         except Exception as e:
             logger.error(f"Failed to delete Neo4j data for {db_id}: {e}")
         finally:
-            if 'driver' in locals():
+            if "driver" in locals():
                 driver.close()
 
         # Delete local files and metadata
@@ -194,6 +194,7 @@ class LightRagKB(KnowledgeBase):
                 base_url=model.base_url,
                 **kwargs,
             )
+
         return llm_model_func
 
     def _get_embedding_func(self, embed_info: dict):
@@ -211,8 +212,7 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
-    async def add_content(self, db_id: str, items: list[str],
-                         params: dict | None = None) -> list[dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -221,7 +221,7 @@ class LightRagKB(KnowledgeBase):
         if not rag:
             raise ValueError(f"Failed to get LightRAG instance for {db_id}")
 
-        content_type = params.get('content_type', 'file') if params else 'file'
+        content_type = params.get("content_type", "file") if params else "file"
         processed_items_info = []
 
         for item in items:
@@ -240,24 +240,20 @@ class LightRagKB(KnowledgeBase):
                 # 根据内容类型处理内容
                 if content_type == "file":
                     markdown_content = await process_file_to_markdown(item, params=params)
-                    markdown_content_lines = markdown_content[:100].replace('\n', ' ')
+                    markdown_content_lines = markdown_content[:100].replace("\n", " ")
                     logger.info(f"Markdown content: {markdown_content_lines}...")
                 else:  # URL
                     markdown_content = await process_url_to_markdown(item, params=params)
 
                 # 使用 LightRAG 插入内容
-                await rag.ainsert(
-                    input=markdown_content,
-                    ids=file_id,
-                    file_paths=item_path
-                )
+                await rag.ainsert(input=markdown_content, ids=file_id, file_paths=item_path)
 
                 logger.info(f"Inserted {content_type} {item} into LightRAG. Done.")
 
                 # 更新状态为完成
                 self.files_meta[file_id]["status"] = "done"
                 self._save_metadata()
-                file_record['status'] = "done"
+                file_record["status"] = "done"
 
             except Exception as e:
                 error_msg = str(e)
@@ -265,8 +261,8 @@ class LightRagKB(KnowledgeBase):
                 self.files_meta[file_id]["status"] = "failed"
                 self.files_meta[file_id]["error"] = error_msg
                 self._save_metadata()
-                file_record['status'] = "failed"
-                file_record['error'] = error_msg
+                file_record["status"] = "failed"
+                file_record["error"] = error_msg
             finally:
                 self._remove_from_processing_queue(file_id)
 
@@ -324,7 +320,7 @@ class LightRagKB(KnowledgeBase):
         if rag:
             try:
                 # 获取文档的所有 chunks
-                assert hasattr(rag.text_chunks, 'get_all'), "text_chunks does not have get_all method"
+                assert hasattr(rag.text_chunks, "get_all"), "text_chunks does not have get_all method"
                 all_chunks = await rag.text_chunks.get_all()  # type: ignore
 
                 # 筛选属于该文档的 chunks
@@ -344,7 +340,7 @@ class LightRagKB(KnowledgeBase):
 
         return {"lines": []}
 
-    async def export_data(self, db_id: str, format: str = 'csv', **kwargs) -> str:
+    async def export_data(self, db_id: str, format: str = "csv", **kwargs) -> str:
         """
         使用 LightRAG 原生功能导出知识库数据。
         [注意] 此功能当前已禁用。

@@ -1,16 +1,16 @@
-import os
+import asyncio
 import json
+import os
+from abc import ABC, abstractmethod
+
 import httpx
 import requests
-import asyncio
-from abc import abstractmethod, ABC
 
 from src import config
-from src.utils import hashstr, logger, get_docker_safe_url
+from src.utils import get_docker_safe_url, hashstr, logger
 
 
 class BaseEmbeddingModel(ABC):
-
     def __init__(self, model=None, name=None, dimension=None, url=None, base_url=None, api_key=None):
         """
         Args:
@@ -60,22 +60,18 @@ class BaseEmbeddingModel(ABC):
         task_id = None
         if len(messages) > batch_size:
             task_id = hashstr(messages)
-            self.embed_state[task_id] = {
-                'status': 'in-progress',
-                'total': len(messages),
-                'progress': 0
-            }
+            self.embed_state[task_id] = {"status": "in-progress", "total": len(messages), "progress": 0}
 
         for i in range(0, len(messages), batch_size):
-            group_msg = messages[i:i+batch_size]
+            group_msg = messages[i : i + batch_size]
             logger.info(f"Encoding [{i}/{len(messages)}] messages (bsz={batch_size})")
             response = self.encode(group_msg)
             data.extend(response)
             if task_id:
-                self.embed_state[task_id]['progress'] = i + len(group_msg)
+                self.embed_state[task_id]["progress"] = i + len(group_msg)
 
         if task_id:
-            self.embed_state[task_id]['status'] = 'completed'
+            self.embed_state[task_id]["status"] = "completed"
 
         return data
 
@@ -84,15 +80,11 @@ class BaseEmbeddingModel(ABC):
         task_id = None
         if len(messages) > batch_size:
             task_id = hashstr(messages)
-            self.embed_state[task_id] = {
-                'status': 'in-progress',
-                'total': len(messages),
-                'progress': 0
-            }
+            self.embed_state[task_id] = {"status": "in-progress", "total": len(messages), "progress": 0}
 
         tasks = []
         for i in range(0, len(messages), batch_size):
-            group_msg = messages[i:i+batch_size]
+            group_msg = messages[i : i + batch_size]
             tasks.append(self.aencode(group_msg))
 
         results = await asyncio.gather(*tasks)
@@ -100,10 +92,11 @@ class BaseEmbeddingModel(ABC):
             data.extend(res)
 
         if task_id:
-            self.embed_state[task_id]['progress'] = len(messages)
-            self.embed_state[task_id]['status'] = 'completed'
+            self.embed_state[task_id]["progress"] = len(messages)
+            self.embed_state[task_id]["status"] = "completed"
 
         return data
+
 
 class OllamaEmbedding(BaseEmbeddingModel):
     """
@@ -149,13 +142,9 @@ class OllamaEmbedding(BaseEmbeddingModel):
 
 
 class OtherEmbedding(BaseEmbeddingModel):
-
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        self.headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
 
     def build_payload(self, message: list[str] | str) -> dict:
         return {"model": self.model, "input": message}

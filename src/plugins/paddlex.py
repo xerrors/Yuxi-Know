@@ -1,30 +1,29 @@
-
-import requests
-import json
 import base64
+import json
 import os
 import time
-from typing import Optional, Any
 from pathlib import Path
+from typing import Any, Optional
+
+import requests
 
 if __name__ == "__main__":
-    from loguru import logger
     import typer
+    from loguru import logger
 else:
     from src.utils import logger
-
 
 
 class PaddleXLayoutParser:
     """PaddleX 版面解析服务客户端"""
 
     def __init__(self, base_url: str = "http://localhost:8080"):
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.endpoint = f"{self.base_url}/layout-parsing"
 
     def encode_file_to_base64(self, file_path: str) -> str:
-        with open(file_path, 'rb') as file:
-            encoded = base64.b64encode(file.read()).decode('utf-8')
+        with open(file_path, "rb") as file:
+            encoded = base64.b64encode(file.read()).decode("utf-8")
             return encoded
 
     def _process_file_input(self, file_input: str) -> str:
@@ -43,7 +42,7 @@ class PaddleXLayoutParser:
                 raise
 
         # 检查是否为URL
-        elif file_input.startswith(('http://', 'https://')):
+        elif file_input.startswith(("http://", "https://")):
             logger.info(f"🌐 检测到URL: {file_input}")
             return file_input
 
@@ -52,21 +51,23 @@ class PaddleXLayoutParser:
             logger.info(f"📝 假设为Base64编码内容，长度: {len(file_input)} 字符")
             return file_input
 
-    def layout_parsing(self,
-            file_input: str,
-            file_type: int | None = None,
-            use_textline_orientation: bool | None = None,
-            use_seal_recognition: bool | None = None,
-            use_table_recognition: bool | None = None,
-            use_formula_recognition: bool | None = None,
-            use_chart_recognition: bool | None = None,
-            use_region_detection: bool | None = None,
-            layout_threshold: float | None = None,
-            layout_nms: bool | None = None,
-            use_doc_orientation_classify: bool = True,
-            use_doc_unwarping: bool | None = False,
-            use_wired_table_cells_trans_to_html: bool = True, # 启用则直接基于有线表单元格检测结果的几何关系构建HTML。
-            **kwargs) -> dict[str, Any]:
+    def layout_parsing(
+        self,
+        file_input: str,
+        file_type: int | None = None,
+        use_textline_orientation: bool | None = None,
+        use_seal_recognition: bool | None = None,
+        use_table_recognition: bool | None = None,
+        use_formula_recognition: bool | None = None,
+        use_chart_recognition: bool | None = None,
+        use_region_detection: bool | None = None,
+        layout_threshold: float | None = None,
+        layout_nms: bool | None = None,
+        use_doc_orientation_classify: bool = True,
+        use_doc_unwarping: bool | None = False,
+        use_wired_table_cells_trans_to_html: bool = True,  # 启用则直接基于有线表单元格检测结果的几何关系构建HTML。
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         调用版面解析API：https://paddlepaddle.github.io/PaddleX/latest/pipeline_usage/tutorials/ocr_pipelines/PP-StructureV3.html#22-python
         """
@@ -102,10 +103,7 @@ class PaddleXLayoutParser:
 
         try:
             response = requests.post(
-                self.endpoint,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=300
+                self.endpoint, json=payload, headers={"Content-Type": "application/json"}, timeout=300
             )
 
             if response.status_code == 200:
@@ -132,7 +130,6 @@ class PaddleXLayoutParser:
             return {"error": str(e)}
 
 
-
 def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dict[str, Any]:
     # 基本信息
     parsed_result = {
@@ -143,7 +140,7 @@ def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dic
         "total_pages": 0,
         "pages": [],
         "full_text": "",
-        "summary": {}
+        "summary": {},
     }
 
     result_data = api_result.get("result", {})
@@ -155,7 +152,7 @@ def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dic
     parsed_result["document_info"] = {
         "type": data_info.get("type", "unknown"),
         "total_pages": data_info.get("numPages", len(layout_results)),
-        "page_dimensions": data_info.get("pages", [])
+        "page_dimensions": data_info.get("pages", []),
     }
 
     # 统计信息
@@ -168,11 +165,7 @@ def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dic
 
     # 解析每页结果
     for page_index, page_result in enumerate(layout_results):
-        page_info = {
-            "page_number": page_index + 1,
-            "content": {},
-            "statistics": {}
-        }
+        page_info = {"page_number": page_index + 1, "content": {}, "statistics": {}}
 
         # Markdown内容
         if "markdown" in page_result:
@@ -240,37 +233,28 @@ def _parse_recognition_result(api_result: dict[str, Any], file_path: str) -> dic
         "total_charts": total_charts,
         "total_seals": total_seals,
         "total_characters": len(parsed_result["full_text"]),
-        "average_elements_per_page": round(total_elements / max(1, len(layout_results)), 2)
+        "average_elements_per_page": round(total_elements / max(1, len(layout_results)), 2),
     }
 
     return parsed_result
 
 
 def analyze_document(file_path: str, base_url: str = "http://localhost:8080") -> dict[str, Any]:
-
     # 检查文件是否存在
     if not os.path.exists(file_path):
-        return {
-            "success": False,
-            "error": f"文件不存在: {file_path}",
-            "file_path": file_path
-        }
+        return {"success": False, "error": f"文件不存在: {file_path}", "file_path": file_path}
 
     # 初始化客户端
     client = PaddleXLayoutParser(base_url=base_url)
 
     # 判断文件类型
     file_ext = os.path.splitext(file_path)[1].lower()
-    if file_ext == '.pdf':
+    if file_ext == ".pdf":
         file_type = 0
-    elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']:
+    elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
         file_type = 1
     else:
-        return {
-            "success": False,
-            "error": f"不支持的文件类型: {file_ext}",
-            "file_path": file_path
-        }
+        return {"success": False, "error": f"不支持的文件类型: {file_ext}", "file_path": file_path}
 
     logger.info(f"📄 开始分析文档: {os.path.basename(file_path)}")
     logger.info(f"📏 文件大小: {os.path.getsize(file_path) / 1024 / 1024:.2f} MB")
@@ -286,7 +270,7 @@ def analyze_document(file_path: str, base_url: str = "http://localhost:8080") ->
                 "success": False,
                 "error": result.get("errorMsg", "API调用失败"),
                 "file_path": file_path,
-                "raw_result": result
+                "raw_result": result,
             }
 
         # 解析结果
@@ -294,11 +278,7 @@ def analyze_document(file_path: str, base_url: str = "http://localhost:8080") ->
         return analysis_result
 
     except Exception as e:
-        return {
-            "success": False,
-            "error": f"处理异常: {str(e)}",
-            "file_path": file_path
-        }
+        return {"success": False, "error": f"处理异常: {str(e)}", "file_path": file_path}
 
 
 def check_paddlex_health(base_url: str = "http://localhost:8080") -> bool:
@@ -318,7 +298,7 @@ def analyze_folder(input_dir: str, output_dir: str, base_url: str = "http://loca
     output_path.mkdir(parents=True, exist_ok=True)
 
     # 获取所有支持的文件
-    supported_extensions = {'.pdf', '.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'}
+    supported_extensions = {".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"}
     files = []
     for root, dirs, filenames in os.walk(input_dir):
         for filename in filenames:
@@ -343,12 +323,16 @@ def analyze_folder(input_dir: str, output_dir: str, base_url: str = "http://loca
             if result.get("success"):
                 # 保持目录结构
                 relative_path = file_path.relative_to(input_path)
-                output_file = output_path / relative_path.with_suffix('.txt')
+                output_file = output_path / relative_path.with_suffix(".txt")
                 output_file.parent.mkdir(parents=True, exist_ok=True)
 
                 # 写入文本内容
-                text_content = result.get("full_text", "未提取到内容") if result.get("success") else f"分析失败：{result.get('error', '未知错误')}"
-                with open(output_file, 'w', encoding='utf-8') as f:
+                text_content = (
+                    result.get("full_text", "未提取到内容")
+                    if result.get("success")
+                    else f"分析失败：{result.get('error', '未知错误')}"
+                )
+                with open(output_file, "w", encoding="utf-8") as f:
                     f.write(text_content)
 
                 success_count += 1

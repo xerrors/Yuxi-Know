@@ -1,10 +1,13 @@
-import time
 import hashlib
 import os
+import time
+
 from src.utils.logging_config import logger
+
 
 def is_text_pdf(pdf_path):
     import fitz
+
     doc = fitz.open(pdf_path)
     total_pages = len(doc)
     if total_pages == 0:
@@ -22,6 +25,7 @@ def is_text_pdf(pdf_path):
     # 如果超过50%的页面有文本内容，则认为是文本PDF
     return text_ratio > 0.5
 
+
 def hashstr(input_string, length=None, with_salt=False):
     """生成字符串的哈希值
     Args:
@@ -31,14 +35,14 @@ def hashstr(input_string, length=None, with_salt=False):
     """
     try:
         # 尝试直接编码
-        encoded_string = str(input_string).encode('utf-8')
+        encoded_string = str(input_string).encode("utf-8")
     except UnicodeEncodeError:
         # 如果编码失败，替换无效字符
-        encoded_string = str(input_string).encode('utf-8', errors='replace')
+        encoded_string = str(input_string).encode("utf-8", errors="replace")
 
     if with_salt:
         salt = str(time.time())
-        encoded_string = (encoded_string.decode('utf-8') + salt).encode('utf-8')
+        encoded_string = (encoded_string.decode("utf-8") + salt).encode("utf-8")
 
     hash = hashlib.md5(encoded_string).hexdigest()
     if length:

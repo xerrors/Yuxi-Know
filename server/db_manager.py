@@ -1,15 +1,17 @@
 import os
 import pathlib
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-from src import config
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from server.models import Base
-from server.models.user_model import User
-from server.models.thread_model import Thread
 from server.models.kb_models import KnowledgeDatabase, KnowledgeFile, KnowledgeNode
+from server.models.thread_model import Thread
+from server.models.user_model import User
+from src import config
 from src.utils import logger
+
 
 class DBManager:
     """数据库管理器 - 只提供基础的数据库连接和会话管理"""
@@ -64,6 +66,7 @@ class DBManager:
             return session.query(User).count() == 0
         finally:
             session.close()
+
 
 # 创建全局数据库管理器实例
 db_manager = DBManager()

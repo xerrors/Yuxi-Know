@@ -1,13 +1,15 @@
 import hashlib
 import os
-import jwt
 from datetime import datetime, timedelta
 from typing import Any
+
+import jwt
 
 # JWT配置
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "yuxi_know_secure_key")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 24 * 60 * 60  # 24小时过期
+
 
 class AuthUtils:
     """认证工具类"""

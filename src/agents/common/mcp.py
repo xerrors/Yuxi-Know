@@ -1,13 +1,13 @@
 """MCP Client setup and management for LangGraph ReAct Agent."""
 
 import traceback
-from typing import Any, cast
 from collections.abc import Callable
+from typing import Any, cast
 
-from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_mcp_adapters.client import (  # type: ignore[import-untyped]
     MultiServerMCPClient,
 )
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 from src.utils import logger
 
@@ -69,6 +69,7 @@ async def get_mcp_tools(server_name: str) -> list[Callable[..., Any]]:
     except Exception:
         logger.opt(exception=True).warning(f"Failed to load tools from MCP server '{server_name}'")
         return []
+
 
 async def get_all_mcp_tools() -> list[Callable[..., Any]]:
     """Get all tools from all configured MCP servers."""

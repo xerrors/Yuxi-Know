@@ -1,26 +1,24 @@
 import os
 import uuid
-from typing import Any, cast
 from pathlib import Path
+from typing import Any, cast
 
 from langchain_core.messages import AIMessage, ToolMessage
-from langgraph.graph import StateGraph, START, END
-from langgraph.runtime import Runtime
-from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
+from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.runtime import Runtime
 
 from src import config as sys_config
-from src.utils import logger
 from src.agents.common.base import BaseAgent
-from src.agents.common.models import load_chat_model
 from src.agents.common.mcp import get_mcp_tools
+from src.agents.common.models import load_chat_model
+from src.utils import logger
 
-
-from .state import State
 from .context import Context
+from .state import State
 from .tools import get_tools
-
 
 
 class ChatbotAgent(BaseAgent):
@@ -69,16 +67,11 @@ class ChatbotAgent(BaseAgent):
         # 使用异步调用
         response = cast(
             AIMessage,
-            await model.ainvoke(
-                [{"role": "system", "content": runtime.context.system_prompt}, *state.messages]
-            ),
+            await model.ainvoke([{"role": "system", "content": runtime.context.system_prompt}, *state.messages]),
         )
         return {"messages": [response]}
 
-
-    async def dynamic_tools_node(
-        self, state: State, runtime: Runtime[Context]
-    ) -> dict[str, list[ToolMessage]]:
+    async def dynamic_tools_node(self, state: State, runtime: Runtime[Context]) -> dict[str, list[ToolMessage]]:
         """Execute tools dynamically based on configuration.
 
         This function gets the available tools based on the current configuration
@@ -133,6 +126,7 @@ class ChatbotAgent(BaseAgent):
         """获取异步存储实例"""
         return AsyncSqliteSaver(await self.get_async_conn())
 
+
 def main():
     agent = ChatbotAgent(Context)
 
@@ -140,6 +134,7 @@ def main():
     config = {"configurable": {"thread_id": thread_id}}
 
     from src.agents.utils import agent_cli
+
     agent_cli(agent, config)
 
 

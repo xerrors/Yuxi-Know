@@ -1,25 +1,26 @@
 import os
 from pathlib import Path
 
+from langchain_core.messages import AnyMessage, SystemMessage
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 from langgraph.prebuilt import create_react_agent
-from langchain_core.messages import AnyMessage, SystemMessage
 from langgraph.runtime import get_runtime
 
 from src import config as sys_config
-from src.utils import logger
-from src.agents.common.context import BaseContext
 from src.agents.common.base import BaseAgent
+from src.agents.common.context import BaseContext
 from src.agents.common.models import load_chat_model
 from src.agents.common.tools import get_buildin_tools
-
+from src.utils import logger
 
 model = load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507")
+
 
 def prompt(state) -> list[AnyMessage]:
     runtime = get_runtime(BaseContext)
     system_msg = SystemMessage(content=runtime.context.system_prompt)
     return [system_msg] + state["messages"]
+
 
 class ReActAgent(BaseAgent):
     name = "ReAct (all tools)"
@@ -38,12 +39,7 @@ class ReActAgent(BaseAgent):
         available_tools = get_buildin_tools()
 
         sqlite_checkpointer = AsyncSqliteSaver(await aiosqlite.connect(self.workdir / "react_history.db"))
-        graph = create_react_agent(
-            model,
-            tools=available_tools,
-            checkpointer=sqlite_checkpointer,
-            prompt=prompt
-        )
+        graph = create_react_agent(model, tools=available_tools, checkpointer=sqlite_checkpointer, prompt=prompt)
         self.graph = graph
         logger.info("ReActAgent使用SQLite checkpointer构建成功")
         return graph

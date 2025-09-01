@@ -1,17 +1,19 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime
 
 from server.db_manager import db_manager
-from server.models.user_model import User, OperationLog
+from server.models.user_model import OperationLog, User
+from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_superadmin_user, oauth2_scheme
 from server.utils.auth_utils import AuthUtils
-from server.utils.auth_middleware import get_db, get_current_user, get_admin_user, get_superadmin_user, oauth2_scheme
 from server.utils.common_utils import log_operation
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
+
 
 # 请求和响应模型
 class Token(BaseModel):
@@ -21,15 +23,18 @@ class Token(BaseModel):
     username: str
     role: str
 
+
 class UserCreate(BaseModel):
     username: str
     password: str
     role: str = "user"
 
+
 class UserUpdate(BaseModel):
     username: str | None = None
     password: str | None = None
     role: str | None = None
+
 
 class UserResponse(BaseModel):
     id: int
@@ -38,9 +43,11 @@ class UserResponse(BaseModel):
     created_at: str
     last_login: str | None = None
 
+
 class InitializeAdmin(BaseModel):
     username: str
     password: str
+
 
 # =============================================================================
 # === 工具函数 ===
@@ -52,11 +59,9 @@ class InitializeAdmin(BaseModel):
 # === 认证分组 ===
 # =============================================================================
 
+
 @auth.post("/token", response_model=Token)
-async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
-):
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     # 查找用户
     user = db.query(User).filter(User.username == form_data.username).first()
 
@@ -84,8 +89,9 @@ async def login_for_access_token(
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
-        "role": user.role
+        "role": user.role,
     }
+
 
 # 路由：校验是否需要初始化管理员
 @auth.get("/check-first-run")
@@ -93,12 +99,10 @@ async def check_first_run():
     is_first_run = db_manager.check_first_run()
     return {"first_run": is_first_run}
 
+
 # 路由：初始化管理员账户
 @auth.post("/initialize", response_model=Token)
-async def initialize_admin(
-    admin_data: InitializeAdmin,
-    db: Session = Depends(get_db)
-):
+async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(get_db)):
     # 检查是否是首次运行
     if not db_manager.check_first_run():
         raise HTTPException(
@@ -110,10 +114,7 @@ async def initialize_admin(
     hashed_password = AuthUtils.hash_password(admin_data.password)
 
     new_admin = User(
-        username=admin_data.username,
-        password_hash=hashed_password,
-        role="superadmin",
-        last_login=datetime.now()
+        username=admin_data.username, password_hash=hashed_password, role="superadmin", last_login=datetime.now()
     )
 
     db.add(new_admin)
@@ -132,29 +133,30 @@ async def initialize_admin(
         "token_type": "bearer",
         "user_id": new_admin.id,
         "username": new_admin.username,
-        "role": new_admin.role
+        "role": new_admin.role,
     }
+
 
 # 路由：获取当前用户信息
 # =============================================================================
 # === 用户信息分组 ===
 # =============================================================================
 
+
 @auth.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user.to_dict()
+
 
 # 路由：创建新用户（管理员权限）
 # =============================================================================
 # === 用户管理分组 ===
 # =============================================================================
 
+
 @auth.post("/users", response_model=UserResponse)
 async def create_user(
-    user_data: UserCreate,
-    request: Request,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    user_data: UserCreate, request: Request, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user_data.username).first()
@@ -182,45 +184,30 @@ async def create_user(
             detail="管理员只能创建普通用户账户",
         )
 
-    new_user = User(
-        username=user_data.username,
-        password_hash=hashed_password,
-        role=user_data.role
-    )
+    new_user = User(username=user_data.username, password_hash=hashed_password, role=user_data.role)
 
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
     # 记录操作
-    log_operation(
-        db,
-        current_user.id,
-        "创建用户",
-        f"创建用户: {user_data.username}, 角色: {user_data.role}",
-        request
-    )
+    log_operation(db, current_user.id, "创建用户", f"创建用户: {user_data.username}, 角色: {user_data.role}", request)
 
     return new_user.to_dict()
+
 
 # 路由：获取所有用户（管理员权限）
 @auth.get("/users", response_model=list[UserResponse])
 async def read_users(
-    skip: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    skip: int = 0, limit: int = 100, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
     users = db.query(User).offset(skip).limit(limit).all()
     return [user.to_dict() for user in users]
 
+
 # 路由：获取特定用户信息（管理员权限）
 @auth.get("/users/{user_id}", response_model=UserResponse)
-async def read_user(
-    user_id: int,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
-):
+async def read_user(user_id: int, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
         raise HTTPException(
@@ -229,6 +216,7 @@ async def read_user(
         )
     return user.to_dict()
 
+
 # 路由：更新用户信息（管理员权限）
 @auth.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
@@ -236,7 +224,7 @@ async def update_user(
     user_data: UserUpdate,
     request: Request,
     current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -284,23 +272,15 @@ async def update_user(
     db.commit()
 
     # 记录操作
-    log_operation(
-        db,
-        current_user.id,
-        "更新用户",
-        f"更新用户ID {user_id}: {', '.join(update_details)}",
-        request
-    )
+    log_operation(db, current_user.id, "更新用户", f"更新用户ID {user_id}: {', '.join(update_details)}", request)
 
     return user.to_dict()
+
 
 # 路由：删除用户（管理员权限）
 @auth.delete("/users/{user_id}", response_model=dict)
 async def delete_user(
-    user_id: int,
-    request: Request,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    user_id: int, request: Request, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if user is None:
@@ -335,11 +315,7 @@ async def delete_user(
 
     # 记录操作
     log_operation(
-        db,
-        current_user.id,
-        "删除用户",
-        f"删除用户: {user.username}, ID: {user.id}, 角色: {user.role}",
-        request
+        db, current_user.id, "删除用户", f"删除用户: {user.username}, ID: {user.id}, 角色: {user.role}", request
     )
 
     # 删除用户

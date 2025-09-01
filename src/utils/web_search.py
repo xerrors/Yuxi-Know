@@ -1,6 +1,9 @@
 import os
+
 from tavily import TavilyClient
+
 from src.utils.logging_config import logger
+
 
 class WebSearcher:
     def __init__(self):
@@ -22,21 +25,19 @@ class WebSearcher:
             搜索结果列表
         """
         try:
-            search_results = self.client.search(
-                query=query,
-                search_depth="basic",
-                max_results=max_results
-            )
+            search_results = self.client.search(query=query, search_depth="basic", max_results=max_results)
 
             # 提取需要的信息
             formatted_results = []
-            for result in search_results['results'][:max_results]:
-                formatted_results.append({
-                    'title': result.get('title', ''),
-                    'content': result.get('content', ''),
-                    'url': result.get('url', ''),
-                    'score': result.get('score', 0)
-                })
+            for result in search_results["results"][:max_results]:
+                formatted_results.append(
+                    {
+                        "title": result.get("title", ""),
+                        "content": result.get("content", ""),
+                        "url": result.get("url", ""),
+                        "score": result.get("score", 0),
+                    }
+                )
 
             return formatted_results
 

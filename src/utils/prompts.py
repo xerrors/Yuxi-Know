@@ -1,7 +1,8 @@
 from datetime import datetime
 
+
 def get_system_prompt():
-    return (f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    return f"当前时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
 
 
 knowbase_qa_template = """
@@ -65,14 +66,4 @@ keywords_prompt_template = """
 <文本>{text}</文本>
 """
 
-HYDE_PROMPT_TEMPLATE = (
-    "Please write a passage to answer the question\n"
-    "Try to include as many key details as possible.\n"
-    "\n"
-    "\n"
-    "{context_str}\n"
-    "\n"
-    "{query}\n"
-    "\n"
-    'Passage:\n'
-)
+HYDE_PROMPT_TEMPLATE = "Please write a passage to answer the question\nTry to include as many key details as possible.\n\n\n{context_str}\n\n{query}\n\nPassage:\n"

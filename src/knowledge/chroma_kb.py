@@ -1,21 +1,26 @@
+import json
 import os
 import time
 import traceback
-import json
-from pathlib import Path
-from typing import Optional, Any
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 import chromadb
+from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 from chromadb.config import Settings
-from chromadb.api.types import EmbeddingFunction, Documents, Embeddings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
-from src.knowledge.indexing import process_url_to_markdown, process_file_to_markdown
-from src.knowledge.knowledge_base import KnowledgeBase
-from src.knowledge.kb_utils import split_text_into_chunks, split_text_into_qa_chunks, prepare_item_metadata, get_embedding_config
-from src.utils import logger, hashstr
 from src import config
+from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
+from src.knowledge.kb_utils import (
+    get_embedding_config,
+    prepare_item_metadata,
+    split_text_into_chunks,
+    split_text_into_qa_chunks,
+)
+from src.knowledge.knowledge_base import KnowledgeBase
+from src.utils import hashstr, logger
 
 
 class ChromaKB(KnowledgeBase):
@@ -40,8 +45,7 @@ class ChromaKB(KnowledgeBase):
 
         # 初始化 ChromaDB 客户端
         self.chroma_client = chromadb.PersistentClient(
-            path=self.chroma_db_path,
-            settings=Settings(anonymized_telemetry=False)
+            path=self.chroma_db_path, settings=Settings(anonymized_telemetry=False)
         )
 
         # 存储集合映射 {db_id: collection}
@@ -68,10 +72,7 @@ class ChromaKB(KnowledgeBase):
 
         try:
             # 尝试获取现有集合
-            collection = self.chroma_client.get_collection(
-                name=collection_name,
-                embedding_function=embedding_function
-            )
+            collection = self.chroma_client.get_collection(name=collection_name, embedding_function=embedding_function)
             logger.info(f"Retrieved existing collection: {collection_name}")
 
             # 检查现有集合的配置是否匹配当前的 embed_info
@@ -82,7 +83,9 @@ class ChromaKB(KnowledgeBase):
             logger.debug(f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'.")
             # 如果模型不匹配，删除现有集合并重新创建
             if current_model != expected_model:
-                logger.warning(f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'. Recreating collection.")
+                logger.warning(
+                    f"Collection {collection_name} uses model '{current_model}', but expected '{expected_model}'. Recreating collection."
+                )
                 self.chroma_client.delete_collection(name=collection_name)
                 raise Exception("Model mismatch, recreating collection")
 
@@ -92,12 +95,10 @@ class ChromaKB(KnowledgeBase):
             collection_metadata = {
                 "db_id": db_id,
                 "created_at": datetime.now().isoformat(),
-                "embedding_model": embed_info.get("name") if embed_info else "default"
+                "embedding_model": embed_info.get("name") if embed_info else "default",
             }
             collection = self.chroma_client.create_collection(
-                name=collection_name,
-                embedding_function=embedding_function,
-                metadata=collection_metadata
+                name=collection_name, embedding_function=embedding_function, metadata=collection_metadata
             )
             logger.info(f"Created new collection: {collection_name}")
 
@@ -114,7 +115,7 @@ class ChromaKB(KnowledgeBase):
         return OpenAIEmbeddingFunction(
             model_name=config_dict["model"],
             api_key=config_dict["api_key"],
-            api_base=config_dict["base_url"].replace('/embeddings', '')
+            api_base=config_dict["base_url"].replace("/embeddings", ""),
         )
 
     async def _get_chroma_collection(self, db_id: str):
@@ -141,11 +142,11 @@ class ChromaKB(KnowledgeBase):
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
         # 检查是否使用QA分割模式
-        use_qa_split = params.get('use_qa_split', False)
+        use_qa_split = params.get("use_qa_split", False)
 
         if use_qa_split:
             # 使用QA分割模式
-            qa_separator = params.get('qa_separator', '\n\n\n')
+            qa_separator = params.get("qa_separator", "\n\n\n")
             chunks = split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
         else:
             # 使用传统分割模式
@@ -157,13 +158,12 @@ class ChromaKB(KnowledgeBase):
                 "source": chunk["source"],
                 "chunk_id": chunk["chunk_id"],
                 "full_doc_id": file_id,
-                "chunk_type": chunk.get("chunk_type", "normal")  # 添加chunk类型标识
+                "chunk_type": chunk.get("chunk_type", "normal"),  # 添加chunk类型标识
             }
 
         return chunks
 
-    async def add_content(self, db_id: str, items: list[str],
-                         params:dict | None) -> list[dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -172,7 +172,7 @@ class ChromaKB(KnowledgeBase):
         if not collection:
             raise ValueError(f"Failed to get ChromaDB collection for {db_id}")
 
-        content_type = params.get('content_type', 'file') if params else 'file'
+        content_type = params.get("content_type", "file") if params else "file"
         processed_items_info = []
 
         for item in items:
@@ -205,24 +205,20 @@ class ChromaKB(KnowledgeBase):
                     ids = [chunk["id"] for chunk in chunks]
 
                     # 插入到 ChromaDB
-                    collection.add(
-                        documents=documents,
-                        metadatas=metadatas,
-                        ids=ids
-                    )
+                    collection.add(documents=documents, metadatas=metadatas, ids=ids)
 
                 logger.info(f"Inserted {content_type} {item} into ChromaDB. Done.")
 
                 # 更新状态为完成
                 self.files_meta[file_id]["status"] = "done"
                 self._save_metadata()
-                file_record['status'] = "done"
+                file_record["status"] = "done"
 
             except Exception as e:
                 logger.error(f"处理{content_type} {item} 失败: {e}, {traceback.format_exc()}")
                 self.files_meta[file_id]["status"] = "failed"
                 self._save_metadata()
-                file_record['status'] = "failed"
+                file_record["status"] = "failed"
             finally:
                 self._remove_from_processing_queue(file_id)
 
@@ -241,9 +237,7 @@ class ChromaKB(KnowledgeBase):
             similarity_threshold = kwargs.get("similarity_threshold", 0.0)
 
             results = collection.query(
-                query_texts=[query_text],
-                n_results=top_k,
-                include=["documents", "metadatas", "distances"]
+                query_texts=[query_text], n_results=top_k, include=["documents", "metadatas", "distances"]
             )
 
             if not results or not results.get("documents") or not results["documents"][0]:
@@ -262,14 +256,10 @@ class ChromaKB(KnowledgeBase):
 
                 metadata = metadatas[i] if i < len(metadatas) else {}
                 # 确保 file_id 在元数据中，并使用统一的键名
-                if 'full_doc_id' in metadata:
-                    metadata['file_id'] = metadata.pop('full_doc_id')
+                if "full_doc_id" in metadata:
+                    metadata["file_id"] = metadata.pop("full_doc_id")
 
-                retrieved_chunks.append({
-                    "content": doc,
-                    "metadata": metadata,
-                    "score": similarity
-                })
+                retrieved_chunks.append({"content": doc, "metadata": metadata, "score": similarity})
 
             logger.debug(f"ChromaDB query response: {len(retrieved_chunks)} chunks found (after similarity filtering)")
             return retrieved_chunks
@@ -284,10 +274,7 @@ class ChromaKB(KnowledgeBase):
         if collection:
             try:
                 # 查找所有相关的chunks
-                results = collection.get(
-                    where={"full_doc_id": file_id},
-                    include=["metadatas"]
-                )
+                results = collection.get(where={"full_doc_id": file_id}, include=["metadatas"])
 
                 # 删除所有相关chunks
                 if results and results.get("ids"):
@@ -312,10 +299,7 @@ class ChromaKB(KnowledgeBase):
         if collection:
             try:
                 # 获取文档的所有chunks
-                results = collection.get(
-                    where={"full_doc_id": file_id},
-                    include=["documents", "metadatas"]
-                )
+                results = collection.get(where={"full_doc_id": file_id}, include=["documents", "metadatas"])
 
                 # 构建chunks数据
                 doc_chunks = []
@@ -325,7 +309,9 @@ class ChromaKB(KnowledgeBase):
                             "id": chunk_id,
                             "content": results["documents"][i] if i < len(results["documents"]) else "",
                             "metadata": results["metadatas"][i] if i < len(results["metadatas"]) else {},
-                            "chunk_order_index": results["metadatas"][i].get("chunk_index", i) if i < len(results["metadatas"]) else i
+                            "chunk_order_index": results["metadatas"][i].get("chunk_index", i)
+                            if i < len(results["metadatas"])
+                            else i,
                         }
                         doc_chunks.append(chunk_data)
 

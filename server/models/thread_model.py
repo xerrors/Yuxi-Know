@@ -1,13 +1,14 @@
-from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.mysql import JSON
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from server.models import Base
 
 
 class Thread(Base):
     """对话线程表"""
+
     __tablename__ = "thread"
 
     id = Column(String(64), primary_key=True, index=True, comment="线程ID")

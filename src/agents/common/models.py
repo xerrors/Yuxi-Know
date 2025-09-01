@@ -1,13 +1,12 @@
 import os
 import traceback
 
-from src import config
-from src.utils import get_docker_safe_url
-from src.models import get_custom_model
 from langchain_core.language_models import BaseChatModel
 from pydantic import SecretStr
 
-
+from src import config
+from src.models import get_custom_model
+from src.utils import get_docker_safe_url
 
 
 def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
@@ -18,6 +17,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
 
     if provider == "custom":
         from langchain_openai import ChatOpenAI
+
         model_info = get_custom_model(model)
         api_key = model_info.get("api_key") or "custom_model"
         base_url = get_docker_safe_url(model_info["api_base"])
@@ -34,6 +34,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
 
     if provider in ["deepseek", "dashscope"]:
         from langchain_deepseek import ChatDeepSeek
+
         return ChatDeepSeek(
             model=model,
             api_key=SecretStr(api_key),
@@ -43,6 +44,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
 
     elif provider == "together":
         from langchain_together import ChatTogether
+
         return ChatTogether(
             model=model,
             api_key=SecretStr(api_key),
@@ -52,6 +54,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
     else:
         try:  # 其他模型，默认使用OpenAIBase, like openai, zhipuai
             from langchain_openai import ChatOpenAI
+
             return ChatOpenAI(
                 model=model,
                 api_key=SecretStr(api_key),

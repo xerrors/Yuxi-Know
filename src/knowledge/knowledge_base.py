@@ -1,27 +1,30 @@
-import os
 import json
+import os
 import time
 from abc import ABC, abstractmethod
-from typing import Any
 from collections.abc import AsyncGenerator
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from src.utils import logger
 
 
 class KnowledgeBaseException(Exception):
     """知识库统一异常基类"""
+
     pass
 
 
 class KBNotFoundError(KnowledgeBaseException):
     """知识库不存在错误"""
+
     pass
 
 
 class KBOperationError(KnowledgeBaseException):
     """知识库操作错误"""
+
     pass
 
 
@@ -84,8 +87,14 @@ class KnowledgeBase(ABC):
         """
         pass
 
-    def create_database(self, database_name: str, description: str,
-                       embed_info: dict | None = None, llm_info: dict | None = None, **kwargs) -> dict:
+    def create_database(
+        self,
+        database_name: str,
+        description: str,
+        embed_info: dict | None = None,
+        llm_info: dict | None = None,
+        **kwargs,
+    ) -> dict:
         """
         创建数据库
 
@@ -110,7 +119,7 @@ class KnowledgeBase(ABC):
             "embed_info": embed_info,
             "llm_info": llm_info,
             "metadata": kwargs,
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
         }
         self._save_metadata()
 
@@ -137,8 +146,7 @@ class KnowledgeBase(ABC):
         """
         if db_id in self.databases_meta:
             # 删除相关文件记录
-            files_to_delete = [fid for fid, finfo in self.files_meta.items()
-                             if finfo.get("database_id") == db_id]
+            files_to_delete = [fid for fid, finfo in self.files_meta.items() if finfo.get("database_id") == db_id]
             for file_id in files_to_delete:
                 del self.files_meta[file_id]
 
@@ -150,6 +158,7 @@ class KnowledgeBase(ABC):
         working_dir = os.path.join(self.work_dir, db_id)
         if os.path.exists(working_dir):
             import shutil
+
             try:
                 shutil.rmtree(working_dir)
             except Exception as e:
@@ -158,8 +167,7 @@ class KnowledgeBase(ABC):
         return {"message": "删除成功"}
 
     @abstractmethod
-    async def add_content(self, db_id: str, items: list[str],
-                         params: dict | None = None) -> list[dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """
         添加内容（文件/URL）
 
@@ -188,7 +196,7 @@ class KnowledgeBase(ABC):
         """
         pass
 
-    async def export_data(self, db_id: str, format: str = 'zip', **kwargs) -> str:
+    async def export_data(self, db_id: str, format: str = "zip", **kwargs) -> str:
         pass
 
     def query(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
@@ -204,6 +212,7 @@ class KnowledgeBase(ABC):
             一个包含字典的列表，每个字典代表一个检索到的文档块。
         """
         import asyncio
+
         logger.warning("query is deprecated, use aquery instead")
         return asyncio.run(self.aquery(query_text, db_id, **kwargs))
 
@@ -236,7 +245,7 @@ class KnowledgeBase(ABC):
                     "path": file_info.get("path", ""),
                     "type": file_info.get("file_type", ""),
                     "status": file_info.get("status", "done"),
-                    "created_at": file_info.get("created_at", time.time())
+                    "created_at": file_info.get("created_at", time.time()),
                 }
 
         # 按创建时间倒序排序文件列表
@@ -272,7 +281,7 @@ class KnowledgeBase(ABC):
                         "path": file_info.get("path", ""),
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
-                        "created_at": file_info.get("created_at", time.time())
+                        "created_at": file_info.get("created_at", time.time()),
                     }
 
             # 按创建时间倒序排序文件列表
@@ -323,8 +332,6 @@ class KnowledgeBase(ABC):
         with cls._processing_lock:
             return file_id in cls._processing_files
 
-
-
     def _check_and_fix_processing_status(self, db_id: str) -> None:
         """
         检查并修复异常的processing状态
@@ -338,14 +345,16 @@ class KnowledgeBase(ABC):
 
             # 检查该数据库下所有processing状态的文件
             for file_id, file_info in self.files_meta.items():
-                if (file_info.get("database_id") == db_id and
-                    file_info.get("status") == "processing"):
-
+                if file_info.get("database_id") == db_id and file_info.get("status") == "processing":
                     # 检查文件是否真的在处理队列中
                     if not self._is_file_in_processing_queue(file_id):
-                        logger.warning(f"File {file_id} has processing status but is not in processing queue, marking as error")
+                        logger.warning(
+                            f"File {file_id} has processing status but is not in processing queue, marking as error"
+                        )
                         self.files_meta[file_id]["status"] = "error"
-                        self.files_meta[file_id]["error"] = "Processing interrupted - file not found in processing queue"
+                        self.files_meta[file_id]["error"] = (
+                            "Processing interrupted - file not found in processing queue"
+                        )
                         status_changed = True
 
             # 如果有状态变更，保存元数据
@@ -430,16 +439,18 @@ class KnowledgeBase(ABC):
         """
         retrievers = {}
         for db_id, meta in self.databases_meta.items():
+
             def make_retriever(db_id):
                 async def retriever(query_text):
                     return await self.aquery(query_text, db_id)
+
                 return retriever
 
             retrievers[db_id] = {
                 "name": meta["name"],
                 "description": meta["description"],
                 "retriever": make_retriever(db_id),
-                "metadata": meta
+                "metadata": meta,
             }
         return retrievers
 
@@ -448,7 +459,7 @@ class KnowledgeBase(ABC):
         meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
         if os.path.exists(meta_file):
             try:
-                with open(meta_file, encoding='utf-8') as f:
+                with open(meta_file, encoding="utf-8") as f:
                     data = json.load(f)
                     self.databases_meta = data.get("databases", {})
                     self.files_meta = data.get("files", {})
@@ -464,9 +475,9 @@ class KnowledgeBase(ABC):
                 "databases": self.databases_meta,
                 "files": self.files_meta,
                 "kb_type": self.kb_type,
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().isoformat(),
             }
-            with open(meta_file, 'w', encoding='utf-8') as f:
+            with open(meta_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"Failed to save {self.kb_type} metadata: {e}")

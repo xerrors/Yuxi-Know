@@ -1,16 +1,17 @@
-import os
 import asyncio
+import os
 from pathlib import Path
+
 from langchain.schema.document import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
-    TextLoader,
-    PyPDFLoader,
-    Docx2txtLoader,
-    UnstructuredMarkdownLoader,
-    UnstructuredHTMLLoader,
     CSVLoader,
-    JSONLoader
+    Docx2txtLoader,
+    JSONLoader,
+    PyPDFLoader,
+    TextLoader,
+    UnstructuredHTMLLoader,
+    UnstructuredMarkdownLoader,
 )
 
 from src.utils import hashstr, logger
@@ -31,22 +32,22 @@ def chunk_with_parser(file_path, params=None):
     file_type = Path(file_path).suffix.lower()
 
     # 选择合适的加载器
-    if file_type in ['.txt']:
+    if file_type in [".txt"]:
         loader = TextLoader(file_path)
 
-    elif file_type in ['.md']:
+    elif file_type in [".md"]:
         loader = UnstructuredMarkdownLoader(file_path)
 
-    elif file_type in ['.docx', '.doc']:
+    elif file_type in [".docx", ".doc"]:
         loader = Docx2txtLoader(file_path)
 
-    elif file_type in ['.html', '.htm']:
+    elif file_type in [".html", ".htm"]:
         loader = UnstructuredHTMLLoader(file_path)
 
-    elif file_type in ['.json']:
+    elif file_type in [".json"]:
         loader = JSONLoader(file_path, jq_schema=".")
 
-    elif file_type in ['.csv']:
+    elif file_type in [".csv"]:
         loader = CSVLoader(file_path)
 
     else:
@@ -73,6 +74,7 @@ def chunk_with_parser(file_path, params=None):
 
     return nodes
 
+
 def chunk_text(text, params=None):
     """
     将文本切分成固定大小的块
@@ -83,9 +85,7 @@ def chunk_text(text, params=None):
 
     # 创建文本分割器
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        separators=["\n\n", "\n", ".", " ", ""]
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap, separators=["\n\n", "\n", ".", " ", ""]
     )
 
     # 分割文档
@@ -95,8 +95,10 @@ def chunk_text(text, params=None):
     nodes = [{"text": node, "metadata": {"chunk_idx": i}} for i, node in enumerate(nodes)]
     return nodes
 
+
 def chunk(text_or_path, params=None):
     raise NotImplementedError("chunk is deprecated, use chunk_with_parser or chunk_text instead")
+
 
 def pdfreader(file_path, params=None):
     """读取PDF文件并返回text文本"""
@@ -114,6 +116,7 @@ def pdfreader(file_path, params=None):
     text = "\n\n".join([d.page_content for d in docs])
     return text
 
+
 def plainreader(file_path):
     """读取普通文本文件并返回text文本"""
     assert os.path.exists(file_path), "File not found"
@@ -123,6 +126,7 @@ def plainreader(file_path):
     docs = loader.load()
     text = "\n\n".join([d.page_content for d in docs])
     return text
+
 
 def parse_pdf(file, params=None):
     """
@@ -149,14 +153,17 @@ def parse_pdf(file, params=None):
     try:
         if opt_ocr == "onnx_rapid_ocr":
             from src.plugins import ocr
+
             return ocr.process_pdf(file, params=params)
 
         elif opt_ocr == "mineru_ocr":
             from src.plugins import ocr
+
             return ocr.process_file_mineru(file, params=params)
 
         elif opt_ocr == "paddlex_ocr":
             from src.plugins import ocr
+
             return ocr.process_file_paddlex(file, params=params)
 
         else:
@@ -167,11 +174,7 @@ def parse_pdf(file, params=None):
         raise
     except Exception as e:
         logger.error(f"PDF parsing failed: {str(e)}")
-        raise OCRServiceException(
-            f"PDF解析失败: {str(e)}",
-            opt_ocr,
-            "parsing_failed"
-        )
+        raise OCRServiceException(f"PDF解析失败: {str(e)}", opt_ocr, "parsing_failed")
 
 
 def parse_image(file, params=None):
@@ -190,14 +193,17 @@ def parse_image(file, params=None):
     try:
         if opt_ocr == "onnx_rapid_ocr":
             from src.plugins import ocr
+
             return ocr.process_image(file, params=params)
 
         elif opt_ocr == "mineru_ocr":
             from src.plugins import ocr
+
             return ocr.process_file_mineru(file, params=params)
 
         elif opt_ocr == "paddlex_ocr":
             from src.plugins import ocr
+
             return ocr.process_file_paddlex(file, params=params)
 
         else:
@@ -208,17 +214,16 @@ def parse_image(file, params=None):
         raise
     except Exception as e:
         logger.error(f"Image parsing failed: {str(e)}")
-        raise OCRServiceException(
-            f"Image解析失败: {str(e)}",
-            opt_ocr,
-            "parsing_failed"
-        )
+        raise OCRServiceException(f"Image解析失败: {str(e)}", opt_ocr, "parsing_failed")
+
 
 async def parse_pdf_async(file, params=None):
     return await asyncio.to_thread(parse_pdf, file, params=params)
 
+
 async def parse_image_async(file, params=None):
     return await asyncio.to_thread(parse_image, file, params=params)
+
 
 async def process_file_to_markdown(file_path: str, params: dict | None = None) -> str:
     """
@@ -234,40 +239,43 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
     file_path_obj = Path(file_path)
     file_ext = file_path_obj.suffix.lower()
 
-    if file_ext == '.pdf':
+    if file_ext == ".pdf":
         # 使用 OCR 处理 PDF
         text = await parse_pdf_async(str(file_path_obj), params=params)
         return f"# {file_path_obj.name}\n\n{text}"
 
-    elif file_ext in ['.txt', '.md']:
+    elif file_ext in [".txt", ".md"]:
         # 直接读取文本文件
-        with open(file_path_obj, encoding='utf-8') as f:
+        with open(file_path_obj, encoding="utf-8") as f:
             content = f.read()
         return f"# {file_path_obj.name}\n\n{content}"
 
-    elif file_ext in ['.doc', '.docx']:
+    elif file_ext in [".doc", ".docx"]:
         # 处理 Word 文档
         from docx import Document  # type: ignore
+
         doc = Document(file_path_obj)
-        text = '\n'.join([para.text for para in doc.paragraphs])
+        text = "\n".join([para.text for para in doc.paragraphs])
         return f"# {file_path_obj.name}\n\n{text}"
 
-    elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']:
+    elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
         # 使用 OCR 处理图片
         text = await parse_image_async(str(file_path_obj), params=params)
         return f"# {file_path_obj.name}\n\n{text}"
 
-    elif file_ext in ['.html', '.htm']:
+    elif file_ext in [".html", ".htm"]:
         # 使用 BeautifulSoup 处理 HTML 文件
         from markdownify import markdownify as md
-        with open(file_path_obj, encoding='utf-8') as f:
+
+        with open(file_path_obj, encoding="utf-8") as f:
             content = f.read()
         text = md(content, heading_style="ATX")
         return f"# {file_path_obj.name}\n\n{text}"
 
-    elif file_ext == '.csv':
+    elif file_ext == ".csv":
         # 处理 CSV 文件
         import pandas as pd
+
         df = pd.read_csv(file_path_obj)
         # 将每一行数据与表头组合成独立的表格
         markdown_content = f"# {file_path_obj.name}\n\n"
@@ -280,9 +288,10 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
         return markdown_content.strip()
 
-    elif file_ext in ['.xls', '.xlsx']:
+    elif file_ext in [".xls", ".xlsx"]:
         # 处理 Excel 文件
         import pandas as pd
+
         # 读取所有工作表
         excel_file = pd.ExcelFile(file_path_obj)
         markdown_content = f"# {file_path_obj.name}\n\n"
@@ -300,10 +309,11 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
         return markdown_content.strip()
 
-    elif file_ext == '.json':
+    elif file_ext == ".json":
         # 处理 JSON 文件
         import json
-        with open(file_path_obj, encoding='utf-8') as f:
+
+        with open(file_path_obj, encoding="utf-8") as f:
             data = json.load(f)
         # 将 JSON 数据格式化为 markdown 代码块
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
@@ -312,6 +322,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
     else:
         # 尝试作为文本文件读取
         raise ValueError(f"Unsupported file type: {file_ext}")
+
 
 async def process_url_to_markdown(url: str, params: dict | None = None) -> str:
     """
@@ -329,10 +340,9 @@ async def process_url_to_markdown(url: str, params: dict | None = None) -> str:
 
     try:
         response = requests.get(url, timeout=30)
-        soup = BeautifulSoup(response.content, 'html.parser')
+        soup = BeautifulSoup(response.content, "html.parser")
         text_content = soup.get_text()
         return f"# {url}\n\n{text_content}"
     except Exception as e:
         logger.error(f"Failed to process URL {url}: {e}")
         return f"# {url}\n\nFailed to process URL: {e}"
-

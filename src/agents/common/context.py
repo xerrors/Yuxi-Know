@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import os
-import yaml
 import uuid
-from dataclasses import dataclass, field, fields, MISSING
+from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
-from typing import get_origin, get_args
+from typing import get_args, get_origin
+
+import yaml
 
 from src import config as sys_config
 from src.utils import logger
@@ -32,28 +33,17 @@ class BaseContext:
 
     thread_id: str = field(
         default_factory=lambda: str(uuid.uuid4()),
-        metadata={
-            "name": "线程ID",
-            "configurable": False,
-            "description": "用来描述智能体的角色和行为"
-        },
+        metadata={"name": "线程ID", "configurable": False, "description": "用来描述智能体的角色和行为"},
     )
 
     user_id: str = field(
         default_factory=lambda: str(uuid.uuid4()),
-        metadata={
-            "name": "用户ID",
-            "configurable": False,
-            "description": "用来描述智能体的角色和行为"
-        },
+        metadata={"name": "用户ID", "configurable": False, "description": "用来描述智能体的角色和行为"},
     )
 
     system_prompt: str = field(
         default="You are a helpful assistant.",
-        metadata={
-            "name": "系统提示词",
-            "description": "用来描述智能体的角色和行为"
-        },
+        metadata={"name": "系统提示词", "description": "用来描述智能体的角色和行为"},
     )
 
     @classmethod
@@ -66,7 +56,7 @@ class BaseContext:
         if module_name is not None and os.path.exists(config_file_path):
             file_config = {}
             try:
-                with open(config_file_path, encoding='utf-8') as f:
+                with open(config_file_path, encoding="utf-8") as f:
                     file_config = yaml.safe_load(f) or {}
             except Exception as e:
                 logger.error(f"加载智能体配置文件出错: {e}")
@@ -92,7 +82,7 @@ class BaseContext:
             config_file_path = Path(sys_config.save_dir) / "agents" / module_name / "config.yaml"
             # 确保目录存在
             os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
-            with open(config_file_path, 'w', encoding='utf-8') as f:
+            with open(config_file_path, "w", encoding="utf-8") as f:
                 yaml.dump(configurable_config, f, indent=2, allow_unicode=True)
 
             return True
@@ -118,7 +108,11 @@ class BaseContext:
                         "type": type_name,
                         "name": f.metadata.get("name", f.name),
                         "options": f.metadata.get("options", []),
-                        "default": f.default if f.default is not MISSING else f.default_factory() if f.default_factory is not MISSING else None,
+                        "default": f.default
+                        if f.default is not MISSING
+                        else f.default_factory()
+                        if f.default_factory is not MISSING
+                        else None,
                         "description": f.metadata.get("description", ""),
                         "template_metadata": template_metadata,  # Annotated 的额外元数据
                     }
@@ -132,8 +126,8 @@ class BaseContext:
         if get_origin(field_type) is not None:
             # 处理泛型类型如 list[str], Annotated[str, {...}]
             origin = get_origin(field_type)
-            if hasattr(origin, '__name__'):
-                if origin.__name__ == 'Annotated':
+            if hasattr(origin, "__name__"):
+                if origin.__name__ == "Annotated":
                     # Annotated 类型，获取真实类型
                     args = get_args(field_type)
                     if args:
@@ -141,7 +135,7 @@ class BaseContext:
                 return origin.__name__
             else:
                 return str(origin)
-        elif hasattr(field_type, '__name__'):
+        elif hasattr(field_type, "__name__"):
             return field_type.__name__
         else:
             return str(field_type)
@@ -151,7 +145,7 @@ class BaseContext:
         """从 Annotated 类型中提取模板元数据"""
         if get_origin(field_type) is not None:
             origin = get_origin(field_type)
-            if hasattr(origin, '__name__') and origin.__name__ == 'Annotated':
+            if hasattr(origin, "__name__") and origin.__name__ == "Annotated":
                 args = get_args(field_type)
                 if len(args) > 1:
                     # 查找包含 __template_metadata__ 的字典

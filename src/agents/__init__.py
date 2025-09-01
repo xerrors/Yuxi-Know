@@ -3,6 +3,7 @@ import asyncio
 from .chatbot.graph import ChatbotAgent
 from .react.graph import ReActAgent
 
+
 class AgentManager:
     def __init__(self):
         self._classes = {}

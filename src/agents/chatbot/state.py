@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Annotated
 
 from langchain_core.messages import AnyMessage
 from langgraph.graph import add_messages
-from typing import Annotated
 
 
 @dataclass
@@ -17,6 +17,4 @@ class State:
     This class is used to define the initial state and structure of incoming data.
     """
 
-    messages: Annotated[Sequence[AnyMessage], add_messages] = field(
-        default_factory=list
-    )
+    messages: Annotated[Sequence[AnyMessage], add_messages] = field(default_factory=list)

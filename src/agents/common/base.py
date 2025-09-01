@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+
 from langgraph.graph.state import CompiledStateGraph
 
-from src.utils import logger
 from src.agents.common.context import BaseContext
+from src.utils import logger
 
 
 class BaseAgent:
-
     """
     定义一个基础 Agent 供 各类 graph 继承
     """
@@ -23,7 +23,7 @@ class BaseAgent:
     @property
     def module_name(self) -> str:
         """Get the module name of the agent class."""
-        return self.__class__.__module__.split('.')[-2]
+        return self.__class__.__module__.split(".")[-2]
 
     @property
     def id(self) -> str:
@@ -42,18 +42,20 @@ class BaseAgent:
     async def get_config(self):
         return self.context_schema.from_file(module_name=self.module_name)
 
-    async def stream_values(self, messages: list[str], input_context = None, **kwargs):
+    async def stream_values(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         for event in graph.astream({"messages": messages}, stream_mode="values", context=context):
             yield event["messages"]
 
-    async def stream_messages(self, messages: list[str], input_context = None, **kwargs):
+    async def stream_messages(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         logger.debug(f"stream_messages: {context}")
         # TODO 的 Checkpointer 似乎还没有适配最新的 Context API
-        async for msg, metadata in graph.astream({"messages": messages}, stream_mode="messages", context=context, config={"configurable": input_context}):
+        async for msg, metadata in graph.astream(
+            {"messages": messages}, stream_mode="messages", context=context, config={"configurable": input_context}
+        ):
             yield msg, metadata
 
     async def check_checkpointer(self):
@@ -76,12 +78,12 @@ class BaseAgent:
 
             result = []
             if state:
-                messages = state.values.get('messages', [])
+                messages = state.values.get("messages", [])
                 for msg in messages:
-                    if hasattr(msg, 'model_dump'):
+                    if hasattr(msg, "model_dump"):
                         msg_dict = msg.model_dump()  # 转换成字典
                     else:
-                        msg_dict = dict(msg) if hasattr(msg, '__dict__') else {"content": str(msg)}
+                        msg_dict = dict(msg) if hasattr(msg, "__dict__") else {"content": str(msg)}
                     result.append(msg_dict)
 
             return result

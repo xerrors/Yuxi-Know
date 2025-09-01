@@ -1,12 +1,12 @@
-import os
-import json
-import time
 import asyncio
-from typing import Any
+import json
+import os
+import time
 from datetime import datetime
+from typing import Any
 
-from src.knowledge.knowledge_base import KnowledgeBase, KBNotFoundError, KBOperationError
 from src.knowledge.kb_factory import KnowledgeBaseFactory
+from src.knowledge.knowledge_base import KBNotFoundError, KBOperationError, KnowledgeBase
 from src.utils import logger
 
 
@@ -49,7 +49,7 @@ class KnowledgeBaseManager:
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
         if os.path.exists(meta_file):
             try:
-                with open(meta_file, encoding='utf-8') as f:
+                with open(meta_file, encoding="utf-8") as f:
                     data = json.load(f)
                     self.global_databases_meta = data.get("databases", {})
                 logger.info(f"Loaded global metadata for {len(self.global_databases_meta)} databases")
@@ -59,12 +59,8 @@ class KnowledgeBaseManager:
     def _save_global_metadata(self):
         """保存全局元数据"""
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
-        data = {
-            "databases": self.global_databases_meta,
-            "updated_at": datetime.now().isoformat(),
-            "version": "2.0"
-        }
-        with open(meta_file, 'w', encoding='utf-8') as f:
+        data = {"databases": self.global_databases_meta, "updated_at": datetime.now().isoformat(), "version": "2.0"}
+        with open(meta_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
     def _initialize_existing_kbs(self):
@@ -140,7 +136,9 @@ class KnowledgeBaseManager:
 
         return {"databases": all_databases}
 
-    async def create_database(self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs) -> dict:
+    async def create_database(
+        self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs
+    ) -> dict:
         """
         创建数据库
 
@@ -160,8 +158,7 @@ class KnowledgeBaseManager:
 
         kb_instance = self._get_or_create_kb_instance(kb_type)
 
-        db_info = kb_instance.create_database(database_name, description,
-                                            embed_info, **kwargs)
+        db_info = kb_instance.create_database(database_name, description, embed_info, **kwargs)
         db_id = db_info["db_id"]
 
         async with self._metadata_lock:
@@ -170,7 +167,7 @@ class KnowledgeBaseManager:
                 "description": description,
                 "kb_type": kb_type,
                 "created_at": datetime.now().isoformat(),
-                "additional_params": kwargs.copy()
+                "additional_params": kwargs.copy(),
             }
             self._save_global_metadata()
 
@@ -203,7 +200,7 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         return await kb_instance.aquery(query_text, db_id, **kwargs)
 
-    async def export_data(self, db_id: str, format: str = 'zip', **kwargs) -> str:
+    async def export_data(self, db_id: str, format: str = "zip", **kwargs) -> str:
         """导出知识库数据"""
         kb_instance = self._get_kb_for_database(db_id)
         return await kb_instance.export_data(db_id, format=format, **kwargs)
@@ -294,17 +291,13 @@ class KnowledgeBaseManager:
             info[kb_type] = {
                 "work_dir": kb_instance.work_dir,
                 "database_count": len(kb_instance.databases_meta),
-                "file_count": len(kb_instance.files_meta)
+                "file_count": len(kb_instance.files_meta),
             }
         return info
 
     def get_statistics(self) -> dict:
         """获取统计信息"""
-        stats = {
-            "total_databases": len(self.global_databases_meta),
-            "kb_types": {},
-            "total_files": 0
-        }
+        stats = {"total_databases": len(self.global_databases_meta), "kb_types": {}, "total_files": 0}
 
         # 按知识库类型统计
         for db_meta in self.global_databases_meta.values():
@@ -352,7 +345,7 @@ class KnowledgeBaseManager:
             kb_instance = self._get_kb_for_database(db_id)
 
             # 如果不是 LightRagKB 实例，返回错误
-            if not hasattr(kb_instance, '_get_lightrag_instance'):
+            if not hasattr(kb_instance, "_get_lightrag_instance"):
                 logger.error(f"Knowledge base instance for {db_id} is not LightRagKB")
                 return None
 

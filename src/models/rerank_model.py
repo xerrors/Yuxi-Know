@@ -1,25 +1,25 @@
-import os
 import json
-import requests
+import os
+
 import numpy as np
+import requests
 
 from src import config
-from src.utils import logger, get_docker_safe_url
+from src.utils import get_docker_safe_url, logger
+
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
+
 
 class OnlineReranker:
     def __init__(self, model_name, api_key, base_url, **kwargs):
         self.url = get_docker_safe_url(base_url)
         self.model = model_name
         self.api_key = api_key
-        self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
+        self.headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
-    def compute_score(self, sentence_pairs, batch_size = 256, max_length = 512, normalize = False):
+    def compute_score(self, sentence_pairs, batch_size=256, max_length=512, normalize=False):
         # TODO 还没实现 batch_size
         query, sentences = sentence_pairs[0], sentence_pairs[1]
         payload = self.build_payload(query, sentences, max_length)
@@ -35,13 +35,14 @@ class OnlineReranker:
 
         return all_scores
 
-    def build_payload(self, query, sentences, max_length = 512):
+    def build_payload(self, query, sentences, max_length=512):
         return {
             "model": self.model,
             "query": query,
             "documents": sentences,
             "max_chunks_per_doc": max_length,
         }
+
 
 def get_reranker(model_id, **kwargs):
     support_rerankers = config.reranker_names.keys()
@@ -51,9 +52,4 @@ def get_reranker(model_id, **kwargs):
     base_url = model_info["base_url"]
     api_key = os.getenv(model_info["api_key"], model_info["api_key"])
     assert api_key, f"{model_info['name']} api_key is required"
-    return OnlineReranker(
-        model_name=model_info["name"],
-        api_key=api_key,
-        base_url=base_url,
-        **kwargs
-    )
+    return OnlineReranker(model_name=model_info["name"], api_key=api_key, base_url=base_url, **kwargs)
