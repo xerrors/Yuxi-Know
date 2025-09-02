@@ -328,9 +328,9 @@ const initGraph = () => {
       type: 'd3-force',
       preventOverlap: true,
       // 优化布局性能参数
-      alphaDecay: 0.08, // 增加衰减率，加快收敛速度
+      alphaDecay: 0.1, // 增加衰减率，加快收敛速度
       alphaMin: 0.01, // 提高最小alpha值，更早停止模拟
-      velocityDecay: 0.8, // 增加速度衰减，减少震荡
+      velocityDecay: 0.7, // 增加速度衰减，减少震荡
       iterations: 100, // 限制最大迭代次数
       // 力的配置
       force: {
@@ -342,7 +342,7 @@ const initGraph = () => {
         },
         // 排斥力 - 节点间相互排斥
         charge: {
-          strength: -300, // 负值表示排斥力
+          strength: -400, // 负值表示排斥力
           distanceMax: 400 // 限制力的作用距离
         },
         // 链接力 - 连接的节点相互吸引
