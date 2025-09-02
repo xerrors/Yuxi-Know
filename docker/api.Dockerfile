@@ -1,5 +1,5 @@
 # 使用轻量级Python基础镜像
-FROM python:3.11-slim
+FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
 
 # 设置工作目录
@@ -38,6 +38,7 @@ ENV HTTP_PROXY=$HTTP_PROXY \
     http_proxy=$HTTP_PROXY \
     https_proxy=$HTTPS_PROXY
 
+# 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev --no-install-project
 
