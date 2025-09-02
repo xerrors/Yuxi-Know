@@ -180,7 +180,7 @@ const threadMessages = ref({});
 const uiState = reactive({
   ...props.state,
   debug_mode: computed(() => props.state.debug_mode ?? false),
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open') === 'true',
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
   isInitialRender: true,
   showRenameButton: false,
   containerWidth: 0,
@@ -213,7 +213,7 @@ const currentThreadState = computed(() => {
 const onGoingConvMessages = computed(() => {
   const threadState = currentThreadState.value;
   if (!threadState || !threadState.onGoingConv) return [];
-  
+
   const msgs = Object.values(threadState.onGoingConv.msgChunks).map(MessageProcessor.mergeMessageChunk);
   return msgs.length > 0
     ? MessageProcessor.convertToolResultToMessages(msgs).filter(msg => msg.type !== 'tool')
@@ -335,9 +335,9 @@ const resetOnGoingConv = (threadId = null) => {
 const _processStreamChunk = (chunk, threadId) => {
   const { status, msg, request_id, message } = chunk;
   const threadState = getThreadState(threadId);
-  
+
   if (!threadState) return;
-  
+
   switch (status) {
     case 'init':
       threadState.onGoingConv.msgChunks[request_id] = [msg];
