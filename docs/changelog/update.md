@@ -6,8 +6,8 @@
 - [ ] 使用更好的知识图谱检索方法
 - [ ] 使用其他的聊天记录管理方法，解决两个问题，一个是上下文长度过长，一个是上下文的类型变得更加丰富，比如多模态等等。（现在是基于 LangGraph 的 Memory 实现的，v0.2.3 版本实现），暂定使用 [mem0](github.com/mem0ai/mem0) 来实现。但是目前了解下来，还不是我想要的那种方案。可能会基于这个实现一个 ThreadConvManager 这个类。
 - [ ] 添加对于上传文件的支持：这里的复杂的地方就在于如何和历史记录结合在一起（v0.2.3 版本实现，放在记忆管理后面）
-- [ ] 将现在的GraphContainer相关的代码分离到一个单独的组件中，然后 actions 和 footer 都是作为 slot top/bottom 提供的
-- [ ] 移除现有的 GraphContainer 然后应用到 AgentView 中。
+- [x] 将现在的 graphview.vue 文件中 GraphContainer相关的代码分离到一个单独的组件中，然后 actions 和 footer 都是作为 slot top/bottom 提供的
+- [x]  然后应用到 web/src/components/ToolCallingResult/KnowledgeGraphResult.vue 中，替换现有的 GraphContainer。
 - [ ] 知识图谱的上传和可视化，支持属性，标签的展示
 
 🐛**BUGs**
@@ -28,5 +28,5 @@
 - [ ] 添加 SQL 读取工具
 - [ ] 添加绘图工具（这里的绘图是指绘制固定格式的图和表等，暂时没想好如何支持自定义绘图）
 - [ ] 添加测试脚本，覆盖最常见的功能
-- [ ] 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - [ ] 优化对文档信息的检索展示（检索结果页、详情页）
+- [ ] 集成 LangFuse (观望)添加用户日志与用户反馈模块，可以在 AgentView 中查看信息

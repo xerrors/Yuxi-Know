@@ -9,7 +9,7 @@
 
     <!-- 图谱可视化容器 -->
     <div class="graph-visualization" ref="graphContainerRef" v-if="totalNodes > 0 || totalRelations > 0">
-      <GraphContainer :graph-data="graphData" ref="graphContainer" />
+      <GraphCanvas :graph-data="graphData" ref="graphContainer" style="height: 360px;" />
     </div>
 
     <!-- 详细信息展示 -->
@@ -55,7 +55,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUpdated } from 'vue'
 import { DeploymentUnitOutlined } from '@ant-design/icons-vue'
-import GraphContainer from '../GraphContainer.vue'
+import GraphCanvas from '../GraphCanvas.vue'
 
 const props = defineProps({
   data: {

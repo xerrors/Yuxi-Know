@@ -28,44 +28,54 @@
     </HeaderComponent>
 
     <div class="container-outter">
-      <div class="main" id="container" ref="container" v-show="graphData.nodes.length > 0">
-        <div class="actions">
-          <div class="actions-left">
-            <a-input
-              v-model:value="state.searchInput"
-              placeholder="输入要查询的实体"
-              style="width: 300px"
-              @keydown.enter="onSearch"
-            >
-              <template #suffix>
-                <component :is="state.searchLoading ? LoadingOutlined : SearchOutlined" @click="onSearch" />
-              </template>
-            </a-input>
+      <GraphCanvas
+        ref="graphRef"
+        :graph-data="graphData"
+      >
+        <template #top>
+          <div class="actions">
+            <div class="actions-left">
+              <a-input
+                v-model:value="state.searchInput"
+                placeholder="输入要查询的实体"
+                style="width: 300px"
+                @keydown.enter="onSearch"
+                allow-clear
+              >
+                <template #suffix>
+                  <component :is="state.searchLoading ? LoadingOutlined : SearchOutlined" @click="onSearch" />
+                </template>
+              </a-input>
+            </div>
+            <div class="actions-right">
+              <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
+                说明
+              </a-button>
+              <a-input
+                v-model:value="sampleNodeCount"
+                placeholder="查询三元组数量"
+                style="width: 100px"
+                @keydown.enter="loadSampleNodes"
+                :loading="state.fetching"
+              >
+                <template #suffix>
+                  <component :is="state.fetching ? LoadingOutlined : ReloadOutlined" @click="loadSampleNodes" />
+                </template>
+              </a-input>
+            </div>
           </div>
-          <div class="actions-right">
-            <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
-              说明
-            </a-button>
-            <a-input
-              v-model:value="sampleNodeCount"
-              placeholder="查询三元组数量"
-              style="width: 100px"
-              @keydown.enter="loadSampleNodes"
-              :loading="state.fetching"
-            >
-              <template #suffix>
-                <component :is="state.fetching ? LoadingOutlined : ReloadOutlined" @click="loadSampleNodes" />
-              </template>
-            </a-input>
+        </template>
+        <template #content>
+          <a-empty v-show="graphData.nodes.length === 0" style="padding: 4rem 0;"/>
+        </template>
+        <template #bottom>
+          <div class="footer">
+            <div class="tags">
+              <a-tag :bordered="false" v-for="tag in graphTags" :key="tag.key" :color="tag.type">{{ tag.text }}</a-tag>
+            </div>
           </div>
-        </div>
-        <div class="footer">
-          <div class="tags">
-            <a-tag :bordered="false" v-for="tag in graphTags" :key="tag.key" :color="tag.type">{{ tag.text }}</a-tag>
-          </div>
-        </div>
-      </div>
-      <a-empty v-show="graphData.nodes.length === 0" style="padding: 4rem 0;"/>
+        </template>
+      </GraphCanvas>
     </div>
 
     <a-modal
@@ -130,22 +140,21 @@ LIMIT $num</code></pre>
 </template>
 
 <script setup>
-import { Graph } from "@antv/g6";
 import { computed, onMounted, reactive, ref, h } from 'vue';
-import { message, Button as AButton } from 'ant-design-vue';
+import { message } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
 import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
+import GraphCanvas from '@/components/GraphCanvas.vue';
 
 const configStore = useConfigStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model);
 const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
 
-let graphInstance
+const graphRef = ref(null)
 const graphInfo = ref(null)
-const container = ref(null);
 const fileList = ref([]);
 const sampleNodeCount = ref(100);
 const graphData = reactive({
@@ -160,7 +169,7 @@ const state = reactive({
   searchLoading: false,
   showModal: false,
   showInfoModal: false,
-  precessing: false,
+  processing: false,
   indexing: false,
   showPage: true,
 })
@@ -183,48 +192,6 @@ const loadGraphInfo = () => {
       message.error(error.message || '加载图数据库信息失败')
       state.loadingGraphInfo = false
     })
-}
-
-const getGraphData = () => {
-  // 计算每个节点的度数（连接数）
-  const nodeDegrees = {};
-
-  // 初始化所有节点的度数为0
-  graphData.nodes.forEach(node => {
-    nodeDegrees[node.id] = 0;
-  });
-
-  // 计算每个节点的连接数
-  graphData.edges.forEach(edge => {
-    nodeDegrees[edge.source_id] = (nodeDegrees[edge.source_id] || 0) + 1;
-    nodeDegrees[edge.target_id] = (nodeDegrees[edge.target_id] || 0) + 1;
-  });
-
-  return {
-    nodes: graphData.nodes.map(node => {
-      // 计算节点大小，基础大小为15，每个连接增加5的大小，最小为15，最大为50
-      const degree = nodeDegrees[node.id] || 0;
-      const nodeSize = Math.min(15 + degree * 5, 50);
-
-      return {
-        id: String(node.id),
-        data: {
-          label: node.name,
-          degree: degree, // 存储度数信息
-        },
-      }
-    }),
-    edges: graphData.edges.map((edge, index) => {
-      return {
-        id: `edge-${index}`,
-        source: edge.source_id,
-        target: edge.target_id,
-        data: {
-          label: edge.type
-        }
-      }
-    }),
-  }
 }
 
 const addDocumentByFile = () => {
@@ -253,7 +220,8 @@ const loadSampleNodes = () => {
       graphData.nodes = data.result.nodes
       graphData.edges = data.result.edges
       console.log(graphData)
-      setTimeout(() => renderGraph(), 500)
+      // 初次加载后兜底刷新一次，避免容器初次可见尺寸未稳定
+      setTimeout(() => graphRef.value?.refreshGraph?.(), 500)
     })
     .catch((error) => {
       console.error(error)
@@ -269,14 +237,7 @@ const onSearch = () => {
   }
 
   if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) {
-    // if (!graphInfo?.value?.embed_model_name) {
-    //   message.error('请先上传文件(jsonl)')
-    //   return
-    // }
-
-    // if (!confirm(`构建图数据库时向量模型为 ${graphInfo?.value?.embed_model_name}，当前向量模型为 ${cur_embed_model.value}，是否继续查询？`)) {
-    //   return
-    // }
+    // 可选：提示模型不一致
   }
 
   if (!state.searchInput) {
@@ -297,7 +258,7 @@ const onSearch = () => {
       }
       console.log(data)
       console.log(graphData)
-      renderGraph()
+      graphRef.value?.refreshGraph?.()
     })
     .catch((error) => {
       console.error('查询错误:', error);
@@ -306,215 +267,10 @@ const onSearch = () => {
     .finally(() => state.searchLoading = false)
 };
 
-const renderGraph = () => {
-
-  if (graphInstance) {
-    graphInstance.destroy();
-  }
-
-  initGraph();
-  graphInstance.setData(getGraphData());
-  graphInstance.render();
-}
-
-const initGraph = () => {
-  graphInstance = new Graph({
-    container: container.value,
-    width: container.value.offsetWidth,
-    height: container.value.offsetHeight,
-    autoFit: true,
-    autoResize: true,
-    layout: {
-      type: 'd3-force',
-      preventOverlap: true,
-      // 优化布局性能参数
-      alphaDecay: 0.1, // 增加衰减率，加快收敛速度
-      alphaMin: 0.01, // 提高最小alpha值，更早停止模拟
-      velocityDecay: 0.7, // 增加速度衰减，减少震荡
-      iterations: 100, // 限制最大迭代次数
-      // 力的配置
-      force: {
-        // 中心力 - 将节点拉向中心
-        center: {
-          x: 0.5,
-          y: 0.5,
-          strength: 0.1
-        },
-        // 排斥力 - 节点间相互排斥
-        charge: {
-          strength: -400, // 负值表示排斥力
-          distanceMax: 400 // 限制力的作用距离
-        },
-        // 链接力 - 连接的节点相互吸引
-        link: {
-          distance: 100, // 理想链接距离
-          strength: 0.8 // 链接强度
-        }
-      },
-      collide: {
-        radius: 40,
-        strength: 0.8, // 增加碰撞强度，减少重叠
-        iterations: 3 // 限制碰撞检测迭代次数
-      },
-    },
-    node: {
-      type: 'circle',
-      style: {
-        labelText: (d) => d.data.label,
-        // 使用节点度数来决定大小
-        size: (d) => {
-          const degree = d.data.degree || 0;
-          return Math.min(15 + degree * 5, 50);
-        },
-        // 现代化默认样式
-        fillOpacity: 0.8,
-        opacity: 0.8,
-        stroke: '#ffffff',
-        lineWidth: 1.5,
-        shadowColor: '#94a3b8',
-        shadowBlur: 4,
-        'label-text-fill': '#334155',
-      },
-      palette: {
-        field: 'label',
-        color: [
-          '#60a5fa', // sky-400
-          '#34d399', // emerald-400
-          '#f59e0b', // amber-500
-          '#f472b6', // pink-400
-          '#22d3ee', // cyan-400
-          '#a78bfa', // violet-400
-          '#f97316', // orange-500
-          '#4ade80', // green-400
-          '#f43f5e', // rose-500
-          '#2dd4bf', // teal-400
-        ],
-      },
-      state: {
-        hidden: {
-          opacity: 0.15,
-          'label-text-opacity': 0,
-        },
-        focus: {
-          opacity: 1,
-          stroke: '#2563eb', // blue-600
-          lineWidth: 2.5,
-          shadowColor: '#60a5fa',
-          shadowBlur: 16,
-        },
-      },
-    },
-    edge: {
-      type: 'line',
-      style: {
-        labelText: (d) => d.data.label,
-        labelBackground: '#ffffff',
-        stroke: '#94a3b8',
-        opacity: 0.6,
-        lineWidth: 1.2,
-        endArrow: true,
-        'label-text-fill': '#334155',
-      },
-      state: {
-        hidden: {
-          opacity: 0.15,
-          'label-text-opacity': 0,
-        },
-        focus: {
-          opacity: 0.95,
-          stroke: '#2563eb',
-          lineWidth: 2,
-          'label-text-opacity': 1,
-        },
-      },
-    },
-    behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
-  });
-
-  let activeNodeId = null;
-
-  const getGraphItemIds = () => {
-    const { nodes, edges } = graphInstance.getData();
-    const nodeIds = nodes.map(node => node.id);
-    const edgeIds = edges.map(edge => edge.id);
-    return { nodeIds, edgeIds };
-  };
-
-  // 从事件对象中尽可能稳健地获取被点击元素的 id
-  const getClickedElementId = (e) => {
-    return e?.id || e?.data?.id || e?.target?.id || null;
-  };
-
-  const resetStyles = async () => {
-    const { nodeIds, edgeIds } = getGraphItemIds();
-    const allElementIds = [...nodeIds, ...edgeIds];
-    const updates = {};
-    allElementIds.forEach(id => {
-        updates[id] = [];
-    });
-
-    if (allElementIds.length > 0) {
-      await graphInstance.setElementState(updates);
-    }
-    activeNodeId = null;
-    await graphInstance.draw();
-  };
-
-  graphInstance.on('node:click', async (e) => {
-    const clickedNodeId = getClickedElementId(e);
-    if (!clickedNodeId) return;
-
-    if (activeNodeId === clickedNodeId) {
-      await resetStyles();
-      return;
-    }
-
-    activeNodeId = clickedNodeId;
-
-    const { nodeIds: allNodeIds, edgeIds: allEdgeIds } = getGraphItemIds();
-    const { edges: allEdges } = graphInstance.getData();
-
-    const updates = {};
-
-    // 1. All nodes and edges are hidden by default
-    allNodeIds.forEach(id => updates[id] = ['hidden']);
-    allEdgeIds.forEach(id => updates[id] = ['hidden']);
-
-    // 2. Find neighbors and related edges
-    const neighborSet = new Set();
-    const relatedEdgeIds = [];
-    allEdges.forEach((edge) => {
-      if (edge.source === clickedNodeId) {
-        neighborSet.add(edge.target);
-        relatedEdgeIds.push(edge.id);
-      } else if (edge.target === clickedNodeId) {
-        neighborSet.add(edge.source);
-        relatedEdgeIds.push(edge.id);
-      }
-    });
-    const neighborNodeIds = Array.from(neighborSet);
-
-    // 3. Set 'focus' state for the clicked node, its neighbors, and related edges.
-    // This will overwrite the 'hidden' state.
-    updates[clickedNodeId] = ['focus'];
-    neighborNodeIds.forEach(id => updates[id] = ['focus']);
-    relatedEdgeIds.forEach(id => updates[id] = ['focus']);
-
-    // 4. Apply all state changes at once
-    await graphInstance.setElementState(updates);
-    await graphInstance.draw();
-  });
-
-  // 专门监听画布空白处的点击事件来重置样式
-  graphInstance.on('canvas:click', resetStyles);
-  window.addEventListener('resize', renderGraph);
-}
-
 onMounted(() => {
   loadGraphInfo();
   loadSampleNodes();
 });
-
 
 const handleFileUpload = (event) => {
   console.log(event)
@@ -664,20 +420,13 @@ const openLink = (url) => {
   overflow: hidden;
   background: var(--gray-50);
 
-  #container {
-    width: 100%;
-    height: 100%;
-  }
-
   .actions,
   .footer {
-    position: absolute;
     display: flex;
     justify-content: space-between;
     margin: 20px 0;
     padding: 0 24px;
     width: 100%;
-    z-index: 999;
   }
 }
 
@@ -697,54 +446,6 @@ const openLink = (url) => {
   button {
     height: 37px;
     box-shadow: none;
-  }
-}
-
-.footer {
-  position: relative;
-}
-
-.footer {
-  bottom: 0;
-  z-index: 2; // 显示在画布之上
-}
-
-.database-empty {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
-  flex-direction: column;
-  color: var(--gray-900);
-}
-
-.info-content {
-  line-height: 1.6;
-
-  ul {
-    padding-left: 20px;
-    margin: 10px 0;
-  }
-
-  li {
-    margin: 8px 0;
-  }
-
-  code {
-    background-color: #f0f0f0;
-    padding: 2px 4px;
-    border-radius: 4px;
-    font-family: monospace;
-  }
-
-  pre {
-    background-color: #f8f8f8;
-    padding: 12px;
-    border-radius: 4px;
-    overflow-x: auto;
-    margin: 15px 0;
-    font-size: 13px;
   }
 }
 </style>
