@@ -346,13 +346,20 @@ onUnmounted(() => {
 defineExpose({ refreshGraph, fitView, fitCenter, getInstance, focusNode, clearFocus, setData: setGraphData })
 </script>
 
-<style lang="less" scoped>
+<style lang="less">
 .graph-canvas-container {
   position: relative;
   width: 100%;
   height: 100%;
 
+  .graph-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
   .slots {
+    // 让整层覆盖容器默认不接收指针事件（便于穿透到底下画布）
+    pointer-events: none;
     position: absolute;
     top: 0;
     left: 0;
@@ -361,20 +368,25 @@ defineExpose({ refreshGraph, fitView, fitCenter, getInstance, focusNode, clearFo
     display: flex;
     flex-direction: column;
     z-index: 999;
+
+    .overlay {
+      width: 100%;
+      flex-shrink: 0;
+      flex-grow: 0;
+      pointer-events: auto;
+
+      &.top { top: 0; }
+      &.bottom { bottom: 0; }
+    }
+    .content {
+      // 中间内容层及其子元素全部穿透
+      pointer-events: none;
+      flex: 1;
+    }
+    .content * {
+      pointer-events: none;
+    }
   }
 }
-.graph-canvas {
-  width: 100%;
-  height: 100%;
-}
-.overlay {
-  width: 100%;
-  flex-shrink: 0;
-  flex-grow: 0;
-}
-.content {
-  flex: 1;
-}
-.top { top: 0; }
-.bottom { bottom: 0; }
+
 </style>
