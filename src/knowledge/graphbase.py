@@ -64,44 +64,50 @@ class GraphDatabase:
             """Note: 使用连通性查询获取集中的节点子图"""
             # 首先尝试获取一个连通的子图
             query_str = """
-                 // 获取高度数节点作为种子节点
-                 MATCH (seed:Entity)
-                 WITH seed, COUNT{(seed)-[]->()} + COUNT{(seed)<-[]-()} as degree
-                 WHERE degree > 0
-                 ORDER BY degree DESC
-                 LIMIT 5
+                // 获取高度数节点作为种子节点
+                MATCH (seed:Entity)
+                WITH seed, COUNT{(seed)-[]->()} + COUNT{(seed)<-[]-()} as degree
+                WHERE degree > 0
+                ORDER BY degree DESC
+                LIMIT 5
 
-                 // 为每个种子节点控制连接数量，避免过度集中
-                 UNWIND seed as s
-                 MATCH (s)-[*1..1]-(neighbor:Entity)
-                 WITH s, neighbor, COUNT{(s)-[]->()} + COUNT{(s)<-[]-()} as s_degree
-                 WITH s, s_degree, collect(neighbor) as neighbors
-                 WITH s, s_degree, neighbors[0..toInteger($num * 0.1)] as limited_neighbors
+                // 为每个种子节点收集更多邻居节点
+                UNWIND seed as s
+                MATCH (s)-[*1..1]-(neighbor:Entity)
+                WITH s, neighbor, COUNT{(s)-[]->()} + COUNT{(s)<-[]-()} as s_degree
+                WITH s, s_degree, collect(DISTINCT neighbor) as neighbors
+                // 调整限制比例，允许更多的邻居节点
+                WITH s, s_degree, neighbors[0..toInteger($num * 0.15)] as limited_neighbors
 
-                 // 从邻居节点扩展到二跳节点，形成开枝散叶结构
-                 UNWIND limited_neighbors as neighbor
-                 OPTIONAL MATCH (neighbor)-[*1..1]-(second_hop:Entity)
-                 WHERE second_hop <> s
-                 WITH s, limited_neighbors, neighbor, collect(DISTINCT second_hop)[0..2] as second_hops
+                // 从邻居节点扩展到二跳节点，形成开枝散叶结构
+                UNWIND limited_neighbors as neighbor
+                OPTIONAL MATCH (neighbor)-[*1..1]-(second_hop:Entity)
+                WHERE second_hop <> s
+                // 增加二跳节点的数量
+                WITH s, limited_neighbors, neighbor, collect(DISTINCT second_hop)[0..5] as second_hops
 
-                 // 收集所有连通节点
-                 WITH collect(DISTINCT s) as seeds,
-                      collect(DISTINCT neighbor) as neighbors,
-                      reduce(acc = [], x IN collect(second_hops) | acc + x) as second_hop_nodes
-                 WITH seeds + neighbors + second_hop_nodes as connected_nodes
+                // 收集所有连通节点
+                WITH collect(DISTINCT s) as seeds,
+                    collect(DISTINCT neighbor) as first_hop_nodes,
+                    reduce(acc = [], x IN collect(second_hops) | acc + x) as second_hop_nodes
+                WITH seeds + first_hop_nodes + second_hop_nodes as connected_nodes
 
-                 // 只使用连接的节点，不添加随机节点
-                 WITH connected_nodes[0..$num] as final_nodes
+                // 确保不会超过请求的节点数量
+                WITH connected_nodes[0..$num] as final_nodes
 
-                 // 获取这些节点之间的关系，避免双向边
-                 UNWIND final_nodes as n
-                 MATCH (n)-[rel]-(m)
-                 WHERE m IN final_nodes AND elementId(n) < elementId(m)
-                 RETURN
-                     {id: elementId(n), name: n.name} AS h,
-                     {type: rel.type, source_id: elementId(n), target_id: elementId(m)} AS r,
-                     {id: elementId(m), name: m.name} AS t
-                 """
+                // 获取这些节点之间的关系，避免双向边
+                UNWIND final_nodes as n
+                OPTIONAL MATCH (n)-[rel]-(m)
+                WHERE m IN final_nodes AND elementId(n) < elementId(m)
+                RETURN
+                    {id: elementId(n), name: n.name} AS h,
+                    CASE WHEN rel IS NOT NULL THEN
+                        {type: rel.type, source_id: elementId(n), target_id: elementId(m)}
+                    ELSE null END AS r,
+                    CASE WHEN m IS NOT NULL THEN
+                        {id: elementId(m), name: m.name}
+                    ELSE null END AS t
+                """
 
             try:
                 results = tx.run(query_str, num=int(num))
@@ -110,35 +116,41 @@ class GraphDatabase:
 
                 for item in results:
                     h_node = item["h"]
-                    t_node = item["t"]
 
-                    # 避免重复添加节点
+                    # 始终添加头节点
                     if h_node["id"] not in node_ids:
                         formatted_results["nodes"].append(h_node)
                         node_ids.add(h_node["id"])
-                    if t_node["id"] not in node_ids:
-                        formatted_results["nodes"].append(t_node)
-                        node_ids.add(t_node["id"])
 
-                    formatted_results["edges"].append(item["r"])
+                    # 只有当边和尾节点都存在时才处理
+                    if item["r"] is not None and item["t"] is not None:
+                        t_node = item["t"]
 
-                # 如果连通查询没有返回足够的结果，回退到原始查询
-                if len(formatted_results["nodes"]) < num // 2:
-                    fallback_query = """
-                    MATCH (n:Entity)-[r]-(m:Entity)
-                    WHERE elementId(n) < elementId(m)
-                    RETURN
-                        {id: elementId(n), name: n.name} AS h,
-                        {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
-                        {id: elementId(m), name: m.name} AS t
-                    LIMIT $num
-                    """
-                    fallback_results = tx.run(fallback_query, num=int(num))
-                    formatted_results = {"nodes": [], "edges": []}
+                        # 避免重复添加尾节点
+                        if t_node["id"] not in node_ids:
+                            formatted_results["nodes"].append(t_node)
+                            node_ids.add(t_node["id"])
 
-                    for item in fallback_results:
-                        formatted_results["nodes"].extend([item["h"], item["t"]])
                         formatted_results["edges"].append(item["r"])
+
+                # 如果连通查询返回的节点数不足，补充更多节点
+                if len(formatted_results["nodes"]) < num:
+                    remaining_count = num - len(formatted_results["nodes"])
+
+                    # 获取额外的节点来补充
+                    supplement_query = """
+                    MATCH (n:Entity)
+                    WHERE NOT elementId(n) IN $existing_ids
+                    RETURN {id: elementId(n), name: n.name} AS node
+                    LIMIT $count
+                    """
+
+                    supplement_results = tx.run(supplement_query, existing_ids=list(node_ids), count=remaining_count)
+
+                    for item in supplement_results:
+                        node = item["node"]
+                        formatted_results["nodes"].append(node)
+                        node_ids.add(node["id"])
 
                 return formatted_results
 
@@ -156,9 +168,20 @@ class GraphDatabase:
                 """
                 results = tx.run(fallback_query, num=int(num))
                 formatted_results = {"nodes": [], "edges": []}
+                node_ids = set()
 
                 for item in results:
-                    formatted_results["nodes"].extend([item["h"], item["t"]])
+                    h_node = item["h"]
+                    t_node = item["t"]
+
+                    # 避免重复添加节点
+                    if h_node["id"] not in node_ids:
+                        formatted_results["nodes"].append(h_node)
+                        node_ids.add(h_node["id"])
+                    if t_node["id"] not in node_ids:
+                        formatted_results["nodes"].append(t_node)
+                        node_ids.add(t_node["id"])
+
                     formatted_results["edges"].append(item["r"])
 
                 return formatted_results
