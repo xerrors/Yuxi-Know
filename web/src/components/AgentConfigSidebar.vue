@@ -421,9 +421,7 @@ const loadAvailableTools = async () => {
 
 const openToolsModal = async () => {
   try {
-    if (!availableTools.value || Object.keys(availableTools.value).length === 0) {
-      await loadAvailableTools();
-    }
+    await loadAvailableTools();
     selectedTools.value = [...(agentConfig.value?.tools || [])];
     toolsModalOpen.value = true;
   } catch (error) {
