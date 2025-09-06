@@ -178,7 +178,7 @@
       </div>
     </div>
 
-    <div class="legend" v-if="entityTypes.length > 0">
+    <!-- <div class="legend" v-if="entityTypes.length > 0">
       <div class="legend-header">
         <h4>实体类型</h4>
       </div>
@@ -191,7 +191,7 @@
           <span>{{ type.type }} ({{ type.count }})</span>
         </div>
       </div>
-    </div>
+    </div> -->
 
     <!-- 控制按钮 (简化版) -->
     <div class="graph-controls">

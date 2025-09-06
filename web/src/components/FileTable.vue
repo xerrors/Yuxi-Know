@@ -17,7 +17,7 @@
           :icon="h(ReloadOutlined)"
           title="刷新"
         />
-        <a-button
+        <!-- <a-button
           @click="toggleAutoRefresh"
           size="small"
           :type="autoRefresh ? 'primary' : 'default'"
@@ -25,7 +25,7 @@
           class="auto-refresh-btn panel-action-btn"
         >
           Auto
-        </a-button>
+        </a-button> -->
         <a-input
           v-model:value="filenameFilter"
           placeholder="搜索文件名"
@@ -34,14 +34,14 @@
           allow-clear
           @change="onFilterChange"
         />
-        <a-button
+        <!-- <a-button
           type="text"
           @click="toggleRightPanel"
           :icon="h(ChevronLast)"
           title="切换右侧面板"
           class="panel-action-btn expand"
           :class="{ 'expanded': props.rightPanelVisible }"
-        />
+        /> -->
       </div>
     </div>
 

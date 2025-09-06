@@ -29,14 +29,14 @@
           导出图谱
         </a-button>
         -->
-        <a-button
+        <!-- <a-button
           type="text"
           size="small"
           @click="showSettings = true"
         >
           <SettingOutlined />
-          查询参数
-        </a-button>
+          参数
+        </a-button> -->
         <!-- <a-button
           type="text"
           size="small"
@@ -324,42 +324,6 @@ watch(isGraphSupported, (supported) => {
     display: flex;
     flex-direction: column;
     height: 100%;
-  }
-}
-</style>
-
-<style lang="less">
-.graph-section {
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    border-bottom: 1px solid #f0f0f0;
-    background-color: #fafafa;
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .section-title {
-      font-size: 16px;
-      font-weight: 500;
-      margin: 0;
-    }
-
-    .graph-stats {
-      display: flex;
-      gap: 8px;
-    }
-
-    .panel-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
   }
 }
 </style>

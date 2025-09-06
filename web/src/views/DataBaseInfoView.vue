@@ -121,7 +121,7 @@ const toggleRightPanel = () => {
 };
 
 // 拖拽调整大小
-const leftPanelWidth = ref(45);
+const leftPanelWidth = ref(60);
 const isDragging = ref(false);
 const resizeHandle = ref(null);
 
@@ -332,7 +332,7 @@ const handleMouseUpHorizontal = () => {
   .left-panel {
     flex-shrink: 0;
     flex-grow: 1;
-    background-color: var(--bg-sider);
+    background-color: var(--gray-0);
     padding: 8px;
   }
 
@@ -350,7 +350,7 @@ const handleMouseUpHorizontal = () => {
   }
 
   .resize-handle {
-    width: 2px;
+    width: 1px;
     cursor: col-resize;
     background-color: var(--gray-200);
     transition: background-color 0.2s ease;

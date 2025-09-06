@@ -68,14 +68,33 @@
                 </div>
 
                 <!-- 系统提示词 -->
-                <a-textarea
-                  v-else-if="key === 'system_prompt'"
-                  :value="agentConfig[key]"
-                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
-                  :rows="10"
-                  :placeholder="getPlaceholder(key, value)"
-                  class="system-prompt-input"
-                />
+                <div v-else-if="key === 'system_prompt'" class="system-prompt-container">
+                  <!-- 编辑模式 -->
+                  <a-textarea
+                    v-if="systemPromptEditMode"
+                    :value="agentConfig[key]"
+                    @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                    :rows="10"
+                    :placeholder="getPlaceholder(key, value)"
+                    class="system-prompt-input"
+                    @blur="systemPromptEditMode = false"
+                    ref="systemPromptTextarea"
+                  />
+                  <!-- 显示模式 -->
+                  <div
+                    v-else
+                    class="system-prompt-display"
+                    @click="enterEditMode"
+                  >
+                    <div
+                      class="system-prompt-content"
+                      :class="{ 'is-placeholder': !agentConfig[key] }"
+                    >
+                      {{ agentConfig[key] || getPlaceholder(key, value) }}
+                    </div>
+                    <div class="edit-hint">点击编辑</div>
+                  </div>
+                </div>
 
                 <!-- 工具选择 -->
                 <div v-else-if="value.template_metadata.kind === 'tools'" class="tools-selector">
@@ -276,7 +295,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import {
   SettingOutlined,
   CloseOutlined,
@@ -319,6 +338,7 @@ const debugMode = ref(false);
 const toolsModalOpen = ref(false);
 const selectedTools = ref([]);
 const toolsSearchText = ref('');
+const systemPromptEditMode = ref(false);
 
 
 const isEmptyConfig = computed(() => {
@@ -462,6 +482,18 @@ const cancelToolsSelection = () => {
   toolsModalOpen.value = false;
   toolsSearchText.value = '';
   selectedTools.value = [];
+};
+
+// 系统提示词编辑相关方法
+const enterEditMode = () => {
+  systemPromptEditMode.value = true;
+  // 使用 nextTick 确保 DOM 更新后再聚焦
+  nextTick(() => {
+    const textarea = document.querySelector('.system-prompt-input');
+    if (textarea) {
+      textarea.focus();
+    }
+  });
 };
 
 // 验证和过滤配置项
@@ -718,6 +750,62 @@ watch(() => props.isOpen, (newVal) => {
 
             &:focus {
               outline: none;
+            }
+          }
+
+          .system-prompt-container {
+            width: 100%;
+          }
+
+          .system-prompt-display {
+            min-height: 60px;
+            background: var(--gray-50);
+            border: 1px solid var(--gray-200);
+            border-radius: 6px;
+            padding: 8px 12px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+
+            &:hover {
+              border-color: var(--main-color);
+              background: var(--gray-25);
+
+              .edit-hint {
+                opacity: 1;
+              }
+            }
+
+            .system-prompt-content {
+               white-space: pre-wrap;
+               word-break: break-word;
+               line-height: 1.5;
+               color: var(--gray-900);
+               font-size: 14px;
+              //  min-height: 100px;
+
+               &.is-placeholder {
+                 color: var(--gray-400);
+                 font-style: italic;
+               }
+
+               &:empty::before {
+                 content: attr(data-placeholder);
+                 color: var(--gray-400);
+               }
+             }
+
+            .edit-hint {
+              position: absolute;
+              top: 8px;
+              right: 12px;
+              font-size: 12px;
+              color: var(--gray-400);
+              opacity: 0;
+              transition: opacity 0.2s ease;
+              background: rgba(255, 255, 255, 0.9);
+              padding: 2px 6px;
+              border-radius: 4px;
             }
           }
 
