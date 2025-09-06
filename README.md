@@ -164,7 +164,15 @@ custom-provider-name-here:
 
 现在支持的知识库类型包括 `Chroma`、`Milvus`、`LightRAG`。[LightRAG](https://github.com/HKUDS/LightRAG) 是轻量级 GraphRAG方法。
 
-![knowledge_bases](./docs/images/knowledge_bases.png)
+
+<table>
+  <tbody>
+    <tr>
+      <td><img src="https://github.com/user-attachments/assets/6ad3cc6a-3816-4545-b074-6eeb814d8124" alt="知识图谱可视化"></td>
+      <td><img src="https://github.com/user-attachments/assets/6cc3c3a6-b7c2-4dc3-9678-b97de7835959" alt="知识库可视化"></td>
+    </tr>
+  </tbody>
+</table>
 
 ### 知识图谱
 
@@ -172,9 +180,23 @@ custom-provider-name-here:
 
 默认使用的图谱构建模式是 `siliconflow` 的 `Qwen/Qwen3-30B-A3B-Instruct-2507`，可以使用 `LIGHTRAG_LLM_PROVIDER` 和 `LIGHTRAG_LLM_NAME` 覆盖。
 
-|知识库可视化|Neo4J管理端|
-|--|--|
-|![知识库可视化](./docs/images/lightrag_kb.png)|![Neo4J管理端](./docs/images/neo4j_browser.png)|
+<table>
+  <thead>
+    <tr>
+      <th>知识图谱可视化</th>
+      <th>知识库可视化</th>
+      <th>Neo4J管理端</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><img src="https://github.com/user-attachments/assets/87b1dc91-65f4-4529-84b3-1b2a561c580d" alt="知识图谱可视化" height="210"></td>
+      <td><img src="https://github.com/user-attachments/assets/452b8228-a59f-4f28-80ce-7d93e9497ccc" alt="知识库可视化" height="210"></td>
+      <td><img src="./docs/images/neo4j_browser.png" alt="Neo4J管理端" height="210"></td>
+    </tr>
+  </tbody>
+</table>
+
 
 除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是`neo4j` / `0123456789`。
 
