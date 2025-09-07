@@ -27,7 +27,8 @@ class _MinioClient:
         self.secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
         if os.getenv("RUNNING_IN_DOCKER"):
-            self.public_endpoint = f"localhost:{self.endpoint.split(':')[-1]}"
+            host_ip = os.getenv("HOST_IP", "localhost")
+            self.public_endpoint = f"{host_ip}:{self.endpoint.split(':')[-1]}"
         else:
             self.public_endpoint = self.endpoint
 

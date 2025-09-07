@@ -18,11 +18,12 @@ MCP_SERVERS = {
         "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
         "transport": "streamable_http",
     },
-    "time": {
-        "command": "uvx",
-        "args": ["mcp-server-time"],
-        "transport": "stdio",
-    },
+    # 这些 stdio 的 MCP server 需要在本地启动，启动的时候需要安装对应的包，需要时间
+    # "time": {
+    #     "command": "uvx",
+    #     "args": ["mcp-server-time"],
+    #     "transport": "stdio",
+    # },
 }
 
 

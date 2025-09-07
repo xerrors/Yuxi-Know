@@ -1,8 +1,9 @@
-from io import BytesIO
+import os
+import requests
+
 from typing import Any
 
 from langchain_core.tools import tool
-from PIL import Image, ImageDraw, ImageFont
 
 from src.agents.common.tools import get_buildin_tools
 from src.utils import logger
@@ -29,35 +30,42 @@ def calculator(a: float, b: float, operation: str) -> float:
         logger.error(f"Calculator error: {e}")
         raise
 
-
 @tool
-async def text_to_img(text: str) -> str:
-    """
-    文生图函数，根据文本生成一张包含该文本的图片，并将其上传到文件服务器，最终返回图片的公开访问 URL。
-    A text-to-image function that generates an image containing the given text,
-    uploads it to a file server, and returns the public URL of the image.
-    """
-    logger.info(f"Generating image for text: {text}")
-    # 1. Simulate image generation using Pillow
-    try:
-        img = Image.new("RGB", (400, 100), color=(73, 109, 137))
-        draw = ImageDraw.Draw(img)
-        try:
-            font = ImageFont.truetype("arial.ttf", 15)
-        except OSError:
-            font = ImageFont.load_default()
-        draw.text((10, 10), f"Generated from: {text}", fill=(255, 255, 0), font=font)
+async def text_to_img_kolors(text: str) -> str:
+    """（用来测试文件存储）使用Kolors模型生成图片， 会返回图片的URL"""
 
-        img_bytes = BytesIO()
-        img.save(img_bytes, format="JPEG")
-        img_bytes.seek(0)
-        file_data = img_bytes.read()
-        logger.info("Image data generated successfully.")
+    url = "https://api.siliconflow.cn/v1/images/generations"
+
+    payload = {
+        "model": "Kwai-Kolors/Kolors",
+        "prompt": text,
+        "image_size": "512x512",
+        "batch_size": 1,
+        "num_inference_steps": 20,
+        "guidance_scale": 7.5
+    }
+    headers = {
+        "Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response_json = response.json()
     except Exception as e:
-        logger.error(f"Failed to generate image with Pillow: {e}")
+        logger.error(f"Failed to generate image with Kolors: {e}")
         raise ValueError(f"Image generation failed: {e}")
 
+    try:
+        image_url = response_json["images"][0]["url"]
+    except (KeyError, IndexError, TypeError) as e:
+        logger.error(f"Failed to parse image URL from Kolors response: {e}, {response_json=}")
+        raise ValueError(f"Image URL extraction failed: {e}")
+
     # 2. Upload to MinIO (Simplified)
+    response = requests.get(image_url)
+    file_data = response.content
+
     image_url = upload_image_to_minio(data=file_data, file_extension="jpg")
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url
@@ -67,5 +75,5 @@ def get_tools() -> list[Any]:
     """获取所有可运行的工具（给大模型使用）"""
     tools = get_buildin_tools()
     tools.append(calculator)
-    tools.append(text_to_img)
+    tools.append(text_to_img_kolors)
     return tools
