@@ -2,6 +2,8 @@ import asyncio
 import json
 import traceback
 import uuid
+import yaml
+from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -97,7 +99,11 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体（需要登录）"""
     agents = await agent_manager.get_agents_info()
     # logger.debug(f"agents: {agents}")
-    return {"agents": agents}
+    metadata = {}
+    if Path("src/static/agents_meta.yaml").exists():
+        with open("src/static/agents_meta.yaml") as f:
+            metadata = yaml.safe_load(f)
+    return {"agents": agents, "metadata": metadata}
 
 
 @chat.post("/agent/{agent_id}")

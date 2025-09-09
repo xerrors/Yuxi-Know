@@ -1,0 +1,9 @@
+ChatbotAgent:
+  name: 食品安全知识助手
+  icon: /agents-icon/chatbot.png
+  examples:
+    - 冰箱里不同食材应该怎么存放？
+    - 有机食品和普通食品有什么区别？
+    - 外卖食品安全需要注意什么？
+    - 如何判断食品是否已经变质？
+    - 食品添加剂对健康有害吗？

@@ -7,6 +7,7 @@ export const useAgentStore = defineStore('agent', {
   state: () => ({
     // 智能体相关状态
     agents: {}, // 以ID为键的智能体对象
+    metadata: {}, // 智能体元数据
     selectedAgentId: null, // 当前选中的智能体ID
     defaultAgentId: null, // 默认智能体ID
 
@@ -102,6 +103,7 @@ export const useAgentStore = defineStore('agent', {
           acc[agent.id] = agent;
           return acc;
         }, {});
+        this.metadata = response.metadata;
       } catch (error) {
         console.error('Failed to fetch agents:', error);
         handleChatError(error, 'fetch');

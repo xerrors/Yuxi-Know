@@ -60,8 +60,12 @@
       </div>
 
       <div v-else-if="!conversations.length" class="chat-examples">
-        <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
-        <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p>
+        <img v-if="currentAgentMetadata.icon" class="agent-icons" :src="currentAgentMetadata.icon" alt="智能体图标" />
+        <div v-else style="margin-bottom: 150px"></div>
+        <h1>您好，我是{{ currentAgentName }}！有什么可以帮您？</h1>
+        <!-- <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
+        <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p> -->
+
         <div class="inputer-init">
           <MessageInputComponent
             v-model="userInput"
@@ -72,6 +76,21 @@
             @send="handleSendMessage"
             @keydown="handleKeyDown"
           />
+
+          <!-- 示例问题 -->
+          <div class="example-questions" v-if="exampleQuestions.length > 0">
+            <div class="example-title">或试试这些问题：</div>
+            <div class="example-chips">
+              <div
+                v-for="question in exampleQuestions"
+                :key="question.id"
+                class="example-chip"
+                @click="handleExampleClick(question.text)"
+              >
+                {{ question.text }}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="chat-box" ref="messagesContainer">
@@ -164,6 +183,15 @@ const {
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('');
 
+// 从智能体元数据获取示例问题
+const exampleQuestions = computed(() => {
+  const examples = currentAgentMetadata.value?.examples || [];
+  return examples.map((text, index) => ({
+    id: index + 1,
+    text: text
+  }));
+});
+
 const chatState = reactive({
   currentThreadId: null,
   isLoadingThreads: false,
@@ -194,6 +222,9 @@ const currentAgentId = computed(() => {
     return selectedAgentId.value;
   }
 });
+
+const currentAgentMetadata = computed(() => agentStore.metadata[currentAgentId.value] || {});
+const currentAgentName = computed(() => currentAgentMetadata?.value.name || currentAgent.name || '智能体');
 
 const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
 const chatsList = computed(() => threads.value || []);
@@ -674,6 +705,14 @@ const handleKeyDown = (e) => {
   }
 };
 
+// 处理示例问题点击
+const handleExampleClick = (questionText) => {
+  userInput.value = questionText;
+  nextTick(() => {
+    handleSendMessage();
+  });
+};
+
 const shareChat = async () => {
   if (!AgentValidator.validateShareOperation(currentChatId.value, currentAgent.value, handleValidationError)) return;
   try {
@@ -926,7 +965,7 @@ watch(conversations, () => {
   padding: 0 50px;
   text-align: center;
   position: absolute;
-  top: 20%;
+  top: 15%;
   width: 100%;
   z-index: 9;
   animation: slideInUp 0.5s ease-out;
@@ -942,8 +981,58 @@ watch(conversations, () => {
     color: var(--gray-700);
   }
 
+  .agent-icons {
+    height: 180px;
+  }
+
+  .example-questions {
+    margin-top: 16px;
+    text-align: center;
+
+    .example-title {
+      font-size: 0.85rem;
+      color: var(--gray-600);
+      margin-bottom: 12px;
+    }
+
+    .example-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .example-chip {
+      padding: 6px 12px;
+      background: var(--gray-100);
+      border: 1px solid var(--gray-200);
+      border-radius: 16px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--gray-700);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      &:hover {
+        background: var(--main-50);
+        border-color: var(--main-200);
+        color: var(--main-700);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      &:active {
+        transform: translateY(0);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+    }
+  }
+
   .inputer-init {
-    margin: 40px auto;
+    margin: 20px auto;
     width: 90%;
     max-width: 800px;
   }
