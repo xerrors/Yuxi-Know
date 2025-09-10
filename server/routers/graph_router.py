@@ -201,7 +201,7 @@ async def get_neo4j_node(
         if not graph_base.is_running():
             raise HTTPException(status_code=400, detail="图数据库未启动")
 
-        result = graph_base.query_node(entity_name=entity_name)
+        result = graph_base.query_node(keyword=entity_name)
 
         return {"success": True, "result": result, "message": "success"}
 

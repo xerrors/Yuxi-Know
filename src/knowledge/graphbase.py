@@ -386,7 +386,7 @@ class GraphDatabase:
         tx.run(query)
 
     def query_node(
-        self, entity_name, threshold=0.9, kgdb_name="neo4j", hops=2, max_entities=5, return_format="graph", **kwargs
+        self, keyword, threshold=0.9, kgdb_name="neo4j", hops=2, max_entities=8, return_format="graph", **kwargs
     ):
         """知识图谱查询节点的入口:"""
         assert self.driver is not None, "Database is not connected"
@@ -395,12 +395,12 @@ class GraphDatabase:
         self.use_database(kgdb_name)
 
         # 使用向量索引进行查询
-        results_sim = self._query_with_vector_sim(entity_name, kgdb_name, threshold)
-        results_fuzzy = self._query_with_fuzzy_match(entity_name, kgdb_name)
+        results_sim = self._query_with_vector_sim(keyword, kgdb_name, threshold)
+        results_fuzzy = self._query_with_fuzzy_match(keyword, kgdb_name)
         results = results_sim + results_fuzzy
         qualified_entities = [result[0] for result in results][:max_entities]
 
-        logger.debug(f"Graph Query Entities: {entity_name}, {qualified_entities=}")
+        logger.debug(f"Graph Query Entities: {keyword}, {qualified_entities=}")
 
         # 对每个合格的实体进行查询
         all_query_results = {"nodes": [], "edges": [], "triples": []}
@@ -484,29 +484,31 @@ class GraphDatabase:
         def query(tx, entity_name, hops, limit):
             try:
                 query_str = """
-                MATCH (n {name: $entity_name})-[r1]->(m1)
-                RETURN
-                {id: elementId(n), name: n.name} AS h,
-                {type: r1.type, source_id: elementId(n), target_id: elementId(m1)} AS r,
-                {id: elementId(m1), name: m1.name} AS t
-                UNION
-                MATCH (n {name: $entity_name})-[r1]->(m1)-[r2]->(m2)
-                RETURN
-                {id: elementId(m1), name: m1.name} AS h,
-                {type: r2.type, source_id: elementId(m1), target_id: elementId(m2)} AS r,
-                {id: elementId(m2), name: m2.name} AS t
-                UNION
-                MATCH (m1)-[r1]->(n {name: $entity_name})
-                RETURN
-                {id: elementId(m1), name: m1.name} AS h,
-                {type: r1.type, source_id: elementId(m1), target_id: elementId(n)} AS r,
-                {id: elementId(n), name: n.name} AS t
-                UNION
-                MATCH (m2)-[r2]->(m1)-[r1]->(n {name: $entity_name})
-                RETURN
-                {id: elementId(m2), name: m2.name} AS h,
-                {type: r2.type, source_id: elementId(m2), target_id: elementId(m1)} AS r,
-                {id: elementId(m1), name: m1.name} AS t
+                WITH [
+                    // 1跳出边
+                    [(n {name: $entity_name})-[r1]->(m1) | 
+                     {h: {id: elementId(n), name: n.name}, 
+                      r: {type: r1.type, source_id: elementId(n), target_id: elementId(m1)}, 
+                      t: {id: elementId(m1), name: m1.name}}],
+                    // 2跳出边
+                    [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) | 
+                     {h: {id: elementId(m1), name: m1.name}, 
+                      r: {type: r2.type, source_id: elementId(m1), target_id: elementId(m2)}, 
+                      t: {id: elementId(m2), name: m2.name}}],
+                    // 1跳入边
+                    [(m1)-[r1]->(n {name: $entity_name}) | 
+                     {h: {id: elementId(m1), name: m1.name}, 
+                      r: {type: r1.type, source_id: elementId(m1), target_id: elementId(n)}, 
+                      t: {id: elementId(n), name: n.name}}],
+                    // 2跳入边
+                    [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) | 
+                     {h: {id: elementId(m2), name: m2.name}, 
+                      r: {type: r2.type, source_id: elementId(m2), target_id: elementId(m1)}, 
+                      t: {id: elementId(m1), name: m1.name}}]
+                ] AS all_results
+                UNWIND all_results AS result_list
+                UNWIND result_list AS item
+                RETURN item.h AS h, item.r AS r, item.t AS t
                 LIMIT $limit
                 """
                 results = tx.run(query_str, entity_name=entity_name, limit=limit)
