@@ -32,7 +32,8 @@ const props = defineProps({
   nodeStyleOptions: { type: Object, default: () => ({}) },
   edgeStyleOptions: { type: Object, default: () => ({}) },
   enableFocusNeighbor: { type: Boolean, default: true },
-  sizeByDegree: { type: Boolean, default: true }
+  sizeByDegree: { type: Boolean, default: true },
+  highlightKeywords: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['ready', 'node-click', 'edge-click', 'canvas-click', 'data-rendered'])
@@ -153,6 +154,17 @@ function initGraph() {
       state: props.nodeStyleOptions.state || {
         hidden: { opacity: 0.15, 'label-text-opacity': 0 },
         focus: { opacity: 1, stroke: '#2563eb', lineWidth: 2.5, shadowColor: '#60a5fa', shadowBlur: 16 },
+        highlighted: {
+          opacity: 1,
+          stroke: '#ff0000',
+          lineWidth: 4,
+          shadowColor: '#ff0000',
+          shadowBlur: 30,
+          'label-text-fill': '#ff0000',
+          'label-text-font-weight': 'bold',
+          'label-text-size': 20,
+          fill: '#ffcccc',
+        },
       },
     },
     edge: {
@@ -253,9 +265,53 @@ function setGraphData() {
   const data = formatData()
   graphInstance.setData(data)
   graphInstance.render()
+
+  // 应用关键词高亮
   setTimeout(() => {
+    applyHighlightKeywords()
     emit('data-rendered')
   }, 100)
+}
+
+// 关键词高亮功能
+function applyHighlightKeywords() {
+  if (!graphInstance || !props.highlightKeywords || props.highlightKeywords.length === 0) return
+
+  const { nodes } = graphInstance.getData()
+  const updates = {}
+
+  nodes.forEach(node => {
+    const nodeLabel = node.data.label || node.data[props.labelField] || String(node.id)
+    const shouldHighlight = props.highlightKeywords.some(keyword =>
+      keyword.trim() !== '' && nodeLabel.toLowerCase().includes(keyword.toLowerCase())
+    )
+
+    if (shouldHighlight) {
+      updates[node.id] = ['highlighted']
+    }
+  })
+
+  if (Object.keys(updates).length > 0) {
+    graphInstance.setElementState(updates)
+    graphInstance.draw()
+  }
+}
+
+// 清除高亮
+function clearHighlights() {
+  if (!graphInstance) return
+
+  const { nodes } = graphInstance.getData()
+  const updates = {}
+
+  nodes.forEach(node => {
+    updates[node.id] = []
+  })
+
+  if (Object.keys(updates).length > 0) {
+    graphInstance.setElementState(updates)
+    graphInstance.draw()
+  }
 }
 
 function renderGraph() {
@@ -316,6 +372,14 @@ watch(() => props.graphData, () => {
   renderTimeout = setTimeout(() => setGraphData(), 50)
 }, { deep: true })
 
+// 监听关键词变化
+watch(() => props.highlightKeywords, () => {
+  if (graphInstance) {
+    clearHighlights()
+    setTimeout(() => applyHighlightKeywords(), 50)
+  }
+}, { deep: true })
+
 onMounted(() => {
   // ResizeObserver 监听容器尺寸，自动重渲染
   if (window.ResizeObserver) {
@@ -343,7 +407,17 @@ onUnmounted(() => {
 })
 
 // 暴露方法
-defineExpose({ refreshGraph, fitView, fitCenter, getInstance, focusNode, clearFocus, setData: setGraphData })
+defineExpose({
+  refreshGraph,
+  fitView,
+  fitCenter,
+  getInstance,
+  focusNode,
+  clearFocus,
+  setData: setGraphData,
+  applyHighlightKeywords,
+  clearHighlights
+})
 </script>
 
 <style lang="less">
@@ -387,6 +461,23 @@ defineExpose({ refreshGraph, fitView, fitCenter, getInstance, focusNode, clearFo
       pointer-events: none;
     }
   }
+}
+
+/* 高亮节点的脉冲动画效果 */
+@keyframes highlightPulse {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3) drop-shadow(0 0 8px rgba(255, 0, 0, 0.8));
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+.highlight-animation {
+  animation: highlightPulse 2s infinite ease-in-out;
 }
 
 </style>

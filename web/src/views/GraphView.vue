@@ -31,6 +31,7 @@
       <GraphCanvas
         ref="graphRef"
         :graph-data="graphData"
+        :highlight-keywords="[state.searchInput]"
       >
         <template #top>
           <div class="actions">
@@ -143,7 +144,7 @@ LIMIT $num</code></pre>
 import { computed, onMounted, reactive, ref, h } from 'vue';
 import { message } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined, HighlightOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
