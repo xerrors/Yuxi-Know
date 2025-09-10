@@ -1,3 +1,7 @@
+
+<div align="center">
+  <img width="200" height="200" alt="ChatGPT Image 2025年9月10日 01_33_14" src="https://github.com/user-attachments/assets/e9ebe490-4036-4a8a-9d98-2a0e3bb3ff12" />
+</div>
 <h1 align="center">语析 - 基于大模型的知识库与知识图谱问答系统</h1>
 
 <div align="center">
