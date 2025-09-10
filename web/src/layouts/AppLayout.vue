@@ -245,7 +245,7 @@ div.header, #app-router-view {
   background-color: var(--main-10);
   height: 100%;
   width: var(--header-width);
-  border-right: 1px solid var(--gray-300);
+  border-right: 1px solid var(--gray-100);
 
   .nav {
     display: flex;

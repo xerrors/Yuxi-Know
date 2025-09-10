@@ -22,6 +22,10 @@
           <template #icon><RobotOutlined /></template>
           智能体配置
         </a-button>
+        <a-button @click="toggleDebugMode" :type="infoStore.debugMode ? 'primary' : 'default'">
+          <template #icon><BugOutlined /></template>
+          Debug 模式: {{ infoStore.debugMode ? '开启' : '关闭' }}
+        </a-button>
         <a-button @click="toggleFullscreen">
           <template #icon>
             <FullscreenOutlined v-if="!state.isFullscreen" />
@@ -99,6 +103,7 @@ import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
 import { useAgentStore } from '@/stores/agent';
+import { useInfoStore } from '@/stores/info';
 import { useThrottleFn } from '@vueuse/core';
 import { message } from 'ant-design-vue';
 import {
@@ -112,7 +117,8 @@ import {
   PlusCircleOutlined,
   UserOutlined,
   DatabaseOutlined,
-  RobotOutlined
+  RobotOutlined,
+  BugOutlined
 } from '@ant-design/icons-vue';
 import dayjs from 'dayjs';
 import { configApi } from '@/apis/system_api';
@@ -122,6 +128,7 @@ const configStore = useConfigStore()
 const userStore = useUserStore();
 const databaseStore = useDatabaseStore();
 const agentStore = useAgentStore();
+const infoStore = useInfoStore();
 const config = configStore.config;
 
 
@@ -364,6 +371,12 @@ const printDatabaseInfo = async () => {
     console.error('获取知识库信息失败:', error);
     message.error('获取知识库信息失败: ' + error.message);
   }
+};
+
+// 切换Debug模式
+const toggleDebugMode = () => {
+  if (!checkAdminPermission()) return;
+  infoStore.toggleDebugMode();
 };
 
 // 打印智能体配置

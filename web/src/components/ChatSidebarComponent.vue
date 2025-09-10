@@ -244,7 +244,7 @@ const openAgentModal = () => {
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-50);
     flex-shrink: 0;
 
     .header-title {
@@ -261,6 +261,7 @@ const openAgentModal = () => {
       display: flex;
       align-items: center;
       gap: 8px;
+      // color: var(--gray-600);
     }
   }
 
@@ -360,10 +361,10 @@ const openAgentModal = () => {
       }
 
       &:hover {
-        background-color: var(--gray-50);
+        background-color: var(--gray-25);
 
         .actions-mask {
-            background: linear-gradient(to right, transparent, var(--gray-100) 20px);
+            background: linear-gradient(to right, transparent, var(--gray-25) 20px);
         }
 
         .actions-mask, .conversation-actions {
@@ -372,14 +373,14 @@ const openAgentModal = () => {
       }
 
       &.active {
-        background-color: var(--gray-100);
+        background-color: var(--gray-50);
 
         .conversation-title {
           color: var(--main-600);
           font-weight: 500;
         }
         .actions-mask {
-          background: linear-gradient(to right, transparent, var(--gray-100) 20px);
+          background: linear-gradient(to right, transparent, var(--gray-50) 20px);
         }
       }
     }
@@ -415,20 +416,25 @@ const openAgentModal = () => {
   justify-content: center;
   align-items: center;
   border-radius: 8px;
-  color: var(--gray-500);
   // padding: 0.5rem;
   transition: background-color 0.3s;
-  &:hover {
-    color: var(--main-color);
+
+  svg {
+    stroke: var(--gray-600);
+  }
+
+  &:hover svg {
+    stroke: var(--main-color);
   }
 }
 
 // 智能体选择器样式
 .agent-selector {
   cursor: pointer;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--gray-900);
   transition: color 0.2s ease;
+  font-weight: 500;
 
   &:hover {
     color: var(--main-500);

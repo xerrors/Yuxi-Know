@@ -21,11 +21,6 @@
       <div class="agent-info" v-if="selectedAgent">
         <div class="agent-basic-info">
           <p class="agent-description">{{ selectedAgent.description }}</p>
-          <!-- <div class="debug-toggle" v-if="selectedAgent.name">
-            <span class="debug-text">调试信息</span>
-            <a-switch v-model:checked="debugMode" size="small" />
-          </div>
-          <pre v-if="debugMode && selectedAgent.name" class="debug-info">{{ selectedAgent }}</pre> -->
         </div>
 
         <a-divider />
@@ -334,7 +329,6 @@ const {
 // console.log(availableTools.value)
 
 // 本地状态
-const debugMode = ref(false);
 const toolsModalOpen = ref(false);
 const selectedTools = ref([]);
 const toolsSearchText = ref('');
@@ -360,10 +354,6 @@ const filteredTools = computed(() => {
 // 方法
 const closeSidebar = () => {
   emit('close');
-};
-
-const toggleDebugMode = () => {
-  debugMode.value = !debugMode.value;
 };
 
 const getConfigLabel = (key, value) => {
@@ -647,30 +637,6 @@ watch(() => props.isOpen, (newVal) => {
           font-size: 14px;
           color: var(--gray-700);
           line-height: 1.5;
-        }
-
-        .debug-toggle {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 0;
-          cursor: pointer;
-
-          .debug-text {
-            font-size: 13px;
-            color: var(--gray-600);
-          }
-        }
-
-        .debug-info {
-          margin-top: 12px;
-          padding: 12px;
-          background: var(--gray-50);
-          border-radius: 6px;
-          font-size: 12px;
-          color: var(--gray-700);
-          max-height: 200px;
-          overflow-y: auto;
         }
       }
     }

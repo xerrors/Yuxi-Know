@@ -7,6 +7,7 @@ export const useInfoStore = defineStore('info', () => {
   const infoConfig = ref({})
   const isLoading = ref(false)
   const isLoaded = ref(false)
+  const debugMode = ref(false)
 
   // 计算属性 - 组织信息
   const organization = computed(() => infoConfig.value.organization || {
@@ -39,6 +40,14 @@ export const useInfoStore = defineStore('info', () => {
   function setInfoConfig(newConfig) {
     infoConfig.value = newConfig
     isLoaded.value = true
+  }
+
+  function setDebugMode(enabled) {
+    debugMode.value = enabled
+  }
+
+  function toggleDebugMode() {
+    debugMode.value = !debugMode.value
   }
 
   async function loadInfoConfig(force = false) {
@@ -93,6 +102,7 @@ export const useInfoStore = defineStore('info', () => {
     infoConfig,
     isLoading,
     isLoaded,
+    debugMode,
 
     // 计算属性
     organization,
@@ -102,6 +112,8 @@ export const useInfoStore = defineStore('info', () => {
 
     // 方法
     setInfoConfig,
+    setDebugMode,
+    toggleDebugMode,
     loadInfoConfig,
     reloadInfoConfig
   }

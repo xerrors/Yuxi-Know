@@ -100,7 +100,6 @@
             :message="message"
             :key="msgIndex"
             :is-processing="isProcessing && conv.status === 'streaming' && msgIndex === conv.messages.length - 1"
-            :debug-mode="state.debug_mode"
             :show-refs="showMsgRefs(message)"
             @retry="retryMessage(message)"
           >
@@ -207,7 +206,6 @@ const threadMessages = ref({});
 
 const uiState = reactive({
   ...props.state,
-  debug_mode: computed(() => props.state.debug_mode ?? false),
   isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
   isInitialRender: true,
   showRenameButton: false,
@@ -1004,8 +1002,8 @@ watch(conversations, () => {
 
     .example-chip {
       padding: 6px 12px;
-      background: var(--gray-100);
-      border: 1px solid var(--gray-200);
+      background: var(--gray-25);
+      // border: 1px solid var(--gray-100);
       border-radius: 16px;
       cursor: pointer;
       font-size: 0.8rem;
@@ -1017,11 +1015,10 @@ watch(conversations, () => {
       text-overflow: ellipsis;
 
       &:hover {
-        background: var(--main-50);
+        // background: var(--main-25);
         border-color: var(--main-200);
         color: var(--main-700);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 0px 4px rgba(0, 0, 0, 0.03);
       }
 
       &:active {

@@ -71,7 +71,7 @@
       <!-- 错误消息 -->
     </div>
 
-    <div v-if="debugMode" class="status-info">{{ message }}</div>
+    <div v-if="infoStore.debugMode" class="status-info">{{ message }}</div>
 
     <!-- 自定义内容 -->
     <slot></slot>
@@ -85,6 +85,7 @@ import RefsComponent from '@/components/RefsComponent.vue'
 import { Loader, CircleCheckBig } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
 import { useAgentStore } from '@/stores/agent'
+import { useInfoStore } from '@/stores/info'
 import { storeToRefs } from 'pinia'
 
 
@@ -112,12 +113,13 @@ const props = defineProps({
     type: [Array, Boolean],
     default: () => false
   },
-  debugMode: {
+  // 是否为最新消息
+  isLatestMessage: {
     type: Boolean,
     default: false
   },
-  // 是否为最新消息
-  isLatestMessage: {
+  // 是否显示调试信息 (已废弃，使用 infoStore.debugMode)
+  debugMode: {
     type: Boolean,
     default: false
   }
@@ -133,6 +135,7 @@ const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 
 // 引入智能体 store
 const agentStore = useAgentStore();
+const infoStore = useInfoStore();
 const { availableTools } = storeToRefs(agentStore);
 
 // 工具相关方法

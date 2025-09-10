@@ -9,6 +9,8 @@
 - [x] 将现在的 graphview.vue 文件中 GraphContainer相关的代码分离到一个单独的组件中，然后 actions 和 footer 都是作为 slot top/bottom 提供的
 - [x]  然后应用到 web/src/components/ToolCallingResult/KnowledgeGraphResult.vue 中，替换现有的 GraphContainer。
 - [ ] 知识图谱的上传和可视化，支持属性，标签的展示
+- [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
+- [ ] 开发与生产环境隔离
 
 🐛**BUGs**
 - [x] LlightRAG 知识库中，点击边，没有显示，但是在全屏的时候却又能够显示出来。

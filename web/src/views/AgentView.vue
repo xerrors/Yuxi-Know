@@ -2,19 +2,19 @@
   <div class="agent-view">
     <div class="agent-view-header">
       <div class="header-left">
-      <div class="header-item">
-        <span class="brandname">{{ infoStore.branding?.title }}</span>
-      </div>
         <div class="header-item">
-          <a-button class="header-button" @click="openAgentModal">
-            <Bot size="18" stroke-width="1.75" />
-            选择：{{ selectedAgent?.name || '选择智能体' }}
-          </a-button>
+          <span class="brandname">{{ infoStore.branding?.title }}</span>
         </div>
       </div>
       <div class="header-center">
       </div>
       <div class="header-right">
+        <div class="header-item">
+          <a-button class="header-button" @click="openAgentModal">
+            <Bot size="18" stroke-width="1.75" />
+            切换智能体
+          </a-button>
+        </div>
         <div class="header-item">
           <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
         </div>
@@ -118,7 +118,6 @@ const {
   configurableItems,
 } = storeToRefs(agentStore);
 const state = reactive({
-  debug_mode: false,
   agentModalOpen: false,
   isConfigSidebarOpen: false,
   isEmptyConfig: computed(() =>
@@ -217,11 +216,6 @@ const goToAgentPage = () => {
   }
 };
 
-const toggleDebugMode = () => {
-  state.debug_mode = !state.debug_mode;
-  console.log("debug_mode", state.debug_mode);
-};
-
 const toggleConf = () => {
   state.isConfigSidebarOpen = !state.isConfigSidebarOpen
 }
@@ -240,7 +234,7 @@ const toggleConf = () => {
 .agent-view-header {
   height: var(--agent-view-header-height);
   background-color: var(--bg-sider);
-  border-bottom: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-100);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -260,7 +254,7 @@ const toggleConf = () => {
     gap: 10px;
 
     span.brandname {
-      font-size: 17px;
+      font-size: 18px;
       font-weight: 600;
       color: var(--text-primary);
       margin-right: 16px;
@@ -271,6 +265,7 @@ const toggleConf = () => {
       display: flex;
       align-items: center;
       gap: 6px;
+      border-color: var(--gray-100);
     }
   }
 }
