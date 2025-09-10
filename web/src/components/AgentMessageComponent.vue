@@ -148,6 +148,13 @@ const parsedData = computed(() => {
   let content = props.message.content.trim() || '';
   let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';
 
+  if (reasoning_content) {
+    return {
+      content,
+      reasoning_content,
+    }
+  }
+
   // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
   const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s;
   const thinkMatch = content.match(thinkRegex);
