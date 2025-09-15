@@ -534,9 +534,32 @@ const updateMessageInThread = (threadId, messageIndex, updatedMessage) => {
 };
 
 // ==================== CHAT ACTIONS ====================
+// 检查第一个对话是否为空
+const isFirstChatEmpty = () => {
+  if (threads.value.length === 0) return false;
+  const firstThread = threads.value[0];
+  const firstThreadMessages = threadMessages.value[firstThread.id] || [];
+  return firstThreadMessages.length === 0;
+};
+
+// 如果第一个对话为空，直接切换到第一个对话
+const switchToFirstChatIfEmpty = async () => {
+  if (threads.value.length > 0 && isFirstChatEmpty()) {
+    await selectChat(threads.value[0].id);
+    return true;
+  }
+  return false;
+};
+
 const createNewChat = async () => {
   if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || isProcessing.value) return;
-  if (currentChatId.value && conversations.value.length === 0) return;
+
+  // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
+  if (await switchToFirstChatIfEmpty()) return;
+
+  // 只有当当前对话是第一个对话且为空时，才阻止创建新对话
+  const currentThreadIndex = threads.value.findIndex(thread => thread.id === currentChatId.value);
+  if (currentChatId.value && conversations.value.length === 0 && currentThreadIndex === 0) return;
 
   chatState.creatingNewChat = true;
   try {
