@@ -22,7 +22,7 @@
         </a-button>
         <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
         <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
-          <SyncOutlined/> 为{{ unindexedCount }}个节点添加索引
+          <SyncOutlined v-if="!state.indexing"/> 为{{ unindexedCount }}个节点添加索引
         </a-button>
       </template>
     </HeaderComponent>
