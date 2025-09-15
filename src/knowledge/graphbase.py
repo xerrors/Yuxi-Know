@@ -394,11 +394,38 @@ class GraphDatabase:
 
         self.use_database(kgdb_name)
 
-        # 使用向量索引进行查询
-        results_sim = self._query_with_vector_sim(keyword, kgdb_name, threshold)
-        results_fuzzy = self._query_with_fuzzy_match(keyword, kgdb_name)
-        results = results_sim + results_fuzzy
-        qualified_entities = [result[0] for result in results][:max_entities]
+        # 简单空格分词，OR 聚合
+        tokens = [t for t in str(keyword).split(" ") if t]
+        if not tokens:
+            tokens = [str(keyword)]
+
+        # name -> score 聚合；向量分数累加，模糊命中给予轻权重
+        entity_to_score = {}
+        for token in tokens:
+            # 使用向量索引进行查询
+            results_sim = self._query_with_vector_sim(token, kgdb_name, threshold)
+            for r in results_sim:
+                name = r[0]  # 与下方保持统一的 [0] 取 name 的方式
+                score = 0.0
+                try:
+                    score = float(r["score"])  # neo4j.Record 支持键访问
+                except Exception:
+                    # 兜底：若无法取到score，给个基础分
+                    score = 0.5
+                entity_to_score[name] = max(entity_to_score.get(name, 0.0), score)
+
+            # 模糊查询（不区分大小写），命中加一个较小分
+            results_fuzzy = self._query_with_fuzzy_match(token, kgdb_name)
+            for fr in results_fuzzy:
+                # _query_with_fuzzy_match 返回 values()，形如 [name]
+                name = fr[0]
+                # 给予轻权重，避免覆盖向量高分
+                entity_to_score[name] = max(entity_to_score.get(name, 0.0), 0.3)
+
+        # 排序并截断
+        qualified_entities = [name for name, _ in sorted(entity_to_score.items(), key=lambda x: x[1], reverse=True)][
+            :max_entities
+        ]
 
         logger.debug(f"Graph Query Entities: {keyword}, {qualified_entities=}")
 
@@ -414,6 +441,35 @@ class GraphDatabase:
             else:
                 raise ValueError(f"Invalid return_format: {return_format}")
 
+        # 基础去重
+        if return_format == "graph":
+            seen_node_ids = set()
+            dedup_nodes = []
+            for n in all_query_results["nodes"]:
+                nid = n.get("id") if isinstance(n, dict) else n
+                if nid not in seen_node_ids:
+                    seen_node_ids.add(nid)
+                    dedup_nodes.append(n)
+            all_query_results["nodes"] = dedup_nodes
+
+            seen_edges = set()
+            dedup_edges = []
+            for e in all_query_results["edges"]:
+                key = (e.get("source_id"), e.get("target_id"), e.get("type"))
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    dedup_edges.append(e)
+            all_query_results["edges"] = dedup_edges
+
+        elif return_format == "triples":
+            seen_triples = set()
+            dedup_triples = []
+            for t in all_query_results["triples"]:
+                if t not in seen_triples:
+                    seen_triples.add(t)
+                    dedup_triples.append(t)
+            all_query_results["triples"] = dedup_triples
+
         return all_query_results
 
     def _query_with_fuzzy_match(self, keyword, kgdb_name="neo4j"):
@@ -425,7 +481,7 @@ class GraphDatabase:
             result = tx.run(
                 """
             MATCH (n:Entity)
-            WHERE n.name CONTAINS $keyword
+            WHERE toLower(n.name) CONTAINS toLower($keyword)
             RETURN DISTINCT n.name AS name
             """,
                 keyword=keyword,
@@ -486,24 +542,24 @@ class GraphDatabase:
                 query_str = """
                 WITH [
                     // 1跳出边
-                    [(n {name: $entity_name})-[r1]->(m1) | 
-                     {h: {id: elementId(n), name: n.name}, 
-                      r: {type: r1.type, source_id: elementId(n), target_id: elementId(m1)}, 
+                    [(n {name: $entity_name})-[r1]->(m1) |
+                     {h: {id: elementId(n), name: n.name},
+                      r: {type: r1.type, source_id: elementId(n), target_id: elementId(m1)},
                       t: {id: elementId(m1), name: m1.name}}],
                     // 2跳出边
-                    [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) | 
-                     {h: {id: elementId(m1), name: m1.name}, 
-                      r: {type: r2.type, source_id: elementId(m1), target_id: elementId(m2)}, 
+                    [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) |
+                     {h: {id: elementId(m1), name: m1.name},
+                      r: {type: r2.type, source_id: elementId(m1), target_id: elementId(m2)},
                       t: {id: elementId(m2), name: m2.name}}],
                     // 1跳入边
-                    [(m1)-[r1]->(n {name: $entity_name}) | 
-                     {h: {id: elementId(m1), name: m1.name}, 
-                      r: {type: r1.type, source_id: elementId(m1), target_id: elementId(n)}, 
+                    [(m1)-[r1]->(n {name: $entity_name}) |
+                     {h: {id: elementId(m1), name: m1.name},
+                      r: {type: r1.type, source_id: elementId(m1), target_id: elementId(n)},
                       t: {id: elementId(n), name: n.name}}],
                     // 2跳入边
-                    [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) | 
-                     {h: {id: elementId(m2), name: m2.name}, 
-                      r: {type: r2.type, source_id: elementId(m2), target_id: elementId(m1)}, 
+                    [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) |
+                     {h: {id: elementId(m2), name: m2.name},
+                      r: {type: r2.type, source_id: elementId(m2), target_id: elementId(m1)},
                       t: {id: elementId(m1), name: m1.name}}]
                 ] AS all_results
                 UNWIND all_results AS result_list
@@ -589,7 +645,7 @@ class GraphDatabase:
                 "labels": labels,
                 "status": self.status,
                 "embed_model_name": self.embed_model_name,
-                "unindexed_node_count": self.query_nodes_without_embedding(graph_name),
+                "unindexed_node_count": len(self.query_nodes_without_embedding(graph_name)),
             }
 
         try:
