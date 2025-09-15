@@ -9,52 +9,28 @@
 
     <!-- 图谱可视化容器 -->
     <div class="graph-visualization" ref="graphContainerRef" v-if="totalNodes > 0 || totalRelations > 0">
-      <GraphCanvas :graph-data="graphData" ref="graphContainer" style="height: 360px;" />
+      <GraphCanvas :graph-data="graphData" ref="graphContainer" style="height: 360px;">
+        <template #top>
+          <div class="graph-controls">
+            <a-button
+              @click="refreshGraph"
+              :loading="isRefreshing"
+              title="重新渲染图谱"
+              class="refresh-btn"
+            >
+              <ReloadOutlined v-if="!isRefreshing" />
+            </a-button>
+            </div>
+        </template>
+      </GraphCanvas>
     </div>
 
-    <!-- 详细信息展示 -->
-    <!-- <div class="kg-details">
-      <a-collapse v-model:activeKey="activeKeys" ghost>
-        <a-collapse-panel key="entities" header="实体节点">
-          <div class="entities-list">
-            <a-tag
-              v-for="entity in uniqueEntities"
-              :key="entity.name"
-              color="blue"
-              class="entity-tag"
-            >
-              {{ entity.name }}
-            </a-tag>
-          </div>
-        </a-collapse-panel>
-
-        <a-collapse-panel key="relations" header="关系详情">
-          <div class="relations-list">
-            <div
-              v-for="(relation, index) in allRelations"
-              :key="index"
-              class="relation-item"
-            >
-              <div class="relation-content">
-                <span class="entity-name">{{ relation.source }}</span>
-                <span class="relation-type">{{ relation.type }}</span>
-                <span class="entity-name">{{ relation.target }}</span>
-              </div>
-            </div>
-          </div>
-        </a-collapse-panel>
-
-        <a-collapse-panel key="raw" header="原始数据">
-          <pre class="raw-data">{{ JSON.stringify(props.data, null, 2) }}</pre>
-        </a-collapse-panel>
-      </a-collapse>
-    </div> -->
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUpdated } from 'vue'
-import { DeploymentUnitOutlined } from '@ant-design/icons-vue'
+import { DeploymentUnitOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import GraphCanvas from '../GraphCanvas.vue'
 
 const props = defineProps({
@@ -68,6 +44,7 @@ const activeKeys = ref(['entities'])
 const graphContainer = ref(null)
 const graphContainerRef = ref(null)
 const isVisible = ref(false)
+const isRefreshing = ref(false)
 
 // 计算属性：解析图谱数据
 const graphData = computed(() => {
@@ -225,13 +202,20 @@ onUpdated(() => {
 // 添加供父组件调用的刷新方法
 const refreshGraph = () => {
   console.log('KnowledgeGraphResult: refreshGraph called');
+  isRefreshing.value = true;
   if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
     // 增加延迟确保容器完全展开
     setTimeout(() => {
       graphContainer.value.refreshGraph();
+      setTimeout(() => {
+        isRefreshing.value = false;
+      }, 500);
     }, 300);
+  } else {
+    isRefreshing.value = false;
   }
 };
+
 
 // 向父组件暴露方法
 defineExpose({
@@ -272,6 +256,34 @@ defineExpose({
     border-radius: 6px;
     border: 1px solid var(--gray-200);
     min-height: 350px;
+
+    .graph-controls {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 1000;
+
+      .refresh-btn {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        padding: 0;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid var(--gray-300);
+        color: var(--gray-600);
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        &:hover {
+          background: rgba(255, 255, 255, 1);
+          border-color: var(--main-color);
+          color: var(--main-color);
+        }
+      }
+    }
   }
 
   .kg-details {
@@ -351,4 +363,5 @@ defineExpose({
     }
   }
 }
+
 </style>
