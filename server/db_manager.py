@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from server.models import Base
 from server.models.user_model import User
+from server.utils.migrate import check_and_migrate
 from src import config
 from src.utils import logger
 
@@ -24,8 +25,11 @@ class DBManager:
         # 创建会话工厂
         self.Session = sessionmaker(bind=self.engine)
 
-        # 确保表存在
+        # 首先创建基本表结构
         self.create_tables()
+        
+        # 然后检查并执行数据库迁移
+        self.run_migrations()
 
     def ensure_db_dir(self):
         """确保数据库目录存在"""
@@ -37,6 +41,18 @@ class DBManager:
         # 确保所有表都会被创建
         Base.metadata.create_all(self.engine)
         logger.info("Database tables created/checked")
+    
+    def run_migrations(self):
+        """运行数据库迁移"""
+        try:
+            success = check_and_migrate(self.db_path)
+            if success:
+                logger.info("数据库迁移检查完成")
+            else:
+                logger.warning("数据库迁移过程中出现问题")
+        except Exception as e:
+            logger.error(f"数据库迁移失败: {e}")
+            # 不抛出异常，以防止阻断应用启动
 
     def get_session(self):
         """获取数据库会话"""

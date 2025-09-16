@@ -206,7 +206,7 @@ const threadMessages = ref({});
 
 const uiState = reactive({
   ...props.state,
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open', 'true') === 'true',
+  isSidebarOpen: localStorage.getItem('chat_sidebar_open') !== 'false',
   isInitialRender: true,
   showRenameButton: false,
   containerWidth: 0,

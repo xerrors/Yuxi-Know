@@ -27,6 +27,15 @@ export const useUserStore = defineStore('user', () => {
 
       if (!response.ok) {
         const error = await response.json()
+        
+        // 如果是423锁定状态码，抛出包含状态码的错误
+        if (response.status === 423) {
+          const lockError = new Error(error.detail || '账户被锁定')
+          lockError.status = 423
+          lockError.headers = response.headers
+          throw lockError
+        }
+        
         throw new Error(error.detail || '登录失败')
       }
 
