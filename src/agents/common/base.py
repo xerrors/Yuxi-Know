@@ -53,8 +53,9 @@ class BaseAgent:
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         logger.debug(f"stream_messages: {context}")
         # TODO 的 Checkpointer 似乎还没有适配最新的 Context API
+        input_config = {"configurable": input_context, "recursion_limit": 100}
         async for msg, metadata in graph.astream(
-            {"messages": messages}, stream_mode="messages", context=context, config={"configurable": input_context}
+            {"messages": messages}, stream_mode="messages", context=context, config=input_config
         ):
             yield msg, metadata
 

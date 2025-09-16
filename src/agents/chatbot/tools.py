@@ -8,6 +8,7 @@ from langchain_core.tools import tool
 from src.agents.common.tools import get_buildin_tools
 from src.utils import logger
 from src.utils.minio_utils import upload_image_to_minio
+from src.agents.common.toolkits.mysql import get_mysql_tools
 
 
 @tool
@@ -30,6 +31,7 @@ def calculator(a: float, b: float, operation: str) -> float:
         logger.error(f"Calculator error: {e}")
         raise
 
+
 @tool
 async def text_to_img_kolors(text: str) -> str:
     """（用来测试文件存储）使用Kolors模型生成图片， 会返回图片的URL"""
@@ -42,12 +44,9 @@ async def text_to_img_kolors(text: str) -> str:
         "image_size": "512x512",
         "batch_size": 1,
         "num_inference_steps": 20,
-        "guidance_scale": 7.5
+        "guidance_scale": 7.5,
     }
-    headers = {
-        "Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}", "Content-Type": "application/json"}
 
     try:
         response = requests.post(url, json=payload, headers=headers)
@@ -76,4 +75,5 @@ def get_tools() -> list[Any]:
     tools = get_buildin_tools()
     tools.append(calculator)
     tools.append(text_to_img_kolors)
+    tools.extend(get_mysql_tools())
     return tools

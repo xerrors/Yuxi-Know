@@ -25,6 +25,11 @@
       :data="parsedData"
     />
 
+    <!-- 图片结果 -->
+    <div v-else-if="isImageResult" class="image-result">
+      <img :src="parsedData" />
+    </div>
+
     <!-- 默认的原始数据展示 -->
     <div v-else class="default-result">
       <!-- <div class="default-header">
@@ -117,6 +122,17 @@ const isKnowledgeBaseResult = computed(() => {
   }
 
   return false
+})
+
+const isImageResult = computed(() => {
+  // 包含 chart 且返回值是url
+  const data = parsedData.value
+  const toolNameLower = props.toolName.toLowerCase()
+  const isImageTool = toolNameLower.includes('chart')
+
+  if (!isImageTool) return false
+
+  return data && typeof data === 'string' && data.startsWith('http')
 })
 
 // 判断是否为知识图谱查询结果
@@ -213,6 +229,20 @@ defineExpose({
         // border-left: 2px solid var(--main-color);
       }
     }
+  }
+
+  .image-result {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
   }
 }
 </style>

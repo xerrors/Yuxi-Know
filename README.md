@@ -261,6 +261,59 @@ agent_manager.register_agent(ChatbotAgent)
 agent_manager.init_all_agents()
 ```
 
+### MySQL 数据库查询集成（Beta）
+
+项目目前已经支持智能体去查询 MySQL 数据库如果想要接入数据库，则可以在环境变量中配置如下信息：
+
+```sh
+# 基础配置示例
+MYSQL_HOST=192.168.1.100
+MYSQL_USER=username
+MYSQL_PASSWORD=your_secure_password
+MYSQL_DATABASE=database_name
+MYSQL_PORT=3306
+MYSQL_CHARSET=utf8mb4
+```
+
+然后在智能体配置的工具中，勾选上 `mysql` 开头的几个工具即可。
+
+- **mysql_list_tables**: 获取数据库中的所有表名
+- **mysql_describe_table**: 获取指定表的详细结构信息
+- **mysql_query**: 执行只读的 SQL 查询语句
+
+**安全特性**
+
+- ✅ 只允许 SELECT、SHOW、DESCRIBE、EXPLAIN 操作
+- ✅ 表名参数验证，严格的 SQL 注入防护
+- ✅ 查询超时控制（默认10秒，最大60秒）
+- ✅ 结果大小、行数限制（默认10000字符，100行，最大1000行）
+
+**注意事项**
+
+1. 确保数据库用户只有只读权限
+2. 大表查询建议使用 LIMIT 子句
+3. 复杂查询可能需要调整超时时间
+4. 查询结果过大会被自动截断并提示
+
+### 图表可视化绘制 - MCP（Beta）
+
+这个是基于 @antvis 团队开发的 [可视化图表-MCP-Server](https://www.modelscope.cn/mcp/servers/@antvis/mcp-server-chart)，可以在魔搭社区中配置 Host 资源后，在 src/agents/common/mcp.py 的 `MCP_SERVERS` 中添加 mcp-server，需要注意的是记得将 `type` 字段修改为 `transport`。
+
+```python
+# MCP Server configurations
+MCP_SERVERS = {
+    "sequentialthinking": {
+        "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
+        "transport": "streamable_http",
+    },
+
+    "mcp-server-chart": {
+        "url": "https://mcp.api-inference.modelscope.net/9993ae42524c4c/mcp",
+        "transport": "streamable_http",
+    }
+}
+```
+
 ### 服务端口说明
 
 | 端口 | 服务 | 说明 |

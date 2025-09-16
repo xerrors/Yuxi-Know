@@ -115,6 +115,10 @@ def get_buildin_tools() -> list:
         tools.extend(get_kb_based_tools())
         tools.extend(get_static_tools())
 
+        from src.agents.common.toolkits.mysql.tools import get_mysql_tools
+
+        tools.extend(get_mysql_tools())
+
     except Exception as e:
         logger.error(f"Failed to get knowledge base retrievers: {e}")
 

@@ -24,6 +24,10 @@ MCP_SERVERS = {
     #     "args": ["mcp-server-time"],
     #     "transport": "stdio",
     # },
+    # "mcp-server-chart": {
+    #     "url": "https://mcp.api-inference.modelscope.net/9993ae42524c4c/mcp",
+    #     "transport": "streamable_http",
+    # }
 }
 
 
