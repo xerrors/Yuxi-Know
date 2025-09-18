@@ -72,17 +72,14 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="用户名或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     # 检查用户是否处于登录锁定状态
     if user.is_login_locked():
         remaining_time = user.get_remaining_lock_time()
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
             detail=f"登录被锁定，请等待 {remaining_time} 秒后再试",
-            headers={
-                "WWW-Authenticate": "Bearer",
-                "X-Lock-Remaining": str(remaining_time)
-            },
+            headers={"WWW-Authenticate": "Bearer", "X-Lock-Remaining": str(remaining_time)},
         )
 
     # 验证密码
@@ -90,20 +87,17 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         # 密码错误，增加失败次数
         user.increment_failed_login()
         db.commit()
-        
+
         # 记录失败操作
         log_operation(db, user.id if user else None, "登录失败", f"密码错误，失败次数: {user.login_failed_count}")
-        
+
         # 检查是否需要锁定
         if user.is_login_locked():
             remaining_time = user.get_remaining_lock_time()
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
                 detail=f"由于多次登录失败，账户已被锁定 {remaining_time} 秒",
-                headers={
-                    "WWW-Authenticate": "Bearer",
-                    "X-Lock-Remaining": str(remaining_time)
-                },
+                headers={"WWW-Authenticate": "Bearer", "X-Lock-Remaining": str(remaining_time)},
             )
         else:
             raise HTTPException(

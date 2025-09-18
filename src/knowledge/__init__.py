@@ -21,4 +21,3 @@ knowledge_base = KnowledgeBaseManager(work_dir)
 graph_base = GraphDatabase()
 
 __all__ = ["GraphDatabase", "knowledge_base", "graph_base"]
-

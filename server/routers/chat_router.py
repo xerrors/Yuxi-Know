@@ -15,7 +15,8 @@ from server.models.thread_model import Thread
 from server.models.user_model import User
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
-from src import config, executor
+from src import executor
+from src import config as conf
 from src.agents import agent_manager
 from src.agents.common.tools import gen_tool_info, get_buildin_tools
 from src.models import select_model
@@ -32,7 +33,7 @@ chat = APIRouter(prefix="/chat", tags=["chat"])
 async def get_default_agent(current_user: User = Depends(get_required_user)):
     """获取默认智能体ID（需要登录）"""
     try:
-        default_agent_id = config.default_agent_id
+        default_agent_id = conf.default_agent_id
         # 如果没有设置默认智能体，尝试获取第一个可用的智能体
         if not default_agent_id:
             agents = await agent_manager.get_agents_info()
@@ -61,9 +62,9 @@ async def set_default_agent(request_data: dict = Body(...), current_user=Depends
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         # 设置默认智能体ID
-        config.default_agent_id = agent_id
+        conf.default_agent_id = agent_id
         # 保存配置
-        config.save()
+        conf.save()
 
         return {"success": True, "default_agent_id": agent_id}
     except HTTPException as he:
@@ -187,9 +188,9 @@ async def get_chat_models(model_provider: str, current_user: User = Depends(get_
 @chat.post("/models/update")
 async def update_chat_models(model_provider: str, model_names: list[str], current_user=Depends(get_admin_user)):
     """更新指定模型提供商的模型列表 (仅管理员)"""
-    config.model_names[model_provider]["models"] = model_names
-    config._save_models_to_file()
-    return {"models": config.model_names[model_provider]["models"]}
+    conf.model_names[model_provider]["models"] = model_names
+    conf._save_models_to_file()
+    return {"models": conf.model_names[model_provider]["models"]}
 
 
 @chat.get("/tools")

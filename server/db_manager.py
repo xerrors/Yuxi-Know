@@ -27,7 +27,7 @@ class DBManager:
 
         # 首先创建基本表结构
         self.create_tables()
-        
+
         # 然后检查并执行数据库迁移
         self.run_migrations()
 
@@ -41,7 +41,7 @@ class DBManager:
         # 确保所有表都会被创建
         Base.metadata.create_all(self.engine)
         logger.info("Database tables created/checked")
-    
+
     def run_migrations(self):
         """运行数据库迁移"""
         try:
