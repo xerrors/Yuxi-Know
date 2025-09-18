@@ -29,30 +29,22 @@ class BaseEmbeddingModel(ABC):
         self.embed_state = {}
 
     @abstractmethod
-    def predict(self, message: list[str] | str) -> list[list[float]]:
+    def encode(self, message: list[str] | str) -> list[list[float]]:
         """同步编码"""
         raise NotImplementedError("Subclasses must implement this method")
 
+    def encode_queries(self, queries: list[str] | str) -> list[list[float]]:
+        """等同于encode"""
+        return self.encode(queries)
+
     @abstractmethod
-    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+    async def aencode(self, message: list[str] | str) -> list[list[float]]:
         """异步编码"""
         raise NotImplementedError("Subclasses must implement this method")
 
-    def encode(self, message: list[str] | str) -> list[list[float]]:
-        """等同于predict"""
-        return self.predict(message)
-
-    def encode_queries(self, queries: list[str] | str) -> list[list[float]]:
-        """等同于predict"""
-        return self.predict(queries)
-
-    async def aencode(self, message: list[str] | str) -> list[list[float]]:
-        """等同于apredict"""
-        return await self.apredict(message)
-
     async def aencode_queries(self, queries: list[str] | str) -> list[list[float]]:
-        """等同于apredict"""
-        return await self.apredict(queries)
+        """等同于aencode"""
+        return await self.aencode(queries)
 
     def batch_encode(self, messages: list[str], batch_size: int = 40) -> list[list[float]]:
         # logger.info(f"Batch encoding {len(messages)} messages")
@@ -107,7 +99,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
         super().__init__(**kwargs)
         self.base_url = self.base_url or get_docker_safe_url("http://localhost:11434/api/embed")
 
-    def predict(self, message: list[str] | str) -> list[list[float]]:
+    def encode(self, message: list[str] | str) -> list[list[float]]:
         if isinstance(message, str):
             message = [message]
 
@@ -123,7 +115,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
             logger.error(f"Ollama Embedding request failed: {e}, {payload}")
             raise ValueError(f"Ollama Embedding request failed: {e}")
 
-    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+    async def aencode(self, message: list[str] | str) -> list[list[float]]:
         if isinstance(message, str):
             message = [message]
 
@@ -149,7 +141,7 @@ class OtherEmbedding(BaseEmbeddingModel):
     def build_payload(self, message: list[str] | str) -> dict:
         return {"model": self.model, "input": message}
 
-    def predict(self, message: list[str] | str) -> list[list[float]]:
+    def encode(self, message: list[str] | str) -> list[list[float]]:
         payload = self.build_payload(message)
         try:
             response = requests.post(self.base_url, json=payload, headers=self.headers, timeout=60)
@@ -162,7 +154,7 @@ class OtherEmbedding(BaseEmbeddingModel):
             logger.error(f"Other Embedding request failed: {e}, {payload}")
             raise ValueError(f"Other Embedding request failed: {e}")
 
-    async def apredict(self, message: list[str] | str) -> list[list[float]]:
+    async def aencode(self, message: list[str] | str) -> list[list[float]]:
         payload = self.build_payload(message)
         async with httpx.AsyncClient() as client:
             try:

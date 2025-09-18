@@ -50,6 +50,12 @@ class Config(SimpleConfig):
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
         self.add_item("enable_content_guard", default=False, des="是否启用内容审查")
+        self.add_item("enable_content_guard_llm", default=False, des="是否启用LLM内容审查")
+        self.add_item(
+            "content_guard_llm_model",
+            default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
+            des="内容审查LLM模型"
+        )
         self.add_item(
             "enable_web_search",
             default=False,
@@ -98,15 +104,21 @@ class Config(SimpleConfig):
 
     def _update_models_from_file(self):
         """
-        从 models.yaml 和 models.private.yml 中更新 MODEL_NAMES
+        从 models.yaml 和 models.private.yaml 中更新 MODEL_NAMES
         """
 
         with open(Path("src/static/models.yaml"), encoding="utf-8") as f:
             _models = yaml.safe_load(f)
 
-        # 尝试打开一个 models.private.yml 文件，用来覆盖 models.yaml 中的配置
+        # 尝试打开一个 models.private.yaml 文件，用来覆盖 models.yaml 中的配置
+        # 兼容性测试（历史遗留问题）
+        exist_yml = Path("src/static/models.private.yml").exists()
+        exist_yaml = Path("src/static/models.private.yaml").exists()
+        if exist_yml and not exist_yaml:
+            os.rename("src/static/models.private.yml", "src/static/models.private.yaml")
+
         try:
-            with open(Path("src/static/models.private.yml"), encoding="utf-8") as f:
+            with open(Path("src/static/models.private.yaml"), encoding="utf-8") as f:
                 _models_private = yaml.safe_load(f)
         except FileNotFoundError:
             _models_private = {}
@@ -124,7 +136,7 @@ class Config(SimpleConfig):
             "EMBED_MODEL_INFO": self.embed_model_names,
             "RERANKER_LIST": self.reranker_names,
         }
-        with open(Path("src/static/models.private.yml"), "w", encoding="utf-8") as f:
+        with open(Path("src/static/models.private.yaml"), "w", encoding="utf-8") as f:
             yaml.dump(_models, f, indent=2, allow_unicode=True)
 
     def handle_self(self):

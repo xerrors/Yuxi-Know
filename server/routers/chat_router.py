@@ -86,11 +86,11 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
     meta = meta or {}
     model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
 
-    async def predict_async(query):
+    async def call_async(query):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(executor, model.predict, query)
+        return await loop.run_in_executor(executor, model.call, query)
 
-    response = await predict_async(query)
+    response = await call_async(query)
     logger.debug({"query": query, "response": response.content})
 
     return {"response": response.content}
@@ -169,14 +169,23 @@ async def chat_agent(
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
+
                     accumulated_content += msg.content
                     if conf.enable_content_guard and content_guard.check(accumulated_content):
                         logger.warning(f"Sensitive content detected in stream: {accumulated_content}")
                         yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                         return
+
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
+
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
+
+            # Additional content guard with llm
+            if conf.enable_content_guard and content_guard.check_with_llm(accumulated_content):
+                logger.warning(f"Content guard triggered: {accumulated_content=}")
+                yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
+                return
 
             yield make_chunk(status="finished", meta=meta)
         except Exception as e:

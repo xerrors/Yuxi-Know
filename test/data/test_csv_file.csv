@@ -1,0 +1,8 @@
+ProductID,ProductName,Category,Price,Stock,DateAdded
+101,Laptop,Electronics,1200.50,50,2025-01-15
+102,Wireless Mouse,Electronics,25.99,150,2025-02-20
+201,The Last Question,Books,9.99,300,2025-03-10
+301,Coffee Mug,Home Goods,15.00,200,2025-01-25
+401,T-Shirt,Apparel,22.50,500,2025-04-05
+103,USB-C Hub,Electronics,45.75,80,2025-05-12
+202,Dune,Books,14.95,250,2025-06-18

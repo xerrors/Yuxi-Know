@@ -15,7 +15,7 @@ class OpenAIBase:
         self.model_name = model_name
         self.info = kwargs
 
-    def predict(self, message, stream=False):
+    def call(self, message, stream=False):
         if isinstance(message, str):
             messages = [{"role": "user", "content": message}]
         else:
