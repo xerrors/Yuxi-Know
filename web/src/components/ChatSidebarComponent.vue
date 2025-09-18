@@ -71,8 +71,12 @@ import { PanelLeftClose, MessageSquarePlus } from 'lucide-vue-next';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 
 dayjs.extend(relativeTime);
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.locale('zh-cn');
 
 const props = defineProps({
@@ -128,16 +132,23 @@ const groupedChats = computed(() => {
     '三十天内': [],
   };
 
-  const now = dayjs();
+  // 确保使用北京时间进行比较
+  const now = dayjs().tz('Asia/Shanghai');
   const today = now.startOf('day');
   const sevenDaysAgo = now.subtract(7, 'day').startOf('day');
   const thirtyDaysAgo = now.subtract(30, 'day').startOf('day');
 
   // Sort chats by creation date, newest first
-  const sortedChats = [...props.chatsList].sort((a, b) => dayjs(b.create_at).diff(dayjs(a.create_at)));
+  const sortedChats = [...props.chatsList].sort((a, b) => {
+    // 将后端时间当作UTC时间处理，然后转换为北京时间进行比较
+    const dateA = dayjs.utc(b.create_at).tz('Asia/Shanghai');
+    const dateB = dayjs.utc(a.create_at).tz('Asia/Shanghai');
+    return dateA.diff(dateB);
+  });
 
   sortedChats.forEach(chat => {
-    const chatDate = dayjs(chat.create_at);
+    // 将后端时间当作UTC时间处理，然后转换为北京时间
+    const chatDate = dayjs.utc(chat.create_at).tz('Asia/Shanghai');
     if (chatDate.isAfter(today)) {
       groups['今天'].push(chat);
     } else if (chatDate.isAfter(sevenDaysAgo)) {
