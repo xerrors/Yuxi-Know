@@ -60,7 +60,7 @@
       </div>
 
       <div v-else-if="!conversations.length" class="chat-examples">
-        <img v-if="currentAgentMetadata.icon" class="agent-icons" :src="currentAgentMetadata.icon" alt="智能体图标" />
+        <img v-if="currentAgentMetadata?.icon" class="agent-icons" :src="currentAgentMetadata?.icon" alt="智能体图标" />
         <div v-else style="margin-bottom: 150px"></div>
         <h1>您好，我是{{ currentAgentName }}！有什么可以帮您？</h1>
         <!-- <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
@@ -221,8 +221,13 @@ const currentAgentId = computed(() => {
   }
 });
 
-const currentAgentMetadata = computed(() => agentStore.metadata[currentAgentId.value] || {});
-const currentAgentName = computed(() => currentAgentMetadata?.value.name || currentAgent.name || '智能体');
+const currentAgentMetadata = computed(() => {
+  if (agentStore?.metadata && CurrentAgentId.value in agentStore?.metadata[currentAgentId.value]) {
+    return agentStore?.metadata[currentAgentId.value]
+  }
+  return {}
+});
+const currentAgentName = computed(() => currentAgentMetadata.value?.name || currentAgent.name || '智能体');
 
 const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
 const chatsList = computed(() => threads.value || []);
