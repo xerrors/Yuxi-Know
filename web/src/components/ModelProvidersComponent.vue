@@ -178,7 +178,7 @@
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
             <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
             <div v-else>
-              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yml 中添加。（如没有此文件，则需要手动创建一个）" />
+              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/static/models.private.yaml 中添加。（如没有此文件，则需要手动创建一个）" />
               <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%; margin-top: 16px;">
             </div>
           </div>
@@ -447,7 +447,7 @@ const filteredModels = computed(() => {
 
 <style lang="less" scoped>
 .model-provider-card {
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--gray-150);
   background-color: white;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -456,13 +456,12 @@ const filteredModels = computed(() => {
   overflow: hidden;
 
   &:hover {
-    border-color: var(--gray-300);
+    border-color: var(--gray-200);
   }
 
   // 自定义模型容器特殊样式
   &.custom-models-card {
     .card-header {
-      border-bottom: 1px solid var(--gray-200);
 
       h3 {
         color: var(--main-color);
@@ -474,7 +473,6 @@ const filteredModels = computed(() => {
   // 已配置provider的样式
   &.configured-provider {
     .card-header {
-      border-bottom: 1px solid var(--gray-200);
 
       .model-icon {
         &.available {
@@ -490,7 +488,7 @@ const filteredModels = computed(() => {
   &.unconfigured-provider {
     .card-header {
       background: #fafafa;
-      border-bottom: 1px solid var(--gray-200);
+      border-bottom: 1px solid var(--gray-150);
 
       h3 {
         color: var(--gray-700);
@@ -511,7 +509,7 @@ const filteredModels = computed(() => {
     align-items: center;
     gap: 12px;
     cursor: pointer;
-    padding: 16px 20px;
+    padding: 8px 16px;
     background: white;
     transition: all 0.3s ease;
 
@@ -551,7 +549,7 @@ const filteredModels = computed(() => {
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border: 1px solid var(--gray-200);
+        border: 1px solid var(--gray-100);
         border-radius: 6px;
       }
 
@@ -613,7 +611,7 @@ const filteredModels = computed(() => {
       transition: all 0.2s ease;
 
       &:hover {
-        background-color: var(--gray-100);
+        background-color: var(--gray-50);
         color: var(--gray-700);
       }
 
@@ -644,13 +642,13 @@ const filteredModels = computed(() => {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 12px;
     padding: 16px;
-    background: #fafafa;
+    background: var(--gray-10);
 
     // 普通模型卡片样式
     .card-models {
       width: 100%;
       border-radius: 6px;
-      border: 1px solid var(--gray-200);
+      border: 1px solid var(--gray-150);
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
@@ -661,8 +659,8 @@ const filteredModels = computed(() => {
       min-height: 48px;
 
       &:hover {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        border-color: var(--gray-400);
+        box-shadow: 0 1px 8px rgba(0, 0, 0, 0.03);
+        border-color: var(--gray-200);
       }
 
       .model_name {
@@ -701,12 +699,12 @@ const filteredModels = computed(() => {
       min-height: 72px;
       background: white;
       border-radius: 6px;
-      border: 1px solid var(--gray-200);
+      border: 1px solid var(--gray-150);
       transition: all 0.3s ease;
 
       &:hover {
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        border-color: var(--gray-400);
+        border-color: var(--gray-200);
 
         .card-models__header .action {
           opacity: 1;
@@ -884,7 +882,7 @@ const filteredModels = computed(() => {
             padding: 4px 6px;
             border-radius: 6px;
             background-color: white;
-            border: 1px solid var(--gray-200);
+            border: 1px solid var(--gray-150);
 
             &:hover {
               background-color: var(--gray-50);
@@ -909,7 +907,7 @@ const filteredModels = computed(() => {
 
       &:hover {
         box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-        border-color: var(--gray-300);
+        border-color: var(--gray-200);
       }
     }
   }

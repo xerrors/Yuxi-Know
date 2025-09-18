@@ -577,20 +577,27 @@ const toggleToolCall = (toolCallId) => {
   table {
     width: 100%;
     border-collapse: collapse;
-    margin: 1em 0;
-    font-size: 16px;
+    margin: 2em 0;
+    font-size: 15px;
     display: table;
+    outline: 1px solid var(--gray-100);
+    outline-offset: 14px;
+    border-radius: 12px;
 
+    thead tr th{
+      padding-top: 0;
+    }
 
     thead th,
     tbody th {
       border: none;
-      border-bottom: 1.5px solid var(--gray-400);
+      border-bottom: 1px solid var(--gray-200);
     }
 
     tbody tr:last-child td {
-      border-bottom: 1.5px solid var(--gray-300);
+      border-bottom: 1px solid var(--gray-200);
       border: none;
+      padding-bottom: 0;
     }
   }
 

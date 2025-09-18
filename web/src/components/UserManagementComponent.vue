@@ -6,7 +6,7 @@
         <h3 class="title">用户管理</h3>
         <p class="description">管理系统用户，请谨慎操作。删除用户后该用户将无法登录系统。</p>
       </div>
-      <a-button type="primary" size="large" @click="showAddUserModal" class="add-btn">
+      <a-button type="primary" @click="showAddUserModal" class="add-btn">
         <template #icon><PlusOutlined /></template>
         添加用户
       </a-button>

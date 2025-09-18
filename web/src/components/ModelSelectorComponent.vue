@@ -64,9 +64,9 @@ const handleSelectModel = (provider, name) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0.25rem 0.5rem;
+  padding: 4px 8px;
   cursor: pointer;
-  border: 1px solid var(--gray-300);
+  border: 1px solid var(--gray-200);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -88,27 +88,6 @@ const handleSelectModel = (provider, name) => {
   }
 
 
-}
-
-.nav-btn {
-  height: 2.5rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 8px;
-  color: var(--gray-900);
-  cursor: pointer;
-  width: auto;
-  transition: background-color 0.3s;
-  padding: 0.5rem 0.75rem;
-
-  .text {
-    margin-left: 10px;
-  }
-
-  &:hover {
-    background-color: var(--main-20);
-  }
 }
 
 .scrollable-menu {

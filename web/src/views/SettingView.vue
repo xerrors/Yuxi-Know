@@ -49,11 +49,30 @@
               </a-select-option>
             </a-select>
           </div>
+        </div>
+        <h3>内容审查配置</h3>
+        <div class="section">
+          <!-- 内容审查配置 -->
           <div class="card">
             <span class="label">{{ items?.enable_content_guard.des }}</span>
             <a-switch
               :checked="configStore.config?.enable_content_guard"
               @change="handleChange('enable_content_guard', $event)"
+            />
+          </div>
+          <div class="card" v-if="configStore.config?.enable_content_guard">
+            <span class="label">{{ items?.enable_content_guard_llm.des }}</span>
+            <a-switch
+              :checked="configStore.config?.enable_content_guard_llm"
+              @change="handleChange('enable_content_guard_llm', $event)"
+            />
+          </div>
+          <div class="card card-select" v-if="configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm">
+            <span class="label">{{ items?.content_guard_llm_model.des }}</span>
+            <ModelSelectorComponent
+              @select-model="handleContentGuardModelSelect"
+              :model_name="configStore.config?.content_guard_llm_model?.split('/').pop()"
+              :model_provider="configStore.config?.content_guard_llm_model?.split('/')[0]"
             />
           </div>
         </div>
@@ -198,6 +217,10 @@ const handleChatModelSelect = ({ provider, name }) => {
   })
 }
 
+const handleContentGuardModelSelect = ({ provider, name }) => {
+  configStore.setConfigValue('content_guard_llm_model', `${provider}/${name}`)
+}
+
 onMounted(() => {
   updateWindowWidth()
   window.addEventListener('resize', updateWindowWidth)
@@ -297,19 +320,33 @@ const openLink = (url) => {
   padding: 0 20px;
   margin-bottom: 40px;
 
-  h3 {
+  h3:not(:first-child) {
+    margin-top: 30px;
+  }
+  h3:first-child {
     margin-top: 20px;
   }
 
   .section {
-    margin-top: 20px;
+    margin-top: 10px;
     background-color: var(--gray-0);
-    padding: 20px;
+    padding: 12px 16px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-150);
+
+    .content-guard-section {
+      h4 {
+        margin: 0 0 12px 0;
+        color: var(--gray-900);
+        font-size: 16px;
+        font-weight: 600;
+        border-bottom: 1px solid var(--gray-150);
+        padding-bottom: 8px;
+      }
+    }
   }
 
   .card {
@@ -335,20 +372,20 @@ const openLink = (url) => {
   .services-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap: 16px;
+    gap: 12px;
     margin-top: 20px;
   }
 
-    .service-link-card {
+  .service-link-card {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
-    border: 1px solid var(--gray-300);
+    padding: 12px 16px;
+    border: 1px solid var(--gray-150);
     border-radius: 8px;
     background: white;
     transition: all 0.2s;
-    min-height: 80px;
+    min-height: 60px;
 
     &:hover {
       box-shadow: 0 1px 8px var(--gray-200);
