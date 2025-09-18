@@ -55,6 +55,7 @@ dependencies = [
     "minio>=7.2.7",
     "Pillow>=10.5.0",
     "pymysql>=1.1.0",
+    "tenacity>=8.0.0",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

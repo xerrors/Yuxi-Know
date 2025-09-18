@@ -2,6 +2,7 @@ import os
 import traceback
 
 from openai import OpenAI
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log, after_log
 
 from src import config
 from src.utils import get_docker_safe_url, logger
@@ -15,27 +16,24 @@ class OpenAIBase:
         self.model_name = model_name
         self.info = kwargs
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((Exception,)),
+        before_sleep=before_sleep_log(logger, log_level="WARNING"),
+        reraise=True
+    )
     def call(self, message, stream=False):
         if isinstance(message, str):
             messages = [{"role": "user", "content": message}]
         else:
             messages = message
 
-        if stream:
-            return self._stream_response(messages)
-        else:
-            return self._get_response(messages)
-
-    def _stream_response(self, messages):
         try:
-            response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                stream=True,
-            )
-            for chunk in response:
-                if len(chunk.choices) > 0:
-                    yield chunk.choices[0].delta
+            if stream:
+                response = self._stream_response(messages)
+            else:
+                response =  self._get_response(messages)
 
         except Exception as e:
             err = (
@@ -44,6 +42,19 @@ class OpenAIBase:
             )
             logger.error(err)
             raise Exception(err)
+
+        return response
+
+    def _stream_response(self, messages):
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            stream=True,
+        )
+        for chunk in response:
+            if len(chunk.choices) > 0:
+                yield chunk.choices[0].delta
+
 
     def _get_response(self, messages):
         response = self.client.chat.completions.create(
