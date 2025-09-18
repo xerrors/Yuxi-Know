@@ -120,7 +120,7 @@ EMBED_MODEL_INFO:
   vllm/Qwen/Qwen3-Embedding-0.6B:
     name: Qwen3-Embedding-0.6B
     dimension: 1024
-    base_url: http://localhost:8081/v1/embeddings
+    base_url: http://localhost:8000/v1/embeddings
     api_key: no_api_key
 
   ollama/nomic-embed-text:
@@ -140,7 +140,7 @@ RERANKER_LIST:
     base_url: https://api.siliconflow.cn/v1/rerank
     api_key: SILICONFLOW_API_KEY
 
-  vllm/Qwen/Qwen3-Reranker-0.6B:
-    name: Qwen/Qwen3-Reranker-0.6B
-    base_url: http://localhost:8081/v1/rerank
+  vllm/BAAI/bge-reranker-v2-m3:
+    name: BAAI/bge-reranker-v2-m3
+    base_url: http://localhost:8000/v1/rerank
     api_key: no_api_key

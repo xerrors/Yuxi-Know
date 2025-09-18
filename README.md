@@ -23,10 +23,10 @@
 
 ### ✨ 核心特性
 
-- 🤖 **多模型支持** - 适配主流大模型平台及本地部署（vLLM、Ollama），支持自定义智能体开发，兼容 LangGraph 部署
-- 📚 **灵活知识库** - 支持 LightRAG、Milvus、Chroma 等存储形式，配置 MinerU、PP-Structure-V3 的文档解析引擎
-- 🕸️ **知识图谱** - 支持 LightRAG 的自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
-- 👥 **权限控制** - 支持超级管理员、管理员、普通用户三级权限体系
+- 🤖 **多模型支持** - 适配主流大模型平台及离线方案（vLLM、Ollama），支持自定义智能体开发，兼容 LangGraph 部署
+- 📚 **灵活知识库** - 支持 LightRAG、Milvus、Chroma 等存储形式，配置 MinerU、PP-Structure-V3 文档解析引擎
+- 🕸️ **知识图谱** - 支持 LightRAG 自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
+- 👥 **权限安全** - 支持超级管理员、管理员、普通用户三级权限体系，并配置守卫模型
 
 <div align="center">
   <!-- 视频缩略图 -->
@@ -56,7 +56,7 @@
    git clone -b 0.2.1 https://github.com/xerrors/Yuxi-Know.git
    cd Yuxi-Know
    ```
-   如果想要使用之前的稳定版（与现版本不兼容），可以使用分支：`stable` 分支，`main` 分支是最新的开发版本。
+   如果想要使用之前的稳定版（与现版本不兼容），可以使用 `stable` 分支，`main` 分支是最新的开发版本。
 
 2. **配置 API 密钥**
 
@@ -93,20 +93,20 @@
 如果拉取镜像失败，可以尝试手动拉取：
 
 ```bash
-  bash docker/pull_image.sh python:3.11-slim  # 替换后面的 repo_name 即可
-  ```
-  **如果**依然存在镜像拉取问题，可以先在另一个可访问 Docker 的设备上拉取镜像后，使用下面的脚本保存为 tar 文件，再拷贝到开发设备使用。
-  ```bash
-  # 保存镜像，会生成 docker_images_xxx.tar
-  bash docker/save_docker_images.sh # Linux 或 macOS
-  powershell -ExecutionPolicy Bypass -File docker/save_docker_images.ps1 # Windows PowerShell
+bash docker/pull_image.sh python:3.11-slim  # 替换后面的 repo_name 即可
+```
+**如果**依然存在镜像拉取问题，可以先在另一个可访问 Docker 的设备上拉取镜像后，使用下面的脚本保存为 tar 文件，再拷贝到开发设备使用。
+```bash
+# 保存镜像，会生成 docker_images_xxx.tar
+bash docker/save_docker_images.sh # Linux 或 macOS
+powershell -ExecutionPolicy Bypass -File docker/save_docker_images.ps1 # Windows PowerShell
 
-  # 拷贝 docker_images_xxx.tar 文件到开发设备
-  scp docker_images_xxx.tar <user>@<dev_host>:<path_to_save>
+# 拷贝 docker_images_xxx.tar 文件到开发设备
+scp docker_images_xxx.tar <user>@<dev_host>:<path_to_save>
 
-  # 在开发设备上执行
-  docker load -i docker_images_xxx.tar
-   ```
+# 在开发设备上执行
+docker load -i docker_images_xxx.tar
+```
 </details>
 <details>
   <summary>镜像拉取完成，但是构建失败</summary>
@@ -157,6 +157,47 @@ custom-provider-name-here:
 ```
 </details>
 
+### 自定义嵌入模型和重排序模型
+
+需要注意的是，从 v0.2 版本开始，项目将模型部署和项目本身做了完全解耦，因此无论是 Embedding 还是 Reranker，如果需要使用本地模型，都需要使用 vllm /ollama 转换为 api 服务后，在 src/static/models.yaml 或者 src/static/models.private.yaml （优先）中 添加类似下面的信息：
+
+```yaml
+EMBED_MODEL_INFO:
+  # 其余的
+  vllm/Qwen/Qwen3-Embedding-0.6B:
+    name: Qwen/Qwen3-Embedding-0.6B
+    dimension: 1024
+    base_url: http://localhost:8000/v1/embeddings
+    api_key: no_api_key
+
+RERANKER_LIST:
+  vllm/BAAI/bge-reranker-v2-m3:
+    name: BAAI/bge-reranker-v2-m3
+    base_url: http://localhost:8000/v1/rerank
+    api_key: no_api_key
+```
+
+<details>
+<summary>启动脚本示例</summary>
+
+```bash
+# 启动 Qwen Embedding 模型
+vllm serve Qwen/Qwen3-Embedding-0.6B \
+  --task embed \
+  --dtype auto \
+  --port 8000
+
+# 启动 BAAI reranker 模型
+vllm serve BAAI/bge-reranker-v2-m3 \
+  --task score \
+  --dtype fp16 \
+  --port 8000
+```
+
+</details>
+
+
+
 ### OpenAI 兼容模型
 
 项目理论上兼容任何 OpenAI 兼容的模型，包括但不限于 vLLM、Ollama 或者其他 API 中转或者代理服务。在 Web 界面的"设置"中添加本地模型地址。
@@ -166,7 +207,7 @@ custom-provider-name-here:
 
 ### 知识库管理
 
-现在支持的知识库类型包括 `Chroma`、`Milvus`、`LightRAG`。[LightRAG](https://github.com/HKUDS/LightRAG) 是轻量级 GraphRAG方法。
+现在支持的知识库类型包括 `Chroma`、`Milvus`、`LightRAG`。[LightRAG](https://github.com/HKUDS/LightRAG) 是轻量级 GraphRAG 方法。
 
 
 <table>
@@ -180,9 +221,9 @@ custom-provider-name-here:
 
 ### 知识图谱
 
-在 v0.2 版本中，项目支持了基于 [LightRAG](https://github.com/HKUDS/LightRAG) 的知识图谱构建方法。需要在知识库中创建一个基于 LightRAG 的知识库，然后上传文档。构建的知识图谱会自动导入到 Neo4j 中，并使用不同的 label 做区分。需要说明的是，基于 LightRAG 的知识库，可以在知识库详情中可视化，但是不能在侧边栏的图谱中检索，知识图谱检索工具也不支持基于 LightRAG 的知识库进行检索。基于 LightRAG 方法构建的图谱的查询，需要使用对应的知识库作为查询工具。
+在 v0.2 版本中，项目支持了基于 [LightRAG](https://github.com/HKUDS/LightRAG) 的知识图谱构建方法。需要在知识库中创建一个基于 LightRAG 的知识库，然后上传文档。构建的知识图谱会自动导入到 Neo4j 中，并使用不同的 label 做区分。需要说明的是，基于 LightRAG 的知识库可以在知识库详情中可视化，但是不能在侧边栏的图谱中检索，知识图谱检索工具也不支持基于 LightRAG 的知识库进行检索。基于 LightRAG 方法构建的图谱查询，需要使用对应的知识库作为查询工具。
 
-默认使用的图谱构建模式是 `siliconflow` 的 `Qwen/Qwen3-30B-A3B-Instruct-2507`，可以使用 `LIGHTRAG_LLM_PROVIDER` 和 `LIGHTRAG_LLM_NAME` 覆盖。
+默认使用的图谱构建模型是 `siliconflow` 的 `Qwen/Qwen3-30B-A3B-Instruct-2507`，可以使用 `LIGHTRAG_LLM_PROVIDER` 和 `LIGHTRAG_LLM_NAME` 覆盖。
 
 <table>
   <thead>
@@ -202,7 +243,7 @@ custom-provider-name-here:
 </table>
 
 
-除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是`neo4j` / `0123456789`。
+除此之外，也支持将已有的知识图谱按照下面的格式导入 Neo4j 中，上传后，节点会自动添加 `Upload`、`Entity` 标签，关系会自动添加 `Relation` 标签。可以通过 `name` 属性访问实体的名称，使用 `type` 属性访问边的名称。默认账户密码是 `neo4j` / `0123456789`。
 
 
 **数据格式**：支持 JSONL 格式导入，可以先尝试 [test/data/A_Dream_of_Red_Mansions_tiny.jsonl](test/data/A_Dream_of_Red_Mansions_tiny.jsonl) 文件。
@@ -212,7 +253,7 @@ custom-provider-name-here:
 {"h": "上海", "t": "中国", "r": "直辖市"}
 ```
 
-此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，**但是**最好确保每个节点都有 Entity 标签，每个关系都有 `RELATION` 类型，否则会影响到图的检索与构建。
+此外，也可以通过修改 `docker-compose.yml` 中的 `NEO4J_URI` 配置来接入已有的 Neo4j 实例，**但是**最好确保每个节点都有 `Entity` 标签，每个关系都有 `RELATION` 类型，否则会影响到图的检索与构建。
 
 注：在“图谱”页面，只能看到上传的节点和边，基于 LightRAG 构建的图谱不会展示在里面，完整的图谱可以去 Neo4j 管理页面查看。
 
@@ -220,7 +261,7 @@ custom-provider-name-here:
 
 ### OCR 服务（可选）
 
-对于**基础的 OCR 服务**（RapidOCR onnx 版本），可以使用 SWHL/RapidOCR 的 onnx 版本，但是需要提前将模型下载到 `$MODEL_DIR` 目录下（默认 `src/.env.template` 中为 `models`）。在容器内实际路径为 `/models`（由 `MODEL_DIR_IN_DOCKER` 指向）。
+对于**基础的 OCR 服务**（RapidOCR ONNX 版本），可以使用 SWHL/RapidOCR 的 ONNX 版本，但是需要提前将模型下载到 `$MODEL_DIR` 目录下（默认 `src/.env.template` 中为 `models`）。在容器内实际路径为 `/models`（由 `MODEL_DIR_IN_DOCKER` 指向）。
 
 ```bash
 huggingface-cli download SWHL/RapidOCR --local-dir ${MODEL_DIR:-./models}/SWHL/RapidOCR
@@ -249,7 +290,7 @@ docker compose up paddlex --build
 
 目前该项目默认集成了三个 Demo 智能体，包含基础智能体、ReAct、DeepResearch 三个案例 Demo，均使用 [LangGraph](https://github.com/langchain-ai/langgraph) 开发。代码位于 [src/agents](src/agents) 目录。在 [src/agents/react/graph.py](src/agents/react/graph.py) 中定义了 `ReActAgent` 示例。
 
-如果需要自定义智能体应用，实现一个继承于 `BaseAgent` 的类，并实现 `get_graph` 方法返回一个 graph 实例。智能体的 `context_schema` 定义了配置参数。
+如果需要自定义智能体应用，需要实现一个继承于 `BaseAgent` 的类，并实现 `get_graph` 方法返回一个 graph 实例。智能体的 `context_schema` 定义了配置参数。
 
 注册智能体的方式请参考已有实现：[src/agents/__init__.py](src/agents/__init__.py)。例如：
 
@@ -263,7 +304,7 @@ agent_manager.init_all_agents()
 
 ### MySQL 数据库查询集成（Beta）
 
-项目目前已经支持智能体去查询 MySQL 数据库如果想要接入数据库，则可以在环境变量中配置如下信息：
+项目目前已经支持智能体查询 MySQL 数据库，如果想要接入数据库，则可以在环境变量中配置如下信息：
 
 ```sh
 # 基础配置示例
@@ -297,7 +338,7 @@ MYSQL_CHARSET=utf8mb4
 
 ### 图表可视化绘制 - MCP（Beta）
 
-这个是基于 @antvis 团队开发的 [可视化图表-MCP-Server](https://www.modelscope.cn/mcp/servers/@antvis/mcp-server-chart)，可以在魔搭社区中配置 Host 资源后，在 src/agents/common/mcp.py 的 `MCP_SERVERS` 中添加 mcp-server，需要注意的是记得将 `type` 字段修改为 `transport`。
+这是基于 @antvis 团队开发的 [可视化图表-MCP-Server](https://www.modelscope.cn/mcp/servers/@antvis/mcp-server-chart)，可以在魔搭社区中配置 Host 资源后，在 src/agents/common/mcp.py 的 `MCP_SERVERS` 中添加 mcp-server，需要注意的是记得将 `type` 字段修改为 `transport`。
 
 ```python
 # MCP Server configurations
@@ -338,9 +379,9 @@ MCP_SERVERS = {
 
 ### 品牌信息配置
 
-在主页和登录页面的很多信息，比如 Logo，组织名称，版权信息等，都可以复制 [src/static/info.template.yaml](src/static/info.template.yaml)，并新建一个 `src/static/info.local.yaml`（或者在 .env 文件中配置 `YUXI_BRAND_FILE_PATH` 指向这个文件），在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置，渲染到前端页面中。如果 `src/static/info.local.yaml` 不存在，会默认使用 [src/static/info.template.yaml](src/static/info.template.yaml) 中的配置。
+在主页和登录页面的很多信息，比如 Logo、组织名称、版权信息等，都可以复制 [src/static/info.template.yaml](src/static/info.template.yaml)，并新建一个 `src/static/info.local.yaml`（或者在 .env 文件中配置 `YUXI_BRAND_FILE_PATH` 指向这个文件），在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置渲染到前端页面中。如果 `src/static/info.local.yaml` 不存在，会默认使用 [src/static/info.template.yaml](src/static/info.template.yaml) 中的配置。
 
-系统的配色方面，主要保存在 [web/src/assets/css/base.css](web/src/assets/css/base.css) 中。只要替换其中的 `--main-*` 相关的变量，就可以改变系统的配色。
+系统的配色方面，主要保存在 [web/src/assets/css/base.css](web/src/assets/css/base.css) 中。只要替换其中的 `--main-*` 相关变量，就可以改变系统的配色。
 
 ### 预设脚本
 
