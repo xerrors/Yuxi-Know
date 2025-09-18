@@ -49,6 +49,7 @@ class Config(SimpleConfig):
         ### >>> 默认配置
         # 功能选项
         self.add_item("enable_reranker", default=False, des="是否开启重排序")
+        self.add_item("enable_content_guard", default=False, des="是否启用内容审查")
         self.add_item(
             "enable_web_search",
             default=False,

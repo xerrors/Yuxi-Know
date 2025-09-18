@@ -20,6 +20,7 @@ from src import config as conf
 from src.agents import agent_manager
 from src.agents.common.tools import gen_tool_info, get_buildin_tools
 from src.models import select_model
+from src.plugins.guard import content_guard
 from src.utils.logging_config import logger
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -142,6 +143,11 @@ async def chat_agent(
         # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
 
+        # Input guard
+        if conf.enable_content_guard and content_guard.check(query):
+            yield make_chunk(status="error", message="输入内容包含敏感词", meta=meta)
+            return
+
         try:
             agent = agent_manager.get_agent(agent_id)
         except Exception as e:
@@ -158,9 +164,16 @@ async def chat_agent(
         input_context = {"user_id": user_id, "thread_id": thread_id}
 
         try:
+            # Output guard for streaming
+            accumulated_content = ""
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
+                    accumulated_content += msg.content
+                    if conf.enable_content_guard and content_guard.check(accumulated_content):
+                        logger.warning(f"Sensitive content detected in stream: {accumulated_content}")
+                        yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
+                        return
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")

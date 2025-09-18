@@ -1,5 +1,5 @@
 <template>
-  <div class="">
+  <div class="setting-view">
     <HeaderComponent title="设置" class="setting-header">
 
       <template #actions>
@@ -48,6 +48,13 @@
                 :value="name">{{ name }}
               </a-select-option>
             </a-select>
+          </div>
+          <div class="card">
+            <span class="label">{{ items?.enable_content_guard.des }}</span>
+            <a-switch
+              :checked="configStore.config?.enable_content_guard"
+              @change="handleChange('enable_content_guard', $event)"
+            />
           </div>
         </div>
 
@@ -225,8 +232,10 @@ const openLink = (url) => {
 </script>
 
 <style lang="less" scoped>
+
 .setting-container {
-  --setting-header-height: 65px;
+  --setting-header-height: 55px;
+  max-width: 870px;
 }
 
 .setting-header {
@@ -246,7 +255,7 @@ const openLink = (url) => {
 }
 
 .sider {
-  width: 200px;
+  width: 180px;
   height: 100%;
   padding: 0 20px;
   position: sticky;
@@ -254,7 +263,6 @@ const openLink = (url) => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  border-right: 1px solid var(--main-20);
   gap: 8px;
   padding-top: 20px;
 
@@ -271,12 +279,12 @@ const openLink = (url) => {
     color: var(--gray-700);
 
     &:hover {
-      background: var(--gray-100);
+      background: var(--gray-50);
     }
 
     &.activesec {
-      background: var(--gray-200);
-      color: var(--gray-900);
+      background: var(--gray-100);
+      color: var(--main-700);
     }
   }
 }

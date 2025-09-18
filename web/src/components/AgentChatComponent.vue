@@ -381,7 +381,31 @@ const _processStreamChunk = (chunk, threadId) => {
       break;
     case 'error':
       handleChatError({ message }, 'stream');
-      resetOnGoingConv(threadId);
+      // Stop the loading indicator
+      if (threadState) {
+        threadState.isStreaming = false;
+
+        // Create a new AI message chunk for the error
+        const errorMsgChunk = {
+          id: 'ai-error-' + Date.now(),
+          type: 'ai',
+          role: 'assistant',
+          content: chunk.message || 'An error occurred',
+          isError: true // Custom flag for styling
+        };
+
+        // Add this to the chunks of the ongoing conversation
+        if (threadState.onGoingConv && threadState.onGoingConv.msgChunks) {
+          threadState.onGoingConv.msgChunks[errorMsgChunk.id] = [errorMsgChunk];
+        }
+
+        // Abort the stream controller to stop processing further events
+        if (threadState.streamAbortController) {
+          threadState.streamAbortController.abort();
+          threadState.streamAbortController = null;
+        }
+      }
+      // We no longer call resetOnGoingConv to keep the context.
       break;
     case 'finished':
           fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
