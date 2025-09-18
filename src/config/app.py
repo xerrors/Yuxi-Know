@@ -52,9 +52,7 @@ class Config(SimpleConfig):
         self.add_item("enable_content_guard", default=False, des="是否启用内容审查")
         self.add_item("enable_content_guard_llm", default=False, des="是否启用LLM内容审查")
         self.add_item(
-            "content_guard_llm_model",
-            default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
-            des="内容审查LLM模型"
+            "content_guard_llm_model", default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507", des="内容审查LLM模型"
         )
         self.add_item(
             "enable_web_search",

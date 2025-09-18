@@ -27,6 +27,7 @@ PROMPT_TEMPLATE = """
 输入内容：{content}
 输出内容："""
 
+
 def load_keywords(file_path: str) -> list[str]:
     """Loads keywords from a file, one per line."""
     if not os.path.exists(file_path):
@@ -50,7 +51,6 @@ class ContentGuard:
             self.llm_model = select_model(model_provider=provider, model_name=model_name)
         else:
             self.llm_model = None
-
 
     def check(self, text: str) -> bool:
         """
@@ -87,6 +87,7 @@ class ContentGuard:
         response = self.llm_model.call(prompt)
         logger.debug(f"LLM response: {response.content}")
         return True if "不合规" in response.content else False
+
 
 # Global instance
 content_guard = ContentGuard()

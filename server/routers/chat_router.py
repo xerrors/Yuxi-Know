@@ -169,7 +169,6 @@ async def chat_agent(
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
-
                     accumulated_content += msg.content
                     if conf.enable_content_guard and content_guard.check(accumulated_content):
                         logger.warning(f"Sensitive content detected in stream: {accumulated_content}")
