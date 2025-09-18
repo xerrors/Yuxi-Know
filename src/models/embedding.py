@@ -119,7 +119,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
                 raise ValueError(f"Ollama Embedding failed: Invalid response format {result}")
             return result["embeddings"]
         except (requests.RequestException, json.JSONDecodeError) as e:
-            logger.error(f"Ollama Embedding request failed: {e}")
+            logger.error(f"Ollama Embedding request failed: {e}, {payload}")
             raise ValueError(f"Ollama Embedding request failed: {e}")
 
     async def apredict(self, message: list[str] | str) -> list[list[float]]:
@@ -136,7 +136,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
                     raise ValueError(f"Ollama Embedding failed: Invalid response format {result}")
                 return result["embeddings"]
             except (httpx.RequestError, json.JSONDecodeError) as e:
-                logger.error(f"Ollama Embedding async request failed: {e}")
+                logger.error(f"Ollama Embedding async request failed: {e}, {payload}")
                 raise ValueError(f"Ollama Embedding async request failed: {e}")
 
 
@@ -158,7 +158,7 @@ class OtherEmbedding(BaseEmbeddingModel):
                 raise ValueError(f"Other Embedding failed: Invalid response format {result}")
             return [item["embedding"] for item in result["data"]]
         except (requests.RequestException, json.JSONDecodeError) as e:
-            logger.error(f"Other Embedding request failed: {e}")
+            logger.error(f"Other Embedding request failed: {e}, {payload}")
             raise ValueError(f"Other Embedding request failed: {e}")
 
     async def apredict(self, message: list[str] | str) -> list[list[float]]:
@@ -172,5 +172,5 @@ class OtherEmbedding(BaseEmbeddingModel):
                     raise ValueError(f"Other Embedding failed: Invalid response format {result}")
                 return [item["embedding"] for item in result["data"]]
             except (httpx.RequestError, json.JSONDecodeError) as e:
-                logger.error(f"Other Embedding async request failed: {e}")
+                logger.error(f"Other Embedding async request failed: {e}, {payload}")
                 raise ValueError(f"Other Embedding async request failed: {e}")

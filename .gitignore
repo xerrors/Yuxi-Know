@@ -29,6 +29,7 @@ cache
 .vscode
 .idea
 .vibe
+.qoder
 *.nogit*
 *.private*
 *.local*
