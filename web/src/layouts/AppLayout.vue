@@ -267,9 +267,9 @@ div.header, #app-router-view {
   }
 
   .logo {
-    width: 40px;
-    height: 40px;
-    margin: 8px 0 14px 0;
+    width: 34px;
+    height: 34px;
+    margin: 12px 0 20px 0;
 
     img {
       width: 100%;

@@ -66,8 +66,26 @@ lint.select = [         # 选择的规则
     "UP",
 ]
 
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+testpaths = ["test"]
+markers = [
+    "auth: marks tests that require authentication",
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests"
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+
 [dependency-groups]
 dev = [
     "ipykernel>=6.30.0",
     "ruff>=0.12.1",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+    "pytest-cov>=6.0.0",
 ]

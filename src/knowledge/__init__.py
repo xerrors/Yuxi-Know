@@ -1,8 +1,8 @@
 import os
 
 from ..config import config
-from .graphbase import GraphDatabase
 from .chroma_kb import ChromaKB
+from .graphbase import GraphDatabase
 from .kb_factory import KnowledgeBaseFactory
 from .kb_manager import KnowledgeBaseManager
 from .lightrag_kb import LightRagKB

@@ -2,7 +2,7 @@ import os
 import traceback
 
 from openai import OpenAI
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, before_sleep_log
+from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src import config
 from src.utils import get_docker_safe_url, logger

@@ -1,12 +1,13 @@
 from typing import Annotated, Any
+
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
-from .connection import MySQLConnectionManager, limit_result_size
-from .security import MySQLSecurityChecker
-from .exceptions import MySQLConnectionError
 from src.utils import logger
 
+from .connection import MySQLConnectionManager, limit_result_size
+from .exceptions import MySQLConnectionError
+from .security import MySQLSecurityChecker
 
 # 全局连接管理器实例
 _connection_manager: MySQLConnectionManager | None = None

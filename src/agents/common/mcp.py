@@ -27,6 +27,19 @@ MCP_SERVERS = {
     # "mcp-server-chart": {
     #     "url": "https://mcp.api-inference.modelscope.net/9993ae42524c4c/mcp",
     #     "transport": "streamable_http",
+    # },
+    # 需要在 docker 内安装 npx
+    # "mysql": {
+    #     "command": "npx",
+    #     "args": ["-y", "@benborla29/mcp-server-mysql@2.0.2"],
+    #     "env": {
+    #         "MYSQL_HOST": "172.19.13.6",
+    #         "MYSQL_PORT": "3306",
+    #         "MYSQL_USER": "read-only",
+    #         "MYSQL_PASS": "password123",
+    #         "MYSQL_DB": "feed"
+    #     },
+    #     "transport": "stdio"
     # }
 }
 
@@ -69,8 +82,8 @@ async def get_mcp_tools(server_name: str) -> list[Callable[..., Any]]:
     except AssertionError as e:
         logger.warning(f"Failed to load tools from MCP server '{server_name}': {e}")
         return []
-    except Exception:
-        logger.opt(exception=True).warning(f"Failed to load tools from MCP server '{server_name}'")
+    except Exception as e:
+        logger.error(f"Failed to load tools from MCP server '{server_name}': {e}")
         return []
 
 

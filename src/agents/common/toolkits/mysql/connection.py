@@ -1,11 +1,13 @@
 import signal
-import time
-from typing import Any
-from contextlib import contextmanager
 import threading
+import time
+from contextlib import contextmanager
+from typing import Any
+
 import pymysql
-from pymysql.cursors import DictCursor
 from pymysql import MySQLError
+from pymysql.cursors import DictCursor
+
 from src.utils import logger
 
 
