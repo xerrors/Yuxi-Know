@@ -176,7 +176,7 @@
 
 <script setup>
 import { reactive, onMounted, watch } from 'vue';
-import { notification } from 'ant-design-vue';
+import { notification, Modal } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
 import {
   DeleteOutlined,
@@ -423,9 +423,7 @@ const confirmDeleteUser = (user) => {
   }
 
   // 确认对话框
-  const { modal } = notification;
-
-  modal.confirm({
+  Modal.confirm({
     title: '确认删除用户',
     content: `确定要删除用户 "${user.username}" 吗？此操作不可撤销。`,
     okText: '删除',

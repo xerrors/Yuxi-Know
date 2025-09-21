@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
@@ -60,8 +61,9 @@ class UserResponse(BaseModel):
 
 
 class InitializeAdmin(BaseModel):
-    username: str
+    user_id: str  # 直接输入用户ID
     password: str
+    phone_number: str | None = None
 
 
 class UsernameValidation(BaseModel):
@@ -182,21 +184,34 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
     # 创建管理员账户
     hashed_password = AuthUtils.hash_password(admin_data.password)
 
-    # 验证用户名
-    is_valid, error_msg = validate_username(admin_data.username)
-    if not is_valid:
+    # 验证用户ID格式（只支持字母数字和下划线）
+    if not re.match(r'^[a-zA-Z0-9_]+$', admin_data.user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=error_msg,
+            detail="用户ID只能包含字母、数字和下划线",
         )
 
-    # 生成user_id
-    existing_user_ids = []
-    user_id = generate_unique_user_id(admin_data.username, existing_user_ids)
+    if len(admin_data.user_id) < 3 or len(admin_data.user_id) > 20:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户ID长度必须在3-20个字符之间",
+        )
+
+    # 验证手机号格式（如果提供了）
+    if admin_data.phone_number and not is_valid_phone_number(admin_data.phone_number):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="手机号格式不正确"
+        )
+
+    # 由于是首次初始化，直接使用输入的user_id
+    user_id = admin_data.user_id
 
     new_admin = User(
-        username=admin_data.username,
+        username=admin_data.user_id,  # username和user_id设置为相同值
         user_id=user_id,
+        phone_number=admin_data.phone_number,
+        avatar=None,  # 初始化时头像为空
         password_hash=hashed_password,
         role="superadmin",
         last_login=datetime.now()

@@ -39,8 +39,12 @@
 
       <!-- 初始化管理员表单 -->
       <div v-if="isFirstRun" class="login-form">
-        <h2>系统初始化</h2>
-        <p class="init-desc">系统首次运行，请创建超级管理员账户：</p>
+        <h2>系统初始化，请创建超级管理员账户</h2>
+        <div class="init-tips">
+          <p>• 请输入用户ID（仅支持字母、数字和下划线）</p>
+          <p>• 手机号可选填写，用于后续登录</p>
+          <p>• 请妥善保管管理员账户信息</p>
+        </div>
 
         <a-form
           :model="adminForm"
@@ -48,11 +52,50 @@
           layout="vertical"
         >
           <a-form-item
-            label="用户名"
-            name="username"
-            :rules="[{ required: true, message: '请输入用户名' }]"
+            label="用户ID"
+            name="user_id"
+            :rules="[
+              { required: true, message: '请输入用户ID' },
+              {
+                pattern: /^[a-zA-Z0-9_]+$/,
+                message: '用户ID只能包含字母、数字和下划线'
+              },
+              {
+                min: 3,
+                max: 20,
+                message: '用户ID长度必须在3-20个字符之间'
+              }
+            ]"
           >
-            <a-input v-model:value="adminForm.username" prefix-icon="user" />
+            <a-input
+              v-model:value="adminForm.user_id"
+              placeholder="请输入用户ID（3-20个字符）"
+              :maxlength="20"
+            />
+          </a-form-item>
+
+          <a-form-item
+            label="手机号（可选）"
+            name="phone_number"
+            :rules="[
+              {
+                validator: async (rule, value) => {
+                  if (!value || value.trim() === '') {
+                    return; // 空值允许
+                  }
+                  const phoneRegex = /^1[3-9]\d{9}$/;
+                  if (!phoneRegex.test(value)) {
+                    throw new Error('请输入正确的手机号格式');
+                  }
+                }
+              }
+            ]"
+          >
+            <a-input
+              v-model:value="adminForm.phone_number"
+              placeholder="可用于登录，可不填写"
+              :max-length="11"
+            />
           </a-form-item>
 
           <a-form-item
@@ -175,7 +218,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { useInfoStore } from '@/stores/info';
@@ -215,9 +258,10 @@ const loginForm = reactive({
 
 // 管理员初始化表单
 const adminForm = reactive({
-  username: '',
+  user_id: '', // 改为直接输入user_id
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  phone_number: '' // 手机号字段（可选）
 });
 
 // 开发中功能提示
@@ -269,14 +313,13 @@ const formatTime = (seconds) => {
 };
 
 // 密码确认验证
-const validateConfirmPassword = (rule, value) => {
+const validateConfirmPassword = async (rule, value) => {
   if (value === '') {
-    return Promise.reject('请确认密码');
+    throw new Error('请确认密码');
   }
   if (value !== adminForm.password) {
-    return Promise.reject('两次输入的密码不一致');
+    throw new Error('两次输入的密码不一致');
   }
-  return Promise.resolve();
 };
 
 // 处理登录
@@ -388,8 +431,9 @@ const handleInitialize = async () => {
     }
 
     await userStore.initialize({
-      username: adminForm.username,
-      password: adminForm.password
+      user_id: adminForm.user_id,
+      password: adminForm.password,
+      phone_number: adminForm.phone_number || null // 空字符串转为null
     });
 
     message.success('管理员账户创建成功');
@@ -624,10 +668,28 @@ onUnmounted(() => {
   }
 }
 
-.init-desc {
-  margin-bottom: 24px;
-  color: #666;
-  text-align: center;
+.init-tips {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  text-align: left;
+
+  p {
+    margin: 4px 0;
+    font-size: 13px;
+    color: #52c41a;
+    line-height: 1.4;
+
+    &:first-child {
+      margin-top: 0;
+    }
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
 }
 
 .error-message {
