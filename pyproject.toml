@@ -56,6 +56,7 @@ dependencies = [
     "Pillow>=10.5.0",
     "pymysql>=1.1.0",
     "tenacity>=8.0.0",
+    "pypinyin>=0.55.0",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

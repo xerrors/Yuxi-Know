@@ -198,11 +198,8 @@ const mainList = [{
 </template>
 
 <style lang="less" scoped>
-@import '@/assets/css/main.css';
-
-:root {
-  --header-width: 60px;
-}
+// Less 变量定义
+@header-width: 60px;
 
 .app-layout {
   display: flex;
@@ -239,12 +236,12 @@ div.header, #app-router-view {
 .header {
   display: flex;
   flex-direction: column;
-  flex: 0 0 var(--header-width);
+  flex: 0 0 @header-width;
   justify-content: flex-start;
   align-items: center;
   background-color: var(--main-10);
   height: 100%;
-  width: var(--header-width);
+  width: @header-width;
   border-right: 1px solid var(--gray-100);
 
   .nav {

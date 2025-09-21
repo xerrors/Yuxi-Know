@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from server.models import Base
 from server.models.user_model import User
-from server.utils.migrate import check_and_migrate
+from server.utils.migrate import check_and_migrate, validate_database_schema
 from src import config
 from src.utils import logger
 
@@ -44,15 +44,20 @@ class DBManager:
 
     def run_migrations(self):
         """运行数据库迁移"""
-        try:
-            success = check_and_migrate(self.db_path)
-            if success:
-                logger.info("数据库迁移检查完成")
-            else:
-                logger.warning("数据库迁移过程中出现问题")
-        except Exception as e:
-            logger.error(f"数据库迁移失败: {e}")
-            # 不抛出异常，以防止阻断应用启动
+        # 在创建表之前先检查结构
+        if os.path.exists(self.db_path):
+            is_valid, issues = validate_database_schema(self.db_path)
+
+            if not is_valid:
+                logger.warning("=" * 60)
+                logger.warning("检测到数据库结构与当前模型不一致！")
+                logger.warning("=" * 60)
+                for issue in issues:
+                    logger.warning(f"  ⚠️  {issue}")
+                logger.warning("")
+                logger.warning("请运行以下 scripts/migrate_user_fields.py 来修复数据库结构:")
+                logger.warning("=" * 60)
+
 
     def get_session(self):
         """获取数据库会话"""

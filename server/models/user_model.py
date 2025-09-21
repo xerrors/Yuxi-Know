@@ -11,7 +11,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, nullable=False, unique=True, index=True)
+    username = Column(String, nullable=False, unique=True, index=True)  # 显示名称，2-20字符
+    user_id = Column(String, nullable=False, unique=True, index=True)  # 登录ID，根据用户名生成
+    phone_number = Column(String, nullable=True, unique=True, index=True)  # 手机号，可选登录方式
+    avatar = Column(String, nullable=True)  # 头像URL
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")  # 角色: superadmin, admin, user
     created_at = Column(DateTime, default=func.now())
@@ -29,6 +32,9 @@ class User(Base):
         result = {
             "id": self.id,
             "username": self.username,
+            "user_id": self.user_id,
+            "phone_number": self.phone_number,
+            "avatar": self.avatar,
             "role": self.role,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,

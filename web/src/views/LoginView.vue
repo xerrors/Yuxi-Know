@@ -88,11 +88,11 @@
           layout="vertical"
         >
           <a-form-item
-            label="用户名"
-            name="username"
-            :rules="[{ required: true, message: '请输入用户名' }]"
+            label="登录账号"
+            name="loginId"
+            :rules="[{ required: true, message: '请输入用户ID或手机号' }]"
           >
-            <a-input v-model:value="loginForm.username">
+            <a-input v-model:value="loginForm.loginId" placeholder="用户ID或手机号">
               <template #prefix>
                 <user-outlined />
               </template>
@@ -119,10 +119,10 @@
           </a-form-item>
 
           <a-form-item>
-            <a-button 
-              type="primary" 
-              html-type="submit" 
-              :loading="loading" 
+            <a-button
+              type="primary"
+              html-type="submit"
+              :loading="loading"
               :disabled="isLocked"
               block
             >
@@ -209,7 +209,7 @@ const lockCountdown = ref(null);
 
 // 登录表单
 const loginForm = reactive({
-  username: '',
+  loginId: '', // 支持user_id或phone_number登录
   password: ''
 });
 
@@ -238,7 +238,7 @@ const startLockCountdown = (remainingSeconds) => {
   clearLockCountdown();
   isLocked.value = true;
   lockRemainingTime.value = remainingSeconds;
-  
+
   lockCountdown.value = setInterval(() => {
     lockRemainingTime.value--;
     if (lockRemainingTime.value <= 0) {
@@ -286,14 +286,14 @@ const handleLogin = async () => {
     message.warning(`账户被锁定，请等待 ${formatTime(lockRemainingTime.value)}`);
     return;
   }
-  
+
   try {
     loading.value = true;
     errorMessage.value = '';
     clearLockCountdown();
 
     await userStore.login({
-      username: loginForm.username,
+      loginId: loginForm.loginId,
       password: loginForm.password
     });
 
@@ -315,7 +315,7 @@ const handleLogin = async () => {
       try {
         // 初始化agentStore并获取智能体信息
         await agentStore.initialize();
-        
+
         // 尝试获取默认智能体
         if (agentStore.defaultAgentId) {
           // 如果存在默认智能体，直接跳转
@@ -342,7 +342,7 @@ const handleLogin = async () => {
     }
   } catch (error) {
     console.error('登录失败:', error);
-    
+
     // 检查是否是锁定错误（HTTP 423）
     if (error.status === 423) {
       // 尝试从响应头中获取剩余时间
@@ -353,7 +353,7 @@ const handleLogin = async () => {
           remainingTime = parseInt(lockRemainingHeader);
         }
       }
-      
+
       // 如果没有从头中获取到，尝试从错误消息中解析
       if (remainingTime === 0) {
         const lockTimeMatch = error.message.match(/(\d+)\s*秒/);
@@ -361,7 +361,7 @@ const handleLogin = async () => {
           remainingTime = parseInt(lockTimeMatch[1]);
         }
       }
-      
+
       if (remainingTime > 0) {
         startLockCountdown(remainingTime);
         errorMessage.value = `由于多次登录失败，账户已被锁定 ${formatTime(remainingTime)}`;

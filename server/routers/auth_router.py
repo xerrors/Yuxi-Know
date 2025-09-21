@@ -1,15 +1,17 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from server.db_manager import db_manager
 from server.models.user_model import User
-from server.utils.auth_middleware import get_admin_user, get_current_user, get_db
+from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_required_user
 from server.utils.auth_utils import AuthUtils
+from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
+from src.utils.minio_utils import upload_image_to_minio
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -21,6 +23,9 @@ class Token(BaseModel):
     token_type: str
     user_id: int
     username: str
+    user_id_login: str  # 用于登录的user_id
+    phone_number: str | None = None
+    avatar: str | None = None
     role: str
 
 
@@ -28,17 +33,27 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str = "user"
+    phone_number: str | None = None
 
 
 class UserUpdate(BaseModel):
     username: str | None = None
     password: str | None = None
     role: str | None = None
+    phone_number: str | None = None
+    avatar: str | None = None
+
+
+class UserProfileUpdate(BaseModel):
+    phone_number: str | None = None
 
 
 class UserResponse(BaseModel):
     id: int
     username: str
+    user_id: str
+    phone_number: str | None = None
+    avatar: str | None = None
     role: str
     created_at: str
     last_login: str | None = None
@@ -47,6 +62,16 @@ class UserResponse(BaseModel):
 class InitializeAdmin(BaseModel):
     username: str
     password: str
+
+
+class UsernameValidation(BaseModel):
+    username: str
+
+
+class UserIdGeneration(BaseModel):
+    username: str
+    user_id: str
+    is_available: bool
 
 
 # =============================================================================
@@ -62,14 +87,21 @@ class InitializeAdmin(BaseModel):
 
 @auth.post("/token", response_model=Token)
 async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # 查找用户
-    user = db.query(User).filter(User.username == form_data.username).first()
+    # 查找用户 - 支持user_id和phone_number登录
+    login_identifier = form_data.username  # OAuth2表单中的username字段作为登录标识符
+
+    # 尝试通过user_id查找
+    user = db.query(User).filter(User.user_id == login_identifier).first()
+
+    # 如果通过user_id没找到，尝试通过phone_number查找
+    if not user:
+        user = db.query(User).filter(User.phone_number == login_identifier).first()
 
     # 如果用户不存在，为防止用户名枚举攻击，返回通用错误信息
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="用户名或密码错误",
+            detail="登录标识或密码错误",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -123,6 +155,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         "token_type": "bearer",
         "user_id": user.id,
         "username": user.username,
+        "user_id_login": user.user_id,
+        "phone_number": user.phone_number,
+        "avatar": user.avatar,
         "role": user.role,
     }
 
@@ -147,8 +182,24 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
     # 创建管理员账户
     hashed_password = AuthUtils.hash_password(admin_data.password)
 
+    # 验证用户名
+    is_valid, error_msg = validate_username(admin_data.username)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    # 生成user_id
+    existing_user_ids = []
+    user_id = generate_unique_user_id(admin_data.username, existing_user_ids)
+
     new_admin = User(
-        username=admin_data.username, password_hash=hashed_password, role="superadmin", last_login=datetime.now()
+        username=admin_data.username,
+        user_id=user_id,
+        password_hash=hashed_password,
+        role="superadmin",
+        last_login=datetime.now()
     )
 
     db.add(new_admin)
@@ -167,6 +218,9 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
         "token_type": "bearer",
         "user_id": new_admin.id,
         "username": new_admin.username,
+        "user_id_login": new_admin.user_id,
+        "phone_number": new_admin.phone_number,
+        "avatar": new_admin.avatar,
         "role": new_admin.role,
     }
 
@@ -182,6 +236,56 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
     return current_user.to_dict()
 
 
+# 路由：更新个人资料
+@auth.put("/profile", response_model=UserResponse)
+async def update_profile(
+    profile_data: UserProfileUpdate,
+    request: Request,
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db)
+):
+    """更新当前用户的个人资料"""
+    update_details = []
+
+    # 更新手机号
+    if profile_data.phone_number is not None:
+        # 如果手机号不为空，验证格式
+        if profile_data.phone_number and not is_valid_phone_number(profile_data.phone_number):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="手机号格式不正确"
+            )
+
+        # 检查手机号是否已被其他用户使用
+        if profile_data.phone_number:
+            existing_phone = db.query(User).filter(
+                User.phone_number == profile_data.phone_number,
+                User.id != current_user.id
+            ).first()
+            if existing_phone:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="手机号已被其他用户使用"
+                )
+
+        current_user.phone_number = profile_data.phone_number
+        update_details.append(f"手机号: {profile_data.phone_number or '已清空'}")
+
+    db.commit()
+
+    # 记录操作
+    if update_details:
+        log_operation(
+            db,
+            current_user.id,
+            "更新个人资料",
+            f"更新个人资料: {', '.join(update_details)}",
+            request
+        )
+
+    return current_user.to_dict()
+
+
 # 路由：创建新用户（管理员权限）
 # =============================================================================
 # === 用户管理分组 ===
@@ -192,6 +296,14 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
 async def create_user(
     user_data: UserCreate, request: Request, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
+    # 验证用户名
+    is_valid, error_msg = validate_username(user_data.username)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
     # 检查用户名是否已存在
     existing_user = db.query(User).filter(User.username == user_data.username).first()
     if existing_user:
@@ -199,6 +311,19 @@ async def create_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户名已存在",
         )
+
+    # 检查手机号是否已存在（如果提供了）
+    if user_data.phone_number:
+        existing_phone = db.query(User).filter(User.phone_number == user_data.phone_number).first()
+        if existing_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="手机号已存在",
+            )
+
+    # 生成唯一的user_id
+    existing_user_ids = [user.user_id for user in db.query(User.user_id).all()]
+    user_id = generate_unique_user_id(user_data.username, existing_user_ids)
 
     # 创建新用户
     hashed_password = AuthUtils.hash_password(user_data.password)
@@ -218,7 +343,13 @@ async def create_user(
             detail="管理员只能创建普通用户账户",
         )
 
-    new_user = User(username=user_data.username, password_hash=hashed_password, role=user_data.role)
+    new_user = User(
+        username=user_data.username,
+        user_id=user_id,
+        phone_number=user_data.phone_number,
+        password_hash=hashed_password,
+        role=user_data.role
+    )
 
     db.add(new_user)
     db.commit()
@@ -357,3 +488,106 @@ async def delete_user(
     db.commit()
 
     return {"success": True, "message": "用户已删除"}
+
+
+# 路由：验证用户名并生成user_id
+@auth.post("/validate-username", response_model=UserIdGeneration)
+async def validate_username_and_generate_user_id(
+    validation_data: UsernameValidation,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """验证用户名格式并生成可用的user_id"""
+    # 验证用户名格式
+    is_valid, error_msg = validate_username(validation_data.username)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_msg,
+        )
+
+    # 检查用户名是否已存在
+    existing_user = db.query(User).filter(User.username == validation_data.username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名已存在",
+        )
+
+    # 生成唯一的user_id
+    existing_user_ids = [user.user_id for user in db.query(User.user_id).all()]
+    user_id = generate_unique_user_id(validation_data.username, existing_user_ids)
+
+    return UserIdGeneration(
+        username=validation_data.username,
+        user_id=user_id,
+        is_available=True
+    )
+
+
+# 路由：检查user_id是否可用
+@auth.get("/check-user-id/{user_id}")
+async def check_user_id_availability(
+    user_id: str,
+    current_user: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """检查user_id是否可用"""
+    existing_user = db.query(User).filter(User.user_id == user_id).first()
+    return {
+        "user_id": user_id,
+        "is_available": existing_user is None
+    }
+
+
+# 路由：上传用户头像
+@auth.post("/upload-avatar")
+async def upload_user_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db)
+):
+    """上传用户头像"""
+    # 检查文件类型
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="只能上传图片文件"
+        )
+
+    # 检查文件大小（5MB限制）
+    file_size = 0
+    file_content = await file.read()
+    file_size = len(file_content)
+
+    if file_size > 5 * 1024 * 1024:  # 5MB
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="文件大小不能超过5MB"
+        )
+
+    try:
+        # 获取文件扩展名
+        file_extension = file.filename.split('.')[-1].lower() if file.filename and '.' in file.filename else 'jpg'
+
+        # 上传到MinIO
+        avatar_url = upload_image_to_minio(file_content, file_extension)
+
+        # 更新用户头像
+        current_user.avatar = avatar_url
+        db.commit()
+
+        # 记录操作
+        log_operation(db, current_user.id, "上传头像", f"更新头像: {avatar_url}")
+
+        return {
+            "success": True,
+            "avatar_url": avatar_url,
+            "message": "头像上传成功"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"头像上传失败: {str(e)}"
+        )

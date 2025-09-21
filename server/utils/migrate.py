@@ -260,8 +260,71 @@ class DatabaseMigrator:
         return migrations
 
 
+def validate_database_schema(db_path: str) -> tuple[bool, list[str]]:
+    """验证数据库结构是否符合当前模型
+
+    Returns:
+        tuple: (是否符合, 缺失的字段列表)
+    """
+    if not os.path.exists(db_path):
+        return False, ["数据库文件不存在"]
+
+    missing_fields = []
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # 检查users表必需字段
+        required_fields = {
+            'users': ['id', 'username', 'user_id', 'phone_number', 'avatar',
+                     'password_hash', 'role', 'created_at', 'last_login',
+                     'login_failed_count', 'last_failed_login', 'login_locked_until'],
+            'operation_logs': ['id', 'user_id', 'operation', 'details', 'ip_address', 'timestamp']
+        }
+
+        for table_name, fields in required_fields.items():
+            # 检查表是否存在
+            cursor.execute("""
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name=?
+            """, (table_name,))
+
+            if not cursor.fetchone():
+                missing_fields.append(f"表 {table_name} 不存在")
+                continue
+
+            # 检查字段是否存在
+            cursor.execute(f"PRAGMA table_info({table_name})")
+            existing_columns = [column[1] for column in cursor.fetchall()]
+
+            for field in fields:
+                if field not in existing_columns:
+                    missing_fields.append(f"表 {table_name} 缺少字段 {field}")
+
+        return len(missing_fields) == 0, missing_fields
+
+    except Exception as e:
+        logger.error(f"验证数据库结构失败: {e}")
+        return False, [f"验证失败: {str(e)}"]
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
+
 def check_and_migrate(db_path: str):
     """检查并执行数据库迁移"""
+    # 先验证数据库结构
+    is_valid, issues = validate_database_schema(db_path)
+
+    if not is_valid:
+        logger.warning("数据库结构不符合当前设计:")
+        for issue in issues:
+            logger.warning(f"  - {issue}")
+
+        if os.path.exists(db_path):
+            logger.info("建议运行迁移脚本: docker exec api-dev python /app/scripts/migrate_user_fields.py")
+
     migrator = DatabaseMigrator(db_path)
 
     try:
