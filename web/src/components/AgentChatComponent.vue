@@ -222,7 +222,7 @@ const currentAgentId = computed(() => {
 });
 
 const currentAgentMetadata = computed(() => {
-  if (agentStore?.metadata && currentAgentId.value in agentStore?.metadata[currentAgentId.value]) {
+  if (agentStore?.metadata && currentAgentId.value && currentAgentId.value in agentStore?.metadata[currentAgentId.value]) {
     return agentStore?.metadata[currentAgentId.value]
   }
   return {}

@@ -93,6 +93,16 @@ export const documentApi = {
    */
   deleteDocument: async (dbId, docId) => {
     return apiAdminDelete(`/api/knowledge/databases/${dbId}/documents/${docId}`)
+  },
+
+  /**
+   * 下载文档
+   * @param {string} dbId - 知识库ID
+   * @param {string} docId - 文档ID
+   * @returns {Promise} - Response对象
+   */
+  downloadDocument: async (dbId, docId) => {
+    return apiAdminGet(`/api/knowledge/databases/${dbId}/documents/${docId}/download`, {}, 'blob')
   }
 }
 

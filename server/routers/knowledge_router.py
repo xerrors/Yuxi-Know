@@ -1,8 +1,10 @@
 import os
 import traceback
+from urllib.parse import quote, unquote
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from starlette.responses import FileResponse as StarletteFileResponse
 
 from server.models.user_model import User
 from server.utils.auth_middleware import get_admin_user
@@ -160,7 +162,7 @@ async def add_documents(
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}")
 async def get_document_info(db_id: str, doc_id: str, current_user: User = Depends(get_admin_user)):
-    """获取文档详细信息"""
+    """获取文档详细信息（包含基本信息和内容信息）"""
     logger.debug(f"GET document {doc_id} info in {db_id}")
 
     try:
@@ -169,6 +171,32 @@ async def get_document_info(db_id: str, doc_id: str, current_user: User = Depend
     except Exception as e:
         logger.error(f"Failed to get file info, {e}, {db_id=}, {doc_id=}, {traceback.format_exc()}")
         return {"message": "Failed to get file info", "status": "failed"}
+
+
+@knowledge.get("/databases/{db_id}/documents/{doc_id}/basic")
+async def get_document_basic_info(db_id: str, doc_id: str, current_user: User = Depends(get_admin_user)):
+    """获取文档基本信息（仅元数据）"""
+    logger.debug(f"GET document {doc_id} basic info in {db_id}")
+
+    try:
+        info = await knowledge_base.get_file_basic_info(db_id, doc_id)
+        return info
+    except Exception as e:
+        logger.error(f"Failed to get file basic info, {e}, {db_id=}, {doc_id=}, {traceback.format_exc()}")
+        return {"message": "Failed to get file basic info", "status": "failed"}
+
+
+@knowledge.get("/databases/{db_id}/documents/{doc_id}/content")
+async def get_document_content(db_id: str, doc_id: str, current_user: User = Depends(get_admin_user)):
+    """获取文档内容信息（chunks和lines）"""
+    logger.debug(f"GET document {doc_id} content in {db_id}")
+
+    try:
+        info = await knowledge_base.get_file_content(db_id, doc_id)
+        return info
+    except Exception as e:
+        logger.error(f"Failed to get file content, {e}, {db_id=}, {doc_id=}, {traceback.format_exc()}")
+        return {"message": "Failed to get file content", "status": "failed"}
 
 
 @knowledge.delete("/databases/{db_id}/documents/{doc_id}")
@@ -181,6 +209,96 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
     except Exception as e:
         logger.error(f"删除文档失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=f"删除文档失败: {e}")
+
+
+@knowledge.get("/databases/{db_id}/documents/{doc_id}/download")
+async def download_document(db_id: str, doc_id: str, request: Request, current_user: User = Depends(get_admin_user)):
+    """下载原始文件"""
+    logger.debug(f"Download document {doc_id} from {db_id}")
+    try:
+        file_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
+        if not file_info:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        file_path = file_info.get("meta", {}).get("path")
+        if not file_path or not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"File not found on disk: {file_info=}")
+
+        # 获取文件扩展名和MIME类型，解码URL编码的文件名
+        filename = file_info.get("meta", {}).get("filename", "file")
+        logger.debug(f"Original filename from database: {filename}")
+
+        # 解码URL编码的文件名（如果有的话）
+        try:
+            decoded_filename = unquote(filename, encoding='utf-8')
+            logger.debug(f"Decoded filename: {decoded_filename}")
+        except Exception as e:
+            logger.debug(f"Failed to decode filename {filename}: {e}")
+            decoded_filename = filename  # 如果解码失败，使用原文件名
+
+        _, ext = os.path.splitext(decoded_filename)
+
+        media_types = {
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc": "application/msword",
+            ".txt": "text/plain",
+            ".md": "text/markdown",
+            ".json": "application/json",
+            ".csv": "text/csv",
+            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls": "application/vnd.ms-excel",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".ppt": "application/vnd.ms-powerpoint",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+            ".svg": "image/svg+xml",
+            ".zip": "application/zip",
+            ".rar": "application/x-rar-compressed",
+            ".7z": "application/x-7z-compressed",
+            ".tar": "application/x-tar",
+            ".gz": "application/gzip",
+            ".html": "text/html",
+            ".htm": "text/html",
+            ".xml": "text/xml",
+            ".css": "text/css",
+            ".js": "application/javascript",
+            ".py": "text/x-python",
+            ".java": "text/x-java-source",
+            ".cpp": "text/x-c++src",
+            ".c": "text/x-csrc",
+            ".h": "text/x-chdr",
+            ".hpp": "text/x-c++hdr",
+        }
+        media_type = media_types.get(ext.lower(), "application/octet-stream")
+
+        # 创建自定义FileResponse，避免文件名编码问题
+        response = StarletteFileResponse(
+            path=file_path,
+            media_type=media_type
+        )
+
+        # 正确处理中文文件名的HTTP头部设置
+        # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码
+        try:
+            # 尝试使用ASCII编码（适用于英文文件名）
+            decoded_filename.encode('ascii')
+            # 如果成功，直接使用简单格式
+            response.headers["Content-Disposition"] = f'attachment; filename="{decoded_filename}"'
+        except UnicodeEncodeError:
+            # 如果包含非ASCII字符（如中文），使用RFC 2231格式
+            encoded_filename = quote(decoded_filename.encode('utf-8'))
+            response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+
+        return response
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"下载文件失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"下载失败: {e}")
 
 
 # =============================================================================
@@ -382,6 +500,8 @@ async def upload_file(
     """上传文件"""
     if not file.filename:
         raise HTTPException(status_code=400, detail="No selected file")
+
+    logger.debug(f"Received upload file with filename: {file.filename}")
 
     # 根据db_id获取上传路径，如果db_id为None则使用默认路径
     if db_id:

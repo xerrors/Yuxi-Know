@@ -377,12 +377,20 @@ class MilvusKB(KnowledgeBase):
                 del self.files_meta[file_id]
                 self._save_metadata()
 
-    async def get_file_info(self, db_id: str, file_id: str) -> dict:
-        """获取文件信息和chunks"""
+    async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
+        """获取文件基本信息（仅元数据）"""
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
+
+        return {"meta": self.files_meta[file_id]}
+
+    async def get_file_content(self, db_id: str, file_id: str) -> dict:
+        """获取文件内容信息（chunks和lines）"""
         if file_id not in self.files_meta:
             raise Exception(f"File not found: {file_id}")
 
         # 使用 Milvus 获取chunks
+        content_info = {"lines": []}
         collection = await self._get_milvus_collection(db_id)
         if collection:
             try:
@@ -406,12 +414,26 @@ class MilvusKB(KnowledgeBase):
 
                 # 按 chunk_order_index 排序
                 doc_chunks.sort(key=lambda x: x.get("chunk_order_index", 0))
-                return {"lines": doc_chunks}
+                content_info["lines"] = doc_chunks
+                return content_info
 
             except Exception as e:
-                logger.error(f"Error getting chunks for file {file_id}: {e}")
+                logger.error(f"Failed to get file content from Milvus: {e}")
+                content_info["lines"] = []
+                return content_info
 
-        return {"lines": []}
+        return content_info
+
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
+        """获取文件完整信息（基本信息+内容信息）- 保持向后兼容"""
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
+
+        # 合并基本信息和内容信息
+        basic_info = await self.get_file_basic_info(db_id, file_id)
+        content_info = await self.get_file_content(db_id, file_id)
+
+        return {**basic_info, **content_info}
 
     def delete_database(self, db_id: str) -> dict:
         """删除数据库，同时清除Milvus中的集合"""

@@ -375,16 +375,44 @@ class KnowledgeBase(ABC):
         pass
 
     @abstractmethod
-    async def get_file_info(self, db_id: str, file_id: str) -> dict:
+    async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """
-        获取文件信息和chunks
+        获取文件基本信息（仅元数据）
 
         Args:
             db_id: 数据库ID
             file_id: 文件ID
 
         Returns:
-            文件信息和chunks
+            dict: 包含文件基本信息的字典
+        """
+        pass
+
+    @abstractmethod
+    async def get_file_content(self, db_id: str, file_id: str) -> dict:
+        """
+        获取文件内容信息（chunks和lines）
+
+        Args:
+            db_id: 数据库ID
+            file_id: 文件ID
+
+        Returns:
+            dict: 包含文件内容信息的字典
+        """
+        pass
+
+    @abstractmethod
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
+        """
+        获取文件完整信息（基本信息+内容信息）- 保持向后兼容
+
+        Args:
+            db_id: 数据库ID
+            file_id: 文件ID
+
+        Returns:
+            dict: 包含文件信息和chunks的字典
         """
         pass
 

@@ -230,8 +230,18 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
 
+    async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
+        """获取文件基本信息（仅元数据）"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.get_file_basic_info(db_id, file_id)
+
+    async def get_file_content(self, db_id: str, file_id: str) -> dict:
+        """获取文件内容信息（chunks和lines）"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.get_file_content(db_id, file_id)
+
     async def get_file_info(self, db_id: str, file_id: str) -> dict:
-        """获取文件信息"""
+        """获取文件完整信息（基本信息+内容信息）- 保持向后兼容"""
         kb_instance = self._get_kb_for_database(db_id)
         return await kb_instance.get_file_info(db_id, file_id)
 

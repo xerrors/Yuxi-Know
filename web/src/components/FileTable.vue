@@ -102,6 +102,12 @@
         </a-tooltip>
 
         <div v-else-if="column.key === 'action'" style="display: flex; gap: 4px;">
+          <a-button class="download-btn" type="text"
+            @click="handleDownloadFile(record)"
+            :disabled="lock || record.status !== 'done'"
+            :icon="h(DownloadOutlined)"
+            title="下载"
+            />
           <a-button class="del-btn" type="text"
             @click="handleDeleteFile(record.file_id)"
             :disabled="lock || record.status === 'processing' || record.status === 'waiting'"
@@ -118,7 +124,9 @@
 <script setup>
 import { ref, computed, watch, h } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
-import { Modal } from 'ant-design-vue';
+import { Modal, message } from 'ant-design-vue';
+import { useUserStore } from '@/stores/user';
+import { documentApi } from '@/apis/knowledge_api';
 import {
   CheckCircleFilled,
   HourglassFilled,
@@ -127,10 +135,12 @@ import {
   DeleteOutlined,
   PlusOutlined,
   ReloadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue';
 import { ChevronLast } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
+const userStore = useUserStore();
 
 const props = defineProps({
   rightPanelVisible: {
@@ -189,7 +199,7 @@ const columnsCompact = [
     },
     sortDirections: ['ascend', 'descend']
   },
-  { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }
+  { title: '', key: 'action', dataIndex: 'file_id', width: 80, align: 'center' }
 ];
 
 // 过滤后的文件列表
@@ -284,7 +294,67 @@ const selectAllFailedFiles = () => {
 };
 
 const openFileDetail = (record) => {
+  console.log('openFileDetail', record);
   store.openFileDetail(record);
+};
+
+const handleDownloadFile = async (record) => {
+  const dbId = store.databaseId;
+  if (!dbId) {
+    console.error('无法获取数据库ID，数据库ID:', store.databaseId, '记录:', record);
+    message.error('无法获取数据库ID，请刷新页面后重试');
+    return;
+  }
+
+  console.log('开始下载文件:', { dbId, fileId: record.file_id, record });
+
+  try {
+    const response = await documentApi.downloadDocument(dbId, record.file_id);
+
+    // 获取文件名
+    const contentDisposition = response.headers.get('content-disposition');
+    let filename = record.filename;
+    if (contentDisposition) {
+      // 首先尝试匹配RFC 2231格式 filename*=UTF-8''...
+      const rfc2231Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+      if (rfc2231Match) {
+        try {
+          filename = decodeURIComponent(rfc2231Match[1]);
+        } catch (error) {
+          console.warn('Failed to decode RFC2231 filename:', rfc2231Match[1], error);
+        }
+      } else {
+        // 回退到标准格式 filename="..."
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (filenameMatch && filenameMatch[1]) {
+          filename = filenameMatch[1].replace(/['"]/g, '');
+          // 解码URL编码的文件名
+          try {
+            filename = decodeURIComponent(filename);
+          } catch (error) {
+            console.warn('Failed to decode filename:', filename, error);
+            // 如果解码失败，使用原文件名
+          }
+        }
+      }
+    }
+
+    // 创建blob并下载
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('下载文件时出错:', error);
+    const errorMessage = error.message || '下载失败，请稍后重试';
+    message.error(errorMessage);
+  }
 };
 
 // 导入工具函数
@@ -386,6 +456,14 @@ import { getFileIcon, getFileIconColor, formatRelativeTime } from '@/utils/file_
 
 .my-table-compact .del-btn {
   color: var(--gray-500);
+}
+
+.my-table-compact .download-btn {
+  color: var(--gray-500);
+}
+
+.my-table-compact .download-btn:hover {
+  color: var(--main-color);
 }
 
 .my-table-compact .del-btn:hover {

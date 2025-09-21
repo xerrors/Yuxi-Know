@@ -310,12 +310,20 @@ class LightRagKB(KnowledgeBase):
             del self.files_meta[file_id]
             self._save_metadata()
 
-    async def get_file_info(self, db_id: str, file_id: str) -> dict:
-        """获取文件信息和chunks"""
+    async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
+        """获取文件基本信息（仅元数据）"""
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
+
+        return {"meta": self.files_meta[file_id]}
+
+    async def get_file_content(self, db_id: str, file_id: str) -> dict:
+        """获取文件内容信息（chunks和lines）"""
         if file_id not in self.files_meta:
             raise Exception(f"File not found: {file_id}")
 
         # 使用 LightRAG 获取 chunks
+        content_info = {"lines": []}
         rag = await self._get_lightrag_instance(db_id)
         if rag:
             try:
@@ -333,12 +341,26 @@ class LightRagKB(KnowledgeBase):
 
                 # 按 chunk_order_index 排序
                 doc_chunks.sort(key=lambda x: x.get("chunk_order_index", 0))
-                return {"lines": doc_chunks}
+                content_info["lines"] = doc_chunks
+                return content_info
 
             except Exception as e:
-                logger.error(f"Error getting chunks for file {file_id}: {e}")
+                logger.error(f"Failed to get file content from LightRAG: {e}")
+                content_info["lines"] = []
+                return content_info
 
-        return {"lines": []}
+        return content_info
+
+    async def get_file_info(self, db_id: str, file_id: str) -> dict:
+        """获取文件完整信息（基本信息+内容信息）- 保持向后兼容"""
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
+
+        # 合并基本信息和内容信息
+        basic_info = await self.get_file_basic_info(db_id, file_id)
+        content_info = await self.get_file_content(db_id, file_id)
+
+        return {**basic_info, **content_info}
 
     async def export_data(self, db_id: str, format: str = "csv", **kwargs) -> str:
         """
