@@ -15,14 +15,20 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone &
     # 更换为阿里云镜像源加速下载
     sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
-    # 安装系统依赖
-    apt-get update && apt-get install -y --no-install-recommends \
+    # 清理apt缓存并更新，避免空间不足问题
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* && \
+    apt-get update && \
+    # 安装系统依赖，减少缓存占用
+    apt-get install -y --no-install-recommends \
         python3-dev \
         ffmpeg \
         libsm6 \
         libxext6 \
         curl \
-        && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+        && apt-get autoremove -y && \
+        apt-get autoclean && \
+        rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
 
 # 复制项目配置文件
 COPY ../pyproject.toml /app/pyproject.toml
