@@ -230,7 +230,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
 
         # 解码URL编码的文件名（如果有的话）
         try:
-            decoded_filename = unquote(filename, encoding='utf-8')
+            decoded_filename = unquote(filename, encoding="utf-8")
             logger.debug(f"Decoded filename: {decoded_filename}")
         except Exception as e:
             logger.debug(f"Failed to decode filename {filename}: {e}")
@@ -276,21 +276,18 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
         # 创建自定义FileResponse，避免文件名编码问题
-        response = StarletteFileResponse(
-            path=file_path,
-            media_type=media_type
-        )
+        response = StarletteFileResponse(path=file_path, media_type=media_type)
 
         # 正确处理中文文件名的HTTP头部设置
         # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码
         try:
             # 尝试使用ASCII编码（适用于英文文件名）
-            decoded_filename.encode('ascii')
+            decoded_filename.encode("ascii")
             # 如果成功，直接使用简单格式
             response.headers["Content-Disposition"] = f'attachment; filename="{decoded_filename}"'
         except UnicodeEncodeError:
             # 如果包含非ASCII字符（如中文），使用RFC 2231格式
-            encoded_filename = quote(decoded_filename.encode('utf-8'))
+            encoded_filename = quote(decoded_filename.encode("utf-8"))
             response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
 
         return response

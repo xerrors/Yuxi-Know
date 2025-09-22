@@ -185,7 +185,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
     hashed_password = AuthUtils.hash_password(admin_data.password)
 
     # 验证用户ID格式（只支持字母数字和下划线）
-    if not re.match(r'^[a-zA-Z0-9_]+$', admin_data.user_id):
+    if not re.match(r"^[a-zA-Z0-9_]+$", admin_data.user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户ID只能包含字母、数字和下划线",
@@ -199,10 +199,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
 
     # 验证手机号格式（如果提供了）
     if admin_data.phone_number and not is_valid_phone_number(admin_data.phone_number):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="手机号格式不正确"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号格式不正确")
 
     # 由于是首次初始化，直接使用输入的user_id
     user_id = admin_data.user_id
@@ -214,7 +211,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
         avatar=None,  # 初始化时头像为空
         password_hash=hashed_password,
         role="superadmin",
-        last_login=datetime.now()
+        last_login=datetime.now(),
     )
 
     db.add(new_admin)
@@ -257,7 +254,7 @@ async def update_profile(
     profile_data: UserProfileUpdate,
     request: Request,
     current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """更新当前用户的个人资料"""
     update_details = []
@@ -266,22 +263,17 @@ async def update_profile(
     if profile_data.phone_number is not None:
         # 如果手机号不为空，验证格式
         if profile_data.phone_number and not is_valid_phone_number(profile_data.phone_number):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="手机号格式不正确"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号格式不正确")
 
         # 检查手机号是否已被其他用户使用
         if profile_data.phone_number:
-            existing_phone = db.query(User).filter(
-                User.phone_number == profile_data.phone_number,
-                User.id != current_user.id
-            ).first()
+            existing_phone = (
+                db.query(User)
+                .filter(User.phone_number == profile_data.phone_number, User.id != current_user.id)
+                .first()
+            )
             if existing_phone:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="手机号已被其他用户使用"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号已被其他用户使用")
 
         current_user.phone_number = profile_data.phone_number
         update_details.append(f"手机号: {profile_data.phone_number or '已清空'}")
@@ -290,13 +282,7 @@ async def update_profile(
 
     # 记录操作
     if update_details:
-        log_operation(
-            db,
-            current_user.id,
-            "更新个人资料",
-            f"更新个人资料: {', '.join(update_details)}",
-            request
-        )
+        log_operation(db, current_user.id, "更新个人资料", f"更新个人资料: {', '.join(update_details)}", request)
 
     return current_user.to_dict()
 
@@ -363,7 +349,7 @@ async def create_user(
         user_id=user_id,
         phone_number=user_data.phone_number,
         password_hash=hashed_password,
-        role=user_data.role
+        role=user_data.role,
     )
 
     db.add(new_user)
@@ -508,9 +494,7 @@ async def delete_user(
 # 路由：验证用户名并生成user_id
 @auth.post("/validate-username", response_model=UserIdGeneration)
 async def validate_username_and_generate_user_id(
-    validation_data: UsernameValidation,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    validation_data: UsernameValidation, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
     """验证用户名格式并生成可用的user_id"""
     # 验证用户名格式
@@ -533,42 +517,28 @@ async def validate_username_and_generate_user_id(
     existing_user_ids = [user.user_id for user in db.query(User.user_id).all()]
     user_id = generate_unique_user_id(validation_data.username, existing_user_ids)
 
-    return UserIdGeneration(
-        username=validation_data.username,
-        user_id=user_id,
-        is_available=True
-    )
+    return UserIdGeneration(username=validation_data.username, user_id=user_id, is_available=True)
 
 
 # 路由：检查user_id是否可用
 @auth.get("/check-user-id/{user_id}")
 async def check_user_id_availability(
-    user_id: str,
-    current_user: User = Depends(get_admin_user),
-    db: Session = Depends(get_db)
+    user_id: str, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
     """检查user_id是否可用"""
     existing_user = db.query(User).filter(User.user_id == user_id).first()
-    return {
-        "user_id": user_id,
-        "is_available": existing_user is None
-    }
+    return {"user_id": user_id, "is_available": existing_user is None}
 
 
 # 路由：上传用户头像
 @auth.post("/upload-avatar")
 async def upload_user_avatar(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db)
+    file: UploadFile = File(...), current_user: User = Depends(get_required_user), db: Session = Depends(get_db)
 ):
     """上传用户头像"""
     # 检查文件类型
-    if not file.content_type or not file.content_type.startswith('image/'):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="只能上传图片文件"
-        )
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="只能上传图片文件")
 
     # 检查文件大小（5MB限制）
     file_size = 0
@@ -576,14 +546,11 @@ async def upload_user_avatar(
     file_size = len(file_content)
 
     if file_size > 5 * 1024 * 1024:  # 5MB
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="文件大小不能超过5MB"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="文件大小不能超过5MB")
 
     try:
         # 获取文件扩展名
-        file_extension = file.filename.split('.')[-1].lower() if file.filename and '.' in file.filename else 'jpg'
+        file_extension = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
 
         # 上传到MinIO
         avatar_url = upload_image_to_minio(file_content, file_extension)
@@ -595,14 +562,7 @@ async def upload_user_avatar(
         # 记录操作
         log_operation(db, current_user.id, "上传头像", f"更新头像: {avatar_url}")
 
-        return {
-            "success": True,
-            "avatar_url": avatar_url,
-            "message": "头像上传成功"
-        }
+        return {"success": True, "avatar_url": avatar_url, "message": "头像上传成功"}
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"头像上传失败: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"头像上传失败: {str(e)}")

@@ -277,18 +277,32 @@ def validate_database_schema(db_path: str) -> tuple[bool, list[str]]:
 
         # 检查users表必需字段
         required_fields = {
-            'users': ['id', 'username', 'user_id', 'phone_number', 'avatar',
-                     'password_hash', 'role', 'created_at', 'last_login',
-                     'login_failed_count', 'last_failed_login', 'login_locked_until'],
-            'operation_logs': ['id', 'user_id', 'operation', 'details', 'ip_address', 'timestamp']
+            "users": [
+                "id",
+                "username",
+                "user_id",
+                "phone_number",
+                "avatar",
+                "password_hash",
+                "role",
+                "created_at",
+                "last_login",
+                "login_failed_count",
+                "last_failed_login",
+                "login_locked_until",
+            ],
+            "operation_logs": ["id", "user_id", "operation", "details", "ip_address", "timestamp"],
         }
 
         for table_name, fields in required_fields.items():
             # 检查表是否存在
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT name FROM sqlite_master
                 WHERE type='table' AND name=?
-            """, (table_name,))
+            """,
+                (table_name,),
+            )
 
             if not cursor.fetchone():
                 missing_fields.append(f"表 {table_name} 不存在")
@@ -308,7 +322,7 @@ def validate_database_schema(db_path: str) -> tuple[bool, list[str]]:
         logger.error(f"验证数据库结构失败: {e}")
         return False, [f"验证失败: {str(e)}"]
     finally:
-        if 'conn' in locals():
+        if "conn" in locals():
             conn.close()
 
 

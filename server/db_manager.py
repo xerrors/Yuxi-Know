@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from server.models import Base
 from server.models.user_model import User
-from server.utils.migrate import check_and_migrate, validate_database_schema
+from server.utils.migrate import validate_database_schema
 from src import config
 from src.utils import logger
 
@@ -57,7 +57,6 @@ class DBManager:
                 logger.warning("")
                 logger.warning("请运行以下 scripts/migrate_user_fields.py 来修复数据库结构:")
                 logger.warning("=" * 60)
-
 
     def get_session(self):
         """获取数据库会话"""

@@ -14,7 +14,7 @@ from src.knowledge.kb_utils import (
     split_text_into_qa_chunks,
 )
 from src.knowledge.knowledge_base import KnowledgeBase
-from src.models.embedding import OtherEmbedding
+from src.models.embed import OtherEmbedding
 from src.utils import hashstr, logger
 
 MILVUS_AVAILABLE = True

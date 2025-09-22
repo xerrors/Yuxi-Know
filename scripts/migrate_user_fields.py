@@ -5,17 +5,19 @@
 将现有的 username 作为 user_id 的默认值
 """
 
-import os
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
+
+from sqlalchemy import text
 
 # 添加项目根目录到Python路径
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from sqlalchemy import text
 from server.db_manager import db_manager
-from server.models.user_model import User
+from server.models.user_model import User as User
 
 
 def migrate_user_fields():
@@ -41,15 +43,15 @@ def migrate_user_fields():
             print(f"现有字段: {existing_columns}")
 
             # 添加缺失的字段
-            if 'user_id' not in existing_columns:
+            if "user_id" not in existing_columns:
                 print("添加 user_id 字段...")
                 db.execute(text("ALTER TABLE users ADD COLUMN user_id VARCHAR(255)"))
 
-            if 'phone_number' not in existing_columns:
+            if "phone_number" not in existing_columns:
                 print("添加 phone_number 字段...")
                 db.execute(text("ALTER TABLE users ADD COLUMN phone_number VARCHAR(255)"))
 
-            if 'avatar' not in existing_columns:
+            if "avatar" not in existing_columns:
                 print("添加 avatar 字段...")
                 db.execute(text("ALTER TABLE users ADD COLUMN avatar VARCHAR(500)"))
 
@@ -82,10 +84,7 @@ def migrate_user_fields():
         for user_id, username in users_without_user_id:
             # 将 username 作为默认的 user_id
             print(f"为用户 {username} (ID: {user_id}) 设置 user_id: {username}")
-            db.execute(
-                text("UPDATE users SET user_id = :user_id WHERE id = :id"),
-                {"user_id": username, "id": user_id}
-            )
+            db.execute(text("UPDATE users SET user_id = :user_id WHERE id = :id"), {"user_id": username, "id": user_id})
 
         db.commit()
 
@@ -96,13 +95,18 @@ def migrate_user_fields():
             try:
                 db.execute(text("CREATE UNIQUE INDEX idx_users_user_id ON users(user_id)"))
                 print("创建 user_id 唯一索引")
-            except:
+            except Exception:
                 print("user_id 索引可能已存在")
 
             try:
-                db.execute(text("CREATE UNIQUE INDEX idx_users_phone_number ON users(phone_number) WHERE phone_number IS NOT NULL"))
+                db.execute(
+                    text(
+                        "CREATE UNIQUE INDEX idx_users_phone_number ON users(phone_number) "
+                        "WHERE phone_number IS NOT NULL"
+                    )
+                )
                 print("创建 phone_number 唯一索引")
-            except:
+            except Exception:
                 print("phone_number 索引可能已存在")
 
             db.commit()
@@ -114,7 +118,9 @@ def migrate_user_fields():
         # 4. 验证迁移结果
         print("验证迁移结果...")
         total_users = db.execute(text("SELECT COUNT(*) FROM users")).scalar()
-        users_with_user_id = db.execute(text("SELECT COUNT(*) FROM users WHERE user_id IS NOT NULL AND user_id != ''")).scalar()
+        users_with_user_id = db.execute(
+            text("SELECT COUNT(*) FROM users WHERE user_id IS NOT NULL AND user_id != ''")
+        ).scalar()
 
         print(f"总用户数: {total_users}")
         print(f"已设置 user_id 的用户数: {users_with_user_id}")
@@ -126,11 +132,11 @@ def migrate_user_fields():
 
     except Exception as e:
         print(f"迁移过程中发生错误: {e}")
-        if 'db' in locals():
+        if "db" in locals():
             db.rollback()
         raise
     finally:
-        if 'db' in locals():
+        if "db" in locals():
             db.close()
 
 
