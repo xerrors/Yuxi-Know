@@ -42,7 +42,7 @@
     "eslint": "^9.34.0",
     "eslint-plugin-vue": "^10.4.0",
     "prettier": "^3.6.2",
-    "vite": "^7.1.4",
+    "vite": "^7.1.5",
     "vue-eslint-parser": "^10.2.0"
   },
   "packageManager": "pnpm@10.11.0"
