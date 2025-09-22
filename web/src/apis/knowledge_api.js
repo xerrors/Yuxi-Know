@@ -198,3 +198,26 @@ export const typeApi = {
   }
 }
 
+// =============================================================================
+// === Embedding模型状态检查分组 ===
+// =============================================================================
+
+export const embeddingApi = {
+  /**
+   * 获取指定embedding模型的状态
+   * @param {string} modelId - 模型ID
+   * @returns {Promise} - 模型状态
+   */
+  getModelStatus: async (modelId) => {
+    return apiAdminGet(`/api/knowledge/embedding-models/${modelId}/status`)
+  },
+
+  /**
+   * 获取所有embedding模型的状态
+   * @returns {Promise} - 所有模型状态
+   */
+  getAllModelsStatus: async () => {
+    return apiAdminGet('/api/knowledge/embedding-models/status')
+  }
+}
+

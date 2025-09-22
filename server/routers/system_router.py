@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from server.models.user_model import User
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
 from src import config, graph_base
+from src.models.chat import test_chat_model_status, test_all_chat_models_status
 from src.utils.logging_config import logger
 
 system = APIRouter(prefix="/system", tags=["system"])
@@ -244,3 +245,35 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
     overall_status = "healthy" if any(svc["status"] == "healthy" for svc in health_status.values()) else "unhealthy"
 
     return {"overall_status": overall_status, "services": health_status, "message": "OCR服务健康检查完成"}
+
+
+# =============================================================================
+# === 聊天模型状态检查分组 ===
+# =============================================================================
+
+
+@system.get("/chat-models/status")
+async def get_chat_model_status(provider: str, model_name: str, current_user: User = Depends(get_admin_user)):
+    """获取指定聊天模型的状态"""
+    logger.debug(f"Checking chat model status: {provider}/{model_name}")
+    try:
+        status = await test_chat_model_status(provider, model_name)
+        return {"status": status, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取聊天模型状态失败 {provider}/{model_name}: {e}")
+        return {
+            "message": f"获取聊天模型状态失败: {e}",
+            "status": {"provider": provider, "model_name": model_name, "status": "error", "message": str(e)},
+        }
+
+
+@system.get("/chat-models/all/status")
+async def get_all_chat_models_status(current_user: User = Depends(get_admin_user)):
+    """获取所有聊天模型的状态"""
+    logger.debug("Checking all chat models status")
+    try:
+        status = await test_all_chat_models_status()
+        return {"status": status, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取所有聊天模型状态失败: {e}")
+        return {"message": f"获取所有聊天模型状态失败: {e}", "status": {"models": {}, "total": 0, "available": 0}}

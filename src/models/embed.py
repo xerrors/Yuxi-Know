@@ -168,12 +168,89 @@ class OtherEmbedding(BaseEmbeddingModel):
                 logger.error(f"Other Embedding async request failed: {e}, {payload}")
                 raise ValueError(f"Other Embedding async request failed: {e}")
 
+    async def test_connection(self) -> tuple[bool, str]:
+        """
+        测试embedding模型的连接性
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            # 使用简单的测试文本
+            test_text = ["Hello world"]
+            await self.aencode(test_text)
+            return True, "连接正常"
+        except Exception as e:
+            error_msg = str(e)
+            return False, error_msg
+
+
+async def test_embedding_model_status(model_id: str) -> dict:
+    """
+    测试指定embedding模型的状态
+
+    Args:
+        model_id: 模型ID，格式为 "provider/model_name"
+
+    Returns:
+        dict: 包含状态信息的字典
+    """
+    try:
+        support_embed_models = config.embed_model_names.keys()
+        if model_id not in support_embed_models:
+            return {"model_id": model_id, "status": "unsupported", "message": f"不支持的模型: {model_id}"}
+
+        # 选择并创建模型实例
+        model = select_embedding_model(model_id)
+
+        # 测试连接
+        success, message = await model.test_connection()
+
+        return {
+            "model_id": model_id,
+            "status": "available" if success else "unavailable",
+            "message": message if not success else "连接正常",
+            "dimension": model.dimension,
+        }
+
+    except Exception as e:
+        logger.warning(f"测试embedding模型状态失败 {model_id}: {e}")
+        return {"model_id": model_id, "status": "error", "message": str(e)}
+
+
+async def test_all_embedding_models_status() -> dict:
+    """
+    测试所有支持的embedding模型状态
+
+    Returns:
+        dict: 包含所有模型状态的字典
+    """
+    support_embed_models = list(config.embed_model_names.keys())
+    results = {}
+
+    # 并发测试所有模型
+    tasks = [test_embedding_model_status(model_id) for model_id in support_embed_models]
+    model_statuses = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for i, status in enumerate(model_statuses):
+        if isinstance(status, Exception):
+            model_id = support_embed_models[i]
+            results[model_id] = {"model_id": model_id, "status": "error", "message": str(status)}
+        else:
+            results[status["model_id"]] = status
+
+    return {
+        "models": results,
+        "total": len(support_embed_models),
+        "available": len([m for m in results.values() if m["status"] == "available"]),
+    }
+
 
 def select_embedding_model(model_id):
     provider, model_name = model_id.split("/", 1) if model_id else ("", "")
     support_embed_models = config.embed_model_names.keys()
     assert model_id in support_embed_models, f"Unsupported embed model: {model_id}, only support {support_embed_models}"
-    logger.debug(f"Loading embedding model {model_id}")
+    logger.info(f"Loading embedding model {model_id}")
     if provider == "local":
         raise ValueError("Local embedding model is not supported, please use other embedding models")
 

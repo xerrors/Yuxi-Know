@@ -26,20 +26,50 @@
             />
           </div>
           <div class="card card-select">
-            <span class="label">{{ items?.embed_model.des }}</span>
-            <a-select style="width: 300px"
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="label">{{ items?.embed_model.des }}</span>
+              <!-- <a-button
+                size="small"
+                :loading="state.checkingStatus"
+                @click="checkAllModelStatus"
+                :disabled="state.checkingStatus"
+              >
+                检查状态
+              </a-button> -->
+            </div>
+            <a-select style="width: 320px"
               :value="configStore.config?.embed_model"
               @change="handleChange('embed_model', $event)"
+              @dropdownVisibleChange="checkAllModelStatus"
             >
               <a-select-option
                 v-for="(name, idx) in items?.embed_model.choices" :key="idx"
-                :value="name">{{ name }}
+                :value="name"
+              >
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                  <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    {{ name }}
+                  </span>
+                  <span
+                    :style="{
+                      color: getModelStatusColor(name),
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      flexShrink: 0,
+                      padding: '2px 4px',
+                      borderRadius: '3px',
+                    }"
+                    :title="getModelStatusTooltip(name)"
+                  >
+                    {{ getModelStatusIcon(name) }}
+                  </span>
+                </div>
               </a-select-option>
             </a-select>
           </div>
           <div class="card card-select">
             <span class="label">{{ items?.reranker.des }}</span>
-            <a-select style="width: 300px"
+            <a-select style="width: 320px"
               :value="configStore.config?.reranker"
               @change="handleChange('reranker', $event)"
             >
@@ -156,6 +186,7 @@ import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue';
 import UserManagementComponent from '@/components/UserManagementComponent.vue';
 import { notification, Button } from 'ant-design-vue';
 import { configApi } from '@/apis/system_api'
+import { embeddingApi } from '@/apis/knowledge_api'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 
 const configStore = useConfigStore()
@@ -165,7 +196,9 @@ const isNeedRestart = ref(false)
 const state = reactive({
   loading: false,
   section: 'base',
-  windowWidth: window?.innerWidth || 0
+  windowWidth: window?.innerWidth || 0,
+  modelStatuses: {}, // 存储embedding模型状态
+  checkingStatus: false // 是否正在检查状态
 })
 
 const handleModelLocalPathsUpdate = (config) => {
@@ -225,6 +258,8 @@ onMounted(() => {
   updateWindowWidth()
   window.addEventListener('resize', updateWindowWidth)
   state.section = userStore.isSuperAdmin ? 'base' : 'user'
+
+  checkAllModelStatus()
 })
 
 onUnmounted(() => {
@@ -247,6 +282,56 @@ const sendRestart = () => {
       console.error('重启服务失败:', error)
       message.error({ content: `重启失败: ${error.message}`, key: "restart", duration: 2 });
     });
+}
+
+
+// 检查所有embedding模型状态
+const checkAllModelStatus = async () => {
+  try {
+    state.checkingStatus = true
+    const response = await embeddingApi.getAllModelsStatus()
+    if (response.status.models) {
+      state.modelStatuses = response.status.models
+    }
+  } catch (error) {
+    console.error('检查所有模型状态失败:', error)
+    message.error('获取模型状态失败')
+  } finally {
+    state.checkingStatus = false
+  }
+}
+
+// 获取模型状态图标
+const getModelStatusIcon = (modelId) => {
+  const status = state.modelStatuses[modelId]
+  if (!status) return '○'
+  if (status.status === 'available') return '✓'
+  if (status.status === 'unavailable') return '✗'
+  if (status.status === 'error') return '⚠'
+  return '○'
+}
+
+// 获取模型状态颜色
+const getModelStatusColor = (modelId) => {
+  const status = state.modelStatuses[modelId]
+  if (!status) return '#999'
+  if (status.status === 'available') return '#52c41a'
+  if (status.status === 'unavailable') return '#ff4d4f'
+  if (status.status === 'error') return '#faad14'
+  return '#999'
+}
+// 获取模型状态提示文本
+const getModelStatusTooltip = (modelId) => {
+  const status = state.modelStatuses[modelId]
+  if (!status) return '状态未知'
+
+  let statusText = ''
+  if (status.status === 'available') statusText = '可用'
+  else if (status.status === 'unavailable') statusText = '不可用'
+  else if (status.status === 'error') statusText = '错误'
+
+  const message = status.message || '无详细信息'
+  return `${statusText}: ${message}`
 }
 
 const openLink = (url) => {

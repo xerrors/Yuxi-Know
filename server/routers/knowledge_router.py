@@ -10,6 +10,7 @@ from server.models.user_model import User
 from server.utils.auth_middleware import get_admin_user
 from src import config, knowledge_base
 from src.knowledge.indexing import process_file_to_markdown
+from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
 from src.utils import hashstr, logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -554,3 +555,35 @@ async def get_knowledge_base_statistics(current_user: User = Depends(get_admin_u
     except Exception as e:
         logger.error(f"获取知识库统计失败 {e}, {traceback.format_exc()}")
         return {"message": f"获取知识库统计失败 {e}", "stats": {}}
+
+
+# =============================================================================
+# === Embedding模型状态检查分组 ===
+# =============================================================================
+
+
+@knowledge.get("/embedding-models/{model_id}/status")
+async def get_embedding_model_status(model_id: str, current_user: User = Depends(get_admin_user)):
+    """获取指定embedding模型的状态"""
+    logger.debug(f"Checking embedding model status: {model_id}")
+    try:
+        status = await test_embedding_model_status(model_id)
+        return {"status": status, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取embedding模型状态失败 {model_id}: {e}, {traceback.format_exc()}")
+        return {
+            "message": f"获取embedding模型状态失败: {e}",
+            "status": {"model_id": model_id, "status": "error", "message": str(e)},
+        }
+
+
+@knowledge.get("/embedding-models/status")
+async def get_all_embedding_models_status(current_user: User = Depends(get_admin_user)):
+    """获取所有embedding模型的状态"""
+    logger.debug("Checking all embedding models status")
+    try:
+        status = await test_all_embedding_models_status()
+        return {"status": status, "message": "success"}
+    except Exception as e:
+        logger.error(f"获取所有embedding模型状态失败: {e}, {traceback.format_exc()}")
+        return {"message": f"获取所有embedding模型状态失败: {e}", "status": {"models": {}, "total": 0, "available": 0}}

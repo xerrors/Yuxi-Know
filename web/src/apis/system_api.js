@@ -100,5 +100,29 @@ export const ocrApi = {
   getHealth: async () => apiAdminGet('/api/system/ocr/health')
 }
 
+// =============================================================================
+// === 聊天模型状态检查分组 ===
+// =============================================================================
+
+export const chatModelApi = {
+  /**
+   * 获取指定聊天模型的状态
+   * @param {string} provider - 模型提供商
+   * @param {string} modelName - 模型名称
+   * @returns {Promise} - 模型状态
+   */
+  getModelStatus: async (provider, modelName) => {
+    return apiAdminGet(`/api/system/chat-models/status?provider=${encodeURIComponent(provider)}&model_name=${encodeURIComponent(modelName)}`)
+  },
+
+  /**
+   * 获取所有聊天模型的状态
+   * @returns {Promise} - 所有模型状态
+   */
+  getAllModelsStatus: async () => {
+    return apiAdminGet('/api/system/chat-models/all/status')
+  }
+}
+
 
 

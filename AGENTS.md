@@ -11,13 +11,15 @@ Yuxi-Know/
 ├── server/              # 服务端代码（部分）
 ├── src/                 # 主要源代码目录
 │   ├── agents/          # 智能体应用
-│   ├── config/          # 配置文件
+│   ├── config/           # 配置文件
 │   ├── knowledge/       # 知识库相关
 │   ├── models/          # 数据模型
 │   ├── plugins/         # 插件（存放OCR）
 │   ├── static/          # 静态资源（配置文件）
 │   └── utils/           # 工具函数
-├── web/                 # 前端代码
+├── web/src/             # 前端代码
+│   ├── apis/            # 前端的接口定义
+│   └── views/           # 主要 vue 文件
 └── docker-compose.yml   # Docker Compose 配置
 ```
 
@@ -37,7 +39,20 @@ Yuxi-Know/
 
 核心原则: 由于 api-dev 和 web-dev 服务均配置了热重载 (hot-reloading)，本地修改代码后无需重启容器，服务会自动更新。应该先检查项目是否已经在后台启动（`docker ps`），具体的可以阅读 [docker-compose.yml](docker-compose.yml).
 
-## 风格说明
+前端开发规范：
 
-- UI风格要简洁，同时要保持一致性，颜色要尽量参考 [base.css](web/src/assets/css/base.css) 中的颜色。不要悬停位移，不要过度使用阴影以及渐变色。
-- Python 代码要符合 Python 的规范，尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+），使用 uvx ruff check 检查 lint。
+- API 接口规范：所有的 API 接口都应该定义在 web/src/apis 下面，并继承自 apiGet/apiPost/apiRequest
+- Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next
+- Vue 中的样式使用 less，并尽量使用[base.css](web/src/assets/css/base.css) 中的颜色。
+- UI风格要简洁，同时要保持一致性，颜色要尽量参考 不要悬停位移，不要过度使用阴影以及渐变色。
+
+
+后端开发规范：
+
+- 项目使用 uv 来管理依赖
+- Python 代码要符合 Python 的规范，尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+），使用 make lint 检查 lint。使用 make format 来格式化代码。
+
+其他：
+
+- 如果需要新建说明文档，则保存在 docs/vibe 文件夹下面
+- 测试脚本可以放在 test 文件夹下面，可以从 docker 中启动测试

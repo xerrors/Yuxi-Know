@@ -20,7 +20,7 @@ def setup_logger(name, level="DEBUG", console=True):
     loguru_logger.add(
         LOG_FILE,
         level=level,
-        format="{time:YYYY-MM-DD HH:mm:ss} - {level} - {name}:{line} - {message}",
+        format="{time:YYYY-MM-DD HH:mm:ss} - {level} - {file}:{line} - {message}",
         encoding="utf-8",
         rotation="10 MB",  # 文件大小达到 10MB 时轮转
         retention="30 days",  # 保留30天的日志
@@ -35,7 +35,7 @@ def setup_logger(name, level="DEBUG", console=True):
             format=(
                 "<green>{time:MM-DD HH:mm:ss}</green> "
                 "<level>{level}</level> "
-                "<cyan>{name}:{line}</cyan>: "
+                "<cyan>{file}:{line}</cyan>: "
                 "<level>{message}</level>"
             ),
             colorize=True,

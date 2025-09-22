@@ -131,5 +131,70 @@ def get_custom_model(model_id):
     return modle_info
 
 
+async def test_chat_model_status(provider: str, model_name: str) -> dict:
+    """
+    测试指定聊天模型的状态
+
+    Args:
+        provider: 模型提供商
+        model_name: 模型名称
+
+    Returns:
+        dict: 包含状态信息的字典
+    """
+    try:
+        # 加载模型
+        logger.debug(f"Selecting chat model {provider}/{model_name}")
+        model = select_model(provider, model_name)
+
+        # 使用简单的测试消息
+        test_messages = [{"role": "user", "content": "Say 1"}]
+
+        # 发送测试请求
+        response = model.call(test_messages, stream=False)
+        logger.debug(f"Test chat model status response: {response}")
+
+        # 检查响应是否有效
+        if response and response.content:
+            return {"provider": provider, "model_name": model_name, "status": "available", "message": "连接正常"}
+        else:
+            return {"provider": provider, "model_name": model_name, "status": "unavailable", "message": "响应无效"}
+
+    except Exception as e:
+        logger.error(f"测试聊天模型状态失败 {provider}/{model_name}: {e}")
+        return {"provider": provider, "model_name": model_name, "status": "error", "message": str(e)}
+
+
+async def test_all_chat_models_status() -> dict:
+    """
+    测试所有支持的聊天模型状态
+
+    Returns:
+        dict: 包含所有模型状态的字典
+    """
+    from src import config
+
+    results = {}
+
+    # 获取所有可用的模型
+    for provider, provider_info in config.model_names.items():
+        if provider == "custom":
+            # 处理自定义模型
+            for custom_model in config.custom_models:
+                model_id = f"custom/{custom_model['custom_id']}"
+                status = await test_chat_model_status("custom", custom_model["custom_id"])
+                results[model_id] = status
+        else:
+            # 处理普通模型
+            for model_name in provider_info.models:
+                model_id = f"{provider}/{model_name}"
+                status = await test_chat_model_status(provider, model_name)
+                results[model_id] = status
+
+    available_count = len([m for m in results.values() if m["status"] == "available"])
+
+    return {"models": results, "total": len(results), "available": available_count}
+
+
 if __name__ == "__main__":
     pass
