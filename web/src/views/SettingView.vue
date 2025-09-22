@@ -101,8 +101,8 @@
             <span class="label">{{ items?.content_guard_llm_model.des }}</span>
             <ModelSelectorComponent
               @select-model="handleContentGuardModelSelect"
-              :model_name="configStore.config?.content_guard_llm_model?.split('/').pop()"
-              :model_provider="configStore.config?.content_guard_llm_model?.split('/')[0]"
+              :model_name="contentGuardModelName"
+              :model_provider="contentGuardModelProvider"
             />
           </div>
         </div>
@@ -249,6 +249,19 @@ const handleChatModelSelect = ({ provider, name }) => {
     model_name: name,
   })
 }
+
+const contentGuardModelProvider = computed(() => {
+  const contentGuardModel = configStore.config?.content_guard_llm_model
+  if (!contentGuardModel) return ''
+  return contentGuardModel.split('/')[0]
+})
+
+const contentGuardModelName = computed(() => {
+  const contentGuardModel = configStore.config?.content_guard_llm_model
+  if (!contentGuardModel) return ''
+  const parts = contentGuardModel.split('/')
+  return parts.slice(1).join('/')
+})
 
 const handleContentGuardModelSelect = ({ provider, name }) => {
   configStore.setConfigValue('content_guard_llm_model', `${provider}/${name}`)
