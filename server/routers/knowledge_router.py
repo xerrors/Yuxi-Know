@@ -150,6 +150,15 @@ async def add_documents(
 
     content_type = params.get("content_type", "file")
 
+    # 安全检查：验证文件路径
+    if content_type == "file":
+        from src.knowledge.kb_utils import validate_file_path
+        for item in items:
+            try:
+                validate_file_path(item, db_id)
+            except ValueError as e:
+                raise HTTPException(status_code=403, detail=str(e))
+
     try:
         processed_items = await knowledge_base.add_content(db_id, items, params=params)
         item_type = "URLs" if content_type == "url" else "files"
@@ -222,7 +231,17 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
             raise HTTPException(status_code=404, detail="File not found")
 
         file_path = file_info.get("meta", {}).get("path")
-        if not file_path or not os.path.exists(file_path):
+        if not file_path:
+            raise HTTPException(status_code=404, detail="File path not found in metadata")
+
+        # 安全检查：验证文件路径
+        from src.knowledge.kb_utils import validate_file_path
+        try:
+            normalized_path = validate_file_path(file_path, db_id)
+        except ValueError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+
+        if not os.path.exists(normalized_path):
             raise HTTPException(status_code=404, detail=f"File not found on disk: {file_info=}")
 
         # 获取文件扩展名和MIME类型，解码URL编码的文件名
@@ -277,7 +296,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
         # 创建自定义FileResponse，避免文件名编码问题
-        response = StarletteFileResponse(path=file_path, media_type=media_type)
+        response = StarletteFileResponse(path=normalized_path, media_type=media_type)
 
         # 正确处理中文文件名的HTTP头部设置
         # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码

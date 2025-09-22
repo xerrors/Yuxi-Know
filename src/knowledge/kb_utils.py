@@ -8,6 +8,64 @@ from src import config
 from src.utils import hashstr, logger
 
 
+def validate_file_path(file_path: str, db_id: str = None) -> str:
+    """
+    验证文件路径安全性，防止路径遍历攻击
+
+    Args:
+        file_path: 要验证的文件路径
+        db_id: 数据库ID，用于获取知识库特定的上传目录
+
+    Returns:
+        str: 规范化后的安全路径
+
+    Raises:
+        ValueError: 如果路径不安全
+    """
+    try:
+        # 规范化路径
+        normalized_path = os.path.abspath(os.path.realpath(file_path))
+
+        # 获取允许的根目录
+        from src.knowledge import knowledge_base
+
+        allowed_dirs = [
+            os.path.abspath(os.path.realpath(config.save_dir)),
+        ]
+
+        # 如果指定了db_id，添加知识库特定的上传目录
+        if db_id:
+            try:
+                allowed_dirs.append(
+                    os.path.abspath(os.path.realpath(knowledge_base.get_db_upload_path(db_id)))
+                )
+            except Exception:
+                # 如果无法获取db路径，使用通用上传目录
+                allowed_dirs.append(
+                    os.path.abspath(os.path.realpath(os.path.join(config.save_dir, "database", "uploads")))
+                )
+
+        # 检查路径是否在允许的目录内
+        is_safe = False
+        for allowed_dir in allowed_dirs:
+            try:
+                if normalized_path.startswith(allowed_dir):
+                    is_safe = True
+                    break
+            except Exception:
+                continue
+
+        if not is_safe:
+            logger.warning(f"Path traversal attempt detected: {file_path} (normalized: {normalized_path})")
+            raise ValueError(f"Access denied: Invalid file path: {file_path}")
+
+        return normalized_path
+
+    except Exception as e:
+        logger.error(f"Path validation failed for {file_path}: {e}")
+        raise ValueError(f"Invalid file path: {file_path}")
+
+
 def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict = {}) -> list[dict]:
     """
     将文本分割成块，使用 LangChain 的 MarkdownTextSplitter 进行智能分割
