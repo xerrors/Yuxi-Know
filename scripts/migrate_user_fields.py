@@ -16,8 +16,8 @@ from sqlalchemy import text
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from server.db_manager import db_manager
-from server.models.user_model import User as User
+from src.storage.db.manager import db_manager
+from src.storage.db.models import User as User
 
 
 def migrate_user_fields():

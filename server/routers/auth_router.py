@@ -6,13 +6,13 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from server.db_manager import db_manager
-from server.models.user_model import User
+from src.storage.db.manager import db_manager
+from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_required_user
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
-from src.utils.minio_utils import upload_image_to_minio
+from src.storage.minio import upload_image_to_minio
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])

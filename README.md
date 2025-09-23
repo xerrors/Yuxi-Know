@@ -141,7 +141,7 @@ export HTTPS_PROXY=http://IP:PORT
 <details>
   <summary>自定义模型供应商</summary>
 
-在 [src/static/models.yaml](src/static/models.yaml) 中添加新的模型配置，然后在 `.env` 文件中添加对应的环境变量，最后重新部署项目即可。
+在 [src/config/static/models.yaml](src/config/static/models.yaml) 中添加新的模型配置，然后在 `.env` 文件中添加对应的环境变量，最后重新部署项目即可。
 
 **示例**：
 
@@ -159,7 +159,7 @@ custom-provider-name-here:
 
 ### 自定义嵌入模型和重排序模型
 
-需要注意的是，从 v0.2 版本开始，项目将模型部署和项目本身做了完全解耦，因此无论是 Embedding 还是 Reranker，如果需要使用本地模型，都需要使用 vllm /ollama 转换为 api 服务后，在 src/static/models.yaml 或者 src/static/models.private.yaml （优先）中 添加类似下面的信息：
+需要注意的是，从 v0.2 版本开始，项目将模型部署和项目本身做了完全解耦，因此无论是 Embedding 还是 Reranker，如果需要使用本地模型，都需要使用 vllm /ollama 转换为 api 服务后，在 src/config/static/models.yaml 或者 src/config/static/models.private.yaml （优先）中 添加类似下面的信息：
 
 ```yaml
 EMBED_MODEL_INFO:
@@ -359,7 +359,7 @@ MCP_SERVERS = {
 
 为了保障服务内容的合规性，系统内置了一套内容审查机制。对用户的输入和模型生成的输出进行关键词过滤，防止不当内容的传播。
 
-管理员可以在 `设置` -> `基本设置` 页面一键启用或禁用内容审查功能。**敏感词词库**位于 `src/static/bad_keywords.txt` 文件，可以根据需要自行修改，每行一个关键词。
+管理员可以在 `设置` -> `基本设置` 页面一键启用或禁用内容审查功能。**敏感词词库**位于 `src/config/static/bad_keywords.txt` 文件，可以根据需要自行修改，每行一个关键词。
 
 
 
@@ -379,7 +379,7 @@ MCP_SERVERS = {
 
 ### 品牌信息配置
 
-在主页和登录页面的很多信息，比如 Logo、组织名称、版权信息等，都可以复制 [src/static/info.template.yaml](src/static/info.template.yaml)，并新建一个 `src/static/info.local.yaml`（或者在 .env 文件中配置 `YUXI_BRAND_FILE_PATH` 指向这个文件），在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置渲染到前端页面中。如果 `src/static/info.local.yaml` 不存在，会默认使用 [src/static/info.template.yaml](src/static/info.template.yaml) 中的配置。
+在主页和登录页面的很多信息，比如 Logo、组织名称、版权信息等，都可以复制 [src/config/static/info.template.yaml](src/config/static/info.template.yaml)，并新建一个 `src/config/static/info.local.yaml`（或者在 .env 文件中配置 `YUXI_BRAND_FILE_PATH` 指向这个文件），在这个文件中配置。在项目启动时，会加载这个文件，然后根据文件中的配置渲染到前端页面中。如果 `src/config/static/info.local.yaml` 不存在，会默认使用 [src/config/static/info.template.yaml](src/config/static/info.template.yaml) 中的配置。
 
 系统的配色方面，主要保存在 [web/src/assets/css/base.css](web/src/assets/css/base.css) 中。只要替换其中的 `--main-*` 相关变量，就可以改变系统的配色。
 

@@ -36,9 +36,7 @@ def validate_file_path(file_path: str, db_id: str = None) -> str:
         # 如果指定了db_id，添加知识库特定的上传目录
         if db_id:
             try:
-                allowed_dirs.append(
-                    os.path.abspath(os.path.realpath(knowledge_base.get_db_upload_path(db_id)))
-                )
+                allowed_dirs.append(os.path.abspath(os.path.realpath(knowledge_base.get_db_upload_path(db_id))))
             except Exception:
                 # 如果无法获取db路径，使用通用上传目录
                 allowed_dirs.append(

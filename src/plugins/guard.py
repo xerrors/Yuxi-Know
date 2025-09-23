@@ -39,7 +39,7 @@ def load_keywords(file_path: str) -> list[str]:
 
 
 class ContentGuard:
-    def __init__(self, keywords_file: str = "src/static/bad_keywords.txt"):
+    def __init__(self, keywords_file: str = "src/config/static/bad_keywords.txt"):
         self.keywords = load_keywords(keywords_file)
         if not self.keywords:
             self.keywords = ["贩毒"]

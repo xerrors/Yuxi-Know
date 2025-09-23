@@ -1,0 +1,27 @@
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+# 导入所有模型，确保它们被注册到 Base.metadata
+from src.storage.db.models import (  # noqa: E402, F401
+    User,
+    OperationLog,
+    Thread,
+    KnowledgeDatabase,
+    KnowledgeFile,
+    KnowledgeNode,
+)  # noqa: E402
+
+# 导入数据库管理器
+from src.storage.db.manager import db_manager  # noqa: E402
+
+__all__ = [
+    "Base",
+    "User",
+    "OperationLog",
+    "Thread",
+    "KnowledgeDatabase",
+    "KnowledgeFile",
+    "KnowledgeNode",
+    "db_manager",
+]

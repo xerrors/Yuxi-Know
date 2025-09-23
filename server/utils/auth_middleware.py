@@ -5,8 +5,8 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from server.db_manager import db_manager
-from server.models.user_model import User
+from src.storage.db.manager import db_manager
+from src.storage.db.models import User
 from server.utils.auth_utils import AuthUtils
 
 # 定义OAuth2密码承载器，指定token URL

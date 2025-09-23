@@ -6,7 +6,7 @@ import requests
 import yaml
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from server.models.user_model import User
+from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user, get_superadmin_user
 from src import config, graph_base
 from src.models.chat import test_chat_model_status, test_all_chat_models_status
@@ -84,13 +84,13 @@ def load_info_config():
     """加载信息配置文件"""
     try:
         # 配置文件路径
-        brand_file_path = os.environ.get("YUXI_BRAND_FILE_PATH", "src/static/info.local.yaml")
+        brand_file_path = os.environ.get("YUXI_BRAND_FILE_PATH", "src/config/static/info.local.yaml")
         config_path = Path(brand_file_path)
 
         # 检查文件是否存在
         if not config_path.exists():
             logger.debug(f"The config file {config_path} does not exist, using default config")
-            config_path = Path("src/static/info.template.yaml")
+            config_path = Path("src/config/static/info.template.yaml")
 
         # 读取配置文件
         with open(config_path, encoding="utf-8") as file:

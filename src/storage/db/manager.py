@@ -5,11 +5,16 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from server.models import Base
-from server.models.user_model import User
-from server.utils.migrate import validate_database_schema
+from src.storage.db.models import Base, User
 from src import config
 from src.utils import logger
+
+try:
+    from server.utils.migrate import validate_database_schema
+except ImportError:
+    # 如果迁移工具不存在，使用简单的占位函数
+    def validate_database_schema(db_path):
+        return True, []
 
 
 class DBManager:

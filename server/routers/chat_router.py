@@ -11,8 +11,7 @@ from langchain_core.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from server.models.thread_model import Thread
-from server.models.user_model import User
+from src.storage.db.models import Thread, User
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
 from src import executor
@@ -102,8 +101,8 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     agents = await agent_manager.get_agents_info()
     # logger.debug(f"agents: {agents}")
     metadata = {}
-    if Path("src/static/agents_meta.yaml").exists():
-        with open("src/static/agents_meta.yaml") as f:
+    if Path("src/config/static/agents_meta.yaml").exists():
+        with open("src/config/static/agents_meta.yaml") as f:
             metadata = yaml.safe_load(f)
     return {"agents": agents, "metadata": metadata}
 

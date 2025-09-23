@@ -2,7 +2,7 @@ import traceback
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
-from server.models.user_model import User
+from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
 from src import graph_base, knowledge_base
 from src.utils.logging_config import logger

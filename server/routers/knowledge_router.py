@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Reques
 from fastapi.responses import FileResponse
 from starlette.responses import FileResponse as StarletteFileResponse
 
-from server.models.user_model import User
+from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
 from src import config, knowledge_base
 from src.knowledge.indexing import process_file_to_markdown
@@ -153,6 +153,7 @@ async def add_documents(
     # 安全检查：验证文件路径
     if content_type == "file":
         from src.knowledge.kb_utils import validate_file_path
+
         for item in items:
             try:
                 validate_file_path(item, db_id)
@@ -236,6 +237,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
 
         # 安全检查：验证文件路径
         from src.knowledge.kb_utils import validate_file_path
+
         try:
             normalized_path = validate_file_path(file_path, db_id)
         except ValueError as e:

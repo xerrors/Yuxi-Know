@@ -5,7 +5,7 @@ import logging
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from server.models.user_model import OperationLog, User
+from src.storage.db.models import OperationLog, User
 
 
 def setup_logging():

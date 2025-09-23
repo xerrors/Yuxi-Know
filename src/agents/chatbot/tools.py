@@ -7,7 +7,7 @@ from langchain_core.tools import tool
 from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.agents.common.tools import get_buildin_tools
 from src.utils import logger
-from src.utils.minio_utils import upload_image_to_minio
+from src.storage.minio import upload_image_to_minio
 
 
 @tool
@@ -32,18 +32,14 @@ def calculator(a: float, b: float, operation: str) -> float:
 
 
 @tool
-async def text_to_img_kolors(text: str) -> str:
+async def text_to_img_qwen(text: str) -> str:
     """（用来测试文件存储）使用Kolors模型生成图片， 会返回图片的URL"""
 
     url = "https://api.siliconflow.cn/v1/images/generations"
 
     payload = {
-        "model": "Kwai-Kolors/Kolors",
+        "model": "Qwen/Qwen-Image",
         "prompt": text,
-        "image_size": "512x512",
-        "batch_size": 1,
-        "num_inference_steps": 20,
-        "guidance_scale": 7.5,
     }
     headers = {"Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}", "Content-Type": "application/json"}
 
@@ -73,6 +69,6 @@ def get_tools() -> list[Any]:
     """获取所有可运行的工具（给大模型使用）"""
     tools = get_buildin_tools()
     tools.append(calculator)
-    tools.append(text_to_img_kolors)
+    tools.append(text_to_img_qwen)
     tools.extend(get_mysql_tools())
     return tools
