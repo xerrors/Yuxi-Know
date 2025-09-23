@@ -7,13 +7,13 @@ from typing import Any
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
-from src.knowledge.kb_utils import (
+from src.knowledge.utils.kb_utils import (
     get_embedding_config,
     prepare_item_metadata,
     split_text_into_chunks,
     split_text_into_qa_chunks,
 )
-from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.base import KnowledgeBase
 from src.models.embed import OtherEmbedding
 from src.utils import hashstr, logger
 

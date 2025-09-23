@@ -1,12 +1,12 @@
 import os
 
 from ..config import config
-from .chroma_kb import ChromaKB
-from .graphbase import GraphDatabase
-from .kb_factory import KnowledgeBaseFactory
-from .kb_manager import KnowledgeBaseManager
-from .lightrag_kb import LightRagKB
-from .milvus_kb import MilvusKB
+from .implementations.chroma import ChromaKB
+from .graph import GraphDatabase
+from .factory import KnowledgeBaseFactory
+from .manager import KnowledgeBaseManager
+from .implementations.lightrag import LightRagKB
+from .implementations.milvus import MilvusKB
 
 # 注册知识库类型
 KnowledgeBaseFactory.register("chroma", ChromaKB, {"description": "基于 ChromaDB 的轻量级向量知识库，适合开发和小规模"})

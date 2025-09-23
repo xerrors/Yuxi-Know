@@ -1,4 +1,4 @@
-from src.knowledge.knowledge_base import KBNotFoundError, KnowledgeBase
+from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.utils import logger
 
 

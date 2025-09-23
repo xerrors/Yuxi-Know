@@ -10,8 +10,8 @@ from neo4j import GraphDatabase
 from pymilvus import connections, utility
 
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
-from src.knowledge.kb_utils import get_embedding_config, prepare_item_metadata
-from src.knowledge.knowledge_base import KnowledgeBase
+from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
+from src.knowledge.base import KnowledgeBase
 from src.utils import hashstr, logger
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
