@@ -152,7 +152,7 @@ async def add_documents(
 
     # 安全检查：验证文件路径
     if content_type == "file":
-        from src.knowledge.kb_utils import validate_file_path
+        from src.knowledge.utils.kb_utils import validate_file_path
 
         for item in items:
             try:
@@ -236,7 +236,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
             raise HTTPException(status_code=404, detail="File path not found in metadata")
 
         # 安全检查：验证文件路径
-        from src.knowledge.kb_utils import validate_file_path
+        from src.knowledge.utils.kb_utils import validate_file_path
 
         try:
             normalized_path = validate_file_path(file_path, db_id)
