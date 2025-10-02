@@ -7,6 +7,7 @@ import chromadb
 from chromadb.config import Settings
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 
+from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.utils.kb_utils import (
     get_embedding_config,
@@ -14,7 +15,6 @@ from src.knowledge.utils.kb_utils import (
     split_text_into_chunks,
     split_text_into_qa_chunks,
 )
-from src.knowledge.base import KnowledgeBase
 from src.utils import logger
 
 

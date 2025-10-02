@@ -645,7 +645,7 @@ watch(() => props.isOpen, (newVal) => {
       position: sticky;
       bottom: 16px;
       padding: 12px 0;
-      border-top: 1px solid var(--gray-200);
+      border-top: 1px solid var(--gray-100);
       background: #fff;
       // min-width: 400px;
       z-index: 10;
@@ -689,6 +689,7 @@ watch(() => props.isOpen, (newVal) => {
     }
 
     .config-form-content {
+      margin-bottom: 100px;
       .config-form {
         .config-alert {
           margin-bottom: 16px;
@@ -798,7 +799,7 @@ watch(() => props.isOpen, (newVal) => {
     justify-content: space-between;
     align-items: center;
     padding: 6px 12px;
-    background: var(--gray-50);
+    background: var(--gray-20);
     border-radius: 8px;
     border: 1px solid var(--gray-200);
     margin-bottom: 8px;
@@ -808,7 +809,7 @@ watch(() => props.isOpen, (newVal) => {
       align-items: center;
       gap: 8px;
       font-size: 13px;
-      color: var(--gray-700);
+      color: var(--gray-900);
 
       .tools-count {
         color: var(--gray-900);
@@ -825,7 +826,7 @@ watch(() => props.isOpen, (newVal) => {
     .select-tools-btn {
       background: var(--main-color);
       border: none;
-      border-radius: 6px;
+      border-radius: 4px;
       height: 28px;
       font-size: 12px;
       font-weight: 500;
@@ -845,9 +846,9 @@ watch(() => props.isOpen, (newVal) => {
     .tool-tag {
       margin: 0;
       padding: 4px 8px;
-      border-radius: 4px;
-      background: var(--gray-100);
-      border: 1px solid var(--gray-300);
+      border-radius: 12px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
       color: var(--gray-900);
       font-size: 12px;
 

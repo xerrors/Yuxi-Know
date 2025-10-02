@@ -7,7 +7,7 @@
 """
 
 from .chroma import ChromaKB
-from .milvus import MilvusKB
 from .lightrag import LightRagKB
+from .milvus import MilvusKB
 
 __all__ = ["ChromaKB", "MilvusKB", "LightRagKB"]

@@ -6,6 +6,7 @@ from typing import Any
 
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
+from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.utils.kb_utils import (
     get_embedding_config,
@@ -13,7 +14,6 @@ from src.knowledge.utils.kb_utils import (
     split_text_into_chunks,
     split_text_into_qa_chunks,
 )
-from src.knowledge.base import KnowledgeBase
 from src.models.embed import OtherEmbedding
 from src.utils import hashstr, logger
 

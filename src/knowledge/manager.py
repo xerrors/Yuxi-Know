@@ -3,8 +3,8 @@ import json
 import os
 from datetime import datetime
 
-from src.knowledge.factory import KnowledgeBaseFactory
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
+from src.knowledge.factory import KnowledgeBaseFactory
 from src.utils import logger
 
 

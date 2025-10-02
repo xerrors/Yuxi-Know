@@ -28,6 +28,7 @@
 - [x] 补充 embedding 模型和 reranker 模型的配置说明
 - [ ] 支持 MinerU 的解析方法
 - [x] 优化 knowledge 文件夹下面的架构
+- [ ] Options 中添加网络搜索和绘制图片的选项，分别是用来调用工具
 
 📝 **Base**
 

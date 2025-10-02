@@ -9,7 +9,6 @@ from io import BytesIO
 
 from minio import Minio
 from minio.error import S3Error
-
 from src.utils import logger
 
 

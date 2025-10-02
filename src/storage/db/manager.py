@@ -5,8 +5,8 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.storage.db.models import Base, User
 from src import config
+from src.storage.db.models import Base, User
 from src.utils import logger
 
 try:
