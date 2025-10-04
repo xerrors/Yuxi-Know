@@ -122,16 +122,19 @@ const mainList = [{
       </div>
       <div class="nav">
         <!-- 使用mainList渲染导航项 -->
-        <RouterLink
+        <a-tooltip
           v-for="(item, index) in mainList"
           :key="index"
-          :to="item.path"
-          v-show="!item.hidden"
-          class="nav-item"
-          active-class="active">
-          <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
-          <span class="text">{{item.name}}</span>
-        </RouterLink>
+          placement="right"
+          v-show="!item.hidden">
+          <template #title>{{ item.name }}</template>
+          <RouterLink
+            :to="item.path"
+            class="nav-item"
+            active-class="active">
+            <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
+          </RouterLink>
+        </a-tooltip>
       </div>
       <div
         ref="htmlRefHook"
@@ -289,12 +292,11 @@ div.header, #app-router-view {
 
   .nav-item {
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 52px;
-    padding: 4px;
-    padding-top: 10px;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
     border: 1px solid transparent;
     border-radius: 8px;
     background-color: transparent;
@@ -352,12 +354,6 @@ div.header, #app-router-view {
 
     &:hover {
       color: var(--main-color);
-    }
-
-    .text {
-      font-size: 12px;
-      margin-top: 4px;
-      text-align: center;
     }
   }
 

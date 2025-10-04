@@ -124,6 +124,7 @@ class ConversationManager:
         tool_output: str | None = None,
         status: str = "pending",
         error_message: str | None = None,
+        langgraph_tool_call_id: str | None = None,
     ) -> ToolCall:
         """
         Add a tool call record
@@ -135,6 +136,7 @@ class ConversationManager:
             tool_output: Tool execution result
             status: Status (pending/success/error)
             error_message: Error message if failed
+            langgraph_tool_call_id: LangGraph tool_call_id for precise matching
 
         Returns:
             Created ToolCall object
@@ -146,6 +148,7 @@ class ConversationManager:
             tool_output=tool_output,
             status=status,
             error_message=error_message,
+            langgraph_tool_call_id=langgraph_tool_call_id,
         )
 
         self.db.add(tool_call)
@@ -155,9 +158,7 @@ class ConversationManager:
         logger.debug(f"Added tool call {tool_name} to message {message_id}")
         return tool_call
 
-    def get_messages(
-        self, conversation_id: int, limit: int | None = None, offset: int = 0
-    ) -> list[Message]:
+    def get_messages(self, conversation_id: int, limit: int | None = None, offset: int = 0) -> list[Message]:
         """
         Get messages for a conversation
 
@@ -181,9 +182,7 @@ class ConversationManager:
 
         return query.all()
 
-    def get_messages_by_thread_id(
-        self, thread_id: str, limit: int | None = None, offset: int = 0
-    ) -> list[Message]:
+    def get_messages_by_thread_id(self, thread_id: str, limit: int | None = None, offset: int = 0) -> list[Message]:
         """
         Get messages for a conversation by thread ID
 
@@ -260,7 +259,7 @@ class ConversationManager:
             current_metadata.update(metadata)
             conversation.extra_metadata = current_metadata
 
-        conversation.updated_at = datetime.now()
+        conversation.updated_at = datetime.now(datetime.UTC)
         self.db.commit()
         self.db.refresh(conversation)
 
@@ -335,11 +334,58 @@ class ConversationManager:
         if user_feedback is not None:
             stats.user_feedback = user_feedback
 
-        stats.updated_at = datetime.now()
+        stats.updated_at = datetime.now(datetime.UTC)
         self.db.commit()
         self.db.refresh(stats)
 
         return stats
+
+    def get_tool_call_by_langgraph_id(self, langgraph_tool_call_id: str) -> ToolCall | None:
+        """
+        Get tool call by LangGraph tool_call_id
+
+        Args:
+            langgraph_tool_call_id: LangGraph tool_call_id
+
+        Returns:
+            ToolCall object or None if not found
+        """
+        return self.db.query(ToolCall).filter(ToolCall.langgraph_tool_call_id == langgraph_tool_call_id).first()
+
+    def update_tool_call_output(
+        self,
+        langgraph_tool_call_id: str,
+        tool_output: str,
+        status: str = "success",
+        error_message: str | None = None,
+    ) -> ToolCall | None:
+        """
+        Update tool call output by LangGraph tool_call_id
+
+        Args:
+            langgraph_tool_call_id: LangGraph tool_call_id
+            tool_output: Tool execution result
+            status: Status (success/error)
+            error_message: Error message if failed
+
+        Returns:
+            Updated ToolCall object or None if not found
+        """
+        tool_call = self.get_tool_call_by_langgraph_id(langgraph_tool_call_id)
+        if not tool_call:
+            logger.warning(f"Tool call not found for langgraph_tool_call_id: {langgraph_tool_call_id}")
+            return None
+
+        tool_call.tool_output = tool_output
+        tool_call.status = status
+        if error_message:
+            tool_call.error_message = error_message
+
+        self.db.commit()
+        self.db.refresh(tool_call)
+
+        logger.debug(f"Updated tool call {langgraph_tool_call_id} with output")
+        return tool_call
 
     def _update_message_count(self, conversation_id: int) -> None:
         """
@@ -353,4 +399,3 @@ class ConversationManager:
             message_count = self.db.query(Message).filter(Message.conversation_id == conversation_id).count()
             stats.message_count = message_count
             self.db.commit()
-

@@ -141,14 +141,14 @@ const groupedChats = computed(() => {
   // Sort chats by creation date, newest first
   const sortedChats = [...props.chatsList].sort((a, b) => {
     // 将后端时间当作UTC时间处理，然后转换为北京时间进行比较
-    const dateA = dayjs.utc(b.create_at).tz('Asia/Shanghai');
-    const dateB = dayjs.utc(a.create_at).tz('Asia/Shanghai');
+    const dateA = dayjs.utc(b.created_at).tz('Asia/Shanghai');
+    const dateB = dayjs.utc(a.created_at).tz('Asia/Shanghai');
     return dateA.diff(dateB);
   });
 
   sortedChats.forEach(chat => {
     // 将后端时间当作UTC时间处理，然后转换为北京时间
-    const chatDate = dayjs.utc(chat.create_at).tz('Asia/Shanghai');
+    const chatDate = dayjs.utc(chat.created_at).tz('Asia/Shanghai');
     if (chatDate.isAfter(today)) {
       groups['今天'].push(chat);
     } else if (chatDate.isAfter(sevenDaysAgo)) {

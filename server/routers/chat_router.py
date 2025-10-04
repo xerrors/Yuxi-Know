@@ -190,7 +190,7 @@ async def chat_agent(
                         extra_metadata=msg_dict,  # 保存原始 model_dump
                     )
 
-                    # 保存 tool_calls（如果有）
+                    # 保存 tool_calls（如果有）- 使用 LangGraph 的 tool_call_id
                     if tool_calls_data:
                         logger.debug(f"Saving {len(tool_calls_data)} tool calls from AI message")
                         for tc in tool_calls_data:
@@ -199,32 +199,28 @@ async def chat_agent(
                                 tool_name=tc.get("name", "unknown"),
                                 tool_input=tc.get("args", {}),  # 完整的参数
                                 status="pending",  # 工具还未执行
+                                langgraph_tool_call_id=tc.get("id"),  # 保存 LangGraph tool_call_id
                             )
 
                     logger.debug(f"Saved AI message {ai_msg.id} with {len(tool_calls_data)} tool calls")
 
                 elif msg_type == "tool":
-                    # 工具执行结果消息
-                    # 需要找到对应的 tool_call 记录并更新
+                    # 工具执行结果消息 - 使用 tool_call_id 精确匹配
                     tool_call_id = msg_dict.get("tool_call_id")
                     content = msg_dict.get("content", "")
+                    name = msg_dict.get("name", "")
 
                     if tool_call_id:
-                        # 通过 tool_call_id 找到对应的 tool_call 记录
-                        # 注意：LangGraph 的 tool_call_id 和我们数据库的 id 不同
-                        # 我们需要通过最近的 AI 消息找到对应的 tool_call
-                        recent_ai_msgs = conv_mgr.get_messages(conversation.id, limit=10)
-                        for recent_msg in reversed(recent_ai_msgs):
-                            if recent_msg.role == "assistant" and recent_msg.tool_calls:
-                                for tc in recent_msg.tool_calls:
-                                    # 这里简化处理：按顺序更新 pending 状态的 tool_call
-                                    if tc.status == "pending" and not tc.tool_output:
-                                        tc.tool_output = content
-                                        tc.status = "success"
-                                        db.commit()
-                                        logger.debug(f"Updated tool_call {tc.id} with output")
-                                        break
-                                break
+                        # 通过 LangGraph tool_call_id 精确匹配并更新
+                        updated_tc = conv_mgr.update_tool_call_output(
+                            langgraph_tool_call_id=tool_call_id,
+                            tool_output=content,
+                            status="success",
+                        )
+                        if updated_tc:
+                            logger.debug(f"Updated tool_call {tool_call_id} ({name}) with output")
+                        else:
+                            logger.warning(f"Tool call {tool_call_id} not found for update")
 
                 logger.debug(f"Processed message type={msg_type}")
 
@@ -402,12 +398,7 @@ async def get_agent_history(
         history = []
         for msg in messages:
             # Map role to type that frontend expects
-            role_type_map = {
-                "user": "human",
-                "assistant": "ai",
-                "tool": "tool",
-                "system": "system"
-            }
+            role_type_map = {"user": "human", "assistant": "ai", "tool": "tool", "system": "system"}
 
             msg_dict = {
                 "type": role_type_map.get(msg.role, msg.role),  # human/ai/tool/system
@@ -470,8 +461,8 @@ class ThreadResponse(BaseModel):
     user_id: str
     agent_id: str
     title: str | None = None
-    create_at: str
-    update_at: str
+    created_at: str
+    updated_at: str
 
 
 # =============================================================================
@@ -504,8 +495,8 @@ async def create_thread(
         "user_id": conversation.user_id,
         "agent_id": conversation.agent_id,
         "title": conversation.title,
-        "create_at": conversation.created_at.isoformat(),
-        "update_at": conversation.updated_at.isoformat(),
+        "created_at": conversation.created_at.isoformat(),
+        "updated_at": conversation.updated_at.isoformat(),
     }
 
 
@@ -530,8 +521,8 @@ async def list_threads(agent_id: str, db: Session = Depends(get_db), current_use
             "user_id": conv.user_id,
             "agent_id": conv.agent_id,
             "title": conv.title,
-            "create_at": conv.created_at.isoformat(),
-            "update_at": conv.updated_at.isoformat(),
+            "created_at": conv.created_at.isoformat(),
+            "updated_at": conv.updated_at.isoformat(),
         }
         for conv in conversations
     ]
@@ -589,6 +580,6 @@ async def update_thread(
         "user_id": updated_conv.user_id,
         "agent_id": updated_conv.agent_id,
         "title": updated_conv.title,
-        "create_at": updated_conv.created_at.isoformat(),
-        "update_at": updated_conv.updated_at.isoformat(),
+        "created_at": updated_conv.created_at.isoformat(),
+        "updated_at": updated_conv.updated_at.isoformat(),
     }
