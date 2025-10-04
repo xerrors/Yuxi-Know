@@ -1,5 +1,5 @@
+import datetime as dt
 import time
-from datetime import datetime
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
@@ -20,7 +20,7 @@ class KnowledgeDatabase(Base):
     embed_model = Column(String, nullable=True)  # 嵌入模型名称
     dimension = Column(Integer, nullable=True)  # 向量维度
     meta_info = Column(JSON, nullable=True)  # 元数据
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC))  # 创建时间
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))  # 创建时间
 
     # 关系
     files = relationship("KnowledgeFile", back_populates="database", cascade="all, delete-orphan")
@@ -57,7 +57,7 @@ class KnowledgeFile(Base):
     path = Column(String, nullable=False)  # 文件路径
     file_type = Column(String, nullable=False)  # 文件类型
     status = Column(String, nullable=False)  # 处理状态
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC))  # 创建时间
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))  # 创建时间
 
     # 关系
     database = relationship("KnowledgeDatabase", back_populates="files")
@@ -124,11 +124,11 @@ class Conversation(Base):
     agent_id = Column(String(64), index=True, nullable=False, comment="Agent ID")
     title = Column(String(255), nullable=True, comment="Conversation title")
     status = Column(String(20), default="active", comment="Status: active/archived/deleted")
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(datetime.UTC),
-        onupdate=lambda: datetime.now(datetime.UTC),
+        default=lambda: dt.datetime.now(dt.UTC),
+        onupdate=lambda: dt.datetime.now(dt.UTC),
         comment="Update time",
     )
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata")
@@ -165,7 +165,7 @@ class Message(Base):
     role = Column(String(20), nullable=False, comment="Message role: user/assistant/system/tool")
     content = Column(Text, nullable=False, comment="Message content")
     message_type = Column(String(30), default="text", comment="Message type: text/tool_call/tool_result")
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
     token_count = Column(Integer, nullable=True, comment="Token count (optional)")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata (complete message dump)")
 
@@ -202,7 +202,7 @@ class ToolCall(Base):
     tool_output = Column(Text, nullable=True, comment="Tool execution result")
     status = Column(String(20), default="pending", comment="Status: pending/success/error")
     error_message = Column(Text, nullable=True, comment="Error message if failed")
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
 
     # Relationships
     message = relationship("Message", back_populates="tool_calls")
@@ -234,11 +234,11 @@ class ConversationStats(Base):
     total_tokens = Column(Integer, default=0, comment="Total tokens used")
     model_used = Column(String(100), nullable=True, comment="Model used")
     user_feedback = Column(JSON, nullable=True, comment="User feedback")
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
     updated_at = Column(
         DateTime,
-        default=lambda: datetime.now(datetime.UTC),
-        onupdate=lambda: datetime.now(datetime.UTC),
+        default=lambda: dt.datetime.now(dt.UTC),
+        onupdate=lambda: dt.datetime.now(dt.UTC),
         comment="Update time",
     )
 
@@ -270,7 +270,7 @@ class User(Base):
     avatar = Column(String, nullable=True)  # 头像URL
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")  # 角色: superadmin, admin, user
-    created_at = Column(DateTime, default=lambda: datetime.now(datetime.UTC))
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
     last_login = Column(DateTime, nullable=True)
 
     # 登录失败限制相关字段
@@ -355,7 +355,7 @@ class OperationLog(Base):
     operation = Column(String, nullable=False)
     details = Column(Text, nullable=True)
     ip_address = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=lambda: datetime.now(datetime.UTC))
+    timestamp = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
 
     # 关联用户
     user = relationship("User", back_populates="operation_logs")
