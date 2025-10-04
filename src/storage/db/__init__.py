@@ -10,7 +10,6 @@ from src.storage.db.models import (  # noqa: E402, F401
     KnowledgeFile,
     KnowledgeNode,
     OperationLog,
-    Thread,
     User,
 )  # noqa: E402
 
@@ -18,7 +17,6 @@ __all__ = [
     "Base",
     "User",
     "OperationLog",
-    "Thread",
     "KnowledgeDatabase",
     "KnowledgeFile",
     "KnowledgeNode",

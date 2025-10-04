@@ -91,6 +91,19 @@ const router = createRouter({
       ]
     },
     {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'DashboardComp',
+          component: () => import('../views/DashboardView.vue'),
+          meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('../views/EmptyView.vue'),
@@ -126,7 +139,7 @@ router.beforeEach(async (to, from, next) => {
       if (!agentStore.isInitialized) {
         await agentStore.initialize();
       }
-      
+
       const defaultAgent = agentStore.defaultAgent;
       if (defaultAgent && defaultAgent.id) {
         next(`/agent/${defaultAgent.id}`);

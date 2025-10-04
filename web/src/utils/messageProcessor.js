@@ -9,7 +9,7 @@ export class MessageProcessor {
    */
   static convertToolResultToMessages(msgs) {
     const toolResponseMap = new Map();
-    
+
     // 构建工具响应映射
     for (const item of msgs) {
       if (item.type === 'tool' && item.tool_call_id) {
@@ -43,15 +43,27 @@ export class MessageProcessor {
    * @returns {Array} 对话数组
    */
   static convertServerHistoryToMessages(serverHistory) {
-    // 第一步：将所有tool消息与对应的tool call合并
-    const mergedHistory = this.convertToolResultToMessages(serverHistory);
+    // Filter out standalone 'tool' messages since tool results are already in AI messages' tool_calls
+    // Backend new storage: tool results are embedded in AI messages' tool_calls array with tool_call_result field
+    const filteredHistory = serverHistory.filter(item => item.type !== 'tool');
 
-    // 第二步：按照对话分组
+    // 按照对话分组
     const conversations = [];
     let currentConv = null;
 
-    for (const item of mergedHistory) {
+    for (const item of filteredHistory) {
       if (item.type === 'human') {
+        // Start new conversation, finalize previous one
+        if (currentConv) {
+          // Find the last AI message and mark it as final
+          for (let i = currentConv.messages.length - 1; i >= 0; i--) {
+            if (currentConv.messages[i].type === 'ai') {
+              currentConv.messages[i].isLast = true;
+              currentConv.status = 'finished';
+              break;
+            }
+          }
+        }
         currentConv = {
           messages: [item],
           status: 'loading'
@@ -59,11 +71,17 @@ export class MessageProcessor {
         conversations.push(currentConv);
       } else if (item.type === 'ai' && currentConv) {
         currentConv.messages.push(item);
+      }
+    }
 
-        if (item.response_metadata?.finish_reason === 'stop') {
-          item.isLast = true;
+    // Mark the last conversation as finished
+    if (currentConv && currentConv.messages.length > 0) {
+      // Find the last AI message and mark it as final
+      for (let i = currentConv.messages.length - 1; i >= 0; i--) {
+        if (currentConv.messages[i].type === 'ai') {
+          currentConv.messages[i].isLast = true;
           currentConv.status = 'finished';
-          currentConv = null;
+          break;
         }
       }
     }
@@ -86,7 +104,7 @@ export class MessageProcessor {
     // 合并后续chunks
     for (let i = 1; i < chunks.length; i++) {
       const chunk = chunks[i];
-      
+
       // 合并内容
       if (chunk.content) {
         result.content += chunk.content;

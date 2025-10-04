@@ -31,6 +31,10 @@ cache
 .idea
 .vibe
 .qoder
+.claude
+.cursor
+.trae
+.pytest_cache
 *.nogit*
 *.private*
 *.local*

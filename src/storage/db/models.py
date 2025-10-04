@@ -113,20 +113,135 @@ class KnowledgeNode(Base):
         }
 
 
-class Thread(Base):
-    """对话线程表"""
+class Conversation(Base):
+    """Conversation table - new storage system"""
 
-    __tablename__ = "thread"
+    __tablename__ = "conversations"
 
-    id = Column(String(64), primary_key=True, index=True, comment="线程ID")
-    user_id = Column(String(64), index=True, nullable=False, comment="用户ID")
-    agent_id = Column(String(64), index=True, nullable=False, comment="智能体ID")
-    title = Column(String(255), nullable=True, comment="标题")
-    create_at = Column(DateTime, default=func.now(), comment="创建时间")
-    update_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="更新时间")
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
+    thread_id = Column(String(64), unique=True, index=True, nullable=False, comment="Thread ID (UUID)")
+    user_id = Column(String(64), index=True, nullable=False, comment="User ID")
+    agent_id = Column(String(64), index=True, nullable=False, comment="Agent ID")
+    title = Column(String(255), nullable=True, comment="Conversation title")
+    status = Column(String(20), default="active", comment="Status: active/archived/deleted")
+    created_at = Column(DateTime, default=func.now(), comment="Creation time")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="Update time")
+    extra_metadata = Column(JSON, nullable=True, comment="Additional metadata")
 
-    description = Column(String(255), nullable=True, comment="描述")
-    status = Column(Integer, default=1, comment="状态")
+    # Relationships
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+    stats = relationship(
+        "ConversationStats", back_populates="conversation", uselist=False, cascade="all, delete-orphan"
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "thread_id": self.thread_id,
+            "user_id": self.user_id,
+            "agent_id": self.agent_id,
+            "title": self.title,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "metadata": self.extra_metadata or {},
+        }
+
+
+class Message(Base):
+    """Message table - stores conversation messages"""
+
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id"), nullable=False, index=True, comment="Conversation ID"
+    )
+    role = Column(String(20), nullable=False, comment="Message role: user/assistant/system/tool")
+    content = Column(Text, nullable=False, comment="Message content")
+    message_type = Column(String(30), default="text", comment="Message type: text/tool_call/tool_result")
+    created_at = Column(DateTime, default=func.now(), comment="Creation time")
+    token_count = Column(Integer, nullable=True, comment="Token count (optional)")
+    extra_metadata = Column(JSON, nullable=True, comment="Additional metadata (complete message dump)")
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+    tool_calls = relationship("ToolCall", back_populates="message", cascade="all, delete-orphan")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "role": self.role,
+            "content": self.content,
+            "message_type": self.message_type,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "token_count": self.token_count,
+            "metadata": self.extra_metadata or {},
+            "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
+        }
+
+
+class ToolCall(Base):
+    """ToolCall table - stores tool invocations"""
+
+    __tablename__ = "tool_calls"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
+    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False, index=True, comment="Message ID")
+    tool_name = Column(String(100), nullable=False, comment="Tool name")
+    tool_input = Column(JSON, nullable=True, comment="Tool input parameters")
+    tool_output = Column(Text, nullable=True, comment="Tool execution result")
+    status = Column(String(20), default="pending", comment="Status: pending/success/error")
+    error_message = Column(Text, nullable=True, comment="Error message if failed")
+    created_at = Column(DateTime, default=func.now(), comment="Creation time")
+
+    # Relationships
+    message = relationship("Message", back_populates="tool_calls")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "message_id": self.message_id,
+            "tool_name": self.tool_name,
+            "tool_input": self.tool_input or {},
+            "tool_output": self.tool_output,
+            "status": self.status,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ConversationStats(Base):
+    """ConversationStats table - stores conversation statistics"""
+
+    __tablename__ = "conversation_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
+    conversation_id = Column(
+        Integer, ForeignKey("conversations.id"), unique=True, nullable=False, comment="Conversation ID"
+    )
+    message_count = Column(Integer, default=0, comment="Total message count")
+    total_tokens = Column(Integer, default=0, comment="Total tokens used")
+    model_used = Column(String(100), nullable=True, comment="Model used")
+    user_feedback = Column(JSON, nullable=True, comment="User feedback")
+    created_at = Column(DateTime, default=func.now(), comment="Creation time")
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now(), comment="Update time")
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="stats")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "message_count": self.message_count,
+            "total_tokens": self.total_tokens,
+            "model_used": self.model_used,
+            "user_feedback": self.user_feedback or {},
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class User(Base):

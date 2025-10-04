@@ -7,11 +7,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk, HumanMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.storage.db.models import Thread, User
+from src.storage.db.models import User
+from src.storage.conversation import ConversationManager
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
 from src import executor
@@ -114,6 +115,7 @@ async def chat_agent(
     config: dict = Body({}),
     meta: dict = Body({}),
     current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
 ):
     """使用特定智能体进行对话（需要登录）"""
 
@@ -137,6 +139,100 @@ async def chat_agent(
             ).encode("utf-8")
             + b"\n"
         )
+
+    async def save_messages_from_langgraph_state(
+        agent_instance,
+        conversation,
+        conv_mgr,
+        config_dict,
+    ):
+        """
+        从 LangGraph state 中读取完整消息并保存到数据库
+        这样可以获得完整的 tool_calls 参数
+        """
+        try:
+            graph = await agent_instance.get_graph()
+            state = await graph.aget_state(config_dict)
+
+            if not state or not state.values:
+                logger.warning("No state found in LangGraph")
+                return
+
+            messages = state.values.get("messages", [])
+            logger.debug(f"Retrieved {len(messages)} messages from LangGraph state")
+
+            # 获取已保存的消息数量，避免重复保存
+            existing_messages = conv_mgr.get_messages(conversation.id)
+            existing_count = len(existing_messages)
+
+            # 只保存新增的消息
+            new_messages = messages[existing_count:]
+
+            for msg in new_messages:
+                msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
+                msg_type = msg_dict.get("type", "unknown")
+
+                if msg_type == "human":
+                    # 用户消息（理论上已经保存过了，跳过）
+                    continue
+
+                elif msg_type == "ai":
+                    # AI 消息
+                    content = msg_dict.get("content", "")
+                    tool_calls_data = msg_dict.get("tool_calls", [])
+
+                    # 保存 AI 消息
+                    ai_msg = conv_mgr.add_message(
+                        conversation_id=conversation.id,
+                        role="assistant",
+                        content=content,
+                        message_type="text",
+                        extra_metadata=msg_dict,  # 保存原始 model_dump
+                    )
+
+                    # 保存 tool_calls（如果有）
+                    if tool_calls_data:
+                        logger.debug(f"Saving {len(tool_calls_data)} tool calls from AI message")
+                        for tc in tool_calls_data:
+                            conv_mgr.add_tool_call(
+                                message_id=ai_msg.id,
+                                tool_name=tc.get("name", "unknown"),
+                                tool_input=tc.get("args", {}),  # 完整的参数
+                                status="pending",  # 工具还未执行
+                            )
+
+                    logger.debug(f"Saved AI message {ai_msg.id} with {len(tool_calls_data)} tool calls")
+
+                elif msg_type == "tool":
+                    # 工具执行结果消息
+                    # 需要找到对应的 tool_call 记录并更新
+                    tool_call_id = msg_dict.get("tool_call_id")
+                    content = msg_dict.get("content", "")
+
+                    if tool_call_id:
+                        # 通过 tool_call_id 找到对应的 tool_call 记录
+                        # 注意：LangGraph 的 tool_call_id 和我们数据库的 id 不同
+                        # 我们需要通过最近的 AI 消息找到对应的 tool_call
+                        recent_ai_msgs = conv_mgr.get_messages(conversation.id, limit=10)
+                        for recent_msg in reversed(recent_ai_msgs):
+                            if recent_msg.role == "assistant" and recent_msg.tool_calls:
+                                for tc in recent_msg.tool_calls:
+                                    # 这里简化处理：按顺序更新 pending 状态的 tool_call
+                                    if tc.status == "pending" and not tc.tool_output:
+                                        tc.tool_output = content
+                                        tc.status = "success"
+                                        db.commit()
+                                        logger.debug(f"Updated tool_call {tc.id} with output")
+                                        break
+                                break
+
+                logger.debug(f"Processed message type={msg_type}")
+
+            logger.info(f"Saved {len(new_messages)} new messages from LangGraph state")
+
+        except Exception as e:
+            logger.error(f"Error saving messages from LangGraph state: {e}")
+            logger.error(traceback.format_exc())
 
     async def stream_messages():
         # 代表服务端已经收到了请求
@@ -162,30 +258,68 @@ async def chat_agent(
 
         input_context = {"user_id": user_id, "thread_id": thread_id}
 
+        # Initialize conversation manager
+        conv_manager = ConversationManager(db)
+
+        # Get or create conversation
+        conversation = None
+        if thread_id:
+            conversation = conv_manager.get_conversation_by_thread_id(thread_id)
+            if not conversation:
+                try:
+                    # Auto-create conversation for existing thread
+                    conversation = conv_manager.create_conversation(
+                        user_id=user_id,
+                        agent_id=agent_id,
+                        title=(query[:50] + "..." if len(query) > 50 else query) if query else "新的对话",
+                        thread_id=thread_id,
+                    )
+                    logger.info(f"Auto-created conversation for thread_id {thread_id}")
+                except Exception as e:
+                    logger.error(f"Failed to auto-create conversation: {e}")
+                    conversation = None
+
+        # Save user message
+        if conversation:
+            try:
+                conv_manager.add_message(
+                    conversation_id=conversation.id,
+                    role="user",
+                    content=query,
+                    message_type="text",
+                    extra_metadata={"raw_message": HumanMessage(content=query).model_dump()},
+                )
+            except Exception as e:
+                logger.error(f"Error saving user message: {e}")
+
         try:
-            # Output guard for streaming
-            accumulated_content = ""
+            # Stream messages (only for display, don't save yet)
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
-                # logger.debug(f"msg: {msg.model_dump()}, metadata: {metadata}")
                 if isinstance(msg, AIMessageChunk):
-                    accumulated_content += msg.content
-                    if conf.enable_content_guard and content_guard.check(accumulated_content):
-                        logger.warning(f"Sensitive content detected in stream: {accumulated_content}")
+                    # Content guard
+                    if conf.enable_content_guard and content_guard.check(msg.content):
+                        logger.warning("Sensitive content detected in stream")
                         yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                         return
 
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
 
+                elif isinstance(msg, ToolMessage):
+                    yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
 
-            # Additional content guard with llm
-            if conf.enable_content_guard and content_guard.check_with_llm(accumulated_content):
-                logger.warning(f"Content guard triggered: {accumulated_content=}")
-                yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
-                return
-
             yield make_chunk(status="finished", meta=meta)
+
+            # After streaming finished, save all messages from LangGraph state
+            if conversation:
+                langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+                await save_messages_from_langgraph_state(
+                    agent_instance=agent,
+                    conversation=conversation,
+                    conv_mgr=conv_manager,
+                    config_dict=langgraph_config,
+                )
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
@@ -251,15 +385,53 @@ async def save_agent_config(agent_id: str, config: dict = Body(...), current_use
 
 
 @chat.get("/agent/{agent_id}/history")
-async def get_agent_history(agent_id: str, thread_id: str, current_user: User = Depends(get_required_user)):
-    """获取智能体历史消息（需要登录）"""
+async def get_agent_history(
+    agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: Session = Depends(get_db)
+):
+    """获取智能体历史消息（需要登录）- NEW STORAGE ONLY"""
     try:
-        # 获取Agent实例和配置类
-        if not (agent := agent_manager.get_agent(agent_id)):
+        # 获取Agent实例验证
+        if not agent_manager.get_agent(agent_id):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
-        # 获取历史消息
-        history = await agent.get_history(user_id=str(current_user.id), thread_id=thread_id)
+        # Use new storage system ONLY
+        conv_manager = ConversationManager(db)
+        messages = conv_manager.get_messages_by_thread_id(thread_id)
+
+        # Convert to frontend-compatible format
+        history = []
+        for msg in messages:
+            # Map role to type that frontend expects
+            role_type_map = {
+                "user": "human",
+                "assistant": "ai",
+                "tool": "tool",
+                "system": "system"
+            }
+
+            msg_dict = {
+                "type": role_type_map.get(msg.role, msg.role),  # human/ai/tool/system
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            }
+
+            # Add tool calls if present (for AI messages)
+            if msg.tool_calls and len(msg.tool_calls) > 0:
+                msg_dict["tool_calls"] = [
+                    {
+                        "id": str(tc.id),
+                        "name": tc.tool_name,
+                        "function": {"name": tc.tool_name},  # Frontend compatibility
+                        "args": tc.tool_input or {},
+                        "tool_call_result": {"content": tc.tool_output} if tc.tool_output else None,
+                        "status": tc.status,
+                    }
+                    for tc in msg.tool_calls
+                ]
+
+            history.append(msg_dict)
+
+        logger.info(f"Loaded {len(history)} messages from new storage for thread {thread_id}")
         return {"history": history}
 
     except Exception as e:
@@ -290,7 +462,6 @@ async def get_agent_config(agent_id: str, current_user: User = Depends(get_requi
 class ThreadCreate(BaseModel):
     title: str | None = None
     agent_id: str
-    description: str | None = None
     metadata: dict | None = None
 
 
@@ -299,7 +470,6 @@ class ThreadResponse(BaseModel):
     user_id: str
     agent_id: str
     title: str | None = None
-    description: str | None = None
     create_at: str
     update_at: str
 
@@ -313,79 +483,81 @@ class ThreadResponse(BaseModel):
 async def create_thread(
     thread: ThreadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)
 ):
-    """创建新对话线程"""
+    """创建新对话线程 (使用新存储系统)"""
     thread_id = str(uuid.uuid4())
     logger.debug(f"thread.agent_id: {thread.agent_id}")
 
-    new_thread = Thread(
-        id=thread_id,
+    # Create conversation using new storage system
+    conv_manager = ConversationManager(db)
+    conversation = conv_manager.create_conversation(
         user_id=str(current_user.id),
         agent_id=thread.agent_id,
         title=thread.title or "新的对话",
-        description=thread.description,
+        thread_id=thread_id,
+        metadata=thread.metadata,
     )
 
-    db.add(new_thread)
-    db.commit()
-    db.refresh(new_thread)
+    logger.info(f"Created conversation with thread_id: {thread_id}")
 
     return {
-        "id": new_thread.id,
-        "user_id": new_thread.user_id,
-        "agent_id": new_thread.agent_id,
-        "title": new_thread.title,
-        "description": new_thread.description,
-        "create_at": new_thread.create_at.isoformat(),
-        "update_at": new_thread.update_at.isoformat(),
+        "id": conversation.thread_id,
+        "user_id": conversation.user_id,
+        "agent_id": conversation.agent_id,
+        "title": conversation.title,
+        "create_at": conversation.created_at.isoformat(),
+        "update_at": conversation.updated_at.isoformat(),
     }
 
 
 @chat.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
-    """获取用户的所有对话线程"""
+    """获取用户的所有对话线程 (使用新存储系统)"""
     assert agent_id, "agent_id 不能为空"
-    query = db.query(Thread).filter(
-        Thread.user_id == str(current_user.id),
-        Thread.status == 1,
-        Thread.agent_id == agent_id,
-    )
 
     logger.debug(f"agent_id: {agent_id}")
 
-    threads = query.order_by(Thread.update_at.desc()).all()
+    # Use new storage system
+    conv_manager = ConversationManager(db)
+    conversations = conv_manager.list_conversations(
+        user_id=str(current_user.id),
+        agent_id=agent_id,
+        status="active",
+    )
 
     return [
         {
-            "id": thread.id,
-            "user_id": thread.user_id,
-            "agent_id": thread.agent_id,
-            "title": thread.title,
-            "description": thread.description,
-            "create_at": thread.create_at.isoformat(),
-            "update_at": thread.update_at.isoformat(),
+            "id": conv.thread_id,
+            "user_id": conv.user_id,
+            "agent_id": conv.agent_id,
+            "title": conv.title,
+            "create_at": conv.created_at.isoformat(),
+            "update_at": conv.updated_at.isoformat(),
         }
-        for thread in threads
+        for conv in conversations
     ]
 
 
 @chat.delete("/thread/{thread_id}")
 async def delete_thread(thread_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
-    """删除对话线程"""
-    thread = db.query(Thread).filter(Thread.id == thread_id, Thread.user_id == str(current_user.id)).first()
+    """删除对话线程 (使用新存储系统)"""
+    # Use new storage system
+    conv_manager = ConversationManager(db)
+    conversation = conv_manager.get_conversation_by_thread_id(thread_id)
 
-    if not thread:
+    if not conversation or conversation.user_id != str(current_user.id):
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
-    # 软删除
-    thread.status = 0
-    db.commit()
+    # Soft delete
+    success = conv_manager.delete_conversation(thread_id, soft_delete=True)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="删除失败")
 
     return {"message": "删除成功"}
 
 
 class ThreadUpdate(BaseModel):
     title: str | None = None
-    description: str | None = None
 
 
 @chat.put("/thread/{thread_id}", response_model=ThreadResponse)
@@ -395,31 +567,28 @@ async def update_thread(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
-    """更新对话线程信息"""
-    thread = (
-        db.query(Thread)
-        .filter(Thread.id == thread_id, Thread.user_id == str(current_user.id), Thread.status == 1)
-        .first()
-    )
+    """更新对话线程信息 (使用新存储系统)"""
+    # Use new storage system
+    conv_manager = ConversationManager(db)
+    conversation = conv_manager.get_conversation_by_thread_id(thread_id)
 
-    if not thread:
+    if not conversation or conversation.user_id != str(current_user.id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
-    if thread_update.title is not None:
-        thread.title = thread_update.title
+    # Update conversation
+    updated_conv = conv_manager.update_conversation(
+        thread_id=thread_id,
+        title=thread_update.title,
+    )
 
-    if thread_update.description is not None:
-        thread.description = thread_update.description
-
-    db.commit()
-    db.refresh(thread)
+    if not updated_conv:
+        raise HTTPException(status_code=500, detail="更新失败")
 
     return {
-        "id": thread.id,
-        "user_id": thread.user_id,
-        "agent_id": thread.agent_id,
-        "title": thread.title,
-        "description": thread.description,
-        "create_at": thread.create_at.isoformat(),
-        "update_at": thread.update_at.isoformat(),
+        "id": updated_conv.thread_id,
+        "user_id": updated_conv.user_id,
+        "agent_id": updated_conv.agent_id,
+        "title": updated_conv.title,
+        "create_at": updated_conv.created_at.isoformat(),
+        "update_at": updated_conv.updated_at.isoformat(),
     }
