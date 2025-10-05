@@ -308,6 +308,7 @@ div.header, #app-router-view {
 
     &.github {
       padding: 10px 12px;
+      margin-bottom: 16px;
       &:hover {
         background-color: transparent;
         border: 1px solid transparent;

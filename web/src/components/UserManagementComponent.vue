@@ -19,68 +19,68 @@
           <a-alert type="error" :message="userManagement.error" show-icon />
         </div>
 
-        <div class="table-container">
-          <a-table
-            :dataSource="userManagement.users"
-            :columns="userColumns"
-            rowKey="id"
-            :pagination="{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total) => `共 ${total} 条记录`
-            }"
-            :scroll="{ x: 1200, y: 'calc(100vh - 300px)' }"
-            class="user-table"
-            bordered
-          >
-            <!-- 角色列自定义渲染 -->
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'role'">
-                <a-tag :color="getRoleColor(record.role)" class="role-tag">
-                  {{ getRoleLabel(record.role) }}
-                </a-tag>
-              </template>
-
-              <!-- 时间列格式化 -->
-              <template v-if="column.key === 'created_at' || column.key === 'last_login'">
-                <span class="time-text">{{ formatTime(record[column.key]) }}</span>
-              </template>
-
-              <!-- 手机号列 -->
-              <template v-if="column.key === 'phone_number'">
-                <span class="phone-text">{{ record.phone_number || '-' }}</span>
-              </template>
-
-              <!-- 用户ID列 -->
-              <template v-if="column.key === 'user_id'">
-                <span class="user-id-text">{{ record.user_id || '-' }}</span>
-              </template>
-
-              <!-- 操作列 -->
-              <template v-if="column.key === 'action'">
-                <div class="table-actions">
-                  <a-tooltip title="编辑用户">
-                    <a-button type="text" size="small" @click="showEditUserModal(record)" class="action-btn">
-                      <EditOutlined />
-                    </a-button>
-                  </a-tooltip>
-                  <a-tooltip title="删除用户">
-                    <a-button
-                      type="text"
-                      size="small"
-                      danger
-                      @click="confirmDeleteUser(record)"
-                      :disabled="record.id === userStore.userId || (record.role === 'superadmin' && userStore.userRole !== 'superadmin')"
-                      class="action-btn"
-                    >
-                      <DeleteOutlined />
-                    </a-button>
-                  </a-tooltip>
+        <div class="cards-container">
+          <div v-if="userManagement.users.length === 0" class="empty-state">
+            <a-empty description="暂无用户数据" />
+          </div>
+          <div v-else class="user-cards-grid">
+            <div v-for="user in userManagement.users" :key="user.id" class="user-card">
+              <div class="card-header">
+                <div class="user-info">
+                  <div class="user-avatar">
+                    <img v-if="user.avatar" :src="user.avatar" :alt="user.username" class="avatar-img" />
+                    <div v-else class="avatar-placeholder">
+                      {{ user.username.charAt(0).toUpperCase() }}
+                    </div>
+                  </div>
+                  <div class="user-basic-info">
+                    <h4 class="username">{{ user.username }}</h4>
+                    <div class="user-id">ID: {{ user.user_id || '-' }}</div>
+                  </div>
                 </div>
-              </template>
-            </template>
-          </a-table>
+                <a-tag :color="getRoleColor(user.role)" class="role-tag">
+                  {{ getRoleLabel(user.role) }}
+                </a-tag>
+              </div>
+
+              <div class="card-content">
+                <div class="info-item">
+                  <span class="info-label">手机号:</span>
+                  <span class="info-value phone-text">{{ user.phone_number || '-' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">创建时间:</span>
+                  <span class="info-value time-text">{{ formatTime(user.created_at) }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">最后登录:</span>
+                  <span class="info-value time-text">{{ formatTime(user.last_login) }}</span>
+                </div>
+              </div>
+
+              <div class="card-actions">
+                <a-tooltip title="编辑用户">
+                  <a-button type="text" size="small" @click="showEditUserModal(user)" class="action-btn">
+                    <EditOutlined />
+                    <span>编辑</span>
+                  </a-button>
+                </a-tooltip>
+                <a-tooltip title="删除用户">
+                  <a-button
+                    type="text"
+                    size="small"
+                    danger
+                    @click="confirmDeleteUser(user)"
+                    :disabled="user.id === userStore.userId || (user.role === 'superadmin' && userStore.userRole !== 'superadmin')"
+                    class="action-btn"
+                  >
+                    <DeleteOutlined />
+                    <span>删除</span>
+                  </a-button>
+                </a-tooltip>
+              </div>
+            </div>
+          </div>
         </div>
       </a-spin>
     </div>
@@ -449,62 +449,6 @@ const confirmDeleteUser = (user) => {
   });
 };
 
-// 用户表格列定义
-const userColumns = [
-  {
-    title: 'ID',
-    dataIndex: 'id',
-    key: 'id',
-    width: 60,
-    align: 'center'
-  },
-  {
-    title: '用户名',
-    dataIndex: 'username',
-    key: 'username',
-    width: 120
-  },
-  {
-    title: '用户ID',
-    dataIndex: 'user_id',
-    key: 'user_id',
-    width: 120
-  },
-  {
-    title: '手机号',
-    dataIndex: 'phone_number',
-    key: 'phone_number',
-    width: 120,
-    customRender: ({ text }) => text || '-'
-  },
-  {
-    title: '角色',
-    dataIndex: 'role',
-    key: 'role',
-    width: 100,
-    align: 'center'
-  },
-  {
-    title: '创建时间',
-    dataIndex: 'created_at',
-    key: 'created_at',
-    width: 140,
-    align: 'center'
-  },
-  {
-    title: '最后登录',
-    dataIndex: 'last_login',
-    key: 'last_login',
-    width: 140,
-    align: 'center'
-  },
-  {
-    title: '操作',
-    key: 'action',
-    width: 100,
-    align: 'center'
-  }
-];
 
 // 角色显示辅助函数
 const getRoleLabel = (role) => {
@@ -562,52 +506,157 @@ onMounted(() => {
       padding: 16px 24px;
     }
 
-    .table-container {
-      max-height: calc(100vh - 300px);
-      overflow: hidden;
+    .cards-container {
+      .empty-state {
+        padding: 60px 20px;
+        text-align: center;
+      }
 
-      .user-table {
-        :deep(.ant-table-thead > tr > th) {
-          background: #fafafa;
-          font-weight: 600;
-          color: #262626;
-          border-bottom: 2px solid #f0f0f0;
-        }
+      .user-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 16px;
+        // padding: 16px;
 
-        :deep(.ant-table-tbody > tr > td) {
-          padding: 12px 16px;
-          border-bottom: 1px solid #f5f5f5;
-        }
+        .user-card {
+          background: var(--gray-0);
+          border: 1px solid var(--gray-150);
+          border-radius: 8px;
+          padding: 16px;
+          transition: all 0.2s ease;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-        :deep(.ant-table-tbody > tr:hover > td) {
-          background: #f8f9ff;
-        }
-
-        :deep(.ant-pagination) {
-          margin: 16px 24px;
-        }
-
-        // 自定义滚动条样式
-        :deep(.ant-table-body) {
-          scrollbar-width: thin;
-          scrollbar-color: #d9d9d9 transparent;
-
-          &::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+          &:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border-color: var(--gray-200);
           }
 
-          &::-webkit-scrollbar-track {
-            background: #f5f5f5;
-            border-radius: 4px;
+          .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+
+            .user-info {
+              display: flex;
+              align-items: center;
+              gap: 12px;
+
+              .user-avatar {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                background: var(--gray-50);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+                flex-shrink: 0;
+
+                .avatar-img {
+                  width: 100%;
+                  height: 100%;
+                  object-fit: cover;
+                }
+
+                .avatar-placeholder {
+                  color: var(--gray-600);
+                  font-weight: 500;
+                  font-size: 14px;
+                }
+              }
+
+              .user-basic-info {
+                .username {
+                  margin: 0 0 2px 0;
+                  font-size: 15px;
+                  font-weight: 600;
+                  color: var(--gray-900);
+                }
+
+                .user-id {
+                  font-size: 12px;
+                  color: var(--gray-600);
+                  font-family: 'Monaco', 'Consolas', monospace;
+                }
+              }
+            }
+
+            .role-tag {
+              font-weight: 500;
+              border-radius: 4px;
+              padding: 2px 8px;
+              font-size: 12px;
+            }
           }
 
-          &::-webkit-scrollbar-thumb {
-            background: #d9d9d9;
-            border-radius: 4px;
+          .card-content {
+            margin-bottom: 12px;
 
-            &:hover {
-              background: #bfbfbf;
+            .info-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: 2px 0;
+              border-bottom: 1px solid var(--gray-25);
+
+              &:last-child {
+                border-bottom: none;
+              }
+
+              .info-label {
+                font-size: 12px;
+                color: var(--gray-600);
+                font-weight: 500;
+                min-width: 70px;
+              }
+
+              .info-value {
+                font-size: 12px;
+                color: var(--gray-900);
+                text-align: right;
+                flex: 1;
+
+                &.time-text {
+                  color: var(--gray-700);
+                }
+
+                &.phone-text {
+                  font-family: 'Monaco', 'Consolas', monospace;
+                }
+              }
+            }
+          }
+
+          .card-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            padding-top: 8px;
+            border-top: 1px solid var(--gray-25);
+
+            .action-btn {
+              display: flex;
+              align-items: center;
+              gap: 4px;
+              padding: 4px 8px;
+              border-radius: 6px;
+              transition: all 0.2s ease;
+              font-size: 12px;
+
+              span {
+                font-size: 12px;
+              }
+
+              &:hover {
+                background: var(--gray-25);
+              }
+
+              &.ant-btn-dangerous:hover {
+                background: var(--gray-25);
+                border-color: var(--color-error);
+                color: var(--color-error);
+              }
             }
           }
         }
@@ -615,47 +664,15 @@ onMounted(() => {
     }
   }
 
-  .role-tag {
-    font-weight: 500;
-    border-radius: 4px;
-    padding: 2px 8px;
-  }
-
   .time-text {
     font-size: 13px;
-    color: #595959;
+    color: var(--gray-700);
   }
 
   .phone-text, .user-id-text {
     font-size: 13px;
-    color: #262626;
+    color: var(--gray-900);
     font-family: 'Monaco', 'Consolas', monospace;
-  }
-
-  .table-actions {
-    display: flex;
-    gap: 4px;
-    justify-content: center;
-
-    .action-btn {
-      width: 32px;
-      height: 32px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-
-      &:hover {
-        transform: scale(1.1);
-      }
-
-      &.ant-btn-dangerous:hover {
-        background: #fff2f0;
-        border-color: #ffccc7;
-        color: #ff4d4f;
-      }
-    }
   }
 }
 

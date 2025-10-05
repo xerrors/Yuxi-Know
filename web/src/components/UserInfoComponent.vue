@@ -360,8 +360,9 @@ const handleAvatarChange = async (info) => {
   .avatar-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 50%;
+    border: 2px solid #f0f0f0;
   }
 }
 
