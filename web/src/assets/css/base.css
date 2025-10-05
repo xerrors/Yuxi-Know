@@ -51,6 +51,46 @@
   --color-error: #c73234;
   --color-info: #0058d4;
 
+  /* Chart Colors - 图表颜色系统 */
+  --chart-primary: var(--main-500);        /* 主色调 - 用于主要数据 */
+  --chart-primary-light: var(--main-400);  /* 主色调浅色 - 用于渐变 */
+  --chart-primary-dark: var(--main-600);   /* 主色调深色 - 用于强调 */
+
+  --chart-success: #52c41a;               /* 成功色 - 绿色 */
+  --chart-success-light: #95de64;        /* 成功色浅色 */
+  --chart-success-dark: #389e0d;         /* 成功色深色 */
+
+  --chart-warning: #faad14;               /* 警告色 - 橙色 */
+  --chart-warning-light: #ffd666;        /* 警告色浅色 */
+  --chart-warning-dark: #d48806;         /* 警告色深色 */
+
+  --chart-error: #f5222d;                /* 错误色 - 红色 */
+  --chart-error-light: #ff7875;          /* 错误色浅色 */
+  --chart-error-dark: #cf1322;          /* 错误色深色 */
+
+  --chart-info: #1890ff;                 /* 信息色 - 蓝色 */
+  --chart-info-light: #69c0ff;           /* 信息色浅色 */
+  --chart-info-dark: #096dd9;            /* 信息色深色 */
+
+  --chart-secondary: #722ed1;           /* 次要色 - 紫色 */
+  --chart-secondary-light: #b37feb;      /* 次要色浅色 */
+  --chart-secondary-dark: #531dab;       /* 次要色深色 */
+
+  --chart-accent: #13c2c2;               /* 强调色 - 青色 */
+  --chart-accent-light: #5cdbd3;        /* 强调色浅色 */
+  --chart-accent-dark: #08979c;          /* 强调色深色 */
+
+  /* Chart Palette - 图表调色板 */
+  --chart-palette-1: var(--chart-primary);
+  --chart-palette-2: var(--chart-success);
+  --chart-palette-3: var(--chart-warning);
+  --chart-palette-4: var(--chart-error);
+  --chart-palette-5: var(--chart-info);
+  --chart-palette-6: var(--chart-secondary);
+  --chart-palette-7: var(--chart-accent);
+  --chart-palette-8: #fa541c;            /* 橙红色 */
+  --chart-palette-9: #eb2f96;            /* 粉红色 */
+  --chart-palette-10: #a0d911;           /* 黄绿色 */
 
   --bg-sider: var(--main-5);
   --color-text: var(--c-black);

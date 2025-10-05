@@ -59,6 +59,67 @@ export const dashboardApi = {
     if (params.offset) queryParams.append('offset', params.offset)
 
     return apiAdminGet(`/api/dashboard/feedbacks?${queryParams.toString()}`)
+  },
+
+  // ========== 新增并行API接口 ==========
+
+  /**
+   * 获取用户活跃度统计
+   * @returns {Promise<Object>} - 用户活跃度统计信息
+   */
+  getUserStats: () => {
+    return apiAdminGet('/api/dashboard/stats/users')
+  },
+
+  /**
+   * 获取工具调用统计
+   * @returns {Promise<Object>} - 工具调用统计信息
+   */
+  getToolStats: () => {
+    return apiAdminGet('/api/dashboard/stats/tools')
+  },
+
+  /**
+   * 获取知识库统计
+   * @returns {Promise<Object>} - 知识库统计信息
+   */
+  getKnowledgeStats: () => {
+    return apiAdminGet('/api/dashboard/stats/knowledge')
+  },
+
+  /**
+   * 获取AI智能体分析数据
+   * @returns {Promise<Object>} - AI智能体分析信息
+   */
+  getAgentStats: () => {
+    return apiAdminGet('/api/dashboard/stats/agents')
+  },
+
+  /**
+   * 批量获取所有统计数据（并行请求）
+   * @returns {Promise<Object>} - 所有统计数据
+   */
+  getAllStats: async () => {
+    try {
+      const [basicStats, userStats, toolStats, knowledgeStats, agentStats] = await Promise.all([
+        apiAdminGet('/api/dashboard/stats'),
+        apiAdminGet('/api/dashboard/stats/users'),
+        apiAdminGet('/api/dashboard/stats/tools'),
+        apiAdminGet('/api/dashboard/stats/knowledge'),
+        apiAdminGet('/api/dashboard/stats/agents')
+      ])
+
+      return {
+        basic: basicStats,
+        users: userStats,
+        tools: toolStats,
+        knowledge: knowledgeStats,
+        agents: agentStats
+      }
+    } catch (error) {
+      console.error('批量获取统计数据失败:', error)
+      throw error
+    }
   }
 }
 

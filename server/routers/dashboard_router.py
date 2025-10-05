@@ -27,6 +27,48 @@ dashboard = APIRouter(prefix="/dashboard", tags=["Dashboard"])
 # =============================================================================
 
 
+class UserActivityStats(BaseModel):
+    """用户活跃度统计"""
+
+    total_users: int
+    active_users_24h: int
+    active_users_30d: int
+    daily_active_users: list[dict]  # 最近7天每日活跃用户
+
+
+class ToolCallStats(BaseModel):
+    """工具调用统计"""
+
+    total_calls: int
+    successful_calls: int
+    failed_calls: int
+    success_rate: float
+    most_used_tools: list[dict]
+    tool_error_distribution: dict
+    daily_tool_calls: list[dict]  # 最近7天每日工具调用数
+
+
+class KnowledgeStats(BaseModel):
+    """知识库统计"""
+
+    total_databases: int
+    total_files: int
+    total_nodes: int
+    total_storage_size: int  # 字节
+    databases_by_type: dict
+    file_type_distribution: dict
+
+
+class AgentAnalytics(BaseModel):
+    """AI智能体分析"""
+
+    total_agents: int
+    agent_conversation_counts: list[dict]
+    agent_satisfaction_rates: list[dict]
+    agent_tool_usage: list[dict]
+    top_performing_agents: list[dict]
+
+
 class ConversationListItem(BaseModel):
     """Conversation list item"""
 
@@ -176,7 +218,373 @@ async def get_conversation_detail(
 
 
 # =============================================================================
-# Statistics
+# User Activity Statistics
+# =============================================================================
+
+
+@dashboard.get("/stats/users", response_model=UserActivityStats)
+async def get_user_activity_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get user activity statistics (Admin only)"""
+    try:
+        from src.storage.db.models import User, Conversation
+
+        now = datetime.utcnow()
+
+        # 基础用户统计
+        total_users = db.query(func.count(User.id)).scalar() or 0
+
+        # 不同时间段的活跃用户数（基于对话活动）
+        active_users_24h = (
+            db.query(func.count(distinct(Conversation.user_id)))
+            .filter(Conversation.updated_at >= now - timedelta(days=1))
+            .scalar()
+            or 0
+        )
+
+        active_users_30d = (
+            db.query(func.count(distinct(Conversation.user_id)))
+            .filter(Conversation.updated_at >= now - timedelta(days=30))
+            .scalar()
+            or 0
+        )
+        # 最近7天每日活跃用户
+        daily_active_users = []
+        for i in range(7):
+            day_start = now - timedelta(days=i + 1)
+            day_end = now - timedelta(days=i)
+
+            active_count = (
+                db.query(func.count(distinct(Conversation.user_id)))
+                .filter(Conversation.updated_at >= day_start, Conversation.updated_at < day_end)
+                .scalar()
+                or 0
+            )
+
+            daily_active_users.append({"date": day_start.strftime("%Y-%m-%d"), "active_users": active_count})
+
+        return UserActivityStats(
+            total_users=total_users,
+            active_users_24h=active_users_24h,
+            active_users_30d=active_users_30d,
+            daily_active_users=list(reversed(daily_active_users)),  # 按时间正序
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting user activity stats: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get user activity stats: {str(e)}")
+
+
+# =============================================================================
+# Tool Call Statistics
+# =============================================================================
+
+
+@dashboard.get("/stats/tools", response_model=ToolCallStats)
+async def get_tool_call_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get tool call statistics (Admin only)"""
+    try:
+        from src.storage.db.models import ToolCall
+
+        now = datetime.utcnow()
+
+        # 基础工具调用统计
+        total_calls = db.query(func.count(ToolCall.id)).scalar() or 0
+        successful_calls = db.query(func.count(ToolCall.id)).filter(ToolCall.status == "success").scalar() or 0
+        failed_calls = total_calls - successful_calls
+        success_rate = round((successful_calls / total_calls * 100), 2) if total_calls > 0 else 0
+
+        # 最常用工具
+        most_used_tools = (
+            db.query(ToolCall.tool_name, func.count(ToolCall.id).label("count"))
+            .group_by(ToolCall.tool_name)
+            .order_by(func.count(ToolCall.id).desc())
+            .limit(10)
+            .all()
+        )
+        most_used_tools = [{"tool_name": name, "count": count} for name, count in most_used_tools]
+
+        # 工具错误分布
+        tool_errors = (
+            db.query(ToolCall.tool_name, func.count(ToolCall.id).label("error_count"))
+            .filter(ToolCall.status == "error")
+            .group_by(ToolCall.tool_name)
+            .all()
+        )
+        tool_error_distribution = {name: count for name, count in tool_errors}
+
+        # 最近7天每日工具调用数
+        daily_tool_calls = []
+        for i in range(7):
+            day_start = now - timedelta(days=i + 1)
+            day_end = now - timedelta(days=i)
+
+            daily_count = (
+                db.query(func.count(ToolCall.id))
+                .filter(ToolCall.created_at >= day_start, ToolCall.created_at < day_end)
+                .scalar()
+                or 0
+            )
+
+            daily_tool_calls.append({"date": day_start.strftime("%Y-%m-%d"), "call_count": daily_count})
+
+        return ToolCallStats(
+            total_calls=total_calls,
+            successful_calls=successful_calls,
+            failed_calls=failed_calls,
+            success_rate=success_rate,
+            most_used_tools=most_used_tools,
+            tool_error_distribution=tool_error_distribution,
+            daily_tool_calls=list(reversed(daily_tool_calls)),
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting tool call stats: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get tool call stats: {str(e)}")
+
+
+# =============================================================================
+# Knowledge Base Statistics
+# =============================================================================
+
+
+@dashboard.get("/stats/knowledge", response_model=KnowledgeStats)
+async def get_knowledge_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get knowledge base statistics (Admin only)"""
+    try:
+        from src.knowledge.manager import KnowledgeBaseManager
+        import json
+        import os
+
+        # 从知识库管理系统获取数据
+        kb_manager = KnowledgeBaseManager(work_dir="/app/saves/knowledge_base_data")
+
+        # 读取全局元数据文件
+        metadata_file = "/app/saves/knowledge_base_data/global_metadata.json"
+        if os.path.exists(metadata_file):
+            with open(metadata_file, encoding="utf-8") as f:
+                global_metadata = json.load(f)
+
+            databases = global_metadata.get("databases", {})
+            total_databases = len(databases)
+
+            # 统计不同类型的知识库
+            databases_by_type = {}
+            files_by_type = {}
+            total_files = 0
+            total_nodes = 0
+            total_storage_size = 0
+
+            # 文件类型映射到中文友好名称
+            file_type_mapping = {
+                "txt": "文本文件",
+                "pdf": "PDF文档",
+                "docx": "Word文档",
+                "doc": "Word文档",
+                "md": "Markdown",
+                "html": "HTML网页",
+                "htm": "HTML网页",
+                "json": "JSON数据",
+                "csv": "CSV表格",
+                "xlsx": "Excel表格",
+                "xls": "Excel表格",
+                "pptx": "PowerPoint",
+                "ppt": "PowerPoint",
+                "png": "PNG图片",
+                "jpg": "JPEG图片",
+                "jpeg": "JPEG图片",
+                "gif": "GIF图片",
+                "svg": "SVG图片",
+                "mp4": "MP4视频",
+                "mp3": "MP3音频",
+                "zip": "ZIP压缩包",
+                "rar": "RAR压缩包",
+                "7z": "7Z压缩包",
+            }
+
+            # 统计上传文件
+            uploads_dir = "/app/saves/knowledge_base_data/uploads"
+            if os.path.exists(uploads_dir):
+                for root, dirs, files in os.walk(uploads_dir):
+                    for file in files:
+                        # 支持更多文件类型
+                        if file.lower().endswith(tuple(file_type_mapping.keys())):
+                            total_files += 1
+                            file_ext = file.lower().split(".")[-1]
+                            # 使用映射后的友好名称
+                            display_name = file_type_mapping.get(file_ext, file_ext.upper() + "文件")
+                            files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
+
+                            # 估算文件大小
+                            file_path = os.path.join(root, file)
+                            try:
+                                file_size = os.path.getsize(file_path)
+                                total_storage_size += file_size
+                            except OSError:
+                                total_storage_size += 1024  # 默认1KB
+
+            # 统计知识库类型分布
+            for kb_id, kb_info in databases.items():
+                kb_type = kb_info.get("kb_type", "unknown")
+                display_type = {
+                    "lightrag": "LightRAG",
+                    "chroma": "Chroma向量库",
+                    "faiss": "FAISS索引",
+                    "milvus": "Milvus向量库",
+                    "qdrant": "Qdrant向量库",
+                    "elasticsearch": "Elasticsearch",
+                    "unknown": "未知类型",
+                }.get(kb_type.lower(), kb_type)
+                databases_by_type[display_type] = databases_by_type.get(display_type, 0) + 1
+
+                # 尝试从各个知识库系统获取更详细的统计
+                try:
+                    kb_instance = kb_manager.get_kb(kb_id)
+                    if kb_instance and hasattr(kb_instance, "get_stats"):
+                        stats = kb_instance.get_stats()
+                        total_nodes += stats.get("node_count", 0)
+                except Exception as e:
+                    logger.warning(f"Failed to get stats for KB {kb_id}: {e}")
+                    continue
+
+        else:
+            # 如果没有元数据文件，返回空数据
+            total_databases = 0
+            total_files = 0
+            total_nodes = 0
+            total_storage_size = 0
+            databases_by_type = {}
+            files_by_type = {}
+
+        return KnowledgeStats(
+            total_databases=total_databases,
+            total_files=total_files,
+            total_nodes=total_nodes,
+            total_storage_size=total_storage_size,
+            databases_by_type=databases_by_type,
+            file_type_distribution=files_by_type,  # 保持API兼容，但使用新的数据
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting knowledge stats: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get knowledge stats: {str(e)}")
+
+
+# =============================================================================
+# Agent Analytics
+# =============================================================================
+
+
+@dashboard.get("/stats/agents", response_model=AgentAnalytics)
+async def get_agent_analytics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get AI agent analytics (Admin only)"""
+    try:
+        from src.storage.db.models import Conversation, MessageFeedback, Message, ToolCall
+
+        # 获取所有智能体
+        agents = (
+            db.query(Conversation.agent_id, func.count(Conversation.id).label("conversation_count"))
+            .group_by(Conversation.agent_id)
+            .all()
+        )
+
+        total_agents = len(agents)
+        agent_conversation_counts = [{"agent_id": agent_id, "conversation_count": count} for agent_id, count in agents]
+
+        # 智能体满意度统计
+        agent_satisfaction = []
+        for agent_id, _ in agents:
+            total_feedbacks = (
+                db.query(func.count(MessageFeedback.id))
+                .join(Message, MessageFeedback.message_id == Message.id)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .filter(Conversation.agent_id == agent_id)
+                .scalar()
+                or 0
+            )
+
+            positive_feedbacks = (
+                db.query(func.count(MessageFeedback.id))
+                .join(Message, MessageFeedback.message_id == Message.id)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .filter(Conversation.agent_id == agent_id, MessageFeedback.rating == "like")
+                .scalar()
+                or 0
+            )
+
+            satisfaction_rate = round((positive_feedbacks / total_feedbacks * 100), 2) if total_feedbacks > 0 else 0
+
+            agent_satisfaction.append(
+                {"agent_id": agent_id, "satisfaction_rate": satisfaction_rate, "total_feedbacks": total_feedbacks}
+            )
+
+        # 智能体工具使用统计
+        agent_tool_usage = []
+        for agent_id, _ in agents:
+            tool_usage_count = (
+                db.query(func.count(ToolCall.id))
+                .join(Message, ToolCall.message_id == Message.id)
+                .join(Conversation, Message.conversation_id == Conversation.id)
+                .filter(Conversation.agent_id == agent_id)
+                .scalar()
+                or 0
+            )
+
+            agent_tool_usage.append({"agent_id": agent_id, "tool_usage_count": tool_usage_count})
+
+        # 表现最佳的智能体（综合评分）
+        top_performing_agents = []
+        for i, (agent_id, conv_count) in enumerate(agents):
+            # 综合评分 = 对话数权重 + 满意度权重
+            satisfaction_data = next(
+                (s for s in agent_satisfaction if s["agent_id"] == agent_id), {"satisfaction_rate": 0}
+            )
+
+            score = conv_count * 0.3 + satisfaction_data["satisfaction_rate"] * 0.7
+
+            top_performing_agents.append(
+                {
+                    "agent_id": agent_id,
+                    "score": round(score, 2),
+                    "conversation_count": conv_count,
+                    "satisfaction_rate": satisfaction_data["satisfaction_rate"],
+                }
+            )
+
+        # 按评分排序，取前5名
+        top_performing_agents.sort(key=lambda x: x["score"], reverse=True)
+        top_performing_agents = top_performing_agents[:5]
+
+        return AgentAnalytics(
+            total_agents=total_agents,
+            agent_conversation_counts=agent_conversation_counts,
+            agent_satisfaction_rates=agent_satisfaction,
+            agent_tool_usage=agent_tool_usage,
+            top_performing_agents=top_performing_agents,
+        )
+
+    except Exception as e:
+        logger.error(f"Error getting agent analytics: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get agent analytics: {str(e)}")
+
+
+# =============================================================================
+# Basic Statistics (保留原有接口)
 # =============================================================================
 
 
@@ -197,54 +605,21 @@ async def get_dashboard_stats(
         total_messages = db.query(func.count(Message.id)).scalar() or 0
         total_users = db.query(func.count(distinct(Conversation.user_id))).scalar() or 0
 
-        # Conversations by agent
-        conversations_by_agent = (
-            db.query(Conversation.agent_id, func.count(Conversation.id).label("count"))
-            .group_by(Conversation.agent_id)
-            .all()
-        )
-
-        # Recent activity (last 24 hours)
-        yesterday = datetime.utcnow() - timedelta(days=1)
-        recent_conversations = (
-            db.query(func.count(Conversation.id)).filter(Conversation.created_at >= yesterday).scalar() or 0
-        )
-        recent_messages = db.query(func.count(Message.id)).filter(Message.created_at >= yesterday).scalar() or 0
-
         # Feedback statistics
         total_feedbacks = db.query(func.count(MessageFeedback.id)).scalar() or 0
         like_count = db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "like").scalar() or 0
-        dislike_count = (
-            db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "dislike").scalar() or 0
-        )
 
         # Calculate satisfaction rate
         satisfaction_rate = round((like_count / total_feedbacks * 100), 2) if total_feedbacks > 0 else 0
 
-        # Recent feedback (last 24 hours)
-        recent_feedbacks = (
-            db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.created_at >= yesterday).scalar() or 0
-        )
-
         return {
-            "timestamp": datetime.utcnow().isoformat(),
             "total_conversations": total_conversations,
             "active_conversations": active_conversations,
             "total_messages": total_messages,
             "total_users": total_users,
-            "conversations_by_agent": [
-                {"agent_id": agent_id or "unknown", "count": count} for agent_id, count in conversations_by_agent
-            ],
-            "recent_activity": {
-                "conversations_24h": recent_conversations,
-                "messages_24h": recent_messages,
-            },
             "feedback_stats": {
                 "total_feedbacks": total_feedbacks,
-                "like_count": like_count,
-                "dislike_count": dislike_count,
                 "satisfaction_rate": satisfaction_rate,
-                "recent_feedbacks_24h": recent_feedbacks,
             },
         }
     except Exception as e:
@@ -262,7 +637,6 @@ class FeedbackListItem(BaseModel):
     """Feedback list item"""
 
     id: int
-    message_id: int
     user_id: str
     rating: str
     reason: str | None

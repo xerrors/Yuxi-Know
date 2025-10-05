@@ -236,4 +236,5 @@ class Config(SimpleConfig):
 
         return value
 
+
 config = Config()
