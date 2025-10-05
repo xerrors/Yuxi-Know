@@ -26,6 +26,14 @@
             />
           </div>
           <div class="card card-select">
+            <span class="label">{{ items?.fast_model.des }}</span>
+            <ModelSelectorComponent
+              @select-model="handleFastModelSelect"
+              :model_name="fastModelName"
+              :model_provider="fastModelProvider"
+            />
+          </div>
+          <div class="card card-select">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span class="label">{{ items?.embed_model.des }}</span>
               <!-- <a-button
@@ -248,6 +256,23 @@ const handleChatModelSelect = ({ provider, name }) => {
     model_provider: provider,
     model_name: name,
   })
+}
+
+const fastModelProvider = computed(() => {
+  const fastModel = configStore.config?.fast_model
+  if (!fastModel) return ''
+  return fastModel.split('/')[0]
+})
+
+const fastModelName = computed(() => {
+  const fastModel = configStore.config?.fast_model
+  if (!fastModel) return ''
+  const parts = fastModel.split('/')
+  return parts.slice(1).join('/')
+})
+
+const handleFastModelSelect = ({ provider, name }) => {
+  configStore.setConfigValue('fast_model', `${provider}/${name}`)
 }
 
 const contentGuardModelProvider = computed(() => {

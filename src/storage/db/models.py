@@ -369,3 +369,31 @@ class OperationLog(Base):
             "ip_address": self.ip_address,
             "timestamp": self.timestamp.isoformat() if self.timestamp else None,
         }
+
+
+class MessageFeedback(Base):
+    """Message feedback table - stores user feedback on AI responses"""
+
+    __tablename__ = "message_feedbacks"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
+    message_id = Column(
+        Integer, ForeignKey("messages.id"), nullable=False, index=True, comment="Message ID being rated"
+    )
+    user_id = Column(String(64), nullable=False, index=True, comment="User ID who provided feedback")
+    rating = Column(String(10), nullable=False, comment="Feedback rating: like or dislike")
+    reason = Column(Text, nullable=True, comment="Optional reason for dislike feedback")
+    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Feedback creation time")
+
+    # Relationships
+    message = relationship("Message", backref="feedbacks")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "message_id": self.message_id,
+            "user_id": self.user_id,
+            "rating": self.rating,
+            "reason": self.reason,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

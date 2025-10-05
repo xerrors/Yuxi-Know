@@ -1,8 +1,8 @@
 <template>
   <div class="calculator-result">
-    <div class="calc-header">
+    <!-- <div class="calc-header">
       <h4><NumberOutlined /> 计算结果</h4>
-    </div>
+    </div> -->
 
     <div class="calc-display">
       <div class="result-container">
@@ -82,7 +82,7 @@ const formatNumber = (num) => {
       }
 
       .result-value {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 600;
         color: var(--main-color);
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;

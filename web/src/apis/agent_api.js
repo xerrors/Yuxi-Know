@@ -66,6 +66,23 @@ export const agentApi = {
   getAgentHistory: (agentId, threadId) => apiGet(`/api/chat/agent/${agentId}/history?thread_id=${threadId}`),
 
   /**
+   * Submit feedback for a message
+   * @param {number} messageId - Message ID
+   * @param {string} rating - 'like' or 'dislike'
+   * @param {string|null} reason - Optional reason for dislike
+   * @returns {Promise} - Feedback response
+   */
+  submitMessageFeedback: (messageId, rating, reason = null) =>
+    apiPost(`/api/chat/message/${messageId}/feedback`, { rating, reason }),
+
+  /**
+   * Get feedback status for a message
+   * @param {number} messageId - Message ID
+   * @returns {Promise} - Feedback status
+   */
+  getMessageFeedback: (messageId) => apiGet(`/api/chat/message/${messageId}/feedback`),
+
+  /**
    * 获取模型提供商的模型列表
    * @param {string} provider - 模型提供商
    * @returns {Promise} - 模型列表

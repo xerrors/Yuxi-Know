@@ -122,19 +122,18 @@ const mainList = [{
       </div>
       <div class="nav">
         <!-- 使用mainList渲染导航项 -->
-        <a-tooltip
+        <RouterLink
           v-for="(item, index) in mainList"
           :key="index"
-          placement="right"
-          v-show="!item.hidden">
-          <template #title>{{ item.name }}</template>
-          <RouterLink
-            :to="item.path"
-            class="nav-item"
-            active-class="active">
+          :to="item.path"
+          v-show="!item.hidden"
+          class="nav-item"
+          active-class="active">
+          <a-tooltip placement="right">
+            <template #title>{{ item.name }}</template>
             <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
-          </RouterLink>
-        </a-tooltip>
+          </a-tooltip>
+        </RouterLink>
       </div>
       <div
         ref="htmlRefHook"
@@ -207,7 +206,7 @@ const mainList = [{
 
 <style lang="less" scoped>
 // Less 变量定义
-@header-width: 60px;
+@header-width: 50px;
 
 .app-layout {
   display: flex;

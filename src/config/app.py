@@ -54,13 +54,6 @@ class Config(SimpleConfig):
         self.add_item(
             "content_guard_llm_model", default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507", des="内容审查LLM模型"
         )
-        self.add_item(
-            "enable_web_search",
-            default=False,
-            des=(
-                "是否开启网页搜索（注：现阶段会根据 TAVILY_API_KEY 自动开启，无法手动配置，将会在下个版本移除此配置项）"
-            ),
-        )
         # 默认智能体配置
         self.add_item("default_agent_id", default="", des="默认智能体ID")
         # 模型配置
@@ -68,6 +61,11 @@ class Config(SimpleConfig):
         ## 如果需要自定义本地模型路径，则在 src/.env 中配置 MODEL_DIR
         self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(self.model_names.keys()))
         self.add_item("model_name", default="zai-org/GLM-4.5", des="模型名称")
+        self.add_item(
+            "fast_model",
+            default="siliconflow/THUDM/GLM-4-9B-0414",
+            des="快速响应模型",
+        )
 
         self.add_item(
             "embed_model",
@@ -237,6 +235,5 @@ class Config(SimpleConfig):
                     value[i]["api_key"] = current_api_key
 
         return value
-
 
 config = Config()

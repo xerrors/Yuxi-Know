@@ -42,6 +42,23 @@ export const dashboardApi = {
    */
   getStats: () => {
     return apiAdminGet('/api/dashboard/stats')
+  },
+
+  /**
+   * 获取用户反馈列表
+   * @param {Object} params - 查询参数
+   * @param {string} params.rating - 反馈类型过滤 (like/dislike/all)
+   * @param {number} params.limit - 每页数量
+   * @param {number} params.offset - 偏移量
+   * @returns {Promise<Array>} - 反馈列表
+   */
+  getFeedbacks: (params = {}) => {
+    const queryParams = new URLSearchParams()
+    if (params.rating && params.rating !== 'all') queryParams.append('rating', params.rating)
+    if (params.limit) queryParams.append('limit', params.limit)
+    if (params.offset) queryParams.append('offset', params.offset)
+
+    return apiAdminGet(`/api/dashboard/feedbacks?${queryParams.toString()}`)
   }
 }
 

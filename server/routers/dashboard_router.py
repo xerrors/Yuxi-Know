@@ -186,7 +186,7 @@ async def get_dashboard_stats(
     current_user: User = Depends(get_admin_user),
 ):
     """Get dashboard statistics (Admin only)"""
-    from src.storage.db.models import Conversation, Message
+    from src.storage.db.models import Conversation, Message, MessageFeedback
 
     try:
         # Basic counts
@@ -211,6 +211,21 @@ async def get_dashboard_stats(
         )
         recent_messages = db.query(func.count(Message.id)).filter(Message.created_at >= yesterday).scalar() or 0
 
+        # Feedback statistics
+        total_feedbacks = db.query(func.count(MessageFeedback.id)).scalar() or 0
+        like_count = db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "like").scalar() or 0
+        dislike_count = (
+            db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "dislike").scalar() or 0
+        )
+
+        # Calculate satisfaction rate
+        satisfaction_rate = round((like_count / total_feedbacks * 100), 2) if total_feedbacks > 0 else 0
+
+        # Recent feedback (last 24 hours)
+        recent_feedbacks = (
+            db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.created_at >= yesterday).scalar() or 0
+        )
+
         return {
             "timestamp": datetime.utcnow().isoformat(),
             "total_conversations": total_conversations,
@@ -224,8 +239,82 @@ async def get_dashboard_stats(
                 "conversations_24h": recent_conversations,
                 "messages_24h": recent_messages,
             },
+            "feedback_stats": {
+                "total_feedbacks": total_feedbacks,
+                "like_count": like_count,
+                "dislike_count": dislike_count,
+                "satisfaction_rate": satisfaction_rate,
+                "recent_feedbacks_24h": recent_feedbacks,
+            },
         }
     except Exception as e:
         logger.error(f"Error getting dashboard stats: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to get dashboard stats: {str(e)}")
+
+
+# =============================================================================
+# Feedback Management
+# =============================================================================
+
+
+class FeedbackListItem(BaseModel):
+    """Feedback list item"""
+
+    id: int
+    message_id: int
+    user_id: str
+    rating: str
+    reason: str | None
+    created_at: str
+    message_content: str
+    conversation_title: str | None
+    agent_id: str
+
+
+@dashboard.get("/feedbacks", response_model=list[FeedbackListItem])
+async def get_all_feedbacks(
+    rating: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get all feedback records (Admin only)"""
+    from src.storage.db.models import MessageFeedback, Message, Conversation
+
+    try:
+        # Build query with joins
+        query = (
+            db.query(MessageFeedback, Message, Conversation)
+            .join(Message, MessageFeedback.message_id == Message.id)
+            .join(Conversation, Message.conversation_id == Conversation.id)
+        )
+
+        # Apply filters
+        if rating and rating in ["like", "dislike"]:
+            query = query.filter(MessageFeedback.rating == rating)
+
+        # Order and paginate
+        query = query.order_by(MessageFeedback.created_at.desc()).limit(limit).offset(offset)
+
+        results = query.all()
+
+        return [
+            {
+                "id": feedback.id,
+                "message_id": feedback.message_id,
+                "user_id": feedback.user_id,
+                "rating": feedback.rating,
+                "reason": feedback.reason,
+                "created_at": feedback.created_at.isoformat(),
+                "message_content": message.content[:100] + ("..." if len(message.content) > 100 else ""),
+                "conversation_title": conversation.title,
+                "agent_id": conversation.agent_id,
+            }
+            for feedback, message, conversation in results
+        ]
+    except Exception as e:
+        logger.error(f"Error getting feedbacks: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get feedbacks: {str(e)}")

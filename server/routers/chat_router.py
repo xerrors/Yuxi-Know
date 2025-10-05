@@ -11,7 +11,7 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.storage.db.models import User
+from src.storage.db.models import User, MessageFeedback, Message, Conversation
 from src.storage.conversation import ConversationManager
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
@@ -401,6 +401,7 @@ async def get_agent_history(
             role_type_map = {"user": "human", "assistant": "ai", "tool": "tool", "system": "system"}
 
             msg_dict = {
+                "id": msg.id,  # Include message ID for feedback
                 "type": role_type_map.get(msg.role, msg.role),  # human/ai/tool/system
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
@@ -583,3 +584,112 @@ async def update_thread(
         "created_at": updated_conv.created_at.isoformat(),
         "updated_at": updated_conv.updated_at.isoformat(),
     }
+
+
+# =============================================================================
+# > === 消息反馈分组 ===
+# =============================================================================
+
+
+class MessageFeedbackRequest(BaseModel):
+    rating: str  # 'like' or 'dislike'
+    reason: str | None = None  # Optional reason for dislike
+
+
+class MessageFeedbackResponse(BaseModel):
+    id: int
+    message_id: int
+    rating: str
+    reason: str | None
+    created_at: str
+
+
+@chat.post("/message/{message_id}/feedback", response_model=MessageFeedbackResponse)
+async def submit_message_feedback(
+    message_id: int,
+    feedback_data: MessageFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """Submit user feedback for a specific message"""
+    try:
+        # Validate rating
+        if feedback_data.rating not in ["like", "dislike"]:
+            raise HTTPException(status_code=422, detail="Rating must be 'like' or 'dislike'")
+
+        # Verify message exists and get conversation to check permissions
+        message = db.query(Message).filter_by(id=message_id).first()
+
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        # Verify user has access to this message (through conversation)
+        conversation = db.query(Conversation).filter_by(id=message.conversation_id).first()
+        if not conversation or conversation.user_id != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Check if feedback already exists (user can only submit once)
+        existing_feedback = (
+            db.query(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)).first()
+        )
+
+        if existing_feedback:
+            raise HTTPException(status_code=409, detail="Feedback already submitted for this message")
+
+        # Create new feedback
+        new_feedback = MessageFeedback(
+            message_id=message_id,
+            user_id=str(current_user.id),
+            rating=feedback_data.rating,
+            reason=feedback_data.reason,
+        )
+
+        db.add(new_feedback)
+        db.commit()
+        db.refresh(new_feedback)
+
+        logger.info(f"User {current_user.id} submitted {feedback_data.rating} feedback for message {message_id}")
+
+        return MessageFeedbackResponse(
+            id=new_feedback.id,
+            message_id=new_feedback.message_id,
+            rating=new_feedback.rating,
+            reason=new_feedback.reason,
+            created_at=new_feedback.created_at.isoformat(),
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting message feedback: {e}, {traceback.format_exc()}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
+
+
+@chat.get("/message/{message_id}/feedback")
+async def get_message_feedback(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """Get feedback status for a specific message (for current user)"""
+    try:
+        # Get user's feedback for this message
+        feedback = db.query(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)).first()
+
+        if not feedback:
+            return {"has_feedback": False, "feedback": None}
+
+        return {
+            "has_feedback": True,
+            "feedback": {
+                "id": feedback.id,
+                "rating": feedback.rating,
+                "reason": feedback.reason,
+                "created_at": feedback.created_at.isoformat(),
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting message feedback: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get feedback: {str(e)}")

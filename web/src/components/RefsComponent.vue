@@ -1,8 +1,24 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
-      <span class="item btn" @click="likeThisResponse(msg)"><LikeOutlined /></span>
-      <span class="item btn" @click="dislikeThisResponse(msg)"><DislikeOutlined /></span>
+      <span
+        class="item btn"
+        :class="{ 'disabled': feedbackState.hasSubmitted }"
+        @click="likeThisResponse(msg)"
+        :title="feedbackState.hasSubmitted && feedbackState.rating === 'like' ? '已点赞' : '点赞'"
+      >
+        <LikeFilled v-if="feedbackState.rating === 'like'" />
+        <LikeOutlined v-else />
+      </span>
+      <span
+        class="item btn"
+        :class="{ 'disabled': feedbackState.hasSubmitted }"
+        @click="dislikeThisResponse(msg)"
+        :title="feedbackState.hasSubmitted && feedbackState.rating === 'dislike' ? '已点踩' : '点踩'"
+      >
+        <DislikeFilled v-if="feedbackState.rating === 'dislike'" />
+        <DislikeOutlined v-else />
+      </span>
       <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
         <BulbOutlined /> {{ getModelName(msg) }}
       </span>
@@ -35,10 +51,29 @@
       </span>
     </div>
   </div>
+
+  <!-- Dislike reason modal -->
+  <a-modal
+    v-model:open="dislikeModalVisible"
+    title="请告诉我们不满意的原因"
+    @ok="submitDislikeFeedback"
+    @cancel="cancelDislike"
+    :confirmLoading="submittingFeedback"
+    okText="提交"
+    cancelText="取消"
+  >
+    <a-textarea
+      v-model:value="dislikeReason"
+      :rows="4"
+      placeholder="您的反馈将帮助我们改进服务（可选）"
+      :maxlength="500"
+      show-count
+    />
+  </a-modal>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
 import {
@@ -49,8 +84,11 @@ import {
   BulbOutlined,
   ReloadOutlined,
   LikeOutlined,
+  LikeFilled,
   DislikeOutlined,
+  DislikeFilled,
 } from '@ant-design/icons-vue'
+import { agentApi } from '@/apis'
 
 const emit = defineEmits(['retry', 'openRefs']);
 const props = defineProps({
@@ -66,6 +104,18 @@ const props = defineProps({
 })
 
 const msg = ref(props.message)
+
+// Feedback state
+const feedbackState = reactive({
+  hasSubmitted: false,
+  rating: null, // 'like' or 'dislike'
+  reason: null,
+})
+
+// Modal state for dislike
+const dislikeModalVisible = ref(false)
+const dislikeReason = ref('')
+const submittingFeedback = ref(false)
 
 // 使用 useClipboard 实现复制功能
 const { copy, isSupported } = useClipboard()
@@ -140,12 +190,109 @@ const getModelName = (msg) => {
   return null;
 }
 
-const likeThisResponse = (msg) => {
-  console.log(msg)
+// Load existing feedback on mount
+onMounted(async () => {
+  if (msg.value?.id) {
+    try {
+      const response = await agentApi.getMessageFeedback(msg.value.id)
+      if (response.has_feedback) {
+        feedbackState.hasSubmitted = true
+        feedbackState.rating = response.feedback.rating
+        feedbackState.reason = response.feedback.reason
+      }
+    } catch (error) {
+      console.error('Failed to load feedback:', error)
+    }
+  }
+})
+
+// Handle like action
+const likeThisResponse = async (msg) => {
+  if (feedbackState.hasSubmitted) {
+    message.info('您已经提交过反馈了')
+    return
+  }
+
+  if (!msg?.id) {
+    message.error('无法提交反馈：消息ID不存在')
+    console.error('Message object:', msg)
+    return
+  }
+
+  try {
+    submittingFeedback.value = true
+    await agentApi.submitMessageFeedback(msg.id, 'like', null)
+
+    feedbackState.hasSubmitted = true
+    feedbackState.rating = 'like'
+
+    message.success('感谢您的反馈！')
+  } catch (error) {
+    console.error('Failed to submit like feedback:', error)
+    if (error.message?.includes('already submitted')) {
+      message.info('您已经提交过反馈了')
+      feedbackState.hasSubmitted = true
+    } else {
+      message.error('提交反馈失败，请稍后重试')
+    }
+  } finally {
+    submittingFeedback.value = false
+  }
 }
 
-const dislikeThisResponse = (msg) => {
-  console.log(msg)
+// Handle dislike action
+const dislikeThisResponse = async (msg) => {
+  if (feedbackState.hasSubmitted) {
+    message.info('您已经提交过反馈了')
+    return
+  }
+
+  if (!msg?.id) {
+    message.error('无法提交反馈：消息ID不存在')
+    console.error('Message object:', msg)
+    return
+  }
+
+  // Open modal to get reason
+  dislikeModalVisible.value = true
+}
+
+// Submit dislike feedback with reason
+const submitDislikeFeedback = async () => {
+  try {
+    submittingFeedback.value = true
+    await agentApi.submitMessageFeedback(
+      msg.value.id,
+      'dislike',
+      dislikeReason.value || null
+    )
+
+    feedbackState.hasSubmitted = true
+    feedbackState.rating = 'dislike'
+    feedbackState.reason = dislikeReason.value
+
+    dislikeModalVisible.value = false
+    dislikeReason.value = ''
+
+    message.success('感谢您的反馈！')
+  } catch (error) {
+    console.error('Failed to submit dislike feedback:', error)
+    if (error.message?.includes('already submitted')) {
+      message.info('您已经提交过反馈了')
+      feedbackState.hasSubmitted = true
+      dislikeModalVisible.value = false
+    } else {
+      message.error('提交反馈失败，请稍后重试')
+    }
+  } finally {
+    submittingFeedback.value = false
+  }
+}
+
+// Cancel dislike modal
+const cancelDislike = () => {
+  dislikeModalVisible.value = false
+  dislikeReason.value = ''
 }
 </script>
 
@@ -165,6 +312,7 @@ const dislikeThisResponse = (msg) => {
     border-radius: 8px;
     font-size: 13px;
     user-select: none;
+    transition: all 0.2s ease;
 
     &.btn {
       cursor: pointer;
@@ -173,6 +321,16 @@ const dislikeThisResponse = (msg) => {
       }
       &:active {
         background: var(--gray-200);
+      }
+
+      // Disabled state - when feedback has been submitted
+      &.disabled {
+        cursor: not-allowed;
+        opacity: 0.7;
+
+        &:hover {
+          background: var(--gray-50);
+        }
       }
     }
   }
