@@ -26,6 +26,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             model=model_name,
             api_key=SecretStr(api_key),
             base_url=base_url,
+            stream_usage=True,
         )
 
     model_info = config.model_names.get(provider, {})
@@ -40,6 +41,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             api_key=SecretStr(api_key),
             base_url=base_url,
             api_base=base_url,
+            stream_usage=True,
         )
 
     elif provider == "together":
@@ -49,6 +51,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             model=model,
             api_key=SecretStr(api_key),
             base_url=base_url,
+            stream_usage=True,
         )
 
     else:
@@ -59,6 +62,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
                 model=model,
                 api_key=SecretStr(api_key),
                 base_url=base_url,
+                stream_usage=True,
             )
         except Exception as e:
             raise ValueError(f"Model provider {provider} load failed, {e} \n {traceback.format_exc()}")

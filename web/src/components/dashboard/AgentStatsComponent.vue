@@ -63,8 +63,6 @@
         :data-source="topPerformers"
         size="small"
         :pagination="false"
-        :row-class-name="getRowClassName"
-        :scroll="{ y: 240 }"
       >
         <template #bodyCell="{ column, record, index }">
           <template v-if="column.key === 'rank'">
@@ -190,12 +188,6 @@ const getScoreColor = (score) => {
   return '#a3d8e8'
 }
 
-const getRowClassName = (record, index) => {
-  if (index === 0) return 'top-rank first'
-  if (index === 1) return 'top-rank second'
-  if (index === 2) return 'top-rank third'
-  return ''
-}
 
 // 初始化对话数和工具调用数合并图表
 const initConversationToolChart = () => {
@@ -396,18 +388,6 @@ defineExpose({
   }
 }
 
-// 排名样式优化
-:deep(.ant-table-tbody > tr.top-rank.first) {
-  background: linear-gradient(90deg, rgba(255, 215, 0, 0.1) 0%, transparent 100%);
-}
-
-:deep(.ant-table-tbody > tr.top-rank.second) {
-  background: linear-gradient(90deg, rgba(192, 192, 192, 0.1) 0%, transparent 100%);
-}
-
-:deep(.ant-table-tbody > tr.top-rank.third) {
-  background: linear-gradient(90deg, rgba(205, 127, 50, 0.1) 0%, transparent 100%);
-}
 
 :deep(.ant-progress-bg) {
   transition: all 0.3s ease;

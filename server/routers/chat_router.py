@@ -211,10 +211,16 @@ async def chat_agent(
                     name = msg_dict.get("name", "")
 
                     if tool_call_id:
+                        # 确保tool_output是字符串类型，避免SQLite不支持列表类型
+                        if isinstance(content, list):
+                            tool_output = json.dumps(content) if content else ""
+                        else:
+                            tool_output = str(content)
+
                         # 通过 LangGraph tool_call_id 精确匹配并更新
                         updated_tc = conv_mgr.update_tool_call_output(
                             langgraph_tool_call_id=tool_call_id,
-                            tool_output=content,
+                            tool_output=tool_output,
                             status="success",
                         )
                         if updated_tc:
