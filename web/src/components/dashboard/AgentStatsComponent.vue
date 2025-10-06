@@ -3,7 +3,7 @@
     <!-- 智能体概览 -->
     <div class="stats-overview">
       <a-row :gutter="16">
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="智能体总数"
             :value="agentStats?.total_agents || 0"
@@ -11,18 +11,7 @@
             suffix="个"
           />
         </a-col>
-        <a-col :span="6">
-          <a-statistic
-            title="平均满意度"
-            :value="averageSatisfaction"
-            suffix="%"
-            :value-style="{
-              color: averageSatisfaction >= 80 ? 'var(--chart-success)' :
-                     averageSatisfaction >= 60 ? 'var(--chart-warning)' : 'var(--chart-error)'
-            }"
-          />
-        </a-col>
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="总对话数"
             :value="totalConversations"
@@ -30,7 +19,7 @@
             suffix="次"
           />
         </a-col>
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="工具调用总数"
             :value="totalToolUsage"
@@ -159,14 +148,6 @@ const performerColumns = [
 ]
 
 // 计算属性
-const averageSatisfaction = computed(() => {
-  const satisfactionRates = props.agentStats?.agent_satisfaction_rates || []
-  if (satisfactionRates.length === 0) return 0
-
-  const total = satisfactionRates.reduce((sum, item) => sum + item.satisfaction_rate, 0)
-  return Math.round(total / satisfactionRates.length)
-})
-
 const totalConversations = computed(() => {
   const conversationCounts = props.agentStats?.agent_conversation_counts || []
   return conversationCounts.reduce((sum, item) => sum + item.conversation_count, 0)
@@ -218,16 +199,18 @@ const initConversationToolChart = () => {
     },
     legend: {
       data: ['对话数', '工具调用数'],
-      top: '5%',
+      right: '0%',
+      top: '0%',
+      orient: 'horizontal',
       textStyle: {
         color: '#666'
       }
     },
     grid: {
       left: '3%',
-      right: '4%',
+      right: '15%',
       bottom: '3%',
-      top: '15%',
+      top: '10%',
       containLabel: true
     },
     xAxis: {
@@ -269,25 +252,14 @@ const initConversationToolChart = () => {
           return item ? item.conversation_count : 0
         }),
         itemStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [{
-              offset: 0, color: '#3996ae'
-            }, {
-              offset: 1, color: '#5faec2'
-            }]
-          },
+          color: '#3996ae',
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: '#24839a',
+            color: '#028ea0',
             shadowBlur: 10,
-            shadowColor: 'rgba(57, 150, 174, 0.3)'
+            shadowColor: 'rgba(2, 142, 160, 0.3)'
           }
         }
       },
@@ -299,25 +271,14 @@ const initConversationToolChart = () => {
           return item ? item.tool_usage_count : 0
         }),
         itemStyle: {
-          color: {
-            type: 'linear',
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
-            colorStops: [{
-              offset: 0, color: '#82c3d6'
-            }, {
-              offset: 1, color: '#a3d8e8'
-            }]
-          },
+          color: '#00b8a9',
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: '#5faec2',
+            color: '#028ea0',
             shadowBlur: 10,
-            shadowColor: 'rgba(130, 195, 214, 0.3)'
+            shadowColor: 'rgba(2, 142, 160, 0.3)'
           }
         }
       }
@@ -367,7 +328,6 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-@import '@/assets/css/dashboard.css';
 
 // AgentStatsComponent 特有的样式
 .top-performers, .metrics-comparison {

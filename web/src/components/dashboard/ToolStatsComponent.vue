@@ -197,25 +197,14 @@ const initToolsChart = () => {
       type: 'bar',
       data: data.map(item => item.count),
       itemStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 1,
-          y2: 0,
-          colorStops: [{
-            offset: 0, color: '#3996ae'
-          }, {
-            offset: 1, color: '#5faec2'
-          }]
-        },
+        color: '#3996ae',
         borderRadius: [0, 4, 4, 0]
       },
       emphasis: {
         itemStyle: {
-          color: '#24839a',
+          color: '#028ea0',
           shadowBlur: 10,
-          shadowColor: 'rgba(57, 150, 174, 0.3)'
+          shadowColor: 'rgba(2, 142, 160, 0.3)'
         }
       }
     }]
@@ -268,7 +257,7 @@ const initErrorChart = () => {
           shadowColor: 'rgba(0, 0, 0, 0.5)'
         }
       },
-      color: ['#3996ae', '#5faec2', '#82c3d6', '#a3d8e8', '#24839a']
+      color: ['#3996ae', '#028ea0', '#00b8a9', '#f2c94c', '#eb5757', '#2f80ed', '#9b51e0', '#56ccf2', '#6fcf97', '#333333']
     }]
   }
 
@@ -321,7 +310,6 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-@import '@/assets/css/dashboard.css';
 
 // ToolStatsComponent 特有的样式
 .error-analysis {

@@ -5,88 +5,13 @@
     <!-- 现代化顶部统计栏 -->
     <div class="modern-stats-header">
       <StatusBar />
-      <div class="stats-grid">
-        <div class="stat-card primary">
-          <div class="stat-icon">
-            <MessageCircle class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.total_conversations || 0 }}</div>
-            <div class="stat-label">总对话数</div>
-            <div class="stat-trend" v-if="basicStats?.conversation_trend">
-              <TrendingUp v-if="basicStats.conversation_trend > 0" class="trend-icon up" />
-              <TrendingDown v-else-if="basicStats.conversation_trend < 0" class="trend-icon down" />
-              <span class="trend-text">{{ Math.abs(basicStats.conversation_trend) }}%</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="stat-card success">
-          <div class="stat-icon">
-            <Activity class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.active_conversations || 0 }}</div>
-            <div class="stat-label">活跃对话</div>
-          </div>
-        </div>
-
-        <div class="stat-card info">
-          <div class="stat-icon">
-            <Mail class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.total_messages || 0 }}</div>
-            <div class="stat-label">总消息数</div>
-          </div>
-        </div>
-
-        <div class="stat-card warning">
-          <div class="stat-icon">
-            <Users class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.total_users || 0 }}</div>
-            <div class="stat-label">用户数</div>
-          </div>
-        </div>
-
-        <div class="stat-card secondary">
-          <div class="stat-icon">
-            <BarChart3 class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.feedback_stats?.total_feedbacks || 0 }}</div>
-            <div class="stat-label">总反馈数</div>
-          </div>
-        </div>
-
-        <div class="stat-card" :class="getSatisfactionClass()">
-          <div class="stat-icon">
-            <Heart class="icon" />
-          </div>
-          <div class="stat-content">
-            <div class="stat-value">{{ basicStats?.feedback_stats?.satisfaction_rate || 0 }}%</div>
-            <div class="stat-label">满意度</div>
-          </div>
-        </div>
-      </div>
+      <StatsOverviewComponent :basic-stats="basicStats" />
     </div>
 
     <!-- Grid布局的主要内容区域 -->
     <div class="dashboard-grid">
-      <!-- 调用统计模块 - 占据2x1网格（新增） -->
-      <div class="grid-item call-stats">
-        <a-card class="call-stats-section" title="调用统计" :loading="loading">
-          <div class="placeholder-content">
-            <div class="placeholder-icon">
-              <BarChart3 class="icon" />
-            </div>
-            <div class="placeholder-text">调用统计模块</div>
-            <div class="placeholder-subtitle">即将上线</div>
-          </div>
-        </a-card>
-      </div>
+      <!-- 调用统计模块 - 占据2x1网格 -->
+      <CallStatsComponent :loading="loading" ref="callStatsRef" />
 
       <!-- 用户活跃度分析 - 占据1x1网格 -->
       <div class="grid-item user-stats">
@@ -238,16 +163,6 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { LikeOutlined, DislikeOutlined } from '@ant-design/icons-vue'
-import {
-  MessageCircle,
-  Activity,
-  Mail,
-  Users,
-  BarChart3,
-  Heart,
-  TrendingUp,
-  TrendingDown
-} from 'lucide-vue-next'
 import { dashboardApi } from '@/apis/dashboard_api'
 
 // 导入子组件
@@ -256,6 +171,8 @@ import UserStatsComponent from '@/components/dashboard/UserStatsComponent.vue'
 import ToolStatsComponent from '@/components/dashboard/ToolStatsComponent.vue'
 import KnowledgeStatsComponent from '@/components/dashboard/KnowledgeStatsComponent.vue'
 import AgentStatsComponent from '@/components/dashboard/AgentStatsComponent.vue'
+import CallStatsComponent from '@/components/dashboard/CallStatsComponent.vue'
+import StatsOverviewComponent from '@/components/dashboard/StatsOverviewComponent.vue'
 
 // 统计数据 - 使用新的响应式结构
 const basicStats = ref({})
@@ -287,6 +204,9 @@ const feedbackPagination = reactive({
   pageSize: 20,
   total: 0,
 })
+
+// 调用统计子组件引用
+const callStatsRef = ref(null)
 
 // 分页
 const conversationPagination = reactive({
@@ -452,14 +372,6 @@ const loadConversations = async () => {
   }
 }
 
-// 获取满意度等级样式
-const getSatisfactionClass = () => {
-  const rate = basicStats.value?.feedback_stats?.satisfaction_rate || 0
-  if (rate >= 80) return 'high'
-  if (rate >= 60) return 'medium'
-  return 'low'
-}
-
 // 日期格式化
 const formatDate = (dateString) => {
   if (!dateString) return '-'
@@ -559,9 +471,10 @@ const loadFeedbacks = async () => {
 // 清理函数 - 清理所有子组件的图表实例
 const cleanupCharts = () => {
   if (userStatsRef.value?.cleanup) userStatsRef.value.cleanup()
-  if (toolStatsRef.value?.cleanup) toolStatsRef.value.cleanup()
+  if (toolStatsRef.value?.cleanup) userStatsRef.value.cleanup()
   if (knowledgeStatsRef.value?.cleanup) knowledgeStatsRef.value.cleanup()
   if (agentStatsRef.value?.cleanup) agentStatsRef.value.cleanup()
+  if (callStatsRef.value?.cleanup) callStatsRef.value.cleanup()
 }
 
 // 初始化
@@ -577,7 +490,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="less">
-@import '@/assets/css/dashboard.css';
 
 .dashboard-container {
   // padding: 0 24px 24px 24px;
@@ -585,158 +497,6 @@ onUnmounted(() => {
   min-height: calc(100vh - 64px);
   overflow-x: hidden;
 }
-
-// Dashboard 特有的统计栏样式
-.modern-stats-header {
-  margin-top: 8px;
-
-  .stats-grid {
-    display: grid;
-    padding: 16px;
-    grid-template-columns: repeat(6, 1fr);
-    gap: 16px;
-
-    .stat-card {
-      background: var(--gray-0);
-      border-radius: 8px;
-      padding: 20px;
-      border: 1px solid var(--gray-200);
-      transition: all 0.2s ease;
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      text-align: left;
-      min-height: 80px;
-      justify-content: flex-start;
-
-      &:hover {
-        border-color: var(--gray-300);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
-      }
-
-      &.primary {
-        .stat-icon {
-          background-color: #eff6ff;
-          color: #2563eb;
-        }
-      }
-
-      &.success {
-        .stat-icon {
-          background-color: #f0fdf4;
-          color: #16a34a;
-        }
-      }
-
-      &.info {
-        .stat-icon {
-          background-color: #f0f9ff;
-          color: #0284c7;
-        }
-      }
-
-      &.warning {
-        .stat-icon {
-          background-color: #fffbeb;
-          color: #d97706;
-        }
-      }
-
-      &.secondary {
-        .stat-icon {
-          background-color: #faf5ff;
-          color: #9333ea;
-        }
-      }
-
-      &.satisfaction-high {
-        .stat-icon {
-          background-color: #f0fdf4;
-          color: #16a34a;
-        }
-      }
-
-      &.satisfaction-medium {
-        .stat-icon {
-          background-color: #fffbeb;
-          color: #d97706;
-        }
-      }
-
-      &.satisfaction-low {
-        .stat-icon {
-          background-color: #fef2f2;
-          color: #dc2626;
-        }
-      }
-
-      .stat-icon {
-        width: 44px;
-        height: 44px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 16px;
-        flex-shrink: 0;
-
-        .icon {
-          width: 20px;
-          height: 20px;
-        }
-      }
-
-      .stat-content {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-
-        .stat-value {
-          font-size: 24px;
-          font-weight: 700;
-          color: var(--gray-1000);
-          line-height: 1.1;
-          margin-bottom: 4px;
-        }
-
-        .stat-label {
-          font-size: 13px;
-          color: var(--gray-600);
-          font-weight: 500;
-          margin-bottom: 8px;
-        }
-
-        .stat-trend {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          margin-top: 4px;
-
-          .trend-icon {
-            width: 14px;
-            height: 14px;
-
-            &.up {
-              color: #16a34a;
-            }
-
-            &.down {
-              color: #dc2626;
-            }
-          }
-
-          .trend-text {
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--gray-600);
-          }
-        }
-      }
-    }
-  }
-}
-
 
 // Dashboard 特有的网格布局
 .dashboard-grid {
@@ -761,7 +521,7 @@ onUnmounted(() => {
     &:hover {
       .conversations-section,
       .call-stats-section {
-        border-color: var(--gray-300);
+        border-color: var(--gray-200);
         box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
       }
     }
@@ -816,7 +576,7 @@ onUnmounted(() => {
 
   &:hover {
     background-color: var(--gray-25);
-    border-color: var(--gray-300);
+    border-color: var(--gray-200);
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   }
 
@@ -905,15 +665,56 @@ onUnmounted(() => {
   }
 }
 
-// Dashboard 特有的响应式设计
-@media (max-width: 1200px) {
-  .modern-stats-header {
-    .stats-grid {
-      grid-template-columns: repeat(3, 1fr);
+// 调用统计模块样式
+.call-stats-section {
+  .call-stats-container {
+    .call-summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
       gap: 16px;
+      margin-bottom: 24px;
+
+      .summary-card {
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+
+        .summary-value {
+          font-size: 16px;
+          font-weight: 600;
+          color: #1e293b;
+          margin-bottom: 4px;
+        }
+
+        .summary-label {
+          font-size: 11px;
+          color: #64748b;
+          font-weight: 500;
+        }
+      }
+    }
+
+    .chart-container {
+      .chart {
+        width: 100%;
+        height: 280px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
     }
   }
 
+  :deep(.ant-card-extra) {
+    .ant-space {
+      gap: 8px;
+    }
+  }
+}
+
+// Dashboard 特有的响应式设计
+@media (max-width: 1200px) {
   .dashboard-grid {
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto auto auto;
@@ -965,39 +766,6 @@ onUnmounted(() => {
     padding: 16px;
   }
 
-  .modern-stats-header {
-    .stats-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-    }
-
-    .stat-card {
-      padding: 16px;
-      min-height: 80px;
-
-      .stat-icon {
-        width: 36px;
-        height: 36px;
-        margin-right: 12px;
-
-        .icon {
-          width: 18px;
-          height: 18px;
-        }
-      }
-
-      .stat-content {
-        .stat-value {
-          font-size: 20px;
-        }
-
-        .stat-label {
-          font-size: 12px;
-        }
-      }
-    }
-  }
-
   .dashboard-grid {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -1012,6 +780,33 @@ onUnmounted(() => {
         grid-column: 1 / 2;
         grid-row: auto;
         min-height: 300px;
+      }
+    }
+  }
+
+  .call-stats-section {
+    .call-stats-container {
+      .call-summary {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+
+        .summary-card {
+          padding: 12px;
+
+          .summary-value {
+            font-size: 18px;
+          }
+
+          .summary-label {
+            font-size: 11px;
+          }
+        }
+      }
+
+      .chart-container {
+        .chart {
+          height: 200px;
+        }
       }
     }
   }

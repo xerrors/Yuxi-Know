@@ -120,6 +120,16 @@ export const dashboardApi = {
       console.error('批量获取统计数据失败:', error)
       throw error
     }
+  },
+
+  /**
+   * 获取调用统计时间序列数据
+   * @param {string} type - 数据类型 (models/agents/tokens/tools)
+   * @param {string} timeRange - 时间范围 (7hours/7days/7weeks)
+   * @returns {Promise<Object>} - 时间序列统计数据
+   */
+  getCallTimeseries: (type = 'models', timeRange = '7days') => {
+    return apiAdminGet(`/api/dashboard/stats/calls/timeseries?type=${type}&time_range=${timeRange}`)
   }
 }
 

@@ -419,7 +419,7 @@ const openLink = (url) => {
   width: 100%;
   height: calc(100vh - @graph-header-height);
   overflow: hidden;
-  background: var(--gray-50);
+  background: var(--gray-10);
 
   .actions,
   .footer {

@@ -125,7 +125,7 @@ onUnmounted(() => {
 .status-bar {
   // background: white;
   // backdrop-filter: blur(10px);
-  height: 60px;
+  // height: 60px;
   display: flex;
   align-items: center;
   // position: sticky;
@@ -138,7 +138,8 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 16px;
+  padding: 16px;
+  // padding-bottom: 0;
 }
 
 .status-left {

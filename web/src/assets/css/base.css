@@ -82,15 +82,29 @@
 
   /* Chart Palette - 图表调色板 */
   --chart-palette-1: var(--chart-primary);
-  --chart-palette-2: var(--chart-success);
-  --chart-palette-3: var(--chart-warning);
-  --chart-palette-4: var(--chart-error);
-  --chart-palette-5: var(--chart-info);
-  --chart-palette-6: var(--chart-secondary);
-  --chart-palette-7: var(--chart-accent);
-  --chart-palette-8: #fa541c;            /* 橙红色 */
-  --chart-palette-9: #eb2f96;            /* 粉红色 */
-  --chart-palette-10: #a0d911;           /* 黄绿色 */
+  --chart-palette-2: #028ea0;            /* 浅一点的青蓝 */
+  --chart-palette-3: #00b8a9;            /* 明亮青绿（邻近色） */
+  --chart-palette-4: #f2c94c;            /* 柔和金黄（对比色） */
+  --chart-palette-5: #eb5757;            /* 温暖红橙（强调） */
+  --chart-palette-6: #2f80ed;            /* 明亮蓝色（辅助） */
+  --chart-palette-7: #9b51e0;            /* 紫色（分类区分） */
+  --chart-palette-8: #56ccf2;            /* 天蓝色（柔和点缀） */
+  --chart-palette-9: #6fcf97;            /* 淡绿色（平衡） */
+  --chart-palette-10: #333333;           /* 深灰（中性补充） */
+
+  /* Stats Card Colors - 统计卡片颜色系统 */
+  --stats-primary-bg: #eff6ff;           /* 主色调背景 */
+  --stats-primary-color: #2563eb;        /* 主色调文字 */
+  --stats-success-bg: #f0fdf4;          /* 成功色背景 */
+  --stats-success-color: #16a34a;       /* 成功色文字 */
+  --stats-info-bg: #f0f9ff;              /* 信息色背景 */
+  --stats-info-color: #0284c7;           /* 信息色文字 */
+  --stats-warning-bg: #fffbeb;           /* 警告色背景 */
+  --stats-warning-color: #d97706;        /* 警告色文字 */
+  --stats-secondary-bg: #faf5ff;        /* 次要色背景 */
+  --stats-secondary-color: #9333ea;     /* 次要色文字 */
+  --stats-error-bg: #fef2f2;            /* 错误色背景 */
+  --stats-error-color: #dc2626;          /* 错误色文字 */
 
   --bg-sider: var(--main-5);
   --color-text: var(--c-black);

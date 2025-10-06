@@ -1,0 +1,396 @@
+<template>
+  <div class="grid-item call-stats">
+    <a-card class="dashboard-card call-stats-section" title="调用统计" :loading="loading">
+      <template #extra>
+        <div class="simple-controls">
+          <div class="simple-toggle-group">
+            <!-- <span class="simple-toggle-label">时间</span> -->
+            <span
+              v-for="opt in timeRangeOptions"
+              :key="opt.value"
+              class="simple-toggle"
+              :class="{ active: callTimeRange === opt.value }"
+              @click="switchTimeRange(opt.value)"
+            >{{ opt.label }}</span>
+          </div>
+          <div class="divider"></div>
+          <div class="simple-toggle-group">
+            <!-- <span class="simple-toggle-label">类型</span> -->
+            <span
+              v-for="opt in dataTypeOptions"
+              :key="opt.value"
+              class="simple-toggle"
+              :class="{ active: callDataType === opt.value }"
+              @click="switchDataType(opt.value)"
+            >{{ opt.label }}</span>
+          </div>
+          <!-- <div class="subtitle">总计：{{ callStatsData?.total_count || 0 }}</div> -->
+        </div>
+      </template>
+
+      <div class="call-stats-container">
+        <div class="chart-container">
+          <div ref="callStatsChartRef" class="chart"></div>
+        </div>
+      </div>
+    </a-card>
+  </div>
+
+</template>
+
+<script setup>
+import { ref, computed, onMounted, onUnmounted, nextTick, defineExpose, watch } from 'vue'
+import * as echarts from 'echarts'
+import { dashboardApi } from '@/apis/dashboard_api'
+
+const props = defineProps({
+  loading: { type: Boolean, default: false },
+})
+
+// state
+const callStatsData = ref(null)
+const callStatsLoading = ref(false)
+const callTimeRange = ref('7days')
+const callDataType = ref('models')
+const timeRangeOptions = [
+  { value: '7hours', label: '近7小时' },
+  { value: '7days', label: '近7天' },
+  { value: '7weeks', label: '近7周' },
+]
+const dataTypeOptions = [
+  { value: 'models', label: '模型调用' },
+  { value: 'agents', label: '智能体调用' },
+  { value: 'tokens', label: 'Token消耗' },
+  { value: 'tools', label: '工具调用' },
+]
+
+const switchTimeRange = (val) => {
+  if (callTimeRange.value === val) return
+  callTimeRange.value = val
+  loadCallStats()
+}
+
+const switchDataType = (val) => {
+  if (callDataType.value === val) return
+  callDataType.value = val
+  loadCallStats()
+}
+const callStatsChartRef = ref(null)
+let callStatsChart = null
+let retryTimer = null
+const retryCount = ref(0)
+const maxRetry = 20
+
+// Build color palette from CSS variables in base.css
+let colorPalette = []
+const buildColorPalette = () => {
+  try {
+    const root = document.documentElement
+    const styles = getComputedStyle(root)
+    const pick = (name, fallback) => {
+      const v = styles.getPropertyValue(name)
+      return v && v.trim() ? v.trim() : fallback
+    }
+    const baseVars = [
+      ['--chart-primary', '#3996ae'],
+      ['--chart-success', '#52c41a'],
+      ['--chart-warning', '#faad14'],
+      ['--chart-error', '#f5222d'],
+      ['--chart-secondary', '#722ed1'],
+      ['--chart-accent', '#13c2c2'],
+    ]
+    const paletteVars = [
+      ['--chart-palette-1', '#3996ae'],
+      ['--chart-palette-2', '#028ea0'],
+      ['--chart-palette-3', '#00b8a9'],
+      ['--chart-palette-4', '#f2c94c'],
+      ['--chart-palette-5', '#eb5757'],
+      ['--chart-palette-6', '#2f80ed'],
+      ['--chart-palette-7', '#9b51e0'],
+      ['--chart-palette-8', '#56ccf2'],
+      ['--chart-palette-9', '#6fcf97'],
+      ['--chart-palette-10', '#333333'],
+    ]
+    const baseColors = baseVars.map(([n, f]) => pick(n, f))
+    const paletteColors = paletteVars.map(([n, f]) => pick(n, f))
+    // PRIORITY: palette first, then base
+    const merged = [...paletteColors, ...baseColors]
+      .filter(Boolean)
+      .filter((c, idx, arr) => arr.indexOf(c) === idx)
+    colorPalette = merged
+  } catch (e) {
+    // Fallback
+    colorPalette = [
+      '#3996ae', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2',
+      '#fa8c16', '#1890ff', '#95de64', '#69c0ff'
+    ]
+  }
+}
+
+const getColorByIndex = (index) => {
+  if (!colorPalette || colorPalette.length === 0) buildColorPalette()
+  return colorPalette[index % colorPalette.length]
+}
+
+const truncateLegend = (name) => {
+  if (!name) return ''
+  return name.length > 20 ? name.slice(0, 20) + '…' : name
+}
+
+const loadCallStats = async () => {
+  callStatsLoading.value = true
+  try {
+    const response = await dashboardApi.getCallTimeseries(callDataType.value, callTimeRange.value)
+    callStatsData.value = response
+    await nextTick()
+    renderCallStatsChart()
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.error('加载调用统计数据失败:', error)
+  } finally {
+    callStatsLoading.value = false
+  }
+}
+
+const renderCallStatsChart = () => {
+  const container = callStatsChartRef.value
+  if (!container || !callStatsData.value) return
+
+  // 若父卡片仍在 loading，等待 loading 结束
+  if (props.loading) {
+    scheduleRetry()
+    return
+  }
+
+  const { clientWidth, clientHeight } = container
+  if (!clientWidth || !clientHeight) {
+    scheduleRetry()
+    return
+  }
+
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+  retryCount.value = 0
+
+  if (callStatsChart) {
+    callStatsChart.dispose()
+  }
+
+  if (!colorPalette || colorPalette.length === 0) buildColorPalette()
+
+  callStatsChart = echarts.init(container)
+
+  const data = callStatsData.value.data || []
+  const categories = callStatsData.value.categories || []
+
+  const xAxisData = data.map(item => {
+    const date = item.date
+    if (callTimeRange.value === '7hours') {
+      return date.split(' ')[1]
+    } else if (callTimeRange.value === '7weeks') {
+      return `第${date.split('-')[1]}周`
+    } else {
+      return date.split('-').slice(1).join('-')
+    }
+  })
+
+  const series = categories.map((category, index) => ({
+    name: category === 'None' ? '未知模型' : category,
+    type: 'bar',
+    stack: 'total',
+    emphasis: { focus: 'series' },
+    data: data.map(item => item.data[category] || 0),
+    itemStyle: {
+      color: getColorByIndex(index),
+      borderRadius: 0,
+    }
+  }))
+
+  const option = {
+    grid: {
+      left: '3%',
+      right: '4%',
+      top: '5%',     /* 减少顶部留白 */
+      bottom: 50,    /* 减少底部留白，从60减少到50 */
+      containLabel: true
+    },
+    xAxis: {
+      type: 'category',
+      data: xAxisData,
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#6b7280', fontSize: 12 }
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#6b7280', fontSize: 12 },
+      splitLine: { lineStyle: { color: '#f3f4f6' } }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      borderColor: '#e5e7eb',
+      borderWidth: 1,
+      textStyle: { color: '#374151', fontSize: 12 },
+      formatter: (params) => {
+        let total = 0
+        let result = `${params[0].name}<br/>`
+        params.forEach(param => {
+          total += param.value
+          result += `<span style=\"display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}\"></span>`
+          result += `${param.seriesName}: ${param.value}<br/>`
+        })
+        const labelMap = { models: '模型调用', agents: '智能体调用', tokens: 'Token消耗', tools: '工具调用' }
+        return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${total}</strong>`
+      }
+    },
+    legend: {
+      data: categories.map(cat => (cat === 'None' ? '未知模型' : cat)),
+      bottom: 5,        /* 调整图例位置，从0改为5 */
+      textStyle: { color: '#6b7280', fontSize: 12 },
+      itemWidth: 14,
+      itemHeight: 14,
+      formatter: (name) => truncateLegend(name)
+    },
+    series,
+  }
+
+  callStatsChart.setOption(option)
+
+  window.addEventListener('resize', handleResize, resizeListenerOptions)
+}
+
+const scheduleRetry = () => {
+  if (retryCount.value >= maxRetry) return
+  if (retryTimer) clearTimeout(retryTimer)
+  retryTimer = setTimeout(() => {
+    retryCount.value += 1
+    renderCallStatsChart()
+  }, 100)
+}
+
+const handleResize = () => {
+  if (callStatsChart) callStatsChart.resize()
+}
+
+const resizeListenerOptions = { passive: true }
+
+const cleanup = () => {
+  window.removeEventListener('resize', handleResize, resizeListenerOptions)
+  if (retryTimer) {
+    clearTimeout(retryTimer)
+    retryTimer = null
+  }
+  retryCount.value = 0
+  if (callStatsChart) {
+    callStatsChart.dispose()
+    callStatsChart = null
+  }
+}
+
+defineExpose({ cleanup })
+
+onMounted(() => {
+  buildColorPalette()
+  loadCallStats()
+})
+
+watch(() => props.loading, (now) => {
+  if (!now) {
+    if (callStatsData.value) {
+      nextTick().then(() => renderCallStatsChart())
+    }
+  }
+})
+
+onUnmounted(() => {
+  cleanup()
+})
+</script>
+
+<style scoped lang="less">
+
+/* 复用 dashboard.css 样式：此处仅做最小覆盖以避免重复 */
+.call-stats-section {
+  background-color: var(--gray-0);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.ant-card-body) {
+  flex: 1;
+  display: flex;
+  padding: 16px; /* 减少padding从20px到16px */
+}
+
+.call-stats-container {
+  height: 100%;
+  display: flex;
+  flex: 1;
+}
+
+.call-stats .chart-container {
+  height: 100%;
+  flex: 1;
+  padding: 0; /* 移除默认padding */
+}
+
+.call-stats .chart {
+  height: 100% !important;
+  width: 100%;
+  padding: 0; /* 移除chart的padding */
+  border: none; /* 移除chart的border */
+  background-color: transparent; /* 移除背景色 */
+}
+
+.simple-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.simple-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.simple-toggle-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-right: 4px;
+}
+
+.simple-toggle {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.simple-toggle:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.simple-toggle.active {
+  background-color: #3996ae;
+  color: white;
+}
+
+.divider {
+  width: 1px;
+  height: 16px;
+  background-color: #e5e7eb;
+}
+</style>
+
+

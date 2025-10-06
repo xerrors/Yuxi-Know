@@ -181,7 +181,6 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-@import '@/assets/css/dashboard.css';
 
 // UserStatsComponent 特有的样式
 .compact-chart-container {

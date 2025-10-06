@@ -412,26 +412,28 @@ async def get_knowledge_stats(
                 "7z": "7Z压缩包",
             }
 
-            # 统计上传文件
-            uploads_dir = "/app/saves/knowledge_base_data/uploads"
-            if os.path.exists(uploads_dir):
-                for root, dirs, files in os.walk(uploads_dir):
-                    for file in files:
-                        # 支持更多文件类型
-                        if file.lower().endswith(tuple(file_type_mapping.keys())):
-                            total_files += 1
-                            file_ext = file.lower().split(".")[-1]
-                            # 使用映射后的友好名称
-                            display_name = file_type_mapping.get(file_ext, file_ext.upper() + "文件")
-                            files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
+            # 统计文件：改为基于各知识库实现中的 files_meta，更加准确
+            # 注意：部分记录可能来源于 URL，此时无法统计物理大小
+            for kb_instance in kb_manager.kb_instances.values():
+                files_meta = getattr(kb_instance, "files_meta", {}) or {}
+                total_files += len(files_meta)
 
-                            # 估算文件大小
-                            file_path = os.path.join(root, file)
-                            try:
-                                file_size = os.path.getsize(file_path)
-                                total_storage_size += file_size
-                            except OSError:
-                                total_storage_size += 1024  # 默认1KB
+                for _fid, finfo in files_meta.items():
+                    file_ext = (finfo.get("file_type") or "").lower()
+                    # 统一映射显示名
+                    display_name = file_type_mapping.get(
+                        file_ext, file_ext.upper() + "文件" if file_ext else "其他"
+                    )
+                    files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
+
+                    # 估算大小（如果路径存在且是本地文件）
+                    path = finfo.get("path") or ""
+                    try:
+                        if path and os.path.exists(path) and os.path.isfile(path):
+                            total_storage_size += os.path.getsize(path)
+                    except Exception:
+                        # 忽略无法访问的路径
+                        pass
 
             # 统计知识库类型分布
             for kb_id, kb_info in databases.items():
@@ -692,3 +694,260 @@ async def get_all_feedbacks(
         logger.error(f"Error getting feedbacks: {e}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to get feedbacks: {str(e)}")
+
+
+# =============================================================================
+# Time Series Statistics for Call Analytics
+# =============================================================================
+
+
+class TimeSeriesStats(BaseModel):
+    """时间序列统计数据"""
+
+    data: list[dict]  # [{"date": "2024-01-01", "data": {"item1": 50, "item2": 30}, "total": 80}, ...]
+    categories: list[str]  # 所有类别名称
+    total_count: int
+    average_count: float
+    peak_count: int
+    peak_date: str
+
+
+@dashboard.get("/stats/calls/timeseries", response_model=TimeSeriesStats)
+async def get_call_timeseries_stats(
+    type: str = "models",  # models/agents/tokens/tools
+    time_range: str = "7days",  # 7hours/7days/7weeks
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_admin_user),
+):
+    """Get time series statistics for call analytics (Admin only)"""
+    try:
+        from src.storage.db.models import Conversation, Message, ToolCall, ConversationStats
+
+        # 计算时间范围（使用北京时间 UTC+8）
+        now = datetime.utcnow()
+        beijing_time = now + timedelta(hours=8)  # 转换为北京时间
+
+        if time_range == "7hours":
+            intervals = 7
+            start_time = now - timedelta(hours=intervals)
+            time_format = "%Y-%m-%d %H:00"
+            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
+            group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, '+8 hours'))
+        elif time_range == "7weeks":
+            intervals = 7
+            start_time = now - timedelta(weeks=intervals)
+            time_format = "%Y-W%U"
+            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
+            group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, '+8 hours'))
+        else:  # 7days (default)
+            intervals = 7
+            start_time = now - timedelta(days=intervals)
+            time_format = "%Y-%m-%d"
+            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
+            group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, '+8 hours'))
+
+        # 根据类型查询数据
+        if type == "models":
+            # 模型调用统计（基于消息数量，按模型分组）
+            # 从message的extra_metadata中提取模型信息
+            query = (
+                db.query(
+                    group_format.label("date"),
+                    func.count(Message.id).label("count"),
+                    func.json_extract(Message.extra_metadata, "$.response_metadata.model_name").label("category")
+                )
+                .filter(Message.role == "assistant", Message.created_at >= start_time)
+                .filter(Message.extra_metadata.isnot(None))
+                .group_by(group_format, func.json_extract(Message.extra_metadata, "$.response_metadata.model_name"))
+                .order_by(group_format)
+            )
+        elif type == "agents":
+            # 智能体调用统计（基于对话数量，按智能体分组）
+            # 为对话创建独立的时间格式化器
+            if time_range == "7hours":
+                conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.created_at, '+8 hours'))
+            elif time_range == "7weeks":
+                conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.created_at, '+8 hours'))
+            else:  # 7days
+                conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.created_at, '+8 hours'))
+
+            query = (
+                db.query(
+                    conv_group_format.label("date"),
+                    func.count(Conversation.id).label("count"),
+                    Conversation.agent_id.label("category")
+                )
+                .filter(Conversation.created_at >= start_time)
+                .group_by(conv_group_format, Conversation.agent_id)
+                .order_by(conv_group_format)
+            )
+        elif type == "tokens":
+            # Token消耗统计（区分input/output tokens）
+            # 先查询input tokens
+            from sqlalchemy import text, literal
+
+            input_query = (
+                db.query(
+                    group_format.label("date"),
+                    func.sum(
+                        func.coalesce(
+                            func.json_extract(Message.extra_metadata, "$.usage_metadata.input_tokens"), 0
+                        )
+                    ).label("count"),
+                    literal("input_tokens").label("category")
+                )
+                .filter(
+                    Message.created_at >= start_time,
+                    Message.extra_metadata.isnot(None),
+                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None)
+                )
+                .group_by(group_format)
+                .order_by(group_format)
+            )
+
+            # 查询output tokens
+            output_query = (
+                db.query(
+                    group_format.label("date"),
+                    func.sum(
+                        func.coalesce(
+                            func.json_extract(Message.extra_metadata, "$.usage_metadata.output_tokens"), 0
+                        )
+                    ).label("count"),
+                    literal("output_tokens").label("category")
+                )
+                .filter(
+                    Message.created_at >= start_time,
+                    Message.extra_metadata.isnot(None),
+                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None)
+                )
+                .group_by(group_format)
+                .order_by(group_format)
+            )
+
+            # 合并两个查询结果
+            input_results = input_query.all()
+            output_results = output_query.all()
+            results = input_results + output_results
+        elif type == "tools":
+            # 工具调用统计（按工具名称分组）
+            # 为工具调用创建独立的时间格式化器
+            if time_range == "7hours":
+                tool_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(ToolCall.created_at, '+8 hours'))
+            elif time_range == "7weeks":
+                tool_group_format = func.strftime("%Y-%W", func.datetime(ToolCall.created_at, '+8 hours'))
+            else:  # 7days
+                tool_group_format = func.strftime("%Y-%m-%d", func.datetime(ToolCall.created_at, '+8 hours'))
+
+            query = (
+                db.query(
+                    tool_group_format.label("date"),
+                    func.count(ToolCall.id).label("count"),
+                    ToolCall.tool_name.label("category")
+                )
+                .filter(ToolCall.created_at >= start_time)
+                .group_by(tool_group_format, ToolCall.tool_name)
+                .order_by(tool_group_format)
+            )
+        else:
+            raise HTTPException(status_code=422, detail=f"Invalid type: {type}")
+
+        if type != "tokens":
+            results = query.all()
+
+        # 处理堆叠数据格式
+        # 首先收集所有类别
+        categories = set()
+        for result in results:
+            if hasattr(result, 'category') and result.category:
+                categories.add(result.category)
+
+        # 如果没有类别数据，提供默认类别
+        if not categories:
+            if type == "models":
+                categories.add("unknown_model")
+            elif type == "agents":
+                categories.add("unknown_agent")
+            elif type == "tokens":
+                categories.update(["input_tokens", "output_tokens"])
+            elif type == "tools":
+                categories.add("unknown_tool")
+
+        categories = sorted(list(categories))
+
+        # 重新组织数据：按时间点分组每个类别的数据
+        time_data = {}
+        for result in results:
+            date_key = result.date
+            category = getattr(result, 'category', 'unknown')
+            count = result.count
+
+            if date_key not in time_data:
+                time_data[date_key] = {}
+
+            time_data[date_key][category] = count
+
+        # 填充缺失的时间点（使用北京时间）
+        data = []
+        current_time = start_time + timedelta(hours=8)  # 转换为北京时间
+
+        if time_range == "7hours":
+            delta = timedelta(hours=1)
+        elif time_range == "7weeks":
+            delta = timedelta(weeks=1)
+        else:
+            delta = timedelta(days=1)
+
+        for i in range(intervals):
+            if time_range == "7hours":
+                date_key = current_time.strftime("%Y-%m-%d %H:00")
+            elif time_range == "7weeks":
+                # 计算ISO周数
+                week_num = current_time.isocalendar()[1]
+                date_key = f"{current_time.year}-{week_num:02d}"
+            else:
+                date_key = current_time.strftime("%Y-%m-%d")
+
+            # 获取该时间点的数据
+            day_data = time_data.get(date_key, {})
+            day_total = sum(day_data.values())
+
+            # 确保所有类别都有值（缺失的补0）
+            for category in categories:
+                if category not in day_data:
+                    day_data[category] = 0
+
+            data.append({
+                "date": date_key,
+                "data": day_data,
+                "total": day_total
+            })
+            current_time += delta
+
+        # 计算统计指标
+        if type == "tools":
+            # 对于工具调用，显示所有时间的总数（与ToolStatsComponent保持一致）
+            from src.storage.db.models import ToolCall
+            total_count = db.query(func.count(ToolCall.id)).scalar() or 0
+        else:
+            # 其他类型使用时间序列数据的总和
+            total_count = sum(item["total"] for item in data)
+
+        average_count = round(total_count / intervals, 2) if intervals > 0 else 0
+        peak_data = max(data, key=lambda x: x["total"]) if data else {"total": 0, "date": ""}
+
+        return TimeSeriesStats(
+            data=data,
+            categories=categories,
+            total_count=total_count,
+            average_count=average_count,
+            peak_count=peak_data["total"],
+            peak_date=peak_data["date"],
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting call timeseries stats: {e}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to get call timeseries stats: {str(e)}")
