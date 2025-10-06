@@ -71,9 +71,9 @@
             v-model="userInput"
             :is-loading="isProcessing"
             :disabled="!currentAgent"
-            :send-button-disabled="!userInput || !currentAgent || isProcessing"
+            :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
             :placeholder="'输入问题...'"
-            @send="handleSendMessage"
+            @send="handleSendOrStop"
             @keydown="handleKeyDown"
           />
 
@@ -131,9 +131,9 @@
             v-model="userInput"
             :is-loading="isProcessing"
             :disabled="!currentAgent"
-            :send-button-disabled="!userInput || !currentAgent || isProcessing"
+            :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
             :placeholder="'输入问题...'"
-            @send="handleSendMessage"
+            @send="handleSendOrStop"
             @keydown="handleKeyDown"
           />
           <div class="bottom-actions">
@@ -413,6 +413,11 @@ const _processStreamChunk = (chunk, threadId) => {
       // We no longer call resetOnGoingConv to keep the context.
       break;
     case 'finished':
+          fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+          resetOnGoingConv(threadId);
+          break;
+    case 'interrupted':
+          // 中断状态，刷新消息历史
           fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
           resetOnGoingConv(threadId);
           break;
@@ -724,6 +729,27 @@ const handleSendMessage = async () => {
     threadState.streamAbortController = null;
     resetOnGoingConv(threadId);
   }
+};
+
+// 发送或中断
+const handleSendOrStop = async () => {
+  const threadId = currentChatId.value;
+  const threadState = getThreadState(threadId);
+  if (isProcessing.value && threadState && threadState.streamAbortController) {
+    // 中断生成
+    threadState.streamAbortController.abort();
+
+    // 中断后刷新消息历史，确保显示最新的状态
+    try {
+      await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      message.info('已中断对话生成');
+    } catch (error) {
+      console.error('刷新消息历史失败:', error);
+      message.info('已中断对话生成');
+    }
+    return;
+  }
+  await handleSendMessage();
 };
 
 // ==================== UI HANDLERS ====================

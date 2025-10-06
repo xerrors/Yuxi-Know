@@ -322,6 +322,26 @@ async def chat_agent(
                     conv_mgr=conv_manager,
                     config_dict=langgraph_config,
                 )
+        except (asyncio.CancelledError, ConnectionError) as e:
+            # 客户端主动中断连接，尝试保存已生成的部分内容
+            logger.info(f"Client disconnected for thread {thread_id}: {e}")
+            try:
+                if conversation:
+                    langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+                    await save_messages_from_langgraph_state(
+                        agent_instance=agent,
+                        conversation=conversation,
+                        conv_mgr=conv_manager,
+                        config_dict=langgraph_config,
+                    )
+            except Exception as save_error:
+                logger.error(f"Error saving partial messages after disconnect: {save_error}")
+            # 通知前端中断（可能发送不到，但用于一致性）
+            try:
+                yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
+            except Exception:
+                pass
+            return
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
