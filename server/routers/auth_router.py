@@ -46,6 +46,7 @@ class UserUpdate(BaseModel):
 
 
 class UserProfileUpdate(BaseModel):
+    username: str | None = None
     phone_number: str | None = None
 
 
@@ -258,6 +259,31 @@ async def update_profile(
 ):
     """更新当前用户的个人资料"""
     update_details = []
+
+    # 更新用户名（仅允许修改显示名，不修改 user_id）
+    if profile_data.username is not None:
+        # 验证用户名格式
+        is_valid, error_msg = validate_username(profile_data.username)
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg,
+            )
+
+        # 检查用户名是否已被其他用户使用
+        existing_user = (
+            db.query(User)
+            .filter(User.username == profile_data.username, User.id != current_user.id)
+            .first()
+        )
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名已存在",
+            )
+
+        current_user.username = profile_data.username
+        update_details.append(f"用户名: {profile_data.username}")
 
     # 更新手机号
     if profile_data.phone_number is not None:

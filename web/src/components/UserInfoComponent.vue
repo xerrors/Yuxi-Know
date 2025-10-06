@@ -78,11 +78,26 @@
         <div class="info-section">
           <div class="info-item">
             <div class="info-label">用户名</div>
-            <div class="info-value">{{ userStore.username || '未设置' }}</div>
+            <div class="info-value" v-if="!profileEditing">{{ userStore.username || '未设置' }}</div>
+            <div class="info-value" v-else>
+              <a-input
+                v-model:value="editedProfile.username"
+                placeholder="请输入用户名（2-20个字符）"
+                :max-length="20"
+                style="width: 240px;"
+              />
+            </div>
           </div>
           <div class="info-item">
             <div class="info-label">用户ID</div>
-            <div class="info-value user-id">{{ userStore.userIdLogin || '未设置' }}</div>
+            <div class="info-value user-id" v-if="!profileEditing">{{ userStore.userIdLogin || '未设置' }}</div>
+            <div class="info-value" v-else>
+              <a-input
+                :value="userStore.userIdLogin || ''"
+                disabled
+                style="width: 240px;"
+              />
+            </div>
           </div>
           <div class="info-item">
             <div class="info-label">手机号</div>
@@ -150,6 +165,7 @@ const profileModalVisible = ref(false);
 const avatarUploading = ref(false);
 const profileEditing = ref(false);
 const editedProfile = ref({
+  username: '',
   phone_number: ''
 });
 
@@ -215,6 +231,7 @@ const openProfile = async () => {
   try {
     await userStore.getCurrentUser();
     editedProfile.value = {
+      username: userStore.username || '',
       phone_number: userStore.phoneNumber || ''
     };
   } catch (error) {
@@ -236,6 +253,7 @@ const getRoleColor = (role) => {
 const startEdit = () => {
   profileEditing.value = true;
   editedProfile.value = {
+    username: userStore.username || '',
     phone_number: userStore.phoneNumber || ''
   };
 };
@@ -244,6 +262,7 @@ const startEdit = () => {
 const cancelEdit = () => {
   profileEditing.value = false;
   editedProfile.value = {
+    username: userStore.username || '',
     phone_number: userStore.phoneNumber || ''
   };
 };
@@ -251,13 +270,22 @@ const cancelEdit = () => {
 // 保存个人资料
 const saveProfile = async () => {
   try {
+    // 验证用户名
+    if (editedProfile.value.username && (editedProfile.value.username.trim().length < 2 || editedProfile.value.username.trim().length > 20)) {
+      message.error('用户名长度必须在 2-20 个字符之间');
+      return;
+    }
+
     // 验证手机号格式
     if (editedProfile.value.phone_number && !validatePhoneNumber(editedProfile.value.phone_number)) {
       message.error('请输入正确的手机号格式');
       return;
     }
 
-    await userStore.updateProfile(editedProfile.value);
+    await userStore.updateProfile({
+      username: editedProfile.value.username?.trim() || undefined,
+      phone_number: editedProfile.value.phone_number || undefined,
+    });
     message.success('个人资料更新成功！');
     profileEditing.value = false;
   } catch (error) {
@@ -513,8 +541,8 @@ const handleAvatarChange = async (info) => {
 
         &.user-id {
           font-family: 'Monaco', 'Consolas', monospace;
-          background: #f5f5f5;
-          padding: 4px 8px;
+          // background: #f5f5f5;
+          // padding: 4px 8px;
           border-radius: 4px;
           display: inline-block;
         }

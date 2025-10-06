@@ -349,10 +349,14 @@ export const useUserStore = defineStore('user', () => {
       const userData = await response.json()
 
       // 更新本地状态
-      phoneNumber.value = userData.phone_number || ''
-
-      // 更新本地存储
-      localStorage.setItem('phone_number', userData.phone_number || '')
+      if (typeof userData.username === 'string') {
+        username.value = userData.username
+        localStorage.setItem('username', userData.username)
+      }
+      if (typeof userData.phone_number !== 'undefined') {
+        phoneNumber.value = userData.phone_number || ''
+        localStorage.setItem('phone_number', userData.phone_number || '')
+      }
 
       return userData
     } catch (error) {
