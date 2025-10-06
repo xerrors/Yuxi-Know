@@ -19,7 +19,7 @@
         </div>
         <div class="user-info">
           <User class="icon" />
-          <span class="user-name">{{ currentUser }}</span>
+          <span class="user-greeting">{{ greeting }}</span>
         </div>
         <div class="status-indicator" :class="systemStatus">
           <div class="status-dot"></div>
@@ -33,19 +33,45 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useInfoStore } from '@/stores/info'
+import { useUserStore } from '@/stores/user'
 import { Clock, User } from 'lucide-vue-next'
 
-// 使用 info store
+// 使用 stores
 const infoStore = useInfoStore()
+const userStore = useUserStore()
 
 // 响应式数据
 const currentTime = ref('')
-const currentUser = ref('管理员')
 const systemStatus = ref('online')
 
 // 计算属性
 const organization = computed(() => infoStore.organization)
 const branding = computed(() => infoStore.branding)
+
+// 用户名计算属性
+const currentUser = computed(() => {
+  return userStore.username || '游客'
+})
+
+// 问候语计算属性
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  let greetingText = ''
+
+  if (hour >= 5 && hour < 12) {
+    greetingText = '早上好'
+  } else if (hour >= 12 && hour < 14) {
+    greetingText = '中午好'
+  } else if (hour >= 14 && hour < 18) {
+    greetingText = '下午好'
+  } else if (hour >= 18 && hour < 22) {
+    greetingText = '晚上好'
+  } else {
+    greetingText = '夜深了'
+  }
+
+  return `${greetingText}！${currentUser.value}`
+})
 
 const statusText = computed(() => {
   switch (systemStatus.value) {
@@ -76,9 +102,16 @@ const updateTime = () => {
 // 定时器
 let timeInterval = null
 
-onMounted(() => {
+onMounted(async () => {
   updateTime()
   timeInterval = setInterval(updateTime, 1000)
+
+  // 获取用户信息
+  try {
+    await userStore.getCurrentUser()
+  } catch (error) {
+    console.error('获取用户信息失败:', error)
+  }
 })
 
 onUnmounted(() => {
@@ -121,14 +154,14 @@ onUnmounted(() => {
 
 .system-details {
   .system-name {
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 600;
     color: #111827;
     line-height: 1.4;
   }
 
   .system-subtitle {
-    font-size: 12px;
+    font-size: 13px;
     color: #6b7280;
     line-height: 1.2;
   }
@@ -155,7 +188,7 @@ onUnmounted(() => {
 }
 
 .current-time,
-.user-name {
+.user-greeting {
   font-weight: 500;
 }
 
