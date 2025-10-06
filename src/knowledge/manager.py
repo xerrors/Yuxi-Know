@@ -123,6 +123,14 @@ class KnowledgeBaseManager:
     # 统一的外部接口 - 与原始 LightRagBasedKB 兼容
     # =============================================================================
 
+    def get_kb(self, db_id: str) -> KnowledgeBase:
+        """Public accessor to fetch the underlying knowledge base instance by database id.
+
+        This provides a simple compatibility layer for callers that expect a
+        `get_kb` method on the manager.
+        """
+        return self._get_kb_for_database(db_id)
+
     def get_databases(self) -> dict:
         """获取所有数据库信息"""
         all_databases = []
