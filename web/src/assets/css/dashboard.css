@@ -341,11 +341,12 @@
 
 /* 使用更具体的选择器来覆盖 Ant Design 的默认样式 */
 .dashboard-card .ant-card-head {
-  border-bottom: 1px solid var(--gray-200) !important;
+  /* border-bottom: 1px solid var(--gray-200) !important; */
   min-height: 56px !important;
   padding: 0 20px !important;
   flex-shrink: 0;
   background-color: var(--gray-0) !important;
+  /* border: 1px solo; */
 }
 
 .dashboard-card .ant-card-head-title {
@@ -356,9 +357,14 @@
 
 .dashboard-card .ant-card-body {
   padding: 20px !important;
+  padding-top: 0px !important;
   flex: 1;
   overflow: auto;
   background-color: var(--gray-0) !important;
+}
+
+.dashboard-card .ant-card-extra {
+  padding-top: 0px !important;
 }
 
 /* 统计概览样式 */

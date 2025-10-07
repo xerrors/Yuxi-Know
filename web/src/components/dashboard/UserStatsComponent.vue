@@ -30,6 +30,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import { getChartColor } from '@/utils/chartColors'
 import { dashboardApi } from '@/apis/dashboard_api'
 
 // Props
@@ -105,7 +106,7 @@ const initActivityChart = () => {
       data: props.userStats.daily_active_users.map(item => item.active_users),
       smooth: true,
       lineStyle: {
-        color: '#3996ae',
+        color: getChartColor('primary'),
         width: 3
       },
       areaStyle: {
@@ -123,13 +124,13 @@ const initActivityChart = () => {
         }
       },
       itemStyle: {
-        color: '#3996ae',
+        color: getChartColor('primary'),
         borderWidth: 2,
         borderColor: '#fff'
       },
       emphasis: {
         itemStyle: {
-          color: '#24839a',
+          color: getChartColor('primary'),
           borderWidth: 3,
           borderColor: '#fff',
           shadowBlur: 10,

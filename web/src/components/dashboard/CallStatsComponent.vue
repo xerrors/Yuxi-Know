@@ -42,6 +42,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, defineExpose, watch } from 'vue'
 import * as echarts from 'echarts'
 import { dashboardApi } from '@/apis/dashboard_api'
+import { getColorByIndex, truncateLegend } from '@/utils/chartColors'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
@@ -80,62 +81,6 @@ let callStatsChart = null
 let retryTimer = null
 const retryCount = ref(0)
 const maxRetry = 20
-
-// Build color palette from CSS variables in base.css
-let colorPalette = []
-const buildColorPalette = () => {
-  try {
-    const root = document.documentElement
-    const styles = getComputedStyle(root)
-    const pick = (name, fallback) => {
-      const v = styles.getPropertyValue(name)
-      return v && v.trim() ? v.trim() : fallback
-    }
-    const baseVars = [
-      ['--chart-primary', '#3996ae'],
-      ['--chart-success', '#52c41a'],
-      ['--chart-warning', '#faad14'],
-      ['--chart-error', '#f5222d'],
-      ['--chart-secondary', '#722ed1'],
-      ['--chart-accent', '#13c2c2'],
-    ]
-    const paletteVars = [
-      ['--chart-palette-1', '#3996ae'],
-      ['--chart-palette-2', '#028ea0'],
-      ['--chart-palette-3', '#00b8a9'],
-      ['--chart-palette-4', '#f2c94c'],
-      ['--chart-palette-5', '#eb5757'],
-      ['--chart-palette-6', '#2f80ed'],
-      ['--chart-palette-7', '#9b51e0'],
-      ['--chart-palette-8', '#56ccf2'],
-      ['--chart-palette-9', '#6fcf97'],
-      ['--chart-palette-10', '#333333'],
-    ]
-    const baseColors = baseVars.map(([n, f]) => pick(n, f))
-    const paletteColors = paletteVars.map(([n, f]) => pick(n, f))
-    // PRIORITY: palette first, then base
-    const merged = [...paletteColors, ...baseColors]
-      .filter(Boolean)
-      .filter((c, idx, arr) => arr.indexOf(c) === idx)
-    colorPalette = merged
-  } catch (e) {
-    // Fallback
-    colorPalette = [
-      '#3996ae', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2',
-      '#fa8c16', '#1890ff', '#95de64', '#69c0ff'
-    ]
-  }
-}
-
-const getColorByIndex = (index) => {
-  if (!colorPalette || colorPalette.length === 0) buildColorPalette()
-  return colorPalette[index % colorPalette.length]
-}
-
-const truncateLegend = (name) => {
-  if (!name) return ''
-  return name.length > 20 ? name.slice(0, 20) + '…' : name
-}
 
 const loadCallStats = async () => {
   callStatsLoading.value = true
@@ -178,7 +123,6 @@ const renderCallStatsChart = () => {
     callStatsChart.dispose()
   }
 
-  if (!colorPalette || colorPalette.length === 0) buildColorPalette()
 
   callStatsChart = echarts.init(container)
 
@@ -295,7 +239,6 @@ const cleanup = () => {
 defineExpose({ cleanup })
 
 onMounted(() => {
-  buildColorPalette()
   loadCallStats()
 })
 

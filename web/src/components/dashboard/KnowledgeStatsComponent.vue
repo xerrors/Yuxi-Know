@@ -94,6 +94,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
+import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
 
 // Props
 const props = defineProps({
@@ -134,38 +135,8 @@ const formattedStorageSize = computed(() => {
 //   return nodes > 0 ? size / (nodes * 1024) : 0 // 转换为KB
 // })
 
-// 颜色数组 - 基于主题色的协调调色板
-const colorPalette = [
-  '#3996ae', // 主色调
-  '#5faec2', // 主色调浅色
-  '#82c3d6', // 主色调更浅
-  '#a3d8e8', // 主色调最浅
-  '#24839a', // 主色调深色
-  '#046a82', // 主色调更深
-  '#035065', // 主色调最深
-  '#c4eaf5', // 极浅色
-  '#e1f6fb', // 背景色
-  '#f2fbfd'  // 最浅背景色
-]
-
-const getColorByIndex = (index) => {
-  return colorPalette[index % colorPalette.length]
-}
-
-// 图例/分段颜色：与 base.css 中的 --chart-palette-* 保持一致（使用固定 HEX）
-const legendPalette = [
-  '#3996ae', // --chart-palette-1 -> var(--chart-primary)
-  '#028ea0', // --chart-palette-2
-  '#00b8a9', // --chart-palette-3
-  '#f2c94c', // --chart-palette-4
-  '#eb5757', // --chart-palette-5
-  '#2f80ed', // --chart-palette-6
-  '#9b51e0', // --chart-palette-7
-  '#56ccf2', // --chart-palette-8
-  '#6fcf97', // --chart-palette-9
-  '#333333'  // --chart-palette-10
-]
-const getLegendColorByIndex = (index) => legendPalette[index % legendPalette.length]
+// 使用统一的调色盘
+const getLegendColorByIndex = (index) => getColorByIndex(index)
 
 
 // 初始化数据库类型分布图 - 横向分段条
@@ -293,7 +264,7 @@ const initFileTypeChart = () => {
           show: true
         },
         data: data,
-        color: legendPalette
+        color: getColorPalette()
       }]
     }
 

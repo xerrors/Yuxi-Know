@@ -98,6 +98,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
+import { getColorByIndex, getChartColor } from '@/utils/chartColors'
 
 // Props
 const props = defineProps({
@@ -164,9 +165,9 @@ const topPerformers = computed(() => {
 
 // 颜色辅助函数
 const getScoreColor = (score) => {
-  if (score >= 80) return '#3996ae'
-  if (score >= 60) return '#82c3d6'
-  return '#a3d8e8'
+  if (score >= 80) return getChartColor('primary')
+  if (score >= 60) return getChartColor('warning')
+  return getChartColor('accent')
 }
 
 
@@ -252,12 +253,12 @@ const initConversationToolChart = () => {
           return item ? item.conversation_count : 0
         }),
         itemStyle: {
-          color: '#3996ae',
+          color: getChartColor('primary'),
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: '#028ea0',
+            color: getChartColor('primary'),
             shadowBlur: 10,
             shadowColor: 'rgba(2, 142, 160, 0.3)'
           }
@@ -271,12 +272,12 @@ const initConversationToolChart = () => {
           return item ? item.tool_usage_count : 0
         }),
         itemStyle: {
-          color: '#00b8a9',
+          color: getChartColor('accent'),
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: '#028ea0',
+            color: getChartColor('primary'),
             shadowBlur: 10,
             shadowColor: 'rgba(2, 142, 160, 0.3)'
           }

@@ -86,6 +86,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
+import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
 
 // Props
 const props = defineProps({
@@ -197,12 +198,12 @@ const initToolsChart = () => {
       type: 'bar',
       data: data.map(item => item.count),
       itemStyle: {
-        color: '#3996ae',
+        color: getChartColor('primary'),
         borderRadius: [0, 4, 4, 0]
       },
       emphasis: {
         itemStyle: {
-          color: '#028ea0',
+          color: getChartColor('primary'),
           shadowBlur: 10,
           shadowColor: 'rgba(2, 142, 160, 0.3)'
         }
@@ -257,7 +258,7 @@ const initErrorChart = () => {
           shadowColor: 'rgba(0, 0, 0, 0.5)'
         }
       },
-      color: ['#3996ae', '#028ea0', '#00b8a9', '#f2c94c', '#eb5757', '#2f80ed', '#9b51e0', '#56ccf2', '#6fcf97', '#333333']
+      color: getColorPalette()
     }]
   }
 

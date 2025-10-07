@@ -82,7 +82,7 @@
 
   /* Chart Palette - 图表调色板 */
   --chart-palette-1: var(--chart-primary);
-  --chart-palette-2: #028ea0;            /* 浅一点的青蓝 */
+  --chart-palette-2: #11cbe3;            /* 浅一点的青蓝 */
   --chart-palette-3: #00b8a9;            /* 明亮青绿（邻近色） */
   --chart-palette-4: #f2c94c;            /* 柔和金黄（对比色） */
   --chart-palette-5: #eb5757;            /* 温暖红橙（强调） */
