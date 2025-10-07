@@ -3,22 +3,14 @@
     <!-- 工具调用概览 -->
     <div class="stats-overview">
       <a-row :gutter="16">
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="总调用次数"
             :value="toolStats?.total_calls || 0"
             :value-style="{ color: 'var(--chart-info)' }"
           />
         </a-col>
-        <a-col :span="6">
-          <a-statistic
-            title="成功调用"
-            :value="toolStats?.successful_calls || 0"
-            :value-style="{ color: 'var(--chart-success)' }"
-            suffix="次"
-          />
-        </a-col>
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="失败调用"
             :value="toolStats?.failed_calls || 0"
@@ -26,7 +18,7 @@
             suffix="次"
           />
         </a-col>
-        <a-col :span="6">
+        <a-col :span="8">
           <a-statistic
             title="成功率"
             :value="toolStats?.success_rate || 0"

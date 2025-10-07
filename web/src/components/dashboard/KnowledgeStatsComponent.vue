@@ -37,7 +37,7 @@
       <a-col :span="24">
         <div class="chart-container">
           <div class="chart-header">
-            <h4>数据库类型分布</h4>
+            <h4>类型分布</h4>
             <div class="legend" v-if="dbTypeLegend.length">
               <div class="legend-item" v-for="(item, idx) in dbTypeLegend" :key="item.name">
                 <span class="legend-color" :style="{ backgroundColor: getLegendColorByIndex(idx) }"></span>

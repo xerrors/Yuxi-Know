@@ -440,10 +440,10 @@ async def get_knowledge_stats(
                 kb_type = kb_info.get("kb_type", "unknown")
                 display_type = {
                     "lightrag": "LightRAG",
-                    "chroma": "Chroma向量库",
-                    "faiss": "FAISS索引",
-                    "milvus": "Milvus向量库",
-                    "qdrant": "Qdrant向量库",
+                    "chroma": "Chroma",
+                    "faiss": "FAISS",
+                    "milvus": "Milvus",
+                    "qdrant": "Qdrant",
                     "elasticsearch": "Elasticsearch",
                     "unknown": "未知类型",
                 }.get(kb_type.lower(), kb_type)

@@ -92,7 +92,7 @@
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'title'">
-                <a @click="handleViewDetail(record)" class="conversation-title">{{ record.title || '未命名对话' }}</a>
+                <a @click="handleViewDetail(record)" class="conversation-title" :class="{ 'loading': loadingDetail }">{{ record.title || '未命名对话' }}</a>
               </template>
               <template v-if="column.key === 'status'">
                 <a-tag :color="record.status === 'active' ? 'green' : 'red'" size="small">
@@ -103,7 +103,7 @@
                 <span class="time-text">{{ formatDate(record.updated_at) }}</span>
               </template>
               <template v-if="column.key === 'actions'">
-                <a-button type="link" size="small" @click="handleViewDetail(record)">
+                <a-button type="link" size="small" @click="handleViewDetail(record)" :loading="loadingDetail">
                   详情
                 </a-button>
               </template>
@@ -193,6 +193,7 @@ const filters = reactive({
 // 对话列表
 const conversations = ref([])
 const loading = ref(false)
+const loadingDetail = ref(false)
 
 // 反馈相关
 const feedbackModalVisible = ref(false)
@@ -394,25 +395,14 @@ const formatDate = (dateString) => {
 // 查看对话详情
 const handleViewDetail = async (record) => {
   try {
-    loading.value = true
+    loadingDetail.value = true
     const detail = await dashboardApi.getConversationDetail(record.thread_id)
-
-    console.log('========================================')
-    console.log('=== 数据库原始数据 ===')
-    console.log('========================================')
-    console.log('完整对话数据（JSON）:')
-    console.log(JSON.stringify(detail, null, 2))
-    console.log('\n')
-    console.log('完整对话数据（对象）:')
     console.log(detail)
-    console.log('========================================')
-
-    message.success('数据库原始数据已输出到控制台')
   } catch (error) {
     console.error('获取对话详情失败:', error)
     message.error('获取对话详情失败')
   } finally {
-    loading.value = false
+    loadingDetail.value = false
   }
 }
 

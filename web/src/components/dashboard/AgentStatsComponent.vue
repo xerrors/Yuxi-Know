@@ -37,7 +37,7 @@
       <!-- 对话数和工具调用数分布 -->
       <a-col :span="24">
         <div class="chart-container">
-          <h4>智能体对话数与工具调用数分布</h4>
+          <h4>对话/工具调用分布</h4>
           <div ref="conversationToolChartRef" class="chart"></div>
         </div>
       </a-col>
@@ -225,7 +225,7 @@ const initConversationToolChart = () => {
       axisLabel: {
         color: '#666',
         interval: 0,
-        rotate: 45
+        // rotate: 45
       }
     },
     yAxis: {
