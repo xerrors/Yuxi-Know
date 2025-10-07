@@ -605,7 +605,7 @@ async def get_dashboard_stats(
             db.query(func.count(Conversation.id)).filter(Conversation.status == "active").scalar() or 0
         )
         total_messages = db.query(func.count(Message.id)).scalar() or 0
-        total_users = db.query(func.count(distinct(Conversation.user_id))).scalar() or 0
+        total_users = db.query(func.count(User.id)).scalar() or 0
 
         # Feedback statistics
         total_feedbacks = db.query(func.count(MessageFeedback.id)).scalar() or 0
@@ -729,19 +729,22 @@ async def get_call_timeseries_stats(
 
         if time_range == "7hours":
             intervals = 7
-            start_time = now - timedelta(hours=intervals)
+            # 包含当前小时：从6小时前开始
+            start_time = now - timedelta(hours=intervals-1)
             time_format = "%Y-%m-%d %H:00"
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
             group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, '+8 hours'))
         elif time_range == "7weeks":
             intervals = 7
-            start_time = now - timedelta(weeks=intervals)
+            # 包含当前周：从6周前开始
+            start_time = now - timedelta(weeks=intervals-1)
             time_format = "%Y-W%U"
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
             group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, '+8 hours'))
         else:  # 7days (default)
             intervals = 7
-            start_time = now - timedelta(days=intervals)
+            # 包含当前天：从6天前开始
+            start_time = now - timedelta(days=intervals-1)
             time_format = "%Y-%m-%d"
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
             group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, '+8 hours'))
@@ -889,7 +892,8 @@ async def get_call_timeseries_stats(
 
         # 填充缺失的时间点（使用北京时间）
         data = []
-        current_time = start_time + timedelta(hours=8)  # 转换为北京时间
+        # 从start_time开始，转换为北京时间
+        current_time = start_time + timedelta(hours=8)
 
         if time_range == "7hours":
             delta = timedelta(hours=1)

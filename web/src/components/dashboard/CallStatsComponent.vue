@@ -185,8 +185,9 @@ const renderCallStatsChart = () => {
         let result = `${params[0].name}<br/>`
         params.forEach(param => {
           total += param.value
+          const truncatedName = truncateLegend(param.seriesName)
           result += `<span style=\"display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}\"></span>`
-          result += `${param.seriesName}: ${param.value}<br/>`
+          result += `${truncatedName}: ${param.value}<br/>`
         })
         const labelMap = { models: '模型调用', agents: '智能体调用', tokens: 'Token消耗', tools: '工具调用' }
         return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${total}</strong>`
@@ -269,6 +270,7 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   padding: 16px; /* 减少padding从20px到16px */
+  overflow-x: hidden; /* 防止横向滚动条 */
 }
 
 .call-stats-container {

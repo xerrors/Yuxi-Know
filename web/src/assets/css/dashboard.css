@@ -493,8 +493,8 @@
 .compact-stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 8px;
+  margin-bottom: 16px;
 
   .mini-stat-card {
     background-color: var(--gray-0);
@@ -629,7 +629,7 @@
 @media (max-width: 768px) {
   .compact-stats-grid {
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: 6px;
 
     .mini-stat-card {
       padding: 8px;
