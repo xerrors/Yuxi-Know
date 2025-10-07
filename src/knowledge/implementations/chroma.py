@@ -200,8 +200,23 @@ class ChromaKB(KnowledgeBase):
                     metadatas = [chunk["metadata"] for chunk in chunks]
                     ids = [chunk["id"] for chunk in chunks]
 
-                    # 插入到 ChromaDB
-                    collection.add(documents=documents, metadatas=metadatas, ids=ids)
+                    # 插入到 ChromaDB - 分批处理以避免超出 OpenAI 批次大小限制
+                    batch_size = 64  # OpenAI 的最大批次大小限制
+                    total_batches = (len(chunks) + batch_size - 1) // batch_size
+
+                    for i in range(0, len(chunks), batch_size):
+                        batch_documents = documents[i:i + batch_size]
+                        batch_metadatas = metadatas[i:i + batch_size]
+                        batch_ids = ids[i:i + batch_size]
+
+                        collection.add(
+                            documents=batch_documents,
+                            metadatas=batch_metadatas,
+                            ids=batch_ids
+                        )
+
+                        batch_num = i // batch_size + 1
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {filename}")
 
                 logger.info(f"Inserted {content_type} {item} into ChromaDB. Done.")
 
