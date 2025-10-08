@@ -421,9 +421,7 @@ async def get_knowledge_stats(
                 for _fid, finfo in files_meta.items():
                     file_ext = (finfo.get("file_type") or "").lower()
                     # 统一映射显示名
-                    display_name = file_type_mapping.get(
-                        file_ext, file_ext.upper() + "文件" if file_ext else "其他"
-                    )
+                    display_name = file_type_mapping.get(file_ext, file_ext.upper() + "文件" if file_ext else "其他")
                     files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
 
                     # 估算大小（如果路径存在且是本地文件）
@@ -721,33 +719,29 @@ async def get_call_timeseries_stats(
 ):
     """Get time series statistics for call analytics (Admin only)"""
     try:
-        from src.storage.db.models import Conversation, Message, ToolCall, ConversationStats
+        from src.storage.db.models import Conversation, Message, ToolCall
 
         # 计算时间范围（使用北京时间 UTC+8）
         now = datetime.utcnow()
-        beijing_time = now + timedelta(hours=8)  # 转换为北京时间
 
         if time_range == "7hours":
             intervals = 7
             # 包含当前小时：从6小时前开始
-            start_time = now - timedelta(hours=intervals-1)
-            time_format = "%Y-%m-%d %H:00"
+            start_time = now - timedelta(hours=intervals - 1)
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
-            group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, '+8 hours'))
+            group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, "+8 hours"))
         elif time_range == "7weeks":
             intervals = 7
             # 包含当前周：从6周前开始
-            start_time = now - timedelta(weeks=intervals-1)
-            time_format = "%Y-W%U"
+            start_time = now - timedelta(weeks=intervals - 1)
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
-            group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, '+8 hours'))
+            group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, "+8 hours"))
         else:  # 7days (default)
             intervals = 7
             # 包含当前天：从6天前开始
-            start_time = now - timedelta(days=intervals-1)
-            time_format = "%Y-%m-%d"
+            start_time = now - timedelta(days=intervals - 1)
             # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
-            group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, '+8 hours'))
+            group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, "+8 hours"))
 
         # 根据类型查询数据
         if type == "models":
@@ -757,7 +751,7 @@ async def get_call_timeseries_stats(
                 db.query(
                     group_format.label("date"),
                     func.count(Message.id).label("count"),
-                    func.json_extract(Message.extra_metadata, "$.response_metadata.model_name").label("category")
+                    func.json_extract(Message.extra_metadata, "$.response_metadata.model_name").label("category"),
                 )
                 .filter(Message.role == "assistant", Message.created_at >= start_time)
                 .filter(Message.extra_metadata.isnot(None))
@@ -768,17 +762,17 @@ async def get_call_timeseries_stats(
             # 智能体调用统计（基于对话数量，按智能体分组）
             # 为对话创建独立的时间格式化器
             if time_range == "7hours":
-                conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.created_at, '+8 hours'))
+                conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.created_at, "+8 hours"))
             elif time_range == "7weeks":
-                conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.created_at, '+8 hours'))
+                conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.created_at, "+8 hours"))
             else:  # 7days
-                conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.created_at, '+8 hours'))
+                conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.created_at, "+8 hours"))
 
             query = (
                 db.query(
                     conv_group_format.label("date"),
                     func.count(Conversation.id).label("count"),
-                    Conversation.agent_id.label("category")
+                    Conversation.agent_id.label("category"),
                 )
                 .filter(Conversation.created_at >= start_time)
                 .group_by(conv_group_format, Conversation.agent_id)
@@ -787,22 +781,20 @@ async def get_call_timeseries_stats(
         elif type == "tokens":
             # Token消耗统计（区分input/output tokens）
             # 先查询input tokens
-            from sqlalchemy import text, literal
+            from sqlalchemy import literal
 
             input_query = (
                 db.query(
                     group_format.label("date"),
                     func.sum(
-                        func.coalesce(
-                            func.json_extract(Message.extra_metadata, "$.usage_metadata.input_tokens"), 0
-                        )
+                        func.coalesce(func.json_extract(Message.extra_metadata, "$.usage_metadata.input_tokens"), 0)
                     ).label("count"),
-                    literal("input_tokens").label("category")
+                    literal("input_tokens").label("category"),
                 )
                 .filter(
                     Message.created_at >= start_time,
                     Message.extra_metadata.isnot(None),
-                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None)
+                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None),
                 )
                 .group_by(group_format)
                 .order_by(group_format)
@@ -813,16 +805,14 @@ async def get_call_timeseries_stats(
                 db.query(
                     group_format.label("date"),
                     func.sum(
-                        func.coalesce(
-                            func.json_extract(Message.extra_metadata, "$.usage_metadata.output_tokens"), 0
-                        )
+                        func.coalesce(func.json_extract(Message.extra_metadata, "$.usage_metadata.output_tokens"), 0)
                     ).label("count"),
-                    literal("output_tokens").label("category")
+                    literal("output_tokens").label("category"),
                 )
                 .filter(
                     Message.created_at >= start_time,
                     Message.extra_metadata.isnot(None),
-                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None)
+                    func.json_extract(Message.extra_metadata, "$.usage_metadata").isnot(None),
                 )
                 .group_by(group_format)
                 .order_by(group_format)
@@ -836,17 +826,17 @@ async def get_call_timeseries_stats(
             # 工具调用统计（按工具名称分组）
             # 为工具调用创建独立的时间格式化器
             if time_range == "7hours":
-                tool_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(ToolCall.created_at, '+8 hours'))
+                tool_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(ToolCall.created_at, "+8 hours"))
             elif time_range == "7weeks":
-                tool_group_format = func.strftime("%Y-%W", func.datetime(ToolCall.created_at, '+8 hours'))
+                tool_group_format = func.strftime("%Y-%W", func.datetime(ToolCall.created_at, "+8 hours"))
             else:  # 7days
-                tool_group_format = func.strftime("%Y-%m-%d", func.datetime(ToolCall.created_at, '+8 hours'))
+                tool_group_format = func.strftime("%Y-%m-%d", func.datetime(ToolCall.created_at, "+8 hours"))
 
             query = (
                 db.query(
                     tool_group_format.label("date"),
                     func.count(ToolCall.id).label("count"),
-                    ToolCall.tool_name.label("category")
+                    ToolCall.tool_name.label("category"),
                 )
                 .filter(ToolCall.created_at >= start_time)
                 .group_by(tool_group_format, ToolCall.tool_name)
@@ -862,7 +852,7 @@ async def get_call_timeseries_stats(
         # 首先收集所有类别
         categories = set()
         for result in results:
-            if hasattr(result, 'category') and result.category:
+            if hasattr(result, "category") and result.category:
                 categories.add(result.category)
 
         # 如果没有类别数据，提供默认类别
@@ -882,7 +872,7 @@ async def get_call_timeseries_stats(
         time_data = {}
         for result in results:
             date_key = result.date
-            category = getattr(result, 'category', 'unknown')
+            category = getattr(result, "category", "unknown")
             count = result.count
 
             if date_key not in time_data:
@@ -921,17 +911,14 @@ async def get_call_timeseries_stats(
                 if category not in day_data:
                     day_data[category] = 0
 
-            data.append({
-                "date": date_key,
-                "data": day_data,
-                "total": day_total
-            })
+            data.append({"date": date_key, "data": day_data, "total": day_total})
             current_time += delta
 
         # 计算统计指标
         if type == "tools":
             # 对于工具调用，显示所有时间的总数（与ToolStatsComponent保持一致）
             from src.storage.db.models import ToolCall
+
             total_count = db.query(func.count(ToolCall.id)).scalar() or 0
         else:
             # 其他类型使用时间序列数据的总和

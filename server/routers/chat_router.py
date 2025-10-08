@@ -183,11 +183,11 @@ async def chat_agent(
 
                     # 格式清洗
                     if finish_reason := msg_dict.get("response_metadata", {}).get("finish_reason"):
-                        if "tool_call" in finish_reason and len(finish_reason) > len("tool_call") :
+                        if "tool_call" in finish_reason and len(finish_reason) > len("tool_call"):
                             model_name = msg_dict.get("response_metadata", {}).get("model_name", "")
                             repeat_count = len(finish_reason) // len("tool_call")
                             msg_dict["response_metadata"]["finish_reason"] = "tool_call"
-                            msg_dict["response_metadata"]["model_name"] = model_name[:len(model_name)//repeat_count]
+                            msg_dict["response_metadata"]["model_name"] = model_name[: len(model_name) // repeat_count]
 
                     # 保存 AI 消息
                     ai_msg = conv_mgr.add_message(

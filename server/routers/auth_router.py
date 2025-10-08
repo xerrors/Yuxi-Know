@@ -272,9 +272,7 @@ async def update_profile(
 
         # 检查用户名是否已被其他用户使用
         existing_user = (
-            db.query(User)
-            .filter(User.username == profile_data.username, User.id != current_user.id)
-            .first()
+            db.query(User).filter(User.username == profile_data.username, User.id != current_user.id).first()
         )
         if existing_user:
             raise HTTPException(

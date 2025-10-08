@@ -205,15 +205,11 @@ class ChromaKB(KnowledgeBase):
                     total_batches = (len(chunks) + batch_size - 1) // batch_size
 
                     for i in range(0, len(chunks), batch_size):
-                        batch_documents = documents[i:i + batch_size]
-                        batch_metadatas = metadatas[i:i + batch_size]
-                        batch_ids = ids[i:i + batch_size]
+                        batch_documents = documents[i : i + batch_size]
+                        batch_metadatas = metadatas[i : i + batch_size]
+                        batch_ids = ids[i : i + batch_size]
 
-                        collection.add(
-                            documents=batch_documents,
-                            metadatas=batch_metadatas,
-                            ids=batch_ids
-                        )
+                        collection.add(documents=batch_documents, metadatas=batch_metadatas, ids=batch_ids)
 
                         batch_num = i // batch_size + 1
                         logger.info(f"Processed batch {batch_num}/{total_batches} for {filename}")
