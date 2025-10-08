@@ -75,7 +75,7 @@
               <a-button size="small" @click="loadConversations" :loading="loading">
                 刷新
               </a-button>
-              <a-button size="small" type="primary" @click="showFeedbackList">
+              <a-button size="small" @click="feedbackModal.show()">
                 反馈详情
               </a-button>
             </a-space>
@@ -113,56 +113,14 @@
       </div>
     </div>
 
-    <!-- 反馈列表模态框 -->
-    <a-modal
-      v-model:open="feedbackModalVisible"
-      title="用户反馈详情"
-      width="1000px"
-      :footer="null"
-    >
-      <a-space style="margin-bottom: 16px">
-        <a-radio-group v-model:value="feedbackFilter" @change="loadFeedbacks">
-          <a-radio-button value="all">全部</a-radio-button>
-          <a-radio-button value="like">点赞</a-radio-button>
-          <a-radio-button value="dislike">点踩</a-radio-button>
-        </a-radio-group>
-      </a-space>
-
-      <a-table
-        :columns="feedbackColumns"
-        :data-source="feedbacks"
-        :loading="loadingFeedbacks"
-        :pagination="feedbackPagination"
-        row-key="id"
-        size="small"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'rating'">
-            <a-tag :color="record.rating === 'like' ? 'green' : 'red'">
-              <template #icon>
-                <LikeOutlined v-if="record.rating === 'like'" />
-                <DislikeOutlined v-else />
-              </template>
-              {{ record.rating === 'like' ? '点赞' : '点踩' }}
-            </a-tag>
-          </template>
-          <template v-if="column.key === 'reason'">
-            <span v-if="record.reason">{{ record.reason }}</span>
-            <span v-else style="color: #999">-</span>
-          </template>
-          <template v-if="column.key === 'created_at'">
-            {{ formatFullDate(record.created_at) }}
-          </template>
-        </template>
-      </a-table>
-    </a-modal>
+    <!-- 反馈模态框 -->
+    <FeedbackModalComponent ref="feedbackModal" />
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { LikeOutlined, DislikeOutlined } from '@ant-design/icons-vue'
 import { dashboardApi } from '@/apis/dashboard_api'
 
 // 导入子组件
@@ -173,6 +131,10 @@ import KnowledgeStatsComponent from '@/components/dashboard/KnowledgeStatsCompon
 import AgentStatsComponent from '@/components/dashboard/AgentStatsComponent.vue'
 import CallStatsComponent from '@/components/dashboard/CallStatsComponent.vue'
 import StatsOverviewComponent from '@/components/dashboard/StatsOverviewComponent.vue'
+import FeedbackModalComponent from '@/components/dashboard/FeedbackModalComponent.vue'
+
+// 组件引用
+const feedbackModal = ref(null)
 
 // 统计数据 - 使用新的响应式结构
 const basicStats = ref({})
@@ -194,17 +156,6 @@ const filters = reactive({
 const conversations = ref([])
 const loading = ref(false)
 const loadingDetail = ref(false)
-
-// 反馈相关
-const feedbackModalVisible = ref(false)
-const feedbacks = ref([])
-const loadingFeedbacks = ref(false)
-const feedbackFilter = ref('all')
-const feedbackPagination = reactive({
-  current: 1,
-  pageSize: 20,
-  total: 0,
-})
 
 // 调用统计子组件引用
 const callStatsRef = ref(null)
@@ -259,49 +210,6 @@ const conversationColumns = [
     key: 'actions',
     width: '60px',
     align: 'center',
-  },
-]
-
-// 反馈表格列定义
-const feedbackColumns = [
-  {
-    title: '反馈类型',
-    key: 'rating',
-    width: '10%',
-  },
-  {
-    title: '用户ID',
-    dataIndex: 'user_id',
-    key: 'user_id',
-    width: '12%',
-  },
-  {
-    title: '智能体ID',
-    dataIndex: 'agent_id',
-    key: 'agent_id',
-    width: '12%',
-  },
-  {
-    title: '对话标题',
-    dataIndex: 'conversation_title',
-    key: 'conversation_title',
-    width: '15%',
-  },
-  {
-    title: '消息内容',
-    dataIndex: 'message_content',
-    key: 'message_content',
-    width: '25%',
-  },
-  {
-    title: '反馈原因',
-    key: 'reason',
-    width: '16%',
-  },
-  {
-    title: '时间',
-    key: 'created_at',
-    width: '10%',
   },
 ]
 
@@ -419,44 +327,6 @@ const handleTableChange = (pag) => {
   loadConversations()
 }
 
-// 格式化完整日期
-const formatFullDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-// 显示反馈列表
-const showFeedbackList = () => {
-  feedbackModalVisible.value = true
-  loadFeedbacks()
-}
-
-// 加载反馈列表
-const loadFeedbacks = async () => {
-  loadingFeedbacks.value = true
-  try {
-    const params = {
-      rating: feedbackFilter.value === 'all' ? undefined : feedbackFilter.value,
-      limit: feedbackPagination.pageSize,
-      offset: (feedbackPagination.current - 1) * feedbackPagination.pageSize,
-    }
-
-    const response = await dashboardApi.getFeedbacks(params)
-    feedbacks.value = response
-  } catch (error) {
-    console.error('加载反馈列表失败:', error)
-    message.error('加载反馈列表失败')
-  } finally {
-    loadingFeedbacks.value = false
-  }
-}
 
 // 清理函数 - 清理所有子组件的图表实例
 const cleanupCharts = () => {

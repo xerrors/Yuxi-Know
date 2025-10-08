@@ -18,6 +18,12 @@
         <div class="header-item">
           <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
         </div>
+        <div class="header-item" v-if="selectedAgentId">
+          <a-button class="header-button" @click="feedbackModal.show()">
+            <template #icon><MessageOutlined /></template>
+            反馈详情
+          </a-button>
+        </div>
         <div class="header-item">
           <a-button
             class="header-button"
@@ -79,6 +85,9 @@
         :isOpen="state.isConfigSidebarOpen"
         @close="() => state.isConfigSidebarOpen = false"
       />
+
+      <!-- 反馈模态框 -->
+      <FeedbackModalComponent ref="feedbackModal" :agent-id="selectedAgentId" />
     </div>
   </div>
 </template>
@@ -91,19 +100,21 @@ import {
   LinkOutlined,
   StarOutlined,
   StarFilled,
+  MessageOutlined,
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { Bot } from 'lucide-vue-next';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
+import FeedbackModalComponent from '@/components/dashboard/FeedbackModalComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { useAgentStore } from '@/stores/agent';
 import { useInfoStore } from '@/stores/info';
 
 import { storeToRefs } from 'pinia';
 
-// 路由和stores
-const router = useRouter();
+// 组件引用
+const feedbackModal = ref(null)
 const userStore = useUserStore();
 const agentStore = useAgentStore();
 const infoStore = useInfoStore();

@@ -638,6 +638,8 @@ class FeedbackListItem(BaseModel):
 
     id: int
     user_id: str
+    username: str | None
+    avatar: str | None
     rating: str
     reason: str | None
     created_at: str
@@ -649,36 +651,48 @@ class FeedbackListItem(BaseModel):
 @dashboard.get("/feedbacks", response_model=list[FeedbackListItem])
 async def get_all_feedbacks(
     rating: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    agent_id: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get all feedback records (Admin only)"""
-    from src.storage.db.models import MessageFeedback, Message, Conversation
+    from src.storage.db.models import MessageFeedback, Message, Conversation, User
 
     try:
-        # Build query with joins
+        # Build query with joins including User table
+        # Try both User.id and User.user_id as MessageFeedback.user_id might be stored as either
         query = (
-            db.query(MessageFeedback, Message, Conversation)
+            db.query(MessageFeedback, Message, Conversation, User)
             .join(Message, MessageFeedback.message_id == Message.id)
             .join(Conversation, Message.conversation_id == Conversation.id)
+            .outerjoin(User,
+                (MessageFeedback.user_id == User.id) |
+                (MessageFeedback.user_id == User.user_id)
+            )
         )
 
         # Apply filters
         if rating and rating in ["like", "dislike"]:
             query = query.filter(MessageFeedback.rating == rating)
+        if agent_id:
+            query = query.filter(Conversation.agent_id == agent_id)
 
-        # Order and paginate
-        query = query.order_by(MessageFeedback.created_at.desc()).limit(limit).offset(offset)
+        # Order by creation time (most recent first)
+        query = query.order_by(MessageFeedback.created_at.desc())
 
         results = query.all()
+
+        # Debug logging (privacy-safe)
+        logger.info(f"Found {len(results)} feedback records")
+        # Removed sensitive user data from logs for privacy compliance
 
         return [
             {
                 "id": feedback.id,
                 "message_id": feedback.message_id,
                 "user_id": feedback.user_id,
+                "username": user.username if user else None,
+                "avatar": user.avatar if user else None,
                 "rating": feedback.rating,
                 "reason": feedback.reason,
                 "created_at": feedback.created_at.isoformat(),
@@ -686,7 +700,7 @@ async def get_all_feedbacks(
                 "conversation_title": conversation.title,
                 "agent_id": conversation.agent_id,
             }
-            for feedback, message, conversation in results
+            for feedback, message, conversation, user in results
         ]
     except Exception as e:
         logger.error(f"Error getting feedbacks: {e}")
