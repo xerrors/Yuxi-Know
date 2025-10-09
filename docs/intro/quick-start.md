@@ -293,6 +293,7 @@ vllm serve BAAI/bge-reranker-v2-m3 \
     <tr>
       <td><img src="https://github.com/user-attachments/assets/6ad3cc6a-3816-4545-b074-6eeb814d8124" alt="知识图谱可视化"></td>
       <td><img src="https://github.com/user-attachments/assets/6cc3c3a6-b7c2-4dc3-9678-b97de7835959" alt="知识库可视化"></td>
+      <td><img src="/images/neo4j_browser.png"></td>
     </tr>
   </tbody>
 </table>
@@ -764,23 +765,3 @@ docker restart api-dev
 - 添加必要的测试用例
 - 更新相关文档
 - 确保所有测试通过
-
-## 项目信息
-
-### Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=xerrors/Yuxi-Know)](https://star-history.com/#xerrors/Yuxi-Know)
-
-### 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
----
-
-<div align="center">
-
-**如果这个项目对您有帮助，请不要忘记给我们一个 ⭐️**
-
-[报告问题](https://github.com/xerrors/Yuxi-Know/issues) | [功能请求](https://github.com/xerrors/Yuxi-Know/issues) | [讨论](https://github.com/xerrors/Yuxi-Know/discussions)
-
-</div>

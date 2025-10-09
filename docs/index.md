@@ -6,6 +6,9 @@ hero:
   name: "Yuxi-Know"
   text: "智能知识库与知识图谱问答系统"
   tagline: 基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建的智能问答平台
+  image:
+    src: /bb.png
+    alt: VitePress
   actions:
     - theme: brand
       text: 快速开始
@@ -29,3 +32,10 @@ features:
     details: 完整的测试套件、API 文档、监控日志，适合企业级部署和使用
 ---
 
+
+
+## 轻松部署
+
+```sh
+docker compose up --build -d
+```
