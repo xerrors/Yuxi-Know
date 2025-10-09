@@ -1,9 +1,17 @@
 import { defineConfig } from 'vitepress'
+import markdownItTaskCheckbox from 'markdown-it-task-checkbox'
+
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
+  lang: 'zh-CN',
   title: "Yuxi-Know Docs",
   description: "文档中心",
+  markdown: {
+    config: (md) => {
+      md.use(markdownItTaskCheckbox)
+    }
+  },
   themeConfig: {
     // https://vitepress.dev/reference/default-theme-config
     nav: [
@@ -30,5 +38,5 @@ export default defineConfig({
     socialLinks: [
       { icon: 'github', link: 'https://github.com/xerrors/Yuxi-Know' }
     ]
-  }
+  },
 })

@@ -5,6 +5,7 @@
     "docs:preview": "vitepress preview docs"
   },
   "dependencies": {
+    "markdown-it-task-checkbox": "^1.0.6",
     "vitepress": "^1.6.4"
   }
 }
