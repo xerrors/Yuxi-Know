@@ -7,6 +7,7 @@ export default defineConfig({
   lang: 'zh-CN',
   title: "Yuxi-Know Docs",
   description: "文档中心",
+  base: '/Yuxi-Know/',
   markdown: {
     config: (md) => {
       md.use(markdownItTaskCheckbox)
