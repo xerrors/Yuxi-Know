@@ -42,13 +42,17 @@
 
 ### 1. 编辑模型配置文件
 
-**方式一：修改公共配置**
+**方式一：修改默认配置**
 编辑 `src/config/static/models.yaml` 文件
 
-**方式二：创建私有配置（推荐）**
-复制模板并创建私有配置：
+**方式二：使用覆盖配置**
+创建自定义配置文件并通过环境变量指定：
 ```bash
-cp src/config/static/models.yaml src/config/static/models.private.yaml
+# 创建自定义配置文件
+cp src/config/static/models.yaml /path/to/your/custom-models.yaml
+
+# 设置环境变量
+export OVERRIDE_DEFAULT_MODELS_CONFIG_WITH=/path/to/your/custom-models.yaml
 ```
 
 ### 2. 添加模型配置
@@ -60,20 +64,17 @@ custom-provider-name:
   name: custom-provider-name
   default: custom-model-name
   base_url: "https://api.your-provider.com/v1"
-  env:
-    - CUSTOM_API_KEY_ENV_NAME
+  env: CUSTOM_API_KEY_ENV_NAME  # 注意：现在是单个环境变量
   models:
     - supported-model-name
     - another-model-name
-
 
 # 本地 Ollama 服务
 local-ollama:
   name: Local Ollama
   base_url: "http://localhost:11434/v1"
   default: llama3.2
-  env:
-    - NO_API_KEY
+  env: NO_API_KEY  # 对于不需要API Key的服务，使用NO_API_KEY
   models:
     - llama3.2
     - qwen2.5
@@ -83,8 +84,7 @@ local-vllm:
   name: Local vLLM
   base_url: "http://localhost:8000/v1"
   default: Qwen/Qwen2.5-7B-Instruct
-  env:
-    - NO_API_KEY
+  env: NO_API_KEY
   models:
     - Qwen/Qwen2.5-7B-Instruct
     - Qwen/Qwen2.5-14B-Instruct
@@ -113,7 +113,7 @@ docker compose restart api-dev
 
 #### 1. 配置模型信息
 
-在 `src/config/static/models.yaml` 或 `src/config/static/models.private.yaml` 中添加配置：
+在 `src/config/static/models.yaml` 中或通过覆盖配置文件添加配置：
 
 ```yaml
 EMBED_MODEL_INFO:

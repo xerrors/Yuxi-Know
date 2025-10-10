@@ -79,14 +79,6 @@ class OpenModel(OpenAIBase):
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
-class CustomModel(OpenAIBase):
-    def __init__(self, model_info):
-        model_name = model_info["name"]
-        api_key = model_info.get("api_key") or "custom_model"
-        base_url = get_docker_safe_url(model_info["api_base"])
-        logger.info(f"> Custom model: {model_name}, base_url: {base_url}")
-
-        super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
 class GeneralResponse:
@@ -106,14 +98,10 @@ def select_model(model_provider, model_name=None):
     if model_provider == "openai":
         return OpenModel(model_name)
 
-    if model_provider == "custom":
-        model_info = get_custom_model(model_name)
-        return CustomModel(model_info)
-
     # 其他模型，默认使用OpenAIBase
     try:
         model = OpenAIBase(
-            api_key=os.getenv(model_info["env"][0]),
+            api_key=os.getenv(model_info["env"]),
             base_url=model_info["base_url"],
             model_name=model_name,
         )
@@ -122,13 +110,6 @@ def select_model(model_provider, model_name=None):
         raise ValueError(f"Model provider {model_provider} load failed, {e} \n {traceback.format_exc()}")
 
 
-def get_custom_model(model_id):
-    """return model_info"""
-    assert config.custom_models is not None, "custom_models is not set"
-    modle_info = next((x for x in config.custom_models if x["custom_id"] == model_id), None)
-    if modle_info is None:
-        raise ValueError(f"Model {model_id} not found in custom models")
-    return modle_info
 
 
 async def test_chat_model_status(provider: str, model_name: str) -> dict:
@@ -178,18 +159,11 @@ async def test_all_chat_models_status() -> dict:
 
     # 获取所有可用的模型
     for provider, provider_info in config.model_names.items():
-        if provider == "custom":
-            # 处理自定义模型
-            for custom_model in config.custom_models:
-                model_id = f"custom/{custom_model['custom_id']}"
-                status = await test_chat_model_status("custom", custom_model["custom_id"])
-                results[model_id] = status
-        else:
-            # 处理普通模型
-            for model_name in provider_info.models:
-                model_id = f"{provider}/{model_name}"
-                status = await test_chat_model_status(provider, model_name)
-                results[model_id] = status
+        # 处理普通模型
+        for model_name in provider_info.models:
+            model_id = f"{provider}/{model_name}"
+            status = await test_chat_model_status(provider, model_name)
+            results[model_id] = status
 
     available_count = len([m for m in results.values() if m["status"] == "available"])
 

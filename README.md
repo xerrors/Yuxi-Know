@@ -141,7 +141,7 @@ export HTTPS_PROXY=http://IP:PORT
 <details>
   <summary>自定义模型供应商</summary>
 
-在 [src/config/static/models.yaml](src/config/static/models.yaml) 中添加新的模型配置，然后在 `.env` 文件中添加对应的环境变量，最后重新部署项目即可。
+在 [src/config/static/models.yaml](src/config/static/models.yaml) 中添加新的模型配置，然后在 `.env` 文件中添加对应的环境变量，最后重新部署项目即可。如需使用自定义配置文件，可设置环境变量 `OVERRIDE_DEFAULT_MODELS_CONFIG_WITH` 指向该文件。
 
 **示例**：
 
@@ -150,8 +150,7 @@ custom-provider-name-here:
   name: custom-provider-name-here
   default: custom-model-name-here
   base_url: "https://api.your-provider.com/v1"
-  env:
-    - CUSTOM_API_KEY_ENV_NAME  # e.g. OPENAI_API_KEY
+  env: CUSTOM_API_KEY_ENV_NAME  # e.g. OPENAI_API_KEY
   models:
     - supported-model-name-here
 ```
@@ -159,7 +158,7 @@ custom-provider-name-here:
 
 ### 自定义嵌入模型和重排序模型
 
-需要注意的是，从 v0.2 版本开始，项目将模型部署和项目本身做了完全解耦，因此无论是 Embedding 还是 Reranker，如果需要使用本地模型，都需要使用 vllm /ollama 转换为 api 服务后，在 src/config/static/models.yaml 或者 src/config/static/models.private.yaml （优先）中 添加类似下面的信息：
+需要注意的是，从 v0.2 版本开始，项目将模型部署和项目本身做了完全解耦。因此无论是 Embedding 还是 Reranker，如果需要使用本地模型，都需要使用 vllm /ollama 转换为 API 服务后，在 [src/config/static/models.yaml](src/config/static/models.yaml)（或环境变量 `OVERRIDE_DEFAULT_MODELS_CONFIG_WITH` 指向的文件）中添加类似下面的信息：
 
 ```yaml
 EMBED_MODEL_INFO:

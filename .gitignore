@@ -49,6 +49,7 @@ saves_dev
 notebooks
 graphrag
 docker/volumes
+docs/vibe
 .cursorrules
 
 /models

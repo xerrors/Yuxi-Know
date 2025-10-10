@@ -37,11 +37,6 @@
             {{ model }}
           </a-menu-item>
         </a-menu-item-group>
-        <a-menu-item-group v-if="customModels.length > 0" title="自定义模型">
-          <a-menu-item v-for="(model, idx) in customModels" :key="`custom-${idx}`" @click="handleSelectModel('custom', model.custom_id)">
-            custom/{{ model.custom_id }}
-          </a-menu-item>
-        </a-menu-item-group>
       </a-menu>
     </template>
   </a-dropdown>
@@ -75,7 +70,6 @@ const state = reactive({
 // 从configStore中获取所需数据
 const modelNames = computed(() => configStore.config?.model_names)
 const modelStatus = computed(() => configStore.config?.model_provider_status)
-const customModels = computed(() => configStore.config?.custom_models || [])
 
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {

@@ -6,8 +6,6 @@ import yaml
 
 from src.utils.logging_config import logger
 
-DEFAULT_MOCK_API = "this_is_mock_api_key_in_frontend"
-
 
 class SimpleConfig(dict):
     def __key(self, key):
@@ -44,6 +42,7 @@ class Config(SimpleConfig):
         self.filename = str(Path(f"{self.save_dir}/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
+        self._models_config_path: Path | None = None
         self._update_models_from_file()
 
         ### >>> 默认配置
@@ -100,40 +99,42 @@ class Config(SimpleConfig):
 
     def _update_models_from_file(self):
         """
-        从 models.yaml 和 models.private.yaml 中更新 MODEL_NAMES
+        从 models.yaml 或覆盖配置文件中更新 MODEL_NAMES
         """
+        # 检查是否设置了覆盖配置文件的环境变量
+        override_config_path = os.getenv("OVERRIDE_DEFAULT_MODELS_CONFIG_WITH")
 
-        with open(Path("src/config/static/models.yaml"), encoding="utf-8") as f:
+        if override_config_path and os.path.exists(override_config_path):
+            config_file = Path(override_config_path)
+            logger.info(f"Using override models config from: {override_config_path}")
+        else:
+            config_file = Path("src/config/static/models.yaml")
+            logger.info("Using default models config")
+
+        self._models_config_path = config_file
+
+        with open(self._models_config_path, encoding="utf-8") as f:
             _models = yaml.safe_load(f)
 
-        # 尝试打开一个 models.private.yaml 文件，用来覆盖 models.yaml 中的配置
-        # 兼容性测试（历史遗留问题）
-        exist_yml = Path("src/config/static/models.private.yml").exists()
-        exist_yaml = Path("src/config/static/models.private.yaml").exists()
-        if exist_yml and not exist_yaml:
-            os.rename("src/config/static/models.private.yml", "src/config/static/models.private.yaml")
-
-        try:
-            with open(Path("src/config/static/models.private.yaml"), encoding="utf-8") as f:
-                _models_private = yaml.safe_load(f)
-        except FileNotFoundError:
-            _models_private = {}
-
-        # 修改为按照子元素合并
-        # _models = {**_models, **_models_private}
-
-        self.model_names = {**_models["MODEL_NAMES"], **_models_private.get("MODEL_NAMES", {})}
-        self.embed_model_names = {**_models["EMBED_MODEL_INFO"], **_models_private.get("EMBED_MODEL_INFO", {})}
-        self.reranker_names = {**_models["RERANKER_LIST"], **_models_private.get("RERANKER_LIST", {})}
+        self.model_names = _models["MODEL_NAMES"]
+        self.embed_model_names = _models["EMBED_MODEL_INFO"]
+        self.reranker_names = _models["RERANKER_LIST"]
 
     def _save_models_to_file(self):
-        _models = {
+        """
+        将当前模型配置写回模型配置文件
+        """
+        if self._models_config_path is None:
+            self._models_config_path = Path("src/config/static/models.yaml")
+
+        models_payload = {
             "MODEL_NAMES": self.model_names,
             "EMBED_MODEL_INFO": self.embed_model_names,
             "RERANKER_LIST": self.reranker_names,
         }
-        with open(Path("src/config/static/models.private.yaml"), "w", encoding="utf-8") as f:
-            yaml.dump(_models, f, indent=2, allow_unicode=True)
+
+        with open(self._models_config_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(models_payload, f, indent=2, allow_unicode=True, sort_keys=False)
 
     def handle_self(self):
         """
@@ -156,19 +157,21 @@ class Config(SimpleConfig):
                 )
 
         # 检查模型提供商的环境变量
-        conds = {}
         self.model_provider_status = {}
         for provider in self.model_names:
-            conds[provider] = self.model_names[provider]["env"]
-            conds_bool = [bool(os.getenv(_k)) for _k in conds[provider]]
-            self.model_provider_status[provider] = all(conds_bool)
+            env_var = self.model_names[provider]["env"]
+            # 如果环境变量名为 NO_API_KEY，则认为总是可用
+            if env_var == "NO_API_KEY":
+                self.model_provider_status[provider] = True
+            else:
+                self.model_provider_status[provider] = bool(os.getenv(env_var))
 
         if os.getenv("TAVILY_API_KEY"):
             self.enable_web_search = True
 
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
         assert len(self.valuable_model_provider) > 0, (
-            f"No model provider available, please check your `.env` file. API_KEY_LIST: {conds}"
+            "No model provider available, please check your `.env` file."
         )
 
     def load(self):
@@ -218,23 +221,6 @@ class Config(SimpleConfig):
     def dump_config(self):
         return json.loads(str(self))
 
-    def compare_custom_models(self, value):
-        """
-        比较 custom_models 中的 api_key，如果输入的 api_key 与当前的 api_key 相同，则不修改
-        如果输入的 api_key 为 DEFAULT_MOCK_API，则使用当前的 api_key
-        """
-        current_models_dict = {model["custom_id"]: model.get("api_key") for model in self.get("custom_models", [])}
-
-        for i, model in enumerate(value):
-            input_custom_id = model.get("custom_id")
-            input_api_key = model.get("api_key")
-
-            if input_custom_id in current_models_dict:
-                current_api_key = current_models_dict[input_custom_id]
-                if input_api_key == DEFAULT_MOCK_API or input_api_key == current_api_key:
-                    value[i]["api_key"] = current_api_key
-
-        return value
 
 
 config = Config()

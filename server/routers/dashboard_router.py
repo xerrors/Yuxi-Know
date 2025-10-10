@@ -665,10 +665,7 @@ async def get_all_feedbacks(
             db.query(MessageFeedback, Message, Conversation, User)
             .join(Message, MessageFeedback.message_id == Message.id)
             .join(Conversation, Message.conversation_id == Conversation.id)
-            .outerjoin(User,
-                (MessageFeedback.user_id == User.id) |
-                (MessageFeedback.user_id == User.user_id)
-            )
+            .outerjoin(User, (MessageFeedback.user_id == User.id) | (MessageFeedback.user_id == User.user_id))
         )
 
         # Apply filters

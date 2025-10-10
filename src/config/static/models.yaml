@@ -1,8 +1,8 @@
 ####################################################
 #
-#  不要直接修改这个里面的文件，可能会有被覆盖的风险，
-#  建议 复制一份 在 models.private.yaml 中修改，
-#  会自动加载
+#  默认模型配置文件。可以直接修改该文件更新模型。
+#  如需自定义路径，可通过环境变量
+#  OVERRIDE_DEFAULT_MODELS_CONFIG_WITH 指向新的 YAML。
 #
 #####################################################
 
@@ -12,8 +12,7 @@ MODEL_NAMES:
     url: https://platform.openai.com/docs/models
     base_url: https://api.openai.com/v1
     default: gpt-4o-mini
-    env:
-      - OPENAI_API_KEY
+    env: OPENAI_API_KEY
     models:
       - gpt-4
       - gpt-4o
@@ -24,8 +23,7 @@ MODEL_NAMES:
     url: https://platform.deepseek.com/api-docs/zh-cn/pricing
     base_url: https://api.deepseek.com/v1
     default: deepseek-chat
-    env:
-      - DEEPSEEK_API_KEY
+    env: DEEPSEEK_API_KEY
     models:
       - deepseek-chat
       - deepseek-reasoner
@@ -35,8 +33,7 @@ MODEL_NAMES:
     url: https://open.bigmodel.cn/dev/api
     base_url: https://open.bigmodel.cn/api/paas/v4/
     default: glm-4.5-flash
-    env:
-      - ZHIPUAI_API_KEY
+    env: ZHIPUAI_API_KEY
     models:
       - glm-4.5
       - glm-4.5-air
@@ -47,8 +44,7 @@ MODEL_NAMES:
     url: https://cloud.siliconflow.cn/models
     base_url: https://api.siliconflow.cn/v1
     default: zai-org/GLM-4.5
-    env:
-      - SILICONFLOW_API_KEY
+    env: SILICONFLOW_API_KEY
     models:
       - Qwen/Qwen3-235B-A22B-Thinking-2507
       - Qwen/Qwen3-235B-A22B-Instruct-2507
@@ -60,8 +56,7 @@ MODEL_NAMES:
     url: https://api.together.ai/models
     base_url: https://api.together.xyz/v1/
     default: meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
-    env:
-      - TOGETHER_API_KEY
+    env: TOGETHER_API_KEY
     models:
       - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
 
@@ -70,8 +65,7 @@ MODEL_NAMES:
     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
     default: qwen-max-latest
-    env:
-      - DASHSCOPE_API_KEY
+    env: DASHSCOPE_API_KEY
     models:
       - qwen-max-latest
       - qwen-plus-latest
@@ -84,8 +78,7 @@ MODEL_NAMES:
     url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
     base_url: https://ark.cn-beijing.volces.com/api/v3
     default: doubao-seed-1-6-250615
-    env:
-      - ARK_API_KEY
+    env: ARK_API_KEY
     models:
       - doubao-seed-1-6-250615
       - doubao-seed-1-6-thinking-250715
@@ -96,8 +89,7 @@ MODEL_NAMES:
     url: https://openrouter.ai/models
     base_url: https://openrouter.ai/api/v1
     default: openai/gpt-4o
-    env:
-      - OPENROUTER_API_KEY
+    env: OPENROUTER_API_KEY
     models:
       - openai/gpt-4o
       - x-ai/grok-4

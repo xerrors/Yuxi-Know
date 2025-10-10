@@ -1,38 +1,7 @@
 <template>
   <div>
-    <a-alert message="自定义模型将在 0.3的稳定版中移除，届时只能通过修改 models.yaml 来添加模型和供应商。" type="warning" />
+    <a-alert message="自定义模型在 0.3.x 的稳定版中移除，只能通过修改 models.yaml 来添加模型和供应商。" type="warning" />
     <br>
-    <div class="model-provider-card custom-models-card">
-      <div class="card-header">
-        <h3>自定义模型</h3>
-      </div>
-      <div class="card-body">
-        <div class="custom-model" v-for="(item, key) in configStore.config.custom_models" :key="item.custom_id">
-          <div class="card-models__header">
-            <div class="name" :title="item.name">{{ item.name }}</div>
-            <div class="action">
-              <a-popconfirm
-                title="确认删除该模型?"
-                @confirm="handleDeleteCustomModel(item.custom_id)"
-                okText="确认删除"
-                cancelText="取消"
-                ok-type="danger"
-              >
-                <a-button type="text" @click.stop><DeleteOutlined /></a-button>
-              </a-popconfirm>
-              <a-button type="text" @click.stop="prepareToEditCustomModel(item)"><EditOutlined /></a-button>
-            </div>
-          </div>
-          <div class="api_base">{{ item.api_base }}</div>
-        </div>
-        <div class="card-models custom-model add-model" @click="prepareToAddCustomModel">
-          <div class="card-models__header">
-            <div class="name"> + 添加模型</div>
-          </div>
-          <div class="api_base">添加兼容 OpenAI 的模型</div>
-        </div>
-      </div>
-    </div>
     <div class="model-provider-card configured-provider" v-for="(item, key) in modelKeys" :key="key">
       <div class="card-header" @click="toggleExpand(item)">
         <div :class="{'model-icon': true, 'available': modelStatus[item]}">
@@ -87,42 +56,11 @@
           <SettingOutlined />
         </a-button>
         <div class="missing-keys">
-          需配置<span v-for="(key, idx) in modelNames[item].env" :key="idx">{{ key }}</span>
+          需配置<span>{{ modelNames[item].env }}</span>
         </div>
       </div>
     </div>
 
-    <!-- 添加和编辑自定义模型的弹窗 -->
-    <a-modal
-      class="custom-model-modal"
-      v-model:open="customModel.visible"
-      :title="customModel.modelTitle"
-      @ok="handleAddOrEditCustomModel"
-      @cancel="handleCancelCustomModel"
-      :okText="'确认'"
-      :cancelText="'取消'"
-      :okButtonProps="{disabled: !customModel.name || !customModel.api_base}"
-      :ok-type="'primary'"
-    >
-      <p>添加的模型是兼容 OpenAI 的模型，比如 vllm，Ollama。</p>
-      <a-form :model="customModel" layout="vertical">
-        <a-form-item label="模型ID" v-if="customModel.edit_type == 'edit'" name="custom_id">
-          <p class="form-item-description">调用的模型的ID</p>
-          <a-input v-model:value="customModel.custom_id" disabled/>
-        </a-form-item>
-        <a-form-item label="模型名称" name="name" :rules="[{ required: true, message: '请输入模型名称' }]">
-          <p class="form-item-description">调用的模型的名称</p>
-          <a-input v-model:value="customModel.name" :disabled="customModel.edit_type == 'edit'"/>
-        </a-form-item>
-        <a-form-item label="API Base" name="api_base" :rules="[{ required: true, message: '请输入API Base' }]">
-          <p class="form-item-description">比如 <code>http://localhost:11434/v1</code></p>
-          <a-input v-model:value="customModel.api_base" />
-        </a-form-item>
-        <a-form-item label="API KEY" name="api_key">
-          <a-input-password v-model:value="customModel.api_key" :visibilityToggle="true" autocomplete="new-password"/>
-        </a-form-item>
-      </a-form>
-    </a-modal>
 
     <!-- 模型提供商配置弹窗 -->
     <a-modal
@@ -180,7 +118,7 @@
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
             <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
             <div v-else>
-              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如果需要添加模型，请在 src/config/static/models.private.yaml 中添加。（如没有此文件，则需要手动创建一个）" />
+              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如需添加模型，请编辑 src/config/static/models.yaml 或通过环境变量 OVERRIDE_DEFAULT_MODELS_CONFIG_WITH 指向的文件。" />
               <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%; margin-top: 16px;">
             </div>
           </div>
@@ -194,8 +132,6 @@
 import { computed, reactive, watch, h } from 'vue'
 import { message } from 'ant-design-vue';
 import {
-  DeleteOutlined,
-  EditOutlined,
   InfoCircleOutlined,
   SettingOutlined,
   DownCircleOutlined,
@@ -212,16 +148,6 @@ const configStore = useConfigStore();
 const modelNames = computed(() => configStore.config?.model_names);
 const modelStatus = computed(() => configStore.config?.model_provider_status);
 
-// 自定义模型相关状态
-const customModel = reactive({
-  modelTitle: '添加自定义模型',
-  visible: false,
-  custom_id: '',
-  name: '',
-  api_key: '',
-  api_base: '',
-  edit_type: 'add',
-});
 
 // 提供商配置相关状态
 const providerConfig = reactive({
@@ -257,86 +183,6 @@ watch(modelKeys, (newKeys) => {
   });
 }, { immediate: true });
 
-// 生成随机哈希值
-const generateRandomHash = (length) => {
-  let chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let hash = '';
-  for (let i = 0; i < length; i++) {
-    hash += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return hash;
-};
-
-// 处理自定义模型删除
-const handleDeleteCustomModel = (customId) => {
-  const updatedModels = configStore.config.custom_models.filter(item => item.custom_id !== customId);
-  configStore.setConfigValue('custom_models', updatedModels);
-};
-
-// 准备编辑自定义模型
-const prepareToEditCustomModel = (item) => {
-  customModel.modelTitle = '编辑自定义模型';
-  customModel.custom_id = item.custom_id;
-  customModel.visible = true;
-  customModel.edit_type = 'edit';
-  customModel.name = item.name;
-  customModel.api_key = item.api_key;
-  customModel.api_base = item.api_base;
-};
-
-// 准备添加自定义模型
-const prepareToAddCustomModel = () => {
-  customModel.modelTitle = '添加自定义模型';
-  customModel.edit_type = 'add';
-  customModel.visible = true;
-  clearCustomModel();
-};
-
-// 清除自定义模型表单
-const clearCustomModel = () => {
-  customModel.custom_id = '';
-  customModel.name = '';
-  customModel.api_key = '';
-  customModel.api_base = '';
-};
-
-// 取消自定义模型添加/编辑
-const handleCancelCustomModel = () => {
-  clearCustomModel();
-  customModel.visible = false;
-};
-
-// 添加或编辑自定义模型
-const handleAddOrEditCustomModel = async () => {
-  if (!customModel.name || !customModel.api_base) {
-    message.error('请填写完整的模型名称和API Base信息。');
-    return;
-  }
-
-  let custom_models = configStore.config.custom_models || [];
-
-  const model_info = {
-    custom_id: customModel.custom_id || `${customModel.name}-${generateRandomHash(4)}`,
-    name: customModel.name,
-    api_key: customModel.api_key,
-    api_base: customModel.api_base,
-  };
-
-  if (customModel.edit_type === 'add') {
-    if (custom_models.find(item => item.custom_id === customModel.custom_id)) {
-      message.error('模型ID已存在');
-      return;
-    }
-    custom_models.push(model_info);
-  } else {
-    // 如果 custom_id 相同，则更新
-    custom_models = custom_models.map(item => item.custom_id === customModel.custom_id ? model_info : item);
-  }
-
-  customModel.visible = false;
-  await configStore.setConfigValue('custom_models', custom_models);
-  message.success(customModel.edit_type === 'add' ? '模型添加成功' : '模型修改成功');
-};
 
 // 切换展开状态
 const toggleExpand = (item) => {

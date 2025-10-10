@@ -3,25 +3,8 @@
 
 Yuxi-Know 是一个基于知识图谱和向量数据库的智能知识库系统。它通过 FastAPI 提供后端 API，使用 Vue.js 构建前端界面，并利用 Docker Compose 进行整体服务的编排和管理。
 
+文档中心在 `docs` 文件夹下面。
 
-```
-Yuxi-Know/
-├── docker/              # Docker 配置文件
-├── scripts/             # 脚本文件，如批量上传等
-├── server/              # 服务端代码（部分）
-├── src/                 # 主要源代码目录
-│   ├── agents/          # 智能体应用
-│   ├── config/           # 配置文件
-│   ├── knowledge/       # 知识库相关
-│   ├── models/          # 数据模型
-│   ├── plugins/         # 插件（存放OCR）
-│   ├── static/          # 静态资源（配置文件）
-│   └── utils/           # 工具函数
-├── web/src/             # 前端代码
-│   ├── apis/            # 前端的接口定义
-│   └── views/           # 主要 vue 文件
-└── docker-compose.yml   # Docker Compose 配置
-```
 
 # 核心服务与容器 (Core Services & Containers)
 
@@ -54,5 +37,6 @@ Yuxi-Know/
 
 其他：
 
-- 如果需要新建说明文档，则保存在 docs/vibe 文件夹下面
+- 如果需要新建说明文档（仅开发者可见，非必要不创建），则保存在 `docs/vibe` 文件夹下面
 - 测试脚本可以放在 test 文件夹下面，可以从 docker 中启动测试
+- 代码更新后要检查文档部分是否有需要更新的地方，文档的目录定义在 `docs/.vitepress/config.mts` 中
