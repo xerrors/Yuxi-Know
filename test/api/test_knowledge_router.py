@@ -47,7 +47,5 @@ async def test_knowledge_routes_enforce_permissions(test_client, standard_user, 
     forbidden_list = await test_client.get("/api/knowledge/databases", headers=standard_user["headers"])
     assert forbidden_list.status_code == 403
 
-    forbidden_get = await test_client.get(
-        f"/api/knowledge/databases/{db_id}", headers=standard_user["headers"]
-    )
+    forbidden_get = await test_client.get(f"/api/knowledge/databases/{db_id}", headers=standard_user["headers"])
     assert forbidden_get.status_code == 403

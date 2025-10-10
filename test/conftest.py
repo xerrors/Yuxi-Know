@@ -139,7 +139,9 @@ async def knowledge_database(test_client: httpx.AsyncClient, admin_headers: dict
         headers=admin_headers,
     )
     if create_response.status_code != 200:
-        pytest.fail(f"Failed to create knowledge database (status={create_response.status_code}): {create_response.text}")
+        pytest.fail(
+            f"Failed to create knowledge database (status={create_response.status_code}): {create_response.text}"
+        )
 
     db_payload = create_response.json()
     db_id = db_payload["db_id"]

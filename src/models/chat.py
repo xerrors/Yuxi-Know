@@ -5,7 +5,7 @@ from openai import OpenAI
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src import config
-from src.utils import get_docker_safe_url, logger
+from src.utils import logger
 
 
 class OpenAIBase:
@@ -79,8 +79,6 @@ class OpenModel(OpenAIBase):
         super().__init__(api_key=api_key, base_url=base_url, model_name=model_name)
 
 
-
-
 class GeneralResponse:
     def __init__(self, content):
         self.content = content
@@ -108,8 +106,6 @@ def select_model(model_provider, model_name=None):
         return model
     except Exception as e:
         raise ValueError(f"Model provider {model_provider} load failed, {e} \n {traceback.format_exc()}")
-
-
 
 
 async def test_chat_model_status(provider: str, model_name: str) -> dict:

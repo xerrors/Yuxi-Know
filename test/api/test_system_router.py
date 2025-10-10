@@ -25,9 +25,7 @@ async def test_info_endpoint_is_public(test_client):
 
 async def test_config_endpoints_require_admin(test_client, standard_user):
     assert (await test_client.get("/api/system/config")).status_code == 401
-    assert (
-        await test_client.get("/api/system/config", headers=standard_user["headers"])
-    ).status_code == 403
+    assert (await test_client.get("/api/system/config", headers=standard_user["headers"])).status_code == 403
 
 
 async def test_admin_can_fetch_config_and_reload_info(test_client, admin_headers):

@@ -15,9 +15,7 @@ async def test_graph_routes_require_auth(test_client):
 
 
 async def test_standard_user_cannot_access_graph_endpoints(test_client, standard_user):
-    response = await test_client.get(
-        "/api/graph/lightrag/databases", headers=standard_user["headers"]
-    )
+    response = await test_client.get("/api/graph/lightrag/databases", headers=standard_user["headers"])
     assert response.status_code == 403
 
 
