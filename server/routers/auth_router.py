@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.storage.db.manager import db_manager
-from src.storage.db.models import User
+from src.storage.db.models import User, OperationLog
 from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_required_user
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
@@ -503,14 +503,17 @@ async def delete_user(
             detail="不能删除自己的账户",
         )
 
-    # 记录操作
-    log_operation(
-        db, current_user.id, "删除用户", f"删除用户: {user.username}, ID: {user.id}, 角色: {user.role}", request
-    )
+    deletion_detail = f"删除用户: {user.username}, ID: {user.id}, 角色: {user.role}"
+
+    # 清理关联的操作日志，避免外键约束报错
+    db.query(OperationLog).filter(OperationLog.user_id == user.id).delete(synchronize_session=False)
 
     # 删除用户
     db.delete(user)
     db.commit()
+
+    # 记录操作
+    log_operation(db, current_user.id, "删除用户", deletion_detail, request)
 
     return {"success": True, "message": "用户已删除"}
 
