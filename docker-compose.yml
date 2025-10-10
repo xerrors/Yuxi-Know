@@ -23,6 +23,7 @@ services:
       - "host.docker.internal:host-gateway"
     env_file:
       - src/.env
+    # region api_envs
     environment:
       - HOST_IP=${HOST_IP:-}
       - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
@@ -37,6 +38,7 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
+    # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     healthcheck:
@@ -105,6 +107,7 @@ services:
   #   restart: unless-stopped
   #   command: ["bash", "/init-postgres.sh"]
 
+  # region neo4j
   graph:
     image: neo4j:5.26
     container_name: graph
@@ -128,6 +131,7 @@ services:
     networks:
       - app-network
     restart: unless-stopped
+  # endregion neo4j
 
   etcd:
     container_name: milvus-etcd-dev

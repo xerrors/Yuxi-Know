@@ -24,13 +24,27 @@ export default defineConfig({
       {
         text: '简介',
         items: [
-          { text: '快速开始', link: '/intro/quick-start' }
+          { text: '什么是 Yuxi-Know？', link: '/intro/project-overview' },
+          { text: '快速开始', link: '/intro/quick-start' },
+          { text: '模型配置', link: '/intro/model-config' },
+          { text: '知识库与知识图谱', link: '/intro/knowledge-base' }
+        ]
+      },
+      {
+        text: '高级配置',
+        items: [
+          { text: '文档解析', link: '/advanced/document-processing' },
+          { text: '智能体', link: '/advanced/agents' },
+          { text: '品牌自定义', link: '/advanced/branding' },
+          { text: '其他配置', link: '/advanced/misc' }
         ]
       },
       {
         text: '更新日志',
         items: [
-          { text: '更新日志', link: '/changelog/update' }
+          { text: '路线图', link: '/changelog/roadmap' },
+          { text: '参与贡献', link: '/changelog/contributing' },
+          { text: '常见问题', link: '/changelog/faq' }
         ]
       }
     ],

@@ -1,5 +1,7 @@
 <template>
   <div>
+    <a-alert message="自定义模型将在 0.3的稳定版中移除，届时只能通过修改 models.yaml 来添加模型和供应商。" type="warning" />
+    <br>
     <div class="model-provider-card custom-models-card">
       <div class="card-header">
         <h3>自定义模型</h3>
