@@ -22,7 +22,7 @@
 | **8081** | vLLM | - | 本地推理（可选）|
 
 ::: tip 端口访问
-- Web 界面: http://localhost:5173
-- API 文档: http://localhost:5050/docs
-- Neo4j 管理: http://localhost:7474
+- Web 界面: `http://localhost:5173`
+- API 文档: `http://localhost:5050/docs`
+- Neo4j 管理: `http://localhost:7474`
 :::

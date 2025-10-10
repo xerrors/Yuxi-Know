@@ -14,12 +14,12 @@
 
 ```bash
 # 克隆稳定版本
-git clone -b 0.2.1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch 0.2.2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
-- `0.2.1`: 当前稳定版本（推荐）
+- `0.2.2`: 当前稳定版本（推荐）
 - `stable`: 旧版本稳定分支（与现版本不兼容）
 - `main`: 最新开发版本（可能不稳定）
 :::
@@ -57,8 +57,8 @@ docker compose up --build -d
 
 服务启动完成后，访问以下地址：
 
-- **Web 界面**: http://localhost:5173
-- **API 文档**: http://localhost:5050/docs
+- **Web 界面**: `http://localhost:5173`
+- **API 文档**: `http://localhost:5050/docs`
 
 #### 5. 停止服务
 
@@ -162,8 +162,8 @@ docker ps
 **Q: MinerU/PaddleX 健康检查失败？**
 
 分别检查服务状态：
-- MinerU: http://localhost:30000/health
-- PaddleX: http://localhost:8080/
+- MinerU: `http://localhost:30000/health`
+- PaddleX: `http://localhost:8080/`
 
 确认 GPU/驱动与 CUDA 版本匹配。
 
@@ -182,5 +182,4 @@ docker restart api-dev
 检查默认账户信息：
 - 用户名: `neo4j`
 - 密码: `0123456789`
-- 管理界面: http://localhost:7474
-
+- 管理界面: `http://localhost:7474`

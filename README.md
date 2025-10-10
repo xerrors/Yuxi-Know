@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-v0.2.1-blue.svg)](https://github.com/xerrors/Yuxi-Know/issues)
+[![Version](https://img.shields.io/badge/version-v0.2.2-blue.svg)](https://github.com/xerrors/Yuxi-Know/issues)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -52,10 +52,10 @@
 ### 一键启动
 
 1. **克隆项目**
-   ```bash
-   git clone -b 0.2.1 https://github.com/xerrors/Yuxi-Know.git
-   cd Yuxi-Know
-   ```
+```bash
+git clone --branch 0.2.2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+cd Yuxi-Know
+```
    如果想要使用之前的稳定版（与现版本不兼容），可以使用 `stable` 分支，`main` 分支是最新的开发版本。
 
 2. **配置 API 密钥**
