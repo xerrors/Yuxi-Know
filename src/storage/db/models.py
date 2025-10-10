@@ -176,7 +176,7 @@ class User(Base):
     login_locked_until = Column(DateTime, nullable=True)  # 锁定到什么时候
 
     # 关联操作日志
-    operation_logs = relationship("OperationLog", back_populates="user")
+    operation_logs = relationship("OperationLog", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, include_password=False):
         result = {
