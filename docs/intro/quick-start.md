@@ -29,15 +29,14 @@ cd Yuxi-Know
 复制环境变量模板并编辑：
 
 ```bash
-cp src/.env.template src/.env
+cp .env.template .env
 ```
 
-编辑 `src/.env` 文件，配置必需的 API 密钥：
+编辑 `.env` 文件，配置必需的 API 密钥：
 
-```env
-# 必需配置 - 推荐使用硅基流动免费服务
-SILICONFLOW_API_KEY=sk-270ea********8bfa97.e3XOMd****Q1Sk
-```
+
+<<< @/../.env.template#model_provider{bash 2}
+
 
 ::: tip 免费获取 API Key
 [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。

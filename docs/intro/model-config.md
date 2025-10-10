@@ -17,9 +17,9 @@
 
 ### 配置方法
 
-在 `src/.env` 文件中添加对应的环境变量：
+在 `.env` 文件中添加对应的环境变量：
 
-<<< @/../src/.env.template#model_provider{bash 2}
+<<< @/../.env.template#model_provider{bash 2}
 
 
 ::: tip 免费获取 API Key
@@ -92,7 +92,7 @@ local-vllm:
 
 ### 3. 配置环境变量
 
-在 `src/.env` 文件中添加对应的环境变量：
+在 `.env` 文件中添加对应的环境变量：
 ```env
 CUSTOM_API_KEY_ENV_NAME=your_api_key_here
 ```

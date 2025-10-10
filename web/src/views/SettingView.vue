@@ -164,7 +164,7 @@
       </div>
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'model') && userStore.isSuperAdmin">
         <h3>模型配置</h3>
-        <p>请在 <code>src/.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
+        <p>请在 <code>.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
         <ModelProvidersComponent />
       </div>
 

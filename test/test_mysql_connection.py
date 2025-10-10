@@ -9,7 +9,7 @@ import os
 # sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent.parent))
 
 
-def load_env_file(env_file="src/.env"):
+def load_env_file(env_file=".env"):
     """加载 .env 文件"""
     env_vars = {}
     if os.path.exists(env_file):

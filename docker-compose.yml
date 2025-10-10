@@ -22,7 +22,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
-      - src/.env
+      - .env
     # region api_envs
     environment:
       - HOST_IP=${HOST_IP:-}

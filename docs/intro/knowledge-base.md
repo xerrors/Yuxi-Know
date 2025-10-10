@@ -28,7 +28,7 @@ LightRAG 知识库可在知识库详情中可视化，但不支持在侧边栏�
 
 系统默认使用 `siliconflow` 的 `Qwen/Qwen3-30B-A3B-Instruct-2507` 模型进行图谱构建。可通过环境变量自定义图谱构建模型：
 
-<<< @/../src/.env.template#lightrag{bash}
+<<< @/../.env.template#lightrag{bash}
 
 
 ## 文档管理
@@ -71,7 +71,7 @@ Neo4j 访问信息可以参考 `docker-compose.yml` 中配置对应的环境变�
 
 如需接入已有的 Neo4j 实例，可修改 `.env` 中的配置：
 
-<<< @/../src/.env.template#neo4j{bash}
+<<< @/../.env.template#neo4j{bash}
 
 同时记得注释掉下面的 neo4j 服务：
 

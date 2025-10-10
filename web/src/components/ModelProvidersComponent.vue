@@ -116,7 +116,7 @@
             </div>
           </div>
           <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
-            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 src/.env 中配置对应的 APIKEY，并重新启动服务" />
+            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 .env 中配置对应的 APIKEY，并重新启动服务" />
             <div v-else>
               <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如需添加模型，请编辑 src/config/static/models.yaml 或通过环境变量 OVERRIDE_DEFAULT_MODELS_CONFIG_WITH 指向的文件。" />
               <img src="@/assets/pics/guides/how-to-add-models.png" alt="添加模型指引" style="width: 100%; height: 100%; margin-top: 16px;">
@@ -255,7 +255,7 @@ const fetchProviderModels = (provider) => {
 // 保存提供商配置
 const saveProviderConfig = async () => {
   if (!modelStatus.value[providerConfig.provider]) {
-    message.error('请在 src/.env 中配置对应的 APIKEY，并重新启动服务');
+    message.error('请在 .env 中配置对应的 APIKEY，并重新启动服务');
     return;
   }
 
