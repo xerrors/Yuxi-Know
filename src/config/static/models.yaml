@@ -35,7 +35,7 @@ MODEL_NAMES:
     default: glm-4.5-flash
     env: ZHIPUAI_API_KEY
     models:
-      - glm-4.5
+      - glm-4.6
       - glm-4.5-air
       - glm-4.5-flash
 
@@ -43,13 +43,14 @@ MODEL_NAMES:
     name: SiliconFlow
     url: https://cloud.siliconflow.cn/models
     base_url: https://api.siliconflow.cn/v1
-    default: zai-org/GLM-4.5
+    default: deepseek-ai/DeepSeek-V3.2-Exp
     env: SILICONFLOW_API_KEY
     models:
+      - deepseek-ai/DeepSeek-V3.2-Exp
       - Qwen/Qwen3-235B-A22B-Thinking-2507
       - Qwen/Qwen3-235B-A22B-Instruct-2507
-      - moonshotai/Kimi-K2-Instruct
-      - zai-org/GLM-4.5
+      - moonshotai/Kimi-K2-Instruct-0905
+      - zai-org/GLM-4.6
 
   together.ai:
     name: Together.ai

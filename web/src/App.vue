@@ -1,12 +1,16 @@
 <script setup>
 import { themeConfig } from '@/assets/theme'
 import { useAgentStore } from '@/stores/agent'
+import { useUserStore } from '@/stores/user'
 import { onMounted } from 'vue'
 
 const agentStore = useAgentStore();
+const userStore = useUserStore();
 
 onMounted(async () => {
-  await agentStore.initialize();
+  if (userStore.isLoggedIn) {
+    await agentStore.initialize();
+  }
 })
 </script>
 <template>
