@@ -475,10 +475,13 @@ const printAgentConfig = async () => {
     &.ant-btn-primary {
       background-color: var(--main-color);
       border-color: var(--main-color);
+      color: #fff;
 
-      &:hover {
+      &:hover,
+      &:focus {
         background-color: var(--main-color);
         border-color: var(--main-color);
+        color: #fff;
       }
     }
 

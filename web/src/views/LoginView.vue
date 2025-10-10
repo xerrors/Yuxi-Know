@@ -14,6 +14,12 @@
       </div>
     </div>
 
+    <div class="login-top-action">
+      <a-button type="text" size="small" class="back-home-btn" @click="goHome">
+        返回首页
+      </a-button>
+    </div>
+
     <div class="login-layout">
       <!-- 左侧图片区域 -->
       <div class="login-image-section">
@@ -269,6 +275,10 @@ const showDevMessage = () => {
   message.info('该功能正在开发中，敬请期待！');
 };
 
+const goHome = () => {
+  router.push('/');
+};
+
 // 清理倒计时器
 const clearLockCountdown = () => {
   if (lockCountdown.value) {
@@ -510,6 +520,25 @@ onUnmounted(() => {
 
   &.has-alert {
     padding-top: 60px;
+  }
+}
+
+.login-top-action {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+}
+
+.back-home-btn {
+  color: #666;
+  font-size: 14px;
+  padding: 0 8px;
+
+  &:hover,
+  &:focus {
+    color: var(--main-color);
+    background-color: transparent;
   }
 }
 

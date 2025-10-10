@@ -5,7 +5,7 @@ import {
   GithubOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3 } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
@@ -149,6 +149,19 @@ const mainList = [{
             <span v-if="githubStars > 0" class="github-stars">
               <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
             </span>
+          </a>
+        </a-tooltip>
+      </div>
+      <div class="nav-item docs">
+        <a-tooltip placement="right">
+          <template #title>文档中心</template>
+          <a
+            href="https://xerrors.github.io/Yuxi-Know/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="docs-link"
+          >
+            <BookOpen class="icon" size="22" />
           </a>
         </a-tooltip>
       </div>
@@ -341,6 +354,16 @@ div.header, #app-router-view {
 
     &.api-docs {
       padding: 10px 12px;
+    }
+    &.docs {
+      padding: 10px 12px;
+      margin-bottom: 12px;
+
+      .docs-link {
+        display: flex;
+        align-items: center;
+        color: inherit;
+      }
     }
     &.active {
       text-shadow: 0 0 15px var(--main-300);
