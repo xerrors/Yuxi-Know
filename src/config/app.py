@@ -42,7 +42,7 @@ class Config(SimpleConfig):
         self.filename = str(Path(f"{self.save_dir}/config/base.yaml"))
         os.makedirs(os.path.dirname(self.filename), exist_ok=True)
 
-        self._models_config_path: Path | None = None
+        self._models_config_path: Path | None = os.getenv("OVERRIDE_DEFAULT_MODELS_CONFIG_WITH")
         self._update_models_from_file()
 
         ### >>> 默认配置
@@ -94,6 +94,7 @@ class Config(SimpleConfig):
             "model_provider_status",
             "embed_model_names",
             "reranker_names",
+            "_models_config_path",
         ]
         return {k: v for k, v in self.items() if k not in blocklist}
 
@@ -111,7 +112,7 @@ class Config(SimpleConfig):
             config_file = Path("src/config/static/models.yaml")
             logger.info("Using default models config")
 
-        self._models_config_path = config_file
+        self._models_config_path = str(config_file)
 
         with open(self._models_config_path, encoding="utf-8") as f:
             _models = yaml.safe_load(f)
@@ -125,7 +126,7 @@ class Config(SimpleConfig):
         将当前模型配置写回模型配置文件
         """
         if self._models_config_path is None:
-            self._models_config_path = Path("src/config/static/models.yaml")
+            self._models_config_path = str(Path("src/config/static/models.yaml"))
 
         models_payload = {
             "MODEL_NAMES": self.model_names,
