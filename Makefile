@@ -1,5 +1,7 @@
 
-.PHONY: start logs
+.PHONY: start stop logs lint format format_diff router-tests
+
+PYTEST_ARGS ?=
 
 start:
 	docker compose up -d
@@ -28,3 +30,6 @@ format:
 
 format_diff:
 	uv run ruff format --diff .
+
+router-tests:
+	docker compose exec -T api uv run --group test pytest test/api $(PYTEST_ARGS)

@@ -60,16 +60,29 @@ chore: 构建过程或辅助工具的变动
 
 ### 测试要求
 
-::: info
- 部分测试脚本待补充
+::: tip 测试
+- `make lint` / `make format` 保持代码整洁
+- `cp test/.env.test.example test/.env.test` 配置测试凭据
+- `make router-tests` 运行集成路由测试，支持 `PYTEST_ARGS="-k chat_router"`
+- `uv run --group test pytest test/api` 可直接运行 pytest（容器内）
 :::
 
-- 确保所有测试通过
-- 添加新功能的测试用例
-- 验证现有功能不受影响
-- 测试不同环境下的兼容性
+<details>
+<summary>常用命令</summary>
+
+```bash
+# 全量路由测试
+make router-tests
+
+# 仅运行知识库相关用例
+make router-tests PYTEST_ARGS="-k knowledge_router"
+
+# 不经过 Makefile，直接调用 pytest
+uv run --group test pytest test/api -vv
+```
+
+</details>
 
 ## 许可证
 
 本项目基于 MIT License 开源，贡献的代码将遵循相同的许可证。
-
