@@ -1,11 +1,9 @@
-import os
 import uuid
 from pathlib import Path
 from typing import Any, cast
 
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime
@@ -28,6 +26,7 @@ class ChatbotAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph = None
+        self.checkpointer = InMemorySaver()
         self.context_schema = Context
         self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -90,8 +89,8 @@ class ChatbotAgent(BaseAgent):
 
     async def get_graph(self, **kwargs):
         """构建图"""
-        # if self.graph:
-        #     return self.graph
+        if self.graph:
+            return self.graph
 
         builder = StateGraph(State, context_schema=self.context_schema)
         builder.add_node("chatbot", self.llm_call)
@@ -104,27 +103,9 @@ class ChatbotAgent(BaseAgent):
         builder.add_edge("tools", "chatbot")
         builder.add_edge("chatbot", END)
 
-        # 创建数据库连接并确保设置 checkpointer
-        try:
-            sqlite_checkpointer = AsyncSqliteSaver(await self.get_async_conn())
-            graph = builder.compile(checkpointer=sqlite_checkpointer, name=self.name)
-            self.graph = graph
-            return graph
-        except Exception as e:
-            logger.error(f"构建 Graph 设置 checkpointer 时出错: {e}, 尝试使用内存存储")
-            # 即使出错也返回一个可用的图实例，只是无法保存历史
-            checkpointer = InMemorySaver()
-            graph = builder.compile(checkpointer=checkpointer, name=self.name)
-            self.graph = graph
-            return graph
-
-    async def get_async_conn(self) -> aiosqlite.Connection:
-        """获取异步数据库连接"""
-        return await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
-
-    async def get_aio_memory(self) -> AsyncSqliteSaver:
-        """获取异步存储实例"""
-        return AsyncSqliteSaver(await self.get_async_conn())
+        graph = builder.compile(checkpointer=self.checkpointer, name=self.name)
+        self.graph = graph
+        return graph
 
 
 def main():

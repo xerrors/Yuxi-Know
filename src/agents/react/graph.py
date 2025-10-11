@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from langchain_core.messages import AnyMessage, SystemMessage
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 from langgraph.prebuilt import create_react_agent
 from langgraph.runtime import get_runtime
 
@@ -37,8 +36,7 @@ class ReActAgent(BaseAgent):
 
         available_tools = get_buildin_tools()
 
-        sqlite_checkpointer = AsyncSqliteSaver(await aiosqlite.connect(self.workdir / "react_history.db"))
-        graph = create_react_agent(model, tools=available_tools, checkpointer=sqlite_checkpointer, prompt=prompt)
+        graph = create_react_agent(model, tools=available_tools, prompt=prompt, checkpointer=self.checkpointer)
         self.graph = graph
-        logger.info("ReActAgent使用SQLite checkpointer构建成功")
+        logger.info("ReActAgent 使用内存 checkpointer 构建成功")
         return graph

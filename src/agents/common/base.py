@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import abstractmethod
 
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.checkpoint.memory import InMemorySaver
 
 from src.agents.common.context import BaseContext
 from src.utils import logger
@@ -18,6 +19,7 @@ class BaseAgent:
 
     def __init__(self, **kwargs):
         self.graph = None  # will be covered by get_graph
+        self.checkpointer = InMemorySaver()
         self.context_schema = BaseContext
 
     @property
@@ -52,7 +54,7 @@ class BaseAgent:
         graph = await self.get_graph()
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         logger.debug(f"stream_messages: {context}")
-        # TODO 的 Checkpointer 似乎还没有适配最新的 Context API
+        # TODO Checkpointer 似乎还没有适配最新的 1.0 Context API
         input_config = {"configurable": input_context, "recursion_limit": 100}
         async for msg, metadata in graph.astream(
             {"messages": messages}, stream_mode="messages", context=context, config=input_config
