@@ -9,7 +9,7 @@ from starlette.responses import FileResponse as StarletteFileResponse
 from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
 from src import config, knowledge_base
-from src.knowledge.indexing import process_file_to_markdown
+from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
 from src.utils import hashstr, logger
 
@@ -522,6 +522,10 @@ async def upload_file(
 
     logger.debug(f"Received upload file with filename: {file.filename}")
 
+    if not is_supported_file_extension(file.filename):
+        ext = os.path.splitext(file.filename)[1].lower()
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
     # 根据db_id获取上传路径，如果db_id为None则使用默认路径
     if db_id:
         upload_dir = knowledge_base.get_db_upload_path(db_id)
@@ -537,6 +541,12 @@ async def upload_file(
         buffer.write(await file.read())
 
     return {"message": "File successfully uploaded", "file_path": file_path, "db_id": db_id}
+
+
+@knowledge.get("/files/supported-types")
+async def get_supported_file_types(current_user: User = Depends(get_admin_user)):
+    """获取当前支持的文件类型"""
+    return {"message": "success", "file_types": sorted(SUPPORTED_FILE_EXTENSIONS)}
 
 
 @knowledge.post("/files/markdown")

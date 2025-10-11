@@ -5,15 +5,67 @@ from pathlib import Path
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     CSVLoader,
-    Docx2txtLoader,
     JSONLoader,
     PyPDFLoader,
     TextLoader,
     UnstructuredHTMLLoader,
     UnstructuredMarkdownLoader,
+    UnstructuredWordDocumentLoader,
 )
 
 from src.utils import logger
+
+
+SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
+    ".txt",
+    ".md",
+    ".doc",
+    ".docx",
+    ".html",
+    ".htm",
+    ".json",
+    ".csv",
+    ".xls",
+    ".xlsx",
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".bmp",
+    ".tiff",
+    ".tif",
+)
+
+
+def is_supported_file_extension(file_name: str | os.PathLike[str]) -> bool:
+    """Check whether the given file path has a supported extension."""
+    return Path(file_name).suffix.lower() in SUPPORTED_FILE_EXTENSIONS
+
+
+def _extract_word_text(file_path: Path) -> str:
+    """
+    Parse Word documents (.doc/.docx) into plain text.
+
+    Try python-docx first for docx files and fall back to the unstructured
+    loader so legacy .doc files are still parsed when possible.
+    """
+    try:
+        from docx import Document  # type: ignore
+
+        doc = Document(file_path)
+        text = "\n".join(paragraph.text for paragraph in doc.paragraphs).strip()
+        if text:
+            return text
+    except Exception as docx_error:  # noqa: BLE001
+        logger.warning(f"python-docx failed to parse {file_path.name}: {docx_error}")
+
+    try:
+        loader = UnstructuredWordDocumentLoader(str(file_path))
+        docs = loader.load()
+        return "\n".join(doc.page_content for doc in docs).strip()
+    except Exception as unstructured_error:  # noqa: BLE001
+        logger.error(f"Unstructured failed to parse {file_path.name}: {unstructured_error}")
+        raise ValueError(f"无法解析 Word 文档: {file_path.name}") from unstructured_error
 
 
 def chunk_with_parser(file_path, params=None):
@@ -38,7 +90,7 @@ def chunk_with_parser(file_path, params=None):
         loader = UnstructuredMarkdownLoader(file_path)
 
     elif file_type in [".docx", ".doc"]:
-        loader = Docx2txtLoader(file_path)
+        loader = UnstructuredWordDocumentLoader(file_path)
 
     elif file_type in [".html", ".htm"]:
         loader = UnstructuredHTMLLoader(file_path)
@@ -251,10 +303,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
     elif file_ext in [".doc", ".docx"]:
         # 处理 Word 文档
-        from docx import Document  # type: ignore
-
-        doc = Document(file_path_obj)
-        text = "\n".join([para.text for para in doc.paragraphs])
+        text = _extract_word_text(file_path_obj)
         return f"# {file_path_obj.name}\n\n{text}"
 
     elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:

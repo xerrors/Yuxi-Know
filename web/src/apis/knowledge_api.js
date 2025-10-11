@@ -173,6 +173,14 @@ export const fileApi = {
         'Content-Type': 'multipart/form-data'
       }
     })
+  },
+
+  /**
+   * 获取支持的文件类型
+   * @returns {Promise} - 文件类型列表
+   */
+  getSupportedFileTypes: async () => {
+    return apiAdminGet('/api/knowledge/files/supported-types')
   }
 }
 
@@ -220,4 +228,3 @@ export const embeddingApi = {
     return apiAdminGet('/api/knowledge/embedding-models/status')
   }
 }
-

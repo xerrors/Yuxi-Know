@@ -105,6 +105,8 @@
           name="file"
           :multiple="true"
           :disabled="chunkLoading"
+          :accept="acceptedFileTypes"
+          :before-upload="beforeUpload"
           :action="'/api/knowledge/files/upload?db_id=' + databaseId"
           :headers="getAuthHeaders()"
           @change="handleFileUpload"
@@ -112,7 +114,7 @@
         >
           <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
           <p class="ant-upload-hint">
-            目前仅支持上传文本、图片文件，如 .pdf, .txt, .md, .docx, png, jpg等。
+            支持的文件类型：{{ uploadHint }}
           </p>
         </a-upload-dragger>
       </div>
@@ -174,11 +176,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
-import { message } from 'ant-design-vue';
+import { ref, computed, onMounted } from 'vue';
+import { message, Upload } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
 import { ocrApi } from '@/apis/system_api';
+import { fileApi } from '@/apis/knowledge_api';
 import {
   FileOutlined,
   LinkOutlined,
@@ -197,6 +200,83 @@ const props = defineProps({
 const emit = defineEmits(['update:visible']);
 
 const store = useDatabaseStore();
+
+const DEFAULT_SUPPORTED_TYPES = [
+  '.txt',
+  '.pdf',
+  '.jpg',
+  '.jpeg',
+  '.md',
+  '.docx',
+  '.doc',
+];
+
+const normalizeExtensions = (extensions) => {
+  if (!Array.isArray(extensions)) {
+    return [];
+  }
+  const normalized = extensions
+    .map((ext) => (typeof ext === 'string' ? ext.trim().toLowerCase() : ''))
+    .filter((ext) => ext.length > 0)
+    .map((ext) => (ext.startsWith('.') ? ext : `.${ext}`));
+
+  return Array.from(new Set(normalized)).sort();
+};
+
+const supportedFileTypes = ref(normalizeExtensions(DEFAULT_SUPPORTED_TYPES));
+
+const applySupportedFileTypes = (extensions) => {
+  const normalized = normalizeExtensions(extensions);
+  if (normalized.length > 0) {
+    supportedFileTypes.value = normalized;
+  } else {
+    supportedFileTypes.value = normalizeExtensions(DEFAULT_SUPPORTED_TYPES);
+  }
+};
+
+const acceptedFileTypes = computed(() => {
+  if (!supportedFileTypes.value.length) {
+    return '';
+  }
+  return supportedFileTypes.value.join(',');
+});
+
+const uploadHint = computed(() => {
+  if (!supportedFileTypes.value.length) {
+    return '加载中...';
+  }
+  return supportedFileTypes.value.join(', ');
+});
+
+const isSupportedExtension = (fileName) => {
+  if (!fileName) {
+    return true;
+  }
+  if (!supportedFileTypes.value.length) {
+    return true;
+  }
+  const lastDotIndex = fileName.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return false;
+  }
+  const ext = fileName.slice(lastDotIndex).toLowerCase();
+  return supportedFileTypes.value.includes(ext);
+};
+
+const loadSupportedFileTypes = async () => {
+  try {
+    const data = await fileApi.getSupportedFileTypes();
+    applySupportedFileTypes(data?.file_types);
+  } catch (error) {
+    console.error('获取支持的文件类型失败:', error);
+    message.warning('获取支持的文件类型失败，已使用默认配置');
+    applySupportedFileTypes(DEFAULT_SUPPORTED_TYPES);
+  }
+};
+
+onMounted(() => {
+  loadSupportedFileTypes();
+});
 
 const visible = computed({
   get: () => props.visible,
@@ -370,13 +450,23 @@ const handleCancel = () => {
   emit('update:visible', false);
 };
 
-const handleFileUpload = (event) => {
-  console.log(event);
+const beforeUpload = (file) => {
+  if (!isSupportedExtension(file?.name)) {
+    message.error(`不支持的文件类型：${file?.name || '未知文件'}`);
+    return Upload.LIST_IGNORE;
+  }
+  return true;
 };
 
-const handleDrop = (event) => {
-  console.log(event);
+const handleFileUpload = (info) => {
+  if (info?.file?.status === 'error') {
+    const errorMessage = info.file?.response?.detail || `文件上传失败：${info.file.name}`;
+    message.error(errorMessage);
+  }
+  fileList.value = info?.fileList ?? [];
 };
+
+const handleDrop = () => {};
 
 const showChunkConfigModal = () => {
   tempChunkParams.value = {
