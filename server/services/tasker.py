@@ -285,7 +285,7 @@ class Tasker:
         tasks = [task.to_dict() for task in self._tasks.values()]
         payload = {"tasks": tasks, "updated_at": _utc_timestamp()}
 
-        async def _write() -> None:
+        def _write() -> None:
             self._storage_path.parent.mkdir(parents=True, exist_ok=True)
             tmp_path = self._storage_path.with_suffix(".tmp")
             with open(tmp_path, "w", encoding="utf-8") as fh:
