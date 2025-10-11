@@ -6,6 +6,7 @@
 """
 
 from .kb_utils import (
+    calculate_content_hash,
     get_embedding_config,
     prepare_item_metadata,
     split_text_into_chunks,
@@ -14,6 +15,7 @@ from .kb_utils import (
 )
 
 __all__ = [
+    "calculate_content_hash",
     "get_embedding_config",
     "prepare_item_metadata",
     "split_text_into_chunks",

@@ -268,6 +268,24 @@ class KnowledgeBaseManager:
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
+    def file_existed_in_db(self, db_id: str | None, content_hash: str | None) -> bool:
+        """检查指定数据库中是否存在相同内容哈希的文件"""
+        if not db_id or not content_hash:
+            return False
+
+        try:
+            kb_instance = self._get_kb_for_database(db_id)
+        except KBNotFoundError:
+            return False
+
+        for file_info in kb_instance.files_meta.values():
+            if file_info.get("database_id") != db_id:
+                continue
+            if file_info.get("content_hash") == content_hash:
+                return True
+
+        return False
+
     async def update_database(self, db_id: str, name: str, description: str) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)

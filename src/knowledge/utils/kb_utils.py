@@ -1,3 +1,4 @@
+import hashlib
 import os
 import time
 from pathlib import Path
@@ -100,6 +101,32 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
     return chunks
 
 
+def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str] | Path) -> str:
+    """
+    计算文件内容的 SHA-256 哈希值。
+
+    Args:
+        data: 文件内容的二进制数据或文件路径
+
+    Returns:
+        str: 十六进制哈希值
+    """
+    sha256 = hashlib.sha256()
+
+    if isinstance(data, (bytes, bytearray)):
+        sha256.update(data)
+        return sha256.hexdigest()
+
+    if isinstance(data, (str, os.PathLike, Path)):
+        path = Path(data)
+        with path.open("rb") as file_handle:
+            for chunk in iter(lambda: file_handle.read(8192), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+
+    raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")
+
+
 def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
     """
     准备文件或URL的元数据
@@ -110,11 +137,18 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         file_type = file_path.suffix.lower().replace(".", "")
         filename = file_path.name
         item_path = os.path.relpath(file_path, Path.cwd())
+        content_hash = None
+        try:
+            if file_path.exists():
+                content_hash = calculate_content_hash(file_path)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to calculate content hash for {file_path}: {exc}")
     else:  # URL
         file_id = f"url_{hashstr(item + str(time.time()), 6)}"
         file_type = "url"
         filename = f"webpage_{hashstr(item, 6)}.md"
         item_path = item
+        content_hash = None
 
     return {
         "database_id": db_id,
@@ -124,6 +158,7 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         "status": "processing",
         "created_at": time.time(),
         "file_id": file_id,
+        "content_hash": content_hash,
     }
 
 
