@@ -6,6 +6,25 @@
 
 敏感词词库位于 `src/config/static/bad_keywords.txt` 文件，每行一个关键词，实时生效，无需重启服务。
 
+## 网页搜索
+
+系统内置了基于 Tavily 的联网搜索能力，配置完成后，大模型会自动在需要时调用 `enable_web_search` 对应的工具，为回答提供实时网页信息。
+
+### 配置步骤
+
+1. 前往 [Tavily 官网](https://app.tavily.com/) 注册并在控制台创建 API Key。
+2. 在项目根目录的 `.env`（或 `docker-compose.yml` 中的对应环境变量段）写入：
+   ```env
+   TAVILY_API_KEY=sk-xxxxxxxxxxxxxxxx
+   ```
+3. 重新加载服务使密钥生效，推荐执行：
+   ```bash
+   docker compose up -d api-dev web-dev
+   ```
+   若服务已运行，则使用 `docker compose restart api-dev` 即可。
+
+完成以上步骤后，后端会自动将 `enable_web_search` 标记为启用，在智能体的工具配置区域即可看到这个工具，展示 Tavily 返回的实时结果。若需要关闭该能力，删除或清空 `TAVILY_API_KEY` 后再次重启服务即可。
+
 ## 服务端口
 
 系统使用多个端口提供不同服务，以下是完整的端口映射：
