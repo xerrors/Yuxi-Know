@@ -5,18 +5,23 @@ import {
   GithubOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, ListChecks } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
+import { useTaskerStore } from '@/stores/tasker'
+import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
+import TaskCenterDrawer from '@/components/TaskCenterDrawer.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
+const taskerStore = useTaskerStore()
+const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
 
 const layoutSettings = reactive({
   showDebug: false,
@@ -87,6 +92,8 @@ onMounted(async () => {
 const route = useRoute()
 console.log(route)
 
+const activeTaskCount = computed(() => activeCountRef.value || 0)
+
 // 下面是导航菜单部分，添加智能体项
 const mainList = [{
     name: '智能体',
@@ -134,6 +141,23 @@ const mainList = [{
             <component class="icon" :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon" size="22"/>
           </a-tooltip>
         </RouterLink>
+        <div
+          class="nav-item task-center"
+          :class="{ active: isDrawerOpen }"
+          @click="taskerStore.openDrawer()"
+        >
+          <a-tooltip placement="right">
+            <template #title>任务中心</template>
+            <a-badge
+              :count="activeTaskCount"
+              :overflow-count="99"
+              class="task-center-badge"
+              size="small"
+            >
+              <ListChecks class="icon" size="22" />
+            </a-badge>
+          </a-tooltip>
+        </div>
       </div>
       <div
         ref="htmlRefHook"
@@ -214,6 +238,7 @@ const mainList = [{
     >
       <DebugComponent />
     </a-modal>
+    <TaskCenterDrawer />
   </div>
 </template>
 
@@ -365,6 +390,14 @@ div.header, #app-router-view {
         color: inherit;
       }
     }
+    &.task-center {
+      .task-center-badge {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+      }
+    }
+
     &.active {
       text-shadow: 0 0 15px var(--main-300);
       font-weight: bold;

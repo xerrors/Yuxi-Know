@@ -88,8 +88,18 @@ async def process_document(
         response.raise_for_status()
         result = response.json()
 
-        # Check if the overall request was successful
-        if result.get("status") != "success":
+        # Handle asynchronous ingest response
+        overall_status = result.get("status")
+        if overall_status == "queued":
+            task_id = result.get("task_id")
+            extra = f" (task id: {task_id})" if task_id else ""
+            console.print(
+                f"[bold cyan]Ingestion queued for {server_file_path}{extra}. Track progress in the task center.[/bold cyan]"
+            )
+            return True
+
+        # Check if the overall request was successful for synchronous responses
+        if overall_status != "success":
             console.print(
                 f"[bold yellow]Processing warning for {server_file_path}: {result.get('message')}[/bold yellow]"
             )

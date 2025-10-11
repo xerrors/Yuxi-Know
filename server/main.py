@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.routers import router
+from server.services.tasker import tasker
 from server.utils.auth_middleware import is_public_path
 from server.utils.common_utils import setup_logging
 
@@ -58,6 +59,17 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 # 添加鉴权中间件
 app.add_middleware(AuthMiddleware)
+
+
+@app.on_event("startup")
+async def start_tasker() -> None:
+    await tasker.start()
+
+
+@app.on_event("shutdown")
+async def stop_tasker() -> None:
+    await tasker.shutdown()
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5050, threads=10, workers=10, reload=True)

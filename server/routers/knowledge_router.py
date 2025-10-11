@@ -1,3 +1,4 @@
+import asyncio
 import os
 import traceback
 from urllib.parse import quote, unquote
@@ -8,6 +9,7 @@ from starlette.responses import FileResponse as StarletteFileResponse
 
 from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
+from server.services.tasker import TaskContext, tasker
 from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
@@ -160,15 +162,63 @@ async def add_documents(
             except ValueError as e:
                 raise HTTPException(status_code=403, detail=str(e))
 
+    async def run_ingest(context: TaskContext):
+        await context.set_message("任务初始化")
+        await context.set_progress(5.0, "准备处理文档")
+
+        total = len(items)
+        processed_items = []
+
+        try:
+            # 逐个处理文档并更新进度
+            for idx, item in enumerate(items, 1):
+                await context.raise_if_cancelled()
+
+                # 更新进度
+                progress = 5.0 + (idx / total) * 90.0  # 5% ~ 95%
+                await context.set_progress(progress, f"正在处理第 {idx}/{total} 个文档")
+
+                # 处理单个文档
+                result = await knowledge_base.add_content(db_id, [item], params=params)
+                processed_items.extend(result)
+
+        except asyncio.CancelledError:
+            await context.set_progress(100.0, "任务已取消")
+            raise
+
+        item_type = "URL" if content_type == "url" else "文件"
+        failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])
+        summary = {
+            "db_id": db_id,
+            "item_type": item_type,
+            "submitted": len(processed_items),
+            "failed": failed_count,
+        }
+        message = f"{item_type}处理完成，失败 {failed_count} 个" if failed_count else f"{item_type}处理完成"
+        await context.set_result(summary | {"items": processed_items})
+        await context.set_progress(100.0, message)
+        return summary | {"items": processed_items}
+
     try:
-        processed_items = await knowledge_base.add_content(db_id, items, params=params)
-        item_type = "URLs" if content_type == "url" else "files"
-        processed_failed_count = len([_p for _p in processed_items if _p["status"] == "failed"])
-        processed_info = f"Processed {len(processed_items)} {item_type}, {processed_failed_count} {item_type} failed"
-        return {"message": processed_info, "items": processed_items, "status": "success"}
-    except Exception as e:
-        logger.error(f"Failed to process {content_type}s: {e}, {traceback.format_exc()}")
-        return {"message": f"Failed to process {content_type}s: {e}", "status": "failed"}
+        task = await tasker.enqueue(
+            name=f"知识库文档处理({db_id})",
+            task_type="knowledge_ingest",
+            payload={
+                "db_id": db_id,
+                "items": items,
+                "params": params,
+                "content_type": content_type,
+            },
+            coroutine=run_ingest,
+        )
+        return {
+            "message": "任务已提交，请在任务中心查看进度",
+            "status": "queued",
+            "task_id": task.id,
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to enqueue {content_type}s: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to enqueue task: {e}", "status": "failed"}
 
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}")

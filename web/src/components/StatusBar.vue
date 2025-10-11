@@ -21,6 +21,18 @@
           <User class="icon" />
           <span class="user-greeting">{{ greeting }}</span>
         </div>
+        <div class="task-center-entry" @click="openTaskCenter">
+          <a-badge
+            :count="activeTaskCount"
+            :overflow-count="99"
+            class="task-center-badge"
+          >
+            <span class="task-center-button">
+              <ListChecks class="icon" />
+              <span class="task-center-label">任务中心</span>
+            </span>
+          </a-badge>
+        </div>
         <div class="status-indicator" :class="systemStatus">
           <div class="status-dot"></div>
           <span class="status-text">{{ statusText }}</span>
@@ -34,11 +46,15 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useInfoStore } from '@/stores/info'
 import { useUserStore } from '@/stores/user'
-import { Clock, User } from 'lucide-vue-next'
+import { Clock, User, ListChecks } from 'lucide-vue-next'
+import { useTaskerStore } from '@/stores/tasker'
+import { storeToRefs } from 'pinia'
 
 // 使用 stores
 const infoStore = useInfoStore()
 const userStore = useUserStore()
+const taskerStore = useTaskerStore()
+const { activeCount: activeCountRef } = storeToRefs(taskerStore)
 
 // 响应式数据
 const currentTime = ref('')
@@ -85,6 +101,12 @@ const statusText = computed(() => {
       return '未知'
   }
 })
+
+const activeTaskCount = computed(() => activeCountRef.value || 0)
+
+const openTaskCenter = () => {
+  taskerStore.openDrawer()
+}
 
 // 更新时间
 const updateTime = () => {
@@ -172,6 +194,48 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.task-center-entry {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.task-center-badge {
+  display: flex;
+  align-items: center;
+}
+
+.task-center-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background-color: #f3f4f6;
+  color: #374151;
+  font-size: 13px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.task-center-button .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.task-center-label {
+  font-weight: 500;
+}
+
+.task-center-entry:hover .task-center-button {
+  background-color: var(--main-40, #e5f0ff);
+  color: var(--main-500, #1d4ed8);
+}
+
+.task-center-badge :deep(.ant-badge-count) {
+  background-color: var(--main-color, #1d4ed8);
 }
 
 .time-info,

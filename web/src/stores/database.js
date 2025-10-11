@@ -3,10 +3,12 @@ import { defineStore } from 'pinia';
 import { ref, reactive } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import { databaseApi, documentApi, queryApi } from '@/apis/knowledge_api';
+import { useTaskerStore } from '@/stores/tasker';
 import { useRouter } from 'vue-router';
 
 export const useDatabaseStore = defineStore('database', () => {
   const router = useRouter();
+  const taskerStore = useTaskerStore();
 
   // State
   const database = ref({});
@@ -187,9 +189,22 @@ export const useDatabaseStore = defineStore('database', () => {
     state.chunkLoading = true;
     try {
       const data = await documentApi.addDocuments(databaseId.value, items, { ...params, content_type: contentType });
-      if (data.status === 'success') {
+      if (data.status === 'success' || data.status === 'queued') {
         const itemType = contentType === 'file' ? '文件' : 'URL';
-        message.success(data.message || `${itemType}已提交处理，请稍后在列表刷新查看状态`);
+        message.success(data.message || `${itemType}已提交处理，请在任务中心查看进度`);
+        if (data.task_id) {
+          taskerStore.registerQueuedTask({
+            task_id: data.task_id,
+            name: `知识库导入 (${databaseId.value || ''})`,
+            task_type: 'knowledge_ingest',
+            message: data.message,
+            payload: {
+              db_id: databaseId.value,
+              count: items.length,
+              content_type: contentType,
+            }
+          });
+        }
         await getDatabaseInfo();
         return true; // Indicate success
       } else {
