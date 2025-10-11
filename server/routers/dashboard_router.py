@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import distinct, func
+from sqlalchemy import String, cast, distinct, func, or_
 from sqlalchemy.orm import Session
 
 from server.routers.auth_router import get_admin_user
@@ -233,32 +233,45 @@ async def get_user_activity_stats(
 
         now = datetime.utcnow()
 
-        # 基础用户统计
-        total_users = db.query(func.count(User.id)).scalar() or 0
+        # Conversations may store either the numeric user primary key or the login user_id string.
+        # Join condition accounts for both representations.
+        user_join_condition = or_(
+            Conversation.user_id == User.user_id,
+            Conversation.user_id == cast(User.id, String),
+        )
 
-        # 不同时间段的活跃用户数（基于对话活动）
+        # 基础用户统计（排除已删除用户）
+        total_users = db.query(func.count(User.id)).filter(User.is_deleted == 0).scalar() or 0
+
+        # 不同时间段的活跃用户数（基于对话活动，排除已删除用户）
         active_users_24h = (
-            db.query(func.count(distinct(Conversation.user_id)))
-            .filter(Conversation.updated_at >= now - timedelta(days=1))
+            db.query(func.count(distinct(User.id)))
+            .select_from(Conversation)
+            .join(User, user_join_condition)
+            .filter(Conversation.updated_at >= now - timedelta(days=1), User.is_deleted == 0)
             .scalar()
             or 0
         )
 
         active_users_30d = (
-            db.query(func.count(distinct(Conversation.user_id)))
-            .filter(Conversation.updated_at >= now - timedelta(days=30))
+            db.query(func.count(distinct(User.id)))
+            .select_from(Conversation)
+            .join(User, user_join_condition)
+            .filter(Conversation.updated_at >= now - timedelta(days=30), User.is_deleted == 0)
             .scalar()
             or 0
         )
-        # 最近7天每日活跃用户
+        # 最近7天每日活跃用户（排除已删除用户）
         daily_active_users = []
         for i in range(7):
             day_start = now - timedelta(days=i + 1)
             day_end = now - timedelta(days=i)
 
             active_count = (
-                db.query(func.count(distinct(Conversation.user_id)))
-                .filter(Conversation.updated_at >= day_start, Conversation.updated_at < day_end)
+                db.query(func.count(distinct(User.id)))
+                .select_from(Conversation)
+                .join(User, user_join_condition)
+                .filter(Conversation.updated_at >= day_start, Conversation.updated_at < day_end, User.is_deleted == 0)
                 .scalar()
                 or 0
             )
@@ -603,7 +616,7 @@ async def get_dashboard_stats(
             db.query(func.count(Conversation.id)).filter(Conversation.status == "active").scalar() or 0
         )
         total_messages = db.query(func.count(Message.id)).scalar() or 0
-        total_users = db.query(func.count(User.id)).scalar() or 0
+        total_users = db.query(func.count(User.id)).filter(User.is_deleted == 0).scalar() or 0
 
         # Feedback statistics
         total_feedbacks = db.query(func.count(MessageFeedback.id)).scalar() or 0

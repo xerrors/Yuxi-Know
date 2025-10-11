@@ -108,6 +108,14 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # 检查用户是否已被删除
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该账户已注销",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # 检查用户是否处于登录锁定状态
     if user.is_login_locked():
         remaining_time = user.get_remaining_lock_time()
@@ -391,14 +399,14 @@ async def create_user(
 async def read_users(
     skip: int = 0, limit: int = 100, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
-    users = db.query(User).offset(skip).limit(limit).all()
+    users = db.query(User).filter(User.is_deleted == 0).offset(skip).limit(limit).all()
     return [user.to_dict() for user in users]
 
 
 # 路由：获取特定用户信息（管理员权限）
 @auth.get("/users/{user_id}", response_model=UserResponse)
 async def read_user(user_id: int, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == 0).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -416,7 +424,7 @@ async def update_user(
     current_user: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == 0).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -472,7 +480,7 @@ async def update_user(
 async def delete_user(
     user_id: int, request: Request, current_user: User = Depends(get_admin_user), db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == user_id, User.is_deleted == 0).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -489,7 +497,7 @@ async def delete_user(
             )
 
         # 检查是否是最后一个超级管理员
-        superadmin_count = db.query(User).filter(User.role == "superadmin").count()
+        superadmin_count = db.query(User).filter(User.role == "superadmin", User.is_deleted == 0).count()
         if superadmin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -503,13 +511,28 @@ async def delete_user(
             detail="不能删除自己的账户",
         )
 
+    # 检查是否已经被删除
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该用户已经被删除",
+        )
+
     deletion_detail = f"删除用户: {user.username}, ID: {user.id}, 角色: {user.role}"
 
-    # 清理关联的操作日志，避免外键约束报错
-    db.query(OperationLog).filter(OperationLog.user_id == user.id).delete(synchronize_session=False)
+    # 软删除：标记删除状态并脱敏
+    import hashlib
 
-    # 删除用户
-    db.delete(user)
+    # 生成4位哈希（基于user_id保证唯一性）
+    hash_suffix = hashlib.md5(user.user_id.encode()).hexdigest()[:4]
+
+    user.is_deleted = 1
+    user.deleted_at = datetime.now()
+    user.username = f"已注销用户-{hash_suffix}"
+    user.phone_number = None  # 清空手机号，释放该手机号供其他用户使用
+    user.password_hash = "DELETED"  # 禁止登录
+    user.avatar = None  # 清空头像
+
     db.commit()
 
     # 记录操作

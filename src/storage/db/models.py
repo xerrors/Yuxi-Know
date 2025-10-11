@@ -175,6 +175,10 @@ class User(Base):
     last_failed_login = Column(DateTime, nullable=True)  # 最后一次登录失败时间
     login_locked_until = Column(DateTime, nullable=True)  # 锁定到什么时候
 
+    # 软删除相关字段
+    is_deleted = Column(Integer, nullable=False, default=0, index=True)  # 是否已删除：0=否，1=是
+    deleted_at = Column(DateTime, nullable=True)  # 删除时间
+
     # 关联操作日志
     operation_logs = relationship("OperationLog", back_populates="user", cascade="all, delete-orphan")
 
@@ -191,6 +195,8 @@ class User(Base):
             "login_failed_count": self.login_failed_count,
             "last_failed_login": self.last_failed_login.isoformat() if self.last_failed_login else None,
             "login_locked_until": self.login_locked_until.isoformat() if self.login_locked_until else None,
+            "is_deleted": self.is_deleted,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
         if include_password:
             result["password_hash"] = self.password_hash
