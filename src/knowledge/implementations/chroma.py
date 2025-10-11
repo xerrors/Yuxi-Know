@@ -1,3 +1,4 @@
+import asyncio
 import os
 import traceback
 from datetime import datetime
@@ -209,7 +210,12 @@ class ChromaKB(KnowledgeBase):
                         batch_metadatas = metadatas[i : i + batch_size]
                         batch_ids = ids[i : i + batch_size]
 
-                        collection.add(documents=batch_documents, metadatas=batch_metadatas, ids=batch_ids)
+                        await asyncio.to_thread(
+                            collection.add,
+                            documents=batch_documents,
+                            metadatas=batch_metadatas,
+                            ids=batch_ids,
+                        )
 
                         batch_num = i // batch_size + 1
                         logger.info(f"Processed batch {batch_num}/{total_batches} for {filename}")
