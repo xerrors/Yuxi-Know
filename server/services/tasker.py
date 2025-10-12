@@ -105,7 +105,7 @@ class Tasker:
                 worker = asyncio.create_task(self._worker_loop(), name="tasker-worker")
                 self._workers.append(worker)
             self._started = True
-            logger.info("Tasker started with %s workers", self.worker_count)
+            logger.info("Tasker started with {} workers", self.worker_count)
 
     async def shutdown(self) -> None:
         async with self._lock:
@@ -133,7 +133,7 @@ class Tasker:
             self._tasks[task_id] = task
             await self._persist_state()
             await self._queue.put((task_id, coroutine))
-        logger.info("Enqueued task %s (%s)", task_id, name)
+        logger.info("Enqueued task {} ({})", task_id, name)
         return task
 
     async def list_tasks(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -159,7 +159,7 @@ class Tasker:
             task.cancel_requested = True
             task.updated_at = _utc_timestamp()
             await self._persist_state()
-        logger.info("Cancellation requested for task %s", task_id)
+        logger.info("Cancellation requested for task {}", task_id)
         return True
 
     async def _worker_loop(self) -> None:
@@ -191,7 +191,7 @@ class Tasker:
                     except asyncio.CancelledError:
                         await self._mark_cancelled(task_id, "任务被取消")
                     except Exception as exc:  # noqa: BLE001
-                        logger.error("Task %s failed: %s", task_id, exc, exc_info=True)
+                        logger.exception("Task {} failed: {}", task_id, exc)
                         await self._update_task(
                             task_id,
                             status="failed",
@@ -205,7 +205,7 @@ class Tasker:
             except asyncio.CancelledError:
                 break
             except Exception as exc:  # noqa: BLE001
-                logger.error("Tasker worker error: %s", exc, exc_info=True)
+                logger.exception("Tasker worker error: {}", exc)
 
     async def _get_task_instance(self, task_id: str) -> Optional[Task]:
         async with self._lock:
@@ -277,9 +277,9 @@ class Tasker:
                     task.message = "服务重启时任务未继续执行"
                     task.updated_at = _utc_timestamp()
                 self._tasks[task.id] = task
-            logger.info("Loaded %s task records from storage", len(tasks))
+            logger.info("Loaded {} task records from storage", len(tasks))
         except Exception as exc:  # noqa: BLE001
-            logger.error("Failed to load task state: %s", exc, exc_info=True)
+            logger.exception("Failed to load task state: {}", exc)
 
     async def _persist_state(self) -> None:
         tasks = [task.to_dict() for task in self._tasks.values()]

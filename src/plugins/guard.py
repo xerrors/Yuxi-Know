@@ -4,6 +4,7 @@ from src.config.app import config
 from src.models import select_model
 from src.utils import logger
 
+# region guard_prompt
 PROMPT_TEMPLATE = """
 # 指令
 你是一个内容合规性检测助手。请根据提供的规则集，判断以下内容是否符合合规性要求。
@@ -26,6 +27,7 @@ PROMPT_TEMPLATE = """
 
 输入内容：{content}
 输出内容："""
+# endregion guard_prompt
 
 
 def load_keywords(file_path: str) -> list[str]:
@@ -52,9 +54,24 @@ class ContentGuard:
         else:
             self.llm_model = None
 
-    def check(self, text: str) -> bool:
+    async def check(self, text: str) -> bool:
         """
         Checks if the text contains any sensitive keywords.
+        Returns True if sensitive content is found, False otherwise.
+        True: 不合规
+        False: 合规
+        """
+        if keywords_result := await self.check_with_keywords(text):
+            return keywords_result
+
+        if self.llm_model:
+            return await self.check_with_llm(text)
+
+        return False
+
+    async def check_with_keywords(self, text: str) -> bool:
+        """
+        Checks if the text contains any sensitive keywords from the predefined list.
         Returns True if sensitive content is found, False otherwise.
         True: 不合规
         False: 合规
@@ -64,10 +81,11 @@ class ContentGuard:
         text_lower = text.lower()
         for keyword in self.keywords:
             if keyword in text_lower:
+                logger.debug(f"Keyword match found: {keyword}")
                 return True
         return False
 
-    def check_with_llm(self, text: str) -> bool:
+    async def check_with_llm(self, text: str) -> bool:
         """
         Checks if the text contains any sensitive keywords using an LLM.
         Returns True if sensitive content is found, False otherwise.

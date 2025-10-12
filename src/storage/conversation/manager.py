@@ -116,6 +116,40 @@ class ConversationManager:
         logger.debug(f"Added {role} message to conversation {conversation_id}")
         return message
 
+    def add_message_by_thread_id(
+        self,
+        thread_id: str,
+        role: str,
+        content: str,
+        message_type: str = "text",
+        extra_metadata: dict | None = None,
+    ) -> Message | None:
+        """
+        Add a message to a conversation by thread ID
+
+        Args:
+            thread_id: Thread ID
+            role: Message role (user/assistant/system/tool)
+            content: Message content
+            message_type: Message type (text/tool_call/tool_result)
+            extra_metadata: Additional metadata (complete message dump)
+
+        Returns:
+            Created Message object or None if conversation not found
+        """
+        conversation = self.get_conversation_by_thread_id(thread_id)
+        if not conversation:
+            logger.warning(f"Conversation not found for thread_id: {thread_id}")
+            return None
+
+        return self.add_message(
+            conversation_id=conversation.id,
+            role=role,
+            content=content,
+            message_type=message_type,
+            extra_metadata=extra_metadata,
+        )
+
     def add_tool_call(
         self,
         message_id: int,
@@ -196,6 +230,7 @@ class ConversationManager:
         """
         conversation = self.get_conversation_by_thread_id(thread_id)
         if not conversation:
+            logger.warning(f"Conversation not found for thread_id: {thread_id}")
             return []
 
         return self.get_messages(conversation.id, limit, offset)

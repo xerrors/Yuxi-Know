@@ -142,7 +142,7 @@ async def chat_agent(
 
     async def save_messages_from_langgraph_state(
         agent_instance,
-        conversation,
+        thread_id,
         conv_mgr,
         config_dict,
     ):
@@ -162,11 +162,11 @@ async def chat_agent(
             logger.debug(f"Retrieved {len(messages)} messages from LangGraph state")
 
             # 获取已保存的消息数量，避免重复保存
-            existing_messages = conv_mgr.get_messages(conversation.id)
+            existing_messages = conv_mgr.get_messages_by_thread_id(thread_id)
             existing_count = len(existing_messages)
 
             # 只保存新增的消息
-            new_messages = messages[existing_count:]
+            new_messages = messages
 
             for msg in new_messages:
                 msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
@@ -190,8 +190,8 @@ async def chat_agent(
                             msg_dict["response_metadata"]["model_name"] = model_name[: len(model_name) // repeat_count]
 
                     # 保存 AI 消息
-                    ai_msg = conv_mgr.add_message(
-                        conversation_id=conversation.id,
+                    ai_msg = conv_mgr.add_message_by_thread_id(
+                        thread_id=thread_id,
                         role="assistant",
                         content=content,
                         message_type="text",
@@ -236,6 +236,10 @@ async def chat_agent(
                         else:
                             logger.warning(f"Tool call {tool_call_id} not found for update")
 
+                else:
+                    logger.warning(f"Unknown message type: {msg_type}, skipping")
+                    continue
+
                 logger.debug(f"Processed message type={msg_type}")
 
             logger.info(f"Saved {len(new_messages)} new messages from LangGraph state")
@@ -249,7 +253,7 @@ async def chat_agent(
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
 
         # Input guard
-        if conf.enable_content_guard and content_guard.check(query):
+        if conf.enable_content_guard and await content_guard.check(query):
             yield make_chunk(status="error", message="输入内容包含敏感词", meta=meta)
             return
 
@@ -265,91 +269,74 @@ async def chat_agent(
         # 构造运行时配置，如果没有thread_id则生成一个
         user_id = str(current_user.id)
         thread_id = config.get("thread_id")
-
         input_context = {"user_id": user_id, "thread_id": thread_id}
+
+        if not thread_id:
+            thread_id = str(uuid.uuid4())
+            logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
+
 
         # Initialize conversation manager
         conv_manager = ConversationManager(db)
 
-        # Get or create conversation
-        conversation = None
-        if thread_id:
-            conversation = conv_manager.get_conversation_by_thread_id(thread_id)
-            if not conversation:
-                try:
-                    # Auto-create conversation for existing thread
-                    conversation = conv_manager.create_conversation(
-                        user_id=user_id,
-                        agent_id=agent_id,
-                        title=(query[:50] + "..." if len(query) > 50 else query) if query else "新的对话",
-                        thread_id=thread_id,
-                    )
-                    logger.info(f"Auto-created conversation for thread_id {thread_id}")
-                except Exception as e:
-                    logger.error(f"Failed to auto-create conversation: {e}")
-                    conversation = None
-
         # Save user message
-        if conversation:
-            try:
-                conv_manager.add_message(
-                    conversation_id=conversation.id,
-                    role="user",
-                    content=query,
-                    message_type="text",
-                    extra_metadata={"raw_message": HumanMessage(content=query).model_dump()},
-                )
-            except Exception as e:
-                logger.error(f"Error saving user message: {e}")
+        try:
+            conv_manager.add_message_by_thread_id(
+                thread_id=thread_id,
+                role="user",
+                content=query,
+                message_type="text",
+                extra_metadata={"raw_message": HumanMessage(content=query).model_dump()},
+            )
+        except Exception as e:
+            logger.error(f"Error saving user message: {e}")
 
         try:
-            # Stream messages (only for display, don't save yet)
+            full_ai_content = ""
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 if isinstance(msg, AIMessageChunk):
-                    # Content guard
-                    if conf.enable_content_guard and content_guard.check(msg.content):
+
+                    full_ai_content += msg.content
+                    if conf.enable_content_guard and await content_guard.check_with_keywords(full_ai_content[-20:]):
                         logger.warning("Sensitive content detected in stream")
                         yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                         return
 
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
 
-                elif isinstance(msg, ToolMessage):
-                    yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
+
+            if conf.enable_content_guard and await content_guard.check(full_ai_content):
+                logger.warning("Sensitive content detected in final message")
+                yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
+                return
 
             yield make_chunk(status="finished", meta=meta)
 
             # After streaming finished, save all messages from LangGraph state
-            if conversation:
-                langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-                await save_messages_from_langgraph_state(
-                    agent_instance=agent,
-                    conversation=conversation,
-                    conv_mgr=conv_manager,
-                    config_dict=langgraph_config,
-                )
+            langgraph_config = {"configurable": input_context}
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
+            )
+
         except (asyncio.CancelledError, ConnectionError) as e:
             # 客户端主动中断连接，尝试保存已生成的部分内容
-            logger.info(f"Client disconnected for thread {thread_id}: {e}")
-            try:
-                if conversation:
-                    langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-                    await save_messages_from_langgraph_state(
-                        agent_instance=agent,
-                        conversation=conversation,
-                        conv_mgr=conv_manager,
-                        config_dict=langgraph_config,
-                    )
-            except Exception as save_error:
-                logger.error(f"Error saving partial messages after disconnect: {save_error}")
+            logger.warning(f"Client disconnected for thread {thread_id}: {e}")
+            langgraph_config = {"configurable": input_context}
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
+            )
+
             # 通知前端中断（可能发送不到，但用于一致性）
-            try:
-                yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
-            except Exception:
-                pass
-            return
+            yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
+
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
