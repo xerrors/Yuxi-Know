@@ -33,10 +33,6 @@
             </span>
           </a-badge>
         </div>
-        <div class="status-indicator" :class="systemStatus">
-          <div class="status-dot"></div>
-          <span class="status-text">{{ statusText }}</span>
-        </div>
       </div>
     </div>
   </div>
@@ -58,7 +54,6 @@ const { activeCount: activeCountRef } = storeToRefs(taskerStore)
 
 // 响应式数据
 const currentTime = ref('')
-const systemStatus = ref('online')
 
 // 计算属性
 const organization = computed(() => infoStore.organization)
@@ -87,19 +82,6 @@ const greeting = computed(() => {
   }
 
   return `${greetingText}！${currentUser.value}`
-})
-
-const statusText = computed(() => {
-  switch (systemStatus.value) {
-    case 'online':
-      return '在线'
-    case 'offline':
-      return '离线'
-    case 'maintenance':
-      return '维护中'
-    default:
-      return '未知'
-  }
 })
 
 const activeTaskCount = computed(() => activeCountRef.value || 0)
@@ -255,52 +237,6 @@ onUnmounted(() => {
 .current-time,
 .user-greeting {
   font-weight: 500;
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-
-  &.online {
-    background-color: #f0fdf4;
-    color: #16a34a;
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: #16a34a;
-    }
-  }
-
-  &.offline {
-    background-color: #fef2f2;
-    color: #dc2626;
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: #dc2626;
-    }
-  }
-
-  &.maintenance {
-    background-color: #fffbeb;
-    color: #d97706;
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background-color: #d97706;
-    }
-  }
 }
 
 // 响应式设计
