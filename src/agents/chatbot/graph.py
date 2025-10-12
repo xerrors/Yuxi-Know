@@ -26,10 +26,8 @@ class ChatbotAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.graph = None
-        self.checkpointer = InMemorySaver()
+        self.checkpointer = None
         self.context_schema = Context
-        self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
-        self.workdir.mkdir(parents=True, exist_ok=True)
         self.agent_tools = None
 
     def get_tools(self):
@@ -103,21 +101,14 @@ class ChatbotAgent(BaseAgent):
         builder.add_edge("tools", "chatbot")
         builder.add_edge("chatbot", END)
 
+        self.checkpointer = await self._get_checkpointer()
         graph = builder.compile(checkpointer=self.checkpointer, name=self.name)
         self.graph = graph
         return graph
 
 
 def main():
-    agent = ChatbotAgent(Context)
-
-    thread_id = str(uuid.uuid4())
-    config = {"configurable": {"thread_id": thread_id}}
-
-    from src.agents.utils import agent_cli
-
-    agent_cli(agent, config)
-
+    pass
 
 if __name__ == "__main__":
     main()

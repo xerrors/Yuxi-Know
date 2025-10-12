@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from abc import abstractmethod
 
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 
+from src import config as sys_config
 from src.agents.common.context import BaseContext
 from src.utils import logger
 
@@ -19,8 +23,10 @@ class BaseAgent:
 
     def __init__(self, **kwargs):
         self.graph = None  # will be covered by get_graph
-        self.checkpointer = InMemorySaver()
+        self.checkpointer = None
         self.context_schema = BaseContext
+        self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
+        self.workdir.mkdir(parents=True, exist_ok=True)
 
     @property
     def module_name(self) -> str:
@@ -103,3 +109,26 @@ class BaseAgent:
         例如: graph = workflow.compile(checkpointer=sqlite_checkpointer)
         """
         pass
+
+    async def _get_checkpointer(self):
+        # 创建数据库连接并确保设置 checkpointer
+        checkpointer = None
+
+        try:
+            checkpointer = AsyncSqliteSaver(await self.get_async_conn())
+
+        except Exception as e:
+            logger.error(f"构建 Graph 设置 checkpointer 时出错: {e}, 尝试使用内存存储")
+            checkpointer = InMemorySaver()
+
+        return checkpointer
+
+
+    async def get_async_conn(self) -> aiosqlite.Connection:
+        """获取异步数据库连接"""
+        return await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
+
+    async def get_aio_memory(self) -> AsyncSqliteSaver:
+        """获取异步存储实例"""
+        return AsyncSqliteSaver(await self.get_async_conn())
+

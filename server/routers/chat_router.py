@@ -166,7 +166,7 @@ async def chat_agent(
             existing_count = len(existing_messages)
 
             # 只保存新增的消息
-            new_messages = messages
+            new_messages = messages[existing_count :]
 
             for msg in new_messages:
                 msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}

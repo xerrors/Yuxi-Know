@@ -83,6 +83,12 @@ class Message(Base):
             "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
         }
 
+    def to_simple_dict(self):
+        return {
+            "role": self.role,
+            "content": self.content,
+        }
+
 
 class ToolCall(Base):
     """ToolCall table - stores tool invocations"""

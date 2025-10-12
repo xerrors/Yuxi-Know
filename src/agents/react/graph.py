@@ -35,7 +35,9 @@ class ReActAgent(BaseAgent):
             return self.graph
 
         available_tools = get_buildin_tools()
+        self.checkpointer = await self._get_checkpointer()
 
+         # 创建 ReActAgent
         graph = create_react_agent(model, tools=available_tools, prompt=prompt, checkpointer=self.checkpointer)
         self.graph = graph
         logger.info("ReActAgent 使用内存 checkpointer 构建成功")
