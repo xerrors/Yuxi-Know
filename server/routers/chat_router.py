@@ -163,17 +163,13 @@ async def chat_agent(
 
             # 获取已保存的消息数量，避免重复保存
             existing_messages = conv_mgr.get_messages_by_thread_id(thread_id)
-            existing_count = len(existing_messages)
+            existing_ids = {msg.extra_metadata["id"] for msg in existing_messages if msg.extra_metadata and "id" in msg.extra_metadata}
 
-            # 只保存新增的消息
-            new_messages = messages[existing_count :]
-
-            for msg in new_messages:
+            for msg in messages:
                 msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
                 msg_type = msg_dict.get("type", "unknown")
 
-                if msg_type == "human":
-                    # 用户消息（理论上已经保存过了，跳过）
+                if msg_type == "human" or msg.id in existing_ids:
                     continue
 
                 elif msg_type == "ai":
@@ -242,7 +238,7 @@ async def chat_agent(
 
                 logger.debug(f"Processed message type={msg_type}")
 
-            logger.info(f"Saved {len(new_messages)} new messages from LangGraph state")
+            logger.info(f"Saved messages from LangGraph state")
 
         except Exception as e:
             logger.error(f"Error saving messages from LangGraph state: {e}")
