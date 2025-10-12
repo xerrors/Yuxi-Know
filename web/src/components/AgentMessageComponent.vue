@@ -27,6 +27,12 @@
 
       <div v-else-if="parsedData.reasoning_content"  class="empty-block"></div>
 
+      <!-- 错误提示块 -->
+      <div v-if="message.error_type" class="error-hint" :class="{ 'error-interrupted': message.error_type === 'interrupted', 'error-unexpect': message.error_type === 'unexpect' }">
+        <span v-if="message.error_type === 'interrupted'">回答生成已中断</span>
+        <span v-else-if="message.error_type === 'unexpect'">生成过程中出现异常</span>
+      </div>
+
       <div v-if="message.tool_calls && Object.keys(message.tool_calls).length > 0" class="tool-calls-container">
         <div v-for="(toolCall, index) in message.tool_calls || {}" :key="index" class="tool-call-container">
           <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
@@ -296,6 +302,32 @@ const toggleToolCall = (toolCallId) => {
     width: 100%;
   }
 
+  .error-hint {
+    margin: 10px 0;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    &.error-interrupted {
+      background-color: #fffbeb;
+      // border: 1px solid #fbbf24;
+      color: #92400e;
+    }
+
+    &.error-unexpect {
+      background-color: #fef2f2;
+      // border: 1px solid #f87171;
+      color: #991b1b;
+    }
+
+    span {
+      line-height: 1.5;
+    }
+  }
+
   .status-info {
     display: block;
     background-color: var(--gray-50);
@@ -553,6 +585,7 @@ const toggleToolCall = (toolCallId) => {
 
     .md-editor-code-head {
       background-color: var(--gray-50);
+      z-index: 1;
 
       .md-editor-collapse-tips {
         color: var(--gray-400);

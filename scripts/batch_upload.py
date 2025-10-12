@@ -94,7 +94,8 @@ async def process_document(
             task_id = result.get("task_id")
             extra = f" (task id: {task_id})" if task_id else ""
             console.print(
-                f"[bold cyan]Ingestion queued for {server_file_path}{extra}. Track progress in the task center.[/bold cyan]"
+                f"[bold cyan]Ingestion queued for {server_file_path}{extra}. "
+                "Track progress in the task center.[/bold cyan]"
             )
             return True
 

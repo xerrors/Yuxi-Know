@@ -20,14 +20,22 @@ export const agentApi = {
    * @param {Object} data - 聊天数据
    * @returns {Promise} - 聊天响应流
    */
-  sendAgentMessage: (agentId, data) => {
+  sendAgentMessage: (agentId, data, options = {}) => {
+    const { signal, headers: extraHeaders, ...restOptions } = options || {};
+    const baseHeaders = {
+      'Content-Type': 'application/json',
+      ...useUserStore().getAuthHeaders()
+    };
+
     return fetch(`/api/chat/agent/${agentId}`, {
       method: 'POST',
+      body: JSON.stringify(data),
+      signal,
       headers: {
-        'Content-Type': 'application/json',
-        ...useUserStore().getAuthHeaders()
+        ...baseHeaders,
+        ...(extraHeaders || {})
       },
-      body: JSON.stringify(data)
+      ...restOptions
     })
   },
 

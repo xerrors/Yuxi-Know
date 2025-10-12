@@ -7,12 +7,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.storage.db.models import User, MessageFeedback, Message, Conversation
 from src.storage.conversation import ConversationManager
+from src.storage.db.manager import db_manager
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
 from src import executor
@@ -163,7 +164,11 @@ async def chat_agent(
 
             # 获取已保存的消息数量，避免重复保存
             existing_messages = conv_mgr.get_messages_by_thread_id(thread_id)
-            existing_ids = {msg.extra_metadata["id"] for msg in existing_messages if msg.extra_metadata and "id" in msg.extra_metadata}
+            existing_ids = {
+                msg.extra_metadata["id"]
+                for msg in existing_messages
+                if msg.extra_metadata and "id" in msg.extra_metadata
+            }
 
             for msg in messages:
                 msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
@@ -238,7 +243,7 @@ async def chat_agent(
 
                 logger.debug(f"Processed message type={msg_type}")
 
-            logger.info(f"Saved messages from LangGraph state")
+            logger.info("Saved messages from LangGraph state")
 
         except Exception as e:
             logger.error(f"Error saving messages from LangGraph state: {e}")
@@ -271,7 +276,6 @@ async def chat_agent(
             thread_id = str(uuid.uuid4())
             logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
-
         # Initialize conversation manager
         conv_manager = ConversationManager(db)
 
@@ -288,12 +292,11 @@ async def chat_agent(
             logger.error(f"Error saving user message: {e}")
 
         try:
-            full_ai_content = ""
+            full_msg = None
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 if isinstance(msg, AIMessageChunk):
-
-                    full_ai_content += msg.content
-                    if conf.enable_content_guard and await content_guard.check_with_keywords(full_ai_content[-20:]):
+                    full_msg = msg if not full_msg else full_msg + msg
+                    if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
                         logger.warning("Sensitive content detected in stream")
                         yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                         return
@@ -303,7 +306,7 @@ async def chat_agent(
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
 
-            if conf.enable_content_guard and await content_guard.check(full_ai_content):
+            if conf.enable_content_guard and hasattr(full_msg, "content") and await content_guard.check(full_msg.content):
                 logger.warning("Sensitive content detected in final message")
                 yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                 return
@@ -321,20 +324,45 @@ async def chat_agent(
 
         except (asyncio.CancelledError, ConnectionError) as e:
             # 客户端主动中断连接，尝试保存已生成的部分内容
-            logger.warning(f"Client disconnected for thread {thread_id}: {e}")
-            langgraph_config = {"configurable": input_context}
-            await save_messages_from_langgraph_state(
-                agent_instance=agent,
-                thread_id=thread_id,
-                conv_mgr=conv_manager,
-                config_dict=langgraph_config,
-            )
+            logger.warning(f"Client disconnected, cancelling stream: {e}")
+            if full_msg:
+                # 创建新的 db session，因为原 session 可能已关闭
+                new_db = db_manager.get_session()
+                try:
+                    new_conv_manager = ConversationManager(new_db)
+                    msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
+                    content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+                    new_conv_manager.add_message_by_thread_id(
+                        thread_id=thread_id,
+                        role="assistant",
+                        content=content,
+                        message_type="text",
+                        extra_metadata=msg_dict | {"error_type": "interrupted"},  # 保存原始 model_dump
+                    )
+                finally:
+                    new_db.close()
 
             # 通知前端中断（可能发送不到，但用于一致性）
             yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
 
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
+            if full_msg:
+                # 创建新的 db session，因为原 session 可能已关闭
+                new_db = db_manager.get_session()
+                try:
+                    new_conv_manager = ConversationManager(new_db)
+                    msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
+                    content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+                    new_conv_manager.add_message_by_thread_id(
+                        thread_id=thread_id,
+                        role="assistant",
+                        content=content,
+                        message_type="text",
+                        extra_metadata=msg_dict | {"error_type": "unexpect"},  # 保存原始 model_dump
+                    )
+                finally:
+                    new_db.close()
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
     return StreamingResponse(stream_messages(), media_type="application/json")
@@ -422,6 +450,7 @@ async def get_agent_history(
                 "type": role_type_map.get(msg.role, msg.role),  # human/ai/tool/system
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "error_type": msg.extra_metadata.get("error_type") if msg.extra_metadata else None,
             }
 
             # Add tool calls if present (for AI messages)

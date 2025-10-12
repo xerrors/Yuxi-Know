@@ -370,12 +370,12 @@ const _processStreamChunk = (chunk, threadId) => {
   const { status, msg, request_id, message } = chunk;
   const threadState = getThreadState(threadId);
 
-  if (!threadState) return;
+  if (!threadState) return false;
 
   switch (status) {
     case 'init':
       threadState.onGoingConv.msgChunks[request_id] = [msg];
-      break;
+      return false;
     case 'loading':
       if (msg.id) {
         if (!threadState.onGoingConv.msgChunks[msg.id]) {
@@ -383,26 +383,12 @@ const _processStreamChunk = (chunk, threadId) => {
         }
         threadState.onGoingConv.msgChunks[msg.id].push(msg);
       }
-      break;
+      return false;
     case 'error':
       handleChatError({ message }, 'stream');
       // Stop the loading indicator
       if (threadState) {
         threadState.isStreaming = false;
-
-        // Create a new AI message chunk for the error
-        const errorMsgChunk = {
-          id: 'ai-error-' + Date.now(),
-          type: 'ai',
-          role: 'assistant',
-          content: chunk.message || 'An error occurred',
-          isError: true // Custom flag for styling
-        };
-
-        // Add this to the chunks of the ongoing conversation
-        if (threadState.onGoingConv && threadState.onGoingConv.msgChunks) {
-          threadState.onGoingConv.msgChunks[errorMsgChunk.id] = [errorMsgChunk];
-        }
 
         // Abort the stream controller to stop processing further events
         if (threadState.streamAbortController) {
@@ -410,18 +396,23 @@ const _processStreamChunk = (chunk, threadId) => {
           threadState.streamAbortController = null;
         }
       }
-      // We no longer call resetOnGoingConv to keep the context.
-      break;
+
+      // Reload messages to show any partial content saved by the backend
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      resetOnGoingConv(threadId);
+      return true;
     case 'finished':
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
-          resetOnGoingConv(threadId);
-          break;
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      resetOnGoingConv(threadId);
+      return true;
     case 'interrupted':
-          // 中断状态，刷新消息历史
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
-          resetOnGoingConv(threadId);
-          break;
+      // 中断状态，刷新消息历史
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      resetOnGoingConv(threadId);
+      return true;
   }
+
+  return false;
 };
 
 // ==================== 线程管理方法 ====================
@@ -520,7 +511,7 @@ const fetchThreadMessages = async ({ agentId, threadId }) => {
 };
 
 // 发送消息并处理流式响应
-const sendMessage = async ({ agentId, threadId, text }) => {
+const sendMessage = async ({ agentId, threadId, text, signal = undefined }) => {
   if (!agentId || !threadId || !text) {
     const error = new Error("Missing agent, thread, or message text");
     handleChatError(error, 'send');
@@ -540,32 +531,13 @@ const sendMessage = async ({ agentId, threadId, text }) => {
   };
 
   try {
-    return await agentApi.sendAgentMessage(agentId, requestData);
+    return await agentApi.sendAgentMessage(agentId, requestData, signal ? { signal } : undefined);
   } catch (error) {
     handleChatError(error, 'send');
     throw error;
   }
 };
 
-// 添加消息到线程
-const addMessageToThread = (threadId, message) => {
-  if (!threadId || !message) return;
-
-  if (!threadMessages.value[threadId]) {
-    threadMessages.value[threadId] = [];
-  }
-
-  threadMessages.value[threadId].push(message);
-};
-
-// 更新线程中的消息
-const updateMessageInThread = (threadId, messageIndex, updatedMessage) => {
-  if (!threadId || messageIndex < 0 || !threadMessages.value[threadId]) return;
-
-  if (messageIndex < threadMessages.value[threadId].length) {
-    threadMessages.value[threadId][messageIndex] = updatedMessage;
-  }
-};
 
 // ==================== CHAT ACTIONS ====================
 // 检查第一个对话是否为空
@@ -689,15 +661,16 @@ const handleSendMessage = async () => {
     const response = await sendMessage({
       agentId: currentAgentId.value,
       threadId: currentChatId.value,
-      text: text
+      text: text,
+      signal: threadState.streamAbortController?.signal
     });
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let stopReading = false;
 
-    while (true) {
-      if (!threadState.streamAbortController || threadState.streamAbortController.signal.aborted) break;
+    while (!stopReading) {
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -706,18 +679,24 @@ const handleSendMessage = async () => {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.trim() && threadState.streamAbortController && !threadState.streamAbortController.signal.aborted) {
+        const trimmedLine = line.trim();
+        if (trimmedLine) {
           try {
-            const chunk = JSON.parse(line.trim());
-            _processStreamChunk(chunk, threadId);
+            const chunk = JSON.parse(trimmedLine);
+            if (_processStreamChunk(chunk, threadId)) {
+              stopReading = true;
+              break;
+            }
           } catch (e) { console.warn('Failed to parse stream chunk JSON:', e); }
         }
       }
     }
-    if (buffer.trim() && threadState.streamAbortController && !threadState.streamAbortController.signal.aborted) {
+    if (!stopReading && buffer.trim()) {
       try {
         const chunk = JSON.parse(buffer.trim());
-        _processStreamChunk(chunk, threadId);
+        if (_processStreamChunk(chunk, threadId)) {
+          stopReading = true;
+        }
       } catch (e) { console.warn('Failed to parse final stream chunk JSON:', e); }
     }
   } catch (error) {
@@ -1151,6 +1130,7 @@ watch(conversations, () => {
   margin: 0 auto;
   padding: 4px 2rem 0 2rem;
   background: white;
+  z-index: 1000;
 
   .message-input-wrapper {
     width: 100%;

@@ -123,7 +123,6 @@ class BaseAgent:
 
         return checkpointer
 
-
     async def get_async_conn(self) -> aiosqlite.Connection:
         """获取异步数据库连接"""
         return await aiosqlite.connect(os.path.join(self.workdir, "aio_history.db"))
@@ -131,4 +130,3 @@ class BaseAgent:
     async def get_aio_memory(self) -> AsyncSqliteSaver:
         """获取异步存储实例"""
         return AsyncSqliteSaver(await self.get_async_conn())
-

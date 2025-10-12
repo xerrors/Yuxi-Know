@@ -592,12 +592,20 @@ async def upload_file(
 
     content_hash = calculate_content_hash(file_bytes)
     if knowledge_base.file_existed_in_db(db_id, content_hash):
-        raise HTTPException(status_code=409, detail="数据库中已经存在了相同文件，File with the same content already exists in this database")
+        raise HTTPException(
+            status_code=409,
+            detail="数据库中已经存在了相同文件，File with the same content already exists in this database",
+        )
 
     with open(file_path, "wb") as buffer:
         buffer.write(file_bytes)
 
-    return {"message": "File successfully uploaded", "file_path": file_path, "db_id": db_id, "content_hash": content_hash}
+    return {
+        "message": "File successfully uploaded",
+        "file_path": file_path,
+        "db_id": db_id,
+        "content_hash": content_hash,
+    }
 
 
 @knowledge.get("/files/supported-types")

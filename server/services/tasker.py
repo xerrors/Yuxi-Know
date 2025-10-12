@@ -5,7 +5,8 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any
+from collections.abc import Awaitable, Callable
 
 from src.config import config
 from src.utils.logging_config import logger
@@ -28,19 +29,19 @@ class Task:
     message: str = ""
     created_at: str = field(default_factory=_utc_timestamp)
     updated_at: str = field(default_factory=_utc_timestamp)
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
-    payload: Dict[str, Any] = field(default_factory=dict)
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
+    payload: dict[str, Any] = field(default_factory=dict)
+    result: Any | None = None
+    error: str | None = None
     cancel_requested: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         return data
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+    def from_dict(cls, data: dict[str, Any]) -> "Task":
         return cls(
             id=data["id"],
             name=data.get("name", "Unnamed Task"),
@@ -64,7 +65,7 @@ class TaskContext:
         self._tasker = tasker
         self.task_id = task_id
 
-    async def set_progress(self, progress: float, message: Optional[str] = None) -> None:
+    async def set_progress(self, progress: float, message: str | None = None) -> None:
         await self._tasker._update_task(
             self.task_id,
             progress=max(0.0, min(progress, 100.0)),
@@ -88,10 +89,10 @@ class TaskContext:
 class Tasker:
     def __init__(self, worker_count: int = 2):
         self.worker_count = max(1, worker_count)
-        self._queue: "asyncio.Queue[tuple[str, TaskCoroutine]]" = asyncio.Queue()
-        self._tasks: Dict[str, Task] = {}
+        self._queue: asyncio.Queue[tuple[str, TaskCoroutine]] = asyncio.Queue()
+        self._tasks: dict[str, Task] = {}
         self._lock = asyncio.Lock()
-        self._workers: List[asyncio.Task[Any]] = []
+        self._workers: list[asyncio.Task[Any]] = []
         self._storage_path = Path(config.save_dir) / "tasks" / "tasks.json"
         os.makedirs(self._storage_path.parent, exist_ok=True)
         self._started = False
@@ -124,7 +125,7 @@ class Tasker:
         *,
         name: str,
         task_type: str,
-        payload: Optional[Dict[str, Any]] = None,
+        payload: dict[str, Any] | None = None,
         coroutine: TaskCoroutine,
     ) -> Task:
         task_id = uuid.uuid4().hex
@@ -136,7 +137,7 @@ class Tasker:
         logger.info("Enqueued task {} ({})", task_id, name)
         return task
 
-    async def list_tasks(self, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def list_tasks(self, status: str | None = None) -> list[dict[str, Any]]:
         async with self._lock:
             tasks = list(self._tasks.values())
         if status:
@@ -144,7 +145,7 @@ class Tasker:
         tasks.sort(key=lambda item: item.created_at, reverse=True)
         return [task.to_dict() for task in tasks]
 
-    async def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
+    async def get_task(self, task_id: str) -> dict[str, Any] | None:
         async with self._lock:
             task = self._tasks.get(task_id)
         return task.to_dict() if task else None
@@ -173,7 +174,9 @@ class Tasker:
                     if task.cancel_requested:
                         await self._mark_cancelled(task_id, "Task was cancelled before execution")
                         continue
-                    await self._update_task(task_id, status="running", progress=0.0, message="任务开始执行", started_at=_utc_timestamp())
+                    await self._update_task(
+                        task_id, status="running", progress=0.0, message="任务开始执行", started_at=_utc_timestamp()
+                    )
                     context = TaskContext(self, task_id)
                     try:
                         result = await coroutine(context)
@@ -207,7 +210,7 @@ class Tasker:
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Tasker worker error: {}", exc)
 
-    async def _get_task_instance(self, task_id: str) -> Optional[Task]:
+    async def _get_task_instance(self, task_id: str) -> Task | None:
         async with self._lock:
             return self._tasks.get(task_id)
 
@@ -224,13 +227,13 @@ class Tasker:
         self,
         task_id: str,
         *,
-        status: Optional[str] = None,
-        progress: Optional[float] = None,
-        message: Optional[str] = None,
+        status: str | None = None,
+        progress: float | None = None,
+        message: str | None = None,
         result: Any = None,
-        error: Optional[str] = None,
-        started_at: Optional[str] = None,
-        completed_at: Optional[str] = None,
+        error: str | None = None,
+        started_at: str | None = None,
+        completed_at: str | None = None,
     ) -> None:
         async with self._lock:
             task = self._tasks.get(task_id)
