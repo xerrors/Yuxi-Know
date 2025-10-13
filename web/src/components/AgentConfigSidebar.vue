@@ -234,7 +234,7 @@
     <a-modal
       v-model:open="toolsModalOpen"
       title="选择工具"
-      :width="600"
+      :width="800"
       :footer="null"
       :maskClosable="false"
       class="tools-modal"
@@ -569,7 +569,7 @@ watch(() => props.isOpen, (newVal) => {
 
 <style lang="less" scoped>
 
-@padding-bottom: 40px;
+@padding-bottom: 0px;
 .agent-config-sidebar {
   position: relative;
   width: 0;
@@ -642,7 +642,7 @@ watch(() => props.isOpen, (newVal) => {
 
     .sidebar-footer {
       position: sticky;
-      bottom: 16px;
+      bottom: 0px;
       padding: 12px 0;
       border-top: 1px solid var(--gray-100);
       background: #fff;

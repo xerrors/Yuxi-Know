@@ -350,9 +350,7 @@ def check_and_migrate(db_path: str):
             logger.warning(f"  - {issue}")
 
         if os.path.exists(db_path):
-            logger.info(
-                "建议运行迁移脚本: docker exec api-dev python /app/scripts/migrate_user_soft_delete.py"
-            )
+            logger.info("建议运行迁移脚本: docker exec api-dev python /app/scripts/migrate_user_soft_delete.py")
 
     migrator = DatabaseMigrator(db_path)
 

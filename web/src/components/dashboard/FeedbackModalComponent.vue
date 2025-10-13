@@ -7,11 +7,11 @@
     :footer="null"
   >
       <a-space style="margin-bottom: 16px">
-        <a-radio-group v-model:value="feedbackFilter" @change="loadFeedbacks">
-          <a-radio-button value="all">全部</a-radio-button>
-          <a-radio-button value="like">点赞</a-radio-button>
-          <a-radio-button value="dislike">点踩</a-radio-button>
-        </a-radio-group>
+        <a-segmented
+          v-model:value="feedbackFilter"
+          :options="feedbackOptions"
+          @change="loadFeedbacks"
+        />
       </a-space>
 
       <!-- 卡片列表 -->
@@ -92,7 +92,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { LikeOutlined, DislikeOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
 import { dashboardApi } from '@/apis/dashboard_api'
@@ -113,6 +113,11 @@ const modalVisible = ref(false)
 const feedbacks = ref([])
 const loadingFeedbacks = ref(false)
 const feedbackFilter = ref('all')
+const feedbackOptions = [
+  { label: '全部', value: 'all' },
+  { label: '点赞', value: 'like' },
+  { label: '点踩', value: 'dislike' }
+]
 
 // 显示模态框
 const show = () => {

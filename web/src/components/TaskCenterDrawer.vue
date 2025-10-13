@@ -9,36 +9,10 @@
     <div class="task-center">
       <div class="task-toolbar">
         <div class="task-filter-group">
-          <a-button-group>
-            <a-button
-              :type="isActiveFilter('all') ? 'primary' : 'default'"
-              @click="setFilter('all')"
-            >
-              全部
-              <span class="filter-count">{{ totalCount }}</span>
-            </a-button>
-            <a-button
-              :type="isActiveFilter('active') ? 'primary' : 'default'"
-              @click="setFilter('active')"
-            >
-              进行中
-              <span class="filter-count">{{ inProgressCount }}</span>
-            </a-button>
-            <a-button
-              :type="isActiveFilter('success') ? 'primary' : 'default'"
-              @click="setFilter('success')"
-            >
-              已完成
-              <span class="filter-count">{{ completedCount }}</span>
-            </a-button>
-            <a-button
-              :type="isActiveFilter('failed') ? 'primary' : 'default'"
-              @click="setFilter('failed')"
-            >
-              失败
-              <span class="filter-count">{{ failedCount }}</span>
-            </a-button>
-          </a-button-group>
+          <a-segmented
+            v-model:value="statusFilter"
+            :options="taskFilterOptions"
+          />
         </div>
         <div class="task-toolbar-actions">
           <a-button
@@ -135,7 +109,6 @@ import { computed, h, onBeforeUnmount, watch, ref } from 'vue'
 import { Modal } from 'ant-design-vue'
 import { useTaskerStore } from '@/stores/tasker'
 import { storeToRefs } from 'pinia'
-import { ReloadOutlined } from '@ant-design/icons-vue'
 import { formatFullDateTime, formatRelative, parseToShanghai } from '@/utils/time'
 
 const taskerStore = useTaskerStore()
@@ -146,6 +119,48 @@ const tasks = computed(() => sortedTasks.value)
 const loadingState = computed(() => Boolean(loading.value))
 const lastErrorState = computed(() => lastError.value)
 const statusFilter = ref('all')
+const inProgressCount = computed(
+  () => tasks.value.filter((task) => ACTIVE_CLASS_STATUSES.has(task.status)).length
+)
+const completedCount = computed(() => tasks.value.filter((task) => task.status === 'success').length)
+const failedCount = computed(
+  () => tasks.value.filter((task) => FAILED_STATUSES.has(task.status)).length
+)
+const totalCount = computed(() => tasks.value.length)
+const taskFilterOptions = computed(() => [
+  {
+    label: () =>
+      h('span', { class: 'task-filter-option' }, [
+        '全部',
+        h('span', { class: 'filter-count' }, totalCount.value)
+      ]),
+    value: 'all'
+  },
+  {
+    label: () =>
+      h('span', { class: 'task-filter-option' }, [
+        '进行中',
+        h('span', { class: 'filter-count' }, inProgressCount.value)
+      ]),
+    value: 'active'
+  },
+  {
+    label: () =>
+      h('span', { class: 'task-filter-option' }, [
+        '已完成',
+        h('span', { class: 'filter-count' }, completedCount.value)
+      ]),
+    value: 'success'
+  },
+  {
+    label: () =>
+      h('span', { class: 'task-filter-option' }, [
+        '失败',
+        h('span', { class: 'filter-count' }, failedCount.value)
+      ]),
+    value: 'failed'
+  }
+])
 
 const filteredTasks = computed(() => {
   const list = tasks.value
@@ -321,22 +336,6 @@ function canCancel(task) {
   return ['pending', 'running', 'queued'].includes(task.status) && !task.cancel_requested
 }
 
-const inProgressCount = computed(
-  () => tasks.value.filter((task) => ACTIVE_CLASS_STATUSES.has(task.status)).length
-)
-const completedCount = computed(() => tasks.value.filter((task) => task.status === 'success').length)
-const failedCount = computed(
-  () => tasks.value.filter((task) => FAILED_STATUSES.has(task.status)).length
-)
-const totalCount = computed(() => tasks.value.length)
-
-function setFilter(value) {
-  statusFilter.value = value
-}
-
-function isActiveFilter(value) {
-  return statusFilter.value === value
-}
 </script>
 <style scoped lang="less">
 .task-center {
@@ -365,13 +364,7 @@ function isActiveFilter(value) {
   gap: 4px;
 }
 
-.task-filter-group :deep(.ant-btn) {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.filter-count {
+:deep(.filter-count) {
   margin-left: 2px;
   font-size: 12px;
   color: #94a3b8;

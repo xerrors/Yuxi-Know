@@ -18,19 +18,19 @@
         <h3>检索配置</h3>
         <div class="section">
           <div class="card card-select">
-            <span class="label">对话模型</span>
+            <span class="label">{{ items?.default_model?.des || '默认对话模型' }}</span>
             <ModelSelectorComponent
               @select-model="handleChatModelSelect"
-              :model_name="configStore.config?.model_name"
-              :model_provider="configStore.config?.model_provider"
+              :model_spec="configStore.config?.default_model"
+              placeholder="请选择默认模型"
             />
           </div>
           <div class="card card-select">
             <span class="label">{{ items?.fast_model.des }}</span>
             <ModelSelectorComponent
               @select-model="handleFastModelSelect"
-              :model_name="fastModelName"
-              :model_provider="fastModelProvider"
+              :model_spec="configStore.config?.fast_model"
+              placeholder="请选择模型"
             />
           </div>
           <div class="card card-select">
@@ -109,8 +109,8 @@
             <span class="label">{{ items?.content_guard_llm_model.des }}</span>
             <ModelSelectorComponent
               @select-model="handleContentGuardModelSelect"
-              :model_name="contentGuardModelName"
-              :model_provider="contentGuardModelProvider"
+              :model_spec="configStore.config?.content_guard_llm_model"
+              placeholder="请选择模型"
             />
           </div>
         </div>
@@ -251,45 +251,22 @@ const updateWindowWidth = () => {
   state.windowWidth = window?.innerWidth || 0
 }
 
-const handleChatModelSelect = ({ provider, name }) => {
-  configStore.setConfigValues({
-    model_provider: provider,
-    model_name: name,
-  })
+const handleChatModelSelect = (spec) => {
+  if (typeof spec === 'string' && spec) {
+    configStore.setConfigValue('default_model', spec)
+  }
 }
 
-const fastModelProvider = computed(() => {
-  const fastModel = configStore.config?.fast_model
-  if (!fastModel) return ''
-  return fastModel.split('/')[0]
-})
-
-const fastModelName = computed(() => {
-  const fastModel = configStore.config?.fast_model
-  if (!fastModel) return ''
-  const parts = fastModel.split('/')
-  return parts.slice(1).join('/')
-})
-
-const handleFastModelSelect = ({ provider, name }) => {
-  configStore.setConfigValue('fast_model', `${provider}/${name}`)
+const handleFastModelSelect = (spec) => {
+  if (typeof spec === 'string' && spec) {
+    configStore.setConfigValue('fast_model', spec)
+  }
 }
 
-const contentGuardModelProvider = computed(() => {
-  const contentGuardModel = configStore.config?.content_guard_llm_model
-  if (!contentGuardModel) return ''
-  return contentGuardModel.split('/')[0]
-})
-
-const contentGuardModelName = computed(() => {
-  const contentGuardModel = configStore.config?.content_guard_llm_model
-  if (!contentGuardModel) return ''
-  const parts = contentGuardModel.split('/')
-  return parts.slice(1).join('/')
-})
-
-const handleContentGuardModelSelect = ({ provider, name }) => {
-  configStore.setConfigValue('content_guard_llm_model', `${provider}/${name}`)
+const handleContentGuardModelSelect = (spec) => {
+  if (typeof spec === 'string' && spec) {
+    configStore.setConfigValue('content_guard_llm_model', spec)
+  }
 }
 
 onMounted(() => {
@@ -381,7 +358,7 @@ const openLink = (url) => {
 
 .setting-container {
   --setting-header-height: 55px;
-  max-width: 870px;
+  max-width: 1054px;
 }
 
 .setting-header {
