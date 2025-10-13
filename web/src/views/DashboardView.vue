@@ -316,7 +316,7 @@ const handleViewDetail = async (record) => {
 
 // 处理过滤器变化
 const handleFilterChange = () => {
-  pagination.current = 1
+  conversationPagination.current = 1
   loadConversations()
 }
 

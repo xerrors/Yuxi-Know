@@ -747,25 +747,29 @@ async def get_call_timeseries_stats(
 
         # 计算时间范围（使用北京时间 UTC+8）
         now = datetime.utcnow()
+        local_now = now + timedelta(hours=8)
 
         if time_range == "7hours":
             intervals = 7
             # 包含当前小时：从6小时前开始
             start_time = now - timedelta(hours=intervals - 1)
-            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
             group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, "+8 hours"))
+            base_local_time = start_time + timedelta(hours=8)
         elif time_range == "7weeks":
             intervals = 7
-            # 包含当前周：从6周前开始
-            start_time = now - timedelta(weeks=intervals - 1)
-            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
+            # 包含当前周：从6周前开始，并对齐到当周周一 00:00
+            local_start = local_now - timedelta(weeks=intervals - 1)
+            local_start = local_start - timedelta(days=local_start.weekday())
+            local_start = local_start.replace(hour=0, minute=0, second=0, microsecond=0)
+            start_time = local_start - timedelta(hours=8)
             group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, "+8 hours"))
+            base_local_time = local_start
         else:  # 7days (default)
             intervals = 7
             # 包含当前天：从6天前开始
             start_time = now - timedelta(days=intervals - 1)
-            # SQLite compatible approach: 使用datetime函数转换UTC时间为北京时间
             group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, "+8 hours"))
+            base_local_time = start_time + timedelta(hours=8)
 
         # 根据类型查询数据
         if type == "models":
@@ -783,14 +787,14 @@ async def get_call_timeseries_stats(
                 .order_by(group_format)
             )
         elif type == "agents":
-            # 智能体调用统计（基于对话数量，按智能体分组）
+            # 智能体调用统计（基于对话更新时间，按智能体分组）
             # 为对话创建独立的时间格式化器
             if time_range == "7hours":
-                conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.created_at, "+8 hours"))
+                conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.updated_at, "+8 hours"))
             elif time_range == "7weeks":
-                conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.created_at, "+8 hours"))
+                conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.updated_at, "+8 hours"))
             else:  # 7days
-                conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.created_at, "+8 hours"))
+                conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.updated_at, "+8 hours"))
 
             query = (
                 db.query(
@@ -798,7 +802,8 @@ async def get_call_timeseries_stats(
                     func.count(Conversation.id).label("count"),
                     Conversation.agent_id.label("category"),
                 )
-                .filter(Conversation.created_at >= start_time)
+                .filter(Conversation.updated_at.isnot(None))
+                .filter(Conversation.updated_at >= start_time)
                 .group_by(conv_group_format, Conversation.agent_id)
                 .order_by(conv_group_format)
             )
@@ -894,8 +899,16 @@ async def get_call_timeseries_stats(
 
         # 重新组织数据：按时间点分组每个类别的数据
         time_data = {}
+
+        def normalize_week_key(raw_key: str) -> str:
+            base_date = datetime.strptime(f"{raw_key}-1", "%Y-%W-%w")
+            iso_year, iso_week, _ = base_date.isocalendar()
+            return f"{iso_year}-{iso_week:02d}"
+
         for result in results:
             date_key = result.date
+            if time_range == "7weeks":
+                date_key = normalize_week_key(date_key)
             category = getattr(result, "category", "unknown")
             count = result.count
 
@@ -906,8 +919,8 @@ async def get_call_timeseries_stats(
 
         # 填充缺失的时间点（使用北京时间）
         data = []
-        # 从start_time开始，转换为北京时间
-        current_time = start_time + timedelta(hours=8)
+        # 从起始点开始（北京时间）
+        current_time = base_local_time
 
         if time_range == "7hours":
             delta = timedelta(hours=1)
@@ -920,9 +933,8 @@ async def get_call_timeseries_stats(
             if time_range == "7hours":
                 date_key = current_time.strftime("%Y-%m-%d %H:00")
             elif time_range == "7weeks":
-                # 计算ISO周数
-                week_num = current_time.isocalendar()[1]
-                date_key = f"{current_time.year}-{week_num:02d}"
+                iso_year, iso_week, _ = current_time.isocalendar()
+                date_key = f"{iso_year}-{iso_week:02d}"
             else:
                 date_key = current_time.strftime("%Y-%m-%d")
 

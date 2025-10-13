@@ -107,6 +107,13 @@ class ConversationManager:
         )
 
         self.db.add(message)
+        # Mark the parent conversation as active for sorting/analytics
+        conversation = (
+            self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
+        )
+        if conversation:
+            conversation.updated_at = dt.datetime.now(dt.UTC)
+
         self.db.commit()
         self.db.refresh(message)
 
