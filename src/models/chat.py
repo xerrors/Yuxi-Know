@@ -8,6 +8,21 @@ from src import config
 from src.utils import logger
 
 
+def split_model_spec(model_spec, sep="/"):
+    """
+    将 provider/model 形式的字符串拆分为 (provider, model)
+    """
+    if not model_spec or not isinstance(model_spec, str):
+        return "", ""
+    if not sep:
+        return model_spec, ""
+    try:
+        provider, model_name = model_spec.split(sep, 1)
+        return provider, model_name
+    except ValueError:
+        return model_spec, ""
+
+
 class OpenAIBase:
     def __init__(self, api_key, base_url, model_name, **kwargs):
         self.api_key = api_key
@@ -85,11 +100,25 @@ class GeneralResponse:
         self.is_full = False
 
 
-def select_model(model_provider, model_name=None):
+def select_model(model_provider=None, model_name=None, model_spec=None):
     """根据模型提供者选择模型"""
-    assert model_provider is not None, "Model provider not specified"
+    if model_spec:
+        spec_provider, spec_model_name = split_model_spec(model_spec)
+        model_provider = model_provider or spec_provider
+        model_name = model_name or spec_model_name
+
+    if model_provider is None or not model_name:
+        default_provider, default_model = split_model_spec(getattr(config, "default_model", ""))
+        model_provider = model_provider or default_provider
+        model_name = model_name or default_model
+
+    assert model_provider, "Model provider not specified"
+
     model_info = config.model_names.get(model_provider, {})
     model_name = model_name or model_info.get("default", "")
+
+    if not model_name:
+        raise ValueError(f"Model name not specified for provider {model_provider}")
 
     logger.info(f"Selecting model from `{model_provider}` with `{model_name}`")
 

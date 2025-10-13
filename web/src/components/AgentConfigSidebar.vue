@@ -56,8 +56,7 @@
                 <div v-if="value.template_metadata.kind === 'llm'" class="model-selector">
                   <ModelSelectorComponent
                     @select-model="handleModelChange"
-                    :model_name="agentConfig[key] ? agentConfig[key].split('/').slice(1).join('/') : ''"
-                    :model_provider="agentConfig[key] ? agentConfig[key].split('/')[0] : ''"
+                    :model_spec="agentConfig[key] || ''"
                   />
                 </div>
 
@@ -367,9 +366,10 @@ const getPlaceholder = (key, value) => {
   return `（默认: ${value.default}）`;
 };
 
-const handleModelChange = (data) => {
+const handleModelChange = (spec) => {
+  if (typeof spec !== 'string' || !spec) return;
   agentStore.updateAgentConfig({
-    model: `${data.provider}/${data.name}`
+    model: spec
   });
 };
 

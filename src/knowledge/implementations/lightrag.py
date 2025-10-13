@@ -174,16 +174,19 @@ class LightRagKB(KnowledgeBase):
         from src.models import select_model
 
         # 如果用户选择了LLM，使用用户选择的；否则使用环境变量默认值
-        if llm_info and llm_info.get("provider") and llm_info.get("model_name"):
-            provider = llm_info["provider"]
-            model_name = llm_info["model_name"]
+        if llm_info and llm_info.get("model_spec"):
+            model_spec = llm_info["model_spec"]
+            logger.info(f"Using user-selected LLM spec: {model_spec}")
+        elif llm_info and llm_info.get("provider") and llm_info.get("model_name"):
+            model_spec = f"{llm_info['provider']}/{llm_info['model_name']}"
             logger.info(f"Using user-selected LLM: {provider}/{model_name}")
         else:
             provider = LIGHTRAG_LLM_PROVIDER
             model_name = LIGHTRAG_LLM_NAME
+            model_spec = f"{provider}/{model_name}"
             logger.info(f"Using default LLM from environment: {provider}/{model_name}")
 
-        model = select_model(provider, model_name)
+        model = select_model(model_spec=model_spec)
 
         async def llm_model_func(prompt, system_prompt=None, history_messages=[], **kwargs):
             return await openai_complete_if_cache(
