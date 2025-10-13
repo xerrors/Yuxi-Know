@@ -58,8 +58,11 @@ class Config(SimpleConfig):
         # 模型配置
         ## 注意这里是模型名，而不是具体的模型路径，默认使用 HuggingFace 的路径
         ## 如果需要自定义本地模型路径，则在 .env 中配置 MODEL_DIR
-        self.add_item("model_provider", default="siliconflow", des="模型提供商", choices=list(self.model_names.keys()))
-        self.add_item("model_name", default="zai-org/GLM-4.5", des="模型名称")
+        self.add_item(
+            "default_model",
+            default=self._get_default_chat_model_spec(),
+            des="默认对话模型",
+        )
         self.add_item(
             "fast_model",
             default="siliconflow/THUDM/GLM-4-9B-0414",
@@ -81,6 +84,9 @@ class Config(SimpleConfig):
         ### <<< 默认配置结束
 
         self.load()
+        # 清理已废弃的配置项
+        self.pop("model_provider", None)
+        self.pop("model_name", None)
         self.handle_self()
 
     def add_item(self, key, default, des=None, choices=None):
@@ -136,6 +142,22 @@ class Config(SimpleConfig):
 
         with open(self._models_config_path, "w", encoding="utf-8") as f:
             yaml.safe_dump(models_payload, f, indent=2, allow_unicode=True, sort_keys=False)
+
+    def _get_default_chat_model_spec(self):
+        """选择一个默认的聊天模型，优先使用 siliconflow 的默认模型"""
+        preferred_provider = "siliconflow"
+        provider_info = (self.model_names or {}).get(preferred_provider)
+        if provider_info:
+            default_model = provider_info.get("default")
+            if default_model:
+                return f"{preferred_provider}/{default_model}"
+
+        for provider, info in (self.model_names or {}).items():
+            default_model = info.get("default")
+            if default_model:
+                return f"{provider}/{default_model}"
+
+        return ""
 
     def handle_self(self):
         """

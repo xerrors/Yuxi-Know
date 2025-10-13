@@ -85,7 +85,11 @@ async def set_default_agent(request_data: dict = Body(...), current_user=Depends
 async def call(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
     """调用模型进行简单问答（需要登录）"""
     meta = meta or {}
-    model = select_model(model_provider=meta.get("model_provider"), model_name=meta.get("model_name"))
+    model = select_model(
+        model_provider=meta.get("model_provider"),
+        model_name=meta.get("model_name"),
+        model_spec=meta.get("model_spec") or meta.get("model"),
+    )
 
     async def call_async(query):
         loop = asyncio.get_event_loop()

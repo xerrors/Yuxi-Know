@@ -21,6 +21,16 @@
 
 <<< @/../.env.template#model_provider{bash 2}
 
+### 默认对话模型格式
+
+系统的默认对话模型通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
+
+```yaml
+default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
+```
+
+在 Web 界面中选择模型时也会自动按照这一格式保存，无需手动拆分提供商和模型名称。
+
 
 ::: tip 免费获取 API Key
 [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。

@@ -61,7 +61,7 @@
               :status="progressStatus(task.status)"
               stroke-width="6"
               />
-            <span class="task-card-progress-value">{{ Math.round(task.progress || 0) }}%</span>
+            <!-- <span class="task-card-progress-value">{{ Math.round(task.progress || 0) }}%</span> -->
           </div>
 
           <div v-if="task.message && !isTaskCompleted(task)" class="task-card-message">

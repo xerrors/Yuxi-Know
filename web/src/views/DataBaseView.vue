@@ -61,9 +61,10 @@
         <h3 style="margin-top: 20px;">语言模型 (LLM)</h3>
         <p style="color: var(--gray-700); font-size: 14px;">可以在设置中配置语言模型</p>
         <ModelSelectorComponent
-          :model_name="newDatabase.llm_info.model_name || '请选择模型'"
-          :model_provider="newDatabase.llm_info.provider || ''"
+          :model_spec="llmModelSpec"
+          placeholder="请选择模型"
           @select-model="handleLLMSelect"
+          size="large"
           style="width: 100%; height: 60px;"
         />
       </div>
@@ -200,6 +201,15 @@ const emptyEmbedInfo = {
 
 const newDatabase = reactive({
   ...emptyEmbedInfo,
+})
+
+const llmModelSpec = computed(() => {
+  const provider = newDatabase.llm_info?.provider || ''
+  const modelName = newDatabase.llm_info?.model_name || ''
+  if (provider && modelName) {
+    return `${provider}/${modelName}`
+  }
+  return ''
 })
 
 // 支持的知识库类型
@@ -351,10 +361,16 @@ const handleKbTypeChange = (type) => {
 }
 
 // 处理LLM选择
-const handleLLMSelect = (selection) => {
-  console.log('LLM选择:', selection)
-  newDatabase.llm_info.provider = selection.provider
-  newDatabase.llm_info.model_name = selection.name
+const handleLLMSelect = (spec) => {
+  console.log('LLM选择:', spec)
+  if (typeof spec !== 'string' || !spec) return
+
+  const index = spec.indexOf('/')
+  const provider = index !== -1 ? spec.slice(0, index) : ''
+  const modelName = index !== -1 ? spec.slice(index + 1) : ''
+
+  newDatabase.llm_info.provider = provider
+  newDatabase.llm_info.model_name = modelName
 }
 
 const createDatabase = () => {

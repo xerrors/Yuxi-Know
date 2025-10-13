@@ -1,12 +1,12 @@
 <template>
   <a-dropdown trigger="click">
-    <div class="model-select" @click.prevent>
+    <div class="model-select" :class="modelSelectClasses" @click.prevent>
       <div class="model-select-content">
         <div class="model-info">
-          <a-tooltip :title="model_name" placement="right">
-            <span class="model-text text"> {{ model_name }} </span>
+          <a-tooltip :title="displayModelText" placement="right">
+            <span class="model-text text"> {{ displayModelText }} </span>
           </a-tooltip>
-          <span class="model-provider">{{ model_provider }}</span>
+          <span class="model-provider">{{ displayModelProvider }}</span>
         </div>
         <div class="model-status-controls">
           <span
@@ -18,7 +18,7 @@
             {{ modelStatusIcon }}
           </span>
           <a-button
-            size="small"
+            :size="buttonSize"
             type="text"
             :loading="state.checkingStatus"
             @click.stop="checkCurrentModelStatus"
@@ -48,13 +48,22 @@ import { useConfigStore } from '@/stores/config'
 import { chatModelApi } from '@/apis/system_api'
 
 const props = defineProps({
-  model_name: {
+  model_spec: {
     type: String,
     default: ''
   },
-  model_provider: {
+  sep: {
     type: String,
-    default: ''
+    default: '/'
+  },
+  placeholder: {
+    type: String,
+    default: '请选择模型'
+  },
+  size: {
+    type: String,
+    default: 'small',
+    validator: value => ['small', 'middle', 'large'].includes(value)
   }
 });
 
@@ -76,6 +85,38 @@ const modelKeys = computed(() => {
   return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
 })
 
+const resolvedSep = computed(() => props.sep || '/')
+const resolvedSize = computed(() => props.size || 'small')
+const modelSelectClasses = computed(() => ({
+  'model-select--middle': resolvedSize.value === 'middle',
+  'model-select--large': resolvedSize.value === 'large'
+}))
+const buttonSize = computed(() => {
+  if (resolvedSize.value === 'large') return 'large'
+  if (resolvedSize.value === 'middle') return 'middle'
+  return 'small'
+})
+
+const resolvedModel = computed(() => {
+  const spec = props.model_spec || ''
+  const sep = resolvedSep.value
+  if (spec && sep) {
+    const index = spec.indexOf(sep)
+    if (index !== -1) {
+      const provider = spec.slice(0, index)
+      const name = spec.slice(index + sep.length)
+      if (provider && name) {
+        return { provider, name }
+      }
+    }
+  }
+  return { provider: '', name: '' }
+})
+
+const displayModelProvider = computed(() => resolvedModel.value.provider || '')
+const displayModelName = computed(() => resolvedModel.value.name || '')
+const displayModelText = computed(() => displayModelName.value || props.placeholder)
+
 // 当前模型状态
 const currentModelStatus = computed(() => {
   return state.currentModelStatus
@@ -83,18 +124,19 @@ const currentModelStatus = computed(() => {
 
 // 检查当前模型状态
 const checkCurrentModelStatus = async () => {
-  if (!props.model_provider || !props.model_name) return
+  const { provider, name } = resolvedModel.value
+  if (!provider || !name) return
 
   try {
     state.checkingStatus = true
-    const response = await chatModelApi.getModelStatus(props.model_provider, props.model_name)
+    const response = await chatModelApi.getModelStatus(provider, name)
     if (response.status) {
       state.currentModelStatus = response.status
     } else {
       state.currentModelStatus = null
     }
   } catch (error) {
-    console.error(`检查当前模型 ${props.model_provider}/${props.model_name} 状态失败:`, error)
+    console.error(`检查当前模型 ${provider}/${name} 状态失败:`, error)
     state.currentModelStatus = { status: 'error', message: error.message }
   } finally {
     state.checkingStatus = false
@@ -128,24 +170,27 @@ const getCurrentModelStatusTooltip = () => {
 
 // 选择模型的方法
 const handleSelectModel = async (provider, name) => {
-  emit('select-model', { provider, name })
+  const sep = resolvedSep.value || '/'
+  const separator = sep || '/'
+  const spec = `${provider}${separator}${name}`
+  emit('select-model', spec)
 }
 
 </script>
 
 <style lang="less" scoped>
 // 变量定义
-@status-success: #52c41a;
-@status-error: #ff4d4f;
-@status-warning: #faad14;
-@status-default: #999;
+@status-success: var(--color-success);
+@status-error: var(--color-error);
+@status-warning: var(--chart-warning);
+@status-default: var(--gray-500);
 @border-radius: 8px;
 @scrollbar-width: 6px;
 @status-indicator-padding: 2px 4px;
 @status-check-button-padding: 0 4px;
 @status-check-button-font-size: 12px;
 @status-indicator-font-size: 11px;
-@model-provider-color: #aaa;
+@model-provider-color: var(--gray-500);
 
 // 主选择器样式
 .model-select {
@@ -156,7 +201,7 @@ const handleSelectModel = async (provider, name) => {
   cursor: pointer;
   border: 1px solid var(--gray-200);
   border-radius: @border-radius;
-  background-color: white;
+  background-color: var(--gray-0);
   min-width: 0;
   display: flex;
   align-items: center;
@@ -169,6 +214,14 @@ const handleSelectModel = async (provider, name) => {
 
   &.max-width {
     max-width: 380px;
+  }
+
+  &.model-select--middle {
+    font-size: 15px;
+  }
+
+  &.model-select--large {
+    font-size: 16px;
   }
 
   // 内容区域
@@ -188,7 +241,7 @@ const handleSelectModel = async (provider, name) => {
       .model-text {
         overflow: hidden;
         text-overflow: ellipsis;
-        color: #000;
+        color: var(--gray-1000);
         white-space: nowrap;
       }
 

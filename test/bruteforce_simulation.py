@@ -23,9 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Simulate brute-force login attempts.")
     parser.add_argument("--base-url", default=os.getenv("TEST_BASE_URL", "http://localhost:5050"), help="API base URL")
     parser.add_argument("--username", default=os.getenv("TEST_USERNAME", "admin"), help="Login identifier to attack")
-    parser.add_argument(
-        "--attempts", type=int, default=20, help="Total number of attempts to issue (default: 20)"
-    )
+    parser.add_argument("--attempts", type=int, default=20, help="Total number of attempts to issue (default: 20)")
     parser.add_argument(
         "--concurrency",
         type=int,
@@ -68,10 +66,13 @@ async def attempt_login(
         started = time.perf_counter()
         response = await client.post("/api/auth/token", data=payload)
         elapsed = time.perf_counter() - started
-        detail = response.json().get("detail") if response.headers.get("content-type", "").startswith("application/json") else response.text
+        detail = (
+            response.json().get("detail")
+            if response.headers.get("content-type", "").startswith("application/json")
+            else response.text
+        )
         print(
-            f"[{attempt_no:02d}] {response.status_code} in {elapsed*1000:.1f} ms "
-            f"(pwd={password!r}) detail={detail!r}"
+            f"[{attempt_no:02d}] {response.status_code} in {elapsed * 1000:.1f} ms (pwd={password!r}) detail={detail!r}"
         )
         return response.status_code, elapsed
 
@@ -86,9 +87,7 @@ async def run_simulation(args: argparse.Namespace) -> int:
         tasks = []
         for attempt_no in range(1, args.attempts + 1):
             tasks.append(
-                asyncio.create_task(
-                    attempt_login(client, semaphore, attempt_no, args.username, args.password)
-                )
+                asyncio.create_task(attempt_login(client, semaphore, attempt_no, args.username, args.password))
             )
             if args.delay:
                 await asyncio.sleep(args.delay)
