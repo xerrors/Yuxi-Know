@@ -136,6 +136,7 @@ import { Modal } from 'ant-design-vue'
 import { useTaskerStore } from '@/stores/tasker'
 import { storeToRefs } from 'pinia'
 import { ReloadOutlined } from '@ant-design/icons-vue'
+import { formatFullDateTime, formatRelative, parseToShanghai } from '@/utils/time'
 
 const taskerStore = useTaskerStore()
 const { isDrawerOpen, sortedTasks, loading, lastError } = storeToRefs(taskerStore)
@@ -236,49 +237,38 @@ function handleCancel(taskId) {
   taskerStore.cancelTask(taskId)
 }
 
-function formatTime(value, format = 'full') {
+function formatTime(value, mode = 'full') {
   if (!value) return '-'
-  try {
-    const date = new Date(value)
-    if (format === 'short') {
-      const now = new Date()
-      const diff = now - date
-      const minutes = Math.floor(diff / 60000)
-      const hours = Math.floor(diff / 3600000)
-      const days = Math.floor(diff / 86400000)
-
-      if (minutes < 1) return '刚刚'
-      if (minutes < 60) return `${minutes}分钟前`
-      if (hours < 24) return `${hours}小时前`
-      if (days < 7) return `${days}天前`
-
-      return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-    }
-    return date.toLocaleString()
-  } catch {
-    return value
+  if (mode === 'short') {
+    return formatRelative(value)
   }
+  return formatFullDateTime(value)
 }
 
 function getTaskDuration(task) {
   if (!task.started_at || !task.completed_at) return null
   try {
-    const start = new Date(task.started_at)
-    const end = new Date(task.completed_at)
-    const diffMs = end - start
-    const seconds = Math.floor(diffMs / 1000)
-    const minutes = Math.floor(seconds / 60)
-    const hours = Math.floor(minutes / 60)
+    const start = parseToShanghai(task.started_at)
+    const end = parseToShanghai(task.completed_at)
+    if (!start || !end) {
+      return null
+    }
+
+    const diffSeconds = Math.max(0, Math.floor(end.diff(start, 'second')))
+    const hours = Math.floor(diffSeconds / 3600)
+    const minutes = Math.floor((diffSeconds % 3600) / 60)
+    const seconds = diffSeconds % 60
 
     if (hours > 0) {
-      return `${hours}小时${minutes % 60}分钟`
-    } else if (minutes > 0) {
-      return `${minutes}分钟${seconds % 60}秒`
-    } else if (seconds > 0) {
-      return `${seconds}秒`
-    } else {
-      return `${diffMs}毫秒`
+      return `${hours}小时${minutes}分钟`
     }
+    if (minutes > 0) {
+      return `${minutes}分钟${seconds}秒`
+    }
+    if (seconds > 0) {
+      return `${seconds}秒`
+    }
+    return '小于1秒'
   } catch {
     return null
   }

@@ -1,4 +1,5 @@
 import { marked } from 'marked';
+import dayjs, { parseToShanghai } from '@/utils/time';
 import chatExportTemplate from './templates/chat-export-template.html?raw';
 
 // 统一的 Markdown 渲染配置
@@ -33,8 +34,9 @@ export class ChatExporter {
       const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      const timestamp = new Date().toLocaleString('zh-CN').replace(/[:/\s]/g, '-');
-      const filename = `${chatTitle}-${timestamp}.html`;
+      const timestamp = dayjs().tz('Asia/Shanghai').format('YYYYMMDD-HHmmss');
+      const safeTitle = chatTitle.replace(/[\\/:*?"<>|]/g, '_');
+      const filename = `${safeTitle}-${timestamp}.html`;
 
       link.href = url;
       link.download = filename;
@@ -74,7 +76,7 @@ export class ChatExporter {
       chatTitle,
       agentName,
       agentDescription,
-      exportTime: new Date().toLocaleString('zh-CN'),
+      exportTime: dayjs().tz('Asia/Shanghai').format('YYYY年MM月DD日 HH:mm:ss'),
       messagesHTML
     });
   }
@@ -383,35 +385,25 @@ export class ChatExporter {
    * 格式化时间戳
    */
   static formatTimestamp(raw) {
-    if (!raw && raw !== 0) {
-      return new Date().toLocaleString('zh-CN');
-    }
+    const fallback = dayjs().tz('Asia/Shanghai');
 
     if (raw instanceof Date) {
-      return raw.toLocaleString('zh-CN');
+      return dayjs(raw).tz('Asia/Shanghai').format('YYYY年MM月DD日 HH:mm:ss');
     }
 
-    if (typeof raw === 'number') {
-      const value = raw < 1e12 ? raw * 1000 : raw;
-      return new Date(value).toLocaleString('zh-CN');
-    }
-
-    if (typeof raw === 'string') {
-      const numeric = Number(raw);
-      if (!Number.isNaN(numeric)) {
-        return this.formatTimestamp(numeric);
+    if (raw || raw === 0) {
+      if (typeof raw === 'number') {
+        const value = raw < 1e12 ? raw * 1000 : raw;
+        return dayjs(value).tz('Asia/Shanghai').format('YYYY年MM月DD日 HH:mm:ss');
       }
-      const parsed = Date.parse(raw);
-      if (!Number.isNaN(parsed)) {
-        return new Date(parsed).toLocaleString('zh-CN');
+
+      const parsed = parseToShanghai(raw);
+      if (parsed) {
+        return parsed.format('YYYY年MM月DD日 HH:mm:ss');
       }
     }
 
-    try {
-      return new Date(raw).toLocaleString('zh-CN');
-    } catch {
-      return new Date().toLocaleString('zh-CN');
-    }
+    return fallback.format('YYYY年MM月DD日 HH:mm:ss');
   }
 
   /**

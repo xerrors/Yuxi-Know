@@ -44,6 +44,7 @@
 
 <script setup>
 import { GlobalOutlined } from '@ant-design/icons-vue'
+import { parseToShanghai } from '@/utils/time'
 
 const props = defineProps({
   data: {
@@ -54,12 +55,9 @@ const props = defineProps({
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
+  const parsed = parseToShanghai(dateString)
+  if (!parsed) return ''
+  return parsed.format('YYYY年MM月DD日')
 }
 </script>
 

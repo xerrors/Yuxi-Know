@@ -1,11 +1,11 @@
 import asyncio
 import json
 import os
-from datetime import datetime
 
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.knowledge.factory import KnowledgeBaseFactory
 from src.utils import logger
+from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
 
 
 class KnowledgeBaseManager:
@@ -36,6 +36,7 @@ class KnowledgeBaseManager:
 
         # 加载全局元数据
         self._load_global_metadata()
+        self._normalize_global_metadata()
 
         # 初始化已存在的知识库实例
         self._initialize_existing_kbs()
@@ -57,9 +58,21 @@ class KnowledgeBaseManager:
     def _save_global_metadata(self):
         """保存全局元数据"""
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
-        data = {"databases": self.global_databases_meta, "updated_at": datetime.now().isoformat(), "version": "2.0"}
+        data = {"databases": self.global_databases_meta, "updated_at": utc_isoformat(), "version": "2.0"}
         with open(meta_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def _normalize_global_metadata(self) -> None:
+        """Normalize stored timestamps within the global metadata cache."""
+        for meta in self.global_databases_meta.values():
+            if "created_at" in meta:
+                try:
+                    dt_value = coerce_any_to_utc_datetime(meta.get("created_at"))
+                    if dt_value:
+                        meta["created_at"] = utc_isoformat(dt_value)
+                        continue
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(f"Failed to normalize database metadata timestamp {meta.get('created_at')!r}: {exc}")
 
     def _initialize_existing_kbs(self):
         """初始化已存在的知识库实例"""
@@ -172,7 +185,7 @@ class KnowledgeBaseManager:
                 "name": database_name,
                 "description": description,
                 "kb_type": kb_type,
-                "created_at": datetime.now().isoformat(),
+                "created_at": utc_isoformat(),
                 "additional_params": kwargs.copy(),
             }
             self._save_global_metadata()

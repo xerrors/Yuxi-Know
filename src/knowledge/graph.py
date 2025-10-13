@@ -8,6 +8,7 @@ from neo4j import GraphDatabase as GD
 from src import config
 from src.models import select_embedding_model
 from src.utils import logger
+from src.utils.datetime_utils import utc_isoformat
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -655,9 +656,7 @@ class GraphDatabase:
                     graph_info = session.execute_read(query)
 
                     # 添加时间戳
-                    from datetime import datetime
-
-                    graph_info["last_updated"] = datetime.now().isoformat()
+                    graph_info["last_updated"] = utc_isoformat()
                     return graph_info
             else:
                 logger.warning(f"图数据库未连接或未运行:{self.status=}")

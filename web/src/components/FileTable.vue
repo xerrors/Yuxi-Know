@@ -97,8 +97,8 @@
           <ClockCircleFilled v-else-if="text === 'waiting'" style="color: #FFCD43;"/>
         </div>
 
-        <a-tooltip v-else-if="column.key === 'created_at'" :title="formatRelativeTime(Math.round(text*1000))" placement="left">
-          <span>{{ formatRelativeTime(Math.round(text*1000)) }}</span>
+        <a-tooltip v-else-if="column.key === 'created_at'" :title="formatRelativeTime(text)" placement="left">
+          <span>{{ formatRelativeTime(text) }}</span>
         </a-tooltip>
 
         <div v-else-if="column.key === 'action'" style="display: flex; gap: 4px;">
@@ -184,7 +184,14 @@ const columnsCompact = [
     key: 'created_at',
     width: 120,
     align: 'right',
-    sorter: (a, b) => (a.created_at || 0) - (b.created_at || 0),
+    sorter: (a, b) => {
+      const timeA = parseToShanghai(a.created_at)
+      const timeB = parseToShanghai(b.created_at)
+      if (!timeA && !timeB) return 0
+      if (!timeA) return 1
+      if (!timeB) return -1
+      return timeA.valueOf() - timeB.valueOf()
+    },
     sortDirections: ['ascend', 'descend']
   },
   {
@@ -359,6 +366,7 @@ const handleDownloadFile = async (record) => {
 
 // 导入工具函数
 import { getFileIcon, getFileIconColor, formatRelativeTime } from '@/utils/file_utils';
+import { parseToShanghai } from '@/utils/time';
 </script>
 
 <style scoped>

@@ -99,6 +99,7 @@ import {
   PushpinOutlined
 } from '@ant-design/icons-vue'
 import GraphContainer from './GraphContainer.vue'
+import { formatDateTime } from '@/utils/time'
 
 const props = defineProps({
   visible: {
@@ -230,9 +231,7 @@ const getDomain = (url) => {
 }
 
 // 日期格式化函数
-const formatDate = (timestamp) => {
-  return new Date(timestamp * 1000).toLocaleString()
-}
+const formatDate = (timestamp) => formatDateTime(timestamp)
 
 // 手动设置活动标签页
 const setActiveTab = (tab) => {

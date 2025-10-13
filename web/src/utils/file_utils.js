@@ -1,5 +1,6 @@
 // 文件相关工具函数
 import { FileTextFilled, FileMarkdownFilled, FilePdfFilled, FileWordFilled, FileExcelFilled, FileImageFilled, FileUnknownFilled } from '@ant-design/icons-vue';
+import { formatRelative, parseToShanghai } from '@/utils/time';
 
 // 根据文件扩展名获取文件图标
 export const getFileIcon = (filename) => {
@@ -83,50 +84,14 @@ export const getFileIconColor = (filename) => {
   return colorMap[extension] || '#8c8c8c'
 }
 
-// Format relative time with more granularity: days ago, weeks ago, months ago
-export const formatRelativeTime = (timestamp, offset = 0) => {
-    // If you want to adjust to UTC+8, set offset to 8, otherwise 0
-    const timezoneOffset = offset * 60 * 60 * 1000; // offset in milliseconds
-    const adjustedTimestamp = timestamp + timezoneOffset;
-
-    const now = Date.now();
-    const secondsPast = (now - adjustedTimestamp) / 1000;
-
-    if (secondsPast < 60) {
-        return Math.round(secondsPast) + ' 秒前';
-    } else if (secondsPast < 3600) {
-        return Math.round(secondsPast / 60) + ' 分钟前';
-    } else if (secondsPast < 86400) {
-        return Math.round(secondsPast / 3600) + ' 小时前';
-    } else if (secondsPast < 86400 * 7) {
-        // Less than 7 days
-        return Math.round(secondsPast / 86400) + ' 天前';
-    } else if (secondsPast < 86400 * 30) {
-        // Less than 30 days, show in weeks
-        return Math.round(secondsPast / (86400 * 7)) + ' 周前';
-    } else if (secondsPast < 86400 * 365) {
-        // Less than 1 year, show in months
-        return Math.round(secondsPast / (86400 * 30)) + ' 月前';
-    } else {
-        // More than 1 year, show full date
-        const date = new Date(adjustedTimestamp);
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1;
-        const day = date.getDate();
-        return `${year} 年 ${month} 月 ${day} 日`;
-    }
-}
+// Format relative time with CST baseline
+export const formatRelativeTime = (value) => formatRelative(value)
 
 // 格式化标准时间
-export const formatStandardTime = (timestamp) => {
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hour = String(date.getHours()).padStart(2, '0');
-  const minute = String(date.getMinutes()).padStart(2, '0');
-  const second = String(date.getSeconds()).padStart(2, '0');
-  return `${year}年${month}月${day}日 ${hour}:${minute}:${second}`;
+export const formatStandardTime = (value) => {
+  const parsed = parseToShanghai(value)
+  if (!parsed) return '-'
+  return parsed.format('YYYY年MM月DD日 HH:mm:ss')
 }
 
 // 获取状态文本

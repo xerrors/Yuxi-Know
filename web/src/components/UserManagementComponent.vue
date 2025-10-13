@@ -183,6 +183,7 @@ import {
   EditOutlined,
   PlusOutlined
 } from '@ant-design/icons-vue';
+import { formatDateTime } from '@/utils/time';
 
 const userStore = useUserStore();
 
@@ -263,17 +264,7 @@ watch(() => userManagement.form.phoneNumber, (newPhone) => {
 });
 
 // 格式化时间显示
-const formatTime = (timeStr) => {
-  if (!timeStr) return '-';
-  const date = new Date(timeStr);
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
+const formatTime = (timeStr) => formatDateTime(timeStr);
 
 // 获取用户列表
 const fetchUsers = async () => {

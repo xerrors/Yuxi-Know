@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { taskerApi } from '@/apis/tasker'
+import { parseToShanghai } from '@/utils/time'
 
 const ACTIVE_STATUSES = new Set(['pending', 'running', 'queued'])
 
@@ -32,8 +33,12 @@ export const useTaskerStore = defineStore('tasker', () => {
 
   const sortedTasks = computed(() => {
     return [...tasks.value].sort((a, b) => {
-      if (!a.created_at || !b.created_at) return 0
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      const timeA = parseToShanghai(a.created_at)
+      const timeB = parseToShanghai(b.created_at)
+      if (!timeA && !timeB) return 0
+      if (!timeA) return 1
+      if (!timeB) return -1
+      return timeB.valueOf() - timeA.valueOf()
     })
   })
 

@@ -120,7 +120,7 @@ import {
   RobotOutlined,
   BugOutlined
 } from '@ant-design/icons-vue';
-import dayjs from 'dayjs';
+import dayjs from '@/utils/time';
 import { configApi } from '@/apis/system_api';
 import { checkAdminPermission } from '@/stores/user';
 

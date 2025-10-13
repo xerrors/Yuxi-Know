@@ -7,6 +7,7 @@ from langchain_text_splitters import MarkdownTextSplitter
 
 from src import config
 from src.utils import hashstr, logger
+from src.utils.datetime_utils import utc_isoformat
 
 
 def validate_file_path(file_path: str, db_id: str = None) -> str:
@@ -156,7 +157,7 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         "path": item_path,
         "file_type": file_type,
         "status": "processing",
-        "created_at": time.time(),
+        "created_at": utc_isoformat(),
         "file_id": file_id,
         "content_hash": content_hash,
     }
