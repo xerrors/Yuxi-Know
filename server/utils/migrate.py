@@ -164,11 +164,14 @@ class DatabaseMigrator:
         # 如果数据库已存在但没有版本表，创建版本表并设置为最新版本
         if current_version == 0 and latest_version > 0 and os.path.exists(self.db_path):
             # 检查users表是否已有新字段，如果有，说明是通过SQLAlchemy创建的
-            if (
-                self.check_column_exists("users", "login_failed_count")
-                and self.check_column_exists("users", "last_failed_login")
-                and self.check_column_exists("users", "login_locked_until")
-            ):
+            required_columns = [
+                "login_failed_count",
+                "last_failed_login",
+                "login_locked_until",
+                "is_deleted",
+                "deleted_at",
+            ]
+            if all(self.check_column_exists("users", column) for column in required_columns):
                 # 字段已存在，直接设置为最新版本
                 logger.info(f"检测到现有数据库已包含最新字段，设置版本为 v{latest_version}")
                 self.set_version(latest_version)
@@ -217,9 +220,8 @@ class DatabaseMigrator:
 
     def get_latest_migration_version(self) -> int:
         """获取最新迁移版本号"""
-        # 这里返回硬编码的最新版本号，不依赖迁移定义
-        # 因为迁移定义可能为空（字段已存在）
-        return 1  # 当前最新版本是 v1
+        migrations = self.get_migrations()
+        return max((version for version, _, _ in migrations), default=0)
 
     def get_migrations(self) -> list[tuple[int, str, list[str]]]:
         """获取所有迁移定义
@@ -243,9 +245,18 @@ class DatabaseMigrator:
         if not self.check_column_exists("users", "login_locked_until"):
             v1_commands.append("ALTER TABLE users ADD COLUMN login_locked_until DATETIME")
 
-        # 如果有命令需要执行，才添加迁移
-        if v1_commands:
-            migrations.append((1, "为用户表添加登录失败限制字段", v1_commands))
+        migrations.append((1, "为用户表添加登录失败限制字段", v1_commands))
+
+        # 迁移 v2: 为 users 表添加软删除字段
+        v2_commands: list[str] = []
+
+        if not self.check_column_exists("users", "is_deleted"):
+            v2_commands.append("ALTER TABLE users ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0")
+
+        if not self.check_column_exists("users", "deleted_at"):
+            v2_commands.append("ALTER TABLE users ADD COLUMN deleted_at DATETIME")
+
+        migrations.append((2, "为用户表添加软删除字段", v2_commands))
 
         # 未来的迁移可以在这里添加
         # migrations.append((
@@ -290,6 +301,8 @@ def validate_database_schema(db_path: str) -> tuple[bool, list[str]]:
                 "login_failed_count",
                 "last_failed_login",
                 "login_locked_until",
+                "is_deleted",
+                "deleted_at",
             ],
             "operation_logs": ["id", "user_id", "operation", "details", "ip_address", "timestamp"],
         }
@@ -337,7 +350,9 @@ def check_and_migrate(db_path: str):
             logger.warning(f"  - {issue}")
 
         if os.path.exists(db_path):
-            logger.info("建议运行迁移脚本: docker exec api-dev python /app/scripts/migrate_user_fields.py")
+            logger.info(
+                "建议运行迁移脚本: docker exec api-dev python /app/scripts/migrate_user_soft_delete.py"
+            )
 
     migrator = DatabaseMigrator(db_path)
 
