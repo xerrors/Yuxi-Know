@@ -26,27 +26,18 @@
       <div class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
-          <div class="toggle-sidebar nav-btn" v-if="!uiState.isSidebarOpen" @click="toggleSidebar">
-            <PanelLeftOpen size="20" color="var(--gray-800)"/>
+          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="toggleSidebar">
+            <PanelLeftOpen  class="nav-btn-icon" size="18"/>
           </div>
-          <div class="newchat nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="isProcessing">
-            <MessageSquarePlus size="20" color="var(--gray-800)"/> <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
+          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="isProcessing">
+            <MessageCirclePlus  class="nav-btn-icon"  size="18"/>
+            <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
-        </div>
-        <div class="header__center" @mouseenter="uiState.showRenameButton = true" @mouseleave="uiState.showRenameButton = false">
-          <div @click="logConversationInfo" class="center-title">
-            {{ currentThread?.title }}
-          </div>
-          <div class="rename-button" v-if="currentChatId" :class="{ 'visible': uiState.showRenameButton }" @click="handleRenameChat">
-            <EditOutlined style="font-size: 14px; color: var(--gray-600);"/>
-          </div>
-          <slot name="header-center"></slot>
         </div>
         <div class="header__right">
-          <!-- 分享按钮 -->
-          <div class="nav-btn" @click="shareChat" v-if="currentChatId && currentAgent">
+          <!-- <div class="nav-btn" @click="shareChat" v-if="currentChatId && currentAgent">
             <ShareAltOutlined style="font-size: 18px;"/>
-          </div>
+          </div> -->
           <!-- <div class="nav-btn test-history" @click="getAgentHistory" v-if="currentChatId && currentAgent">
             <ThunderboltOutlined />
           </div> -->
@@ -72,7 +63,7 @@
             :is-loading="isProcessing"
             :disabled="!currentAgent"
             :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
-            :placeholder="'输入问题...'"
+            placeholder="输入问题..."
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
           />
@@ -132,7 +123,7 @@
             :is-loading="isProcessing"
             :disabled="!currentAgent"
             :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
-            :placeholder="'输入问题...'"
+            placeholder="输入问题..."
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
           />
@@ -146,15 +137,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, h } from 'vue';
-import { ShareAltOutlined, LoadingOutlined, EditOutlined } from '@ant-design/icons-vue';
-import { message, Modal } from 'ant-design-vue';
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
+import { LoadingOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageSquarePlus } from 'lucide-vue-next';
-import { ChatExporter } from '@/utils/chatExporter';
+import { PanelLeftOpen, MessageCirclePlus } from 'lucide-vue-next';
 import { handleChatError, handleValidationError } from '@/utils/errorHandler';
 import { ScrollController } from '@/utils/scrollController';
 import { AgentValidator } from '@/utils/agentValidator';
@@ -208,7 +198,6 @@ const uiState = reactive({
   ...props.state,
   isSidebarOpen: localStorage.getItem('chat_sidebar_open') !== 'false',
   isInitialRender: true,
-  showRenameButton: false,
   containerWidth: 0,
 });
 
@@ -222,12 +211,11 @@ const currentAgentId = computed(() => {
 });
 
 const currentAgentMetadata = computed(() => {
-  if (agentStore?.metadata && currentAgentId.value && currentAgentId.value in agentStore?.metadata[currentAgentId.value]) {
-    return agentStore?.metadata[currentAgentId.value]
-  }
-  return {}
+  const agentId = currentAgentId.value;
+  const metadata = agentStore?.metadata || {};
+  return agentId && metadata[agentId] ? metadata[agentId] : {};
 });
-const currentAgentName = computed(() => currentAgentMetadata.value?.name || currentAgent.name || '智能体');
+const currentAgentName = computed(() => currentAgentMetadata.value?.name || currentAgent.value?.name || '智能体');
 
 const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
 const chatsList = computed(() => threads.value || []);
@@ -732,27 +720,6 @@ const handleSendOrStop = async () => {
 };
 
 // ==================== UI HANDLERS ====================
-const handleRenameChat = () => {
-  if (!currentChatId.value || !currentThread.value) {
-    handleValidationError('请先选择对话');
-    return;
-  }
-  let newTitle = currentThread.value.title;
-  Modal.confirm({
-    title: '重命名对话',
-    content: h('div', { style: { marginTop: '12px' } }, [
-      h('input', {
-        value: newTitle,
-        style: { width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px' },
-        onInput: (e) => { newTitle = e.target.value; }
-      })
-    ]),
-    okText: '确认',
-    cancelText: '取消',
-    onOk: () => renameChat({ chatId: currentChatId.value, title: newTitle }),
-  });
-};
-
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -768,21 +735,21 @@ const handleExampleClick = (questionText) => {
   });
 };
 
-const shareChat = async () => {
-  if (!AgentValidator.validateShareOperation(currentChatId.value, currentAgent.value, handleValidationError)) return;
-  try {
-    const result = await ChatExporter.exportToHTML({
-      chatTitle: currentThread.value?.title || '新对话',
-      agentName: currentAgent.value?.name || '智能助手',
-      agentDescription: currentAgent.value?.description || '',
-      messages: conversations.value,
-      onGoingMessages: []
-    });
-    message.success(`对话已导出为HTML文件: ${result.filename}`);
-  } catch (error) {
-    handleChatError(error, 'export');
-  }
+const buildExportPayload = () => {
+  const payload = {
+    chatTitle: currentThread.value?.title || '新对话',
+    agentName: currentAgentName.value || currentAgent.value?.name || '智能助手',
+    agentDescription: currentAgentMetadata.value?.description || currentAgent.value?.description || '',
+    messages: conversations.value ? JSON.parse(JSON.stringify(conversations.value)) : [],
+    onGoingMessages: onGoingConvMessages.value ? JSON.parse(JSON.stringify(onGoingConvMessages.value)) : []
+  };
+
+  return payload;
 };
+
+defineExpose({
+  getExportPayload: buildExportPayload
+});
 
 const retryMessage = (msg) => { /* TODO */ };
 const toggleSidebar = () => {
@@ -790,15 +757,6 @@ const toggleSidebar = () => {
   localStorage.setItem('chat_sidebar_open', uiState.isSidebarOpen);
 };
 const openAgentModal = () => emit('open-agent-modal');
-
-// ==================== CONVERSATION INFO LOGGING ====================
-const logConversationInfo = () => {
-  console.log(currentThread.value);
-  console.group('📜 对话历史消息');
-  console.log('原始消息数组:', currentThreadMessages.value);
-  console.log('消息总数:', currentThreadMessages.value.length);
-  console.groupEnd();
-};
 
 // ==================== HELPER FUNCTIONS ====================
 const getLastMessage = (conv) => {
@@ -940,78 +898,15 @@ watch(conversations, () => {
     position: sticky;
     top: 0;
     z-index: 10;
-    background-color: white;
     height: var(--header-height);
     display: flex;
     justify-content: space-between;
     align-items: center;
     padding: 1rem 8px;
-    border-bottom: 1px solid var(--main-20);
 
     .header__left, .header__right, .header__center {
       display: flex;
       align-items: center;
-    }
-
-    .header__center {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      .center-title {
-        max-width: 200px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .rename-button {
-         display: flex;
-         align-items: center;
-         justify-content: center;
-         width: 24px;
-         height: 24px;
-         border-radius: 4px;
-         cursor: pointer;
-         opacity: 0;
-         transition: all 0.2s ease;
-
-         &.visible {
-           opacity: 1;
-         }
-
-         &:hover {
-           background-color: var(--gray-100);
-         }
-       }
-    }
-  }
-
-  .nav-btn {
-    height: 2.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    color: var(--gray-900);
-    cursor: pointer;
-    font-size: 15px;
-    width: auto;
-    padding: 0.5rem 1rem;
-    transition: background-color 0.3s;
-
-    .text {
-      margin-left: 10px;
-    }
-
-    &:hover {
-      background-color: var(--main-20);
-    }
-
-    .nav-btn-icon {
-      width: 1.5rem;
-      height: 1.5rem;
     }
   }
 }
@@ -1244,39 +1139,6 @@ watch(conversations, () => {
   }
 }
 
-
-.toggle-sidebar {
-  cursor: pointer;
-
-  &.nav-btn {
-    height: 2.5rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    border-radius: 8px;
-    color: var(--gray-900);
-    cursor: pointer;
-    font-size: 15px;
-    width: auto;
-    padding: 0.5rem 1rem;
-    transition: background-color 0.3s;
-    overflow: hidden;
-
-    .text {
-      margin-left: 10px;
-    }
-
-    &:hover {
-      background-color: var(--main-20);
-    }
-
-    .nav-btn-icon {
-      width: 1.5rem;
-      height: 1.5rem;
-    }
-  }
-}
-
 @keyframes dotPulse {
   0%, 80%, 100% {
     transform: scale(0.8);
@@ -1361,6 +1223,16 @@ watch(conversations, () => {
   }
 }
 
+@media (max-width: 1800px) {
+
+  .chat-header {
+    background-color: white;
+    border-bottom: 1px solid var(--gray-100);
+  }
+}
+
+
+
 @media (max-width: 768px) {
   .chat-sidebar.collapsed {
     width: 0;
@@ -1392,10 +1264,6 @@ watch(conversations, () => {
   .chat-header {
     padding: 0.5rem 0 !important;
 
-    .nav-btn {
-      font-size: 14px !important;
-      padding: 0.4rem 0.8rem !important;
-    }
   }
 
   .floating-sidebar {
@@ -1418,5 +1286,29 @@ watch(conversations, () => {
 
 .hide-text {
   display: none;
+}
+</style>
+
+<style lang="less">
+div.agent-nav-btn {
+  display: flex;
+  gap: 10px;
+  padding: 6px 14px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  color: var(--gray-900);
+  cursor: pointer;
+  width: auto;
+  font-size: 15px;
+  transition: background-color 0.3s;
+
+  &:hover {
+    background-color: var(--gray-50);
+  }
+
+  .nav-btn-icon {
+    height: 24px;
+  }
 }
 </style>

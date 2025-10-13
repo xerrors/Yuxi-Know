@@ -1,8 +1,12 @@
 <template>
   <div class="agent-single-view">
     <!-- 智能体聊天界面 -->
-    <AgentChatComponent :agent-id="agentId" :single-mode="true">
+    <AgentChatComponent ref="chatComponentRef" :agent-id="agentId" :single-mode="true">
       <template #header-right>
+        <div type="button" class="agent-nav-btn" @click="handleShareChat">
+          <Share2 size="18" class="nav-btn-icon" />
+          <span class="text">分享</span>
+        </div>
         <UserInfoComponent />
       </template>
     </AgentChatComponent>
@@ -11,12 +15,45 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import { message } from 'ant-design-vue';
 import { useRoute } from 'vue-router';
+import { Share2 } from 'lucide-vue-next';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import UserInfoComponent from '@/components/UserInfoComponent.vue';
+import { ChatExporter } from '@/utils/chatExporter';
+import { handleChatError } from '@/utils/errorHandler';
 
 const route = useRoute();
 const agentId = computed(() => route.params.agent_id);
+const chatComponentRef = ref(null);
+
+const handleShareChat = async () => {
+  try {
+    const exportData = chatComponentRef.value?.getExportPayload?.();
+
+    if (!exportData) {
+      message.warning('当前没有可导出的对话内容');
+      return;
+    }
+
+    const hasMessages = Boolean(exportData.messages?.length);
+    const hasOngoingMessages = Boolean(exportData.onGoingMessages?.length);
+
+    if (!hasMessages && !hasOngoingMessages) {
+      message.warning('当前对话暂无内容可导出，请先进行对话');
+      return;
+    }
+
+    const result = await ChatExporter.exportToHTML(exportData);
+    message.success(`对话已导出为HTML文件: ${result.filename}`);
+  } catch (error) {
+    if (error?.message?.includes('没有可导出的对话内容')) {
+      message.warning('当前对话暂无内容可导出，请先进行对话');
+      return;
+    }
+    handleChatError(error, 'export');
+  }
+};
 </script>
 
 <style lang="less" scoped>
@@ -91,5 +128,4 @@ const agentId = computed(() => route.params.agent_id);
   }
 }
 </style>
-
 

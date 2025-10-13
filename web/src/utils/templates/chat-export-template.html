@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{TITLE}} - 对话导出</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #212529;
+      background-color: #f5f7fa;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 40px auto;
+      background: #fff;
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 18px 40px -24px rgba(15, 23, 42, 0.45);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #f8fafc, #eef2ff);
+      border-bottom: 1px solid #e5e7eb;
+      padding: 32px 40px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      margin-bottom: 12px;
+      color: #1e293b;
+      font-weight: 700;
+    }
+
+    .header .agent-info {
+      font-size: 14px;
+      color: #475569;
+      margin-bottom: 16px;
+      line-height: 1.6;
+    }
+
+    .header .export-info {
+      font-size: 12px;
+      color: #64748b;
+      padding-top: 12px;
+      border-top: 1px dashed #cbd5f5;
+    }
+
+    .messages {
+      padding: 32px 40px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .message {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .avatar {
+      font-size: 20px;
+    }
+
+    .sender {
+      font-weight: 600;
+      color: #334155;
+    }
+
+    .time {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .message-content {
+      padding: 18px 22px;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .message-content > *:not(:last-child) {
+      margin-bottom: 18px;
+    }
+
+    .user-message .message-content {
+      background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
+      border: 1px solid #bae6fd;
+    }
+
+    .user-message .sender {
+      color: #0369a1;
+    }
+
+    .ai-message .message-content {
+      background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+      border: 1px solid #e2e8f0;
+    }
+
+    .markdown-body {
+      font-size: 14px;
+      color: #0f172a;
+    }
+
+    .markdown-body p {
+      margin-bottom: 14px;
+    }
+
+    .markdown-body p:last-child {
+      margin-bottom: 0;
+    }
+
+    .markdown-body ul,
+    .markdown-body ol {
+      padding-left: 24px;
+      margin: 12px 0;
+    }
+
+    .markdown-body li {
+      margin-bottom: 6px;
+    }
+
+    .markdown-body pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 16px 0;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .markdown-body code {
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      background: rgba(15, 23, 42, 0.08);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #0f172a;
+    }
+
+    .reasoning-section {
+      border: 1px solid #cbd5f5;
+      border-radius: 10px;
+      background: rgba(79, 70, 229, 0.04);
+      padding: 14px 18px;
+    }
+
+    .reasoning-summary {
+      font-weight: 600;
+      color: #4338ca;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .reasoning-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .reasoning-summary::after {
+      content: '▼';
+      font-size: 0.8em;
+      margin-left: 6px;
+      transition: transform 0.2s ease;
+      display: inline-block;
+    }
+
+    .reasoning-section[open] .reasoning-summary::after {
+      transform: rotate(180deg);
+    }
+
+    .reasoning-content {
+      margin-top: 14px;
+      border-top: 1px dashed rgba(79, 70, 229, 0.2);
+      padding-top: 14px;
+      color: #312e81;
+    }
+
+    .tool-calls {
+      border: 1px solid #cbd5f5;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.04);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tool-call {
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.08);
+      padding: 12px 16px;
+    }
+
+    .tool-call > summary {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+      color: #1d4ed8;
+    }
+
+    .tool-call > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .tool-call > summary::after {
+      content: '▼';
+      font-size: 0.8em;
+      margin-left: 8px;
+      transition: transform 0.2s ease;
+      color: rgba(29, 78, 216, 0.6);
+    }
+
+    .tool-call[open] > summary::after {
+      transform: rotate(180deg);
+    }
+
+    .tool-call-body {
+      margin-top: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .tool-call-state {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid;
+    }
+
+    .tool-call-state.done {
+      border-color: rgba(34, 197, 94, 0.3);
+      background: rgba(22, 163, 74, 0.1);
+      color: #15803d;
+    }
+
+    .tool-call-state.pending {
+      border-color: rgba(251, 191, 36, 0.3);
+      background: rgba(245, 158, 11, 0.1);
+      color: #b45309;
+    }
+
+    .tool-call pre {
+      background: rgba(15, 23, 42, 0.9);
+      color: rgba(248, 250, 252, 0.9);
+      padding: 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      overflow-x: auto;
+      line-height: 1.55;
+    }
+
+    .empty-message {
+      font-style: italic;
+      color: #94a3b8;
+      text-align: center;
+      padding: 12px;
+    }
+
+    .footer {
+      border-top: 1px solid #e5e7eb;
+      padding: 18px 24px;
+      text-align: center;
+      font-size: 13px;
+      color: #94a3b8;
+      background: #f8fafc;
+    }
+
+    .footer .brand {
+      font-weight: 600;
+      color: #4338ca;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>{{TITLE}}</h1>
+      <div class="agent-info">
+        <strong>智能体:</strong> {{AGENT_NAME}}
+        {{DESCRIPTION_BLOCK}}
+      </div>
+      <div class="export-info">
+        导出时间: {{EXPORT_TIME}}
+      </div>
+    </div>
+    <div class="messages">
+      {{MESSAGES}}
+    </div>
+    <div class="footer">
+      <p>此对话由 <span class="brand">智能助手平台</span> 导出</p>
+    </div>
+  </div>
+</body>
+</html>

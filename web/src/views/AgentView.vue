@@ -1,41 +1,5 @@
 <template>
   <div class="agent-view">
-    <div class="agent-view-header">
-      <div class="header-left">
-        <div class="header-item">
-          <span class="brandname">{{ infoStore.branding?.title }}</span>
-        </div>
-      </div>
-      <div class="header-center">
-      </div>
-      <div class="header-right">
-        <div class="header-item">
-          <a-button class="header-button" @click="openAgentModal">
-            <Bot size="18" stroke-width="1.75" />
-            切换智能体
-          </a-button>
-        </div>
-        <div class="header-item">
-          <a-button class="header-button" @click="toggleConf" :icon="h(SettingOutlined)"> 配置 </a-button>
-        </div>
-        <div class="header-item" v-if="selectedAgentId">
-          <a-button class="header-button" @click="feedbackModal.show()">
-            <template #icon><MessageOutlined /></template>
-            反馈详情
-          </a-button>
-        </div>
-        <div class="header-item">
-          <a-button
-            class="header-button"
-            @click="goToAgentPage"
-            v-if="selectedAgentId"
-          >
-            <template #icon><LinkOutlined /></template>
-            独立页面
-          </a-button>
-        </div>
-      </div>
-    </div>
     <div class="agent-view-body">
       <!-- 智能体选择弹窗 -->
       <a-modal
@@ -71,12 +35,22 @@
       <!-- 中间内容区域 -->
       <div class="content">
         <AgentChatComponent
+          ref="chatComponentRef"
           :state="state"
           :single-mode="false"
           @open-config="toggleConf"
           @open-agent-modal="openAgentModal"
           @close-config-sidebar="() => state.isConfigSidebarOpen = false"
         >
+          <template #header-right>
+            <div type="button" class="agent-nav-btn" @click="toggleConf">
+              <Settings2 size="18" class="nav-btn-icon"/>
+              <span class="text">配置</span>
+            </div>
+            <div v-if="selectedAgentId" type="button" class="agent-nav-btn" @click="toggleMoreMenu">
+              <Ellipsis size="18"  class="nav-btn-icon"/>
+            </div>
+          </template>
         </AgentChatComponent>
       </div>
 
@@ -88,53 +62,79 @@
 
       <!-- 反馈模态框 -->
       <FeedbackModalComponent ref="feedbackModal" :agent-id="selectedAgentId" />
+
+      <!-- 自定义更多菜单 -->
+      <Teleport to="body">
+        <Transition name="menu-fade">
+          <div
+            v-if="state.moreMenuOpen"
+            ref="moreMenuRef"
+            class="more-popup-menu"
+            :style="{
+              left: state.moreMenuPosition.x + 'px',
+              top: state.moreMenuPosition.y + 'px'
+            }"
+          >
+            <div class="menu-item" @click="handleShareChat">
+              <ShareAltOutlined class="menu-icon" />
+              <span class="menu-text">分享对话</span>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" @click="handleFeedback">
+              <MessageOutlined class="menu-icon" />
+              <span class="menu-text">查看反馈</span>
+            </div>
+            <div class="menu-divider"></div>
+            <div class="menu-item" @click="handlePreview">
+              <EyeOutlined class="menu-icon" />
+              <span class="menu-text">预览页面</span>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch, computed, h } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, reactive, watch } from 'vue';
 import {
-  SettingOutlined,
-  LinkOutlined,
   StarOutlined,
   StarFilled,
   MessageOutlined,
+  ShareAltOutlined,
+  EyeOutlined,
 } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
-import { Bot } from 'lucide-vue-next';
+import { Settings2, Ellipsis } from 'lucide-vue-next';
 import AgentChatComponent from '@/components/AgentChatComponent.vue';
 import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
 import FeedbackModalComponent from '@/components/dashboard/FeedbackModalComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { useAgentStore } from '@/stores/agent';
-import { useInfoStore } from '@/stores/info';
+import { ChatExporter } from '@/utils/chatExporter';
+import { handleChatError } from '@/utils/errorHandler';
+import { onClickOutside } from '@vueuse/core';
 
 import { storeToRefs } from 'pinia';
 
 // 组件引用
 const feedbackModal = ref(null)
+const chatComponentRef = ref(null)
 const userStore = useUserStore();
 const agentStore = useAgentStore();
-const infoStore = useInfoStore();
 
 // 从store中获取响应式状态
 const {
   agents,
   selectedAgentId,
   defaultAgentId,
-  agentConfig,
-  selectedAgent,
-  configurableItems,
 } = storeToRefs(agentStore);
 const state = reactive({
   agentModalOpen: false,
   isConfigSidebarOpen: false,
-  isEmptyConfig: computed(() =>
-    !selectedAgentId.value ||
-    Object.keys(configurableItems.value || {}).length === 0
-  )
+  moreMenuOpen: false,
+  moreMenuPosition: { x: 0, y: 0 }
 });
 
 
@@ -160,7 +160,6 @@ const setAsDefaultAgent = async (agentId) => {
 
 // 这些方法现在由agentStore处理，无需在组件中定义
 
-// 加载智能体配置（使用store方法）
 const loadAgentConfig = async () => {
   try {
     await agentStore.loadAgentConfig();
@@ -169,11 +168,6 @@ const loadAgentConfig = async () => {
     message.error('加载配置失败');
   }
 };
-
-const handleModelChange = (data) => {
-  agentConfig.value.model = `${data.provider}/${data.name}`;
-}
-
 
 // 监听智能体选择变化
 watch(
@@ -202,34 +196,89 @@ const selectAgentFromModal = (agentId) => {
 };
 
 
+const toggleConf = () => {
+  state.isConfigSidebarOpen = !state.isConfigSidebarOpen
+}
 
+// 更多菜单相关
+const moreMenuRef = ref(null);
 
+const toggleMoreMenu = (event) => {
+  event.stopPropagation();
+  // 切换状态，而不是只打开
+  state.moreMenuOpen = !state.moreMenuOpen;
 
-// 获取配置标签
-const getConfigLabel = (key, value) => {
-  // 根据配置项属性选择合适的显示文本
-  if (value.description && value.name !== key) {
-    return `${value.name}（${key}）`;
+  if (state.moreMenuOpen) {
+    // 只在打开时计算位置
+    const rect = event.currentTarget.getBoundingClientRect();
+    state.moreMenuPosition = {
+      x: rect.right - 130, // 菜单宽度180px，右对齐
+      y: rect.bottom + 8
+    };
   }
-  return key;
 };
 
-// 获取占位符
-const getPlaceholder = (key, value) => {
-  // 返回描述作为占位符
-  return `（默认: ${value.default}）` ;
+const closeMoreMenu = () => {
+  state.moreMenuOpen = false;
 };
 
-// 跳转到独立智能体页面
-const goToAgentPage = () => {
+// 使用 VueUse 的 onClickOutside
+onClickOutside(moreMenuRef, () => {
+  if (state.moreMenuOpen) {
+    closeMoreMenu();
+  }
+});
+
+const handleShareChat = async () => {
+  closeMoreMenu();
+
+  try {
+    // 从聊天组件获取导出数据
+    const exportData = chatComponentRef.value?.getExportPayload?.();
+
+    console.log('[AgentView] Export data:', exportData);
+
+    if (!exportData) {
+      message.warning('当前没有可导出的对话内容');
+      return;
+    }
+
+    // 检查是否有实际的消息内容
+    const hasMessages = exportData.messages && exportData.messages.length > 0;
+    const hasOngoingMessages = exportData.onGoingMessages && exportData.onGoingMessages.length > 0;
+
+    if (!hasMessages && !hasOngoingMessages) {
+      console.warn('[AgentView] Export data has no messages:', {
+        messages: exportData.messages,
+        onGoingMessages: exportData.onGoingMessages
+      });
+      message.warning('当前对话暂无内容可导出，请先进行对话');
+      return;
+    }
+
+    const result = await ChatExporter.exportToHTML(exportData);
+    message.success(`对话已导出为HTML文件: ${result.filename}`);
+  } catch (error) {
+    console.error('[AgentView] Export error:', error);
+    if (error?.message?.includes('没有可导出的对话内容')) {
+      message.warning('当前对话暂无内容可导出，请先进行对话');
+      return;
+    }
+    handleChatError(error, 'export');
+  }
+};
+
+const handleFeedback = () => {
+  closeMoreMenu();
+  feedbackModal.value?.show();
+};
+
+const handlePreview = () => {
+  closeMoreMenu();
   if (selectedAgentId.value) {
     window.open(`/agent/${selectedAgentId.value}`, '_blank');
   }
 };
-
-const toggleConf = () => {
-  state.isConfigSidebarOpen = !state.isConfigSidebarOpen
-}
 </script>
 
 <style lang="less" scoped>
@@ -239,46 +288,6 @@ const toggleConf = () => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  --agent-view-header-height: 54px;
-}
-
-.agent-view-header {
-  height: var(--agent-view-header-height);
-  background-color: var(--bg-sider);
-  border-bottom: 1px solid var(--gray-100);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 2px 16px;
-
-  .header-left,
-  .header-right,
-  .header-center {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-  }
-
-  .header-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-
-    span.brandname {
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-right: 16px;
-    }
-
-    button.header-button {
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      border-color: var(--gray-100);
-    }
-  }
 }
 
 .agent-view-body {
@@ -287,11 +296,9 @@ const toggleConf = () => {
   flex-direction: row;
   width: 100%;
   flex: 1;
-  min-height: calc(100% - var(--agent-view-header-height));
+  height: 100%;
   overflow: hidden;
   position: relative;
-  // padding: var(--gap-radius);
-  // gap: var(--gap-radius);
 
   .content {
     flex: 1;
@@ -879,6 +886,102 @@ const toggleConf = () => {
     }
   }
 }
+
+// 自定义更多菜单样式
+.more-popup-menu {
+  position: fixed;
+  min-width: 130px;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid var(--gray-100);
+  padding: 6px;
+  z-index: 9999;
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 14px;
+    color: var(--gray-900);
+    position: relative;
+    user-select: none;
+
+    .menu-icon {
+      font-size: 16px;
+      color: var(--gray-600);
+      transition: color 0.15s ease;
+      flex-shrink: 0;
+    }
+
+    .menu-text {
+      font-weight: 400;
+      letter-spacing: 0.01em;
+    }
+
+    &:hover {
+      background: var(--gray-50);
+      // color: var(--main-700);
+
+      // .menu-icon {
+      //   color: var(--main-600);
+      // }
+    }
+
+    &:active {
+      background: var(--gray-100);
+    }
+  }
+
+  .menu-divider {
+    height: 1px;
+    background: var(--gray-100);
+    margin: 4px 8px;
+  }
+}
+
+// 菜单淡入淡出动画
+.menu-fade-enter-active {
+  animation: menuSlideIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.menu-fade-leave-active {
+  animation: menuSlideOut 0.15s cubic-bezier(0.4, 0, 1, 1);
+}
+
+@keyframes menuSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes menuSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+// 响应式优化
+@media (max-width: 520px) {
+  .more-popup-menu {
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
+  }
+}
+
 
 </style>
 

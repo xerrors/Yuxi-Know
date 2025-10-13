@@ -72,10 +72,12 @@
               <div class="task-card-subtitle">
                 <span class="task-card-id">#{{ formatTaskId(task.id) }}</span>
                 <span class="task-card-type">{{ taskTypeLabel(task.type) }}</span>
+                <span class="task-card-id" v-if="getTaskDuration(task)">{{ getTaskDuration(task) }}</span>
               </div>
             </div>
             <a-tag :color="statusColor(task.status)" class="task-card-status">
               {{ statusLabel(task.status) }}
+
             </a-tag>
           </div>
 
@@ -86,17 +88,6 @@
               stroke-width="6"
               />
             <span class="task-card-progress-value">{{ Math.round(task.progress || 0) }}%</span>
-          </div>
-
-          <div v-else class="task-card-completion">
-            <div class="completion-badge" :class="`completion-badge--${task.status}`">
-              <span class="completion-icon">{{ getCompletionIcon(task.status) }}</span>
-              <span class="completion-text">{{ statusLabel(task.status) }}</span>
-            </div>
-            <div class="task-duration" v-if="getTaskDuration(task)">
-              <span class="duration-label">执行时长:</span>
-              <span class="duration-value">{{ getTaskDuration(task) }}</span>
-            </div>
           </div>
 
           <div v-if="task.message && !isTaskCompleted(task)" class="task-card-message">
@@ -283,8 +274,10 @@ function getTaskDuration(task) {
       return `${hours}小时${minutes % 60}分钟`
     } else if (minutes > 0) {
       return `${minutes}分钟${seconds % 60}秒`
-    } else {
+    } else if (seconds > 0) {
       return `${seconds}秒`
+    } else {
+      return `${diffMs}毫秒`
     }
   } catch {
     return null
@@ -413,14 +406,14 @@ function isActiveFilter(value) {
 
 .task-card {
   background: #ffffff;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--gray-200);
   border-radius: 12px;
   padding: 16px 18px;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  // box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .task-card:hover {
@@ -428,19 +421,15 @@ function isActiveFilter(value) {
 }
 
 .task-card--active {
-  background: linear-gradient(to bottom, #ffffff, #fafbff);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.12);
+  background: linear-gradient(to bottom, #ffffff, #fbfcff);
 }
 
 .task-card--success {
-  background: linear-gradient(to bottom, #ffffff, #f6fff8);
-  border-color: rgba(34, 197, 94, 0.3);
+  background: linear-gradient(to bottom, #ffffff, #f7fff9);
 }
 
 .task-card--failed {
-  background: linear-gradient(to bottom, #ffffff, #fffbfb);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: linear-gradient(to bottom, #ffffff, #fffcfc);
 }
 
 .task-card-header {
@@ -462,7 +451,10 @@ function isActiveFilter(value) {
   font-weight: 600;
   color: #0f172a;
   line-height: 1.3;
-  word-break: break-word;
+  // word-break: break-word;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .task-card-subtitle {
@@ -535,8 +527,8 @@ function isActiveFilter(value) {
 
 .task-card-timestamps {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  gap: 6px;
   font-size: 12px;
   color: #94a3b8;
 }

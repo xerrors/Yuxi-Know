@@ -1,73 +1,77 @@
 <template>
   <div class="chat-sidebar" :class="{'sidebar-open': isSidebarOpen, 'no-transition': isInitialRender}">
-    <div class="sidebar-header">
-      <div class="header-title" v-if="singleMode">{{ selectedAgentName }}</div>
-      <div
-        v-else
-        class="agent-selector"
-        @click="openAgentModal"
-      > {{ selectedAgentName || '选择智能体' }}</div>
-      <div class="header-actions">
-        <div class="toggle-sidebar nav-btn" v-if="isSidebarOpen" @click="toggleCollapse">
-          <PanelLeftClose size="20" color="var(--gray-800)"/>
+    <div class="sidebar-content">
+      <div class="sidebar-header">
+        <div class="header-title" v-if="singleMode">{{ selectedAgentName }}</div>
+        <div
+          v-else
+          class="agent-selector"
+          @click="openAgentModal"
+        >
+          <span class="agent-name">{{ selectedAgentName || '选择智能体' }}</span>
+          <ChevronDown size="16" class="switch-icon" />
         </div>
-      </div>
-    </div>
-    <div class="conversation-list-top">
-      <button type="text" @click="createNewChat" class="new-chat-btn">
-       <MessageSquarePlus size="20" /> 创建新对话
-      </button>
-    </div>
-    <div class="conversation-list">
-      <a-spin v-if="loading" />
-      <template v-else-if="Object.keys(groupedChats).length > 0">
-        <div v-for="(group, groupName) in groupedChats" :key="groupName" class="chat-group">
-          <div class="chat-group-title">{{ groupName }}</div>
-          <div
-            v-for="chat in group"
-            :key="chat.id"
-            class="conversation-item"
-            :class="{ 'active': currentChatId === chat.id }"
-            @click="selectChat(chat)"
-          >
-            <div class="conversation-title">{{ chat.title || '新的对话' }}</div>
-            <div class="actions-mask"></div>
-            <div class="conversation-actions">
-              <a-dropdown :trigger="['click']" @click.stop>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
-                      <EditOutlined /> 重命名
-                    </a-menu-item>
-                    <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" v-if="chat.id !== currentChatId">
-                      <DeleteOutlined /> 删除
-                    </a-menu-item>
-                  </a-menu>
-                </template>
-                <a-button type="text" class="more-btn" @click.stop>
-                  <MoreOutlined />
-                </a-button>
-              </a-dropdown>
-            </div>
+        <div class="header-actions">
+          <div class="toggle-sidebar nav-btn" v-if="isSidebarOpen" @click="toggleCollapse">
+            <PanelLeftClose size="20" color="var(--gray-800)"/>
           </div>
         </div>
-      </template>
-      <div v-else class="empty-list">
-        暂无对话历史
+      </div>
+      <div class="conversation-list-top">
+        <button type="text" @click="createNewChat" class="new-chat-btn">
+          <MessageSquarePlus size="20" /> 创建新对话
+        </button>
+      </div>
+      <div class="conversation-list">
+        <template v-if="Object.keys(groupedChats).length > 0">
+          <div v-for="(group, groupName) in groupedChats" :key="groupName" class="chat-group">
+            <div class="chat-group-title">{{ groupName }}</div>
+            <div
+              v-for="chat in group"
+              :key="chat.id"
+              class="conversation-item"
+              :class="{ 'active': currentChatId === chat.id }"
+              @click="selectChat(chat)"
+            >
+              <div class="conversation-title">{{ chat.title || '新的对话' }}</div>
+              <div class="actions-mask"></div>
+              <div class="conversation-actions">
+                <a-dropdown :trigger="['click']" @click.stop>
+                  <template #overlay>
+                    <a-menu>
+                      <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
+                        <EditOutlined /> 重命名
+                      </a-menu-item>
+                      <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" v-if="chat.id !== currentChatId">
+                        <DeleteOutlined /> 删除
+                      </a-menu-item>
+                    </a-menu>
+                  </template>
+                  <a-button type="text" class="more-btn" @click.stop>
+                    <MoreOutlined />
+                  </a-button>
+                </a-dropdown>
+              </div>
+            </div>
+          </div>
+        </template>
+        <div v-else class="empty-list">
+          暂无对话历史
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, h } from 'vue';
+import { computed, h } from 'vue';
 import {
   DeleteOutlined,
   EditOutlined,
   MoreOutlined
 } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
-import { PanelLeftClose, MessageSquarePlus } from 'lucide-vue-next';
+import { PanelLeftClose, MessageSquarePlus, ChevronDown } from 'lucide-vue-next';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -115,8 +119,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar', 'open-agent-modal']);
-
-const loading = ref(false);
 
 const selectedAgentName = computed(() => {
   if (props.selectedAgentId && props.agents && props.agents[props.selectedAgentId]) {
@@ -180,7 +182,6 @@ const createNewChat = () => {
 };
 
 const selectChat = (chat) => {
-  console.log(chat);
   emit('select-chat', chat.id);
 };
 
@@ -238,6 +239,29 @@ const openAgentModal = () => {
   flex-direction: column;
   border: none;
   overflow: hidden;
+
+  .sidebar-content {
+    // 保持内部宽度，避免折叠时压缩
+    width: 280px;
+    min-width: 280px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 0.2s ease, transform 0.3s ease;
+  }
+
+  &:not(.sidebar-open) .sidebar-content {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  &.floating-sidebar .sidebar-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 300px;
+  }
 
   &.no-transition {
     transition: none !important;
@@ -446,9 +470,27 @@ const openAgentModal = () => {
   color: var(--gray-900);
   transition: color 0.2s ease;
   font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  .agent-name {
+    transition: color 0.2s ease;
+  }
+
+  .switch-icon {
+    color: var(--gray-500);
+    transition: all 0.2s ease;
+  }
 
   &:hover {
-    color: var(--main-500);
+    .agent-name {
+      color: var(--main-500);
+    }
+    .switch-icon {
+      color: var(--main-500);
+      transform: translateY(1px);
+    }
   }
 }
 </style>
