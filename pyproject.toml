@@ -81,7 +81,6 @@ asyncio_default_fixture_loop_scope = "function"
 
 [dependency-groups]
 dev = [
-    "ipykernel>=6.30.0",
     "ruff>=0.12.1",
 ]
 test = [
