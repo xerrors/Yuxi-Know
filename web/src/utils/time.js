@@ -41,10 +41,12 @@ const coerceDayjs = (value) => {
     return dayjs(numeric).tz(DEFAULT_TZ)
   }
 
+  // 解析 ISO 字符串（dayjs 会自动识别时区信息，如 Z 后缀表示 UTC）
   const parsed = dayjs(stringValue)
   if (!parsed.isValid()) {
     return null
   }
+  // 转换为上海时区
   return parsed.tz(DEFAULT_TZ)
 }
 

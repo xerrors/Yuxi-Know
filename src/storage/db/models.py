@@ -34,6 +34,13 @@ class Conversation(Base):
     )
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "thread_id": self.thread_id,
@@ -41,8 +48,8 @@ class Conversation(Base):
             "agent_id": self.agent_id,
             "title": self.title,
             "status": self.status,
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
-            "updated_at": utc_isoformat(self.updated_at) if self.updated_at else None,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
             "metadata": self.extra_metadata or {},
         }
 
@@ -68,13 +75,20 @@ class Message(Base):
     tool_calls = relationship("ToolCall", back_populates="message", cascade="all, delete-orphan")
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "conversation_id": self.conversation_id,
             "role": self.role,
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "created_at": format_utc_datetime(self.created_at),
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
             "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
@@ -108,6 +122,13 @@ class ToolCall(Base):
     message = relationship("Message", back_populates="tool_calls")
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "message_id": self.message_id,
@@ -117,7 +138,7 @@ class ToolCall(Base):
             "tool_output": self.tool_output,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -141,6 +162,13 @@ class ConversationStats(Base):
     conversation = relationship("Conversation", back_populates="stats")
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "conversation_id": self.conversation_id,
@@ -148,8 +176,8 @@ class ConversationStats(Base):
             "total_tokens": self.total_tokens,
             "model_used": self.model_used,
             "user_feedback": self.user_feedback or {},
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
-            "updated_at": utc_isoformat(self.updated_at) if self.updated_at else None,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
         }
 
 
@@ -181,6 +209,15 @@ class User(Base):
     operation_logs = relationship("OperationLog", back_populates="user", cascade="all, delete-orphan")
 
     def to_dict(self, include_password=False):
+        # SQLite 存储 naive datetime，需要标记为 UTC 后再转换
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            # 如果是 naive datetime，假设它是 UTC（因为代码中使用 utc_now() 存储）
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         result = {
             "id": self.id,
             "username": self.username,
@@ -188,13 +225,13 @@ class User(Base):
             "phone_number": self.phone_number,
             "avatar": self.avatar,
             "role": self.role,
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
-            "last_login": utc_isoformat(self.last_login) if self.last_login else None,
+            "created_at": format_utc_datetime(self.created_at),
+            "last_login": format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,
-            "last_failed_login": utc_isoformat(self.last_failed_login) if self.last_failed_login else None,
-            "login_locked_until": utc_isoformat(self.login_locked_until) if self.login_locked_until else None,
+            "last_failed_login": format_utc_datetime(self.last_failed_login),
+            "login_locked_until": format_utc_datetime(self.login_locked_until),
             "is_deleted": self.is_deleted,
-            "deleted_at": utc_isoformat(self.deleted_at) if self.deleted_at else None,
+            "deleted_at": format_utc_datetime(self.deleted_at),
         }
         if include_password:
             result["password_hash"] = self.password_hash
@@ -259,13 +296,20 @@ class OperationLog(Base):
     user = relationship("User", back_populates="operation_logs")
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "user_id": self.user_id,
             "operation": self.operation,
             "details": self.details,
             "ip_address": self.ip_address,
-            "timestamp": utc_isoformat(self.timestamp) if self.timestamp else None,
+            "timestamp": format_utc_datetime(self.timestamp),
         }
 
 
@@ -287,11 +331,18 @@ class MessageFeedback(Base):
     message = relationship("Message", backref="feedbacks")
 
     def to_dict(self):
+        def format_utc_datetime(dt_value):
+            if dt_value is None:
+                return None
+            if dt_value.tzinfo is None:
+                dt_value = dt_value.replace(tzinfo=dt.UTC)
+            return utc_isoformat(dt_value)
+
         return {
             "id": self.id,
             "message_id": self.message_id,
             "user_id": self.user_id,
             "rating": self.rating,
             "reason": self.reason,
-            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "created_at": format_utc_datetime(self.created_at),
         }
