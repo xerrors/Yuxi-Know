@@ -122,6 +122,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { dashboardApi } from '@/apis/dashboard_api'
+import dayjs, { parseToShanghai } from '@/utils/time'
 
 // 导入子组件
 import StatusBar from '@/components/StatusBar.vue'
@@ -284,20 +285,21 @@ const loadConversations = async () => {
 // 日期格式化
 const formatDate = (dateString) => {
   if (!dateString) return '-'
-  const date = new Date(dateString)
-  const now = new Date()
-  const diffMs = now - date
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const parsed = parseToShanghai(dateString)
+  if (!parsed) return '-'
+  const now = dayjs().tz('Asia/Shanghai')
+  const diffDays = now.startOf('day').diff(parsed.startOf('day'), 'day')
 
   if (diffDays === 0) {
-    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  } else if (diffDays === 1) {
-    return '昨天'
-  } else if (diffDays < 7) {
-    return `${diffDays}天前`
-  } else {
-    return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+    return parsed.format('HH:mm')
   }
+  if (diffDays === 1) {
+    return '昨天'
+  }
+  if (diffDays < 7) {
+    return `${diffDays}天前`
+  }
+  return parsed.format('MM-DD')
 }
 
 // 查看对话详情

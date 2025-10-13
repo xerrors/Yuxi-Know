@@ -3,20 +3,20 @@ import json
 import os
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 from collections.abc import Awaitable, Callable
 
 from src.config import config
 from src.utils.logging_config import logger
+from src.utils.datetime_utils import utc_isoformat
 
 TaskCoroutine = Callable[["TaskContext"], Awaitable[Any]]
 TERMINAL_STATUSES = {"success", "failed", "cancelled"}
 
 
 def _utc_timestamp() -> str:
-    return datetime.utcnow().isoformat() + "Z"
+    return utc_isoformat()
 
 
 @dataclass
@@ -142,7 +142,7 @@ class Tasker:
             tasks = list(self._tasks.values())
         if status:
             tasks = [task for task in tasks if task.status == status]
-        tasks.sort(key=lambda item: item.created_at, reverse=True)
+        tasks.sort(key=lambda item: item.created_at or utc_isoformat(), reverse=True)
         return [task.to_dict() for task in tasks]
 
     async def get_task(self, task_id: str) -> dict[str, Any] | None:

@@ -1,7 +1,6 @@
 import asyncio
 import os
 import traceback
-from datetime import datetime
 from typing import Any
 
 import chromadb
@@ -17,6 +16,7 @@ from src.knowledge.utils.kb_utils import (
     split_text_into_qa_chunks,
 )
 from src.utils import logger
+from src.utils.datetime_utils import utc_isoformat
 
 
 class ChromaKB(KnowledgeBase):
@@ -91,7 +91,7 @@ class ChromaKB(KnowledgeBase):
             logger.info(f"Creating new collection with embedding model: {embed_info.get('name', 'default')}")
             collection_metadata = {
                 "db_id": db_id,
-                "created_at": datetime.now().isoformat(),
+                "created_at": utc_isoformat(),
                 "embedding_model": embed_info.get("name") if embed_info else "default",
             }
             collection = self.chroma_client.create_collection(

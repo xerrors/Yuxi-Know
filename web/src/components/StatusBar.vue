@@ -45,6 +45,7 @@ import { useUserStore } from '@/stores/user'
 import { Clock, User, ListChecks } from 'lucide-vue-next'
 import { useTaskerStore } from '@/stores/tasker'
 import { storeToRefs } from 'pinia'
+import dayjs from '@/utils/time'
 
 // 使用 stores
 const infoStore = useInfoStore()
@@ -66,7 +67,7 @@ const currentUser = computed(() => {
 
 // 问候语计算属性
 const greeting = computed(() => {
-  const hour = new Date().getHours()
+  const hour = dayjs().tz('Asia/Shanghai').hour()
   let greetingText = ''
 
   if (hour >= 5 && hour < 12) {
@@ -92,15 +93,8 @@ const openTaskCenter = () => {
 
 // 更新时间
 const updateTime = () => {
-  const now = new Date()
-  currentTime.value = now.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
+  const now = dayjs().tz('Asia/Shanghai')
+  currentTime.value = now.format('YYYY年MM月DD日 HH:mm:ss')
 }
 
 // 定时器

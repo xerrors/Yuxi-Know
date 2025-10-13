@@ -4,13 +4,13 @@ Conversation Storage Manager
 Manages conversation data storage including messages, tool calls, and statistics.
 """
 
-import datetime as dt
 import uuid
 
 from sqlalchemy.orm import Session, joinedload
 
 from src.storage.db.models import Conversation, ConversationStats, Message, ToolCall
 from src.utils import logger
+from src.utils.datetime_utils import utc_now
 
 
 class ConversationManager:
@@ -108,11 +108,9 @@ class ConversationManager:
 
         self.db.add(message)
         # Mark the parent conversation as active for sorting/analytics
-        conversation = (
-            self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
-        )
+        conversation = self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
         if conversation:
-            conversation.updated_at = dt.datetime.now(dt.UTC)
+            conversation.updated_at = utc_now()
 
         self.db.commit()
         self.db.refresh(message)
@@ -301,7 +299,7 @@ class ConversationManager:
             current_metadata.update(metadata)
             conversation.extra_metadata = current_metadata
 
-        conversation.updated_at = dt.datetime.now(dt.UTC)
+        conversation.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(conversation)
 
@@ -376,7 +374,7 @@ class ConversationManager:
         if user_feedback is not None:
             stats.user_feedback = user_feedback
 
-        stats.updated_at = dt.datetime.now(dt.UTC)
+        stats.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(stats)
 

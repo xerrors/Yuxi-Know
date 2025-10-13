@@ -5,10 +5,10 @@
 import os
 import shutil
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 
 from src.utils import logger
+from src.utils.datetime_utils import shanghai_now
 
 
 class DatabaseMigrator:
@@ -30,7 +30,7 @@ class DatabaseMigrator:
             return ""
 
         self.ensure_backup_dir()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = shanghai_now().strftime("%Y%m%d_%H%M%S")
         backup_filename = f"server_backup_{timestamp}.db"
         backup_path = os.path.join(self.backup_dir, backup_filename)
 

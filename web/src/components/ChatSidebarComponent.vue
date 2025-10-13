@@ -72,16 +72,7 @@ import {
 } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
 import { PanelLeftClose, MessageSquarePlus, ChevronDown } from 'lucide-vue-next';
-import dayjs from 'dayjs';
-import 'dayjs/locale/zh-cn';
-import relativeTime from 'dayjs/plugin/relativeTime';
-import utc from 'dayjs/plugin/utc';
-import timezone from 'dayjs/plugin/timezone';
-
-dayjs.extend(relativeTime);
-dayjs.extend(utc);
-dayjs.extend(timezone);
-dayjs.locale('zh-cn');
+import dayjs, { parseToShanghai } from '@/utils/time';
 
 const props = defineProps({
   currentAgentId: {
@@ -142,15 +133,18 @@ const groupedChats = computed(() => {
 
   // Sort chats by creation date, newest first
   const sortedChats = [...props.chatsList].sort((a, b) => {
-    // 将后端时间当作UTC时间处理，然后转换为北京时间进行比较
-    const dateA = dayjs.utc(b.created_at).tz('Asia/Shanghai');
-    const dateB = dayjs.utc(a.created_at).tz('Asia/Shanghai');
+    const dateA = parseToShanghai(b.created_at);
+    const dateB = parseToShanghai(a.created_at);
+    if (!dateA || !dateB) return 0;
     return dateA.diff(dateB);
   });
 
   sortedChats.forEach(chat => {
     // 将后端时间当作UTC时间处理，然后转换为北京时间
-    const chatDate = dayjs.utc(chat.created_at).tz('Asia/Shanghai');
+    const chatDate = parseToShanghai(chat.created_at);
+    if (!chatDate) {
+      return;
+    }
     if (chatDate.isAfter(today)) {
       groups['今天'].push(chat);
     } else if (chatDate.isAfter(sevenDaysAgo)) {

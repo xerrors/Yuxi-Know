@@ -1,9 +1,11 @@
 import hashlib
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 import jwt
+
+from src.utils.datetime_utils import utc_now
 
 # JWT配置
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "yuxi_know_secure_key")
@@ -46,9 +48,9 @@ class AuthUtils:
 
         # 设置过期时间
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = utc_now() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(seconds=JWT_EXPIRATION)
+            expire = utc_now() + timedelta(seconds=JWT_EXPIRATION)
 
         to_encode.update({"exp": expire})
 

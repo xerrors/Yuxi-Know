@@ -4,6 +4,8 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
+from src.utils.datetime_utils import coerce_datetime, utc_isoformat, utc_now
+
 Base = declarative_base()
 
 
@@ -21,13 +23,8 @@ class Conversation(Base):
     agent_id = Column(String(64), index=True, nullable=False, comment="Agent ID")
     title = Column(String(255), nullable=True, comment="Conversation title")
     status = Column(String(20), default="active", comment="Status: active/archived/deleted")
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
-    updated_at = Column(
-        DateTime,
-        default=lambda: dt.datetime.now(dt.UTC),
-        onupdate=lambda: dt.datetime.now(dt.UTC),
-        comment="Update time",
-    )
+    created_at = Column(DateTime, default=utc_now, comment="Creation time")
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, comment="Update time")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata")
 
     # Relationships
@@ -44,8 +41,8 @@ class Conversation(Base):
             "agent_id": self.agent_id,
             "title": self.title,
             "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "updated_at": utc_isoformat(self.updated_at) if self.updated_at else None,
             "metadata": self.extra_metadata or {},
         }
 
@@ -62,7 +59,7 @@ class Message(Base):
     role = Column(String(20), nullable=False, comment="Message role: user/assistant/system/tool")
     content = Column(Text, nullable=False, comment="Message content")
     message_type = Column(String(30), default="text", comment="Message type: text/tool_call/tool_result")
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=utc_now, comment="Creation time")
     token_count = Column(Integer, nullable=True, comment="Token count (optional)")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata (complete message dump)")
 
@@ -77,7 +74,7 @@ class Message(Base):
             "role": self.role,
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
             "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
@@ -105,7 +102,7 @@ class ToolCall(Base):
     tool_output = Column(Text, nullable=True, comment="Tool execution result")
     status = Column(String(20), default="pending", comment="Status: pending/success/error")
     error_message = Column(Text, nullable=True, comment="Error message if failed")
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
+    created_at = Column(DateTime, default=utc_now, comment="Creation time")
 
     # Relationships
     message = relationship("Message", back_populates="tool_calls")
@@ -120,7 +117,7 @@ class ToolCall(Base):
             "tool_output": self.tool_output,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
         }
 
 
@@ -137,13 +134,8 @@ class ConversationStats(Base):
     total_tokens = Column(Integer, default=0, comment="Total tokens used")
     model_used = Column(String(100), nullable=True, comment="Model used")
     user_feedback = Column(JSON, nullable=True, comment="User feedback")
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Creation time")
-    updated_at = Column(
-        DateTime,
-        default=lambda: dt.datetime.now(dt.UTC),
-        onupdate=lambda: dt.datetime.now(dt.UTC),
-        comment="Update time",
-    )
+    created_at = Column(DateTime, default=utc_now, comment="Creation time")
+    updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, comment="Update time")
 
     # Relationships
     conversation = relationship("Conversation", back_populates="stats")
@@ -156,8 +148,8 @@ class ConversationStats(Base):
             "total_tokens": self.total_tokens,
             "model_used": self.model_used,
             "user_feedback": self.user_feedback or {},
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "updated_at": utc_isoformat(self.updated_at) if self.updated_at else None,
         }
 
 
@@ -173,7 +165,7 @@ class User(Base):
     avatar = Column(String, nullable=True)  # 头像URL
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")  # 角色: superadmin, admin, user
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
+    created_at = Column(DateTime, default=utc_now)
     last_login = Column(DateTime, nullable=True)
 
     # 登录失败限制相关字段
@@ -196,13 +188,13 @@ class User(Base):
             "phone_number": self.phone_number,
             "avatar": self.avatar,
             "role": self.role,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
+            "last_login": utc_isoformat(self.last_login) if self.last_login else None,
             "login_failed_count": self.login_failed_count,
-            "last_failed_login": self.last_failed_login.isoformat() if self.last_failed_login else None,
-            "login_locked_until": self.login_locked_until.isoformat() if self.login_locked_until else None,
+            "last_failed_login": utc_isoformat(self.last_failed_login) if self.last_failed_login else None,
+            "login_locked_until": utc_isoformat(self.login_locked_until) if self.login_locked_until else None,
             "is_deleted": self.is_deleted,
-            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "deleted_at": utc_isoformat(self.deleted_at) if self.deleted_at else None,
         }
         if include_password:
             result["password_hash"] = self.password_hash
@@ -210,19 +202,18 @@ class User(Base):
 
     def is_login_locked(self):
         """检查用户是否处于登录锁定状态"""
-        if self.login_locked_until is None:
+        lock_deadline = coerce_datetime(self.login_locked_until)
+        if lock_deadline is None:
             return False
-        from datetime import datetime
-
-        return datetime.now() < self.login_locked_until
+        return utc_now() < lock_deadline
 
     def get_remaining_lock_time(self):
         """获取剩余锁定时间（秒）"""
-        if not self.is_login_locked():
+        lock_deadline = coerce_datetime(self.login_locked_until)
+        if lock_deadline is None:
             return 0
-        from datetime import datetime
-
-        return int((self.login_locked_until - datetime.now()).total_seconds())
+        remaining = int((lock_deadline - utc_now()).total_seconds())
+        return max(0, remaining)
 
     def calculate_lock_duration(self):
         """根据失败次数计算锁定时长（秒）"""
@@ -238,14 +229,12 @@ class User(Base):
 
     def increment_failed_login(self):
         """增加登录失败次数并设置锁定时间"""
-        from datetime import datetime, timedelta
-
         self.login_failed_count += 1
-        self.last_failed_login = datetime.now()
+        self.last_failed_login = utc_now()
 
         lock_duration = self.calculate_lock_duration()
         if lock_duration > 0:
-            self.login_locked_until = datetime.now() + timedelta(seconds=lock_duration)
+            self.login_locked_until = utc_now() + dt.timedelta(seconds=lock_duration)
 
     def reset_failed_login(self):
         """重置登录失败相关字段"""
@@ -264,7 +253,7 @@ class OperationLog(Base):
     operation = Column(String, nullable=False)
     details = Column(Text, nullable=True)
     ip_address = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
+    timestamp = Column(DateTime, default=utc_now)
 
     # 关联用户
     user = relationship("User", back_populates="operation_logs")
@@ -276,7 +265,7 @@ class OperationLog(Base):
             "operation": self.operation,
             "details": self.details,
             "ip_address": self.ip_address,
-            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "timestamp": utc_isoformat(self.timestamp) if self.timestamp else None,
         }
 
 
@@ -292,7 +281,7 @@ class MessageFeedback(Base):
     user_id = Column(String(64), nullable=False, index=True, comment="User ID who provided feedback")
     rating = Column(String(10), nullable=False, comment="Feedback rating: like or dislike")
     reason = Column(Text, nullable=True, comment="Optional reason for dislike feedback")
-    created_at = Column(DateTime, default=lambda: dt.datetime.now(dt.UTC), comment="Feedback creation time")
+    created_at = Column(DateTime, default=utc_now, comment="Feedback creation time")
 
     # Relationships
     message = relationship("Message", backref="feedbacks")
@@ -304,5 +293,5 @@ class MessageFeedback(Base):
             "user_id": self.user_id,
             "rating": self.rating,
             "reason": self.reason,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": utc_isoformat(self.created_at) if self.created_at else None,
         }

@@ -1,4 +1,3 @@
-from datetime import datetime
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
@@ -13,6 +12,7 @@ from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
 from src.storage.minio import upload_image_to_minio
+from src.utils.datetime_utils import utc_now
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -151,7 +151,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
     # 登录成功，重置失败计数器
     user.reset_failed_login()
-    user.last_login = datetime.now()
+    user.last_login = utc_now()
     db.commit()
 
     # 生成访问令牌
@@ -220,7 +220,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
         avatar=None,  # 初始化时头像为空
         password_hash=hashed_password,
         role="superadmin",
-        last_login=datetime.now(),
+        last_login=utc_now(),
     )
 
     db.add(new_admin)
@@ -527,7 +527,7 @@ async def delete_user(
     hash_suffix = hashlib.md5(user.user_id.encode()).hexdigest()[:4]
 
     user.is_deleted = 1
-    user.deleted_at = datetime.now()
+    user.deleted_at = utc_now()
     user.username = f"已注销用户-{hash_suffix}"
     user.phone_number = None  # 清空手机号，释放该手机号供其他用户使用
     user.password_hash = "DELETED"  # 禁止登录

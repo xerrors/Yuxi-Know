@@ -14,12 +14,13 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch 0.2.2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.2.2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
-- `0.2.2`: 当前稳定版本（推荐）
+- `v0.2.2`: 当前稳定版本（推荐）
+- `v0.3.0-beta`：最新的 Beta 测试版
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 

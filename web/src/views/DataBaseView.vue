@@ -148,6 +148,7 @@ import { BookPlus, Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucid
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import dayjs, { parseToShanghai } from '@/utils/time';
 
 const route = useRoute()
 const router = useRouter()
@@ -230,9 +231,12 @@ const loadDatabases = () => {
       console.log(data)
       // 按照创建时间排序，最新的在前面
       databases.value = data.databases.sort((a, b) => {
-        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
-        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
-        return timeB - timeA // 降序排列，最新的在前面
+        const timeA = parseToShanghai(a.created_at)
+        const timeB = parseToShanghai(b.created_at)
+        if (!timeA && !timeB) return 0
+        if (!timeA) return 1
+        if (!timeB) return -1
+        return timeB.valueOf() - timeA.valueOf() // 降序排列，最新的在前面
       })
       state.loading = false
     })
@@ -311,28 +315,32 @@ const getKbTypeFeature = (type) => {
 // 格式化创建时间
 const formatCreatedTime = (createdAt) => {
   if (!createdAt) return ''
+  const parsed = parseToShanghai(createdAt)
+  if (!parsed) return ''
 
-  const now = new Date()
-  const createdTime = new Date(createdAt)
-  const diffInMs = now.getTime() - createdTime.getTime()
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+  const today = dayjs().startOf('day')
+  const createdDay = parsed.startOf('day')
+  const diffInDays = today.diff(createdDay, 'day')
 
   if (diffInDays === 0) {
     return '今天创建'
-  } else if (diffInDays === 1) {
+  }
+  if (diffInDays === 1) {
     return '昨天创建'
-  } else if (diffInDays < 7) {
+  }
+  if (diffInDays < 7) {
     return `${diffInDays} 天前创建`
-  } else if (diffInDays < 30) {
+  }
+  if (diffInDays < 30) {
     const weeks = Math.floor(diffInDays / 7)
     return `${weeks} 周前创建`
-  } else if (diffInDays < 365) {
+  }
+  if (diffInDays < 365) {
     const months = Math.floor(diffInDays / 30)
     return `${months} 个月前创建`
-  } else {
-    const years = Math.floor(diffInDays / 365)
-    return `${years} 年前创建`
   }
+  const years = Math.floor(diffInDays / 365)
+  return `${years} 年前创建`
 }
 
 // 处理知识库类型改变
@@ -753,5 +761,3 @@ onMounted(() => {
   }
 }
 </style>
-
-

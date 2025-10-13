@@ -16,6 +16,7 @@ from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db
 from src.storage.conversation import ConversationManager
 from src.storage.db.models import User
+from src.utils.datetime_utils import UTC, ensure_shanghai, shanghai_now, utc_now
 from src.utils.logging_config import logger
 
 
@@ -231,7 +232,7 @@ async def get_user_activity_stats(
     try:
         from src.storage.db.models import User, Conversation
 
-        now = datetime.utcnow()
+        now = utc_now()
 
         # Conversations may store either the numeric user primary key or the login user_id string.
         # Join condition accounts for both representations.
@@ -305,7 +306,7 @@ async def get_tool_call_stats(
     try:
         from src.storage.db.models import ToolCall
 
-        now = datetime.utcnow()
+        now = utc_now()
 
         # 基础工具调用统计
         total_calls = db.query(func.count(ToolCall.id)).scalar() or 0
@@ -746,22 +747,22 @@ async def get_call_timeseries_stats(
         from src.storage.db.models import Conversation, Message, ToolCall
 
         # 计算时间范围（使用北京时间 UTC+8）
-        now = datetime.utcnow()
-        local_now = now + timedelta(hours=8)
+        now = utc_now()
+        local_now = shanghai_now()
 
         if time_range == "7hours":
             intervals = 7
             # 包含当前小时：从6小时前开始
             start_time = now - timedelta(hours=intervals - 1)
             group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, "+8 hours"))
-            base_local_time = start_time + timedelta(hours=8)
+            base_local_time = ensure_shanghai(start_time)
         elif time_range == "7weeks":
             intervals = 7
             # 包含当前周：从6周前开始，并对齐到当周周一 00:00
             local_start = local_now - timedelta(weeks=intervals - 1)
             local_start = local_start - timedelta(days=local_start.weekday())
             local_start = local_start.replace(hour=0, minute=0, second=0, microsecond=0)
-            start_time = local_start - timedelta(hours=8)
+            start_time = local_start.astimezone(UTC)
             group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, "+8 hours"))
             base_local_time = local_start
         else:  # 7days (default)
@@ -769,7 +770,7 @@ async def get_call_timeseries_stats(
             # 包含当前天：从6天前开始
             start_time = now - timedelta(days=intervals - 1)
             group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, "+8 hours"))
-            base_local_time = start_time + timedelta(hours=8)
+            base_local_time = ensure_shanghai(start_time)
 
         # 根据类型查询数据
         if type == "models":

@@ -1,6 +1,5 @@
 import os
 import traceback
-from datetime import datetime
 
 from lightrag import LightRAG, QueryParam
 from lightrag.kg.shared_storage import initialize_pipeline_status
@@ -13,6 +12,7 @@ from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
 from src.utils import hashstr, logger
+from src.utils.datetime_utils import shanghai_now
 
 LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
 LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "zai-org/GLM-4.5-Air")
@@ -38,7 +38,8 @@ class LightRagKB(KnowledgeBase):
         log_dir = os.path.join(work_dir, "logs", "lightrag")
         os.makedirs(log_dir, exist_ok=True)
         setup_logger(
-            "lightrag", log_file_path=os.path.join(log_dir, f"lightrag_{datetime.now().strftime('%Y-%m-%d')}.log")
+            "lightrag",
+            log_file_path=os.path.join(log_dir, f"lightrag_{shanghai_now().strftime('%Y-%m-%d')}.log"),
         )
 
         logger.info("LightRagKB initialized")

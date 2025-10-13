@@ -1,11 +1,10 @@
 import json
 import os
-import time
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import Any
 
 from src.utils import logger
+from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
 
 
 class KnowledgeBaseException(Exception):
@@ -54,6 +53,34 @@ class KnowledgeBase(ABC):
 
         # 自动加载元数据
         self._load_metadata()
+        self._normalize_metadata_state()
+
+    @staticmethod
+    def _normalize_timestamp(value: Any) -> str | None:
+        """Convert persisted timestamps to a normalized UTC ISO string."""
+        try:
+            dt_value = coerce_any_to_utc_datetime(value)
+        except (TypeError, ValueError) as exc:  # noqa: BLE001
+            logger.warning(f"Invalid timestamp encountered: {value!r} ({exc})")
+            return None
+
+        if not dt_value:
+            return None
+        return utc_isoformat(dt_value)
+
+    def _normalize_metadata_state(self) -> None:
+        """Ensure in-memory metadata uses normalized timestamp formats."""
+        for meta in self.databases_meta.values():
+            if "created_at" in meta:
+                normalized = self._normalize_timestamp(meta.get("created_at"))
+                if normalized:
+                    meta["created_at"] = normalized
+
+        for file_info in self.files_meta.values():
+            if "created_at" in file_info:
+                normalized = self._normalize_timestamp(file_info.get("created_at"))
+                if normalized:
+                    file_info["created_at"] = normalized
 
     @property
     @abstractmethod
@@ -117,7 +144,7 @@ class KnowledgeBase(ABC):
             "embed_info": embed_info,
             "llm_info": llm_info,
             "metadata": kwargs,
-            "created_at": datetime.now().isoformat(),
+            "created_at": utc_isoformat(),
         }
         self._save_metadata()
 
@@ -237,17 +264,24 @@ class KnowledgeBase(ABC):
         db_files = {}
         for file_id, file_info in self.files_meta.items():
             if file_info.get("database_id") == db_id:
+                created_at = self._normalize_timestamp(file_info.get("created_at"))
                 db_files[file_id] = {
                     "file_id": file_id,
                     "filename": file_info.get("filename", ""),
                     "path": file_info.get("path", ""),
                     "type": file_info.get("file_type", ""),
                     "status": file_info.get("status", "done"),
-                    "created_at": file_info.get("created_at", time.time()),
+                    "created_at": created_at,
                 }
 
         # 按创建时间倒序排序文件列表
-        sorted_files = dict(sorted(db_files.items(), key=lambda x: x[1].get("created_at", 0), reverse=True))
+        sorted_files = dict(
+            sorted(
+                db_files.items(),
+                key=lambda item: item[1].get("created_at") or "",
+                reverse=True,
+            )
+        )
 
         meta["files"] = sorted_files
         meta["row_count"] = len(sorted_files)
@@ -273,17 +307,24 @@ class KnowledgeBase(ABC):
             db_files = {}
             for file_id, file_info in self.files_meta.items():
                 if file_info.get("database_id") == db_id:
+                    created_at = self._normalize_timestamp(file_info.get("created_at"))
                     db_files[file_id] = {
                         "file_id": file_id,
                         "filename": file_info.get("filename", ""),
                         "path": file_info.get("path", ""),
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
-                        "created_at": file_info.get("created_at", time.time()),
+                        "created_at": created_at,
                     }
 
             # 按创建时间倒序排序文件列表
-            sorted_files = dict(sorted(db_files.items(), key=lambda x: x[1].get("created_at", 0), reverse=True))
+            sorted_files = dict(
+                sorted(
+                    db_files.items(),
+                    key=lambda item: item[1].get("created_at") or "",
+                    reverse=True,
+                )
+            )
 
             db_dict["files"] = sorted_files
             db_dict["row_count"] = len(sorted_files)
@@ -495,13 +536,14 @@ class KnowledgeBase(ABC):
 
     def _save_metadata(self):
         """保存元数据"""
+        self._normalize_metadata_state()
         meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
         try:
             data = {
                 "databases": self.databases_meta,
                 "files": self.files_meta,
                 "kb_type": self.kb_type,
-                "updated_at": datetime.now().isoformat(),
+                "updated_at": utc_isoformat(),
             }
             with open(meta_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)

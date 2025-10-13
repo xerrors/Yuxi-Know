@@ -1,11 +1,11 @@
 import os
-from datetime import datetime
 
-import pytz
 from loguru import logger as loguru_logger
 
+from src.utils.datetime_utils import shanghai_now
+
 SAVE_DIR = os.getenv("SAVE_DIR", "saves")
-DATETIME = datetime.now(pytz.timezone("Asia/Shanghai")).strftime("%Y-%m-%d")
+DATETIME = shanghai_now().strftime("%Y-%m-%d")
 LOG_FILE = f"{SAVE_DIR}/logs/yuxi-{DATETIME}.log"
 
 

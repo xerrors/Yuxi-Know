@@ -306,7 +306,11 @@ async def chat_agent(
                 else:
                     yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
 
-            if conf.enable_content_guard and hasattr(full_msg, "content") and await content_guard.check(full_msg.content):
+            if (
+                conf.enable_content_guard
+                and hasattr(full_msg, "content")
+                and await content_guard.check(full_msg.content)
+            ):
                 logger.warning("Sensitive content detected in final message")
                 yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                 return

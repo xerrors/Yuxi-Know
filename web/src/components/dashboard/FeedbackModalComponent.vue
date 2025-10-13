@@ -96,6 +96,7 @@ import { ref, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { LikeOutlined, DislikeOutlined, ClockCircleOutlined } from '@ant-design/icons-vue'
 import { dashboardApi } from '@/apis/dashboard_api'
+import { formatFullDateTime } from '@/utils/time'
 
 // Props
 const props = defineProps({
@@ -142,17 +143,7 @@ const loadFeedbacks = async () => {
 }
 
 // 格式化完整日期
-const formatFullDate = (dateString) => {
-  if (!dateString) return '-'
-  const date = new Date(dateString)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const formatFullDate = (dateString) => formatFullDateTime(dateString)
 
 // 监听 agentId 变化，重新加载数据
 watch(() => props.agentId, () => {
