@@ -263,11 +263,10 @@ class MilvusKB(KnowledgeBase):
                         embeddings,
                     ]
 
-                    def _insert_and_flush():
+                    def _insert_records():
                         collection.insert(entities)
-                        collection.flush()
 
-                    await asyncio.to_thread(_insert_and_flush)
+                    await asyncio.to_thread(_insert_records)
 
                 logger.info(f"Inserted {content_type} {item} into Milvus. Done.")
 
@@ -363,7 +362,6 @@ class MilvusKB(KnowledgeBase):
                     def _delete_from_milvus():
                         try:
                             collection.delete(expr)
-                            collection.flush()
                             logger.info(f"Deleted chunks for file {file_id} from Milvus")
                         except Exception as e:
                             logger.error(f"Error deleting file {file_id} from Milvus: {e}")
