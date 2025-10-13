@@ -51,10 +51,24 @@ agent_manager.init_all_agents()
 
 ## 内置工具与 MCP 集成
 
+系统默认会为对话/推理智能体注册一组“内置工具”，并根据配置动态启用：
 
-::: warning
-文档待完善
-:::
+- 知识图谱查询：`query_knowledge_graph`
+  - 依赖 Neo4j 服务（见 docker-compose 中 `graph`）
+  - 返回包含三元组的结果，适合图谱关系类问题
+- 网页搜索：`TavilySearch`
+  - 需要设置 `TAVILY_API_KEY` 才会启用
+  - LLM 在需要时自动调用，提供实时网页信息
+- 知识库检索工具：按知识库动态生成
+  - 工具名称形如 `query_<db_id前缀>`；描述来自知识库名称与说明
+  - 在工具选择阶段，用描述帮助模型做针对性检索
+- MySQL 工具包：只读查询
+  - `mysql_list_tables`、`mysql_describe_table`、`mysql_query`
+  - 环境变量见下，具备超时/行数限制与注入防护
+
+MCP（Model Context Protocol）可接入外部可视化或其他工具能力：
+- 在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 添加配置；`transport` 字段名必须正确
+- 常见问题：无法列出工具多因服务不可达或配置错误；优先检查可达性与字段名
 
 
 ### 1. MySQL 数据库集成
@@ -115,5 +129,5 @@ MCP_SERVERS = {
 ```
 
 ::: warning 配置注意
-记得将 `type` 字段修改为 `transport`。
+记得将 `type` 字段修改为 `transport`，并确保服务可达。
 :::

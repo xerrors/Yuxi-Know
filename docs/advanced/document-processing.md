@@ -51,6 +51,13 @@ docker compose up paddlex --build
 - **结构化文档**: PP-Structure-V3
 - **生产环境**: 根据硬件条件选择
 
+### `enable_ocr` 取值说明（入库参数）
+
+- `disable`：不启用 OCR（PDF 将按纯文本提取，图片会自动转为 `onnx_rapid_ocr` 提示）
+- `onnx_rapid_ocr`：CPU 友好，安装简单
+- `mineru_ocr`：GPU 加速，复杂文档效果好
+- `paddlex_ocr`：结构化表格/票据等场景
+
 ## 批量处理脚本
 
 系统提供便捷的批量处理脚本，支持文件上传和解析操作。
@@ -81,6 +88,8 @@ uv run scripts/batch_upload.py upload \
 - `--recursive`: 递归处理子目录
 - `--record-file`: 处理记录文件路径
 
+提示：系统按“内容哈希”进行去重；同一知识库已存在相同内容的文件会被拒绝（409）。
+
 ### 文件解析脚本
 
 使用 `scripts/batch_upload.py trans` 将文件解析为 Markdown：
@@ -108,3 +117,5 @@ uv run scripts/batch_upload.py trans \
 - **断点续传**: 支持中断后继续处理
 - **日志记录**: 详细记录处理过程
 - **结果统计**: 处理完成后显示统计信息
+
+更多关于“入库参数、导出数据、支持类型”等，请参阅：介绍 → 知识库与知识图谱 → 文档管理。

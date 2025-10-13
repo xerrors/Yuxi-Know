@@ -12,6 +12,7 @@
 
 **Next**
 
+- [ ] 修改现有的 ReAct 智能体，并尽量将默认助手的特性兼容到 LangGraph 的 [`create_agent`](https://docs.langchain.com/oss/python/langchain/agents) 中
 - [ ] 添加对于上传文件的支持
 - [ ] 知识图谱的上传和可视化，支持属性，标签的展示 <Badge type="info" text="0.4" />
 - [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示

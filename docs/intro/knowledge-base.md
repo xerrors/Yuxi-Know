@@ -33,15 +33,45 @@ LightRAG 知识库可在知识库详情中可视化，但不支持在侧边栏�
 
 ## 文档管理
 
-::: danger
-待补充
-:::
+本系统的“上传 → 解析入库 → 检索/可视化”流程既可通过 Web 界面完成，也可使用 API/脚本批量处理。
+
+**支持的文件类型**
+
+- 文本与文档：`.txt`、`.md`、`.doc`、`.docx`、`.pdf`
+- 网页与数据：`.html`、`.htm`、`.json`、`.csv`、`.xls`、`.xlsx`
+- 图片：`.jpg`、`.jpeg`、`.png`、`.bmp`、`.tiff`、`.tif`
+
+接口查询：`GET /api/knowledge/files/supported-types`
+
+**上传与入库**
+
+1) 上传文件（返回服务端保存路径）
+- `POST /api/knowledge/files/upload?db_id=<可选>`
+- 成功返回：`file_path`（后续入库使用）、`content_hash`（内容去重）
+
+2) 解析并入库（异步任务）
+- `POST /api/knowledge/databases/{db_id}/documents`
+- 返回：`status=queued` 与 `task_id`，可在任务中心查看进度
+
+去重策略：系统按“内容哈希”判断是否已存在相同文件，避免重复入库。
+
+### 批量脚本
+
+- 上传并入库：参见 `scripts/batch_upload.py upload`
+- 转换为 Markdown：参见 `scripts/batch_upload.py trans`
 
 ## 知识图谱
 
-::: danger
-待补充关于知识图谱在项目中的定位
-:::
+本项目存在两类“图谱相关”能力：
+
+- 全局知识图谱（Neo4j）：用于智能体工具 `query_knowledge_graph` 的图实体查询；统一保存在 Neo4j 中，提供三元组检索和系统级可视化。
+- LightRAG 知识库内图谱：针对某个知识库由 LightRAG 自动抽取实体/关系，用于该库内的图增强检索与可视化；与全局图共享同一 Neo4j 实例，但通过特殊 tag 区分，不作为全局图谱使用。
+
+选择建议：
+- 更结构化的库内检索/可视化：优先使用 LightRAG（注意构建质量与成本）。
+- 统一的图查询/工具调用：依赖全局 Neo4j 图谱与工具 `query_knowledge_graph`。
+
+接入已有 Neo4j 实例、三元组导入方式与注意事项见下文说明；LightRAG 构建模型可通过 `.env` 中的 `LIGHTRAG_LLM_*` 变量覆盖。
 
 ### 1. 以三元组形式导入
 

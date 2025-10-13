@@ -39,3 +39,5 @@ features:
 ```sh
 docker compose up --build -d
 ```
+
+查看端口与服务说明：高级配置 → 其他配置 → 服务端口。
