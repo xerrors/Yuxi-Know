@@ -5,30 +5,30 @@
 - **[2025/10/13]** v0.3 进入 beta 测试环节，不会再封装新的特性，仅作 bug 层面的修复
 
 
-**Bugs**
+## Bugs
 
 - [ ] 当前 ReAct 智能体有消息顺序错乱的 bug，且不会默认调用工具
 
 
-**Next**
+## Next
 
 - [ ] 修改现有的智能体Demo，并尽量将默认助手的特性兼容到 LangGraph 的 [`create_agent`](https://docs.langchain.com/oss/python/langchain/agents) 中
 - [ ] 基于 create_agent 创建 SQL Viewer 智能体 <Badge type="info" text="0.3.5" />
 - [ ] 优化 MCP 逻辑，支持 common + special 创建方式 <Badge type="info" text="0.3.5" />
 - [ ] 添加对于上传文件的支持
-- [ ] 知识图谱的上传和可视化，支持属性，标签的展示 <Badge type="info" text="0.4" />
+- [ ] 统一图谱数据结构，优化可视化方式 [#298](https://github.com/xerrors/Yuxi-Know/issues/298) <Badge type="info" text="0.4" />
 - [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
 - [ ] 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />
-- [ ] 支持 MinerU 2.5 的解析方法（含API方法，API不支持文件上传）<Badge type="info" text="0.3.5" />
+- [ ] 支持 MinerU 2.5 的解析方法 <Badge type="info" text="0.3.5" />
 - [ ] 优化全局配置的管理模型，优化配置管理
 
-**Later**
+## Later
 
 下面的功能**可能**会放在后续版本实现，暂时未定
 
 - [ ] 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 
-**Done**
+## Done
 
 
 - [x] 添加测试脚本，覆盖最常见的功能（已覆盖API）
