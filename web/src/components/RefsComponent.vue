@@ -1,6 +1,7 @@
 <template>
   <div class="refs" v-if="showRefs">
     <div class="tags">
+      <!-- 反馈 -->
       <span
         class="item btn"
         :class="{ 'disabled': feedbackState.hasSubmitted }"
@@ -19,37 +20,22 @@
         <DislikeFilled v-if="feedbackState.rating === 'dislike'" />
         <DislikeOutlined v-else />
       </span>
+      <!-- 模型名称 -->
       <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
         <BulbOutlined /> {{ getModelName(msg) }}
       </span>
+      <!-- 复制 -->
       <span
         v-if="showKey('copy')"
-        class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined /></span>
+        class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined />
+      </span>
+
+      <!-- 重试 -->
       <span
         v-if="showKey('regenerate')"
-        class="item btn" @click="regenerateMessage()" title="重新生成"><ReloadOutlined /></span>
-      <span
-        v-if="isLatestMessage && showKey('subGraph') && hasSubGraphData(msg)"
-        class="item btn"
-        @click="openGlobalRefs('graph')"
-      >
-        <DeploymentUnitOutlined /> 关系图
+        class="item btn" @click="regenerateMessage()" title="重新生成"><ReloadOutlined />
       </span>
-      <span
-        class="item btn"
-        v-if="isLatestMessage && showKey('webSearch') && msg.refs?.web_search.results.length > 0"
-        @click="openGlobalRefs('webSearch')"
-      >
-        <GlobalOutlined /> 网页搜索 {{ msg.refs.web_search?.results.length }}
-      </span>
-      <span
-        class="item btn"
-        v-if="isLatestMessage && showKey('knowledgeBase') && hasKnowledgeBaseData(msg)"
-        @click="openGlobalRefs('knowledgeBase')"
-      >
-        <FileTextOutlined /> 知识库
-      </span>
-    </div>
+      </div>
   </div>
 
   <!-- Dislike reason modal -->
@@ -77,10 +63,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
 import {
-  GlobalOutlined,
-  FileTextOutlined,
   CopyOutlined,
-  DeploymentUnitOutlined,
   BulbOutlined,
   ReloadOutlined,
   LikeOutlined,
@@ -152,25 +135,6 @@ const showRefs = computed(() => {
   return (msg.value.role=='received' || msg.value.role=='assistant') && msg.value.status=='finished';
 })
 
-// 打开全局refs抽屉
-const openGlobalRefs = (type) => {
-  emit('openRefs', {
-    type,
-    refs: msg.value.refs
-  })
-}
-
-const hasSubGraphData = (msg) => {
-  return msg.refs &&
-         msg.refs.graph_base &&
-         msg.refs.graph_base.results.nodes.length > 0;
-}
-
-const hasKnowledgeBaseData = (msg) => {
-  return msg.refs &&
-         msg.refs.knowledge_base &&
-         msg.refs.knowledge_base.results.length > 0;
-}
 
 // 添加重新生成方法
 const regenerateMessage = () => {

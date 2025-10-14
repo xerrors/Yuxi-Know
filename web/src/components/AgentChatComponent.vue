@@ -244,13 +244,26 @@ const onGoingConvMessages = computed(() => {
 
 const conversations = computed(() => {
   const historyConvs = MessageProcessor.convertServerHistoryToMessages(currentThreadMessages.value);
-  if (onGoingConvMessages.value.length > 0) {
+  const threadState = currentThreadState.value;
+
+  // 如果有进行中的消息且线程状态显示正在流式处理，添加进行中的对话
+  if (onGoingConvMessages.value.length > 0 && threadState?.isStreaming) {
     const onGoingConv = {
       messages: onGoingConvMessages.value,
       status: 'streaming'
     };
     return [...historyConvs, onGoingConv];
   }
+
+  // 即使流式结束，如果历史记录为空但还有消息没有完全同步，也保持显示
+  if (historyConvs.length === 0 && onGoingConvMessages.value.length > 0 && !threadState?.isStreaming) {
+    const finalConv = {
+      messages: onGoingConvMessages.value,
+      status: 'finished'
+    };
+    return [finalConv];
+  }
+
   return historyConvs;
 });
 
@@ -322,7 +335,7 @@ const cleanupThreadState = (threadId) => {
 };
 
 // ==================== STREAM HANDLING LOGIC ====================
-const resetOnGoingConv = (threadId = null) => {
+const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
   if (threadId) {
     // 清理指定线程的状态
     const threadState = getThreadState(threadId);
@@ -331,7 +344,17 @@ const resetOnGoingConv = (threadId = null) => {
         threadState.streamAbortController.abort();
         threadState.streamAbortController = null;
       }
-      threadState.onGoingConv = { msgChunks: {} };
+      // 如果指定要保留消息，则延迟清空
+      if (preserveMessages) {
+        // 延迟清空消息，给历史记录加载足够时间
+        setTimeout(() => {
+          if (threadState.onGoingConv) {
+            threadState.onGoingConv = { msgChunks: {} };
+          }
+        }, 100);
+      } else {
+        threadState.onGoingConv = { msgChunks: {} };
+      }
     }
   } else {
     // 清理当前线程或所有线程的状态
@@ -343,7 +366,15 @@ const resetOnGoingConv = (threadId = null) => {
           threadState.streamAbortController.abort();
           threadState.streamAbortController = null;
         }
-        threadState.onGoingConv = { msgChunks: {} };
+        if (preserveMessages) {
+          setTimeout(() => {
+            if (threadState.onGoingConv) {
+              threadState.onGoingConv = { msgChunks: {} };
+            }
+          }, 100);
+        } else {
+          threadState.onGoingConv = { msgChunks: {} };
+        }
       }
     } else {
       // 如果没有当前线程，清理所有线程状态
@@ -390,13 +421,26 @@ const _processStreamChunk = (chunk, threadId) => {
       resetOnGoingConv(threadId);
       return true;
     case 'finished':
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
-      resetOnGoingConv(threadId);
+      // 先标记流式结束，但保持消息显示直到历史记录加载完成
+      if (threadState) {
+        threadState.isStreaming = false;
+      }
+      // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
+        .finally(() => {
+          // 历史记录加载完成后，安全地清空当前进行中的对话
+          resetOnGoingConv(threadId, true);
+        });
       return true;
     case 'interrupted':
       // 中断状态，刷新消息历史
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
-      resetOnGoingConv(threadId);
+      if (threadState) {
+        threadState.isStreaming = false;
+      }
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
+        .finally(() => {
+          resetOnGoingConv(threadId, true);
+        });
       return true;
   }
 

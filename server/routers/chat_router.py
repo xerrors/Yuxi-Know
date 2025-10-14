@@ -123,6 +123,7 @@ async def chat_agent(
     db: Session = Depends(get_db),
 ):
     """使用特定智能体进行对话（需要登录）"""
+    start_time = asyncio.get_event_loop().time()
 
     logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
 
@@ -319,6 +320,7 @@ async def chat_agent(
                 yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                 return
 
+            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
             yield make_chunk(status="finished", meta=meta)
 
             # After streaming finished, save all messages from LangGraph state
