@@ -111,7 +111,7 @@ class PaddleXLayoutParser:
                 logger.info("✅ 请求成功!")
                 return result
             else:
-                logger.error("❌ 请求失败!")
+                logger.error(f"❌ 请求失败! {self.endpoint}")
                 try:
                     error_result = response.json()
                     logger.error(f"错误信息: {json.dumps(error_result, indent=2, ensure_ascii=False)}")

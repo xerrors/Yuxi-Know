@@ -10,8 +10,10 @@ from src.storage.db.models import Base, User
 from src.utils import logger
 
 try:
-    from server.utils.migrate import validate_database_schema
+    from server.utils.migrate import DatabaseMigrator, validate_database_schema
 except ImportError:
+    DatabaseMigrator = None
+
     # 如果迁移工具不存在，使用简单的占位函数
     def validate_database_schema(db_path):
         return True, []
@@ -49,19 +51,29 @@ class DBManager:
 
     def run_migrations(self):
         """运行数据库迁移"""
-        # 在创建表之前先检查结构
-        if os.path.exists(self.db_path):
-            is_valid, issues = validate_database_schema(self.db_path)
+        if not os.path.exists(self.db_path):
+            return
 
-            if not is_valid:
-                logger.warning("=" * 60)
-                logger.warning("检测到数据库结构与当前模型不一致！")
-                logger.warning("=" * 60)
-                for issue in issues:
-                    logger.warning(f"  ⚠️  {issue}")
-                logger.warning("")
-                logger.warning("请运行以下 scripts/migrate_user_fields.py 来修复数据库结构:")
-                logger.warning("=" * 60)
+        if DatabaseMigrator is not None:
+            migrator = DatabaseMigrator(self.db_path)
+            try:
+                migrator.run_migrations()
+            except Exception as exc:
+                logger.error(f"数据库迁移执行失败: {exc}")
+        else:
+            logger.warning("数据库迁移工具缺失，无法自动执行迁移")
+
+        is_valid, issues = validate_database_schema(self.db_path)
+
+        if not is_valid:
+            logger.warning("=" * 60)
+            logger.warning("检测到数据库结构与当前模型不一致！")
+            logger.warning("=" * 60)
+            for issue in issues:
+                logger.warning(f"  ⚠️  {issue}")
+            logger.warning("")
+            logger.warning("请运行 scripts/migrate_user_soft_delete.py 手动修复数据库结构")
+            logger.warning("=" * 60)
 
     def get_session(self):
         """获取数据库会话"""
