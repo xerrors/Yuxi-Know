@@ -54,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, computed, toRefs, onMounted, nextTick, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount, useSlots } from 'vue';
 import {
   SendOutlined,
   ArrowUpOutlined,
@@ -67,7 +67,6 @@ import {
 const inputRef = ref(null);
 const isSingleLine = ref(true);
 const optionsExpanded = ref(false);
-const hasOptionsLeft = ref(false);
 const singleLineHeight = ref(0); // Add this
 // 用于防抖的定时器
 const debounceTimer = ref(null);
@@ -107,6 +106,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'send', 'keydown']);
+const slots = useSlots();
+const hasOptionsLeft = computed(() => {
+  const slot = slots['options-left'];
+  if (!slot) {
+    return false;
+  }
+  const renderedNodes = slot();
+  return Boolean(renderedNodes && renderedNodes.length);
+});
 
 // 图标映射
 const iconComponents = {
@@ -206,13 +214,6 @@ const focusInput = () => {
   }
 };
 
-// 检查是否有左侧选项
-const checkOptionsLeft = () => {
-  // 这里可以通过检查slot内容来判断是否有选项
-  // 暂时设为true，实际使用时可以根据slot内容动态判断
-  hasOptionsLeft.value = true;
-};
-
 // 监听输入值变化
 watch(inputValue, () => {
   nextTick(() => {
@@ -242,7 +243,6 @@ watch(inputValue, () => {
 // Wait for component to mount before setting up onStartTyping
 onMounted(() => {
   // console.log('Component mounted');
-  checkOptionsLeft();
   nextTick(() => {
     if (inputRef.value) {
       // 记录单行模式下的高度和宽度基准
