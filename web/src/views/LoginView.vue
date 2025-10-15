@@ -26,9 +26,9 @@
         <img :src="loginBgImage" alt="登录背景" class="login-bg-image" />
         <div class="image-overlay">
           <div class="brand-info">
-             <h1 class="brand-title">{{ infoStore.branding?.name || 'Yuxi-Know' }}</h1>
-             <p class="brand-subtitle">{{ infoStore.branding?.subtitle || '大模型驱动的知识库管理工具' }}</p>
-             <p class="brand-description">{{ infoStore.branding?.description || '结合知识库与知识图谱，提供更准确、更全面的回答' }}</p>
+             <h1 class="brand-title">{{ brandName }}</h1>
+             <p class="brand-subtitle">{{ brandSubtitle }}</p>
+             <p class="brand-description">{{ brandDescription }}</p>
            </div>
           <div class="brand-copyright">
             <p>{{ infoStore.footer?.copyright || 'Yuxi-Know' }}. {{ infoStore.branding?.copyright || '版权所有' }}</p>
@@ -39,177 +39,175 @@
       <!-- 右侧登录表单区域 -->
       <div class="login-form-section">
         <div class="login-container">
-      <div class="login-logo">
-        <h1>欢迎登录 {{ infoStore.branding.name }}</h1>
-      </div>
+          <header class="login-header">
+            <p class="login-title">欢迎登录</p>
+            <h1 class="login-brand">{{ brandName }}</h1>
+            <p v-if="!isFirstRun && brandSubtitle" class="login-subtitle">{{ brandSubtitle }}</p>
+          </header>
 
-      <!-- 初始化管理员表单 -->
-      <div v-if="isFirstRun" class="login-form">
-        <h2>系统初始化，请创建超级管理员账户</h2>
-        <div class="init-tips">
-          <p>• 请输入用户ID（仅支持字母、数字和下划线）</p>
-          <p>• 手机号可选填写，用于后续登录</p>
-          <p>• 请妥善保管管理员账户信息</p>
-        </div>
+          <div class="login-content" :class="{ 'is-initializing': isFirstRun }">
+            <!-- 初始化管理员表单 -->
+            <div v-if="isFirstRun" class="login-form login-form--init">
+              <h2>系统初始化，请创建超级管理员</h2>
+              <a-form
+                :model="adminForm"
+                @finish="handleInitialize"
+                layout="vertical"
+              >
+                <a-form-item
+                  label="用户ID"
+                  name="user_id"
+                  :rules="[
+                    { required: true, message: '请输入用户ID' },
+                    {
+                      pattern: /^[a-zA-Z0-9_]+$/,
+                      message: '用户ID只能包含字母、数字和下划线'
+                    },
+                    {
+                      min: 3,
+                      max: 20,
+                      message: '用户ID长度必须在3-20个字符之间'
+                    }
+                  ]"
+                >
+                  <a-input
+                    v-model:value="adminForm.user_id"
+                    placeholder="请输入用户ID（3-20个字符）"
+                    :maxlength="20"
+                  />
+                </a-form-item>
 
-        <a-form
-          :model="adminForm"
-          @finish="handleInitialize"
-          layout="vertical"
-        >
-          <a-form-item
-            label="用户ID"
-            name="user_id"
-            :rules="[
-              { required: true, message: '请输入用户ID' },
-              {
-                pattern: /^[a-zA-Z0-9_]+$/,
-                message: '用户ID只能包含字母、数字和下划线'
-              },
-              {
-                min: 3,
-                max: 20,
-                message: '用户ID长度必须在3-20个字符之间'
-              }
-            ]"
-          >
-            <a-input
-              v-model:value="adminForm.user_id"
-              placeholder="请输入用户ID（3-20个字符）"
-              :maxlength="20"
-            />
-          </a-form-item>
+                <a-form-item
+                  label="手机号（可选）"
+                  name="phone_number"
+                  :rules="[
+                    {
+                      validator: async (rule, value) => {
+                        if (!value || value.trim() === '') {
+                          return; // 空值允许
+                        }
+                        const phoneRegex = /^1[3-9]\d{9}$/;
+                        if (!phoneRegex.test(value)) {
+                          throw new Error('请输入正确的手机号格式');
+                        }
+                      }
+                    }
+                  ]"
+                >
+                  <a-input
+                    v-model:value="adminForm.phone_number"
+                    placeholder="可用于登录，可不填写"
+                    :max-length="11"
+                  />
+                </a-form-item>
 
-          <a-form-item
-            label="手机号（可选）"
-            name="phone_number"
-            :rules="[
-              {
-                validator: async (rule, value) => {
-                  if (!value || value.trim() === '') {
-                    return; // 空值允许
-                  }
-                  const phoneRegex = /^1[3-9]\d{9}$/;
-                  if (!phoneRegex.test(value)) {
-                    throw new Error('请输入正确的手机号格式');
-                  }
-                }
-              }
-            ]"
-          >
-            <a-input
-              v-model:value="adminForm.phone_number"
-              placeholder="可用于登录，可不填写"
-              :max-length="11"
-            />
-          </a-form-item>
+                <a-form-item
+                  label="密码"
+                  name="password"
+                  :rules="[{ required: true, message: '请输入密码' }]"
+                >
+                  <a-input-password v-model:value="adminForm.password" prefix-icon="lock" />
+                </a-form-item>
 
-          <a-form-item
-            label="密码"
-            name="password"
-            :rules="[{ required: true, message: '请输入密码' }]"
-          >
-            <a-input-password v-model:value="adminForm.password" prefix-icon="lock" />
-          </a-form-item>
+                <a-form-item
+                  label="确认密码"
+                  name="confirmPassword"
+                  :rules="[
+                    { required: true, message: '请确认密码' },
+                    { validator: validateConfirmPassword }
+                  ]"
+                >
+                  <a-input-password v-model:value="adminForm.confirmPassword" prefix-icon="lock" />
+                </a-form-item>
 
-          <a-form-item
-            label="确认密码"
-            name="confirmPassword"
-            :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: validateConfirmPassword }
-            ]"
-          >
-            <a-input-password v-model:value="adminForm.confirmPassword" prefix-icon="lock" />
-          </a-form-item>
-
-          <a-form-item>
-            <a-button type="primary" html-type="submit" :loading="loading" block>创建管理员账户</a-button>
-          </a-form-item>
-        </a-form>
-      </div>
-
-      <!-- 登录表单 -->
-      <div v-else class="login-form">
-        <a-form
-          :model="loginForm"
-          @finish="handleLogin"
-          layout="vertical"
-        >
-          <a-form-item
-            label="登录账号"
-            name="loginId"
-            :rules="[{ required: true, message: '请输入用户ID或手机号' }]"
-          >
-            <a-input v-model:value="loginForm.loginId" placeholder="用户ID或手机号">
-              <template #prefix>
-                <user-outlined />
-              </template>
-            </a-input>
-          </a-form-item>
-
-          <a-form-item
-            label="密码"
-            name="password"
-            :rules="[{ required: true, message: '请输入密码' }]"
-          >
-            <a-input-password v-model:value="loginForm.password">
-              <template #prefix>
-                <lock-outlined />
-              </template>
-            </a-input-password>
-          </a-form-item>
-
-          <a-form-item>
-            <div class="login-options">
-              <a-checkbox v-model:checked="rememberMe" @click="showDevMessage">记住我</a-checkbox>
-              <a class="forgot-password" @click="showDevMessage">忘记密码?</a>
+                <a-form-item>
+                  <a-button type="primary" html-type="submit" :loading="loading" block>创建管理员账户</a-button>
+                </a-form-item>
+              </a-form>
             </div>
-          </a-form-item>
 
-          <a-form-item>
-            <a-button
-              type="primary"
-              html-type="submit"
-              :loading="loading"
-              :disabled="isLocked"
-              block
-            >
-              <span v-if="isLocked">账户已锁定 {{ formatTime(lockRemainingTime) }}</span>
-              <span v-else>登录</span>
-            </a-button>
-          </a-form-item>
+            <!-- 登录表单 -->
+            <div v-else class="login-form">
+              <a-form
+                :model="loginForm"
+                @finish="handleLogin"
+                layout="vertical"
+              >
+                <a-form-item
+                  label="登录账号"
+                  name="loginId"
+                  :rules="[{ required: true, message: '请输入用户ID或手机号' }]"
+                >
+                  <a-input v-model:value="loginForm.loginId" placeholder="用户ID或手机号">
+                    <template #prefix>
+                      <user-outlined />
+                    </template>
+                  </a-input>
+                </a-form-item>
 
-          <!-- 第三方登录选项 -->
-          <div class="third-party-login">
-            <div class="divider">
-              <span>其他登录方式</span>
+                <a-form-item
+                  label="密码"
+                  name="password"
+                  :rules="[{ required: true, message: '请输入密码' }]"
+                >
+                  <a-input-password v-model:value="loginForm.password">
+                    <template #prefix>
+                      <lock-outlined />
+                    </template>
+                  </a-input-password>
+                </a-form-item>
+
+                <a-form-item>
+                  <div class="login-options">
+                    <a-checkbox v-model:checked="rememberMe" @click="showDevMessage">记住我</a-checkbox>
+                    <a class="forgot-password" @click="showDevMessage">忘记密码?</a>
+                  </div>
+                </a-form-item>
+
+                <a-form-item>
+                  <a-button
+                    type="primary"
+                    html-type="submit"
+                    :loading="loading"
+                    :disabled="isLocked"
+                    block
+                  >
+                    <span v-if="isLocked">账户已锁定 {{ formatTime(lockRemainingTime) }}</span>
+                    <span v-else>登录</span>
+                  </a-button>
+                </a-form-item>
+
+                <!-- 第三方登录选项 -->
+                <div class="third-party-login">
+                  <div class="divider">
+                    <span>其他登录方式</span>
+                  </div>
+                  <div class="login-icons">
+                    <a-tooltip title="微信登录">
+                      <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                        <template #icon><wechat-outlined /></template>
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip title="企业微信登录">
+                      <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                        <template #icon><qrcode-outlined /></template>
+                      </a-button>
+                    </a-tooltip>
+                    <a-tooltip title="飞书登录">
+                      <a-button shape="circle" class="login-icon" @click="showDevMessage">
+                        <template #icon><thunderbolt-outlined /></template>
+                      </a-button>
+                    </a-tooltip>
+                  </div>
+                </div>
+              </a-form>
             </div>
-            <div class="login-icons">
-              <a-tooltip title="微信登录">
-                <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                  <template #icon><wechat-outlined /></template>
-                </a-button>
-              </a-tooltip>
-              <a-tooltip title="企业微信登录">
-                <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                  <template #icon><qrcode-outlined /></template>
-                </a-button>
-              </a-tooltip>
-              <a-tooltip title="飞书登录">
-                <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                  <template #icon><thunderbolt-outlined /></template>
-                </a-button>
-              </a-tooltip>
+
+            <!-- 错误提示 -->
+            <div v-if="errorMessage" class="error-message">
+              {{ errorMessage }}
             </div>
           </div>
-        </a-form>
-      </div>
-
-      <!-- 错误提示 -->
-      <div v-if="errorMessage" class="error-message">
-        {{ errorMessage }}
-      </div>
 
           <!-- 页脚 -->
           <div class="login-footer">
@@ -224,7 +222,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 import { useInfoStore } from '@/stores/info';
@@ -237,9 +235,24 @@ const userStore = useUserStore();
 const infoStore = useInfoStore();
 const agentStore = useAgentStore();
 
-// 从infoStore获取登录背景图片
+// 品牌展示数据
 const loginBgImage = computed(() => {
   return infoStore.organization?.login_bg || '/login-bg.jpg';
+});
+const brandName = computed(() => {
+  const rawName = infoStore.branding?.name ?? '';
+  const trimmed = rawName.trim();
+  return trimmed || 'Yuxi-Know';
+});
+const brandSubtitle = computed(() => {
+  const rawSubtitle = infoStore.branding?.subtitle ?? '';
+  const trimmed = rawSubtitle.trim();
+  return trimmed || '大模型驱动的知识库管理工具';
+});
+const brandDescription = computed(() => {
+  const rawDescription = infoStore.branding?.description ?? '';
+  const trimmed = rawDescription.trim();
+  return trimmed || '结合知识库与知识图谱，提供更准确、更全面的回答';
 });
 
 // 状态
@@ -531,7 +544,7 @@ onUnmounted(() => {
 }
 
 .back-home-btn {
-  color: #666;
+  color: var(--gray-600);
   font-size: 14px;
   padding: 0 8px;
 
@@ -544,14 +557,16 @@ onUnmounted(() => {
 
 .login-layout {
   display: flex;
-  height: 100%;
+  min-height: 100%;
   width: 100%;
+  background: var(--gray-10);
 }
 
 .login-image-section {
-  flex: 0 0 55%;
+  flex: 0 0 52%;
   position: relative;
   overflow: hidden;
+  max-height: 100vh;
 
   .login-bg-image {
     width: 100%;
@@ -561,48 +576,48 @@ onUnmounted(() => {
   }
 
   .image-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 80px 60px 40px 60px;
-}
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.35);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 72px 64px 36px;
+  }
 
   .brand-info {
-     text-align: left;
-     color: white;
-     max-width: 600px;
+    text-align: left;
+    color: white;
+    max-width: 520px;
 
-     .brand-title {
-       font-size: 64px;
-       font-weight: 800;
-       margin-bottom: 24px;
-       text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
-       letter-spacing: -1px;
-     }
+    .brand-title {
+      font-size: 52px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      text-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+      letter-spacing: -0.5px;
+    }
 
-     .brand-subtitle {
-       font-size: 28px;
-       font-weight: 500;
-       margin-bottom: 32px;
-       opacity: 0.95;
-       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-       line-height: 1.3;
-     }
+    .brand-subtitle {
+      font-size: 24px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      opacity: 0.92;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+      line-height: 1.4;
+    }
 
-     .brand-description {
-       font-size: 20px;
-       line-height: 1.6;
-       margin-bottom: 0;
-       opacity: 0.85;
-       text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-     }
-   }
+    .brand-description {
+      font-size: 18px;
+      line-height: 1.6;
+      margin: 0;
+      opacity: 0.82;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    }
+  }
 
   .brand-copyright {
     align-self: flex-start;
@@ -619,54 +634,80 @@ onUnmounted(() => {
 
 .login-form-section {
   flex: 1;
-  min-width: 400px;
+  min-width: 420px;
   display: flex;
   justify-content: center;
   align-items: center;
-  background: #ffffff;
-  padding: 40px;
+  padding: 64px 72px;
+  background: var(--main-20);
 }
 
 .login-container {
   width: 100%;
-  max-width: 420px;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
-  box-shadow: none;
-  backdrop-filter: none;
-  border: none;
+  max-width: 460px;
+  padding: 40px;
+  background: var(--gray-0);
+  border-radius: 24px;
+  border: 1px solid var(--gray-150);
+  box-shadow: 0 18px 36px rgba(66, 66, 66, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
 }
 
-.login-logo {
-  text-align: center;
-  margin-bottom: 30px;
+.login-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+}
 
-  img {
-    height: 70px;
-    margin-bottom: 16px;
-  }
+.login-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--gray-600);
+  text-transform: uppercase;
+}
 
-  h1 {
-    font-size: 28px;
-    font-weight: 600;
-    color: var(--main-color);
-    margin: 0;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+.login-brand {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--main-color);
+  line-height: 1.25;
+}
+
+.login-subtitle {
+  margin: 0;
+  font-size: 16px;
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+
+.login-content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+
+  &.is-initializing {
+    gap: 28px;
   }
 }
 
 .login-form {
-  h2 {
-    text-align: center;
-    margin-bottom: 30px;
-    font-size: 22px;
-    font-weight: 500;
-    color: #333;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+
+  :deep(.ant-form) {
+    width: 100%;
   }
 
   :deep(.ant-form-item) {
-    margin-bottom: 20px;
+    margin-bottom: 18px;
   }
 
   :deep(.ant-input-affix-wrapper) {
@@ -681,35 +722,52 @@ onUnmounted(() => {
   }
 }
 
+.login-form--init {
+  padding: 24px;
+  border-radius: 18px;
+  background: var(--main-30);
+  border: 1px solid var(--main-200);
+
+  h2 {
+    margin-bottom: 16px;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--main-color);
+    text-align: left;
+  }
+}
+
 .login-options {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  gap: 12px;
+  flex-wrap: wrap;
 
   .forgot-password {
-    color: #1890ff;
+    color: var(--main-color);
     font-size: 14px;
 
     &:hover {
-      color: #40a9ff;
+      color: var(--main-bright);
     }
   }
 }
 
 .init-tips {
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
-  border-radius: 6px;
-  padding: 12px 16px;
+  background: var(--main-20);
+  border: 1px solid var(--main-200);
+  border-radius: 12px;
+  padding: 16px 18px;
   margin-bottom: 20px;
   text-align: left;
 
   p {
     margin: 4px 0;
     font-size: 13px;
-    color: #52c41a;
-    line-height: 1.4;
+    color: var(--main-700);
+    line-height: 1.45;
 
     &:first-child {
       margin-top: 0;
@@ -724,10 +782,10 @@ onUnmounted(() => {
 .error-message {
   margin-top: 16px;
   padding: 10px 12px;
-  background-color: #fff2f0;
-  border: 1px solid #ffccc7;
-  border-radius: 4px;
-  color: #ff4d4f;
+  background-color: var(--stats-error-bg);
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  border-radius: 8px;
+  color: var(--stats-error-color);
   font-size: 14px;
 }
 
@@ -745,7 +803,7 @@ onUnmounted(() => {
       top: 50%;
       width: calc(50% - 60px);
       height: 1px;
-      background-color: #e8e8e8;
+      background-color: var(--gray-200);
     }
 
     &::before {
@@ -759,9 +817,9 @@ onUnmounted(() => {
     span {
       display: inline-block;
       padding: 0 12px;
-      background-color: #fff;
+      background-color: var(--gray-0);
       position: relative;
-      color: #999;
+      color: var(--gray-600);
       font-size: 14px;
     }
   }
@@ -775,26 +833,33 @@ onUnmounted(() => {
       margin: 0 12px;
       width: 42px;
       height: 42px;
-      color: #666;
+      color: var(--gray-600);
       border: 1px solid var(--gray-300);
-      transition: all 0.3s;
+      transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 
       &:hover {
         color: var(--main-color);
         border-color: var(--main-color);
+        background-color: var(--main-20);
       }
     }
   }
 }
 
+
 .login-footer {
-  margin-top: 24px;
-  text-align: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--gray-150);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   font-size: 13px;
 
   a {
-    color: #666;
-    margin: 0 8px;
+    color: var(--gray-600);
     cursor: pointer;
 
     &:hover {
@@ -804,7 +869,7 @@ onUnmounted(() => {
 }
 
 .server-status-alert {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   right: 0;

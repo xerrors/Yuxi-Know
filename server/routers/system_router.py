@@ -114,7 +114,7 @@ def get_default_info_config():
             "description": "结合知识库与知识图谱，提供更准确、更全面的回答",
         },
         "features": ["📚 灵活知识库", "🕸️ 知识图谱集成", "🤖 多模型支持"],
-        "footer": {"copyright": "© 江南语析 2025 [WIP] v0.2.0"},
+        "footer": {"copyright": "© 江南语析 2025 [WIP] v0.3.0"},
     }
 
 
