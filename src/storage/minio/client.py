@@ -3,6 +3,7 @@ MinIO 存储客户端
 简化的 MinIO 对象存储操作
 """
 
+import json
 import os
 import uuid
 from io import BytesIO
@@ -32,6 +33,8 @@ class MinIOClient:
     简化的 MinIO 客户端类
     """
 
+    PUBLIC_READ_BUCKETS = {"generated-images", "avatar"}
+
     def __init__(self):
         """初始化 MinIO 客户端"""
         self.endpoint = os.getenv("MINIO_URI", "http://milvus-minio:9000")
@@ -41,7 +44,12 @@ class MinIOClient:
 
         # 设置公开访问端点
         if os.getenv("RUNNING_IN_DOCKER"):
-            host_ip = os.getenv("HOST_IP", "localhost")
+            host_ip = (os.getenv("HOST_IP") or "").strip()
+            if not host_ip:
+                host_ip = "localhost"
+            if "://" in host_ip:
+                host_ip = host_ip.split("://")[-1]
+            host_ip = host_ip.rstrip("/")
             self.public_endpoint = f"{host_ip}:9000"
         else:
             self.public_endpoint = "localhost:9000"
@@ -62,14 +70,23 @@ class MinIOClient:
     def ensure_bucket_exists(self, bucket_name: str) -> bool:
         """确保存储桶存在"""
         try:
+            created = False
             if not self.client.bucket_exists(bucket_name):
                 self.client.make_bucket(bucket_name)
+                created = True
                 logger.info(f"存储桶 '{bucket_name}' 已创建")
-                return True
+
+            self._ensure_public_read_access(bucket_name)
+
+            if created and bucket_name in self.PUBLIC_READ_BUCKETS:
+                logger.info(f"存储桶 '{bucket_name}' 已配置为公开可读")
+
             return True
         except S3Error as e:
             logger.error(f"存储桶 '{bucket_name}' 错误: {e}")
             raise StorageError(f"Error with bucket '{bucket_name}': {e}")
+        except StorageError:
+            raise
 
     def upload_file(
         self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream"
@@ -167,6 +184,35 @@ class MinIOClient:
                 return False
             raise StorageError(f"检查文件存在性失败: {e}")
 
+    def _ensure_public_read_access(self, bucket_name: str) -> None:
+        """设置存储桶策略，允许公开读取对象"""
+        if bucket_name not in self.PUBLIC_READ_BUCKETS:
+            return
+
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{bucket_name}/*"],
+                },
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:ListBucket"],
+                    "Resource": [f"arn:aws:s3:::{bucket_name}"],
+                },
+            ],
+        }
+
+        try:
+            self.client.set_bucket_policy(bucket_name, json.dumps(policy))
+        except S3Error as e:
+            logger.warning(f"设置存储桶 '{bucket_name}' 公共读取策略失败: {e}")
+            raise StorageError(f"无法设置存储桶公共访问策略: {e}")
+
 
 # 全局客户端实例
 _default_client = None
@@ -180,7 +226,7 @@ def get_minio_client() -> MinIOClient:
     return _default_client
 
 
-def upload_image_to_minio(data: bytes, file_extension: str = "jpg") -> str:
+def upload_image_to_minio(bucket_name: str, data: bytes, file_extension: str = "jpg") -> str:
     """
     上传图片到 MinIO（保持向后兼容）
 
@@ -194,6 +240,6 @@ def upload_image_to_minio(data: bytes, file_extension: str = "jpg") -> str:
     client = get_minio_client()
     file_name = f"{uuid.uuid4()}.{file_extension}"
     result = client.upload_file(
-        bucket_name="generated-images", object_name=file_name, data=data, content_type=f"image/{file_extension}"
+        bucket_name=bucket_name, object_name=file_name, data=data, content_type=f"image/{file_extension}"
     )
     return result.url

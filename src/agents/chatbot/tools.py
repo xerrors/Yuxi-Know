@@ -60,7 +60,7 @@ async def text_to_img_qwen(text: str) -> str:
     response = requests.get(image_url)
     file_data = response.content
 
-    image_url = upload_image_to_minio(data=file_data, file_extension="jpg")
+    image_url = upload_image_to_minio(bucket_name="generated-images", data=file_data, file_extension="jpg")
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url
 

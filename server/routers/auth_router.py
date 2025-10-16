@@ -603,7 +603,7 @@ async def upload_user_avatar(
         file_extension = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
 
         # 上传到MinIO
-        avatar_url = upload_image_to_minio(file_content, file_extension)
+        avatar_url = upload_image_to_minio("avatar", file_content, file_extension)
 
         # 更新用户头像
         current_user.avatar = avatar_url
