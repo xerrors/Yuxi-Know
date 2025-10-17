@@ -565,7 +565,10 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
 
 @knowledge.post("/files/upload")
 async def upload_file(
-    file: UploadFile = File(...), db_id: str | None = Query(None), current_user: User = Depends(get_admin_user)
+    file: UploadFile = File(...),
+    db_id: str | None = Query(None),
+    allow_jsonl: bool = Query(False),
+    current_user: User = Depends(get_admin_user),
 ):
     """上传文件"""
     if not file.filename:
@@ -573,8 +576,12 @@ async def upload_file(
 
     logger.debug(f"Received upload file with filename: {file.filename}")
 
-    if not is_supported_file_extension(file.filename):
-        ext = os.path.splitext(file.filename)[1].lower()
+    ext = os.path.splitext(file.filename)[1].lower()
+
+    if ext == ".jsonl":
+        if allow_jsonl is not True or db_id is not None:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+    elif not is_supported_file_extension(file.filename):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     # 根据db_id获取上传路径，如果db_id为None则使用默认路径
