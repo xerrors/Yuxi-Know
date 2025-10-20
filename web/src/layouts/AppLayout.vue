@@ -332,11 +332,11 @@ div.header, #app-router-view {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    padding: 10px;
+    width: 40px;
+    height: 40px;
+    padding: 4px;
     border: 1px solid transparent;
-    border-radius: 8px;
+    border-radius: 12px;
     background-color: transparent;
     color: #222;
     font-size: 20px;
@@ -344,6 +344,28 @@ div.header, #app-router-view {
     margin: 0;
     text-decoration: none;
     cursor: pointer;
+    outline: none;
+
+    & > svg:focus {
+      outline: none;
+    }
+    & > svg:focus-visible {
+      outline: none;
+    }
+
+    &.active {
+      background-color: var(--gray-150);
+      font-weight: bold;
+      color: var(--main-color);
+    }
+
+    &.warning {
+      color: red;
+    }
+
+    &:hover {
+      color: var(--main-color);
+    }
 
     &.github {
       padding: 10px 12px;
@@ -399,32 +421,15 @@ div.header, #app-router-view {
       }
     }
 
-    &.active {
-      text-shadow: 0 0 15px var(--main-300);
-      font-weight: bold;
-      color: var(--main-color);
-    }
+    &.setting {
+      margin: 8px 0;
 
-    &.warning {
-      color: red;
-    }
-
-    &:hover {
-      color: var(--main-color);
+      &:hover {
+        cursor: pointer;
+      }
     }
   }
 
-  .setting {
-    width: auto;
-    font-size: 20px;
-    color: #333;
-    margin-bottom: 8px;
-    padding: 16px 12px;
-
-    &:hover {
-      cursor: pointer;
-    }
-  }
 }
 
 
