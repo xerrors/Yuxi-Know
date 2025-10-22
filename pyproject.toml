@@ -57,6 +57,8 @@ dependencies = [
     "pymysql>=1.1.0",
     "tenacity>=8.0.0",
     "pypinyin>=0.55.0",
+    "tomli",
+    "tomli-w",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

@@ -49,7 +49,7 @@ def get_reranker(model_id, **kwargs):
     assert model_id in support_rerankers, f"Unsupported Reranker: {model_id}, only support {support_rerankers}"
 
     model_info = config.reranker_names[model_id]
-    base_url = model_info["base_url"]
-    api_key = os.getenv(model_info["api_key"], model_info["api_key"])
-    assert api_key, f"{model_info['name']} api_key is required"
-    return OnlineReranker(model_name=model_info["name"], api_key=api_key, base_url=base_url, **kwargs)
+    base_url = model_info.base_url
+    api_key = os.getenv(model_info.api_key, model_info.api_key)
+    assert api_key, f"{model_info.name} api_key is required"
+    return OnlineReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)

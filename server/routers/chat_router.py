@@ -393,9 +393,9 @@ async def get_chat_models(model_provider: str, current_user: User = Depends(get_
 @chat.post("/models/update")
 async def update_chat_models(model_provider: str, model_names: list[str], current_user=Depends(get_admin_user)):
     """更新指定模型提供商的模型列表 (仅管理员)"""
-    conf.model_names[model_provider]["models"] = model_names
-    conf._save_models_to_file()
-    return {"models": conf.model_names[model_provider]["models"]}
+    conf.model_names[model_provider].models = model_names
+    conf._save_models_to_file(model_provider)
+    return {"models": conf.model_names[model_provider].models}
 
 
 @chat.get("/tools")

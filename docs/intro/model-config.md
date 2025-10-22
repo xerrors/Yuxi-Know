@@ -39,7 +39,13 @@ default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
 ## 自定义模型供应商
 
 ::: warning
-原本网页中的自定义模型已在 `0.3.x` 版本移除，请在 `src/config/static/models.yaml` 中按如下方式配置，并重启服务后选择并使用。此外，这里也推荐一下团队的另外一个小工具 [mvllm (Manage and Route vLLM Servers)](https://github.com/xerrors/mvllm)。
+原本网页中的自定义模型已在 `0.3.x` 版本移除，请在 `src/config/static/models.py` 中按如下方式配置，并重启服务后选择并使用。此外，这里也推荐一下团队的另外一个小工具 [mvllm (Manage and Route vLLM Servers)](https://github.com/xerrors/mvllm)。
+:::
+
+::: tip 配置系统升级 (v0.3.x)
+从 `v0.3.x` 版本开始，模型配置系统已升级为基于 Pydantic BaseModel 的类型安全配置，支持 TOML 格式的用户配置文件。
+- **默认配置**: `src/config/static/models.py` (Python 代码)
+- **用户配置**: `saves/config/base.toml` (TOML 格式，仅保存用户修改)
 :::
 
 系统理论上兼容任何 OpenAI 兼容的模型服务，包括：
@@ -52,52 +58,50 @@ default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
 
 ### 1. 编辑模型配置文件
 
-**方式一：修改默认配置**
-编辑 `src/config/static/models.yaml` 文件
+**方式一：修改默认配置（推荐）**
+编辑 `src/config/static/models.py` 文件中的 `DEFAULT_CHAT_MODEL_PROVIDERS` 字典
 
-**方式二：使用覆盖配置**
-创建自定义配置文件并通过环境变量指定：
-```bash
-# 创建自定义配置文件
-cp src/config/static/models.yaml /path/to/your/custom-models.yaml
+在 `src/config/static/models.py` 中添加新的模型供应商：
 
-# 设置环境变量
-export OVERRIDE_DEFAULT_MODELS_CONFIG_WITH=/path/to/your/custom-models.yaml
-```
+```python
+DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
+    # ... 现有配置 ...
 
-### 2. 添加模型配置
+    "custom-provider": ChatModelProvider(
+        name="自定义提供商",
+        url="https://your-provider.com/docs",
+        base_url="https://api.your-provider.com/v1",
+        default="custom-model-name",
+        env="CUSTOM_API_KEY_ENV_NAME",
+        models=[
+            "supported-model-name",
+            "another-model-name",
+        ],
+    ),
 
-在配置文件中添加新的模型供应商：
+    # 本地 Ollama 服务
+    "local-ollama": ChatModelProvider(
+        name="Local Ollama",
+        url="https://ollama.com",
+        base_url="http://localhost:11434/v1",
+        default="llama3.2",
+        env="NO_API_KEY",  # 对于不需要API Key的服务，使用NO_API_KEY
+        models=["llama3.2", "qwen2.5"],
+    ),
 
-```yaml
-custom-provider-name:
-  name: custom-provider-name
-  default: custom-model-name
-  base_url: "https://api.your-provider.com/v1"
-  env: CUSTOM_API_KEY_ENV_NAME  # 注意：现在是单个环境变量
-  models:
-    - supported-model-name
-    - another-model-name
-
-# 本地 Ollama 服务
-local-ollama:
-  name: Local Ollama
-  base_url: "http://localhost:11434/v1"
-  default: llama3.2
-  env: NO_API_KEY  # 对于不需要API Key的服务，使用NO_API_KEY
-  models:
-    - llama3.2
-    - qwen2.5
-
-# 本地 vLLM 服务
-local-vllm:
-  name: Local vLLM
-  base_url: "http://localhost:8000/v1"
-  default: Qwen/Qwen2.5-7B-Instruct
-  env: NO_API_KEY
-  models:
-    - Qwen/Qwen2.5-7B-Instruct
-    - Qwen/Qwen2.5-14B-Instruct
+    # 本地 vLLM 服务
+    "local-vllm": ChatModelProvider(
+        name="Local vLLM",
+        url="https://docs.vllm.ai",
+        base_url="http://localhost:8000/v1",
+        default="Qwen/Qwen2.5-7B-Instruct",
+        env="NO_API_KEY",
+        models=[
+            "Qwen/Qwen2.5-7B-Instruct",
+            "Qwen/Qwen2.5-14B-Instruct",
+        ],
+    ),
+}
 ```
 
 ### 3. 配置环境变量
@@ -123,21 +127,58 @@ docker compose restart api-dev
 
 #### 1. 配置模型信息
 
-在 `src/config/static/models.yaml` 中或通过覆盖配置文件添加配置：
+在 `src/config/static/models.py` 中的默认配置部分添加：
 
-```yaml
-EMBED_MODEL_INFO:
-  vllm/Qwen/Qwen3-Embedding-0.6B:
-    name: Qwen/Qwen3-Embedding-0.6B
-    dimension: 1024
-    base_url: http://localhost:8000/v1/embeddings
-    api_key: no_api_key
+```python
+# 默认嵌入模型配置
+DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
+    # ... 现有配置 ...
 
-RERANKER_LIST:
-  vllm/BAAI/bge-reranker-v2-m3:
-    name: BAAI/bge-reranker-v2-m3
-    base_url: http://localhost:8000/v1/rerank
-    api_key: no_api_key
+    "vllm/Qwen/Qwen3-Embedding-0.6B": EmbedModelInfo(
+        name="Qwen/Qwen3-Embedding-0.6B",
+        dimension=1024,
+        base_url="http://localhost:8000/v1/embeddings",
+        api_key="no_api_key",
+    ),
+}
+
+# 默认重排序模型配置
+DEFAULT_RERANKERS: dict[str, RerankerInfo] = {
+    # ... 现有配置 ...
+
+    "vllm/BAAI/bge-reranker-v2-m3": RerankerInfo(
+        name="BAAI/bge-reranker-v2-m3",
+        base_url="http://localhost:8000/v1/rerank",
+        api_key="no_api_key",
+    ),
+}
+```
+
+#### 2. 动态配置（可选）
+
+你也可以通过代码动态添加本地模型：
+
+```python
+from src.config import config
+from src.config.static.models import EmbedModelInfo, RerankerInfo
+
+# 添加本地嵌入模型
+config.embed_model_names["local/embed-model"] = EmbedModelInfo(
+    name="local-embed-model",
+    dimension=1024,
+    base_url="http://localhost:8000/v1/embeddings",
+    api_key="no_api_key",
+)
+
+# 添加本地重排序模型
+config.reranker_names["local/reranker-model"] = RerankerInfo(
+    name="local-reranker-model",
+    base_url="http://localhost:8000/v1/rerank",
+    api_key="no_api_key",
+)
+
+# 保存配置
+config.save()
 ```
 
 #### 2. 启动模型服务
@@ -155,19 +196,3 @@ vllm serve BAAI/bge-reranker-v2-m3 \
   --dtype fp16 \
   --port 8000
 ```
-
-## 常见问题
-
-**Q: 如何查看当前可用的模型？**
-
-在 Web 界面的"设置"页面可以查看所有已配置的模型。
-
-**Q: 模型配置不生效？**
-
-1. 检查环境变量是否正确设置
-2. 确认 API 密钥有效
-3. 重启服务：`docker compose restart api-dev`
-
-**Q: 如何测试模型连接？**
-
-在 Web 界面的对话页面选择对应模型进行测试。

@@ -254,10 +254,12 @@ def select_embedding_model(model_id):
     if provider == "local":
         raise ValueError("Local embedding model is not supported, please use other embedding models")
 
-    elif provider == "ollama":
-        model = OllamaEmbedding(**config.embed_model_names[model_id])
+    # 获取嵌入模型配置并转换为字典
+    embed_config = config.embed_model_names[model_id].model_dump()
 
+    if provider == "ollama":
+        model = OllamaEmbedding(**embed_config)
     else:
-        model = OtherEmbedding(**config.embed_model_names[model_id])
+        model = OtherEmbedding(**embed_config)
 
     return model

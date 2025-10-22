@@ -114,8 +114,11 @@ def select_model(model_provider=None, model_name=None, model_spec=None):
 
     assert model_provider, "Model provider not specified"
 
-    model_info = config.model_names.get(model_provider, {})
-    model_name = model_name or model_info.get("default", "")
+    model_info = config.model_names.get(model_provider)
+    if not model_info:
+        raise ValueError(f"Unknown model provider: {model_provider}")
+
+    model_name = model_name or model_info.default
 
     if not model_name:
         raise ValueError(f"Model name not specified for provider {model_provider}")
@@ -128,8 +131,8 @@ def select_model(model_provider=None, model_name=None, model_spec=None):
     # 其他模型，默认使用OpenAIBase
     try:
         model = OpenAIBase(
-            api_key=os.getenv(model_info["env"]),
-            base_url=model_info["base_url"],
+            api_key=os.getenv(model_info.env),
+            base_url=model_info.base_url,
             model_name=model_name,
         )
         return model
