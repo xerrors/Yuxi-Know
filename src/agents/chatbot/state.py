@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Annotated
 
-from langchain_core.messages import AnyMessage
+from langchain.messages import AnyMessage
 from langgraph.graph import add_messages
 
 

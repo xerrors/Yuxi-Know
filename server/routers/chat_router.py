@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessageChunk, HumanMessage
+from langchain.messages import AIMessageChunk, HumanMessage
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 

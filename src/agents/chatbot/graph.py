@@ -1,6 +1,6 @@
 from typing import Any, cast
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain.messages import AIMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime

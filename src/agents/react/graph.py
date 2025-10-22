@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from langchain_core.messages import AnyMessage, SystemMessage
+from langchain.messages import AnyMessage, SystemMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.runtime import get_runtime
 

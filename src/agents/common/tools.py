@@ -2,7 +2,8 @@ import asyncio
 import traceback
 from typing import Annotated, Any
 
-from langchain_core.tools import StructuredTool, tool
+from langchain.tools import tool
+from langchain_core.tools import StructuredTool
 from langchain_tavily import TavilySearch
 from pydantic import BaseModel, Field
 

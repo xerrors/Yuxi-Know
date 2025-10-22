@@ -5,8 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "arxiv>=2.2.0",
     "asyncpg>=0.30.0",
+    "langchain==1.0",
     "chromadb>=1.0.15",
     "colorlog>=6.9.0",
     "dashscope>=1.23.2",
@@ -19,8 +19,7 @@ dependencies = [
     "langchain-openai>=0.3.14",
     "langchain-tavily>=0.2.3",
     "langchain-text-splitters>=0.3.9",
-    "langchain-together>=0.3.0",
-    "langgraph>=0.3.34",
+    "langgraph==1.0.1",
     "langgraph-checkpoint-sqlite>=2.0.7",
     "langgraph-cli[inmem]>=0.1.54",
     "langsmith>=0.3.37",

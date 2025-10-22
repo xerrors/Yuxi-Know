@@ -2,7 +2,7 @@ import os
 from typing import Any
 
 import requests
-from langchain_core.tools import tool
+from langchain.tools import tool
 
 from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.agents.common.tools import get_buildin_tools
