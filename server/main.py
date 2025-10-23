@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.routers import router
-from server.services.tasker import tasker
+from server.utils.lifespan import lifespan
 from server.utils.auth_middleware import is_public_path
 from server.utils.common_utils import setup_logging
 
@@ -24,7 +24,7 @@ RATE_LIMIT_ENDPOINTS = {("/api/auth/token", "POST")}
 _login_attempts: defaultdict[str, deque[float]] = defaultdict(deque)
 _attempt_lock = asyncio.Lock()
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 app.include_router(router, prefix="/api")
 
 # CORS 设置
@@ -118,17 +118,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
 # 添加鉴权中间件
 app.add_middleware(LoginRateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
-
-
-@app.on_event("startup")
-async def start_tasker() -> None:
-    await tasker.start()
-
-
-@app.on_event("shutdown")
-async def stop_tasker() -> None:
-    await tasker.shutdown()
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5050, threads=10, workers=10, reload=True)

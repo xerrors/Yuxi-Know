@@ -43,9 +43,11 @@ MODEL_NAMES:
     name: SiliconFlow
     url: https://cloud.siliconflow.cn/models
     base_url: https://api.siliconflow.cn/v1
-    default: deepseek-ai/DeepSeek-V3.2-Exp
+    default: Qwen/Qwen3-32B
     env: SILICONFLOW_API_KEY
     models:
+      - Qwen/Qwen3-Next-80B-A3B-Thinking
+      - Qwen/Qwen3-32B
       - deepseek-ai/DeepSeek-V3.2-Exp
       - Qwen/Qwen3-235B-A22B-Thinking-2507
       - Qwen/Qwen3-235B-A22B-Instruct-2507
@@ -98,6 +100,12 @@ MODEL_NAMES:
       - anthropic/claude-sonnet-4
 
 EMBED_MODEL_INFO:
+  siliconflow/Pro/BAAI/bge-m3:
+    name: Pro/BAAI/bge-m3
+    dimension: 1024
+    base_url: https://api.siliconflow.cn/v1/embeddings
+    api_key: SILICONFLOW_API_KEY
+
   siliconflow/BAAI/bge-m3:
     name: BAAI/bge-m3
     dimension: 1024
@@ -127,6 +135,10 @@ EMBED_MODEL_INFO:
     dimension: 1024
 
 RERANKER_LIST:
+  siliconflow/Pro/BAAI/bge-reranker-v2-m3:
+    name: Pro/BAAI/bge-reranker-v2-m3
+    base_url: https://api.siliconflow.cn/v1/rerank
+    api_key: SILICONFLOW_API_KEY
 
   siliconflow/BAAI/bge-reranker-v2-m3:
     name: BAAI/bge-reranker-v2-m3

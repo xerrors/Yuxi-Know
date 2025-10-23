@@ -1,7 +1,10 @@
 import asyncio
+import importlib
+import inspect
+from pathlib import Path
 
-from .chatbot.graph import ChatbotAgent
-from .react.graph import ReActAgent
+from src.agents.common.base import BaseAgent
+from src.utils import logger
 
 
 class AgentManager:
@@ -35,10 +38,51 @@ class AgentManager:
         agents = self.get_agents()
         return await asyncio.gather(*[a.get_info() for a in agents])
 
+    def auto_discover_agents(self):
+        """自动发现并注册 src/agents/ 下的所有智能体。
+
+        遍历 src/agents/ 目录下的所有子文件夹，如果子文件夹包含 __init__.py，
+        则尝试从中导入 BaseAgent 的子类并注册。(使用自动导入的方式，支持私有agent)
+        """
+        # 获取 agents 目录的路径
+        agents_dir = Path(__file__).parent
+
+        # 遍历所有子目录
+        for item in agents_dir.iterdir():
+            logger.info(f"尝试导入模块：{item}")
+            # 跳过非目录、common 目录、__pycache__ 等
+            if not item.is_dir() or item.name.startswith("_") or item.name == "common":
+                continue
+
+            # 检查是否有 __init__.py 文件
+            init_file = item / "__init__.py"
+            if not init_file.exists():
+                logger.warning(f"{item} 不是一个有效的模块")
+                continue
+
+            # 尝试导入模块
+            try:
+                module_name = f"src.agents.{item.name}"
+                module = importlib.import_module(module_name)
+
+                # 查找模块中所有 BaseAgent 的子类
+                for name, obj in inspect.getmembers(module):
+                    if (
+                        inspect.isclass(obj)
+                        and issubclass(obj, BaseAgent)
+                        and obj is not BaseAgent
+                        and obj.__module__.startswith(module_name)
+                    ):
+                        logger.info(f"自动发现智能体: {obj.__name__} 来自 {item.name}")
+                        self.register_agent(obj)
+
+            except Exception as e:
+                logger.warning(f"无法从 {item.name} 加载智能体: {e}")
+
 
 agent_manager = AgentManager()
-agent_manager.register_agent(ChatbotAgent)
-agent_manager.register_agent(ReActAgent)
+# 自动发现并注册所有智能体
+agent_manager.auto_discover_agents()
 agent_manager.init_all_agents()
 
 __all__ = ["agent_manager"]

@@ -12,6 +12,7 @@ from src.storage.db.models import Conversation, ConversationStats, Message, Tool
 from src.utils import logger
 from src.utils.datetime_utils import utc_now
 
+#TODO:[未完成]待修改为异步版本
 
 class ConversationManager:
     """Manager for conversation storage operations"""

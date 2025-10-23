@@ -35,10 +35,17 @@ cache
 .cursor
 .trae
 .pytest_cache
-*.nogit*
-*.private*
-*.local*
+
+###  (企业私有代码 - 仅忽略敏感配置，不忽略代码文件)
+# 移除了 *.private* 和 *_private 规则，允许 Git 本地管理
+# 通过 .git/info/exclude 或本地分支管理私有代码
 *.secret*
+*.nogit*
+# *.local* 保留用于本地配置文件
+*.local.py
+*.local.js
+*.local.yaml
+
 
 *.pdf
 src/data
