@@ -6,7 +6,7 @@ services:
       args:
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
-    image: yuxi-api:0.2.0.dev
+    image: yuxi-api:0.3.dev
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -62,7 +62,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
-    image: yuxi-web:0.2.0.dev
+    image: yuxi-web:0.3.dev
     container_name: web-dev
     volumes:
       - ./web/src:/app/src
@@ -209,7 +209,7 @@ services:
     restart: unless-stopped
 
   # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
-  mineru:
+  mineru-vllm-server:
     build:
       context: .
       dockerfile: docker/mineru.Dockerfile
@@ -243,6 +243,38 @@ services:
               capabilities: [gpu]
     networks:
       - app-network
+    restart: unless-stopped
+
+  mineru-api:
+    build:
+      context: .
+      dockerfile: docker/mineru.Dockerfile
+    image: mineru-vllm:latest
+    container_name: mineru-api
+    profiles:
+      - all
+    ports:
+      - 30001:30001
+    environment:
+      MINERU_MODEL_SOURCE: local
+    entrypoint: mineru-api
+    command:
+      --host 0.0.0.0
+      --port 30001
+      # parameters for vllm-engine
+      # --data-parallel-size 2  # If using multiple GPUs, increase throughput using vllm's multi-GPU parallel mode
+      # --gpu-memory-utilization 0.5  # If running on a single GPU and encountering VRAM shortage, reduce the KV cache size by this parameter, if VRAM issues persist, try lowering it further to `0.4` or below.
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: [ "0" ]
+              capabilities: [ gpu ]
     restart: unless-stopped
 
   paddlex:
