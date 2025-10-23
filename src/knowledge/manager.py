@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import shutil
+import tempfile
 
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.knowledge.factory import KnowledgeBaseFactory
@@ -43,9 +45,27 @@ class KnowledgeBaseManager:
 
         logger.info("KnowledgeBaseManager initialized")
 
+        # 在后台运行数据一致性检测（不阻塞初始化）
+        try:
+            # 尝试获取当前事件循环，如果没有则创建新的
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # 如果已经在事件循环中，创建任务
+                    asyncio.create_task(self.detect_data_inconsistencies())
+                else:
+                    # 如果事件循环未运行，直接运行
+                    loop.run_until_complete(self.detect_data_inconsistencies())
+            except RuntimeError:
+                # 没有事件循环，创建一个来运行检测
+                asyncio.run(self.detect_data_inconsistencies())
+        except Exception as e:
+            logger.warning(f"初始化时运行数据一致性检测失败: {e}")
+
     def _load_global_metadata(self):
         """加载全局元数据"""
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
+
         if os.path.exists(meta_file):
             try:
                 with open(meta_file, encoding="utf-8") as f:
@@ -54,13 +74,63 @@ class KnowledgeBaseManager:
                 logger.info(f"Loaded global metadata for {len(self.global_databases_meta)} databases")
             except Exception as e:
                 logger.error(f"Failed to load global metadata: {e}")
+                # 尝试从备份恢复
+                backup_file = f"{meta_file}.backup"
+                if os.path.exists(backup_file):
+                    try:
+                        with open(backup_file, encoding="utf-8") as f:
+                            data = json.load(f)
+                            self.global_databases_meta = data.get("databases", {})
+                        logger.info("Loaded global metadata from backup")
+                        # 恢复备份文件
+                        shutil.copy2(backup_file, meta_file)
+                        return
+                    except Exception as backup_e:
+                        logger.error(f"Failed to load backup: {backup_e}")
+
+                # 如果加载失败，初始化为空状态
+                logger.warning("Initializing empty global metadata")
+                self.global_databases_meta = {}
 
     def _save_global_metadata(self):
         """保存全局元数据"""
+        self._normalize_global_metadata()
         meta_file = os.path.join(self.work_dir, "global_metadata.json")
-        data = {"databases": self.global_databases_meta, "updated_at": utc_isoformat(), "version": "2.0"}
-        with open(meta_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        backup_file = f"{meta_file}.backup"
+
+        try:
+            # 创建简单备份
+            if os.path.exists(meta_file):
+                shutil.copy2(meta_file, backup_file)
+
+            # 准备数据
+            data = {
+                "databases": self.global_databases_meta,
+                "updated_at": utc_isoformat(),
+                "version": "2.0"
+            }
+
+            # 原子性写入（使用临时文件）
+            with tempfile.NamedTemporaryFile(
+                mode='w', dir=os.path.dirname(meta_file),
+                prefix='.tmp_', suffix='.json', delete=False
+            ) as tmp_file:
+                json.dump(data, tmp_file, ensure_ascii=False, indent=2)
+                temp_path = tmp_file.name
+
+            os.replace(temp_path, meta_file)
+            logger.debug("Saved global metadata")
+
+        except Exception as e:
+            logger.error(f"Failed to save global metadata: {e}")
+            # 尝试恢复备份
+            if os.path.exists(backup_file):
+                try:
+                    shutil.copy2(backup_file, meta_file)
+                    logger.info("Restored global metadata from backup")
+                except Exception as restore_e:
+                    logger.error(f"Failed to restore backup: {restore_e}")
+            raise e
 
     def _normalize_global_metadata(self) -> None:
         """Normalize stored timestamps within the global metadata cache."""
@@ -434,3 +504,239 @@ class KnowledgeBaseManager:
                 lightrag_databases.append(db)
 
         return lightrag_databases
+
+    # =============================================================================
+    # 数据一致性检测方法
+    # =============================================================================
+
+    async def detect_data_inconsistencies(self) -> dict:
+        """
+        检测向量数据库中存在但在 metadata 中缺失的数据
+
+        Returns:
+            包含不一致信息的字典，按知识库类型分组
+        """
+        inconsistencies = {
+            "chroma": {"missing_collections": [], "missing_files": []},
+            "milvus": {"missing_collections": [], "missing_files": []},
+            "total_missing_collections": 0,
+            "total_missing_files": 0
+        }
+
+        logger.info("开始检测向量数据库与元数据的一致性...")
+
+        # 检测 ChromaDB 数据不一致
+        if "chroma" in self.kb_instances:
+            try:
+                chroma_inconsistencies = await self._detect_chroma_inconsistencies()
+                inconsistencies["chroma"] = chroma_inconsistencies
+                inconsistencies["total_missing_collections"] += len(chroma_inconsistencies["missing_collections"])
+                inconsistencies["total_missing_files"] += len(chroma_inconsistencies["missing_files"])
+            except Exception as e:
+                logger.error(f"检测 ChromaDB 数据不一致时出错: {e}")
+
+        # 检测 Milvus 数据不一致
+        if "milvus" in self.kb_instances:
+            try:
+                milvus_inconsistencies = await self._detect_milvus_inconsistencies()
+                inconsistencies["milvus"] = milvus_inconsistencies
+                inconsistencies["total_missing_collections"] += len(milvus_inconsistencies["missing_collections"])
+                inconsistencies["total_missing_files"] += len(milvus_inconsistencies["missing_files"])
+            except Exception as e:
+                logger.error(f"检测 Milvus 数据不一致时出错: {e}")
+
+        # 输出检测结果到日志
+        self._log_inconsistencies(inconsistencies)
+
+        return inconsistencies
+
+    async def _detect_chroma_inconsistencies(self) -> dict:
+        """检测 ChromaDB 中的数据不一致"""
+        inconsistencies = {"missing_collections": [], "missing_files": []}
+
+        chroma_kb = self.kb_instances["chroma"]
+
+        # 获取 ChromaDB 中所有实际的集合
+        try:
+            actual_collections = chroma_kb.chroma_client.list_collections()
+            actual_collection_names = {col.name for col in actual_collections}
+
+            # 获取 metadata 中记录的数据库ID
+            metadata_collection_names = set()
+            for db_id, db_meta in chroma_kb.databases_meta.items():
+                metadata_collection_names.add(db_id)
+
+            # 找出存在于 ChromaDB 但不在 metadata 中的集合
+            missing_collections = actual_collection_names - metadata_collection_names
+            for collection_name in missing_collections:
+                # 跳过一些系统集合
+                if not collection_name.startswith("kb_"):
+                    continue
+
+                collection_info = {
+                    "collection_name": collection_name,
+                    "detected_at": utc_isoformat()
+                }
+
+                # 尝试获取集合的基本信息
+                try:
+                    collection = chroma_kb.chroma_client.get_collection(name=collection_name)
+                    collection_info["count"] = collection.count()
+                    collection_info["metadata"] = collection.metadata
+                except Exception as e:
+                    logger.warning(f"无法获取集合 {collection_name} 的详细信息: {e}")
+                    collection_info["count"] = "unknown"
+
+                inconsistencies["missing_collections"].append(collection_info)
+                logger.warning(f"发现 ChromaDB 中存在但 metadata 中缺失的集合: {collection_name} (文档数: {collection_info['count']})")
+
+            # 检查文件级别的不一致（针对已知的数据库）
+            for db_id in metadata_collection_names:
+                try:
+                    collection = chroma_kb.chroma_client.get_collection(name=db_id)
+                    actual_count = collection.count()
+
+                    # 获取 metadata 中记录的文件数量
+                    metadata_files_count = sum(1 for file_info in chroma_kb.files_meta.values()
+                                            if file_info.get("database_id") == db_id)
+
+                    # 如果向量数据库中有数据但 metadata 中没有文件记录，可能存在文件缺失
+                    if actual_count > 0 and metadata_files_count == 0:
+                        inconsistencies["missing_files"].append({
+                            "database_id": db_id,
+                            "vector_count": actual_count,
+                            "metadata_files_count": metadata_files_count,
+                            "detected_at": utc_isoformat()
+                        })
+                        logger.warning(f"发现数据库 {db_id} 在 ChromaDB 中有 {actual_count} 条向量数据，但 metadata 中没有文件记录")
+
+                except Exception as e:
+                    logger.debug(f"检查数据库 {db_id} 的文件一致性时出错: {e}")
+
+        except Exception as e:
+            logger.error(f"检测 ChromaDB 数据不一致时出错: {e}")
+
+        return inconsistencies
+
+    async def _detect_milvus_inconsistencies(self) -> dict:
+        """检测 Milvus 中的数据不一致"""
+        inconsistencies = {"missing_collections": [], "missing_files": []}
+
+        milvus_kb = self.kb_instances["milvus"]
+
+        try:
+            from pymilvus import utility
+
+            # 获取 Milvus 中所有实际的集合
+            actual_collection_names = set(utility.list_collections(using=milvus_kb.connection_alias))
+
+            # 获取 metadata 中记录的数据库ID
+            metadata_collection_names = set(milvus_kb.databases_meta.keys())
+
+            # 找出存在于 Milvus 但不在 metadata 中的集合
+            missing_collections = actual_collection_names - metadata_collection_names
+            for collection_name in missing_collections:
+                # 跳过一些系统集合
+                if not collection_name.startswith("kb_"):
+                    continue
+
+                collection_info = {
+                    "collection_name": collection_name,
+                    "detected_at": utc_isoformat()
+                }
+
+                # 尝试获取集合的基本信息
+                try:
+                    from pymilvus import Collection
+                    collection = Collection(name=collection_name, using=milvus_kb.connection_alias)
+                    collection_info["count"] = collection.num_entities
+                    collection_info["description"] = collection.description
+                except Exception as e:
+                    logger.warning(f"无法获取集合 {collection_name} 的详细信息: {e}")
+                    collection_info["count"] = "unknown"
+
+                inconsistencies["missing_collections"].append(collection_info)
+                logger.warning(f"发现 Milvus 中存在但 metadata 中缺失的集合: {collection_name} (实体数: {collection_info['count']})")
+
+
+            # 检查文件级别的不一致（针对已知的数据库）
+            for db_id in metadata_collection_names:
+                try:
+                    if utility.has_collection(db_id, using=milvus_kb.connection_alias):
+                        from pymilvus import Collection
+                        collection = Collection(name=db_id, using=milvus_kb.connection_alias)
+                        actual_count = collection.num_entities
+
+                        # 获取 metadata 中记录的文件数量
+                        metadata_files_count = sum(1 for file_info in milvus_kb.files_meta.values()
+                                                if file_info.get("database_id") == db_id)
+
+                        # 如果向量数据库中有数据但 metadata 中没有文件记录，可能存在文件缺失
+                        if actual_count > 0 and metadata_files_count == 0:
+                            inconsistencies["missing_files"].append({
+                                "database_id": db_id,
+                                "vector_count": actual_count,
+                                "metadata_files_count": metadata_files_count,
+                                "detected_at": utc_isoformat()
+                            })
+                            logger.warning(f"发现数据库 {db_id} 在 Milvus 中有 {actual_count} 条向量数据，但 metadata 中没有文件记录")
+
+                except Exception as e:
+                    logger.debug(f"检查数据库 {db_id} 的文件一致性时出错: {e}")
+
+        except Exception as e:
+            logger.error(f"检测 Milvus 数据不一致时出错: {e}")
+
+        return inconsistencies
+
+    def _log_inconsistencies(self, inconsistencies: dict) -> None:
+        """将不一致检测结果输出到日志"""
+        total_missing_collections = inconsistencies["total_missing_collections"]
+        total_missing_files = inconsistencies["total_missing_files"]
+
+        if total_missing_collections == 0 and total_missing_files == 0:
+            logger.info("数据一致性检测完成，未发现不一致情况")
+            return
+
+        logger.warning("=" * 80)
+        logger.warning("数据一致性检测完成，发现以下不一致情况：")
+        logger.warning("=" * 80)
+
+        # ChromaDB 不一致情况
+        chroma_missing = inconsistencies["chroma"]["missing_collections"]
+        chroma_files_missing = inconsistencies["chroma"]["missing_files"]
+        if chroma_missing or chroma_files_missing:
+            logger.warning(f"ChromaDB 不一致情况：")
+            logger.warning(f"  缺失集合数量: {len(chroma_missing)}")
+            for collection_info in chroma_missing:
+                logger.warning(f"    - 集合: {collection_info['collection_name']}, 向量数: {collection_info['count']}")
+            logger.warning(f"  缺失文件记录数量: {len(chroma_files_missing)}")
+            for file_info in chroma_files_missing:
+                logger.warning(f"    - 数据库: {file_info['database_id']}, 向量数: {file_info['vector_count']}, 元数据文件数: {file_info['metadata_files_count']}")
+
+        # Milvus 不一致情况
+        milvus_missing = inconsistencies["milvus"]["missing_collections"]
+        milvus_files_missing = inconsistencies["milvus"]["missing_files"]
+        if milvus_missing or milvus_files_missing:
+            logger.warning(f"Milvus 不一致情况：")
+            logger.warning(f"  缺失集合数量: {len(milvus_missing)}")
+            for collection_info in milvus_missing:
+                logger.warning(f"    - 集合: {collection_info['collection_name']}, 实体数: {collection_info['count']}")
+            logger.warning(f"  缺失文件记录数量: {len(milvus_files_missing)}")
+            for file_info in milvus_files_missing:
+                logger.warning(f"    - 数据库: {file_info['database_id']}, 向量数: {file_info['vector_count']}, 元数据文件数: {file_info['metadata_files_count']}")
+
+        logger.warning("=" * 80)
+        logger.warning(f"总计：缺失集合 {total_missing_collections} 个，缺失文件记录 {total_missing_files} 个")
+        logger.warning("建议：检查这些不一致的数据，必要时进行数据清理或元数据修复")
+        logger.warning("=" * 80)
+
+    async def manual_consistency_check(self) -> dict:
+        """
+        手动触发数据一致性检测
+
+        Returns:
+            检测结果字典
+        """
+        logger.info("手动触发数据一致性检测...")
+        return await self.detect_data_inconsistencies()

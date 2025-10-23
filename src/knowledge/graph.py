@@ -299,7 +299,7 @@ class GraphDatabase:
             logger.info(f"Adding entity to {kgdb_name}")
             session.execute_write(_create_graph, triples)
             logger.info(f"Creating vector index for {kgdb_name} with {config.embed_model}")
-            session.execute_write(_create_vector_index, cur_embed_info["dimension"])
+            session.execute_write(_create_vector_index, getattr(cur_embed_info, 'dimension', 1024))
 
             # 收集所有需要处理的实体名称，去重
             all_entities = []

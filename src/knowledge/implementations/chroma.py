@@ -72,7 +72,12 @@ class ChromaKB(KnowledgeBase):
             logger.info(f"Retrieved existing collection: {collection_name}")
 
             # 检查现有集合的配置是否匹配当前的 embed_info
-            expected_model = embed_info.get("name") if embed_info else "default"
+            expected_model = getattr(embed_info, 'name', None) if embed_info else None
+            if expected_model is None and hasattr(embed_info, 'get'):
+                expected_model = embed_info.get('name')
+            elif embed_info and isinstance(embed_info, dict):
+                expected_model = embed_info.get('name')
+            expected_model = expected_model or "default"
             collection_metadata = collection.metadata or {}
             current_model = collection_metadata.get("embedding_model", "unknown")
 
@@ -88,11 +93,18 @@ class ChromaKB(KnowledgeBase):
 
         except Exception:
             # 创建新集合
-            logger.info(f"Creating new collection with embedding model: {embed_info.get('name', 'default')}")
+            model_name = getattr(embed_info, 'name', None) if embed_info else None
+            if model_name is None and hasattr(embed_info, 'get'):
+                model_name = embed_info.get('name')
+            elif embed_info and isinstance(embed_info, dict):
+                model_name = embed_info.get('name')
+
+            model_name = model_name or 'default'
+            logger.info(f"Creating new collection with embedding model: {model_name}")
             collection_metadata = {
                 "db_id": db_id,
                 "created_at": utc_isoformat(),
-                "embedding_model": embed_info.get("name") if embed_info else "default",
+                "embedding_model": model_name,
             }
             collection = self.chroma_client.create_collection(
                 name=collection_name, embedding_function=embedding_function, metadata=collection_metadata
