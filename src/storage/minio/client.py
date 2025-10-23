@@ -51,8 +51,10 @@ class MinIOClient:
                 host_ip = host_ip.split("://")[-1]
             host_ip = host_ip.rstrip("/")
             self.public_endpoint = f"{host_ip}:9000"
+            logger.debug(f"Docker MinIOClient public_endpoint: {self.public_endpoint}")
         else:
             self.public_endpoint = "localhost:9000"
+            logger.debug(f"Default_client: {self.public_endpoint}")
 
     @property
     def client(self) -> Minio:
