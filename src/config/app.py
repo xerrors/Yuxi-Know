@@ -13,7 +13,7 @@ from typing import Any
 
 import tomli
 import tomli_w
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from src.config.static.models import (
     DEFAULT_CHAT_MODEL_PROVIDERS,
@@ -172,13 +172,10 @@ class Config(BaseModel):
         self.model_dir = os.environ.get("MODEL_DIR", self.model_dir)
         if self.model_dir:
             if os.path.exists(self.model_dir):
-                logger.debug(
-                    f"Model directory ({self.model_dir}) contains: {os.listdir(self.model_dir)}"
-                )
+                logger.debug(f"Model directory ({self.model_dir}) contains: {os.listdir(self.model_dir)}")
             else:
                 logger.warning(
-                    f"Model directory ({self.model_dir}) does not exist. "
-                    "If not configured, please ignore it."
+                    f"Model directory ({self.model_dir}) does not exist. If not configured, please ignore it."
                 )
 
         # 检查模型提供商的环境变量
@@ -195,14 +192,10 @@ class Config(BaseModel):
             self.enable_web_search = True
 
         # 获取可用的模型提供商
-        self.valuable_model_provider = [
-            k for k, v in self.model_provider_status.items() if v
-        ]
+        self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
 
         if not self.valuable_model_provider:
-            raise ValueError(
-                "No model provider available, please check your `.env` file."
-            )
+            raise ValueError("No model provider available, please check your `.env` file.")
 
     def save(self):
         """保存配置到 TOML 文件（仅保存用户修改的字段）"""
@@ -251,15 +244,11 @@ class Config(BaseModel):
         )
 
         # 添加模型信息（转换为字典格式供前端使用）
-        config_dict["model_names"] = {
-            provider: info.model_dump() for provider, info in self.model_names.items()
-        }
+        config_dict["model_names"] = {provider: info.model_dump() for provider, info in self.model_names.items()}
         config_dict["embed_model_names"] = {
             model_id: info.model_dump() for model_id, info in self.embed_model_names.items()
         }
-        config_dict["reranker_names"] = {
-            model_id: info.model_dump() for model_id, info in self.reranker_names.items()
-        }
+        config_dict["reranker_names"] = {model_id: info.model_dump() for model_id, info in self.reranker_names.items()}
 
         # 添加运行时状态信息
         config_dict["model_provider_status"] = self.model_provider_status
@@ -269,10 +258,12 @@ class Config(BaseModel):
         for field_name, field_info in Config.model_fields.items():
             if not field_info.exclude:  # 排除内部字段
                 fields_info[field_name] = {
-                    'des': field_info.description,
-                    'default': field_info.default,
-                    'type': field_info.annotation.__name__ if hasattr(field_info.annotation, '__name__') else str(field_info.annotation),
-                    'exclude': field_info.exclude if hasattr(field_info, 'exclude') else False,
+                    "des": field_info.description,
+                    "default": field_info.default,
+                    "type": field_info.annotation.__name__
+                    if hasattr(field_info.annotation, "__name__")
+                    else str(field_info.annotation),
+                    "exclude": field_info.exclude if hasattr(field_info, "exclude") else False,
                 }
         config_dict["_config_items"] = fields_info
 
@@ -301,14 +292,12 @@ class Config(BaseModel):
 
     def __getitem__(self, key: str) -> Any:
         """支持字典式访问 config[key]"""
-        logger.warning("Using deprecated dict-style access for Config. "
-                       "Please use attribute access instead.")
+        logger.warning("Using deprecated dict-style access for Config. Please use attribute access instead.")
         return getattr(self, key, None)
 
     def __setitem__(self, key: str, value: Any):
         """支持字典式赋值 config[key] = value"""
-        logger.warning("Using deprecated dict-style assignment for Config. "
-                       "Please use attribute access instead.")
+        logger.warning("Using deprecated dict-style assignment for Config. Please use attribute access instead.")
         setattr(self, key, value)
 
     def update(self, other: dict):
@@ -352,8 +341,7 @@ class Config(BaseModel):
             else:
                 # 保存所有 model_names
                 user_config["model_names"] = {
-                    provider: info.model_dump()
-                    for provider, info in self.model_names.items()
+                    provider: info.model_dump() for provider, info in self.model_names.items()
                 }
                 # 记录整个 model_names 字段的修改
                 self._user_modified_fields.add("model_names")

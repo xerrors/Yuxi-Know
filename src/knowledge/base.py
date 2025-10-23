@@ -1,7 +1,7 @@
 import json
 import os
-import tempfile
 import shutil
+import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -144,8 +144,8 @@ class KnowledgeBase(ABC):
             "name": database_name,
             "description": description,
             "kb_type": self.kb_type,
-            "embed_info": embed_info.model_dump() if hasattr(embed_info, 'model_dump') else embed_info,
-            "llm_info": llm_info.model_dump() if hasattr(llm_info, 'model_dump') else llm_info,
+            "embed_info": embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info,
+            "llm_info": llm_info.model_dump() if hasattr(llm_info, "model_dump") else llm_info,
             "metadata": kwargs,
             "created_at": utc_isoformat(),
         }
@@ -559,7 +559,7 @@ class KnowledgeBase(ABC):
 
     def _serialize_metadata(self, obj):
         """递归序列化元数据中的 Pydantic 模型"""
-        if hasattr(obj, 'dict'):
+        if hasattr(obj, "dict"):
             return obj.dict()
         elif isinstance(obj, dict):
             return {k: self._serialize_metadata(v) for k, v in obj.items()}
@@ -589,8 +589,7 @@ class KnowledgeBase(ABC):
 
             # 原子性写入（使用临时文件）
             with tempfile.NamedTemporaryFile(
-                mode='w', dir=os.path.dirname(meta_file),
-                prefix='.tmp_', suffix='.json', delete=False
+                mode="w", dir=os.path.dirname(meta_file), prefix=".tmp_", suffix=".json", delete=False
             ) as tmp_file:
                 json.dump(data, tmp_file, ensure_ascii=False, indent=2)
                 temp_path = tmp_file.name

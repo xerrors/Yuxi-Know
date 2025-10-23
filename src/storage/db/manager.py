@@ -22,6 +22,7 @@ except ImportError:
 # TODO:[优化建议]需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
 # TODO:[已完成]为DBManager添加单例模式
 
+
 class DBManager(metaclass=SingletonMeta):
     """数据库管理器 - 只提供基础的数据库连接和会话管理"""
 

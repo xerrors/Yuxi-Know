@@ -112,7 +112,8 @@ async def get_agent(current_user: User = Depends(get_required_user)):
             metadata = yaml.safe_load(f)
     return {"agents": agents, "metadata": metadata}
 
-#TODO:[未完成]这个thread_id在前端是直接生成的1234，最好传入thread_id时做校验只允许uuid4
+
+# TODO:[未完成]这个thread_id在前端是直接生成的1234，最好传入thread_id时做校验只允许uuid4
 @chat.post("/agent/{agent_id}")
 async def chat_agent(
     agent_id: str,
@@ -254,7 +255,8 @@ async def chat_agent(
             logger.error(f"Error saving messages from LangGraph state: {e}")
             logger.error(traceback.format_exc())
 
-    #TODO:[功能建议]针对需要人工审批后再执行的工具，可以使用langgraph的interrupt方法中断对话，等待用户输入后再使用command跳转回去
+    # TODO:[功能建议]针对需要人工审批后再执行的工具，
+    # 可以使用langgraph的interrupt方法中断对话，等待用户输入后再使用command跳转回去
     async def stream_messages():
         # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())

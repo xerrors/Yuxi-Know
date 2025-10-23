@@ -9,8 +9,9 @@ from src.agents.common.tools import get_buildin_tools
 from src.storage.minio import upload_image_to_minio
 from src.utils import logger
 
-#TODO:[已完成]修改了tool定义的示例，使用更符合langgraph调用的方式
-@tool(name_or_callable="全能计算器",description="可以对给定的2个数字选择进行加减乘除四种计算")
+
+# TODO:[已完成]修改了tool定义的示例，使用更符合langgraph调用的方式
+@tool(name_or_callable="全能计算器", description="可以对给定的2个数字选择进行加减乘除四种计算")
 def calculator(a: float, b: float, operation: str) -> float:
     """
     可以对给定的2个数字选择进行加减乘除四种计算

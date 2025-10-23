@@ -11,7 +11,7 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
-@tool
+@tool(name_or_callable="查询知识图谱", description="使用这个工具可以查询知识图谱中包含的三元组信息。")
 def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
     """Use this to query knowledge graph, which include some food domain knowledge."""
     try:
@@ -35,7 +35,9 @@ def get_static_tools() -> list:
 
     # 检查是否启用网页搜索
     if config.enable_web_search:
-        static_tools.append(TavilySearch(max_results=10))
+        search = TavilySearch(max_results=10)
+        search.metadata = {"name": "Tavily 网页搜索"}
+        static_tools.append(search)
 
     return static_tools
 
@@ -76,9 +78,6 @@ def get_kb_based_tools() -> list:
 
     for db_id, retrieve_info in retrievers.items():
         try:
-            # 使用改进的工具ID生成策略
-            tool_id = f"query_{db_id[:8]}"
-
             # 构建工具描述
             description = (
                 f"使用 {retrieve_info['name']} 知识库进行检索。\n"
@@ -88,10 +87,12 @@ def get_kb_based_tools() -> list:
             # 使用工厂函数创建检索器包装函数，避免闭包问题
             retriever_wrapper = _create_retriever_wrapper(db_id, retrieve_info)
 
+            safename = retrieve_info["name"].replace(" ", "_")[:20]
+
             # 使用 StructuredTool.from_function 创建异步工具
             tool = StructuredTool.from_function(
                 coroutine=retriever_wrapper,
-                name=tool_id,
+                name=safename,
                 description=description,
                 args_schema=KnowledgeRetrieverModel,
                 metadata=retrieve_info["metadata"] | {"tag": ["knowledgebase"]},

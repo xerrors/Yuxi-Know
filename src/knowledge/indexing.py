@@ -2,7 +2,6 @@ import asyncio
 import os
 from pathlib import Path
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     CSVLoader,
     JSONLoader,
@@ -12,9 +11,9 @@ from langchain_community.document_loaders import (
     UnstructuredMarkdownLoader,
     UnstructuredWordDocumentLoader,
 )
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from src.utils import logger
-
 
 SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".txt",

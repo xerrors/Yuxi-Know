@@ -211,7 +211,7 @@ def get_embedding_config(embed_info: dict) -> dict:
     try:
         if embed_info:
             # 处理 embed_info 可能是字典或 EmbedModelInfo 对象的情况
-            if hasattr(embed_info, 'name'):
+            if hasattr(embed_info, "name"):
                 # EmbedModelInfo 对象
                 config_dict["model"] = embed_info.name
                 config_dict["api_key"] = os.getenv(embed_info.api_key, embed_info.api_key)
