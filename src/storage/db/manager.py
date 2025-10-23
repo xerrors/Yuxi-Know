@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from server.utils.singleton import SingletonMeta
 from src import config
 from src.storage.db.models import Base, User
 from src.utils import logger
@@ -18,8 +19,10 @@ except ImportError:
     def validate_database_schema(db_path):
         return True, []
 
+# TODO:[优化建议]需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
+# TODO:[已完成]为DBManager添加单例模式
 
-class DBManager:
+class DBManager(metaclass=SingletonMeta):
     """数据库管理器 - 只提供基础的数据库连接和会话管理"""
 
     def __init__(self):

@@ -15,7 +15,7 @@ services:
       - ./saves:/app/saves
       - ./test:/app/test
       - ./scripts:/app/scripts
-      - ./.env :/app/.env
+      - ./.env:/app/.env
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
     ports:
       - "5050:5050"
@@ -38,8 +38,8 @@ services:
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
       - RUNNING_IN_DOCKER=true
-      - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
-      - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex
+      - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
     # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
@@ -145,7 +145,7 @@ services:
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
       - ./docker/volumes/milvus/etcd:/etcd
-    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
       interval: 60s

@@ -210,11 +210,11 @@ const state = reactive({
 })
 
 const embedModelChoices = computed(() => {
-  return Object.keys(configStore.config.embed_model_names) || []
+  return Object.keys(configStore?.config?.embed_model_names || {}) || []
 })
 
 const rerankerChoices = computed(() => {
-  return Object.keys(configStore.config.reranker_names) || []
+  return Object.keys(configStore?.config?.reranker_names || {}) || []
 })
 
 const preHandleChange = (key, e) => {
