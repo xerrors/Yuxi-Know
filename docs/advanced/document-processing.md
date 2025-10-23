@@ -60,7 +60,7 @@ docker compose up paddlex --build
 
 ## 批量处理脚本
 
-系统提供便捷的批量处理脚本，支持文件上传和解析操作。
+系统提供便捷的批量处理脚本，用于高效批量上传文档。
 
 ### 文件上传脚本
 
@@ -89,26 +89,6 @@ uv run scripts/batch_upload.py upload \
 - `--record-file`: 处理记录文件路径
 
 提示：系统按“内容哈希”进行去重；同一知识库已存在相同内容的文件会被拒绝（409）。
-
-### 文件解析脚本
-
-使用 `scripts/batch_upload.py trans` 将文件解析为 Markdown：
-
-```bash
-# 批量解析文档
-uv run scripts/batch_upload.py trans \
-    --db-id your_kb_id \
-    --directory path/to/your/data \
-    --output-dir path/to/output_markdown \
-    --pattern "*.docx" \
-    --base-url http://127.0.0.1:5050/api \
-    --username your_username \
-    --password your_password \
-    --concurrency 4 \
-    --recursive
-```
-
-**输出结果**: 解析后的 Markdown 文件将保存到指定输出目录。
 
 ### 脚本功能
 

@@ -32,7 +32,6 @@
 
 - 批量上传与转换示例？
   - 上传入库：`uv run scripts/batch_upload.py upload --db-id <id> --directory <dir> --username <u> --password <p> --base-url http://127.0.0.1:5050/api`
-  - 转 Markdown：`uv run scripts/batch_upload.py trans --db-id <id> --directory <dir> --username <u> --password <p>`
   - 参考：高级配置 → 文档解析
 
 - 登录失败被锁定？
