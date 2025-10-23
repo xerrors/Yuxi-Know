@@ -1,151 +1,150 @@
-####################################################
+##################################################################################
 #
-#  默认模型配置文件。可以直接修改该文件更新模型。
-#  如需自定义路径，可通过环境变量
-#  OVERRIDE_DEFAULT_MODELS_CONFIG_WITH 指向新的 YAML。
+#  注意：本文件已弃用，现在模型的默认配置在 src/config/static/models.py 中定义
+#       修改后的配置信息，保存在 saves/config/base.toml 中
 #
-#####################################################
+###################################################################################
 
-MODEL_NAMES:
-  openai:
-    name: OpenAI
-    url: https://platform.openai.com/docs/models
-    base_url: https://api.openai.com/v1
-    default: gpt-4o-mini
-    env: OPENAI_API_KEY
-    models:
-      - gpt-4
-      - gpt-4o
-      - gpt-4o-mini
+# MODEL_NAMES:
+#   openai:
+#     name: OpenAI
+#     url: https://platform.openai.com/docs/models
+#     base_url: https://api.openai.com/v1
+#     default: gpt-4o-mini
+#     env: OPENAI_API_KEY
+#     models:
+#       - gpt-4
+#       - gpt-4o
+#       - gpt-4o-mini
 
-  deepseek:
-    name: DeepSeek
-    url: https://platform.deepseek.com/api-docs/zh-cn/pricing
-    base_url: https://api.deepseek.com/v1
-    default: deepseek-chat
-    env: DEEPSEEK_API_KEY
-    models:
-      - deepseek-chat
-      - deepseek-reasoner
+#   deepseek:
+#     name: DeepSeek
+#     url: https://platform.deepseek.com/api-docs/zh-cn/pricing
+#     base_url: https://api.deepseek.com/v1
+#     default: deepseek-chat
+#     env: DEEPSEEK_API_KEY
+#     models:
+#       - deepseek-chat
+#       - deepseek-reasoner
 
-  zhipu:
-    name: 智谱AI (Zhipu)
-    url: https://open.bigmodel.cn/dev/api
-    base_url: https://open.bigmodel.cn/api/paas/v4/
-    default: glm-4.5-flash
-    env: ZHIPUAI_API_KEY
-    models:
-      - glm-4.6
-      - glm-4.5-air
-      - glm-4.5-flash
+#   zhipu:
+#     name: 智谱AI (Zhipu)
+#     url: https://open.bigmodel.cn/dev/api
+#     base_url: https://open.bigmodel.cn/api/paas/v4/
+#     default: glm-4.5-flash
+#     env: ZHIPUAI_API_KEY
+#     models:
+#       - glm-4.6
+#       - glm-4.5-air
+#       - glm-4.5-flash
 
-  siliconflow:
-    name: SiliconFlow
-    url: https://cloud.siliconflow.cn/models
-    base_url: https://api.siliconflow.cn/v1
-    default: Qwen/Qwen3-32B
-    env: SILICONFLOW_API_KEY
-    models:
-      - Qwen/Qwen3-Next-80B-A3B-Thinking
-      - Qwen/Qwen3-32B
-      - deepseek-ai/DeepSeek-V3.2-Exp
-      - Qwen/Qwen3-235B-A22B-Thinking-2507
-      - Qwen/Qwen3-235B-A22B-Instruct-2507
-      - moonshotai/Kimi-K2-Instruct-0905
-      - zai-org/GLM-4.6
+#   siliconflow:
+#     name: SiliconFlow
+#     url: https://cloud.siliconflow.cn/models
+#     base_url: https://api.siliconflow.cn/v1
+#     default: Qwen/Qwen3-32B
+#     env: SILICONFLOW_API_KEY
+#     models:
+#       - Qwen/Qwen3-Next-80B-A3B-Thinking
+#       - Qwen/Qwen3-32B
+#       - deepseek-ai/DeepSeek-V3.2-Exp
+#       - Qwen/Qwen3-235B-A22B-Thinking-2507
+#       - Qwen/Qwen3-235B-A22B-Instruct-2507
+#       - moonshotai/Kimi-K2-Instruct-0905
+#       - zai-org/GLM-4.6
 
-  together.ai:
-    name: Together.ai
-    url: https://api.together.ai/models
-    base_url: https://api.together.xyz/v1/
-    default: meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
-    env: TOGETHER_API_KEY
-    models:
-      - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
+#   together.ai:
+#     name: Together.ai
+#     url: https://api.together.ai/models
+#     base_url: https://api.together.xyz/v1/
+#     default: meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
+#     env: TOGETHER_API_KEY
+#     models:
+#       - meta-llama/Llama-3.3-70B-Instruct-Turbo-Free
 
-  dashscope:
-    name: 阿里百炼 (DashScope)
-    url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
-    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-    default: qwen-max-latest
-    env: DASHSCOPE_API_KEY
-    models:
-      - qwen-max-latest
-      - qwen-plus-latest
-      - qwen-turbo-latest
-      - qwen3-235b-a22b-thinking-2507
-      - qwen3-235b-a22b-instruct-2507
+#   dashscope:
+#     name: 阿里百炼 (DashScope)
+#     url: https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market
+#     base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+#     default: qwen-max-latest
+#     env: DASHSCOPE_API_KEY
+#     models:
+#       - qwen-max-latest
+#       - qwen-plus-latest
+#       - qwen-turbo-latest
+#       - qwen3-235b-a22b-thinking-2507
+#       - qwen3-235b-a22b-instruct-2507
 
-  ark:
-    name: 豆包（Ark）
-    url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
-    base_url: https://ark.cn-beijing.volces.com/api/v3
-    default: doubao-seed-1-6-250615
-    env: ARK_API_KEY
-    models:
-      - doubao-seed-1-6-250615
-      - doubao-seed-1-6-thinking-250715
-      - doubao-seed-1-6-flash-250715
+#   ark:
+#     name: 豆包（Ark）
+#     url: https://console.volcengine.com/ark/region:ark+cn-beijing/model
+#     base_url: https://ark.cn-beijing.volces.com/api/v3
+#     default: doubao-seed-1-6-250615
+#     env: ARK_API_KEY
+#     models:
+#       - doubao-seed-1-6-250615
+#       - doubao-seed-1-6-thinking-250715
+#       - doubao-seed-1-6-flash-250715
 
-  openrouter:
-    name: OpenRouter
-    url: https://openrouter.ai/models
-    base_url: https://openrouter.ai/api/v1
-    default: openai/gpt-4o
-    env: OPENROUTER_API_KEY
-    models:
-      - openai/gpt-4o
-      - x-ai/grok-4
-      - google/gemini-2.5-pro
-      - anthropic/claude-sonnet-4
+#   openrouter:
+#     name: OpenRouter
+#     url: https://openrouter.ai/models
+#     base_url: https://openrouter.ai/api/v1
+#     default: openai/gpt-4o
+#     env: OPENROUTER_API_KEY
+#     models:
+#       - openai/gpt-4o
+#       - x-ai/grok-4
+#       - google/gemini-2.5-pro
+#       - anthropic/claude-sonnet-4
 
-EMBED_MODEL_INFO:
-  siliconflow/Pro/BAAI/bge-m3:
-    name: Pro/BAAI/bge-m3
-    dimension: 1024
-    base_url: https://api.siliconflow.cn/v1/embeddings
-    api_key: SILICONFLOW_API_KEY
+# EMBED_MODEL_INFO:
+#   siliconflow/Pro/BAAI/bge-m3:
+#     name: Pro/BAAI/bge-m3
+#     dimension: 1024
+#     base_url: https://api.siliconflow.cn/v1/embeddings
+#     api_key: SILICONFLOW_API_KEY
 
-  siliconflow/BAAI/bge-m3:
-    name: BAAI/bge-m3
-    dimension: 1024
-    base_url: https://api.siliconflow.cn/v1/embeddings
-    api_key: SILICONFLOW_API_KEY
+#   siliconflow/BAAI/bge-m3:
+#     name: BAAI/bge-m3
+#     dimension: 1024
+#     base_url: https://api.siliconflow.cn/v1/embeddings
+#     api_key: SILICONFLOW_API_KEY
 
-  siliconflow/Qwen/Qwen3-Embedding-0.6B:
-    name: Qwen/Qwen3-Embedding-0.6B
-    dimension: 1024
-    base_url: https://api.siliconflow.cn/v1/embeddings
-    api_key: SILICONFLOW_API_KEY
+#   siliconflow/Qwen/Qwen3-Embedding-0.6B:
+#     name: Qwen/Qwen3-Embedding-0.6B
+#     dimension: 1024
+#     base_url: https://api.siliconflow.cn/v1/embeddings
+#     api_key: SILICONFLOW_API_KEY
 
-  vllm/Qwen/Qwen3-Embedding-0.6B:
-    name: Qwen3-Embedding-0.6B
-    dimension: 1024
-    base_url: http://localhost:8000/v1/embeddings
-    api_key: no_api_key
+#   vllm/Qwen/Qwen3-Embedding-0.6B:
+#     name: Qwen3-Embedding-0.6B
+#     dimension: 1024
+#     base_url: http://localhost:8000/v1/embeddings
+#     api_key: no_api_key
 
-  ollama/nomic-embed-text:
-    name: nomic-embed-text
-    base_url: http://localhost:11434/api/embed
-    dimension: 768
+#   ollama/nomic-embed-text:
+#     name: nomic-embed-text
+#     base_url: http://localhost:11434/api/embed
+#     dimension: 768
 
-  ollama/bge-m3:
-    name: bge-m3
-    base_url: http://localhost:11434/api/embed
-    dimension: 1024
+#   ollama/bge-m3:
+#     name: bge-m3
+#     base_url: http://localhost:11434/api/embed
+#     dimension: 1024
 
-RERANKER_LIST:
-  siliconflow/Pro/BAAI/bge-reranker-v2-m3:
-    name: Pro/BAAI/bge-reranker-v2-m3
-    base_url: https://api.siliconflow.cn/v1/rerank
-    api_key: SILICONFLOW_API_KEY
+# RERANKER_LIST:
+#   siliconflow/Pro/BAAI/bge-reranker-v2-m3:
+#     name: Pro/BAAI/bge-reranker-v2-m3
+#     base_url: https://api.siliconflow.cn/v1/rerank
+#     api_key: SILICONFLOW_API_KEY
 
-  siliconflow/BAAI/bge-reranker-v2-m3:
-    name: BAAI/bge-reranker-v2-m3
-    base_url: https://api.siliconflow.cn/v1/rerank
-    api_key: SILICONFLOW_API_KEY
+#   siliconflow/BAAI/bge-reranker-v2-m3:
+#     name: BAAI/bge-reranker-v2-m3
+#     base_url: https://api.siliconflow.cn/v1/rerank
+#     api_key: SILICONFLOW_API_KEY
 
-  vllm/BAAI/bge-reranker-v2-m3:
-    name: BAAI/bge-reranker-v2-m3
-    base_url: http://localhost:8000/v1/rerank
-    api_key: no_api_key
+#   vllm/BAAI/bge-reranker-v2-m3:
+#     name: BAAI/bge-reranker-v2-m3
+#     base_url: http://localhost:8000/v1/rerank
+#     api_key: no_api_key

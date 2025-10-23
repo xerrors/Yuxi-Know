@@ -142,6 +142,12 @@ DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
         base_url="https://api.siliconflow.cn/v1/embeddings",
         api_key="SILICONFLOW_API_KEY",
     ),
+    "siliconflow/Pro/BAAI/bge-m3": EmbedModelInfo(
+        name="Pro/BAAI/bge-m3",
+        dimension=1024,
+        base_url="https://api.siliconflow.cn/v1/embeddings",
+        api_key="SILICONFLOW_API_KEY",
+    ),
     "siliconflow/Qwen/Qwen3-Embedding-0.6B": EmbedModelInfo(
         name="Qwen/Qwen3-Embedding-0.6B",
         dimension=1024,
@@ -176,6 +182,11 @@ DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
 DEFAULT_RERANKERS: dict[str, RerankerInfo] = {
     "siliconflow/BAAI/bge-reranker-v2-m3": RerankerInfo(
         name="BAAI/bge-reranker-v2-m3",
+        base_url="https://api.siliconflow.cn/v1/rerank",
+        api_key="SILICONFLOW_API_KEY",
+    ),
+    "siliconflow/Pro/BAAI/bge-reranker-v2-m3": RerankerInfo(
+        name="Pro/BAAI/bge-reranker-v2-m3",
         base_url="https://api.siliconflow.cn/v1/rerank",
         api_key="SILICONFLOW_API_KEY",
     ),

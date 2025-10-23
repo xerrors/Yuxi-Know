@@ -51,7 +51,7 @@
               @dropdownVisibleChange="checkAllModelStatus"
             >
               <a-select-option
-                v-for="(name, idx) in items?.embed_model.choices" :key="idx"
+                v-for="(name, idx) in embedModelChoices" :key="idx"
                 :value="name"
               >
                 <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
@@ -82,7 +82,7 @@
               @change="handleChange('reranker', $event)"
             >
               <a-select-option
-                v-for="(name, idx) in items?.reranker.choices" :key="idx"
+                v-for="(name, idx) in rerankerChoices" :key="idx"
                 :value="name">{{ name }}
               </a-select-option>
             </a-select>
@@ -209,9 +209,13 @@ const state = reactive({
   checkingStatus: false // 是否正在检查状态
 })
 
-const handleModelLocalPathsUpdate = (config) => {
-  handleChange('model_local_paths', config)
-}
+const embedModelChoices = computed(() => {
+  return Object.keys(configStore?.config?.embed_model_names || {}) || []
+})
+
+const rerankerChoices = computed(() => {
+  return Object.keys(configStore?.config?.reranker_names || {}) || []
+})
 
 const preHandleChange = (key, e) => {
 
