@@ -103,7 +103,7 @@ class MilvusKB(KnowledgeBase):
 
                 # 检查嵌入模型是否匹配
                 description = collection.description
-                expected_model = embed_info.get("name") if embed_info else "default"
+                expected_model = getattr(embed_info, 'name', 'default') if embed_info else "default"
 
                 if expected_model not in description:
                     logger.warning(f"Collection {collection_name} model mismatch, recreating...")
@@ -116,8 +116,8 @@ class MilvusKB(KnowledgeBase):
 
         except Exception:
             # 创建新集合
-            embedding_dim = embed_info.get("dimension", 1024) if embed_info else 1024
-            model_name = embed_info.get("name", "default") if embed_info else "default"
+            embedding_dim = getattr(embed_info, 'dimension', 1024) if embed_info else 1024
+            model_name = getattr(embed_info, 'name', 'default') if embed_info else "default"
 
             # 定义集合Schema
             fields = [

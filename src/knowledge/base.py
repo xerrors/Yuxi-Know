@@ -1,5 +1,7 @@
 import json
 import os
+import tempfile
+import shutil
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -525,6 +527,7 @@ class KnowledgeBase(ABC):
     def _load_metadata(self):
         """加载元数据"""
         meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
+
         if os.path.exists(meta_file):
             try:
                 with open(meta_file, encoding="utf-8") as f:
@@ -534,19 +537,74 @@ class KnowledgeBase(ABC):
                 logger.info(f"Loaded {self.kb_type} metadata for {len(self.databases_meta)} databases")
             except Exception as e:
                 logger.error(f"Failed to load {self.kb_type} metadata: {e}")
+                # 尝试从备份恢复
+                backup_file = f"{meta_file}.backup"
+                if os.path.exists(backup_file):
+                    try:
+                        with open(backup_file, encoding="utf-8") as f:
+                            data = json.load(f)
+                            self.databases_meta = data.get("databases", {})
+                            self.files_meta = data.get("files", {})
+                        logger.info(f"Loaded {self.kb_type} metadata from backup")
+                        # 恢复备份文件
+                        shutil.copy2(backup_file, meta_file)
+                        return
+                    except Exception as backup_e:
+                        logger.error(f"Failed to load backup: {backup_e}")
+
+                # 如果加载失败，初始化为空状态
+                logger.warning(f"Initializing empty {self.kb_type} metadata")
+                self.databases_meta = {}
+                self.files_meta = {}
+
+    def _serialize_metadata(self, obj):
+        """递归序列化元数据中的 Pydantic 模型"""
+        if hasattr(obj, 'dict'):
+            return obj.dict()
+        elif isinstance(obj, dict):
+            return {k: self._serialize_metadata(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [self._serialize_metadata(item) for item in obj]
+        else:
+            return obj
 
     def _save_metadata(self):
         """保存元数据"""
         self._normalize_metadata_state()
         meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
+        backup_file = f"{meta_file}.backup"
+
         try:
+            # 创建简单备份
+            if os.path.exists(meta_file):
+                shutil.copy2(meta_file, backup_file)
+
+            # 准备数据并序列化 Pydantic 模型
             data = {
-                "databases": self.databases_meta,
-                "files": self.files_meta,
+                "databases": self._serialize_metadata(self.databases_meta),
+                "files": self._serialize_metadata(self.files_meta),
                 "kb_type": self.kb_type,
                 "updated_at": utc_isoformat(),
             }
-            with open(meta_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # 原子性写入（使用临时文件）
+            with tempfile.NamedTemporaryFile(
+                mode='w', dir=os.path.dirname(meta_file),
+                prefix='.tmp_', suffix='.json', delete=False
+            ) as tmp_file:
+                json.dump(data, tmp_file, ensure_ascii=False, indent=2)
+                temp_path = tmp_file.name
+
+            os.replace(temp_path, meta_file)
+            logger.debug(f"Saved {self.kb_type} metadata")
+
         except Exception as e:
             logger.error(f"Failed to save {self.kb_type} metadata: {e}")
+            # 尝试恢复备份
+            if os.path.exists(backup_file):
+                try:
+                    shutil.copy2(backup_file, meta_file)
+                    logger.info("Restored metadata from backup")
+                except Exception as restore_e:
+                    logger.error(f"Failed to restore backup: {restore_e}")
+            raise e
