@@ -1,62 +1,105 @@
-# 文档解析
+# 文档处理与 OCR
 
-## OCR 服务
+系统提供 4 种文档处理选项：
 
-系统提供多种 OCR 服务选项，满足不同精度和性能需求。
+- **RapidOCR**: CPU 友好，无需 GPU，适合基础文字识别
+- **MinerU**: 本地化高精度 VLM 解析，适合复杂 PDF 和表格文档
+- **MinerU Official**: 官方云服务 API，无需本地部署，开箱即用
+- **PaddleX**: 结构化解析，适合表格、票据等特殊格式
 
-### 基础 OCR 服务
+## 快速配置
 
-使用 RapidOCR ONNX 版本，无需 GPU 支持：
-
-#### 1. 下载模型
-
-```bash
-huggingface-cli download SWHL/RapidOCR --local-dir ${MODEL_DIR:-./models}/SWHL/RapidOCR
-```
-
-#### 2. 模型要求
-
-确保以下文件存在：
-- `PP-OCRv4/ch_PP-OCRv4_det_infer.onnx`
-- `PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx`
-
-::: warning 权限问题
-如果提示 `[Errno 13] Permission denied`，需要使用 sudo 修改权限后执行。
-:::
-
-### 高级 OCR 服务
-
-为提升 PDF 解析准确性，可选择以下 GPU 加速服务：
-
-#### 1. MinerU 服务（推荐）
+### 1. 基础 OCR (RapidOCR)
 
 ```bash
-# 需要 CUDA 12.6+ 环境
-docker compose up mineru --build
+# 下载模型
+hf download SWHL/RapidOCR --local-dir ./models/SWHL/RapidOCR
+
+# 启动服务
+docker compose up -d api
 ```
 
-#### 2. PP-Structure-V3 服务
+### 2. 高精度 OCR (MinerU)
 
 ```bash
-# 需要 CUDA 11.8+ 环境
-docker compose up paddlex --build
+# 需要 GPU，启动 MinerU 服务
+docker compose up -d mineru-vllm-server mineru-api
+
+# 启动主服务
+docker compose up -d api
 ```
 
-**配置文件**: `docker/PP-StructureV3.yaml`
+### 3. 官方云服务 (MinerU Official)
 
-### OCR 服务选择建议
 
-- **基础使用**: RapidOCR（无需 GPU）
-- **高精度需求**: MinerU（推荐）
-- **结构化文档**: PP-Structure-V3
-- **生产环境**: 根据硬件条件选择
+API 密钥可以从 [MinerU 官网](https://mineru.net) 申请。
 
-### `enable_ocr` 取值说明（入库参数）
+```bash
+# 设置 API 密钥环境变量
+export MINERU_API_KEY="your-api-key-here"
 
-- `disable`：不启用 OCR（PDF 将按纯文本提取，图片会自动转为 `onnx_rapid_ocr` 提示）
-- `onnx_rapid_ocr`：CPU 友好，安装简单
-- `mineru_ocr`：GPU 加速，复杂文档效果好
-- `paddlex_ocr`：结构化表格/票据等场景
+# 启动主服务
+docker compose up -d api
+```
+
+### 4. 结构化解析 (PaddleX)
+
+```bash
+# 需要 GPU，启动 PaddleX 服务
+docker compose up -d paddlex
+
+# 启动主服务
+docker compose up -d api
+```
+
+## 处理器选择
+
+| 处理器 | 适用场景 | 硬件要求 | 特点 |
+|--------|----------|------------|------|
+| **RapidOCR** | 基础文字识别 | CPU | 速度快，资源占用低 |
+| **MinerU** | 复杂 PDF、表格、公式 | GPU | 精度高，版面分析好 |
+| **MinerU Official** | 复杂文档解析（云服务） | 无特殊要求 | 官方云服务，开箱即用，有 API 配额 |
+| **PaddleX** | 表格、票据、结构化文档 | GPU | 专业版面解析 |
+
+## 参数说明
+
+### enable_ocr 选项
+- `disable`: 不启用 OCR（PDF 按文本提取，图片**必须选择 OCR 方式**）
+- `onnx_rapid_ocr`: RapidOCR 处理
+- `mineru_ocr`: MinerU HTTP API 处理
+- `mineru_official`: MinerU 官方云服务 API 处理
+- `paddlex_ocr`: PaddleX 处理
+
+### 注意事项
+- **图片文件必须启用 OCR**，否则无法提取内容
+- MinerU 和 PaddleX 需要 GPU 支持
+- MinerU Official 需要设置 `MINERU_API_KEY` 环境变量
+- RapidOCR 适合 CPU 环境和基础识别需求
+
+## 故障排除
+
+### 常见问题
+
+1. **RapidOCR 模型不存在**
+   ```bash
+   # 下载模型
+   huggingface-cli download SWHL/RapidOCR --local-dir ./models/SWHL/RapidOCR
+   ```
+
+2. **GPU 服务连接失败**
+   ```bash
+   # 检查服务状态
+   docker compose ps
+
+   # 查看日志
+   docker compose logs mineru
+   ```
+
+3. **健康检查**
+   ```bash
+   # 检查所有 OCR 服务状态
+   curl http://localhost:5050/system/health/ocr-services
+   ```
 
 ## 批量处理脚本
 

@@ -298,8 +298,9 @@ const urlList = ref('');
 
 // OCR服务健康状态
 const ocrHealthStatus = ref({
-  rapid_ocr: { status: 'unknown', message: '' },
+  onnx_rapid_ocr: { status: 'unknown', message: '' },
   mineru_ocr: { status: 'unknown', message: '' },
+  mineru_official: { status: 'unknown', message: '' },
   paddlex_ocr: { status: 'unknown', message: '' }
 });
 
@@ -348,19 +349,25 @@ const enableOcrOptions = computed(() => [
     value: 'onnx_rapid_ocr',
     label: getRapidOcrLabel(),
     title: 'ONNX with RapidOCR',
-    disabled: ocrHealthStatus.value.rapid_ocr.status === 'unavailable' || ocrHealthStatus.value.rapid_ocr.status === 'error'
+    disabled: ocrHealthStatus.value?.onnx_rapid_ocr?.status === 'unavailable' || ocrHealthStatus.value?.onnx_rapid_ocr?.status === 'error'
   },
   {
     value: 'mineru_ocr',
     label: getMinerULabel(),
     title: 'MinerU OCR',
-    disabled: ocrHealthStatus.value.mineru_ocr.status === 'unavailable' || ocrHealthStatus.value.mineru_ocr.status === 'error'
+    disabled: ocrHealthStatus.value?.mineru_ocr?.status === 'unavailable' || ocrHealthStatus.value?.mineru_ocr?.status === 'error'
+  },
+  {
+    value: 'mineru_official',
+    label: getMinerUOfficialLabel(),
+    title: 'MinerU Official API',
+    disabled: ocrHealthStatus.value?.mineru_official?.status === 'unavailable' || ocrHealthStatus.value?.mineru_official?.status === 'error'
   },
   {
     value: 'paddlex_ocr',
     label: getPaddleXLabel(),
     title: 'PaddleX OCR',
-    disabled: ocrHealthStatus.value.paddlex_ocr.status === 'unavailable' || ocrHealthStatus.value.paddlex_ocr.status === 'error'
+    disabled: ocrHealthStatus.value?.paddlex_ocr?.status === 'unavailable' || ocrHealthStatus.value?.paddlex_ocr?.status === 'error'
   },
 ]);
 
@@ -368,11 +375,13 @@ const enableOcrOptions = computed(() => [
 const selectedOcrStatus = computed(() => {
   switch (chunkParams.value.enable_ocr) {
     case 'onnx_rapid_ocr':
-      return ocrHealthStatus.value.rapid_ocr.status;
+      return ocrHealthStatus.value?.onnx_rapid_ocr?.status || 'unknown';
     case 'mineru_ocr':
-      return ocrHealthStatus.value.mineru_ocr.status;
+      return ocrHealthStatus.value?.mineru_ocr?.status || 'unknown';
+    case 'mineru_official':
+      return ocrHealthStatus.value?.mineru_official?.status || 'unknown';
     case 'paddlex_ocr':
-      return ocrHealthStatus.value.paddlex_ocr.status;
+      return ocrHealthStatus.value?.paddlex_ocr?.status || 'unknown';
     default:
       return null;
   }
@@ -382,11 +391,13 @@ const selectedOcrStatus = computed(() => {
 const selectedOcrMessage = computed(() => {
   switch (chunkParams.value.enable_ocr) {
     case 'onnx_rapid_ocr':
-      return ocrHealthStatus.value.rapid_ocr.message;
+      return ocrHealthStatus.value?.onnx_rapid_ocr?.message || '';
     case 'mineru_ocr':
-      return ocrHealthStatus.value.mineru_ocr.message;
+      return ocrHealthStatus.value?.mineru_ocr?.message || '';
+    case 'mineru_official':
+      return ocrHealthStatus.value?.mineru_official?.message || '';
     case 'paddlex_ocr':
-      return ocrHealthStatus.value.paddlex_ocr.message;
+      return ocrHealthStatus.value?.paddlex_ocr?.message || '';
     default:
       return '';
   }
@@ -394,7 +405,7 @@ const selectedOcrMessage = computed(() => {
 
 // OCR选项标签生成函数
 const getRapidOcrLabel = () => {
-  const status = ocrHealthStatus.value.rapid_ocr.status;
+  const status = ocrHealthStatus.value?.onnx_rapid_ocr?.status || 'unknown';
   const statusIcons = {
     'healthy': '✅',
     'unavailable': '❌',
@@ -405,7 +416,7 @@ const getRapidOcrLabel = () => {
 };
 
 const getMinerULabel = () => {
-  const status = ocrHealthStatus.value.mineru_ocr.status;
+  const status = ocrHealthStatus.value?.mineru_ocr?.status || 'unknown';
   const statusIcons = {
     'healthy': '✅',
     'unavailable': '❌',
@@ -417,8 +428,21 @@ const getMinerULabel = () => {
   return `${statusIcons[status] || '❓'} MinerU OCR`;
 };
 
+const getMinerUOfficialLabel = () => {
+  const status = ocrHealthStatus.value?.mineru_official?.status || 'unknown';
+  const statusIcons = {
+    'healthy': '✅',
+    'unavailable': '❌',
+    'unhealthy': '⚠️',
+    'timeout': '⏰',
+    'error': '⚠️',
+    'unknown': '❓'
+  };
+  return `${statusIcons[status] || '❓'} MinerU Official API`;
+};
+
 const getPaddleXLabel = () => {
-  const status = ocrHealthStatus.value.paddlex_ocr.status;
+  const status = ocrHealthStatus.value?.paddlex_ocr?.status || 'unknown';
   const statusIcons = {
     'healthy': '✅',
     'unavailable': '❌',
@@ -527,6 +551,22 @@ const chunkData = async () => {
       message.error('请先上传文件');
       return;
     }
+
+    // 验证图片文件是否启用OCR
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'];
+    const hasImageFiles = validFiles.some(filePath => {
+      const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+      return imageExtensions.includes(ext);
+    });
+
+    if (hasImageFiles && chunkParams.value.enable_ocr === 'disable') {
+      message.error({
+        content: '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PaddleX) 或移除图片文件。',
+        duration: 5,
+      });
+      return;
+    }
+
     success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
   } else if (uploadMode.value === 'url') {
     const urls = urlList.value.split('\n')

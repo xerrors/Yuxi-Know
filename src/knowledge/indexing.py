@@ -190,9 +190,10 @@ def parse_pdf(file, params=None):
         str: 解析得到的文本
 
     Raises:
-        OCRServiceException: OCR服务不可用时抛出
+        DocumentProcessorException: 处理失败时抛出
     """
-    from src.plugins._ocr import OCRServiceException
+    from src.plugins.document_processor_base import DocumentProcessorException
+    from src.plugins.document_processor_factory import DocumentProcessorFactory
 
     params = params or {}
     opt_ocr = params.get("enable_ocr", "disable")
@@ -201,70 +202,53 @@ def parse_pdf(file, params=None):
         return pdfreader(file, params=params)
 
     try:
-        if opt_ocr == "onnx_rapid_ocr":
-            from src.plugins import ocr
+        return DocumentProcessorFactory.process_file(opt_ocr, file, params)
 
-            return ocr.process_pdf(file, params=params)
-
-        elif opt_ocr == "mineru_ocr":
-            from src.plugins import ocr
-
-            return ocr.process_file_mineru(file, params=params)
-
-        elif opt_ocr == "paddlex_ocr":
-            from src.plugins import ocr
-
-            return ocr.process_file_paddlex(file, params=params)
-
-        else:
-            raise ValueError(f"不支持的OCR方式: {opt_ocr}")
-
-    except OCRServiceException as e:
-        logger.error(f"OCR service failed: {e.service_name} - {str(e)}")
+    except DocumentProcessorException as e:
+        logger.error(f"文档处理失败: {e.service_name} - {str(e)}")
         raise
     except Exception as e:
-        logger.error(f"PDF parsing failed: {str(e)}")
-        raise OCRServiceException(f"PDF解析失败: {str(e)}", opt_ocr, "parsing_failed")
+        logger.error(f"PDF 解析失败: {str(e)}")
+        raise DocumentProcessorException(f"PDF解析失败: {str(e)}", opt_ocr, "parsing_failed")
 
 
 def parse_image(file, params=None):
     """
     解析图像文件，支持多种OCR方式
+
+    Args:
+        file: 图像文件路径
+        params: 参数字典，包含enable_ocr设置
+
+    Returns:
+        str: 解析得到的文本
+
+    Raises:
+        DocumentProcessorException: 处理失败时抛出
+        ValueError: 图像文件禁用OCR时抛出
     """
-    from src.plugins._ocr import OCRServiceException
+    from src.plugins.document_processor_base import DocumentProcessorException
+    from src.plugins.document_processor_factory import DocumentProcessorFactory
 
     params = params or {}
     opt_ocr = params.get("enable_ocr", "disable")
 
+    # 图像文件必须使用 OCR,不能禁用
     if opt_ocr == "disable":
-        logger.warning(f"OCR is disabled for image file: {file}, Using `onnx_rapid_ocr` instead")
-        opt_ocr = "onnx_rapid_ocr"
+        raise ValueError(
+            "图像文件必须启用OCR才能提取文本内容。"
+            "请选择OCR方式 (onnx_rapid_ocr/mineru_ocr/mineru_official/paddlex_ocr) 或移除该文件。"
+        )
 
     try:
-        if opt_ocr == "onnx_rapid_ocr":
-            from src.plugins import ocr
+        return DocumentProcessorFactory.process_file(opt_ocr, file, params)
 
-            return ocr.process_image(file, params=params)
-
-        elif opt_ocr == "mineru_ocr":
-            from src.plugins import ocr
-
-            return ocr.process_file_mineru(file, params=params)
-
-        elif opt_ocr == "paddlex_ocr":
-            from src.plugins import ocr
-
-            return ocr.process_file_paddlex(file, params=params)
-
-        else:
-            raise ValueError(f"不支持的OCR方式: {opt_ocr}")
-
-    except OCRServiceException as e:
-        logger.error(f"OCR service failed: {e.service_name} - {str(e)}")
+    except DocumentProcessorException as e:
+        logger.error(f"图像处理失败: {e.service_name} - {str(e)}")
         raise
     except Exception as e:
-        logger.error(f"Image parsing failed: {str(e)}")
-        raise OCRServiceException(f"Image解析失败: {str(e)}", opt_ocr, "parsing_failed")
+        logger.error(f"图像解析失败: {str(e)}")
+        raise DocumentProcessorException(f"图像解析失败: {str(e)}", opt_ocr, "parsing_failed")
 
 
 async def parse_pdf_async(file, params=None):

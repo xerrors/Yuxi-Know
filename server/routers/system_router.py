@@ -2,7 +2,6 @@ import os
 from collections import deque
 from pathlib import Path
 
-import requests
 import yaml
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -168,83 +167,39 @@ async def check_ocr_services_health(current_user: User = Depends(get_admin_user)
     检查所有OCR服务的健康状态
     返回各个OCR服务的可用性信息
     """
-    health_status = {
-        "rapid_ocr": {"status": "unknown", "message": ""},
-        "mineru_ocr": {"status": "unknown", "message": ""},
-        "paddlex_ocr": {"status": "unknown", "message": ""},
-    }
+    from src.plugins.document_processor_factory import DocumentProcessorFactory
 
-    # 检查 RapidOCR (ONNX) 模型
     try:
-        model_dir_root = (
-            os.getenv("MODEL_DIR") if not os.getenv("RUNNING_IN_DOCKER") else os.getenv("MODEL_DIR_IN_DOCKER")
+        # 使用统一的健康检查接口
+        health_status = DocumentProcessorFactory.check_all_health()
+
+        # 转换为旧格式以保持API兼容性
+        formatted_status = {}
+        for service_name, health_info in health_status.items():
+            formatted_status[service_name] = {
+                "status": health_info.get("status", "unknown"),
+                "message": health_info.get("message", ""),
+                "details": health_info.get("details", {}),
+            }
+
+        # 计算整体健康状态
+        overall_status = (
+            "healthy" if any(svc["status"] == "healthy" for svc in formatted_status.values()) else "unhealthy"
         )
-        model_dir = os.path.join(model_dir_root, "SWHL/RapidOCR")
-        det_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_det_infer.onnx")
-        rec_model_path = os.path.join(model_dir, "PP-OCRv4/ch_PP-OCRv4_rec_infer.onnx")
 
-        if os.path.exists(model_dir) and os.path.exists(det_model_path) and os.path.exists(rec_model_path):
-            # 尝试初始化RapidOCR
-            from rapidocr_onnxruntime import RapidOCR
+        return {
+            "overall_status": overall_status,
+            "services": formatted_status,
+            "message": "OCR服务健康检查完成",
+        }
 
-            test_ocr = RapidOCR(det_box_thresh=0.3, det_model_path=det_model_path, rec_model_path=rec_model_path)  # noqa: F841
-            health_status["rapid_ocr"]["status"] = "healthy"
-            health_status["rapid_ocr"]["message"] = "RapidOCR模型已加载"
-        else:
-            health_status["rapid_ocr"]["status"] = "unavailable"
-            health_status["rapid_ocr"]["message"] = f"模型文件不存在: {model_dir}"
     except Exception as e:
-        health_status["rapid_ocr"]["status"] = "error"
-        health_status["rapid_ocr"]["message"] = f"RapidOCR初始化失败: {str(e)}"
-
-    # 检查 MinerU OCR 服务
-    try:
-        mineru_uri = os.getenv("MINERU_OCR_URI", "http://localhost:30000")
-        health_url = f"{mineru_uri}/health"
-
-        response = requests.get(health_url, timeout=5)
-        if response.status_code == 200:
-            health_status["mineru_ocr"]["status"] = "healthy"
-            health_status["mineru_ocr"]["message"] = f"MinerU服务运行正常 ({mineru_uri})"
-        else:
-            health_status["mineru_ocr"]["status"] = "unhealthy"
-            health_status["mineru_ocr"]["message"] = f"MinerU服务响应异常({mineru_uri}): {response.status_code}"
-    except requests.exceptions.ConnectionError:
-        health_status["mineru_ocr"]["status"] = "unavailable"
-        health_status["mineru_ocr"]["message"] = "MinerU服务无法连接，请检查服务是否启动"
-    except requests.exceptions.Timeout:
-        health_status["mineru_ocr"]["status"] = "timeout"
-        health_status["mineru_ocr"]["message"] = "MinerU服务连接超时"
-    except Exception as e:
-        health_status["mineru_ocr"]["status"] = "error"
-        health_status["mineru_ocr"]["message"] = f"MinerU服务检查失败: {str(e)}"
-
-    # 检查 PaddleX OCR 服务
-    try:
-        paddlex_uri = os.getenv("PADDLEX_URI", "http://localhost:8080")
-        health_url = f"{paddlex_uri}/health"
-
-        response = requests.get(health_url, timeout=5)
-        if response.status_code == 200:
-            health_status["paddlex_ocr"]["status"] = "healthy"
-            health_status["paddlex_ocr"]["message"] = f"PaddleX服务运行正常({paddlex_uri})"
-        else:
-            health_status["paddlex_ocr"]["status"] = "unhealthy"
-            health_status["paddlex_ocr"]["message"] = f"PaddleX服务响应异常({paddlex_uri}): {response.status_code}"
-    except requests.exceptions.ConnectionError:
-        health_status["paddlex_ocr"]["status"] = "unavailable"
-        health_status["paddlex_ocr"]["message"] = "PaddleX服务无法连接，请检查服务是否启动({paddlex_uri})"
-    except requests.exceptions.Timeout:
-        health_status["paddlex_ocr"]["status"] = "timeout"
-        health_status["paddlex_ocr"]["message"] = "PaddleX服务连接超时({paddlex_uri})"
-    except Exception as e:
-        health_status["paddlex_ocr"]["status"] = "error"
-        health_status["paddlex_ocr"]["message"] = f"PaddleX服务检查失败: {str(e)}"
-
-    # 计算整体健康状态
-    overall_status = "healthy" if any(svc["status"] == "healthy" for svc in health_status.values()) else "unhealthy"
-
-    return {"overall_status": overall_status, "services": health_status, "message": "OCR服务健康检查完成"}
+        logger.error(f"OCR健康检查失败: {str(e)}")
+        return {
+            "overall_status": "error",
+            "services": {},
+            "message": f"OCR健康检查失败: {str(e)}",
+        }
 
 
 # =============================================================================

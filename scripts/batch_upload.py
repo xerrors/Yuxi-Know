@@ -247,7 +247,9 @@ def upload(
     ),
     chunk_size: int = typer.Option(1000, help="Chunk size for document processing."),
     chunk_overlap: int = typer.Option(200, help="Chunk overlap for document processing."),
-    enable_ocr: str = typer.Option("paddlex_ocr", help="OCR engine to use (paddlex_ocr, mineru_ocr, disable)."),
+    enable_ocr: str = typer.Option(
+        "paddlex_ocr", help="OCR engine to use (onnx_rapid_ocr, mineru_ocr, mineru_official, paddlex_ocr, disable)."
+    ),
     use_qa_split: bool = typer.Option(False, help="Whether to use QA splitting."),
     qa_separator: str = typer.Option("\n\n\n", help="Separator for QA splitting."),
 ):
