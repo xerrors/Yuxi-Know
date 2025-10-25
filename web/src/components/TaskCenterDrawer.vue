@@ -98,7 +98,7 @@
       <div v-else class="task-empty">
         <div class="task-empty-icon">🗂️</div>
         <div class="task-empty-title">暂无任务</div>
-        <div class="task-empty-subtitle">当你提交知识库导入或其他后台任务时，会在这里展示实时进度。</div>
+        <div class="task-empty-subtitle">当你提交知识库导入或其他后台任务时，会在这里展示实时进度（仅展示最近的 100 个任务）。</div>
       </div>
     </div>
   </a-drawer>
@@ -112,27 +112,32 @@ import { storeToRefs } from 'pinia'
 import { formatFullDateTime, formatRelative, parseToShanghai } from '@/utils/time'
 
 const taskerStore = useTaskerStore()
-const { isDrawerOpen, sortedTasks, loading, lastError } = storeToRefs(taskerStore)
+const {
+  isDrawerOpen,
+  sortedTasks,
+  loading,
+  lastError,
+  activeCount,
+  totalCount,
+  successCount,
+  failedCount
+} = storeToRefs(taskerStore)
 const isOpen = isDrawerOpen
 
 const tasks = computed(() => sortedTasks.value)
 const loadingState = computed(() => Boolean(loading.value))
 const lastErrorState = computed(() => lastError.value)
 const statusFilter = ref('all')
-const inProgressCount = computed(
-  () => tasks.value.filter((task) => ACTIVE_CLASS_STATUSES.has(task.status)).length
-)
-const completedCount = computed(() => tasks.value.filter((task) => task.status === 'success').length)
-const failedCount = computed(
-  () => tasks.value.filter((task) => FAILED_STATUSES.has(task.status)).length
-)
-const totalCount = computed(() => tasks.value.length)
+const inProgressCount = computed(() => activeCount.value || 0)
+const completedCount = computed(() => successCount.value || 0)
+const failedTaskCount = computed(() => failedCount.value || 0)
+const totalTaskCount = computed(() => totalCount.value || 0)
 const taskFilterOptions = computed(() => [
   {
     label: () =>
       h('span', { class: 'task-filter-option' }, [
         '全部',
-        h('span', { class: 'filter-count' }, totalCount.value)
+        h('span', { class: 'filter-count' }, totalTaskCount.value)
       ]),
     value: 'all'
   },
@@ -156,7 +161,7 @@ const taskFilterOptions = computed(() => [
     label: () =>
       h('span', { class: 'task-filter-option' }, [
         '失败',
-        h('span', { class: 'filter-count' }, failedCount.value)
+        h('span', { class: 'filter-count' }, failedTaskCount.value)
       ]),
     value: 'failed'
   }

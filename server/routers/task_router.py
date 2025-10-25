@@ -10,11 +10,11 @@ tasks = APIRouter(prefix="/tasks", tags=["tasks"])
 @tasks.get("")
 async def list_tasks(
     status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=100),
     current_user: User = Depends(get_admin_user),
 ):
     """List tasks, optionally filtered by status."""
-    task_list = await tasker.list_tasks(status=status)
-    return {"tasks": task_list}
+    return await tasker.list_tasks(status=status, limit=limit)
 
 
 @tasks.get("/{task_id}")

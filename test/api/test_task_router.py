@@ -33,6 +33,8 @@ async def test_admin_can_list_tasks(test_client, admin_headers):
     payload = response.json()
     assert "tasks" in payload
     assert isinstance(payload["tasks"], list)
+    assert "summary" in payload
+    assert isinstance(payload["summary"], dict)
 
 
 async def test_cancel_unknown_task_returns_client_error(test_client, admin_headers):

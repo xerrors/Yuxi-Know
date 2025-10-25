@@ -5,6 +5,14 @@ import { taskerApi } from '@/apis/tasker'
 import { parseToShanghai } from '@/utils/time'
 
 const ACTIVE_STATUSES = new Set(['pending', 'running', 'queued'])
+const FAILED_STATUSES = new Set(['failed', 'cancelled'])
+
+const createDefaultSummary = () => ({
+  total: 0,
+  filtered_total: 0,
+  status_counts: {},
+  type_counts: {}
+})
 
 const toTask = (raw = {}) => ({
   id: raw.id,
@@ -29,6 +37,7 @@ export const useTaskerStore = defineStore('tasker', () => {
   const lastError = ref(null)
   const isPolling = ref(false)
   const isDrawerOpen = ref(false)
+  const summary = ref(createDefaultSummary())
   let pollingTimer = null
 
   const sortedTasks = computed(() => {
@@ -42,7 +51,16 @@ export const useTaskerStore = defineStore('tasker', () => {
     })
   })
 
-  const activeCount = computed(() => sortedTasks.value.filter(task => ACTIVE_STATUSES.has(task.status)).length)
+  const statusCounts = computed(() => summary.value?.status_counts || {})
+
+  const activeCount = computed(() =>
+    Array.from(ACTIVE_STATUSES).reduce((count, status) => count + (statusCounts.value?.[status] || 0), 0)
+  )
+  const failedCount = computed(() =>
+    Array.from(FAILED_STATUSES).reduce((count, status) => count + (statusCounts.value?.[status] || 0), 0)
+  )
+  const successCount = computed(() => statusCounts.value?.success || 0)
+  const totalCount = computed(() => summary.value?.total || 0)
 
   function upsertTask(rawTask) {
     if (!rawTask || !rawTask.id) return
@@ -61,10 +79,15 @@ export const useTaskerStore = defineStore('tasker', () => {
     try {
       const response = await taskerApi.fetchTasks(params)
       const taskList = response?.tasks || []
+      summary.value = {
+        ...createDefaultSummary(),
+        ...(response?.summary || {})
+      }
       tasks.value = taskList.map(toTask)
     } catch (error) {
       console.error('加载任务列表失败', error)
       lastError.value = error
+      summary.value = createDefaultSummary()
     } finally {
       loading.value = false
     }
@@ -144,12 +167,18 @@ export const useTaskerStore = defineStore('tasker', () => {
     tasks.value = []
     lastError.value = null
     isDrawerOpen.value = false
+    summary.value = createDefaultSummary()
   }
 
   return {
     isDrawerOpen,
     tasks,
     sortedTasks,
+    summary,
+    statusCounts,
+    totalCount,
+    successCount,
+    failedCount,
     loading,
     lastError,
     activeCount,

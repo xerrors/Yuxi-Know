@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 from collections.abc import Awaitable, Callable
+from collections import Counter
 
 from src.config import config
 from src.utils.logging_config import logger
@@ -137,13 +138,31 @@ class Tasker:
         logger.info("Enqueued task {} ({})", task_id, name)
         return task
 
-    async def list_tasks(self, status: str | None = None) -> list[dict[str, Any]]:
+    async def list_tasks(self, status: str | None = None, limit: int = 100) -> dict[str, Any]:
         async with self._lock:
-            tasks = list(self._tasks.values())
+            all_tasks = list(self._tasks.values())
+
+        status_counter = Counter(task.status for task in all_tasks)
+        type_counter = Counter(task.type for task in all_tasks)
+        all_tasks.sort(key=lambda item: item.created_at or utc_isoformat(), reverse=True)
+
+        tasks = all_tasks
         if status:
             tasks = [task for task in tasks if task.status == status]
-        tasks.sort(key=lambda item: item.created_at or utc_isoformat(), reverse=True)
-        return [task.to_dict() for task in tasks]
+
+        limited_tasks = tasks[: max(limit, 0)]
+
+        summary: dict[str, Any] = {
+            "total": len(all_tasks),
+            "filtered_total": len(tasks),
+            "status_counts": dict(status_counter),
+            "type_counts": dict(type_counter),
+        }
+
+        return {
+            "tasks": [task.to_dict() for task in limited_tasks],
+            "summary": summary,
+        }
 
     async def get_task(self, task_id: str) -> dict[str, Any] | None:
         async with self._lock:
