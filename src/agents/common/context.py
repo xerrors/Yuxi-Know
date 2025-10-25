@@ -1,12 +1,10 @@
 """Define the configurable parameters for the agent."""
 
-from __future__ import annotations
-
 import os
 import uuid
 from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
-from typing import get_args, get_origin
+from typing import Annotated, get_args, get_origin
 
 import yaml
 
@@ -46,8 +44,13 @@ class BaseContext:
         metadata={"name": "系统提示词", "description": "用来描述智能体的角色和行为"},
     )
 
+    model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
+        default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
+        metadata={"name": "智能体模型", "options": [], "description": "智能体的驱动模型"},
+    )
+
     @classmethod
-    def from_file(cls, module_name: str, input_context: dict = None) -> BaseContext:
+    def from_file(cls, module_name: str, input_context: dict = None) -> "BaseContext":
         """Load configuration from a YAML file. 用于持久化配置"""
 
         # 从文件加载配置

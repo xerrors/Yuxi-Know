@@ -18,7 +18,7 @@
     <!-- 侧边栏内容 -->
     <div class="sidebar-content">
       <div class="agent-info" v-if="selectedAgent">
-        <div class="agent-basic-info">
+        <div class="agent-basic-info" @click="console.log(configurableItems)">
           <p class="agent-description">{{ selectedAgent.description }}</p>
         </div>
 

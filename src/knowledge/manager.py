@@ -46,21 +46,21 @@ class KnowledgeBaseManager:
         logger.info("KnowledgeBaseManager initialized")
 
         # 在后台运行数据一致性检测（不阻塞初始化）
-        try:
-            # 尝试获取当前事件循环，如果没有则创建新的
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    # 如果已经在事件循环中，创建任务
-                    asyncio.create_task(self.detect_data_inconsistencies())
-                else:
-                    # 如果事件循环未运行，直接运行
-                    loop.run_until_complete(self.detect_data_inconsistencies())
-            except RuntimeError:
-                # 没有事件循环，创建一个来运行检测
-                asyncio.run(self.detect_data_inconsistencies())
-        except Exception as e:
-            logger.warning(f"初始化时运行数据一致性检测失败: {e}")
+        # try:
+        #     # 尝试获取当前事件循环，如果没有则创建新的
+        #     try:
+        #         loop = asyncio.get_event_loop()
+        #         if loop.is_running():
+        #             # 如果已经在事件循环中，创建任务
+        #             asyncio.create_task(self.detect_data_inconsistencies())
+        #         else:
+        #             # 如果事件循环未运行，直接运行
+        #             loop.run_until_complete(self.detect_data_inconsistencies())
+        #     except RuntimeError:
+        #         # 没有事件循环，创建一个来运行检测
+        #         asyncio.run(self.detect_data_inconsistencies())
+        # except Exception as e:
+        #     logger.warning(f"初始化时运行数据一致性检测失败: {e}")
 
     def _load_global_metadata(self):
         """加载全局元数据"""

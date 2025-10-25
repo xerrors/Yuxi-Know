@@ -10,11 +10,6 @@ from .tools import get_tools
 
 @dataclass(kw_only=True)
 class Context(BaseContext):
-    model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
-        default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
-        metadata={"name": "智能体模型", "options": [], "description": "智能体的驱动模型"},
-    )
-
     tools: Annotated[list[dict], {"__template_metadata__": {"kind": "tools"}}] = field(
         default_factory=list,
         metadata={
