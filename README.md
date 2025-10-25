@@ -17,6 +17,8 @@
 
 语析是一个功能强大的智能问答平台，融合了 RAG 知识库与知识图谱技术，基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建。
 
+---
+
 🙏 感谢 Star ~ ⭐⭐⭐⭐⭐
 
 详细文档请查看全新的 [**📄文档中心**](https://xerrors.github.io/Yuxi-Know/)， [📽️ 点击查看视频演示 v0.2](https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8)

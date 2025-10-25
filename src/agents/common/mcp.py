@@ -58,7 +58,7 @@ async def get_mcp_client(
         return None
 
 
-async def get_mcp_tools(server_name: str) -> list[Callable[..., Any]]:
+async def get_mcp_tools(server_name: str, additional_servers: dict[str, dict] = None) -> list[Callable[..., Any]]:
     """Get MCP tools for a specific server, initializing client if needed."""
     global _mcp_tools_cache
 
@@ -66,9 +66,11 @@ async def get_mcp_tools(server_name: str) -> list[Callable[..., Any]]:
     if server_name in _mcp_tools_cache:
         return _mcp_tools_cache[server_name]
 
+    mcp_servers = MCP_SERVERS | (additional_servers or {})
+
     try:
-        assert server_name in MCP_SERVERS, f"Server {server_name} not found in MCP_SERVERS"
-        client = await get_mcp_client({server_name: MCP_SERVERS[server_name]})
+        assert server_name in mcp_servers, f"Server {server_name} not found in MCP_SERVERS"
+        client = await get_mcp_client({server_name: mcp_servers[server_name]})
         if client is None:
             return []
 
@@ -85,7 +87,6 @@ async def get_mcp_tools(server_name: str) -> list[Callable[..., Any]]:
     except Exception as e:
         logger.error(f"Failed to load tools from MCP server '{server_name}': {e}")
         return []
-
 
 async def get_all_mcp_tools() -> list[Callable[..., Any]]:
     """Get all tools from all configured MCP servers."""

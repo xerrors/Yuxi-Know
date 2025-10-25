@@ -3,13 +3,10 @@ from pathlib import Path
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
-from src import config as sys_config
 from src.agents.common.base import BaseAgent
 from src.agents.common.models import load_chat_model
 from src.agents.common.tools import get_buildin_tools
 from src.utils import logger
-
-model = load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507")
 
 
 @dynamic_prompt
@@ -34,9 +31,6 @@ class ReActAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.graph = None
-        self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
-        self.workdir.mkdir(parents=True, exist_ok=True)
 
     def get_tools(self):
         return get_buildin_tools()
@@ -47,12 +41,11 @@ class ReActAgent(BaseAgent):
 
         # 创建 ReActAgent
         graph = create_agent(
-            model=model,
+            model=load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507"),  # 实际会被覆盖
             tools=self.get_tools(),
             middleware=[context_aware_prompt, context_based_model],
             checkpointer=await self._get_checkpointer(),
         )
 
         self.graph = graph
-        logger.info("ReActAgent 使用内存 checkpointer 构建成功")
         return graph

@@ -44,7 +44,7 @@ class TableListModel(BaseModel):
     pass
 
 
-@tool(args_schema=TableListModel)
+@tool(name_or_callable="查询表名", args_schema=TableListModel)
 def mysql_list_tables() -> str:
     """获取数据库中的所有表名
 
@@ -94,7 +94,7 @@ class TableDescribeModel(BaseModel):
     table_name: str = Field(description="要查询的表名", example="users")
 
 
-@tool(args_schema=TableDescribeModel)
+@tool(name_or_callable="描述表", args_schema=TableDescribeModel)
 def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"]) -> str:
     """获取指定表的详细结构信息
 
@@ -168,7 +168,7 @@ class QueryModel(BaseModel):
     timeout: int | None = Field(default=10, description="查询超时时间（秒），默认10秒，最大60秒", ge=1, le=60)
 
 
-@tool(args_schema=QueryModel)
+@tool(name_or_callable="执行 SQL 查询", args_schema=QueryModel)
 def mysql_query(
     sql: Annotated[str, "要执行的SQL查询语句（只能是SELECT语句）"],
     limit: Annotated[int | None, "限制返回的最大行数，默认100，最大1000"] = 100,

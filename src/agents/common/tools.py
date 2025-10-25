@@ -146,7 +146,11 @@ def gen_tool_info(tools) -> list[dict[str, Any]]:
                 }
 
                 if hasattr(tool_obj, "args_schema") and tool_obj.args_schema:
-                    schema = tool_obj.args_schema.schema()
+                    if isinstance(tool_obj.args_schema, dict):
+                        schema = tool_obj.args_schema
+                    else:
+                        schema = tool_obj.args_schema.schema()
+
                     for arg_name, arg_info in schema.get("properties", {}).items():
                         info["args"].append(
                             {
@@ -161,7 +165,8 @@ def gen_tool_info(tools) -> list[dict[str, Any]]:
 
             except Exception as e:
                 logger.error(
-                    f"Failed to process tool {getattr(tool_obj, 'name', 'unknown')}: {e}\n{traceback.format_exc()}"
+                    f"Failed to process tool {getattr(tool_obj, 'name', 'unknown')}: {e}\n{traceback.format_exc()}. "
+                    f"Details: {dict(tool_obj.__dict__)}"
                 )
                 continue
 
