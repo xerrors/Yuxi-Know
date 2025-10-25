@@ -18,10 +18,9 @@
 - [ ] 统一图谱数据结构，优化可视化方式 [#298](https://github.com/xerrors/Yuxi-Know/issues/298) <Badge type="info" text="0.4" />
 - [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
 - [ ] 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />
-- [ ] 支持 MinerU 2.5 的解析方法 <Badge type="info" text="0.3.5" />
-    - [ ] MinerU 处理的结果转义字符没有处理
-- [ ] 文件管理：（1）文件选择的时候会跨数据库；（2）文件校验会算上失败的文件；
-- [ ] Tasker 中获取历史任务的时候，仅获取 top100 个 task。
+- [x] 支持 MinerU 2.5 的解析方法 <Badge type="info" text="0.3.5" />
+- [x] 文件管理：（1）文件选择的时候会跨数据库；（2）文件校验会算上失败的文件；
+- [x] Tasker 中获取历史任务的时候，仅获取 top100 个 task。
 
 
 ## Later

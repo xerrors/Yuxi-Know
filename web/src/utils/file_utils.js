@@ -38,6 +38,10 @@ export const getFileIcon = (filename) => {
     'bmp': FileImageFilled,
     'svg': FileImageFilled,
     'webp': FileImageFilled,
+
+    // HTML文件
+    'html': FileTextFilled,
+    'htm': FileTextFilled,
   }
 
   return iconMap[extension] || FileUnknownFilled
@@ -79,6 +83,10 @@ export const getFileIconColor = (filename) => {
     'bmp': '#722ed1',
     'svg': '#722ed1',
     'webp': '#722ed1',
+
+    // HTML文件 - 橙色
+    'html': '#fa8c16',
+    'htm': '#fa8c16',
   }
 
   return colorMap[extension] || '#8c8c8c'

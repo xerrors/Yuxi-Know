@@ -10,12 +10,21 @@
         >添加文件</a-button>
       </div>
       <div class="panel-actions">
+        <a-input
+          v-model:value="filenameFilter"
+          placeholder="搜索文件名"
+          size="small"
+          class="action-searcher"
+          allow-clear
+          @change="onFilterChange"
+        />
         <a-button
           type="text"
           @click="handleRefresh"
           :loading="refreshing"
-          :icon="h(ReloadOutlined)"
+          :icon="h(RefreshCcw)"
           title="刷新"
+          class="panel-action-btn"
         />
         <!-- <a-button
           @click="toggleAutoRefresh"
@@ -26,22 +35,14 @@
         >
           Auto
         </a-button> -->
-        <a-input
-          v-model:value="filenameFilter"
-          placeholder="搜索文件名"
-          size="small"
-          style="width: 120px; margin-right: 8px; border-radius: 6px; padding: 4px 8px;"
-          allow-clear
-          @change="onFilterChange"
-        />
-        <!-- <a-button
+        <a-button
           type="text"
           @click="toggleRightPanel"
           :icon="h(ChevronLast)"
           title="切换右侧面板"
           class="panel-action-btn expand"
           :class="{ 'expanded': props.rightPanelVisible }"
-        /> -->
+        />
       </div>
     </div>
 
@@ -134,10 +135,9 @@ import {
   ClockCircleFilled,
   DeleteOutlined,
   PlusOutlined,
-  ReloadOutlined,
   DownloadOutlined,
 } from '@ant-design/icons-vue';
-import { ChevronLast } from 'lucide-vue-next';
+import { ChevronLast, RefreshCcw } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
 const userStore = useUserStore();
@@ -403,6 +403,14 @@ import { parseToShanghai } from '@/utils/time';
   display: flex;
   align-items: center;
   gap: 6px;
+
+  .action-searcher {
+    width: 120px;
+    margin-right: 8px;
+    border-radius: 6px;
+    padding: 4px 8px;
+    border: none;
+  }
 }
 
 .batch-actions-compact {
@@ -500,25 +508,27 @@ import { parseToShanghai } from '@/utils/time';
 }
 
 .panel-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
-  border: 1px solid var(--gray-300);
-  background-color: var(--gray-50);
+  /* border: 1px solid var(--gray-300); */
+  /* background-color: var(--gray-50); */
   color: var(--gray-700);
   transition: all 0.1s ease;
+  font-size: 12px;
+
+  svg {
+    height: 16px;
+  }
 
   &.expand {
     transform: scaleX(-1);
   }
-}
 
-.panel-action-btn.expanded {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transform: scaleX(1);
-  padding: 4px;
+  &.expanded {
+    transform: scaleX(1);
+  }
 }
 
 .panel-action-btn.auto-refresh-btn.ant-btn-primary {
@@ -535,17 +545,17 @@ import { parseToShanghai } from '@/utils/time';
 .panel-action-btn:hover {
   background-color: var(--main-5);
   color: var(--main-color);
+  border: 1px solid var(--main-color);
 }
 
-.panel-action-btn.expanded:hover {
-  background-color: var(--main-5);
-  border-color: var(--main-color);
-  color: var(--main-color);
-}
 
 /* Table row selection styling */
 :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
   background-color: var(--main-5);
+}
+
+:deep(.ant-table-tbody > tr.ant-table-row-selected.ant-table-row:hover > td) {
+  background-color: var(--main-20);
 }
 
 :deep(.ant-table-tbody > tr:hover > td) {

@@ -40,6 +40,8 @@ export const useDatabaseStore = defineStore('database', () => {
   });
 
   let refreshInterval = null;
+  let autoRefreshSource = null; // Tracks whether auto-refresh was user-triggered or automatic
+  let autoRefreshManualOverride = false; // Indicates user explicitly disabled auto-refresh
 
   // Actions
   async function getDatabaseInfo(id) {
@@ -51,6 +53,7 @@ export const useDatabaseStore = defineStore('database', () => {
     try {
       const data = await databaseApi.getDatabaseInfo(db_id);
       database.value = data;
+      ensureAutoRefreshForProcessing(data?.files);
       await loadQueryParams(db_id);
     } catch (error) {
       console.error(error);
@@ -180,6 +183,40 @@ export const useDatabaseStore = defineStore('database', () => {
     });
   }
 
+  const processingStatuses = new Set(['processing', 'waiting']);
+
+  function enableAutoRefresh(source = 'auto') {
+    if (autoRefreshManualOverride && source === 'auto') {
+      return;
+    }
+
+    if (!state.autoRefresh) {
+      state.autoRefresh = true;
+      autoRefreshSource = source;
+      autoRefreshManualOverride = false;
+      startAutoRefresh();
+      return;
+    }
+
+    if (source === 'auto' && autoRefreshSource !== 'manual') {
+      autoRefreshSource = 'auto';
+    }
+  }
+
+  function ensureAutoRefreshForProcessing(filesMap) {
+    const files = Object.values(filesMap || {});
+    const hasPending = files.some((file) => file && processingStatuses.has(file.status));
+    if (hasPending) {
+      enableAutoRefresh('auto');
+    } else if (autoRefreshSource === 'auto' && state.autoRefresh) {
+      state.autoRefresh = false;
+      autoRefreshSource = null;
+      autoRefreshManualOverride = false;
+      stopAutoRefresh();
+    }
+    return hasPending;
+  }
+
   async function addFiles({ items, contentType, params }) {
     if (items.length === 0) {
       message.error(contentType === 'file' ? '请先上传文件' : '请输入有效的网页链接');
@@ -191,6 +228,7 @@ export const useDatabaseStore = defineStore('database', () => {
       const data = await documentApi.addDocuments(databaseId.value, items, { ...params, content_type: contentType });
       if (data.status === 'success' || data.status === 'queued') {
         const itemType = contentType === 'file' ? '文件' : 'URL';
+        enableAutoRefresh('auto');
         message.success(data.message || `${itemType}已提交处理，请在任务中心查看进度`);
         if (data.task_id) {
           taskerStore.registerQueuedTask({
@@ -299,10 +337,15 @@ export const useDatabaseStore = defineStore('database', () => {
   }
 
   function toggleAutoRefresh() {
-    state.autoRefresh = !state.autoRefresh;
-    if (state.autoRefresh) {
+    const nextState = !state.autoRefresh;
+    state.autoRefresh = nextState;
+    if (nextState) {
+      autoRefreshSource = 'manual';
+      autoRefreshManualOverride = false;
       startAutoRefresh();
     } else {
+      autoRefreshManualOverride = true;
+      autoRefreshSource = null;
       stopAutoRefresh();
     }
   }

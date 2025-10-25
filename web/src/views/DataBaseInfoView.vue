@@ -175,8 +175,15 @@ const toggleGraphMaximize = () => {
   isGraphMaximized.value = !isGraphMaximized.value;
 };
 
+const resetFileSelectionState = () => {
+  store.selectedRowKeys = [];
+  store.selectedFile = null;
+  store.state.fileDetailModalVisible = false;
+};
+
 watch(() => route.params.database_id, async (newId) => {
     store.databaseId = newId;
+    resetFileSelectionState();
     store.stopAutoRefresh();
     await store.getDatabaseInfo(newId);
     store.startAutoRefresh();
@@ -187,6 +194,7 @@ watch(() => route.params.database_id, async (newId) => {
 // 组件挂载时启动示例轮播
 onMounted(() => {
   store.databaseId = route.params.database_id;
+  resetFileSelectionState();
   store.getDatabaseInfo();
   store.startAutoRefresh();
 

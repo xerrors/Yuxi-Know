@@ -359,6 +359,8 @@ class KnowledgeBaseManager:
         for file_info in kb_instance.files_meta.values():
             if file_info.get("database_id") != db_id:
                 continue
+            if file_info.get("status") == "failed":
+                continue
             if file_info.get("content_hash") == content_hash:
                 return True
 
