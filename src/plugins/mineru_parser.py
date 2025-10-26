@@ -116,25 +116,14 @@ class MinerUParser(BaseDocumentProcessor):
                 f"不支持的文件类型: {file_ext}", self.get_service_name(), "unsupported_file_type"
             )
 
-        # 先检查服务健康状态
-        health = self.check_health()
-        if health["status"] != "healthy":
-            raise DocumentParserException(
-                f"MinerU 服务不可用: {health['message']}", self.get_service_name(), health["status"]
-            )
-
         # 解析参数
         params = params or {}
 
         # 构建请求数据 - 只保留核心参数
         data = {
             "lang_list": params.get("lang_list", ["ch"]),
-            "backend": params.get("backend", "pipeline"),
+            "backend": params.get("backend", "vlm-http-client"),
             "parse_method": params.get("parse_method", "auto"),
-            "formula_enable": params.get("formula_enable", True),
-            "table_enable": params.get("table_enable", True),
-            "start_page_id": params.get("start_page_id", 0),
-            "end_page_id": params.get("end_page_id", 99999),
             # 固定返回 markdown 格式
             "return_md": True,
         }

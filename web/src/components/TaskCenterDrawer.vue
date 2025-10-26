@@ -59,7 +59,7 @@
             <a-progress
               :percent="Math.round(task.progress || 0)"
               :status="progressStatus(task.status)"
-              stroke-width="6"
+              stroke-width=6
               />
             <!-- <span class="task-card-progress-value">{{ Math.round(task.progress || 0) }}%</span> -->
           </div>
