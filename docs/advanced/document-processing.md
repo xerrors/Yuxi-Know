@@ -21,6 +21,15 @@ docker compose up -d api
 
 ### 2. 高精度 OCR (MinerU)
 
+需要配置：
+
+```bash
+MINERU_VL_SERVER=http://localhost:30000
+MINERU_API_URI=http://localhost:30001
+```
+
+然后启动相关服务
+
 ```bash
 # 需要 GPU，启动 MinerU 服务
 docker compose up -d mineru-vllm-server mineru-api

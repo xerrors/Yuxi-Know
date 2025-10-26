@@ -217,6 +217,8 @@ services:
     container_name: mineru
     profiles:
       - all
+    env_file:
+      - .env
     ports:
       - 30000:30000
     environment:
@@ -253,6 +255,8 @@ services:
     container_name: mineru-api
     profiles:
       - all
+    env_file:
+      - .env
     ports:
       - 30001:30001
     environment:

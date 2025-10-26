@@ -97,6 +97,11 @@
         </a-form>
       </div>
 
+            <!-- PDF/图片OCR提醒 -->
+      <div v-if="uploadMode === 'file' && hasPdfOrImageFiles && !isOcrEnabled" class="ocr-warning-alert">
+        ⚠️ 检测到PDF或图片文件，请启用OCR功能以提取文本内容
+      </div>
+
       <!-- 文件上传区域 -->
       <div class="upload" v-if="uploadMode === 'file'">
         <a-upload-dragger
@@ -187,6 +192,7 @@ import {
   LinkOutlined,
   SettingOutlined,
   CheckCircleOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons-vue';
 import { h } from 'vue';
 
@@ -336,6 +342,36 @@ const isQaSplitSupported = computed(() => {
 const isGraphBased = computed(() => {
   const type = kbType.value?.toLowerCase();
   return type === 'lightrag';
+});
+
+// 计算属性：是否启用了OCR
+const isOcrEnabled = computed(() => {
+  return chunkParams.value.enable_ocr !== 'disable';
+});
+
+// 计算属性：是否有PDF或图片文件
+const hasPdfOrImageFiles = computed(() => {
+  if (fileList.value.length === 0) {
+    return false;
+  }
+
+  const pdfExtensions = ['.pdf'];
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.gif', '.webp'];
+  const ocrExtensions = [...pdfExtensions, ...imageExtensions];
+
+  return fileList.value.some(file => {
+    if (file.status !== 'done') {
+      return false;
+    }
+
+    const filePath = file.response?.file_path || file.name;
+    if (!filePath) {
+      return false;
+    }
+
+    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    return ocrExtensions.includes(ext);
+  });
 });
 
 // 计算属性：OCR选项
@@ -676,5 +712,16 @@ const chunkData = async () => {
 
 .chunk-config-content .params-info {
   margin-bottom: 16px;
+}
+
+// OCR警告提醒样式
+.ocr-warning-alert {
+  margin: 12px 0;
+  padding: 8px 12px;
+  background: #fff7e6;
+  border: 1px solid #ffd666;
+  border-radius: 4px;
+  color: #d46b08;
+  font-size: 13px;
 }
 </style>
