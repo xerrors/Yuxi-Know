@@ -21,7 +21,7 @@ MILVUS_AVAILABLE = True
 
 
 class MilvusKB(KnowledgeBase):
-    """基于 Milvus 的生产级向量知识库实现"""
+    """基于 Milvus 的生产级向量库"""
 
     def __init__(self, work_dir: str, **kwargs):
         """

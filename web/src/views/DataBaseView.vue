@@ -76,6 +76,20 @@
         placeholder="新建知识库描述"
         :auto-size="{ minRows: 5, maxRows: 10 }"
       />
+
+      <h3 style="margin-top: 20px;">隐私设置</h3>
+      <div class="privacy-config">
+        <a-switch
+          v-model:checked="newDatabase.is_private"
+          checked-children="私有"
+          un-checked-children="公开"
+          size="default"
+        />
+        <span style="margin-left: 12px;">设置为私有知识库</span>
+        <a-tooltip title="在部分智能体的设计中，可以根据隐私标志来决定启用什么模型和策略。例如，对于私有知识库，可以选择更严格的数据处理和访问控制策略，以保护敏感信息的安全性和隐私性。">
+          <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help;" />
+        </a-tooltip>
+      </div>
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button key="submit" type="primary" :loading="state.creating" @click="createDatabase">创建</a-button>
@@ -104,6 +118,12 @@
         :key="database.db_id"
         class="database dbcard"
         @click="navigateToDatabase(database.db_id)">
+        <!-- 私有知识库锁定图标 -->
+        <LockOutlined
+          v-if="database.metadata?.is_private"
+          class="private-lock-icon"
+          title="私有知识库"
+        />
         <div class="top">
           <div class="icon">
             <component :is="getKbTypeIcon(database.kb_type || 'lightrag')" />
@@ -132,7 +152,7 @@
           >
             {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
           </a-tag>
-        </div>
+          </div>
 
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
@@ -146,6 +166,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { useConfigStore } from '@/stores/config';
 import { message } from 'ant-design-vue'
 import { BookPlus, Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
+import { LockOutlined, InfoCircleOutlined } from '@ant-design/icons-vue';
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
@@ -189,6 +210,7 @@ const emptyEmbedInfo = {
   description: '',
   embed_model_name: configStore.config?.embed_model,
   kb_type: 'chroma', // 默认为 Milvus
+  is_private: false, // 默认为公开知识库
   // Vector 知识库特有配置
   storage: '', // 存储方式配置
   // LightRAG 特有配置
@@ -391,7 +413,9 @@ const createDatabase = () => {
     description: newDatabase.description?.trim() || '',
     embed_model_name: newDatabase.embed_model_name || configStore.config.embed_model,
     kb_type: newDatabase.kb_type,
-    additional_params: {}
+    additional_params: {
+      is_private: newDatabase.is_private || false
+    }
   }
 
   // 添加类型特有的配置
@@ -450,6 +474,12 @@ onMounted(() => {
     margin: 12px 0;
   }
 
+  .privacy-config {
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
   .kb-type-cards {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -473,7 +503,6 @@ onMounted(() => {
 
       &:hover {
         border-color: var(--main-color);
-        transform: translateY(-1px);
       }
 
       // 为不同知识库类型设置不同的悬停颜色
@@ -577,7 +606,7 @@ onMounted(() => {
         color: var(--gray-600);
         line-height: 1.5;
         margin-bottom: 12px;
-        min-height: 40px;
+        // min-height: 40px;
       }
 
       .card-features {
@@ -687,6 +716,19 @@ onMounted(() => {
   cursor: pointer;
   display: flex;
   flex-direction: column;
+  position: relative; // 为绝对定位的锁定图标提供参考
+
+  .private-lock-icon {
+    position: absolute;
+    top: 24px;
+    right: 16px;
+    color: var(--gray-700);
+    background: var(--gray-100);
+    font-size: 12px;
+    border-radius: 6px;
+    padding: 5px;
+    z-index: 1;
+  }
 
   .top {
     display: flex;

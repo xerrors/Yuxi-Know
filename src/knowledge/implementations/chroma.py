@@ -20,7 +20,7 @@ from src.utils.datetime_utils import utc_isoformat
 
 
 class ChromaKB(KnowledgeBase):
-    """基于 ChromaDB 的向量知识库实现"""
+    """基于 ChromaDB 的向量库"""
 
     def __init__(self, work_dir: str, **kwargs):
         """

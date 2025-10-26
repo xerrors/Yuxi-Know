@@ -136,7 +136,12 @@ class KnowledgeBase(ABC):
         """
         from src.utils import hashstr
 
-        db_id = f"kb_{hashstr(database_name, with_salt=True)}"
+        from src.utils import hashstr
+
+        # 从 kwargs 中获取 is_private 配置
+        is_private = kwargs.get('is_private', False)
+        prefix = "kb_private_" if is_private else "kb_"
+        db_id = f"{prefix}{hashstr(database_name, with_salt=True)}"
 
         # 创建数据库记录
         # 确保 Pydantic 模型被转换为字典，以便 JSON 序列化
