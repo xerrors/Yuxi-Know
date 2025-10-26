@@ -73,18 +73,19 @@
 
           <div class="task-card-footer">
             <div class="task-card-timestamps">
-              <span v-if="task.started_at">开始: {{ formatTime(task.started_at, 'short') }}</span>
-              <span v-if="task.completed_at">完成: {{ formatTime(task.completed_at, 'short') }}</span>
+              <span v-if="task.started_at">开始: {{ formatTime(task.started_at) }}</span>
+              <span v-if="task.completed_at">完成: {{ formatTime(task.completed_at) }}</span>
               <span v-if="!task.started_at">创建: {{ formatTime(task.created_at, 'short') }}</span>
             </div>
             <div class="task-card-actions">
-              <a-button type="link" size="small" @click="handleDetail(task.id)">
+              <a-button type="link" size="small" @click="handleDetail(task.id)" style="color: var(--gray-500);">
                 详情
               </a-button>
               <a-button
                 type="link"
                 size="small"
                 danger
+                v-if="canCancel(task)"
                 :disabled="!canCancel(task)"
                 @click="handleCancel(task.id)"
               >
@@ -394,18 +395,18 @@ function canCancel(task) {
 
 .task-card {
   background: #ffffff;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--gray-100);
   border-radius: 12px;
   padding: 16px 18px;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   // box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .task-card:hover {
-  border-color: rgba(59, 130, 246, 0.3);
+  border-color: var(--gray-200);;
 }
 
 .task-card--active {
@@ -413,7 +414,7 @@ function canCancel(task) {
 }
 
 .task-card--success {
-  background: linear-gradient(to bottom, #ffffff, #f7fff9);
+  background: linear-gradient(to bottom, #ffffff, #fafffb);
 }
 
 .task-card--failed {
@@ -516,7 +517,7 @@ function canCancel(task) {
 .task-card-timestamps {
   display: flex;
   flex-direction: row;
-  gap: 6px;
+  gap: 10px;
   font-size: 12px;
   color: #94a3b8;
 }
@@ -555,7 +556,7 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #dcfce7;
+  background: #f3fff8;
   font-size: 14px;
 }
 

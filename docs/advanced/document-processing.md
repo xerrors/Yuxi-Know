@@ -116,38 +116,36 @@ docker compose up -d api
 
 ### 文件上传脚本
 
-使用 `scripts/batch_upload.py upload` 批量上传文件到知识库：
+使用 `scripts/batch_upload.py` 批量上传文件到知识库：
 
 ```bash
-# 批量上传文档
-uv run scripts/batch_upload.py upload \
-    --db-id your_kb_id \
-    --directory path/to/your/data \
-    --pattern "*.docx" \
-    --base-url http://127.0.0.1:5050/api \
-    --username your_username \
-    --password your_password \
-    --concurrency 4 \
+# 批量上传文档（多种格式）
+uv run scripts/batch_upload.py \
+    --db-id kb_b2730ad6801b149694021106c7eddd38 \
+    --directory data.nogit/农业农村局 \
+    --pattern "*.docx" --pattern "*.txt" --pattern "*.html" \
+    --base-url http://172.19.13.6:5050/api \
+    --username admin \
+    --password admin123 \
+    --batch-size 20 \
+    --wait-for-completion \
+    --poll-interval 5 \
     --recursive \
-    --record-file scripts/tmp/batch_processed_files.txt
+    --record-file scripts/tmp/batch_processed_files_1029.txt
 ```
 
 **参数说明**:
 - `--db-id`: 目标知识库 ID
 - `--directory`: 文件目录路径
-- `--pattern`: 文件匹配模式
-- `--concurrency`: 并发处理数量
+- `--pattern`: 文件匹配模式，可以多次指定以支持多种格式（例如：`--pattern "*.docx" --pattern "*.pdf" --pattern "*.html"`）
+- `--batch-size`: 每批处理的文件数量（默认20）
+- `--wait-for-completion`: 是否等待任务完成再处理下一批（默认开启）
+- `--poll-interval`: 任务状态检查间隔，单位秒（默认5秒）
 - `--recursive`: 递归处理子目录
 - `--record-file`: 处理记录文件路径
 
-提示：系统按“内容哈希”进行去重；同一知识库已存在相同内容的文件会被拒绝（409）。
-
-### 脚本功能
-
-- **进度跟踪**: 实时显示处理进度
-- **错误处理**: 自动跳过无法处理的文件
-- **断点续传**: 支持中断后继续处理
-- **日志记录**: 详细记录处理过程
-- **结果统计**: 处理完成后显示统计信息
-
-更多关于“入库参数、导出数据、支持类型”等，请参阅：介绍 → 知识库与知识图谱 → 文档管理。
+**注意事项**:
+- 系统按"内容哈希"进行去重；同一知识库已存在相同内容的文件会被拒绝（409）
+- 建议根据系统性能调整批次大小
+- 大量文件处理时建议开启分批等待功能
+- 先上传后处理的机制更稳定，适合大批量文档导入

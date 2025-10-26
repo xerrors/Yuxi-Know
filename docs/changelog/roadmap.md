@@ -7,13 +7,12 @@
 
 ## Bugs
 
-- [x] 修复本地知识库的 metadata 和 向量数据库中不一致的情况。
+- [ ] v1 版本的 LangGraph 的工具渲染有问题
+- [ ] upload 接口会阻塞主进程
 
 ## Next
 
-- [x] 修改现有的智能体Demo，并尽量将默认助手的特性兼容到 LangGraph 的 [`create_agent`](https://docs.langchain.com/oss/python/langchain/agents) 中
-- [x] 基于 create_agent 创建 SQL Viewer 智能体 <Badge type="info" text="0.3.5" />
-- [x] 优化 MCP 逻辑，支持 common + special 创建方式 <Badge type="info" text="0.3.5" />
+- [ ] 新建 DeepAgents 智能体
 - [ ] 添加对于上传文件的支持
 - [ ] 统一图谱数据结构，优化可视化方式 [#298](https://github.com/xerrors/Yuxi-Know/issues/298) <Badge type="info" text="0.4" />
 - [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
@@ -37,3 +36,7 @@
 - [x] 支持 MinerU 2.5 的解析方法 <Badge type="info" text="0.3.5" />
 - [x] 文件管理：（1）文件选择的时候会跨数据库；（2）文件校验会算上失败的文件；
 - [x] Tasker 中获取历史任务的时候，仅获取 top100 个 task。
+- [x] 修改现有的智能体Demo，并尽量将默认助手的特性兼容到 LangGraph 的 [`create_agent`](https://docs.langchain.com/oss/python/langchain/agents) 中
+- [x] 基于 create_agent 创建 SQL Viewer 智能体 <Badge type="info" text="0.3.5" />
+- [x] 优化 MCP 逻辑，支持 common + special 创建方式 <Badge type="info" text="0.3.5" />
+- [x] 修复本地知识库的 metadata 和 向量数据库中不一致的情况。
