@@ -33,8 +33,8 @@
         <span v-else-if="message.error_type === 'unexpect'">生成过程中出现异常</span>
       </div>
 
-      <div v-if="message.tool_calls && Object.keys(message.tool_calls).length > 0" class="tool-calls-container">
-        <div v-for="(toolCall, index) in message.tool_calls || {}" :key="index" class="tool-call-container">
+      <div v-if="validToolCalls && validToolCalls.length > 0" class="tool-calls-container">
+        <div v-for="(toolCall, index) in validToolCalls" :key="toolCall.id || index" class="tool-call-container">
           <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
             <div class="tool-header" @click="toggleToolCall(toolCall.id)">
               <span v-if="!toolCall.tool_call_result">
@@ -47,15 +47,17 @@
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
-              <div class="tool-params" v-if="toolCall.args || toolCall.function.arguments">
+              <div class="tool-params" v-if="toolCall.args || toolCall.function?.arguments">
                 <div class="tool-params-content">
-                  <strong>参数:</strong> {{ toolCall.args || toolCall.function.arguments }}
+                  <strong>参数:</strong>
+                  <span v-if="getFormattedToolArgs(toolCall)">{{ getFormattedToolArgs(toolCall) }}</span>
+                  <span v-else>{{ toolCall.args || toolCall.function?.arguments }}</span>
                 </div>
               </div>
               <div class="tool-result" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
                 <div class="tool-result-content" :data-tool-call-id="toolCall.id">
                   <ToolResultRenderer
-                    :tool-name="toolCall.name || toolCall.function.name"
+                    :tool-name="toolCall.name || toolCall.function?.name"
                     :result-content="toolCall.tool_call_result.content"
                   />
                 </div>
@@ -146,13 +148,51 @@ const { availableTools } = storeToRefs(agentStore);
 
 // 工具相关方法
 const getToolNameByToolCall = (toolCall) => {
-  const toolId = toolCall.name || toolCall.function.name;
+  const toolId = toolCall.name || toolCall.function?.name;
   const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
   const tool = toolsList.find(t => t.id === toolId);
   return tool ? tool.name : toolId;
 };
 
+const getFormattedToolArgs = (toolCall) => {
+  const args = toolCall.args || toolCall.function?.arguments;
+  if (!args) return '';
+
+  try {
+    // 尝试解析JSON格式的参数
+    if (typeof args === 'string' && args.trim().startsWith('{')) {
+      const parsed = JSON.parse(args);
+      return JSON.stringify(parsed, null, 2);
+    }
+  } catch (e) {
+    // 如果解析失败，直接返回原始字符串
+  }
+
+  return args;
+};
+
+// 过滤有效的工具调用
+const validToolCalls = computed(() => {
+  if (!props.message.tool_calls || !Array.isArray(props.message.tool_calls)) {
+    return [];
+  }
+
+  return props.message.tool_calls.filter(toolCall => {
+    // 过滤掉无效的工具调用
+    return toolCall &&
+           (toolCall.id || toolCall.name) &&
+           (toolCall.args !== undefined ||
+            toolCall.function?.arguments !== undefined ||
+            toolCall.tool_call_result !== undefined);
+  });
+});
+
 const parsedData = computed(() => {
+  // 调试工具调用处理
+  if (validToolCalls.value && validToolCalls.value.length > 0) {
+    console.log('Valid tool calls in message:', validToolCalls.value);
+  }
+
   // Start with default values from the prop to avoid mutation.
   let content = props.message.content.trim() || '';
   let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';

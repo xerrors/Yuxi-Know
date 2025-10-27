@@ -388,6 +388,7 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
 const _processStreamChunk = (chunk, threadId) => {
   const { status, msg, request_id, message } = chunk;
   const threadState = getThreadState(threadId);
+  // console.log('msg:', msg);
 
   if (!threadState) return false;
 

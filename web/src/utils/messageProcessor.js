@@ -12,8 +12,12 @@ export class MessageProcessor {
 
     // 构建工具响应映射
     for (const item of msgs) {
-      if (item.type === 'tool' && item.tool_call_id) {
-        toolResponseMap.set(item.tool_call_id, item);
+      if (item.type === 'tool') {
+        // 使用多种可能的ID字段来匹配工具调用
+        const toolCallId = item.tool_call_id || item.id;
+        if (toolCallId) {
+          toolResponseMap.set(toolCallId, item);
+        }
       }
     }
 
@@ -127,13 +131,14 @@ export class MessageProcessor {
         result.additional_kwargs.reasoning_content += chunk.additional_kwargs.reasoning_content;
       }
 
-      // 合并tool_calls
+      // 合并tool_calls (处理新的数据结构)
       MessageProcessor._mergeToolCalls(result, chunk);
     }
 
     // 处理AIMessageChunk类型
     if (result.type === 'AIMessageChunk') {
       result.type = 'ai';
+      // 将tool_calls从additional_kwargs移到顶层，并确保格式正确
       if (result.additional_kwargs?.tool_calls) {
         result.tool_calls = result.additional_kwargs.tool_calls;
       }
@@ -149,6 +154,7 @@ export class MessageProcessor {
    * @param {Object} chunk - 当前块
    */
   static _mergeToolCalls(result, chunk) {
+    // 1. 处理 additional_kwargs.tool_calls (旧格式，保持兼容性)
     if (chunk.additional_kwargs?.tool_calls) {
       if (!result.additional_kwargs) result.additional_kwargs = {};
       if (!result.additional_kwargs.tool_calls) result.additional_kwargs.tool_calls = [];
@@ -168,6 +174,100 @@ export class MessageProcessor {
           result.additional_kwargs.tool_calls.push(JSON.parse(JSON.stringify(toolCall)));
         }
       }
+    }
+
+    // 2. 处理顶层的 tool_calls (新格式)
+    if (chunk.tool_calls) {
+      if (!result.tool_calls) result.tool_calls = [];
+
+      for (const toolCall of chunk.tool_calls) {
+        // 过滤掉无效的工具调用（没有id或name的空对象）
+        if (!toolCall.id && !toolCall.name) {
+          continue;
+        }
+
+        const existingToolCall = result.tool_calls.find(t => t.id === toolCall.id);
+
+        if (existingToolCall) {
+          // 合并相同ID的tool call的args
+          if (toolCall.args && existingToolCall.args !== undefined) {
+            existingToolCall.args += toolCall.args;
+          }
+        } else {
+          // 添加新的tool call
+          result.tool_calls.push(JSON.parse(JSON.stringify(toolCall)));
+        }
+      }
+    }
+
+    // 3. 处理 tool_call_chunks (分片的工具调用参数)
+    if (chunk.tool_call_chunks) {
+      if (!result.tool_call_chunks) result.tool_call_chunks = [];
+
+      for (const toolCallChunk of chunk.tool_call_chunks) {
+        // 过滤掉无效的chunk（没有id、name和args的空对象）
+        if (!toolCallChunk.id && !toolCallChunk.name && !toolCallChunk.args) {
+          continue;
+        }
+
+        const existingChunk = result.tool_call_chunks.find(
+          t => (t.id === toolCallChunk.id || (t.index === toolCallChunk.index && t.index !== null))
+        );
+
+        if (existingChunk) {
+          // 合并参数字符串
+          if (toolCallChunk.args && existingChunk.args !== undefined) {
+            existingChunk.args += toolCallChunk.args;
+          }
+          // 更新工具名称
+          if (toolCallChunk.name && !existingChunk.name) {
+            existingChunk.name = toolCallChunk.name;
+          }
+        } else {
+          // 添加新的chunk
+          result.tool_call_chunks.push(JSON.parse(JSON.stringify(toolCallChunk)));
+        }
+      }
+    }
+
+    // 4. 同步 tool_call_chunks 到 tool_calls (构建完整的工具调用)
+    if (result.tool_call_chunks && result.tool_call_chunks.length > 0) {
+      if (!result.tool_calls) result.tool_calls = [];
+
+      for (const chunk of result.tool_call_chunks) {
+        if (chunk.name && chunk.args) {
+          const existingToolCall = result.tool_calls.find(t => t.id === chunk.id);
+
+          if (!existingToolCall) {
+            // 创建新的完整工具调用
+            result.tool_calls.push({
+              id: chunk.id,
+              name: chunk.name,
+              args: chunk.args,
+              type: 'tool_call'
+            });
+          } else {
+            // 更新现有工具调用的参数
+            existingToolCall.args = chunk.args;
+          }
+        }
+      }
+    }
+
+    // 5. 清理无效的工具调用
+    if (result.tool_calls) {
+      result.tool_calls = result.tool_calls.filter(toolCall => {
+        // 保留有id或有name的工具调用，并且不是空的args对象
+        return (toolCall.id || toolCall.name) &&
+               (toolCall.args !== undefined || toolCall.function?.arguments);
+      });
+    }
+
+    // 清理空的tool_call_chunks
+    if (result.tool_call_chunks) {
+      result.tool_call_chunks = result.tool_call_chunks.filter(chunk => {
+        return (chunk.id || chunk.name || chunk.args);
+      });
     }
   }
 

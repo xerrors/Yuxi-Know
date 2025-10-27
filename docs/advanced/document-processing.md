@@ -131,6 +131,7 @@ uv run scripts/batch_upload.py \
     --wait-for-completion \
     --poll-interval 5 \
     --recursive \
+    --enable-ocr mineru_ocr \ # mineru_official, paddlex_ocr, onnx_rapid_ocr
     --record-file scripts/tmp/batch_processed_files_1029.txt
 ```
 
