@@ -5,7 +5,12 @@ from pydantic import BaseModel, Field
 
 from src.utils import logger
 
-from .connection import MySQLConnectionManager, limit_result_size
+from .connection import (
+    MySQLConnectionManager,
+    QueryTimeoutError,
+    execute_query_with_timeout,
+    limit_result_size,
+)
 from .exceptions import MySQLConnectionError
 from .security import MySQLSecurityChecker
 
@@ -56,6 +61,7 @@ def mysql_list_tables() -> str:
         with conn_manager.get_cursor() as cursor:
             # 获取表名
             cursor.execute("SHOW TABLES")
+            logger.debug("Executed `SHOW TABLES` query")
             tables = cursor.fetchall()
 
             if not tables:
@@ -68,17 +74,18 @@ def mysql_list_tables() -> str:
                 table_names.append(table_name)
 
             # 获取每个表的行数信息
-            table_info = []
-            for table_name in table_names:
-                try:
-                    cursor.execute(f"SELECT COUNT(*) as count FROM `{table_name}`")
-                    count_result = cursor.fetchone()
-                    row_count = count_result["count"]
-                    table_info.append(f"- {table_name} (约 {row_count} 行)")
-                except Exception:
-                    table_info.append(f"- {table_name} (无法获取行数)")
+            # table_info = []
+            # for table_name in table_names:
+            #     try:
+            #         cursor.execute(f"SELECT COUNT(*) as count FROM `{table_name}`")
+            #         logger.debug(f"Executed `SELECT COUNT(*) FROM {table_name}` query")
+            #         count_result = cursor.fetchone()
+            #         row_count = count_result["count"]
+            #         table_info.append(f"- {table_name} (约 {row_count} 行)")
+            #     except Exception:
+            #         table_info.append(f"- {table_name} (无法获取行数)")
 
-            result = "数据库中的表:\n" + "\n".join(table_info)
+            result = "数据库中的表:\n" + "\n".join(table_names)
             logger.info(f"Retrieved {len(table_names)} tables from database")
             return result
 
@@ -116,9 +123,28 @@ def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"])
             if not columns:
                 return f"表 {table_name} 不存在或没有字段"
 
+            # 获取字段备注信息
+            column_comments: dict[str, str] = {}
+            try:
+                cursor.execute(
+                    """
+                    SELECT COLUMN_NAME, COLUMN_COMMENT
+                    FROM information_schema.COLUMNS
+                    WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s
+                    """,
+                    (table_name, conn_manager.database_name),
+                )
+                comment_rows = cursor.fetchall()
+                for row in comment_rows:
+                    column_name = row.get("COLUMN_NAME")
+                    if column_name:
+                        column_comments[column_name] = row.get("COLUMN_COMMENT") or ""
+            except Exception as e:
+                logger.warning(f"Failed to fetch column comments for table {table_name}: {e}")
+
             # 格式化输出
             result = f"表 `{table_name}` 的结构:\n\n"
-            result += "字段名\t\t类型\t\tNULL\t键\t默认值\t\t额外\n"
+            result += "字段名\t\t类型\t\tNULL\t键\t默认值\t\t额外\t备注\n"
             result += "-" * 80 + "\n"
 
             for col in columns:
@@ -128,9 +154,13 @@ def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"])
                 key_str = col["Key"] or ""
                 default_str = col.get("Default") or ""
                 extra_str = col.get("Extra") or ""
+                comment_str = column_comments.get(field, "")
 
                 # 格式化输出
-                result += f"{field:<16}\t{type_str:<16}\t{null_str:<8}\t{key_str:<4}\t{default_str:<16}\t{extra_str}\n"
+                result += (
+                    f"{field:<16}\t{type_str:<16}\t{null_str:<8}\t{key_str:<4}\t"
+                    f"{default_str:<16}\t{extra_str:<16}\t{comment_str}\n"
+                )
 
             # 获取索引信息
             try:
@@ -164,15 +194,13 @@ class QueryModel(BaseModel):
     """执行SQL查询的参数模型"""
 
     sql: str = Field(description="要执行的SQL查询语句（只能是SELECT语句）", example="SELECT * FROM users WHERE id = 1")
-    limit: int | None = Field(default=100, description="限制返回的最大行数，默认100，最大1000", ge=1, le=1000)
-    timeout: int | None = Field(default=10, description="查询超时时间（秒），默认10秒，最大60秒", ge=1, le=60)
+    timeout: int | None = Field(default=60, description="查询超时时间（秒），默认60秒，最大600秒", ge=1, le=600)
 
 
 @tool(name_or_callable="执行 SQL 查询", args_schema=QueryModel)
 def mysql_query(
     sql: Annotated[str, "要执行的SQL查询语句（只能是SELECT语句）"],
-    limit: Annotated[int | None, "限制返回的最大行数，默认100，最大1000"] = 100,
-    timeout: Annotated[int | None, "查询超时时间（秒），默认10秒，最大60秒"] = 10,
+    timeout: Annotated[int | None, "查询超时时间（秒），默认60秒，最大600秒"] = 60,
 ) -> str:
     """执行只读的SQL查询语句
 
@@ -181,7 +209,6 @@ def mysql_query(
 
     参数:
     - sql: SQL查询语句
-    - limit: 返回结果的最大行数（防止结果过大）
     - timeout: 查询超时时间（防止长时间运行的查询）
     """
     try:
@@ -189,88 +216,88 @@ def mysql_query(
         if not MySQLSecurityChecker.validate_sql(sql):
             return "SQL语句包含不安全的操作或可能的注入攻击，请检查SQL语句"
 
-        # 验证参数
-        if not MySQLSecurityChecker.validate_limit(limit):
-            return "limit参数必须在1-1000之间"
-
         if not MySQLSecurityChecker.validate_timeout(timeout):
-            return "timeout参数必须在1-60之间"
-
-        # 如果SQL中没有LIMIT，添加LIMIT子句
-        if "LIMIT" not in sql.upper() and "limit" not in sql:
-            sql_upper = sql.strip().upper()
-            # 确保是SELECT语句才添加LIMIT
-            if sql_upper.startswith("SELECT"):
-                sql = f"{sql} LIMIT {limit}"
+            return "timeout参数必须在1-600之间"
 
         conn_manager = get_connection_manager()
+        connection = conn_manager.get_connection()
 
-        with conn_manager.get_cursor() as cursor:
-            # 执行查询
-            cursor.execute(sql)
-            result = cursor.fetchall()
+        effective_timeout = timeout or 60
+        try:
+            result = execute_query_with_timeout(connection, sql, timeout=effective_timeout)
+        except QueryTimeoutError as timeout_error:
+            logger.error(f"MySQL query timed out after {effective_timeout} seconds: {timeout_error}")
+            raise
+        except Exception:
+            conn_manager.invalidate_connection()
+            raise
 
-            if not result:
-                return "查询执行成功，但没有返回任何结果"
+        if not result:
+            return "查询执行成功，但没有返回任何结果"
 
-            # 限制结果大小
-            limited_result = limit_result_size(result, max_chars=10000)
+        # 限制结果大小
+        limited_result = limit_result_size(result, max_chars=10000)
 
-            # 检查结果是否被截断
-            if len(limited_result) < len(result):
-                warning = f"\n\n⚠️ 警告: 查询结果过大，只显示了前 {len(limited_result)} 行（共 {len(result)} 行）。\n"
-                warning += "建议使用更精确的查询条件或使用LIMIT子句来减少返回的数据量。"
-            else:
-                warning = ""
+        # 检查结果是否被截断
+        if len(limited_result) < len(result):
+            warning = f"\n\n⚠️ 警告: 查询结果过大，只显示了前 {len(limited_result)} 行（共 {len(result)} 行）。\n"
+            warning += "建议使用更精确的查询条件或使用LIMIT子句来减少返回的数据量。"
+        else:
+            warning = ""
 
-            # 格式化输出
-            if limited_result:
-                # 获取列名
-                columns = list(limited_result[0].keys())
+        # 格式化输出
+        if limited_result:
+            # 获取列名
+            columns = list(limited_result[0].keys())
 
-                # 计算每列的最大宽度
-                col_widths = {}
-                for col in columns:
-                    col_widths[col] = max(len(str(col)), max(len(str(row.get(col, ""))) for row in limited_result))
-                    col_widths[col] = min(col_widths[col], 50)  # 限制最大宽度
+            # 计算每列的最大宽度
+            col_widths = {}
+            for col in columns:
+                col_widths[col] = max(len(str(col)), max(len(str(row.get(col, ""))) for row in limited_result))
+                col_widths[col] = min(col_widths[col], 50)  # 限制最大宽度
 
-                # 构建表头
-                header = "| " + " | ".join(f"{col:<{col_widths[col]}}" for col in columns) + " |"
-                separator = "|" + "|".join("-" * (col_widths[col] + 2) for col in columns) + "|"
+            # 构建表头
+            header = "| " + " | ".join(f"{col:<{col_widths[col]}}" for col in columns) + " |"
+            separator = "|" + "|".join("-" * (col_widths[col] + 2) for col in columns) + "|"
 
-                # 构建数据行
-                rows = []
-                for row in limited_result:
-                    row_str = "| " + " | ".join(f"{str(row.get(col, '')):<{col_widths[col]}}" for col in columns) + " |"
-                    rows.append(row_str)
+            # 构建数据行
+            rows = []
+            for row in limited_result:
+                row_str = "| " + " | ".join(f"{str(row.get(col, '')):<{col_widths[col]}}" for col in columns) + " |"
+                rows.append(row_str)
 
-                result_str = f"查询结果（共 {len(limited_result)} 行）:\n\n"
-                result_str += header + "\n" + separator + "\n"
-                result_str += "\n".join(rows[:50])  # 最多显示50行
+            result_str = f"查询结果（共 {len(limited_result)} 行）:\n\n"
+            result_str += header + "\n" + separator + "\n"
+            result_str += "\n".join(rows[:50])  # 最多显示50行
 
-                if len(rows) > 50:
-                    result_str += f"\n\n... 还有 {len(rows) - 50} 行未显示 ..."
+            if len(rows) > 50:
+                result_str += f"\n\n... 还有 {len(rows) - 50} 行未显示 ..."
 
-                result_str += warning
+            result_str += warning
 
-                logger.info(f"Query executed successfully, returned {len(limited_result)} rows")
-                return result_str
-            else:
-                return "查询执行成功，但没有返回任何结果"
+            logger.info(f"Query executed successfully, returned {len(limited_result)} rows")
+            return result_str
+
+        return "查询执行成功，但返回数据为空"
 
     except Exception as e:
-        error_msg = f"SQL查询执行失败: {str(e)}"
+        error_msg = f"SQL查询执行失败: {str(e)}\n\n{sql}"
 
         # 提供更有用的错误信息
         if "timeout" in str(e).lower():
             error_msg += "\n\n💡 建议：查询超时了，请尝试以下方法：\n"
             error_msg += "1. 减少查询的数据量（使用WHERE条件过滤）\n"
             error_msg += "2. 使用LIMIT子句限制返回行数\n"
-            error_msg += "3. 增加timeout参数值（最大60秒）"
+            error_msg += "3. 增加timeout参数值（最大600秒）"
         elif "table" in str(e).lower() and "doesn't exist" in str(e).lower():
             error_msg += "\n\n💡 建议：表不存在，请使用 mysql_list_tables 查看可用的表名"
         elif "column" in str(e).lower() and "doesn't exist" in str(e).lower():
             error_msg += "\n\n💡 建议：列不存在，请使用 mysql_describe_table 查看表结构"
+        elif "not enough arguments for format string" in str(e).lower():
+            error_msg += (
+                "\n\n💡 建议：SQL 中的百分号 (%) 被当作参数占位符使用。"
+                " 如需匹配包含百分号的文本，请将百分号写成双百分号 (%%) 或使用参数化查询。"
+            )
 
         logger.error(error_msg)
         return error_msg

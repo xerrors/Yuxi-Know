@@ -1,4 +1,4 @@
-import signal
+import concurrent.futures
 import threading
 import time
 from contextlib import contextmanager
@@ -93,47 +93,64 @@ class MySQLConnectionManager:
             pass
         return False
 
+    def _invalidate_connection(self, connection: pymysql.Connection | None = None):
+        """关闭并清理失效的连接"""
+        try:
+            if connection:
+                connection.close()
+        except Exception:
+            pass
+        finally:
+            self.connection = None
+
     @contextmanager
     def get_cursor(self):
         """获取数据库游标的上下文管理器"""
         max_retries = 2
+        cursor = None
+        connection = None
+        last_error: Exception | None = None
+
+        # 优先确保成功获取游标再交给调用方执行查询
         for attempt in range(max_retries):
             try:
                 connection = self._get_connection()
                 cursor = connection.cursor()
-
-                try:
-                    yield cursor
-                    connection.commit()
-                    break  # 成功，退出重试循环
-
-                except Exception as e:
-                    connection.rollback()
-
-                    # 如果是连接错误，尝试重新连接
-                    if "MySQL" in str(e) or "connection" in str(e).lower():
-                        if attempt < max_retries - 1:
-                            logger.warning(f"Connection error, retrying (attempt {attempt + 1}): {e}")
-                            # 强制重新连接
-                            if self.connection:
-                                try:
-                                    self.connection.close()
-                                except Exception as _:
-                                    pass
-                            self.connection = None
-                            time.sleep(1)
-                            continue
-
-                    raise e  # 其他错误直接抛出
-
-                finally:
-                    if cursor:
-                        cursor.close()
-
+                break
             except Exception as e:
+                last_error = e
+                logger.warning(f"Failed to acquire cursor (attempt {attempt + 1}): {e}")
+                self._invalidate_connection(connection)
+                cursor = None
+                connection = None
                 if attempt == max_retries - 1:
-                    raise e  # 最后一次尝试失败，抛出异常
+                    raise e
                 time.sleep(1)
+
+        if cursor is None or connection is None:
+            raise last_error or ConnectionError("Unable to acquire MySQL cursor")
+
+        try:
+            yield cursor
+            connection.commit()
+        except Exception as e:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+
+            # 标记连接失效，等待下一次获取时重建
+            if "MySQL" in str(e) or "connection" in str(e).lower():
+                logger.warning(f"MySQL connection error encountered, invalidating connection: {e}")
+                self._invalidate_connection(connection)
+
+            raise
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
 
     def close(self):
         """关闭数据库连接"""
@@ -141,6 +158,19 @@ class MySQLConnectionManager:
             self.connection.close()
             self.connection = None
             logger.info("MySQL connection closed")
+
+    def get_connection(self) -> pymysql.Connection:
+        """对外暴露的连接获取方法"""
+        return self._get_connection()
+
+    def invalidate_connection(self):
+        """手动标记连接失效"""
+        self._invalidate_connection(self.connection)
+
+    @property
+    def database_name(self) -> str:
+        """返回当前配置的数据库名称"""
+        return self.config["database"]
 
 
 class QueryTimeoutError(Exception):
@@ -156,25 +186,30 @@ class QueryResultTooLargeError(Exception):
 
 
 def execute_query_with_timeout(connection: pymysql.Connection, sql: str, params: tuple = None, timeout: int = 10):
-    """带超时的查询执行"""
+    """使用线程池实现超时控制，避免信号导致的生成器问题"""
 
-    def timeout_handler(_signum, _frame):
-        raise QueryTimeoutError(f"Query timeout after {timeout} seconds")
-
-    # 设置信号处理
-    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(timeout)
-
-    try:
+    def query_worker():
+        """查询工作函数，在单独线程中执行"""
         cursor = connection.cursor(DictCursor)
-        cursor.execute(sql, params or ())
-        result = cursor.fetchall()
-        cursor.close()
-        return result
-    finally:
-        # 恢复原始信号处理
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
+        try:
+            if params is None:
+                cursor.execute(sql)
+            else:
+                cursor.execute(sql, params)
+            result = cursor.fetchall()
+            return result
+        finally:
+            cursor.close()
+
+    # 使用线程池执行查询，设置超时
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(query_worker)
+        try:
+            return future.result(timeout=timeout)
+        except concurrent.futures.TimeoutError:
+            # 尝试取消任务
+            future.cancel()
+            raise QueryTimeoutError(f"Query timeout after {timeout} seconds")
 
 
 def limit_result_size(result: list, max_chars: int = 10000) -> list:

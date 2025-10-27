@@ -77,11 +77,6 @@ class MySQLSecurityChecker:
         return bool(re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", table_name))
 
     @classmethod
-    def validate_limit(cls, limit: int) -> bool:
-        """验证limit参数"""
-        return isinstance(limit, int) and 0 < limit <= 1000
-
-    @classmethod
     def validate_timeout(cls, timeout: int) -> bool:
         """验证timeout参数"""
-        return isinstance(timeout, int) and 1 <= timeout <= 60
+        return isinstance(timeout, int) and 1 <= timeout <= 600
