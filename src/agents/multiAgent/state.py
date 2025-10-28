@@ -9,9 +9,11 @@ from typing import Annotated
 from langchain.messages import AnyMessage
 from langgraph.graph import add_messages
 
+from src.agents.common.state import BaseState
+
 
 @dataclass
-class State:
+class State(BaseState):
     """Defines the input state for the agent, representing a narrower interface to the outside world.
 
     This class is used to define the initial state and structure of incoming data.
