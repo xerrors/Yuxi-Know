@@ -8,12 +8,13 @@
 ## Bugs
 
 - [ ] upload 接口会阻塞主进程
-- [ ] LightRAG 知识库查看不了解析后的文本
+- [ ] LightRAG 知识库查看不了解析后的文本，偶然出现，未复现
 
 ## Next
 
 - [ ] 新建 DeepAgents 智能体
 - [ ] 添加对于上传文件的支持
+- [ ] LightRAG 知识库应该可以支持修改 LLM
 - [ ] 统一图谱数据结构，优化可视化方式 [#298](https://github.com/xerrors/Yuxi-Know/issues/298) <Badge type="info" text="0.4" />
 - [ ] 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
 - [ ] 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />

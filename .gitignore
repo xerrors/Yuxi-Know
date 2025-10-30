@@ -25,6 +25,10 @@ logs
 *.lock
 tmp
 cache
+.cache
+.backup
+*.bak
+
 
 ### IDE
 .vscode
