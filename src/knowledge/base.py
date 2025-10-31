@@ -136,7 +136,6 @@ class KnowledgeBase(ABC):
         """
         from src.utils import hashstr
 
-        from src.utils import hashstr
 
         # 从 kwargs 中获取 is_private 配置
         is_private = kwargs.get('is_private', False)

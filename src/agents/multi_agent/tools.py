@@ -1,11 +1,9 @@
-import os
 from typing import Any
 
 from langchain.tools import tool
 from langchain_core.runnables import RunnableConfig
 
 from src.agents import agent_manager
-from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.agents.common.tools import get_buildin_tools
 from src.utils import logger
 

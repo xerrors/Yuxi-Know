@@ -31,7 +31,7 @@ def get_approved_user_goal(
     """
     # 构建详细的中断信息
     interrupt_info = {
-        "question": f"是否批准以下操作？",
+        "question": "是否批准以下操作？",
         "operation": operation_description,
     }
 

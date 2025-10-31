@@ -1,4 +1,4 @@
-from langgraph.constants import START, END
+from langgraph.constants import END
 from langgraph.graph import StateGraph
 
 from src.agents.common.toolagent import ToolAgent
@@ -18,10 +18,9 @@ def tools_branch_continue(state: State):
 
 
 class ReActAgent(ToolAgent):
-    name = "智能体 Demo"
-    description = "A react agent that can answer questions and help with tasks."
+    name = "ReActAgent"
+    description = "符合 ReAct 范式的智能体，可以通过调用工具来完成复杂任务。"
 
-    # TODO:[已完成] React智能体
     '''
     提示词示例：
     你是一个智能体助手
