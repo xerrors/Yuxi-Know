@@ -13,12 +13,12 @@ class SampleMultiAgent(ToolAgent):
     description = "Supervisor智能体，具有调用其他子智能体的能力(在工具中添加)"
 
     # TODO[已完成]: 通过将其他agent封装为工具的方式添加了多智能体调度
-    '''
+    """
     你是一个多智能体核心，通过多智能体调用的方式帮助用户完成一系列任务：
 
     1.当你需要知识库问答功能时，请调用对话聊天智能体实现
     2.当你需要加密计算的时候，请调用加密计算智能体实现
-    '''
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

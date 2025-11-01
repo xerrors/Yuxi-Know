@@ -134,9 +134,6 @@ export class MessageProcessor {
     // 处理AIMessageChunk类型
     if (result.type === 'AIMessageChunk') {
       result.type = 'ai';
-      if (result.additional_kwargs?.tool_calls) {
-        result.tool_calls = result.additional_kwargs.tool_calls;
-      }
     }
 
     return result;
@@ -149,23 +146,47 @@ export class MessageProcessor {
    * @param {Object} chunk - 当前块
    */
   static _mergeToolCalls(result, chunk) {
-    if (chunk.additional_kwargs?.tool_calls) {
-      if (!result.additional_kwargs) result.additional_kwargs = {};
-      if (!result.additional_kwargs.tool_calls) result.additional_kwargs.tool_calls = [];
+    if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
+      // 确保 result 有 tool_calls 数组
+      if (!result.tool_calls) result.tool_calls = [];
 
-      for (const toolCall of chunk.additional_kwargs.tool_calls) {
-        const existingToolCall = result.additional_kwargs.tool_calls.find(
-          t => (t.id === toolCall.id || t.index === toolCall.index)
+      for (const toolCallChunk of chunk.tool_call_chunks) {
+        // 使用 index 来标识工具调用（因为可能有多个工具调用）
+        const existingToolCallIndex = result.tool_calls.findIndex(
+          t => t.index === toolCallChunk.index
         );
 
-        if (existingToolCall) {
-          // 合并相同ID的tool call
-          if (existingToolCall.function && toolCall.function) {
-            existingToolCall.function.arguments += toolCall.function.arguments;
+        if (existingToolCallIndex !== -1) {
+          // 合并相同index的tool call
+          const existingToolCall = result.tool_calls[existingToolCallIndex];
+
+          // 更新名称和ID（如果存在）
+          if (toolCallChunk.name && !existingToolCall.function?.name) {
+            if (!existingToolCall.function) existingToolCall.function = {};
+            existingToolCall.function.name = toolCallChunk.name;
+          }
+
+          if (toolCallChunk.id && !existingToolCall.id) {
+            existingToolCall.id = toolCallChunk.id;
+          }
+
+          // 合并参数
+          if (toolCallChunk.args) {
+            if (!existingToolCall.function) existingToolCall.function = {};
+            if (!existingToolCall.function.arguments) existingToolCall.function.arguments = '';
+            existingToolCall.function.arguments += toolCallChunk.args;
           }
         } else {
           // 添加新的tool call
-          result.additional_kwargs.tool_calls.push(JSON.parse(JSON.stringify(toolCall)));
+          const newToolCall = {
+            index: toolCallChunk.index,
+            id: toolCallChunk.id,
+            function: {
+              name: toolCallChunk.name || null,
+              arguments: toolCallChunk.args || ''
+            }
+          };
+          result.tool_calls.push(newToolCall);
         }
       }
     }

@@ -29,7 +29,7 @@
           <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen  class="nav-btn-icon" size="18"/>
           </div>
-          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="isProcessing">
+          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="chatState.creatingNewChat">
             <MessageCirclePlus  class="nav-btn-icon"  size="18"/>
             <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
@@ -97,14 +97,14 @@
           </AgentMessageComponent>
           <!-- 显示对话最后一个消息使用的模型 -->
           <RefsComponent
-            v-if="getLastMessage(conv) && conv.status !== 'streaming'"
+            v-if="shouldShowRefs(conv)"
             :message="getLastMessage(conv)"
             :show-refs="['model', 'copy']"
             :is-latest-message="false"
           />
         </div>
 
-        <!-- 生成中的加载状态 -->
+        <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
         <div class="generating-status" v-if="isProcessing && conversations.length > 0">
           <div class="generating-indicator">
             <div class="loading-dots">
@@ -117,6 +117,15 @@
         </div>
       </div>
       <div class="bottom">
+        <!-- 人工审批弹窗 - 放在输入框上方 -->
+        <HumanApprovalModal
+          :visible="approvalState.showModal"
+          :question="approvalState.question"
+          :operation="approvalState.operation"
+          @approve="handleApprove"
+          @reject="handleReject"
+        />
+
         <div class="message-input-wrapper" v-if="conversations.length > 0">
           <MessageInputComponent
             v-model="userInput"
@@ -152,6 +161,8 @@ import { useAgentStore } from '@/stores/agent';
 import { storeToRefs } from 'pinia';
 import { MessageProcessor } from '@/utils/messageProcessor';
 import { agentApi, threadApi } from '@/apis';
+import HumanApprovalModal from '@/components/HumanApprovalModal.vue';
+import { useApproval } from '@/composables/useApproval';
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
@@ -179,6 +190,14 @@ const exampleQuestions = computed(() => {
     id: index + 1,
     text: text
   }));
+});
+
+// Keep per-thread streaming scratch data in a consistent shape.
+const createOnGoingConvState = () => ({
+  msgChunks: {},
+  currentRequestKey: null,
+  currentAssistantKey: null,
+  toolCallBuffers: {}
 });
 
 const chatState = reactive({
@@ -226,6 +245,18 @@ const currentThread = computed(() => {
 });
 
 const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || []);
+
+// 计算是否显示Refs组件的条件
+const shouldShowRefs = computed(() => {
+  return (conv) => {
+    return getLastMessage(conv) &&
+           conv.status !== 'streaming' &&
+           !approvalState.showModal &&
+           !(approvalState.threadId &&
+             chatState.currentThreadId === approvalState.threadId &&
+             isProcessing.value);
+  };
+});
 
 // 当前线程状态的computed属性
 const currentThreadState = computed(() => {
@@ -316,7 +347,7 @@ const getThreadState = (threadId) => {
     chatState.threadStates[threadId] = {
       isStreaming: false,
       streamAbortController: null,
-      onGoingConv: { msgChunks: {} }
+      onGoingConv: createOnGoingConvState()
     };
   }
   return chatState.threadStates[threadId];
@@ -349,11 +380,11 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
         // 延迟清空消息，给历史记录加载足够时间
         setTimeout(() => {
           if (threadState.onGoingConv) {
-            threadState.onGoingConv = { msgChunks: {} };
+            threadState.onGoingConv = createOnGoingConvState();
           }
         }, 100);
       } else {
-        threadState.onGoingConv = { msgChunks: {} };
+        threadState.onGoingConv = createOnGoingConvState();
       }
     }
   } else {
@@ -369,11 +400,11 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
         if (preserveMessages) {
           setTimeout(() => {
             if (threadState.onGoingConv) {
-              threadState.onGoingConv = { msgChunks: {} };
+              threadState.onGoingConv = createOnGoingConvState();
             }
           }, 100);
         } else {
-          threadState.onGoingConv = { msgChunks: {} };
+          threadState.onGoingConv = createOnGoingConvState();
         }
       }
     } else {
@@ -388,6 +419,7 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
 const _processStreamChunk = (chunk, threadId) => {
   const { status, msg, request_id, message } = chunk;
   const threadState = getThreadState(threadId);
+  // console.log('Processing stream chunk:', chunk, 'for thread:', threadId);
 
   if (!threadState) return false;
 
@@ -399,10 +431,10 @@ const _processStreamChunk = (chunk, threadId) => {
       if (msg.id) {
         if (!threadState.onGoingConv.msgChunks[msg.id]) {
           threadState.onGoingConv.msgChunks[msg.id] = [];
-        }
+                }
         threadState.onGoingConv.msgChunks[msg.id].push(msg);
       }
-      return false;
+        return false;
     case 'error':
       handleChatError({ message }, 'stream');
       // Stop the loading indicator
@@ -420,6 +452,9 @@ const _processStreamChunk = (chunk, threadId) => {
       fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
       resetOnGoingConv(threadId);
       return true;
+    case 'human_approval_required':
+      // 使用审批 composable 处理审批请求
+      return processApprovalInStream(chunk, threadId, currentAgentId.value);
     case 'finished':
       // 先标记流式结束，但保持消息显示直到历史记录加载完成
       if (threadState) {
@@ -542,6 +577,13 @@ const fetchThreadMessages = async ({ agentId, threadId }) => {
   }
 };
 
+// ==================== 审批功能管理 ====================
+const { approvalState, handleApproval, processApprovalInStream } = useApproval({
+  getThreadState,
+  resetOnGoingConv,
+  fetchThreadMessages
+});
+
 // 发送消息并处理流式响应
 const sendMessage = async ({ agentId, threadId, text, signal = undefined }) => {
   if (!agentId || !threadId || !text) {
@@ -590,7 +632,7 @@ const switchToFirstChatIfEmpty = async () => {
 };
 
 const createNewChat = async () => {
-  if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || isProcessing.value) return;
+  if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || chatState.creatingNewChat) return;
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
   if (await switchToFirstChatIfEmpty()) return;
@@ -603,6 +645,17 @@ const createNewChat = async () => {
   try {
     const newThread = await createThread(currentAgentId.value, '新的对话');
     if (newThread) {
+      // 中断之前线程的流式输出（如果存在）
+      const previousThreadId = chatState.currentThreadId;
+      if (previousThreadId) {
+        const previousThreadState = getThreadState(previousThreadId);
+        if (previousThreadState?.isStreaming && previousThreadState.streamAbortController) {
+          previousThreadState.streamAbortController.abort();
+          previousThreadState.isStreaming = false;
+          previousThreadState.streamAbortController = null;
+        }
+      }
+
       chatState.currentThreadId = newThread.id;
     }
   } catch (error) {
@@ -615,8 +668,17 @@ const createNewChat = async () => {
 const selectChat = async (chatId) => {
   if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '选择对话', handleValidationError)) return;
 
-  // 切换线程时，不再中断上一个线程的流式输出
-  // resetOnGoingConv(chatState.currentThreadId);
+  // 中断之前线程的流式输出（如果存在）
+  const previousThreadId = chatState.currentThreadId;
+  if (previousThreadId && previousThreadId !== chatId) {
+    const previousThreadState = getThreadState(previousThreadId);
+    if (previousThreadState?.isStreaming && previousThreadState.streamAbortController) {
+      previousThreadState.streamAbortController.abort();
+      previousThreadState.isStreaming = false;
+      previousThreadState.streamAbortController = null;
+    }
+  }
+
   chatState.currentThreadId = chatId;
   chatState.isLoadingMessages = true;
   try {
@@ -763,6 +825,106 @@ const handleSendOrStop = async () => {
   await handleSendMessage();
 };
 
+// ==================== 人工审批处理 ====================
+const handleApprovalWithStream = async (approved) => {
+  console.log('🔄 [STREAM] Starting resume stream processing');
+
+  const threadId = approvalState.threadId;
+  if (!threadId) {
+    message.error('无效的审批请求');
+    approvalState.showModal = false;
+    return;
+  }
+
+  const threadState = getThreadState(threadId);
+  if (!threadState) {
+    message.error('无法找到对应的对话线程');
+    approvalState.showModal = false;
+    return;
+  }
+
+  try {
+    // 使用审批 composable 处理审批
+    const response = await handleApproval(approved, currentAgentId.value);
+
+    if (!response) return; // 如果 handleApproval 抛出错误，这里不会执行
+
+    console.log('🔄 [STREAM] Processing resume streaming response');
+
+    // 处理流式响应
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let stopReading = false;
+
+    while (!stopReading) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        if (trimmedLine) {
+          try {
+            const chunk = JSON.parse(trimmedLine);
+            console.log('🔄 [STREAM] Processing chunk:', chunk);
+
+            // 处理chunk并更新对话 - _processStreamChunk 已经处理了所有必要的逻辑
+            if (_processStreamChunk(chunk, threadId)) {
+              stopReading = true;
+              break;
+            }
+
+          } catch (e) {
+            console.warn('Failed to parse stream chunk JSON:', e, 'Line:', trimmedLine);
+          }
+        }
+      }
+    }
+
+    if (!stopReading && buffer.trim()) {
+      try {
+        const chunk = JSON.parse(buffer.trim());
+        console.log('🔄 [STREAM] Processing final chunk:', chunk);
+
+        // 处理最终chunk - _processStreamChunk 已经处理了所有必要的逻辑
+        if (_processStreamChunk(chunk, threadId)) {
+          stopReading = true;
+        }
+
+      } catch (e) {
+        console.warn('Failed to parse final stream chunk JSON:', e);
+      }
+    }
+
+    console.log('🔄 [STREAM] Resume stream processing completed');
+
+  } catch (error) {
+    console.error('❌ [STREAM] Resume stream failed:', error);
+    if (error.name !== 'AbortError') {
+      console.error('Resume approval error:', error);
+      // handleChatError 已在 useApproval 中调用
+    }
+  } finally {
+    console.log('🔄 [STREAM] Cleaning up streaming state');
+    if (threadState) {
+      threadState.isStreaming = false;
+      threadState.streamAbortController = null;
+    }
+  }
+};
+
+const handleApprove = () => {
+  handleApprovalWithStream(true);
+};
+
+const handleReject = () => {
+  handleApprovalWithStream(false);
+};
+
 // ==================== UI HANDLERS ====================
 const handleKeyDown = (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -795,7 +957,6 @@ defineExpose({
   getExportPayload: buildExportPayload
 });
 
-const retryMessage = (msg) => { /* TODO */ };
 const toggleSidebar = () => {
   uiState.isSidebarOpen = !uiState.isSidebarOpen;
   localStorage.setItem('chat_sidebar_open', uiState.isSidebarOpen);
@@ -812,7 +973,24 @@ const getLastMessage = (conv) => {
 };
 
 const showMsgRefs = (msg) => {
-  if (msg.isLast) return ['copy'];
+  // 如果正在审批中，不显示 refs
+  if (approvalState.showModal) {
+    return false;
+  }
+
+  // 如果当前线程ID与审批线程ID匹配，但审批框已关闭（说明刚刚处理完审批）
+  // 且当前有新的流式处理正在进行，则不显示之前被中断的消息的 refs
+  if (approvalState.threadId &&
+      chatState.currentThreadId === approvalState.threadId &&
+      !approvalState.showModal &&
+      isProcessing) {
+    return false;
+  }
+
+  // 只有真正完成的消息才显示 refs
+  if (msg.isLast && msg.status === 'finished') {
+    return ['copy'];
+  }
   return false;
 };
 
@@ -874,6 +1052,7 @@ watch(currentAgentId, async (newAgentId, oldAgentId) => {
     }
   }
 }, { immediate: true });
+
 
 watch(conversations, () => {
   if (isProcessing.value) {

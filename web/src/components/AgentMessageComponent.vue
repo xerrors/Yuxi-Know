@@ -3,6 +3,8 @@
     <!-- 用户消息 -->
     <p v-if="message.type === 'human'" class="message-text">{{ message.content }}</p>
 
+    <p v-else-if="message.type === 'system'" class="message-text-system">{{ message.content }}</p>
+
     <!-- 助手消息 -->
     <div v-else-if="message.type === 'ai'" class="assistant-message">
       <div v-if="parsedData.reasoning_content" class="reasoning-box">
@@ -230,6 +232,19 @@ const toggleToolCall = (toolCallId) => {
     max-width: 100%;
     margin-bottom: 0;
     white-space: pre-line;
+  }
+
+  .message-text-system {
+    max-width: 100%;
+    margin-bottom: 0;
+    white-space: pre-line;
+    color: var(--gray-600);
+    font-style: italic;
+    font-size: 14px;
+    padding: 8px 12px;
+    background-color: var(--gray-50);
+    border-left: 3px solid var(--gray-300);
+    border-radius: 4px;
   }
 
   .err-msg {
