@@ -1,11 +1,12 @@
-from langgraph.constants import START, END
+from langgraph.constants import END
 from langgraph.graph import StateGraph
 
 from src.agents.common.toolagent import ToolAgent
 
-from .state import State
 from .context import Context
+from .state import State
 from .tools import get_tools
+
 
 def tools_branch_continue(state: State):
     messages = state.messages
@@ -18,8 +19,17 @@ def tools_branch_continue(state: State):
 
 
 class ReActAgent(ToolAgent):
-    name = "智能体 Demo"
-    description = "A react agent that can answer questions and help with tasks."
+    name = "ReActAgent"
+    description = "符合 ReAct 范式的智能体，可以通过调用工具来完成复杂任务。"
+
+    """
+    提示词示例：
+    你是一个智能体助手
+
+    你的所有需要计算的工作不能自己计算，只能通过调用加密计算机工具进行,你只能通过调用该工具的方式进行计算才能得到正确答案。计算顺序是正常的。
+
+    例如 2+3+2，你必须调用两次加密计算机工具进行运算，最终结果为9。
+    """
 
     # TODO:[已完成] React智能体
     '''

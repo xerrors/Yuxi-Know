@@ -137,7 +137,33 @@ export const agentApi = {
    * 获取所有可用工具的信息
    * @returns {Promise} - 工具信息列表
    */
-  getTools: (agentId) => apiGet(`/api/chat/tools?agent_id=${agentId}`)
+  getTools: (agentId) => apiGet(`/api/chat/tools?agent_id=${agentId}`),
+
+  /**
+   * 恢复被人工审批中断的对话（流式响应）
+   * @param {string} agentId - 智能体ID
+   * @param {Object} data - 恢复数据 { thread_id, approved }
+   * @param {Object} options - 可选参数（signal, headers等）
+   * @returns {Promise} - 恢复响应流
+   */
+  resumeAgentChat: (agentId, data, options = {}) => {
+    const { signal, headers: extraHeaders, ...restOptions } = options || {};
+    const baseHeaders = {
+      'Content-Type': 'application/json',
+      ...useUserStore().getAuthHeaders()
+    };
+
+    return fetch(`/api/chat/agent/${agentId}/resume`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      signal,
+      headers: {
+        ...baseHeaders,
+        ...(extraHeaders || {})
+      },
+      ...restOptions
+    })
+  }
 }
 
 

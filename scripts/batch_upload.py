@@ -314,7 +314,10 @@ def upload(
     directory: pathlib.Path = typer.Option(
         ..., help="The directory containing files to upload.", exists=True, file_okay=False
     ),
-    pattern: list[str] = typer.Option(["*.md"], help="The glob patterns for files to upload (e.g., '*.pdf', '**/*.txt'). Can be specified multiple times."),
+    pattern: list[str] = typer.Option(
+        ["*.md"],
+        help="The glob patterns for files to upload (e.g., '*.pdf', '**/*.txt'). Can be specified multiple times.",
+    ),
     base_url: str = typer.Option("http://127.0.0.1:5050/api", help="The base URL of the API server."),
     username: str = typer.Option(..., help="Admin username for login."),
     password: str = typer.Option(..., help="Admin password for login."),
@@ -354,7 +357,9 @@ def upload(
 
     if not all_files:
         patterns_str = "', '".join(pattern)
-        console.print(f"[bold yellow]No files found in '{directory}' matching patterns: '{patterns_str}'. Aborting.[/bold yellow]")
+        console.print(
+            f"[bold yellow]No files found in '{directory}' matching patterns: '{patterns_str}'. Aborting.[/bold yellow]"
+        )
         raise typer.Exit()
 
     # 过滤掉macos的隐藏文件
@@ -398,11 +403,13 @@ def upload(
 
             # Split all files into batches
             for batch_num in range(0, len(files_to_upload), batch_size):
-                batch_files = files_to_upload[batch_num:batch_num + batch_size]
+                batch_files = files_to_upload[batch_num : batch_num + batch_size]
                 batch_start = batch_num + 1
                 batch_end = min(batch_num + batch_size, len(files_to_upload))
 
-                console.print(f"\n[bold yellow]=== Batch {batch_start}-{batch_end} of {len(files_to_upload)} ===[/bold yellow]")
+                console.print(
+                    f"\n[bold yellow]=== Batch {batch_start}-{batch_end} of {len(files_to_upload)} ===[/bold yellow]"
+                )
 
                 # Step 1: Upload this batch of files sequentially
                 console.print(f"[blue]Step 1: Uploading {len(batch_files)} files...[/blue]")
@@ -420,7 +427,9 @@ def upload(
                     console=console,
                     transient=True,
                 ) as progress:
-                    upload_task_id = progress.add_task(f"Uploading batch {batch_start}-{batch_end}...", total=len(batch_files), postfix="")
+                    upload_task_id = progress.add_task(
+                        f"Uploading batch {batch_start}-{batch_end}...", total=len(batch_files), postfix=""
+                    )
 
                     for file_path, file_hash in batch_files:
                         server_file_path = await upload_single_file(
@@ -458,7 +467,9 @@ def upload(
 
                         # Step 3: Wait for this batch to complete
                         if wait_for_completion and task_id:
-                            console.print(f"[cyan]Step 3: Waiting for batch {batch_start}-{batch_end} to complete...[/cyan]")
+                            console.print(
+                                f"[cyan]Step 3: Waiting for batch {batch_start}-{batch_end} to complete...[/cyan]"
+                            )
                             await wait_for_tasks_completion(client, base_url, [task_id], poll_interval)
                             console.print(f"[green]Batch {batch_start}-{batch_end} completed![/green]")
                         else:

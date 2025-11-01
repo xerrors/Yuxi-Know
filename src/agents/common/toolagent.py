@@ -10,8 +10,9 @@ from src.agents.common.mcp import get_mcp_tools
 from src.agents.common.models import load_chat_model
 from src.utils import logger
 
-from .state import BaseState
 from .context import BaseContext
+from .state import BaseState
+
 
 class ToolAgent(BaseAgent):
     name = "ToolAgent"
@@ -24,7 +25,6 @@ class ToolAgent(BaseAgent):
         self.context_schema = BaseContext
         self.agent_tools = None
 
-
     # TODO:[修改建议] _get_invoke_tools,llm_call,dynamic_tools_node这类针对工具调用的功能大多数Agent都能用得到
     # 可以通过一个ToolAgent类继承BaseAgent,通过重写抽象方法获取tools,通过继承BaseState和BaseContext获取配置
     # 必要时可通过重写以下方法实现其他逻辑
@@ -32,7 +32,6 @@ class ToolAgent(BaseAgent):
     def get_tools(self):
         logger.error(f"get_tools() is not implemented in {self.__class__.__name__}")
         return []
-
 
     async def _get_invoke_tools(self, selected_tools: list[str], selected_mcps: list[str]):
         """根据配置获取工具。

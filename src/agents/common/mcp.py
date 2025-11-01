@@ -88,6 +88,7 @@ async def get_mcp_tools(server_name: str, additional_servers: dict[str, dict] = 
         logger.error(f"Failed to load tools from MCP server '{server_name}': {e}")
         return []
 
+
 async def get_all_mcp_tools() -> list[Callable[..., Any]]:
     """Get all tools from all configured MCP servers."""
     all_tools = []

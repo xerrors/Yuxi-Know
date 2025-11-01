@@ -1,12 +1,11 @@
 import textwrap
-from pathlib import Path
 
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
 from src.agents.common.base import BaseAgent
-from src.agents.common.models import load_chat_model
 from src.agents.common.mcp import get_mcp_tools
+from src.agents.common.models import load_chat_model
 from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.utils import logger
 
@@ -16,6 +15,7 @@ _mcp_servers = {
         "transport": "streamable_http",
     },
 }
+
 
 @dynamic_prompt
 def context_aware_prompt(request: ModelRequest) -> str:
