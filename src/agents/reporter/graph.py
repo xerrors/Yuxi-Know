@@ -39,7 +39,7 @@ async def context_based_model(request: ModelRequest, handler) -> ModelResponse:
 
 
 class SqlReporterAgent(BaseAgent):
-    name = "SQL 报告助手"
+    name = "数据库报表助手"
     description = "一个能够生成 SQL 查询报告的智能体助手。同时调用 Charts MCP 生成图表。"
 
     def __init__(self, **kwargs):
