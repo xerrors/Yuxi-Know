@@ -1,51 +1,68 @@
-from pathlib import Path
+from langgraph.constants import START, END
+from langgraph.graph import StateGraph
 
-from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
+from src.agents.common.toolagent import ToolAgent
 
-from src.agents.common.base import BaseAgent
-from src.agents.common.models import load_chat_model
-from src.agents.common.tools import get_buildin_tools
-from src.utils import logger
+from .state import State
+from .context import Context
+from .tools import get_tools
 
-
-@dynamic_prompt
-def context_aware_prompt(request: ModelRequest) -> str:
-    runtime = request.runtime
-    return runtime.context.system_prompt
-
-
-@wrap_model_call
-async def context_based_model(request: ModelRequest, handler) -> ModelResponse:
-    # 从 runtime context 读取配置
-    model_spec = request.runtime.context.model
-    model = load_chat_model(model_spec)
-
-    request = request.override(model=model)
-    return await handler(request)
+def tools_branch_continue(state: State):
+    messages = state.messages
+    last_message = messages[-1]
+    # 如果无工具调用则结束
+    if not last_message.tool_calls:
+        return "end"
+    else:
+        return "continue"
 
 
-class ReActAgent(BaseAgent):
+class ReActAgent(ToolAgent):
     name = "智能体 Demo"
     description = "A react agent that can answer questions and help with tasks."
 
+    # TODO:[已完成] React智能体
+    '''
+    提示词示例：
+    你是一个智能体助手
+
+    你的所有需要计算的工作不能自己计算，只能通过调用加密计算机工具进行,你只能通过调用该工具的方式进行计算才能得到正确答案。计算顺序是正常的。
+
+    例如 2+3+2，你必须调用两次加密计算机工具进行运算，最终结果为9。
+    '''
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.graph = None
+        self.checkpointer = None
+        self.context_schema = Context
+        self.agent_tools = None
 
     def get_tools(self):
-        return get_buildin_tools()
+        return get_tools()
 
     async def get_graph(self, **kwargs):
+        # 创建 ReActAgent
+        """构建图"""
         if self.graph:
             return self.graph
 
-        # 创建 ReActAgent
-        graph = create_agent(
-            model=load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507"),  # 实际会被覆盖
-            tools=self.get_tools(),
-            middleware=[context_aware_prompt, context_based_model],
-            checkpointer=await self._get_checkpointer(),
+        builder = StateGraph(State, context_schema=self.context_schema)
+        builder.add_node("agent", self.llm_call)
+        builder.add_node("tools", self.dynamic_tools_node)
+        builder.set_entry_point("agent")
+        # 添加条件边：agent 决定是否调用工具继续还是结束对话
+        builder.add_conditional_edges(
+            "agent",
+            tools_branch_continue,
+            {
+                "continue": "tools",  # 调用工具
+                "end": END,  # 结束对话
+            },
         )
-
+        builder.add_edge("tools", "agent")
+        self.checkpointer = await self._get_checkpointer()
+        graph = builder.compile(checkpointer=self.checkpointer, name=self.name)
         self.graph = graph
         return graph
+

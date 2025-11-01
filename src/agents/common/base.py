@@ -67,6 +67,14 @@ class BaseAgent:
         ):
             yield msg, metadata
 
+    async def invoke_messages(self, messages: list[str], input_context=None, **kwargs):
+        graph = await self.get_graph()
+        context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
+        logger.debug(f"invoke_messages: {context}")
+        input_config = {"configurable": input_context, "recursion_limit": 100}
+        msg = await graph.ainvoke({"messages": messages}, context=context, config=input_config)
+        return msg
+
     async def check_checkpointer(self):
         app = await self.get_graph()
         if not hasattr(app, "checkpointer") or app.checkpointer is None:

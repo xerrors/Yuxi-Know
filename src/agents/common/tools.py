@@ -5,11 +5,54 @@ from typing import Annotated, Any
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
 from langchain_tavily import TavilySearch
+from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from src import config, graph_base, knowledge_base
 from src.utils import logger
 
+# TODO[修改建议]:前端需要通过interrupt进行交互，点击是或否来批准执行
+# 返回中断点：
+# is_approved : bool = True 或者 False
+# resume_command = Command(resume=is_approved)
+# stream = graph.stream(resume_command, config=config, stream_mode="messages")
+# graph.invoke(resume_command, config=config)
+@tool(name_or_callable="人工审批工具", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
+def get_approved_user_goal(
+    operation_description: str,
+)->dict:
+    """
+    请求人工审批，在执行重要操作前获得人类确认。
+
+    Args:
+        operation_description: 需要审批的操作描述，例如 "调用知识库工具"
+    Returns:
+        dict: 包含审批结果的字典，格式为 {"approved": bool, "message": str}
+    """
+    # 构建详细的中断信息
+    interrupt_info = {
+        "question": f"是否批准以下操作？",
+        "operation": operation_description,
+    }
+
+    # 触发人工审批
+    is_approved = interrupt(interrupt_info)
+
+    # 返回审批结果
+    if is_approved:
+        result = {
+            "approved": True,
+            "message": f"✅ 操作已批准：{operation_description}",
+        }
+        print(f"✅ 人工审批通过: {operation_description}")
+    else:
+        result = {
+            "approved": False,
+            "message": f"❌ 操作被拒绝：{operation_description}",
+        }
+        print(f"❌ 人工审批被拒绝: {operation_description}")
+
+    return result
 
 @tool(name_or_callable="查询知识图谱", description="使用这个工具可以查询知识图谱中包含的三元组信息。")
 def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
@@ -31,6 +74,7 @@ def get_static_tools() -> list:
     """注册静态工具"""
     static_tools = [
         query_knowledge_graph,
+        get_approved_user_goal
     ]
 
     # 检查是否启用网页搜索
