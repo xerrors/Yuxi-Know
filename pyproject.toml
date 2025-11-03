@@ -58,6 +58,7 @@ dependencies = [
     "pypinyin>=0.55.0",
     "tomli",
     "tomli-w",
+    "aiofiles>=24.1.0",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

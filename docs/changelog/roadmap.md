@@ -7,7 +7,6 @@
 
 ## Bugs
 
-- [ ] upload 接口会阻塞主进程
 - [ ] LightRAG 知识库查看不了解析后的文本，偶然出现，未复现
 
 ## Next
@@ -42,3 +41,4 @@
 - [x] 优化 MCP 逻辑，支持 common + special 创建方式 <Badge type="info" text="0.3.5" />
 - [x] 修复本地知识库的 metadata 和 向量数据库中不一致的情况。
 - [x] v1 版本的 LangGraph 的工具渲染有问题
+- [x] upload 接口会阻塞主进程

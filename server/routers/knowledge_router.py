@@ -1,3 +1,4 @@
+import aiofiles
 import asyncio
 import os
 import traceback
@@ -593,19 +594,26 @@ async def upload_file(
     basename, ext = os.path.splitext(file.filename)
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
     file_path = os.path.join(upload_dir, filename)
-    os.makedirs(upload_dir, exist_ok=True)
+
+    # 在线程池中执行同步文件系统操作，避免阻塞事件循环
+    await asyncio.to_thread(os.makedirs, upload_dir, exist_ok=True)
 
     file_bytes = await file.read()
 
-    content_hash = calculate_content_hash(file_bytes)
-    if knowledge_base.file_existed_in_db(db_id, content_hash):
+    # 在线程池中执行计算密集型操作，避免阻塞事件循环
+    content_hash = await asyncio.to_thread(calculate_content_hash, file_bytes)
+
+    # 在线程池中执行同步数据库查询，避免阻塞事件循环
+    file_exists = await asyncio.to_thread(knowledge_base.file_existed_in_db, db_id, content_hash)
+    if file_exists:
         raise HTTPException(
             status_code=409,
             detail="数据库中已经存在了相同文件，File with the same content already exists in this database",
         )
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(file_bytes)
+    # 使用异步文件写入，避免阻塞事件循环
+    async with aiofiles.open(file_path, "wb") as buffer:
+        await buffer.write(file_bytes)
 
     return {
         "message": "File successfully uploaded",
