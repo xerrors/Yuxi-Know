@@ -332,8 +332,12 @@ class LightRagKB(KnowledgeBase):
         if rag:
             try:
                 # 获取文档的所有 chunks
-                assert hasattr(rag.text_chunks, "get_all"), "text_chunks does not have get_all method"
-                all_chunks = await rag.text_chunks.get_all()  # type: ignore
+                # LightRAG v1.4+ 使用 JsonKVStorage，通过 _data 属性访问所有数据
+                if hasattr(rag.text_chunks, "_data"):
+                    all_chunks = dict(rag.text_chunks._data)
+                else:
+                    logger.warning("text_chunks does not have _data attribute, cannot get file content")
+                    return content_info
 
                 # 筛选属于该文档的 chunks
                 doc_chunks = []

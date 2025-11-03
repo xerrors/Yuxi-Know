@@ -366,10 +366,10 @@ class KnowledgeBaseManager:
 
         return False
 
-    async def update_database(self, db_id: str, name: str, description: str) -> dict:
+    async def update_database(self, db_id: str, name: str, description: str, llm_info: dict = None) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)
-        result = kb_instance.update_database(db_id, name, description)
+        result = kb_instance.update_database(db_id, name, description, llm_info)
 
         async with self._metadata_lock:
             if db_id in self.global_databases_meta:

@@ -78,12 +78,16 @@ async def get_database_info(db_id: str, current_user: User = Depends(get_admin_u
 
 @knowledge.put("/databases/{db_id}")
 async def update_database_info(
-    db_id: str, name: str = Body(...), description: str = Body(...), current_user: User = Depends(get_admin_user)
+    db_id: str,
+    name: str = Body(...),
+    description: str = Body(...),
+    llm_info: dict = Body(None),
+    current_user: User = Depends(get_admin_user),
 ):
     """更新知识库信息"""
-    logger.debug(f"Update database {db_id} info: {name}, {description}")
+    logger.debug(f"Update database {db_id} info: {name}, {description}, llm_info: {llm_info}")
     try:
-        database = await knowledge_base.update_database(db_id, name, description)
+        database = await knowledge_base.update_database(db_id, name, description, llm_info)
         return {"message": "更新成功", "database": database}
     except Exception as e:
         logger.error(f"更新数据库失败 {e}, {traceback.format_exc()}")
