@@ -63,7 +63,7 @@ agent_manager.init_all_agents()
   - 工具名称形如 `query_<db_id前缀>`；描述来自知识库名称与说明
   - 在工具选择阶段，用描述帮助模型做针对性检索
 - MySQL 工具包：只读查询
-  - `mysql_list_tables`、`mysql_describe_table`、`mysql_query`
+  - `mysql_list_tables`（对话侧名称：查询表名及说明）、`mysql_describe_table`、`mysql_query`
   - 环境变量见下，具备超时/行数限制与注入防护
 
 MCP（Model Context Protocol）可接入外部可视化或其他工具能力：
@@ -85,6 +85,7 @@ MYSQL_HOST=192.168.1.100
 MYSQL_USER=username
 MYSQL_PASSWORD=your_secure_password
 MYSQL_DATABASE=database_name
+MYSQL_DATABASE_DESCRIPTION=业务主库（可选，用于工具提示）
 MYSQL_PORT=3306
 MYSQL_CHARSET=utf8mb4
 ```
@@ -93,9 +94,11 @@ MYSQL_CHARSET=utf8mb4
 
 | 工具名称 | 功能描述 |
 |----------|----------|
-| `mysql_list_tables` | 获取数据库中的所有表名 |
-| `mysql_describe_table` | 获取指定表的详细结构信息 |
-| `mysql_query` | 执行只读的 SQL 查询语句 |
+| `mysql_list_tables`（查询表名及说明） | 获取数据库中的所有表名，并在有配置时附带数据库说明 |
+| `mysql_describe_table` （描述表） | 获取指定表的详细结构信息 |
+| `mysql_query` （执行 SQL 查询）| 执行只读的 SQL 查询语句 |
+
+配置 `MYSQL_DATABASE_DESCRIPTION` 后，智能体在列出数据库表时会优先展示这段说明，帮助模型在使用工具时理解库的用途，从而匹配更精确的查询策略。
 
 ### 安全特性
 
