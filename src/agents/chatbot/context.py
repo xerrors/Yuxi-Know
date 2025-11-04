@@ -1,9 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Annotated
 
-from src.agents.common.context import BaseContext
+from src.agents.common import BaseContext, gen_tool_info
 from src.agents.common.mcp import MCP_SERVERS
-from src.agents.common.tools import gen_tool_info
 
 from .tools import get_tools
 

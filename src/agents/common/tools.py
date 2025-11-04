@@ -12,7 +12,28 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
-@tool(name_or_callable="人工审批工具", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
+
+@tool(name_or_callable="计算器", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
+def calculator(a: float, b: float, operation: str) -> float:
+    try:
+        if operation == "add":
+            return a + b
+        elif operation == "subtract":
+            return a - b
+        elif operation == "multiply":
+            return a * b
+        elif operation == "divide":
+            if b == 0:
+                raise ZeroDivisionError("除数不能为零")
+            return a / b
+        else:
+            raise ValueError(f"不支持的运算类型: {operation}，仅支持 add, subtract, multiply, divide")
+    except Exception as e:
+        logger.error(f"Calculator error: {e}")
+        raise
+
+
+@tool(name_or_callable="人工审批工具(Debug)", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
 def get_approved_user_goal(
     operation_description: str,
 )->dict:

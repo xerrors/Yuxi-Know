@@ -3,9 +3,8 @@ import textwrap
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
-from src.agents.common.base import BaseAgent
-from src.agents.common.mcp import get_mcp_tools
-from src.agents.common.models import load_chat_model
+from src.agents.common import BaseAgent, load_chat_model, get_mcp_tools
+from src.agents.common.middlewares import context_aware_prompt, context_based_model
 from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.utils import logger
 
@@ -15,27 +14,6 @@ _mcp_servers = {
         "transport": "streamable_http",
     },
 }
-
-
-@dynamic_prompt
-def context_aware_prompt(request: ModelRequest) -> str:
-    user_prompt = request.runtime.context.system_prompt
-    agent_prompt = user_prompt + textwrap.dedent("""
-        You are an SQL reporting assistant. Your task is to generate SQL queries based on user requests
-        and provide insights from the database. Use the tools provided to you to answer the questions.
-        """)
-
-    return agent_prompt
-
-
-@wrap_model_call
-async def context_based_model(request: ModelRequest, handler) -> ModelResponse:
-    # 从 runtime context 读取配置
-    model_spec = request.runtime.context.model
-    model = load_chat_model(model_spec)
-
-    request = request.override(model=model)
-    return await handler(request)
 
 
 class SqlReporterAgent(BaseAgent):

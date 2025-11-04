@@ -37,16 +37,6 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
             stream_usage=True,
         )
 
-    # elif provider == "together":
-    #     from langchain_together import ChatTogether
-
-    #     return ChatTogether(
-    #         model=model,
-    #         api_key=SecretStr(api_key),
-    #         base_url=base_url,
-    #         stream_usage=True,
-    #     )
-
     else:
         try:  # 其他模型，默认使用OpenAIBase, like openai, zhipuai
             from langchain_openai import ChatOpenAI
