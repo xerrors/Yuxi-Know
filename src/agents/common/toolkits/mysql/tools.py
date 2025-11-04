@@ -32,6 +32,7 @@ def get_connection_manager() -> MySQLConnectionManager:
             "database": os.getenv("MYSQL_DATABASE"),
             "port": int(os.getenv("MYSQL_PORT", "3306")),
             "charset": "utf8mb4",
+            "description": os.getenv("MYSQL_DATABASE_DESCRIPTION", "默认 MySQL 数据库"),
         }
         # 验证配置完整性
         required_keys = ["host", "user", "password", "database"]
@@ -49,7 +50,7 @@ class TableListModel(BaseModel):
     pass
 
 
-@tool(name_or_callable="查询表名", args_schema=TableListModel)
+@tool(name_or_callable="查询表名及说明", args_schema=TableListModel)
 def mysql_list_tables() -> str:
     """获取数据库中的所有表名
 
@@ -85,7 +86,9 @@ def mysql_list_tables() -> str:
             #     except Exception:
             #         table_info.append(f"- {table_name} (无法获取行数)")
 
-            result = "数据库中的表:\n" + "\n".join(table_names)
+            result = f"数据库中的表:\n{'\n'.join(table_names)}"
+            if db_note := conn_manager.config.get('description'):
+                result = f"数据库说明: {db_note}\n\n" + result
             logger.info(f"Retrieved {len(table_names)} tables from database")
             return result
 
