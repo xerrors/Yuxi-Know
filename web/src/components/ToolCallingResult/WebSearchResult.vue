@@ -101,16 +101,18 @@ const formatDate = (dateString) => {
   }
 
   .search-result-item {
-    background: var(--gray-0);
     padding: 12px;
-    border-radius: 6px;
-    border: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
     transition: all 0.2s ease;
+
+    &:last-child {
+      border-bottom: none;
+    }
 
     .result-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
 
       .result-title {
         margin: 0;
@@ -134,7 +136,7 @@ const formatDate = (dateString) => {
         font-size: 11px;
         color: var(--gray-600);
         background: var(--gray-50);
-        padding: 2px 6px;
+        padding: 0px 6px;
         border-radius: 10px;
         margin-left: 8px;
       }
@@ -163,7 +165,8 @@ const formatDate = (dateString) => {
       color: var(--gray-700);
       overflow: hidden;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      line-clamp: 2;
+      -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
     }
   }
