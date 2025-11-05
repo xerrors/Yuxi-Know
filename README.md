@@ -1,9 +1,8 @@
-# 语析 - 基于大模型的知识库与知识图谱问答系统</h1>
+# 语析 - 基于大模型的知识库与知识图谱问答系统
 
 <div>
 
 [![Stable](https://img.shields.io/badge/stable-v0.3.0-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0)
-<!-- [![Beta](https://img.shields.io/badge/beta-v0.3.0-yellow.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0) -->
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -17,17 +16,18 @@
 
 语析是一个功能强大的智能问答平台，融合了 RAG 知识库与知识图谱技术，基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建。
 
----
+> [!tip]
+> 🙏 **感谢 Star Star Star** ~ ⭐⭐⭐⭐⭐ 详细文档请查看全新的 [**📄文档中心**](https://xerrors.github.io/Yuxi-Know/)
 
-🙏 感谢 Star ~ ⭐⭐⭐⭐⭐
-
-详细文档请查看全新的 [**📄文档中心**](https://xerrors.github.io/Yuxi-Know/)
 
 **🎉 最新动态**
 
-- **[2025/11/05] v0.3 版本发布
-  - 全面适配LangChain/LangGraph v1版本的特性，使用 create_agent 创建智能体入口。
+- **[2025/11/05] v0.3 版本发布**
+  - 全面适配 LangChain/LangGraph v1 版本的特性，使用 create_agent 创建智能体入口。
+  - 文档解析升级，适配 mineru-2.6 以及 mineru-api。
+  - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 
+---
 
 <div align="center">
   <!-- 视频缩略图 -->
