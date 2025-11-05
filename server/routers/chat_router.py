@@ -280,6 +280,11 @@ async def check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta,
 async def call(query: str = Body(...), meta: dict = Body(None), current_user: User = Depends(get_required_user)):
     """调用模型进行简单问答（需要登录）"""
     meta = meta or {}
+
+    # 确保 request_id 存在
+    if "request_id" not in meta or not meta.get("request_id"):
+        meta["request_id"] = str(uuid.uuid4())
+
     model = select_model(
         model_provider=meta.get("model_provider"),
         model_name=meta.get("model_name"),
@@ -293,7 +298,7 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
     response = await call_async(query)
     logger.debug({"query": query, "response": response.content})
 
-    return {"response": response.content}
+    return {"response": response.content, "request_id": meta["request_id"]}
 
 
 @chat.get("/agent")
@@ -323,6 +328,10 @@ async def chat_agent(
 
     logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
 
+    # 确保 request_id 存在
+    if "request_id" not in meta or not meta.get("request_id"):
+        meta["request_id"] = str(uuid.uuid4())
+
     meta.update(
         {
             "query": query,
@@ -342,8 +351,6 @@ async def chat_agent(
             + b"\n"
         )
 
-    # TODO:[功能建议]针对需要人工审批后再执行的工具，
-    # 可以使用langgraph的interrupt方法中断对话，等待用户输入后再使用command跳转回去
     async def stream_messages():
         # 代表服务端已经收到了请求
         yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())

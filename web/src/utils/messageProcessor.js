@@ -194,46 +194,6 @@ export class MessageProcessor {
         }
       }
     }
-
-    // 4. 同步 tool_call_chunks 到 tool_calls (构建完整的工具调用)
-    if (result.tool_call_chunks && result.tool_call_chunks.length > 0) {
-      if (!result.tool_calls) result.tool_calls = [];
-
-      for (const chunk of result.tool_call_chunks) {
-        if (chunk.name && chunk.args) {
-          const existingToolCall = result.tool_calls.find(t => t.id === chunk.id);
-
-          if (!existingToolCall) {
-            // 创建新的完整工具调用
-            result.tool_calls.push({
-              id: chunk.id,
-              name: chunk.name,
-              args: chunk.args,
-              type: 'tool_call'
-            });
-          } else {
-            // 更新现有工具调用的参数
-            existingToolCall.args = chunk.args;
-          }
-        }
-      }
-    }
-
-    // 5. 清理无效的工具调用
-    if (result.tool_calls) {
-      result.tool_calls = result.tool_calls.filter(toolCall => {
-        // 保留有id或有name的工具调用，并且不是空的args对象
-        return (toolCall.id || toolCall.name) &&
-               (toolCall.args !== undefined || toolCall.function?.arguments);
-      });
-    }
-
-    // 清理空的tool_call_chunks
-    if (result.tool_call_chunks) {
-      result.tool_call_chunks = result.tool_call_chunks.filter(chunk => {
-        return (chunk.id || chunk.name || chunk.args);
-      });
-    }
   }
 
   /**

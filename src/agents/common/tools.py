@@ -88,7 +88,7 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
 
 def get_static_tools() -> list:
     """注册静态工具"""
-    static_tools = [query_knowledge_graph, get_approved_user_goal]
+    static_tools = [query_knowledge_graph, get_approved_user_goal, calculator]
 
     # 检查是否启用网页搜索
     if config.enable_web_search:

@@ -5,7 +5,7 @@ import {
   GithubOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, ListChecks } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, CircleCheck } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
@@ -154,7 +154,7 @@ const mainList = [{
               class="task-center-badge"
               size="small"
             >
-              <ListChecks class="icon" size="22" />
+              <CircleCheck class="icon" size="22" />
             </a-badge>
           </a-tooltip>
         </div>
