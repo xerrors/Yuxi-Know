@@ -132,6 +132,22 @@ class OllamaEmbedding(BaseEmbeddingModel):
                 logger.error(f"Ollama Embedding async request failed: {e}, {payload}")
                 raise ValueError(f"Ollama Embedding async request failed: {e}")
 
+    async def test_connection(self) -> tuple[bool, str]:
+        """
+        测试embedding模型的连接性
+
+        Returns:
+            tuple: (success: bool, message: str)
+        """
+        try:
+            # 使用简单的测试文本
+            test_text = ["Hello world"]
+            await self.aencode(test_text)
+            return True, "连接正常"
+        except Exception as e:
+            error_msg = str(e)
+            return False, error_msg
+
 
 class OtherEmbedding(BaseEmbeddingModel):
     def __init__(self, **kwargs) -> None:

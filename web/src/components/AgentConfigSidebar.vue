@@ -695,7 +695,7 @@ watch(() => props.isOpen, (newVal) => {
         }
 
         .config-item {
-          margin-bottom: 20px;
+          margin: 30px 0;
 
           .config-description {
             margin: 4px 0 8px 0;

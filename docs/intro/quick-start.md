@@ -16,13 +16,13 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch v0.3.0-beta2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.3.0 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
-- `v0.2.2`: 稳定版本
-- `v0.3.0-beta2`：最新的 Beta 测试版
+- `v0.3.0`: 稳定版本
+- `v0.3.0`：最新的 Beta 测试版
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 

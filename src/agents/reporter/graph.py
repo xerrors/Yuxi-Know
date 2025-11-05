@@ -3,6 +3,7 @@ import textwrap
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
+from src import config
 from src.agents.common import BaseAgent, load_chat_model, get_mcp_tools
 from src.agents.common.middlewares import context_aware_prompt, context_based_model
 from src.agents.common.toolkits.mysql import get_mysql_tools
@@ -34,7 +35,7 @@ class SqlReporterAgent(BaseAgent):
 
         # 创建 SqlReporterAgent
         graph = create_agent(
-            model=load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507"),
+            model=load_chat_model(config.default_model),  # 默认模型，会被 middleware 覆盖
             tools=await self.get_tools(),
             middleware=[context_aware_prompt, context_based_model],
             checkpointer=await self._get_checkpointer(),

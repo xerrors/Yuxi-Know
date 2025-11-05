@@ -2,8 +2,8 @@
 
 <div>
 
-[![Stable](https://img.shields.io/badge/stable-v0.2.2-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.2.2)
-[![Lasted](https://img.shields.io/badge/latest-v0.3.0.beta-yellow.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0-beta)
+[![Stable](https://img.shields.io/badge/stable-v0.3.0-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0)
+<!-- [![Beta](https://img.shields.io/badge/beta-v0.3.0-yellow.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0) -->
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -21,11 +21,12 @@
 
 🙏 感谢 Star ~ ⭐⭐⭐⭐⭐
 
-详细文档请查看全新的 [**📄文档中心**](https://xerrors.github.io/Yuxi-Know/)， [📽️ 点击查看视频演示 v0.2](https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8)
+详细文档请查看全新的 [**📄文档中心**](https://xerrors.github.io/Yuxi-Know/)
 
 **🎉 最新动态**
 
-- **[2025/10/13]** v0.3 进入 beta 测试环节，不会再封装新的特性，仅作 bug 层面的修复
+- **[2025/11/05] v0.3 版本发布
+  - 全面适配LangChain/LangGraph v1版本的特性，使用 create_agent 创建智能体入口。
 
 
 <div align="center">

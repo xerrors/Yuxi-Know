@@ -2,135 +2,62 @@
 
 ## 智能体开发
 
-系统基于 [LangGraph](https://github.com/langchain-ai/langgraph) 框架，支持自定义智能体应用开发。
+系统基于 [LangGraph](https://github.com/langchain-ai/langgraph) 并通过统一的 `AgentManager` 管理所有智能体。`src/agents/__init__.py` 会在启动时遍历 `src/agents` 目录，对每个包含 `__init__.py` 的子包执行自动发现：所有继承 `BaseAgent` 的类都会被注册并立即初始化，因此只要代码落位正确，就不需要再手动登记或修改管理器。
 
-系统默认集成示例智能体：
+仓库预置了若干可直接运行的智能体：`chatbot` 聚焦对话与动态工具调度，`mini_agent` 提供精简模板，`reporter` 演示报告类链路。这些目录展示了上下文类、Graph 构造方式、子智能体引用以及中间件组合的范例，新增功能时可以直接复用。
 
-| 智能体 | 功能 | 位置 |
-|--------|------|------|
-| **基础智能体** | 对话功能 | `src/agents/chatbot/` |
-| **ReAct 智能体** | 推理与行动循环 | `src/agents/react/` |
+### 创建新的智能体
 
-### 开发自定义智能体
+在 `src/agents` 下新建一个包，保持与现有目录一致的结构：放置 Graph 构造逻辑（通常命名为 `graph.py`），并在包内的 `__init__.py` 中暴露主类。
 
-如果需要开发自己的智能体的话，可以基于智能体基类以及相关脚手架实现。整体上是和 LangGraph 的架构是适配的，只是在部分功能上需要和平台更加适配才好。
+智能体类必须继承 `src.agents.common.BaseAgent`，同时实现异步的 `get_graph` 方法来返回编译后的 LangGraph 实例，并配置好 `checkpointer`，否则无法从历史对话中恢复。
 
-#### 1. 创建智能体类
+需要额外上下文字段时，可继承 `BaseContext` 构建自己的配置表单，再把类绑定到 `context_schema`，平台会在 `saves/agents/<module>` 下生成默认配置。
 
-继承 `BaseAgent` 并实现 `get_graph` 方法：
+案例1 使用内置工具构建一个极简的智能体，可以动态选择 Prompt 和 LLM：
 
-```python
-from .base import BaseAgent
+<<< @/../src/agents/mini_agent/graph.py
 
-class CustomAgent(BaseAgent):
-    def get_graph(self):
-        # 返回 LangGraph 实例
-        return graph_instance
+案例2 基于MySQL工具，以及自定义 MCP Server 的数据库报表助手。
 
-    @property
-    def context_schema(self):
-        # 定义配置参数
-        return schema
-```
+<<< @/../src/agents/reporter/graph.py
 
-#### 2. 注册智能体
 
-在 `src/agents/__init__.py` 中注册：
 
-```python
-from .custom_agent import CustomAgent
+智能体实例的生命周期交给管理器处理，会在自动发现时完成初始化并缓存单例，以便快速响应请求。在容器内热重载时，只要保存文件即可触发重新导入；需要强制刷新可调用 `agent_manager.get_agent(<id>, reload=True)`。
 
-agent_manager = AgentManager()
-agent_manager.register_agent(CustomAgent)
-agent_manager.init_all_agents()
-```
+更多动态工具选择与 MCP 注册的例子，见 `src/agents/chatbot/graph.py` 中的中间件组合。
 
-#### 3. 参考示例
+### 拓展现有智能体
 
-查看 `src/agents/react/graph.py` 中的 `ReActAgent` 实现示例。
+智能体保持为 LangGraph 的标准节点组合，因此可以在原有 `graph.py` 中添加节点、条件与消息转换器。复用现成上下文时，只需扩展当前 `context_schema` 的字段；若功能差异较大，可以创建新的上下文类并替换 `context_schema`。
+
+对工具、模型或提示语的调整建议封装到中间件或独立函数里，既方便多智能体共用，又能保持 `BaseAgent` 的基础接口稳定。变更提交后无需手动刷新注册表，只要确保包结构未改变，智能体会在热重载中自动更新。
+
+### 子智能体与中间件
+
+子智能体集中放在 `src/agents/common/subagents` 目录，典型例子是 `calc_agent`，它通过 LangChain 的 `create_agent` 构建计算器能力并以工具暴露给主图。新增子智能体时沿用这一结构：在目录内编写封装函数与 `@tool` 装饰器，导出后即可被任意智能体调用。
+
+中间件位于 `src/agents/common/middlewares`，包含上下文感知提示词、模型选择以及动态工具加载等实现。如果需要编写新的中间件，请遵循 LangChain 官方文档中对 `AgentMiddleware`、`ModelRequest`、`ModelResponse` 等接口的定义，完成后在该目录的 `__init__.py` 暴露入口，主智能体即可在 `middleware` 列表中引用。
 
 ## 内置工具与 MCP 集成
 
-系统默认会为对话/推理智能体注册一组“内置工具”，并根据配置动态启用：
+系统会根据配置自动组装工具集合，涵盖知识图谱查询、向量检索生成的动态工具、MySQL 只读查询能力、Tavily 搜索以及所有注册的 MCP 工具。
 
-- 知识图谱查询：`query_knowledge_graph`
-  - 依赖 Neo4j 服务（见 docker-compose 中 `graph`）
-  - 返回包含三元组的结果，适合图谱关系类问题
-- 网页搜索：`TavilySearch`
-  - 需要设置 `TAVILY_API_KEY` 才会启用
-  - LLM 在需要时自动调用，提供实时网页信息
-- 知识库检索工具：按知识库动态生成
-  - 工具名称形如 `query_<db_id前缀>`；描述来自知识库名称与说明
-  - 在工具选择阶段，用描述帮助模型做针对性检索
-- MySQL 工具包：只读查询
-  - `mysql_list_tables`（对话侧名称：查询表名及说明）、`mysql_describe_table`、`mysql_query`
-  - 环境变量见下，具备超时/行数限制与注入防护
+工具的启用状态和描述由配置文件或环境变量决定，当依赖缺失时会被中间件自动忽略，从而避免在图中加载不可用能力。MCP Server 的接入方式保持不变，只需在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 中填入服务地址与 `transport` 类型，如需更多范式可参阅 LangChain 官方文档。
 
-MCP（Model Context Protocol）可接入外部可视化或其他工具能力：
-- 在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 添加配置；`transport` 字段名必须正确
-- 常见问题：无法列出工具多因服务不可达或配置错误；优先检查可达性与字段名
+### MySQL 数据库
 
-
-### 1. MySQL 数据库集成
-
-系统支持智能体查询 MySQL 数据库，为数据分析提供强大支持。
-
-### 配置数据库连接
-
-在环境变量中配置数据库信息：
+设置数据库连接时，在 `.env` 中提供以下字段：
 
 ```env
-# MySQL 数据库配置
 MYSQL_HOST=192.168.1.100
 MYSQL_USER=username
 MYSQL_PASSWORD=your_secure_password
 MYSQL_DATABASE=database_name
-MYSQL_DATABASE_DESCRIPTION=业务主库（可选，用于工具提示）
+MYSQL_DATABASE_DESCRIPTION=业务主库（可选提示）
 MYSQL_PORT=3306
 MYSQL_CHARSET=utf8mb4
 ```
 
-在智能体配置中启用以下 MySQL 工具：
-
-| 工具名称 | 功能描述 |
-|----------|----------|
-| `mysql_list_tables`（查询表名及说明） | 获取数据库中的所有表名，并在有配置时附带数据库说明 |
-| `mysql_describe_table` （描述表） | 获取指定表的详细结构信息 |
-| `mysql_query` （执行 SQL 查询）| 执行只读的 SQL 查询语句 |
-
-配置 `MYSQL_DATABASE_DESCRIPTION` 后，智能体在列出数据库表时会优先展示这段说明，帮助模型在使用工具时理解库的用途，从而匹配更精确的查询策略。
-
-### 安全特性
-
-- ✅ **只读操作**: 仅允许 SELECT、SHOW、DESCRIBE、EXPLAIN 操作
-- ✅ **SQL 注入防护**: 严格的表名参数验证
-- ✅ **超时控制**: 默认 60 秒，最大 600 秒
-- ✅ **结果限制**: 默认 10000 字符，100 行，最大 1000 行
-
-### 可视化图表-MCP-Server
-
-系统支持基于 MCP（Model Context Protocol）的图表可视化功能。
-
-- 基于 @antvis 团队开发的 [可视化图表-MCP-Server](https://www.modelscope.cn/mcp/servers/@antvis/mcp-server-chart)
-- 支持多种图表类型和数据可视化
-- 通过魔搭社区配置 Host 资源
-
-在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 中添加配置：
-
-```python
-# MCP Server configurations
-MCP_SERVERS = {
-    "sequentialthinking": {
-        "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
-        "transport": "streamable_http",
-    },
-    "mcp-server-chart": {
-        "url": "https://mcp.api-inference.modelscope.net/9993ae42524c4c/mcp",
-        "transport": "streamable_http",
-    }
-}
-```
-
-::: warning 配置注意
-记得将 `type` 字段修改为 `transport`，并确保服务可达。
-:::
+所有查询限定在只读范围（SELECT、SHOW、DESCRIBE、EXPLAIN），请求会经过表名校验与超时控制，默认限制 60 秒与 100 行输出，并可通过配置调整上限。连接信息会反馈给 LangGraph，智能体可以自动陈述数据库用途并选择更准确的检索策略。
