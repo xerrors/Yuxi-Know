@@ -540,7 +540,7 @@ async def get_agent_analytics(
                 or 0
             )
 
-            satisfaction_rate = round((positive_feedbacks / total_feedbacks * 100), 2) if total_feedbacks > 0 else 0
+            satisfaction_rate = round((positive_feedbacks / total_feedbacks * 100), 2) if total_feedbacks > 0 else 100
 
             agent_satisfaction.append(
                 {"agent_id": agent_id, "satisfaction_rate": satisfaction_rate, "total_feedbacks": total_feedbacks}
@@ -624,7 +624,7 @@ async def get_dashboard_stats(
         like_count = db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "like").scalar() or 0
 
         # Calculate satisfaction rate
-        satisfaction_rate = round((like_count / total_feedbacks * 100), 2) if total_feedbacks > 0 else 0
+        satisfaction_rate = round((like_count / total_feedbacks * 100), 2) if total_feedbacks > 0 else 100
 
         return {
             "total_conversations": total_conversations,
@@ -738,7 +738,7 @@ class TimeSeriesStats(BaseModel):
 @dashboard.get("/stats/calls/timeseries", response_model=TimeSeriesStats)
 async def get_call_timeseries_stats(
     type: str = "models",  # models/agents/tokens/tools
-    time_range: str = "7days",  # 7hours/7days/7weeks
+    time_range: str = "14days",  # 14hours/14days/14weeks
     db: Session = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
@@ -750,24 +750,24 @@ async def get_call_timeseries_stats(
         now = utc_now()
         local_now = shanghai_now()
 
-        if time_range == "7hours":
-            intervals = 7
-            # 包含当前小时：从6小时前开始
+        if time_range == "14hours":
+            intervals = 14
+            # 包含当前小时：从13小时前开始
             start_time = now - timedelta(hours=intervals - 1)
             group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Message.created_at, "+8 hours"))
             base_local_time = ensure_shanghai(start_time)
-        elif time_range == "7weeks":
-            intervals = 7
-            # 包含当前周：从6周前开始，并对齐到当周周一 00:00
+        elif time_range == "14weeks":
+            intervals = 14
+            # 包含当前周：从13周前开始，并对齐到当周周一 00:00
             local_start = local_now - timedelta(weeks=intervals - 1)
             local_start = local_start - timedelta(days=local_start.weekday())
             local_start = local_start.replace(hour=0, minute=0, second=0, microsecond=0)
             start_time = local_start.astimezone(UTC)
             group_format = func.strftime("%Y-%W", func.datetime(Message.created_at, "+8 hours"))
             base_local_time = local_start
-        else:  # 7days (default)
-            intervals = 7
-            # 包含当前天：从6天前开始
+        else:  # 14days (default)
+            intervals = 14
+            # 包含当前天：从13天前开始
             start_time = now - timedelta(days=intervals - 1)
             group_format = func.strftime("%Y-%m-%d", func.datetime(Message.created_at, "+8 hours"))
             base_local_time = ensure_shanghai(start_time)
@@ -790,11 +790,11 @@ async def get_call_timeseries_stats(
         elif type == "agents":
             # 智能体调用统计（基于对话更新时间，按智能体分组）
             # 为对话创建独立的时间格式化器
-            if time_range == "7hours":
+            if time_range == "14hours":
                 conv_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(Conversation.updated_at, "+8 hours"))
-            elif time_range == "7weeks":
+            elif time_range == "14weeks":
                 conv_group_format = func.strftime("%Y-%W", func.datetime(Conversation.updated_at, "+8 hours"))
-            else:  # 7days
+            else:  # 14days
                 conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.updated_at, "+8 hours"))
 
             query = (
@@ -855,11 +855,11 @@ async def get_call_timeseries_stats(
         elif type == "tools":
             # 工具调用统计（按工具名称分组）
             # 为工具调用创建独立的时间格式化器
-            if time_range == "7hours":
+            if time_range == "14hours":
                 tool_group_format = func.strftime("%Y-%m-%d %H:00", func.datetime(ToolCall.created_at, "+8 hours"))
-            elif time_range == "7weeks":
+            elif time_range == "14weeks":
                 tool_group_format = func.strftime("%Y-%W", func.datetime(ToolCall.created_at, "+8 hours"))
-            else:  # 7days
+            else:  # 14days
                 tool_group_format = func.strftime("%Y-%m-%d", func.datetime(ToolCall.created_at, "+8 hours"))
 
             query = (
@@ -908,7 +908,7 @@ async def get_call_timeseries_stats(
 
         for result in results:
             date_key = result.date
-            if time_range == "7weeks":
+            if time_range == "14weeks":
                 date_key = normalize_week_key(date_key)
             category = getattr(result, "category", "unknown")
             count = result.count
@@ -923,17 +923,17 @@ async def get_call_timeseries_stats(
         # 从起始点开始（北京时间）
         current_time = base_local_time
 
-        if time_range == "7hours":
+        if time_range == "14hours":
             delta = timedelta(hours=1)
-        elif time_range == "7weeks":
+        elif time_range == "14weeks":
             delta = timedelta(weeks=1)
         else:
             delta = timedelta(days=1)
 
         for i in range(intervals):
-            if time_range == "7hours":
+            if time_range == "14hours":
                 date_key = current_time.strftime("%Y-%m-%d %H:00")
-            elif time_range == "7weeks":
+            elif time_range == "14weeks":
                 iso_year, iso_week, _ = current_time.isocalendar()
                 date_key = f"{iso_year}-{iso_week:02d}"
             else:

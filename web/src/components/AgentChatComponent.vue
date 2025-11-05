@@ -45,9 +45,14 @@
         </div>
       </div>
 
-      <div v-if="isLoadingThreads || isLoadingMessages" class="chat-loading">
-        <LoadingOutlined />
-        <span>正在加载历史记录...</span>
+      <!-- 加载状态：新建对话或加载消息 -->
+      <div v-if="chatState.creatingNewChat" class="chat-loading">
+        <div class="loading-spinner"></div>
+        <span>正在创建新对话...</span>
+      </div>
+      <div v-else-if="isLoadingMessages" class="chat-loading">
+        <div class="loading-spinner"></div>
+        <span>正在加载消息...</span>
       </div>
 
       <div v-else-if="!conversations.length" class="chat-examples">
@@ -304,7 +309,7 @@ const isStreaming = computed(() => {
   const threadState = currentThreadState.value;
   return threadState ? threadState.isStreaming : false;
 });
-const isProcessing = computed(() => isStreaming.value || chatState.creatingNewChat);
+const isProcessing = computed(() => isStreaming.value);
 const isSmallContainer = computed(() => uiState.containerWidth <= 520);
 const isMediumContainer = computed(() => uiState.containerWidth <= 768);
 
@@ -1218,10 +1223,23 @@ watch(conversations, () => {
   width: 100%;
   z-index: 9;
   animation: slideInUp 0.5s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
 
   span {
-    margin-left: 8px;
     color: var(--gray-700);
+    font-size: 14px;
+  }
+
+  .loading-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gray-200);
+    border-top-color: var(--main-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
   }
 }
 

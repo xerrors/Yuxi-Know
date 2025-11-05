@@ -51,12 +51,12 @@ const props = defineProps({
 // state
 const callStatsData = ref(null)
 const callStatsLoading = ref(false)
-const callTimeRange = ref('7days')
+const callTimeRange = ref('14days')
 const callDataType = ref('models')
 const timeRangeOptions = [
-  { value: '7hours', label: '近7小时' },
-  { value: '7days', label: '近7天' },
-  { value: '7weeks', label: '近7周' },
+  { value: '14hours', label: '近14小时' },
+  { value: '14days', label: '近14天' },
+  { value: '14weeks', label: '近14周' },
 ]
 const dataTypeOptions = [
   { value: 'models', label: '模型调用' },
@@ -64,6 +64,27 @@ const dataTypeOptions = [
   { value: 'tokens', label: 'Token消耗' },
   { value: 'tools', label: '工具调用' },
 ]
+const isTokenView = computed(() => callDataType.value === 'tokens')
+
+const formatTokenValue = (value) => {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return '0M'
+  }
+  const millionValue = value / 1_000_000
+  const absMillion = Math.abs(millionValue)
+  const decimalPlaces = absMillion >= 100 ? 0 : absMillion >= 10 ? 1 : 2
+  return `${millionValue.toFixed(decimalPlaces)}M`
+}
+
+const formatValueForDisplay = (value) => {
+  if (isTokenView.value) {
+    return formatTokenValue(value)
+  }
+  if (typeof value === 'number') {
+    return value.toLocaleString()
+  }
+  return (value ?? 0).toString()
+}
 
 const switchTimeRange = (val) => {
   if (callTimeRange.value === val) return
@@ -131,9 +152,9 @@ const renderCallStatsChart = () => {
 
   const xAxisData = data.map(item => {
     const date = item.date
-    if (callTimeRange.value === '7hours') {
+    if (callTimeRange.value === '14hours') {
       return date.split(' ')[1]
-    } else if (callTimeRange.value === '7weeks') {
+    } else if (callTimeRange.value === '14weeks') {
       return `第${date.split('-')[1]}周`
     } else {
       return date.split('-').slice(1).join('-')
@@ -171,7 +192,11 @@ const renderCallStatsChart = () => {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 12 },
+      axisLabel: {
+        color: '#6b7280',
+        fontSize: 12,
+        formatter: (value) => (isTokenView.value ? formatTokenValue(value) : value),
+      },
       splitLine: { lineStyle: { color: '#f3f4f6' } }
     },
     tooltip: {
@@ -181,16 +206,18 @@ const renderCallStatsChart = () => {
       borderWidth: 1,
       textStyle: { color: '#374151', fontSize: 12 },
       formatter: (params) => {
+        if (!params?.length) return ''
         let total = 0
         let result = `${params[0].name}<br/>`
         params.forEach(param => {
           total += param.value
           const truncatedName = truncateLegend(param.seriesName)
           result += `<span style=\"display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}\"></span>`
-          result += `${truncatedName}: ${param.value}<br/>`
+          result += `${truncatedName}: ${formatValueForDisplay(param.value)}<br/>`
         })
         const labelMap = { models: '模型调用', agents: '智能体调用', tokens: 'Token消耗', tools: '工具调用' }
-        return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${total}</strong>`
+        const formattedTotal = formatValueForDisplay(total)
+        return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${formattedTotal}</strong>`
       }
     },
     legend: {
