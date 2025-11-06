@@ -1,15 +1,13 @@
 <template>
-  <div class="graph-section" :class="{ collapsed: !visible }" :style="style" v-if="isGraphSupported">
-    <div class="section-header">
-      <div class="header-left">
-        <h3 class="section-title">知识图谱</h3>
+  <div class="graph-section" v-if="isGraphSupported">
+    <div class="graph-toolbar">
+      <div class="toolbar-left">
         <div v-if="graphStats.displayed_nodes > 0 || graphStats.displayed_edges > 0" class="graph-stats">
           <a-tag color="blue" size="small">节点: {{ graphStats.displayed_nodes }}</a-tag>
           <a-tag color="green" size="small">边: {{ graphStats.displayed_edges }}</a-tag>
-          <!-- <a-tag v-if="graphStats.is_truncated" color="red" size="small">已截断</a-tag> -->
         </div>
       </div>
-      <div class="panel-actions">
+      <div class="toolbar-right">
         <a-button
           type="primary"
           size="small"
@@ -19,34 +17,6 @@
         >
           加载图谱
         </a-button>
-        <!-- 导出功能暂禁，等待 LightRAG 库修复
-        <a-button
-          type="primary"
-          size="small"
-          @click="showExportModal = true"
-          :disabled="!isGraphSupported"
-        >
-          导出图谱
-        </a-button>
-        -->
-        <!-- <a-button
-          type="text"
-          size="small"
-          @click="showSettings = true"
-        >
-          <SettingOutlined />
-          参数
-        </a-button> -->
-        <!-- <a-button
-          type="text"
-          size="small"
-          :icon="h(DeleteOutlined)"
-          title="清空"
-          @click="clearGraph"
-          :disabled="!isGraphSupported"
-        >
-          清空
-        </a-button> -->
         <a-button
           type="text"
           size="small"
@@ -57,17 +27,9 @@
         >
           最大化
         </a-button>
-        <a-button
-          type="text"
-          size="small"
-          @click="toggleVisible"
-          title="折叠/展开"
-        >
-          <component :is="visible ? UpOutlined : DownOutlined" />
-        </a-button>
       </div>
     </div>
-    <div class="graph-container-compact content" v-show="visible">
+    <div class="graph-container-compact">
       <div v-if="!isGraphSupported" class="graph-disabled">
         <div class="disabled-content">
           <h4>知识图谱不可用</h4>
@@ -153,31 +115,12 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
-import { useUserStore } from '@/stores/user';
-import { ReloadOutlined, DeleteOutlined, ExpandOutlined, UpOutlined, DownOutlined, SettingOutlined } from '@ant-design/icons-vue';
+import { ReloadOutlined, ExpandOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
 import { h } from 'vue';
 
 const store = useDatabaseStore();
-const userStore = useUserStore();
-
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: true
-  },
-  style: {
-    type: Object,
-    default: () => ({})
-  },
-});
-
-// 添加调试日志
-console.log('KnowledgeGraphSection props:', props);
-console.log('KnowledgeGraphSection style prop:', props.style);
-
-const emit = defineEmits(['toggleVisible']);
 
 const databaseId = computed(() => store.databaseId);
 const kbType = computed(() => store.database.kb_type);
@@ -202,10 +145,6 @@ const isGraphSupported = computed(() => {
   const type = kbType.value?.toLowerCase();
   return type === 'lightrag';
 });
-
-const toggleVisible = () => {
-  emit('toggleVisible');
-};
 
 const loadGraph = () => {
   if (!(Object.keys(store.database?.files).length > 0)) {
@@ -293,37 +232,58 @@ watch(isGraphSupported, (supported) => {
 
 <style scoped lang="less">
 .graph-section {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
-  .graph-container-compact {
-    flex: 1;
-    min-height: 0;
-    padding: 0;
-    height: 100%;
-    border-radius: 0;
-  }
+.graph-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #fff;
+  border-bottom: 1px solid var(--gray-200);
 
-  .graph-disabled {
+  .toolbar-left {
     display: flex;
-    justify-content: center;
     align-items: center;
-    height: 200px;
-  }
+    gap: 12px;
 
-  .disabled-content {
-    text-align: center;
-    color: #8c8c8c;
-
-    h4 {
-      margin-bottom: 8px;
+    .graph-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
   }
 
-  .content {
-    flex: 1;
-    min-height: 0;
+  .toolbar-right {
     display: flex;
-    flex-direction: column;
-    height: 100%;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.graph-container-compact {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.graph-disabled {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.disabled-content {
+  text-align: center;
+  color: #8c8c8c;
+
+  h4 {
+    margin-bottom: 8px;
   }
 }
 </style>

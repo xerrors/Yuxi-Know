@@ -12,7 +12,6 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
-
 @tool(name_or_callable="计算器", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
 def calculator(a: float, b: float, operation: str) -> float:
     try:
@@ -47,7 +46,7 @@ def get_approved_user_goal(
     """
     # 构建详细的中断信息
     interrupt_info = {
-        "question": f"是否批准以下操作？",
+        "question": "是否批准以下操作？",
         "operation": operation_description,
     }
 

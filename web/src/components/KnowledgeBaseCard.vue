@@ -1,0 +1,289 @@
+<template>
+  <div class="knowledge-base-card">
+    <!-- 标题栏 -->
+    <div class="card-header">
+      <div class="header-left">
+        <a-button
+          @click="backToDatabase"
+          shape="circle"
+          :icon="h(LeftOutlined)"
+          type="text"
+          size="small"
+        ></a-button>
+        <h3 class="card-title">{{ database.name || '数据库信息加载中' }}</h3>
+
+      </div>
+      <div class="header-right">
+        <a-button
+          type="text"
+          size="small"
+          :icon="h(CopyOutlined)"
+          @click="copyDatabaseId"
+          title="复制知识库ID"
+        />
+        <a-button
+          @click="showEditModal"
+          type="text"
+          size="small"
+          :icon="h(EditOutlined)"
+        />
+      </div>
+    </div>
+
+    <!-- 卡片内容 -->
+    <div class="card-content">
+      <!-- 描述文本 -->
+      <div class="description" v-if="database.description">
+        <p class="description-text">{{ database.description }}</p>
+      </div>
+
+      <!-- Tags -->
+      <div class="tags-section">
+        <a-tag
+          :color="getKbTypeColor(database.kb_type || 'lightrag')"
+          size="small"
+        >
+          {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
+        </a-tag>
+        <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑对话框 -->
+  <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
+    <template #footer>
+      <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0;">
+        <DeleteOutlined /> 删除数据库
+      </a-button>
+      <a-button key="back" @click="editModalVisible = false">取消</a-button>
+      <a-button key="submit" type="primary" @click="handleEditSubmit">确定</a-button>
+    </template>
+    <a-form :model="editForm" :rules="rules" ref="editFormRef" layout="vertical">
+      <a-form-item label="知识库名称" name="name" required>
+        <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
+      </a-form-item>
+      <a-form-item label="知识库描述" name="description">
+        <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
+      </a-form-item>
+      <!-- 仅对 LightRAG 类型显示 LLM 配置 -->
+      <a-form-item v-if="database.kb_type === 'lightrag'" label="语言模型 (LLM)" name="llm_info">
+        <ModelSelectorComponent
+          :model_spec="llmModelSpec"
+          placeholder="请选择模型"
+          @select-model="handleLLMSelect"
+          style="width: 100%;"
+        />
+      </a-form-item>
+    </a-form>
+  </a-modal>
+</template>
+
+<script setup>
+import { ref, reactive, computed, h } from 'vue';
+import { useRouter } from 'vue-router';
+import { useDatabaseStore } from '@/stores/database';
+import { getKbTypeLabel, getKbTypeColor } from '@/utils/kb_utils';
+import { message } from 'ant-design-vue';
+import {
+  LeftOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CopyOutlined,
+} from '@ant-design/icons-vue';
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+
+const router = useRouter();
+const store = useDatabaseStore();
+
+const database = computed(() => store.database);
+
+// 复制数据库ID
+const copyDatabaseId = async () => {
+  if (!database.value.db_id) {
+    message.warning('知识库ID为空');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(database.value.db_id);
+    message.success('知识库ID已复制到剪贴板');
+  } catch (err) {
+    // 降级方案
+    const textArea = document.createElement('textarea');
+    textArea.value = database.value.db_id;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    message.success('知识库ID已复制到剪贴板');
+  }
+};
+
+// 格式化日期
+const formatDate = (dateStr) => {
+  if (!dateStr) return 'N/A';
+  const date = new Date(dateStr);
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// 返回数据库列表
+const backToDatabase = () => {
+  router.push('/database');
+};
+
+// 编辑相关逻辑（复用自 DatabaseHeader）
+const editModalVisible = ref(false);
+const editFormRef = ref(null);
+const editForm = reactive({
+  name: '',
+  description: '',
+  llm_info: {
+    provider: '',
+    model_name: ''
+  }
+});
+
+const rules = {
+  name: [{ required: true, message: '请输入知识库名称' }]
+};
+
+const showEditModal = () => {
+  editForm.name = database.value.name || '';
+  editForm.description = database.value.description || '';
+  // 如果是 LightRAG 类型，加载当前的 LLM 配置
+  if (database.value.kb_type === 'lightrag') {
+    const llmInfo = database.value.llm_info || {};
+    editForm.llm_info.provider = llmInfo.provider || '';
+    editForm.llm_info.model_name = llmInfo.model_name || '';
+  }
+  editModalVisible.value = true;
+};
+
+const handleEditSubmit = () => {
+  editFormRef.value.validate().then(async () => {
+    const updateData = {
+      name: editForm.name,
+      description: editForm.description
+    };
+
+    // 如果是 LightRAG 类型，包含 llm_info
+    if (database.value.kb_type === 'lightrag') {
+      updateData.llm_info = {
+        provider: editForm.llm_info.provider,
+        model_name: editForm.llm_info.model_name
+      };
+    }
+
+    await store.updateDatabaseInfo(updateData);
+    editModalVisible.value = false;
+  }).catch(err => {
+    console.error('表单验证失败:', err);
+  });
+};
+
+// LLM 模型选择处理
+const llmModelSpec = computed(() => {
+  const provider = editForm.llm_info?.provider || '';
+  const modelName = editForm.llm_info?.model_name || '';
+  if (provider && modelName) {
+    return `${provider}/${modelName}`;
+  }
+  return '';
+});
+
+const handleLLMSelect = (spec) => {
+  console.log('LLM选择:', spec);
+  if (typeof spec !== 'string' || !spec) return;
+
+  const index = spec.indexOf('/');
+  const provider = index !== -1 ? spec.slice(0, index) : '';
+  const modelName = index !== -1 ? spec.slice(index + 1) : '';
+
+  editForm.llm_info.provider = provider;
+  editForm.llm_info.model_name = modelName;
+};
+
+const deleteDatabase = () => {
+  store.deleteDatabase();
+};
+</script>
+
+<style lang="less" scoped>
+.knowledge-base-card {
+  background: linear-gradient(120deg, var(--main-30) 0%, #fff 100%);
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  margin-bottom: 8px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--gray-800);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    // flex: 1;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+
+    button {
+      height: 100%;
+    }
+
+    button:hover {
+      background-color: var(--gray-100);
+    }
+  }
+}
+
+.card-content {
+  padding: 0 16px 16px 16px;
+}
+
+.description {
+  margin-bottom: 12px;
+
+  .description-text {
+    font-size: 14px;
+    color: var(--gray-700);
+    line-height: 1.5;
+    margin: 0;
+  }
+}
+
+.tags-section {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+</style>

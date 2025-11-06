@@ -263,7 +263,7 @@ const showAddFilesModal = () => {
 };
 
 const handleRefresh = () => {
-  store.getDatabaseInfo();
+  store.getDatabaseInfo(undefined, true); // Skip query params for manual refresh
 };
 
 const toggleAutoRefresh = () => {
@@ -374,6 +374,9 @@ import { parseToShanghai } from '@/utils/time';
   display: flex;
   flex-direction: column;
   height: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--gray-150);
+  padding-top: 6px;
 }
 
 .panel-header {

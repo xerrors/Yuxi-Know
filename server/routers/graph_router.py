@@ -221,6 +221,152 @@ async def get_neo4j_node(
 # =============================================================================
 
 
+@graph.get("/lightrag/test-data")
+async def create_test_graph_data(
+    db_id: str = Query(..., description="数据库ID"), current_user: User = Depends(get_admin_user)
+):
+    """
+    创建测试图谱数据（临时API，用于演示图谱功能）
+    """
+    try:
+        logger.info(f"创建测试图谱数据 - db_id: {db_id}")
+
+        # 检查是否是 LightRAG 数据库
+        if not knowledge_base.is_lightrag_database(db_id):
+            raise HTTPException(
+                status_code=400, detail=f"数据库 {db_id} 不是 LightRAG 类型，图谱功能仅支持 LightRAG 知识库"
+            )
+
+        # 获取 LightRAG 实例
+        rag_instance = await knowledge_base._get_lightrag_instance(db_id)
+        if not rag_instance:
+            raise HTTPException(status_code=404, detail=f"LightRAG 数据库 {db_id} 不存在或无法访问")
+
+        # 创建测试图谱数据
+        test_nodes = [
+            {
+                'id': '宋晓宁',
+                'labels': ['人物'],
+                'entity_type': 'person',
+                'properties': {
+                    'entity_id': '宋晓宁',
+                    'entity_type': 'person',
+                    'description': '人工智能学院项目负责人',
+                    'file_path': 'test'
+                }
+            },
+            {
+                'id': '江南大学',
+                'labels': ['机构'],
+                'entity_type': 'organization',
+                'properties': {
+                    'entity_id': '江南大学',
+                    'entity_type': 'organization',
+                    'description': '江南大学',
+                    'file_path': 'test'
+                }
+            },
+            {
+                'id': '食品安全知识图谱',
+                'labels': ['项目'],
+                'entity_type': 'project',
+                'properties': {
+                    'entity_id': '食品安全知识图谱',
+                    'entity_type': 'project',
+                    'description': '食品安全知识图谱和监管控制平台的构建与应用示范',
+                    'file_path': 'test'
+                }
+            },
+            {
+                'id': '无锡君桥汽车租赁有限公司',
+                'labels': ['公司'],
+                'entity_type': 'company',
+                'properties': {
+                    'entity_id': '无锡君桥汽车租赁有限公司',
+                    'entity_type': 'company',
+                    'description': '汽车租赁服务公司',
+                    'file_path': 'test'
+                }
+            },
+            {
+                'id': '租车费',
+                'labels': ['费用'],
+                'entity_type': 'expense',
+                'properties': {
+                    'entity_id': '租车费',
+                    'entity_type': 'expense',
+                    'description': '租车费用300元',
+                    'file_path': 'test'
+                }
+            }
+        ]
+
+        test_edges = [
+            {
+                'id': '宋晓宁-江南大学-工作于',
+                'source': '宋晓宁',
+                'target': '江南大学',
+                'type': 'WORKS_AT',
+                'properties': {
+                    'description': '宋晓宁工作于江南大学',
+                    'keywords': '工作关系'
+                }
+            },
+            {
+                'id': '宋晓宁-食品安全知识图谱-负责',
+                'source': '宋晓宁',
+                'target': '食品安全知识图谱',
+                'type': 'RESPONSIBLE_FOR',
+                'properties': {
+                    'description': '宋晓宁负责食品安全知识图谱项目',
+                    'keywords': '负责关系'
+                }
+            },
+            {
+                'id': '宋晓宁-租车费-产生',
+                'source': '宋晓宁',
+                'target': '租车费',
+                'type': 'INCURRED',
+                'properties': {
+                    'description': '宋晓宁产生租车费用',
+                    'keywords': '费用关系'
+                }
+            },
+            {
+                'id': '租车费-无锡君桥汽车租赁有限公司-支付给',
+                'source': '租车费',
+                'target': '无锡君桥汽车租赁有限公司',
+                'type': 'PAID_TO',
+                'properties': {
+                    'description': '租车费支付给无锡君桥汽车租赁有限公司',
+                    'keywords': '支付关系'
+                }
+            }
+        ]
+
+        result = {
+            "success": True,
+            "data": {
+                "nodes": test_nodes,
+                "edges": test_edges,
+                "is_truncated": False,
+                "total_nodes": len(test_nodes),
+                "total_edges": len(test_edges),
+            },
+        }
+
+        logger.info(f"成功创建测试图谱 - 节点数: {len(test_nodes)}, 边数: {len(test_edges)}")
+        return result
+
+    except HTTPException:
+        # 重新抛出 HTTP 异常
+        raise
+    except Exception as e:
+        logger.error(f"创建测试图谱数据失败: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"创建测试图谱数据失败: {str(e)}")
+
+
 @graph.get("/lightrag/stats")
 async def get_lightrag_stats(
     db_id: str = Query(..., description="数据库ID"), current_user: User = Depends(get_admin_user)

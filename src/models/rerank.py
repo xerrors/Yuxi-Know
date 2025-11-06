@@ -1,11 +1,13 @@
-import json
+import asyncio
 import os
+from collections.abc import Iterable, Sequence
+from typing import Any
 
+import aiohttp
 import numpy as np
-import requests
 
 from src import config
-from src.utils import get_docker_safe_url
+from src.utils import get_docker_safe_url, logger
 
 
 def sigmoid(x):
@@ -18,30 +20,103 @@ class OnlineReranker:
         self.model = model_name
         self.api_key = api_key
         self.headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        self.session: aiohttp.ClientSession | None = None
+        self.timeout = aiohttp.ClientTimeout(total=30)
 
-    def compute_score(self, sentence_pairs, batch_size=256, max_length=512, normalize=False):
-        # TODO 还没实现 batch_size
+    async def _ensure_session(self) -> None:
+        if self.session is None or self.session.closed:
+            self.session = aiohttp.ClientSession(headers=self.headers, timeout=self.timeout)
+
+    async def acompute_score(
+        self,
+        sentence_pairs: Sequence[Sequence[str]],
+        batch_size: int = 32,
+        max_length: int = 512,
+        normalize: bool = True,
+    ) -> list[float]:
+        if not sentence_pairs or len(sentence_pairs) < 2:
+            return []
+
         query, sentences = sentence_pairs[0], sentence_pairs[1]
-        payload = self.build_payload(query, sentences, max_length)
-        response = requests.request("POST", self.url, json=payload, headers=self.headers)
-        response = json.loads(response.text)
-        # logger.debug(f"SiliconFlow Reranker response: {response}")
+        documents = [sentences] if isinstance(sentences, str) else list(sentences)
 
-        results = sorted(response["results"], key=lambda x: x["index"])
-        all_scores = [result["relevance_score"] for result in results]
+        if not documents:
+            return []
+
+        await self._ensure_session()
+
+        all_scores: list[float] = []
+        batch_size = max(1, int(batch_size))
+        total_batches = (len(documents) + batch_size - 1) // batch_size
+
+        for batch_no, start in enumerate(range(0, len(documents), batch_size), start=1):
+            batch = documents[start : start + batch_size]
+            try:
+                scores = await self._batch_rerank(query, batch, max_length=max_length)
+                all_scores.extend(scores)
+                logger.debug(f"Reranking batch {batch_no}/{total_batches} completed")
+            except Exception as exc:  # noqa: BLE001
+                logger.error(f"Reranking batch {batch_no} failed: {exc}")
+                all_scores.extend([0.5] * len(batch))
 
         if normalize:
-            all_scores = [sigmoid(score) for score in all_scores]
+            all_scores = [float(sigmoid(score)) for score in all_scores]
 
         return all_scores
 
-    def build_payload(self, query, sentences, max_length=512):
-        return {
+    async def _batch_rerank(self, query: str, documents: Iterable[str], max_length: int) -> list[float]:
+        payload = {
             "model": self.model,
             "query": query,
-            "documents": sentences,
+            "documents": list(documents),
             "max_chunks_per_doc": max_length,
         }
+
+        if not payload["documents"]:
+            return []
+
+        await self._ensure_session()
+        assert self.session is not None
+
+        try:
+            async with self.session.post(self.url, json=payload) as response:
+                response.raise_for_status()
+                result: dict[str, Any] = await response.json()
+        except TimeoutError as exc:
+            total_timeout = self.timeout.total if self.timeout else 0.0
+            logger.error(f"Reranking request timeout after {total_timeout:.1f}s")
+            raise exc
+        except aiohttp.ClientError as exc:
+            logger.error(f"Reranking request failed: {exc}")
+            raise exc
+
+        processed = sorted(result.get("results", []), key=lambda item: item.get("index", 0))
+        return [float(entry.get("relevance_score", 0.0)) for entry in processed]
+
+    def compute_score(self, sentence_pairs, batch_size=256, max_length=512, normalize=False):
+        """Synchronous helper retained for backwards compatibility."""
+        try:
+            _ = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.acompute_score(sentence_pairs, batch_size, max_length, normalize))
+        raise RuntimeError("compute_score cannot be used while an event loop is running. Use acompute_score instead.")
+
+    async def aclose(self) -> None:
+        if self.session and not self.session.closed:
+            await self.session.close()
+
+    def __del__(self) -> None:
+        if self.session and not self.session.closed:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                asyncio.run(self.aclose())
+                return
+
+            if loop.is_closed():
+                asyncio.run(self.aclose())
+            elif not loop.is_running():
+                loop.run_until_complete(self.aclose())
 
 
 def get_reranker(model_id, **kwargs):

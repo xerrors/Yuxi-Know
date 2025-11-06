@@ -2,6 +2,7 @@ import aiofiles
 import asyncio
 import os
 import traceback
+from collections.abc import Mapping
 from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
@@ -51,6 +52,56 @@ async def create_database(
         f"additional_params {additional_params}, llm_info {llm_info}"
     )
     try:
+        additional_params = {**(additional_params or {})}
+
+        def normalize_reranker_config(kb: str, params: dict) -> None:
+            reranker_cfg = params.get("reranker_config")
+            if kb not in {"chroma", "milvus"}:
+                if kb == "lightrag" and reranker_cfg:
+                    logger.warning("LightRAG does not support reranker, ignoring reranker_config")
+                    params.pop("reranker_config", None)
+                return
+
+            if not reranker_cfg:
+                params["reranker_config"] = {
+                    "enabled": False,
+                    "model": "",
+                    "recall_top_k": 50,
+                    "final_top_k": 10,
+                }
+                return
+
+            if not isinstance(reranker_cfg, Mapping):
+                raise HTTPException(status_code=400, detail="reranker_config must be an object")
+
+            enabled = bool(reranker_cfg.get("enabled", False))
+            model = (reranker_cfg.get("model") or "").strip()
+            recall_top_k = max(1, int(reranker_cfg.get("recall_top_k", 50)))
+            final_top_k = max(1, int(reranker_cfg.get("final_top_k", 10)))
+
+            if enabled:
+                if not model:
+                    raise HTTPException(status_code=400, detail="reranker_config.model is required when enabled")
+                if model not in config.reranker_names:
+                    raise HTTPException(status_code=400, detail=f"Unsupported reranker model: {model}")
+                if final_top_k > recall_top_k:
+                    logger.warning(
+                        f"final_top_k ({final_top_k}) cannot exceed recall_top_k ({recall_top_k}); "
+                        "adjusting recall_top_k to match final_top_k"
+                    )
+                    recall_top_k = final_top_k
+            else:
+                model = model if model in config.reranker_names else ""
+
+            params["reranker_config"] = {
+                "enabled": enabled,
+                "model": model,
+                "recall_top_k": recall_top_k,
+                "final_top_k": final_top_k,
+            }
+
+        normalize_reranker_config(kb_type, additional_params)
+
         embed_info = config.embed_model_names[embed_model_name]
         database_info = await knowledge_base.create_database(
             database_name, description, kb_type=kb_type, embed_info=embed_info, llm_info=llm_info, **additional_params
@@ -419,6 +470,9 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
             raise HTTPException(status_code=404, detail="Database not found")
 
         kb_type = db_info.get("kb_type", "lightrag")
+        metadata = db_info.get("metadata", {}) or {}
+        reranker_config = metadata.get("reranker_config", {}) or {}
+        reranker_enabled = bool(reranker_config.get("enabled", False))
 
         # 根据知识库类型返回不同的查询参数
         if kb_type == "lightrag":
@@ -464,81 +518,143 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
                 ],
             }
         elif kb_type == "chroma":
-            params = {
-                "type": "chroma",
-                "options": [
+            top_k_default = reranker_config.get("final_top_k", 10)
+            params_list = [
+                {
+                    "key": "top_k",
+                    "label": "TopK",
+                    "type": "number",
+                    "default": top_k_default,
+                    "min": 1,
+                    "max": 100,
+                    "description": "返回的最大结果数量",
+                },
+                {
+                    "key": "similarity_threshold",
+                    "label": "相似度阈值",
+                    "type": "number",
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.1,
+                    "description": "过滤相似度低于此值的结果",
+                },
+                {
+                    "key": "include_distances",
+                    "label": "显示相似度",
+                    "type": "boolean",
+                    "default": True,
+                    "description": "在结果中显示相似度分数",
+                },
+                {
+                    "key": "use_reranker",
+                    "label": "启用重排序",
+                    "type": "boolean",
+                    "default": reranker_enabled,
+                    "description": "是否使用精排模型对检索结果进行重排序",
+                },
+                {
+                    "key": "recall_top_k",
+                    "label": "召回数量",
+                    "type": "number",
+                    "default": reranker_config.get("recall_top_k", 50),
+                    "min": 10,
+                    "max": 200,
+                    "description": "启用重排序时向量检索的候选数量",
+                },
+            ]
+
+            if config.reranker_names:
+                params_list.append(
                     {
-                        "key": "top_k",
-                        "label": "TopK",
-                        "type": "number",
-                        "default": 10,
-                        "min": 1,
-                        "max": 100,
-                        "description": "返回的最大结果数量",
-                    },
-                    {
-                        "key": "similarity_threshold",
-                        "label": "相似度阈值",
-                        "type": "number",
-                        "default": 0.0,
-                        "min": 0.0,
-                        "max": 1.0,
-                        "step": 0.1,
-                        "description": "过滤相似度低于此值的结果",
-                    },
-                    {
-                        "key": "include_distances",
-                        "label": "显示相似度",
-                        "type": "boolean",
-                        "default": True,
-                        "description": "在结果中显示相似度分数",
-                    },
-                ],
-            }
-        elif kb_type == "milvus":
-            params = {
-                "type": "milvus",
-                "options": [
-                    {
-                        "key": "top_k",
-                        "label": "TopK",
-                        "type": "number",
-                        "default": 10,
-                        "min": 1,
-                        "max": 100,
-                        "description": "返回的最大结果数量",
-                    },
-                    {
-                        "key": "similarity_threshold",
-                        "label": "相似度阈值",
-                        "type": "number",
-                        "default": 0.0,
-                        "min": 0.0,
-                        "max": 1.0,
-                        "step": 0.1,
-                        "description": "过滤相似度低于此值的结果",
-                    },
-                    {
-                        "key": "include_distances",
-                        "label": "显示相似度",
-                        "type": "boolean",
-                        "default": True,
-                        "description": "在结果中显示相似度分数",
-                    },
-                    {
-                        "key": "metric_type",
-                        "label": "距离度量类型",
+                        "key": "reranker_model",
+                        "label": "重排序模型",
                         "type": "select",
-                        "default": "COSINE",
+                        "default": reranker_config.get("model", ""),
                         "options": [
-                            {"value": "COSINE", "label": "余弦相似度", "description": "适合文本语义相似度"},
-                            {"value": "L2", "label": "欧几里得距离", "description": "适合数值型数据"},
-                            {"value": "IP", "label": "内积", "description": "适合标准化向量"},
+                            {"label": info.name, "value": model_id}
+                            for model_id, info in config.reranker_names.items()
                         ],
-                        "description": "向量相似度计算方法",
-                    },
-                ],
-            }
+                        "description": "覆盖默认配置，选择用于本次查询的重排序模型",
+                    }
+                )
+
+            params = {"type": "chroma", "options": params_list}
+        elif kb_type == "milvus":
+            top_k_default = reranker_config.get("final_top_k", 10)
+            params_list = [
+                {
+                    "key": "top_k",
+                    "label": "TopK",
+                    "type": "number",
+                    "default": top_k_default,
+                    "min": 1,
+                    "max": 100,
+                    "description": "返回的最大结果数量",
+                },
+                {
+                    "key": "similarity_threshold",
+                    "label": "相似度阈值",
+                    "type": "number",
+                    "default": 0.0,
+                    "min": 0.0,
+                    "max": 1.0,
+                    "step": 0.1,
+                    "description": "过滤相似度低于此值的结果",
+                },
+                {
+                    "key": "include_distances",
+                    "label": "显示相似度",
+                    "type": "boolean",
+                    "default": True,
+                    "description": "在结果中显示相似度分数",
+                },
+                {
+                    "key": "metric_type",
+                    "label": "距离度量类型",
+                    "type": "select",
+                    "default": "COSINE",
+                    "options": [
+                        {"value": "COSINE", "label": "余弦相似度", "description": "适合文本语义相似度"},
+                        {"value": "L2", "label": "欧几里得距离", "description": "适合数值型数据"},
+                        {"value": "IP", "label": "内积", "description": "适合标准化向量"},
+                    ],
+                    "description": "向量相似度计算方法",
+                },
+                {
+                    "key": "use_reranker",
+                    "label": "启用重排序",
+                    "type": "boolean",
+                    "default": reranker_enabled,
+                    "description": "是否使用精排模型对检索结果进行重排序",
+                },
+                {
+                    "key": "recall_top_k",
+                    "label": "召回数量",
+                    "type": "number",
+                    "default": reranker_config.get("recall_top_k", 50),
+                    "min": 10,
+                    "max": 200,
+                    "description": "启用重排序时向量检索的候选数量",
+                },
+            ]
+
+            if config.reranker_names:
+                params_list.append(
+                    {
+                        "key": "reranker_model",
+                        "label": "重排序模型",
+                        "type": "select",
+                        "default": reranker_config.get("model", ""),
+                        "options": [
+                            {"label": info.name, "value": model_id}
+                            for model_id, info in config.reranker_names.items()
+                        ],
+                        "description": "覆盖默认配置，选择用于本次查询的重排序模型",
+                    }
+                )
+
+            params = {"type": "milvus", "options": params_list}
         else:
             # 未知类型，返回基本参数
             params = {

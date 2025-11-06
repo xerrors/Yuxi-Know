@@ -71,6 +71,17 @@
         >
           <SearchOutlined v-if="!loading" /> 加载图谱
         </a-button>
+        <a-button
+          type="default"
+          size="small"
+          :loading="loading"
+          @click="loadTestData"
+          :disabled="!selectedDatabase"
+          style="margin-left: 6px"
+          title="加载测试数据（用于演示图谱功能）"
+        >
+          <ReloadOutlined v-if="!loading" /> 测试数据
+        </a-button>
       </div>
 
       <div v-if="!props.hideStats" class="stats-section">
@@ -741,6 +752,82 @@ const loadGraphData = async () => {
     loading.value = false
     loadingMessage.value = '加载图数据中...'
     graphStore.setIsFetching(false)
+  }
+}
+
+// 加载测试数据
+const loadTestData = async () => {
+  if (!selectedDatabase.value) {
+    message.warning('请先选择数据库')
+    return
+  }
+
+  loading.value = true
+  loadingMessage.value = '加载测试数据中...'
+
+  try {
+    const response = await fetch(`/api/graph/lightrag/test-data?db_id=${selectedDatabase.value}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+        'Content-Type': 'application/json'
+      }
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const testData = await response.json()
+
+    if (testData.success) {
+      // 创建图数据
+      const rawGraph = graphStore.createGraphFromApiData(
+        testData.data.nodes,
+        testData.data.edges
+      )
+
+      // 设置图数据
+      graphStore.setRawGraph(rawGraph)
+      graphStore.stats = {
+        displayed_nodes: testData.data.nodes.length,
+        displayed_edges: testData.data.edges.length,
+        is_truncated: testData.data.is_truncated
+      }
+
+      console.log('Test graph created:', {
+        nodes: rawGraph.nodes.length,
+        edges: rawGraph.edges.length,
+        sampleNode: rawGraph.nodes[0],
+        sampleEdge: rawGraph.edges[0]
+      })
+
+      // 创建Sigma图
+      const sigmaGraph = graphStore.createSigmaGraph(rawGraph)
+      graphStore.setSigmaGraph(sigmaGraph)
+
+      // 应用布局
+      await applyLayout(sigmaGraph)
+
+      // 更新Sigma实例
+      if (sigmaInstance) {
+        sigmaInstance.setGraph(sigmaGraph)
+        sigmaInstance.refresh()
+      } else {
+        await nextTick()
+        await initSigma()
+      }
+
+      message.success(`测试数据加载成功：${rawGraph.nodes.length} 个节点，${rawGraph.edges.length} 条边`)
+    } else {
+      throw new Error('Failed to load test data')
+    }
+
+  } catch (error) {
+    console.error('加载测试数据失败:', error)
+    message.error('加载测试数据失败: ' + error.message)
+  } finally {
+    loading.value = false
+    loadingMessage.value = '加载图数据中...'
   }
 }
 

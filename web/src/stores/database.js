@@ -44,7 +44,7 @@ export const useDatabaseStore = defineStore('database', () => {
   let autoRefreshManualOverride = false; // Indicates user explicitly disabled auto-refresh
 
   // Actions
-  async function getDatabaseInfo(id) {
+  async function getDatabaseInfo(id, skipQueryParams = false) {
     const db_id = id || databaseId.value;
     if (!db_id) return;
 
@@ -54,7 +54,11 @@ export const useDatabaseStore = defineStore('database', () => {
       const data = await databaseApi.getDatabaseInfo(db_id);
       database.value = data;
       ensureAutoRefreshForProcessing(data?.files);
-      await loadQueryParams(db_id);
+
+      // Only load query parameters if explicitly requested or if not loaded yet
+      if (!skipQueryParams && queryParams.value.length === 0) {
+        await loadQueryParams(db_id);
+      }
     } catch (error) {
       console.error(error);
       message.error(error.message || '获取数据库信息失败');
@@ -69,7 +73,7 @@ export const useDatabaseStore = defineStore('database', () => {
       state.lock = true;
       await databaseApi.updateDatabase(databaseId.value, formData);
       message.success('知识库信息更新成功');
-      await getDatabaseInfo();
+      await getDatabaseInfo(); // Load query params after updating database info
     } catch (error) {
       console.error(error);
       message.error(error.message || '更新失败');
@@ -104,7 +108,7 @@ export const useDatabaseStore = defineStore('database', () => {
     state.lock = true;
     try {
       await documentApi.deleteDocument(databaseId.value, fileId);
-      await getDatabaseInfo();
+      await getDatabaseInfo(undefined, true); // Skip query params for file deletion
     } catch (error) {
       console.error(error);
       message.error(error.message || '删除失败');
@@ -171,7 +175,7 @@ export const useDatabaseStore = defineStore('database', () => {
             message.error(`${failureCount} 个文件删除失败`);
           }
           selectedRowKeys.value = [];
-          await getDatabaseInfo();
+          await getDatabaseInfo(undefined, true); // Skip query params for batch deletion
         } catch (error) {
           progressMessage?.();
           console.error('批量删除出错:', error);
@@ -243,7 +247,7 @@ export const useDatabaseStore = defineStore('database', () => {
             }
           });
         }
-        await getDatabaseInfo();
+        await getDatabaseInfo(undefined, true); // Skip query params when adding files
         return true; // Indicate success
       } else {
         message.error(data.message || '处理失败');
@@ -324,7 +328,7 @@ export const useDatabaseStore = defineStore('database', () => {
   function startAutoRefresh() {
     if (state.autoRefresh && !refreshInterval) {
       refreshInterval = setInterval(() => {
-        getDatabaseInfo();
+        getDatabaseInfo(undefined, true); // Skip loading query params during auto-refresh
       }, 1000);
     }
   }

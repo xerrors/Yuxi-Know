@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 import traceback
 from functools import partial
 from typing import Any
@@ -299,9 +300,24 @@ class MilvusKB(KnowledgeBase):
             raise ValueError(f"Database {db_id} not found")
 
         try:
-            top_k = kwargs.get("top_k", 30)
-            similarity_threshold = kwargs.get("similarity_threshold", 0.2)
+            db_meta = self.databases_meta.get(db_id, {})
+            db_metadata = db_meta.get("metadata", {}) or {}
+            reranker_config = db_metadata.get("reranker_config", {}) or {}
+
+            requested_top_k = int(kwargs.get("top_k", reranker_config.get("final_top_k", 30)))
+            requested_top_k = max(requested_top_k, 1)
+            similarity_threshold = float(kwargs.get("similarity_threshold", 0.2))
             metric_type = kwargs.get("metric_type", "COSINE")
+            include_distances = bool(kwargs.get("include_distances", True))
+
+            use_reranker = bool(kwargs.get("use_reranker", reranker_config.get("enabled", False)))
+            if use_reranker:
+                recall_top_k = int(kwargs.get("recall_top_k", reranker_config.get("recall_top_k", 50)))
+                recall_top_k = max(recall_top_k, requested_top_k)
+                final_top_k = requested_top_k
+            else:
+                recall_top_k = requested_top_k
+                final_top_k = requested_top_k
 
             embed_info = self.databases_meta[db_id].get("embed_info", {})
             embedding_function = self._get_embedding_function(embed_info)
@@ -312,7 +328,7 @@ class MilvusKB(KnowledgeBase):
                 data=query_embedding,
                 anns_field="embedding",
                 param=search_params,
-                limit=top_k,
+                limit=recall_top_k,
                 output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"],
             )
 
@@ -334,12 +350,45 @@ class MilvusKB(KnowledgeBase):
                     "chunk_index": entity.get("chunk_index"),
                 }
 
-                retrieved_chunks.append(
-                    {"content": entity.get("content", ""), "metadata": metadata, "score": similarity}
-                )
+                chunk = {"content": entity.get("content", ""), "metadata": metadata, "score": similarity}
+                if include_distances:
+                    chunk["distance"] = hit.distance
+                retrieved_chunks.append(chunk)
 
             logger.debug(f"Milvus query response: {len(retrieved_chunks)} chunks found (after similarity filtering)")
-            return retrieved_chunks
+
+            if use_reranker and retrieved_chunks:
+                try:
+                    reranker_model = kwargs.get("reranker_model", reranker_config.get("model"))
+                    if not reranker_model:
+                        logger.warning("Reranker enabled but no model specified, skipping reranking")
+                    else:
+                        from src.models.rerank import get_reranker
+
+                        reranker = get_reranker(reranker_model)
+                        try:
+                            rerank_start = time.time()
+                            documents_text = [chunk["content"] for chunk in retrieved_chunks]
+                            rerank_scores = await reranker.acompute_score(
+                                [query_text, documents_text], normalize=True
+                            )
+
+                            for chunk, rerank_score in zip(retrieved_chunks, rerank_scores):
+                                chunk["rerank_score"] = float(rerank_score)
+
+                            retrieved_chunks.sort(
+                                key=lambda item: item.get("rerank_score", item.get("score", 0.0)), reverse=True
+                            )
+                            elapsed = time.time() - rerank_start
+                            logger.info(
+                                f"Reranking completed for {db_id} in {elapsed:.3f}s with model {reranker_model}"
+                            )
+                        finally:
+                            await reranker.aclose()
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(f"Reranking failed: {exc}, falling back to vector scores")
+
+            return retrieved_chunks[:final_top_k]
 
         except Exception as e:
             logger.error(f"Milvus query error: {e}, {traceback.format_exc()}")
