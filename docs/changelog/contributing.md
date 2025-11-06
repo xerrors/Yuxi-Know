@@ -58,6 +58,43 @@ test: 添加测试
 chore: 构建过程或辅助工具的变动
 ```
 
+
+## 🐞 Bug 修复发布流程
+
+如果在发布 `v0.3.0` 后发现 bug：
+
+### ✅ 情况 1：main 上没有未完成的新功能
+
+直接在 main 修复并发布：
+
+```bash
+git commit -m "fix: resolve config parser crash"
+git tag -a v0.3.1 -m "Hotfix v0.3.1"
+git push origin main --tags
+```
+
+### ⚙️ 情况 2：main 上已有新功能未完成
+
+从上一个 tag 建立 hotfix 分支：
+
+```bash
+git checkout -b hotfix/0.3.1 v0.3.0
+# 修复问题
+git commit -m "fix: resolve config parser crash"
+git push origin hotfix/0.3.1
+
+# 测试后合并回 main 并打 tag
+git checkout main
+git merge --no-ff hotfix/0.3.1
+git tag -a v0.3.1 -m "Hotfix v0.3.1"
+git push origin main --tags
+
+# 删除临时分支
+git branch -d hotfix/0.3.1
+git push origin --delete hotfix/0.3.1
+```
+
+
 ### 测试要求
 
 ::: tip 测试

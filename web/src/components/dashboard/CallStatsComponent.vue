@@ -52,7 +52,7 @@ const props = defineProps({
 const callStatsData = ref(null)
 const callStatsLoading = ref(false)
 const callTimeRange = ref('14days')
-const callDataType = ref('models')
+const callDataType = ref('agents')
 const timeRangeOptions = [
   { value: '14hours', label: '近14小时' },
   { value: '14days', label: '近14天' },

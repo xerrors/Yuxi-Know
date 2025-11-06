@@ -55,7 +55,16 @@
       <a-col :span="24">
         <div class="chart-container">
           <h4>文件类型分布</h4>
-          <div ref="fileTypeChartRef" class="chart"></div>
+          <div ref="fileTypeChartRef" class="chart donut-chart-container">
+            <div class="carousel-info" v-if="fileTypeData.length > 0">
+              <div class="carousel-item" :class="{ active: currentCarouselIndex === index }"
+                   v-for="(item, index) in fileTypeData" :key="item.name">
+                <div class="carousel-label">{{ item.name }}</div>
+                <div class="carousel-value">{{ item.value }}</div>
+                <div class="carousel-percent">{{ ((item.value / totalFiles) * 100).toFixed(1) }}%</div>
+              </div>
+            </div>
+          </div>
         </div>
       </a-col>
     </a-row>
@@ -113,6 +122,12 @@ const dbTypeChartRef = ref(null)
 const fileTypeChartRef = ref(null)
 let dbTypeChart = null
 let fileTypeChart = null
+
+// File type chart data for carousel
+const fileTypeData = ref([])
+const totalFiles = ref(0)
+const currentCarouselIndex = ref(0)
+let carouselTimer = null
 
 // 计算属性
 const formattedStorageSize = computed(() => {
@@ -219,7 +234,14 @@ const initFileTypeChart = () => {
     const data = Object.entries(fileTypesData).map(([type, count]) => ({
       name: type || '未知',
       value: count
-    }))
+    })).sort((a, b) => b.value - a.value) // 按数量排序
+
+    // 设置轮播数据
+    fileTypeData.value = data
+    totalFiles.value = data.reduce((sum, item) => sum + item.value, 0)
+
+    // 启动轮播
+    startCarousel()
 
     const option = {
       tooltip: {
@@ -232,28 +254,33 @@ const initFileTypeChart = () => {
         },
         formatter: '{a} <br/>{b}: {c} ({d}%)'
       },
+      legend: {
+        orient: 'horizontal',
+        bottom: '5%',
+        left: 'center',
+        itemGap: 16,
+        itemWidth: 10,
+        itemHeight: 10,
+        textStyle: {
+          fontSize: 11,
+          color: '#666'
+        }
+      },
       series: [{
         name: '文件类型',
         type: 'pie',
-        radius: ['30%', '70%'],
-        center: ['50%', '60%'],
-        avoidLabelOverlap: false,
+        radius: ['45%', '75%'], // 调整为更大的环，为中心信息留出更多空间
+        center: ['50%', '45%'], // 向上移动，为中心和底部图例留出空间
+        avoidLabelOverlap: true, // 避免标签重叠
         itemStyle: {
-          borderRadius: 6,
+          borderRadius: 8,
           borderColor: '#fff',
           borderWidth: 2
         },
         label: {
-          show: true,
-          formatter: '{b}: {c}'
+          show: false // 隐藏饼图上的标签，使用图例代替
         },
         emphasis: {
-          label: {
-            show: true,
-            fontSize: '14',
-            fontWeight: 'bold',
-            color: '#333'
-          },
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
@@ -261,7 +288,7 @@ const initFileTypeChart = () => {
           }
         },
         labelLine: {
-          show: true
+          show: false // 隐藏标签线
         },
         data: data,
         color: getColorPalette()
@@ -270,6 +297,11 @@ const initFileTypeChart = () => {
 
     fileTypeChart.setOption(option)
   } else {
+    // 清空轮播数据
+    fileTypeData.value = []
+    totalFiles.value = 0
+    stopCarousel()
+
     // 如果没有文件类型数据，显示一个占位图表
     const option = {
       tooltip: {
@@ -285,25 +317,18 @@ const initFileTypeChart = () => {
       series: [{
         name: '文件类型',
         type: 'pie',
-        radius: ['30%', '70%'],
-        center: ['50%', '60%'],
-        avoidLabelOverlap: false,
+        radius: ['45%', '75%'],
+        center: ['50%', '45%'],
+        avoidLabelOverlap: true,
         itemStyle: {
-          borderRadius: 6,
+          borderRadius: 8,
           borderColor: '#fff',
           borderWidth: 2
         },
         label: {
-          show: true,
-          formatter: '{b}: {c}'
+          show: false
         },
         emphasis: {
-          label: {
-            show: true,
-            fontSize: '14',
-            fontWeight: 'bold',
-            color: '#333'
-          },
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
@@ -311,7 +336,7 @@ const initFileTypeChart = () => {
           }
         },
         labelLine: {
-          show: true
+          show: false
         },
         data: [
           { name: '暂无数据', value: 1 }
@@ -321,6 +346,27 @@ const initFileTypeChart = () => {
     }
 
     fileTypeChart.setOption(option)
+  }
+}
+
+// 轮播功能
+const startCarousel = () => {
+  stopCarousel() // 先停止之前的轮播
+  if (fileTypeData.value.length <= 1) return
+
+  // 重置索引
+  currentCarouselIndex.value = 0
+
+  // 启动新的轮播，每3秒切换一次
+  carouselTimer = setInterval(() => {
+    currentCarouselIndex.value = (currentCarouselIndex.value + 1) % fileTypeData.value.length
+  }, 3000)
+}
+
+const stopCarousel = () => {
+  if (carouselTimer) {
+    clearInterval(carouselTimer)
+    carouselTimer = null
   }
 }
 
@@ -351,6 +397,7 @@ onMounted(() => {
 // 组件卸载时清理
 const cleanup = () => {
   window.removeEventListener('resize', handleResize)
+  stopCarousel() // 停止轮播
   if (dbTypeChart) {
     dbTypeChart.dispose()
     dbTypeChart = null
@@ -408,6 +455,56 @@ defineExpose({
 
   .chart--thin {
     height: 80px;
+  }
+
+  // 环形图容器样式
+  .donut-chart-container {
+    position: relative;
+
+    .carousel-info {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 10;
+
+      .carousel-item {
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        white-space: nowrap;
+
+        &.active {
+          opacity: 1;
+        }
+
+        .carousel-label {
+          font-size: 14px;
+          font-weight: 600;
+          color: #666;
+          margin-bottom: 4px;
+        }
+
+        .carousel-value {
+          font-size: 24px;
+          font-weight: 700;
+          color: #333;
+          margin-bottom: 2px;
+          line-height: 1;
+        }
+
+        .carousel-percent {
+          font-size: 12px;
+          color: #999;
+          font-weight: 500;
+        }
+      }
+    }
   }
 }
 </style>
