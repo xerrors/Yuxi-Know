@@ -1,38 +1,5 @@
 <template>
 <div class="database-info-container">
-  <!-- Maximize Graph Modal -->
-  <a-modal
-    v-model:open="isGraphMaximized"
-    :footer="null"
-    :closable="false"
-    width="100%"
-    wrap-class-name="full-modal"
-    :mask-closable="false"
-  >
-    <template #title>
-      <div class="maximized-graph-header">
-        <h3>知识图谱 (最大化)</h3>
-        <a-button type="text" @click="toggleGraphMaximize">
-          <CompressOutlined /> 退出最大化
-        </a-button>
-      </div>
-    </template>
-    <div class="maximized-graph-content">
-      <div v-if="!isGraphSupported" class="graph-disabled">
-        <div class="disabled-content">
-          <h4>知识图谱不可用</h4>
-          <p>当前知识库类型 "{{ getKbTypeLabel(database.kb_type || 'lightrag') }}" 不支持知识图谱功能。</p>
-          <p>只有 LightRAG 类型的知识库支持知识图谱。</p>
-        </div>
-      </div>
-      <KnowledgeGraphViewer
-        v-else-if="isGraphMaximized"
-        :initial-database-id="databaseId"
-        :hide-db-selector="true"
-      />
-    </div>
-  </a-modal>
-
   <FileDetailModal />
 
   <FileUploadModal
@@ -79,9 +46,6 @@
 import { onMounted, reactive, ref, watch, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
-import { getKbTypeLabel } from '@/utils/kb_utils';
-import { CompressOutlined } from '@ant-design/icons-vue';
-import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';
@@ -96,11 +60,6 @@ const store = useDatabaseStore();
 const databaseId = computed(() => store.databaseId);
 const database = computed(() => store.database);
 const state = computed(() => store.state);
-const isGraphMaximized = computed({
-    get: () => store.state.isGraphMaximized,
-    set: (val) => store.state.isGraphMaximized = val
-});
-
 // 计算属性：是否支持知识图谱
 const isGraphSupported = computed(() => {
   const kbType = database.value.kb_type?.toLowerCase();
@@ -110,13 +69,32 @@ const isGraphSupported = computed(() => {
 // Tab 切换逻辑 - 智能默认
 const activeTab = ref('query');
 
+
+const resetGraphStats = () => {
+  store.graphStats = {
+    total_nodes: 0,
+    total_edges: 0,
+    displayed_nodes: 0,
+    displayed_edges: 0,
+    is_truncated: false
+  };
+};
+
+
 // LightRAG 默认展示知识图谱
 watch(
   () => [databaseId.value, isGraphSupported.value],
   ([newDbId, supported], oldValue = []) => {
     const [oldDbId, previouslySupported] = oldValue;
+
     if (!newDbId) {
       return;
+    }
+
+    if (newDbId && newDbId !== oldDbId) {
+      resetGraphStats();
+    } else if (!supported && previouslySupported) {
+      resetGraphStats();
     }
 
     if (supported && (newDbId !== oldDbId || previouslySupported === false || previouslySupported === undefined)) {
@@ -149,11 +127,7 @@ const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
 };
 
-// 切换图谱最大化状态
-const toggleGraphMaximize = () => {
-  isGraphMaximized.value = !isGraphMaximized.value;
-};
-
+// 重置文件选中状态
 const resetFileSelectionState = () => {
   store.selectedRowKeys = [];
   store.selectedFile = null;
@@ -163,6 +137,7 @@ const resetFileSelectionState = () => {
 watch(() => route.params.database_id, async (newId) => {
     store.databaseId = newId;
     resetFileSelectionState();
+    resetGraphStats();
     store.stopAutoRefresh();
     await store.getDatabaseInfo(newId, false); // Explicitly load query params on initial load
     store.startAutoRefresh();
@@ -360,47 +335,6 @@ const handleMouseUp = () => {
 </style>
 
 <style lang="less">
-:deep(.full-modal) {
-  .ant-modal {
-    max-width: 100%;
-    top: 0;
-    padding-bottom: 0;
-    margin: 0;
-    padding: 0;
-  }
-
-  .ant-modal-content {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 200px);
-  }
-
-  .ant-modal-body {
-    flex: 1;
-  }
-}
-
-
-
-.maximized-graph-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  h3 {
-    margin: 0;
-    color: var(--gray-800);
-  }
-}
-
-
-.maximized-graph-content {
-  height: calc(100vh - 300px);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-
 /* 全局样式作为备用方案 */
 .ant-popover .query-params-compact {
   width: 220px;

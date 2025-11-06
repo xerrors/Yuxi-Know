@@ -18,6 +18,8 @@ export const useDatabaseStore = defineStore('database', () => {
   const queryParams = ref([]);
   const meta = reactive({});
   const graphStats = ref({
+    total_nodes: 0,
+    total_edges: 0,
     displayed_nodes: 0,
     displayed_edges: 0,
     is_truncated: false,
@@ -35,7 +37,6 @@ export const useDatabaseStore = defineStore('database', () => {
     chunkLoading: false,
     autoRefresh: false,
     queryParamsLoading: false,
-    isGraphMaximized: false,
     rightPanelVisible: true,
   });
 

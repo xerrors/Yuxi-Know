@@ -372,6 +372,7 @@ import { parseToShanghai } from '@/utils/time';
 <style scoped>
 .file-table-container {
   display: flex;
+  flex-grow: 1;
   flex-direction: column;
   max-height: 100%;
   overflow: hidden;

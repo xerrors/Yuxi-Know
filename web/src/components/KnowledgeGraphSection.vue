@@ -2,31 +2,10 @@
   <div class="graph-section" v-if="isGraphSupported">
     <div class="graph-toolbar">
       <div class="toolbar-left">
-        <div v-if="graphStats.displayed_nodes > 0 || graphStats.displayed_edges > 0" class="graph-stats">
-          <a-tag color="blue" size="small">节点: {{ graphStats.displayed_nodes }}</a-tag>
-          <a-tag color="green" size="small">边: {{ graphStats.displayed_edges }}</a-tag>
+        <div class="graph-stats">
+          <a-tag color="blue" size="small">总节点: {{ graphStats.total_nodes || 0 }}</a-tag>
+          <a-tag color="green" size="small">总边: {{ graphStats.total_edges || 0 }}</a-tag>
         </div>
-      </div>
-      <div class="toolbar-right">
-        <a-button
-          type="primary"
-          size="small"
-          @click="loadGraph"
-          :disabled="!isGraphSupported"
-          :icon='h(ReloadOutlined)'
-        >
-          加载图谱
-        </a-button>
-        <a-button
-          type="text"
-          size="small"
-          :icon="h(ExpandOutlined)"
-          title="最大化"
-          @click="toggleGraphMaximize"
-          :disabled="!isGraphSupported"
-        >
-          最大化
-        </a-button>
       </div>
     </div>
     <div class="graph-container-compact">
@@ -41,12 +20,10 @@
         v-else
         :initial-database-id="databaseId"
         :hide-db-selector="true"
-        :hide-stats="true"
-        :hide-controls="!store.state.isGraphMaximized"
         :initial-limit="graphLimit"
         :initial-depth="graphDepth"
-        @update:stats="handleStatsUpdate"
         ref="graphViewerRef"
+        @update:stats="handleViewerStats"
       />
     </div>
 
@@ -115,7 +92,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
-import { ReloadOutlined, ExpandOutlined } from '@ant-design/icons-vue';
+import { ReloadOutlined } from '@ant-design/icons-vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
 import { h } from 'vue';
 import { getKbTypeLabel } from '@/utils/kb_utils';
@@ -139,7 +116,7 @@ const graphStats = computed({
 
 const graphViewerRef = ref(null);
 const showSettings = ref(false);
-const graphLimit = ref(200);
+const graphLimit = ref(50);
 const graphDepth = ref(2);
 
 const showExportModal = ref(false);
@@ -166,14 +143,6 @@ const clearGraph = () => {
   if (graphViewerRef.value && typeof graphViewerRef.value.clearGraph === 'function') {
     graphViewerRef.value.clearGraph();
   }
-};
-
-const toggleGraphMaximize = () => {
-  store.state.isGraphMaximized = !store.state.isGraphMaximized;
-};
-
-const handleStatsUpdate = (stats) => {
-  graphStats.value = stats;
 };
 
 const applySettings = () => {
@@ -241,6 +210,20 @@ const scheduleGraphLoad = (delay = 200) => {
   }, delay);
 };
 
+// 处理子组件（Viewer）上报的统计信息，将其写入 database store 的 graphStats
+const handleViewerStats = (stats) => {
+  if (!stats) return;
+
+  // 合并现有 store.graphStats，优先使用来自 viewer 的值
+  store.graphStats = {
+    total_nodes: stats.total_nodes ?? store.graphStats.total_nodes ?? 0,
+    total_edges: stats.total_edges ?? store.graphStats.total_edges ?? 0,
+    displayed_nodes: stats.displayed_nodes ?? store.graphStats.displayed_nodes ?? 0,
+    displayed_edges: stats.displayed_edges ?? store.graphStats.displayed_edges ?? 0,
+    is_truncated: stats.is_truncated ?? store.graphStats.is_truncated ?? false,
+  }
+}
+
 watch(
   () => props.active,
   (active) => {
@@ -252,13 +235,17 @@ watch(
 );
 
 watch(databaseId, () => {
+  store.graphStats = defaultGraphStats();
   scheduleGraphLoad(300);
 });
 
 watch(isGraphSupported, (supported) => {
-  if (supported) {
-    scheduleGraphLoad(200);
+  if (!supported) {
+    store.graphStats = defaultGraphStats();
+    clearGraph();
+    return;
   }
+  scheduleGraphLoad(200);
 });
 
 onUnmounted(() => {

@@ -71,24 +71,8 @@
         >
           <SearchOutlined v-if="!loading" /> 加载图谱
         </a-button>
-        <a-button
-          type="default"
-          size="small"
-          :loading="loading"
-          @click="loadTestData"
-          :disabled="!selectedDatabase"
-          style="margin-left: 6px"
-          title="加载测试数据（用于演示图谱功能）"
-        >
-          <ReloadOutlined v-if="!loading" /> 测试数据
-        </a-button>
       </div>
 
-      <div v-if="!props.hideStats" class="stats-section">
-        <a-tag color="blue" size="small">节点: {{ stats.displayed_nodes || 0 }}</a-tag>
-        <a-tag color="green" size="small">边: {{ stats.displayed_edges || 0 }}</a-tag>
-        <!-- <a-tag v-if="stats.is_truncated" color="red" size="small">已截断</a-tag> -->
-      </div>
     </div>
 
     <!-- Sigma.js图可视化容器 -->
@@ -97,6 +81,11 @@
       ref="sigmaContainer"
       :class="{ 'loading': loading }"
     ></div>
+
+    <div v-if="!props.hideStats" class="graph-overlay-stats">
+      <a-tag color="blue" size="small">节点: {{ stats.displayed_nodes || 0 }}</a-tag>
+      <a-tag color="green" size="small">边: {{ stats.displayed_edges || 0 }}</a-tag>
+    </div>
 
     <!-- 节点详情面板 -->
     <div
@@ -234,7 +223,6 @@ import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from
 import { message } from 'ant-design-vue'
 import {
   SearchOutlined,
-  ReloadOutlined,
   ClearOutlined,
   CloseOutlined,
   PlusOutlined,
@@ -248,6 +236,7 @@ import { EdgeArrowProgram } from 'sigma/rendering'
 
 import { lightragApi } from '@/apis/graph_api'
 import { useGraphStore } from '@/stores/graphStore'
+import { useDatabaseStore } from '@/stores/database'
 import '@/assets/css/sigma.css'
 
 // 定义 props
@@ -283,6 +272,7 @@ const emit = defineEmits(['update:stats', 'refresh-graph', 'clear-graph'])
 
 // 状态管理
 const graphStore = useGraphStore()
+const databaseStore = useDatabaseStore()
 
 // 响应式引用
 const loading = ref(false)
@@ -714,9 +704,13 @@ const loadGraphData = async () => {
 
       // 设置图数据
       graphStore.setRawGraph(rawGraph)
+      // 更新 displayed 计数（当前视图）以及来自后端的 total 计数（整个库）
       graphStore.stats = {
         displayed_nodes: graphResponse.data.nodes.length,
         displayed_edges: graphResponse.data.edges.length,
+        // 从 statsResponse 填充整个知识库的统计信息（后端返回 total_nodes/total_edges）
+        total_nodes: statsResponse.data.total_nodes ?? graphStore.stats.total_nodes ?? 0,
+        total_edges: statsResponse.data.total_edges ?? graphStore.stats.total_edges ?? 0,
         is_truncated: graphResponse.data.is_truncated
       }
 
@@ -752,82 +746,6 @@ const loadGraphData = async () => {
     loading.value = false
     loadingMessage.value = '加载图数据中...'
     graphStore.setIsFetching(false)
-  }
-}
-
-// 加载测试数据
-const loadTestData = async () => {
-  if (!selectedDatabase.value) {
-    message.warning('请先选择数据库')
-    return
-  }
-
-  loading.value = true
-  loadingMessage.value = '加载测试数据中...'
-
-  try {
-    const response = await fetch(`/api/graph/lightrag/test-data?db_id=${selectedDatabase.value}`, {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-        'Content-Type': 'application/json'
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-    }
-
-    const testData = await response.json()
-
-    if (testData.success) {
-      // 创建图数据
-      const rawGraph = graphStore.createGraphFromApiData(
-        testData.data.nodes,
-        testData.data.edges
-      )
-
-      // 设置图数据
-      graphStore.setRawGraph(rawGraph)
-      graphStore.stats = {
-        displayed_nodes: testData.data.nodes.length,
-        displayed_edges: testData.data.edges.length,
-        is_truncated: testData.data.is_truncated
-      }
-
-      console.log('Test graph created:', {
-        nodes: rawGraph.nodes.length,
-        edges: rawGraph.edges.length,
-        sampleNode: rawGraph.nodes[0],
-        sampleEdge: rawGraph.edges[0]
-      })
-
-      // 创建Sigma图
-      const sigmaGraph = graphStore.createSigmaGraph(rawGraph)
-      graphStore.setSigmaGraph(sigmaGraph)
-
-      // 应用布局
-      await applyLayout(sigmaGraph)
-
-      // 更新Sigma实例
-      if (sigmaInstance) {
-        sigmaInstance.setGraph(sigmaGraph)
-        sigmaInstance.refresh()
-      } else {
-        await nextTick()
-        await initSigma()
-      }
-
-      message.success(`测试数据加载成功：${rawGraph.nodes.length} 个节点，${rawGraph.edges.length} 条边`)
-    } else {
-      throw new Error('Failed to load test data')
-    }
-
-  } catch (error) {
-    console.error('加载测试数据失败:', error)
-    message.error('加载测试数据失败: ' + error.message)
-  } finally {
-    loading.value = false
-    loadingMessage.value = '加载图数据中...'
   }
 }
 
@@ -1277,7 +1195,7 @@ defineExpose({
 
 .control-panel {
   background: white;
-  padding: 8px 0; /* Reduced from 16px */
+  padding: 6px 16px; /* Reduced from 16px */
   border-bottom: none;
   display: flex;
   gap: 12px; /* Reduced from 16px */
@@ -1301,15 +1219,25 @@ defineExpose({
 
 .sigma-container {
   flex: 1;
-  background: white;
+  // background: white;
   position: relative; /* 确保子元素可以相对于此容器定位 */
-  border: 1px solid var(--main-20);
+  // border: 1px solid var(--main-20);
   border-radius: 8px;
   overflow: hidden;
 
   &.loading {
     pointer-events: none;
   }
+}
+
+.graph-overlay-stats {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+  z-index: 1100;
 }
 
 .detail-panel {
