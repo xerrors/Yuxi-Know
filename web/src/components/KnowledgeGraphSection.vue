@@ -113,17 +113,25 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { ReloadOutlined, ExpandOutlined } from '@ant-design/icons-vue';
-import { message } from 'ant-design-vue';
 import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
 import { h } from 'vue';
+import { getKbTypeLabel } from '@/utils/kb_utils';
+
+const props = defineProps({
+  active: {
+    type: Boolean,
+    default: false,
+  },
+});
 
 const store = useDatabaseStore();
 
 const databaseId = computed(() => store.databaseId);
 const kbType = computed(() => store.database.kb_type);
+const kbTypeLabel = computed(() => getKbTypeLabel(kbType.value || 'lightrag'));
 const graphStats = computed({
     get: () => store.graphStats,
     set: (stats) => store.graphStats = stats
@@ -146,10 +154,9 @@ const isGraphSupported = computed(() => {
   return type === 'lightrag';
 });
 
+let pendingLoadTimer = null;
+
 const loadGraph = () => {
-  if (!(Object.keys(store.database?.files).length > 0)) {
-    return;
-  }
   if (graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function') {
     graphViewerRef.value.loadFullGraph();
   }
@@ -220,12 +227,45 @@ const applySettings = () => {
 //   }
 // };
 
-watch(isGraphSupported, (supported) => {
-    if (supported) {
-        setTimeout(() => {
-            loadGraph();
-        }, 800);
+const scheduleGraphLoad = (delay = 200) => {
+  if (!props.active || !isGraphSupported.value) {
+    return;
+  }
+  if (pendingLoadTimer) {
+    clearTimeout(pendingLoadTimer);
+  }
+  pendingLoadTimer = setTimeout(() => {
+    nextTick(() => {
+      loadGraph();
+    });
+  }, delay);
+};
+
+watch(
+  () => props.active,
+  (active) => {
+    if (active) {
+      scheduleGraphLoad();
     }
+  },
+  { immediate: true }
+);
+
+watch(databaseId, () => {
+  scheduleGraphLoad(300);
+});
+
+watch(isGraphSupported, (supported) => {
+  if (supported) {
+    scheduleGraphLoad(200);
+  }
+});
+
+onUnmounted(() => {
+  if (pendingLoadTimer) {
+    clearTimeout(pendingLoadTimer);
+    pendingLoadTimer = null;
+  }
 });
 
 </script>

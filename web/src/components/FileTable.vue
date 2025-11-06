@@ -46,7 +46,7 @@
       </div>
     </div>
 
-    <div class="batch-actions-compact" v-if="selectedRowKeys.length > 0">
+    <div class="batch-actions" v-if="selectedRowKeys.length > 0">
       <div class="batch-info">
         <span>{{ selectedRowKeys.length }} 项</span>
         <a-button
@@ -74,7 +74,7 @@
         :columns="columnsCompact"
         :data-source="filteredFiles"
         row-key="file_id"
-        class="my-table-compact"
+        class="my-table"
         size="small"
         :pagination="paginationCompact"
         :row-selection="{
@@ -373,7 +373,8 @@ import { parseToShanghai } from '@/utils/time';
 .file-table-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--gray-150);
   padding-top: 6px;
@@ -416,12 +417,12 @@ import { parseToShanghai } from '@/utils/time';
   }
 }
 
-.batch-actions-compact {
+.batch-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 4px;
-  background-color: var(--main-5);
+  padding: 2px 12px;
+  background-color: var(--main-10);
   border-radius: 4px;
   margin-bottom: 4px;
   flex-shrink: 0;
@@ -434,31 +435,31 @@ import { parseToShanghai } from '@/utils/time';
 }
 
 .batch-info span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--gray-700);
 }
 
-.batch-actions-compact .ant-btn {
-  font-size: 11px;
+.batch-actions .ant-btn {
+  font-size: 12px;
   padding: 0 6px;
   height: 22px;
   border-radius: 3px;
 }
 
-.batch-actions-compact .ant-btn:hover {
+.batch-actions .ant-btn:hover {
   background-color: var(--main-20);
   color: var(--main-color);
 }
 
-.my-table-compact {
+.my-table {
   flex: 1;
   overflow: auto;
   background-color: transparent;
   min-height: 0; /* 让 flex 子项可以正确缩小 */
 }
 
-.my-table-compact .main-btn {
+.my-table .main-btn {
   padding: 0;
   height: auto;
   line-height: 1.4;
@@ -468,32 +469,32 @@ import { parseToShanghai } from '@/utils/time';
   text-decoration: none;
 }
 
-.my-table-compact .main-btn:hover {
+.my-table .main-btn:hover {
   cursor: pointer;
   color: var(--main-color);
 }
 
-.my-table-compact .del-btn {
+.my-table .del-btn {
   color: var(--gray-500);
 }
 
-.my-table-compact .download-btn {
+.my-table .download-btn {
   color: var(--gray-500);
 }
 
-.my-table-compact .download-btn:hover {
+.my-table .download-btn:hover {
   color: var(--main-color);
 }
 
-.my-table-compact .del-btn:hover {
+.my-table .del-btn:hover {
   color: var(--error-color);
 }
 
-.my-table-compact .del-btn:disabled {
+.my-table .del-btn:disabled {
   cursor: not-allowed;
 }
 
-.my-table-compact .span-type {
+.my-table .span-type {
   display: inline-block;
   padding: 1px 5px;
   font-size: 10px;

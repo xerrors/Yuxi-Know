@@ -163,15 +163,6 @@
 
     <!-- 数据库列表 -->
     <div v-else class="databases">
-      <div class="new-database dbcard" @click="state.openNewDatabaseModel=true">
-        <div class="top">
-          <div class="icon"><BookPlus /></div>
-          <div class="info">
-            <h3>新建知识库</h3>
-          </div>
-        </div>
-        <p>导入您自己的文本数据或通过Webhook实时写入数据以增强 LLM 的上下文。</p>
-      </div>
       <div
         v-for="database in databases"
         :key="database.db_id"
@@ -224,7 +215,7 @@ import { ref, onMounted, reactive, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
 import { useConfigStore } from '@/stores/config';
 import { message } from 'ant-design-vue'
-import { BookPlus, Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
+import { Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
 import { LockOutlined, InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue';
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
@@ -877,10 +868,6 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-
-  .new-database {
-    background-color: #F0F3F4;
-  }
 }
 
 .database, .graphbase {

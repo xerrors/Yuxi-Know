@@ -56,6 +56,7 @@
         <a-tab-pane key="graph" tab="知识图谱" v-if="isGraphSupported">
           <KnowledgeGraphSection
             :visible="true"
+            :active="activeTab === 'graph'"
             @toggle-visible="() => {}"
           />
         </a-tab-pane>
@@ -108,19 +109,27 @@ const isGraphSupported = computed(() => {
 
 // Tab 切换逻辑 - 智能默认
 const activeTab = ref('query');
-const previousDatabaseId = ref(null);
 
-// 监听数据库ID变化，只在切换数据库时设置默认Tab
-watch(databaseId, (newDbId, oldDbId) => {
-  if (newDbId && newDbId !== oldDbId) {
-    // 切换到支持图谱的数据库时，默认显示图谱，否则显示检索
-    // 使用setTimeout确保在下一个tick中设置，避免和其他响应式更新冲突
-    setTimeout(() => {
-      activeTab.value = isGraphSupported.value ? 'graph' : 'query';
-    }, 0);
-    previousDatabaseId.value = newDbId;
-  }
-}, { immediate: true });
+// LightRAG 默认展示知识图谱
+watch(
+  () => [databaseId.value, isGraphSupported.value],
+  ([newDbId, supported], oldValue = []) => {
+    const [oldDbId, previouslySupported] = oldValue;
+    if (!newDbId) {
+      return;
+    }
+
+    if (supported && (newDbId !== oldDbId || previouslySupported === false || previouslySupported === undefined)) {
+      activeTab.value = 'graph';
+      return;
+    }
+
+    if (!supported && activeTab.value === 'graph') {
+      activeTab.value = 'query';
+    }
+  },
+  { immediate: true }
+);
 
 // 切换右侧面板显示/隐藏
 const toggleRightPanel = () => {
@@ -261,10 +270,12 @@ const handleMouseUp = () => {
   }
 
   .left-panel {
+    display: flex;
     flex-shrink: 0;
     flex-grow: 1;
     background-color: var(--gray-0);
     padding-right: 0;
+    // max-height: calc(100% - 16px);
   }
 
   .right-panel {
@@ -314,7 +325,6 @@ const handleMouseUp = () => {
     border-bottom: 1px solid var(--gray-200);
   }
 }
-
 
 /* Simplify resize handle */
 .resize-handle {

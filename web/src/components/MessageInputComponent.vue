@@ -444,7 +444,7 @@ onBeforeUnmount(() => {
   }
 
   &:disabled {
-    background-color: var(--gray-400);
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;

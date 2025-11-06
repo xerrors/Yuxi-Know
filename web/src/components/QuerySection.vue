@@ -3,63 +3,37 @@
     <div class="query-section-layout">
       <!-- 主内容区域 -->
       <div class="query-main">
-        <div class="query-header">
-          <div class="header-status">
-            <a-switch
-              v-model:checked="showRawData"
-              size="small"
-              checked-children="原始数据"
-              un-checked-children="格式化"
-            />
-            <span v-if="searchLoading" class="search-status">
-              <a-spin size="small" />
-              搜索中...
-            </span>
-            <span v-else-if="queryResult" class="result-count">
-              找到 {{ resultCount }} 条结果
-            </span>
-          </div>
-        </div>
-
         <div class="query-input-container">
-          <a-textarea
-            v-model:value="queryText"
-            placeholder="输入查询内容"
-            :auto-size="{ minRows: 3, maxRows: 6 }"
-            class="compact-query-textarea"
-          />
-          <div class="query-actions-row">
-            <a-button
-              @click="onQuery"
-              :loading="searchLoading"
-              class="search-button"
-              type="primary"
-            >
-              <template #icon>
-                <SearchOutlined />
-              </template>
-              搜索
-            </a-button>
-            <div class="query-examples-compact">
-              <span class="examples-label">示例：</span>
-              <div class="examples-container">
-                <a-button
-                  type="text"
-                  :key="currentExampleIndex"
-                  @click="useQueryExample(queryExamples[currentExampleIndex])"
-                  size="small"
-                  class="example-btn"
-                >
-                  {{ queryExamples[currentExampleIndex] }}
-                </a-button>
-              </div>
+          <div class="search-input-wrapper">
+            <a-textarea
+              v-model:value="queryText"
+              placeholder="输入查询内容..."
+              :auto-size="{ minRows: 2, maxRows: 6 }"
+              class="search-textarea"
+              @press-enter.prevent="onQuery"
+            />
+            <div class="search-actions">
+              <a-switch
+                v-model:checked="showRawData"
+                checked-children="格式化"
+                un-checked-children="原始"
+              />
+              <a-button
+                @click="onQuery"
+                :loading="searchLoading"
+                class="search-button"
+                type="primary"
+                :disabled="!queryText.trim()"
+                :icon=h(SearchOutlined)
+                shape="circle"
+              />
             </div>
           </div>
         </div>
 
         <div class="query-results" v-if="queryResult">
           <!-- 原始数据显示 -->
-          <div v-if="showRawData" class="result-raw">
+          <div v-if="!showRawData" class="result-raw">
             <pre>{{ JSON.stringify(queryResult, null, 2) }}</pre>
           </div>
 
@@ -128,16 +102,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, h } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { message } from 'ant-design-vue';
 import { queryApi } from '@/apis/knowledge_api';
 import {
   SearchOutlined,
-  SettingOutlined,
-  CloseOutlined,
 } from '@ant-design/icons-vue';
-import { h } from 'vue';
 
 const store = useDatabaseStore();
 
@@ -155,29 +126,10 @@ const props = defineProps({
 
 const searchLoading = computed(() => store.state.searchLoading);
 const queryResult = ref('');
-const showRawData = ref(false);
-const resultCount = ref(0);
+const showRawData = ref(true);
 
 // 查询测试
 const queryText = ref('');
-
-// 添加更多示例查询
-const queryExamples = ref([
-  '孕妇应该避免吃哪些水果？',
-  '荔枝应该怎么清洗？',
-  '如何判断西瓜是否成熟？',
-  '苹果有哪些营养价值？',
-  '什么季节最适合吃梨？',
-  '如何保存草莓以延长保质期？',
-  '香蕉变黑后还能吃吗？',
-  '橙子皮可以用来做什么？'
-]);
-
-// 当前示例索引
-const currentExampleIndex = ref(0);
-
-// 示例轮播相关
-let exampleCarouselInterval = null;
 
 
 const onQuery = async () => {
@@ -195,57 +147,19 @@ const onQuery = async () => {
     const data = await queryApi.queryTest(store.database.db_id, queryText.value.trim(), queryMeta);
     queryResult.value = data;
 
-    // 计算结果数量
-    if (data?.data && Array.isArray(data.data)) {
-      resultCount.value = data.data.length;
-    } else if (data) {
-      resultCount.value = 1;
-    }
-
   } catch (error) {
     console.error(error);
     message.error(error.message);
     queryResult.value = '';
-    resultCount.value = 0;
   } finally {
     store.state.searchLoading = false;
   }
 };
 
-const useQueryExample = (example) => {
-  queryText.value = example;
-  onQuery();
-};
-
-const startExampleCarousel = () => {
-  if (exampleCarouselInterval) return;
-
-  exampleCarouselInterval = setInterval(() => {
-    currentExampleIndex.value = (currentExampleIndex.value + 1) % queryExamples.value.length;
-  }, 6000); // 每6秒切换一次
-};
-
-const stopExampleCarousel = () => {
-  if (exampleCarouselInterval) {
-    clearInterval(exampleCarouselInterval);
-    exampleCarouselInterval = null;
-  }
-};
-
-// 组件挂载时启动示例轮播
+// 组件挂载时加载查询参数
 onMounted(() => {
-  // 启动示例轮播
-  startExampleCarousel();
-
   // 加载查询参数
   store.loadQueryParams();
-
-  });
-
-// 组件卸载时停止示例轮播
-onUnmounted(() => {
-  // 停止示例轮播
-  stopExampleCarousel();
 });
 </script>
 
@@ -267,98 +181,92 @@ onUnmounted(() => {
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
-}
-
-.query-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--gray-200);
-  background-color: #fff;
-
-  .header-status {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    font-size: 13px;
-    color: var(--gray-600);
-
-    .search-status {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .result-count {
-      font-weight: 500;
-    }
-  }
+  max-height: 100%;
 }
 
 .query-input-container {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  background-color: #fff;
-  border-bottom: 1px solid var(--gray-200);
+  gap: 12px;
+  background-color: var(--gray-0);
 }
 
-.compact-query-textarea {
-  flex: 1;
+.search-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 16px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--gray-200);
+  background-color: var(--gray-0);
+  box-shadow: 0 1px 3px rgba(23, 23, 23, 0.05);
+  transition: border-color 0.5s ease, box-shadow 0.5s ease;
 
-  &:focus {
+  &:hover {
+    border-color: var(--main-400);
+    box-shadow: 0 4px 12px rgba(1, 97, 121, 0.08);
+  }
+
+  :deep(.ant-input) {
+    border-radius: 8px;
+    background-color: var(--gray-0);
+    color: var(--gray-1000);
     outline: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+
+    &:focus {
+      outline: none;
+      border: none;
+    }
+
+    &::placeholder {
+      color: var(--gray-500);
+    }
   }
 }
 
-.query-actions-row {
+.search-actions {
   display: flex;
-  gap: 16px;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .search-button {
-  flex-shrink: 0;
-}
+  background-color: var(--main-color);
+  border-color: var(--main-color);
+  box-shadow: 0 2px 4px rgba(1, 97, 121, 0.15);
+  transition: all 0.2s ease;
 
-.query-examples-compact {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+  &:hover:not(:disabled) {
+    background-color: var(--main-bright);
+    border-color: var(--main-bright);
+    box-shadow: 0 4px 8px rgba(1, 136, 166, 0.25);
+    transform: translateY(-1px);
+  }
 
-.examples-label {
-  font-size: 12px;
-  color: #8c8c8c;
-  white-space: nowrap;
-}
-
-.examples-container {
-  min-height: 24px;
-  display: flex;
-}
-
-.example-btn {
-  text-align: left;
-  white-space: normal;
-  height: auto;
-  padding: 4px 8px;
-  font-size: 12px;
+  &:disabled {
+    opacity: 0.5;
+    color: var(--gray-0);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
 }
 
 .query-results {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
-  background-color: #fafafa;
+  padding: 16px;
+  background-color: var(--gray-25);
   min-height: 0;
 
   .result-raw {
-    background-color: #f8f9fa;
+    background-color: var(--gray-50);
     border: 1px solid var(--gray-200);
     border-radius: 6px;
     padding: 16px;
@@ -369,6 +277,7 @@ onUnmounted(() => {
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       font-size: 12px;
       line-height: 1.5;
+      color: var(--gray-1000);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -378,32 +287,36 @@ onUnmounted(() => {
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.6;
+    color: var(--gray-1000);
   }
 
   .result-list {
     .no-results {
       text-align: center;
       padding: 32px;
-      color: #999;
+      color: var(--gray-500);
     }
 
     .result-summary {
       margin-bottom: 12px;
       padding: 8px 12px;
-      background-color: #e6f7ff;
+      background-color: var(--main-50);
       border-left: 3px solid var(--main-color);
       border-radius: 2px;
+      color: var(--gray-800);
     }
 
     .result-item {
-      background-color: white;
-      border: 1px solid #e8e8e8;
+      background-color: var(--gray-0);
+      border: 1px solid var(--gray-200);
       border-radius: 6px;
       padding: 12px;
       margin-bottom: 12px;
+      transition: all 0.2s ease;
 
       &:hover {
-        border-color: var(--gray-400);
+        border-color: var(--main-300);
+        box-shadow: 0 2px 8px rgba(1, 97, 121, 0.08);
       }
 
       &:last-child {
@@ -416,7 +329,7 @@ onUnmounted(() => {
         gap: 12px;
         margin-bottom: 8px;
         padding-bottom: 8px;
-        border-bottom: 1px solid #f0f0f0;
+        border-bottom: 1px solid var(--gray-150);
 
         .result-index {
           font-weight: 600;
@@ -429,20 +342,20 @@ onUnmounted(() => {
           font-size: 12px;
           padding: 2px 8px;
           border-radius: 12px;
-          background-color: #f0f0f0;
-          color: #666;
+          background-color: var(--gray-100);
+          color: var(--gray-700);
         }
 
         .result-rerank-score {
-          background-color: #fff7e6;
-          color: #fa8c16;
+          background-color: var(--stats-warning-bg);
+          color: var(--stats-warning-color);
         }
       }
 
       .result-content {
         padding: 8px 0;
         line-height: 1.6;
-        color: #333;
+        color: var(--gray-900);
         white-space: pre-wrap;
         word-break: break-word;
       }
@@ -453,14 +366,14 @@ onUnmounted(() => {
         gap: 12px;
         margin-top: 8px;
         padding-top: 8px;
-        border-top: 1px solid #f0f0f0;
+        border-top: 1px solid var(--gray-150);
 
         .metadata-item {
           font-size: 12px;
-          color: #666;
+          color: var(--gray-700);
 
           strong {
-            color: #999;
+            color: var(--gray-500);
             font-weight: 500;
             margin-right: 4px;
           }
@@ -471,11 +384,13 @@ onUnmounted(() => {
 
   .result-unknown {
     pre {
-      background-color: white;
+      background-color: var(--gray-0);
+      border: 1px solid var(--gray-200);
       padding: 12px;
       border-radius: 4px;
       overflow-x: auto;
       font-size: 12px;
+      color: var(--gray-1000);
     }
   }
 }
