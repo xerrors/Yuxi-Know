@@ -247,7 +247,10 @@ const currentAgentName = computed(() => {
   return '智能体';
 });
 
-const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
+const currentAgent = computed(() => {
+  if (!currentAgentId.value || !agents.value || !agents.value.length) return null;
+  return agents.value.find(a => a.id === currentAgentId.value) || null;
+});
 const chatsList = computed(() => threads.value || []);
 const currentChatId = computed(() => chatState.currentThreadId);
 const currentThread = computed(() => {
