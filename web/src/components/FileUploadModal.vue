@@ -29,7 +29,11 @@
           />
         </div>
         <div class="config-controls">
-          <a-button type="dashed" @click="showChunkConfigModal" v-if="!isGraphBased">
+          <a-button
+            type="dashed"
+            @click="showChunkConfigModal"
+            :disabled="isGraphBased"
+          >
             <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
           </a-button>
         </div>
@@ -654,27 +658,16 @@ const chunkData = async () => {
 
 .source-segmented {
   background-color: var(--gray-100);
-  border-radius: 999px;
-  padding: 4px;
   border: 1px solid var(--gray-200);
 }
 
-.source-segmented :deep(.ant-segmented-item) {
-  border-radius: 999px;
-}
 
 .source-segmented :deep(.ant-segmented-item-label) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 16px;
   font-weight: 500;
   color: var(--gray-600);
-}
-
-.source-segmented :deep(.ant-segmented-thumb) {
-  background-color: var(--main-30);
-  border-radius: 999px;
 }
 
 .source-segmented :deep(.ant-segmented-item-selected .ant-segmented-item-label) {
@@ -682,13 +675,14 @@ const chunkData = async () => {
 }
 
 .source-segmented :deep(.segmented-option) {
+  font-size: 13px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .source-segmented :deep(.option-icon) {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .ocr-config {
