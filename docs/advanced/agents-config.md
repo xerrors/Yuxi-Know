@@ -6,6 +6,20 @@
 
 仓库预置了若干可直接运行的智能体：`chatbot` 聚焦对话与动态工具调度，`mini_agent` 提供精简模板，`reporter` 演示报告类链路。这些目录展示了上下文类、Graph 构造方式、子智能体引用以及中间件组合的范例，新增功能时可以直接复用。
 
+### 智能体元数据配置
+
+每个智能体可以通过在智能体目录下创建 `metadata.toml` 文件来配置元数据信息。这个文件使用 TOML 格式，包含以下字段：
+
+- `name`: 智能体显示名称
+- `description`: 智能体功能描述
+- `examples`: 示例问题列表（数组格式）
+
+例如，`src/agents/chatbot/metadata.toml`：
+
+<<< @/../src/agents/chatbot/metadata.toml
+
+**注意**：`metadata.toml` 文件是可选的，如果没有提供，系统将使用智能体类的基本属性。
+
 ### 创建新的智能体
 
 在 `src/agents` 下新建一个包，保持与现有目录一致的结构：放置 Graph 构造逻辑（通常命名为 `graph.py`），并在包内的 `__init__.py` 中暴露主类。

@@ -6,8 +6,7 @@ import { handleChatError } from '@/utils/errorHandler';
 export const useAgentStore = defineStore('agent', {
   state: () => ({
     // 智能体相关状态
-    agents: {}, // 以ID为键的智能体对象
-    metadata: {}, // 智能体元数据
+    agents: [], // 智能体数组，每个元素包含完整信息
     selectedAgentId: null, // 当前选中的智能体ID
     defaultAgentId: null, // 默认智能体ID
 
@@ -34,12 +33,12 @@ export const useAgentStore = defineStore('agent', {
 
   getters: {
     // --- 智能体相关 Getters ---
-    selectedAgent: (state) => state.selectedAgentId ? state.agents[state.selectedAgentId] : null,
-    defaultAgent: (state) => state.defaultAgentId ? state.agents[state.defaultAgentId] : state.agents[Object.keys(state.agents)[0]],
-    agentsList: (state) => Object.values(state.agents),
+    selectedAgent: (state) => state.selectedAgentId ? state.agents.find(a => a.id === state.selectedAgentId) : null,
+    defaultAgent: (state) => state.defaultAgentId ? state.agents.find(a => a.id === state.defaultAgentId) : state.agents[0],
+    agentsList: (state) => state.agents,
     isDefaultAgent: (state) => state.selectedAgentId === state.defaultAgentId,
     configurableItems: (state) => {
-      const agent = state.selectedAgentId ? state.agents[state.selectedAgentId] : null;
+      const agent = state.selectedAgentId ? state.agents.find(a => a.id === state.selectedAgentId) : null;
       if (!agent || !agent.configurable_items) return {};
 
       const agentConfigurableItems = agent.configurable_items;
@@ -67,11 +66,11 @@ export const useAgentStore = defineStore('agent', {
         await this.fetchAgents();
         await this.fetchDefaultAgent();
 
-        if (!this.selectedAgentId || !this.agents[this.selectedAgentId]) {
-          if (this.defaultAgentId && this.agents[this.defaultAgentId]) {
+        if (!this.selectedAgentId || !this.agents.find(a => a.id === this.selectedAgentId)) {
+          if (this.defaultAgentId && this.agents.find(a => a.id === this.defaultAgentId)) {
             this.selectAgent(this.defaultAgentId);
-          } else if (Object.keys(this.agents).length > 0) {
-            const firstAgentId = Object.keys(this.agents)[0];
+          } else if (this.agents.length > 0) {
+            const firstAgentId = this.agents[0].id;
             this.selectAgent(firstAgentId);
           }
         } else {
@@ -98,12 +97,8 @@ export const useAgentStore = defineStore('agent', {
 
       try {
         const response = await agentApi.getAgents();
-        // 将数组转换为以ID为键的对象
-        this.agents = response.agents.reduce((acc, agent) => {
-          acc[agent.id] = agent;
-          return acc;
-        }, {});
-        this.metadata = response.metadata;
+        // 直接使用返回的 agents 数组
+        this.agents = response.agents;
       } catch (error) {
         console.error('Failed to fetch agents:', error);
         handleChatError(error, 'fetch');
@@ -141,7 +136,7 @@ export const useAgentStore = defineStore('agent', {
 
     // 选择智能体
     selectAgent(agentId) {
-      if (this.agents[agentId]) {
+      if (this.agents.find(a => a.id === agentId)) {
         this.selectedAgentId = agentId;
         // 清空之前的配置
         this.agentConfig = {};
@@ -229,7 +224,7 @@ export const useAgentStore = defineStore('agent', {
 
     // 重置store状态
     reset() {
-      this.agents = {};
+      this.agents = [];
       this.selectedAgentId = null;
       this.defaultAgentId = null;
       this.agentConfig = {};

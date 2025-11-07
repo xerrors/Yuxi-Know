@@ -56,9 +56,8 @@
       </div>
 
       <div v-else-if="!conversations.length" class="chat-examples">
-        <img v-if="currentAgentMetadata?.icon" class="agent-icons" :src="currentAgentMetadata?.icon" alt="智能体图标" />
-        <div v-else style="margin-bottom: 150px"></div>
-        <h1>您好，我是{{ currentAgentName }}！有什么可以帮您？</h1>
+        <div style="margin-bottom: 150px"></div>
+        <h1>您好，我是{{ currentAgentName }}！</h1>
         <!-- <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
         <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p> -->
 
@@ -190,7 +189,12 @@ const userInput = ref('');
 
 // 从智能体元数据获取示例问题
 const exampleQuestions = computed(() => {
-  const examples = currentAgentMetadata.value?.examples || [];
+  const agentId = currentAgentId.value;
+  let examples = [];
+  if (agentId && agents.value && agents.value.length > 0) {
+    const agent = agents.value.find(a => a.id === agentId);
+    examples = agent ? (agent.examples || []) : [];
+  }
   return examples.map((text, index) => ({
     id: index + 1,
     text: text
@@ -234,12 +238,14 @@ const currentAgentId = computed(() => {
   }
 });
 
-const currentAgentMetadata = computed(() => {
+const currentAgentName = computed(() => {
   const agentId = currentAgentId.value;
-  const metadata = agentStore?.metadata || {};
-  return agentId && metadata[agentId] ? metadata[agentId] : {};
+  if (agentId && agents.value && agents.value.length > 0) {
+    const agent = agents.value.find(a => a.id === agentId);
+    return agent ? agent.name : '智能体';
+  }
+  return '智能体';
 });
-const currentAgentName = computed(() => currentAgentMetadata.value?.name || currentAgent.value?.name || '智能体');
 
 const currentAgent = computed(() => agents.value[currentAgentId.value] || null);
 const chatsList = computed(() => threads.value || []);
@@ -947,10 +953,17 @@ const handleExampleClick = (questionText) => {
 };
 
 const buildExportPayload = () => {
+  const agentId = currentAgentId.value;
+  let agentDescription = '';
+  if (agentId && agents.value && agents.value.length > 0) {
+    const agent = agents.value.find(a => a.id === agentId);
+    agentDescription = agent ? (agent.description || '') : '';
+  }
+
   const payload = {
     chatTitle: currentThread.value?.title || '新对话',
     agentName: currentAgentName.value || currentAgent.value?.name || '智能助手',
-    agentDescription: currentAgentMetadata.value?.description || currentAgent.value?.description || '',
+    agentDescription: agentDescription || currentAgent.value?.description || '',
     messages: conversations.value ? JSON.parse(JSON.stringify(conversations.value)) : [],
     onGoingMessages: onGoingConvMessages.value ? JSON.parse(JSON.stringify(onGoingConvMessages.value)) : []
   };

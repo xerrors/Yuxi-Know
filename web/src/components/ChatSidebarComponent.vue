@@ -100,8 +100,8 @@ const props = defineProps({
     default: true
   },
   agents: {
-    type: Object,
-    default: () => ({})
+    type: Array,
+    default: () => []
   },
   selectedAgentId: {
     type: String,
@@ -112,8 +112,9 @@ const props = defineProps({
 const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar', 'open-agent-modal']);
 
 const selectedAgentName = computed(() => {
-  if (props.selectedAgentId && props.agents && props.agents[props.selectedAgentId]) {
-    return props.agents[props.selectedAgentId].name;
+  if (props.selectedAgentId && props.agents && props.agents.length > 0) {
+    const agent = props.agents.find(a => a.id === props.selectedAgentId);
+    return agent ? agent.name : '';
   }
   return '';
 });

@@ -2,7 +2,6 @@ import asyncio
 import json
 import traceback
 import uuid
-import yaml
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -304,13 +303,22 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 @chat.get("/agent")
 async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体（需要登录）"""
-    agents = await agent_manager.get_agents_info()
-    # logger.debug(f"agents: {agents}")
-    metadata = {}
-    if Path("src/config/static/agents_meta.yaml").exists():
-        with open("src/config/static/agents_meta.yaml") as f:
-            metadata = yaml.safe_load(f)
-    return {"agents": agents, "metadata": metadata}
+    agents_info = await agent_manager.get_agents_info()
+
+    # Return agents with complete information
+    agents = [
+        {
+            "id": agent_info["id"],
+            "name": agent_info.get("name", "Unknown"),
+            "description": agent_info.get("description", ""),
+            "examples": agent_info.get("examples", []),
+            "configurable_items": agent_info.get("configurable_items", []),
+            "has_checkpointer": agent_info.get("has_checkpointer", False)
+        }
+        for agent_info in agents_info
+    ]
+
+    return {"agents": agents}
 
 
 # TODO:[未完成]这个thread_id在前端是直接生成的1234，最好传入thread_id时做校验只允许uuid4

@@ -13,20 +13,23 @@
         <div class="agent-modal-content">
           <div class="agents-grid">
             <div
-              v-for="(agent, id) in agents"
-              :key="id"
+              v-for="agent in agents"
+              :key="agent.id"
               class="agent-card"
-              :class="{ 'selected': id === selectedAgentId }"
-              @click="selectAgentFromModal(id)"
+              :class="{ 'selected': agent.id === selectedAgentId }"
+              @click="selectAgentFromModal(agent.id)"
             >
               <div class="agent-card-header">
                 <div class="agent-card-title">
-                  <span class="agent-card-name">{{ agent.name }}</span>
-                  <StarFilled v-if="id === defaultAgentId" class="default-icon" />
-                  <StarOutlined v-else @click.prevent="setAsDefaultAgent(id)" class="default-icon" />
+                  <span class="agent-card-name">{{ agent.name || 'Unknown' }}</span>
+                  <StarFilled v-if="agent.id === defaultAgentId" class="default-icon" />
+                  <StarOutlined v-else @click.prevent="setAsDefaultAgent(agent.id)" class="default-icon" />
                 </div>
               </div>
-              <div class="agent-card-description">{{ agent.description }}</div>
+
+              <div class="agent-card-description">
+                {{ agent.description || '' }}
+              </div>
             </div>
           </div>
         </div>
@@ -97,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, computed } from 'vue';
 import {
   StarOutlined,
   StarFilled,
@@ -130,6 +133,7 @@ const {
   selectedAgentId,
   defaultAgentId,
 } = storeToRefs(agentStore);
+
 const state = reactive({
   agentModalOpen: false,
   isConfigSidebarOpen: false,
