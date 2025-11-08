@@ -180,6 +180,35 @@ def _serialize_attachment(record: dict) -> dict:
     }
 
 
+async def save_partial_message(conv_mgr, thread_id, full_msg, error_type="interrupted"):
+    """
+    保存部分生成的AI消息到数据库
+    当streaming被中断时，用于保存已生成的部分内容
+    """
+    if not full_msg:
+        return None
+
+    try:
+        msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
+        content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+
+        saved_msg = conv_mgr.add_message_by_thread_id(
+            thread_id=thread_id,
+            role="assistant",
+            content=content,
+            message_type="text",
+            extra_metadata=msg_dict | {"error_type": error_type},
+        )
+
+        logger.info(f"Saved partial message due to {error_type}: {saved_msg.id}")
+        return saved_msg
+
+    except Exception as e:
+        logger.error(f"Error saving partial message: {e}")
+        logger.error(traceback.format_exc())
+        return None
+
+
 async def save_messages_from_langgraph_state(
     agent_instance,
     thread_id,
@@ -442,6 +471,7 @@ async def chat_agent(
                     full_msg = msg if not full_msg else full_msg + msg
                     if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
                         logger.warning("Sensitive content detected in stream")
+                        await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
                         yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                         return
 
@@ -456,6 +486,7 @@ async def chat_agent(
                 and await content_guard.check(full_msg.content)
             ):
                 logger.warning("Sensitive content detected in final message")
+                await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
                 yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
                 return
 
@@ -481,28 +512,24 @@ async def chat_agent(
             # 客户端主动中断连接，检查中断并保存已生成的部分内容
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
-            # 即使在断开连接时也检查中断，确保状态一致性
+            # 断开连接时不检查中断，直接保存部分消息
             langgraph_config = {"configurable": input_context}
-            try:
-                async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
-                    yield chunk
-            except Exception as interrupt_error:
-                logger.error(f"Error checking interrupts during disconnect: {interrupt_error}")
 
+            # 尝试从 LangGraph state 保存消息（可能没有，因为中断了）
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
+            )
+
+            # 如果有手动维护的 full_msg，直接保存到数据库
             if full_msg:
                 # 创建新的 db session，因为原 session 可能已关闭
                 new_db = db_manager.get_session()
                 try:
                     new_conv_manager = ConversationManager(new_db)
-                    msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
-                    content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
-                    new_conv_manager.add_message_by_thread_id(
-                        thread_id=thread_id,
-                        role="assistant",
-                        content=content,
-                        message_type="text",
-                        extra_metadata=msg_dict | {"error_type": "interrupted"},  # 保存原始 model_dump
-                    )
+                    await save_partial_message(new_conv_manager, thread_id, full_msg, "interrupted")
                 finally:
                     new_db.close()
 
@@ -512,30 +539,27 @@ async def chat_agent(
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
 
-            # 即使在异常情况下也检查中断，确保状态一致性
+            # 异常情况下也不检查中断，直接保存部分消息
             langgraph_config = {"configurable": input_context}
-            try:
-                async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
-                    yield chunk
-            except Exception as interrupt_error:
-                logger.error(f"Error checking interrupts during exception: {interrupt_error}")
 
+            # 尝试从 LangGraph state 保存消息（可能没有，因为异常了）
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
+            )
+
+            # 如果有手动维护的 full_msg，直接保存到数据库
             if full_msg:
                 # 创建新的 db session，因为原 session 可能已关闭
                 new_db = db_manager.get_session()
                 try:
                     new_conv_manager = ConversationManager(new_db)
-                    msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
-                    content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
-                    new_conv_manager.add_message_by_thread_id(
-                        thread_id=thread_id,
-                        role="assistant",
-                        content=content,
-                        message_type="text",
-                        extra_metadata=msg_dict | {"error_type": "unexpect"},  # 保存原始 model_dump
-                    )
+                    await save_partial_message(new_conv_manager, thread_id, full_msg, "unexpected_error")
                 finally:
                     new_db.close()
+
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
     return StreamingResponse(stream_messages(), media_type="application/json")
