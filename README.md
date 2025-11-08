@@ -1,4 +1,4 @@
-# 语析 - 基于大模型的知识库与知识图谱问答系统
+# 语析 - 基于大模型的知识库与知识图谱智能体开发平台
 
 <div>
 
@@ -14,7 +14,9 @@
 </div>
 
 
-语析是一个功能强大的智能问答平台，融合了 RAG 知识库与知识图谱技术，基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建。
+语析是一个功能强大的智能体平台，融合了 RAG 知识库与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI + LightRAG 架构构建。
+
+**亮点**：提供全套的智能体开发套件，基于 MIT 开源协议，技术栈友好，适合基于此项目打造自己的智能体平台。
 
 > [!tip]
 > 🙏 **感谢 Star Star Star** ~ ⭐⭐⭐⭐⭐ 详细文档请查看全新的 📄[**文档中心**](https://xerrors.github.io/Yuxi-Know/)，或者在 哔哩哔哩观看 📽️[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
