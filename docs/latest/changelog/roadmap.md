@@ -14,6 +14,7 @@
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
+- DeepSeek 官方接口适配会出现问题
 
 ### 新增
 - 优化知识库详情页面，更加简洁清晰
