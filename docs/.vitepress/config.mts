@@ -5,8 +5,8 @@ import markdownItTaskCheckbox from 'markdown-it-task-checkbox'
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   lang: 'zh-CN',
-  title: "Yuxi-Know Docs",
-  description: "文档中心",
+  title: "Yuxi-Know",
+  description: "语析",
   base: '/Yuxi-Know/',
   markdown: {
     config: (md) => {
@@ -17,39 +17,75 @@ export default defineConfig({
     // https://vitepress.dev/reference/default-theme-config
     logo: "/favicon.svg",
     nav: [
-      { text: '快速开始', link: '/intro/quick-start' },
-    ],
-
-    sidebar: [
       {
-        text: '简介',
+        text: 'Version',
         items: [
-          { text: '什么是 Yuxi-Know？', link: '/intro/project-overview' },
-          { text: '快速开始', link: '/intro/quick-start' },
-          { text: '模型配置', link: '/intro/model-config' },
-          { text: '知识库与知识图谱', link: '/intro/knowledge-base' }
-        ]
-      },
-      {
-        text: '高级配置',
-        items: [
-          { text: '配置系统详解', link: '/advanced/configuration' },
-          { text: '文档解析', link: '/advanced/document-processing' },
-          { text: '智能体', link: '/advanced/agents-config' },
-          { text: '品牌自定义', link: '/advanced/branding' },
-          { text: '其他配置', link: '/advanced/misc' }
-        ]
-      },
-      {
-        text: '更新日志',
-        items: [
-          { text: '版本说明 v0.3', link: '/changelog/0.3-release-notes' },
-          { text: '路线图', link: '/changelog/roadmap' },
-          { text: '参与贡献', link: '/changelog/contributing' },
-          { text: '常见问题', link: '/changelog/faq' }
+          { text: 'Latest (开发版)', link: '/latest/intro/quick-start' },
+          { text: 'v0.3.0 (稳定版)', link: '/v0.3.0/intro/quick-start' }
         ]
       }
     ],
+
+    sidebar: {
+      '/latest/': [
+        {
+          text: '简介',
+          items: [
+            { text: '什么是 Yuxi-Know？', link: '/latest/intro/project-overview' },
+            { text: '快速开始', link: '/latest/intro/quick-start' },
+            { text: '模型配置', link: '/latest/intro/model-config' },
+            { text: '知识库与知识图谱', link: '/latest/intro/knowledge-base' }
+          ]
+        },
+        {
+          text: '高级配置',
+          items: [
+            { text: '配置系统详解', link: '/latest/advanced/configuration' },
+            { text: '文档解析', link: '/latest/advanced/document-processing' },
+            { text: '智能体', link: '/latest/advanced/agents-config' },
+            { text: '品牌自定义', link: '/latest/advanced/branding' },
+            { text: '其他配置', link: '/latest/advanced/misc' }
+          ]
+        },
+        {
+          text: '更新日志',
+          items: [
+            { text: '路线图', link: '/latest/changelog/roadmap' },
+            { text: '参与贡献', link: '/latest/changelog/contributing' },
+            { text: '常见问题', link: '/latest/changelog/faq' }
+          ]
+        }
+      ],
+      '/v0.3.0/': [
+        {
+          text: '简介',
+          items: [
+            { text: '什么是 Yuxi-Know？', link: '/v0.3.0/intro/project-overview' },
+            { text: '快速开始', link: '/v0.3.0/intro/quick-start' },
+            { text: '模型配置', link: '/v0.3.0/intro/model-config' },
+            { text: '知识库与知识图谱', link: '/v0.3.0/intro/knowledge-base' }
+          ]
+        },
+        {
+          text: '高级配置',
+          items: [
+            { text: '配置系统详解', link: '/v0.3.0/advanced/configuration' },
+            { text: '文档解析', link: '/v0.3.0/advanced/document-processing' },
+            { text: '智能体', link: '/v0.3.0/advanced/agents-config' },
+            { text: '品牌自定义', link: '/v0.3.0/advanced/branding' },
+            { text: '其他配置', link: '/v0.3.0/advanced/misc' }
+          ]
+        },
+        {
+          text: '更新日志',
+          items: [
+            { text: '版本说明 v0.3', link: '/v0.3.0/changelog/0.3-release-notes' },
+            { text: '参与贡献', link: '/v0.3.0/changelog/contributing' },
+            { text: '常见问题', link: '/v0.3.0/changelog/faq' }
+          ]
+        }
+      ]
+    },
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/xerrors/Yuxi-Know' }

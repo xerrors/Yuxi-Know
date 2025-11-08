@@ -11,11 +11,11 @@ hero:
     alt: VitePress
   actions:
     - theme: brand
-      text: 快速开始
-      link: /intro/quick-start
+      text: Latest 文档
+      link: /latest/intro/quick-start
     - theme: alt
-      text: 在线演示
-      link: https://www.bilibili.com/video/BV1ETedzREgY/
+      text: v0.3.0 文档
+      link: /v0.3.0/intro/quick-start
 
 features:
   - title: 🤖 智能体与模型
@@ -32,12 +32,12 @@ features:
     details: 完整的测试套件、API 文档、监控日志，适合企业级部署和使用
 ---
 
-
-
-## 轻松部署
+## 快速开始
 
 ```sh
 docker compose up --build -d
 ```
 
-查看端口与服务说明：高级配置 → 其他配置 → 服务端口。
+## 在线演示
+
+观看视频演示：[Bilibili](https://www.bilibili.com/video/BV1DF14BTETq)
