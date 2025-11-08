@@ -1,16 +1,10 @@
 <template>
   <div class="home-container">
-    <div class="background-elements">
-      <div class="circle circle-1"></div>
-      <div class="circle circle-2"></div>
-      <div class="circle circle-3"></div>
-      <div class="circle circle-4"></div>
-    </div>
     <div class="hero-section">
       <div class="glass-header">
         <div class="logo">
           <img :src="infoStore.organization.logo" :alt="infoStore.organization.name" class="logo-img" />
-          <span style="font-size: 1.3rem; font-weight: bold;">{{ infoStore.organization.name }}</span>
+          <span class="logo-text">{{ infoStore.organization.name }}</span>
         </div>
         <nav class="nav-links">
           <router-link to="/agent" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
@@ -38,19 +32,52 @@
         </div>
       </div>
 
-      <div class="hero-content">
-        <h1 class="title">{{ infoStore.branding.title }}</h1>
-        <div class="description">
+      <div class="hero-layout">
+        <div class="hero-content">
+          <h1 class="title">{{ infoStore.branding.title }}</h1>
           <p class="subtitle">{{ infoStore.branding.subtitle }}</p>
-          <p class="features">
-            <span v-for="feature in infoStore.features" :key="feature">{{ feature }}</span>
-          </p>
+          <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
+          <div class="hero-actions">
+            <button class="button-base primary" @click="goToChat">开始对话</button>
+            <a class="button-base secondary" href="https://xerrors.github.io/Yuxi-Know/" target="_blank">查看文档</a>
+          </div>
         </div>
-        <button class="start-button" @click="goToChat">开始对话</button>
+        <div class="insight-panel" v-if="featureCards.length">
+          <div class="stat-card" v-for="card in featureCards" :key="card.label">
+            <div class="stat-headline">
+              <span class="stat-icon" v-if="card.icon">
+                <component :is="card.icon" />
+              </span>
+              <p class="stat-value">{{ card.value }}</p>
+            </div>
+            <p class="stat-label">{{ card.label }}</p>
+            <p class="stat-description">{{ card.description }}</p>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 底部版权信息 -->
+    <div class="section action-section" v-if="actionLinks.length">
+      <div class="action-grid">
+        <a
+          v-for="action in actionLinks"
+          :key="action.name"
+          class="action-card"
+          :href="action.url"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="action-icon" v-if="action.icon">
+            <component :is="action.icon" />
+          </span>
+          <div class="action-meta">
+            <p class="action-title">{{ action.name }}</p>
+            <p class="action-url">{{ action.url }}</p>
+          </div>
+        </a>
+      </div>
+    </div>
+
     <footer class="footer">
       <div class="footer-content">
         <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
@@ -60,12 +87,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
 import { useAgentStore } from '@/stores/agent'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
+import {
+  BookText,
+  Bug,
+  Video,
+  Route,
+  Github,
+  Star,
+  CheckCircle2,
+  GitCommit,
+  ShieldCheck
+} from 'lucide-vue-next'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -92,7 +130,11 @@ const goToChat = async () => {
   try {
     // 获取默认智能体
     const defaultAgent = agentStore.defaultAgent;
-    router.push(`/agent/${defaultAgent.id}`);
+    if (defaultAgent?.id) {
+      router.push(`/agent/${defaultAgent.id}`);
+    } else {
+      router.push('/agent');
+    }
   } catch (error) {
     console.error('跳转到智能体页面失败:', error);
     router.push("/");
@@ -103,6 +145,74 @@ onMounted(async () => {
   // 加载信息配置
   await infoStore.loadInfoConfig()
 })
+
+const iconKey = (value) => typeof value === 'string' ? value.toLowerCase() : ''
+
+const featureIconMap = {
+  stars: Star,
+  issues: CheckCircle2,
+  resolved: CheckCircle2,
+  commits: GitCommit,
+  license: ShieldCheck,
+  default: Star
+}
+
+const actionIconMap = {
+  doc: BookText,
+  docs: BookText,
+  document: BookText,
+  issue: Bug,
+  bug: Bug,
+  roadmap: Route,
+  plan: Route,
+  demo: Video,
+  video: Video,
+  github: Github,
+  default: Github
+}
+
+const featureCards = computed(() => {
+  const list = Array.isArray(infoStore.features) ? infoStore.features : []
+  return list
+    .map((item) => {
+      if (typeof item === 'string') {
+        return {
+          label: item,
+          value: '',
+          description: '',
+          icon: featureIconMap.default
+        }
+      }
+
+      const key = iconKey(item.icon || item.type)
+      return {
+        label: item.label || item.name || '',
+        value: item.value || '',
+        description: item.description || '',
+        icon: featureIconMap[key] || featureIconMap.default
+      }
+    })
+    .filter((item) => item.label || item.value || item.description)
+})
+
+const actionLinks = computed(() => {
+  const actions = infoStore.actions
+  if (!Array.isArray(actions)) {
+    return []
+  }
+
+  return actions
+    .map((item) => {
+      const key = iconKey(item?.icon || item?.type)
+      return {
+        name: item?.name || item?.label || '',
+        url: item?.url || item?.link || '',
+        icon: actionIconMap[key] || actionIconMap.default
+      }
+    })
+    .filter((item) => item.name && item.url)
+})
+
 </script>
 
 <style lang="less" scoped>
@@ -110,49 +220,10 @@ onMounted(async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  color: var(--main-800);
-  background: linear-gradient(135deg, var(--main-30) 0%, var(--main-20) 25%, var(--main-10) 50%, var(--main-5) 75%, var(--main-1) 100%);
-  background-size: 400% 400%;
-  animation: gradientBackground 25s ease infinite;
+  color: var(--main-900);
+  background: radial-gradient(circle at top right, var(--main-50), transparent 60%), var(--main-5);
   position: relative;
-  overflow: hidden;
-}
-
-.home-container::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at 15% 25%, rgba(161, 196, 253, 0.12) 0%, transparent 30%),
-              radial-gradient(circle at 85% 75%, rgba(194, 233, 251, 0.12) 0%, transparent 30%),
-              radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, transparent 35%),
-              radial-gradient(circle at 25% 75%, rgba(147, 197, 253, 0.06) 0%, transparent 25%),
-              radial-gradient(circle at 75% 25%, rgba(219, 234, 254, 0.06) 0%, transparent 25%);
-  z-index: 0;
-  animation: backgroundShift 30s ease-in-out infinite;
-}
-
-@keyframes backgroundShift {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-@keyframes gradientBackground {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+  overflow-x: hidden;
 }
 
 .glass-header {
@@ -160,33 +231,16 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 0.5rem 2rem;
-  background-color: rgba(255, 255, 255, 0.18);
+  padding: 0.75rem 2.5rem;
+  background-color: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+  // border-bottom: 1px solid var(--main-30);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   z-index: 100;
-  box-shadow: 0 2px 25px rgba(0, 0, 0, 0.01);
-  transition: all 0.3s ease;
-}
-
-.glass-header:hover {
-  background-color: rgba(255, 255, 255, 1);
-}
-
-.glass-header:hover .nav-link {
-  color: #333;
-}
-
-.glass-header:hover .github-link a {
-  color: #333;
-}
-
-.glass-header:hover .logo {
-  color: #333;
+  box-shadow: 0 6px 25px rgba(3, 80, 101, 0.02);
 }
 
 .nav-links {
@@ -204,7 +258,7 @@ onMounted(async () => {
   color: #555;
   font-weight: 500;
   font-size: 0.95rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color 0.2s ease;
   position: relative;
   overflow: hidden;
 
@@ -226,11 +280,6 @@ onMounted(async () => {
       }
     }
 
-  svg {
-    transition: transform 0.3s ease;
-    flex-shrink: 0;
-  }
-
   span {
     white-space: nowrap;
   }
@@ -242,82 +291,22 @@ onMounted(async () => {
   gap: 1rem;
 }
 
-.background-elements {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.circle {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  animation: float 18s infinite ease-in-out;
-  box-shadow: 0 0 30px rgba(161, 196, 253, 0.1);
-}
-
-.circle-1 {
-  width: 150px;
-  height: 150px;
-  top: 10%;
-  left: 5%;
-  animation-delay: 0s;
-}
-
-.circle-2 {
-  width: 100px;
-  height: 100px;
-  top: 70%;
-  left: 20%;
-  animation-delay: -5s;
-}
-
-.circle-3 {
-  width: 80px;
-  height: 80px;
-  top: 20%;
-  right: 10%;
-  animation-delay: -10s;
-}
-
-.circle-4 {
-  width: 120px;
-  height: 120px;
-  bottom: 15%;
-  right: 15%;
-  animation-delay: -7s;
-}
-
-@keyframes float {
-  0%, 100% {
-    transform: translate(0, 0);
-  }
-  25% {
-    transform: translate(20px, 20px);
-  }
-  50% {
-    transform: translate(40px, 0);
-  }
-  75% {
-    transform: translate(20px, -20px);
-  }
-}
-
 .logo {
   display: flex;
   align-items: center;
   font-size: 1.4rem;
   font-weight: bold;
-  color: var(--main-color, #333);
+  color: var(--main-800);
 
   .logo-img {
     height: 2rem;
     margin-right: 0.6rem;
   }
+}
+
+.logo-text {
+  font-size: 1.3rem;
+  font-weight: 600;
 }
 
 .github-link a {
@@ -350,101 +339,247 @@ onMounted(async () => {
 
 .hero-section {
   flex: 1;
-  width: 100vw;
+  width: 100%;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  padding: 5rem 2rem 2rem;
+}
+
+.hero-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2.5rem;
   align-items: center;
-  text-align: center;
-  padding: 0 2rem;
-  position: relative;
-  z-index: 1;
-  min-height: 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: 4rem;
 }
 
 .hero-content {
-  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 
 .title {
-  font-size: 4.5rem;
+  font-size: clamp(2.5rem, 4vw, 4rem);
   font-weight: 800;
-  margin-bottom: 1.5rem;
-  background: linear-gradient(135deg, var(--main-800) 0%, var(--main-600) 50%, var(--main-500) 100%);
+  margin: 0;
+  background: linear-gradient(135deg, var(--main-900), var(--main-600));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  animation: titleGlow 2s ease-in-out infinite alternate;
 }
 
-@keyframes titleGlow {
-  0% {
-    text-shadow: 0 0 20px rgba(57, 150, 174, 0.1), 0 0 30px rgba(57, 150, 174, 0.2), 0 0 40px rgba(57, 150, 174, 0.1);
-  }
-  100% {
-    text-shadow: 0 0 30px rgba(57, 150, 174, 0.2), 0 0 40px rgba(57, 150, 174, 0.3), 0 0 50px rgba(57, 150, 174, 0.2);
-  }
-}
-
-.description {
-  margin-bottom: 2.5rem;
+.hero-eyebrow {
+  color: var(--main-600);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.85rem;
 }
 
 .subtitle {
-  font-size: 1.6rem;
-  font-weight: 500;
-  margin-bottom: 2rem;
-  color: #64748b;
-  line-height: 1.4;
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.features {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-
-  span {
-    padding: 0.7rem 1.2rem;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.2));
-    border-radius: 2rem;
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    backdrop-filter: blur(15px);
-    font-weight: 500;
-    color: #475569;
-    transition: all 0.3s ease;
-
-    &:hover {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.3));
-    }
-  }
-}
-
-.start-button {
-  padding: 1rem 3.5rem;
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   font-weight: 600;
-  color: white;
-  background: linear-gradient(135deg, var(--main-600), var(--main-500));
-  border: none;
-  border-radius: 3rem;
+  color: var(--gray-700);
+  line-height: 1.4;
+}
+
+.description {
+  color: var(--gray-600);
+  line-height: 1.6;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+}
+
+.button-base {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 2.75rem;
+  border-radius: 999px;
+  font-size: 1.05rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
-  margin-top: 1rem;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: all 0.25s ease;
+  min-height: 52px;
+}
+
+.button-base.primary {
+  background: linear-gradient(135deg, var(--main-600), var(--main-500));
+  color: #fff;
+  border-color: transparent;
 
   &:hover {
     background: linear-gradient(135deg, var(--main-700), var(--main-600));
   }
+}
 
-  &:active {
-    opacity: 0.9;
+.button-base.secondary {
+  background: rgba(2, 57, 68, 0.06);
+  color: var(--main-700);
+  border-color: var(--gray-100);
+
+  &:hover {
+    border-color: var(--main-200);
+    background: var(--gray-50);
   }
+}
+
+.insight-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  background: var(--main-0);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--main-40);
+  box-shadow: 0 15px 35px rgba(3, 80, 101, 0.08);
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.stat-headline {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--gray-25);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  :deep(svg) {
+    width: 24px;
+    height: 24px;
+    color: var(--main-700);
+  }
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--main-800);
+  margin: 0;
+}
+
+.stat-label {
+  margin: 0;
+  color: var(--gray-700);
+  font-weight: 600;
+}
+
+.stat-description {
+  margin: 0;
+  color: var(--gray-600);
+  font-size: 0.9rem;
+}
+
+.section {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.section-header {
+  margin-bottom: 1.5rem;
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.8rem;
+    color: var(--main-800);
+  }
+
+  p {
+    margin: 0;
+    color: var(--gray-600);
+  }
+}
+
+.action-section {
+  padding-bottom: 3rem;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.action-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--gray-50);
+  background: var(--gray-0);
+  transition: transform 0.2s ease, background 0.2s ease;
+
+  &:hover {
+    background: var(--gray-0);
+    transform: translateY(-2px);
+  }
+}
+
+.action-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--gray-50);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  :deep(svg) {
+    width: 22px;
+    height: 22px;
+    color: var(--main-700);
+  }
+}
+
+.action-meta {
+  flex: 1;
+  overflow: hidden;
+}
+
+.action-title {
+  margin: 0;
+  font-weight: 600;
+  color: var(--main-800);
+}
+
+.action-url {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--gray-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .preview-section {
@@ -505,9 +640,8 @@ onMounted(async () => {
 
 .footer {
   margin-top: auto;
-  background: var(--main-10);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--main-30);
+  background: var(--main-0);
+  border-top: 1px solid var(--main-20);
   position: relative;
   z-index: 10;
 }
@@ -534,10 +668,10 @@ onMounted(async () => {
 
 @media (max-width: 768px) {
   .glass-header {
-    padding: 0.8rem 1rem;
+    padding: 0.8rem 1.25rem;
     flex-wrap: wrap;
     gap: 1rem;
-  }
+    }
 
   .nav-links {
     order: 3;
@@ -561,33 +695,20 @@ onMounted(async () => {
   }
 
   .title {
-    font-size: 2.8rem;
-    margin-bottom: 1rem;
+    font-size: 2.4rem;
   }
 
   .subtitle {
-    font-size: 1.3rem;
-    margin-bottom: 1.5rem;
-    padding: 0 1rem;
-  }
-
-  .features {
-    flex-direction: column;
-    gap: 0.8rem;
-    padding: 0 1rem;
-
-    span {
-      padding: 0.6rem 1rem;
-    }
+    font-size: 1.2rem;
   }
 
   .start-button {
-    padding: 1rem 2.5rem;
-    font-size: 1.1rem;
+    width: 100%;
+    text-align: center;
   }
 
   .hero-content {
-    padding: 0 1rem;
+    padding: 0;
   }
 
   .github-link a {
@@ -597,6 +718,10 @@ onMounted(async () => {
     .stars-count {
       display: none;
     }
+  }
+
+  .hero-layout {
+    padding: 0 0.5rem;
   }
 }
 </style>

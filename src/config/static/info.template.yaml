@@ -11,15 +11,42 @@ organization:
 # 项目信息
 branding:
   name: "Yuxi-Know"
-  title: "Yuxi-Know: 更智能的知识库管理工具"                           # 系统标题
-  subtitle: "大模型驱动的知识库管理工具"          # 副标题
-  description: "结合知识库与知识图谱，提供更准确、更全面的回答"  # 描述信息
+  title: "Yuxi-Know: 更智能的知识库智能体平台"     # 系统标题
+  subtitle: "大模型驱动的知识库智能体平台"          # 副标题
 
-# 功能特性
 features:
-  - "📚 灵活知识库"
-  - "🕸️ 知识图谱集成"
-  - "🤖 权限隔离"
+  - label: "GitHub Stars"
+    value: "2300+"
+    description: "开发者社区的认可与支持"
+    icon: "stars"
+  - label: "已解决 Issues"
+    value: "200+"
+    description: "持续改进和问题解决能力"
+    icon: "issues"
+  - label: "累计 Commits"
+    value: "1000+"
+    description: "活跃的开发迭代和功能更新"
+    icon: "commits"
+  - label: "开源协议"
+    value: "MIT 协议"
+    description: "完全免费，支持商业使用"
+    icon: "license"
+
+actions:
+  - name: "演示视频"
+    icon: "video"
+    url: "https://www.bilibili.com/video/BV1DF14BTETq"
+  - name: "文档中心"
+    icon: "docs"
+    url: "https://xerrors.github.io/Yuxi-Know/"
+  - name: "提交 Issue"
+    icon: "issue"
+    url: "https://github.com/xerrors/Yuxi-Know/issues/new/choose"
+  - name: "开发路线图"
+    icon: "roadmap"
+    url: "https://xerrors.github.io/Yuxi-Know/latest/changelog/roadmap.html"
+
+
 
 # 页脚信息
 footer:
