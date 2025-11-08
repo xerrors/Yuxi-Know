@@ -21,7 +21,7 @@ docker compose up -d api
 
 ### 2. 高精度 OCR (MinerU)
 
-需要配置：
+需要在 `.env` 文件中配置：
 
 ```bash
 MINERU_VL_SERVER=http://localhost:30000
@@ -40,16 +40,16 @@ docker compose up -d api
 
 ### 3. 官方云服务 (MinerU Official)
 
-
 API 密钥可以从 [MinerU 官网](https://mineru.net) 申请。
+
+然后在 `.env` 文件中添加
 
 ```bash
 # 设置 API 密钥环境变量
-export MINERU_API_KEY="your-api-key-here"
-
-# 启动主服务
-docker compose up -d api
+MINERU_API_KEY="your-api-key-here"
 ```
+
+然后使用 `docker compose up -d api` 重启后端服务。
 
 ### 4. 结构化解析 (PaddleX)
 
