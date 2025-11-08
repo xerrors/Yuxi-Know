@@ -9,7 +9,7 @@ Yuxi-Know 是一个基于知识图谱和向量数据库的智能知识库系统�
 
 本项目完全通过 Docker Compose 进行管理。所有开发和调试都应在运行的容器环境中进行。使用 `docker compose up -d` 命令进行构建和启动。
 
-核心原则: 由于 api-dev 和 web-dev 服务均配置了热重载 (hot-reloading)，本地修改代码后无需重启容器，服务会自动更新。应该先检查项目是否已经在后台启动（`docker ps`），具体的可以阅读 [docker-compose.yml](docker-compose.yml).
+核心原则: 由于 api-dev 和 web-dev 服务均配置了热重载 (hot-reloading)，本地修改代码后无需重启容器，服务会自动更新。应该先检查项目是否已经在后台启动（`docker ps`），查看日志（`docker logs api-dev --tail 100`）具体的可以阅读 [docker-compose.yml](docker-compose.yml).
 
 前端开发规范：
 
@@ -22,7 +22,7 @@ Yuxi-Know 是一个基于知识图谱和向量数据库的智能知识库系统�
 后端开发规范：
 
 - 项目使用 uv 来管理依赖，所以需要使用 uv run 来调试。
-- Python 代码要符合 Python 的规范，尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+），使用 make lint 检查 lint。使用 make format 来格式化代码。
+- Python 代码要符合 Python 的规范，符合 pythonic 风格，尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+），使用 make lint 检查 lint。使用 make format 来格式化代码。
 
 其他：
 

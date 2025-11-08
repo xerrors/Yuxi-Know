@@ -1,3 +1,4 @@
+import json
 import os
 import pathlib
 from contextlib import contextmanager
@@ -30,8 +31,13 @@ class DBManager(metaclass=SingletonMeta):
         self.db_path = os.path.join(config.save_dir, "database", "server.db")
         self.ensure_db_dir()
 
-        # 创建SQLAlchemy引擎
-        self.engine = create_engine(f"sqlite:///{self.db_path}")
+        # 创建SQLAlchemy引擎，配置JSON序列化器以支持中文
+        # 使用 ensure_ascii=False 确保中文字符不被转义为 Unicode 序列
+        self.engine = create_engine(
+            f"sqlite:///{self.db_path}",
+            json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
+            json_deserializer=json.loads,
+        )
 
         # 创建会话工厂
         self.Session = sessionmaker(bind=self.engine)

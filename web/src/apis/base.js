@@ -16,11 +16,12 @@ import { message } from 'ant-design-vue'
  */
 export async function apiRequest(url, options = {}, requiresAuth = true, responseType = 'json') {
   try {
+    const isFormData = options?.body instanceof FormData
     // 默认请求配置
     const requestOptions = {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers,
       },
     }

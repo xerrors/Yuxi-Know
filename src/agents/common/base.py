@@ -23,6 +23,7 @@ class BaseAgent:
 
     name = "base_agent"
     description = "base_agent"
+    capabilities: list[str] = []  # 智能体能力列表，如 ["file_upload", "web_search"] 等
 
     def __init__(self, **kwargs):
         self.graph = None  # will be covered by get_graph
@@ -54,6 +55,7 @@ class BaseAgent:
             "examples": metadata.get("examples", []),
             "configurable_items": self.context_schema.get_configurable_items(),
             "has_checkpointer": await self.check_checkpointer(),
+            "capabilities": getattr(self, "capabilities", []),  # 智能体能力列表
         }
 
     async def get_config(self):
@@ -70,9 +72,16 @@ class BaseAgent:
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         logger.debug(f"stream_messages: {context}")
         # TODO Checkpointer 似乎还没有适配最新的 1.0 Context API
+
+        # 从 input_context 中提取 attachments（如果有）
+        attachments = (input_context or {}).get("attachments", [])
         input_config = {"configurable": input_context, "recursion_limit": 100}
+
         async for msg, metadata in graph.astream(
-            {"messages": messages}, stream_mode="messages", context=context, config=input_config
+            {"messages": messages, "attachments": attachments},
+            stream_mode="messages",
+            context=context,
+            config=input_config,
         ):
             yield msg, metadata
 
@@ -80,8 +89,14 @@ class BaseAgent:
         graph = await self.get_graph()
         context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
         logger.debug(f"invoke_messages: {context}")
+
+        # 从 input_context 中提取 attachments（如果有）
+        attachments = (input_context or {}).get("attachments", [])
         input_config = {"configurable": input_context, "recursion_limit": 100}
-        msg = await graph.ainvoke({"messages": messages}, context=context, config=input_config)
+
+        msg = await graph.ainvoke(
+            {"messages": messages, "attachments": attachments}, context=context, config=input_config
+        )
         return msg
 
     async def check_checkpointer(self):

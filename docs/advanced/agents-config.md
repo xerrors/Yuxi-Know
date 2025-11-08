@@ -52,7 +52,55 @@
 
 子智能体集中放在 `src/agents/common/subagents` 目录，典型例子是 `calc_agent`，它通过 LangChain 的 `create_agent` 构建计算器能力并以工具暴露给主图。新增子智能体时沿用这一结构：在目录内编写封装函数与 `@tool` 装饰器，导出后即可被任意智能体调用。
 
-中间件位于 `src/agents/common/middlewares`，包含上下文感知提示词、模型选择以及动态工具加载等实现。如果需要编写新的中间件，请遵循 LangChain 官方文档中对 `AgentMiddleware`、`ModelRequest`、`ModelResponse` 等接口的定义，完成后在该目录的 `__init__.py` 暴露入口，主智能体即可在 `middleware` 列表中引用。
+中间件位于 `src/agents/common/middlewares`，包含上下文感知提示词、模型选择、动态工具加载以及附件注入等实现。如果需要编写新的中间件，请遵循 LangChain 官方文档中对 `AgentMiddleware`、`ModelRequest`、`ModelResponse` 等接口的定义，完成后在该目录的 `__init__.py` 暴露入口，主智能体即可在 `middleware` 列表中引用。
+
+#### 文件上传中间件
+
+文件上传功能通过 `inject_attachment_context` 中间件实现（位于 `src/agents/common/middlewares/attachment_middleware.py`）。该中间件基于 LangChain 1.0 的 `AgentMiddleware` 标准实现，具有以下特点：
+
+1. **状态扩展**：定义 `AttachmentState` 扩展 `AgentState`，添加可选的 `attachments` 字段
+2. **自动注入**：在模型调用前，从 `request.state` 中读取附件并转换为 `SystemMessage`
+3. **向后兼容**：不使用文件上传的智能体不受影响
+
+##### 为智能体启用文件上传
+
+只需两步：
+
+**步骤 1：声明能力**（让前端显示上传按钮）
+
+```python
+class MyAgent(BaseAgent):
+    capabilities = ["file_upload"]
+```
+
+**步骤 2：添加中间件**（让智能体能够处理附件内容）
+
+```python
+from src.agents.common.middlewares import inject_attachment_context
+
+async def get_graph(self):
+    graph = create_agent(
+        model=load_chat_model("..."),
+        tools=get_tools(),
+        middleware=[
+            inject_attachment_context,  # 添加附件中间件
+            context_aware_prompt,       # 其他中间件...
+            # ...
+        ],
+        checkpointer=await self._get_checkpointer(),
+    )
+    return graph
+```
+
+##### 工作流程
+
+1. **前端上传**：用户在聊天界面上传文档（txt、md、docx、html）
+2. **API 解析**：后端将文档转换为 Markdown 格式并存储到数据库（超过 32k 会被截断）
+3. **自动加载**：API 层在调用 agent 前从数据库加载附件数据
+4. **中间件注入**：`inject_attachment_context` 自动将附件内容注入为系统消息
+5. **模型处理**：LLM 接收到附件内容和用户问题，进行综合回答
+
+这种设计确保了附件功能的可选性和可扩展性，任何智能体都可以通过添加中间件快速启用文件上传能力。
 
 ## 内置工具与 MCP 集成
 

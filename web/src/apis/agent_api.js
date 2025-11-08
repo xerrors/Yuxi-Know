@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete, apiPut, apiAdminGet, apiAdminPost } from './base'
+import { apiGet, apiPost, apiDelete, apiPut, apiAdminGet, apiAdminPost, apiRequest } from './base'
 import { useUserStore } from '@/stores/user'
 
 /**
@@ -212,5 +212,35 @@ export const threadApi = {
    * @param {string} threadId - 对话线程ID
    * @returns {Promise} - 删除结果
    */
-  deleteThread: (threadId) => apiDelete(`/api/chat/thread/${threadId}`)
+  deleteThread: (threadId) => apiDelete(`/api/chat/thread/${threadId}`),
+
+  /**
+   * 获取线程附件列表
+   * @param {string} threadId - 对话线程ID
+   * @returns {Promise}
+   */
+  getThreadAttachments: (threadId) => apiGet(`/api/chat/thread/${threadId}/attachments`),
+
+  /**
+   * 上传附件
+   * @param {string} threadId
+   * @param {File} file
+   * @returns {Promise}
+   */
+  uploadThreadAttachment: (threadId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return apiRequest(`/api/chat/thread/${threadId}/attachments`, {
+      method: 'POST',
+      body: formData
+    })
+  },
+
+  /**
+   * 删除附件
+   * @param {string} threadId
+   * @param {string} fileId
+   * @returns {Promise}
+   */
+  deleteThreadAttachment: (threadId, fileId) => apiDelete(`/api/chat/thread/${threadId}/attachments/${fileId}`)
 };

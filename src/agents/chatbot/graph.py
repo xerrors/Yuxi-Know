@@ -2,7 +2,12 @@ from langchain.agents import create_agent
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.mcp import MCP_SERVERS
-from src.agents.common.middlewares import DynamicToolMiddleware, context_aware_prompt, context_based_model
+from src.agents.common.middlewares import (
+    DynamicToolMiddleware,
+    context_aware_prompt,
+    context_based_model,
+    inject_attachment_context,
+)
 from src.agents.common.subagents import calc_agent_tool
 
 from .context import Context
@@ -12,6 +17,7 @@ from .tools import get_tools
 class ChatbotAgent(BaseAgent):
     name = "智能体助手"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
+    capabilities = ["file_upload"]  # 支持文件上传功能
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -44,6 +50,7 @@ class ChatbotAgent(BaseAgent):
             tools=get_tools(),  # 注册基础工具
             middleware=[
                 context_aware_prompt,  # 动态系统提示词
+                inject_attachment_context,  # 附件上下文注入（LangChain 标准中间件）
                 context_based_model,  # 动态模型选择
                 dynamic_tool_middleware,  # 动态工具选择（支持 MCP 工具注册）
             ],

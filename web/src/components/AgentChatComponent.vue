@@ -70,7 +70,19 @@
             placeholder="输入问题..."
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
-          />
+          >
+            <template #options-left>
+              <AttachmentInputPanel
+                v-if="supportsFileUpload"
+                :attachments="currentAttachments"
+                :limits="attachmentState.limits"
+                :is-uploading="attachmentState.isUploading"
+                :disabled="!currentAgent"
+                @upload="handleAttachmentUpload"
+                @remove="handleAttachmentRemove"
+              />
+            </template>
+          </MessageInputComponent>
 
           <!-- 示例问题 -->
           <div class="example-questions" v-if="exampleQuestions.length > 0">
@@ -139,7 +151,19 @@
             placeholder="输入问题..."
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
-          />
+          >
+            <template #options-left>
+              <AttachmentInputPanel
+                v-if="supportsFileUpload"
+                :attachments="currentAttachments"
+                :limits="attachmentState.limits"
+                :is-uploading="attachmentState.isUploading"
+                :disabled="!currentAgent"
+                @upload="handleAttachmentUpload"
+                @remove="handleAttachmentRemove"
+              />
+            </template>
+          </MessageInputComponent>
           <div class="bottom-actions">
             <p class="note">请注意辨别内容的可靠性</p>
           </div>
@@ -154,6 +178,7 @@ import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from
 import { LoadingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
+import AttachmentInputPanel from '@/components/AttachmentInputPanel.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
@@ -229,6 +254,12 @@ const uiState = reactive({
   containerWidth: 0,
 });
 
+const attachmentState = reactive({
+  itemsByThread: {},
+  limits: null,
+  isUploading: false,
+})
+
 // ==================== COMPUTED PROPERTIES ====================
 const currentAgentId = computed(() => {
   if (props.singleMode) {
@@ -256,6 +287,18 @@ const currentChatId = computed(() => chatState.currentThreadId);
 const currentThread = computed(() => {
   if (!currentChatId.value) return null;
   return threads.value.find(thread => thread.id === currentChatId.value) || null;
+});
+
+const currentAttachments = computed(() => {
+  if (!currentChatId.value) return [];
+  return attachmentState.itemsByThread[currentChatId.value] || [];
+});
+
+// 检查当前智能体是否支持文件上传
+const supportsFileUpload = computed(() => {
+  if (!currentAgent.value) return false;
+  const capabilities = currentAgent.value.capabilities || [];
+  return capabilities.includes('file_upload');
 });
 
 const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || []);
@@ -506,6 +549,12 @@ const fetchThreads = async (agentId = null) => {
   try {
     const fetchedThreads = await threadApi.getThreads(targetAgentId);
     threads.value = fetchedThreads || [];
+    const validIds = new Set((threads.value || []).map(thread => thread.id));
+    Object.keys(attachmentState.itemsByThread).forEach((id) => {
+      if (!validIds.has(id)) {
+        delete attachmentState.itemsByThread[id];
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch threads:', error);
     handleChatError(error, 'fetch');
@@ -525,6 +574,7 @@ const createThread = async (agentId, title = '新的对话') => {
     if (thread) {
       threads.value.unshift(thread);
       threadMessages.value[thread.id] = [];
+      attachmentState.itemsByThread[thread.id] = [];
     }
     return thread;
   } catch (error) {
@@ -545,6 +595,7 @@ const deleteThread = async (threadId) => {
     await threadApi.deleteThread(threadId);
     threads.value = threads.value.filter(thread => thread.id !== threadId);
     delete threadMessages.value[threadId];
+    delete attachmentState.itemsByThread[threadId];
 
     if (chatState.currentThreadId === threadId) {
       chatState.currentThreadId = null;
@@ -588,6 +639,73 @@ const fetchThreadMessages = async ({ agentId, threadId }) => {
   } catch (error) {
     handleChatError(error, 'load');
     throw error;
+  }
+};
+
+const loadThreadAttachments = async (threadId, { silent = false } = {}) => {
+  if (!threadId) return;
+  try {
+    const response = await threadApi.getThreadAttachments(threadId);
+    attachmentState.itemsByThread[threadId] = response.attachments || [];
+    if (response.limits) {
+      attachmentState.limits = response.limits;
+    }
+  } catch (error) {
+    if (silent) {
+      console.warn('Failed to load attachments:', error);
+    } else {
+      handleChatError(error, 'load');
+    }
+  }
+};
+
+const ensureActiveThread = async (title = '新的对话') => {
+  if (currentChatId.value) return currentChatId.value;
+  try {
+    const newThread = await createThread(currentAgentId.value, title || '新的对话');
+    if (newThread) {
+      chatState.currentThreadId = newThread.id;
+      return newThread.id;
+    }
+  } catch (error) {
+    // createThread 已处理错误提示
+  }
+  return null;
+};
+
+const handleAttachmentUpload = async (files) => {
+  if (!files?.length) return;
+  if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '上传附件', handleValidationError)) return;
+
+  const preferredTitle = files[0]?.name || '新的对话';
+  const threadId = await ensureActiveThread(preferredTitle);
+  if (!threadId) {
+    message.error('创建对话失败，无法上传附件');
+    return;
+  }
+
+  attachmentState.isUploading = true;
+  try {
+    for (const file of files) {
+      await threadApi.uploadThreadAttachment(threadId, file);
+      message.success(`${file.name} 上传成功`);
+    }
+    await loadThreadAttachments(threadId, { silent: true });
+  } catch (error) {
+    handleChatError(error, 'upload');
+  } finally {
+    attachmentState.isUploading = false;
+  }
+};
+
+const handleAttachmentRemove = async (fileId) => {
+  if (!fileId || !currentChatId.value) return;
+  try {
+    await threadApi.deleteThreadAttachment(currentChatId.value, fileId);
+    await loadThreadAttachments(currentChatId.value, { silent: true });
+    message.success('附件已删除');
+  } catch (error) {
+    handleChatError(error, 'delete');
   }
 };
 
@@ -697,6 +815,7 @@ const selectChat = async (chatId) => {
   chatState.isLoadingMessages = true;
   try {
     await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId });
+    await loadThreadAttachments(chatId, { silent: true });
   } catch (error) {
     handleChatError(error, 'load');
   } finally {
@@ -737,18 +856,11 @@ const handleSendMessage = async () => {
   const text = userInput.value.trim();
   if (!text || !currentAgent.value || isProcessing.value) return;
 
-  // 如果没有当前线程，先创建一个新线程
-  if (!currentChatId.value) {
-    try {
-      const newThread = await createThread(currentAgentId.value, text);
-      if (newThread) {
-        chatState.currentThreadId = newThread.id;
-      } else {
-        message.error('创建对话失败，请重试');
-        return;
-      }
-    } catch (error) {
-      handleChatError(error, 'create');
+  let threadId = currentChatId.value;
+  if (!threadId) {
+    threadId = await ensureActiveThread(text);
+    if (!threadId) {
+      message.error('创建对话失败，请重试');
       return;
     }
   }
@@ -757,7 +869,6 @@ const handleSendMessage = async () => {
   await nextTick();
   scrollController.scrollToBottom(true);
 
-  const threadId = currentChatId.value;
   const threadState = getThreadState(threadId);
   if (!threadState) return;
 

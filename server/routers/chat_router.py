@@ -2,9 +2,8 @@ import asyncio
 import json
 import traceback
 import uuid
-from pathlib import Path
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from langchain.messages import AIMessageChunk, HumanMessage
 from langgraph.types import Command
@@ -22,6 +21,12 @@ from src.agents import agent_manager
 from src.agents.common.tools import gen_tool_info, get_buildin_tools
 from src.models import select_model
 from src.plugins.guard import content_guard
+from src.services.doc_converter import (
+    ATTACHMENT_ALLOWED_EXTENSIONS,
+    MAX_ATTACHMENT_SIZE_BYTES,
+    convert_upload_to_markdown,
+)
+from src.utils.datetime_utils import utc_isoformat
 from src.utils.logging_config import logger
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -154,6 +159,25 @@ def _save_tool_message(conv_mgr, msg_dict):
         logger.debug(f"Updated tool_call {tool_call_id} ({name}) with output")
     else:
         logger.warning(f"Tool call {tool_call_id} not found for update")
+
+
+def _require_user_conversation(conv_mgr: ConversationManager, thread_id: str, user_id: str) -> Conversation:
+    conversation = conv_mgr.get_conversation_by_thread_id(thread_id)
+    if not conversation or conversation.user_id != str(user_id) or conversation.status == "deleted":
+        raise HTTPException(status_code=404, detail="对话线程不存在")
+    return conversation
+
+
+def _serialize_attachment(record: dict) -> dict:
+    return {
+        "file_id": record.get("file_id"),
+        "file_name": record.get("file_name"),
+        "file_type": record.get("file_type"),
+        "file_size": record.get("file_size", 0),
+        "status": record.get("status", "parsed"),
+        "uploaded_at": record.get("uploaded_at"),
+        "truncated": record.get("truncated", False),
+    }
 
 
 async def save_messages_from_langgraph_state(
@@ -313,7 +337,8 @@ async def get_agent(current_user: User = Depends(get_required_user)):
             "description": agent_info.get("description", ""),
             "examples": agent_info.get("examples", []),
             "configurable_items": agent_info.get("configurable_items", []),
-            "has_checkpointer": agent_info.get("has_checkpointer", False)
+            "has_checkpointer": agent_info.get("has_checkpointer", False),
+            "capabilities": agent_info.get("capabilities", [])  # 智能体能力列表
         }
         for agent_info in agents_info
     ]
@@ -400,6 +425,15 @@ async def chat_agent(
             )
         except Exception as e:
             logger.error(f"Error saving user message: {e}")
+
+        try:
+            assert thread_id, "thread_id is required"
+            attachments = conv_manager.get_attachments_by_thread_id(thread_id)
+            input_context["attachments"] = attachments
+            logger.debug(f"Loaded {len(attachments)} attachments for thread_id={thread_id}")
+        except Exception as e:
+            logger.error(f"Error loading attachments for thread_id={thread_id}: {e}")
+            input_context["attachments"] = []
 
         try:
             full_msg = None
@@ -739,6 +773,26 @@ class ThreadResponse(BaseModel):
     updated_at: str
 
 
+class AttachmentResponse(BaseModel):
+    file_id: str
+    file_name: str
+    file_type: str | None = None
+    file_size: int
+    status: str
+    uploaded_at: str
+    truncated: bool | None = False
+
+
+class AttachmentLimits(BaseModel):
+    allowed_extensions: list[str]
+    max_size_bytes: int
+
+
+class AttachmentListResponse(BaseModel):
+    attachments: list[AttachmentResponse]
+    limits: AttachmentLimits
+
+
 # =============================================================================
 # > === 会话管理分组 ===
 # =============================================================================
@@ -857,6 +911,75 @@ async def update_thread(
         "created_at": updated_conv.created_at.isoformat(),
         "updated_at": updated_conv.updated_at.isoformat(),
     }
+
+
+@chat.post("/thread/{thread_id}/attachments", response_model=AttachmentResponse)
+async def upload_thread_attachment(
+    thread_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """上传并解析附件为 Markdown，附加到指定对话线程。"""
+    conv_manager = ConversationManager(db)
+    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+
+    try:
+        conversion = await convert_upload_to_markdown(file)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"附件解析失败: {exc}")
+        raise HTTPException(status_code=500, detail="附件解析失败，请稍后重试") from exc
+
+    attachment_record = {
+        "file_id": conversion.file_id,
+        "file_name": conversion.file_name,
+        "file_type": conversion.file_type,
+        "file_size": conversion.file_size,
+        "status": "parsed",
+        "markdown": conversion.markdown,
+        "uploaded_at": utc_isoformat(),
+        "truncated": conversion.truncated,
+    }
+    conv_manager.add_attachment(conversation.id, attachment_record)
+
+    return _serialize_attachment(attachment_record)
+
+
+@chat.get("/thread/{thread_id}/attachments", response_model=AttachmentListResponse)
+async def list_thread_attachments(
+    thread_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """列出当前对话线程的所有附件元信息。"""
+    conv_manager = ConversationManager(db)
+    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+    attachments = conv_manager.get_attachments(conversation.id)
+    return {
+        "attachments": [_serialize_attachment(item) for item in attachments],
+        "limits": {
+            "allowed_extensions": sorted(ATTACHMENT_ALLOWED_EXTENSIONS),
+            "max_size_bytes": MAX_ATTACHMENT_SIZE_BYTES,
+        },
+    }
+
+
+@chat.delete("/thread/{thread_id}/attachments/{file_id}")
+async def delete_thread_attachment(
+    thread_id: str,
+    file_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """移除指定附件。"""
+    conv_manager = ConversationManager(db)
+    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+    removed = conv_manager.remove_attachment(conversation.id, file_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="附件不存在或已被删除")
+    return {"message": "附件已删除"}
 
 
 # =============================================================================
