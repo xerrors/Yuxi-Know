@@ -470,7 +470,7 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
 };
 
 const _processStreamChunk = (chunk, threadId) => {
-  const { status, msg, request_id, message } = chunk;
+  const { status, msg, request_id, message: chunkMessage } = chunk;
   const threadState = getThreadState(threadId);
   // console.log('Processing stream chunk:', chunk, 'for thread:', threadId);
 
@@ -489,7 +489,7 @@ const _processStreamChunk = (chunk, threadId) => {
       }
         return false;
     case 'error':
-      handleChatError({ message }, 'stream');
+      handleChatError({ message: chunkMessage }, 'stream');
       // Stop the loading indicator
       if (threadState) {
         threadState.isStreaming = false;
@@ -524,6 +524,10 @@ const _processStreamChunk = (chunk, threadId) => {
       // 中断状态，刷新消息历史
       if (threadState) {
         threadState.isStreaming = false;
+      }
+      // 如果有 message 字段，显示提示（例如：敏感内容检测）
+      if (chunkMessage) {
+        message.info(chunkMessage);
       }
       fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
         .finally(() => {

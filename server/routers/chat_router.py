@@ -375,7 +375,6 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     return {"agents": agents}
 
 
-# TODO:[未完成]这个thread_id在前端是直接生成的1234，最好传入thread_id时做校验只允许uuid4
 @chat.post("/agent/{agent_id}")
 async def chat_agent(
     agent_id: str,
@@ -472,7 +471,8 @@ async def chat_agent(
                     if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
                         logger.warning("Sensitive content detected in stream")
                         await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
-                        yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
+                        meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                        yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
                         return
 
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
@@ -487,7 +487,8 @@ async def chat_agent(
             ):
                 logger.warning("Sensitive content detected in final message")
                 await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
-                yield make_chunk(message="检测到敏感内容，已中断输出", status="error")
+                meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
                 return
 
             # After streaming finished, check for interrupts and save messages
@@ -512,16 +513,6 @@ async def chat_agent(
             # 客户端主动中断连接，检查中断并保存已生成的部分内容
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
-            # 断开连接时不检查中断，直接保存部分消息
-            langgraph_config = {"configurable": input_context}
-
-            # 尝试从 LangGraph state 保存消息（可能没有，因为中断了）
-            await save_messages_from_langgraph_state(
-                agent_instance=agent,
-                thread_id=thread_id,
-                conv_mgr=conv_manager,
-                config_dict=langgraph_config,
-            )
 
             # 如果有手动维护的 full_msg，直接保存到数据库
             if full_msg:
@@ -539,16 +530,6 @@ async def chat_agent(
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
 
-            # 异常情况下也不检查中断，直接保存部分消息
-            langgraph_config = {"configurable": input_context}
-
-            # 尝试从 LangGraph state 保存消息（可能没有，因为异常了）
-            await save_messages_from_langgraph_state(
-                agent_instance=agent,
-                thread_id=thread_id,
-                conv_mgr=conv_manager,
-                config_dict=langgraph_config,
-            )
 
             # 如果有手动维护的 full_msg，直接保存到数据库
             if full_msg:

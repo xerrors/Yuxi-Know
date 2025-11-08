@@ -64,7 +64,7 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
     ) -> ModelResponse:
         # Read from State: get uploaded files metadata
-        logger.debug(f"inject_attachment_context: request.state = {request.state}")
+        # logger.debug(f"inject_attachment_context: request.state = {request.state}")
         attachments = request.state.get("attachments", [])
 
         if attachments:
