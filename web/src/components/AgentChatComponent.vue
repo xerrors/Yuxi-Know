@@ -30,7 +30,13 @@
           <div type="button" class="agent-nav-btn" v-if="!chatUIStore.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen  class="nav-btn-icon" size="18"/>
           </div>
-          <div type="button" class="agent-nav-btn" v-if="!chatUIStore.isSidebarOpen" @click="createNewChat" :disabled="chatUIStore.creatingNewChat">
+          <div
+            type="button"
+            class="agent-nav-btn"
+            v-if="!chatUIStore.isSidebarOpen"
+            :class="{ 'is-disabled': chatUIStore.creatingNewChat }"
+            @click="createNewChat"
+          >
             <LoaderCircle v-if="chatUIStore.creatingNewChat" class="nav-btn-icon loading-icon" size="18"/>
             <MessageCirclePlus v-else class="nav-btn-icon"  size="18"/>
             <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
@@ -1657,7 +1663,7 @@ watch(conversations, () => {
 </style>
 
 <style lang="less">
-div.agent-nav-btn {
+.agent-nav-btn {
   display: flex;
   gap: 10px;
   padding: 6px 14px;
@@ -1669,14 +1675,17 @@ div.agent-nav-btn {
   width: auto;
   font-size: 15px;
   transition: background-color 0.3s;
+  border: none;
+  background: transparent;
 
-  &:hover:not([disabled]) {
+  &:hover:not(.is-disabled) {
     background-color: var(--gray-50);
   }
 
-  &[disabled] {
+  &.is-disabled {
     cursor: not-allowed;
     opacity: 0.7;
+    pointer-events: none;
   }
 
   .nav-btn-icon {
