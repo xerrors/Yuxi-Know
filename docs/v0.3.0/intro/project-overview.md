@@ -26,11 +26,11 @@ Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知�
 ## 演示视频
 
 <div align="center">
-  <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank">
+  <a href="https://www.bilibili.com/video/BV1DF14BTETq" target="_blank">
     <img width="3651" height="1933" alt="视频演示缩略图" src="https://github.com/user-attachments/assets/eac4fa89-2176-46ae-a649-45a125cb6ed1" />
   </a>
   <p style="margin-top: 12px;">
-    <a href="https://www.bilibili.com/video/BV1ETedzREgY/?share_source=copy_web&vd_source=37b0bdbf95b72ea38b2dc959cfadc4d8" target="_blank" style="text-decoration: none; color: #23ade5; font-weight: 500;">
+    <a href="https://www.bilibili.com/video/BV1DF14BTETq" target="_blank" style="text-decoration: none; color: #23ade5; font-weight: 500;">
       📽️ 点击查看视频演示 <i class="fa fa-external-link" style="margin-left: 4px;"></i>
     </a>
   </p>
