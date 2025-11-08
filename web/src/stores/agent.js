@@ -1,247 +1,311 @@
-import { defineStore } from 'pinia';
-import { agentApi, threadApi } from '@/apis/agent_api';
-import { MessageProcessor } from '@/utils/messageProcessor';
-import { handleChatError } from '@/utils/errorHandler';
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { agentApi } from '@/apis/agent_api'
+import { handleChatError } from '@/utils/errorHandler'
 
-export const useAgentStore = defineStore('agent', {
-  state: () => ({
-    // 智能体相关状态
-    agents: [], // 智能体数组，每个元素包含完整信息
-    selectedAgentId: null, // 当前选中的智能体ID
-    defaultAgentId: null, // 默认智能体ID
+export const useAgentStore = defineStore('agent', () => {
+  // ==================== 状态定义 ====================
+  // 智能体相关状态
+  const agents = ref([])
+  const selectedAgentId = ref(null)
+  const defaultAgentId = ref(null)
 
-    // 智能体配置相关状态
-    agentConfig: {}, // 当前智能体的配置
-    originalAgentConfig: {}, // 原始配置，用于重置
+  // 智能体配置相关状态
+  const agentConfig = ref({})
+  const originalAgentConfig = ref({})
 
-    // 工具相关状态
-    availableTools: [], // 所有可用工具列表
+  // 工具相关状态
+  const availableTools = ref([])
 
-    // 线程相关状态已迁移到组件级别
+  // 加载状态
+  const isLoadingAgents = ref(false)
+  const isLoadingConfig = ref(false)
+  const isLoadingTools = ref(false)
 
-    // 加载状态
-    isLoadingAgents: false,
-    isLoadingConfig: false,
-    isLoadingTools: false,
+  // 错误状态
+  const error = ref(null)
 
-    // 错误状态
-    error: null,
+  // 初始化状态
+  const isInitialized = ref(false)
 
-    // 初始化状态
-    isInitialized: false
-  }),
+  // ==================== 计算属性 ====================
+  const selectedAgent = computed(() =>
+    selectedAgentId.value ? agents.value.find(a => a.id === selectedAgentId.value) : null
+  )
 
-  getters: {
-    // --- 智能体相关 Getters ---
-    selectedAgent: (state) => state.selectedAgentId ? state.agents.find(a => a.id === state.selectedAgentId) : null,
-    defaultAgent: (state) => state.defaultAgentId ? state.agents.find(a => a.id === state.defaultAgentId) : state.agents[0],
-    agentsList: (state) => state.agents,
-    isDefaultAgent: (state) => state.selectedAgentId === state.defaultAgentId,
-    configurableItems: (state) => {
-      const agent = state.selectedAgentId ? state.agents.find(a => a.id === state.selectedAgentId) : null;
-      if (!agent || !agent.configurable_items) return {};
+  const defaultAgent = computed(() =>
+    defaultAgentId.value ? agents.value.find(a => a.id === defaultAgentId.value) : agents.value[0]
+  )
 
-      const agentConfigurableItems = agent.configurable_items;
-      const items = { ...agentConfigurableItems };
-      Object.keys(items).forEach(key => {
-        const item = items[key];
-        if (item && item.x_oap_ui_config) {
-          items[key] = { ...item, ...item.x_oap_ui_config };
-          delete items[key].x_oap_ui_config;
+  const agentsList = computed(() => agents.value)
+
+  const isDefaultAgent = computed(() => selectedAgentId.value === defaultAgentId.value)
+
+  const configurableItems = computed(() => {
+    const agent = selectedAgentId.value ? agents.value.find(a => a.id === selectedAgentId.value) : null
+    if (!agent || !agent.configurable_items) return {}
+
+    const agentConfigurableItems = agent.configurable_items
+    const items = { ...agentConfigurableItems }
+    Object.keys(items).forEach(key => {
+      const item = items[key]
+      if (item && item.x_oap_ui_config) {
+        items[key] = { ...item, ...item.x_oap_ui_config }
+        delete items[key].x_oap_ui_config
+      }
+    })
+    return items
+  })
+
+  const hasConfigChanges = computed(() =>
+    JSON.stringify(agentConfig.value) !== JSON.stringify(originalAgentConfig.value)
+  )
+
+  // ==================== 方法 ====================
+  /**
+   * 初始化 store
+   */
+  async function initialize() {
+    if (isInitialized.value) return
+
+    try {
+      await fetchAgents()
+      await fetchDefaultAgent()
+
+      if (!selectedAgentId.value || !agents.value.find(a => a.id === selectedAgentId.value)) {
+        if (defaultAgentId.value && agents.value.find(a => a.id === defaultAgentId.value)) {
+          selectAgent(defaultAgentId.value)
+        } else if (agents.value.length > 0) {
+          const firstAgentId = agents.value[0].id
+          selectAgent(firstAgentId)
         }
-      });
-      return items;
-    },
-    hasConfigChanges: (state) => JSON.stringify(state.agentConfig) !== JSON.stringify(state.originalAgentConfig),
-
-    // --- 线程与消息相关 Getters (MOVED TO COMPONENT) ---
-  },
-
-  actions: {
-    // 初始化store
-    async initialize() {
-      if (this.isInitialized) return;
-
-      try {
-        await this.fetchAgents();
-        await this.fetchDefaultAgent();
-
-        if (!this.selectedAgentId || !this.agents.find(a => a.id === this.selectedAgentId)) {
-          if (this.defaultAgentId && this.agents.find(a => a.id === this.defaultAgentId)) {
-            this.selectAgent(this.defaultAgentId);
-          } else if (this.agents.length > 0) {
-            const firstAgentId = this.agents[0].id;
-            this.selectAgent(firstAgentId);
-          }
-        } else {
-          console.log('Condition FALSE: Persisted selected agent is valid. Keeping it.');
-        }
-
-        if (this.selectedAgentId) {
-          await this.loadAgentConfig();
-          await this.fetchTools();
-        }
-
-        this.isInitialized = true;
-      } catch (error) {
-        console.error('Failed to initialize agent store:', error);
-        handleChatError(error, 'initialize');
-        this.error = error.message;
+      } else {
+        console.log('Condition FALSE: Persisted selected agent is valid. Keeping it.')
       }
-    },
 
-    // 获取智能体列表
-    async fetchAgents() {
-      this.isLoadingAgents = true;
-      this.error = null;
-
-      try {
-        const response = await agentApi.getAgents();
-        // 直接使用返回的 agents 数组
-        this.agents = response.agents;
-      } catch (error) {
-        console.error('Failed to fetch agents:', error);
-        handleChatError(error, 'fetch');
-        this.error = error.message;
-        throw error;
-      } finally {
-        this.isLoadingAgents = false;
+      if (selectedAgentId.value) {
+        await loadAgentConfig()
+        await fetchTools()
       }
-    },
 
-    // 获取默认智能体
-    async fetchDefaultAgent() {
-      try {
-        const response = await agentApi.getDefaultAgent();
-        this.defaultAgentId = response.default_agent_id;
-      } catch (error) {
-        console.error('Failed to fetch default agent:', error);
-        handleChatError(error, 'fetch');
-        this.error = error.message;
-      }
-    },
-
-    // 设置默认智能体
-    async setDefaultAgent(agentId) {
-      try {
-        await agentApi.setDefaultAgent(agentId);
-        this.defaultAgentId = agentId;
-      } catch (error) {
-        console.error('Failed to set default agent:', error);
-        handleChatError(error, 'save');
-        this.error = error.message;
-        throw error;
-      }
-    },
-
-    // 选择智能体
-    selectAgent(agentId) {
-      if (this.agents.find(a => a.id === agentId)) {
-        this.selectedAgentId = agentId;
-        // 清空之前的配置
-        this.agentConfig = {};
-        this.originalAgentConfig = {};
-      }
-    },
-
-    // 加载智能体配置
-    async loadAgentConfig(agentId = null) {
-      const targetAgentId = agentId || this.selectedAgentId;
-      if (!targetAgentId) return;
-
-      this.isLoadingConfig = true;
-      this.error = null;
-
-      try {
-        const response = await agentApi.getAgentConfig(targetAgentId);
-        this.agentConfig = { ...response.config };
-        this.originalAgentConfig = { ...response.config };
-      } catch (error) {
-        console.error('Failed to load agent config:', error);
-        handleChatError(error, 'load');
-        this.error = error.message;
-        throw error;
-      } finally {
-        this.isLoadingConfig = false;
-      }
-    },
-
-    // 保存智能体配置
-    async saveAgentConfig(agentId = null) {
-      const targetAgentId = agentId || this.selectedAgentId;
-      if (!targetAgentId) return;
-
-      try {
-        await agentApi.saveAgentConfig(targetAgentId, this.agentConfig);
-        this.originalAgentConfig = { ...this.agentConfig };
-      } catch (error) {
-        console.error('Failed to save agent config:', error);
-        handleChatError(error, 'save');
-        this.error = error.message;
-        throw error;
-      }
-    },
-
-    // 重置智能体配置
-    resetAgentConfig() {
-      this.agentConfig = { ...this.originalAgentConfig };
-    },
-
-    // 更新配置项
-    updateConfigItem(key, value) {
-      this.agentConfig[key] = value;
-    },
-
-    // 更新智能体配置（支持批量更新）
-    updateAgentConfig(updates) {
-      Object.assign(this.agentConfig, updates);
-    },
-
-    // 获取工具列表
-    async fetchTools() {
-      this.isLoadingTools = true;
-      this.error = null;
-
-      try {
-        const response = await agentApi.getTools(this.selectedAgentId);
-        this.availableTools = response.tools;
-      } catch (error) {
-        console.error('Failed to fetch tools:', error);
-        handleChatError(error, 'fetch');
-        this.error = error.message;
-        throw error;
-      } finally {
-        this.isLoadingTools = false;
-      }
-    },
-
-    // 清除错误状态
-    clearError() {
-      this.error = null;
-    },
-
-    // ==================== 线程管理方法已迁移到组件级别 ====================
-
-    // 重置store状态
-    reset() {
-      this.agents = [];
-      this.selectedAgentId = null;
-      this.defaultAgentId = null;
-      this.agentConfig = {};
-      this.originalAgentConfig = {};
-      this.availableTools = [];
-      this.isLoadingAgents = false;
-      this.isLoadingConfig = false;
-      this.isLoadingTools = false;
-      this.error = null;
-      this.isInitialized = false;
+      isInitialized.value = true
+    } catch (err) {
+      console.error('Failed to initialize agent store:', err)
+      handleChatError(err, 'initialize')
+      error.value = err.message
     }
-  },
+  }
 
+  /**
+   * 获取智能体列表
+   */
+  async function fetchAgents() {
+    isLoadingAgents.value = true
+    error.value = null
+
+    try {
+      const response = await agentApi.getAgents()
+      agents.value = response.agents
+    } catch (err) {
+      console.error('Failed to fetch agents:', err)
+      handleChatError(err, 'fetch')
+      error.value = err.message
+      throw err
+    } finally {
+      isLoadingAgents.value = false
+    }
+  }
+
+  /**
+   * 获取默认智能体
+   */
+  async function fetchDefaultAgent() {
+    try {
+      const response = await agentApi.getDefaultAgent()
+      defaultAgentId.value = response.default_agent_id
+    } catch (err) {
+      console.error('Failed to fetch default agent:', err)
+      handleChatError(err, 'fetch')
+      error.value = err.message
+    }
+  }
+
+  /**
+   * 设置默认智能体
+   */
+  async function setDefaultAgent(agentId) {
+    try {
+      await agentApi.setDefaultAgent(agentId)
+      defaultAgentId.value = agentId
+    } catch (err) {
+      console.error('Failed to set default agent:', err)
+      handleChatError(err, 'save')
+      error.value = err.message
+      throw err
+    }
+  }
+
+  /**
+   * 选择智能体
+   */
+  function selectAgent(agentId) {
+    if (agents.value.find(a => a.id === agentId)) {
+      selectedAgentId.value = agentId
+      // 清空之前的配置
+      agentConfig.value = {}
+      originalAgentConfig.value = {}
+    }
+  }
+
+  /**
+   * 加载智能体配置
+   */
+  async function loadAgentConfig(agentId = null) {
+    const targetAgentId = agentId || selectedAgentId.value
+    if (!targetAgentId) return
+
+    isLoadingConfig.value = true
+    error.value = null
+
+    try {
+      const response = await agentApi.getAgentConfig(targetAgentId)
+      agentConfig.value = { ...response.config }
+      originalAgentConfig.value = { ...response.config }
+    } catch (err) {
+      console.error('Failed to load agent config:', err)
+      handleChatError(err, 'load')
+      error.value = err.message
+      throw err
+    } finally {
+      isLoadingConfig.value = false
+    }
+  }
+
+  /**
+   * 保存智能体配置
+   */
+  async function saveAgentConfig(agentId = null) {
+    const targetAgentId = agentId || selectedAgentId.value
+    if (!targetAgentId) return
+
+    try {
+      await agentApi.saveAgentConfig(targetAgentId, agentConfig.value)
+      originalAgentConfig.value = { ...agentConfig.value }
+    } catch (err) {
+      console.error('Failed to save agent config:', err)
+      handleChatError(err, 'save')
+      error.value = err.message
+      throw err
+    }
+  }
+
+  /**
+   * 重置智能体配置
+   */
+  function resetAgentConfig() {
+    agentConfig.value = { ...originalAgentConfig.value }
+  }
+
+  /**
+   * 更新配置项
+   */
+  function updateConfigItem(key, value) {
+    agentConfig.value[key] = value
+  }
+
+  /**
+   * 更新智能体配置（支持批量更新）
+   */
+  function updateAgentConfig(updates) {
+    Object.assign(agentConfig.value, updates)
+  }
+
+  /**
+   * 获取工具列表
+   */
+  async function fetchTools() {
+    isLoadingTools.value = true
+    error.value = null
+
+    try {
+      const response = await agentApi.getTools(selectedAgentId.value)
+      availableTools.value = response.tools
+    } catch (err) {
+      console.error('Failed to fetch tools:', err)
+      handleChatError(err, 'fetch')
+      error.value = err.message
+      throw err
+    } finally {
+      isLoadingTools.value = false
+    }
+  }
+
+  /**
+   * 清除错误状态
+   */
+  function clearError() {
+    error.value = null
+  }
+
+  /**
+   * 重置 store 状态
+   */
+  function reset() {
+    agents.value = []
+    selectedAgentId.value = null
+    defaultAgentId.value = null
+    agentConfig.value = {}
+    originalAgentConfig.value = {}
+    availableTools.value = []
+    isLoadingAgents.value = false
+    isLoadingConfig.value = false
+    isLoadingTools.value = false
+    error.value = null
+    isInitialized.value = false
+  }
+
+  return {
+    // 状态
+    agents,
+    selectedAgentId,
+    defaultAgentId,
+    agentConfig,
+    originalAgentConfig,
+    availableTools,
+    isLoadingAgents,
+    isLoadingConfig,
+    isLoadingTools,
+    error,
+    isInitialized,
+
+    // 计算属性
+    selectedAgent,
+    defaultAgent,
+    agentsList,
+    isDefaultAgent,
+    configurableItems,
+    hasConfigChanges,
+
+    // 方法
+    initialize,
+    fetchAgents,
+    fetchDefaultAgent,
+    setDefaultAgent,
+    selectAgent,
+    loadAgentConfig,
+    saveAgentConfig,
+    resetAgentConfig,
+    updateConfigItem,
+    updateAgentConfig,
+    fetchTools,
+    clearError,
+    reset
+  }
+}, {
   // 持久化配置
   persist: {
     key: 'agent-store',
     storage: localStorage,
-    paths: ['selectedAgentId', 'defaultAgentId'] // 只持久化关键状态
+    paths: ['selectedAgentId', 'defaultAgentId']
   }
-});
+})

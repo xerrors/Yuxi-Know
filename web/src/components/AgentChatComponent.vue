@@ -3,11 +3,12 @@
     <ChatSidebarComponent
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
-      :is-sidebar-open="uiState.isSidebarOpen"
-      :is-initial-render="uiState.isInitialRender"
+      :is-sidebar-open="chatUIStore.isSidebarOpen"
+      :is-initial-render="localUIState.isInitialRender"
       :single-mode="props.singleMode"
       :agents="agents"
       :selected-agent-id="currentAgentId"
+      :is-creating-new-chat="chatUIStore.creatingNewChat"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
@@ -16,21 +17,22 @@
       @open-agent-modal="openAgentModal"
       :class="{
         'floating-sidebar': isSmallContainer,
-        'sidebar-open': uiState.isSidebarOpen,
-        'no-transition': uiState.isInitialRender,
-        'collapsed': isSmallContainer && !uiState.isSidebarOpen
+        'sidebar-open': chatUIStore.isSidebarOpen,
+        'no-transition': localUIState.isInitialRender,
+        'collapsed': isSmallContainer && !chatUIStore.isSidebarOpen
       }"
     />
-    <div class="sidebar-backdrop" v-if="uiState.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
+    <div class="sidebar-backdrop" v-if="chatUIStore.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
-          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="toggleSidebar">
+          <div type="button" class="agent-nav-btn" v-if="!chatUIStore.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen  class="nav-btn-icon" size="18"/>
           </div>
-          <div type="button" class="agent-nav-btn" v-if="!uiState.isSidebarOpen" @click="createNewChat" :disabled="chatState.creatingNewChat">
-            <MessageCirclePlus  class="nav-btn-icon"  size="18"/>
+          <div type="button" class="agent-nav-btn" v-if="!chatUIStore.isSidebarOpen" @click="createNewChat" :disabled="chatUIStore.creatingNewChat">
+            <LoaderCircle v-if="chatUIStore.creatingNewChat" class="nav-btn-icon loading-icon" size="18"/>
+            <MessageCirclePlus v-else class="nav-btn-icon"  size="18"/>
             <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
         </div>
@@ -45,12 +47,8 @@
         </div>
       </div>
 
-      <!-- 加载状态：新建对话或加载消息 -->
-      <div v-if="chatState.creatingNewChat" class="chat-loading">
-        <div class="loading-spinner"></div>
-        <span>正在创建新对话...</span>
-      </div>
-      <div v-else-if="isLoadingMessages" class="chat-loading">
+      <!-- 加载状态：加载消息 -->
+      <div v-if="isLoadingMessages" class="chat-loading">
         <div class="loading-spinner"></div>
         <span>正在加载消息...</span>
       </div>
@@ -182,11 +180,12 @@ import AttachmentInputPanel from '@/components/AttachmentInputPanel.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus } from 'lucide-vue-next';
+import { PanelLeftOpen, MessageCirclePlus, LoaderCircle } from 'lucide-vue-next';
 import { handleChatError, handleValidationError } from '@/utils/errorHandler';
 import { ScrollController } from '@/utils/scrollController';
 import { AgentValidator } from '@/utils/agentValidator';
 import { useAgentStore } from '@/stores/agent';
+import { useChatUIStore } from '@/stores/chatUI';
 import { storeToRefs } from 'pinia';
 import { MessageProcessor } from '@/utils/messageProcessor';
 import { agentApi, threadApi } from '@/apis';
@@ -195,7 +194,6 @@ import { useApproval } from '@/composables/useApproval';
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
-  state: { type: Object, default: () => ({}) },
   agentId: { type: String, default: '' },
   singleMode: { type: Boolean, default: true }
 });
@@ -203,6 +201,7 @@ const emit = defineEmits(['open-config', 'open-agent-modal']);
 
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore();
+const chatUIStore = useChatUIStore();
 const {
   agents,
   selectedAgentId,
@@ -234,11 +233,9 @@ const createOnGoingConvState = () => ({
   toolCallBuffers: {}
 });
 
+// 业务状态（保留在组件本地）
 const chatState = reactive({
   currentThreadId: null,
-  isLoadingThreads: false,
-  isLoadingMessages: false,
-  creatingNewChat: false,
   // 以threadId为键的线程状态
   threadStates: {}
 });
@@ -247,9 +244,8 @@ const chatState = reactive({
 const threads = ref([]);
 const threadMessages = ref({});
 
-const uiState = reactive({
-  ...props.state,
-  isSidebarOpen: localStorage.getItem('chat_sidebar_open') !== 'false',
+// 本地 UI 状态（仅在本组件使用）
+const localUIState = reactive({
   isInitialRender: true,
   containerWidth: 0,
 });
@@ -355,15 +351,15 @@ const conversations = computed(() => {
   return historyConvs;
 });
 
-const isLoadingThreads = computed(() => chatState.isLoadingThreads);
-const isLoadingMessages = computed(() => chatState.isLoadingMessages);
+const isLoadingThreads = computed(() => chatUIStore.isLoadingThreads);
+const isLoadingMessages = computed(() => chatUIStore.isLoadingMessages);
 const isStreaming = computed(() => {
   const threadState = currentThreadState.value;
   return threadState ? threadState.isStreaming : false;
 });
 const isProcessing = computed(() => isStreaming.value);
-const isSmallContainer = computed(() => uiState.containerWidth <= 520);
-const isMediumContainer = computed(() => uiState.containerWidth <= 768);
+const isSmallContainer = computed(() => localUIState.containerWidth <= 520);
+const isMediumContainer = computed(() => localUIState.containerWidth <= 768);
 
 // ==================== SCROLL & RESIZE HANDLING ====================
 const chatContainerRef = ref(null);
@@ -373,10 +369,10 @@ let resizeObserver = null;
 onMounted(() => {
   nextTick(() => {
     if (chatContainerRef.value) {
-      uiState.containerWidth = chatContainerRef.value.offsetWidth;
+      localUIState.containerWidth = chatContainerRef.value.offsetWidth;
       resizeObserver = new ResizeObserver(entries => {
         for (let entry of entries) {
-          uiState.containerWidth = entry.contentRect.width;
+          localUIState.containerWidth = entry.contentRect.width;
         }
       });
       resizeObserver.observe(chatContainerRef.value);
@@ -386,7 +382,7 @@ onMounted(() => {
       chatContainer.addEventListener('scroll', scrollController.handleScroll, { passive: true });
     }
   });
-  setTimeout(() => { uiState.isInitialRender = false; }, 300);
+  setTimeout(() => { localUIState.isInitialRender = false; }, 300);
 });
 
 onUnmounted(() => {
@@ -545,7 +541,7 @@ const fetchThreads = async (agentId = null) => {
   const targetAgentId = agentId || currentAgentId.value;
   if (!targetAgentId) return;
 
-  chatState.isLoadingThreads = true;
+  chatUIStore.isLoadingThreads = true;
   try {
     const fetchedThreads = await threadApi.getThreads(targetAgentId);
     threads.value = fetchedThreads || [];
@@ -560,7 +556,7 @@ const fetchThreads = async (agentId = null) => {
     handleChatError(error, 'fetch');
     throw error;
   } finally {
-    chatState.isLoadingThreads = false;
+    chatUIStore.isLoadingThreads = false;
   }
 };
 
@@ -764,7 +760,7 @@ const switchToFirstChatIfEmpty = async () => {
 };
 
 const createNewChat = async () => {
-  if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || chatState.creatingNewChat) return;
+  if (!AgentValidator.validateAgentId(currentAgentId.value, '创建对话') || chatUIStore.creatingNewChat) return;
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
   if (await switchToFirstChatIfEmpty()) return;
@@ -773,7 +769,7 @@ const createNewChat = async () => {
   const currentThreadIndex = threads.value.findIndex(thread => thread.id === currentChatId.value);
   if (currentChatId.value && conversations.value.length === 0 && currentThreadIndex === 0) return;
 
-  chatState.creatingNewChat = true;
+  chatUIStore.creatingNewChat = true;
   try {
     const newThread = await createThread(currentAgentId.value, '新的对话');
     if (newThread) {
@@ -793,7 +789,7 @@ const createNewChat = async () => {
   } catch (error) {
     handleChatError(error, 'create');
   } finally {
-    chatState.creatingNewChat = false;
+    chatUIStore.creatingNewChat = false;
   }
 };
 
@@ -812,14 +808,14 @@ const selectChat = async (chatId) => {
   }
 
   chatState.currentThreadId = chatId;
-  chatState.isLoadingMessages = true;
+  chatUIStore.isLoadingMessages = true;
   try {
     await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId });
     await loadThreadAttachments(chatId, { silent: true });
   } catch (error) {
     handleChatError(error, 'load');
   } finally {
-    chatState.isLoadingMessages = false;
+    chatUIStore.isLoadingMessages = false;
   }
 
   await nextTick();
@@ -1090,8 +1086,7 @@ defineExpose({
 });
 
 const toggleSidebar = () => {
-  uiState.isSidebarOpen = !uiState.isSidebarOpen;
-  localStorage.setItem('chat_sidebar_open', uiState.isSidebarOpen);
+  chatUIStore.toggleSidebar();
 };
 const openAgentModal = () => emit('open-agent-modal');
 
@@ -1671,12 +1666,30 @@ div.agent-nav-btn {
   font-size: 15px;
   transition: background-color 0.3s;
 
-  &:hover {
+  &:hover:not([disabled]) {
     background-color: var(--gray-50);
+  }
+
+  &[disabled] {
+    cursor: not-allowed;
+    opacity: 0.7;
   }
 
   .nav-btn-icon {
     height: 24px;
+  }
+
+  .loading-icon {
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

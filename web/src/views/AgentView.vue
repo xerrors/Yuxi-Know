@@ -3,7 +3,7 @@
     <div class="agent-view-body">
       <!-- 智能体选择弹窗 -->
       <a-modal
-        v-model:open="state.agentModalOpen"
+        v-model:open="chatUIStore.agentModalOpen"
         title="选择智能体"
         :width="800"
         :footer="null"
@@ -39,11 +39,10 @@
       <div class="content">
         <AgentChatComponent
           ref="chatComponentRef"
-          :state="state"
           :single-mode="false"
           @open-config="toggleConf"
           @open-agent-modal="openAgentModal"
-          @close-config-sidebar="() => state.isConfigSidebarOpen = false"
+          @close-config-sidebar="() => chatUIStore.isConfigSidebarOpen = false"
         >
           <template #header-right>
             <div type="button" class="agent-nav-btn" @click="toggleConf">
@@ -59,8 +58,8 @@
 
       <!-- 配置侧边栏 -->
       <AgentConfigSidebar
-        :isOpen="state.isConfigSidebarOpen"
-        @close="() => state.isConfigSidebarOpen = false"
+        :isOpen="chatUIStore.isConfigSidebarOpen"
+        @close="() => chatUIStore.isConfigSidebarOpen = false"
       />
 
       <!-- 反馈模态框 -->
@@ -70,12 +69,12 @@
       <Teleport to="body">
         <Transition name="menu-fade">
           <div
-            v-if="state.moreMenuOpen"
+            v-if="chatUIStore.moreMenuOpen"
             ref="moreMenuRef"
             class="more-popup-menu"
             :style="{
-              left: state.moreMenuPosition.x + 'px',
-              top: state.moreMenuPosition.y + 'px'
+              left: chatUIStore.moreMenuPosition.x + 'px',
+              top: chatUIStore.moreMenuPosition.y + 'px'
             }"
           >
             <div class="menu-item" @click="handleShareChat">
@@ -100,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import {
   StarOutlined,
   StarFilled,
@@ -115,6 +114,7 @@ import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue';
 import FeedbackModalComponent from '@/components/dashboard/FeedbackModalComponent.vue';
 import { useUserStore } from '@/stores/user';
 import { useAgentStore } from '@/stores/agent';
+import { useChatUIStore } from '@/stores/chatUI';
 import { ChatExporter } from '@/utils/chatExporter';
 import { handleChatError } from '@/utils/errorHandler';
 import { onClickOutside } from '@vueuse/core';
@@ -124,26 +124,18 @@ import { storeToRefs } from 'pinia';
 // 组件引用
 const feedbackModal = ref(null)
 const chatComponentRef = ref(null)
+
+// Stores
 const userStore = useUserStore();
 const agentStore = useAgentStore();
+const chatUIStore = useChatUIStore();
 
-// 从store中获取响应式状态
+// 从 agentStore 中获取响应式状态
 const {
   agents,
   selectedAgentId,
   defaultAgentId,
 } = storeToRefs(agentStore);
-
-const state = reactive({
-  agentModalOpen: false,
-  isConfigSidebarOpen: false,
-  moreMenuOpen: false,
-  moreMenuPosition: { x: 0, y: 0 }
-});
-
-
-
-// 本地状态（仅UI相关）
 
 // 设置为默认智能体
 const setAsDefaultAgent = async (agentId) => {
@@ -190,18 +182,18 @@ const selectAgent = (agentId) => {
 
 // 打开智能体选择弹窗
 const openAgentModal = () => {
-  state.agentModalOpen = true;
+  chatUIStore.agentModalOpen = true;
 };
 
 // 从弹窗中选择智能体
 const selectAgentFromModal = (agentId) => {
   selectAgent(agentId);
-  state.agentModalOpen = false;
+  chatUIStore.agentModalOpen = false;
 };
 
 
 const toggleConf = () => {
-  state.isConfigSidebarOpen = !state.isConfigSidebarOpen
+  chatUIStore.isConfigSidebarOpen = !chatUIStore.isConfigSidebarOpen
 }
 
 // 更多菜单相关
@@ -210,25 +202,22 @@ const moreMenuRef = ref(null);
 const toggleMoreMenu = (event) => {
   event.stopPropagation();
   // 切换状态，而不是只打开
-  state.moreMenuOpen = !state.moreMenuOpen;
+  chatUIStore.moreMenuOpen = !chatUIStore.moreMenuOpen;
 
-  if (state.moreMenuOpen) {
+  if (chatUIStore.moreMenuOpen) {
     // 只在打开时计算位置
     const rect = event.currentTarget.getBoundingClientRect();
-    state.moreMenuPosition = {
-      x: rect.right - 130, // 菜单宽度180px，右对齐
-      y: rect.bottom + 8
-    };
+    chatUIStore.openMoreMenu(rect.right - 130, rect.bottom + 8);
   }
 };
 
 const closeMoreMenu = () => {
-  state.moreMenuOpen = false;
+  chatUIStore.closeMoreMenu();
 };
 
 // 使用 VueUse 的 onClickOutside
 onClickOutside(moreMenuRef, () => {
-  if (state.moreMenuOpen) {
+  if (chatUIStore.moreMenuOpen) {
     closeMoreMenu();
   }
 });
