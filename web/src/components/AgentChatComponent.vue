@@ -838,9 +838,11 @@ const deleteChat = async (chatId) => {
     await deleteThread(chatId);
     if (chatState.currentThreadId === chatId) {
       chatState.currentThreadId = null;
-      if (chatsList.value.length > 0) {
-        await selectChat(chatsList.value[0].id);
-      }
+      // 如果删除的是当前对话，自动创建新对话
+      await createNewChat();
+    } else if (chatsList.value.length > 0) {
+      // 如果删除的不是当前对话，选择第一个可用对话
+      await selectChat(chatsList.value[0].id);
     }
   } catch (error) {
     handleChatError(error, 'delete');

@@ -44,7 +44,7 @@
                       <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
                         <EditOutlined /> 重命名
                       </a-menu-item>
-                      <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" v-if="chat.id !== currentChatId">
+                      <a-menu-item key="delete" @click.stop="deleteChat(chat.id)">
                         <DeleteOutlined /> 删除
                       </a-menu-item>
                     </a-menu>
