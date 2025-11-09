@@ -19,7 +19,10 @@
 **亮点**：提供全套的智能体开发套件，基于 MIT 开源协议，技术栈友好，适合基于此项目打造自己的智能体平台。
 
 > [!tip]
-> 🙏 **感谢 Star Star Star** ~ ⭐⭐⭐⭐⭐ 详细文档请查看全新的 📄[**文档中心**](https://xerrors.github.io/Yuxi-Know/)，或者在 哔哩哔哩观看 📽️[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
+> 🙏 **感谢 Star Star Star** ~ ⭐⭐⭐⭐⭐
+> 
+> 详细文档请查看全新的 📄[**文档中心**](https://xerrors.github.io/Yuxi-Know/)，
+> 哔哩哔哩观看 📽️[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
 
 
 **🎉 最新动态**
@@ -29,17 +32,27 @@
   - 文档解析升级，适配 mineru-2.6 以及 mineru-api。
   - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 
----
 
 <div align="center">
   <!-- 视频缩略图 -->
-  <img width="1918" height="1270" alt="image" src="https://github.com/user-attachments/assets/585d2041-e939-4c4f-b5ad-e164dc7d4c25" />
+  <img width="5369" height="2934" alt="111" src="https://github.com/user-attachments/assets/acdf38eb-872f-4b70-b138-d69dc8be0db7" />
+
   <br>
-  <img width="1918" height="1270" alt="image" src="https://github.com/user-attachments/assets/267d605d-0ced-4293-9a6d-7507521e97a6" />
+  <img width="5369" height="2934" alt="222" src="https://github.com/user-attachments/assets/839978d4-dcb8-47bd-a629-2912d2867e7e" />
+
   <br>
-  <img width="1918" height="1270" alt="image" src="https://github.com/user-attachments/assets/8ddd7e0e-35f5-4c46-a4ce-87ef4bc340b5" />
+  <img width="5369" height="2934" alt="333" src="https://github.com/user-attachments/assets/6387abce-45ab-4cd2-bd2f-e478d59a145f" />
+
   <br>
-  <img width="1918" height="1270" alt="image" src="https://github.com/user-attachments/assets/be45b7eb-d63e-4c0e-a81d-df42264e2a58" />
+  <img width="5369" height="2934" alt="444" src="https://github.com/user-attachments/assets/aff737c4-4b58-4b2e-b7aa-b0ff92d84e9b" />
+
+  <br>
+  <img width="5369" height="2934" alt="555" src="https://github.com/user-attachments/assets/3fda0e48-ff6e-4b35-88b2-f7f7bc99a436" />
+
+  <br>
+  <img width="5369" height="2934" alt="666" src="https://github.com/user-attachments/assets/8fdf0407-056d-40e2-949c-8dd4247dc59d" />
+
+
 </div>
 
 
