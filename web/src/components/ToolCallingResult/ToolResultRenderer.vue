@@ -74,7 +74,7 @@ const parsedData = computed(() => {
   if (typeof props.resultContent === 'string') {
     try {
       return JSON.parse(props.resultContent)
-    } catch {
+    } catch (error) {
       return props.resultContent
     }
   }
@@ -138,15 +138,39 @@ const isImageResult = computed(() => {
 // 判断是否为知识图谱查询结果
 const isKnowledgeGraphResult = computed(() => {
   const toolNameLower = props.toolName.toLowerCase()
-  const isGraphTool = toolNameLower.includes('graph') ||
-                     toolNameLower.includes('kg') ||
-                     toolNameLower.includes('query_knowledge_graph')
 
-  if (!isGraphTool) return false
+  // 工具名称初步筛选 - 支持中英文关键词
+  const hasGraphKeyword = toolNameLower.includes('graph') ||
+                         toolNameLower.includes('图谱') ||
+                         toolNameLower.includes('kg')
 
   const data = parsedData.value
-  // 支持新格式：包含nodes、edges、triples的对象
-  return data && typeof data === 'object' && 'triples' in data && Array.isArray(data.triples)
+
+  // 数据格式验证 - 核心判断依据
+  const hasBasicStructure = data && typeof data === 'object'
+  const hasTriples = hasBasicStructure && 'triples' in data
+  const triplesIsArray = hasTriples && Array.isArray(data.triples)
+  const triplesHasContent = triplesIsArray && data.triples.length > 0
+
+  // 进一步验证triples数组的内容格式
+  let triplesHasValidFormat = false
+  if (triplesHasContent) {
+    // 检查是否至少有一个有效的三元组
+    triplesHasValidFormat = data.triples.some(triple => {
+      return Array.isArray(triple) &&
+             triple.length >= 3 &&
+             triple.every(item => typeof item === 'string' && item.trim() !== '')
+    })
+  }
+
+  // 最终判断：数据格式符合规范优先，工具名称作为辅助判断
+  // 1. 如果数据格式完全符合规范，直接认为是知识图谱结果
+  if (hasBasicStructure && triplesIsArray && triplesHasContent && triplesHasValidFormat) {
+    return true
+  }
+
+  // 2. 如果数据格式基本符合且有相关关键词，也认为是知识图谱结果
+  return hasTriples && triplesIsArray && hasGraphKeyword
 })
 
 // 判断是否为计算器结果

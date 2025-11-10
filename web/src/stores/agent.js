@@ -2,8 +2,10 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { agentApi } from '@/apis/agent_api'
 import { handleChatError } from '@/utils/errorHandler'
+import { useUserStore } from '@/stores/user'
 
 export const useAgentStore = defineStore('agent', () => {
+  const userStore = useUserStore()
   // ==================== 状态定义 ====================
   // 智能体相关状态
   const agents = ref([])
@@ -84,7 +86,9 @@ export const useAgentStore = defineStore('agent', () => {
       }
 
       if (selectedAgentId.value) {
-        await loadAgentConfig()
+        if (userStore.isAdmin) {
+          await loadAgentConfig()
+        }
         await fetchTools()
       }
 
@@ -161,6 +165,8 @@ export const useAgentStore = defineStore('agent', () => {
    * 加载智能体配置
    */
   async function loadAgentConfig(agentId = null) {
+    if (!userStore.isAdmin) return
+
     const targetAgentId = agentId || selectedAgentId.value
     if (!targetAgentId) return
 
