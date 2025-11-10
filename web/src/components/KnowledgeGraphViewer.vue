@@ -357,24 +357,18 @@ const getEdgeDisplayName = (edge) => {
 
 // 加载可用数据库
 const loadAvailableDatabases = async () => {
-  // 如果隐藏数据库选择器且有初始数据库ID，直接使用
-  if (props.hideDbSelector && props.initialDatabaseId) {
-    selectedDatabase.value = props.initialDatabaseId
-    await loadGraphLabels(selectedDatabase.value)
-    return
-  }
-
   loadingDatabases.value = true
   try {
     const response = await lightragApi.getDatabases()
     if (response.success) {
       availableDatabases.value = response.data.databases || []
 
-      // 如果有初始数据库 ID，优先选择它
-      if (props.initialDatabaseId && availableDatabases.value.some(db => db.db_id === props.initialDatabaseId)) {
+      // 如果有初始数据库 ID，直接使用它（上层已经检查过类型）
+      if (props.initialDatabaseId) {
         selectedDatabase.value = props.initialDatabaseId
         await onDatabaseChange(selectedDatabase.value)
       } else if (availableDatabases.value.length > 0 && !selectedDatabase.value) {
+        // 没有初始数据库ID，选择第一个可用的数据库
         selectedDatabase.value = availableDatabases.value[0].db_id
         await onDatabaseChange(selectedDatabase.value)
       }
@@ -418,7 +412,7 @@ const onDatabaseChange = async (dbId) => {
   // 加载新数据库的标签
   await loadGraphLabels(dbId)
 
-  message.info(`已切换到数据库: ${availableDatabases.value.find(db => db.db_id === dbId)?.name || dbId}`)
+  // message.info(`已切换到数据库: ${availableDatabases.value.find(db => db.db_id === dbId)?.name || dbId}`)
 }
 
 // Sigma.js配置
@@ -673,7 +667,7 @@ const registerEvents = () => {
 // 加载图数据
 const loadGraphData = async () => {
   if (!selectedDatabase.value) {
-    message.warning('请先选择数据库')
+    console.warn('尝试加载图数据但没有选中数据库')
     return
   }
 
@@ -751,6 +745,25 @@ const loadGraphData = async () => {
 
 // 加载完整图数据
 const loadFullGraph = async () => {
+  console.log('loadFullGraph 调用:', {
+    selectedDatabase: selectedDatabase.value,
+    availableDatabases: availableDatabases.value.length,
+    initialDatabaseId: props.initialDatabaseId
+  });
+
+  // 如果还没有选中数据库，等待数据库加载完成
+  if (!selectedDatabase.value && props.initialDatabaseId) {
+    console.log('等待数据库加载完成...');
+    // 等待一小段时间让异步操作完成
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  // 再次检查是否有选中的数据库
+  if (!selectedDatabase.value) {
+    console.warn('loadFullGraph: 没有选中的数据库，无法加载图谱')
+    return
+  }
+
   selectedLabel.value = '*'
   await loadGraphData()
   emit('refresh-graph')
@@ -852,7 +865,7 @@ const applyLayout = async (graph) => {
 // 展开节点
 const expandNode = async (nodeId) => {
   if (!selectedDatabase.value) {
-    message.warning('请先选择数据库')
+    console.warn('尝试展开节点但没有选中数据库')
     return
   }
 

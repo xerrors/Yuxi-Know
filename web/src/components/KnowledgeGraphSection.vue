@@ -133,9 +133,24 @@ const isGraphSupported = computed(() => {
 
 let pendingLoadTimer = null;
 
-const loadGraph = () => {
+const loadGraph = async () => {
+  console.log('loadGraph 调用:', {
+    hasRef: !!graphViewerRef.value,
+    hasLoadFullGraph: graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function'
+  });
+
+  // 等待一小段时间确保子组件已经完全初始化
+  await nextTick();
+
   if (graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function') {
+    console.log('调用 loadFullGraph');
     graphViewerRef.value.loadFullGraph();
+  } else {
+    console.warn('无法调用 loadFullGraph:', {
+      hasRef: !!graphViewerRef.value,
+      refValue: graphViewerRef.value,
+      hasMethod: graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph
+    });
   }
 };
 
@@ -197,16 +212,45 @@ const applySettings = () => {
 // };
 
 const scheduleGraphLoad = (delay = 200) => {
-  if (!props.active || !isGraphSupported.value) {
+  console.log('scheduleGraphLoad 调用:', {
+    active: props.active,
+    supported: isGraphSupported.value,
+    databaseId: databaseId.value,
+    hasGraphViewer: !!graphViewerRef.value
+  });
+
+  // 确保组件激活且数据库支持图谱功能
+  if (!props.active) {
+    console.log('组件未激活，跳过图谱加载');
     return;
   }
+
+  if (!isGraphSupported.value) {
+    console.log('数据库不支持图谱功能，跳过加载');
+    return;
+  }
+
+  if (!databaseId.value) {
+    console.log('没有选中数据库，跳过图谱加载');
+    return;
+  }
+
   if (pendingLoadTimer) {
     clearTimeout(pendingLoadTimer);
   }
-  pendingLoadTimer = setTimeout(() => {
-    nextTick(() => {
-      loadGraph();
-    });
+  pendingLoadTimer = setTimeout(async () => {
+    await nextTick();
+    // 再次检查条件，防止在延迟期间状态发生变化
+    if (props.active && isGraphSupported.value && databaseId.value) {
+      console.log('执行图谱加载');
+      await loadGraph();
+    } else {
+      console.log('延迟检查时条件不满足:', {
+        active: props.active,
+        supported: isGraphSupported.value,
+        databaseId: databaseId.value
+      });
+    }
   }, delay);
 };
 
@@ -235,13 +279,31 @@ watch(
 );
 
 watch(databaseId, () => {
-  store.graphStats = defaultGraphStats();
-  scheduleGraphLoad(300);
+  // 重置统计信息
+  store.graphStats = {
+    total_nodes: 0,
+    total_edges: 0,
+    displayed_nodes: 0,
+    displayed_edges: 0,
+    is_truncated: false
+  };
+  clearGraph();
+
+  // 只有在新数据库支持图谱时才加载
+  if (isGraphSupported.value) {
+    scheduleGraphLoad(300);
+  }
 });
 
 watch(isGraphSupported, (supported) => {
   if (!supported) {
-    store.graphStats = defaultGraphStats();
+    store.graphStats = {
+      total_nodes: 0,
+      total_edges: 0,
+      displayed_nodes: 0,
+      displayed_edges: 0,
+      is_truncated: false
+    };
     clearGraph();
     return;
   }
