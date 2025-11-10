@@ -236,11 +236,39 @@ async def add_documents(
                 await context.set_progress(progress, f"正在处理第 {idx}/{total} 个文档")
 
                 # 处理单个文档
-                result = await knowledge_base.add_content(db_id, [item], params=params)
-                processed_items.extend(result)
+                try:
+                    result = await knowledge_base.add_content(db_id, [item], params=params)
+                    processed_items.extend(result)
+                except Exception as doc_error:
+                    # 处理单个文档处理的所有异常（包括超时）
+                    logger.error(f"Document processing failed for {item}: {doc_error}")
+
+                    # 判断是否是超时异常
+                    error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
+                    error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
+
+                    processed_items.append({
+                        "item": item,
+                        "status": "failed",
+                        "error": f"{error_msg}: {str(doc_error)}",
+                        "error_type": error_type
+                    })
 
         except asyncio.CancelledError:
             await context.set_progress(100.0, "任务已取消")
+            raise
+        except Exception as task_error:
+            # 处理整体任务的其他异常（如内存不足、网络错误等）
+            logger.exception(f"Task processing failed: {task_error}")
+            await context.set_progress(100.0, f"任务处理失败: {str(task_error)}")
+            # 将所有未处理的文档标记为失败
+            for item in items[len(processed_items):]:
+                processed_items.append({
+                    "item": item,
+                    "status": "failed",
+                    "error": f"任务失败: {str(task_error)}",
+                    "error_type": "task_failed"
+                })
             raise
 
         item_type = "URL" if content_type == "url" else "文件"
