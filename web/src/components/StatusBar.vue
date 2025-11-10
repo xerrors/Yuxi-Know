@@ -28,7 +28,7 @@
             class="task-center-badge"
           >
             <span class="task-center-button">
-              <ListChecks class="icon" />
+              <ClipboardList class="icon" />
               <span class="task-center-label">任务中心</span>
             </span>
           </a-badge>
@@ -42,7 +42,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useInfoStore } from '@/stores/info'
 import { useUserStore } from '@/stores/user'
-import { Clock, User, ListChecks } from 'lucide-vue-next'
+import { Clock, User, ClipboardList } from 'lucide-vue-next'
 import { useTaskerStore } from '@/stores/tasker'
 import { storeToRefs } from 'pinia'
 import dayjs from '@/utils/time'
@@ -169,7 +169,8 @@ onUnmounted(() => {
 .status-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
+  font-size: 13px;
 }
 
 .task-center-entry {
@@ -187,27 +188,31 @@ onUnmounted(() => {
 .task-center-button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+  gap: 8px;
+  padding: 6px 14px;
   border-radius: 999px;
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: transparent;
+  color: var(--main-600, #2563eb);
   font-size: 13px;
-  transition: background-color 0.2s ease, color 0.2s ease;
+  font-weight: 500;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .task-center-button .icon {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
+  color: inherit;
 }
 
 .task-center-label {
-  font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
 .task-center-entry:hover .task-center-button {
-  background-color: var(--main-40, #e5f0ff);
-  color: var(--main-500, #1d4ed8);
+  background-color: rgba(37, 99, 235, 0.08);
+  color: var(--main-700, #1d4ed8);
+  border-color: rgba(37, 99, 235, 0.5);
 }
 
 .task-center-badge :deep(.ant-badge-count) {
@@ -220,17 +225,20 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: #6b7280;
+  line-height: 1.3;
+  color: var(--gray-600, #4b5563);
 
   .icon {
-    width: 14px;
-    height: 14px;
+    width: 15px;
+    height: 15px;
+    color: var(--gray-600, #6b7280);
   }
 }
 
 .current-time,
 .user-greeting {
   font-weight: 500;
+  color: var(--gray-900, #111827);
 }
 
 // 响应式设计

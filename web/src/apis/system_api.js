@@ -51,12 +51,7 @@ export const configApi = {
    */
   updateConfigBatch: async (items) => apiAdminPost('/api/system/config/update', items),
 
-  /**
-   * 重启系统（仅超级管理员）
-   * @returns {Promise} - 重启结果
-   */
-  restartSystem: async () => apiSuperAdminPost('/api/system/restart', {}),
-
+  
   /**
    * 获取系统日志
    * @returns {Promise} - 系统日志

@@ -304,10 +304,10 @@ const openAgentModal = () => {
     .new-chat-btn {
       width: 100%;
       padding: 8px 12px;
-      border-radius: 6px;
-      background-color: var(--gray-50);
+      border-radius: 8px;
+      background-color: var(--gray-0);
       color: var(--main-color);
-      border: none;
+      border: 1px solid var(--gray-150);
       transition: all 0.2s ease;
       font-weight: 500;
       cursor: pointer;
@@ -315,9 +315,10 @@ const openAgentModal = () => {
       align-items: center;
       justify-content: center;
       gap: 8px;
+      box-shadow: 0 3px 4px rgba(0, 10, 20, 0.02);
 
       &:hover:not(:disabled) {
-        background-color: var(--gray-100);
+        box-shadow: 0 3px 4px rgba(0, 10, 20, 0.07);
       }
 
       &:disabled {

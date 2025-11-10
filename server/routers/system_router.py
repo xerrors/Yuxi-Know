@@ -51,11 +51,6 @@ async def update_config_batch(items: dict = Body(...), current_user: User = Depe
     return config.dump_config()
 
 
-@system.post("/restart")
-async def restart_system(current_user: User = Depends(get_superadmin_user)):
-    """重启系统（仅超级管理员）"""
-    graph_base.start()
-    return {"message": "系统已重启"}
 
 
 @system.get("/logs")

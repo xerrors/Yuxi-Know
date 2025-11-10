@@ -1,12 +1,6 @@
 <template>
   <div class="setting-view">
     <HeaderComponent title="设置" class="setting-header">
-
-      <template #actions>
-        <a-button :type="isNeedRestart ? 'primary' : 'default'" @click="sendRestart" :icon="h(ReloadOutlined)">
-          {{ isNeedRestart ? '需要刷新' : '重新加载' }}
-        </a-button>
-      </template>
     </HeaderComponent>
     <div class="setting-container layout-container">
       <div class="sider" v-if="state.windowWidth > 520">
@@ -182,7 +176,6 @@ import { computed, reactive, ref, h, watch, onMounted, onUnmounted } from 'vue'
 import { useConfigStore } from '@/stores/config';
 import { useUserStore } from '@/stores/user'
 import {
-  ReloadOutlined,
   SettingOutlined,
   CodeOutlined,
   FolderOutlined,
@@ -192,15 +185,12 @@ import {
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue';
 import UserManagementComponent from '@/components/UserManagementComponent.vue';
-import { notification, Button } from 'ant-design-vue';
-import { configApi } from '@/apis/system_api'
 import { embeddingApi } from '@/apis/knowledge_api'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 
 const configStore = useConfigStore()
 const userStore = useUserStore()
 const items = computed(() => configStore.config._config_items)
-const isNeedRestart = ref(false)
 const state = reactive({
   loading: false,
   section: 'base',
@@ -218,20 +208,6 @@ const rerankerChoices = computed(() => {
 })
 
 const preHandleChange = (key, e) => {
-
-  if (key == 'enable_reranker'
-    || key == 'embed_model'
-    || key == 'reranker'
-    || key == 'model_local_paths') {
-    isNeedRestart.value = true
-    notification.info({
-      message: '需要重新加载模型',
-      description: '请点击右下角按钮重新加载模型',
-      placement: 'topLeft',
-      duration: 0,
-      btn: h(Button, { type: 'primary', onClick: sendRestart }, '立即重新加载')
-    })
-  }
   return true
 }
 
@@ -285,23 +261,6 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateWindowWidth)
 })
 
-const sendRestart = () => {
-  console.log('Restarting...')
-  message.loading({ content: '重新加载模型中', key: "restart", duration: 0 });
-
-  configApi.restartSystem()
-    .then(() => {
-      console.log('Restarted')
-      message.success({ content: '重新加载完成!', key: "restart", duration: 2 });
-      setTimeout(() => {
-        window.location.reload()
-      }, 200)
-    })
-    .catch(error => {
-      console.error('重启服务失败:', error)
-      message.error({ content: `重启失败: ${error.message}`, key: "restart", duration: 2 });
-    });
-}
 
 
 // 检查所有embedding模型状态
