@@ -284,7 +284,7 @@ div.header, #app-router-view {
   flex: 0 0 @header-width;
   justify-content: flex-start;
   align-items: center;
-  background-color: var(--main-10);
+  background-color: var(--main-0);
   height: 100%;
   width: @header-width;
   border-right: 1px solid var(--gray-100);

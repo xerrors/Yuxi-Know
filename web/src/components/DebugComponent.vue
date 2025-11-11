@@ -352,6 +352,9 @@ const printUserInfo = () => {
     token: userStore.token ? '*** (已隐藏)' : null,
     userId: userStore.userId,
     username: userStore.username,
+    userIdLogin: userStore.userIdLogin,
+    phoneNumber: userStore.phoneNumber,
+    avatar: userStore.avatar,
     userRole: userStore.userRole,
     isLoggedIn: userStore.isLoggedIn,
     isAdmin: userStore.isAdmin,
@@ -365,7 +368,28 @@ const printDatabaseInfo = async () => {
   if (!checkAdminPermission()) return;
 
   try {
-    console.log('知识库信息', databaseStore.database);
+    console.log('=== 知识库信息 ===');
+    console.log('基本信息:', {
+      databaseId: databaseStore.databaseId,
+      databaseName: databaseStore.database.name,
+      databaseDesc: databaseStore.database.description,
+      fileCount: Object.keys(databaseStore.database.files || {}).length
+    });
+
+    console.log('状态信息:', {
+      databaseLoading: databaseStore.state.databaseLoading,
+      refrashing: databaseStore.state.refrashing,
+      searchLoading: databaseStore.state.searchLoading,
+      lock: databaseStore.state.lock,
+      autoRefresh: databaseStore.state.autoRefresh,
+      queryParamsLoading: databaseStore.state.queryParamsLoading
+    });
+
+    console.log('查询参数:', {
+      queryParams: databaseStore.queryParams,
+      meta: databaseStore.meta,
+      selectedFileCount: databaseStore.selectedRowKeys.length
+    });
 
   } catch (error) {
     console.error('获取知识库信息失败:', error);
@@ -386,22 +410,23 @@ const printAgentConfig = async () => {
   try {
     console.log('=== 智能体配置信息 ===');
 
-    // 从store 获取状态信息
+    // Store状态信息
     console.log('Store 状态:', {
       isInitialized: agentStore.isInitialized,
       selectedAgentId: agentStore.selectedAgentId,
       defaultAgentId: agentStore.defaultAgentId,
+      agentCount: agentStore.agentsList.length,
       loadingStates: {
         isLoadingAgents: agentStore.isLoadingAgents,
         isLoadingConfig: agentStore.isLoadingConfig,
         isLoadingTools: agentStore.isLoadingTools
       },
       error: agentStore.error,
-      note: '线程相关状态已迁移到组件级别'
+      hasConfigChanges: agentStore.hasConfigChanges
     });
 
     // 智能体列表信息
-    console.log('智能体列表 (从store):', {
+    console.log('智能体列表:', {
       count: agentStore.agentsList.length,
       agents: toRaw(agentStore.agentsList)
     });
@@ -411,22 +436,31 @@ const printAgentConfig = async () => {
       console.log('当前选中智能体:', {
         agent: toRaw(agentStore.selectedAgent),
         isDefault: agentStore.isDefaultAgent,
-        configurableItems: Object.keys(agentStore.configurableItems).length
+        configurableItemsCount: Object.keys(agentStore.configurableItems).length
       });
 
-      // 当前智能体配置
-      console.log('当前智能体配置:', {
-        current: toRaw(agentStore.agentConfig),
-        original: toRaw(agentStore.originalAgentConfig),
-        hasChanges: agentStore.hasConfigChanges
-      });
+      // 当前智能体配置（仅管理员可见）
+      if (userStore.isAdmin) {
+        console.log('当前智能体配置:', {
+          current: toRaw(agentStore.agentConfig),
+          original: toRaw(agentStore.originalAgentConfig),
+          hasChanges: agentStore.hasConfigChanges
+        });
+      } else {
+        console.log('智能体配置: 需要管理员权限查看详细配置');
+      }
     }
 
     // 工具信息
-    console.log('可用工具:', toRaw(agentStore.availableTools));
+    console.log('可用工具:', {
+      count: agentStore.availableTools.length,
+      tools: toRaw(agentStore.availableTools)
+    });
 
-    // 注意：线程和对话相关信息已迁移到AgentChatComponent组件级别
-    console.log('注意: 线程和对话状态已迁移到组件级别，请在AgentChatComponent中查看相关信息');
+    // 配置项信息（管理员可见）
+    if (userStore.isAdmin && agentStore.selectedAgent) {
+      console.log('可配置项:', toRaw(agentStore.configurableItems));
+    }
 
   } catch (error) {
     console.error('获取智能体配置失败:', error);
