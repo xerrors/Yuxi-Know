@@ -27,10 +27,9 @@ export const useGraphStore = defineStore('graph', {
 
     // 图统计信息
     stats: {
-      total_nodes: 0,
-      total_edges: 0,
       displayed_nodes: 0,
-      displayed_edges: 0
+      displayed_edges: 0,
+      is_truncated: false
     }
   }),
 
@@ -44,9 +43,9 @@ export const useGraphStore = defineStore('graph', {
     // 获取选中边的详细信息
     selectedEdgeData: (state) => {
       if (!state.selectedEdge || !state.rawGraph) return null
-      
+
       console.log('查找边数据，选中边ID:', state.selectedEdge)
-      
+
       // 首先尝试通过dynamicId匹配（Sigma使用的ID格式）
       let foundEdge = state.rawGraph.edges.find(edge => edge.dynamicId === state.selectedEdge)
       if (foundEdge) {
@@ -66,7 +65,7 @@ export const useGraphStore = defineStore('graph', {
       const match = state.selectedEdge.match(dynamicIdPattern)
       if (match) {
         const [, source, target, index] = match
-        foundEdge = state.rawGraph.edges.find(edge => 
+        foundEdge = state.rawGraph.edges.find(edge =>
           edge.source === source && edge.target === target
         )
         if (foundEdge) {
@@ -204,10 +203,9 @@ export const useGraphStore = defineStore('graph', {
     updateStats() {
       if (this.rawGraph) {
         this.stats = {
-          total_nodes: this.rawGraph.nodes.length,
-          total_edges: this.rawGraph.edges.length,
           displayed_nodes: this.rawGraph.nodes.length,
-          displayed_edges: this.rawGraph.edges.length
+          displayed_edges: this.rawGraph.edges.length,
+          is_truncated: this.rawGraph.is_truncated ?? this.stats?.is_truncated ?? false
         }
       }
     },
@@ -417,10 +415,9 @@ export const useGraphStore = defineStore('graph', {
       this.moveToSelectedNode = false
       this.graphIsEmpty = false
       this.stats = {
-        total_nodes: 0,
-        total_edges: 0,
         displayed_nodes: 0,
-        displayed_edges: 0
+        displayed_edges: 0,
+        is_truncated: false
       }
     }
   }

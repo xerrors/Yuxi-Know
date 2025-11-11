@@ -698,13 +698,10 @@ const loadGraphData = async () => {
 
       // 设置图数据
       graphStore.setRawGraph(rawGraph)
-      // 更新 displayed 计数（当前视图）以及来自后端的 total 计数（整个库）
+      // 更新当前显示的节点和边数量
       graphStore.stats = {
         displayed_nodes: graphResponse.data.nodes.length,
         displayed_edges: graphResponse.data.edges.length,
-        // 从 statsResponse 填充整个知识库的统计信息（后端返回 total_nodes/total_edges）
-        total_nodes: statsResponse.data.total_nodes ?? graphStore.stats.total_nodes ?? 0,
-        total_edges: statsResponse.data.total_edges ?? graphStore.stats.total_edges ?? 0,
         is_truncated: graphResponse.data.is_truncated
       }
 

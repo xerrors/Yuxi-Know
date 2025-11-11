@@ -17,14 +17,7 @@ export const useDatabaseStore = defineStore('database', () => {
 
   const queryParams = ref([]);
   const meta = reactive({});
-  const graphStats = ref({
-    total_nodes: 0,
-    total_edges: 0,
-    displayed_nodes: 0,
-    displayed_edges: 0,
-    is_truncated: false,
-  });
-  const selectedRowKeys = ref([]);
+    const selectedRowKeys = ref([]);
 
   const state = reactive({
     databaseLoading: false,
@@ -377,7 +370,6 @@ export const useDatabaseStore = defineStore('database', () => {
     selectedFile,
     queryParams,
     meta,
-    graphStats,
     selectedRowKeys,
     state,
     getDatabaseInfo,

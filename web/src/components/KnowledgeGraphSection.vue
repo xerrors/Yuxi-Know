@@ -2,10 +2,7 @@
   <div class="graph-section" v-if="isGraphSupported">
     <div class="graph-toolbar">
       <div class="toolbar-left">
-        <div class="graph-stats">
-          <a-tag color="blue" size="small">总节点: {{ graphStats.total_nodes || 0 }}</a-tag>
-          <a-tag color="green" size="small">总边: {{ graphStats.total_edges || 0 }}</a-tag>
-        </div>
+        <!-- 移除了不准确的总节点数和总边数显示 -->
       </div>
     </div>
     <div class="graph-container-compact">
@@ -23,7 +20,6 @@
         :initial-limit="graphLimit"
         :initial-depth="graphDepth"
         ref="graphViewerRef"
-        @update:stats="handleViewerStats"
       />
     </div>
 
@@ -109,10 +105,6 @@ const store = useDatabaseStore();
 const databaseId = computed(() => store.databaseId);
 const kbType = computed(() => store.database.kb_type);
 const kbTypeLabel = computed(() => getKbTypeLabel(kbType.value || 'lightrag'));
-const graphStats = computed({
-    get: () => store.graphStats,
-    set: (stats) => store.graphStats = stats
-});
 
 const graphViewerRef = ref(null);
 const showSettings = ref(false);
@@ -254,19 +246,6 @@ const scheduleGraphLoad = (delay = 200) => {
   }, delay);
 };
 
-// 处理子组件（Viewer）上报的统计信息，将其写入 database store 的 graphStats
-const handleViewerStats = (stats) => {
-  if (!stats) return;
-
-  // 合并现有 store.graphStats，优先使用来自 viewer 的值
-  store.graphStats = {
-    total_nodes: stats.total_nodes ?? store.graphStats.total_nodes ?? 0,
-    total_edges: stats.total_edges ?? store.graphStats.total_edges ?? 0,
-    displayed_nodes: stats.displayed_nodes ?? store.graphStats.displayed_nodes ?? 0,
-    displayed_edges: stats.displayed_edges ?? store.graphStats.displayed_edges ?? 0,
-    is_truncated: stats.is_truncated ?? store.graphStats.is_truncated ?? false,
-  }
-}
 
 watch(
   () => props.active,
@@ -279,14 +258,6 @@ watch(
 );
 
 watch(databaseId, () => {
-  // 重置统计信息
-  store.graphStats = {
-    total_nodes: 0,
-    total_edges: 0,
-    displayed_nodes: 0,
-    displayed_edges: 0,
-    is_truncated: false
-  };
   clearGraph();
 
   // 只有在新数据库支持图谱时才加载
@@ -297,13 +268,6 @@ watch(databaseId, () => {
 
 watch(isGraphSupported, (supported) => {
   if (!supported) {
-    store.graphStats = {
-      total_nodes: 0,
-      total_edges: 0,
-      displayed_nodes: 0,
-      displayed_edges: 0,
-      is_truncated: false
-    };
     clearGraph();
     return;
   }
@@ -339,12 +303,6 @@ onUnmounted(() => {
     display: flex;
     align-items: center;
     gap: 12px;
-
-    .graph-stats {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
   }
 
   .toolbar-right {
