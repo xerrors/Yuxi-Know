@@ -1,5 +1,6 @@
 <template>
   <div class="input-box" :class="[customClasses, { 'single-line': isSingleLine }]" @click="focusInput">
+    <slot name="top"></slot>
     <div class="expand-options" v-if="hasOptionsLeft">
       <a-popover
         v-model:open="optionsExpanded"
@@ -7,15 +8,12 @@
         trigger="click"
       >
         <template #content>
-          <div class="popover-options">
-            <slot name="options-left">
-              <div class="no-options">没有配置 options</div>
-            </slot>
-          </div>
+          <slot name="options-left">
+            <div class="no-options">没有配置 options</div>
+          </slot>
         </template>
         <a-button
           type="text"
-          size="small"
           class="expand-btn"
         >
           <template #icon>
@@ -23,6 +21,7 @@
           </template>
         </a-button>
       </a-popover>
+      <slot name="actions-left"></slot>
     </div>
 
     <textarea
@@ -37,6 +36,7 @@
     />
 
     <div class="send-button-container">
+      <slot name="actions-right"></slot>
       <a-tooltip :title="isLoading ? '停止回答' : ''">
         <a-button
           @click="handleSendOrStop"
@@ -51,6 +51,7 @@
       </a-tooltip>
     </div>
   </div>
+  <slot name="bottom"></slot>
 </template>
 
 <script setup>
@@ -109,6 +110,15 @@ const emit = defineEmits(['update:modelValue', 'send', 'keydown']);
 const slots = useSlots();
 const hasOptionsLeft = computed(() => {
   const slot = slots['options-left'];
+  if (!slot) {
+    return false;
+  }
+  const renderedNodes = slot();
+  return Boolean(renderedNodes && renderedNodes.length);
+});
+
+const hasActionsLeft = computed(() => {
+  const slot = slots['actions-left'];
   if (!slot) {
     return false;
   }
@@ -285,6 +295,9 @@ onBeforeUnmount(() => {
 
   .expand-options {
     justify-self: start;
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
   .send-button-container {
     justify-self: end;
@@ -302,6 +315,7 @@ onBeforeUnmount(() => {
     grid-template-rows: 1fr;
     grid-template-areas: "options input send";
     align-items: center;
+    gap: 10px;
 
     .user-input {
       min-height: 24px;
@@ -313,6 +327,12 @@ onBeforeUnmount(() => {
 
     .expand-options, .send-button-container {
       align-self: center;
+    }
+
+    .expand-options {
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
   }
 }
@@ -357,23 +377,29 @@ onBeforeUnmount(() => {
 }
 
 .expand-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--gray-600);
   transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background-color: transparent;
 
   &:hover {
-    background-color: var(--gray-100);
-    color: var(--main-500);
+    color: var(--main-color);
+  }
+
+  &:active {
+    color: var(--main-color);
+    transform: scale(0.95);
   }
 
   .anticon {
-    font-size: 12px;
-    transition: transform 0.2s ease;
+    font-size: 14px;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &.rotated {
       transform: rotate(45deg);
@@ -383,34 +409,34 @@ onBeforeUnmount(() => {
 
 // Popover 选项样式
 .popover-options {
-  min-width: 200px;
-  max-width: 300px;
+  min-width: 160px;
+  max-width: 200px;
+  padding: 4px;
 
   .no-options {
-    color: var(--gray-700);
+    color: var(--gray-500);
     font-size: 12px;
     text-align: center;
+    padding: 12px 8px;
   }
 
   :deep(.opt-item) {
-    border-radius: 12px;
-    border: 1px solid var(--gray-300);
-    padding: 5px 10px;
+    border-radius: 8px;
+    padding: 6px 10px;
     cursor: pointer;
     font-size: 12px;
     color: var(--gray-700);
     transition: all 0.2s ease;
-    margin: 4px;
+    margin: 2px;
     display: inline-block;
 
     &:hover {
       background-color: var(--main-10);
-      color: var(--main-color);
+      color: var(--main-600);
     }
 
     &.active {
-      color: var(--main-color);
-      border: 1px solid var(--main-500);
+      color: var(--main-600);
       background-color: var(--main-10);
     }
   }

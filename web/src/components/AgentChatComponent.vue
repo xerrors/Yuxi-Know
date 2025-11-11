@@ -76,13 +76,17 @@
             @keydown="handleKeyDown"
           >
             <template #options-left>
-              <AttachmentInputPanel
+              <AttachmentOptionsComponent
                 v-if="supportsFileUpload"
-                :attachments="currentAttachments"
-                :limits="attachmentState.limits"
-                :is-uploading="attachmentState.isUploading"
                 :disabled="!currentAgent"
                 @upload="handleAttachmentUpload"
+                @upload-image="handleImageUpload"
+              />
+            </template>
+            <template #actions-left>
+              <AttachmentStatusIndicator
+                :attachments="currentAttachments"
+                :disabled="!currentAgent"
                 @remove="handleAttachmentRemove"
               />
             </template>
@@ -157,13 +161,17 @@
             @keydown="handleKeyDown"
           >
             <template #options-left>
-              <AttachmentInputPanel
+              <AttachmentOptionsComponent
                 v-if="supportsFileUpload"
-                :attachments="currentAttachments"
-                :limits="attachmentState.limits"
-                :is-uploading="attachmentState.isUploading"
                 :disabled="!currentAgent"
                 @upload="handleAttachmentUpload"
+                @upload-image="handleImageUpload"
+              />
+            </template>
+            <template #actions-left>
+              <AttachmentStatusIndicator
+                :attachments="currentAttachments"
+                :disabled="!currentAgent"
                 @remove="handleAttachmentRemove"
               />
             </template>
@@ -183,6 +191,8 @@ import { LoadingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import AttachmentInputPanel from '@/components/AttachmentInputPanel.vue'
+import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
+import AttachmentStatusIndicator from '@/components/AttachmentStatusIndicator.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
@@ -713,6 +723,12 @@ const handleAttachmentRemove = async (fileId) => {
   } catch (error) {
     handleChatError(error, 'delete');
   }
+};
+
+// 处理图片上传（开发中功能）
+const handleImageUpload = () => {
+  // 图片上传功能暂未实现，在 AttachmentOptionsComponent 中已经显示了提示信息
+  // 这里可以预留扩展接口
 };
 
 // ==================== 审批功能管理 ====================
