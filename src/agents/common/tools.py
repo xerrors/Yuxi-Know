@@ -12,6 +12,9 @@ from src import config, graph_base, knowledge_base
 from src.utils import logger
 
 
+search = TavilySearch(max_results=10)
+search.metadata = {"name": "Tavily 网页搜索"}
+
 @tool(name_or_callable="计算器", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
 def calculator(a: float, b: float, operation: str) -> float:
     try:
@@ -69,9 +72,15 @@ def get_approved_user_goal(
 
     return result
 
-@tool(name_or_callable="查询知识图谱", description="使用这个工具可以查询知识图谱中包含的三元组信息。")
+
+KG_QUERY_DESCRIPTION = """
+使用这个工具可以查询知识图谱中包含的三元组信息。
+关键词（query），使用可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。
+"""
+
+@tool(name_or_callable="查询知识图谱", description=KG_QUERY_DESCRIPTION)
 def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
-    """Use this to query knowledge graph, which include some food domain knowledge."""
+    """使用这个工具可以查询知识图谱中包含的三元组信息。关键词（query），使用可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。"""
     try:
         logger.debug(f"Querying knowledge graph with: {query}")
         result = graph_base.query_node(query, hops=2, return_format="triples")
@@ -91,8 +100,6 @@ def get_static_tools() -> list:
 
     # 检查是否启用网页搜索
     if config.enable_web_search:
-        search = TavilySearch(max_results=10)
-        search.metadata = {"name": "Tavily 网页搜索"}
         static_tools.append(search)
 
     return static_tools

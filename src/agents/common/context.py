@@ -31,12 +31,12 @@ class BaseContext:
 
     thread_id: str = field(
         default_factory=lambda: str(uuid.uuid4()),
-        metadata={"name": "线程ID", "configurable": False, "description": "用来描述智能体的角色和行为"},
+        metadata={"name": "线程ID", "configurable": False, "description": "用来唯一标识一个对话线程"},
     )
 
     user_id: str = field(
         default_factory=lambda: str(uuid.uuid4()),
-        metadata={"name": "用户ID", "configurable": False, "description": "用来描述智能体的角色和行为"},
+        metadata={"name": "用户ID", "configurable": False, "description": "用来唯一标识一个用户"},
     )
 
     system_prompt: str = field(
@@ -45,7 +45,7 @@ class BaseContext:
     )
 
     model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
-        default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",
+        default=sys_config.default_model,
         metadata={"name": "智能体模型", "options": [], "description": "智能体的驱动模型"},
     )
 

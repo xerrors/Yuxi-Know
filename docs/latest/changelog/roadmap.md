@@ -11,6 +11,8 @@
 - 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
 - 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
+- 集成 neo4j mcp （或者自己构建工具）
+- 工具组件重构以支持 todo，files 等渲染。
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)

@@ -60,6 +60,7 @@ dependencies = [
     "tomli-w",
     "aiofiles>=24.1.0",
     "aiohttp>=3.9.0",
+    "deepagents>=0.2.5",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
