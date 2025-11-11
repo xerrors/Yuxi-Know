@@ -194,7 +194,7 @@ class DeepAgent(BaseAgent):
             return self.graph
 
         # 获取上下文配置
-        context = self.context_schema.from_file(module_name=self.name)
+        context = self.context_schema.from_file(module_name=self.module_name)
 
         # 使用 create_deep_agent 创建深度智能体
         graph = create_deep_agent(
