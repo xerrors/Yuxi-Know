@@ -22,7 +22,7 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
 
     env_var = model_info.env
 
-    api_key = os.getenv(env_var, env_var)
+    api_key = os.getenv(env_var) or env_var
 
     base_url = get_docker_safe_url(model_info.base_url)
 

@@ -104,14 +104,14 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
 }
 ```
 
-### 3. 配置环境变量
+### 2. 配置环境变量
 
 在 `.env` 文件中添加对应的环境变量：
 ```env
 CUSTOM_API_KEY_ENV_NAME=your_api_key_here
 ```
 
-### 4. 重新部署
+### 3. 重新部署
 
 ```bash
 docker compose restart api-dev

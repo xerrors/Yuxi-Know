@@ -125,6 +125,6 @@ def get_reranker(model_id, **kwargs):
 
     model_info = config.reranker_names[model_id]
     base_url = model_info.base_url
-    api_key = os.getenv(model_info.api_key, model_info.api_key)
+    api_key = os.getenv(model_info.api_key) or model_info.api_key
     assert api_key, f"{model_info.name} api_key is required"
     return OnlineReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)

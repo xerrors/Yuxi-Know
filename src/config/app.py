@@ -120,7 +120,7 @@ class Config(BaseModel):
 
     def _setup_paths(self):
         """设置配置文件路径"""
-        self.save_dir = os.getenv("SAVE_DIR", self.save_dir)
+        self.save_dir = os.getenv("SAVE_DIR") or self.save_dir
         self._config_file = Path(self.save_dir) / "config" / "base.toml"
         self._config_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -169,7 +169,7 @@ class Config(BaseModel):
     def _handle_environment(self):
         """处理环境变量和运行时状态"""
         # 处理模型目录
-        self.model_dir = os.environ.get("MODEL_DIR", self.model_dir)
+        self.model_dir = os.environ.get("MODEL_DIR") or self.model_dir
         if self.model_dir:
             if os.path.exists(self.model_dir):
                 logger.debug(f"Model directory ({self.model_dir}) contains: {os.listdir(self.model_dir)}")

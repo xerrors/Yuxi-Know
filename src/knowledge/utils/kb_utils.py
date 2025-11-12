@@ -214,13 +214,13 @@ def get_embedding_config(embed_info: dict) -> dict:
             if hasattr(embed_info, "name"):
                 # EmbedModelInfo 对象
                 config_dict["model"] = embed_info.name
-                config_dict["api_key"] = os.getenv(embed_info.api_key, embed_info.api_key)
+                config_dict["api_key"] = os.getenv(embed_info.api_key) or embed_info.api_key
                 config_dict["base_url"] = embed_info.base_url
                 config_dict["dimension"] = embed_info.dimension
             else:
                 # 字典形式
                 config_dict["model"] = embed_info["name"]
-                config_dict["api_key"] = os.getenv(embed_info["api_key"], embed_info["api_key"])
+                config_dict["api_key"] = os.getenv(embed_info["api_key"]) or embed_info["api_key"]
                 config_dict["base_url"] = embed_info["base_url"]
                 config_dict["dimension"] = embed_info.get("dimension", 1024)
         else:

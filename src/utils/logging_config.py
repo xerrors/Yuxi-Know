@@ -4,7 +4,7 @@ from loguru import logger as loguru_logger
 
 from src.utils.datetime_utils import shanghai_now
 
-SAVE_DIR = os.getenv("SAVE_DIR", "saves")
+SAVE_DIR = os.getenv("SAVE_DIR") or "saves"
 DATETIME = shanghai_now().strftime("%Y-%m-%d")
 LOG_FILE = f"{SAVE_DIR}/logs/yuxi-{DATETIME}.log"
 

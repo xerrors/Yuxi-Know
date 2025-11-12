@@ -8,14 +8,12 @@ from lightrag.utils import EmbeddingFunc, setup_logger
 from neo4j import GraphDatabase
 from pymilvus import connections, utility
 
+from src import config
 from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
 from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
 from src.utils import hashstr, logger
 from src.utils.datetime_utils import shanghai_now
-
-LIGHTRAG_LLM_PROVIDER = os.getenv("LIGHTRAG_LLM_PROVIDER", "siliconflow")
-LIGHTRAG_LLM_NAME = os.getenv("LIGHTRAG_LLM_NAME", "zai-org/GLM-4.5-Air")
 
 
 class LightRagKB(KnowledgeBase):
@@ -53,8 +51,8 @@ class LightRagKB(KnowledgeBase):
         """删除数据库，同时清除Milvus和Neo4j中的数据"""
         # Drop Milvus collection
         try:
-            milvus_uri = os.getenv("MILVUS_URI", "http://localhost:19530")
-            milvus_token = os.getenv("MILVUS_TOKEN", "")
+            milvus_uri = os.getenv("MILVUS_URI") or "http://localhost:19530"
+            milvus_token = os.getenv("MILVUS_TOKEN") or ""
             connection_alias = f"lightrag_{hashstr(db_id, 6)}"
 
             connections.connect(alias=connection_alias, uri=milvus_uri, token=milvus_token)
@@ -73,9 +71,9 @@ class LightRagKB(KnowledgeBase):
             logger.error(f"Failed to drop Milvus collection {db_id}: {e}")
 
         # Delete Neo4j data
-        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
-        neo4j_username = os.getenv("NEO4J_USERNAME", "neo4j")
-        neo4j_password = os.getenv("NEO4J_PASSWORD", "0123456789")
+        neo4j_uri = os.getenv("NEO4J_URI") or "bolt://localhost:7687"
+        neo4j_username = os.getenv("NEO4J_USERNAME") or "neo4j"
+        neo4j_password = os.getenv("NEO4J_PASSWORD") or "0123456789"
 
         try:
             driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_username, neo4j_password))
@@ -118,7 +116,7 @@ class LightRagKB(KnowledgeBase):
         if isinstance(metadata.get("language"), str) and metadata.get("language"):
             addon_params.setdefault("language", metadata.get("language"))
         # 默认语言从环境变量读取，默认 English
-        addon_params.setdefault("language", os.getenv("SUMMARY_LANGUAGE", "English"))
+        addon_params.setdefault("language", os.getenv("SUMMARY_LANGUAGE") or "English")
 
         # 创建工作目录
         working_dir = os.path.join(self.work_dir, db_id)
@@ -181,10 +179,8 @@ class LightRagKB(KnowledgeBase):
             model_spec = f"{llm_info['provider']}/{llm_info['model_name']}"
             logger.info(f"Using user-selected LLM: {model_spec}")
         else:
-            provider = LIGHTRAG_LLM_PROVIDER
-            model_name = LIGHTRAG_LLM_NAME
-            model_spec = f"{provider}/{model_name}"
-            logger.info(f"Using default LLM from environment: {provider}/{model_name}")
+            model_spec = config.default_model
+            logger.info(f"Using default LLM from environment: {model_spec}")
 
         model = select_model(model_spec=model_spec)
 

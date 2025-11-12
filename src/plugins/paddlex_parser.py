@@ -20,7 +20,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
     """PaddleX 文档解析器 - 使用 PP-StructureV3 进行版面解析"""
 
     def __init__(self, server_url: str | None = None):
-        self.server_url = server_url or os.getenv("PADDLEX_URI", "http://localhost:8080")
+        self.server_url = server_url or os.getenv("PADDLEX_URI") or "http://localhost:8080"
         self.base_url = self.server_url.rstrip("/")
         self.endpoint = f"{self.base_url}/layout-parsing"
 

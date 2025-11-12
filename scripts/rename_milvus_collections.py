@@ -19,8 +19,8 @@ def rename_and_resolve_duplicates():
     Connects to Milvus, renames collections from 'kb_kb_' to 'kb_',
     and resolves duplicates by keeping the collection with more rows.
     """
-    milvus_uri = os.getenv("MILVUS_URI", "http://localhost:19530")
-    milvus_token = os.getenv("MILVUS_TOKEN", "")
+    milvus_uri = os.getenv("MILVUS_URI") or "http://localhost:19530"
+    milvus_token = os.getenv("MILVUS_TOKEN") or ""
     connection_alias = "rename_script"
 
     try:
