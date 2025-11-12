@@ -47,6 +47,10 @@ class ChromaKB(KnowledgeBase):
 
         # 存储集合映射 {db_id: collection}
         self.collections: dict[str, Any] = {}
+
+        # 元数据锁
+        self._metadata_lock = asyncio.Lock()
+
         logger.info("ChromaKB initialized")
 
     @property
@@ -187,7 +191,7 @@ class ChromaKB(KnowledgeBase):
 
         for item in items:
             # 准备文件元数据
-            metadata = prepare_item_metadata(item, content_type, db_id)
+            metadata = prepare_item_metadata(item, content_type, db_id, params=params)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
 
@@ -251,6 +255,129 @@ class ChromaKB(KnowledgeBase):
             processed_items_info.append(file_record)
 
         return processed_items_info
+
+    async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
+        """更新内容 - 根据file_ids重新解析文件并更新向量库"""
+        if db_id not in self.databases_meta:
+            raise ValueError(f"Database {db_id} not found")
+
+        collection = await self._get_chroma_collection(db_id)
+        if not collection:
+            raise ValueError(f"Failed to get ChromaDB collection for {db_id}")
+
+        # 处理默认参数
+        if params is None:
+            params = {}
+        content_type = params.get("content_type", "file")
+        processed_items_info = []
+
+        for file_id in file_ids:
+            # 从元数据中获取文件信息
+            if file_id not in self.files_meta:
+                logger.warning(f"File {file_id} not found in metadata, skipping")
+                continue
+
+            file_meta = self.files_meta[file_id]
+            file_path = file_meta.get("path")
+            filename = file_meta.get("filename")
+
+            if not file_path:
+                logger.warning(f"File path not found for {file_id}, skipping")
+                continue
+
+            # 添加到处理队列
+            self._add_to_processing_queue(file_id)
+
+            try:
+                # 更新状态为处理中
+                self.files_meta[file_id]["status"] = "processing"
+                self._save_metadata()
+
+                # 重新解析文件为 markdown
+                if content_type == "file":
+                    markdown_content = await process_file_to_markdown(file_path, params=params)
+                else:
+                    markdown_content = await process_url_to_markdown(file_path, params=params)
+
+                # 先删除现有的 ChromaDB 数据（仅删除chunks，保留元数据）
+                await self.delete_file_chunks_only(db_id, file_id)
+
+                # 重新生成 chunks
+                chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
+                logger.info(f"Split {filename} into {len(chunks)} chunks")
+
+                if chunks:
+                    documents = [chunk["content"] for chunk in chunks]
+                    metadatas = [chunk["metadata"] for chunk in chunks]
+                    ids = [chunk["id"] for chunk in chunks]
+
+                    # 插入到 ChromaDB - 分批处理以避免超出 OpenAI 批次大小限制
+                    batch_size = 64  # OpenAI 的最大批次大小限制
+                    total_batches = (len(chunks) + batch_size - 1) // batch_size
+
+                    for i in range(0, len(chunks), batch_size):
+                        batch_documents = documents[i : i + batch_size]
+                        batch_metadatas = metadatas[i : i + batch_size]
+                        batch_ids = ids[i : i + batch_size]
+
+                        await asyncio.to_thread(
+                            collection.add,
+                            documents=batch_documents,
+                            metadatas=batch_metadatas,
+                            ids=batch_ids,
+                        )
+
+                        batch_num = i // batch_size + 1
+                        logger.info(f"Processed batch {batch_num}/{total_batches} for {filename}")
+
+                logger.info(f"Updated {content_type} {file_path} in ChromaDB. Done.")
+
+                # 更新元数据状态
+                self.files_meta[file_id]["status"] = "done"
+                self._save_metadata()
+
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
+
+                # 返回更新后的文件信息
+                updated_file_meta = file_meta.copy()
+                updated_file_meta["status"] = "done"
+                updated_file_meta["file_id"] = file_id
+                processed_items_info.append(updated_file_meta)
+
+            except Exception as e:
+                logger.error(f"更新{content_type} {file_path} 失败: {e}, {traceback.format_exc()}")
+                self.files_meta[file_id]["status"] = "failed"
+                self._save_metadata()
+
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
+
+                # 返回失败的文件信息
+                failed_file_meta = file_meta.copy()
+                failed_file_meta["status"] = "failed"
+                failed_file_meta["file_id"] = file_id
+                processed_items_info.append(failed_file_meta)
+
+        return processed_items_info
+
+    async def delete_file_chunks_only(self, db_id: str, file_id: str) -> None:
+        """仅删除文件的chunks数据，保留元数据（用于更新操作）"""
+        collection = await self._get_chroma_collection(db_id)
+
+        if collection:
+            try:
+                # 查找所有相关的chunks
+                results = collection.get(where={"full_doc_id": file_id}, include=["metadatas"])
+
+                # 删除所有相关chunks
+                if results and results.get("ids"):
+                    collection.delete(ids=results["ids"])
+                    logger.info(f"Deleted {len(results['ids'])} chunks for file {file_id}")
+
+            except Exception as e:
+                logger.error(f"Error deleting file {file_id} from ChromaDB: {e}")
+        # 注意：这里不删除 files_meta[file_id]，保留元数据用于后续操作
 
     async def aquery(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
         """异步查询知识库"""
@@ -347,25 +474,15 @@ class ChromaKB(KnowledgeBase):
             return []
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
-        """删除文件"""
-        collection = await self._get_chroma_collection(db_id)
-        if collection:
-            try:
-                # 查找所有相关的chunks
-                results = collection.get(where={"full_doc_id": file_id}, include=["metadatas"])
+        """删除文件（包括元数据）"""
+        # 先删除 ChromaDB 中的 chunks 数据
+        await self.delete_file_chunks_only(db_id, file_id)
 
-                # 删除所有相关chunks
-                if results and results.get("ids"):
-                    collection.delete(ids=results["ids"])
-                    logger.info(f"Deleted {len(results['ids'])} chunks for file {file_id}")
-
-            except Exception as e:
-                logger.error(f"Error deleting file {file_id} from ChromaDB: {e}")
-
-        # 删除文件记录
-        if file_id in self.files_meta:
-            del self.files_meta[file_id]
-            self._save_metadata()
+        # 使用锁确保元数据操作的原子性
+        async with self._metadata_lock:
+            if file_id in self.files_meta:
+                del self.files_meta[file_id]
+                self._save_metadata()
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""

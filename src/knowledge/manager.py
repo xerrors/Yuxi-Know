@@ -316,6 +316,11 @@ class KnowledgeBaseManager:
         kb_instance = self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
 
+    async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
+        """更新内容（重新分块）"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.update_content(db_id, file_ids, params or {})
+
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""
         kb_instance = self._get_kb_for_database(db_id)
