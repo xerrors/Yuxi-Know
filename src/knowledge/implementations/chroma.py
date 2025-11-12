@@ -450,9 +450,7 @@ class ChromaKB(KnowledgeBase):
                         try:
                             rerank_start = time.time()
                             documents_text = [chunk["content"] for chunk in retrieved_chunks]
-                            rerank_scores = await reranker.acompute_score(
-                                [query_text, documents_text], normalize=True
-                            )
+                            rerank_scores = await reranker.acompute_score([query_text, documents_text], normalize=True)
 
                             for chunk, rerank_score in zip(retrieved_chunks, rerank_scores):
                                 chunk["rerank_score"] = float(rerank_score)

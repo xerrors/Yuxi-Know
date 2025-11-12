@@ -258,6 +258,14 @@ class DatabaseMigrator:
 
         migrations.append((2, "为用户表添加软删除字段", v2_commands))
 
+        # 迁移 v3: 为 messages 表添加多模态图片支持
+        v3_commands: list[str] = []
+
+        if not self.check_column_exists("messages", "image_content"):
+            v3_commands.append("ALTER TABLE messages ADD COLUMN image_content TEXT")
+
+        migrations.append((3, "为消息表添加多模态图片支持字段", v3_commands))
+
         # 未来的迁移可以在这里添加
         # migrations.append((
         #     2,
@@ -305,6 +313,17 @@ def validate_database_schema(db_path: str) -> tuple[bool, list[str]]:
                 "deleted_at",
             ],
             "operation_logs": ["id", "user_id", "operation", "details", "ip_address", "timestamp"],
+            "messages": [
+                "id",
+                "conversation_id",
+                "role",
+                "content",
+                "message_type",
+                "created_at",
+                "token_count",
+                "extra_metadata",
+                "image_content",
+            ],
         }
 
         for table_name, fields in required_fields.items():

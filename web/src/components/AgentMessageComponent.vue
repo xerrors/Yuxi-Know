@@ -1,4 +1,7 @@
 <template>
+  <div v-if="message.message_type === 'multimodal_image' && message.image_content" class="message-image">
+    <img :src="`data:image/jpeg;base64,${message.image_content}`" alt="用户上传的图片" />
+  </div>
   <div class="message-box" :class="[message.type, customClasses]">
     <!-- 用户消息 -->
     <p v-if="message.type === 'human'" class="message-text">{{ message.content }}</p>
@@ -252,8 +255,8 @@ const toggleToolCall = (toolCallId) => {
 
   &.human, &.sent {
     max-width: 95%;
-    color: white;
-    background-color: var(--main-color);
+    color: var(--gray-1000);
+    background-color: var(--main-50);
     align-self: flex-end;
     border-radius: .5rem;
     padding: 0.5rem 1rem;
@@ -562,6 +565,21 @@ const toggleToolCall = (toolCallId) => {
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+// 多模态消息样式
+.message-image {
+  border-radius: 12px;
+  overflow: hidden;
+  margin-left: auto;
+  // max-height: 200px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+
+  img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: contain;
   }
 }
 </style>

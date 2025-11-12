@@ -1,6 +1,9 @@
 <template>
   <div class="input-box" :class="[customClasses, { 'single-line': isSingleLine }]" @click="focusInput">
-    <slot name="top"></slot>
+    <div class="top-slot">
+      <slot name="top"></slot>
+    </div>
+
     <div class="expand-options" v-if="hasOptionsLeft">
       <a-popover
         v-model:open="optionsExpanded"
@@ -50,8 +53,11 @@
         </a-button>
       </a-tooltip>
     </div>
+
+    <div class="bottom-slot">
+      <slot name="bottom"></slot>
+    </div>
   </div>
-  <slot name="bottom"></slot>
 </template>
 
 <script setup>
@@ -146,6 +152,7 @@ const inputValue = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
 });
+
 
 // 处理键盘事件
 const handleKeyPress = (e) => {
@@ -272,6 +279,14 @@ onBeforeUnmount(() => {
   }
 });
 
+// 公开方法供父组件调用
+defineExpose({
+  focus: () => inputRef.value?.focus(),
+  closeOptions: () => {
+    optionsExpanded.value = false;
+  }
+});
+
 </script>
 
 <style lang="less" scoped>
@@ -283,24 +298,42 @@ onBeforeUnmount(() => {
   border-radius: 0.8rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
-  gap: 8px;
+  gap: 0px;
 
-  /* Default: Multi-line layout */
+  /* Default: Multi-line layout with top/bottom slots */
   padding: 0.8rem 0.75rem 0.6rem 0.75rem;
   grid-template-columns: auto 1fr;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   grid-template-areas:
+    "top top"
     "input input"
     "options send";
 
+  .top-slot {
+    display: flex;
+    grid-area: top;
+  }
+
   .expand-options {
+    grid-area: options;
     justify-self: start;
     display: flex;
     align-items: center;
+    margin-right: 8px;
     gap: 8px;
   }
+
+  .user-input {
+    grid-area: input;
+  }
+
   .send-button-container {
+    grid-area: send;
     justify-self: end;
+  }
+
+  .bottom-slot {
+    grid-column: 1 / -1;
   }
 
   // &:focus-within {
@@ -312,10 +345,13 @@ onBeforeUnmount(() => {
   &.single-line {
     padding: 0.75rem 0.75rem;
     grid-template-columns: auto 1fr auto;
-    grid-template-rows: 1fr;
-    grid-template-areas: "options input send";
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas:
+      "top top top"
+      "options input send"
+      "bottom bottom bottom";
     align-items: center;
-    gap: 10px;
+    gap: 0px;
 
     .user-input {
       min-height: 24px;
@@ -333,6 +369,14 @@ onBeforeUnmount(() => {
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    .top-slot {
+      grid-area: top;
+    }
+
+    .bottom-slot {
+      grid-area: bottom;
     }
   }
 }
@@ -476,6 +520,7 @@ onBeforeUnmount(() => {
     box-shadow: none;
   }
 }
+
 
 @media (max-width: 520px) {
   .input-box {

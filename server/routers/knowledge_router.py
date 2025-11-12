@@ -247,12 +247,14 @@ async def add_documents(
                     error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
                     error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
 
-                    processed_items.append({
-                        "item": item,
-                        "status": "failed",
-                        "error": f"{error_msg}: {str(doc_error)}",
-                        "error_type": error_type
-                    })
+                    processed_items.append(
+                        {
+                            "item": item,
+                            "status": "failed",
+                            "error": f"{error_msg}: {str(doc_error)}",
+                            "error_type": error_type,
+                        }
+                    )
 
         except asyncio.CancelledError:
             await context.set_progress(100.0, "任务已取消")
@@ -262,13 +264,15 @@ async def add_documents(
             logger.exception(f"Task processing failed: {task_error}")
             await context.set_progress(100.0, f"任务处理失败: {str(task_error)}")
             # 将所有未处理的文档标记为失败
-            for item in items[len(processed_items):]:
-                processed_items.append({
-                    "item": item,
-                    "status": "failed",
-                    "error": f"任务失败: {str(task_error)}",
-                    "error_type": "task_failed"
-                })
+            for item in items[len(processed_items) :]:
+                processed_items.append(
+                    {
+                        "item": item,
+                        "status": "failed",
+                        "error": f"任务失败: {str(task_error)}",
+                        "error_type": "task_failed",
+                    }
+                )
             raise
 
         item_type = "URL" if content_type == "url" else "文件"
@@ -702,8 +706,7 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
                         "type": "select",
                         "default": reranker_config.get("model", ""),
                         "options": [
-                            {"label": info.name, "value": model_id}
-                            for model_id, info in config.reranker_names.items()
+                            {"label": info.name, "value": model_id} for model_id, info in config.reranker_names.items()
                         ],
                         "description": "覆盖默认配置，选择用于本次查询的重排序模型",
                     }
@@ -777,8 +780,7 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
                         "type": "select",
                         "default": reranker_config.get("model", ""),
                         "options": [
-                            {"label": info.name, "value": model_id}
-                            for model_id, info in config.reranker_names.items()
+                            {"label": info.name, "value": model_id} for model_id, info in config.reranker_names.items()
                         ],
                         "description": "覆盖默认配置，选择用于本次查询的重排序模型",
                     }

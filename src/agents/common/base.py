@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import tomllib as tomli
 from abc import abstractmethod
 from pathlib import Path
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver, aiosqlite
 from langgraph.graph.state import CompiledStateGraph
-
-import tomllib as tomli
 
 from src import config as sys_config
 from src.agents.common.context import BaseContext
@@ -162,7 +161,6 @@ class BaseAgent:
     async def get_aio_memory(self) -> AsyncSqliteSaver:
         """获取异步存储实例"""
         return AsyncSqliteSaver(await self.get_async_conn())
-
 
     def load_metadata(self) -> dict:
         """Load metadata from metadata.toml file in the agent's source directory."""

@@ -103,7 +103,19 @@ export class MessageProcessor {
 
     // 深拷贝第一个chunk作为结果
     const result = JSON.parse(JSON.stringify(chunks[0]));
-    result.content = result.content || '';
+
+    // 处理用户消息的内容格式 - 确保显示纯文本
+    if (result.type === 'human' || result.role === 'user') {
+      // 如果content是数组格式（LangChain多模态消息），提取文本部分
+      if (Array.isArray(result.content)) {
+        const textPart = result.content.find(item => item.type === 'text');
+        result.content = textPart ? textPart.text : '';
+      } else {
+        result.content = result.content || '';
+      }
+    } else {
+      result.content = result.content || '';
+    }
 
     // 合并后续chunks
     for (let i = 1; i < chunks.length; i++) {

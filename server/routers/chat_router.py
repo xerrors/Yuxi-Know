@@ -28,6 +28,21 @@ from src.services.doc_converter import (
 )
 from src.utils.datetime_utils import utc_isoformat
 from src.utils.logging_config import logger
+from src.utils.image_processor import process_uploaded_image
+
+
+# 图片上传响应模型
+class ImageUploadResponse(BaseModel):
+    success: bool
+    image_content: str | None = None
+    thumbnail_content: str | None = None
+    width: int | None = None
+    height: int | None = None
+    format: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    error: str | None = None
+
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -180,31 +195,41 @@ def _serialize_attachment(record: dict) -> dict:
     }
 
 
-async def save_partial_message(conv_mgr, thread_id, full_msg, error_type="interrupted"):
+async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message=None, error_type="interrupted"):
     """
-    保存部分生成的AI消息到数据库
-    当streaming被中断时，用于保存已生成的部分内容
-    """
-    if not full_msg:
-        return None
+    统一保存AI消息到数据库的函数
 
+    Args:
+        conv_mgr: 对话管理器
+        thread_id: 线程ID
+        full_msg: 完整的AI消息对象（可选）
+        error_message: 纯错误消息文本（当full_msg为空时使用）
+        error_type: 错误类型标识
+    """
     try:
-        msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
-        content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+        if full_msg:
+            # 保存部分生成的AI消息
+            msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
+            content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+            extra_metadata = msg_dict | {"error_type": error_type}
+        else:
+            # 保存纯错误消息
+            content = error_message or f"发生错误: {error_type}"
+            extra_metadata = {"error_type": error_type, "is_error": True}
 
         saved_msg = conv_mgr.add_message_by_thread_id(
             thread_id=thread_id,
             role="assistant",
             content=content,
             message_type="text",
-            extra_metadata=msg_dict | {"error_type": error_type},
+            extra_metadata=extra_metadata,
         )
 
-        logger.info(f"Saved partial message due to {error_type}: {saved_msg.id}")
+        logger.info(f"Saved message due to {error_type}: {saved_msg.id}")
         return saved_msg
 
     except Exception as e:
-        logger.error(f"Error saving partial message: {e}")
+        logger.error(f"Error saving message: {e}")
         logger.error(traceback.format_exc())
         return None
 
@@ -367,7 +392,7 @@ async def get_agent(current_user: User = Depends(get_required_user)):
             "examples": agent_info.get("examples", []),
             "configurable_items": agent_info.get("configurable_items", []),
             "has_checkpointer": agent_info.get("has_checkpointer", False),
-            "capabilities": agent_info.get("capabilities", [])  # 智能体能力列表
+            "capabilities": agent_info.get("capabilities", []),  # 智能体能力列表
         }
         for agent_info in agents_info
     ]
@@ -381,6 +406,7 @@ async def chat_agent(
     query: str = Body(...),
     config: dict = Body({}),
     meta: dict = Body({}),
+    image_content: str | None = Body(None),
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
 ):
@@ -388,6 +414,10 @@ async def chat_agent(
     start_time = asyncio.get_event_loop().time()
 
     logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
+    logger.info(f"image_content present: {image_content is not None}")
+    if image_content:
+        logger.info(f"image_content length: {len(image_content)}")
+        logger.info(f"image_content preview: {image_content[:50]}...")
 
     # 确保 request_id 存在
     if "request_id" not in meta or not meta.get("request_id"):
@@ -400,6 +430,7 @@ async def chat_agent(
             "server_model_name": config.get("model", agent_id),
             "thread_id": config.get("thread_id"),
             "user_id": current_user.id,
+            "has_image": bool(image_content),
         }
     )
 
@@ -413,8 +444,32 @@ async def chat_agent(
         )
 
     async def stream_messages():
-        # 代表服务端已经收到了请求
-        yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
+        # 构建多模态消息
+        if image_content:
+            # 多模态消息格式
+            human_message = HumanMessage(
+                content=[
+                    {"type": "text", "text": query},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_content}"}},
+                ]
+            )
+            message_type = "multimodal_image"
+        else:
+            # 普通文本消息
+            human_message = HumanMessage(content=query)
+            message_type = "text"
+
+        # 代表服务端已经收到了请求，发送前端友好的消息格式
+        init_msg = {"role": "user", "content": query, "type": "human"}
+
+        # 如果有图片，添加图片相关信息
+        if image_content:
+            init_msg["message_type"] = "multimodal_image"
+            init_msg["image_content"] = image_content
+        else:
+            init_msg["message_type"] = "text"
+
+        yield make_chunk(status="init", meta=meta, msg=init_msg)
 
         # Input guard
         if conf.enable_content_guard and await content_guard.check(query):
@@ -428,7 +483,7 @@ async def chat_agent(
             yield make_chunk(message=f"Error getting agent {agent_id}: {e}", status="error")
             return
 
-        messages = [{"role": "user", "content": query}]
+        messages = [human_message]
 
         # 构造运行时配置，如果没有thread_id则生成一个
         user_id = str(current_user.id)
@@ -448,8 +503,9 @@ async def chat_agent(
                 thread_id=thread_id,
                 role="user",
                 content=query,
-                message_type="text",
-                extra_metadata={"raw_message": HumanMessage(content=query).model_dump()},
+                message_type=message_type,
+                image_content=image_content,
+                extra_metadata={"raw_message": human_message.model_dump()},
             )
         except Exception as e:
             logger.error(f"Error saving user message: {e}")
@@ -513,16 +569,19 @@ async def chat_agent(
             # 客户端主动中断连接，检查中断并保存已生成的部分内容
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
-
-            # 如果有手动维护的 full_msg，直接保存到数据库
-            if full_msg:
-                # 创建新的 db session，因为原 session 可能已关闭
-                new_db = db_manager.get_session()
-                try:
-                    new_conv_manager = ConversationManager(new_db)
-                    await save_partial_message(new_conv_manager, thread_id, full_msg, "interrupted")
-                finally:
-                    new_db.close()
+            # 保存中断消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager,
+                    thread_id,
+                    full_msg=full_msg,
+                    error_message="对话已中断" if not full_msg else None,
+                    error_type="interrupted",
+                )
+            finally:
+                new_db.close()
 
             # 通知前端中断（可能发送不到，但用于一致性）
             yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
@@ -530,18 +589,24 @@ async def chat_agent(
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
 
+            error_msg = f"Error streaming messages: {e}"
+            error_type = "unexpected_error"
 
-            # 如果有手动维护的 full_msg，直接保存到数据库
-            if full_msg:
-                # 创建新的 db session，因为原 session 可能已关闭
-                new_db = db_manager.get_session()
-                try:
-                    new_conv_manager = ConversationManager(new_db)
-                    await save_partial_message(new_conv_manager, thread_id, full_msg, "unexpected_error")
-                finally:
-                    new_db.close()
+            # 保存错误消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager,
+                    thread_id,
+                    full_msg=full_msg,
+                    error_message=error_msg if not full_msg else None,
+                    error_type=error_type,
+                )
+            finally:
+                new_db.close()
 
-            yield make_chunk(message=f"Error streaming messages: {e}", status="error")
+            yield make_chunk(message=error_msg, status="error")
 
     return StreamingResponse(stream_messages(), media_type="application/json")
 
@@ -644,28 +709,61 @@ async def resume_agent_chat(
             resume_command, context=context, config={"configurable": input_context}, stream_mode="messages"
         )
 
-        async for msg, metadata in stream_source:
-            # 确保msg有正确的ID结构
-            msg_dict = msg.model_dump()
-            if "id" not in msg_dict:
-                msg_dict["id"] = str(uuid.uuid4())
+        try:
+            async for msg, metadata in stream_source:
+                # 确保msg有正确的ID结构
+                msg_dict = msg.model_dump()
+                if "id" not in msg_dict:
+                    msg_dict["id"] = str(uuid.uuid4())
 
-            yield make_resume_chunk(
-                content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                yield make_resume_chunk(
+                    content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                )
+
+            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+            yield make_resume_chunk(status="finished", meta=meta)
+
+            # 保存消息到数据库
+            langgraph_config = {"configurable": input_context}
+            conv_manager = ConversationManager(db)
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
             )
 
-        meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-        yield make_resume_chunk(status="finished", meta=meta)
+        except (asyncio.CancelledError, ConnectionError) as e:
+            # 客户端主动中断连接
+            logger.warning(f"Client disconnected during resume: {e}")
 
-        # 保存消息到数据库
-        langgraph_config = {"configurable": input_context}
-        conv_manager = ConversationManager(db)
-        await save_messages_from_langgraph_state(
-            agent_instance=agent,
-            thread_id=thread_id,
-            conv_mgr=conv_manager,
-            config_dict=langgraph_config,
-        )
+            # 保存中断消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager, thread_id, error_message="对话恢复已中断", error_type="resume_interrupted"
+                )
+            finally:
+                new_db.close()
+
+            yield make_resume_chunk(status="interrupted", message="对话恢复已中断", meta=meta)
+
+        except Exception as e:
+            # 处理其他异常
+            logger.error(f"Error during resume: {e}, {traceback.format_exc()}")
+
+            # 保存错误消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager, thread_id, error_message=f"Error during resume: {e}", error_type="resume_error"
+                )
+            finally:
+                new_db.close()
+
+            yield make_resume_chunk(message=f"Error during resume: {e}", status="error")
 
     return StreamingResponse(stream_resume(), media_type="application/json")
 
@@ -717,6 +815,8 @@ async def get_agent_history(
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
                 "error_type": msg.extra_metadata.get("error_type") if msg.extra_metadata else None,
+                "message_type": msg.message_type,  # 添加消息类型字段
+                "image_content": msg.image_content,  # 添加图片内容字段
             }
 
             # Add tool calls if present (for AI messages)
@@ -1094,3 +1194,47 @@ async def get_message_feedback(
     except Exception as e:
         logger.error(f"Error getting message feedback: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get feedback: {str(e)}")
+
+
+# =============================================================================
+# > === 多模态图片支持分组 ===
+# =============================================================================
+
+
+@chat.post("/image/upload", response_model=ImageUploadResponse)
+async def upload_image(file: UploadFile = File(...), current_user: User = Depends(get_required_user)):
+    """
+    上传并处理图片，返回base64编码的图片数据
+    """
+    try:
+        # 验证文件类型
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="只支持图片文件上传")
+
+        # 读取文件内容
+        image_data = await file.read()
+
+        # 检查文件大小（10MB限制，超过后会压缩到5MB）
+        if len(image_data) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="图片文件过大，请上传小于10MB的图片")
+
+        # 处理图片
+        result = process_uploaded_image(image_data, file.filename)
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=f"图片处理失败: {result['error']}")
+
+        logger.info(
+            f"用户 {current_user.id} 成功上传图片: {file.filename}, "
+            f"尺寸: {result['width']}x{result['height']}, "
+            f"格式: {result['format']}, "
+            f"大小: {result['size_bytes']} bytes"
+        )
+
+        return ImageUploadResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"图片上传处理失败: {str(e)}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"图片处理失败: {str(e)}")
