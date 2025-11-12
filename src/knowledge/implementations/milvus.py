@@ -332,6 +332,7 @@ class MilvusKB(KnowledgeBase):
             try:
                 # 更新状态为处理中
                 async with self._metadata_lock:
+                    self.files_meta[file_id]["processing_params"] = params.copy()
                     self.files_meta[file_id]["status"] = "processing"
                     self._save_metadata()
 

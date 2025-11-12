@@ -32,9 +32,6 @@ class LightRagKB(KnowledgeBase):
         # 存储 LightRAG 实例映射 {db_id: LightRAG}
         self.instances: dict[str, LightRAG] = {}
 
-        # 元数据锁
-        self._metadata_lock = asyncio.Lock()
-
         # 设置 LightRAG 日志
         log_dir = os.path.join(work_dir, "logs", "lightrag")
         os.makedirs(log_dir, exist_ok=True)
@@ -306,6 +303,7 @@ class LightRagKB(KnowledgeBase):
 
             try:
                 # 更新状态为处理中
+                self.files_meta[file_id]["processing_params"] = params.copy()
                 self.files_meta[file_id]["status"] = "processing"
                 self._save_metadata()
 
@@ -357,19 +355,6 @@ class LightRagKB(KnowledgeBase):
 
         return processed_items_info
 
-    async def delete_file_chunks_only(self, db_id: str, file_id: str) -> None:
-        """仅删除文件的chunks数据，保留元数据（用于更新操作）"""
-        rag = await self._get_lightrag_instance(db_id)
-
-        if rag:
-            try:
-                # 使用 LightRAG 删除文档
-                await rag.adelete_by_doc_id(file_id)
-                logger.info(f"Deleted chunks for file {file_id} from LightRAG")
-            except Exception as e:
-                logger.error(f"Error deleting file {file_id} from LightRAG: {e}")
-        # 注意：这里不删除 files_meta[file_id]，保留元数据用于后续操作
-
     async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
         """异步查询知识库"""
         rag = await self._get_lightrag_instance(db_id)
@@ -395,16 +380,27 @@ class LightRagKB(KnowledgeBase):
             logger.error(f"Query error: {e}, {traceback.format_exc()}")
             return ""
 
+    async def delete_file_chunks_only(self, db_id: str, file_id: str) -> None:
+        """仅删除文件的chunks数据，保留元数据（用于更新操作）"""
+        rag = await self._get_lightrag_instance(db_id)
+        if rag:
+            try:
+                # 使用 LightRAG 删除文档
+                await rag.adelete_by_doc_id(file_id)
+                logger.info(f"Deleted chunks for file {file_id} from LightRAG")
+            except Exception as e:
+                logger.error(f"Error deleting file {file_id} from LightRAG: {e}")
+        # 注意：这里不删除 files_meta[file_id]，保留元数据用于后续操作
+
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件（包括元数据）"""
         # 先删除 LightRAG 中的 chunks 数据
         await self.delete_file_chunks_only(db_id, file_id)
 
-        # 使用锁确保元数据操作的原子性
-        async with self._metadata_lock:
-            if file_id in self.files_meta:
-                del self.files_meta[file_id]
-                self._save_metadata()
+        # 删除文件记录
+        if file_id in self.files_meta:
+            del self.files_meta[file_id]
+            self._save_metadata()
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""
