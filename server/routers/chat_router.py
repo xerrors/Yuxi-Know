@@ -180,31 +180,41 @@ def _serialize_attachment(record: dict) -> dict:
     }
 
 
-async def save_partial_message(conv_mgr, thread_id, full_msg, error_type="interrupted"):
+async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message=None, error_type="interrupted"):
     """
-    保存部分生成的AI消息到数据库
-    当streaming被中断时，用于保存已生成的部分内容
-    """
-    if not full_msg:
-        return None
+    统一保存AI消息到数据库的函数
 
+    Args:
+        conv_mgr: 对话管理器
+        thread_id: 线程ID
+        full_msg: 完整的AI消息对象（可选）
+        error_message: 纯错误消息文本（当full_msg为空时使用）
+        error_type: 错误类型标识
+    """
     try:
-        msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
-        content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+        if full_msg:
+            # 保存部分生成的AI消息
+            msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
+            content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
+            extra_metadata = msg_dict | {"error_type": error_type}
+        else:
+            # 保存纯错误消息
+            content = error_message or f"发生错误: {error_type}"
+            extra_metadata = {"error_type": error_type, "is_error": True}
 
         saved_msg = conv_mgr.add_message_by_thread_id(
             thread_id=thread_id,
             role="assistant",
             content=content,
             message_type="text",
-            extra_metadata=msg_dict | {"error_type": error_type},
+            extra_metadata=extra_metadata,
         )
 
-        logger.info(f"Saved partial message due to {error_type}: {saved_msg.id}")
+        logger.info(f"Saved message due to {error_type}: {saved_msg.id}")
         return saved_msg
 
     except Exception as e:
-        logger.error(f"Error saving partial message: {e}")
+        logger.error(f"Error saving message: {e}")
         logger.error(traceback.format_exc())
         return None
 
@@ -367,7 +377,7 @@ async def get_agent(current_user: User = Depends(get_required_user)):
             "examples": agent_info.get("examples", []),
             "configurable_items": agent_info.get("configurable_items", []),
             "has_checkpointer": agent_info.get("has_checkpointer", False),
-            "capabilities": agent_info.get("capabilities", [])  # 智能体能力列表
+            "capabilities": agent_info.get("capabilities", []),  # 智能体能力列表
         }
         for agent_info in agents_info
     ]
@@ -513,16 +523,19 @@ async def chat_agent(
             # 客户端主动中断连接，检查中断并保存已生成的部分内容
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
-
-            # 如果有手动维护的 full_msg，直接保存到数据库
-            if full_msg:
-                # 创建新的 db session，因为原 session 可能已关闭
-                new_db = db_manager.get_session()
-                try:
-                    new_conv_manager = ConversationManager(new_db)
-                    await save_partial_message(new_conv_manager, thread_id, full_msg, "interrupted")
-                finally:
-                    new_db.close()
+            # 保存中断消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager,
+                    thread_id,
+                    full_msg=full_msg,
+                    error_message="对话已中断" if not full_msg else None,
+                    error_type="interrupted",
+                )
+            finally:
+                new_db.close()
 
             # 通知前端中断（可能发送不到，但用于一致性）
             yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
@@ -530,16 +543,19 @@ async def chat_agent(
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
 
-
-            # 如果有手动维护的 full_msg，直接保存到数据库
-            if full_msg:
-                # 创建新的 db session，因为原 session 可能已关闭
-                new_db = db_manager.get_session()
-                try:
-                    new_conv_manager = ConversationManager(new_db)
-                    await save_partial_message(new_conv_manager, thread_id, full_msg, "unexpected_error")
-                finally:
-                    new_db.close()
+            # 保存错误消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager,
+                    thread_id,
+                    full_msg=full_msg,
+                    error_message=f"Error streaming messages: {e}" if not full_msg else None,
+                    error_type="unexpected_error",
+                )
+            finally:
+                new_db.close()
 
             yield make_chunk(message=f"Error streaming messages: {e}", status="error")
 
@@ -644,28 +660,61 @@ async def resume_agent_chat(
             resume_command, context=context, config={"configurable": input_context}, stream_mode="messages"
         )
 
-        async for msg, metadata in stream_source:
-            # 确保msg有正确的ID结构
-            msg_dict = msg.model_dump()
-            if "id" not in msg_dict:
-                msg_dict["id"] = str(uuid.uuid4())
+        try:
+            async for msg, metadata in stream_source:
+                # 确保msg有正确的ID结构
+                msg_dict = msg.model_dump()
+                if "id" not in msg_dict:
+                    msg_dict["id"] = str(uuid.uuid4())
 
-            yield make_resume_chunk(
-                content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                yield make_resume_chunk(
+                    content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                )
+
+            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+            yield make_resume_chunk(status="finished", meta=meta)
+
+            # 保存消息到数据库
+            langgraph_config = {"configurable": input_context}
+            conv_manager = ConversationManager(db)
+            await save_messages_from_langgraph_state(
+                agent_instance=agent,
+                thread_id=thread_id,
+                conv_mgr=conv_manager,
+                config_dict=langgraph_config,
             )
 
-        meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-        yield make_resume_chunk(status="finished", meta=meta)
+        except (asyncio.CancelledError, ConnectionError) as e:
+            # 客户端主动中断连接
+            logger.warning(f"Client disconnected during resume: {e}")
 
-        # 保存消息到数据库
-        langgraph_config = {"configurable": input_context}
-        conv_manager = ConversationManager(db)
-        await save_messages_from_langgraph_state(
-            agent_instance=agent,
-            thread_id=thread_id,
-            conv_mgr=conv_manager,
-            config_dict=langgraph_config,
-        )
+            # 保存中断消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager, thread_id, error_message="对话恢复已中断", error_type="resume_interrupted"
+                )
+            finally:
+                new_db.close()
+
+            yield make_resume_chunk(status="interrupted", message="对话恢复已中断", meta=meta)
+
+        except Exception as e:
+            # 处理其他异常
+            logger.error(f"Error during resume: {e}, {traceback.format_exc()}")
+
+            # 保存错误消息到数据库
+            new_db = db_manager.get_session()
+            try:
+                new_conv_manager = ConversationManager(new_db)
+                await save_partial_message(
+                    new_conv_manager, thread_id, error_message=f"Error during resume: {e}", error_type="resume_error"
+                )
+            finally:
+                new_db.close()
+
+            yield make_resume_chunk(message=f"Error during resume: {e}", status="error")
 
     return StreamingResponse(stream_resume(), media_type="application/json")
 

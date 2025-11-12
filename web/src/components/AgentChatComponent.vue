@@ -436,6 +436,7 @@ const cleanupThreadState = (threadId) => {
 
 // ==================== STREAM HANDLING LOGIC ====================
 const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
+  console.log('🔄 [RESET] Resetting on going conversation:', threadId, preserveMessages);
   if (threadId) {
     // 清理指定线程的状态
     const threadState = getThreadState(threadId);
@@ -449,8 +450,8 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
         // 延迟清空消息，给历史记录加载足够时间
         setTimeout(() => {
           if (threadState.onGoingConv) {
-            threadState.onGoingConv = createOnGoingConvState();
-          }
+      threadState.onGoingConv = createOnGoingConvState();
+    }
         }, 100);
       } else {
         threadState.onGoingConv = createOnGoingConvState();
@@ -469,8 +470,8 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
         if (preserveMessages) {
           setTimeout(() => {
             if (threadState.onGoingConv) {
-              threadState.onGoingConv = createOnGoingConvState();
-            }
+        threadState.onGoingConv = createOnGoingConvState();
+      }
           }, 100);
         } else {
           threadState.onGoingConv = createOnGoingConvState();
@@ -547,8 +548,8 @@ const _processStreamChunk = (chunk, threadId) => {
       }
       fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
         .finally(() => {
-          resetOnGoingConv(threadId, true);
-        });
+        resetOnGoingConv(threadId, true);
+      });
       return true;
   }
 
@@ -646,11 +647,17 @@ const updateThread = async (threadId, title) => {
 };
 
 // 获取线程消息
-const fetchThreadMessages = async ({ agentId, threadId }) => {
+const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
   if (!threadId || !agentId) return;
+
+  // 如果指定了延迟，等待指定时间（用于确保后端数据库事务提交）
+  if (delay > 0) {
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
 
   try {
     const response = await agentApi.getAgentHistory(agentId, threadId);
+    console.log('🔄 [FETCH] Thread messages:', response);
     threadMessages.value[threadId] = response.history || [];
   } catch (error) {
     handleChatError(error, 'load');
@@ -963,7 +970,7 @@ const handleSendOrStop = async () => {
 
     // 中断后刷新消息历史，确保显示最新的状态
     try {
-      await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 100 });
       message.info('已中断对话生成');
     } catch (error) {
       console.error('刷新消息历史失败:', error);

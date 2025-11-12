@@ -51,8 +51,6 @@ async def update_config_batch(items: dict = Body(...), current_user: User = Depe
     return config.dump_config()
 
 
-
-
 @system.get("/logs")
 def get_system_logs(current_user: User = Depends(get_admin_user)):
     """获取系统日志"""

@@ -85,9 +85,7 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
         assert reranker_config.get("enabled") is True
         assert reranker_config.get("model") == "siliconflow/BAAI/bge-reranker-v2-m3"
 
-        params_response = await test_client.get(
-            f"/api/knowledge/databases/{db_id}/query-params", headers=admin_headers
-        )
+        params_response = await test_client.get(f"/api/knowledge/databases/{db_id}/query-params", headers=admin_headers)
         assert params_response.status_code == 200, params_response.text
 
         params_payload = params_response.json()

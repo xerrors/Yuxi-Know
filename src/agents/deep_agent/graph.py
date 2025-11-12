@@ -1,17 +1,20 @@
 """Deep Agent - 基于create_deep_agent的深度分析智能体"""
+
 import os
 from typing import Literal
+
 from deepagents import create_deep_agent
+from tavily import TavilyClient
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.tools import search
 from src.agents.common.middlewares import (
     context_aware_prompt,
     context_based_model,
     inject_attachment_context,
 )
+from src.agents.common.tools import search
+
 from .context import DeepContext
-from tavily import TavilyClient
 
 # 最佳实践是初始化客户端一次并复用它。
 tavily_client = TavilyClient(api_key=os.environ["TAVILY_API_KEY"])
@@ -169,8 +172,8 @@ research_instructions = """你是一位专家级研究员。你的工作是进�
 使用此工具对给定的查询进行网络搜索。你可以指定结果数量、主题以及是否包含原始内容。
 """
 
-class DeepAgent(BaseAgent):
 
+class DeepAgent(BaseAgent):
     name = "深度分析智能体"
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
     context_schema = DeepContext

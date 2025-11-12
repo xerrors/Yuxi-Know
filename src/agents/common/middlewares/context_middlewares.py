@@ -14,9 +14,7 @@ def context_aware_prompt(request: ModelRequest) -> str:
 
 
 @wrap_model_call
-async def context_based_model(
-    request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
-) -> ModelResponse:
+async def context_based_model(request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]) -> ModelResponse:
     """从 runtime context 动态选择模型"""
     model_spec = request.runtime.context.model
     model = load_chat_model(model_spec)

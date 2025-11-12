@@ -4,7 +4,6 @@ from dataclasses import field
 
 from src.agents.common.context import BaseContext
 
-
 DEEP_PROMPT = """你是一个能够处理复杂、多步骤任务的深度分析代理。
 
 你拥有以下资源：

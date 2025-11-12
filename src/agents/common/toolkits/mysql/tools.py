@@ -88,7 +88,7 @@ def mysql_list_tables() -> str:
 
             all_table_names = "\n".join(table_names)
             result = f"数据库中的表:\n{all_table_names}"
-            if db_note := conn_manager.config.get('description'):
+            if db_note := conn_manager.config.get("description"):
                 result = f"数据库说明: {db_note}\n\n" + result
             logger.info(f"Retrieved {len(table_names)} tables from database")
             return result
