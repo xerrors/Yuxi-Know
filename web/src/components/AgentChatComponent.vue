@@ -67,6 +67,7 @@
 
         <div class="inputer-init">
           <MessageInputComponent
+            ref="messageInputRef"
             v-model="userInput"
             :is-loading="isProcessing"
             :disabled="!currentAgent"
@@ -75,12 +76,21 @@
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
           >
+            <template #top>
+              <ImagePreviewComponent
+                v-if="currentImage"
+                :image-data="currentImage"
+                @remove="handleImageRemoved"
+                class="image-preview-wrapper"
+              />
+            </template>
             <template #options-left>
               <AttachmentOptionsComponent
                 v-if="supportsFileUpload"
                 :disabled="!currentAgent"
                 @upload="handleAttachmentUpload"
                 @upload-image="handleImageUpload"
+                @upload-image-success="handleImageUploadSuccess"
               />
             </template>
             <template #actions-left>
@@ -152,6 +162,7 @@
 
         <div class="message-input-wrapper" v-if="conversations.length > 0">
           <MessageInputComponent
+            ref="messageInputRef"
             v-model="userInput"
             :is-loading="isProcessing"
             :disabled="!currentAgent"
@@ -160,12 +171,21 @@
             @send="handleSendOrStop"
             @keydown="handleKeyDown"
           >
+            <template #top>
+              <ImagePreviewComponent
+                v-if="currentImage"
+                :image-data="currentImage"
+                @remove="handleImageRemoved"
+                class="image-preview-wrapper"
+              />
+            </template>
             <template #options-left>
               <AttachmentOptionsComponent
                 v-if="supportsFileUpload"
                 :disabled="!currentAgent"
                 @upload="handleAttachmentUpload"
                 @upload-image="handleImageUpload"
+                @upload-image-success="handleImageUploadSuccess"
               />
             </template>
             <template #actions-left>
@@ -194,6 +214,7 @@ import AttachmentInputPanel from '@/components/AttachmentInputPanel.vue'
 import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
 import AttachmentStatusIndicator from '@/components/AttachmentStatusIndicator.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
+import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { PanelLeftOpen, MessageCirclePlus, LoaderCircle } from 'lucide-vue-next';
@@ -379,6 +400,8 @@ const isMediumContainer = computed(() => localUIState.containerWidth <= 768);
 
 // ==================== SCROLL & RESIZE HANDLING ====================
 const chatContainerRef = ref(null);
+const messageInputRef = ref(null);
+const currentImage = ref(null);
 const scrollController = new ScrollController('.chat');
 let resizeObserver = null;
 
@@ -732,10 +755,23 @@ const handleAttachmentRemove = async (fileId) => {
   }
 };
 
-// 处理图片上传（开发中功能）
-const handleImageUpload = () => {
-  // 图片上传功能暂未实现，在 AttachmentOptionsComponent 中已经显示了提示信息
-  // 这里可以预留扩展接口
+// 处理图片上传
+const handleImageUpload = (imageData) => {
+  if (imageData && imageData.success) {
+    currentImage.value = imageData;
+  }
+};
+
+// 处理图片移除
+const handleImageRemoved = () => {
+  currentImage.value = null;
+};
+
+// 处理图片上传成功，关闭选项面板
+const handleImageUploadSuccess = () => {
+  if (messageInputRef.value) {
+    messageInputRef.value.closeOptions();
+  }
 };
 
 // ==================== 审批功能管理 ====================
@@ -746,7 +782,7 @@ const { approvalState, handleApproval, processApprovalInStream } = useApproval({
 });
 
 // 发送消息并处理流式响应
-const sendMessage = async ({ agentId, threadId, text, signal = undefined }) => {
+const sendMessage = async ({ agentId, threadId, text, signal = undefined, imageData = undefined }) => {
   if (!agentId || !threadId || !text) {
     const error = new Error("Missing agent, thread, or message text");
     handleChatError(error, 'send');
@@ -764,6 +800,11 @@ const sendMessage = async ({ agentId, threadId, text, signal = undefined }) => {
       thread_id: threadId,
     },
   };
+
+  // 如果有图片，添加到请求中
+  if (imageData && imageData.imageContent) {
+    requestData.image_content = imageData.imageContent;
+  }
 
   try {
     return await agentApi.sendAgentMessage(agentId, requestData, signal ? { signal } : undefined);
@@ -897,6 +938,11 @@ const handleSendMessage = async () => {
   }
 
   userInput.value = '';
+
+  // 保存当前图片数据，在发送后再清除
+  const imageData = currentImage.value;
+  currentImage.value = null;
+
   await nextTick();
   scrollController.scrollToBottom(true);
 
@@ -912,7 +958,8 @@ const handleSendMessage = async () => {
       agentId: currentAgentId.value,
       threadId: currentChatId.value,
       text: text,
-      signal: threadState.streamAbortController?.signal
+      signal: threadState.streamAbortController?.signal,
+      imageData: imageData
     });
 
     const reader = response.body.getReader();

@@ -69,6 +69,7 @@ class Message(Base):
     created_at = Column(DateTime, default=utc_now, comment="Creation time")
     token_count = Column(Integer, nullable=True, comment="Token count (optional)")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata (complete message dump)")
+    image_content = Column(Text, nullable=True, comment="Base64 encoded image content for multimodal messages")
 
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
@@ -91,6 +92,7 @@ class Message(Base):
             "created_at": format_utc_datetime(self.created_at),
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
+            "image_content": self.image_content,
             "tool_calls": [tc.to_dict() for tc in self.tool_calls] if self.tool_calls else [],
         }
 

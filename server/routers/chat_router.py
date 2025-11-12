@@ -28,6 +28,21 @@ from src.services.doc_converter import (
 )
 from src.utils.datetime_utils import utc_isoformat
 from src.utils.logging_config import logger
+from src.utils.image_processor import process_uploaded_image
+
+
+# 图片上传响应模型
+class ImageUploadResponse(BaseModel):
+    success: bool
+    image_content: str | None = None
+    thumbnail_content: str | None = None
+    width: int | None = None
+    height: int | None = None
+    format: str | None = None
+    mime_type: str | None = None
+    size_bytes: int | None = None
+    error: str | None = None
+
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -391,6 +406,7 @@ async def chat_agent(
     query: str = Body(...),
     config: dict = Body({}),
     meta: dict = Body({}),
+    image_content: str | None = Body(None),
     current_user: User = Depends(get_required_user),
     db: Session = Depends(get_db),
 ):
@@ -398,6 +414,10 @@ async def chat_agent(
     start_time = asyncio.get_event_loop().time()
 
     logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
+    logger.info(f"image_content present: {image_content is not None}")
+    if image_content:
+        logger.info(f"image_content length: {len(image_content)}")
+        logger.info(f"image_content preview: {image_content[:50]}...")
 
     # 确保 request_id 存在
     if "request_id" not in meta or not meta.get("request_id"):
@@ -410,6 +430,7 @@ async def chat_agent(
             "server_model_name": config.get("model", agent_id),
             "thread_id": config.get("thread_id"),
             "user_id": current_user.id,
+            "has_image": bool(image_content),
         }
     )
 
@@ -423,8 +444,32 @@ async def chat_agent(
         )
 
     async def stream_messages():
-        # 代表服务端已经收到了请求
-        yield make_chunk(status="init", meta=meta, msg=HumanMessage(content=query).model_dump())
+        # 构建多模态消息
+        if image_content:
+            # 多模态消息格式
+            human_message = HumanMessage(
+                content=[
+                    {"type": "text", "text": query},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_content}"}},
+                ]
+            )
+            message_type = "multimodal_image"
+        else:
+            # 普通文本消息
+            human_message = HumanMessage(content=query)
+            message_type = "text"
+
+        # 代表服务端已经收到了请求，发送前端友好的消息格式
+        init_msg = {"role": "user", "content": query, "type": "human"}
+
+        # 如果有图片，添加图片相关信息
+        if image_content:
+            init_msg["message_type"] = "multimodal_image"
+            init_msg["image_content"] = image_content
+        else:
+            init_msg["message_type"] = "text"
+
+        yield make_chunk(status="init", meta=meta, msg=init_msg)
 
         # Input guard
         if conf.enable_content_guard and await content_guard.check(query):
@@ -438,7 +483,7 @@ async def chat_agent(
             yield make_chunk(message=f"Error getting agent {agent_id}: {e}", status="error")
             return
 
-        messages = [{"role": "user", "content": query}]
+        messages = [human_message]
 
         # 构造运行时配置，如果没有thread_id则生成一个
         user_id = str(current_user.id)
@@ -458,8 +503,9 @@ async def chat_agent(
                 thread_id=thread_id,
                 role="user",
                 content=query,
-                message_type="text",
-                extra_metadata={"raw_message": HumanMessage(content=query).model_dump()},
+                message_type=message_type,
+                image_content=image_content,
+                extra_metadata={"raw_message": human_message.model_dump()},
             )
         except Exception as e:
             logger.error(f"Error saving user message: {e}")
@@ -543,6 +589,9 @@ async def chat_agent(
         except Exception as e:
             logger.error(f"Error streaming messages: {e}, {traceback.format_exc()}")
 
+            error_msg = f"Error streaming messages: {e}"
+            error_type = "unexpected_error"
+
             # 保存错误消息到数据库
             new_db = db_manager.get_session()
             try:
@@ -551,13 +600,13 @@ async def chat_agent(
                     new_conv_manager,
                     thread_id,
                     full_msg=full_msg,
-                    error_message=f"Error streaming messages: {e}" if not full_msg else None,
-                    error_type="unexpected_error",
+                    error_message=error_msg if not full_msg else None,
+                    error_type=error_type,
                 )
             finally:
                 new_db.close()
 
-            yield make_chunk(message=f"Error streaming messages: {e}", status="error")
+            yield make_chunk(message=error_msg, status="error")
 
     return StreamingResponse(stream_messages(), media_type="application/json")
 
@@ -766,6 +815,8 @@ async def get_agent_history(
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
                 "error_type": msg.extra_metadata.get("error_type") if msg.extra_metadata else None,
+                "message_type": msg.message_type,  # 添加消息类型字段
+                "image_content": msg.image_content,  # 添加图片内容字段
             }
 
             # Add tool calls if present (for AI messages)
@@ -1143,3 +1194,47 @@ async def get_message_feedback(
     except Exception as e:
         logger.error(f"Error getting message feedback: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get feedback: {str(e)}")
+
+
+# =============================================================================
+# > === 多模态图片支持分组 ===
+# =============================================================================
+
+
+@chat.post("/image/upload", response_model=ImageUploadResponse)
+async def upload_image(file: UploadFile = File(...), current_user: User = Depends(get_required_user)):
+    """
+    上传并处理图片，返回base64编码的图片数据
+    """
+    try:
+        # 验证文件类型
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(status_code=400, detail="只支持图片文件上传")
+
+        # 读取文件内容
+        image_data = await file.read()
+
+        # 检查文件大小（10MB限制，超过后会压缩到5MB）
+        if len(image_data) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="图片文件过大，请上传小于10MB的图片")
+
+        # 处理图片
+        result = process_uploaded_image(image_data, file.filename)
+
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=f"图片处理失败: {result['error']}")
+
+        logger.info(
+            f"用户 {current_user.id} 成功上传图片: {file.filename}, "
+            f"尺寸: {result['width']}x{result['height']}, "
+            f"格式: {result['format']}, "
+            f"大小: {result['size_bytes']} bytes"
+        )
+
+        return ImageUploadResponse(**result)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"图片上传处理失败: {str(e)}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"图片处理失败: {str(e)}")

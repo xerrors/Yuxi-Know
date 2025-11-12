@@ -109,6 +109,7 @@ class ConversationManager:
         content: str,
         message_type: str = "text",
         extra_metadata: dict | None = None,
+        image_content: str | None = None,
     ) -> Message:
         """
         Add a message to a conversation
@@ -117,8 +118,9 @@ class ConversationManager:
             conversation_id: Conversation ID
             role: Message role (user/assistant/system/tool)
             content: Message content
-            message_type: Message type (text/tool_call/tool_result)
+            message_type: Message type (text/tool_call/tool_result/multimodal_image)
             extra_metadata: Additional metadata (complete message dump)
+            image_content: Base64 encoded image content for multimodal messages
 
         Returns:
             Created Message object
@@ -129,6 +131,7 @@ class ConversationManager:
             content=content,
             message_type=message_type,
             extra_metadata=extra_metadata or {},
+            image_content=image_content,
         )
 
         self.db.add(message)
@@ -153,6 +156,7 @@ class ConversationManager:
         content: str,
         message_type: str = "text",
         extra_metadata: dict | None = None,
+        image_content: str | None = None,
     ) -> Message | None:
         """
         Add a message to a conversation by thread ID
@@ -161,8 +165,9 @@ class ConversationManager:
             thread_id: Thread ID
             role: Message role (user/assistant/system/tool)
             content: Message content
-            message_type: Message type (text/tool_call/tool_result)
+            message_type: Message type (text/tool_call/tool_result/multimodal_image)
             extra_metadata: Additional metadata (complete message dump)
+            image_content: Base64 encoded image content for multimodal messages
 
         Returns:
             Created Message object or None if conversation not found
@@ -178,6 +183,7 @@ class ConversationManager:
             content=content,
             message_type=message_type,
             extra_metadata=extra_metadata,
+            image_content=image_content,
         )
 
     def add_tool_call(
