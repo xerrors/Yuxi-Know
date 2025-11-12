@@ -8,6 +8,7 @@
 from .kb_utils import (
     calculate_content_hash,
     get_embedding_config,
+    merge_processing_params,
     prepare_item_metadata,
     split_text_into_chunks,
     split_text_into_qa_chunks,

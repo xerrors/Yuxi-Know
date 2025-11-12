@@ -226,7 +226,7 @@ class MilvusKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            metadata = prepare_item_metadata(item, content_type, db_id)
+            metadata = prepare_item_metadata(item, content_type, db_id, params=params)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
 
@@ -290,6 +290,113 @@ class MilvusKB(KnowledgeBase):
                 pass
 
             processed_items_info.append(file_record)
+
+        return processed_items_info
+
+    async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
+        """更新内容 - 根据file_ids重新解析文件并更新向量库"""
+        if db_id not in self.databases_meta:
+            raise ValueError(f"Database {db_id} not found")
+
+        collection = await self._get_milvus_collection(db_id)
+        if not collection:
+            raise ValueError(f"Failed to get Milvus collection for {db_id}")
+
+        embed_info = self.databases_meta[db_id].get("embed_info", {})
+        embedding_function = self._get_async_embedding_function(embed_info)
+
+        # 处理默认参数
+        if params is None:
+            params = {}
+        content_type = params.get("content_type", "file")
+        processed_items_info = []
+
+        for file_id in file_ids:
+            # 从元数据中获取文件信息
+            async with self._metadata_lock:
+                if file_id not in self.files_meta:
+                    logger.warning(f"File {file_id} not found in metadata, skipping")
+                    continue
+
+                file_meta = self.files_meta[file_id]
+                file_path = file_meta.get("path")
+                filename = file_meta.get("filename")
+
+                if not file_path:
+                    logger.warning(f"File path not found for {file_id}, skipping")
+                    continue
+
+            # 添加到处理队列
+            self._add_to_processing_queue(file_id)
+
+            try:
+                # 更新状态为处理中
+                async with self._metadata_lock:
+                    self.files_meta[file_id]["status"] = "processing"
+                    self._save_metadata()
+
+                # 重新解析文件为 markdown
+                if content_type == "file":
+                    markdown_content = await process_file_to_markdown(file_path, params=params)
+                else:
+                    markdown_content = await process_url_to_markdown(file_path, params=params)
+
+                # 先删除现有的 Milvus 数据（仅删除chunks，保留元数据）
+                await self.delete_file_chunks_only(db_id, file_id)
+
+                # 重新生成 chunks
+                chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
+                logger.info(f"Split {filename} into {len(chunks)} chunks")
+
+                if chunks:
+                    texts = [chunk["content"] for chunk in chunks]
+                    embeddings = await embedding_function(texts)
+
+                    entities = [
+                        [chunk["id"] for chunk in chunks],
+                        [chunk["content"] for chunk in chunks],
+                        [chunk["source"] for chunk in chunks],
+                        [chunk["chunk_id"] for chunk in chunks],
+                        [chunk["file_id"] for chunk in chunks],
+                        [chunk["chunk_index"] for chunk in chunks],
+                        embeddings,
+                    ]
+
+                    def _insert_records():
+                        collection.insert(entities)
+
+                    await asyncio.to_thread(_insert_records)
+
+                logger.info(f"Updated {content_type} {file_path} in Milvus. Done.")
+
+                # 更新元数据状态
+                async with self._metadata_lock:
+                    self.files_meta[file_id]["status"] = "done"
+                    self._save_metadata()
+
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
+
+                # 返回更新后的文件信息
+                updated_file_meta = file_meta.copy()
+                updated_file_meta["status"] = "done"
+                updated_file_meta["file_id"] = file_id
+                processed_items_info.append(updated_file_meta)
+
+            except Exception as e:
+                logger.error(f"更新{content_type} {file_path} 失败: {e}, {traceback.format_exc()}")
+                async with self._metadata_lock:
+                    self.files_meta[file_id]["status"] = "failed"
+                    self._save_metadata()
+
+                # 从处理队列中移除
+                self._remove_from_processing_queue(file_id)
+
+                # 返回失败的文件信息
+                failed_file_meta = file_meta.copy()
+                failed_file_meta["status"] = "failed"
+                failed_file_meta["file_id"] = file_id
+                processed_items_info.append(failed_file_meta)
 
         return processed_items_info
 
@@ -394,8 +501,8 @@ class MilvusKB(KnowledgeBase):
             logger.error(f"Milvus query error: {e}, {traceback.format_exc()}")
             return []
 
-    async def delete_file(self, db_id: str, file_id: str) -> None:
-        """删除文件"""
+    async def delete_file_chunks_only(self, db_id: str, file_id: str) -> None:
+        """仅删除文件的chunks数据，保留元数据（用于更新操作）"""
         collection = await self._get_milvus_collection(db_id)
 
         if collection:
@@ -418,6 +525,13 @@ class MilvusKB(KnowledgeBase):
                     await asyncio.to_thread(_delete_from_milvus)
             except Exception as e:
                 logger.error(f"Error checking file existence in Milvus: {e}")
+        # 注意：这里不删除 files_meta[file_id]，保留元数据用于后续操作
+
+    async def delete_file(self, db_id: str, file_id: str) -> None:
+        """删除文件（包括元数据）"""
+        # 先删除 Milvus 中的 chunks 数据
+        await self.delete_file_chunks_only(db_id, file_id)
+
         # 使用锁确保元数据操作的原子性
         async with self._metadata_lock:
             if file_id in self.files_meta:

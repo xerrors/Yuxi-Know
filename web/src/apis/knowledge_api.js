@@ -103,6 +103,20 @@ export const documentApi = {
    */
   downloadDocument: async (dbId, docId) => {
     return apiAdminGet(`/api/knowledge/databases/${dbId}/documents/${docId}/download`, {}, 'blob')
+  },
+
+  /**
+   * 重新分块文档
+   * @param {string} dbId - 知识库ID
+   * @param {Array} fileIds - 文件ID列表
+   * @param {Object} params - 处理参数
+   * @returns {Promise} - 重新分块结果
+   */
+  rechunksDocuments: async (dbId, fileIds, params = {}) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/documents/rechunks`, {
+      file_ids: fileIds,
+      params
+    })
   }
 }
 

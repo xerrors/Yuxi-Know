@@ -188,6 +188,7 @@ const ACTIVE_CLASS_STATUSES = new Set(['pending', 'queued', 'running'])
 const FAILED_STATUSES = new Set(['failed', 'cancelled'])
 const TASK_TYPE_LABELS = {
   knowledge_ingest: '知识库导入',
+  knowledge_rechunks: '文档重新分块',
   graph_task: '图谱处理',
   agent_job: '智能体任务'
 }

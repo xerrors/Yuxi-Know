@@ -14,7 +14,7 @@ from server.utils.auth_middleware import get_admin_user
 from server.services.tasker import TaskContext, tasker
 from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
-from src.knowledge.utils import calculate_content_hash
+from src.knowledge.utils import calculate_content_hash, merge_processing_params
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
 from src.utils import hashstr, logger
 
@@ -355,6 +355,108 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
     except Exception as e:
         logger.error(f"删除文档失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=f"删除文档失败: {e}")
+
+
+@knowledge.post("/databases/{db_id}/documents/rechunks")
+async def rechunks_documents(
+    db_id: str, file_ids: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)
+):
+    """重新分块文档"""
+    logger.debug(f"Rechunks documents for db_id {db_id}: {file_ids} {params=}")
+
+    async def run_rechunks(context: TaskContext):
+        await context.set_message("任务初始化")
+        await context.set_progress(5.0, "准备重新分块文档")
+
+        total = len(file_ids)
+        processed_items = []
+
+        try:
+            # 逐个处理文档并更新进度
+            for idx, file_id in enumerate(file_ids, 1):
+                await context.raise_if_cancelled()
+
+                # 更新进度
+                progress = 5.0 + (idx / total) * 90.0  # 5% ~ 95%
+                await context.set_progress(progress, f"正在重新分块第 {idx}/{total} 个文档")
+
+                # 获取文档元数据中的处理参数
+                metadata_params = None
+                try:
+                    file_info = await knowledge_base.get_file_basic_info(db_id, file_id)
+                    metadata_params = file_info.get("meta", {}).get("processing_params")
+                except Exception as meta_error:
+                    logger.warning(f"Failed to get metadata for file {file_id}: {meta_error}")
+
+                # 合并参数：优先使用请求参数，缺失时使用元数据参数
+                merged_params = merge_processing_params(metadata_params, params)
+
+                # 处理单个文档
+                try:
+                    result = await knowledge_base.update_content(db_id, [file_id], params=merged_params)
+                    processed_items.extend(result)
+                except Exception as doc_error:
+                    # 处理单个文档处理的所有异常（包括超时）
+                    logger.error(f"Document rechunking failed for {file_id}: {doc_error}")
+
+                    # 判断是否是超时异常
+                    error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
+                    error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
+
+                    processed_items.append({
+                        "file_id": file_id,
+                        "status": "failed",
+                        "error": f"{error_msg}: {str(doc_error)}",
+                        "error_type": error_type
+                    })
+
+        except asyncio.CancelledError:
+            await context.set_progress(100.0, "任务已取消")
+            raise
+        except Exception as task_error:
+            # 处理整体任务的其他异常（如内存不足、网络错误等）
+            logger.exception(f"Task rechunking failed: {task_error}")
+            await context.set_progress(100.0, f"任务处理失败: {str(task_error)}")
+            # 将所有未处理的文档标记为失败
+            for file_id in file_ids[len(processed_items):]:
+                processed_items.append({
+                    "file_id": file_id,
+                    "status": "failed",
+                    "error": f"任务失败: {str(task_error)}",
+                    "error_type": "task_failed"
+                })
+            raise
+
+        failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])
+        summary = {
+            "db_id": db_id,
+            "submitted": len(processed_items),
+            "failed": failed_count,
+        }
+        message = f"文档重新分块完成，失败 {failed_count} 个" if failed_count else "文档重新分块完成"
+        await context.set_result(summary | {"items": processed_items})
+        await context.set_progress(100.0, message)
+        return summary | {"items": processed_items}
+
+    try:
+        task = await tasker.enqueue(
+            name=f"文档重新分块({db_id})",
+            task_type="knowledge_rechunks",
+            payload={
+                "db_id": db_id,
+                "file_ids": file_ids,
+                "params": params,
+            },
+            coroutine=run_rechunks,
+        )
+        return {
+            "message": "任务已提交，请在任务中心查看进度",
+            "status": "queued",
+            "task_id": task.id,
+        }
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to enqueue rechunks task: {e}, {traceback.format_exc()}")
+        return {"message": f"Failed to enqueue task: {e}", "status": "failed"}
 
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}/download")

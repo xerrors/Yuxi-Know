@@ -128,9 +128,15 @@ def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str] | Pa
     raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")
 
 
-def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
+def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
     """
     准备文件或URL的元数据
+
+    Args:
+        item: 文件路径或URL
+        content_type: 内容类型 ("file" 或 "url")
+        db_id: 数据库ID
+        params: 处理参数，可选
     """
     if content_type == "file":
         file_path = Path(item)
@@ -151,7 +157,7 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         item_path = item
         content_hash = None
 
-    return {
+    metadata = {
         "database_id": db_id,
         "filename": filename,
         "path": item_path,
@@ -161,6 +167,12 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str) -> dict:
         "file_id": file_id,
         "content_hash": content_hash,
     }
+
+    # 保存处理参数到元数据
+    if params:
+        metadata["processing_params"] = params.copy()
+
+    return metadata
 
 
 def split_text_into_qa_chunks(
@@ -194,6 +206,31 @@ def split_text_into_qa_chunks(
         f"Successfully split QA text into {len(chunks)} chunks using CharacterTextSplitter with `{qa_separator=}`"
     )
     return chunks
+
+
+def merge_processing_params(metadata_params: dict | None, request_params: dict | None) -> dict:
+    """
+    合并处理参数：优先使用请求参数，缺失时使用元数据中的参数
+
+    Args:
+        metadata_params: 元数据中保存的参数
+        request_params: 请求中提供的参数
+
+    Returns:
+        dict: 合并后的参数
+    """
+    merged_params = {}
+
+    # 首先使用元数据中的参数作为默认值
+    if metadata_params:
+        merged_params.update(metadata_params)
+
+    # 然后使用请求参数覆盖（如果提供）
+    if request_params:
+        merged_params.update(request_params)
+
+    logger.debug(f"Merged processing params: metadata={metadata_params}, request={request_params}, result={merged_params}")
+    return merged_params
 
 
 def get_embedding_config(embed_info: dict) -> dict:
