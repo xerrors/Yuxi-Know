@@ -293,6 +293,7 @@ class KnowledgeBase(ABC):
                     "type": file_info.get("file_type", ""),
                     "status": file_info.get("status", "done"),
                     "created_at": created_at,
+                    "processing_params": file_info.get("processing_params", None),
                 }
 
         # 按创建时间倒序排序文件列表

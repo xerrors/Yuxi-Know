@@ -203,7 +203,8 @@ const selectedRowKeys = computed({
 
 // 重新分块参数配置相关
 const rechunkModalVisible = ref(false);
-const rechunkModalLoading = ref(false);
+const rechunkModalLoading = computed(() => store.state.chunkLoading);
+
 const rechunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
@@ -448,17 +449,16 @@ const handleDownloadFile = async (record) => {
 };
 
 const handleRechunkFile = async (record) => {
-  const dbId = store.databaseId;
-  if (!dbId) {
-    console.error('无法获取数据库ID，数据库ID:', store.databaseId, '记录:', record);
-    message.error('无法获取数据库ID，请刷新页面后重试');
-    return;
-  }
-
   try {
     // 设置当前重新分块的文件ID
     currentRechunkFileIds.value = [record.file_id];
     isBatchRechunk.value = false;
+
+    if (record?.processing_params) {
+      rechunkParams.value = {
+        ...record?.processing_params
+      };
+    }
 
     // 显示参数配置模态框
     rechunkModalVisible.value = true;
@@ -470,34 +470,25 @@ const handleRechunkFile = async (record) => {
 
 // 重新分块确认
 const handleRechunkConfirm = async () => {
-  const dbId = store.databaseId;
-  if (!dbId) {
-    console.error('无法获取数据库ID，数据库ID:', store.databaseId);
-    message.error('无法获取数据库ID，请刷新页面后重试');
-    return;
-  }
-
-  if (currentRechunkFileIds.value.length === 0) {
-    message.warning('请选择要重新分块的文件');
-    return;
-  }
-
-  rechunkModalLoading.value = true;
-
   try {
     // 调用 rechunks 接口
-    const result = await documentApi.rechunksDocuments(dbId, currentRechunkFileIds.value, rechunkParams.value);
-
-    if (result.status === 'queued') {
-      message.success('重新分块任务已提交，请在任务中心查看进度');
-      // 刷新文件列表
-      store.getDatabaseInfo(undefined, true);
+    const result = await store.rechunksFiles({fileIds: currentRechunkFileIds.value, params: rechunkParams.value});
+    if (result) {
+      currentRechunkFileIds.value = [];
       // 清空选择
       if (isBatchRechunk.value) {
         selectedRowKeys.value = [];
       }
       // 关闭模态框
       rechunkModalVisible.value = false;
+
+      // 重置参数为默认值
+      rechunkParams.value = {
+        chunk_size: 1000,
+        chunk_overlap: 200,
+        use_qa_split: false,
+        qa_separator: '\n\n\n'
+      };
     } else {
       message.error(`重新分块失败: ${result.message}`);
     }
@@ -505,15 +496,13 @@ const handleRechunkConfirm = async () => {
     console.error('重新分块失败:', error);
     const errorMessage = error.message || '重新分块失败，请稍后重试';
     message.error(errorMessage);
-  } finally {
-    rechunkModalLoading.value = false;
   }
 };
 
 // 重新分块取消
 const handleRechunkCancel = () => {
   rechunkModalVisible.value = false;
-  rechunkModalLoading.value = false;
+  // rechunkModalLoading.value = false;
   currentRechunkFileIds.value = [];
   isBatchRechunk.value = false;
   // 重置参数为默认值

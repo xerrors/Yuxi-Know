@@ -256,6 +256,45 @@ export const useDatabaseStore = defineStore('database', () => {
     }
   }
 
+  async function rechunksFiles({ fileIds, params }) {
+    if (fileIds.length === 0) {
+      message.error('请选择要重新分块的文件！');
+      return;
+    }
+
+    state.chunkLoading = true;
+    try {
+      const data = await documentApi.rechunksDocuments(databaseId.value, fileIds, { ...params });
+      if (data.status === 'success' || data.status === 'queued') {
+        enableAutoRefresh('auto');
+        message.success(data.message || `文档已提交处理，请在任务中心查看进度`);
+        if (data.task_id) {
+          taskerStore.registerQueuedTask({
+            task_id: data.task_id,
+            name: `文档重新分块 (${databaseId.value || ''})`,
+            task_type: 'knowledge_rechunks',
+            message: data.message,
+            payload: {
+              db_id: databaseId.value,
+              count: fileIds.length,
+            }
+          });
+        }
+        await getDatabaseInfo(undefined, true); // Skip query params when adding files
+        return true; // Indicate success
+      } else {
+        message.error(data.message || '处理失败');
+        return false;
+      }
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '处理请求失败');
+      return false;
+    } finally {
+      state.chunkLoading = false;
+    }
+  }
+
   async function openFileDetail(record) {
     if (record.status !== 'done') {
       message.error('文件未处理完成，请稍后再试');
@@ -379,6 +418,7 @@ export const useDatabaseStore = defineStore('database', () => {
     handleDeleteFile,
     handleBatchDelete,
     addFiles,
+    rechunksFiles,
     openFileDetail,
     loadQueryParams,
 
