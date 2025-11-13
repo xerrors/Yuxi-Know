@@ -50,6 +50,7 @@
   --color-success: #45b30e;
   --color-error: #c73234;
   --color-info: #0058d4;
+  --color-warning: #faad14;
 
   /* Chart Colors - 图表颜色系统 */
   --chart-primary: var(--main-500);        /* 主色调 - 用于主要数据 */

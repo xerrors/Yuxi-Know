@@ -229,7 +229,7 @@ def merge_processing_params(metadata_params: dict | None, request_params: dict |
     if request_params:
         merged_params.update(request_params)
 
-    logger.debug(f"Merged processing params: metadata={metadata_params}, request={request_params}, result={merged_params}")
+    logger.debug(f"Merged processing params: {metadata_params=}, {request_params=}, {merged_params=}")
     return merged_params
 
 

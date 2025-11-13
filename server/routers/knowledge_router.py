@@ -407,12 +407,14 @@ async def rechunks_documents(
                     error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
                     error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
 
-                    processed_items.append({
-                        "file_id": file_id,
-                        "status": "failed",
-                        "error": f"{error_msg}: {str(doc_error)}",
-                        "error_type": error_type
-                    })
+                    processed_items.append(
+                        {
+                            "file_id": file_id,
+                            "status": "failed",
+                            "error": f"{error_msg}: {str(doc_error)}",
+                            "error_type": error_type,
+                        }
+                    )
 
         except asyncio.CancelledError:
             await context.set_progress(100.0, "任务已取消")
@@ -422,13 +424,15 @@ async def rechunks_documents(
             logger.exception(f"Task rechunking failed: {task_error}")
             await context.set_progress(100.0, f"任务处理失败: {str(task_error)}")
             # 将所有未处理的文档标记为失败
-            for file_id in file_ids[len(processed_items):]:
-                processed_items.append({
-                    "file_id": file_id,
-                    "status": "failed",
-                    "error": f"任务失败: {str(task_error)}",
-                    "error_type": "task_failed"
-                })
+            for file_id in file_ids[len(processed_items) :]:
+                processed_items.append(
+                    {
+                        "file_id": file_id,
+                        "status": "failed",
+                        "error": f"任务失败: {str(task_error)}",
+                        "error_type": "task_failed",
+                    }
+                )
             raise
 
         failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])

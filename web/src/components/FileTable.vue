@@ -50,7 +50,7 @@
       <div class="batch-info">
         <span>{{ selectedRowKeys.length }} 项</span>
         <a-button
-          type="text"
+          type="link"
           size="small"
           @click="selectAllFailedFiles"
           :disabled="lock"
@@ -61,20 +61,20 @@
       </div>
       <div style="display: flex; gap: 4px;">
         <a-button
-          type="text"
+          type="link"
           @click="handleBatchRechunk"
           :loading="batchRechunking"
           :disabled="!canBatchRechunk"
-          :icon="h(ReloadOutlined)"
+          :icon="h(RefreshCw)"
           title="批量重新分块"
         />
         <a-button
-          type="text"
+          type="link"
           danger
           @click="handleBatchDelete"
           :loading="batchDeleting"
           :disabled="!canBatchDelete"
-          :icon="h(DeleteOutlined)"
+          :icon="h(Trash2)"
           title="批量删除"
         />
       </div>
@@ -121,33 +121,33 @@
         </a-button>
         <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
         <div v-else-if="column.key === 'status'" style="display: flex; align-items: center; justify-content: flex-end;">
-          <CheckCircleFilled v-if="text === 'done'" style="color: #41A317;"/>
-          <CloseCircleFilled v-else-if="text === 'failed'" style="color: #FF4D4F;"/>
-          <HourglassFilled v-else-if="text === 'processing'" style="color: #1677FF;"/>
-          <ClockCircleFilled v-else-if="text === 'waiting'" style="color: #FFCD43;"/>
+          <CheckCircleFilled v-if="text === 'done'" style="color: var(--color-success);"/>
+          <CloseCircleFilled v-else-if="text === 'failed'" style="color: var(--color-error);"/>
+          <HourglassFilled v-else-if="text === 'processing'" style="color: var(--color-info);"/>
+          <ClockCircleFilled v-else-if="text === 'waiting'" style="color: var(--color-warning);"/>
         </div>
 
         <a-tooltip v-else-if="column.key === 'created_at'" :title="formatRelativeTime(text)" placement="left">
           <span>{{ formatRelativeTime(text) }}</span>
         </a-tooltip>
 
-        <div v-else-if="column.key === 'action'" style="display: flex; gap: 4px;">
-          <a-button class="download-btn" type="text"
+        <div v-else-if="column.key === 'action'" class="table-row-actions">
+          <a-button class="download-btn" type="link"
             @click="handleDownloadFile(record)"
             :disabled="lock || record.status !== 'done'"
-            :icon="h(DownloadOutlined)"
+            :icon="h(Download)"
             title="下载"
             />
-          <a-button class="rechunk-btn" type="text"
+          <a-button class="rechunk-btn" type="link"
             @click="handleRechunkFile(record)"
             :disabled="lock || record.status === 'processing' || record.status === 'waiting'"
-            :icon="h(ReloadOutlined)"
+            :icon="h(RefreshCw)"
             title="重新分块"
             />
-          <a-button class="del-btn" type="text"
+          <a-button class="del-btn" type="link"
             @click="handleDeleteFile(record.file_id)"
             :disabled="lock || record.status === 'processing' || record.status === 'waiting'"
-            :icon="h(DeleteOutlined)"
+            :icon="h(Trash2)"
             title="删除"
             />
         </div>
@@ -168,12 +168,15 @@ import {
   HourglassFilled,
   CloseCircleFilled,
   ClockCircleFilled,
-  DeleteOutlined,
   PlusOutlined,
-  DownloadOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons-vue';
-import { ChevronLast, RefreshCcw } from 'lucide-vue-next';
+import {
+  Trash2,
+  Download,
+  RefreshCw,
+  ChevronLast,
+  RefreshCcw,
+} from 'lucide-vue-next';
 
 const store = useDatabaseStore();
 const userStore = useUserStore();
@@ -547,6 +550,11 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
   button {
     padding: 0 8px;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
   }
 
   button:hover {
@@ -597,12 +605,13 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   padding: 0 6px;
   height: 22px;
   border-radius: 3px;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 
-.batch-actions .ant-btn:hover {
-  background-color: var(--main-20);
-  color: var(--main-color);
-}
 
 .my-table {
   flex: 1;
@@ -626,6 +635,8 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   color: var(--main-color);
 }
 
+
+
 .my-table .del-btn {
   color: var(--gray-500);
 }
@@ -642,8 +653,23 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   color: var(--gray-500);
 }
 
+/* 统一设置表格操作按钮的图标尺寸 */
+.my-table .table-row-actions {
+  display: flex;
+}
+
+.my-table .table-row-actions button {
+  display: flex;
+  align-items: center;
+}
+
+.my-table .table-row-actions button svg {
+  width: 16px;
+  height: 16px;
+}
+
 .my-table .rechunk-btn:hover {
-  color: #faad14;
+  color: var(--color-warning);
 }
 
 .my-table .del-btn:hover {
@@ -701,15 +727,10 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   color: #fff;
 }
 
-.panel-action-btn.auto-refresh-btn.ant-btn-primary:hover {
-  background-color: var(--main-color) !important;
-  color: #fff !important;
-}
-
 .panel-action-btn:hover {
-  background-color: var(--main-5);
+  background-color: var(--gray-50);
   color: var(--main-color);
-  border: 1px solid var(--main-color);
+  /* border: 1px solid var(--main-100); */
 }
 
 

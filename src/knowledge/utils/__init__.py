@@ -21,5 +21,6 @@ __all__ = [
     "prepare_item_metadata",
     "split_text_into_chunks",
     "split_text_into_qa_chunks",
+    "merge_processing_params",
     "validate_file_path",
 ]
