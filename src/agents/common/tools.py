@@ -118,7 +118,7 @@ class KnowledgeRetrieverModel(BaseModel):
             "操作类型：'search' 表示检索知识库内容，'get_mindmap' 表示获取知识库的思维导图结构。"
             "当用户询问知识库的整体结构、文件分类、知识架构时，使用 'get_mindmap'。"
             "当用户需要查询具体内容时，使用 'search'。"
-        )
+        ),
     )
 
 
@@ -133,41 +133,41 @@ def get_kb_based_tools() -> list:
 
         async def async_retriever_wrapper(query_text: str, operation: str = "search") -> Any:
             """异步检索器包装函数，支持检索和获取思维导图"""
-            
+
             # 获取思维导图
             if operation == "get_mindmap":
                 try:
                     logger.debug(f"Getting mindmap for database {db_id}")
-                    
+
                     # 从知识库元数据中获取思维导图
                     if db_id not in knowledge_base.global_databases_meta:
                         return f"知识库 {retriever_info['name']} 不存在"
-                    
+
                     db_meta = knowledge_base.global_databases_meta[db_id]
                     mindmap_data = db_meta.get("mindmap")
-                    
+
                     if not mindmap_data:
-                        return f"知识库 {retriever_info['name']} 还没有生成思维导图。请先在知识库中添加文件，系统会自动生成思维导图。"
-                    
+                        return f"知识库 {retriever_info['name']} 还没有生成思维导图。"
+
                     # 将思维导图数据转换为文本格式，便于AI理解
                     def mindmap_to_text(node, level=0):
                         """递归将思维导图JSON转换为层级文本"""
                         indent = "  " * level
                         text = f"{indent}- {node.get('content', '')}\n"
-                        for child in node.get('children', []):
+                        for child in node.get("children", []):
                             text += mindmap_to_text(child, level + 1)
                         return text
-                    
+
                     mindmap_text = f"知识库 {retriever_info['name']} 的思维导图结构：\n\n"
                     mindmap_text += mindmap_to_text(mindmap_data)
-                    
+
                     logger.debug(f"Successfully retrieved mindmap for {db_id}")
                     return mindmap_text
-                
+
                 except Exception as e:
                     logger.error(f"Error getting mindmap for {db_id}: {e}")
                     return f"获取思维导图失败: {str(e)}"
-            
+
             # 默认：检索知识库
             retriever = retriever_info["retriever"]
             try:

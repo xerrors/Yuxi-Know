@@ -198,6 +198,11 @@ class ChromaKB(KnowledgeBase):
 
             self._add_to_processing_queue(file_id)
             try:
+                # 确保params中包含db_id（ZIP文件处理需要）
+                if params is None:
+                    params = {}
+                params["db_id"] = db_id
+
                 # 根据内容类型处理内容
                 if content_type == "file":
                     markdown_content = await process_file_to_markdown(item, params=params)

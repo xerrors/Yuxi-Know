@@ -137,6 +137,9 @@ const resizeHandle = ref(null);
 // 添加文件弹窗
 const addFilesModalVisible = ref(false);
 
+// 标记是否是初次加载
+const isInitialLoad = ref(true);
+
 // 显示添加文件弹窗
 const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
@@ -165,7 +168,6 @@ watch(() => route.params.database_id, async (newId, oldId) => {
 
 // 监听文件列表变化，自动更新思维导图和生成示例问题
 const previousFileCount = ref(0);
-const isInitialLoad = ref(true); // 标记是否是初次加载
 
 watch(
   () => database.value?.files,

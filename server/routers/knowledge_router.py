@@ -2,6 +2,7 @@ import aiofiles
 import asyncio
 import os
 import traceback
+import textwrap
 from collections.abc import Mapping
 from urllib.parse import quote, unquote
 
@@ -235,18 +236,13 @@ async def add_documents(
                 progress = 5.0 + (idx / total) * 90.0  # 5% ~ 95%
                 await context.set_progress(progress, f"正在处理第 {idx}/{total} 个文档")
 
-                # 处理单个文档
                 try:
                     result = await knowledge_base.add_content(db_id, [item], params=params)
                     processed_items.extend(result)
                 except Exception as doc_error:
-                    # 处理单个文档处理的所有异常（包括超时）
                     logger.error(f"Document processing failed for {item}: {doc_error}")
-
-                    # 判断是否是超时异常
                     error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
                     error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
-
                     processed_items.append(
                         {
                             "item": item,
@@ -820,50 +816,9 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
 # =============================================================================
 
 
-@knowledge.post("/databases/{db_id}/sample-questions")
-async def generate_sample_questions(
-    db_id: str,
-    request_body: dict = Body(...),
-    current_user: User = Depends(get_admin_user),
-):
-    """
-    AI生成针对知识库的测试问题
-    
-    Args:
-        db_id: 知识库ID
-        request_body: 请求体，包含 count 字段
-        
-    Returns:
-        生成的问题列表
-    """
-    try:
-        from src.models import select_model
-        import json
-        
-        # 从请求体中提取参数
-        count = request_body.get("count", 10)
-        
-        # 获取知识库信息
-        db_info = knowledge_base.get_database_info(db_id)
-        if not db_info:
-            raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
-        
-        db_name = db_info.get("name", "")
-        all_files = db_info.get("files", {})
-        
-        if not all_files:
-            raise HTTPException(status_code=400, detail="知识库中没有文件")
-        
-        # 收集文件信息
-        files_info = []
-        for file_id, file_info in all_files.items():
-            files_info.append({
-                "filename": file_info.get("filename", ""),
-                "type": file_info.get("type", ""),
-            })
-        
-        # 构建AI提示词
-        system_prompt = """你是一个专业的知识库问答测试专家。你的任务是根据知识库中的文件列表，生成有价值的测试问题。
+SAMPLE_QUESTIONS_SYSTEM_PROMPT = """你是一个专业的知识库问答测试专家。
+
+你的任务是根据知识库中的文件列表，生成有价值的测试问题。
 
 要求：
 1. 问题要具体、有针对性，基于文件名称和类型推测可能的内容
@@ -884,38 +839,85 @@ async def generate_sample_questions(
 }
 ```
 """
-        
+
+
+@knowledge.post("/databases/{db_id}/sample-questions")
+async def generate_sample_questions(
+    db_id: str,
+    request_body: dict = Body(...),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    AI生成针对知识库的测试问题
+
+    Args:
+        db_id: 知识库ID
+        request_body: 请求体，包含 count 字段
+
+    Returns:
+        生成的问题列表
+    """
+    try:
+        from src.models import select_model
+        import json
+
+        # 从请求体中提取参数
+        count = request_body.get("count", 10)
+
+        # 获取知识库信息
+        db_info = knowledge_base.get_database_info(db_id)
+        if not db_info:
+            raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
+
+        db_name = db_info.get("name", "")
+        all_files = db_info.get("files", {})
+
+        if not all_files:
+            raise HTTPException(status_code=400, detail="知识库中没有文件")
+
+        # 收集文件信息
+        files_info = []
+        for file_id, file_info in all_files.items():
+            files_info.append(
+                {
+                    "filename": file_info.get("filename", ""),
+                    "type": file_info.get("type", ""),
+                }
+            )
+
+        # 构建AI提示词
+        system_prompt = SAMPLE_QUESTIONS_SYSTEM_PROMPT
+
         # 构建用户消息
-        files_text = "\n".join([
-            f"- {f['filename']} ({f['type']})" 
-            for f in files_info[:20]  # 最多列举20个文件
-        ])
-        
+        files_text = "\n".join(
+            [
+                f"- {f['filename']} ({f['type']})"
+                for f in files_info[:20]  # 最多列举20个文件
+            ]
+        )
+
         file_count_text = f"（共{len(files_info)}个文件）" if len(files_info) > 20 else ""
-        
-        user_message = f"""请为知识库"{db_name}"生成{count}个测试问题。
 
-知识库文件列表{file_count_text}：
-{files_text}
+        user_message = textwrap.dedent(f"""请为知识库"{db_name}"生成{count}个测试问题。
 
-请根据这些文件的名称和类型，生成{count}个有价值的测试问题。"""
-        
+            知识库文件列表{file_count_text}：
+            {files_text}
+
+            请根据这些文件的名称和类型，生成{count}个有价值的测试问题。""")
+
         # 调用AI生成
         logger.info(f"开始生成知识库问题，知识库: {db_name}, 文件数量: {len(files_info)}, 问题数量: {count}")
-        
+
         # 选择模型并调用
         model = select_model()
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
         response = model.call(messages, stream=False)
-        
+
         # 解析AI返回的JSON
         try:
             # 提取JSON内容
-            content = response.content if hasattr(response, 'content') else str(response)
-            
+            content = response.content if hasattr(response, "content") else str(response)
+
             # 尝试从markdown代码块中提取JSON
             if "```json" in content:
                 json_start = content.find("```json") + 7
@@ -925,15 +927,15 @@ async def generate_sample_questions(
                 json_start = content.find("```") + 3
                 json_end = content.find("```", json_start)
                 content = content[json_start:json_end].strip()
-            
+
             questions_data = json.loads(content)
             questions = questions_data.get("questions", [])
-            
+
             if not questions or not isinstance(questions, list):
                 raise ValueError("AI返回的问题格式不正确")
-            
+
             logger.info(f"成功生成{len(questions)}个问题")
-            
+
             # 保存问题到知识库元数据
             try:
                 async with knowledge_base._metadata_lock:
@@ -946,7 +948,7 @@ async def generate_sample_questions(
                     logger.info(f"成功保存 {len(questions)} 个问题到知识库 {db_id}")
             except Exception as save_error:
                 logger.error(f"保存问题失败: {save_error}")
-            
+
             return {
                 "message": "success",
                 "questions": questions,
@@ -954,11 +956,11 @@ async def generate_sample_questions(
                 "db_id": db_id,
                 "db_name": db_name,
             }
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"AI返回的JSON解析失败: {e}, 原始内容: {content}")
             raise HTTPException(status_code=500, detail=f"AI返回格式错误: {str(e)}")
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -970,10 +972,10 @@ async def generate_sample_questions(
 async def get_sample_questions(db_id: str, current_user: User = Depends(get_admin_user)):
     """
     获取知识库的测试问题
-    
+
     Args:
         db_id: 知识库ID
-        
+
     Returns:
         问题列表
     """
@@ -981,20 +983,20 @@ async def get_sample_questions(db_id: str, current_user: User = Depends(get_admi
         # 直接从全局元数据中读取
         if db_id not in knowledge_base.global_databases_meta:
             raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
-        
+
         db_meta = knowledge_base.global_databases_meta[db_id]
         questions = db_meta.get("sample_questions", [])
-        
+
         if not questions:
             raise HTTPException(status_code=404, detail="该知识库还没有生成测试问题")
-        
+
         return {
             "message": "success",
             "questions": questions,
             "count": len(questions),
             "db_id": db_id,
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1025,7 +1027,7 @@ async def upload_file(
     if ext == ".jsonl":
         if allow_jsonl is not True or db_id is not None:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
-    elif not is_supported_file_extension(file.filename):
+    elif not (is_supported_file_extension(file.filename) or ext == ".zip"):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     # 根据db_id获取上传路径，如果db_id为None则使用默认路径
@@ -1064,352 +1066,6 @@ async def upload_file(
         "db_id": db_id,
         "content_hash": content_hash,
     }
-
-
-@knowledge.post("/files/upload-folder")
-async def upload_folder(
-    file: UploadFile = File(...),
-    db_id: str = Query(...),
-    current_user: User = Depends(get_admin_user),
-):
-    """
-    上传文件夹（zip格式），包含markdown文件和图片
-    文件夹结构应该是：
-    - folder_name/
-      - full.md (或其他 .md 文件)
-      - images/
-        - image1.jpg
-        - image2.png
-        ...
-    
-    返回格式与文件上传保持一致：
-    {
-        "message": "File successfully uploaded",
-        "file_path": "/path/to/uploaded/folder.zip",
-        "db_id": "db_id",
-        "content_hash": "hash_value"
-    }
-    """
-    if not file.filename or not file.filename.endswith('.zip'):
-        raise HTTPException(status_code=400, detail="只支持上传 .zip 格式的文件夹")
-    
-    if not db_id:
-        raise HTTPException(status_code=400, detail="必须指定知识库ID (db_id)")
-    
-    try:
-        # 读取zip文件内容
-        zip_bytes = await file.read()
-        
-        # 计算内容hash（用于重复检查）
-        content_hash = await asyncio.to_thread(calculate_content_hash, zip_bytes)
-        
-        # 检查文件是否已存在
-        file_exists = await asyncio.to_thread(knowledge_base.file_existed_in_db, db_id, content_hash)
-        if file_exists:
-            raise HTTPException(
-                status_code=409,
-                detail="数据库中已经存在了相同文件，File with the same content already exists in this database",
-            )
-        
-        # 获取上传目录
-        upload_dir = knowledge_base.get_db_upload_path(db_id)
-        await asyncio.to_thread(os.makedirs, upload_dir, exist_ok=True)
-        
-        # 生成唯一的文件名
-        basename = os.path.splitext(file.filename)[0]
-        filename = f"{basename}_folder_{hashstr(basename, 4, with_salt=True)}.zip"
-        file_path = os.path.join(upload_dir, filename)
-        
-        # 保存zip文件
-        async with aiofiles.open(file_path, 'wb') as f:
-            await f.write(zip_bytes)
-        
-        return {
-            "message": "File successfully uploaded",
-            "file_path": file_path,
-            "db_id": db_id,
-            "content_hash": content_hash,
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"上传文件夹失败: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"上传文件夹失败: {str(e)}")
-
-
-@knowledge.post("/files/process-folder")
-async def process_folder(
-    file_path: str = Body(...),
-    db_id: str = Body(...),
-    content_hash: str = Body(...),
-    current_user: User = Depends(get_admin_user),
-):
-    """
-    处理已上传的文件夹（zip格式），包含markdown文件和图片
-    这个端点会异步处理文件夹内容，提取markdown和图片，并添加到知识库
-    
-    返回任务ID用于跟踪处理进度
-    """
-    import zipfile
-    import re
-    from pathlib import Path
-    from src.storage.minio import get_minio_client
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="文件夹文件不存在")
-    
-    if not db_id:
-        raise HTTPException(status_code=400, detail="必须指定知识库ID (db_id)")
-    
-    try:
-        # 创建任务处理函数
-        async def process_folder_task(context: TaskContext):
-            await context.set_message("开始处理文件夹")
-            await context.set_progress(5.0, "解压zip文件")
-            
-            try:
-                import tempfile
-                
-                # 创建临时目录解压
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    # 解压zip文件
-                    await context.set_progress(10.0, "正在解压zip文件")
-                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
-                        zip_ref.extractall(tmp_dir)
-                    
-                    # 查找markdown文件（优先找 full.md，否则找第一个 .md 文件）
-                    await context.set_progress(20.0, "查找markdown文件")
-                    md_files = list(Path(tmp_dir).rglob('*.md'))
-                    if not md_files:
-                        raise ValueError("文件夹中未找到 .md 文件")
-                    
-                    # 优先使用 full.md
-                    md_file = None
-                    for f in md_files:
-                        if f.name == 'full.md':
-                            md_file = f
-                            break
-                    if not md_file:
-                        md_file = md_files[0]
-                    
-                    logger.info(f"找到markdown文件: {md_file}")
-                    
-                    # 读取markdown内容
-                    with open(md_file, 'r', encoding='utf-8') as f:
-                        markdown_content = f.read()
-                    
-                    # 查找images文件夹
-                    await context.set_progress(30.0, "查找图片文件")
-                    images_dir = None
-                    potential_images_dir = md_file.parent / 'images'
-                    if potential_images_dir.exists() and potential_images_dir.is_dir():
-                        images_dir = potential_images_dir
-                    else:
-                        potential_images_dir = md_file.parent.parent / 'images'
-                        if potential_images_dir.exists() and potential_images_dir.is_dir():
-                            images_dir = potential_images_dir
-                    
-                    if not images_dir:
-                        logger.warning("未找到 images 文件夹，将只保存markdown内容")
-                    else:
-                        logger.info(f"找到images文件夹: {images_dir}")
-                    
-                    # 获取MinIO客户端
-                    await context.set_progress(40.0, "准备上传图片")
-                    minio_client = get_minio_client()
-                    bucket_name = "kb-images"
-                    minio_client.ensure_bucket_exists(bucket_name)
-                    
-                    # 生成文件ID
-                    file_id = hashstr(str(md_file.name), length=16)
-                    
-                    # 上传图片并更新markdown链接
-                    image_map = {}  # 本地路径 -> MinIO URL 映射
-                    
-                    if images_dir and images_dir.exists():
-                        # 获取所有图片文件
-                        image_files = list(images_dir.glob('*'))
-                        image_files = [f for f in image_files if f.is_file() and f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']]
-                        
-                        logger.info(f"找到 {len(image_files)} 个图片文件")
-                        
-                        total_images = len(image_files)
-                        for idx, img_file in enumerate(image_files):
-                            await context.raise_if_cancelled()
-                            
-                            progress = 40.0 + (idx / total_images) * 30.0  # 40% ~ 70%
-                            await context.set_progress(progress, f"正在上传图片 {idx + 1}/{total_images}")
-                            
-                            try:
-                                # 读取图片
-                                with open(img_file, 'rb') as f:
-                                    img_data = f.read()
-                                
-                                # 构建MinIO对象名
-                                object_name = f"{db_id}/{file_id}/images/{img_file.name}"
-                                
-                                # 确定content_type
-                                content_type = "image/jpeg"
-                                if img_file.suffix.lower() in ['.png']:
-                                    content_type = "image/png"
-                                elif img_file.suffix.lower() in ['.gif']:
-                                    content_type = "image/gif"
-                                elif img_file.suffix.lower() in ['.webp']:
-                                    content_type = "image/webp"
-                                
-                                # 上传到MinIO
-                                result = minio_client.upload_file(
-                                    bucket_name=bucket_name,
-                                    object_name=object_name,
-                                    data=img_data,
-                                    content_type=content_type
-                                )
-                                
-                                # 记录映射关系
-                                image_map[f"images/{img_file.name}"] = result.url
-                                image_map[f"/images/{img_file.name}"] = result.url
-                                image_map[img_file.name] = result.url
-                                
-                                logger.debug(f"图片上传成功: {img_file.name} -> {result.url}")
-                            
-                            except Exception as e:
-                                logger.error(f"上传图片失败 {img_file.name}: {e}")
-                                continue
-                        
-                        # 替换markdown中的图片链接
-                        await context.set_progress(70.0, "更新markdown图片链接")
-                        def replace_image_link(match):
-                            alt_text = match.group(1) or ""
-                            img_path = match.group(2)
-                            
-                            for pattern, url in image_map.items():
-                                if img_path.endswith(pattern) or img_path == pattern:
-                                    return f"![{alt_text}]({url})"
-                            
-                            filename = os.path.basename(img_path)
-                            if filename in image_map:
-                                return f"![{alt_text}]({image_map[filename]})"
-                            
-                            return match.group(0)
-                        
-                        pattern = r'!\[([^\]]*)\]\(([^)]+)\)'
-                        markdown_content = re.sub(pattern, replace_image_link, markdown_content)
-                    
-                    # 保存markdown内容到临时文件
-                    await context.set_progress(75.0, "准备添加到知识库")
-                    temp_md_path = os.path.join(tmp_dir, f"{file_id}.md")
-                    with open(temp_md_path, 'w', encoding='utf-8') as f:
-                        f.write(markdown_content)
-                    
-                    # 计算内容hash
-                    content_hash = await asyncio.to_thread(calculate_content_hash, markdown_content.encode('utf-8'))
-                    
-                    # 检查文件是否已存在
-                    file_exists = await asyncio.to_thread(knowledge_base.file_existed_in_db, db_id, content_hash)
-                    if file_exists:
-                        raise ValueError("数据库中已经存在了相同内容")
-                    
-                    # 使用文件名作为文档名
-                    doc_name = os.path.basename(file_path).replace('_folder_', '_').replace('.zip', '')
-                    
-                    # 添加到知识库
-                    await context.set_progress(80.0, "正在添加到知识库")
-                    items = [temp_md_path]
-                    params = {"filename": f"{doc_name}.md"}
-                    
-                    result = await knowledge_base.add_content(db_id, items, params=params)
-                    
-                    # 保存图片元数据到文件信息中
-                    if image_map:
-                        try:
-                            await context.set_progress(90.0, "保存图片元数据")
-                            # 直接修改global_databases_meta，而不是get_database_info返回的副本
-                            async with knowledge_base._metadata_lock:
-                                if db_id not in knowledge_base.global_databases_meta:
-                                    knowledge_base.global_databases_meta[db_id] = {}
-                                
-                                global_meta = knowledge_base.global_databases_meta[db_id]
-                                if "files" not in global_meta:
-                                    global_meta["files"] = {}
-                                
-                                # 查找对应的文件（通过content_hash匹配）
-                                db_info = knowledge_base.get_database_info(db_id)
-                                if db_info:
-                                    files = db_info.get("files", {})
-                                    for file_id_key, file_info in files.items():
-                                        if file_info.get("content_hash") == content_hash:
-                                            images_info = []
-                                            for local_path, url in image_map.items():
-                                                if local_path.startswith('images/'):
-                                                    filename = os.path.basename(local_path)
-                                                    images_info.append({
-                                                        "name": filename,
-                                                        "url": url,
-                                                        "path": local_path
-                                                    })
-                                            
-                                            if images_info:
-                                                # 直接保存到global_databases_meta
-                                                if file_id_key not in global_meta["files"]:
-                                                    global_meta["files"][file_id_key] = {}
-                                                global_meta["files"][file_id_key]["images"] = images_info
-                                                knowledge_base._save_global_metadata()
-                                                logger.info(f"已保存 {len(images_info)} 张图片信息到文件 {file_id_key}")
-                                            break
-                        except Exception as e:
-                            logger.warning(f"保存图片元数据失败: {e}")
-                    
-                    await context.set_progress(100.0, "文件夹处理完成")
-                    
-                    # 清理上传的zip文件
-                    try:
-                        if os.path.exists(file_path):
-                            await asyncio.to_thread(os.remove, file_path)
-                            logger.debug(f"已清理上传的zip文件: {file_path}")
-                    except Exception as e:
-                        logger.warning(f"清理上传的zip文件失败: {e}")
-                    
-                    return {
-                        "db_id": db_id,
-                        "file_id": file_id,
-                        "markdown_file": str(md_file.name),
-                        "images_count": len(image_map),
-                        "content_hash": content_hash,
-                    }
-            
-            except asyncio.CancelledError:
-                await context.set_progress(100.0, "任务已取消")
-                # 清理上传的zip文件
-                try:
-                    if os.path.exists(file_path):
-                        await asyncio.to_thread(os.remove, file_path)
-                except Exception:
-                    pass
-                raise
-            except Exception as e:
-                logger.error(f"处理文件夹失败: {e}, {traceback.format_exc()}")
-                await context.set_error(str(e))
-                raise
-        
-        # 创建任务
-        task_id = await tasker.create_task(
-            name=f"处理文件夹: {os.path.basename(file_path)}",
-            task_func=process_folder_task
-        )
-        
-        return {
-            "message": "success",
-            "task_id": task_id,
-            "file_path": file_path,
-            "db_id": db_id,
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"处理文件夹失败: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"处理文件夹失败: {str(e)}")
 
 
 @knowledge.get("/files/supported-types")

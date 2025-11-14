@@ -1,5 +1,7 @@
 import asyncio
 import os
+import re
+import zipfile
 from pathlib import Path
 
 from langchain_community.document_loaders import (
@@ -13,7 +15,9 @@ from langchain_community.document_loaders import (
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from src.utils import logger
+from src.knowledge.utils import calculate_content_hash
+from src.storage.minio import get_minio_client
+from src.utils import hashstr, logger
 
 SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".txt",
@@ -33,6 +37,7 @@ SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".bmp",
     ".tiff",
     ".tif",
+    ".zip",
 )
 
 
@@ -265,10 +270,15 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
     Args:
         file_path: 文件路径
-        params: 处理参数
+        params: 处理参数，对于ZIP文件需要包含 db_id
 
     Returns:
         markdown格式内容
+
+    Note:
+        对于ZIP文件，会在params中保存处理结果供调用方使用：
+        - params['_zip_images_info']: 图片信息列表
+        - params['_zip_content_hash']: 内容哈希值
     """
     file_path_obj = Path(file_path)
     file_ext = file_path_obj.suffix.lower()
@@ -350,9 +360,194 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
         json_str = json.dumps(data, ensure_ascii=False, indent=2)
         return f"# {file_path_obj.name}\n\n```json\n{json_str}\n```"
 
+    elif file_ext == ".zip":
+        if not params or "db_id" not in params:
+            raise ValueError("ZIP文件处理需要在params中提供db_id参数")
+
+        result = await asyncio.to_thread(_process_zip_file, str(file_path_obj), params["db_id"])
+
+        # 将处理结果保存到params中供调用方使用
+        params["_zip_images_info"] = result["images_info"]
+        params["_zip_content_hash"] = result["content_hash"]
+
+        return result["markdown_content"]
+
     else:
         # 尝试作为文本文件读取
         raise ValueError(f"Unsupported file type: {file_ext}")
+
+
+def _process_zip_file(zip_path: str, db_id: str) -> dict:
+    """
+    处理ZIP文件，提取markdown内容和图片（内部函数）
+
+    Args:
+        zip_path: ZIP文件路径
+        db_id: 数据库ID
+
+    Returns:
+        dict: {
+            "markdown_content": str,      # markdown内容
+            "content_hash": str,         # 内容哈希值
+            "images_info": list[dict]    # 图片信息列表
+        }
+
+    Raises:
+        FileNotFoundError: ZIP文件不存在
+        ValueError: ZIP文件格式错误或内容不符合要求
+    """
+    # 1. 安全检查
+    if not os.path.exists(zip_path):
+        raise FileNotFoundError(f"ZIP 文件不存在: {zip_path}")
+
+    # 2. 解压ZIP并提取内容
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        # 安全检查：防止路径遍历攻击
+        for name in zf.namelist():
+            if name.startswith("/") or name.startswith("\\"):
+                raise ValueError(f"ZIP 包含不安全路径: {name}")
+            if ".." in Path(name).parts:
+                raise ValueError(f"ZIP 路径包含上级引用: {name}")
+
+        # 查找markdown文件
+        md_files = [n for n in zf.namelist() if n.lower().endswith(".md")]
+        if not md_files:
+            raise ValueError("压缩包中未找到 .md 文件")
+
+        # 优先使用 full.md，否则使用第一个md文件
+        md_file = next((n for n in md_files if Path(n).name == "full.md"), md_files[0])
+
+        # 读取markdown内容
+        with zf.open(md_file) as f:
+            markdown_content = f.read().decode("utf-8")
+
+        # 3. 处理图片
+        images_info = []
+        images_dir = _find_images_directory(zf, md_file)
+
+        if images_dir:
+            images_info = _process_images(zf, images_dir, db_id, md_file)
+            markdown_content = _replace_image_links(markdown_content, images_info)
+
+    # 4. 生成结果
+    content_hash = calculate_content_hash(markdown_content.encode("utf-8"))
+
+    return {
+        "markdown_content": markdown_content,
+        "content_hash": content_hash,
+        "images_info": images_info,
+    }
+
+
+def _find_images_directory(zip_file: zipfile.ZipFile, md_file_path: str) -> str | None:
+    """查找images目录"""
+    md_parent = Path(md_file_path).parent
+
+    # 候选目录
+    candidates = []
+    if str(md_parent) != ".":
+        candidates.extend([str(md_parent / "images"), str(md_parent.parent / "images")])
+    candidates.append("images")
+
+    # 查找存在的目录
+    for cand in candidates:
+        cand_clean = cand.rstrip("/")
+        if any(n.startswith(cand_clean + "/") for n in zip_file.namelist()):
+            return cand_clean
+
+    return None
+
+
+def _process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str, md_file_path: str) -> list[dict]:
+    """处理图片：上传到MinIO并返回信息"""
+    # 支持的图片格式
+    SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    CONTENT_TYPE_MAP = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+    }
+
+    images = []
+    image_names = [n for n in zip_file.namelist() if n.startswith(images_dir + "/")]
+
+    # 上传图片到MinIO
+    minio_client = get_minio_client()
+    bucket_name = "kb-images"
+    minio_client.ensure_bucket_exists(bucket_name)
+
+    file_id = hashstr(Path(md_file_path).name, length=16)
+
+    for img_name in image_names:
+        suffix = Path(img_name).suffix.lower()
+        if suffix not in SUPPORTED_EXTENSIONS:
+            continue
+
+        try:
+            # 读取图片数据
+            with zip_file.open(img_name) as f:
+                data = f.read()
+
+            # 上传到MinIO
+            object_name = f"{db_id}/{file_id}/images/{Path(img_name).name}"
+            content_type = CONTENT_TYPE_MAP.get(suffix, "image/jpeg")
+
+            result = minio_client.upload_file(
+                bucket_name=bucket_name,
+                object_name=object_name,
+                data=data,
+                content_type=content_type,
+            )
+
+            # 记录图片信息
+            img_info = {"name": Path(img_name).name, "url": result.url, "path": f"images/{Path(img_name).name}"}
+            images.append(img_info)
+
+            logger.debug(f"图片上传成功: {Path(img_name).name} -> {result.url}")
+
+        except Exception as e:
+            logger.error(f"上传图片失败 {Path(img_name).name}: {e}")
+            continue
+
+    return images
+
+
+def _replace_image_links(markdown_content: str, images: list[dict]) -> str:
+    """替换markdown中的图片链接为MinIO URL"""
+    if not images:
+        return markdown_content
+
+    # 构建路径映射
+    image_map = {}
+    for img in images:
+        path = img["path"]
+        url = img["url"]
+        image_map[path] = url
+        image_map[f"/{path}"] = url
+        image_map[img["name"]] = url
+
+    def replace_link(match):
+        alt_text = match.group(1) or ""
+        img_path = match.group(2)
+
+        # 尝试匹配各种路径格式
+        for pattern, url in image_map.items():
+            if img_path.endswith(pattern) or img_path == pattern:
+                return f"![{alt_text}]({url})"
+
+        # 尝试文件名匹配
+        filename = os.path.basename(img_path)
+        if filename in image_map:
+            return f"![{alt_text}]({image_map[filename]})"
+
+        return match.group(0)
+
+    # 使用正则表达式替换图片链接
+    pattern = r"!\[([^\]]*)\]\(([^)]+)\)"
+    return re.sub(pattern, replace_link, markdown_content)
 
 
 async def process_url_to_markdown(url: str, params: dict | None = None) -> str:

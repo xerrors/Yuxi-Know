@@ -12,11 +12,13 @@
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - 集成 neo4j mcp （或者自己构建工具）
 - 工具组件重构以支持 todo，files 等渲染。
+- 文档解析部分的 markdown 中的图片替换为内部可访问的链接
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
 - DeepSeek 官方接口适配会出现问题
 - 当前版本如果调用结果为空的时候，工具调用状态会一直处于调用状态，尽管调用是成功的
+- 目前的知识库的图片存在公开访问风险
 
 ### 新增
 - 优化知识库详情页面，更加简洁清晰
@@ -24,6 +26,9 @@
 - 增强文件下载功能
 - 新增多模态模型支持（当前仅支持图片，详见文档）
 - 新建 DeepAgents 智能体（Demo）
+- 新增基于知识库文件生成思维导图功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
+- 新增基于知识库文件生成示例问题功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
+- 新增知识库支持文件夹/压缩包上传的功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
 
 ### 修复
 - 修复重排序模型实际未生效的问题
