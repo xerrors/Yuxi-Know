@@ -102,7 +102,6 @@ async def set_default_agent(request_data: dict = Body(...), current_user=Depends
 
 
 async def _get_langgraph_messages(agent_instance, config_dict):
-    """获取LangGraph中的消息"""
     graph = await agent_instance.get_graph()
     state = await graph.aget_state(config_dict)
 
@@ -111,6 +110,24 @@ async def _get_langgraph_messages(agent_instance, config_dict):
         return None
 
     return state.values.get("messages", [])
+
+
+def _extract_agent_state(values: dict) -> dict:
+    if not isinstance(values, dict):
+        return {}
+
+    def _norm_list(v):
+        if v is None:
+            return []
+        if isinstance(v, (list, tuple)):
+            return list(v)
+        return [v]
+
+    result = {}
+    result["todos"] = _norm_list(values.get("todos"))[:20]
+    result["files"] = _norm_list(values.get("files"))[:50]
+
+    return result
 
 
 def _get_existing_message_ids(conv_mgr, thread_id):
@@ -521,6 +538,7 @@ async def chat_agent(
 
         try:
             full_msg = None
+            langgraph_config = {"configurable": input_context}
             async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                 if isinstance(msg, AIMessageChunk):
                     full_msg = msg if not full_msg else full_msg + msg
@@ -534,7 +552,18 @@ async def chat_agent(
                     yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
 
                 else:
-                    yield make_chunk(msg=msg.model_dump(), metadata=metadata, status="loading")
+                    msg_dict = msg.model_dump()
+                    yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
+
+                    try:
+                        if msg_dict.get("type") == "tool":
+                            graph = await agent.get_graph()
+                            state = await graph.aget_state(langgraph_config)
+                            agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
+                            if agent_state:
+                                yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
+                    except Exception:
+                        pass
 
             if (
                 conf.enable_content_guard
@@ -548,13 +577,22 @@ async def chat_agent(
                 return
 
             # After streaming finished, check for interrupts and save messages
-            langgraph_config = {"configurable": input_context}
 
             # Check for human approval interrupts
             async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
                 yield chunk
 
             meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+            try:
+                graph = await agent.get_graph()
+                state = await graph.aget_state(langgraph_config)
+                agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
+            except Exception:
+                agent_state = {}
+
+            if agent_state:
+                yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
+
             yield make_chunk(status="finished", meta=meta)
 
             # Save all messages from LangGraph state

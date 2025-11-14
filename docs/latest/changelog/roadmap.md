@@ -6,7 +6,6 @@
 
 ### 看板
 
-- 新建 DeepAgents 智能体（暂时没有场景）
 - 统一图谱数据结构，优化可视化方式 [#298](https://github.com/xerrors/Yuxi-Know/issues/298) [#273](https://github.com/xerrors/Yuxi-Know/issues/273) <Badge type="info" text="0.4" />
 - 集成智能体评估，首先使用命令行来实现，然后考虑放在 UI 里面展示
 - 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />
@@ -17,12 +16,14 @@
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
 - DeepSeek 官方接口适配会出现问题
+- 当前版本如果调用结果为空的时候，工具调用状态会一直处于调用状态，尽管调用是成功的
 
 ### 新增
 - 优化知识库详情页面，更加简洁清晰
 - 新增对于上传文件的智能体中间件
 - 增强文件下载功能
 - 新增多模态模型支持（当前仅支持图片，详见文档）
+- 新建 DeepAgents 智能体（Demo）
 
 ### 修复
 - 修复重排序模型实际未生效的问题
