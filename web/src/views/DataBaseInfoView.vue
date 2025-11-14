@@ -29,8 +29,16 @@
         </a-tab-pane>
         <a-tab-pane key="query" tab="检索测试">
           <QuerySection
+            ref="querySectionRef"
             :visible="true"
             @toggle-visible="() => {}"
+          />
+        </a-tab-pane>
+        <a-tab-pane key="mindmap" tab="知识导图">
+          <MindMapSection
+            v-if="databaseId"
+            :database-id="databaseId"
+            ref="mindmapSectionRef"
           />
         </a-tab-pane>
         <a-tab-pane key="config" tab="检索配置">
@@ -53,6 +61,7 @@ import FileUploadModal from '@/components/FileUploadModal.vue';
 import KnowledgeGraphSection from '@/components/KnowledgeGraphSection.vue';
 import QuerySection from '@/components/QuerySection.vue';
 import SearchConfigTab from '@/components/SearchConfigTab.vue';
+import MindMapSection from '@/components/MindMapSection.vue';
 
 const route = useRoute();
 const store = useDatabaseStore();
@@ -68,6 +77,12 @@ const isGraphSupported = computed(() => {
 
 // Tab 切换逻辑 - 智能默认
 const activeTab = ref('query');
+
+// 思维导图引用
+const mindmapSectionRef = ref(null);
+
+// 查询区域引用
+const querySectionRef = ref(null);
 
 
 const resetGraphStats = () => {
@@ -134,7 +149,10 @@ const resetFileSelectionState = () => {
   store.state.fileDetailModalVisible = false;
 };
 
-watch(() => route.params.database_id, async (newId) => {
+watch(() => route.params.database_id, async (newId, oldId) => {
+    // 切换知识库时，标记为初次加载
+    isInitialLoad.value = true;
+    
     store.databaseId = newId;
     resetFileSelectionState();
     resetGraphStats();
@@ -143,6 +161,85 @@ watch(() => route.params.database_id, async (newId) => {
     store.startAutoRefresh();
   },
   { immediate: true }
+);
+
+// 监听文件列表变化，自动更新思维导图和生成示例问题
+const previousFileCount = ref(0);
+const isInitialLoad = ref(true); // 标记是否是初次加载
+
+watch(
+  () => database.value?.files,
+  (newFiles, oldFiles) => {
+    if (!newFiles) return;
+    
+    const newFileCount = Object.keys(newFiles).length;
+    const oldFileCount = previousFileCount.value;
+    
+    // 首次加载时，只更新计数，不触发任何操作
+    if (isInitialLoad.value) {
+      previousFileCount.value = newFileCount;
+      isInitialLoad.value = false;
+      return;
+    }
+    
+    // 如果文件数量发生变化（增加或减少），都重新生成问题和思维导图
+    if (newFileCount !== oldFileCount) {
+      const changeType = newFileCount > oldFileCount ? '增加' : '减少';
+      console.log(`文件数量从 ${oldFileCount} ${changeType}到 ${newFileCount}，准备重新生成问题和思维导图`);
+      
+      // 只要有文件，就重新生成思维导图（无论增加还是减少）
+      if (newFileCount > 0) {
+        setTimeout(() => {
+          if (mindmapSectionRef.value) {
+            if (oldFileCount === 0) {
+              // 首次添加文件，生成思维导图
+              console.log('首次添加文件，生成思维导图');
+              mindmapSectionRef.value.generateMindmap();
+            } else {
+              // 文件数量变化（增加或减少），重新生成思维导图
+              console.log(`文件数量变化，重新生成思维导图`);
+              mindmapSectionRef.value.refreshMindmap();
+            }
+          }
+        }, 2000); // 等待2秒让后端处理完成
+      } else {
+        // 如果文件数量变为0，清空思维导图（如果需要的话）
+        console.log('文件数量为0，思维导图将自动清空');
+      }
+      
+      // 只要有文件，就重新生成问题（无论之前是否有问题）
+      if (newFileCount > 0) {
+        setTimeout(async () => {
+          console.log('文件数量变化，检查是否需要生成问题，querySectionRef:', querySectionRef.value);
+          if (querySectionRef.value) {
+            console.log('开始重新生成问题...');
+            await querySectionRef.value.generateSampleQuestions(true);
+          } else {
+            console.warn('querySectionRef 未准备好，稍后重试');
+            // 如果组件还没准备好，再等一会儿
+            setTimeout(async () => {
+              if (querySectionRef.value) {
+                console.log('延迟后开始生成问题...');
+                await querySectionRef.value.generateSampleQuestions(true);
+              }
+            }, 2000);
+          }
+        }, 3000); // 等待3秒让后端处理完成
+      } else {
+        // 如果文件数量变为0，清空问题列表
+        console.log('文件数量为0，清空问题列表');
+        setTimeout(() => {
+          if (querySectionRef.value) {
+            // 清空问题列表
+            querySectionRef.value.clearQuestions();
+          }
+        }, 1000);
+      }
+    }
+    
+    previousFileCount.value = newFileCount;
+  },
+  { deep: true }
 );
 
 // 组件挂载时启动示例轮播
