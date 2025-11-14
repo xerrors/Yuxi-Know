@@ -194,11 +194,6 @@ const validToolCalls = computed(() => {
 });
 
 const parsedData = computed(() => {
-  // 调试工具调用处理
-  if (validToolCalls.value && validToolCalls.value.length > 0) {
-    console.log('Valid tool calls in message:', validToolCalls.value);
-  }
-
   // Start with default values from the prop to avoid mutation.
   let content = props.message.content.trim() || '';
   let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';

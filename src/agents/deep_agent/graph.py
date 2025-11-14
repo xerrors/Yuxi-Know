@@ -179,6 +179,8 @@ class DeepAgent(BaseAgent):
     context_schema = DeepContext
     capabilities = [
         "file_upload",
+        "todo",
+        "files",
     ]
 
     def __init__(self, **kwargs):
