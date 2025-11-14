@@ -1,4 +1,4 @@
-import { apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
+import { apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete, apiRequest } from './base'
 
 /**
  * 知识库管理API模块
@@ -160,6 +160,27 @@ export const queryApi = {
    */
   getKnowledgeBaseQueryParams: async (dbId) => {
     return apiAdminGet(`/api/knowledge/databases/${dbId}/query-params`)
+  },
+
+  /**
+   * 生成知识库的测试问题
+   * @param {string} dbId - 知识库ID
+   * @param {number} count - 生成问题数量，默认10
+   * @returns {Promise} - 生成的问题列表
+   */
+  generateSampleQuestions: async (dbId, count = 10) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/sample-questions`, {
+      count
+    })
+  },
+
+  /**
+   * 获取知识库的测试问题
+   * @param {string} dbId - 知识库ID
+   * @returns {Promise} - 问题列表
+   */
+  getSampleQuestions: async (dbId) => {
+    return apiAdminGet(`/api/knowledge/databases/${dbId}/sample-questions`)
   }
 }
 
@@ -195,6 +216,40 @@ export const fileApi = {
    */
   getSupportedFileTypes: async () => {
     return apiAdminGet('/api/knowledge/files/supported-types')
+  },
+
+  /**
+   * 上传文件夹（zip格式）
+   * @param {File} file - zip文件
+   * @param {string} dbId - 知识库ID
+   * @returns {Promise} - 上传结果
+   */
+  uploadFolder: async (file, dbId) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    // 使用 apiRequest 直接发送 FormData，但使用统一的错误处理
+    return apiRequest(`/api/knowledge/files/upload-folder?db_id=${dbId}`, {
+      method: 'POST',
+      body: formData,
+      // 不设置 Content-Type，让浏览器自动设置 boundary
+    }, true, 'json')  // 需要认证，期望JSON响应
+  },
+
+  /**
+   * 处理文件夹（异步处理zip文件）
+   * @param {Object} data - 处理参数
+   * @param {string} data.file_path - 已上传的zip文件路径
+   * @param {string} data.db_id - 知识库ID
+   * @param {string} data.content_hash - 文件内容哈希
+   * @returns {Promise} - 处理任务结果
+   */
+  processFolder: async ({ file_path, db_id, content_hash }) => {
+    return apiAdminPost('/api/knowledge/files/process-folder', {
+      file_path,
+      db_id,
+      content_hash
+    })
   }
 }
 

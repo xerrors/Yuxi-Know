@@ -12,7 +12,7 @@
         type="primary"
         @click="chunkData"
         :loading="chunkLoading"
-        :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
+        :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'folder' && folderFileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
       >
         添加到知识库
       </a-button>
@@ -39,7 +39,7 @@
         </div>
       </div>
 
-      <div class="ocr-config" v-if="uploadMode === 'file'">
+      <div class="ocr-config" v-if="uploadMode !== 'folder'">
         <a-form layout="horizontal">
           <a-form-item label="使用OCR" name="enable_ocr">
             <div class="ocr-controls">
@@ -98,8 +98,39 @@
         </a-upload-dragger>
       </div>
 
+      <!-- 文件夹上传区域 -->
+      <div class="upload" v-if="uploadMode === 'folder'">
+        <a-upload-dragger
+          class="upload-dragger"
+          v-model:fileList="folderFileList"
+          name="file"
+          :multiple="false"
+          :disabled="chunkLoading"
+          accept=".zip"
+          :before-upload="beforeFolderUpload"
+          :customRequest="handleFolderCustomRequest"
+          @change="handleFolderUploadChange"
+          @drop="handleDrop"
+        >
+          <p class="ant-upload-text">点击或者把zip文件夹拖拽到这里上传</p>
+          <p class="ant-upload-hint">
+            支持上传zip格式的文件夹，文件夹应包含：
+            <br />• full.md (或其他 .md 文件)
+            <br />• images/ 文件夹（包含图片文件）
+          </p>
+        </a-upload-dragger>
+        <div class="folder-upload-tip" style="margin-top: 12px; padding: 12px; background: #f0f7ff; border-radius: 4px; color: #666; font-size: 12px;">
+          <p style="margin: 0 0 8px 0; font-weight: 500;">📁 文件夹结构示例：</p>
+          <pre style="margin: 0; font-size: 11px; line-height: 1.6;">your-folder/
+  ├── full.md
+  └── images/
+      ├── image1.jpg
+      └── image2.png</pre>
+        </div>
+      </div>
+
       <!-- URL 输入区域 -->
-      <div class="url-input" v-else>
+      <div class="url-input" v-if="uploadMode === 'url'">
         <a-form layout="vertical">
           <a-form-item label="网页链接 (每行一个URL)">
             <a-textarea
@@ -137,11 +168,13 @@ import { ref, computed, onMounted, watch } from 'vue';
 import { message, Upload } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
+import { useTaskerStore } from '@/stores/tasker';
 import { ocrApi } from '@/apis/system_api';
 import { fileApi } from '@/apis/knowledge_api';
 import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 import {
   FileOutlined,
+  FolderOutlined,
   LinkOutlined,
   SettingOutlined,
   CheckCircleOutlined,
@@ -159,6 +192,7 @@ const props = defineProps({
 const emit = defineEmits(['update:visible']);
 
 const store = useDatabaseStore();
+const taskerStore = useTaskerStore();
 
 const DEFAULT_SUPPORTED_TYPES = [
   '.txt',
@@ -259,6 +293,13 @@ const uploadModeOptions = computed(() => [
     ]),
   },
   {
+    value: 'folder',
+    label: h('div', { class: 'segmented-option' }, [
+      h(FolderOutlined, { class: 'option-icon' }),
+      h('span', { class: 'option-text' }, '上传文件夹'),
+    ]),
+  },
+  {
     value: 'url',
     label: h('div', { class: 'segmented-option' }, [
       h(LinkOutlined, { class: 'option-icon' }),
@@ -269,6 +310,9 @@ const uploadModeOptions = computed(() => [
 
 // 文件列表
 const fileList = ref([]);
+
+// 文件夹列表（zip文件）
+const folderFileList = ref([]);
 
 // URL列表
 const urlList = ref('');
@@ -508,6 +552,110 @@ const handleFileUpload = (info) => {
 
 const handleDrop = () => {};
 
+// 文件夹上传前的验证
+const beforeFolderUpload = (file) => {
+  if (!file.name.endsWith('.zip')) {
+    message.error('只支持上传 .zip 格式的文件夹');
+    return Upload.LIST_IGNORE;
+  }
+  // 返回 true 允许上传，使用 customRequest 自定义上传逻辑
+  return true;
+};
+
+// 文件夹自定义上传处理 - 显示上传进度（与文件上传一致）
+const handleFolderCustomRequest = async (options) => {
+  const { file, onProgress, onSuccess, onError } = options;
+  
+  try {
+    // 验证文件格式
+    if (!file.name.endsWith('.zip')) {
+      onError(new Error('只支持上传 .zip 格式的文件夹'));
+      return;
+    }
+    
+    // 如果没有选择知识库，先标记为已选择，不上传
+    if (!databaseId.value) {
+      setTimeout(() => {
+        onSuccess({ 
+          message: '请先选择知识库，然后点击"添加到知识库"按钮开始上传和处理'
+        }, file);
+      }, 100);
+      return;
+    }
+    
+    // 实际上传文件，显示进度条（与文件上传一致）
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const xhr = new XMLHttpRequest();
+    
+    // 监听上传进度
+    xhr.upload.addEventListener('progress', (e) => {
+      if (e.lengthComputable) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        if (onProgress) {
+          onProgress({ percent });
+        }
+      }
+    });
+    
+    // 上传成功
+    xhr.addEventListener('load', () => {
+      if (xhr.status === 200) {
+        try {
+          const response = JSON.parse(xhr.responseText);
+          onSuccess(response, file);
+        } catch (e) {
+          // 如果解析失败，尝试作为文本处理
+          onSuccess({ message: '上传成功' }, file);
+        }
+      } else {
+        try {
+          const error = JSON.parse(xhr.responseText);
+          onError(new Error(error.detail || error.message || '上传失败'));
+        } catch (e) {
+          onError(new Error(`上传失败: ${xhr.status} ${xhr.statusText}`));
+        }
+      }
+    });
+    
+    // 上传错误
+    xhr.addEventListener('error', () => {
+      onError(new Error('上传失败：网络错误'));
+    });
+    
+    // 上传取消
+    xhr.addEventListener('abort', () => {
+      onError(new Error('上传已取消'));
+    });
+    
+    // 设置请求头和发送请求
+    const userStore = useUserStore();
+    const authHeaders = userStore.getAuthHeaders();
+    
+    xhr.open('POST', `/api/knowledge/files/upload-folder?db_id=${databaseId.value}`);
+    Object.keys(authHeaders).forEach(key => {
+      xhr.setRequestHeader(key, authHeaders[key]);
+    });
+    
+    xhr.send(formData);
+    
+  } catch (error) {
+    console.error('文件夹上传失败:', error);
+    onError(error);
+  }
+};
+
+// 处理文件夹上传状态变化
+const handleFolderUploadChange = (info) => {
+  console.log('文件夹上传状态变化:', info);
+  if (info?.file?.status === 'error') {
+    const errorMessage = info.file?.response?.detail || info.file?.response?.message || `文件夹选择失败：${info.file.name}`;
+    message.error(errorMessage);
+  }
+  folderFileList.value = info?.fileList ?? [];
+};
+
 const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
@@ -553,6 +701,11 @@ const getAuthHeaders = () => {
 };
 
 const chunkData = async () => {
+  if (!databaseId.value) {
+    message.error('请先选择知识库');
+    return;
+  }
+
   // 验证OCR服务可用性
   if (!validateOcrService()) {
     return;
@@ -583,7 +736,178 @@ const chunkData = async () => {
       return;
     }
 
-    success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
+    try {
+      store.state.chunkLoading = true;
+      success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
+    } catch (error) {
+      console.error('文件上传失败:', error);
+      message.error('文件上传失败: ' + (error.message || '未知错误'));
+    } finally {
+      store.state.chunkLoading = false;
+    }
+  } else if (uploadMode.value === 'folder') {
+    // 文件夹上传模式 - 像文件上传那样，先上传，然后提交到任务中心
+    if (folderFileList.value.length === 0) {
+      message.error('请选择要上传的文件夹');
+      return;
+    }
+
+    // 获取已上传成功的文件夹文件（与文件上传保持一致）
+    const validFolders = folderFileList.value.filter(file => 
+      file.status === 'done' && file.response
+    );
+
+    if (validFolders.length === 0) {
+      message.error('请先上传文件夹，或等待上传完成');
+      return;
+    }
+
+    try {
+      store.state.chunkLoading = true;
+      
+      // 显示统一的loading消息
+      const hideLoading = message.loading('正在处理文件夹...', 0);
+      
+      // 提交处理任务（文件已上传，只需要处理）
+      const results = [];
+      const errors = [];
+      
+      for (let i = 0; i < validFolders.length; i++) {
+        const file = validFolders[i];
+        const fileIndex = validFolders.length > 1 ? ` (${i + 1}/${validFolders.length})` : '';
+        
+        try {
+          // 获取上传响应
+          const uploadResponse = file.response;
+          console.log(`文件夹${fileIndex}上传响应:`, uploadResponse);
+          
+          // 验证上传响应
+          if (!uploadResponse) {
+            throw new Error('上传响应为空');
+          }
+          
+          // 如果响应是字符串，尝试解析为JSON
+          let responseData = uploadResponse;
+          if (typeof uploadResponse === 'string') {
+            try {
+              responseData = JSON.parse(uploadResponse);
+            } catch (e) {
+              throw new Error('服务器返回格式错误：无法解析响应');
+            }
+          }
+          
+          // 检查响应格式
+          if (typeof responseData !== 'object' || responseData === null) {
+            throw new Error('服务器返回格式错误：响应不是对象');
+          }
+          
+          // 如果响应包含 task_id，说明后端直接返回了处理任务结果
+          if (responseData.task_id && (responseData.status === 'queued' || responseData.status === 'processing')) {
+            responseData.isDirectProcess = true;
+          } else {
+            // 检查必需的字段
+            if (!responseData.file_path || !responseData.content_hash) {
+              throw new Error('服务器返回格式错误：缺少必要字段');
+            }
+          }
+          
+          let processResponse;
+          
+          // 如果上传响应直接包含了处理任务结果，直接使用它
+          if (responseData.isDirectProcess && responseData.task_id) {
+            console.log('使用上传响应中的处理任务结果');
+            processResponse = responseData;
+          } else {
+            // 第二步：提交处理任务到任务中心
+            processResponse = await fileApi.processFolder({
+              file_path: responseData.file_path,
+              db_id: databaseId.value,
+              content_hash: responseData.content_hash
+            });
+            
+            // 验证处理响应
+            if (!processResponse) {
+              throw new Error('处理任务提交失败：服务器未返回数据');
+            }
+          }
+          
+          // 注册任务到任务中心（像文件上传那样）
+          if (processResponse.task_id) {
+            taskerStore.registerQueuedTask({
+              task_id: processResponse.task_id,
+              name: `文件夹处理 (${databaseId.value || ''})`,
+              task_type: 'knowledge_ingest',
+              message: processResponse.message || '文件夹处理任务已提交',
+              payload: {
+                db_id: databaseId.value,
+                file_path: responseData.file_path || '',
+                content_hash: responseData.content_hash || '',
+                content_type: 'folder',
+              }
+            });
+          }
+          
+          results.push(processResponse);
+          
+        } catch (error) {
+          console.error(`文件夹${fileIndex}上传或处理失败:`, error);
+          const errorMessage = error.message || '未知错误';
+          errors.push(`${file.name}: ${errorMessage}`);
+        }
+      }
+      
+      // 清除loading消息
+      hideLoading();
+      
+      // 显示结果消息 - 与文件上传保持一致
+      if (results.length > 0) {
+        const taskIds = results.map(r => r.task_id).filter(Boolean);
+        const itemType = '文件夹';
+        
+        // 使用与文件上传相同的消息格式
+        const successMessage = results[0].message || `${itemType}已提交处理，请在任务中心查看进度`;
+        message.success(successMessage);
+        
+        // 启用自动刷新（与文件上传保持一致）
+        try {
+          if (!store.state.autoRefresh) {
+            store.state.autoRefresh = true;
+          }
+          store.startAutoRefresh();
+        } catch (e) {
+          console.warn('启用自动刷新失败:', e);
+        }
+        
+        // 立即刷新知识库信息（与文件上传保持一致）
+        // 这会触发 DataBaseInfoView 中的 watch，自动生成导图和示例问题
+        try {
+          await store.getDatabaseInfo();
+          console.log('知识库信息已刷新，将触发导图生成和AI分析');
+        } catch (e) {
+          console.warn('刷新知识库信息失败:', e);
+        }
+        
+        success = true;
+      }
+      
+      // 显示错误消息
+      if (errors.length > 0) {
+        if (results.length > 0) {
+          // 部分成功
+          message.warning(`部分文件夹处理失败: ${errors.join('; ')}`);
+        } else {
+          // 全部失败
+          message.error(`所有文件夹处理失败: ${errors.join('; ')}`);
+        }
+      }
+      
+    } catch (error) {
+      console.error('文件夹处理失败:', error);
+      const errorMessage = error.message || '未知错误';
+      message.error(`文件夹处理失败: ${errorMessage}`);
+    } finally {
+      store.state.chunkLoading = false;
+    }
   } else if (uploadMode.value === 'url') {
     const urls = urlList.value.split('\n')
       .map(url => url.trim())
@@ -594,12 +918,21 @@ const chunkData = async () => {
       return;
     }
 
-    success = await store.addFiles({ items: urls, contentType: 'url', params: chunkParams.value });
+    try {
+      store.state.chunkLoading = true;
+      success = await store.addFiles({ items: urls, contentType: 'url', params: chunkParams.value });
+    } catch (error) {
+      console.error('URL上传失败:', error);
+      message.error('URL上传失败: ' + (error.message || '未知错误'));
+    } finally {
+      store.state.chunkLoading = false;
+    }
   }
 
   if (success) {
     emit('update:visible', false);
     fileList.value = [];
+    folderFileList.value = [];
     urlList.value = '';
   }
 };
@@ -708,5 +1041,14 @@ const chunkData = async () => {
   border-radius: 4px;
   color: #d46b08;
   font-size: 13px;
+}
+
+.folder-upload-tip {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 4px;
+  color: #666;
+  font-size: 12px;
 }
 </style>
