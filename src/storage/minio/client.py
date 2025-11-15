@@ -33,7 +33,7 @@ class MinIOClient:
     简化的 MinIO 客户端类
     """
 
-    PUBLIC_READ_BUCKETS = {"generated-images", "avatar"}
+    PUBLIC_READ_BUCKETS = {"generated-images", "avatar", "kb-images"}
 
     def __init__(self):
         """初始化 MinIO 客户端"""

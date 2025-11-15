@@ -95,11 +95,16 @@
           <p class="ant-upload-hint">
             支持的文件类型：{{ uploadHint }}
           </p>
+          <div class="zip-support-tip" v-if="hasZipFiles">
+            📦 zip 包会自动提取 Markdown 文件和图片，图片链接将替换为可访问的 URL
+          </div>
         </a-upload-dragger>
       </div>
 
+
+
       <!-- URL 输入区域 -->
-      <div class="url-input" v-else>
+      <div class="url-input" v-if="uploadMode === 'url'">
         <a-form layout="vertical">
           <a-form-item label="网页链接 (每行一个URL)">
             <a-textarea
@@ -197,14 +202,18 @@ const acceptedFileTypes = computed(() => {
   if (!supportedFileTypes.value.length) {
     return '';
   }
-  return supportedFileTypes.value.join(',');
+  const exts = new Set(supportedFileTypes.value);
+  exts.add('.zip');
+  return Array.from(exts).join(',');
 });
 
 const uploadHint = computed(() => {
   if (!supportedFileTypes.value.length) {
     return '加载中...';
   }
-  return supportedFileTypes.value.join(', ');
+  const exts = new Set(supportedFileTypes.value);
+  exts.add('.zip');
+  return Array.from(exts).join(', ');
 });
 
 const isSupportedExtension = (fileName) => {
@@ -219,7 +228,7 @@ const isSupportedExtension = (fileName) => {
     return false;
   }
   const ext = fileName.slice(lastDotIndex).toLowerCase();
-  return supportedFileTypes.value.includes(ext);
+  return supportedFileTypes.value.includes(ext) || ext === '.zip';
 };
 
 const loadSupportedFileTypes = async () => {
@@ -269,6 +278,7 @@ const uploadModeOptions = computed(() => [
 
 // 文件列表
 const fileList = ref([]);
+
 
 // URL列表
 const urlList = ref('');
@@ -351,6 +361,27 @@ const hasPdfOrImageFiles = computed(() => {
 
     const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
     return ocrExtensions.includes(ext);
+  });
+});
+
+// 计算属性：是否有ZIP文件
+const hasZipFiles = computed(() => {
+  if (fileList.value.length === 0) {
+    return false;
+  }
+
+  return fileList.value.some(file => {
+    if (file.status !== 'done') {
+      return false;
+    }
+
+    const filePath = file.response?.file_path || file.name;
+    if (!filePath) {
+      return false;
+    }
+
+    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    return ext === '.zip';
   });
 });
 
@@ -508,6 +539,8 @@ const handleFileUpload = (info) => {
 
 const handleDrop = () => {};
 
+// 已移除文件夹上传逻辑
+
 const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
@@ -553,6 +586,11 @@ const getAuthHeaders = () => {
 };
 
 const chunkData = async () => {
+  if (!databaseId.value) {
+    message.error('请先选择知识库');
+    return;
+  }
+
   // 验证OCR服务可用性
   if (!validateOcrService()) {
     return;
@@ -583,7 +621,15 @@ const chunkData = async () => {
       return;
     }
 
-    success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
+    try {
+      store.state.chunkLoading = true;
+      success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
+    } catch (error) {
+      console.error('文件上传失败:', error);
+      message.error('文件上传失败: ' + (error.message || '未知错误'));
+    } finally {
+      store.state.chunkLoading = false;
+    }
   } else if (uploadMode.value === 'url') {
     const urls = urlList.value.split('\n')
       .map(url => url.trim())
@@ -594,7 +640,15 @@ const chunkData = async () => {
       return;
     }
 
-    success = await store.addFiles({ items: urls, contentType: 'url', params: chunkParams.value });
+    try {
+      store.state.chunkLoading = true;
+      success = await store.addFiles({ items: urls, contentType: 'url', params: chunkParams.value });
+    } catch (error) {
+      console.error('URL上传失败:', error);
+      message.error('URL上传失败: ' + (error.message || '未知错误'));
+    } finally {
+      store.state.chunkLoading = false;
+    }
   }
 
   if (success) {
@@ -708,5 +762,19 @@ const chunkData = async () => {
   border-radius: 4px;
   color: #d46b08;
   font-size: 13px;
+}
+
+.folder-upload-tip {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f0f7ff;
+  border-radius: 4px;
+  color: #666;
+  font-size: 12px;
+}
+
+.zip-support-tip {
+  font-size: 12px;
+  color: var(--color-warning);
 }
 </style>

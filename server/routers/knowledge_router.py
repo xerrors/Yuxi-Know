@@ -2,6 +2,7 @@ import aiofiles
 import asyncio
 import os
 import traceback
+import textwrap
 from collections.abc import Mapping
 from urllib.parse import quote, unquote
 
@@ -235,18 +236,13 @@ async def add_documents(
                 progress = 5.0 + (idx / total) * 90.0  # 5% ~ 95%
                 await context.set_progress(progress, f"正在处理第 {idx}/{total} 个文档")
 
-                # 处理单个文档
                 try:
                     result = await knowledge_base.add_content(db_id, [item], params=params)
                     processed_items.extend(result)
                 except Exception as doc_error:
-                    # 处理单个文档处理的所有异常（包括超时）
                     logger.error(f"Document processing failed for {item}: {doc_error}")
-
-                    # 判断是否是超时异常
                     error_type = "timeout" if isinstance(doc_error, TimeoutError) else "processing_error"
                     error_msg = "处理超时" if isinstance(doc_error, TimeoutError) else "处理失败"
-
                     processed_items.append(
                         {
                             "item": item,
@@ -816,6 +812,199 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
 
 
 # =============================================================================
+# === AI生成示例问题 ===
+# =============================================================================
+
+
+SAMPLE_QUESTIONS_SYSTEM_PROMPT = """你是一个专业的知识库问答测试专家。
+
+你的任务是根据知识库中的文件列表，生成有价值的测试问题。
+
+要求：
+1. 问题要具体、有针对性，基于文件名称和类型推测可能的内容
+2. 问题要涵盖不同方面和难度
+3. 问题要简洁明了，适合用于检索测试
+4. 问题要多样化，包括事实查询、概念解释、操作指导等
+5. 问题长度控制在10-30字之间
+6. 直接返回JSON数组格式，不要其他说明
+
+返回格式：
+```json
+{
+  "questions": [
+    "问题1？",
+    "问题2？",
+    "问题3？"
+  ]
+}
+```
+"""
+
+
+@knowledge.post("/databases/{db_id}/sample-questions")
+async def generate_sample_questions(
+    db_id: str,
+    request_body: dict = Body(...),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    AI生成针对知识库的测试问题
+
+    Args:
+        db_id: 知识库ID
+        request_body: 请求体，包含 count 字段
+
+    Returns:
+        生成的问题列表
+    """
+    try:
+        from src.models import select_model
+        import json
+
+        # 从请求体中提取参数
+        count = request_body.get("count", 10)
+
+        # 获取知识库信息
+        db_info = knowledge_base.get_database_info(db_id)
+        if not db_info:
+            raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
+
+        db_name = db_info.get("name", "")
+        all_files = db_info.get("files", {})
+
+        if not all_files:
+            raise HTTPException(status_code=400, detail="知识库中没有文件")
+
+        # 收集文件信息
+        files_info = []
+        for file_id, file_info in all_files.items():
+            files_info.append(
+                {
+                    "filename": file_info.get("filename", ""),
+                    "type": file_info.get("type", ""),
+                }
+            )
+
+        # 构建AI提示词
+        system_prompt = SAMPLE_QUESTIONS_SYSTEM_PROMPT
+
+        # 构建用户消息
+        files_text = "\n".join(
+            [
+                f"- {f['filename']} ({f['type']})"
+                for f in files_info[:20]  # 最多列举20个文件
+            ]
+        )
+
+        file_count_text = f"（共{len(files_info)}个文件）" if len(files_info) > 20 else ""
+
+        user_message = textwrap.dedent(f"""请为知识库"{db_name}"生成{count}个测试问题。
+
+            知识库文件列表{file_count_text}：
+            {files_text}
+
+            请根据这些文件的名称和类型，生成{count}个有价值的测试问题。""")
+
+        # 调用AI生成
+        logger.info(f"开始生成知识库问题，知识库: {db_name}, 文件数量: {len(files_info)}, 问题数量: {count}")
+
+        # 选择模型并调用
+        model = select_model()
+        messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
+        response = model.call(messages, stream=False)
+
+        # 解析AI返回的JSON
+        try:
+            # 提取JSON内容
+            content = response.content if hasattr(response, "content") else str(response)
+
+            # 尝试从markdown代码块中提取JSON
+            if "```json" in content:
+                json_start = content.find("```json") + 7
+                json_end = content.find("```", json_start)
+                content = content[json_start:json_end].strip()
+            elif "```" in content:
+                json_start = content.find("```") + 3
+                json_end = content.find("```", json_start)
+                content = content[json_start:json_end].strip()
+
+            questions_data = json.loads(content)
+            questions = questions_data.get("questions", [])
+
+            if not questions or not isinstance(questions, list):
+                raise ValueError("AI返回的问题格式不正确")
+
+            logger.info(f"成功生成{len(questions)}个问题")
+
+            # 保存问题到知识库元数据
+            try:
+                async with knowledge_base._metadata_lock:
+                    # 确保知识库元数据存在
+                    if db_id not in knowledge_base.global_databases_meta:
+                        knowledge_base.global_databases_meta[db_id] = {}
+                    # 保存问题到对应知识库
+                    knowledge_base.global_databases_meta[db_id]["sample_questions"] = questions
+                    knowledge_base._save_global_metadata()
+                    logger.info(f"成功保存 {len(questions)} 个问题到知识库 {db_id}")
+            except Exception as save_error:
+                logger.error(f"保存问题失败: {save_error}")
+
+            return {
+                "message": "success",
+                "questions": questions,
+                "count": len(questions),
+                "db_id": db_id,
+                "db_name": db_name,
+            }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"AI返回的JSON解析失败: {e}, 原始内容: {content}")
+            raise HTTPException(status_code=500, detail=f"AI返回格式错误: {str(e)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"生成知识库问题失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"生成问题失败: {str(e)}")
+
+
+@knowledge.get("/databases/{db_id}/sample-questions")
+async def get_sample_questions(db_id: str, current_user: User = Depends(get_admin_user)):
+    """
+    获取知识库的测试问题
+
+    Args:
+        db_id: 知识库ID
+
+    Returns:
+        问题列表
+    """
+    try:
+        # 直接从全局元数据中读取
+        if db_id not in knowledge_base.global_databases_meta:
+            raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
+
+        db_meta = knowledge_base.global_databases_meta[db_id]
+        questions = db_meta.get("sample_questions", [])
+
+        if not questions:
+            raise HTTPException(status_code=404, detail="该知识库还没有生成测试问题")
+
+        return {
+            "message": "success",
+            "questions": questions,
+            "count": len(questions),
+            "db_id": db_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取知识库问题失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取问题失败: {str(e)}")
+
+
+# =============================================================================
 # === 文件管理分组 ===
 # =============================================================================
 
@@ -838,7 +1027,7 @@ async def upload_file(
     if ext == ".jsonl":
         if allow_jsonl is not True or db_id is not None:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
-    elif not is_supported_file_extension(file.filename):
+    elif not (is_supported_file_extension(file.filename) or ext == ".zip"):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
     # 根据db_id获取上传路径，如果db_id为None则使用默认路径
