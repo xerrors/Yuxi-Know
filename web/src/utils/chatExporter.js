@@ -242,7 +242,7 @@ export class ChatExporter {
       const argsSource = toolCall?.args ?? toolCall?.function?.arguments;
       const args = this.stringifyToolArgs(argsSource);
       const result = this.normalizeToolResult(toolCall?.tool_call_result?.content);
-      const isFinished = Boolean(toolCall?.tool_call_result);
+      const isFinished = toolCall?.status === 'success';
       const stateClass = isFinished ? 'done' : 'pending';
       const stateLabel = isFinished ? '已完成' : '执行中';
 

@@ -863,10 +863,11 @@ async def get_agent_history(
                     {
                         "id": str(tc.id),
                         "name": tc.tool_name,
-                        "function": {"name": tc.tool_name},  # Frontend compatibility
+                        "function": {"name": tc.tool_name},
                         "args": tc.tool_input or {},
-                        "tool_call_result": {"content": tc.tool_output} if tc.tool_output else None,
+                        "tool_call_result": {"content": (tc.tool_output or "")} if tc.status == "success" else None,
                         "status": tc.status,
+                        "error_message": tc.error_message,
                     }
                     for tc in msg.tool_calls
                 ]

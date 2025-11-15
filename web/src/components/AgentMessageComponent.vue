@@ -43,13 +43,17 @@
         <div v-for="(toolCall, index) in validToolCalls" :key="toolCall.id || index" class="tool-call-container">
           <div v-if="toolCall" class="tool-call-display" :class="{ 'is-collapsed': !expandedToolCalls.has(toolCall.id) }">
             <div class="tool-header" @click="toggleToolCall(toolCall.id)">
-              <span v-if="!toolCall.tool_call_result">
+              <span v-if="toolCall.status === 'success' || toolCall.tool_call_result">
+                <span><CircleCheckBig size="16" class="tool-loader tool-success" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行完成
+              </span>
+              <span v-else-if="toolCall.status === 'error'">
+                <span><CircleCheckBig size="16" class="tool-loader tool-error" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行失败
+                <span v-if="toolCall.error_message">（{{ toolCall.error_message }}）</span>
+              </span>
+              <span v-else>
                 <span><Loader size="16" class="tool-loader rotate tool-loading" /></span> &nbsp;
                 <span>正在调用工具: </span>
                 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span>
-              </span>
-              <span v-else>
-                <span><CircleCheckBig size="16" class="tool-loader tool-success" /></span> &nbsp; 工具 <span class="tool-name">{{ getToolNameByToolCall(toolCall) }}</span> 执行完成
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
