@@ -90,7 +90,11 @@ docker logs web-dev -f
 如果拉取镜像失败，可以尝试手动拉取：
 
 ```bash
+# Linux/macOS
 bash docker/pull_image.sh python:3.11-slim
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1 python:3.11-slim
 ```
 
 **离线部署方案**：

@@ -5,7 +5,9 @@
 ## Docker与启动相关问题
 
 ### 镜像拉取/构建失败？
-镜像拉取：可使用 `docker/pull_image.sh` 辅助拉取
+镜像拉取：可使用以下脚本辅助拉取
+- **Linux/macOS**: `docker/pull_image.sh`
+- **Windows PowerShell**: `docker/pull_image.ps1`
 构建失败：若配置了代理仍失败，可尝试以下步骤：
 1. 注释 `api.Dockerfile` 中的代理环境变量设置：
    ```dockerfile
