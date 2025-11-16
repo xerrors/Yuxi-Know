@@ -131,7 +131,7 @@ def select_model(model_provider=None, model_name=None, model_spec=None):
     # 其他模型，默认使用OpenAIBase
     try:
         model = OpenAIBase(
-            api_key=os.getenv(model_info.env),
+            api_key=os.environ.get(model_info.env, model_info.env),
             base_url=model_info.base_url,
             model_name=model_name,
         )

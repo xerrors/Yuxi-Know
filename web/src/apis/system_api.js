@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiAdminGet, apiAdminPost, apiSuperAdminPost } from './base'
+import { apiGet, apiPost, apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
 
 /**
  * 系统管理API模块
@@ -51,7 +51,7 @@ export const configApi = {
    */
   updateConfigBatch: async (items) => apiAdminPost('/api/system/config/update', items),
 
-  
+
   /**
    * 获取系统日志
    * @returns {Promise} - 系统日志
@@ -116,6 +116,59 @@ export const chatModelApi = {
    */
   getAllModelsStatus: async () => {
     return apiAdminGet('/api/system/chat-models/all/status')
+  }
+}
+
+// =============================================================================
+// === 自定义供应商管理分组 ===
+// =============================================================================
+
+export const customProviderApi = {
+  /**
+   * 获取所有自定义供应商
+   * @returns {Promise} - 自定义供应商列表
+   */
+  getCustomProviders: async () => {
+    return apiAdminGet('/api/system/custom-providers')
+  },
+
+  /**
+   * 添加自定义供应商
+   * @param {string} providerId - 供应商ID
+   * @param {Object} providerData - 供应商配置数据
+   * @returns {Promise} - 添加结果
+   */
+  addCustomProvider: async (providerId, providerData) => {
+    return apiAdminPost('/api/system/custom-providers', { provider_id: providerId, provider_data: providerData })
+  },
+
+  /**
+   * 更新自定义供应商
+   * @param {string} providerId - 供应商ID
+   * @param {Object} providerData - 供应商配置数据
+   * @returns {Promise} - 更新结果
+   */
+  updateCustomProvider: async (providerId, providerData) => {
+    return apiAdminPut(`/api/system/custom-providers/${encodeURIComponent(providerId)}`, providerData)
+  },
+
+  /**
+   * 删除自定义供应商
+   * @param {string} providerId - 供应商ID
+   * @returns {Promise} - 删除结果
+   */
+  deleteCustomProvider: async (providerId) => {
+    return apiAdminDelete(`/api/system/custom-providers/${encodeURIComponent(providerId)}`)
+  },
+
+  /**
+   * 测试自定义供应商连接
+   * @param {string} providerId - 供应商ID
+   * @param {string} modelName - 要测试的模型名称
+   * @returns {Promise} - 测试结果
+   */
+  testCustomProvider: async (providerId, modelName) => {
+    return apiAdminPost(`/api/system/custom-providers/${encodeURIComponent(providerId)}/test`, { model_name: modelName })
   }
 }
 

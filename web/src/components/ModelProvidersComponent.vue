@@ -1,62 +1,156 @@
 <template>
   <div>
-    <a-alert message="自定义模型在 0.3.x 的稳定版中移除，只能通过修改 src/config/static/models.py 来添加模型和供应商。" type="warning" />
-    <br>
-    <div class="model-provider-card configured-provider" v-for="(item, key) in modelKeys" :key="key">
-      <div class="card-header" @click="toggleExpand(item)">
-        <div :class="{'model-icon': true, 'available': modelStatus[item]}">
-          <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
-        </div>
-        <div class="model-title-container">
-          <h3>{{ modelNames[item].name }}</h3>
-        </div>
-        <a-button
-          type="text"
-          class="expand-button"
-          @click.stop="openProviderConfig(item)"
-          title="配置模型提供商"
-        >
-          <SettingOutlined />
-        </a-button>
-        <a-button
-          type="text"
-          class="expand-button"
-          @click.stop="toggleExpand(item)"
-        >
-          <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
-            <DownCircleOutlined />
-          </span>
+    <!-- 自定义供应商管理区域 -->
+    <div class="custom-providers-section">
+      <div class="section-header">
+        <h3>自定义供应商</h3>
+        <a-button type="primary" @click="openAddCustomProviderModal">
+          <template #icon>
+            <PlusOutlined />
+          </template>
+          添加自定义供应商
         </a-button>
       </div>
-      <div class="card-body-wrapper" :class="{'expanded': expandedModels[item]}">
-        <div class="card-body" v-if="modelStatus[item]">
-          <div class="card-models" v-for="(model, idx) in modelNames[item].models" :key="idx">
-            <div class="model_name">{{ model }}</div>
+      <p class="section-description">
+        添加自定义的LLM供应商，支持OpenAI兼容的API格式。API密钥支持直接配置或使用环境变量名。
+      </p>
+
+      <!-- 自定义供应商列表 -->
+      <div class="custom-provider-card" v-for="(provider, providerId) in customProviders" :key="providerId">
+        <div class="card-header">
+          <div class="provider-info">
+            <h4>{{ provider.name }}</h4>
+            <span class="provider-id">{{ providerId }}</span>
+          </div>
+          <div class="provider-actions">
+            <a-button type="text" size="small" @click="testCustomProvider(providerId, provider.default)">
+              <template #icon>
+                <ApiOutlined />
+              </template>
+              测试连接
+            </a-button>
+            <a-button type="text" size="small" @click="openEditCustomProviderModal(providerId, provider)">
+              <template #icon>
+                <EditOutlined />
+              </template>
+              编辑
+            </a-button>
+            <a-popconfirm
+              title="确定要删除这个自定义供应商吗？"
+              @confirm="deleteCustomProvider(providerId)"
+              ok-text="确定"
+              cancel-text="取消"
+            >
+              <a-button type="text" size="small" danger>
+                <template #icon>
+                  <DeleteOutlined />
+                </template>
+                删除
+              </a-button>
+            </a-popconfirm>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="provider-details">
+            <div class="detail-item">
+              <span class="label">API地址:</span>
+              <span class="value">{{ provider.base_url }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">默认模型:</span>
+              <span class="value">{{ provider.default }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="label">可用模型:</span>
+              <span class="value">{{ provider.models?.join(', ') || '无' }}</span>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- 无自定义供应商时的提示 -->
+      <div v-if="Object.keys(customProviders).length === 0" class="empty-state">
+        <a-empty description="暂无自定义供应商">
+          <a-button type="primary" @click="openAddCustomProviderModal">添加自定义供应商</a-button>
+        </a-empty>
+      </div>
     </div>
-    <div class="model-provider-card unconfigured-provider" v-for="(item, key) in notModelKeys" :key="key">
-      <div class="card-header">
-        <div class="model-icon">
-          <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
+
+    <a-divider />
+
+    <!-- 系统内置供应商 -->
+    <div class="builtin-providers-section">
+      <div class="section-header">
+        <h3>系统内置供应商</h3>
+        <div class="providers-stats">
+          <span class="stats-item available">
+            {{ modelKeys.length }} 可用
+          </span>
+          <span class="stats-item unavailable">
+            {{ notModelKeys.length }} 未配置
+          </span>
         </div>
-        <div class="model-title-container">
-          <h3 style="font-weight: 400">{{ modelNames[item].name }}</h3>
-          <a :href="modelNames[item].url" target="_blank" class="model-url">
-            <InfoCircleOutlined />
-          </a>
+      </div>
+
+      <!-- 已配置的供应商 -->
+      <div class="model-provider-card configured-provider" v-for="(item, key) in modelKeys" :key="key">
+        <div class="card-header" @click="toggleExpand(item)">
+          <div :class="{'model-icon': true, 'available': modelStatus[item]}">
+            <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
+          </div>
+          <div class="model-title-container">
+            <h3>{{ modelNames[item].name }}</h3>
+            <div class="provider-meta">
+              <span class="model-count">{{ modelNames[item].models?.length || 0 }} 个模型</span>
+              <span class="provider-id">{{ item }}</span>
+            </div>
+          </div>
+          <div class="provider-actions">
+            <a-button
+              type="text"
+              size="small"
+              class="expand-button"
+              @click.stop="openProviderConfig(item)"
+              title="配置模型"
+            >
+              <SettingOutlined />
+            </a-button>
+            <a-button
+              type="text"
+              size="small"
+              class="expand-button"
+              @click.stop="toggleExpand(item)"
+            >
+              <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
+                <DownCircleOutlined />
+              </span>
+            </a-button>
+          </div>
         </div>
-        <a-button
-          type="text"
-          class="config-button"
-          @click.stop="openProviderConfig(item)"
-          title="配置模型提供商"
-        >
-          <SettingOutlined />
-        </a-button>
-        <div class="missing-keys">
-          需配置<span>{{ modelNames[item].env }}</span>
+        <div class="card-body-wrapper" :class="{'expanded': expandedModels[item]}">
+          <div class="card-body" v-if="modelStatus[item]">
+            <div class="card-models" v-for="(model, idx) in modelNames[item].models" :key="idx">
+              <div class="model_name">{{ model }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 未配置的供应商 -->
+      <div class="model-provider-card unconfigured-provider" v-for="(item, key) in notModelKeys" :key="key">
+        <div class="card-header">
+          <div class="model-icon">
+            <img :src="modelIcons[item] || modelIcons.default" alt="模型图标">
+          </div>
+          <div class="model-title-container">
+            <h3>{{ modelNames[item].name }}</h3>
+            <a :href="modelNames[item].url" target="_blank" class="model-url">
+              查看信息 <InfoCircleOutlined />
+            </a>
+          </div>
+          <div class="missing-keys">
+            需配置<span>{{ modelNames[item].env }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -128,28 +222,118 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- 自定义供应商配置弹窗 -->
+    <a-modal
+      v-model:open="customProviderModal.visible"
+      :title="customProviderModal.isEdit ? '编辑自定义供应商' : '添加自定义供应商'"
+      @ok="saveCustomProvider"
+      @cancel="cancelCustomProvider"
+      :okText="'保存'"
+      :cancelText="'取消'"
+      :ok-type="'primary'"
+      :width="600"
+      :confirmLoading="customProviderModal.loading"
+    >
+      <a-form
+        ref="customProviderForm"
+        :model="customProviderModal.data"
+        :rules="customProviderRules"
+        layout="vertical"
+      >
+        <a-form-item label="供应商ID" name="providerId" v-if="!customProviderModal.isEdit">
+          <a-input
+            v-model:value="customProviderModal.data.providerId"
+            placeholder="请输入唯一的供应商标识符（如：my-provider）"
+            :disabled="customProviderModal.isEdit"
+          />
+        </a-form-item>
+
+        <a-form-item label="供应商名称" name="name">
+          <a-input
+            v-model:value="customProviderModal.data.name"
+            placeholder="请输入供应商显示名称"
+          />
+        </a-form-item>
+
+        <a-form-item label="API地址" name="base_url">
+          <a-input
+            v-model:value="customProviderModal.data.base_url"
+            placeholder="请输入API基础地址（如：https://api.example.com/v1）"
+          />
+        </a-form-item>
+
+        <a-form-item label="默认模型" name="default">
+          <a-input
+            v-model:value="customProviderModal.data.default"
+            placeholder="请输入默认模型名称"
+          />
+        </a-form-item>
+
+        <a-form-item label="API密钥" name="env">
+          <a-input
+            v-model:value="customProviderModal.data.env"
+            placeholder="请输入API密钥或环境变量名（如：MY_API_KEY）"
+          />
+          <div class="form-help-text">
+            支持直接输入API密钥，或使用环境变量名（如：MY_API_KEY）
+          </div>
+        </a-form-item>
+
+        <a-form-item label="支持的模型" name="models">
+          <a-textarea
+            v-model:value="customProviderModal.data.modelsText"
+            placeholder="请输入支持的模型列表，每行一个模型"
+            :rows="4"
+          />
+          <div class="form-help-text">
+            每行输入一个模型名称，例如：gpt-3.5-turbo
+          </div>
+        </a-form-item>
+
+        <a-form-item label="文档地址" name="url">
+          <a-input
+            v-model:value="customProviderModal.data.url"
+            placeholder="请输入供应商文档地址（可选）"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, watch, h } from 'vue'
+import { computed, reactive, watch, h, ref } from 'vue'
 import { message } from 'ant-design-vue';
 import {
   InfoCircleOutlined,
   SettingOutlined,
   DownCircleOutlined,
   LoadingOutlined,
-  SearchOutlined
+  SearchOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  ApiOutlined
 } from '@ant-design/icons-vue';
 import { useConfigStore } from '@/stores/config';
 import { modelIcons } from '@/utils/modelIcon';
 import { agentApi } from '@/apis/agent_api';
+import { customProviderApi } from '@/apis/system_api';
 
 const configStore = useConfigStore();
 
 // 计算属性
 const modelNames = computed(() => configStore.config?.model_names);
 const modelStatus = computed(() => configStore.config?.model_provider_status);
+
+// 自定义供应商计算属性
+const customProviders = computed(() => {
+  const providers = configStore.config?.model_names || {};
+  return Object.fromEntries(
+    Object.entries(providers).filter(([key, value]) => value.custom === true)
+  );
+});
 
 
 // 提供商配置相关状态
@@ -166,7 +350,7 @@ const providerConfig = reactive({
 
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {
-  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value[key]);
+  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value[key] && !customProviders.value[key]);
 });
 
 // 筛选 modelStatus 中为假的key
@@ -294,9 +478,382 @@ const filteredModels = computed(() => {
   const searchQuery = providerConfig.searchQuery.toLowerCase();
   return allModels.filter(model => model.id.toLowerCase().includes(searchQuery));
 });
+
+// 自定义供应商管理
+const customProviderForm = ref();
+const customProviderModal = reactive({
+  visible: false,
+  isEdit: false,
+  loading: false,
+  data: {
+    providerId: '',
+    name: '',
+    base_url: '',
+    default: '',
+    env: '',
+    modelsText: '',
+    models: [],
+    url: ''
+  }
+});
+
+// 自定义供应商表单验证规则
+const customProviderRules = {
+  providerId: [
+    { required: true, message: '请输入供应商ID', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_-]+$/, message: '供应商ID只能包含字母、数字、下划线和横线', trigger: 'blur' },
+    {
+      validator: (rule, value) => {
+        if (!value) return Promise.resolve();
+        // 检查是否与现有供应商ID重复
+        if (modelNames.value && modelNames.value[value]) {
+          return Promise.reject('供应商ID已存在，请使用其他ID');
+        }
+        return Promise.resolve();
+      },
+      trigger: 'blur'
+    }
+  ],
+  name: [
+    { required: true, message: '请输入供应商名称', trigger: 'blur' }
+  ],
+  base_url: [
+    { required: true, message: '请输入API地址', trigger: 'blur' },
+    { type: 'url', message: '请输入有效的URL地址', trigger: 'blur' }
+  ],
+  default: [
+    { required: true, message: '请输入默认模型', trigger: 'blur' }
+  ],
+  env: [
+    { required: true, message: '请输入API密钥或环境变量', trigger: 'blur' }
+  ]
+};
+
+// API密钥掩码显示
+const maskApiKey = (apiKey) => {
+  if (!apiKey) return '未配置';
+
+  // 如果是环境变量格式，直接显示
+  if (apiKey.startsWith('${') && apiKey.endsWith('}')) {
+    return apiKey;
+  }
+
+  // 如果是直接的API密钥，进行掩码处理
+  if (apiKey.length > 8) {
+    return apiKey.substring(0, 4) + '***' + apiKey.substring(apiKey.length - 4);
+  }
+  return '***';
+};
+
+// 打开添加自定义供应商弹窗
+const openAddCustomProviderModal = () => {
+  customProviderModal.visible = true;
+  customProviderModal.isEdit = false;
+  resetCustomProviderForm();
+};
+
+// 打开编辑自定义供应商弹窗
+const openEditCustomProviderModal = (providerId, provider) => {
+  customProviderModal.visible = true;
+  customProviderModal.isEdit = true;
+
+  // 填充表单数据
+  customProviderModal.data.providerId = providerId;
+  customProviderModal.data.name = provider.name;
+  customProviderModal.data.base_url = provider.base_url;
+  customProviderModal.data.default = provider.default;
+  customProviderModal.data.env = provider.env;
+  customProviderModal.data.models = provider.models || [];
+  customProviderModal.data.modelsText = (provider.models || []).join('\n');
+  customProviderModal.data.url = provider.url || '';
+};
+
+// 重置自定义供应商表单
+const resetCustomProviderForm = () => {
+  customProviderModal.data = {
+    providerId: '',
+    name: '',
+    base_url: '',
+    default: '',
+    env: '',
+    modelsText: '',
+    models: [],
+    url: ''
+  };
+  customProviderForm.value?.resetFields();
+};
+
+// 保存自定义供应商
+const saveCustomProvider = async () => {
+  try {
+    await customProviderForm.value.validate();
+    customProviderModal.loading = true;
+
+    // 处理模型列表
+    const models = customProviderModal.data.modelsText
+      .split('\n')
+      .map(model => model.trim())
+      .filter(model => model.length > 0);
+
+    const providerData = {
+      name: customProviderModal.data.name,
+      base_url: customProviderModal.data.base_url,
+      default: customProviderModal.data.default,
+      env: customProviderModal.data.env,
+      models: models,
+      url: customProviderModal.data.url,
+      custom: true
+    };
+
+    let result;
+    if (customProviderModal.isEdit) {
+      result = await customProviderApi.updateCustomProvider(
+        customProviderModal.data.providerId,
+        providerData
+      );
+      message.success('自定义供应商更新成功');
+    } else {
+      result = await customProviderApi.addCustomProvider(
+        customProviderModal.data.providerId,
+        providerData
+      );
+      message.success(`自定义供应商 ${customProviderModal.data.providerId} 添加成功`);
+    }
+
+    // 关闭弹窗并刷新配置
+    customProviderModal.visible = false;
+    await configStore.refreshConfig();
+
+  } catch (error) {
+    if (error.errorFields) {
+      // 表单验证错误
+      return;
+    }
+
+    // 处理API错误响应
+    let errorMessage = '未知错误';
+    if (error.response?.data?.detail) {
+      errorMessage = error.response.data.detail;
+    } else if (error.message) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    }
+
+    message.error(`操作失败: ${errorMessage}`);
+  } finally {
+    customProviderModal.loading = false;
+  }
+};
+
+// 取消自定义供应商操作
+const cancelCustomProvider = () => {
+  customProviderModal.visible = false;
+  resetCustomProviderForm();
+};
+
+// 删除自定义供应商
+const deleteCustomProvider = async (providerId) => {
+  try {
+    const result = await customProviderApi.deleteCustomProvider(providerId);
+    message.success('自定义供应商删除成功');
+    await configStore.refreshConfig();
+  } catch (error) {
+    message.error(`删除失败: ${error.message || error.response?.data?.detail || '未知错误'}`);
+  }
+};
+
+// 测试自定义供应商连接
+const testCustomProvider = async (providerId, modelName) => {
+  try {
+    message.loading({ content: '正在测试连接...', key: 'test-connection', duration: 0 });
+
+    const result = await customProviderApi.testCustomProvider(providerId, modelName);
+
+    if (result.status?.status === 'available') {
+      message.success({ content: '连接测试成功', key: 'test-connection', duration: 2 });
+    } else {
+      message.error({
+        content: `连接测试失败: ${result.status?.message || '未知错误'}`,
+        key: 'test-connection',
+        duration: 3
+      });
+    }
+  } catch (error) {
+    message.error({
+      content: `测试失败: ${error.message || error.response?.data?.detail || '未知错误'}`,
+      key: 'test-connection',
+      duration: 3
+    });
+  }
+};
 </script>
 
 <style lang="less" scoped>
+// 自定义供应商区域样式
+.custom-providers-section {
+  margin-bottom: 24px;
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+  }
+
+  .section-description {
+    margin: 0 0 16px 0;
+    color: var(--gray-600);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .custom-provider-card {
+    border: 1px solid var(--gray-200);
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+    &:hover {
+      border-color: var(--gray-300);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      background: #fafafa;
+      border-bottom: 1px solid var(--gray-200);
+
+      .provider-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+
+        h4 {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+          color: var(--gray-900);
+        }
+
+        .provider-id {
+          background: var(--main-color);
+          color: white;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 500;
+        }
+      }
+
+      .provider-actions {
+        display: flex;
+        gap: 8px;
+
+        .ant-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+      }
+    }
+
+    .card-content {
+      padding: 16px 20px;
+
+      .provider-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 12px;
+
+        .detail-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+
+          .label {
+            font-size: 12px;
+            color: var(--gray-600);
+            font-weight: 500;
+          }
+
+          .value {
+            font-size: 14px;
+            color: var(--gray-900);
+            word-break: break-all;
+          }
+        }
+      }
+    }
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    background: #fafafa;
+    border-radius: 8px;
+    border: 1px dashed var(--gray-300);
+  }
+}
+
+.builtin-providers-section {
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .providers-stats {
+      display: flex;
+      gap: 12px;
+      font-size: 13px;
+
+      .stats-item {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+
+        &.available {
+          background: rgba(34, 197, 94, 0.1);
+          color: #16a34a;
+        }
+
+        &.unavailable {
+          background: rgba(249, 115, 22, 0.1);
+          color: #ea580c;
+        }
+      }
+    }
+  }
+}
+
+// 表单帮助文本样式
+.form-help-text {
+  font-size: 12px;
+  color: var(--gray-600);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 .model-provider-card {
   border: 1px solid var(--gray-150);
   background-color: white;
@@ -323,14 +880,16 @@ const filteredModels = computed(() => {
 
   // 已配置provider的样式
   &.configured-provider {
-    .card-header {
+    .model-icon {
+      &.available {
+        filter: grayscale(0%);
+      }
+    }
 
-      .model-icon {
-        &.available {
-          position: relative;
-          overflow: visible;
-          box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.05);
-        }
+    .provider-meta {
+      .model-count {
+        color: var(--gray-600);
+        font-weight: 500;
       }
     }
   }
@@ -339,18 +898,32 @@ const filteredModels = computed(() => {
   &.unconfigured-provider {
     .card-header {
       background: #fafafa;
-      border-bottom: 1px solid var(--gray-150);
 
       h3 {
         color: var(--gray-700);
+        font-weight: 500;
       }
 
-      .missing-keys {
-        background: #fff7ed;
-        border: 1px solid #fed7aa;
-        border-radius: 4px;
-        padding: 4px 8px;
-        margin: 0;
+      .model-icon {
+        filter: grayscale(100%);
+      }
+    }
+
+    .missing-keys {
+      color: var(--gray-700);
+      font-size: 12px;
+      font-weight: 500;
+
+      & > span {
+        margin-left: 6px;
+        user-select: all;
+        background-color: rgba(251, 146, 60, 0.15);
+        color: #d97706;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 11px;
+        border: 1px solid rgba(251, 146, 60, 0.2);
       }
     }
   }
@@ -370,10 +943,47 @@ const filteredModels = computed(() => {
 
     .model-title-container {
       display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 10px;
+      flex-direction: column;
+      gap: 4px;
       flex: 1;
+
+      h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--gray-900);
+      }
+
+      .provider-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+
+        .model-count {
+          color: var(--gray-600);
+          font-weight: 500;
+        }
+
+        .provider-id {
+          background: var(--gray-100);
+          color: var(--gray-600);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 500;
+          font-family: 'Courier New', monospace;
+        }
+
+        .provider-link {
+          color: var(--gray-500);
+          transition: color 0.2s ease;
+
+          &:hover {
+            color: var(--main-color);
+          }
+        }
+      }
     }
 
     .model-url {
@@ -390,11 +1000,11 @@ const filteredModels = computed(() => {
     .model-icon {
       width: 28px;
       height: 28px;
-      position: relative;
       border-radius: 6px;
       overflow: hidden;
       filter: grayscale(100%);
       transition: filter 0.2s ease;
+      flex-shrink: 0;
 
       img {
         width: 100%;
@@ -409,11 +1019,31 @@ const filteredModels = computed(() => {
       }
     }
 
-    h3 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--gray-900);
+    .expand-button, .config-button {
+      height: 32px;
+      width: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      cursor: pointer;
+      color: var(--gray-500);
+      border-radius: 6px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: var(--gray-50);
+        color: var(--gray-700);
+      }
+
+      .icon-wrapper {
+        display: inline-flex;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+        &.rotated {
+          transform: rotate(180deg);
+        }
+      }
     }
 
     a {
@@ -761,6 +1391,19 @@ const filteredModels = computed(() => {
         border-color: var(--gray-200);
       }
     }
+  }
+}
+
+// 添加简单的脉冲动画
+@keyframes pulse {
+  0% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.7;
   }
 }
 

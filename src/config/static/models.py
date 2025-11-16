@@ -19,6 +19,7 @@ class ChatModelProvider(BaseModel):
     default: str = Field(..., description="默认模型名称")
     env: str = Field(..., description="API Key 环境变量名")
     models: list[str] = Field(default_factory=list, description="支持的模型列表")
+    custom: bool = Field(default=False, description="是否为自定义供应商")
 
 
 class EmbedModelInfo(BaseModel):

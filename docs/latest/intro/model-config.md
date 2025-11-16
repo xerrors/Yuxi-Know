@@ -4,14 +4,14 @@
 
 系统支持多种大语言模型服务商，通过配置对应的 API 密钥即可使用：
 
-| 服务商 | 环境变量 | 特点 |
-|--------|----------|------|
+| 服务商                                           | 环境变量                | 特点                  |
+| ------------------------------------------------ | ----------------------- | --------------------- |
 | [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) | `SILICONFLOW_API_KEY` | 🆓 免费额度，默认推荐 |
-| OpenAI | `OPENAI_API_KEY` | GPT 系列模型 |
-| DeepSeek | `DEEPSEEK_API_KEY` | 国产大模型 |
-| OpenRouter | `OPENROUTER_API_KEY` | 多模型聚合平台 |
-| 智谱清言 | `ZHIPUAI_API_KEY` | GLM 系列模型 |
-| 阿里云百炼 | `DASHSCOPE_API_KEY` | 通义千问系列 |
+| OpenAI                                           | `OPENAI_API_KEY`      | GPT 系列模型          |
+| DeepSeek                                         | `DEEPSEEK_API_KEY`    | 国产大模型            |
+| OpenRouter                                       | `OPENROUTER_API_KEY`  | 多模型聚合平台        |
+| 智谱清言                                         | `ZHIPUAI_API_KEY`     | GLM 系列模型          |
+| 阿里云百炼                                       | `DASHSCOPE_API_KEY`   | 通义千问系列          |
 
 其余还支持火山、Together、vLLM、Ollama 等。
 
@@ -19,7 +19,7 @@
 
 在 `.env` 文件中添加对应的环境变量：
 
-<<< @/../.env.template#model_provider{bash 2}
+<<< @/../.env.template#model_provider{bash 5}
 
 ### 默认对话模型格式
 
@@ -29,8 +29,7 @@
 default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
 ```
 
-在 Web 界面中选择模型时也会自动按照这一格式保存，无需手动拆分提供商和模型名称。
-
+在 Web 界面中选择模型时也会自动按照这一格式保存。
 
 ::: tip 免费获取 API Key
 [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。
@@ -38,92 +37,122 @@ default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
 
 ## 自定义模型供应商
 
-::: warning
-原本网页中的自定义模型已在 `0.3.x` 版本移除，请在 `src/config/static/models.py` 中按如下方式配置，并重启服务后选择并使用。此外，这里也推荐一下团队的另外一个小工具 [mvllm (Manage and Route vLLM Servers)](https://github.com/xerrors/mvllm)。
-:::
-
 ::: tip 配置系统升级 (v0.3.x)
 从 `v0.3.x` 版本开始，模型配置系统已升级为基于 Pydantic BaseModel 的类型安全配置，支持 TOML 格式的用户配置文件。
+
 - **默认配置**: `src/config/static/models.py` (Python 代码)
 - **用户配置**: `saves/config/base.toml` (TOML 格式，仅保存用户修改)
-:::
+- **自定义供应商**: `saves/config/custom_providers.toml` (独立配置文件)
+  :::
 
-系统理论上兼容任何 OpenAI 兼容的模型服务，包括：
+系统提供了完整的自定义供应商管理功能，支持通过 Web 界面直接添加、编辑、测试和删除自定义模型供应商。
 
-- **vLLM**: 高性能推理服务
-- **Ollama**: 本地模型管理
-- **API 中转服务**: 各种代理和聚合服务
+### 使用方法
 
-如需添加新的模型供应商，请按以下步骤操作：
+系统支持任何 OpenAI 兼容的云服务提供商
 
-### 1. 编辑模型配置文件
+#### 1. Web 界面操作（推荐）
 
-**方式一：修改默认配置（推荐）**
-编辑 `src/config/static/models.py` 文件中的 `DEFAULT_CHAT_MODEL_PROVIDERS` 字典
+访问 **系统设置 > 模型配置**，在"自定义供应商"部分点击 **添加自定义供应商**。这里的密钥可以直接填写也可以填写对应的环境变量名称。
 
-在 `src/config/static/models.py` 中添加新的模型供应商：
+#### 2. 配置文件操作
 
-```python
-DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
-    # ... 现有配置 ...
+如需通过配置文件管理，编辑 `saves/config/custom_providers.toml`：
 
-    "custom-provider": ChatModelProvider(
-        name="自定义提供商",
-        url="https://your-provider.com/docs",
-        base_url="https://api.your-provider.com/v1",
-        default="custom-model-name",
-        env="CUSTOM_API_KEY_ENV_NAME",
-        models=[
-            "supported-model-name",
-            "another-model-name",
-        ],
-    ),
+```toml
+[model_names.local-vllm]
+name = "本地 vLLM 服务"
+url = "https://docs.vllm.ai"
+base_url = "http://localhost:8000/v1"
+default = "Qwen/Qwen2.5-7B-Instruct"
+env = "LOCAL_VLLM_API_KEY"
+models = [
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen2.5-14B-Instruct",
+]
+custom = true
 
-    # 本地 Ollama 服务
-    "local-ollama": ChatModelProvider(
-        name="Local Ollama",
-        url="https://ollama.com",
-        base_url="http://localhost:11434/v1",
-        default="llama3.2",
-        env="NO_API_KEY",  # 对于不需要API Key的服务，使用NO_API_KEY
-        models=["llama3.2", "qwen2.5"],
-    ),
-
-    # 本地 vLLM 服务
-    "local-vllm": ChatModelProvider(
-        name="Local vLLM",
-        url="https://docs.vllm.ai",
-        base_url="http://localhost:8000/v1",
-        default="Qwen/Qwen2.5-7B-Instruct",
-        env="NO_API_KEY",
-        models=[
-            "Qwen/Qwen2.5-7B-Instruct",
-            "Qwen/Qwen2.5-14B-Instruct",
-        ],
-    ),
-}
+[model_names.local-ollama]
+name = "本地 Ollama"
+url = "https://ollama.com"
+base_url = "http://localhost:11434/v1"
+default = "llama3.2"
+env = "NO_API_KEY"
+models = ["llama3.2", "qwen2.5"]
+custom = true
 ```
 
-### 2. 配置环境变量
+然后在 `.env` 文件中添加对应的环境变量：
 
-在 `.env` 文件中添加对应的环境变量：
 ```env
-CUSTOM_API_KEY_ENV_NAME=your_api_key_here
+LOCAL_VLLM_API_KEY=your_api_key_here
 ```
 
-### 3. 重新部署
+### API 端点
 
-```bash
-docker compose restart api-dev
+系统提供以下 API 端点管理自定义供应商：
+
+- `GET /api/system/custom-providers` - 获取所有自定义供应商
+- `POST /api/system/custom-providers` - 添加自定义供应商
+- `PUT /api/system/custom-providers/{provider_id}` - 更新自定义供应商
+- `DELETE /api/system/custom-providers/{provider_id}` - 删除自定义供应商
+- `POST /api/system/custom-providers/{provider_id}/test` - 测试供应商连接
+
+### 常见配置示例
+
+#### vLLM 本地服务
+
+```toml
+[model_names.vllm-local]
+name = "vLLM 本地服务"
+base_url = "http://localhost:8000/v1"
+default = "Qwen/Qwen2.5-7B-Instruct"
+env = "NO_API_KEY"
+models = [
+    "Qwen/Qwen2.5-7B-Instruct",
+    "Qwen/Qwen2.5-14B-Instruct",
+    "meta-llama/Llama-3.1-8B-Instruct"
+]
 ```
+
+#### Ollama 本地服务
+
+```toml
+[model_names.ollama-local]
+name = "Ollama 本地服务"
+base_url = "http://localhost:11434/v1"
+default = "llama3.2"
+env = "NO_API_KEY"
+models = [
+    "llama3.2:latest",
+    "qwen2.5:latest",
+    "codellama:latest"
+]
+```
+
+#### 第三方 API 中转服务
+
+```toml
+[model_names.api-proxy]
+name = "API 中转服务"
+base_url = "https://api-proxy.example.com/v1"
+default = "gpt-3.5-turbo"
+env = "API_PROXY_KEY"
+models = [
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "claude-3-sonnet"
+]
+```
+
+### 故障排除
+
+1. **测试连接失败**: 检查 API 地址格式和 API 密钥配置
+2. **模型不可用**: 确认模型名称拼写和服务端是否支持该模型
+3. **权限错误**: 确保用户具有管理员权限
+4. **配置未生效**: 检查环境变量配置和服务重启状态
 
 ## 嵌入模型和重排序模型
-
-::: warning 重要说明
-从 v0.2 版本开始，项目采用微服务架构，模型部署与项目本身完全解耦。如需使用本地模型，需要先通过 vLLM 或 Ollama 部署为 API 服务。
-:::
-
-### 本地模型部署
 
 #### 1. 配置模型信息
 

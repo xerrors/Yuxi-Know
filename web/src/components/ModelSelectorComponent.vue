@@ -32,11 +32,11 @@
     </div>
     <template #overlay>
       <a-menu class="scrollable-menu">
-        <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
+                <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
           <a-menu-item v-for="(model, idx) in modelNames[item]?.models" :key="`${item}-${idx}`" @click="handleSelectModel(item, model)">
             {{ model }}
-          </a-menu-item>
-        </a-menu-item-group>
+            </a-menu-item>
+                  </a-menu-item-group>
       </a-menu>
     </template>
   </a-dropdown>

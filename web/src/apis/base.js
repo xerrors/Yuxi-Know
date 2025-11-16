@@ -56,6 +56,17 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
         errorData = await response.json()
         errorMessage = errorData.detail || errorData.message || errorMessage
         console.log('API错误详情:', errorData);
+
+        // 如果是422错误，打印更详细的信息
+        if (response.status === 422) {
+          console.error('422验证错误详情:', {
+            url,
+            requestMethod: requestOptions.method,
+            requestHeaders: requestOptions.headers,
+            requestBody: requestOptions.body,
+            responseData: errorData
+          });
+        }
       } catch (e) {
         // 如果无法解析JSON，使用默认错误信息
         console.log('无法解析错误响应JSON:', e);
