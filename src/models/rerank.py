@@ -1,5 +1,6 @@
 import asyncio
 import os
+from abc import ABC, abstractmethod
 from collections.abc import Iterable, Sequence
 from typing import Any
 
@@ -14,7 +15,7 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-class OnlineReranker:
+class BaseReranker(ABC):
     def __init__(self, model_name, api_key, base_url, **kwargs):
         self.url = get_docker_safe_url(base_url)
         self.model = model_name
@@ -22,10 +23,19 @@ class OnlineReranker:
         self.headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         self.session: aiohttp.ClientSession | None = None
         self.timeout = aiohttp.ClientTimeout(total=30)
+        self.parameters: dict[str, Any] = dict(kwargs.get("parameters", {}))
 
     async def _ensure_session(self) -> None:
         if self.session is None or self.session.closed:
             self.session = aiohttp.ClientSession(headers=self.headers, timeout=self.timeout)
+
+    @abstractmethod
+    def _build_payload(self, query: str, documents: list[str], max_length: int) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def _extract_results(self, result: dict[str, Any]) -> list[dict[str, Any]]:
+        raise NotImplementedError
 
     async def acompute_score(
         self,
@@ -65,15 +75,11 @@ class OnlineReranker:
         return all_scores
 
     async def _batch_rerank(self, query: str, documents: Iterable[str], max_length: int) -> list[float]:
-        payload = {
-            "model": self.model,
-            "query": query,
-            "documents": list(documents),
-            "max_chunks_per_doc": max_length,
-        }
-
-        if not payload["documents"]:
+        docs = list(documents)
+        if not docs:
             return []
+
+        payload = self._build_payload(query, docs, max_length)
 
         await self._ensure_session()
         assert self.session is not None
@@ -90,11 +96,10 @@ class OnlineReranker:
             logger.error(f"Reranking request failed: {exc}")
             raise exc
 
-        processed = sorted(result.get("results", []), key=lambda item: item.get("index", 0))
+        processed = sorted(self._extract_results(result), key=lambda item: item.get("index", 0))
         return [float(entry.get("relevance_score", 0.0)) for entry in processed]
 
     def compute_score(self, sentence_pairs, batch_size=256, max_length=512, normalize=False):
-        """Synchronous helper retained for backwards compatibility."""
         try:
             _ = asyncio.get_running_loop()
         except RuntimeError:
@@ -119,6 +124,35 @@ class OnlineReranker:
                 loop.run_until_complete(self.aclose())
 
 
+class OpenAIReranker(BaseReranker):
+    def _build_payload(self, query: str, documents: list[str], max_length: int) -> dict[str, Any]:
+        return {
+            "model": self.model,
+            "query": query,
+            "documents": documents,
+            "max_chunks_per_doc": max_length,
+        }
+
+    def _extract_results(self, result: dict[str, Any]) -> list[dict[str, Any]]:
+        return list(result.get("results", []))
+
+
+class DashscopeReranker(BaseReranker):
+    def _build_payload(self, query: str, documents: list[str], max_length: int) -> dict[str, Any]:
+        params = {"top_n": len(documents), "return_documents": False}
+        instruct = self.parameters.get("instruct")
+        if instruct:
+            params["instruct"] = instruct
+        return {
+            "model": self.model,
+            "input": {"query": query, "documents": documents},
+            "parameters": params,
+        }
+
+    def _extract_results(self, result: dict[str, Any]) -> list[dict[str, Any]]:
+        return list(result.get("output", {}).get("results", []))
+
+
 def get_reranker(model_id, **kwargs):
     support_rerankers = config.reranker_names.keys()
     assert model_id in support_rerankers, f"Unsupported Reranker: {model_id}, only support {support_rerankers}"
@@ -127,4 +161,9 @@ def get_reranker(model_id, **kwargs):
     base_url = model_info.base_url
     api_key = os.getenv(model_info.api_key) or model_info.api_key
     assert api_key, f"{model_info.name} api_key is required"
-    return OnlineReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)
+    provider = model_id.split("/", maxsplit=1)[0] if "/" in model_id else ""
+    if provider in {"siliconflow", "vllm"}:
+        return OpenAIReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)
+    if provider == "dashscope":
+        return DashscopeReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)
+    return OpenAIReranker(model_name=model_info.name, api_key=api_key, base_url=base_url, **kwargs)

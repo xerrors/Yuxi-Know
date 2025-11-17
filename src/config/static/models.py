@@ -129,6 +129,29 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
             "anthropic/claude-sonnet-4",
         ],
     ),
+    # "moonshot": ChatModelProvider(
+    #     name="月之暗面",
+    #     url="https://platform.moonshot.cn/docs/overview",
+    #     base_url="https://api.moonshot.cn/v1",
+    #     default="kimi-latest",
+    #     env="MOONSHOT_API_KEY",
+    #     models=[
+    #         "kimi-latest",
+    #         "kimi-k2-thinking",
+    #         "kimi-k2-0905-preview",
+    #     ],
+    # ), # 目前适配有问题 Error code: 400 - {'error': {'message': 'Invalid request: function name is invalid, must start with a letter and can contain letters, numbers, underscores, and dashes', 'type': 'invalid_request_error'}}   # noqa: E501
+    "modelscope": ChatModelProvider(
+        name="ModelScope",
+        url="https://www.modelscope.cn/docs/model-service/API-Inference/intro",
+        base_url="https://api-inference.modelscope.cn/v1/",
+        default="deepseek-ai/DeepSeek-V3.2-Exp",
+        env="MODELSCOPE_ACCESS_TOKEN",
+        models=[
+            "Qwen/Qwen3-32B",
+            "deepseek-ai/DeepSeek-V3.2-Exp"
+        ],
+    ),
 }
 
 
@@ -173,6 +196,12 @@ DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
         base_url="http://localhost:11434/api/embed",
         api_key="no_api_key",
     ),
+    "dashscope/text-embedding-v4": EmbedModelInfo(
+        name="text-embedding-v4",
+        dimension=1024,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",
+        api_key="DASHSCOPE_API_KEY",
+    ),
 }
 
 
@@ -190,6 +219,16 @@ DEFAULT_RERANKERS: dict[str, RerankerInfo] = {
         name="Pro/BAAI/bge-reranker-v2-m3",
         base_url="https://api.siliconflow.cn/v1/rerank",
         api_key="SILICONFLOW_API_KEY",
+    ),
+    "dashscope/gte-rerank-v2": RerankerInfo(
+        name="gte-rerank-v2",
+        base_url="https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+        api_key="DASHSCOPE_API_KEY",
+    ),
+    "dashscope/qwen3-rerank": RerankerInfo(
+        name="qwen3-rerank",
+        base_url="https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+        api_key="DASHSCOPE_API_KEY",
     ),
     "vllm/BAAI/bge-reranker-v2-m3": RerankerInfo(
         name="BAAI/bge-reranker-v2-m3",

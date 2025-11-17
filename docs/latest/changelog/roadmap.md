@@ -27,7 +27,7 @@
 - 新增基于知识库文件生成思维导图功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
 - 新增基于知识库文件生成示例问题功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
 - 新增知识库支持文件夹/压缩包上传的功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
-- 新增自定义模型支持
+- 新增自定义模型支持、新增 dashscope rerank/embeddings 模型的支持
 
 ### 修复
 - 修复重排序模型实际未生效的问题
