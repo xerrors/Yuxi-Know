@@ -142,8 +142,38 @@ class MinerUOfficialParser(BaseDocumentProcessor):
             result = self._poll_batch_result(batch_id)
             logger.info(f"任务完成，状态: {result['state']}")
 
-            # 步骤 3: 下载并解压结果
-            text = self._download_and_extract(result.get("full_zip_url"))
+            zip_url = result.get("full_zip_url")
+
+            try:
+                zip_path = self._download_zip(zip_url)
+            except Exception:
+                text = self._download_and_extract(zip_url)
+                processing_time = time.time() - start_time
+                logger.info(
+                    f"MinerU Official 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)"
+                )
+                return text
+
+            from src.knowledge.indexing import _process_zip_file
+
+            try:
+                processed = _process_zip_file(zip_path, params.get("db_id") or "ocr-test")
+                text = processed["markdown_content"]
+            except Exception:
+                import zipfile
+                text = ""
+                logger.error(f"从 zip 文件中提取 full.md 失败: {zip_path}，使用第一个 md 文件")
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    md_files = [n for n in zf.namelist() if n.lower().endswith(".md")]
+                    if md_files:
+                        md_file = next((n for n in md_files if Path(n).name == "full.md"), md_files[0])
+                        with zf.open(md_file) as f:
+                            text = f.read().decode("utf-8")
+            finally:
+                try:
+                    os.unlink(zip_path)
+                except Exception:
+                    pass
 
             processing_time = time.time() - start_time
             logger.info(
@@ -310,3 +340,19 @@ class MinerUOfficialParser(BaseDocumentProcessor):
 
             finally:
                 os.unlink(tmp_file.name)
+
+    def _download_zip(self, zip_url: str) -> str:
+        """下载结果ZIP到临时文件并返回路径"""
+        if not zip_url:
+            raise DocumentParserException("未获取到结果下载链接", self.get_service_name(), "no_download_url")
+        response = requests.get(zip_url, timeout=60)
+        if response.status_code != 200:
+            raise DocumentParserException(
+                f"下载结果失败: HTTP {response.status_code}", self.get_service_name(), "download_failed"
+            )
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_file:
+            tmp_file.write(response.content)
+            tmp_file.flush()
+            return tmp_file.name
