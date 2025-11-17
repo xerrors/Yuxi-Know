@@ -397,17 +397,16 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 
 @chat.get("/agent")
 async def get_agent(current_user: User = Depends(get_required_user)):
-    """获取所有可用智能体（需要登录）"""
+    """获取所有可用智能体的基本信息（需要登录）"""
     agents_info = await agent_manager.get_agents_info()
 
-    # Return agents with complete information
+    # Return agents with basic information (without configurable_items for performance)
     agents = [
         {
             "id": agent_info["id"],
             "name": agent_info.get("name", "Unknown"),
             "description": agent_info.get("description", ""),
             "examples": agent_info.get("examples", []),
-            "configurable_items": agent_info.get("configurable_items", []),
             "has_checkpointer": agent_info.get("has_checkpointer", False),
             "capabilities": agent_info.get("capabilities", []),  # 智能体能力列表
         }
@@ -415,6 +414,34 @@ async def get_agent(current_user: User = Depends(get_required_user)):
     ]
 
     return {"agents": agents}
+
+
+@chat.get("/agent/{agent_id}")
+async def get_single_agent(agent_id: str, current_user: User = Depends(get_required_user)):
+    """获取指定智能体的完整信息（包含配置选项）（需要登录）"""
+    try:
+        # 检查智能体是否存在
+        if not (agent := agent_manager.get_agent(agent_id)):
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+        # 获取智能体的完整信息（包含 configurable_items）
+        agent_info = await agent.get_info()
+
+        return {
+            "id": agent_info["id"],
+            "name": agent_info.get("name", "Unknown"),
+            "description": agent_info.get("description", ""),
+            "examples": agent_info.get("examples", []),
+            "configurable_items": agent_info.get("configurable_items", []),
+            "has_checkpointer": agent_info.get("has_checkpointer", False),
+            "capabilities": agent_info.get("capabilities", []),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取智能体 {agent_id} 信息出错: {e}")
+        raise HTTPException(status_code=500, detail=f"获取智能体信息出错: {str(e)}")
 
 
 @chat.post("/agent/{agent_id}")

@@ -16,6 +16,9 @@ export const useAgentStore = defineStore('agent', () => {
   const agentConfig = ref({})
   const originalAgentConfig = ref({})
 
+  // 智能体详情相关状态
+  const agentDetails = ref({}) // 存储每个智能体的详细信息（含 configurable_items）
+
   // 工具相关状态
   const availableTools = ref([])
 
@@ -23,6 +26,7 @@ export const useAgentStore = defineStore('agent', () => {
   const isLoadingAgents = ref(false)
   const isLoadingConfig = ref(false)
   const isLoadingTools = ref(false)
+  const isLoadingAgentDetail = ref(false)
 
   // 错误状态
   const error = ref(null)
@@ -44,10 +48,12 @@ export const useAgentStore = defineStore('agent', () => {
   const isDefaultAgent = computed(() => selectedAgentId.value === defaultAgentId.value)
 
   const configurableItems = computed(() => {
-    const agent = selectedAgentId.value ? agents.value.find(a => a.id === selectedAgentId.value) : null
-    if (!agent || !agent.configurable_items) return {}
+    const agentId = selectedAgentId.value
+    if (!agentId || !agentDetails.value[agentId] || !agentDetails.value[agentId].configurable_items) {
+      return {}
+    }
 
-    const agentConfigurableItems = agent.configurable_items
+    const agentConfigurableItems = agentDetails.value[agentId].configurable_items
     const items = { ...agentConfigurableItems }
     Object.keys(items).forEach(key => {
       const item = items[key]
@@ -76,13 +82,21 @@ export const useAgentStore = defineStore('agent', () => {
 
       if (!selectedAgentId.value || !agents.value.find(a => a.id === selectedAgentId.value)) {
         if (defaultAgentId.value && agents.value.find(a => a.id === defaultAgentId.value)) {
-          selectAgent(defaultAgentId.value)
+          await selectAgent(defaultAgentId.value)
         } else if (agents.value.length > 0) {
           const firstAgentId = agents.value[0].id
-          selectAgent(firstAgentId)
+          await selectAgent(firstAgentId)
         }
       } else {
         console.log('Condition FALSE: Persisted selected agent is valid. Keeping it.')
+        // 确保已缓存的智能体详细信息存在
+        if (selectedAgentId.value && !agentDetails.value[selectedAgentId.value]) {
+          try {
+            await fetchAgentDetail(selectedAgentId.value)
+          } catch (err) {
+            console.warn(`Failed to fetch agent detail for ${selectedAgentId.value}:`, err)
+          }
+        }
       }
 
       if (selectedAgentId.value) {
@@ -121,6 +135,35 @@ export const useAgentStore = defineStore('agent', () => {
   }
 
   /**
+   * 获取单个智能体的详细信息（包含配置选项）
+   * @param {string} agentId - 智能体ID
+   */
+  async function fetchAgentDetail(agentId) {
+    if (!agentId) return
+
+    // 如果已经缓存了详细信息，直接返回
+    if (agentDetails.value[agentId]) {
+      return agentDetails.value[agentId]
+    }
+
+    isLoadingAgentDetail.value = true
+    error.value = null
+
+    try {
+      const response = await agentApi.getAgentDetail(agentId)
+      agentDetails.value[agentId] = response
+      return response
+    } catch (err) {
+      console.error(`Failed to fetch agent detail for ${agentId}:`, err)
+      handleChatError(err, 'fetch')
+      error.value = err.message
+      throw err
+    } finally {
+      isLoadingAgentDetail.value = false
+    }
+  }
+
+  /**
    * 获取默认智能体
    */
   async function fetchDefaultAgent() {
@@ -152,12 +195,20 @@ export const useAgentStore = defineStore('agent', () => {
   /**
    * 选择智能体
    */
-  function selectAgent(agentId) {
+  async function selectAgent(agentId) {
     if (agents.value.find(a => a.id === agentId)) {
       selectedAgentId.value = agentId
       // 清空之前的配置
       agentConfig.value = {}
       originalAgentConfig.value = {}
+
+      // 自动获取智能体详细信息（包含 configurable_items）
+      try {
+        await fetchAgentDetail(agentId)
+      } catch (err) {
+        console.warn(`Failed to fetch agent detail for ${agentId}:`, err)
+        // 不抛出错误，允许继续选择智能体
+      }
     }
   }
 
@@ -262,10 +313,12 @@ export const useAgentStore = defineStore('agent', () => {
     defaultAgentId.value = null
     agentConfig.value = {}
     originalAgentConfig.value = {}
+    agentDetails.value = {}
     availableTools.value = []
     isLoadingAgents.value = false
     isLoadingConfig.value = false
     isLoadingTools.value = false
+    isLoadingAgentDetail.value = false
     error.value = null
     isInitialized.value = false
   }
@@ -277,10 +330,12 @@ export const useAgentStore = defineStore('agent', () => {
     defaultAgentId,
     agentConfig,
     originalAgentConfig,
+    agentDetails,
     availableTools,
     isLoadingAgents,
     isLoadingConfig,
     isLoadingTools,
+    isLoadingAgentDetail,
     error,
     isInitialized,
 
@@ -295,6 +350,7 @@ export const useAgentStore = defineStore('agent', () => {
     // 方法
     initialize,
     fetchAgents,
+    fetchAgentDetail,
     fetchDefaultAgent,
     setDefaultAgent,
     selectAgent,
