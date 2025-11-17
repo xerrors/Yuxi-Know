@@ -25,6 +25,7 @@
           >
             文件 ({{ fileCount }})
           </button>
+          <a-button type="text" class="refresh-btn" @click="emitRefresh">刷新</a-button>
         </div>
         <div class="tab-content">
           <!-- Todo Display -->
@@ -103,7 +104,7 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:visible']);
+const emit = defineEmits(['update:visible', 'refresh']);
 
 const activeTab = ref('todos');
 const modalVisible = ref(false);
@@ -209,6 +210,10 @@ const closeModal = () => {
   currentFile.value = null;
   currentFilePath.value = '';
 };
+
+const emitRefresh = () => {
+  emit('refresh');
+};
 </script>
 
 <style scoped lang="less">
@@ -223,6 +228,7 @@ const closeModal = () => {
   display: flex;
   border-bottom: 1px solid var(--gray-200);
   position: relative;
+  align-items: center;
 }
 
 .tab {
@@ -496,4 +502,10 @@ const closeModal = () => {
     }
   }
 }
+
+.refresh-btn {
+  margin-left: auto;
+  color: var(--gray-700);
+}
+
 </style>

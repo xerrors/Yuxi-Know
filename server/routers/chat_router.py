@@ -882,6 +882,34 @@ async def get_agent_history(
         raise HTTPException(status_code=500, detail=f"获取智能体历史消息出错: {str(e)}")
 
 
+@chat.get("/agent/{agent_id}/state")
+async def get_agent_state(
+    agent_id: str,
+    thread_id: str,
+    current_user: User = Depends(get_required_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        if not agent_manager.get_agent(agent_id):
+            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+        conv_manager = ConversationManager(db)
+        _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+
+        agent = agent_manager.get_agent(agent_id)
+        graph = await agent.get_graph()
+        langgraph_config = {"configurable": {"user_id": str(current_user.id), "thread_id": thread_id}}
+        state = await graph.aget_state(langgraph_config)
+        agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
+
+        return {"agent_state": agent_state}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"获取AgentState出错: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取AgentState出错: {str(e)}")
+
+
 @chat.get("/agent/{agent_id}/config")
 async def get_agent_config(agent_id: str, current_user: User = Depends(get_required_user)):
     """从YAML文件加载智能体配置（需要登录）"""

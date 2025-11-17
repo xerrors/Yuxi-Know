@@ -45,8 +45,10 @@
         <div class="header__right">
           <!-- AgentState 显示按钮 - 只在智能体支持 todo 或 files 能力时显示 -->
           <AgentPopover
+            v-if="hasAgentStateContent"
             v-model:visible="agentStatePopoverVisible"
             :agent-state="currentAgentState"
+            @refresh="handleAgentStateRefresh"
           >
             <div
               class="agent-nav-btn agent-state-btn"
@@ -369,18 +371,28 @@ const currentAgentState = computed(() => {
   return currentChatId.value ? getThreadState(currentChatId.value)?.agentState || null : null;
 });
 
+const countFiles = (files) => {
+  if (!Array.isArray(files)) return 0;
+  let c = 0;
+  for (const item of files) {
+    if (item && typeof item === 'object') c += Object.keys(item).length;
+  }
+  return c;
+};
+
 const hasAgentStateContent = computed(() => {
-  const agentState = currentAgentState.value;
-  if (!agentState) return false;
-  return (agentState.todos && agentState.todos.length > 0) ||
-         (agentState.files && Object.keys(agentState.files).length > 0);
+  const s = currentAgentState.value;
+  if (!s) return false;
+  const todoCount = Array.isArray(s.todos) ? s.todos.length : 0;
+  const fileCount = countFiles(s.files);
+  return todoCount > 0 || fileCount > 0;
 });
 
 const totalAgentStateItems = computed(() => {
-  const agentState = currentAgentState.value;
-  if (!agentState) return 0;
-  const todoCount = agentState.todos ? agentState.todos.length : 0;
-  const fileCount = agentState.files ? Object.keys(agentState.files).length : 0;
+  const s = currentAgentState.value;
+  if (!s) return 0;
+  const todoCount = Array.isArray(s.todos) ? s.todos.length : 0;
+  const fileCount = countFiles(s.files);
   return todoCount + fileCount;
 });
 
@@ -756,6 +768,15 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
   }
 };
 
+const fetchAgentState = async (agentId, threadId) => {
+  if (!agentId || !threadId) return;
+  try {
+    const res = await agentApi.getAgentState(agentId, threadId);
+    const ts = getThreadState(threadId);
+    if (ts) ts.agentState = res.agent_state || null;
+  } catch (error) {}
+};
+
 const loadThreadAttachments = async (threadId, { silent = false } = {}) => {
   if (!threadId) return;
   try {
@@ -954,6 +975,7 @@ const selectChat = async (chatId) => {
   try {
     await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId });
     await loadThreadAttachments(chatId, { silent: true });
+    await fetchAgentState(currentAgentId.value, chatId);
   } catch (error) {
     handleChatError(error, 'load');
   } finally {
@@ -1239,6 +1261,11 @@ const toggleSidebar = () => {
   chatUIStore.toggleSidebar();
 };
 const openAgentModal = () => emit('open-agent-modal');
+
+const handleAgentStateRefresh = async () => {
+  if (!currentAgentId.value || !currentChatId.value) return;
+  await fetchAgentState(currentAgentId.value, currentChatId.value);
+};
 
 // ==================== HELPER FUNCTIONS ====================
 const getLastMessage = (conv) => {
