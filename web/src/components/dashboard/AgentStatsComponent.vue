@@ -37,7 +37,7 @@
       <!-- 对话数和工具调用数分布 -->
       <a-col :span="24">
         <div class="chart-container">
-          <h4>对话/工具调用分布</h4>
+          <h4>对话/工具调用分布 (TOP 3)</h4>
           <div ref="conversationToolChartRef" class="chart"></div>
         </div>
       </a-col>
@@ -182,11 +182,31 @@ const initConversationToolChart = () => {
   const conversationData = props.agentStats.agent_conversation_counts || []
   const toolData = props.agentStats.agent_tool_usage || []
 
-  // 获取所有智能体ID
-  const allAgentIds = [...new Set([
-    ...conversationData.map(item => item.agent_id),
-    ...toolData.map(item => item.agent_id)
-  ])]
+  // 获取所有智能体ID并按对话数+工具调用数排序，取前3个
+  const allAgentStats = {}
+
+  // 统计每个智能体的总数据量（对话数 + 工具调用数）
+  conversationData.forEach(item => {
+    if (!allAgentStats[item.agent_id]) {
+      allAgentStats[item.agent_id] = { conversation: 0, tool: 0, total: 0 }
+    }
+    allAgentStats[item.agent_id].conversation = item.conversation_count
+    allAgentStats[item.agent_id].total += item.conversation_count
+  })
+
+  toolData.forEach(item => {
+    if (!allAgentStats[item.agent_id]) {
+      allAgentStats[item.agent_id] = { conversation: 0, tool: 0, total: 0 }
+    }
+    allAgentStats[item.agent_id].tool = item.tool_usage_count
+    allAgentStats[item.agent_id].total += item.tool_usage_count
+  })
+
+  // 按总数据量降序排序，取前3个
+  const topAgentIds = Object.entries(allAgentStats)
+    .sort(([,a], [,b]) => b.total - a.total)
+    .slice(0, 3)
+    .map(([agentId]) => agentId)
 
   const option = {
     tooltip: {
@@ -216,7 +236,7 @@ const initConversationToolChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: allAgentIds,
+      data: topAgentIds,
       axisLine: {
         lineStyle: {
           color: '#e8e8e8'
@@ -248,7 +268,7 @@ const initConversationToolChart = () => {
       {
         name: '对话数',
         type: 'bar',
-        data: allAgentIds.map(agentId => {
+        data: topAgentIds.map(agentId => {
           const item = conversationData.find(d => d.agent_id === agentId)
           return item ? item.conversation_count : 0
         }),
@@ -267,7 +287,7 @@ const initConversationToolChart = () => {
       {
         name: '工具调用数',
         type: 'bar',
-        data: allAgentIds.map(agentId => {
+        data: topAgentIds.map(agentId => {
           const item = toolData.find(d => d.agent_id === agentId)
           return item ? item.tool_usage_count : 0
         }),

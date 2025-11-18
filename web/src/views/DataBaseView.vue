@@ -871,57 +871,60 @@ onMounted(() => {
 }
 
 .database, .graphbase {
-  background-color: white;
-  box-shadow: 0px 1px 2px 0px rgba(16,24,40,.06),0px 1px 3px 0px rgba(16,24,40,.1);
-  border: 2px solid white;
-  transition: box-shadow 0.2s ease-in-out;
-
-  &:hover {
-    box-shadow: 0px 4px 6px -2px rgba(16,24,40,.03),0px 12px 16px -4px rgba(16,24,40,.08);
-  }
+  background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
+  box-shadow:
+    0px 1px 2px 0px rgba(16,24,40,.06),
+    inset 0px 1px 0px 0px rgba(255,255,255,.6);
+  border: 1px solid rgba(233, 236, 239, 0.6);
+  transition: none;
+  position: relative;
 }
 
 .dbcard, .database {
   width: 100%;
-  padding: 10px;
-  border-radius: 12px;
-  height: 160px;
-  padding: 20px;
+  padding: 24px;
+  border-radius: 16px;
+  height: 180px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   position: relative; // 为绝对定位的锁定图标提供参考
+  overflow: hidden;
 
   .private-lock-icon {
     position: absolute;
-    top: 24px;
-    right: 16px;
-    color: var(--gray-700);
-    background: var(--gray-100);
+    top: 20px;
+    right: 20px;
+    color: var(--gray-600);
+    background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%);
     font-size: 12px;
-    border-radius: 6px;
-    padding: 5px;
-    z-index: 1;
+    border-radius: 8px;
+    padding: 6px;
+    z-index: 2;
+    box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
+    border: 1px solid rgba(229, 231, 235, 0.5);
   }
 
+  
   .top {
     display: flex;
     align-items: center;
-    height: 50px;
-    margin-bottom: 10px;
+    height: 54px;
+    margin-bottom: 14px;
 
     .icon {
-      width: 50px;
-      height: 50px;
-      font-size: 28px;
-      margin-right: 10px;
+      width: 54px;
+      height: 54px;
+      font-size: 26px;
+      margin-right: 14px;
       display: flex;
       justify-content: center;
       align-items: center;
-      background-color: #F5F8FF;
-      border-radius: 8px;
-      border: 1px solid #E0EAFF;
+      background: var(--main-30);
+      border-radius: 12px;
+      border: 1px solid rgba(1, 97, 121, 0.05);
       color: var(--main-color);
+      position: relative;
     }
 
     .info {
@@ -931,35 +934,47 @@ onMounted(() => {
       }
 
       h3 {
-        font-size: 16px;
-        font-weight: bold;
+        font-size: 17px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        line-height: 1.4;
       }
 
       p {
-        color: var(--gray-900);
-        font-size: small;
+        color: var(--gray-700);
+        font-size: 13px;
         display: flex;
         align-items: center;
         gap: 8px;
         flex-wrap: wrap;
+        margin-top: 4px;
+        font-weight: 400;
 
         .created-time-inline {
           color: var(--gray-500);
-          font-size: 12px;
+          font-size: 11px;
+          font-weight: 400;
+          background: var(--gray-50);
+          padding: 2px 6px;
+          border-radius: 4px;
         }
       }
     }
   }
 
   .description {
-    color: var(--gray-900);
+    color: var(--gray-600);
     overflow: hidden;
     display: -webkit-box;
-    line-clamp: 1;
-    -webkit-line-clamp: 1;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    font-weight: 400;
+    flex: 1;
   }
 
 
