@@ -425,7 +425,7 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
-  background-color: #ffffff;
+  background-color: var(--gray-0);
 
   .graph-canvas {
     width: 100%;
@@ -465,10 +465,7 @@ defineExpose({
   }
 }
 
-/* 深色模式下，强制图谱容器保持白色背景 */
-:root.dark .graph-canvas-container {
-  background-color: #ffffff !important;
-}
+
 
 /* 高亮节点的脉冲动画效果 */
 @keyframes highlightPulse {

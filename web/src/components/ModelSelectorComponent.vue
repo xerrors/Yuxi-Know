@@ -324,3 +324,45 @@ const handleSelectModel = async (provider, name) => {
   }
 }
 </style>
+
+<style lang="less">
+// 深色模式适配
+:root.dark {
+  .model-select {
+    background-color: #262626;
+    border-color: #434343;
+
+    .model-select-content {
+      .model-info {
+        .model-text {
+          color: rgba(255, 255, 255, 0.85);
+        }
+
+        .model-provider {
+          color: rgba(255, 255, 255, 0.65);
+        }
+      }
+
+      .model-status-controls {
+        .status-check-button {
+          color: rgba(255, 255, 255, 0.85);
+
+          &:hover {
+            background: #303030;
+          }
+        }
+      }
+    }
+  }
+
+  .scrollable-menu {
+    &::-webkit-scrollbar-thumb {
+      background: #434343;
+
+      &:hover {
+        background: #595959;
+      }
+    }
+  }
+}
+</style>

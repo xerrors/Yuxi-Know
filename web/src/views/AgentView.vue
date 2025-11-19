@@ -737,6 +737,47 @@ const handlePreview = () => {
   }
 }
 
+// 深色模式适配 - 多选卡片
+:root.dark {
+  .multi-select-cards {
+    .multi-select-label {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .option-card {
+      background: #262626;
+      border-color: #434343;
+
+      &:hover {
+        border-color: var(--main-500);
+      }
+
+      &.selected {
+        border-color: var(--main-500);
+        background: rgba(74, 159, 184, 0.15);
+
+        .option-indicator {
+          color: var(--main-400);
+        }
+
+        .option-text {
+          color: var(--main-400);
+        }
+      }
+
+      &.unselected {
+        .option-indicator {
+          color: rgba(255, 255, 255, 0.45);
+        }
+
+        .option-text {
+          color: rgba(255, 255, 255, 0.65);
+        }
+      }
+    }
+  }
+}
+
 // 智能体选择器样式
 .agent-selector {
   border: 1px solid var(--gray-300);
@@ -880,6 +921,71 @@ const handlePreview = () => {
   }
 }
 
+// 深色模式适配 - 智能体选择器和模态框
+:root.dark {
+  .agent-selector {
+    background: #1f1f1f;
+    border-color: #434343;
+
+    &:hover {
+      border-color: var(--main-500);
+    }
+
+    .selected-agent-display {
+      .agent-name {
+        color: rgba(255, 255, 255, 0.85);
+      }
+    }
+  }
+
+  .agent-modal {
+    :deep(.ant-modal-header) {
+      background: #1f1f1f;
+      border-bottom-color: #434343;
+
+      .ant-modal-title {
+        color: rgba(255, 255, 255, 0.85);
+      }
+    }
+
+    :deep(.ant-modal-body) {
+      background: #1f1f1f;
+    }
+
+    .agent-modal-content {
+      .agent-card {
+        background: #262626;
+        border-color: #434343;
+
+        &:hover {
+          border-color: var(--main-500);
+        }
+
+        .agent-card-header .agent-card-title .agent-card-name {
+          color: rgba(255, 255, 255, 0.85);
+        }
+
+        .agent-card-description {
+          color: rgba(255, 255, 255, 0.65);
+        }
+
+        &.selected {
+          border-color: var(--main-500);
+          background: rgba(74, 159, 184, 0.15);
+
+          .agent-card-header .agent-card-title .agent-card-name {
+            color: var(--main-400);
+          }
+
+          .agent-card-description {
+            color: rgba(255, 255, 255, 0.85);
+          }
+        }
+      }
+    }
+  }
+}
+
 // 自定义更多菜单样式
 .more-popup-menu {
   position: fixed;
@@ -934,6 +1040,33 @@ const handlePreview = () => {
     height: 1px;
     background: var(--gray-100);
     margin: 4px 8px;
+  }
+}
+
+// 深色模式适配
+:root.dark .more-popup-menu {
+  background: #1f1f1f;
+  border-color: #434343;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  .menu-item {
+    color: rgba(255, 255, 255, 0.85);
+
+    .menu-icon {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    &:hover {
+      background: #262626;
+    }
+
+    &:active {
+      background: #303030;
+    }
+  }
+
+  .menu-divider {
+    background: #434343;
   }
 }
 

@@ -574,8 +574,8 @@ watch(() => props.isOpen, (newVal) => {
   position: relative;
   width: 0;
   height: 100vh;
-  background: white;
-  border-left: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border-left: 1px solid var(--gray-200);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   display: flex;
@@ -886,7 +886,7 @@ watch(() => props.isOpen, (newVal) => {
     padding: 10px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: white;
+    background: var(--gray-0);
 
     &:hover {
       border-color: var(--main-color);
@@ -946,7 +946,7 @@ watch(() => props.isOpen, (newVal) => {
   }
 
   :deep(.ant-modal-header) {
-    background: white;
+    background: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
     padding: 16px 20px;
 
@@ -959,7 +959,7 @@ watch(() => props.isOpen, (newVal) => {
 
   :deep(.ant-modal-body) {
     padding: 20px;
-    background: white;
+    background: var(--gray-0);
   }
 
   .tools-modal-content {
@@ -1157,6 +1157,350 @@ watch(() => props.isOpen, (newVal) => {
 @media (max-width: 768px) {
   .agent-config-sidebar.open {
     width: 100vw;
+  }
+}
+
+// 深色模式适配
+:root.dark {
+  .agent-config-sidebar {
+    background: #1f1f1f;
+    border-left-color: #434343;
+
+    .sidebar-header {
+      background: #1f1f1f;
+      border-bottom-color: #434343;
+
+      .sidebar-title {
+        color: rgba(255, 255, 255, 0.85);
+
+        .title-icon {
+          color: var(--main-500);
+        }
+      }
+
+      .close-btn {
+        color: rgba(255, 255, 255, 0.65);
+
+        &:hover {
+          color: rgba(255, 255, 255, 0.85);
+          background: #262626;
+        }
+      }
+    }
+
+    .sidebar-content {
+      .agent-info {
+        .agent-basic-info {
+          .agent-description {
+            color: rgba(255, 255, 255, 0.65);
+          }
+        }
+      }
+
+      .sidebar-footer {
+        background: #1f1f1f;
+        border-top-color: #434343;
+
+        .form-actions {
+          .save-btn {
+            background-color: #262626;
+            color: rgba(255, 255, 255, 0.85);
+
+            &.changed {
+              background-color: var(--main-500);
+              color: #fff;
+            }
+
+            &:hover {
+              opacity: 0.9;
+            }
+          }
+
+          .reset-btn {
+            border-color: #434343;
+            color: rgba(255, 255, 255, 0.85);
+            background: #262626;
+
+            &:hover {
+              border-color: var(--main-500);
+              color: var(--main-400);
+            }
+          }
+        }
+      }
+
+      .config-form-content {
+        .config-form {
+          .config-item {
+            .config-description {
+              color: rgba(255, 255, 255, 0.65);
+            }
+
+            .system-prompt-input {
+              background: #262626;
+              border-color: #434343;
+              color: rgba(255, 255, 255, 0.85);
+
+              &::placeholder {
+                color: rgba(255, 255, 255, 0.45);
+              }
+            }
+
+            .system-prompt-display {
+              background: #262626;
+              border-color: #434343;
+
+              &:hover {
+                border-color: var(--main-500);
+                background: #2a2a2a;
+              }
+
+              .system-prompt-content {
+                color: rgba(255, 255, 255, 0.85);
+
+                &.is-placeholder {
+                  color: rgba(255, 255, 255, 0.45);
+                }
+              }
+
+              .edit-hint {
+                color: rgba(255, 255, 255, 0.65);
+                background: rgba(31, 31, 31, 0.9);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 工具选择器深色模式
+  .tools-selector {
+    .tools-summary {
+      background: #262626;
+      border-color: #434343;
+
+      .tools-summary-info {
+        color: rgba(255, 255, 255, 0.85);
+
+        .tools-count {
+          color: rgba(255, 255, 255, 0.85);
+        }
+      }
+
+      .select-tools-btn {
+        background: var(--main-500);
+
+        &:hover {
+          background: var(--main-500);
+        }
+      }
+    }
+
+    .selected-tools-preview {
+      .tool-tag {
+        background: #262626;
+        border-color: #434343;
+        color: rgba(255, 255, 255, 0.85);
+
+        :deep(.anticon-close) {
+          color: rgba(255, 255, 255, 0.65);
+
+          &:hover {
+            color: rgba(255, 255, 255, 0.85);
+          }
+        }
+      }
+    }
+  }
+
+  // 多选卡片深色模式
+  .multi-select-cards {
+    .multi-select-label {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .option-card {
+      background: #262626;
+      border-color: #434343;
+
+      &:hover {
+        border-color: var(--main-500);
+      }
+
+      &.selected {
+        border-color: var(--main-500);
+        background: rgba(74, 159, 184, 0.15);
+
+        .option-indicator {
+          color: var(--main-400);
+        }
+
+        .option-text {
+          color: var(--main-400);
+        }
+      }
+
+      &.unselected {
+        .option-indicator {
+          color: rgba(255, 255, 255, 0.45);
+        }
+
+        .option-text {
+          color: rgba(255, 255, 255, 0.65);
+        }
+      }
+    }
+  }
+
+  // 工具选择弹窗深色模式
+  .tools-modal {
+    :deep(.ant-modal-content) {
+      background: #1f1f1f;
+      border-color: #434343;
+    }
+
+    :deep(.ant-modal-header) {
+      background: #1f1f1f;
+      border-bottom-color: #434343;
+
+      .ant-modal-title {
+        color: rgba(255, 255, 255, 0.85);
+      }
+    }
+
+    :deep(.ant-modal-body) {
+      background: #1f1f1f;
+    }
+
+    .tools-modal-content {
+      .tools-search {
+        .search-input {
+          background: #262626;
+          border-color: #434343;
+          color: rgba(255, 255, 255, 0.85);
+
+          :deep(input) {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.85);
+
+            &::placeholder {
+              color: rgba(255, 255, 255, 0.45);
+            }
+          }
+
+          .search-icon {
+            color: rgba(255, 255, 255, 0.65);
+          }
+
+          &:focus-within {
+            border-color: var(--main-500);
+
+            .search-icon {
+              color: var(--main-400);
+            }
+          }
+
+          &:hover {
+            border-color: #595959;
+          }
+        }
+      }
+
+      .tools-list {
+        background: #1f1f1f;
+
+        &::-webkit-scrollbar-track {
+          background: #262626;
+        }
+
+        &::-webkit-scrollbar-thumb {
+          background: #434343;
+
+          &:hover {
+            background: #595959;
+          }
+        }
+
+        .tool-item {
+          background: #262626;
+          border-color: #434343;
+
+          &:hover {
+            border-color: #595959;
+            background: #2a2a2a;
+          }
+
+          .tool-content {
+            .tool-header {
+              .tool-name {
+                color: rgba(255, 255, 255, 0.85);
+              }
+
+              .tool-indicator {
+                color: rgba(255, 255, 255, 0.45);
+              }
+            }
+
+            .tool-description {
+              color: rgba(255, 255, 255, 0.65);
+            }
+          }
+
+          &.selected {
+            background: rgba(74, 159, 184, 0.15);
+            border-color: var(--main-500);
+
+            .tool-content {
+              .tool-name {
+                color: var(--main-400);
+              }
+
+              .tool-indicator {
+                color: var(--main-400);
+              }
+
+              .tool-description {
+                color: rgba(255, 255, 255, 0.85);
+              }
+            }
+          }
+        }
+      }
+
+      .tools-modal-footer {
+        border-top-color: #434343;
+
+        .selected-count {
+          background: #262626;
+          border-color: #434343;
+          color: rgba(255, 255, 255, 0.85);
+        }
+
+        .modal-actions {
+          :deep(.ant-btn) {
+            &.ant-btn-default {
+              background: #262626;
+              border-color: #434343;
+              color: rgba(255, 255, 255, 0.85);
+
+              &:hover {
+                border-color: var(--main-500);
+                color: var(--main-400);
+              }
+            }
+
+            &.ant-btn-primary {
+              background: var(--main-500);
+
+              &:hover {
+                background: var(--main-500);
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 </style>

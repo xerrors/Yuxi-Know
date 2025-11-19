@@ -339,6 +339,72 @@ watch(() => props.agentId, () => {
 }
 
 
+// 深色模式适配
+:root.dark {
+  .feedback-cards-container {
+    &::-webkit-scrollbar-track {
+      background: #262626;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: #434343;
+
+      &:hover {
+        background: #595959;
+      }
+    }
+  }
+
+  .feedback-card {
+    background: #1f1f1f;
+    border-color: #434343;
+
+    &:hover {
+      border-color: var(--main-500);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+  }
+
+  .card-header {
+    background: #262626;
+    border-bottom-color: #434343;
+  }
+
+  .user-details .username {
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .message-content {
+    background: #262626;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .info-item {
+    .label {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .value {
+      color: rgba(255, 255, 255, 0.85);
+    }
+  }
+
+  .reason-content {
+    background: rgba(250, 173, 20, 0.15);
+    border-left-color: #faad14;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .card-footer {
+    background: #262626;
+    border-top-color: #434343;
+  }
+
+  .time-info {
+    color: rgba(255, 255, 255, 0.65);
+  }
+}
+
 // 响应式设计
 @media (max-width: 768px) {
   .feedback-cards-container {
