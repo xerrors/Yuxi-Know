@@ -453,7 +453,7 @@ const handleAvatarChange = async (info) => {
     .ant-modal-title {
       font-size: 18px;
       font-weight: 600;
-      color: #262626;
+      color: var(--gray-900);
     }
   }
 
@@ -488,7 +488,7 @@ const handleAvatarChange = async (info) => {
           width: 80px;
           height: 80px;
           border-radius: 50%;
-          background: #f5f5f5;
+          background: var(--gray-50);
           display: flex;
           margin: 0 auto;
           align-items: center;
@@ -521,7 +521,7 @@ const handleAvatarChange = async (info) => {
       display: flex;
       align-items: center;
       padding: 12px 0;
-      border-bottom: 1px solid #f5f5f5;
+      border-bottom: 1px solid var(--gray-50);
 
       &:last-child {
         border-bottom: none;
@@ -536,12 +536,12 @@ const handleAvatarChange = async (info) => {
 
       .info-value {
         flex: 1;
-        color: #262626;
+        color: var(--gray-900);
         font-size: 14px;
 
         &.user-id {
           font-family: 'Monaco', 'Consolas', monospace;
-          // background: #f5f5f5;
+          // background: var(--gray-50);
           // padding: 4px 8px;
           border-radius: 4px;
           display: inline-block;
