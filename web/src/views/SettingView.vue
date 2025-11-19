@@ -444,9 +444,9 @@ const openLink = (url) => {
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border: 1px solid var(--border-light);
+    border: 1px solid var(--gray-150);
     border-radius: 8px;
-    background: var(--bg-elevated);
+    background: white;
     transition: all 0.2s;
     min-height: 60px;
 

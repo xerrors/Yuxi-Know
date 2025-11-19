@@ -355,7 +355,7 @@ onUnmounted(() => {
 
 .dashboard-container {
   // padding: 0 24px 24px 24px;
-  background-color: var(--bg-primary);
+  background-color: var(--gray-25);
   min-height: calc(100vh - 64px);
   overflow-x: hidden;
 }
@@ -430,34 +430,34 @@ onUnmounted(() => {
 // Dashboard 特有的卡片样式
 .conversations-section,
 .call-stats-section {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-color);
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-200);
   border-radius: 12px;
   transition: all 0.2s ease;
   box-shadow: none;
 
   &:hover {
-    background-color: var(--bg-hover);
-    border-color: var(--border-color);
-    box-shadow: var(--shadow-sm);
+    background-color: var(--gray-25);
+    border-color: var(--gray-200);
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
   }
 
   :deep(.ant-card-head) {
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--gray-200);
     min-height: 56px;
     padding: 0 20px;
-    background-color: var(--bg-elevated);
+    background-color: var(--gray-0);
 
     .ant-card-head-title {
       font-size: 16px;
       font-weight: 600;
-      color: var(--text-primary);
+      color: var(--gray-1000);
     }
   }
 
   :deep(.ant-card-body) {
     padding: 16px 20px;
-    background-color: var(--bg-elevated);
+    background-color: var(--gray-0);
   }
 
   :deep(.ant-card-extra) {
@@ -537,8 +537,8 @@ onUnmounted(() => {
       margin-bottom: 24px;
 
       .summary-card {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-color);
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border: 1px solid #e2e8f0;
         border-radius: 8px;
         padding: 12px;
         text-align: center;
@@ -546,13 +546,13 @@ onUnmounted(() => {
         .summary-value {
           font-size: 16px;
           font-weight: 600;
-          color: var(--text-primary);
+          color: #1e293b;
           margin-bottom: 4px;
         }
 
         .summary-label {
           font-size: 11px;
-          color: var(--text-secondary);
+          color: #64748b;
           font-weight: 500;
         }
       }

@@ -3,33 +3,11 @@
   position: relative;
   width: 100%;
   height: 100%;
-
-  /* 1. 默认背景色（浅色模式） */
   background: #fafafa;
-
-  /* 2. 核心修复：强制锁定容器内文字颜色为深灰 */
-  /* 这样即使外部 body 变成了白色文字，图谱标签依然清晰可见 */
-  color: #333333;
-}
-
-/* 3. 核心修复：深色模式下，只改背景，不改其他 */
-@media (prefers-color-scheme: dark) {
-  .sigma-container {
-    background-color: #141414 !important;
-  }
-}
-
-/* 如果你是通过给 body 加 class="dark" 来切换模式，保留这个 */
-:root[data-theme='dark'] .sigma-container,
-body.dark .sigma-container,
-:root.dark .sigma-container {
-  background-color: #141414 !important;
 }
 
 .sigma-container canvas {
   outline: none;
-  /* 4. 防止 Canvas 被全局 CSS 滤镜反转 */
-  filter: none !important;
 }
 
 /* 节点标签样式 */
@@ -40,11 +18,7 @@ body.dark .sigma-container,
   left: 0;
   width: 100%;
   height: 100%;
-  /* 5. 双重保险：强制标签文字颜色不继承外部的白色 */
-  color: #333333 !important;
 }
-
-/* --- 以下保持你原有的高亮和选中样式不变 --- */
 
 /* 高亮样式 */
 .node-highlighted {
@@ -86,8 +60,6 @@ body.dark .sigma-container,
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 1000;
-  /* 确保加载文字在深色背景下可见 */
-  color: #333333;
 }
 
 /* 工具提示 */

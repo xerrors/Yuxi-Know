@@ -387,8 +387,8 @@ const handlePreview = () => {
 }
 
 .action-button {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--border-light);
+  background-color: white;
+  border: 1px solid var(--main-20);
   text-align: left;
   height: auto;
   padding: 8px 12px;
@@ -521,7 +521,7 @@ const handlePreview = () => {
 .tools-modal {
   :deep(.ant-modal-content) {
     border-radius: 8px;
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
     overflow: hidden;
   }
   :deep(.ant-modal-header) {
@@ -671,7 +671,7 @@ const handlePreview = () => {
     padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: var(--bg-elevated);
+    background: white;
     user-select: none;
 
     &:hover {
@@ -742,7 +742,7 @@ const handlePreview = () => {
   border: 1px solid var(--gray-300);
   border-radius: 8px;
   padding: 8px 12px;
-  background: var(--bg-elevated);
+  background: white;
   transition: border-color 0.2s ease;
 
   &:hover {
@@ -806,7 +806,7 @@ const handlePreview = () => {
       padding: 16px;
       cursor: pointer;
       transition: border-color 0.2s ease;
-      background: var(--bg-elevated);
+      background: white;
 
       &:hover {
         border-color: var(--main-color);
@@ -884,9 +884,9 @@ const handlePreview = () => {
 .more-popup-menu {
   position: fixed;
   min-width: 130px;
-  background: var(--bg-elevated);
+  background: white;
   border-radius: 10px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid var(--gray-100);
   padding: 6px;
   z-index: 9999;
@@ -971,7 +971,7 @@ const handlePreview = () => {
 // 响应式优化
 @media (max-width: 520px) {
   .more-popup-menu {
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06);
   }
 }
 
