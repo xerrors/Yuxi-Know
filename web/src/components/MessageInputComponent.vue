@@ -294,11 +294,12 @@ defineExpose({
   display: grid;
   width: 100%;
   margin: 0 auto;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--border-color);
   border-radius: 0.8rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-md);
   transition: all 0.3s ease;
   gap: 0px;
+  background-color: var(--bg-input);
 
   /* Default: Multi-line layout with top/bottom slots */
   padding: 0.8rem 0.75rem 0.6rem 0.75rem;

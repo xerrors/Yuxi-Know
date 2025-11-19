@@ -573,7 +573,8 @@ const toggleToolCall = (toolCallId) => {
   overflow: hidden;
   margin-left: auto;
   // max-height: 200px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-elevated);
 
   img {
     max-width: 100%;

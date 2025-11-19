@@ -336,7 +336,7 @@ const handleMouseUp = () => {
 
   .left-panel,
   .right-panel {
-    background-color: #fff;
+    background-color: var(--bg-primary);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -484,8 +484,8 @@ const handleMouseUp = () => {
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    border-bottom: 1px solid #f0f0f0;
-    background-color: #fafafa;
+    border-bottom: 1px solid var(--border-light);
+    background-color: var(--bg-secondary);
 
     .header-left {
       display: flex;
