@@ -240,7 +240,7 @@ const initConversationToolChart = () => {
       },
       splitLine: {
         lineStyle: {
-          color: '#f0f0f0'
+          color: 'var(--gray-150)'
         }
       }
     },
@@ -354,16 +354,4 @@ defineExpose({
   transition: all 0.3s ease;
 }
 
-// 深色模式适配
-:root.dark {
-  .top-performers, .metrics-comparison {
-    h4 {
-      color: rgba(255, 255, 255, 0.85);
-    }
-
-    h5 {
-      color: rgba(255, 255, 255, 0.65);
-    }
-  }
-}
 </style>

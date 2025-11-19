@@ -80,7 +80,7 @@ defineEmits(['index-nodes', 'export-data'])
   -webkit-backdrop-filter: blur(10px);
   border-radius: 8px;
   margin: 0;
-  border: 1px solid white;
+  border: 1px solid var(--gray-0);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   flex-wrap: wrap;
   align-self: flex-start;

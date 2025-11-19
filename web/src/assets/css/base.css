@@ -119,6 +119,15 @@
   --shadow-5: rgba(0, 0, 0, 0.20);
 
   --min-width: 400px;
+
+  /* Ant Design 兼容变量 */
+  --color-bg-container: var(--main-0);
+  --color-bg-elevated: var(--gray-10);
+  --color-text-secondary: rgba(0, 0, 0, 0.65);
+  --color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --color-trans-light: rgba(255, 255, 255, 0.85);
+  --color-trans-dark: rgba(0, 0, 0, 0.85);
+  --color-border: var(--gray-200);
 }
 
 /* 深色模式 */
@@ -217,6 +226,13 @@
   --bg-sider: #141414;
   --color-text: #ffffff;
 
+  /* Ant Design 兼容变量 - 深色模式 */
+  --color-bg-container: #1f1f1f;
+  --color-bg-elevated: #262626;
+  --color-text-secondary: rgba(255, 255, 255, 0.65);
+  --color-text-tertiary: rgba(255, 255, 255, 0.45);
+  --color-border: #434343;
+
   /* Shadow System - 深色模式阴影系统 */
   --shadow-0: rgba(0, 0, 0, 0.1);
   --shadow-1: rgba(0, 0, 0, 0.2);
@@ -224,376 +240,40 @@
   --shadow-3: rgba(0, 0, 0, 0.4);
   --shadow-4: rgba(0, 0, 0, 0.5);
   --shadow-5: rgba(0, 0, 0, 0.6);
+
+
+  --color-trans-light: rgba(0, 0, 0, 0.85);
+  --color-trans-dark: rgba(255, 255, 255, 0.85);
 }
 
 /* 深色模式全局样式 */
 :root.dark {
   background-color: #141414;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-trans-dark);
+}
+
+/* md-editor - 深色模式 */
+:root.dark .md-editor {
+  background-color: var(--gray-0);
+}
+
+/* 覆盖 Ant Design 全局样式 */
+:root.dark .ant-tag {
+  background-color: var(--gray-50);
+  border-color: currentColor;
 }
 
 :root.dark body {
   background-color: #141414;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-trans-dark);
 }
 
 :root.dark #app {
   background-color: #141414;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--color-trans-dark);
 }
 
 :root.dark #app-router-view {
   background-color: #141414;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* 深色模式下的卡片和面板 */
-:root.dark .left-panel,
-:root.dark .right-panel {
-  background-color: #1f1f1f;
-  border-color: #434343;
-}
-
-/* 深色模式下的浅色背景区域 */
-:root.dark [style*="background-color: #fafafa"],
-:root.dark [style*="background-color: #f5f5f5"],
-:root.dark [style*="background: white"],
-:root.dark [style*="background-color: #fff"] {
-  background-color: #262626 !important;
-}
-
-/* 深色模式下的聊天和内容区域 */
-:root.dark .agent-view,
-:root.dark .agent-view-body,
-:root.dark .content {
-  background-color: #141414;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* 深色模式下的输入区域 */
-:root.dark .message-input-wrapper {
-  background-color: #141414;
-}
-
-/* 深色模式下的输入框 */
-:root.dark .input-box {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  box-shadow: 0 2px 12px var(--shadow-2) !important;
-}
-
-:root.dark .input-box .user-input {
-  background-color: transparent !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .input-box .user-input::placeholder {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-
-/* 深色模式下的消息区域 */
-:root.dark .chat-box,
-:root.dark .conv-box,
-:root.dark .message-bubble,
-:root.dark .user-message {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .assistant-message {
-  background-color: #262626 !important;
-  border-color: #434343 !important;
-}
-
-/* 深色模式下的消息内容 */
-:root.dark .message-content,
-:root.dark .markdown-body,
-:root.dark .message-md,
-:root.dark .md-editor-preview-wrapper,
-:root.dark .md-editor-preview {
-  background-color: transparent !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* 深色模式下的 markdown 编辑器 */
-:root.dark .md-editor,
-:root.dark .md-editor-content {
-  background-color: #1f1f1f !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* 深色模式下的代码块 */
-:root.dark pre,
-:root.dark code {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-/* 深色模式下的设置页面 */
-:root.dark .setting-view,
-:root.dark .setting-container,
-:root.dark .setting {
-  background-color: #141414 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .setting-view .card,
-:root.dark .setting-view .service-link-card {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .setting-view .card:hover,
-:root.dark .setting-view .service-link-card:hover {
-  box-shadow: 0 1px 8px var(--shadow-2) !important;
-}
-
-:root.dark .setting-view .sider {
-  background-color: #141414 !important;
-  border-color: #434343 !important;
-}
-
-/* 深色模式下的图表组件 */
-:root.dark .graph-container,
-:root.dark .graph-canvas-container {
-  background-color: #141414 !important;
-}
-
-:root.dark .status-wrapper {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-/* 深色模式下的配置侧边栏 */
-:root.dark .agent-config-sidebar {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .agent-config-sidebar .sidebar-header,
-:root.dark .agent-config-sidebar .sidebar-content,
-:root.dark .agent-config-sidebar .config-section {
-  background-color: #1f1f1f !important;
-}
-
-:root.dark .agent-config-sidebar .config-card,
-:root.dark .agent-config-sidebar .model-card {
-  background-color: #141414 !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .agent-config-sidebar .ant-btn,
-:root.dark .agent-config-sidebar button {
-  background-color: #141414 !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .agent-config-sidebar .ant-btn-primary {
-  background-color: var(--color-primary) !important;
-  border-color: var(--color-primary) !important;
-  color: #ffffff !important;
-}
-
-/* 深色模式下的通用文本颜色 - 排除图谱容器，避免影响 G6 渲染 */
-:root.dark h1:not(.graph-canvas *),
-:root.dark h2:not(.graph-canvas *),
-:root.dark h3:not(.graph-canvas *),
-:root.dark h4:not(.graph-canvas *),
-:root.dark h5:not(.graph-canvas *),
-:root.dark h6:not(.graph-canvas *),
-:root.dark p:not(.graph-canvas *),
-:root.dark span:not(.graph-canvas *),
-:root.dark div:not(.graph-canvas *),
-:root.dark label:not(.graph-canvas *),
-:root.dark a:not(.graph-canvas *) {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* 深色模式下的次要文本 */
-:root.dark .text-secondary,
-:root.dark .ant-typography-secondary {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-/* 深色模式下的禁用文本 */
-:root.dark .text-disabled,
-:root.dark .ant-typography-disabled {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-
-/* 深色模式下的输入框 */
-:root.dark input,
-:root.dark textarea,
-:root.dark .ant-input,
-:root.dark .ant-input-affix-wrapper {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark input::placeholder,
-:root.dark textarea::placeholder,
-:root.dark .ant-input::placeholder {
-  color: rgba(255, 255, 255, 0.45) !important;
-}
-
-/* 深色模式下的按钮 */
-:root.dark .ant-btn-default {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-btn-default:hover {
-  background-color: #262626 !important;
-  border-color: #4a9fb8 !important;
-  color: #4a9fb8 !important;
-}
-
-/* 深色模式下的卡片 */
-:root.dark .ant-card {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .ant-card-head {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-card-body {
-  background-color: #1f1f1f !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* 深色模式下的表格 */
-:root.dark .ant-table {
-  background-color: #1f1f1f !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-table-thead > tr > th {
-  background-color: #262626 !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-table-tbody > tr > td {
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-table-tbody > tr:hover > td {
-  background-color: #262626 !important;
-}
-
-/* 深色模式下的模态框 */
-:root.dark .ant-modal-content {
-  background-color: #1f1f1f !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-modal-header {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-modal-footer {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-/* 深色模式下的下拉菜单 */
-:root.dark .ant-dropdown-menu {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .ant-dropdown-menu-item {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-dropdown-menu-item:hover {
-  background-color: #262626 !important;
-}
-
-/* 深色模式下的选择器 */
-:root.dark .ant-select-selector {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-select-dropdown {
-  background-color: #1f1f1f !important;
-  border-color: #434343 !important;
-}
-
-:root.dark .ant-select-item {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-:root.dark .ant-select-item-option-selected {
-  background-color: #262626 !important;
-}
-
-:root.dark .ant-select-item-option-active {
-  background-color: #262626 !important;
-}
-
-/* 深色模式下的标签 */
-:root.dark .ant-tag {
-  border-color: #434343 !important;
-}
-
-/* 预设颜色标签在深色模式下的适配 */
-:root.dark .ant-tag-blue {
-  background-color: rgba(61, 143, 255, 0.18) !important;
-  border-color: var(--color-info) !important;
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-:root.dark .ant-tag-green {
-  background-color: rgba(82, 196, 26, 0.22) !important;
-  border-color: var(--color-success) !important;
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-:root.dark .ant-tag-red {
-  background-color: rgba(255, 77, 79, 0.22) !important;
-  border-color: var(--color-error) !important;
-  color: rgba(255, 255, 255, 0.9) !important;
-}
-
-/* 深色模式下的分割线 */
-:root.dark .ant-divider {
-  border-color: #434343 !important;
-}
-
-/* 深色模式下的空状态 */
-:root.dark .ant-empty-description {
-  color: rgba(255, 255, 255, 0.65) !important;
-}
-
-/* 深色模式下的图谱相关组件 - 已禁用，改为在 GraphView.vue 中单独控制 */
-/* :root.dark .graph-container,
-:root.dark .graph-section,
-:root.dark .container-outter {
-  background-color: #141414 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
-} */
-
-/* 深色模式下的操作按钮区域 */
-:root.dark .actions,
-:root.dark .actions-left,
-:root.dark .actions-right,
-:root.dark .footer {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-
-/* 平滑过渡 - 移除 color transition，防止 Canvas 读取中间态颜色 */
-*:not(.graph-canvas):not(.graph-canvas *) {
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  color: var(--color-trans-dark);
 }

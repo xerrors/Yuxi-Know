@@ -354,16 +354,11 @@ const openLink = (url) => {
 
 .graph-container {
   padding: 0;
-  background-color: #ffffff;
+  background-color: var(--gray-0);
 
   .header-container {
     height: @graph-header-height;
   }
-}
-
-/* 深色模式下，强制知识图谱页面保持白色背景 */
-:root.dark .graph-container {
-  background-color: #ffffff !important;
 }
 
 .status-wrapper {
@@ -441,53 +436,6 @@ const openLink = (url) => {
     display: flex;
     gap: 8px;
   }
-}
-
-/* 深色模式下，强制知识图谱页面保持白色背景和深色文字 */
-:root.dark .container-outter {
-  background: #ffffff !important;
-  color: rgba(0, 0, 0, 0.85) !important;
-}
-
-:root.dark .container-outter .actions,
-:root.dark .container-outter .footer {
-  color: rgba(0, 0, 0, 0.85) !important;
-}
-
-:root.dark .container-outter .status-text {
-  color: rgba(0, 0, 0, 0.65) !important;
-}
-
-/* 深色模式下，底部标签使用深色主题样式 */
-:root.dark .footer .tags :deep(.ant-tag) {
-  background-color: rgba(31, 41, 55, 0.9) !important;  /* 深色底 */
-  border-color: rgba(148, 163, 184, 0.3) !important;   /* 灰色边框 */
-  color: rgba(248, 250, 252, 0.95) !important;         /* 浅色文字 */
-}
-
-/* 深色模式下，标签的不同颜色类型 */
-:root.dark .footer .tags :deep(.ant-tag-blue) {
-  background-color: rgba(37, 99, 235, 0.2) !important;
-  border-color: rgba(96, 165, 250, 0.4) !important;
-  color: rgba(147, 197, 253, 1) !important;
-}
-
-:root.dark .footer .tags :deep(.ant-tag-success) {
-  background-color: rgba(34, 197, 94, 0.2) !important;
-  border-color: rgba(74, 222, 128, 0.4) !important;
-  color: rgba(134, 239, 172, 1) !important;
-}
-
-:root.dark .footer .tags :deep(.ant-tag-purple) {
-  background-color: rgba(168, 85, 247, 0.2) !important;
-  border-color: rgba(192, 132, 252, 0.4) !important;
-  color: rgba(216, 180, 254, 1) !important;
-}
-
-:root.dark .footer .tags :deep(.ant-tag-warning) {
-  background-color: rgba(245, 158, 11, 0.2) !important;
-  border-color: rgba(251, 191, 36, 0.4) !important;
-  color: rgba(253, 224, 71, 1) !important;
 }
 
 .actions {

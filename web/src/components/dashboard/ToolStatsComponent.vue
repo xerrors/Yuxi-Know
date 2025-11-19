@@ -168,7 +168,7 @@ const initToolsChart = () => {
       },
       splitLine: {
         lineStyle: {
-          color: '#f0f0f0'
+          color: 'var(--gray-150)'
         }
       }
     },

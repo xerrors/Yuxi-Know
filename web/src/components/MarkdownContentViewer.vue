@@ -182,7 +182,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--gray-200);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -192,8 +192,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 4px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--gray-25);
+  border-bottom: 1px solid var(--gray-200);
 }
 
 .header-controls {
@@ -203,8 +203,8 @@ onUnmounted(() => {
 }
 
 .toggle-btn {
-  /* background: var(--main-color); */
-  /* color: white; */
+  background: var(--gray-100);
+  /* color: var(--gray-0); */
   border: none;
   border-radius: 4px;
   width: 28px;
@@ -242,8 +242,8 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: white;
-  border-right: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border-right: 1px solid var(--gray-200);
   min-height: 0; /* 关键：确保flex项目可以缩小 */
 }
 
@@ -275,7 +275,7 @@ onUnmounted(() => {
 .chunk-panel {
   width: 300px;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--gray-25);
   padding: 16px;
   min-height: 0; /* 确保flex项目可以缩小 */
 }
@@ -287,8 +287,8 @@ onUnmounted(() => {
 }
 
 .chunk-item {
-  background: white;
-  border: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
   border-radius: 6px;
   padding: 12px;
   /* cursor: pointer; */
@@ -358,7 +358,7 @@ onUnmounted(() => {
 
 .chunk-tooltip {
   position: fixed;
-  background: white;
+  background: var(--gray-0);
   border: 1px solid var(--gray-300);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);

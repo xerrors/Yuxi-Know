@@ -395,7 +395,7 @@ function canCancel(task) {
 }
 
 .task-card {
-  background: #ffffff;
+  background: var(--gray-25);
   border: 1px solid var(--gray-100);
   border-radius: 12px;
   padding: 16px 18px;
@@ -408,18 +408,6 @@ function canCancel(task) {
 
 .task-card:hover {
   border-color: var(--gray-200);;
-}
-
-.task-card--active {
-  background: linear-gradient(to bottom, #ffffff, #fbfcff);
-}
-
-.task-card--success {
-  background: linear-gradient(to bottom, #ffffff, #fafffb);
-}
-
-.task-card--failed {
-  background: linear-gradient(to bottom, #ffffff, #fffcfc);
 }
 
 .task-card-header {
@@ -439,7 +427,7 @@ function canCancel(task) {
 .task-card-title {
   font-size: 15px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--gray-900);
   line-height: 1.3;
   // word-break: break-word;
   text-overflow: ellipsis;
@@ -452,7 +440,7 @@ function canCancel(task) {
   gap: 10px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #64748b;
+  color: var(--gray-600);
 }
 
 .task-card-id {
@@ -463,7 +451,7 @@ function canCancel(task) {
   padding: 0 8px;
   border-radius: 999px;
   background-color: rgba(15, 23, 42, 0.06);
-  color: #475569;
+  color: var(--gray-500);
   line-height: 20px;
 }
 
@@ -484,7 +472,7 @@ function canCancel(task) {
 .task-card-progress-value {
   font-size: 12px;
   font-weight: 500;
-  color: #475569;
+  color: var(--gray-500);
   width: 48px;
   text-align: right;
 }
@@ -499,7 +487,7 @@ function canCancel(task) {
 
 .task-card-message {
   background: rgba(15, 23, 42, 0.03);
-  color: #475569;
+  color: var(--gray-800);
 }
 
 .task-card-error {

@@ -471,7 +471,7 @@ const printAgentConfig = async () => {
 
 <style scoped>
 .log-viewer {
-  background: white;
+  background: var(--gray-0);
 }
 
 .log-viewer.fullscreen {
@@ -509,13 +509,13 @@ const printAgentConfig = async () => {
     &.ant-btn-primary {
       background-color: var(--main-color);
       border-color: var(--main-color);
-      color: #fff;
+      color: var(--gray-0);
 
       &:hover,
       &:focus {
         background-color: var(--main-color);
         border-color: var(--main-color);
-        color: #fff;
+        color: var(--gray-0);
       }
     }
 
@@ -531,7 +531,7 @@ const printAgentConfig = async () => {
   }
 
   .auto-refresh-button {
-    color: white;
+    color: var(--gray-0);
   }
 }
 

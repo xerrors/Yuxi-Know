@@ -438,10 +438,10 @@ const sigmaSettings = {
   labelSize: 12,
   edgeLabelSize: 10,
   labelColor: {
-    color: '#000'
+    color: 'var(--color-text)'
   },
   edgeLabelColor: {
-    color: '#666'
+    color: 'var(--color-text-secondary)'
   },
   minEdgeThickness: 4, // 增加最小边厚度，提高点击性
   maxEdgeThickness: 10, // 增加最大边厚度
@@ -589,7 +589,7 @@ const registerEvents = () => {
         const graph = sigmaInstance.getGraph()
         if (graph.hasEdge(edge)) {
           // 高亮悬停的边
-          graph.setEdgeAttribute(edge, 'color', '#ff0000')
+          graph.setEdgeAttribute(edge, 'color', 'var(--color-error)')
           graph.setEdgeAttribute(edge, 'size', (graph.getEdgeAttribute(edge, 'size') || 1) * 1.5)
           sigmaInstance.refresh()
           console.log('悬停在边上:', edge)
@@ -607,7 +607,7 @@ const registerEvents = () => {
         if (graph.hasEdge(edge)) {
           // 恢复边的原始样式
           const originalData = graph.getEdgeAttribute(edge, 'originalData')
-          graph.setEdgeAttribute(edge, 'color', originalData?.color || '#666')
+          graph.setEdgeAttribute(edge, 'color', originalData?.color || 'var(--color-text-secondary)')
           graph.setEdgeAttribute(edge, 'size', originalData?.size || 1)
           sigmaInstance.refresh()
         }
@@ -1200,11 +1200,11 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f5f5f5;
+  background: var(--gray-50);
 }
 
 .control-panel {
-  background: white;
+  background: var(--gray-0);
   padding: 6px 16px; /* Reduced from 16px */
   border-bottom: none;
   display: flex;
@@ -1229,7 +1229,7 @@ defineExpose({
 
 .sigma-container {
   flex: 1;
-  // background: white;
+  // background: var(--gray-0);
   position: relative; /* 确保子元素可以相对于此容器定位 */
   // border: 1px solid var(--main-20);
   border-radius: 8px;
@@ -1253,24 +1253,24 @@ defineExpose({
 .detail-panel {
   position: absolute;
   width: 240px; /* Reduced from 300px */
-  background: white;
-  border: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
   border-radius: 6px; /* Reduced from 8px */
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* Reduced shadow */
+  box-shadow: 0 3px 12px var(--shadow-1); /* Reduced shadow */
   transition: box-shadow 0.2s ease;
   cursor: move;
   z-index: 1000;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); /* Reduced shadow */
+    box-shadow: 0 4px 16px var(--shadow-2); /* Reduced shadow */
   }
 
   &.node-panel {
-    border-left: 4px solid #52c41a; // 绿色边框标识节点面板
+    border-left: 4px solid var(--color-success); // 绿色边框标识节点面板
   }
 
   &.edge-panel {
-    border-left: 4px solid #1890ff; // 蓝色边框标识边面板
+    border-left: 4px solid var(--color-info); // 蓝色边框标识边面板
   }
 }
 
@@ -1279,8 +1279,8 @@ defineExpose({
   align-items: center;
   gap: 6px; /* Reduced from 8px */
   padding: 8px 12px; /* Reduced from 12px 16px */
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-bottom: 1px solid var(--gray-150);
+  background: var(--gray-25);
   border-radius: 6px 6px 0 0; /* Reduced from 8px */
 
   h4 {
@@ -1288,7 +1288,7 @@ defineExpose({
     font-size: 12px; /* Reduced from 14px */
     font-weight: 600;
     flex: 1;
-    color: #262626;
+    color: var(--color-text);
   }
 }
 
@@ -1299,11 +1299,11 @@ defineExpose({
   flex-shrink: 0;
 
   &.node-indicator {
-    background: #52c41a;
+    background: var(--color-success);
   }
 
   &.edge-indicator {
-    background: #1890ff;
+    background: var(--color-info);
   }
 }
 
@@ -1325,13 +1325,13 @@ defineExpose({
 .detail-label {
   min-width: 50px; /* Reduced from 60px */
   font-weight: 600;
-  color: #595959;
+  color: var(--color-text-secondary);
   font-size: 11px; /* Reduced from 12px */
   flex-shrink: 0;
 }
 
 .detail-value {
-  color: #262626;
+  color: var(--color-text);
   font-size: 11px; /* Reduced from 12px */
   word-break: break-word;
   line-height: 1.3; /* Reduced from 1.4 */
@@ -1340,7 +1340,7 @@ defineExpose({
 .detail-actions {
   margin-top: 12px; /* Reduced from 16px */
   padding-top: 8px; /* Reduced from 12px */
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--gray-150);
 }
 
 .graph-controls {
@@ -1351,12 +1351,12 @@ defineExpose({
 }
 
 .control-group {
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--color-bg-container) 80%, transparent);
   backdrop-filter: blur(8px);
-  border: 2px solid white;
+  border: 2px solid var(--gray-0);
   border-radius: 16px; /* Reduced from 20px */
   padding: 2px; /* Reduced from 4px */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); /* Reduced shadow */
+  box-shadow: 0 2px 8px var(--shadow-1); /* Reduced shadow */
   display: flex;
   gap: 1px; /* Reduced from 2px */
 }
@@ -1370,7 +1370,7 @@ defineExpose({
   justify-content: center;
   border: none;
   background: transparent;
-  color: #595959;
+  color: var(--color-text-secondary);
   transition: all 0.2s ease;
 
   &:hover {
@@ -1383,27 +1383,27 @@ defineExpose({
   position: absolute;
   right: 12px; /* Reduced from 16px */
   top: 60px; /* Reduced from 80px */
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--color-bg-container) 80%, transparent);
   backdrop-filter: blur(8px);
-  border: 2px solid white;
+  border: 2px solid var(--gray-0);
   border-radius: 6px; /* Reduced from 8px */
   width: 150px; /* Reduced from 180px */
   max-height: 250px; /* Reduced from 300px */
   z-index: 1000;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08); /* Reduced shadow */
+  box-shadow: 0 3px 12px var(--shadow-1); /* Reduced shadow */
   overflow: hidden;
 }
 
 .legend-header {
-  background: #fafafa;
+  background: var(--gray-25);
   padding: 6px 10px; /* Reduced from 8px 12px */
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--gray-150);
 
   h4 {
     margin: 0;
     font-size: 12px; /* Reduced from 13px */
     font-weight: 600;
-    color: #262626;
+    color: var(--color-text);
   }
 }
 
@@ -1423,11 +1423,11 @@ defineExpose({
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #d9d9d9;
+    background: var(--gray-300);
     border-radius: 2px;
 
     &:hover {
-      background: #bfbfbf;
+      background: var(--gray-400);
     }
   }
 }
@@ -1449,11 +1449,11 @@ defineExpose({
     text-overflow: ellipsis;
     flex: 1;
     min-width: 0;
-    color: #595959;
+    color: var(--color-text-secondary);
   }
 
   &:hover {
-    background-color: #f5f5f5;
+    background-color: var(--gray-50);
   }
 }
 
@@ -1461,14 +1461,14 @@ defineExpose({
   width: 8px; /* Reduced from 10px */
   height: 8px;
   border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--shadow-1);
   flex-shrink: 0;
 }
 
 .loading-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.8);
+  background: color-mix(in srgb, var(--color-bg-container) 80%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1480,7 +1480,7 @@ defineExpose({
 
   p {
     margin-top: 12px; /* Reduced from 16px */
-    color: #666;
+    color: var(--color-text-secondary);
     font-size: 12px; /* Added smaller font size */
   }
 }

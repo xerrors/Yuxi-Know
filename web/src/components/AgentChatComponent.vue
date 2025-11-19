@@ -1875,24 +1875,6 @@ watch(conversations, () => {
   }
 }
 
-/* 深色模式适配 */
-:root.dark .agent-nav-btn {
-  color: rgba(255, 255, 255, 0.85);
-
-  &:hover:not(.is-disabled) {
-    background-color: #262626;
-  }
-
-  &.agent-state-btn.has-content {
-    color: var(--main-500);
-
-    &:hover:not(.is-disabled) {
-      color: var(--main-400);
-      background-color: rgba(74, 159, 184, 0.15);
-    }
-  }
-}
-
 @keyframes spin {
   from {
     transform: rotate(0deg);

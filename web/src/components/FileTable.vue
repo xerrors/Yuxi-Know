@@ -685,7 +685,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   padding: 1px 5px;
   font-size: 10px;
   font-weight: bold;
-  color: white;
+  color: var(--gray-0);
   border-radius: 4px;
   text-transform: uppercase;
   opacity: 0.9;
@@ -724,7 +724,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 .panel-action-btn.auto-refresh-btn.ant-btn-primary {
   background-color: var(--main-color);
   border-color: var(--main-color);
-  color: #fff;
+  color: var(--gray-0);
 }
 
 .panel-action-btn:hover {

@@ -390,7 +390,7 @@ const handleAvatarChange = async (info) => {
     height: 100%;
     object-fit: contain;
     border-radius: 50%;
-    border: 2px solid #f0f0f0;
+    border: 2px solid var(--gray-150);
   }
 }
 
@@ -401,7 +401,7 @@ const handleAvatarChange = async (info) => {
   border-radius: 50%;
   right: 0;
   bottom: 0;
-  border: 2px solid white;
+  border: 2px solid var(--gray-0);
 
   &.superadmin {
     background-color: #c1bd00; // 红色，超管
@@ -448,7 +448,7 @@ const handleAvatarChange = async (info) => {
 .profile-modal {
   :deep(.ant-modal-header) {
     padding: 20px 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-150);
 
     .ant-modal-title {
       font-size: 18px;
@@ -467,7 +467,7 @@ const handleAvatarChange = async (info) => {
     text-align: center;
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-150);
 
     .avatar-container {
       display: inline-block;
@@ -480,7 +480,7 @@ const handleAvatarChange = async (info) => {
           height: 80px;
           border-radius: 50%;
           object-fit: cover;
-          border: 3px solid #f0f0f0;
+          border: 3px solid var(--gray-150);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
@@ -493,7 +493,7 @@ const handleAvatarChange = async (info) => {
           margin: 0 auto;
           align-items: center;
           justify-content: center;
-          border: 3px solid #f0f0f0;
+          border: 3px solid var(--gray-150);
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
           // 确保图标居中
@@ -559,7 +559,7 @@ const handleAvatarChange = async (info) => {
   .actions-section {
     text-align: center;
     padding-top: 16px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--gray-150);
   }
 }
 </style>

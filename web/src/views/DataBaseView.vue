@@ -604,7 +604,7 @@ onMounted(() => {
     border-radius: 12px;
     padding: 16px;
     margin-top: 16px;
-    background: #fafafa;
+    background: var(--gray-25);
 
     .reranker-row {
       display: flex;
@@ -670,12 +670,12 @@ onMounted(() => {
     }
 
     .kb-type-card {
-      border: 2px solid #f0f0f0;
+      border: 2px solid var(--gray-150);
       border-radius: 12px;
       padding: 20px;
       cursor: pointer;
       transition: all 0.3s ease;
-      background: white;
+      background: var(--gray-0);
       position: relative;
       overflow: hidden;
 
@@ -804,9 +804,9 @@ onMounted(() => {
   .chunk-config {
     margin-top: 16px;
     padding: 12px 16px;
-    background-color: #fafafa;
+    background-color: var(--gray-25);
     border-radius: 6px;
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--gray-150);
 
     h3 {
       margin-top: 0;
@@ -871,11 +871,9 @@ onMounted(() => {
 }
 
 .database, .graphbase {
-  background: linear-gradient(145deg, #ffffff 0%, #fafbfc 100%);
-  box-shadow:
-    0px 1px 2px 0px rgba(16,24,40,.06),
-    inset 0px 1px 0px 0px rgba(255,255,255,.6);
-  border: 1px solid rgba(233, 236, 239, 0.6);
+  background: linear-gradient(145deg, var(--gray-0) 0%, var(--gray-10) 100%);
+  box-shadow: 0px 1px 2px 0px var(--shadow-2);
+  border: 1px solid var(--gray-100);
   transition: none;
   position: relative;
 }
@@ -896,16 +894,16 @@ onMounted(() => {
     top: 20px;
     right: 20px;
     color: var(--gray-600);
-    background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%);
+    background: linear-gradient(135deg, var(--gray-0) 0%, var(--gray-100) 100%);
     font-size: 12px;
     border-radius: 8px;
     padding: 6px;
     z-index: 2;
-    box-shadow: 0px 2px 4px rgba(0,0,0,0.1);
-    border: 1px solid rgba(229, 231, 235, 0.5);
+    box-shadow: 0px 2px 4px var(--shadow-2);
+    border: 1px solid var(--gray-100);
   }
 
-  
+
   .top {
     display: flex;
     align-items: center;
@@ -922,7 +920,7 @@ onMounted(() => {
       align-items: center;
       background: var(--main-30);
       border-radius: 12px;
-      border: 1px solid rgba(1, 97, 121, 0.05);
+      border: 1px solid var(--shadow-2);
       color: var(--main-color);
       position: relative;
     }
@@ -930,7 +928,7 @@ onMounted(() => {
     .info {
       h3, p {
         margin: 0;
-        color: black;
+        color: var(--gray-10000);
       }
 
       h3 {

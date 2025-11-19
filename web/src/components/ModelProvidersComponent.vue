@@ -717,7 +717,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
   .custom-provider-card {
     border: 1px solid var(--gray-200);
-    background: white;
+    background: var(--gray-0);
     border-radius: 8px;
     margin-bottom: 12px;
     overflow: hidden;
@@ -733,7 +733,7 @@ const testCustomProvider = async (providerId, modelName) => {
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      background: #fafafa;
+      background: var(--gray-25);
       border-bottom: 1px solid var(--gray-200);
 
       .provider-info {
@@ -750,7 +750,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
         .provider-id {
           background: var(--main-color);
-          color: white;
+          color: var(--gray-0);
           padding: 2px 8px;
           border-radius: 12px;
           font-size: 12px;
@@ -802,7 +802,7 @@ const testCustomProvider = async (providerId, modelName) => {
   .empty-state {
     text-align: center;
     padding: 40px 20px;
-    background: #fafafa;
+    background: var(--gray-25);
     border-radius: 8px;
     border: 1px dashed var(--gray-300);
   }
@@ -856,7 +856,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
 .model-provider-card {
   border: 1px solid var(--gray-150);
-  background-color: white;
+  background-color: var(--gray-0);
   border-radius: 8px;
   margin-bottom: 16px;
   padding: 0;
@@ -897,7 +897,7 @@ const testCustomProvider = async (providerId, modelName) => {
   // 未配置provider的样式
   &.unconfigured-provider {
     .card-header {
-      background: #fafafa;
+      background: var(--gray-25);
 
       h3 {
         color: var(--gray-700);
@@ -934,7 +934,7 @@ const testCustomProvider = async (providerId, modelName) => {
     gap: 12px;
     cursor: pointer;
     padding: 8px 16px;
-    background: white;
+    background: var(--gray-0);
     transition: all 0.3s ease;
 
     &:hover {
@@ -1111,7 +1111,7 @@ const testCustomProvider = async (providerId, modelName) => {
     max-height: 0;
     overflow: hidden;
     transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    background: white;
+    background: var(--gray-0);
 
     &.expanded {
       max-height: 800px;
@@ -1135,7 +1135,7 @@ const testCustomProvider = async (providerId, modelName) => {
       justify-content: space-between;
       align-items: center;
       box-sizing: border-box;
-      background: white;
+      background: var(--gray-0);
       transition: all 0.3s ease;
       min-height: 48px;
 
@@ -1160,7 +1160,7 @@ const testCustomProvider = async (providerId, modelName) => {
         flex: 0 0 16px;
         border-radius: 50%;
         border: 2px solid var(--gray-300);
-        background: white;
+        background: var(--gray-0);
         transition: all 0.2s ease;
 
         &:hover {
@@ -1178,7 +1178,7 @@ const testCustomProvider = async (providerId, modelName) => {
       gap: 8px;
       cursor: pointer;
       min-height: 72px;
-      background: white;
+      background: var(--gray-0);
       border-radius: 6px;
       border: 1px solid var(--gray-150);
       transition: all 0.3s ease;
@@ -1254,7 +1254,7 @@ const testCustomProvider = async (providerId, modelName) => {
       // 添加模型的special样式
       &.add-model {
         border: 2px dashed var(--gray-300);
-        background: white;
+        background: var(--gray-0);
         justify-content: center;
         align-items: center;
         text-align: center;
@@ -1262,7 +1262,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
         &:hover {
           border-color: var(--main-color);
-          background: #fafafa;
+          background: var(--gray-25);
         }
 
         .card-models__header {
@@ -1362,7 +1362,7 @@ const testCustomProvider = async (providerId, modelName) => {
             margin-bottom: 4px;
             padding: 4px 6px;
             border-radius: 6px;
-            background-color: white;
+            background-color: var(--gray-0);
             border: 1px solid var(--gray-150);
 
             &:hover {

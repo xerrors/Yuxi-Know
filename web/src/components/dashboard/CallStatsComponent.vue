@@ -355,7 +355,7 @@ onUnmounted(() => {
 
 .simple-toggle.active {
   background-color: #3996ae;
-  color: white;
+  color: var(--gray-0);
 }
 
 .divider {

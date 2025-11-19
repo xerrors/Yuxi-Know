@@ -446,7 +446,7 @@ const openLink = (url) => {
     padding: 12px 16px;
     border: 1px solid var(--gray-150);
     border-radius: 8px;
-    background: white;
+    background: var(--gray-0);
     transition: all 0.2s;
     min-height: 60px;
 

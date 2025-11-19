@@ -3,7 +3,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  background: #fafafa;
+  background: var(--gray-25);
 }
 
 .sigma-container canvas {
@@ -22,34 +22,34 @@
 
 /* 高亮样式 */
 .node-highlighted {
-  stroke: #ff0000 !important;
+  stroke: var(--color-error) !important;
   stroke-width: 3px !important;
 }
 
 .edge-highlighted {
-  stroke: #ff0000 !important;
+  stroke: var(--color-error) !important;
   stroke-width: 3px !important;
 }
 
 /* 选中样式 */
 .node-selected {
-  stroke: #1890ff !important;
+  stroke: var(--color-info) !important;
   stroke-width: 4px !important;
 }
 
 .edge-selected {
-  stroke: #1890ff !important;
+  stroke: var(--color-info) !important;
   stroke-width: 4px !important;
 }
 
 /* 悬停样式 */
 .node-focused {
-  stroke: #52c41a !important;
+  stroke: var(--color-success) !important;
   stroke-width: 2px !important;
 }
 
 .edge-focused {
-  stroke: #52c41a !important;
+  stroke: var(--color-success) !important;
   stroke-width: 2px !important;
 }
 
@@ -65,8 +65,8 @@
 /* 工具提示 */
 .sigma-tooltip {
   position: absolute;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
+  background: var(--shadow-5);
+  color: var(--gray-0);
   padding: 8px 12px;
   border-radius: 4px;
   font-size: 12px;

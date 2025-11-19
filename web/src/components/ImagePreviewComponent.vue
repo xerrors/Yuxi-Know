@@ -57,7 +57,7 @@ const handleRemove = () => {
   border-radius: 50%;
   border: none;
   background: rgba(0, 0, 0, 0.2);
-  color: white;
+  color: var(--gray-0);
   cursor: pointer;
   display: flex;
   align-items: center;

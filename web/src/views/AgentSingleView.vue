@@ -113,7 +113,7 @@ const handleShareChat = async () => {
     transform: translateY(-50%);
     width: 30px;
     height: 30px;
-    background-color: #fff;
+    background-color: var(--gray-0);
     border-radius: 50%;
     display: flex;
     align-items: center;

@@ -121,7 +121,7 @@ onUnmounted(() => {
 
 <style scoped lang="less">
 .status-bar {
-  // background: white;
+  // background: var(--gray-0);
   // backdrop-filter: blur(10px);
   // height: 60px;
   display: flex;
@@ -155,13 +155,13 @@ onUnmounted(() => {
   .system-name {
     font-size: 20px;
     font-weight: 600;
-    color: #111827;
+    color: var(--gray-900, #111827);
     line-height: 1.4;
   }
 
   .system-subtitle {
     font-size: 13px;
-    color: #6b7280;
+    color: var(--gray-600, #6b7280);
     line-height: 1.2;
   }
 }

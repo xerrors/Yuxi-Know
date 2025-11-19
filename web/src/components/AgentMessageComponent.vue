@@ -247,7 +247,7 @@ const toggleToolCall = (toolCallId) => {
   font-size: 15px;
   line-height: 24px;
   box-sizing: border-box;
-  color: black;
+  color: var(--gray-10000);
   max-width: 100%;
   position: relative;
   letter-spacing: .25px;

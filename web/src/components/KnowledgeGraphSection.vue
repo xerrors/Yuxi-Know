@@ -296,7 +296,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background-color: #fff;
+  background-color: var(--gray-0);
   border-bottom: 1px solid var(--gray-200);
 
   .toolbar-left {

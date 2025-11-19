@@ -387,7 +387,7 @@ const handlePreview = () => {
 }
 
 .action-button {
-  background-color: white;
+  background-color: var(--gray-0);
   border: 1px solid var(--main-20);
   text-align: left;
   height: auto;
@@ -436,7 +436,7 @@ const handlePreview = () => {
   }
 
   .default-icon {
-    color: #faad14;
+    color: var(--color-warning);
     font-size: 14px;
     margin-left: 4px;
   }
@@ -469,7 +469,7 @@ const handlePreview = () => {
     .select-tools-btn {
       background: var(--main-color);
       border: none;
-      color: #fff;
+      color: var(--gray-0);
       border-radius: 6px;
       padding: 4px 12px;
       font-size: 13px;
@@ -525,7 +525,7 @@ const handlePreview = () => {
     overflow: hidden;
   }
   :deep(.ant-modal-header) {
-    background: #fff;
+    background: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
     padding: 16px 20px;
     .ant-modal-title {
@@ -536,7 +536,7 @@ const handlePreview = () => {
   }
   :deep(.ant-modal-body) {
     padding: 20px;
-    background: #fff;
+    background: var(--gray-0);
   }
   .tools-modal-content {
     .tools-search {
@@ -558,7 +558,7 @@ const handlePreview = () => {
       border: 1px solid var(--gray-200);
       border-radius: 8px;
       margin-bottom: 16px;
-      background: #fff;
+      background: var(--gray-0);
       .tool-item {
         padding: 14px 16px;
         border-bottom: 1px solid var(--gray-100);
@@ -626,7 +626,7 @@ const handlePreview = () => {
           &.ant-btn-default {
             border: 1px solid var(--gray-300);
             color: var(--gray-900);
-            background: #fff;
+            background: var(--gray-0);
             &:hover {
               border-color: var(--main-color);
               color: var(--main-color);
@@ -636,7 +636,7 @@ const handlePreview = () => {
           &.ant-btn-primary {
             background: var(--main-color);
             border: none;
-            color: #fff;
+            color: var(--gray-0);
             &:hover {
               background: var(--main-color);
             }
@@ -671,7 +671,7 @@ const handlePreview = () => {
     padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: white;
+    background: var(--gray-0);
     user-select: none;
 
     &:hover {
@@ -737,53 +737,13 @@ const handlePreview = () => {
   }
 }
 
-// 深色模式适配 - 多选卡片
-:root.dark {
-  .multi-select-cards {
-    .multi-select-label {
-      color: rgba(255, 255, 255, 0.65);
-    }
-
-    .option-card {
-      background: #262626;
-      border-color: #434343;
-
-      &:hover {
-        border-color: var(--main-500);
-      }
-
-      &.selected {
-        border-color: var(--main-500);
-        background: rgba(74, 159, 184, 0.15);
-
-        .option-indicator {
-          color: var(--main-400);
-        }
-
-        .option-text {
-          color: var(--main-400);
-        }
-      }
-
-      &.unselected {
-        .option-indicator {
-          color: rgba(255, 255, 255, 0.45);
-        }
-
-        .option-text {
-          color: rgba(255, 255, 255, 0.65);
-        }
-      }
-    }
-  }
-}
 
 // 智能体选择器样式
 .agent-selector {
   border: 1px solid var(--gray-300);
   border-radius: 8px;
   padding: 8px 12px;
-  background: white;
+  background: var(--gray-0);
   transition: border-color 0.2s ease;
 
   &:hover {
@@ -802,7 +762,7 @@ const handlePreview = () => {
     }
 
     .default-icon {
-      color: #faad14;
+      color: var(--color-warning);
       font-size: 14px;
     }
   }
@@ -816,7 +776,7 @@ const handlePreview = () => {
   }
 
   :deep(.ant-modal-header) {
-    background: #fff;
+    background: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
     padding: 16px 20px;
 
@@ -829,7 +789,7 @@ const handlePreview = () => {
 
   :deep(.ant-modal-body) {
     padding: 20px;
-    background: #fff;
+    background: var(--gray-0);
   }
 
   .agent-modal-content {
@@ -847,7 +807,7 @@ const handlePreview = () => {
       padding: 16px;
       cursor: pointer;
       transition: border-color 0.2s ease;
-      background: white;
+      background: var(--gray-0);
 
       &:hover {
         border-color: var(--main-color);
@@ -873,7 +833,7 @@ const handlePreview = () => {
           }
 
           .default-icon {
-            color: #faad14;
+            color: var(--color-warning);
             font-size: 16px;
             flex-shrink: 0;
           }
@@ -921,76 +881,11 @@ const handlePreview = () => {
   }
 }
 
-// 深色模式适配 - 智能体选择器和模态框
-:root.dark {
-  .agent-selector {
-    background: #1f1f1f;
-    border-color: #434343;
-
-    &:hover {
-      border-color: var(--main-500);
-    }
-
-    .selected-agent-display {
-      .agent-name {
-        color: rgba(255, 255, 255, 0.85);
-      }
-    }
-  }
-
-  .agent-modal {
-    :deep(.ant-modal-header) {
-      background: #1f1f1f;
-      border-bottom-color: #434343;
-
-      .ant-modal-title {
-        color: rgba(255, 255, 255, 0.85);
-      }
-    }
-
-    :deep(.ant-modal-body) {
-      background: #1f1f1f;
-    }
-
-    .agent-modal-content {
-      .agent-card {
-        background: #262626;
-        border-color: #434343;
-
-        &:hover {
-          border-color: var(--main-500);
-        }
-
-        .agent-card-header .agent-card-title .agent-card-name {
-          color: rgba(255, 255, 255, 0.85);
-        }
-
-        .agent-card-description {
-          color: rgba(255, 255, 255, 0.65);
-        }
-
-        &.selected {
-          border-color: var(--main-500);
-          background: rgba(74, 159, 184, 0.15);
-
-          .agent-card-header .agent-card-title .agent-card-name {
-            color: var(--main-400);
-          }
-
-          .agent-card-description {
-            color: rgba(255, 255, 255, 0.85);
-          }
-        }
-      }
-    }
-  }
-}
-
 // 自定义更多菜单样式
 .more-popup-menu {
   position: fixed;
   min-width: 130px;
-  background: white;
+  background: var(--gray-0);
   border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid var(--gray-100);
@@ -1043,32 +938,6 @@ const handlePreview = () => {
   }
 }
 
-// 深色模式适配
-:root.dark .more-popup-menu {
-  background: #1f1f1f;
-  border-color: #434343;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
-
-  .menu-item {
-    color: rgba(255, 255, 255, 0.85);
-
-    .menu-icon {
-      color: rgba(255, 255, 255, 0.65);
-    }
-
-    &:hover {
-      background: #262626;
-    }
-
-    &:active {
-      background: #303030;
-    }
-  }
-
-  .menu-divider {
-    background: #434343;
-  }
-}
 
 // 菜单淡入淡出动画
 .menu-fade-enter-active {

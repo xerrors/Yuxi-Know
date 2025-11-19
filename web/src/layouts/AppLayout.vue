@@ -3,25 +3,25 @@ import { ref, reactive, onMounted, useTemplateRef, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, CircleCheck } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, CircleCheck, Sun, Moon } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
+import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
 import TaskCenterDrawer from '@/components/TaskCenterDrawer.vue'
-import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
+const themeStore = useThemeStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
 
 const layoutSettings = reactive({
@@ -190,16 +190,22 @@ const mainList = [{
           </a>
         </a-tooltip>
       </div>
-      
+
       <!-- 主题切换按钮 -->
-      <div class="nav-item theme-toggle">
-        <ThemeToggle />
+      <div class="nav-item theme-toggle-nav">
+        <a-tooltip placement="right">
+          <template #title>{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式' }}</template>
+          <div class="theme-toggle-icon" @click="themeStore.toggleTheme">
+            <component :is="themeStore.isDark ? Sun : Moon" size="22" />
+          </div>
+        </a-tooltip>
       </div>
-      <!-- <div class="nav-item api-docs">
+
+        <!-- <div class="nav-item api-docs">
         <a-tooltip placement="right">
           <template #title>接口文档 {{ apiDocsUrl }}</template>
           <a :href="apiDocsUrl" target="_blank" class="github-link">
-            <ApiOutlined class="icon" style="color: #222;"/>
+            <ApiOutlined class="icon" style="color: var(--gray-1000);"/>
           </a>
         </a-tooltip>
       </div> -->
@@ -329,7 +335,7 @@ div.header, #app-router-view {
       text-decoration: none;
       font-size: 24px;
       font-weight: bold;
-      color: #333;
+      color: var(--gray-900);
     }
   }
 
@@ -359,13 +365,13 @@ div.header, #app-router-view {
     }
 
     &.active {
-      background-color: var(--gray-150);
+      background-color: var(--gray-100);
       font-weight: bold;
       color: var(--main-color);
     }
 
     &.warning {
-      color: red;
+      color: var(--color-error);
     }
 
     &:hover {
@@ -394,7 +400,7 @@ div.header, #app-router-view {
         margin-top: 4px;
 
         .star-icon {
-          color: #f0a742;
+          color: var(--color-warning);
           font-size: 12px;
           margin-right: 2px;
         }
@@ -423,6 +429,23 @@ div.header, #app-router-view {
         width: 100%;
         display: flex;
         justify-content: center;
+      }
+    }
+
+    &.theme-toggle-nav {
+      .theme-toggle-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        color: var(--gray-1000);
+        transition: color 0.2s ease-in-out;
+
+        &:hover {
+          color: var(--main-color);
+        }
       }
     }
 
@@ -471,7 +494,7 @@ div.header, #app-router-view {
       transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;
 
       &.active {
-        color: black;
+        color: var(--gray-10000);
         font-size: 1.1rem;
       }
     }
@@ -572,9 +595,32 @@ div.header, #app-router-view {
         margin-left: 6px;
 
         .star-icon {
-          color: #f0a742;
+          color: var(--color-warning);
           font-size: 14px;
           margin-right: 2px;
+        }
+      }
+    }
+
+    &.theme-toggle-nav {
+      padding: 8px 12px;
+
+      .theme-toggle-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-1000);
+        transition: color 0.2s ease-in-out;
+        cursor: pointer;
+
+        &:hover {
+          color: var(--main-color);
+        }
+      }
+
+      &.active {
+        .theme-toggle-icon {
+          color: var(--main-color);
         }
       }
     }

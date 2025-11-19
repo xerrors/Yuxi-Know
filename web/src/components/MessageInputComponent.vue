@@ -338,7 +338,7 @@ defineExpose({
 
   // &:focus-within {
   //   border-color: var(--main-500);
-  //   background: white;
+  //   background: var(--gray-0);
   //   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   // }
 
@@ -495,7 +495,7 @@ defineExpose({
   border: none;
   transition: all 0.2s ease;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  color: white;
+  color: var(--gray-0);
   padding: 0;
   display: flex;
   align-items: center;
@@ -505,7 +505,7 @@ defineExpose({
   &:hover {
     background-color: var(--main-color);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    color: white;
+    color: var(--gray-0);
   }
 
   &:active {

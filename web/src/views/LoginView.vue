@@ -581,7 +581,7 @@ onUnmounted(() => {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--shadow-2);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -590,14 +590,14 @@ onUnmounted(() => {
 
   .brand-info {
     text-align: left;
-    color: white;
+    color: var(--gray-0);
     max-width: 520px;
 
     .brand-title {
       font-size: 52px;
       font-weight: 700;
       margin-bottom: 20px;
-      text-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+      text-shadow: 0 3px 6px var(--shadow-2);
       letter-spacing: -0.5px;
     }
 
@@ -606,7 +606,7 @@ onUnmounted(() => {
       font-weight: 500;
       margin-bottom: 24px;
       opacity: 0.92;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.28);
+      text-shadow: 0 2px 4px var(--shadow-1);
       line-height: 1.4;
     }
 
@@ -615,7 +615,7 @@ onUnmounted(() => {
       line-height: 1.6;
       margin: 0;
       opacity: 0.82;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+      text-shadow: 0 1px 3px var(--shadow-1);
     }
   }
 
@@ -625,8 +625,8 @@ onUnmounted(() => {
     p {
       margin: 0;
       font-size: 14px;
-      color: rgba(255, 255, 255, 0.7);
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      color: color-mix(in srgb, var(--gray-0) 70%, transparent);
+      text-shadow: 0 1px 2px var(--shadow-1);
       font-weight: 400;
     }
   }
@@ -649,7 +649,7 @@ onUnmounted(() => {
   background: var(--gray-0);
   border-radius: 24px;
   border: 1px solid var(--gray-150);
-  box-shadow: 0 18px 36px rgba(66, 66, 66, 0.05);
+  box-shadow: 0 18px 36px var(--shadow-1);
   display: flex;
   flex-direction: column;
   gap: 32px;
@@ -783,7 +783,7 @@ onUnmounted(() => {
   margin-top: 16px;
   padding: 10px 12px;
   background-color: var(--stats-error-bg);
-  border: 1px solid rgba(220, 38, 38, 0.25);
+  border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
   border-radius: 8px;
   color: var(--stats-error-color);
   font-size: 14px;
@@ -874,10 +874,10 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #ff4d4f, #ff7875);
-  color: white;
+  background: linear-gradient(135deg, var(--color-error), var(--chart-error-light));
+  color: var(--gray-0);
   z-index: 1000;
-  box-shadow: 0 2px 8px rgba(255, 77, 79, 0.3);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-error) 30%, transparent);
 
   .alert-content {
     display: flex;
@@ -888,7 +888,7 @@ onUnmounted(() => {
     .alert-icon {
       font-size: 20px;
       margin-right: 12px;
-      color: white;
+      color: var(--gray-0);
     }
 
     .alert-text {
@@ -907,12 +907,12 @@ onUnmounted(() => {
     }
 
     :deep(.ant-btn-link) {
-      color: white;
-      border-color: white;
+      color: var(--gray-0);
+      border-color: var(--gray-0);
 
       &:hover {
-        color: white;
-        background-color: rgba(255, 255, 255, 0.1);
+        color: var(--gray-0);
+        background-color: color-mix(in srgb, var(--gray-0) 10%, transparent);
       }
     }
   }

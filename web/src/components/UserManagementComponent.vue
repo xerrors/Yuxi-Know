@@ -670,7 +670,7 @@ onMounted(() => {
 .user-modal {
   :deep(.ant-modal-header) {
     padding: 20px 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-800);
 
     .ant-modal-title {
       font-size: 16px;
