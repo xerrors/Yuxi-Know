@@ -5,7 +5,7 @@
       <div v-if="$slots.top" class="overlay top">
         <slot name="top" />
       </div>
-      <div class="content">
+      <div class="canvas-content">
         <slot name="content" />
       </div>
       <div v-if="$slots.bottom" class="overlay bottom">
@@ -425,6 +425,7 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
+  background-color: #ffffff;
 
   .graph-canvas {
     width: 100%;
@@ -452,15 +453,21 @@ defineExpose({
       &.top { top: 0; }
       &.bottom { bottom: 0; }
     }
-    .content {
+    .canvas-content {
       // 中间内容层及其子元素全部穿透
       pointer-events: none;
       flex: 1;
+      background: transparent !important;
     }
-    .content * {
+    .canvas-content * {
       pointer-events: none;
     }
   }
+}
+
+/* 深色模式下，强制图谱容器保持白色背景 */
+:root.dark .graph-canvas-container {
+  background-color: #ffffff !important;
 }
 
 /* 高亮节点的脉冲动画效果 */

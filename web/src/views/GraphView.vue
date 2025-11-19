@@ -71,14 +71,9 @@
         </template>
         <template #bottom>
           <div class="footer">
-            <GraphInfoPanel
-              :graph-info="graphInfo"
-              :graph-data="graphData"
-              :unindexed-count="unindexedCount"
-              :model-matched="modelMatched"
-              @index-nodes="indexNodes"
-              @export-data="exportGraphData"
-            />
+            <div class="tags">
+              <a-tag :bordered="false" v-for="tag in graphTags" :key="tag.key" :color="tag.type">{{ tag.text }}</a-tag>
+            </div>
           </div>
         </template>
       </GraphCanvas>
@@ -155,7 +150,6 @@ import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 import GraphCanvas from '@/components/GraphCanvas.vue';
-import GraphInfoPanel from '@/components/GraphInfoPanel.vue';
 
 const configStore = useConfigStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model);
@@ -300,6 +294,20 @@ const graphStatusText = computed(() => {
   return graphInfo.value?.status === 'open' ? '已连接' : '已关闭';
 });
 
+// 新增：将图谱信息拆分为多条标签用于展示
+const graphTags = computed(() => {
+  const tags = [];
+  const dbName = graphInfo.value?.graph_name;
+  const entityCount = graphInfo.value?.entity_count;
+  const relationCount = graphInfo.value?.relationship_count;
+
+  if (dbName) tags.push({ key: 'name', text: `图谱 ${dbName}`, type: 'blue' });
+  if (typeof entityCount === 'number') tags.push({ key: 'entities', text: `实体 ${graphData.nodes.length} of ${entityCount}`, type: 'success' });
+  if (typeof relationCount === 'number') tags.push({ key: 'relations', text: `关系 ${graphData.edges.length} of ${relationCount}`, type: 'purple' });
+  if (unindexedCount.value > 0) tags.push({ key: 'unindexed', text: `未索引 ${unindexedCount.value}`, type: 'warning' });
+
+  return tags;
+});
 
 // 为未索引节点添加索引
 const indexNodes = () => {
@@ -335,32 +343,6 @@ const getAuthHeaders = () => {
   return userStore.getAuthHeaders();
 };
 
-const exportGraphData = () => {
-  const dataStr = JSON.stringify({
-    nodes: graphData.nodes,
-    edges: graphData.edges,
-    graphInfo: graphInfo.value,
-    exportTime: new Date().toISOString()
-  }, null, 2);
-
-  const dataBlob = new Blob([dataStr], { type: 'application/json' });
-  const url = URL.createObjectURL(dataBlob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `graph-data-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-
-  message.success('图谱数据已导出');
-};
-
-const showQueryHistory = () => {
-  // 这里可以实现查询历史功能
-  message.info('查询历史功能开发中...');
-};
-
 const openLink = (url) => {
   window.open(url, '_blank')
 }
@@ -372,10 +354,16 @@ const openLink = (url) => {
 
 .graph-container {
   padding: 0;
+  background-color: #ffffff;
 
   .header-container {
     height: @graph-header-height;
   }
+}
+
+/* 深色模式下，强制知识图谱页面保持白色背景 */
+:root.dark .graph-container {
+  background-color: #ffffff !important;
 }
 
 .status-wrapper {
@@ -448,6 +436,58 @@ const openLink = (url) => {
     padding: 0 24px;
     width: 100%;
   }
+
+  .tags {
+    display: flex;
+    gap: 8px;
+  }
+}
+
+/* 深色模式下，强制知识图谱页面保持白色背景和深色文字 */
+:root.dark .container-outter {
+  background: #ffffff !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.dark .container-outter .actions,
+:root.dark .container-outter .footer {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.dark .container-outter .status-text {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 深色模式下，底部标签使用深色主题样式 */
+:root.dark .footer .tags :deep(.ant-tag) {
+  background-color: rgba(31, 41, 55, 0.9) !important;  /* 深色底 */
+  border-color: rgba(148, 163, 184, 0.3) !important;   /* 灰色边框 */
+  color: rgba(248, 250, 252, 0.95) !important;         /* 浅色文字 */
+}
+
+/* 深色模式下，标签的不同颜色类型 */
+:root.dark .footer .tags :deep(.ant-tag-blue) {
+  background-color: rgba(37, 99, 235, 0.2) !important;
+  border-color: rgba(96, 165, 250, 0.4) !important;
+  color: rgba(147, 197, 253, 1) !important;
+}
+
+:root.dark .footer .tags :deep(.ant-tag-success) {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  border-color: rgba(74, 222, 128, 0.4) !important;
+  color: rgba(134, 239, 172, 1) !important;
+}
+
+:root.dark .footer .tags :deep(.ant-tag-purple) {
+  background-color: rgba(168, 85, 247, 0.2) !important;
+  border-color: rgba(192, 132, 252, 0.4) !important;
+  color: rgba(216, 180, 254, 1) !important;
+}
+
+:root.dark .footer .tags :deep(.ant-tag-warning) {
+  background-color: rgba(245, 158, 11, 0.2) !important;
+  border-color: rgba(251, 191, 36, 0.4) !important;
+  color: rgba(253, 224, 71, 1) !important;
 }
 
 .actions {
