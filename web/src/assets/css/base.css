@@ -112,3 +112,206 @@
 
   --min-width: 400px;
 }
+
+/* 深色模式 */
+:root.dark {
+  --main-1000: #e1f6fb;
+  --main-900:  #c4eaf5;
+  --main-800:  #a3d8e8;
+  --main-700:  #82c3d6;
+  --main-600:  #5faec2;
+  --main-500:  #4a9fb8;
+  --main-400:  #3996ae;
+  --main-300:  #24839a;
+  --main-200:  #046a82;
+  --main-100:  #035065;
+  --main-50:   #023944;
+  --main-40:   #01151f;
+  --main-30:   #010d14;
+  --main-20:   #010a0f;
+  --main-10:   #00070a;
+  --main-5:    #000405;
+  --main-1:    #000102;
+  --main-0:    #000000;
+
+  --gray-10000: #ffffff;
+  --gray-2000:  #f8fafa;
+  --gray-1000:  #f5f7f7;
+  --gray-900:   #eff2f2;
+  --gray-800:   #eef0f0;
+  --gray-700:   #e4e6e6;
+  --gray-600:   #d7d9d9;
+  --gray-500:   #bdbfbf;
+  --gray-400:   #979999;
+  --gray-300:   #697070;
+  --gray-200:   #4c4d4d;
+  --gray-150:   #323333;
+  --gray-100:   #1e1f1f;
+  --gray-50:    #151616;
+  --gray-25:    #0c0d0d;
+  --gray-10:    #050505;
+  --gray-0:     #000000;
+
+  --main-color: #4a9fb8;
+  --main-bright: #5faec2;
+  --secondry-color: #8fa5b0;
+  --error-color: #ff6b6b;
+  --color-primary: #4a9fb8;
+  --color-primary-bg: #1a3a42;
+  --color-success: #52c41a;
+  --color-error: #ff4d4f;
+  --color-info: #3d8fff;
+  --color-warning: #faad14;
+
+  /* Chart Colors - 深色模式图表颜色 */
+  --chart-primary: var(--main-500);
+  --chart-primary-light: var(--main-600);
+  --chart-primary-dark: var(--main-400);
+
+  --chart-success: #52c41a;
+  --chart-success-light: #73d13d;
+  --chart-success-dark: #389e0d;
+
+  --chart-warning: #faad14;
+  --chart-warning-light: #ffc53d;
+  --chart-warning-dark: #d48806;
+
+  --chart-error: #ff4d4f;
+  --chart-error-light: #ff7875;
+  --chart-error-dark: #cf1322;
+
+  --chart-info: #1890ff;
+  --chart-info-light: #40a9ff;
+  --chart-info-dark: #096dd9;
+
+  --chart-secondary: #722ed1;
+  --chart-secondary-light: #9254de;
+  --chart-secondary-dark: #531dab;
+
+  --chart-accent: #13c2c2;
+  --chart-accent-light: #36cfc9;
+  --chart-accent-dark: #08979c;
+
+  /* Stats Card Colors - 深色模式统计卡片 */
+  --stats-primary-bg: #1e3a8a;
+  --stats-primary-color: #93c5fd;
+  --stats-success-bg: #14532d;
+  --stats-success-color: #86efac;
+  --stats-info-bg: #0c4a6e;
+  --stats-info-color: #7dd3fc;
+  --stats-warning-bg: #78350f;
+  --stats-warning-color: #fcd34d;
+  --stats-secondary-bg: #581c87;
+  --stats-secondary-color: #d8b4fe;
+  --stats-error-bg: #7f1d1d;
+  --stats-error-color: #fca5a5;
+
+  --bg-sider: #1f1f1f;
+  --color-text: #ffffff;
+}
+
+/* 深色模式全局样式 */
+:root.dark {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark body {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark #app {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+:root.dark #app-router-view {
+  background-color: #141414;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 深色模式下覆盖所有白色背景 */
+:root.dark .action-button,
+:root.dark .database,
+:root.dark .graphbase,
+:root.dark .left-panel,
+:root.dark .right-panel,
+:root.dark .agent-card,
+:root.dark .database-card,
+:root.dark .setting-card {
+  background-color: #1f1f1f !important;
+  border-color: #434343 !important;
+}
+
+/* 深色模式下的浅色背景区域 */
+:root.dark [style*="background-color: #fafafa"],
+:root.dark [style*="background-color: #f5f5f5"],
+:root.dark [style*="background: white"],
+:root.dark [style*="background-color: #fff"] {
+  background-color: #262626 !important;
+}
+
+/* 深色模式下的聊天和内容区域 */
+:root.dark .agent-view,
+:root.dark .agent-view-body,
+:root.dark .content,
+:root.dark .chat-container,
+:root.dark .message-list,
+:root.dark .chat-component,
+:root.dark .messages-container,
+:root.dark .chat-header,
+:root.dark .input-container,
+:root.dark .chat {
+  background-color: #141414 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 深色模式下的输入区域 */
+:root.dark .bottom,
+:root.dark .message-input-wrapper {
+  background-color: #141414 !important;
+}
+
+/* 深色模式下的消息区域 */
+:root.dark .chat-box,
+:root.dark .conv-box,
+:root.dark .message-bubble,
+:root.dark .user-message {
+  background-color: #1f1f1f !important;
+  border-color: #434343 !important;
+}
+
+:root.dark .assistant-message {
+  background-color: #262626 !important;
+  border-color: #434343 !important;
+}
+
+/* 深色模式下的消息内容 */
+:root.dark .message-content,
+:root.dark .markdown-body,
+:root.dark .message-md,
+:root.dark .md-editor-preview-wrapper,
+:root.dark .md-editor-preview {
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 深色模式下的 markdown 编辑器 */
+:root.dark .md-editor,
+:root.dark .md-editor-content {
+  background-color: #1f1f1f !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 深色模式下的代码块 */
+:root.dark pre,
+:root.dark code {
+  background-color: #1f1f1f !important;
+  border-color: #434343 !important;
+}
+
+/* 平滑过渡 */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}

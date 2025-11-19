@@ -16,6 +16,7 @@ import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
 import TaskCenterDrawer from '@/components/TaskCenterDrawer.vue'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
@@ -169,7 +170,7 @@ const mainList = [{
         <a-tooltip placement="right">
           <template #title>欢迎 Star</template>
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
-            <GithubOutlined class="icon" style="color: #222;"/>
+            <GithubOutlined class="icon" />
             <span v-if="githubStars > 0" class="github-stars">
               <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
             </span>
@@ -188,6 +189,11 @@ const mainList = [{
             <BookOpen class="icon" size="22" />
           </a>
         </a-tooltip>
+      </div>
+      
+      <!-- 主题切换按钮 -->
+      <div class="nav-item theme-toggle">
+        <ThemeToggle />
       </div>
       <!-- <div class="nav-item api-docs">
         <a-tooltip placement="right">
@@ -337,9 +343,9 @@ div.header, #app-router-view {
     border: 1px solid transparent;
     border-radius: 12px;
     background-color: transparent;
-    color: #222;
+    color: var(--gray-1000);
     font-size: 20px;
-    transition: background-color 0.2s ease-in-out;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
     margin: 0;
     text-decoration: none;
     cursor: pointer;
