@@ -107,6 +107,7 @@ class BaseEmbeddingModel(ABC):
             logger.error(error_msg)
             return False, error_msg
 
+
 class OllamaEmbedding(BaseEmbeddingModel):
     """
     Ollama Embedding Model
@@ -182,7 +183,6 @@ class OtherEmbedding(BaseEmbeddingModel):
                 return [item["embedding"] for item in result["data"]]
             except (httpx.RequestError, json.JSONDecodeError) as e:
                 raise ValueError(f"Other Embedding async request failed: {e}, {payload}, {self.base_url=}")
-
 
 
 async def test_embedding_model_status(model_id: str) -> dict:

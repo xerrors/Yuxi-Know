@@ -147,10 +147,7 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
         base_url="https://api-inference.modelscope.cn/v1/",
         default="deepseek-ai/DeepSeek-V3.2-Exp",
         env="MODELSCOPE_ACCESS_TOKEN",
-        models=[
-            "Qwen/Qwen3-32B",
-            "deepseek-ai/DeepSeek-V3.2-Exp"
-        ],
+        models=["Qwen/Qwen3-32B", "deepseek-ai/DeepSeek-V3.2-Exp"],
     ),
 }
 
