@@ -224,7 +224,7 @@ async def get_custom_providers(current_user: User = Depends(get_admin_user)):
         custom_providers = config.get_custom_providers()
         return {
             "providers": {provider: info.model_dump() for provider, info in custom_providers.items()},
-            "message": "success"
+            "message": "success",
         }
     except Exception as e:
         logger.error(f"获取自定义供应商失败: {e}")
@@ -235,7 +235,7 @@ async def get_custom_providers(current_user: User = Depends(get_admin_user)):
 async def add_custom_provider(
     provider_id: str = Body(..., description="供应商ID"),
     provider_data: dict = Body(..., description="供应商配置数据"),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """添加自定义供应商"""
     try:
@@ -253,7 +253,7 @@ async def add_custom_provider(
 async def update_custom_provider(
     provider_id: str,
     provider_data: dict = Body(..., description="供应商配置数据"),
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """更新自定义供应商"""
     try:
@@ -283,9 +283,7 @@ async def delete_custom_provider(provider_id: str, current_user: User = Depends(
 
 @system.post("/custom-providers/{provider_id}/test")
 async def test_custom_provider(
-    provider_id: str,
-    request: dict = Body(..., description="测试请求"),
-    current_user: User = Depends(get_admin_user)
+    provider_id: str, request: dict = Body(..., description="测试请求"), current_user: User = Depends(get_admin_user)
 ):
     """测试自定义供应商连接"""
     try:

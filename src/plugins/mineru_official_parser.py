@@ -150,7 +150,7 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 text = self._download_and_extract(zip_url)
                 processing_time = time.time() - start_time
                 logger.info(
-                    f"MinerU Official 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)"
+                    f"MinerU Official: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)"
                 )
                 return text
 
@@ -161,6 +161,7 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 text = processed["markdown_content"]
             except Exception:
                 import zipfile
+
                 text = ""
                 logger.error(f"从 zip 文件中提取 full.md 失败: {zip_path}，使用第一个 md 文件")
                 with zipfile.ZipFile(zip_path, "r") as zf:
