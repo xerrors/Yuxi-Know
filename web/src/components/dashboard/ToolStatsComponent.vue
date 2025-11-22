@@ -79,6 +79,15 @@
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
+import { useThemeStore } from '@/stores/theme'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
+
+// theme store
+const themeStore = useThemeStore()
 
 // Props
 const props = defineProps({
@@ -132,6 +141,12 @@ const errorData = computed(() => {
 const initToolsChart = () => {
   if (!toolsChartRef.value || !props.toolStats?.most_used_tools?.length) return
 
+  // 如果已存在图表实例，先销毁
+  if (toolsChart) {
+    toolsChart.dispose()
+    toolsChart = null
+  }
+
   toolsChart = echarts.init(toolsChartRef.value)
 
   const data = props.toolStats.most_used_tools.slice(0, 10) // 只显示前10个
@@ -142,11 +157,11 @@ const initToolsChart = () => {
       axisPointer: {
         type: 'shadow'
       },
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e8e8e8',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
       textStyle: {
-        color: '#666'
+        color: getCSSVariable('--gray-600')
       }
     },
     grid: {
@@ -160,15 +175,15 @@ const initToolsChart = () => {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666'
+        color: getCSSVariable('--gray-500')
       },
       splitLine: {
         lineStyle: {
-          color: '#f0f0f0'
+          color: getCSSVariable('--gray-150')
         }
       }
     },
@@ -177,11 +192,11 @@ const initToolsChart = () => {
       data: data.map(item => item.tool_name),
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666',
+        color: getCSSVariable('--gray-500'),
         interval: 0
       }
     },
@@ -197,7 +212,7 @@ const initToolsChart = () => {
         itemStyle: {
           color: getChartColor('primary'),
           shadowBlur: 10,
-          shadowColor: 'rgba(2, 142, 160, 0.3)'
+          shadowColor: getCSSVariable('--chart-info-shadow')
         }
       }
     }]
@@ -210,6 +225,12 @@ const initToolsChart = () => {
 const initErrorChart = () => {
   if (!errorChartRef.value || !hasErrorData.value) return
 
+  // 如果已存在图表实例，先销毁
+  if (errorChart) {
+    errorChart.dispose()
+    errorChart = null
+  }
+
   errorChart = echarts.init(errorChartRef.value)
 
   const data = errorData.value.slice(0, 5) // 只显示前5个
@@ -217,11 +238,11 @@ const initErrorChart = () => {
   const option = {
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e8e8e8',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
       textStyle: {
-        color: '#666'
+        color: getCSSVariable('--gray-600')
       },
       formatter: '{a} <br/>{b}: {c} ({d}%)'
     },
@@ -236,7 +257,7 @@ const initErrorChart = () => {
       })),
       itemStyle: {
         borderRadius: 6,
-        borderColor: '#fff',
+        borderColor: getCSSVariable('--gray-0'),
         borderWidth: 2
       },
       label: {
@@ -247,7 +268,7 @@ const initErrorChart = () => {
         itemStyle: {
           shadowBlur: 10,
           shadowOffsetX: 0,
-          shadowColor: 'rgba(0, 0, 0, 0.5)'
+          shadowColor: getCSSVariable('--shadow-300')
         }
       },
       color: getColorPalette()
@@ -281,6 +302,15 @@ const handleResize = () => {
 onMounted(() => {
   updateCharts()
   window.addEventListener('resize', handleResize)
+})
+
+// 监听主题变化，重新渲染图表
+watch(() => themeStore.isDark, () => {
+  if (props.toolStats && (toolsChart || errorChart)) {
+    nextTick(() => {
+      updateCharts()
+    })
+  }
 })
 
 // 组件卸载时清理

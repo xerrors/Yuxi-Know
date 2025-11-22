@@ -292,11 +292,11 @@ const getModelStatusIcon = (modelId) => {
 // 获取模型状态颜色
 const getModelStatusColor = (modelId) => {
   const status = state.modelStatuses[modelId]
-  if (!status) return '#999'
-  if (status.status === 'available') return '#52c41a'
-  if (status.status === 'unavailable') return '#ff4d4f'
-  if (status.status === 'error') return '#faad14'
-  return '#999'
+  if (!status) return 'var(--gray-500)'
+  if (status.status === 'available') return 'var(--color-success)'
+  if (status.status === 'unavailable') return 'var(--color-error)'
+  if (status.status === 'error') return 'var(--color-warning)'
+  return 'var(--gray-500)'
 }
 // 获取模型状态提示文本
 const getModelStatusTooltip = (modelId) => {
@@ -446,7 +446,7 @@ const openLink = (url) => {
     padding: 12px 16px;
     border: 1px solid var(--gray-150);
     border-radius: 8px;
-    background: white;
+    background: var(--gray-0);
     transition: all 0.2s;
     min-height: 60px;
 

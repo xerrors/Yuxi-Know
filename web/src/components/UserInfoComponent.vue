@@ -10,22 +10,29 @@
         <div v-if="showRole">{{ userStore.username }}</div>
       </div>
       <template #overlay>
-          <a-menu>
-          <a-menu-item key="username" disabled>
-            <span class="user-menu-username">{{ userStore.username }}</span>
-          </a-menu-item>
-          <a-menu-item key="user-id" disabled>
-            <span class="user-menu-info">ID: {{ userStore.userIdLogin }}</span>
-          </a-menu-item>
-          <a-menu-item key="role" disabled>
-            <span class="user-menu-role">{{ userRoleText }}</span>
+        <a-menu>
+          <a-menu-item key="user-info" @click="openProfile">
+            <div class="user-info-display">
+              <div class="user-menu-username">{{ userStore.username }}</div>
+              <div class="user-menu-details">
+                <span class="user-menu-info">ID: {{ userStore.userIdLogin }}</span>
+                <span class="user-menu-role">{{ userRoleText }}</span>
+              </div>
+            </div>
           </a-menu-item>
           <a-menu-divider />
-          <a-menu-item key="profile" @click="openProfile">
-            <UserOutlined /> &nbsp;个人资料
+          <a-menu-item key="docs" @click="openDocs">
+            <BookOpen size="16"/>
+            <span class="menu-text">文档中心</span>
           </a-menu-item>
+          <a-menu-item key="theme" @click="toggleTheme">
+            <component :is="themeStore.isDark ? Sun : Moon" size="16"/>
+            <span class="menu-text">{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式 (Beta)' }}</span>
+          </a-menu-item>
+          <a-menu-divider />
           <a-menu-item key="logout" @click="logout">
-            <LogoutOutlined /> &nbsp;退出登录
+            <LogOut size="16"/>
+            <span class="menu-text">退出登录</span>
           </a-menu-item>
         </a-menu>
       </template>
@@ -33,9 +40,6 @@
     <a-button v-else-if="showButton" type="primary" @click="goToLogin">
       登录
     </a-button>
-    <div v-else class="login-icon" @click="goToLogin">
-      <UserRoundCheck />
-    </div>
 
     <!-- 个人资料弹窗 -->
     <a-modal
@@ -63,7 +67,7 @@
                 accept="image/*"
               >
                 <a-button type="primary" size="small" :loading="avatarUploading">
-                  <template #icon><UploadOutlined /></template>
+                  <template #icon><Upload size="14"/></template>
                   {{ userStore.avatar ? '更换头像' : '上传头像' }}
                 </a-button>
               </a-upload>
@@ -153,12 +157,17 @@
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
-import { UserOutlined, LogoutOutlined, UploadOutlined } from '@ant-design/icons-vue';
+//
+//
+//
+//
 import { message } from 'ant-design-vue';
-import { CircleUser, UserRoundCheck } from 'lucide-vue-next';
+import { CircleUser, UserRoundCheck, BookOpen, Sun, Moon, User, LogOut, Upload } from 'lucide-vue-next';
+import { useThemeStore } from '@/stores/theme'
 
 const router = useRouter();
 const userStore = useUserStore();
+const themeStore = useThemeStore();
 
 // 个人资料弹窗状态
 const profileModalVisible = ref(false);
@@ -221,6 +230,14 @@ const logout = () => {
 const goToLogin = () => {
   router.push('/login');
 };
+
+const openDocs = () => {
+  window.open('https://xerrors.github.io/Yuxi-Know/', '_blank', 'noopener,noreferrer')
+}
+
+const toggleTheme = () => {
+  themeStore.toggleTheme()
+}
 
 // 打开个人资料页面
 const openProfile = async () => {
@@ -357,7 +374,7 @@ const handleAvatarChange = async (info) => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 
   &[data-align="center"] {
     justify-content: center;
@@ -369,14 +386,14 @@ const handleAvatarChange = async (info) => {
 }
 
 .user-avatar {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
@@ -390,7 +407,7 @@ const handleAvatarChange = async (info) => {
     height: 100%;
     object-fit: contain;
     border-radius: 50%;
-    border: 2px solid #f0f0f0;
+    border: 2px solid var(--gray-150);
   }
 }
 
@@ -401,33 +418,47 @@ const handleAvatarChange = async (info) => {
   border-radius: 50%;
   right: 0;
   bottom: 0;
-  border: 2px solid white;
+  border: 2px solid var(--gray-0);
 
   &.superadmin {
-    background-color: #c1bd00; // 红色，超管
+    background-color: var(--color-warning);
   }
 
   &.admin {
-    background-color: #1890ff; // 蓝色，管理员
+    background-color: var(--color-info); /* 蓝色，管理员 */
   }
 
   &.user {
-    background-color: #52c41a; // 绿色，普通用户
+    background-color: var(--color-success); /* 绿色，普通用户 */
   }
 }
 
+.user-info-display {
+  line-height: 1.4;
+}
+
 .user-menu-username {
-  font-weight: bold;
+  font-weight: 600;
+  color: var(--gray-900);
+  font-size: 14px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.user-menu-details {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .user-menu-info {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--gray-600);
 }
 
 .user-menu-role {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--gray-500);
 }
 
 .login-icon {
@@ -438,22 +469,24 @@ const handleAvatarChange = async (info) => {
   justify-content: center;
   cursor: pointer;
   border-radius: 50%;
-  transition: background-color 0.3s;
+  transition: background-color 0.2s, color 0.2s;
+  color: var(--gray-900);
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--main-10);
+    color: var(--main-color);
   }
 }
 
 .profile-modal {
   :deep(.ant-modal-header) {
     padding: 20px 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-150);
 
     .ant-modal-title {
       font-size: 18px;
       font-weight: 600;
-      color: #262626;
+      color: var(--gray-900);
     }
   }
 
@@ -467,7 +500,7 @@ const handleAvatarChange = async (info) => {
     text-align: center;
     margin-bottom: 32px;
     padding-bottom: 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-150);
 
     .avatar-container {
       display: inline-block;
@@ -480,25 +513,25 @@ const handleAvatarChange = async (info) => {
           height: 80px;
           border-radius: 50%;
           object-fit: cover;
-          border: 3px solid #f0f0f0;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border: 3px solid var(--gray-150);
+          box-shadow: 0 2px 8px var(--shadow-2);
         }
 
         .default-avatar {
           width: 80px;
           height: 80px;
           border-radius: 50%;
-          background: #f5f5f5;
+          background: var(--gray-50);
           display: flex;
           margin: 0 auto;
           align-items: center;
           justify-content: center;
-          border: 3px solid #f0f0f0;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          border: 3px solid var(--gray-150);
+          box-shadow: 0 2px 8px var(--shadow-2);
 
           // 确保图标居中
           :deep(svg) {
-            color: #bfbfbf;
+            color: var(--gray-400);
           }
         }
       }
@@ -507,7 +540,7 @@ const handleAvatarChange = async (info) => {
         .avatar-tips {
           margin-top: 8px;
           font-size: 12px;
-          color: #8c8c8c;
+          color: var(--gray-500);
           line-height: 1.4;
         }
       }
@@ -521,7 +554,7 @@ const handleAvatarChange = async (info) => {
       display: flex;
       align-items: center;
       padding: 12px 0;
-      border-bottom: 1px solid #f5f5f5;
+      border-bottom: 1px solid var(--gray-50);
 
       &:last-child {
         border-bottom: none;
@@ -530,18 +563,18 @@ const handleAvatarChange = async (info) => {
       .info-label {
         width: 80px;
         font-weight: 500;
-        color: #8c8c8c;
+        color: var(--gray-500);
         flex-shrink: 0;
       }
 
       .info-value {
         flex: 1;
-        color: #262626;
+        color: var(--gray-900);
         font-size: 14px;
 
         &.user-id {
           font-family: 'Monaco', 'Consolas', monospace;
-          // background: #f5f5f5;
+          // background: var(--gray-50);
           // padding: 4px 8px;
           border-radius: 4px;
           display: inline-block;
@@ -559,7 +592,29 @@ const handleAvatarChange = async (info) => {
   .actions-section {
     text-align: center;
     padding-top: 16px;
-    border-top: 1px solid #f0f0f0;
+    border-top: 1px solid var(--gray-150);
   }
+}
+
+:deep(.ant-dropdown-menu) {
+  padding: 8px 0;
+}
+
+:deep(.ant-dropdown-menu-title-content) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gray-900);
+}
+
+:deep(.ant-dropdown-menu-item svg) {
+  margin-right: 4px;
+  color: var(--gray-900);
+  vertical-align: middle;
+}
+
+.menu-text {
+  line-height: 20px;
 }
 </style>

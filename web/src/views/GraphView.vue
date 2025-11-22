@@ -330,11 +330,6 @@ const indexNodes = () => {
     });
 };
 
-const getAuthHeaders = () => {
-  const userStore = useUserStore();
-  return userStore.getAuthHeaders();
-};
-
 const exportGraphData = () => {
   const dataStr = JSON.stringify({
     nodes: graphData.nodes,
@@ -356,9 +351,9 @@ const exportGraphData = () => {
   message.success('图谱数据已导出');
 };
 
-const showQueryHistory = () => {
-  // 这里可以实现查询历史功能
-  message.info('查询历史功能开发中...');
+const getAuthHeaders = () => {
+  const userStore = useUserStore();
+  return userStore.getAuthHeaders();
 };
 
 const openLink = (url) => {
@@ -372,6 +367,7 @@ const openLink = (url) => {
 
 .graph-container {
   padding: 0;
+  background-color: var(--gray-0);
 
   .header-container {
     height: @graph-header-height;
@@ -383,7 +379,7 @@ const openLink = (url) => {
   align-items: center;
   margin-right: 16px;
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--color-text-secondary);
 }
 
 .status-text {
@@ -397,16 +393,16 @@ const openLink = (url) => {
   display: inline-block;
 
   &.loading {
-    background-color: #faad14;
+    background-color: var(--color-warning);
     animation: pulse 1.5s infinite ease-in-out;
   }
 
   &.open {
-    background-color: #52c41a;
+    background-color: var(--color-success);
   }
 
   &.closed {
-    background-color: #f5222d;
+    background-color: var(--color-error);
   }
 }
 
@@ -447,6 +443,11 @@ const openLink = (url) => {
     margin: 20px 0;
     padding: 0 24px;
     width: 100%;
+  }
+
+  .tags {
+    display: flex;
+    gap: 8px;
   }
 }
 

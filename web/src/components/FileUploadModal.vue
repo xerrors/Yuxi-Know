@@ -769,7 +769,7 @@ const chunkData = async () => {
   padding: 12px;
   background: #f0f7ff;
   border-radius: 4px;
-  color: #666;
+  color: var(--gray-500);
   font-size: 12px;
 }
 

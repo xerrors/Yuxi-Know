@@ -74,7 +74,7 @@ const handleReject = () => {
 
 <style scoped>
 .approval-modal {
-  background: white;
+  background: var(--gray-0);
   border-radius: 12px 12px;
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
   margin: 0 auto 8px;
@@ -160,7 +160,7 @@ const handleReject = () => {
 
 .btn-approve {
   background: var(--main-color);
-  color: white;
+  color: var(--gray-0);
 }
 
 .btn-approve:hover:not(:disabled) {

@@ -23,8 +23,7 @@
         <MdPreview
           :modelValue="mergedContent"
           :theme="theme"
-          :previewTheme="previewTheme"
-          :codeTheme="codeTheme"
+          previewTheme="github"
           class="markdown-content"
         />
       </div>
@@ -93,10 +92,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import { mergeChunks, getChunkPreview } from '@/utils/chunkUtils';
+import { useThemeStore } from '@/stores/theme';
 
 const props = defineProps({
   chunks: {
@@ -104,6 +104,9 @@ const props = defineProps({
     default: () => []
   }
 });
+
+// 使用主题store
+const themeStore = useThemeStore();
 
 // 响应式引用
 const showTooltip = ref(false);
@@ -113,10 +116,8 @@ const activeChunkIndex = ref(null);
 const highlightedChunkIndex = ref(null);
 const chunkPanelVisible = ref(true);
 
-// 主题设置
-const theme = ref('light');
-const previewTheme = ref('github');
-const codeTheme = ref('atom');
+// 主题设置 - 根据系统主题动态切换
+const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
 
 // 合并chunks
 const mergeResult = computed(() => mergeChunks(props.chunks));
@@ -182,7 +183,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--gray-200);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -192,8 +193,8 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 4px 16px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--gray-25);
+  border-bottom: 1px solid var(--gray-200);
 }
 
 .header-controls {
@@ -203,8 +204,8 @@ onUnmounted(() => {
 }
 
 .toggle-btn {
-  /* background: var(--main-color); */
-  /* color: white; */
+  background: var(--gray-100);
+  /* color: var(--gray-0); */
   border: none;
   border-radius: 4px;
   width: 28px;
@@ -229,7 +230,7 @@ onUnmounted(() => {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #666;
+  color: var(--gray-500);
 }
 
 .viewer-container {
@@ -242,8 +243,8 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  background: white;
-  border-right: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border-right: 1px solid var(--gray-200);
   min-height: 0; /* 关键：确保flex项目可以缩小 */
 }
 
@@ -275,7 +276,7 @@ onUnmounted(() => {
 .chunk-panel {
   width: 300px;
   overflow-y: auto;
-  background: #fafafa;
+  background: var(--gray-25);
   padding: 16px;
   min-height: 0; /* 确保flex项目可以缩小 */
 }
@@ -287,8 +288,8 @@ onUnmounted(() => {
 }
 
 .chunk-item {
-  background: white;
-  border: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
   border-radius: 6px;
   padding: 12px;
   /* cursor: pointer; */
@@ -358,7 +359,7 @@ onUnmounted(() => {
 
 .chunk-tooltip {
   position: fixed;
-  background: white;
+  background: var(--gray-0);
   border: 1px solid var(--gray-300);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);

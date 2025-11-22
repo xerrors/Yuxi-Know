@@ -37,7 +37,7 @@
   --gray-100:   #eff2f2;
   --gray-50:    #f5f7f7;
   --gray-25:    #f8fafa;
-  --gray-10:    #fafcfc;
+  --gray-10:    #fbfcfc;
   --gray-0:     #ffffff;
 
   --main-color: #016179;
@@ -48,9 +48,13 @@
   --color-primary: #1c7796;
   --color-primary-bg: #d6eef1;
   --color-success: #45b30e;
+  --color-success-light: #f6ffed;
   --color-error: #c73234;
+  --color-error-light: #fff2f0;
   --color-info: #0058d4;
+  --color-info-light: #e6f7ff;
   --color-warning: #faad14;
+  --color-warning-light: #fffbe6;
 
   /* Chart Colors - 图表颜色系统 */
   --chart-primary: var(--main-500);        /* 主色调 - 用于主要数据 */
@@ -110,5 +114,59 @@
   --bg-sider: var(--main-5);
   --color-text: var(--c-black);
 
+  /* Shadow System - 阴影系统 */
+  --shadow-0: rgba(0, 0, 0, 0.02);
+  --shadow-1: rgba(0, 0, 0, 0.05);
+  --shadow-2: rgba(0, 0, 0, 0.08);
+  --shadow-3: rgba(0, 0, 0, 0.12);
+  --shadow-4: rgba(0, 0, 0, 0.16);
+  --shadow-5: rgba(0, 0, 0, 0.20);
+
+  /* Extended Chart Variables - 扩展图表变量 */
+  --chart-primary-lighter: var(--chart-primary-light);
+  --chart-info-lighter: var(--chart-info-light);
+  --chart-primary-shadow: rgba(28, 119, 150, 0.3);
+  --chart-info-shadow: rgba(24, 144, 255, 0.3);
+
   --min-width: 400px;
+
+  /* Ant Design 兼容变量 */
+  --color-bg-container: var(--main-0);
+  --color-bg-elevated: var(--gray-10);
+  --color-text-secondary: rgba(0, 0, 0, 0.65);
+  --color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --color-trans-light: rgba(255, 255, 255, 0.85);
+  --color-trans-dark: rgba(0, 0, 0, 0.85);
+}
+
+:root {
+  --scrollbar-width: 4px;
+}
+
+/* 全局滚动条样式 */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--gray-100);
+  border-radius: calc(var(--scrollbar-width) / 2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gray-200);
+  border-radius: calc(var(--scrollbar-width) / 2);
+  transition: background 0.2s ease;
+  cursor: pointer;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gray-100);
+}
+
+/* Firefox 滚动条样式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gray-200) transparent;
 }

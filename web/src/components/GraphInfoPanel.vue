@@ -74,14 +74,13 @@ defineEmits(['index-nodes', 'export-data'])
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 12px 24px;
-  background: rgba(255, 255, 255, 0.6);
+  padding: 8px 16px;
+  background: var(--gray-50);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-radius: 8px;
   margin: 0;
-  border: 1px solid white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--gray-0);
   flex-wrap: wrap;
   align-self: flex-start;
 
@@ -98,7 +97,7 @@ defineEmits(['index-nodes', 'export-data'])
   font-size: 14px;
 
   &.warning {
-    color: #fa8c16;
+    color: var(--color-warning);
   }
 }
 
@@ -112,7 +111,7 @@ defineEmits(['index-nodes', 'export-data'])
   font-weight: 600;
 
   &.warning {
-    color: #fa8c16;
+    color: var(--color-warning);
   }
 }
 

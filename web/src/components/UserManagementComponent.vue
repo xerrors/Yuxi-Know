@@ -481,7 +481,7 @@ onMounted(() => {
 
       .description {
         font-size: 14px;
-        color: #8c8c8c;
+        color: var(--gray-400);
         margin: 0;
         line-height: 1.4;
         margin-bottom: 16px;
@@ -670,12 +670,12 @@ onMounted(() => {
 .user-modal {
   :deep(.ant-modal-header) {
     padding: 20px 24px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--gray-800);
 
     .ant-modal-title {
       font-size: 16px;
       font-weight: 600;
-      color: #262626;
+      color: var(--gray-900);
     }
   }
 
@@ -692,20 +692,20 @@ onMounted(() => {
 
         label {
           font-weight: 500;
-          color: #262626;
+          color: var(--gray-900);
         }
       }
     }
 
     .error-text {
-      color: #ff4d4f;
+      color: var(--color-error);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;
     }
 
     .help-text {
-      color: #8c8c8c;
+      color: var(--gray-400);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;
@@ -716,7 +716,7 @@ onMounted(() => {
 
       :deep(.ant-checkbox-wrapper) {
         font-weight: 500;
-        color: #495057;
+        color: var(--gray-600);
       }
     }
   }

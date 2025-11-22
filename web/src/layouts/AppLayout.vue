@@ -3,9 +3,8 @@ import { ref, reactive, onMounted, useTemplateRef, computed } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
-  ExclamationCircleOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, CircleCheck } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, CircleCheck } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
@@ -169,31 +168,20 @@ const mainList = [{
         <a-tooltip placement="right">
           <template #title>欢迎 Star</template>
           <a href="https://github.com/xerrors/Yuxi-Know" target="_blank" class="github-link">
-            <GithubOutlined class="icon" style="color: #222;"/>
+            <GithubOutlined class="icon" />
             <span v-if="githubStars > 0" class="github-stars">
               <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
             </span>
           </a>
         </a-tooltip>
       </div>
-      <div class="nav-item docs">
-        <a-tooltip placement="right">
-          <template #title>文档中心</template>
-          <a
-            href="https://xerrors.github.io/Yuxi-Know/"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="docs-link"
-          >
-            <BookOpen class="icon" size="22" />
-          </a>
-        </a-tooltip>
-      </div>
-      <!-- <div class="nav-item api-docs">
+
+
+        <!-- <div class="nav-item api-docs">
         <a-tooltip placement="right">
           <template #title>接口文档 {{ apiDocsUrl }}</template>
           <a :href="apiDocsUrl" target="_blank" class="github-link">
-            <ApiOutlined class="icon" style="color: #222;"/>
+            <ApiOutlined class="icon" style="color: var(--gray-1000);"/>
           </a>
         </a-tooltip>
       </div> -->
@@ -323,7 +311,7 @@ div.header, #app-router-view {
       text-decoration: none;
       font-size: 24px;
       font-weight: bold;
-      color: #333;
+      color: var(--gray-900);
     }
   }
 
@@ -337,9 +325,9 @@ div.header, #app-router-view {
     border: 1px solid transparent;
     border-radius: 12px;
     background-color: transparent;
-    color: #222;
+    color: var(--gray-1000);
     font-size: 20px;
-    transition: background-color 0.2s ease-in-out;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
     margin: 0;
     text-decoration: none;
     cursor: pointer;
@@ -353,13 +341,13 @@ div.header, #app-router-view {
     }
 
     &.active {
-      background-color: var(--gray-150);
+      background-color: var(--gray-100);
       font-weight: bold;
       color: var(--main-color);
     }
 
     &.warning {
-      color: red;
+      color: var(--color-error);
     }
 
     &:hover {
@@ -388,7 +376,7 @@ div.header, #app-router-view {
         margin-top: 4px;
 
         .star-icon {
-          color: #f0a742;
+          color: var(--color-warning);
           font-size: 12px;
           margin-right: 2px;
         }
@@ -402,21 +390,29 @@ div.header, #app-router-view {
     &.api-docs {
       padding: 10px 12px;
     }
-    &.docs {
-      padding: 10px 12px;
-      margin-bottom: 12px;
-
-      .docs-link {
-        display: flex;
-        align-items: center;
-        color: inherit;
-      }
-    }
+    &.docs { display: none; }
     &.task-center {
       .task-center-badge {
         width: 100%;
         display: flex;
         justify-content: center;
+      }
+    }
+
+    &.theme-toggle-nav {
+      .theme-toggle-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        cursor: pointer;
+        color: var(--gray-1000);
+        transition: color 0.2s ease-in-out;
+
+        &:hover {
+          color: var(--main-color);
+        }
       }
     }
 
@@ -465,7 +461,7 @@ div.header, #app-router-view {
       transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;
 
       &.active {
-        color: black;
+        color: var(--gray-10000);
         font-size: 1.1rem;
       }
     }
@@ -566,9 +562,32 @@ div.header, #app-router-view {
         margin-left: 6px;
 
         .star-icon {
-          color: #f0a742;
+          color: var(--color-warning);
           font-size: 14px;
           margin-right: 2px;
+        }
+      }
+    }
+
+    &.theme-toggle-nav {
+      padding: 8px 12px;
+
+      .theme-toggle-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--gray-1000);
+        transition: color 0.2s ease-in-out;
+        cursor: pointer;
+
+        &:hover {
+          color: var(--main-color);
+        }
+      }
+
+      &.active {
+        .theme-toggle-icon {
+          color: var(--main-color);
         }
       }
     }

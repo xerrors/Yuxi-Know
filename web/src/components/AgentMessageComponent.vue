@@ -24,6 +24,7 @@
       <!-- 消息内容 -->
       <MdPreview v-if="parsedData.content" ref="editorRef"
         editorId="preview-only"
+        :theme="theme"
         previewTheme="github"
         :showCodeRowNumber="false"
         :modelValue="parsedData.content"
@@ -104,6 +105,7 @@ import { Loader, CircleCheckBig } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
+import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
 
 
@@ -154,7 +156,11 @@ const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
 // 引入智能体 store
 const agentStore = useAgentStore();
 const infoStore = useInfoStore();
+const themeStore = useThemeStore();
 const { availableTools } = storeToRefs(agentStore);
+
+// 主题设置 - 根据系统主题动态切换
+const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
 
 // 工具相关方法
 const getToolNameByToolCall = (toolCall) => {
@@ -247,7 +253,7 @@ const toggleToolCall = (toolCallId) => {
   font-size: 15px;
   line-height: 24px;
   box-sizing: border-box;
-  color: black;
+  color: var(--gray-10000);
   max-width: 100%;
   position: relative;
   letter-spacing: .25px;
@@ -291,12 +297,12 @@ const toggleToolCall = (toolCallId) => {
   }
 
   .err-msg {
-    color: #d15252;
-    border: 1px solid #f19999;
+    color: var(--color-error);
+    border: 1px solid currentColor;
     padding: 0.5rem 1rem;
     border-radius: 8px;
     text-align: left;
-    background: #fffbfb;
+    background: var(--color-error-light);
     margin-bottom: 10px;
     cursor: pointer;
   }
@@ -310,7 +316,7 @@ const toggleToolCall = (toolCallId) => {
     margin-top: 10px;
     margin-bottom: 15px;
     border-radius: 8px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-150);
     background-color: var(--gray-25);
     overflow: hidden;
     transition: all 0.2s ease;
@@ -368,9 +374,9 @@ const toggleToolCall = (toolCallId) => {
     display: flex;
     align-items: center;
     gap: 8px;
-    background-color: #fef2f2;
+    background-color: var(--color-error-light);
     // border: 1px solid #f87171;
-    color: #991b1b;
+    color: var(--color-error);
     span {
       line-height: 1.5;
     }
@@ -404,7 +410,7 @@ const toggleToolCall = (toolCallId) => {
 
   :deep(.tool-call-display) {
     background-color: var(--gray-25);
-    outline: 1px solid var(--gray-200);
+    outline: 1px solid var(--gray-150);
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;
@@ -516,13 +522,13 @@ const toggleToolCall = (toolCallId) => {
 .retry-hint {
   margin-top: 8px;
   padding: 8px 16px;
-  color: #666;
+  color: var(--gray-600);
   font-size: 14px;
   text-align: left;
 }
 
 .retry-link {
-  color: #1890ff;
+  color: var(--color-info);
   cursor: pointer;
   margin-left: 4px;
 
@@ -533,10 +539,10 @@ const toggleToolCall = (toolCallId) => {
 
 .ant-btn-icon-only {
   &:has(.anticon-stop) {
-    background-color: #ff4d4f !important;
+    background-color: var(--color-error) !important;
 
     &:hover {
-      background-color: #ff7875 !important;
+      background-color: var(--chart-error-light) !important;
     }
   }
 }

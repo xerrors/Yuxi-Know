@@ -173,7 +173,7 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--gray-0);
 }
 
 .config-header {

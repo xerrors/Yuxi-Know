@@ -232,7 +232,7 @@ const actionLinks = computed(() => {
   align-items: center;
   width: 100%;
   padding: 0.75rem 2.5rem;
-  background-color: rgba(255, 255, 255, 0.85);
+  background-color: var(--color-trans-light);
   backdrop-filter: blur(20px);
   // border-bottom: 1px solid var(--main-30);
   position: fixed;
@@ -255,7 +255,7 @@ const actionLinks = computed(() => {
   gap: 0.5rem;
   padding: 0.6rem 1rem;
   text-decoration: none;
-  color: #555;
+  color: var(--gray-800);
   font-weight: 500;
   font-size: 0.95rem;
   transition: color 0.2s ease;
@@ -263,7 +263,9 @@ const actionLinks = computed(() => {
   overflow: hidden;
 
   &:hover {
-    color: #333;
+    color: var(--gray-900);
+
+
 
     svg {
       transform: scale(1.1);
@@ -272,7 +274,7 @@ const actionLinks = computed(() => {
 
   &.router-link-active {
       background: linear-gradient(135deg, var(--main-600), var(--main-500));
-      color: white;
+      color: var(--gray-0);
       border-radius: 1.5rem;
 
       &:hover {
@@ -313,14 +315,14 @@ const actionLinks = computed(() => {
   display: flex;
   align-items: center;
   text-decoration: none;
-  color: #555;
+  color: var(--gray-600);
   padding: 0.6rem 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.9rem;
   font-weight: 500;
 
   &:hover {
-    color: #333;
+    color: var(--gray-700);
 
     svg {
       transform: scale(1.1);
@@ -418,7 +420,7 @@ const actionLinks = computed(() => {
 
 .button-base.primary {
   background: linear-gradient(135deg, var(--main-600), var(--main-500));
-  color: #fff;
+  color: var(--gray-0);
   border-color: transparent;
 
   &:hover {
@@ -623,7 +625,7 @@ const actionLinks = computed(() => {
     transition: opacity 0.3s ease;
 
     .overlay-content {
-      color: white;
+      color: var(--gray-0);
 
       h3 {
         font-size: 1.5rem;

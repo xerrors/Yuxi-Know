@@ -294,9 +294,9 @@ defineExpose({
   display: grid;
   width: 100%;
   margin: 0 auto;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--gray-150);
   border-radius: 0.8rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px var(--shadow-1);
   transition: all 0.3s ease;
   gap: 0px;
 
@@ -338,7 +338,7 @@ defineExpose({
 
   // &:focus-within {
   //   border-color: var(--main-500);
-  //   background: white;
+  //   background: var(--gray-0);
   //   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   // }
 
@@ -394,7 +394,7 @@ defineExpose({
   background-color: transparent;
   border: none;
   margin: 0;
-  color: #222222;
+  color: var(--gray-1000);
   font-size: 15px;
   outline: none;
   resize: none;
@@ -409,7 +409,7 @@ defineExpose({
   }
 
   &::placeholder {
-    color: #888888;
+    color: var(--gray-400);
   }
 }
 
@@ -494,8 +494,8 @@ defineExpose({
   border-radius: 50%;
   border: none;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-  color: white;
+  box-shadow: 0 2px 6px var(--shadow-2);
+  color: var(--gray-0);
   padding: 0;
   display: flex;
   align-items: center;
@@ -504,13 +504,13 @@ defineExpose({
 
   &:hover {
     background-color: var(--main-color);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    color: white;
+    box-shadow: 0 4px 8px var(--shadow-3);
+    color: var(--gray-0);
   }
 
   &:active {
     transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 4px var(--shadow-2);
   }
 
   &:disabled {

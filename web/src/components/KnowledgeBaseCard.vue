@@ -217,7 +217,7 @@ const deleteDatabase = () => {
 
 <style lang="less" scoped>
 .knowledge-base-card {
-  background: linear-gradient(120deg, var(--main-30) 0%, #fff 100%);
+  background: linear-gradient(120deg, var(--main-30) 0%, var(--gray-0) 100%);
   border-radius: 12px;
   border: 1px solid var(--gray-200);
   margin-bottom: 8px;

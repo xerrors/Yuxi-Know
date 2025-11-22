@@ -230,7 +230,7 @@ const openAgentModal = () => {
 .chat-sidebar {
   width: 0;
   height: 100%;
-  background-color: var(--bg-sider);
+  background-color: var(--gray-25);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;

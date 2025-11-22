@@ -174,12 +174,12 @@ const deleteDatabase = () => {
 
 .db-id {
   font-size: 12px;
-  color: #666;
+  color: var(--gray-500);
 }
 
 .file-count {
   font-size: 12px;
-  color: #666;
+  color: var(--gray-500);
 }
 
 .kb-type-tag {

@@ -37,9 +37,9 @@
       <div v-else class="mindmap-container">
         <div class="mindmap-toolbar">
           <a-space :size="8">
-            <a-button 
-              type="text" 
-              size="small" 
+            <a-button
+              type="text"
+              size="small"
               @click="refreshMindmap"
               :loading="generating"
               title="重新生成"
@@ -105,11 +105,11 @@ const loadMindmap = async () => {
   try {
     loading.value = true
     const response = await mindmapApi.getByDatabase(props.databaseId)
-    
+
     if (response.mindmap) {
       mindmapData.value = response.mindmap
       await nextTick()
-      
+
       // 延迟渲染，确保DOM完全更新
       setTimeout(() => {
         renderMindmap(response.mindmap)
@@ -148,7 +148,7 @@ const generateMindmap = async () => {
 
     // 等待DOM更新
     await nextTick()
-    
+
     // 再延迟一点，确保SVG元素完全渲染
     setTimeout(() => {
       renderMindmap(response.mindmap)
@@ -175,16 +175,16 @@ const refreshMindmap = async () => {
  */
 const jsonToMarkdown = (node, level = 0) => {
   if (!node || !node.content) return ''
-  
+
   const indent = '#'.repeat(level + 1)
   let markdown = `${indent} ${node.content}\n\n`
-  
+
   if (node.children && node.children.length > 0) {
     for (const child of node.children) {
       markdown += jsonToMarkdown(child, level + 1)
     }
   }
-  
+
   return markdown
 }
 
@@ -193,7 +193,7 @@ const jsonToMarkdown = (node, level = 0) => {
  */
 const renderMindmap = (data, retryCount = 0) => {
   if (!data) return
-  
+
   if (!mindmapSvg.value) {
     // 如果SVG引用还没准备好，最多重试3次
     if (retryCount < 3) {
@@ -233,7 +233,7 @@ const renderMindmap = (data, retryCount = 0) => {
 
     markmapInstance.setData(root)
     markmapInstance.fit()
-    
+
     // 延迟再次适应，确保布局完全稳定
     setTimeout(() => {
       if (markmapInstance) {
@@ -309,7 +309,7 @@ onUnmounted(() => {
 .mindmap-section {
   display: flex;
   flex-direction: column;
-  background: white;
+  background: var(--gray-0);
   border-top: 1px solid var(--border-color);
   height: 100%;
   min-height: 0;
@@ -317,7 +317,7 @@ onUnmounted(() => {
 
 .section-header {
   padding: 10px 16px;
-  background: #fafafa;
+  background: var(--gray-25);
   border-bottom: 1px solid var(--border-color);
 
   .header-left {
@@ -370,7 +370,7 @@ onUnmounted(() => {
 
 .mindmap-toolbar {
   padding: 8px 16px;
-  background: white;
+  background: var(--gray-0);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -385,7 +385,7 @@ onUnmounted(() => {
     padding: 4px 12px;
     display: flex;
     align-items: center;
-    
+
     &:hover {
       background: rgba(0, 0, 0, 0.04);
     }
@@ -396,7 +396,7 @@ onUnmounted(() => {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: white;
+  background: var(--gray-0);
 }
 
 .mindmap-svg {

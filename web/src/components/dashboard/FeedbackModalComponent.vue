@@ -182,23 +182,23 @@ watch(() => props.agentId, () => {
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--gray-100);
     border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
+    background: var(--gray-300);
     border-radius: 3px;
 
     &:hover {
-      background: #a8a8a8;
+      background: var(--gray-400);
     }
   }
 }
 
 // 反馈卡片 - 紧凑设计
 .feedback-card {
-  background: white;
+  background: var(--gray-0);
   border: 1px solid var(--gray-100);
   border-radius: 8px;
   transition: all 0.2s ease;
@@ -218,7 +218,7 @@ watch(() => props.agentId, () => {
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--gray-100);
-  background: #fafafa;
+  background: var(--gray-25);
   border-radius: 8px 8px 0 0;
 }
 
@@ -260,7 +260,7 @@ watch(() => props.agentId, () => {
 }
 
 .message-content {
-  background: #f8f9fa;
+  background: var(--gray-50);
   padding: 10px;
   border-radius: 6px;
   // border-left: 3px solid var(--main-color);
@@ -304,10 +304,10 @@ watch(() => props.agentId, () => {
 }
 
 .reason-content {
-  background: #fff7e6;
+  background: var(--color-warning-light);
   padding: 10px;
   border-radius: 6px;
-  border-left: 3px solid #faad14;
+  border-left: 3px solid var(--color-warning);
   font-size: 13px;
   line-height: 1.4;
   color: var(--gray-800);
@@ -318,7 +318,7 @@ watch(() => props.agentId, () => {
 .card-footer {
   padding: 8px 16px;
   border-top: 1px solid var(--gray-100);
-  background: #fafafa;
+  background: var(--gray-25);
   border-radius: 0 0 8px 8px;
 }
 

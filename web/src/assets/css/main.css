@@ -1,4 +1,5 @@
 @import './base.css';
+@import './base.dark.css';
 @import './sigma.css';
 @import './shorts.css';
 @import './dashboard.css';
@@ -22,6 +23,7 @@ body {
   display: flow-root;
   min-height: 100vh;
   color: var(--gray-900);
+  background: var(--gray-0);
   line-height: 1.6;
   font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'Roboto', 'HarmonyOS Sans SC', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   font-size: 15px;

@@ -529,6 +529,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   flex-grow: 1;
   flex-direction: column;
   max-height: 100%;
+  background: var(--gray-10);
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--gray-150);
@@ -685,7 +686,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   padding: 1px 5px;
   font-size: 10px;
   font-weight: bold;
-  color: white;
+  color: var(--gray-0);
   border-radius: 4px;
   text-transform: uppercase;
   opacity: 0.9;
@@ -724,7 +725,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 .panel-action-btn.auto-refresh-btn.ant-btn-primary {
   background-color: var(--main-color);
   border-color: var(--main-color);
-  color: #fff;
+  color: var(--gray-0);
 }
 
 .panel-action-btn:hover {

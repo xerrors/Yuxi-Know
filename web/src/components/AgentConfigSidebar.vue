@@ -574,8 +574,8 @@ watch(() => props.isOpen, (newVal) => {
   position: relative;
   width: 0;
   height: 100vh;
-  background: white;
-  border-left: 1px solid #e8e8e8;
+  background: var(--gray-0);
+  border-left: 1px solid var(--gray-200);
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   display: flex;
@@ -592,7 +592,7 @@ watch(() => props.isOpen, (newVal) => {
     align-items: center;
     padding: 10px 20px;
     border-bottom: 1px solid var(--gray-200);
-    background: #fff;
+    background: var(--gray-0);
     flex-shrink: 0;
     min-width: 400px;
 
@@ -645,7 +645,7 @@ watch(() => props.isOpen, (newVal) => {
       bottom: 0px;
       padding: 12px 0;
       border-top: 1px solid var(--gray-100);
-      background: #fff;
+      background: var(--gray-0);
       // min-width: 400px;
       z-index: 10;
 
@@ -664,7 +664,7 @@ watch(() => props.isOpen, (newVal) => {
 
           &.changed {
             background-color: var(--main-color);
-            color: #fff;
+            color: var(--gray-0);
           }
 
           &:hover {
@@ -886,7 +886,7 @@ watch(() => props.isOpen, (newVal) => {
     padding: 10px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: white;
+    background: var(--gray-0);
 
     &:hover {
       border-color: var(--main-color);
@@ -946,7 +946,7 @@ watch(() => props.isOpen, (newVal) => {
   }
 
   :deep(.ant-modal-header) {
-    background: white;
+    background: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
     padding: 16px 20px;
 
@@ -959,7 +959,7 @@ watch(() => props.isOpen, (newVal) => {
 
   :deep(.ant-modal-body) {
     padding: 20px;
-    background: white;
+    background: var(--gray-0);
   }
 
   .tools-modal-content {
@@ -972,7 +972,7 @@ watch(() => props.isOpen, (newVal) => {
         height: 36px;
         font-size: 14px;
         transition: all 0.2s ease;
-        background: white;
+        background: var(--gray-0);
 
         .search-icon {
           color: var(--gray-500);
@@ -1002,7 +1002,7 @@ watch(() => props.isOpen, (newVal) => {
       overflow-y: auto;
       border-radius: 8px;
       margin-bottom: 16px;
-      background: white;
+      background: var(--gray-0);
 
       // 在小屏幕下调整为单列布局
       @media (max-width: 480px) {
@@ -1034,7 +1034,7 @@ watch(() => props.isOpen, (newVal) => {
         transition: all 0.2s ease;
         border-radius: 8px;
         margin-bottom: 4px;
-        background: white;
+        background: var(--gray-0);
         border: 1px solid var(--gray-200);
 
         &:hover {
@@ -1129,7 +1129,7 @@ watch(() => props.isOpen, (newVal) => {
           &.ant-btn-default {
             border: 1px solid var(--gray-300);
             color: var(--gray-700);
-            background: white;
+            background: var(--gray-0);
 
             &:hover {
               border-color: var(--main-color);
@@ -1140,7 +1140,7 @@ watch(() => props.isOpen, (newVal) => {
           &.ant-btn-primary {
             background: var(--main-color);
             border: none;
-            color: white;
+            color: var(--gray-0);
 
             &:hover {
               background: var(--main-color);

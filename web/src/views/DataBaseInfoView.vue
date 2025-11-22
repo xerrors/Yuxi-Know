@@ -155,7 +155,7 @@ const resetFileSelectionState = () => {
 watch(() => route.params.database_id, async (newId, oldId) => {
     // 切换知识库时，标记为初次加载
     isInitialLoad.value = true;
-    
+
     store.databaseId = newId;
     resetFileSelectionState();
     resetGraphStats();
@@ -173,22 +173,22 @@ watch(
   () => database.value?.files,
   (newFiles, oldFiles) => {
     if (!newFiles) return;
-    
+
     const newFileCount = Object.keys(newFiles).length;
     const oldFileCount = previousFileCount.value;
-    
+
     // 首次加载时，只更新计数，不触发任何操作
     if (isInitialLoad.value) {
       previousFileCount.value = newFileCount;
       isInitialLoad.value = false;
       return;
     }
-    
+
     // 如果文件数量发生变化（增加或减少），都重新生成问题和思维导图
     if (newFileCount !== oldFileCount) {
       const changeType = newFileCount > oldFileCount ? '增加' : '减少';
       console.log(`文件数量从 ${oldFileCount} ${changeType}到 ${newFileCount}，准备重新生成问题和思维导图`);
-      
+
       // 只要有文件，就重新生成思维导图（无论增加还是减少）
       if (newFileCount > 0) {
         setTimeout(() => {
@@ -208,7 +208,7 @@ watch(
         // 如果文件数量变为0，清空思维导图（如果需要的话）
         console.log('文件数量为0，思维导图将自动清空');
       }
-      
+
       // 只要有文件，就重新生成问题（无论之前是否有问题）
       if (newFileCount > 0) {
         setTimeout(async () => {
@@ -238,7 +238,7 @@ watch(
         }, 1000);
       }
     }
-    
+
     previousFileCount.value = newFileCount;
   },
   { deep: true }
@@ -332,11 +332,11 @@ const handleMouseUp = () => {
 .unified-layout {
   display: flex;
   height: 100vh;
+  background-color: var(--gray-0);
   gap: 0;
 
   .left-panel,
   .right-panel {
-    background-color: #fff;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -347,7 +347,6 @@ const handleMouseUp = () => {
     display: flex;
     flex-shrink: 0;
     flex-grow: 1;
-    background-color: var(--gray-0);
     padding-right: 0;
     // max-height: calc(100% - 16px);
   }
@@ -381,6 +380,9 @@ const handleMouseUp = () => {
   flex-direction: column;
   border: 1px solid var(--gray-200);
   border-radius: 12px;
+  background: var(--gray-10);
+  overflow: hidden;
+
 
   :deep(.ant-tabs-content) {
     flex: 1;
@@ -395,15 +397,11 @@ const handleMouseUp = () => {
 
   :deep(.ant-tabs-nav) {
     margin-bottom: 0;
-    // background-color: #fff;
+    // background-color: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
   }
 }
 
-/* Simplify resize handle */
-.resize-handle {
-  opacity: 0.8;
-}
 
 /* Responsive design for smaller screens */
 @media (max-width: 768px) {
@@ -484,8 +482,8 @@ const handleMouseUp = () => {
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    border-bottom: 1px solid #f0f0f0;
-    background-color: #fafafa;
+    border-bottom: 1px solid var(--gray-150);
+    background-color: var(--gray-25);
 
     .header-left {
       display: flex;
