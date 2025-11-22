@@ -13,15 +13,16 @@ Yuxi-Know 是一个基于知识图谱和向量数据库的智能知识库系统�
 
 前端开发规范：
 
-- API 接口规范：所有的 API 接口都应该定义在 web/src/apis 下面，并继承自 apiGet/apiPost/apiRequest
-- Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next
-- Vue 中的样式使用 less，并尽量使用[base.css](web/src/assets/css/base.css) 中的颜色。
+- API 接口规范：所有的 API 接口都应该定义在 web/src/apis 下面，并继承自 apiGet/apiPost/apiRequest 以及其他。
+- Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next （推荐，但是需要注意尺寸）
+- Vue 中的样式使用 less，非必要情况必须使用[base.css](web/src/assets/css/base.css) 中的颜色变量。
 - UI风格要简洁，同时要保持一致性，颜色要尽量参考 不要悬停位移，不要过度使用阴影以及渐变色。
+- 绝对不要尝试使用 npm/pnpm 等等运行前端开发服务器。
 
 
 后端开发规范：
 
-- 项目使用 uv 来管理依赖，所以需要使用 uv run 来调试。
+- 项目使用 uv 来管理依赖，所以必须使用 uv run 来调试。
 - Python 代码要符合 Python 的规范，符合 pythonic 风格，尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+），使用 make lint 检查 lint。使用 make format 来格式化代码。
 
 其他：
