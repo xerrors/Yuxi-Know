@@ -294,7 +294,7 @@ defineExpose({
   display: grid;
   width: 100%;
   margin: 0 auto;
-  border: 1px solid var(--gray-200);
+  border: 1px solid var(--gray-150);
   border-radius: 0.8rem;
   box-shadow: 0 2px 8px var(--shadow-1);
   transition: all 0.3s ease;

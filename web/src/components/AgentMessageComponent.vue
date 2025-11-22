@@ -316,7 +316,7 @@ const toggleToolCall = (toolCallId) => {
     margin-top: 10px;
     margin-bottom: 15px;
     border-radius: 8px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-150);
     background-color: var(--gray-25);
     overflow: hidden;
     transition: all 0.2s ease;
@@ -410,7 +410,7 @@ const toggleToolCall = (toolCallId) => {
 
   :deep(.tool-call-display) {
     background-color: var(--gray-25);
-    outline: 1px solid var(--gray-200);
+    outline: 1px solid var(--gray-150);
     border-radius: 8px;
     overflow: hidden;
     transition: all 0.2s ease;

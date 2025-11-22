@@ -219,7 +219,6 @@ const emitRefresh = () => {
 <style scoped lang="less">
 .popover-content {
   padding: 0;
-  background: var(--main-0);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -266,7 +265,6 @@ const emitRefresh = () => {
 .tab-content {
   max-height: 400px;
   overflow-y: auto;
-  background: var(--main-0);
 
   /* 自定义滚动条 */
   &::-webkit-scrollbar {
@@ -320,7 +318,6 @@ const emitRefresh = () => {
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  background: var(--main-5);
   border-radius: 6px;
   border: 1px solid var(--gray-150);
   transition: all 0.15s ease;
