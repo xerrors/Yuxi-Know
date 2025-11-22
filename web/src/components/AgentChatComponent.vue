@@ -55,8 +55,8 @@
               :class="{ 'has-content': hasAgentStateContent }"
               :title="hasAgentStateContent ? '查看工作状态' : '暂无工作状态'"
             >
-              <Activity class="nav-btn-icon" size="18"/>
-              <span v-if="hasAgentStateContent" class="text">{{ totalAgentStateItems }}</span>
+              <Layers class="nav-btn-icon" size="18"/>
+              <span v-if="hasAgentStateContent" class="text">状态({{ totalAgentStateItems }})</span>
             </div>
           </AgentPopover>
           <!-- <div class="nav-btn" @click="shareChat" v-if="currentChatId && currentAgent">
@@ -234,7 +234,7 @@ import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Activity } from 'lucide-vue-next';
+import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Layers } from 'lucide-vue-next';
 import { handleChatError, handleValidationError } from '@/utils/errorHandler';
 import { ScrollController } from '@/utils/scrollController';
 import { AgentValidator } from '@/utils/agentValidator';
