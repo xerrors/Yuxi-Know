@@ -374,7 +374,7 @@ function canCancel(task) {
 :deep(.filter-count) {
   margin-left: 2px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--gray-400);
 }
 
 .task-toolbar-actions :deep(.ant-btn) {
@@ -450,7 +450,7 @@ function canCancel(task) {
 .task-card-type {
   padding: 0 8px;
   border-radius: 999px;
-  background-color: rgba(15, 23, 42, 0.06);
+  background-color: rgba(15, 23, 42, 0.06); /* TODO: 透明度需要处理 */
   color: var(--gray-500);
   line-height: 20px;
 }
@@ -486,13 +486,13 @@ function canCancel(task) {
 }
 
 .task-card-message {
-  background: rgba(15, 23, 42, 0.03);
+  background: rgba(15, 23, 42, 0.03); /* TODO: 透明度需要处理 */
   color: var(--gray-800);
 }
 
 .task-card-error {
-  background: rgba(248, 113, 113, 0.12);
-  color: #b91c1c;
+  background: rgba(248, 113, 113, 0.12); /* TODO: 透明度需要处理 */
+  color: var(--color-error);
 }
 
 .task-card-footer {
@@ -508,7 +508,7 @@ function canCancel(task) {
   flex-direction: row;
   gap: 10px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--gray-400);
 }
 
 .task-card-actions {
@@ -522,8 +522,8 @@ function canCancel(task) {
   align-items: center;
   padding: 10px 14px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.02);
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(15, 23, 42, 0.02); /* TODO: 透明度需要处理 */
+  border: 1px solid rgba(15, 23, 42, 0.06); /* TODO: 透明度需要处理 */
 }
 
 .completion-badge {
@@ -535,7 +535,7 @@ function canCancel(task) {
 }
 
 .completion-badge--success {
-  color: #16a34a;
+  color: var(--color-success);
 }
 
 .completion-badge--success .completion-icon {
@@ -545,12 +545,12 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #f3fff8;
+  background: var(--stats-success-bg);
   font-size: 14px;
 }
 
 .completion-badge--failed {
-  color: #dc2626;
+  color: var(--color-error);
 }
 
 .completion-badge--failed .completion-icon {
@@ -560,12 +560,12 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #fee2e2;
+  background: var(--stats-error-bg);
   font-size: 14px;
 }
 
 .completion-badge--cancelled {
-  color: #6b7280;
+  color: var(--gray-500);
 }
 
 .completion-badge--cancelled .completion-icon {
@@ -575,7 +575,7 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #f3f4f6;
+  background: var(--gray-50);
   font-size: 14px;
 }
 
@@ -584,7 +584,7 @@ function canCancel(task) {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--gray-500);
 }
 
 .duration-label {
@@ -594,17 +594,17 @@ function canCancel(task) {
 .duration-value {
   font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
   font-weight: 600;
-  color: #475569;
+  color: var(--gray-600);
 }
 
 .task-empty {
   margin-top: 32px;
   padding: 40px 30px;
   border-radius: 16px;
-  background: rgba(15, 23, 42, 0.03);
-  border: 1px dashed rgba(148, 163, 184, 0.4);
+  background: rgba(15, 23, 42, 0.03); /* TODO: 透明度需要处理 */
+  border: 1px dashed rgba(148, 163, 184, 0.4); /* TODO: 透明度需要处理 */
   text-align: center;
-  color: #475569;
+  color: var(--gray-600);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -624,6 +624,6 @@ function canCancel(task) {
   font-size: 13px;
   max-width: 320px;
   line-height: 1.5;
-  color: #94a3b8;
+  color: var(--gray-400);
 }
 </style>

@@ -685,20 +685,20 @@ onMounted(() => {
 
       // 为不同知识库类型设置不同的悬停颜色
       &:nth-child(1):hover {
-        border-color: #d3adf7;
+        border-color: var(--chart-secondary-light);
       }
 
       &:nth-child(2):hover {
-        border-color: #ffd591;
+        border-color: var(--chart-warning-light);
       }
 
       &:nth-child(3):hover {
-        border-color: #ffadd2;
+        border-color: var(--chart-error-light);
       }
 
       &.active {
         border-color: var(--main-color);
-        background: #f8faff;
+        background: rgba(24, 144, 255, 0.05);
 
         .type-icon {
           color: var(--main-color);
@@ -713,48 +713,48 @@ onMounted(() => {
       // 为不同知识库类型设置不同的主题色
       &:nth-child(1) {
         &.active {
-          border-color: #d3adf7;
-          background: #f9f0ff;
+          border-color: var(--chart-secondary-light);
+          background: rgba(114, 46, 209, 0.05);
 
           .type-icon {
-            color: #722ed1;
+            color: var(--chart-secondary);
           }
 
           .feature-tag {
             background: rgba(114, 46, 209, 0.1);
-            color: #722ed1;
+            color: var(--chart-secondary);
           }
         }
       }
 
       &:nth-child(2) {
         &.active {
-          border-color: #ffd591;
-          background: #fff7e6;
+          border-color: var(--chart-warning-light);
+          background: rgba(250, 140, 22, 0.05);
 
           .type-icon {
-            color: #fa8c16;
+            color: var(--chart-warning);
           }
 
           .feature-tag {
             background: rgba(250, 140, 22, 0.1);
-            color: #fa8c16;
+            color: var(--chart-warning);
           }
         }
       }
 
       &:nth-child(3) {
         &.active {
-          border-color: #ffadd2;
-          background: #fff1f0;
+          border-color: var(--chart-error-light);
+          background: rgba(245, 34, 45, 0.05);
 
           .type-icon {
-            color: #f5222d;
+            color: var(--chart-error);
           }
 
           .feature-tag {
             background: rgba(245, 34, 45, 0.1);
-            color: #f5222d;
+            color: var(--chart-error);
           }
         }
       }
@@ -791,7 +791,7 @@ onMounted(() => {
         .feature-tag {
           display: inline-block;
           padding: 4px 8px;
-          background: rgba(24, 144, 255, 0.1);
+          background: rgba(24, 144, 255, 0.08);
           color: var(--main-color);
           border-radius: 6px;
           font-size: 12px;
@@ -920,7 +920,7 @@ onMounted(() => {
       align-items: center;
       background: var(--main-30);
       border-radius: 12px;
-      border: 1px solid var(--shadow-2);
+      border: 1px solid var(--gray-200);
       color: var(--main-color);
       position: relative;
     }

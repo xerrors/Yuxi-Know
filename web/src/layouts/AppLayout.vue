@@ -4,14 +4,13 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, BookOpen, CircleCheck, Sun, Moon } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, Settings, BarChart3, CircleCheck } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
 import { useInfoStore } from '@/stores/info'
 import { useTaskerStore } from '@/stores/tasker'
-import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
@@ -21,7 +20,6 @@ const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
 const infoStore = useInfoStore()
 const taskerStore = useTaskerStore()
-const themeStore = useThemeStore()
 const { activeCount: activeCountRef, isDrawerOpen } = storeToRefs(taskerStore)
 
 const layoutSettings = reactive({
@@ -177,29 +175,7 @@ const mainList = [{
           </a>
         </a-tooltip>
       </div>
-      <div class="nav-item docs">
-        <a-tooltip placement="right">
-          <template #title>文档中心</template>
-          <a
-            href="https://xerrors.github.io/Yuxi-Know/"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="docs-link"
-          >
-            <BookOpen class="icon" size="22" />
-          </a>
-        </a-tooltip>
-      </div>
 
-      <!-- 主题切换按钮 -->
-      <div class="nav-item theme-toggle-nav">
-        <a-tooltip placement="right">
-          <template #title>{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式' }}</template>
-          <div class="theme-toggle-icon" @click="themeStore.toggleTheme">
-            <component :is="themeStore.isDark ? Sun : Moon" size="22" />
-          </div>
-        </a-tooltip>
-      </div>
 
         <!-- <div class="nav-item api-docs">
         <a-tooltip placement="right">
@@ -414,16 +390,7 @@ div.header, #app-router-view {
     &.api-docs {
       padding: 10px 12px;
     }
-    &.docs {
-      padding: 10px 12px;
-      margin-bottom: 12px;
-
-      .docs-link {
-        display: flex;
-        align-items: center;
-        color: inherit;
-      }
-    }
+    &.docs { display: none; }
     &.task-center {
       .task-center-badge {
         width: 100%;

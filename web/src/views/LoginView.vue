@@ -24,16 +24,6 @@
       <!-- 左侧图片区域 -->
       <div class="login-image-section">
         <img :src="loginBgImage" alt="登录背景" class="login-bg-image" />
-        <div class="image-overlay">
-          <div class="brand-info">
-             <h1 class="brand-title">{{ brandName }}</h1>
-             <p class="brand-subtitle">{{ brandSubtitle }}</p>
-             <p class="brand-description">{{ brandDescription }}</p>
-           </div>
-          <div class="brand-copyright">
-            <p>{{ infoStore.footer?.copyright || 'Yuxi-Know' }}. {{ infoStore.branding?.copyright || '版权所有' }}</p>
-          </div>
-        </div>
       </div>
 
       <!-- 右侧登录表单区域 -->
@@ -581,7 +571,7 @@ onUnmounted(() => {
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--shadow-2);
+    background: rgba(0, 0, 0, 0.08); /* TODO: 需要映射到合适的变量 */
     display: flex;
     flex-direction: column;
     justify-content: space-between;

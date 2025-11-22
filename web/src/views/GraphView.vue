@@ -366,7 +366,7 @@ const openLink = (url) => {
   align-items: center;
   margin-right: 16px;
   font-size: 14px;
-  color: rgba(0, 0, 0, 0.65);
+  color: var(--color-text-secondary);
 }
 
 .status-text {
@@ -380,16 +380,16 @@ const openLink = (url) => {
   display: inline-block;
 
   &.loading {
-    background-color: #faad14;
+    background-color: var(--color-warning);
     animation: pulse 1.5s infinite ease-in-out;
   }
 
   &.open {
-    background-color: #52c41a;
+    background-color: var(--color-success);
   }
 
   &.closed {
-    background-color: #f5222d;
+    background-color: var(--color-error);
   }
 }
 

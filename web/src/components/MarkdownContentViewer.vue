@@ -23,8 +23,7 @@
         <MdPreview
           :modelValue="mergedContent"
           :theme="theme"
-          :previewTheme="previewTheme"
-          :codeTheme="codeTheme"
+          previewTheme="github"
           class="markdown-content"
         />
       </div>
@@ -93,10 +92,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import { mergeChunks, getChunkPreview } from '@/utils/chunkUtils';
+import { useThemeStore } from '@/stores/theme';
 
 const props = defineProps({
   chunks: {
@@ -104,6 +104,9 @@ const props = defineProps({
     default: () => []
   }
 });
+
+// 使用主题store
+const themeStore = useThemeStore();
 
 // 响应式引用
 const showTooltip = ref(false);
@@ -113,10 +116,8 @@ const activeChunkIndex = ref(null);
 const highlightedChunkIndex = ref(null);
 const chunkPanelVisible = ref(true);
 
-// 主题设置
-const theme = ref('light');
-const previewTheme = ref('github');
-const codeTheme = ref('atom');
+// 主题设置 - 根据系统主题动态切换
+const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
 
 // 合并chunks
 const mergeResult = computed(() => mergeChunks(props.chunks));

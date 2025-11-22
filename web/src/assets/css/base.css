@@ -48,9 +48,13 @@
   --color-primary: #1c7796;
   --color-primary-bg: #d6eef1;
   --color-success: #45b30e;
+  --color-success-light: #f6ffed;
   --color-error: #c73234;
+  --color-error-light: #fff2f0;
   --color-info: #0058d4;
+  --color-info-light: #e6f7ff;
   --color-warning: #faad14;
+  --color-warning-light: #fffbe6;
 
   /* Chart Colors - 图表颜色系统 */
   --chart-primary: var(--main-500);        /* 主色调 - 用于主要数据 */
@@ -128,6 +132,12 @@
   --color-trans-light: rgba(255, 255, 255, 0.85);
   --color-trans-dark: rgba(0, 0, 0, 0.85);
   --color-border: var(--gray-200);
+
+  /* Scrollbar Colors - 滚动条颜色系统 */
+  --scrollbar-thumb: var(--gray-400);
+  --scrollbar-thumb-hover: var(--gray-500);
+  --scrollbar-track: transparent;
+  --scrollbar-width: 6px;
 }
 
 /* 深色模式 */
@@ -166,8 +176,8 @@
   --gray-100:   #1e1f1f;
   --gray-50:    #151616;
   --gray-25:    #0c0d0d;
-  --gray-10:    #050505;
-  --gray-0:     #000000;
+  --gray-10:    #080808;
+  --gray-0:     #030303;
 
   --main-color: #4a9fb8;
   --main-bright: #5faec2;
@@ -176,9 +186,13 @@
   --color-primary: #4a9fb8;
   --color-primary-bg: #1a3a42;
   --color-success: #52c41a;
+  --color-success-light: #162312;
   --color-error: #ff4d4f;
+  --color-error-light: #2a1215;
   --color-info: #3d8fff;
+  --color-info-light: #111b26;
   --color-warning: #faad14;
+  --color-warning-light: #2b2111;
 
   /* Chart Colors - 深色模式图表颜色 */
   --chart-primary: var(--main-500);
@@ -244,6 +258,12 @@
 
   --color-trans-light: rgba(0, 0, 0, 0.85);
   --color-trans-dark: rgba(255, 255, 255, 0.85);
+
+  /* Scrollbar Colors - 深色模式滚动条颜色 */
+  --scrollbar-thumb: var(--gray-600);
+  --scrollbar-thumb-hover: var(--gray-500);
+  --scrollbar-track: transparent;
+  --scrollbar-width: 6px;
 }
 
 /* 深色模式全局样式 */
@@ -252,15 +272,19 @@
   color: var(--color-trans-dark);
 }
 
-/* md-editor - 深色模式 */
-:root.dark .md-editor {
-  background-color: var(--gray-0);
-}
 
-/* 覆盖 Ant Design 全局样式 */
-:root.dark .ant-tag {
-  background-color: var(--gray-50);
-  border-color: currentColor;
+:root.dark .markmap {
+  --markmap-max-width: 9999px;
+  --markmap-a-color: var(--main-500);
+  --markmap-a-hover-color: var(--main-600);
+  --markmap-code-bg: var(--gray-50);
+  --markmap-code-color: var(--gray-700);
+  --markmap-highlight-bg: var(--color-warning-light);
+  --markmap-table-border: 1px solid currentColor;
+  --markmap-font: 300 16px / 20px sans-serif;
+  --markmap-circle-open-bg: var(--main-0);
+  --markmap-text-color: var(--gray-700);
+  --markmap-highlight-node-bg: var(--color-error-light);
 }
 
 :root.dark body {
@@ -276,4 +300,31 @@
 :root.dark #app-router-view {
   background-color: #141414;
   color: var(--color-trans-dark);
+}
+
+/* 全局滚动条样式 */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+  height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: calc(var(--scrollbar-width) / 2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: calc(var(--scrollbar-width) / 2);
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox 滚动条样式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }

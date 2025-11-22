@@ -49,7 +49,7 @@
               <Settings2 size="18" class="nav-btn-icon"/>
               <span class="text">配置</span>
             </div>
-            <div v-if="selectedAgentId" type="button" class="agent-nav-btn" @click="toggleMoreMenu">
+            <div v-if="selectedAgentId" ref="moreButtonRef" type="button" class="agent-nav-btn" @click="toggleMoreMenu">
               <Ellipsis size="18"  class="nav-btn-icon"/>
             </div>
           </template>
@@ -198,6 +198,7 @@ const toggleConf = () => {
 
 // 更多菜单相关
 const moreMenuRef = ref(null);
+const moreButtonRef = ref(null);
 
 const toggleMoreMenu = (event) => {
   event.stopPropagation();
@@ -220,7 +221,7 @@ onClickOutside(moreMenuRef, () => {
   if (chatUIStore.moreMenuOpen) {
     closeMoreMenu();
   }
-});
+}, { ignore: [moreButtonRef] });
 
 const handleShareChat = async () => {
   closeMoreMenu();

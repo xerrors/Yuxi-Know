@@ -36,7 +36,7 @@
                   </transition>
                   
                   <!-- 空状态 - 添加文件后会自动生成 -->
-                  <span v-else style="color: #999; font-size: 12px;">添加文件后自动生成</span>
+                  <span v-else style="color: var(--gray-500); font-size: 12px;">添加文件后自动生成</span>
                 </div>
               </div>
               <div style="display: flex; gap: 12px; align-items: center;">
@@ -380,12 +380,12 @@ defineExpose({
   border-radius: 12px;
   border: 1px solid var(--gray-200);
   background-color: var(--gray-0);
-  box-shadow: 0 1px 3px rgba(23, 23, 23, 0.05);
+  box-shadow: 0 1px 3px var(--shadow-1);
   transition: border-color 0.5s ease, box-shadow 0.5s ease;
 
   &:hover {
     border-color: var(--main-400);
-    box-shadow: 0 4px 12px rgba(1, 97, 121, 0.08);
+    box-shadow: 0 4px 12px var(--shadow-2);
   }
 
   :deep(.ant-input) {
@@ -419,7 +419,7 @@ defineExpose({
 .search-button {
   background-color: var(--main-color);
   border-color: var(--main-color);
-  box-shadow: 0 2px 4px rgba(1, 97, 121, 0.15);
+  box-shadow: 0 2px 4px var(--shadow-3);
   transition: all 0.2s ease;
 
   &:hover:not(:disabled) {
@@ -585,7 +585,7 @@ defineExpose({
 
 .examples-label {
   font-size: 12px;
-  color: #8c8c8c;
+  color: var(--gray-500);
   white-space: nowrap;
 }
 

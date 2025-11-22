@@ -260,7 +260,7 @@ watch(() => props.agentId, () => {
 }
 
 .message-content {
-  background: #f8f9fa;
+  background: var(--gray-50);
   padding: 10px;
   border-radius: 6px;
   // border-left: 3px solid var(--main-color);
@@ -304,10 +304,10 @@ watch(() => props.agentId, () => {
 }
 
 .reason-content {
-  background: #fff7e6;
+  background: var(--color-warning-light);
   padding: 10px;
   border-radius: 6px;
-  border-left: 3px solid #faad14;
+  border-left: 3px solid var(--color-warning);
   font-size: 13px;
   line-height: 1.4;
   color: var(--gray-800);

@@ -1,46 +1,30 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { theme } from 'ant-design-vue'
 
 export const useThemeStore = defineStore('theme', () => {
   // 从 localStorage 读取保存的主题，默认为浅色
   const isDark = ref(localStorage.getItem('theme') === 'dark')
 
-  // 浅色主题配置
-  const lightTheme = {
+  // 公共主题配置
+  const commonTheme = {
     token: {
       fontFamily: "'HarmonyOS Sans SC', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;",
       colorPrimary: '#1c7796',
-      colorPrimaryBg: '#d6eef1',
-      colorInfo: '#0058d4',
-      colorSuccess: '#45b30e',
-      colorError: '#c73234',
-      colorBgBase: '#ffffff',
-      colorBgContainer: '#ffffff',
-      colorText: '#000000',
-      colorTextSecondary: '#666666',
       borderRadius: 8,
       wireframe: false,
     },
   }
 
+  // 浅色主题配置
+  const lightTheme = {
+    ...commonTheme,
+  }
+
   // 深色主题配置
   const darkTheme = {
-    token: {
-      fontFamily: "'HarmonyOS Sans SC', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;",
-      colorPrimary: '#4a9fb8',
-      colorPrimaryBg: '#1a3a42',
-      colorInfo: '#3d8fff',
-      colorSuccess: '#52c41a',
-      colorError: '#ff4d4f',
-      colorBgBase: '#141414',
-      colorBgContainer: '#1f1f1f',
-      colorBgElevated: '#262626',
-      colorText: 'rgba(255, 255, 255, 0.85)',
-      colorTextSecondary: 'rgba(255, 255, 255, 0.65)',
-      colorBorder: '#434343',
-      borderRadius: 8,
-      wireframe: false,
-    },
+    ...commonTheme,
+    algorithm: theme.darkAlgorithm,
   }
 
   // 当前主题配置
@@ -48,10 +32,7 @@ export const useThemeStore = defineStore('theme', () => {
 
   // 切换主题
   function toggleTheme() {
-    isDark.value = !isDark.value
-    currentTheme.value = isDark.value ? darkTheme : lightTheme
-    localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
-    updateDocumentTheme()
+    setTheme(!isDark.value)
   }
 
   // 设置主题
