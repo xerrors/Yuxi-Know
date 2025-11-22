@@ -210,7 +210,7 @@ const handleDownloadMarkdown = () => {
 .empty-content {
   text-align: center;
   padding: 40px 0;
-  color: #999;
+  color: var(--gray-400);
 }
 </style>
 

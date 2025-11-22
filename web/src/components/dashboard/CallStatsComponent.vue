@@ -43,10 +43,19 @@ import { ref, computed, onMounted, onUnmounted, nextTick, defineExpose, watch } 
 import * as echarts from 'echarts'
 import { dashboardApi } from '@/apis/dashboard_api'
 import { getColorByIndex, truncateLegend } from '@/utils/chartColors'
+import { useThemeStore } from '@/stores/theme'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
 })
+
+// theme store
+const themeStore = useThemeStore()
 
 // state
 const callStatsData = ref(null)
@@ -184,27 +193,27 @@ const renderCallStatsChart = () => {
     xAxis: {
       type: 'category',
       data: xAxisData,
-      axisLine: { lineStyle: { color: '#e5e7eb' } },
+      axisLine: { lineStyle: { color: getCSSVariable('--gray-200') } },
       axisTick: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 12 }
+      axisLabel: { color: getCSSVariable('--gray-500'), fontSize: 12 }
     },
     yAxis: {
       type: 'value',
       axisLine: { show: false },
       axisTick: { show: false },
       axisLabel: {
-        color: '#6b7280',
+        color: getCSSVariable('--gray-500'),
         fontSize: 12,
         formatter: (value) => (isTokenView.value ? formatTokenValue(value) : value),
       },
-      splitLine: { lineStyle: { color: '#f3f4f6' } }
+      splitLine: { lineStyle: { color: getCSSVariable('--gray-100') } }
     },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e5e7eb',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
-      textStyle: { color: '#374151', fontSize: 12 },
+      textStyle: { color: getCSSVariable('--gray-600'), fontSize: 12 },
       formatter: (params) => {
         if (!params?.length) return ''
         let total = 0
@@ -223,7 +232,7 @@ const renderCallStatsChart = () => {
     legend: {
       data: categories.map(cat => (cat === 'None' ? '未知模型' : cat)),
       bottom: 5,        /* 调整图例位置，从0改为5 */
-      textStyle: { color: '#6b7280', fontSize: 12 },
+      textStyle: { color: getCSSVariable('--gray-500'), fontSize: 12 },
       itemWidth: 14,
       itemHeight: 14,
       formatter: (name) => truncateLegend(name)
@@ -275,6 +284,15 @@ watch(() => props.loading, (now) => {
     if (callStatsData.value) {
       nextTick().then(() => renderCallStatsChart())
     }
+  }
+})
+
+// 监听主题变化，重新渲染图表
+watch(() => themeStore.isDark, () => {
+  if (callStatsData.value && callStatsChart) {
+    nextTick(() => {
+      renderCallStatsChart()
+    })
   }
 })
 
@@ -334,14 +352,14 @@ onUnmounted(() => {
 
 .simple-toggle-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--gray-500);
   margin-right: 4px;
 }
 
 .simple-toggle {
   padding: 4px 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: var(--gray-500);
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s ease;
@@ -349,20 +367,19 @@ onUnmounted(() => {
 }
 
 .simple-toggle:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--gray-100);
+  color: var(--gray-700);
 }
 
 .simple-toggle.active {
-  background-color: #3996ae;
+  background-color: var(--main-600);
   color: var(--gray-0);
 }
 
 .divider {
   width: 1px;
   height: 16px;
-  background-color: #e5e7eb;
+  background-color: var(--gray-200);
 }
 </style>
-
 

@@ -1581,53 +1581,11 @@ watch(conversations, () => {
 
     .note {
       font-size: small;
-      color: #ccc;
+      color: var(--gray-300);
       margin: 4px 0;
       user-select: none;
     }
   }
-}
-
-.conversation-list::-webkit-scrollbar {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: 4px;
-}
-
-.conversation-list::-webkit-scrollbar-thumb:hover {
-  background: rgb(100, 100, 100);
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar {
-  position: absolute;
-  width: 4px;
-  height: 4px;
-}
-
-.chat::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar-thumb {
-  background: var(--gray-400);
-  border-radius: 4px;
-}
-
-.chat::-webkit-scrollbar-thumb:hover {
-  background: rgb(100, 100, 100);
-  border-radius: 4px;
 }
 
 .loading-dots {
@@ -1643,7 +1601,6 @@ watch(conversations, () => {
   background: linear-gradient(135deg, var(--main-color), var(--main-700));
   border-radius: 50%;
   animation: dotPulse 1.4s infinite ease-in-out both;
-  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
 }
 
 .loading-dots div:nth-child(1) {

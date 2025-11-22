@@ -104,6 +104,15 @@
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
+import { useThemeStore } from '@/stores/theme'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
+
+// theme store
+const themeStore = useThemeStore()
 
 // Props
 const props = defineProps({
@@ -181,7 +190,7 @@ const initDbTypeChart = () => {
     data: [item.value],
     itemStyle: {
       color: getLegendColorByIndex(idx),
-      borderColor: '#ffffff',
+      borderColor: getCSSVariable('--gray-0'),
       borderWidth: 2,
       borderJoin: 'miter'
     },
@@ -196,10 +205,10 @@ const initDbTypeChart = () => {
     animation: false,
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e8e8e8',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
-      textStyle: { color: '#666' },
+      textStyle: { color: getCSSVariable('--gray-600') },
       formatter: (params) => {
         const value = params.value || 0
         return `${params.seriesName}: ${value}/${total}`
@@ -226,6 +235,12 @@ const initDbTypeChart = () => {
 const initFileTypeChart = () => {
   if (!fileTypeChartRef.value) return
 
+  // 如果已存在图表实例，先销毁
+  if (fileTypeChart) {
+    fileTypeChart.dispose()
+    fileTypeChart = null
+  }
+
   fileTypeChart = echarts.init(fileTypeChartRef.value)
 
   // 检查是否有文件类型数据 - 兼容旧字段名和新字段名
@@ -246,11 +261,11 @@ const initFileTypeChart = () => {
     const option = {
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderColor: '#e8e8e8',
+        backgroundColor: getCSSVariable('--gray-0'),
+        borderColor: getCSSVariable('--gray-200'),
         borderWidth: 1,
         textStyle: {
-          color: '#666'
+          color: getCSSVariable('--gray-600')
         },
         formatter: '{a} <br/>{b}: {c} ({d}%)'
       },
@@ -263,7 +278,7 @@ const initFileTypeChart = () => {
         itemHeight: 10,
         textStyle: {
           fontSize: 11,
-          color: '#666'
+          color: getCSSVariable('--gray-600')
         }
       },
       series: [{
@@ -274,7 +289,7 @@ const initFileTypeChart = () => {
         avoidLabelOverlap: true, // 避免标签重叠
         itemStyle: {
           borderRadius: 8,
-          borderColor: '#fff',
+          borderColor: getCSSVariable('--gray-0'),
           borderWidth: 2
         },
         label: {
@@ -284,7 +299,7 @@ const initFileTypeChart = () => {
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
+            shadowColor: getCSSVariable('--shadow-3')
           }
         },
         labelLine: {
@@ -306,11 +321,11 @@ const initFileTypeChart = () => {
     const option = {
       tooltip: {
         trigger: 'item',
-        backgroundColor: 'rgba(255, 255, 255, 0.95)',
-        borderColor: '#e8e8e8',
+        backgroundColor: getCSSVariable('--gray-0'),
+        borderColor: getCSSVariable('--gray-200'),
         borderWidth: 1,
         textStyle: {
-          color: '#666'
+          color: getCSSVariable('--gray-600')
         },
         formatter: '{a} <br/>{b}: {c} ({d}%)'
       },
@@ -322,7 +337,7 @@ const initFileTypeChart = () => {
         avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 8,
-          borderColor: '#fff',
+          borderColor: getCSSVariable('--gray-0'),
           borderWidth: 2
         },
         label: {
@@ -332,7 +347,7 @@ const initFileTypeChart = () => {
           itemStyle: {
             shadowBlur: 10,
             shadowOffsetX: 0,
-            shadowColor: 'rgba(0, 0, 0, 0.5)'
+            shadowColor: getCSSVariable('--shadow-3')
           }
         },
         labelLine: {
@@ -341,7 +356,7 @@ const initFileTypeChart = () => {
         data: [
           { name: '暂无数据', value: 1 }
         ],
-        color: ['#e1f6fb']
+        color: [getCSSVariable('--chart-info-lighter')]
       }]
     }
 
@@ -394,6 +409,15 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
+// 监听主题变化，重新渲染图表
+watch(() => themeStore.isDark, () => {
+  if (props.knowledgeStats && (dbTypeChart || fileTypeChart)) {
+    nextTick(() => {
+      updateCharts()
+    })
+  }
+})
+
 // 组件卸载时清理
 const cleanup = () => {
   window.removeEventListener('resize', handleResize)
@@ -437,7 +461,7 @@ defineExpose({
         align-items: center;
         gap: 6px;
         font-size: 12px;
-        color: #666;
+        color: var(--gray-500);
       }
 
       .legend-color {
@@ -486,21 +510,21 @@ defineExpose({
         .carousel-label {
           font-size: 14px;
           font-weight: 600;
-          color: #666;
+          color: var(--gray-500);
           margin-bottom: 4px;
         }
 
         .carousel-value {
           font-size: 24px;
           font-weight: 700;
-          color: #333;
+          color: var(--gray-800);
           margin-bottom: 2px;
           line-height: 1;
         }
 
         .carousel-percent {
           font-size: 12px;
-          color: #999;
+          color: var(--gray-400);
           font-weight: 500;
         }
       }

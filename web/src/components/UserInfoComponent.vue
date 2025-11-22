@@ -421,7 +421,7 @@ const handleAvatarChange = async (info) => {
   border: 2px solid var(--gray-0);
 
   &.superadmin {
-    background-color: #c1bd00; /* TODO: 需要映射到 CSS 变量 - 超管红色 */
+    background-color: var(--color-warning);
   }
 
   &.admin {

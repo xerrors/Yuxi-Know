@@ -617,7 +617,7 @@ const printAgentConfig = async () => {
 .empty-logs {
   padding: 16px;
   text-align: center;
-  color: #666;
+  color: var(--gray-500);
 }
 
 @media (prefers-color-scheme: dark) {

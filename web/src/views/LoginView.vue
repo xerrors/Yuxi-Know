@@ -564,62 +564,6 @@ onUnmounted(() => {
     object-fit: cover;
     object-position: center;
   }
-
-  .image-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.08); /* TODO: 需要映射到合适的变量 */
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    padding: 72px 64px 36px;
-  }
-
-  .brand-info {
-    text-align: left;
-    color: var(--gray-0);
-    max-width: 520px;
-
-    .brand-title {
-      font-size: 52px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      text-shadow: 0 3px 6px var(--shadow-2);
-      letter-spacing: -0.5px;
-    }
-
-    .brand-subtitle {
-      font-size: 24px;
-      font-weight: 500;
-      margin-bottom: 24px;
-      opacity: 0.92;
-      text-shadow: 0 2px 4px var(--shadow-1);
-      line-height: 1.4;
-    }
-
-    .brand-description {
-      font-size: 18px;
-      line-height: 1.6;
-      margin: 0;
-      opacity: 0.82;
-      text-shadow: 0 1px 3px var(--shadow-1);
-    }
-  }
-
-  .brand-copyright {
-    align-self: flex-start;
-
-    p {
-      margin: 0;
-      font-size: 14px;
-      color: color-mix(in srgb, var(--gray-0) 70%, transparent);
-      text-shadow: 0 1px 2px var(--shadow-1);
-      font-weight: 400;
-    }
-  }
 }
 
 .login-form-section {

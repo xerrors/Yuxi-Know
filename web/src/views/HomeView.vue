@@ -315,14 +315,14 @@ const actionLinks = computed(() => {
   display: flex;
   align-items: center;
   text-decoration: none;
-  color: #555;
+  color: var(--gray-600);
   padding: 0.6rem 1rem;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   font-size: 0.9rem;
   font-weight: 500;
 
   &:hover {
-    color: #333;
+    color: var(--gray-700);
 
     svg {
       transform: scale(1.1);

@@ -380,6 +380,9 @@ const handleMouseUp = () => {
   flex-direction: column;
   border: 1px solid var(--gray-200);
   border-radius: 12px;
+  background: var(--gray-10);
+  overflow: hidden;
+
 
   :deep(.ant-tabs-content) {
     flex: 1;

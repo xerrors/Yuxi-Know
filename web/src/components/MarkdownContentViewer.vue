@@ -230,7 +230,7 @@ onUnmounted(() => {
   display: flex;
   gap: 16px;
   font-size: 12px;
-  color: #666;
+  color: var(--gray-500);
 }
 
 .viewer-container {

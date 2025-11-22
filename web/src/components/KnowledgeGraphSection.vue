@@ -1,10 +1,5 @@
 <template>
   <div class="graph-section" v-if="isGraphSupported">
-    <div class="graph-toolbar">
-      <div class="toolbar-left">
-        <!-- 移除了不准确的总节点数和总边数显示 -->
-      </div>
-    </div>
     <div class="graph-container-compact">
       <div v-if="!isGraphSupported" class="graph-disabled">
         <div class="disabled-content">
@@ -291,27 +286,6 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.graph-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background-color: var(--gray-0);
-  border-bottom: 1px solid var(--gray-200);
-
-  .toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .toolbar-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-}
-
 .graph-container-compact {
   flex: 1;
   min-height: 0;
@@ -327,7 +301,7 @@ onUnmounted(() => {
 
 .disabled-content {
   text-align: center;
-  color: #8c8c8c;
+  color: var(--gray-400);
 
   h4 {
     margin-bottom: 8px;

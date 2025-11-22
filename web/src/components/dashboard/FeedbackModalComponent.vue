@@ -182,16 +182,16 @@ watch(() => props.agentId, () => {
   }
 
   &::-webkit-scrollbar-track {
-    background: #f1f1f1;
+    background: var(--gray-100);
     border-radius: 3px;
   }
 
   &::-webkit-scrollbar-thumb {
-    background: #c1c1c1;
+    background: var(--gray-300);
     border-radius: 3px;
 
     &:hover {
-      background: #a8a8a8;
+      background: var(--gray-400);
     }
   }
 }

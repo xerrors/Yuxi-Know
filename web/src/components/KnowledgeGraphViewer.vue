@@ -237,6 +237,11 @@ import { EdgeArrowProgram } from 'sigma/rendering'
 import { lightragApi } from '@/apis/graph_api'
 import { useGraphStore } from '@/stores/graphStore'
 import { useDatabaseStore } from '@/stores/database'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
 import '@/assets/css/sigma.css'
 
 // 定义 props
@@ -438,10 +443,10 @@ const sigmaSettings = {
   labelSize: 12,
   edgeLabelSize: 10,
   labelColor: {
-    color: 'var(--color-text)'
+    color: getCSSVariable('--color-text')
   },
   edgeLabelColor: {
-    color: 'var(--color-text-secondary)'
+    color: getCSSVariable('--color-text-secondary')
   },
   minEdgeThickness: 4, // 增加最小边厚度，提高点击性
   maxEdgeThickness: 10, // 增加最大边厚度
@@ -589,7 +594,7 @@ const registerEvents = () => {
         const graph = sigmaInstance.getGraph()
         if (graph.hasEdge(edge)) {
           // 高亮悬停的边
-          graph.setEdgeAttribute(edge, 'color', 'var(--color-error)')
+          graph.setEdgeAttribute(edge, 'color', getCSSVariable('--color-error'))
           graph.setEdgeAttribute(edge, 'size', (graph.getEdgeAttribute(edge, 'size') || 1) * 1.5)
           sigmaInstance.refresh()
           console.log('悬停在边上:', edge)
@@ -607,7 +612,7 @@ const registerEvents = () => {
         if (graph.hasEdge(edge)) {
           // 恢复边的原始样式
           const originalData = graph.getEdgeAttribute(edge, 'originalData')
-          graph.setEdgeAttribute(edge, 'color', originalData?.color || 'var(--color-text-secondary)')
+          graph.setEdgeAttribute(edge, 'color', originalData?.color || getCSSVariable('--color-text-secondary'))
           graph.setEdgeAttribute(edge, 'size', originalData?.size || 1)
           sigmaInstance.refresh()
         }
@@ -1200,11 +1205,11 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--gray-50);
+  background: var(--gray-10);
 }
 
 .control-panel {
-  background: var(--gray-0);
+  background: var(--gray-10);
   padding: 6px 16px; /* Reduced from 16px */
   border-bottom: none;
   display: flex;

@@ -54,14 +54,14 @@ defineProps({
 
 .params-info p {
   margin: 0;
-  color: #666;
+  color: var(--gray-500);
   font-size: 14px;
   line-height: 1.5;
 }
 
 .param-description {
   font-size: 12px;
-  color: #999;
+  color: var(--gray-400);
   margin: 4px 0 0 0;
   line-height: 1.4;
 }

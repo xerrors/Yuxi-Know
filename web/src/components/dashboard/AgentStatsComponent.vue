@@ -99,6 +99,15 @@
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 import { getColorByIndex, getChartColor } from '@/utils/chartColors'
+import { useThemeStore } from '@/stores/theme'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
+
+// theme store
+const themeStore = useThemeStore()
 
 // Props
 const props = defineProps({
@@ -177,6 +186,12 @@ const initConversationToolChart = () => {
       (!props.agentStats?.agent_conversation_counts?.length &&
        !props.agentStats?.agent_tool_usage?.length)) return
 
+  // 如果已存在图表实例，先销毁
+  if (conversationToolChart) {
+    conversationToolChart.dispose()
+    conversationToolChart = null
+  }
+
   conversationToolChart = echarts.init(conversationToolChartRef.value)
 
   const conversationData = props.agentStats.agent_conversation_counts || []
@@ -211,11 +226,11 @@ const initConversationToolChart = () => {
   const option = {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e8e8e8',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
       textStyle: {
-        color: '#666'
+        color: getCSSVariable('--gray-600')
       }
     },
     legend: {
@@ -224,7 +239,7 @@ const initConversationToolChart = () => {
       top: '0%',
       orient: 'horizontal',
       textStyle: {
-        color: '#666'
+        color: getCSSVariable('--gray-500')
       }
     },
     grid: {
@@ -239,11 +254,11 @@ const initConversationToolChart = () => {
       data: topAgentIds,
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666',
+        color: getCSSVariable('--gray-500'),
         interval: 0,
         // rotate: 45
       }
@@ -252,15 +267,15 @@ const initConversationToolChart = () => {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666'
+        color: getCSSVariable('--gray-500')
       },
       splitLine: {
         lineStyle: {
-          color: 'var(--gray-150)'
+          color: getCSSVariable('--gray-150')
         }
       }
     },
@@ -280,7 +295,7 @@ const initConversationToolChart = () => {
           itemStyle: {
             color: getChartColor('primary'),
             shadowBlur: 10,
-            shadowColor: 'rgba(2, 142, 160, 0.3)'
+            shadowColor: getCSSVariable('--chart-info-shadow')
           }
         }
       },
@@ -299,7 +314,7 @@ const initConversationToolChart = () => {
           itemStyle: {
             color: getChartColor('primary'),
             shadowBlur: 10,
-            shadowColor: 'rgba(2, 142, 160, 0.3)'
+            shadowColor: getCSSVariable('--chart-info-shadow')
           }
         }
       }
@@ -333,6 +348,15 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
+// 监听主题变化，重新渲染图表
+watch(() => themeStore.isDark, () => {
+  if (props.agentStats && conversationToolChart) {
+    nextTick(() => {
+      updateCharts()
+    })
+  }
+})
+
 // 组件卸载时清理
 const cleanup = () => {
   window.removeEventListener('resize', handleResize)
@@ -349,6 +373,39 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
+
+/* 指标值样式 */
+.metric-value {
+  font-weight: 500;
+  color: var(--gray-1000);
+  font-size: 14px;
+}
+
+
+/* 排名显示样式 */
+.rank-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  .rank-medal {
+    font-size: 20px;
+  }
+
+  .rank-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background-color: var(--gray-100);
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-600);
+    border: 1px solid var(--gray-200);
+  }
+}
 
 // AgentStatsComponent 特有的样式
 .top-performers, .metrics-comparison {

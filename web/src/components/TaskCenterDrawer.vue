@@ -450,7 +450,7 @@ function canCancel(task) {
 .task-card-type {
   padding: 0 8px;
   border-radius: 999px;
-  background-color: rgba(15, 23, 42, 0.06); /* TODO: 透明度需要处理 */
+  background-color: var(--gray-100);
   color: var(--gray-500);
   line-height: 20px;
 }
@@ -486,12 +486,12 @@ function canCancel(task) {
 }
 
 .task-card-message {
-  background: rgba(15, 23, 42, 0.03); /* TODO: 透明度需要处理 */
+  background: var(--gray-50);
   color: var(--gray-800);
 }
 
 .task-card-error {
-  background: rgba(248, 113, 113, 0.12); /* TODO: 透明度需要处理 */
+  background: var(--color-error-light);
   color: var(--color-error);
 }
 
@@ -522,8 +522,8 @@ function canCancel(task) {
   align-items: center;
   padding: 10px 14px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.02); /* TODO: 透明度需要处理 */
-  border: 1px solid rgba(15, 23, 42, 0.06); /* TODO: 透明度需要处理 */
+  background: var(--gray-25);
+  border: 1px solid var(--gray-100);
 }
 
 .completion-badge {
@@ -601,8 +601,8 @@ function canCancel(task) {
   margin-top: 32px;
   padding: 40px 30px;
   border-radius: 16px;
-  background: rgba(15, 23, 42, 0.03); /* TODO: 透明度需要处理 */
-  border: 1px dashed rgba(148, 163, 184, 0.4); /* TODO: 透明度需要处理 */
+  background: var(--gray-50);
+  border: 1px dashed var(--gray-300);
   text-align: center;
   color: var(--gray-600);
   display: flex;

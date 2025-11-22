@@ -18,6 +18,7 @@
 <script setup>
 import { Graph } from '@antv/g6'
 import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps({
   graphData: {
@@ -36,10 +37,11 @@ const props = defineProps({
   highlightKeywords: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['ready', 'node-click', 'edge-click', 'canvas-click', 'data-rendered'])
+const emit = defineEmits(['ready', 'data-rendered'])
 
 const container = ref(null)
 const rootEl = ref(null)
+const themeStore = useThemeStore()
 let graphInstance = null
 let resizeObserver = null
 let renderTimeout = null
@@ -62,10 +64,10 @@ const defaultLayout = {
   collide: { radius: 40, strength: 0.8, iterations: 3 },
 }
 
-const paletteColors = [
-  '#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#22d3ee',
-  '#a78bfa', '#f97316', '#4ade80', '#f43f5e', '#2dd4bf',
-]
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
 
 function formatData() {
   const data = props.graphData || { nodes: [], edges: [] }
@@ -133,130 +135,60 @@ function initGraph() {
       type: 'circle',
       style: {
         labelText: (d) => d.data.label,
+        labelFill: getCSSVariable('--gray-700'),
+        labelWordWrap: true, // enable label ellipsis
+        labelMaxWidth: '300%',
         size: (d) => {
           if (!props.sizeByDegree) return 24
           const deg = d.data.degree || 0
           return Math.min(15 + deg * 5, 50)
         },
-        fillOpacity: 0.8,
-        opacity: 0.8,
-        stroke: '#ffffff',
+        opacity: 0.9,
+        stroke: getCSSVariable('--color-bg-container'),
         lineWidth: 1.5,
-        shadowColor: '#94a3b8',
+        shadowColor: getCSSVariable('--gray-400'),
         shadowBlur: 4,
-        'label-text-fill': '#334155',
         ...(props.nodeStyleOptions.style || {}),
       },
       palette: props.nodeStyleOptions.palette || {
         field: 'label',
-        color: paletteColors,
-      },
-      state: props.nodeStyleOptions.state || {
-        hidden: { opacity: 0.15, 'label-text-opacity': 0 },
-        focus: { opacity: 1, stroke: '#2563eb', lineWidth: 2.5, shadowColor: '#60a5fa', shadowBlur: 16 },
-        highlighted: {
-          opacity: 1,
-          stroke: '#ff0000',
-          lineWidth: 4,
-          shadowColor: '#ff0000',
-          shadowBlur: 30,
-          'label-text-fill': '#ff0000',
-          'label-text-font-weight': 'bold',
-          'label-text-size': 20,
-          fill: '#ffcccc',
-        },
+        color: [
+          '#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#22d3ee',
+          '#a78bfa', '#f97316', '#4ade80', '#f43f5e', '#2dd4bf',
+        ],
       },
     },
     edge: {
-      type: 'line',
+      type: 'quadratic',
       style: {
         labelText: (d) => d.data.label,
-        labelBackground: '#ffffff',
-        stroke: '#94a3b8',
-        opacity: 0.6,
+        labelFill: getCSSVariable('--gray-800'),
+        labelBackground: true,
+        labelBackgroundFill: getCSSVariable('--gray-100'),
+        stroke: getCSSVariable('--gray-400'),
+        opacity: 0.8,
         lineWidth: 1.2,
         endArrow: true,
-        'label-text-fill': '#334155',
         ...(props.edgeStyleOptions.style || {}),
       },
-      state: props.edgeStyleOptions.state || {
-        hidden: { opacity: 0.15, 'label-text-opacity': 0 },
-        focus: { opacity: 0.95, stroke: '#2563eb', lineWidth: 2, 'label-text-opacity': 1 },
-      },
     },
-    behaviors: ['drag-element', 'zoom-canvas', 'drag-canvas'],
-  })
-
-  bindEvents()
-  emit('ready', graphInstance)
-}
-
-function bindEvents() {
-  if (!graphInstance) return
-
-  const getIds = () => {
-    const { nodes, edges } = graphInstance.getData()
-    return { nodeIds: nodes.map(n => n.id), edgeIds: edges.map(e => e.id), edges }
-  }
-
-  const getClickedId = (e) => e?.id || e?.data?.id || e?.target?.id || null
-
-  let activeNodeId = null
-
-  const resetStyles = async () => {
-    const { nodeIds, edgeIds } = getIds()
-    const updates = {}
-    nodeIds.forEach(id => updates[id] = [])
-    edgeIds.forEach(id => updates[id] = [])
-    if (nodeIds.length + edgeIds.length > 0) {
-      await graphInstance.setElementState(updates)
-    }
-    activeNodeId = null
-    await graphInstance.draw()
-  }
-
-  if (props.enableFocusNeighbor) {
-    graphInstance.on('node:click', async (e) => {
-      emit('node-click', e)
-      const clickedNodeId = getClickedId(e)
-      if (!clickedNodeId) return
-
-      if (activeNodeId === clickedNodeId) {
-        await resetStyles()
-        return
+    behaviors: [
+      'drag-element',
+      'zoom-canvas',
+      'drag-canvas',
+      'hover-activate',
+      {
+        type: 'click-select',
+        degree: 1,
+        state: 'selected', // 选中的状态
+        neighborState: 'active', // 相邻节点附着状态
+        unselectedState: 'inactive', // 未选中节点状态
+        multiple: true,
+        trigger: ['shift'],
       }
-
-      activeNodeId = clickedNodeId
-      const { nodeIds, edgeIds, edges } = getIds()
-
-      const updates = {}
-      nodeIds.forEach(id => updates[id] = ['hidden'])
-      edgeIds.forEach(id => updates[id] = ['hidden'])
-
-      const neighborSet = new Set()
-      const relatedEdgeIds = []
-      edges.forEach((edge) => {
-        if (edge.source === clickedNodeId) { neighborSet.add(edge.target); relatedEdgeIds.push(edge.id) }
-        else if (edge.target === clickedNodeId) { neighborSet.add(edge.source); relatedEdgeIds.push(edge.id) }
-      })
-
-      updates[clickedNodeId] = ['focus']
-      Array.from(neighborSet).forEach(id => updates[id] = ['focus'])
-      relatedEdgeIds.forEach(id => updates[id] = ['focus'])
-
-      await graphInstance.setElementState(updates)
-      await graphInstance.draw()
-    })
-
-    graphInstance.on('canvas:click', async () => {
-      emit('canvas-click')
-      await resetStyles()
-    })
-  } else {
-    graphInstance.on('node:click', (e) => emit('node-click', e))
-    graphInstance.on('edge:click', (e) => emit('edge-click', e))
-    graphInstance.on('canvas:click', () => emit('canvas-click'))
-  }
+    ],
+  })
+  emit('ready', graphInstance)
 }
 
 function setGraphData() {
@@ -379,6 +311,13 @@ watch(() => props.highlightKeywords, () => {
     setTimeout(() => applyHighlightKeywords(), 50)
   }
 }, { deep: true })
+
+// 监听主题切换，重新加载图形
+watch(() => themeStore.isDark, () => {
+  if (graphInstance) {
+    refreshGraph()
+  }
+})
 
 onMounted(() => {
   // ResizeObserver 监听容器尺寸，自动重渲染

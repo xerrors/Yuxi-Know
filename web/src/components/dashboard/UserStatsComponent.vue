@@ -32,6 +32,15 @@ import { ref, onMounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { getChartColor } from '@/utils/chartColors'
 import { dashboardApi } from '@/apis/dashboard_api'
+import { useThemeStore } from '@/stores/theme'
+
+// CSS 变量解析工具函数
+function getCSSVariable(variableName, element = document.documentElement) {
+  return getComputedStyle(element).getPropertyValue(variableName).trim()
+}
+
+// theme store
+const themeStore = useThemeStore()
 
 // Props
 const props = defineProps({
@@ -53,16 +62,22 @@ let activityChart = null
 const initActivityChart = () => {
   if (!activityChartRef.value || !props.userStats?.daily_active_users) return
 
+  // 如果已存在图表实例，先销毁
+  if (activityChart) {
+    activityChart.dispose()
+    activityChart = null
+  }
+
   activityChart = echarts.init(activityChartRef.value)
 
   const option = {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderColor: '#e8e8e8',
+      backgroundColor: getCSSVariable('--gray-0'),
+      borderColor: getCSSVariable('--gray-200'),
       borderWidth: 1,
       textStyle: {
-        color: '#666'
+        color: getCSSVariable('--gray-600')
       }
     },
     grid: {
@@ -77,26 +92,26 @@ const initActivityChart = () => {
       data: props.userStats.daily_active_users.map(item => item.date),
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666'
+        color: getCSSVariable('--gray-500')
       }
     },
     yAxis: {
       type: 'value',
       axisLine: {
         lineStyle: {
-          color: '#e8e8e8'
+          color: getCSSVariable('--gray-200')
         }
       },
       axisLabel: {
-        color: '#666'
+        color: getCSSVariable('--gray-500')
       },
       splitLine: {
         lineStyle: {
-          color: 'var(--gray-150)'
+          color: getCSSVariable('--gray-100')
         }
       }
     },
@@ -117,24 +132,24 @@ const initActivityChart = () => {
           x2: 0,
           y2: 1,
           colorStops: [{
-            offset: 0, color: 'rgba(57, 150, 174, 0.3)'
+            offset: 0, color: getCSSVariable('--chart-primary-light')
           }, {
-            offset: 1, color: 'rgba(57, 150, 174, 0.05)'
+            offset: 1, color: getCSSVariable('--chart-primary-lighter')
           }]
         }
       },
       itemStyle: {
         color: getChartColor('primary'),
         borderWidth: 2,
-        borderColor: '#fff'
+        borderColor: getCSSVariable('--gray-0')
       },
       emphasis: {
         itemStyle: {
           color: getChartColor('primary'),
           borderWidth: 3,
-          borderColor: '#fff',
+          borderColor: getCSSVariable('--gray-0'),
           shadowBlur: 10,
-          shadowColor: 'rgba(57, 150, 174, 0.5)'
+          shadowColor: getCSSVariable('--chart-primary-shadow')
         }
       }
     }]
@@ -166,6 +181,15 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 })
 
+// 监听主题变化，重新渲染图表
+watch(() => themeStore.isDark, () => {
+  if (props.userStats?.daily_active_users && activityChart) {
+    nextTick(() => {
+      initActivityChart()
+    })
+  }
+})
+
 // 组件卸载时清理
 const cleanup = () => {
   window.removeEventListener('resize', handleResize)
@@ -183,12 +207,132 @@ defineExpose({
 
 <style scoped lang="less">
 
-// UserStatsComponent 特有的样式
-.compact-chart-container {
-  .chart-header {
-    .chart-title {
-      color: var(--chart-primary);
+/* 紧凑型统计网格 */
+.compact-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+
+  .mini-stat-card {
+    background-color: var(--gray-0);
+    border: 1px solid var(--gray-100);
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.2s ease;
+
+    &:hover {
+      border-color: var(--gray-200);
+    }
+
+    .mini-stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--gray-1000);
+      line-height: 1.2;
+      margin-bottom: 4px;
+    }
+
+    .mini-stat-label {
+      font-size: 12px;
+      color: var(--gray-600);
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
     }
   }
 }
+
+/* 紧凑型图表容器 */
+.compact-chart-container {
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-100);
+  border-radius: 6px;
+  padding: 16px;
+  height: 240px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--gray-200);
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    .chart-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-1000);
+    }
+
+    .chart-subtitle {
+      font-size: 11px;
+      color: var(--gray-600);
+      background-color: var(--gray-100);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+    }
+  }
+
+  .compact-chart {
+    height: 180px;
+    width: 100%;
+  }
+}
+
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .compact-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .compact-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+
+    .mini-stat-card {
+      padding: 8px;
+
+      .mini-stat-value {
+        font-size: 16px;
+      }
+
+      .mini-stat-label {
+        font-size: 10px;
+      }
+    }
+  }
+
+  .compact-chart-container {
+    height: 180px;
+    padding: 8px;
+
+    .compact-chart {
+      height: 130px;
+    }
+
+    .chart-header {
+      margin-bottom: 4px;
+
+      .chart-title {
+        font-size: 11px;
+      }
+
+      .chart-subtitle {
+        font-size: 9px;
+      }
+    }
+  }
+}
+
 </style>

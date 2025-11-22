@@ -481,7 +481,7 @@ onMounted(() => {
 
       .description {
         font-size: 14px;
-        color: #8c8c8c;
+        color: var(--gray-400);
         margin: 0;
         line-height: 1.4;
         margin-bottom: 16px;
@@ -698,14 +698,14 @@ onMounted(() => {
     }
 
     .error-text {
-      color: #ff4d4f;
+      color: var(--color-error);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;
     }
 
     .help-text {
-      color: #8c8c8c;
+      color: var(--gray-400);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;
@@ -716,7 +716,7 @@ onMounted(() => {
 
       :deep(.ant-checkbox-wrapper) {
         font-weight: 500;
-        color: #495057;
+        color: var(--gray-600);
       }
     }
   }

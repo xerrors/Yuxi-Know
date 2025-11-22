@@ -597,7 +597,7 @@ defineExpose({
 
 .loading-text {
   font-size: 12px;
-  color: #999;
+  color: var(--gray-400);
   display: flex;
   align-items: center;
   gap: 6px;

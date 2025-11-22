@@ -384,7 +384,7 @@ onUnmounted(() => {
       .conversations-section,
       .call-stats-section {
         border-color: var(--gray-200);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 3px 0 var(--shadow-100);
       }
     }
 
@@ -439,7 +439,7 @@ onUnmounted(() => {
   &:hover {
     background-color: var(--gray-25);
     border-color: var(--gray-200);
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px 0 var(--shadow-100);
   }
 
   :deep(.ant-card-head) {
@@ -537,8 +537,8 @@ onUnmounted(() => {
       margin-bottom: 24px;
 
       .summary-card {
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-        border: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
+        border: 1px solid var(--gray-200);
         border-radius: 8px;
         padding: 12px;
         text-align: center;
@@ -546,13 +546,13 @@ onUnmounted(() => {
         .summary-value {
           font-size: 16px;
           font-weight: 600;
-          color: #1e293b;
+          color: var(--gray-800);
           margin-bottom: 4px;
         }
 
         .summary-label {
           font-size: 11px;
-          color: #64748b;
+          color: var(--gray-500);
           font-weight: 500;
         }
       }

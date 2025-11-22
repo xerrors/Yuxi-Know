@@ -529,6 +529,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   flex-grow: 1;
   flex-direction: column;
   max-height: 100%;
+  background: var(--gray-10);
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--gray-150);
