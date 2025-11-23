@@ -12,7 +12,7 @@
         type="primary"
         @click="chunkData"
         :loading="chunkLoading"
-        :disabled="(uploadMode === 'file' && fileList.length === 0) || (uploadMode === 'url' && !urlList.trim())"
+        :disabled="fileList.length === 0"
       >
         添加到知识库
       </a-button>
@@ -26,6 +26,7 @@
             :options="uploadModeOptions"
             size="large"
             class="source-segmented"
+            :disabled="true"
           />
         </div>
         <div class="config-controls">
@@ -101,24 +102,7 @@
         </a-upload-dragger>
       </div>
 
-
-
-      <!-- URL 输入区域 -->
-      <div class="url-input" v-if="uploadMode === 'url'">
-        <a-form layout="vertical">
-          <a-form-item label="网页链接 (每行一个URL)">
-            <a-textarea
-              v-model:value="urlList"
-              placeholder="请输入网页链接，每行一个"
-              :rows="6"
-              :disabled="chunkLoading"
-            />
-          </a-form-item>
-        </a-form>
-        <p class="url-hint">
-          支持添加网页内容，系统会自动抓取网页文本并进行分块。请确保URL格式正确且可以公开访问。
-        </p>
-      </div>
+      
     </div>
   </a-modal>
 
@@ -139,7 +123,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { message, Upload } from 'ant-design-vue';
+import { message, Upload, Tooltip } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
 import { ocrApi } from '@/apis/system_api';
@@ -269,10 +253,12 @@ const uploadModeOptions = computed(() => [
   },
   {
     value: 'url',
-    label: h('div', { class: 'segmented-option' }, [
-      h(LinkOutlined, { class: 'option-icon' }),
-      h('span', { class: 'option-text' }, '输入网址'),
-    ]),
+    label: h(Tooltip, { title: 'URL 文档上传与解析功能已禁用，出于安全考虑，当前版本仅支持文件上传' }, {
+      default: () => h('div', { class: 'segmented-option' }, [
+        h(LinkOutlined, { class: 'option-icon' }),
+        h('span', { class: 'option-text' }, '输入网址'),
+      ])
+    }),
   },
 ]);
 
@@ -280,8 +266,7 @@ const uploadModeOptions = computed(() => [
 const fileList = ref([]);
 
 
-// URL列表
-const urlList = ref('');
+// URL相关功能已移除
 
 // OCR服务健康状态
 const ocrHealthStatus = ref({
@@ -330,14 +315,7 @@ const isOcrEnabled = computed(() => {
   return chunkParams.value.enable_ocr !== 'disable';
 });
 
-watch(uploadMode, (mode, previous) => {
-  if (mode === 'url') {
-    previousOcrSelection.value = chunkParams.value.enable_ocr;
-    chunkParams.value.enable_ocr = 'disable';
-  } else if (mode === 'file' && previous === 'url') {
-    chunkParams.value.enable_ocr = previousOcrSelection.value || 'disable';
-  }
-});
+// 上传模式切换相关逻辑已移除
 
 // 计算属性：是否有PDF或图片文件
 const hasPdfOrImageFiles = computed(() => {
@@ -630,31 +608,11 @@ const chunkData = async () => {
     } finally {
       store.state.chunkLoading = false;
     }
-  } else if (uploadMode.value === 'url') {
-    const urls = urlList.value.split('\n')
-      .map(url => url.trim())
-      .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')));
-
-    if (urls.length === 0) {
-      message.error('请输入有效的网页链接（必须以http://或https://开头）');
-      return;
-    }
-
-    try {
-      store.state.chunkLoading = true;
-      success = await store.addFiles({ items: urls, contentType: 'url', params: chunkParams.value });
-    } catch (error) {
-      console.error('URL上传失败:', error);
-      message.error('URL上传失败: ' + (error.message || '未知错误'));
-    } finally {
-      store.state.chunkLoading = false;
-    }
   }
 
   if (success) {
     emit('update:visible', false);
     fileList.value = [];
-    urlList.value = '';
   }
 };
 

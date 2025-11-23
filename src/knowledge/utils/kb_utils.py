@@ -150,12 +150,8 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict
                 content_hash = calculate_content_hash(file_path)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Failed to calculate content hash for {file_path}: {exc}")
-    else:  # URL
-        file_id = f"url_{hashstr(item + str(time.time()), 6)}"
-        file_type = "url"
-        filename = f"webpage_{hashstr(item, 6)}.md"
-        item_path = item
-        content_hash = None
+    else:
+        raise ValueError("URL 元数据生成已禁用")
 
     metadata = {
         "database_id": db_id,

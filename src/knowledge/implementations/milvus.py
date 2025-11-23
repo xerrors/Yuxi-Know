@@ -8,7 +8,7 @@ from typing import Any
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
 from src.knowledge.base import KnowledgeBase
-from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
+from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils.kb_utils import (
     get_embedding_config,
     prepare_item_metadata,
@@ -247,10 +247,9 @@ class MilvusKB(KnowledgeBase):
                     params = {}
                 params["db_id"] = db_id
 
-                if content_type == "file":
-                    markdown_content = await process_file_to_markdown(item, params=params)
-                else:
-                    markdown_content = await process_url_to_markdown(item, params=params)
+                if content_type != "file":
+                    raise ValueError("URL 内容解析已禁用")
+                markdown_content = await process_file_to_markdown(item, params=params)
 
                 chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
                 logger.info(f"Split {filename} into {len(chunks)} chunks")
@@ -342,10 +341,9 @@ class MilvusKB(KnowledgeBase):
                     self._save_metadata()
 
                 # 重新解析文件为 markdown
-                if content_type == "file":
-                    markdown_content = await process_file_to_markdown(file_path, params=params)
-                else:
-                    markdown_content = await process_url_to_markdown(file_path, params=params)
+                if content_type != "file":
+                    raise ValueError("URL 内容解析已禁用")
+                markdown_content = await process_file_to_markdown(file_path, params=params)
 
                 # 先删除现有的 Milvus 数据（仅删除chunks，保留元数据）
                 await self.delete_file_chunks_only(db_id, file_id)

@@ -210,6 +210,10 @@ async def add_documents(
 
     content_type = params.get("content_type", "file")
 
+    # 禁止 URL 解析与入库
+    if content_type == "url":
+        raise HTTPException(status_code=400, detail="URL 文档上传与解析已禁用")
+
     # 安全检查：验证文件路径
     if content_type == "file":
         from src.knowledge.utils.kb_utils import validate_file_path

@@ -10,7 +10,7 @@ from pymilvus import connections, utility
 
 from src import config
 from src.knowledge.base import KnowledgeBase
-from src.knowledge.indexing import process_file_to_markdown, process_url_to_markdown
+from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
 from src.utils import hashstr, logger
 from src.utils.datetime_utils import shanghai_now
@@ -243,12 +243,11 @@ class LightRagKB(KnowledgeBase):
                 params["db_id"] = db_id
 
                 # 根据内容类型处理内容
-                if content_type == "file":
-                    markdown_content = await process_file_to_markdown(item, params=params)
-                    markdown_content_lines = markdown_content[:100].replace("\n", " ")
-                    logger.info(f"Markdown content: {markdown_content_lines}...")
-                else:  # URL
-                    markdown_content = await process_url_to_markdown(item, params=params)
+                if content_type != "file":
+                    raise ValueError("URL 内容解析已禁用")
+                markdown_content = await process_file_to_markdown(item, params=params)
+                markdown_content_lines = markdown_content[:100].replace("\n", " ")
+                logger.info(f"Markdown content: {markdown_content_lines}...")
 
                 # 使用 LightRAG 插入内容
                 await rag.ainsert(input=markdown_content, ids=file_id, file_paths=item_path)
@@ -313,12 +312,11 @@ class LightRagKB(KnowledgeBase):
                 self._save_metadata()
 
                 # 重新解析文件为 markdown
-                if content_type == "file":
-                    markdown_content = await process_file_to_markdown(file_path, params=params)
-                    markdown_content_lines = markdown_content[:100].replace("\n", " ")
-                    logger.info(f"Markdown content: {markdown_content_lines}...")
-                else:
-                    markdown_content = await process_url_to_markdown(file_path, params=params)
+                if content_type != "file":
+                    raise ValueError("URL 内容解析已禁用")
+                markdown_content = await process_file_to_markdown(file_path, params=params)
+                markdown_content_lines = markdown_content[:100].replace("\n", " ")
+                logger.info(f"Markdown content: {markdown_content_lines}...")
 
                 # 先删除现有的 LightRAG 数据（仅删除chunks，保留元数据）
                 await self.delete_file_chunks_only(db_id, file_id)

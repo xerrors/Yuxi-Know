@@ -551,24 +551,4 @@ def _replace_image_links(markdown_content: str, images: list[dict]) -> str:
 
 
 async def process_url_to_markdown(url: str, params: dict | None = None) -> str:
-    """
-    将URL转换为markdown格式
-
-    Args:
-        url: URL地址
-        params: 处理参数
-
-    Returns:
-        markdown格式内容
-    """
-    import requests
-    from bs4 import BeautifulSoup
-
-    try:
-        response = requests.get(url, timeout=30)
-        soup = BeautifulSoup(response.content, "html.parser")
-        text_content = soup.get_text()
-        return f"# {url}\n\n{text_content}"
-    except Exception as e:
-        logger.error(f"Failed to process URL {url}: {e}")
-        return f"# {url}\n\nFailed to process URL: {e}"
+    raise NotImplementedError("URL 解析功能已禁用")
