@@ -11,7 +11,7 @@
 - 开发与生产环境隔离，构建生产镜像 <Badge type="info" text="0.4" />
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - 集成 neo4j mcp （或者自己构建工具）
-- 文档解析部分的 markdown 中的图片替换为内部可访问的链接
+- 文档解析部分的 markdown 中的图片替换为内部可访问的链接 (2/4)
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -28,6 +28,7 @@
 - 新增基于知识库文件生成示例问题功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
 - 新增知识库支持文件夹/压缩包上传的功能（[#335](https://github.com/xerrors/Yuxi-Know/pull/335#issuecomment-3530976425)）
 - 新增自定义模型支持、新增 dashscope rerank/embeddings 模型的支持
+- 新增暗色模式支持并调整整体 UI（[#343](https://github.com/xerrors/Yuxi-Know/pull/343)）
 
 ### 修复
 - 修复重排序模型实际未生效的问题

@@ -22,7 +22,7 @@
           <p class="agent-description">{{ selectedAgent.description }}</p>
         </div>
 
-        <a-divider />
+        <!-- <a-divider /> -->
 
         <div v-if="selectedAgentId && configurableItems" class="config-form-content">
           <!-- 配置表单 -->
@@ -357,7 +357,8 @@ const closeSidebar = () => {
 const getConfigLabel = (key, value) => {
   // console.log(configurableItems)
   if (value.description && value.name !== key) {
-    return `${value.name}（${key}）`;
+    return `${value.name}`;
+    // return `${value.name}（${key}）`;
   }
   return key;
 };
@@ -695,7 +696,14 @@ watch(() => props.isOpen, (newVal) => {
         }
 
         .config-item {
-          margin: 30px 0;
+          background-color: var(--gray-50);
+          padding: 12px;
+          border-radius: 8px;
+          box-shadow: 0px 1px 1px var(--shadow-2);
+
+          :deep(label.form_item_model) {
+            font-weight: 600;
+          }
 
           .config-description {
             margin: 4px 0 8px 0;

@@ -30,7 +30,7 @@
           <div type="button" class="agent-nav-btn" v-if="!chatUIStore.isSidebarOpen" @click="toggleSidebar">
             <PanelLeftOpen  class="nav-btn-icon" size="18"/>
           </div>
-          <div
+                    <div
             type="button"
             class="agent-nav-btn"
             v-if="!chatUIStore.isSidebarOpen"
@@ -41,6 +41,15 @@
             <MessageCirclePlus v-else class="nav-btn-icon"  size="18"/>
             <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
           </div>
+          <div
+            v-if="!props.singleMode"
+            class="agent-nav-btn"
+            @click="openAgentModal"
+          >
+            <span class="text">{{ currentAgentName || '选择智能体' }}</span>
+            <ChevronDown size="16" class="switch-icon" />
+          </div>
+
         </div>
         <div class="header__right">
           <!-- AgentState 显示按钮 - 只在智能体支持 todo 或 files 能力时显示 -->
@@ -234,7 +243,7 @@ import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Layers } from 'lucide-vue-next';
+import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Layers, ChevronDown } from 'lucide-vue-next';
 import { handleChatError, handleValidationError } from '@/utils/errorHandler';
 import { ScrollController } from '@/utils/scrollController';
 import { AgentValidator } from '@/utils/agentValidator';
@@ -1432,9 +1441,18 @@ watch(conversations, () => {
     align-items: center;
     padding: 1rem 8px;
 
-    .header__left, .header__right, .header__center {
+    .header__left, .header__right {
       display: flex;
       align-items: center;
+    }
+
+    .switch-icon {
+      color: var(--gray-500);
+      transition: all 0.2s ease;
+    }
+
+    .agent-nav-btn:hover .switch-icon {
+      color: var(--main-500);
     }
   }
 }
