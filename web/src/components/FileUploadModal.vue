@@ -733,6 +733,6 @@ const chunkData = async () => {
 
 .zip-support-tip {
   font-size: 12px;
-  color: var(--color-warning);
+  color: var(--color-warning-500);
 }
 </style>

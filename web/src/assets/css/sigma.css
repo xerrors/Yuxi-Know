@@ -21,35 +21,35 @@
 
 /* 高亮样式 */
 .node-highlighted {
-  stroke: var(--color-error) !important;
-  stroke-width: 3px !important;
+  stroke: var(--color-error-500);
+  stroke-width: 3px;
 }
 
 .edge-highlighted {
-  stroke: var(--color-error) !important;
-  stroke-width: 3px !important;
+  stroke: var(--color-error-500);
+  stroke-width: 3px;
 }
 
 /* 选中样式 */
 .node-selected {
-  stroke: var(--color-info) !important;
-  stroke-width: 4px !important;
+  stroke: var(--color-info-500);
+  stroke-width: 4px;
 }
 
 .edge-selected {
-  stroke: var(--color-info) !important;
-  stroke-width: 4px !important;
+  stroke: var(--color-info-500);
+  stroke-width: 4px;
 }
 
 /* 悬停样式 */
 .node-focused {
-  stroke: var(--color-success) !important;
-  stroke-width: 2px !important;
+  stroke: var(--color-success-500);
+  stroke-width: 2px;
 }
 
 .edge-focused {
-  stroke: var(--color-success) !important;
-  stroke-width: 2px !important;
+  stroke: var(--color-success-500);
+  stroke-width: 2px;
 }
 
 /* 加载动画 */

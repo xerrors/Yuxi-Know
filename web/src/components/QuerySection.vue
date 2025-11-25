@@ -527,8 +527,8 @@ defineExpose({
         }
 
         .result-rerank-score {
-          background-color: var(--stats-warning-bg);
-          color: var(--stats-warning-color);
+          background-color: var(--color-warning-50);
+          color: var(--color-warning-700);
         }
       }
 

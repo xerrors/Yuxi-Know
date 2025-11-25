@@ -437,7 +437,7 @@ const handlePreview = () => {
   }
 
   .default-icon {
-    color: var(--color-warning);
+    color: var(--color-warning-500);
     font-size: 14px;
     margin-left: 4px;
   }
@@ -763,7 +763,7 @@ const handlePreview = () => {
     }
 
     .default-icon {
-      color: var(--color-warning);
+      color: var(--color-warning-500);
       font-size: 14px;
     }
   }
@@ -834,7 +834,7 @@ const handlePreview = () => {
           }
 
           .default-icon {
-            color: var(--color-warning);
+            color: var(--color-warning-500);
             font-size: 16px;
             flex-shrink: 0;
           }

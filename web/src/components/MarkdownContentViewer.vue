@@ -309,7 +309,7 @@ onUnmounted(() => {
 } */
 /*
 .chunk-item.highlighted {
-  border-color: var(--color-success);
+  border-color: var(--color-success-500);
   background: var(--main-50);
 } */
 

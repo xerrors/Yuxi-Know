@@ -734,9 +734,9 @@ watch(() => props.isOpen, (newVal) => {
           .system-prompt-display {
             min-height: 60px;
             background: var(--gray-50);
-            border: 1px solid var(--gray-200);
+            border: 1px dashed var(--gray-200);
             border-radius: 6px;
-            padding: 8px 12px;
+            padding: 6px;
             cursor: pointer;
             position: relative;
             transition: all 0.2s ease;
@@ -774,10 +774,10 @@ watch(() => props.isOpen, (newVal) => {
               top: 8px;
               right: 12px;
               font-size: 12px;
-              color: var(--gray-400);
+              color: var(--gray-800);
               opacity: 0;
               transition: opacity 0.2s ease;
-              background: rgba(255, 255, 255, 0.9);
+              background: var(--gray-0);
               padding: 2px 6px;
               border-radius: 4px;
             }
@@ -890,8 +890,8 @@ watch(() => props.isOpen, (newVal) => {
 
   .option-card {
     border: 1px solid var(--gray-300);
-    border-radius: 6px;
-    padding: 10px 12px;
+    border-radius: 8px;
+    padding: 8px 12px;
     cursor: pointer;
     transition: all 0.2s ease;
     background: var(--gray-0);
@@ -946,30 +946,6 @@ watch(() => props.isOpen, (newVal) => {
 
 // 工具选择弹窗样式
 .tools-modal {
-  :deep(.ant-modal-content) {
-    border-radius: 8px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--gray-200);
-  }
-
-  :deep(.ant-modal-header) {
-    background: var(--gray-0);
-    border-bottom: 1px solid var(--gray-200);
-    padding: 16px 20px;
-
-    .ant-modal-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
-  }
-
-  :deep(.ant-modal-body) {
-    padding: 20px;
-    background: var(--gray-0);
-  }
-
   .tools-modal-content {
     .tools-search {
       margin-bottom: 16px;
@@ -1010,7 +986,6 @@ watch(() => props.isOpen, (newVal) => {
       overflow-y: auto;
       border-radius: 8px;
       margin-bottom: 16px;
-      background: var(--gray-0);
 
       // 在小屏幕下调整为单列布局
       @media (max-width: 480px) {
@@ -1085,19 +1060,19 @@ watch(() => props.isOpen, (newVal) => {
         }
 
         &.selected {
-          background: var(--main-30);
-          // border-color: var(--main-color);
+          background: var(--main-50);
+          border-color: var(--main-200);
 
           .tool-content {
             .tool-name {
-              color: var(--main-color);
+              color: var(--main-800);
             }
             .tool-indicator {
-              color: var(--main-color);
+              color: var(--main-800);
             }
           }
           .tool-description {
-            color: var(--gray-700);
+            color: var(--gray-900);
           }
 
         }

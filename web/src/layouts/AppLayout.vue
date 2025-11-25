@@ -4,7 +4,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
 } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, Settings, BarChart3, CircleCheck } from 'lucide-vue-next';
+import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
@@ -188,19 +188,10 @@ const mainList = [{
 
       <!-- 用户信息组件 -->
       <div class="nav-item user-info">
-        <a-tooltip placement="right">
-          <template #title>用户信息</template>
-          <UserInfoComponent />
-        </a-tooltip>
+        <UserInfoComponent />
       </div>
 
-      <RouterLink class="nav-item setting" to="/setting" active-class="active">
-        <a-tooltip placement="right">
-          <template #title>设置</template>
-          <Settings />
-        </a-tooltip>
-      </RouterLink>
-    </div>
+      </div>
     <div class="header-mobile">
       <RouterLink to="/agent" class="nav-item" active-class="active">对话</RouterLink>
       <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
@@ -347,7 +338,7 @@ div.header, #app-router-view {
     }
 
     &.warning {
-      color: var(--color-error);
+      color: var(--color-error-500);
     }
 
     &:hover {
@@ -376,7 +367,7 @@ div.header, #app-router-view {
         margin-top: 4px;
 
         .star-icon {
-          color: var(--color-warning);
+          color: var(--color-warning-500);
           font-size: 12px;
           margin-right: 2px;
         }
@@ -415,13 +406,8 @@ div.header, #app-router-view {
         }
       }
     }
-
-    &.setting {
-      margin: 8px 0;
-
-      &:hover {
-        cursor: pointer;
-      }
+    &.user-info {
+      margin-bottom: 8px;
     }
   }
 
@@ -537,7 +523,7 @@ div.header, #app-router-view {
       font-size: 15px;
     }
 
-    &.github, &.setting {
+    &.github {
       padding: 8px 12px;
 
       .icon {
@@ -548,9 +534,7 @@ div.header, #app-router-view {
       &.active {
         color: var(--main-color);
       }
-    }
 
-    &.github {
       a {
         display: flex;
         align-items: center;
@@ -562,7 +546,7 @@ div.header, #app-router-view {
         margin-left: 6px;
 
         .star-icon {
-          color: var(--color-warning);
+          color: var(--color-warning-500);
           font-size: 14px;
           margin-right: 2px;
         }

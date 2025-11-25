@@ -341,13 +341,13 @@ const emitRefresh = () => {
   transition: all 0.15s ease;
 
   &.completed {
-    background: var(--stats-success-bg);
-    color: var(--stats-success-color);
+    background: var(--color-success-50);
+    color: var(--color-success-700);
   }
 
   &.in_progress {
-    background: var(--stats-warning-bg);
-    color: var(--stats-warning-color);
+    background: var(--color-warning-50);
+    color: var(--color-warning-700);
   }
 
   &.pending {

@@ -560,27 +560,24 @@ async def get_agent_analytics(
 
             agent_tool_usage.append({"agent_id": agent_id, "tool_usage_count": tool_usage_count})
 
-        # 表现最佳的智能体（综合评分）
+        # 表现最佳的智能体（按对话数排序）
         top_performing_agents = []
         for i, (agent_id, conv_count) in enumerate(agents):
-            # 综合评分 = 对话数权重 + 满意度权重
+            # 获取满意度数据
             satisfaction_data = next(
                 (s for s in agent_satisfaction if s["agent_id"] == agent_id), {"satisfaction_rate": 0}
             )
 
-            score = conv_count * 0.3 + satisfaction_data["satisfaction_rate"] * 0.7
-
             top_performing_agents.append(
                 {
                     "agent_id": agent_id,
-                    "score": round(score, 2),
                     "conversation_count": conv_count,
                     "satisfaction_rate": satisfaction_data["satisfaction_rate"],
                 }
             )
 
-        # 按评分排序，取前5名
-        top_performing_agents.sort(key=lambda x: x["score"], reverse=True)
+        # 按对话数排序，取前5名
+        top_performing_agents.sort(key=lambda x: x["conversation_count"], reverse=True)
         top_performing_agents = top_performing_agents[:5]
 
         return AgentAnalytics(

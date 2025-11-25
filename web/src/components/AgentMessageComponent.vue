@@ -34,10 +34,12 @@
       <div v-else-if="parsedData.reasoning_content"  class="empty-block"></div>
 
       <!-- 错误提示块 -->
-      <div v-if="message.error_type" class="error-hint">
-        <span v-if="message.error_type === 'interrupted'">回答生成已中断</span>
+      <div v-if="displayError" class="error-hint">
+        <span v-if="getErrorMessage">{{ getErrorMessage }}</span>
+        <span v-else-if="message.error_type === 'interrupted'">回答生成已中断</span>
         <span v-else-if="message.error_type === 'unexpect'">生成过程中出现异常</span>
         <span v-else-if="message.error_type === 'content_guard_blocked'">检测到敏感内容，已中断输出</span>
+        <span v-else>{{ message.error_type || '未知错误' }}</span>
       </div>
 
       <div v-if="validToolCalls && validToolCalls.length > 0" class="tool-calls-container">
@@ -152,6 +154,38 @@ const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
 // 推理面板展开状态
 const reasoningActiveKey = ref(['hide']);
 const expandedToolCalls = ref(new Set()); // 展开的工具调用集合
+
+// 错误消息处理
+const displayError = computed(() => {
+  // 简化错误判断：只检查明确的错误类型标识
+  return !!(props.message.error_type || props.message.extra_metadata?.error_type);
+});
+
+const getErrorMessage = computed(() => {
+  // 优先使用直接的 error_message 字段
+  if (props.message.error_message) {
+    return props.message.error_message;
+  }
+
+  // 其次从 extra_metadata 中获取具体的错误信息
+  if (props.message.extra_metadata?.error_message) {
+    return props.message.extra_metadata.error_message;
+  }
+
+  // 对于已知的错误类型，返回默认提示
+  switch (props.message.error_type) {
+    case 'interrupted':
+      return '回答生成已中断';
+    case 'content_guard_blocked':
+      return '检测到敏感内容，已中断输出';
+    case 'unexpect':
+      return '生成过程中出现异常';
+    case 'agent_error':
+      return '智能体获取失败';
+    default:
+      return null;
+  }
+});
 
 // 引入智能体 store
 const agentStore = useAgentStore();
@@ -297,12 +331,12 @@ const toggleToolCall = (toolCallId) => {
   }
 
   .err-msg {
-    color: var(--color-error);
+    color: var(--color-error-500);
     border: 1px solid currentColor;
     padding: 0.5rem 1rem;
     border-radius: 8px;
     text-align: left;
-    background: var(--color-error-light);
+    background: var(--color-error-50);
     margin-bottom: 10px;
     cursor: pointer;
   }
@@ -374,9 +408,9 @@ const toggleToolCall = (toolCallId) => {
     display: flex;
     align-items: center;
     gap: 8px;
-    background-color: var(--color-error-light);
+    background-color: var(--color-error-50);
     // border: 1px solid #f87171;
-    color: var(--color-error);
+    color: var(--color-error-500);
     span {
       line-height: 1.5;
     }
@@ -457,15 +491,15 @@ const toggleToolCall = (toolCallId) => {
       }
 
       .tool-loader.tool-success {
-        color: var(--color-success);
+        color: var(--color-success-500);
       }
 
       .tool-loader.tool-error {
-        color: var(--color-error);
+        color: var(--color-error-500);
       }
 
       .tool-loader.tool-loading {
-        color: var(--color-info);
+        color: var(--color-info-500);
       }
     }
 
@@ -528,7 +562,7 @@ const toggleToolCall = (toolCallId) => {
 }
 
 .retry-link {
-  color: var(--color-info);
+  color: var(--color-info-500);
   cursor: pointer;
   margin-left: 4px;
 
@@ -539,10 +573,10 @@ const toggleToolCall = (toolCallId) => {
 
 .ant-btn-icon-only {
   &:has(.anticon-stop) {
-    background-color: var(--color-error) !important;
+    background-color: var(--color-error-500) !important;
 
     &:hover {
-      background-color: var(--chart-error-light) !important;
+      background-color: var(--color-error-100) !important;
     }
   }
 }

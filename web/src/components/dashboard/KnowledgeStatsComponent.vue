@@ -7,7 +7,7 @@
           <a-statistic
             title="知识库总数"
             :value="knowledgeStats?.total_databases || 0"
-            :value-style="{ color: 'var(--chart-info)' }"
+            :value-style="{ color: 'var(--color-info-500)' }"
             suffix="个"
           />
         </a-col>
@@ -15,7 +15,7 @@
           <a-statistic
             title="文件总数"
             :value="knowledgeStats?.total_files || 0"
-            :value-style="{ color: 'var(--chart-success)' }"
+            :value-style="{ color: 'var(--color-success-500)' }"
             suffix="个"
           />
         </a-col>
@@ -23,7 +23,7 @@
           <a-statistic
             title="存储容量"
             :value="formattedStorageSize"
-            :value-style="{ color: 'var(--chart-warning)' }"
+            :value-style="{ color: 'var(--color-warning-500)' }"
           />
         </a-col>
       </a-row>
@@ -103,7 +103,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
-import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
+import { getColorByIndex, getColorPalette } from '@/utils/chartColors'
 import { useThemeStore } from '@/stores/theme'
 
 // CSS 变量解析工具函数
@@ -356,7 +356,7 @@ const initFileTypeChart = () => {
         data: [
           { name: '暂无数据', value: 1 }
         ],
-        color: [getCSSVariable('--chart-info-lighter')]
+        color: [getCSSVariable('--color-info-500')]
       }]
     }
 

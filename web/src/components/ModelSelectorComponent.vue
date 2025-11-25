@@ -180,9 +180,9 @@ const handleSelectModel = async (provider, name) => {
 
 <style lang="less" scoped>
 // 变量定义
-@status-success: var(--color-success);
-@status-error: var(--color-error);
-@status-warning: var(--chart-warning);
+@status-success: var(--color-success-500);
+@status-error: var(--color-error-500);
+@status-warning: var(--color-warning-500);
 @status-default: var(--gray-500);
 @border-radius: 8px;
 @scrollbar-width: 6px;

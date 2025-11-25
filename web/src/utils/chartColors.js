@@ -21,28 +21,27 @@ const buildColorPalette = () => {
       return v && v.trim() ? v.trim() : fallback
     }
 
-    // Base chart colors
+    // Base chart colors - using new color system
     const baseVars = [
-      ['--chart-primary', '#3996ae'],
-      ['--chart-success', '#52c41a'],
-      ['--chart-warning', '#faad14'],
-      ['--chart-error', '#f5222d'],
-      ['--chart-secondary', '#722ed1'],
-      ['--chart-accent', '#13c2c2'],
+      ['--main-500', '#3996ae'],
+      ['--color-success-500', '#52c41a'],
+      ['--color-warning-500', '#faad14'],
+      ['--color-error-500', '#ff4d4f'],
+      ['--color-accent-500', '#13c2c2'],
     ]
 
     // Extended palette colors
     const paletteVars = [
-      ['--chart-palette-1', '#3996ae'],
-      ['--chart-palette-2', '#028ea0'],
-      ['--chart-palette-3', '#00b8a9'],
-      ['--chart-palette-4', '#f2c94c'],
-      ['--chart-palette-5', '#eb5757'],
-      ['--chart-palette-6', '#2f80ed'],
-      ['--chart-palette-7', '#9b51e0'],
-      ['--chart-palette-8', '#56ccf2'],
-      ['--chart-palette-9', '#6fcf97'],
-      ['--chart-palette-10', '#333333'],
+      ['--chart-palette-1', '#265C96'],
+      ['--chart-palette-2', '#009485'],
+      ['--chart-palette-3', '#E8A035'],
+      ['--chart-palette-4', '#D64B55'],
+      ['--chart-palette-5', '#7D54C4'],
+      ['--chart-palette-6', '#2D9CDB'],
+      ['--chart-palette-7', '#F28B30'],
+      ['--chart-palette-8', '#65C466'],
+      ['--chart-palette-9', '#C2589E'],
+      ['--chart-palette-10', '#4F4F4F'],
     ]
 
     const baseColors = baseVars.map(([n, f]) => pick(n, f))
@@ -59,8 +58,8 @@ const buildColorPalette = () => {
     console.warn('Failed to build color palette from CSS variables, using fallback:', e)
     // Fallback palette
     colorPalette = [
-      '#3996ae', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#13c2c2',
-      '#fa8c16', '#1890ff', '#95de64', '#69c0ff'
+      '#3996ae', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2',
+      '#265C96', '#009485', '#E8A035', '#D64B55', '#7D54C4'
     ]
     isInitialized = true
   }
@@ -89,33 +88,6 @@ export const getColorPalette = () => {
     buildColorPalette()
   }
   return [...colorPalette] // Return a copy
-}
-
-/**
- * Get specific chart colors by name
- * 根据名称获取特定的图表颜色
- * @param {string} colorName - Color name (primary, success, warning, error, secondary, accent)
- * @returns {string} Color value
- */
-export const getChartColor = (colorName) => {
-  const colorMap = {
-    primary: '#3996ae',
-    success: '#52c41a',
-    warning: '#faad14',
-    error: '#f5222d',
-    secondary: '#722ed1',
-    accent: '#13c2c2'
-  }
-
-  try {
-    const root = document.documentElement
-    const styles = getComputedStyle(root)
-    const cssVarName = `--chart-${colorName}`
-    const value = styles.getPropertyValue(cssVarName)
-    return value && value.trim() ? value.trim() : colorMap[colorName] || colorMap.primary
-  } catch (e) {
-    return colorMap[colorName] || colorMap.primary
-  }
 }
 
 /**
