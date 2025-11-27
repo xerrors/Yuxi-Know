@@ -5,13 +5,16 @@ MinerU 文档解析器
 """
 
 import os
+import tempfile
+import base64
 import time
 from pathlib import Path
 
 import requests
 
+from src.knowledge.indexing import _process_zip_file
 from src.plugins.document_processor_base import BaseDocumentProcessor, DocumentParserException
-from src.utils import logger
+from src.utils import logger, hashstr
 
 
 class MinerUParser(BaseDocumentProcessor):
@@ -126,11 +129,16 @@ class MinerUParser(BaseDocumentProcessor):
             "parse_method": params.get("parse_method", "auto"),
             # 固定返回 markdown 格式
             "return_md": True,
+            # 添加图片解析支持
+            "response_format_zip": True,
+            "return_images": True,
         }
 
         # vlm-http-client 后端需要 server_url
         if data["backend"] == "vlm-http-client":
-            data["server_url"] = params.get("server_url")
+            mineru_vl_server = os.environ.get("MINERU_VL_SERVER")
+            assert mineru_vl_server, "MINERU_VL_SERVER 环境变量未配置"
+            data["server_url"] = mineru_vl_server
 
         try:
             start_time = time.time()
@@ -170,8 +178,26 @@ class MinerUParser(BaseDocumentProcessor):
             try:
                 result = response.json()
 
-                # 简化响应处理 - 专注于获取 markdown 内容
-                if isinstance(result, dict) and "results" in result:
+                # 检查ZIP格式响应
+                if isinstance(result, dict) and "zip_data" in result:
+
+                    zip_data = result["zip_data"]
+                    if isinstance(zip_data, str):
+                        zip_data = base64.b64decode(zip_data)
+
+                    # 保存到临时文件并处理
+                    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
+                        tmp_zip.write(zip_data)
+                        tmp_zip.flush()
+
+                        try:
+                            processed = _process_zip_file(tmp_zip.name, params.get("db_id"))
+                            text = processed["markdown_content"]
+                        finally:
+                            os.unlink(tmp_zip.name)
+
+                # 标准JSON格式响应
+                elif isinstance(result, dict) and "results" in result:
                     file_result = list(result["results"].values())[0]
                     text = file_result.get("md") or file_result.get("markdown") or file_result.get("md_content", "")
                 else:
