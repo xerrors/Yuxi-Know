@@ -6,7 +6,6 @@ MinerU 文档解析器
 
 import os
 import tempfile
-import base64
 import time
 from pathlib import Path
 
@@ -14,7 +13,7 @@ import requests
 
 from src.knowledge.indexing import _process_zip_file
 from src.plugins.document_processor_base import BaseDocumentProcessor, DocumentParserException
-from src.utils import logger, hashstr
+from src.utils import logger
 
 
 class MinerUParser(BaseDocumentProcessor):
@@ -160,6 +159,8 @@ class MinerUParser(BaseDocumentProcessor):
                 )
 
             # 检查响应状态
+            logger.debug(f"MinerU 响应状态: {response.status_code}, Content-Type: {response.headers.get('content-type', 'unknown')}")
+
             if response.status_code != 200:
                 error_detail = "未知错误"
                 try:
@@ -168,6 +169,7 @@ class MinerUParser(BaseDocumentProcessor):
                 except Exception:
                     error_detail = response.text or f"HTTP {response.status_code}"
 
+                logger.error(f"MinerU HTTP错误 {response.status_code}: {error_detail}")
                 raise DocumentParserException(
                     f"MinerU 处理失败: {error_detail}",
                     self.get_service_name(),
@@ -176,36 +178,22 @@ class MinerUParser(BaseDocumentProcessor):
 
             # 解析响应
             try:
-                result = response.json()
+                # 直接从响应内容获取 ZIP 数据
+                zip_data = response.content
 
-                # 检查ZIP格式响应
-                if isinstance(result, dict) and "zip_data" in result:
+                # 保存到临时文件并处理
+                with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
+                    tmp_zip.write(zip_data)
+                    tmp_zip.flush()
 
-                    zip_data = result["zip_data"]
-                    if isinstance(zip_data, str):
-                        zip_data = base64.b64decode(zip_data)
-
-                    # 保存到临时文件并处理
-                    with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_zip:
-                        tmp_zip.write(zip_data)
-                        tmp_zip.flush()
-
-                        try:
-                            processed = _process_zip_file(tmp_zip.name, params.get("db_id"))
-                            text = processed["markdown_content"]
-                        finally:
-                            os.unlink(tmp_zip.name)
-
-                # 标准JSON格式响应
-                elif isinstance(result, dict) and "results" in result:
-                    file_result = list(result["results"].values())[0]
-                    text = file_result.get("md") or file_result.get("markdown") or file_result.get("md_content", "")
-                else:
-                    # 降级处理
-                    text = str(result) if result else ""
+                    try:
+                        processed = _process_zip_file(tmp_zip.name, params.get("db_id"))
+                        text = processed["markdown_content"]
+                    finally:
+                        os.unlink(tmp_zip.name)
 
                 if not text:
-                    logger.error(f"MinerU 未返回任何文本内容: {str(result)[:500]}")
+                    logger.error("MinerU 未返回任何文本内容")
                     raise DocumentParserException(
                         "MinerU 未返回任何文本内容",
                         self.get_service_name(),
