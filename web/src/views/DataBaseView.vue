@@ -669,7 +669,7 @@ onMounted(() => {
     .kb-type-card {
       border: 2px solid var(--gray-150);
       border-radius: 12px;
-      padding: 20px;
+      padding: 16px;
       cursor: pointer;
       transition: all 0.3s ease;
       background: var(--gray-0);
@@ -680,62 +680,24 @@ onMounted(() => {
         border-color: var(--main-color);
       }
 
-      // 为不同知识库类型设置不同的悬停颜色
-      &:nth-child(1):hover {
+      // 为不同知识库类型设置不同的悬停颜色与主题色
+      &:nth-child(1):hover,
+      &:nth-child(1).active {
         border-color: var(--color-accent-100);
+        .type-icon { color: var(--color-accent-500); }
       }
 
-      &:nth-child(2):hover {
+      &:nth-child(2):hover,
+      &:nth-child(2).active {
         border-color: var(--color-warning-100);
+        .type-icon { color: var(--color-warning-500); }
       }
 
-      &:nth-child(3):hover {
+      &:nth-child(3):hover,
+      &:nth-child(3).active {
         border-color: var(--color-error-100);
+        .type-icon { color: var(--color-error-500); }
       }
-
-      &.active {
-        border-color: var(--main-color);
-        background: rgba(24, 144, 255, 0.05);
-
-        .type-icon {
-          color: var(--main-color);
-        }
-      }
-
-      // 为不同知识库类型设置不同的主题色
-      &:nth-child(1) {
-        &.active {
-          border-color: var(--color-accent-100);
-          background: rgba(114, 46, 209, 0.05);
-
-          .type-icon {
-            color: var(--color-accent-500);
-          }
-        }
-      }
-
-      &:nth-child(2) {
-        &.active {
-          border-color: var(--color-warning-100);
-          background: rgba(250, 140, 22, 0.05);
-
-          .type-icon {
-            color: var(--color-warning-500);
-          }
-        }
-      }
-
-      &:nth-child(3) {
-        &.active {
-          border-color: var(--color-error-100);
-          background: rgba(245, 34, 45, 0.05);
-
-          .type-icon {
-            color: var(--color-error-500);
-          }
-        }
-      }
-
       .card-header {
         display: flex;
         align-items: center;
@@ -760,7 +722,7 @@ onMounted(() => {
         font-size: 13px;
         color: var(--gray-600);
         line-height: 1.5;
-        margin-bottom: 12px;
+        margin-bottom: 0;
         // min-height: 40px;
       }
     }
