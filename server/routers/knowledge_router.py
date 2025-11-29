@@ -8,7 +8,7 @@ from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
-from starlette.responses import FileResponse as StarletteFileResponse
+from starlette.responses import FileResponse as StarletteFileResponse, StreamingResponse
 
 from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
@@ -17,9 +17,11 @@ from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash, merge_processing_params
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
+from src.storage.minio.client import aupload_file_to_minio, get_minio_client
 from src.utils import hashstr, logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
 
 # =============================================================================
 # === 数据库管理分组 ===
@@ -277,6 +279,7 @@ async def add_documents(
 
         item_type = "URL" if content_type == "url" else "文件"
         failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])
+        success_items = [_p for _p in processed_items if _p.get("status") == "done"]
         summary = {
             "db_id": db_id,
             "item_type": item_type,
@@ -284,6 +287,15 @@ async def add_documents(
             "failed": failed_count,
         }
         message = f"{item_type}处理完成，失败 {failed_count} 个" if failed_count else f"{item_type}处理完成"
+
+        for success_item in success_items:
+            # 使用异步上传到minio的对应知识库,同名文件会被覆盖
+            async with aiofiles.open(success_item["path"], "rb") as f:
+                file_bytes = await f.read()
+            # 上传的bucket名为ref-{refdb},refdb中的_替换为-
+            refdb = db_id.replace("_", "-")
+            url = await aupload_file_to_minio(f"ref-{refdb}", success_item["filename"], file_bytes, success_item["file_type"])
+            logger.info(f"上传文件成功: {url}")
         await context.set_result(summary | {"items": processed_items})
         await context.set_progress(100.0, message)
         return summary | {"items": processed_items}
@@ -354,6 +366,10 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
     """删除文档"""
     logger.debug(f"DELETE document {doc_id} info in {db_id}")
     try:
+        file_meta_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
+        file_name = file_meta_info.get("meta", {}).get("filename")
+        minio_client = get_minio_client()
+        await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
         await knowledge_base.delete_file(db_id, doc_id)
         return {"message": "删除成功"}
     except Exception as e:
@@ -469,6 +485,7 @@ async def rechunks_documents(
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}/download")
 async def download_document(db_id: str, doc_id: str, request: Request, current_user: User = Depends(get_admin_user)):
+    # TODO: 可以考虑修改为minio下载，将文件相关逻辑完全迁移到minio
     """下载原始文件"""
     logger.debug(f"Download document {doc_id} from {db_id}")
     try:
@@ -542,9 +559,29 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
         }
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
-        # 创建自定义FileResponse，避免文件名编码问题
-        response = StarletteFileResponse(path=normalized_path, media_type=media_type)
+        minio_client = get_minio_client()
+        minio_response = await minio_client.adownload_response(
+            bucket_name="ref-" + db_id.replace("_", "-"),
+            object_name=filename,
+        )
 
+        # 创建流式生成器
+        async def minio_stream():
+            try:
+                while True:
+                    chunk = await asyncio.to_thread(minio_response.read, 8192)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                minio_response.close()
+                minio_response.release_conn()
+
+        # 创建StreamingResponse
+        response = StreamingResponse(
+            minio_stream(),
+            media_type=media_type,
+        )
         # 正确处理中文文件名的HTTP头部设置
         # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码
         try:
@@ -1041,7 +1078,12 @@ async def upload_file(
         upload_dir = os.path.join(config.save_dir, "database", "uploads")
 
     basename, ext = os.path.splitext(file.filename)
-    filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
+    # TODO:
+    #   如果知识库中的文件多了，上传了内容修改过的同名文件应当把旧的文件删除掉
+    #   否则会保存两份相同的文档，建议固定salt，上传逻辑是：
+    #   若上传了同名文件时且hash相同则报错，不同则直接替换同名文件
+    filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt="fixed_salt")}{ext}".lower()
+
     file_path = os.path.join(upload_dir, filename)
 
     # 在线程池中执行同步文件系统操作，避免阻塞事件循环
@@ -1049,15 +1091,13 @@ async def upload_file(
 
     file_bytes = await file.read()
 
-    # 在线程池中执行计算密集型操作，避免阻塞事件循环
-    content_hash = await asyncio.to_thread(calculate_content_hash, file_bytes)
+    content_hash = await calculate_content_hash(file_bytes)
 
-    # 在线程池中执行同步数据库查询，避免阻塞事件循环
-    file_exists = await asyncio.to_thread(knowledge_base.file_existed_in_db, db_id, content_hash)
+    file_exists = await knowledge_base.file_existed_in_db(db_id, content_hash)
     if file_exists:
         raise HTTPException(
             status_code=409,
-            detail="数据库中已经存在了相同文件，File with the same content already exists in this database",
+            detail="数据库中已经存在了相同内容文件，File with the same content already exists in this database",
         )
 
     # 使用异步文件写入，避免阻塞事件循环

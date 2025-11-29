@@ -351,7 +351,33 @@ class KnowledgeBaseManager:
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
 
-    def file_existed_in_db(self, db_id: str | None, content_hash: str | None) -> bool:
+    async def file_name_existed_in_db(self, db_id: str | None, file_name: str | None) -> bool:
+        """检查指定数据库中是否存在同名的文件"""
+        if not db_id or not file_name:
+            return False
+        try:
+            kb_instance = self._get_kb_for_database(db_id)
+        except KBNotFoundError:
+            return False
+
+        for file_info in kb_instance.files_meta.values():
+            if file_info.get("database_id") != db_id:
+                continue
+            if file_info.get("status") == "failed":
+                continue
+            if file_info.get("file_name") == file_name:
+                return True
+
+        return False
+
+    async def update_file(self, db_id: str, region_file_id: str,file_name:str,params: dict | None = None) -> dict:
+        """对单个文件执行更新"""
+        kb_instance = self._get_kb_for_database(db_id)
+        await kb_instance.delete_file(db_id, region_file_id)
+        data_list =  await kb_instance.add_content(db_id,[file_name], params or {})
+        return data_list[0]
+
+    async def file_existed_in_db(self, db_id: str | None,content_hash: str | None) -> bool:
         """检查指定数据库中是否存在相同内容哈希的文件"""
         if not db_id or not content_hash:
             return False

@@ -26,7 +26,7 @@ def is_text_pdf(pdf_path):
     return text_ratio > 0.5
 
 
-def hashstr(input_string, length=None, with_salt=False):
+def hashstr(input_string, length=None, with_salt=False, salt=None):
     """生成字符串的哈希值
     Args:
         input_string: 输入字符串
@@ -41,7 +41,8 @@ def hashstr(input_string, length=None, with_salt=False):
         encoded_string = str(input_string).encode("utf-8", errors="replace")
 
     if with_salt:
-        salt = str(time.time())
+        if not salt:
+            salt = str(time.time())
         encoded_string = (encoded_string.decode("utf-8") + salt).encode("utf-8")
 
     hash = hashlib.md5(encoded_string).hexdigest()

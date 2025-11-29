@@ -3,13 +3,17 @@ MinIO 存储客户端
 简化的 MinIO 对象存储操作
 """
 
+import asyncio
 import json
 import os
 import uuid
+from datetime import timedelta
 from io import BytesIO
 
 from minio import Minio
 from minio.error import S3Error
+from urllib3 import BaseHTTPResponse
+
 from src.utils import logger
 
 
@@ -17,6 +21,9 @@ class StorageError(Exception):
     """存储相关异常基类"""
 
     pass
+
+class StorageUploadError(StorageError):
+    """存储相关异常基类"""
 
 
 class UploadResult:
@@ -73,8 +80,8 @@ class MinIOClient:
         """确保存储桶存在"""
         try:
             created = False
-            if not self.client.bucket_exists(bucket_name):
-                self.client.make_bucket(bucket_name)
+            if not self.client.bucket_exists(bucket_name=bucket_name):
+                self.client.make_bucket(bucket_name=bucket_name)
                 created = True
                 logger.info(f"存储桶 '{bucket_name}' 已创建")
 
@@ -95,7 +102,7 @@ class MinIOClient:
     ) -> UploadResult:
         """上传文件到 MinIO"""
         try:
-            self.ensure_bucket_exists(bucket_name)
+            self.ensure_bucket_exists(bucket_name=bucket_name)
 
             data_stream = BytesIO(data)
             result = self.client.put_object(
@@ -115,6 +122,16 @@ class MinIOClient:
             error_msg = f"上传文件 '{object_name}' 失败: {e}"
             logger.error(error_msg)
             raise StorageError(error_msg)
+
+    async def aupload_file(self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream") -> UploadResult:
+        result = await asyncio.to_thread(
+            self.upload_file,
+            bucket_name=bucket_name,
+            object_name=object_name,
+            data=data,
+            content_type=content_type
+        )
+        return result
 
     def upload_file_from_path(self, bucket_name: str, object_name: str, file_path: str) -> UploadResult:
         """从文件路径上传文件"""
@@ -152,7 +169,7 @@ class MinIOClient:
     def download_file(self, bucket_name: str, object_name: str) -> bytes:
         """下载文件"""
         try:
-            response = self.client.get_object(bucket_name, object_name)
+            response = self.client.get_object(bucket_name=bucket_name, object_name=object_name)
             data = response.read()
             response.close()
             logger.info(f"成功下载 '{object_name}' 从存储桶 '{bucket_name}'")
@@ -163,10 +180,55 @@ class MinIOClient:
                 raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
             raise StorageError(f"下载文件失败: {e}")
 
+    async def adownload_response(self, bucket_name: str, object_name: str) -> BaseHTTPResponse:
+        """异步下载文件"""
+        try:
+            response = await asyncio.to_thread(
+                self.client.get_object,
+                bucket_name=bucket_name,
+                object_name=object_name,
+            )
+            return response
+
+        except S3Error as e:
+            if "NoSuchKey" in str(e):
+                raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
+            raise StorageError(f"下载文件失败: {e}")
+
+
+    async def adownload_file(self, bucket_name: str, object_name: str) -> bytes:
+        """异步下载文件"""
+        try:
+            response = await asyncio.to_thread(
+                self.client.get_object,
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
+            data = await asyncio.to_thread(response.read)
+            response.close()
+            logger.info(f"成功下载 '{object_name}' 从存储桶 '{bucket_name}'")
+            return data
+
+        except S3Error as e:
+            if "NoSuchKey" in str(e):
+                raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
+            raise StorageError(f"下载文件失败: {e}")
+
+    def get_presigned_url(self, bucket_name: str, object_name: str,days=7) -> str:
+        """将minio放在内网访问，外部通过返回代理链接访问"""
+        res_url = self.client.get_presigned_url(method="GET",
+                                                bucket_name=bucket_name,
+                                                object_name=object_name,
+                                                expires=timedelta(days=days))
+        return res_url
+
     def delete_file(self, bucket_name: str, object_name: str) -> bool:
         """删除文件"""
         try:
-            self.client.remove_object(bucket_name, object_name)
+            self.client.remove_object(
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
             logger.info(f"成功删除 '{object_name}' 从存储桶 '{bucket_name}'")
             return True
 
@@ -176,10 +238,22 @@ class MinIOClient:
                 return False
             raise StorageError(f"删除文件失败: {e}")
 
+    async def adelete_file(self, bucket_name: str, object_name: str) -> bool:
+        """删除文件"""
+        result = await asyncio.to_thread(
+            self.delete_file,
+            bucket_name=bucket_name,
+            object_name=object_name,
+        )
+        return result
+
     def file_exists(self, bucket_name: str, object_name: str) -> bool:
         """检查文件是否存在"""
         try:
-            self.client.stat_object(bucket_name, object_name)
+            self.client.stat_object(
+                bucket_name=bucket_name,
+                object_name=object_name
+            )
             return True
         except S3Error as e:
             if "NoSuchKey" in str(e):
@@ -210,7 +284,7 @@ class MinIOClient:
         }
 
         try:
-            self.client.set_bucket_policy(bucket_name, json.dumps(policy))
+            self.client.set_bucket_policy(bucket_name=bucket_name, policy=json.dumps(policy))
         except S3Error as e:
             logger.warning(f"设置存储桶 '{bucket_name}' 公共读取策略失败: {e}")
             raise StorageError(f"无法设置存储桶公共访问策略: {e}")
@@ -244,4 +318,29 @@ def upload_image_to_minio(bucket_name: str, data: bytes, file_extension: str = "
     result = client.upload_file(
         bucket_name=bucket_name, object_name=file_name, data=data, content_type=f"image/{file_extension}"
     )
-    return result.url
+    res_url = client.get_presigned_url(
+        bucket_name=bucket_name,
+        object_name=file_name,
+        days=7
+    )
+    return res_url
+
+async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, file_extension: str) -> str:
+    """
+    通过字节上传文件到 MinIO的异步接口，根据输入的file_extension确定文件格式，并返回资源url
+
+    Args:
+        bucket_name: bucket_name
+        file_name : filename
+        data: 文件字节流
+        file_extension: 输入的拓展名
+    Returns:
+        str: 文件访问 URL
+    """
+    client = get_minio_client()
+    # 根据扩展名猜测 content_type
+    content_type = client._guess_content_type(file_extension)
+    # 上传文件
+    result = await client.aupload_file(bucket_name,file_name, data, content_type)
+    res_url = client.get_presigned_url(bucket_name, file_name, days=7)
+    return res_url
