@@ -108,6 +108,113 @@ async def get_graph(self):
 
 工具的启用状态和描述由配置文件或环境变量决定，当依赖缺失时会被中间件自动忽略，从而避免在图中加载不可用能力。MCP Server 的接入方式保持不变，只需在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 中填入服务地址与 `transport` 类型，如需更多范式可参阅 LangChain 官方文档。
 
+### MCP 服务器配置方式
+
+系统支持四种 MCP 服务器配置方式，可根据具体场景选择：
+
+#### 1. 远程 HTTP 服务器
+
+```python
+MCP_SERVERS = {
+    "sequentialthinking": {
+        "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
+        "transport": "streamable_http",
+    }
+}
+```
+
+**特点**：
+- 通过 HTTP 远程访问，无需本地安装，适合公开可用的 MCP 服务
+- 启动速度快，无需本地依赖
+
+#### 2. 使用 npx 运行 Node.js 包
+
+```python
+MCP_SERVERS = {
+    "mcp_server_chart": {
+        "command": "npx",
+        "args": ["-y", "@antv/mcp-server-chart"],
+        "transport": "stdio"
+    },
+}
+```
+
+**特点**：
+- 使用 npx 直接运行 Node.js 包，`-y` 参数自动下载并运行指定包
+- 适合 Node.js 生态的 MCP 服务，需要确保 npx 可以使用
+
+#### 3. 使用 uvx 运行 Python 包
+
+```python
+MCP_SERVERS = {
+    "mysql-mcp-server": {
+        "command": "uvx",
+        "args": ["mysql_mcp_server"],
+        "env": {
+            "MYSQL_DATABASE": "your_database",
+            "MYSQL_HOST": "localhost",
+            "MYSQL_PASSWORD": "your_password",
+            "MYSQL_PORT": "3306",
+            "MYSQL_USER": "your_username"
+        },
+        "transport": "stdio"
+    }
+}
+```
+
+**特点**：
+- 使用 uvx 运行已发布的 Python 包，自动管理虚拟环境和依赖
+- 适合 PyPI 上已发布的 MCP 服务
+
+#### 4. 使用 uv 运行本地仓库
+
+```python
+MCP_SERVERS = {
+    "arxiv-mcp-server": {
+        "command": "uv",
+        "args": [
+            "tool",
+            "run",
+            "arxiv-mcp-server",
+            "--storage-path", "src/agents/mcp_repos/arxiv-mcp-server"
+        ],
+        "transport": "stdio"
+    }
+}
+```
+
+**特点**：
+- 直接运行本地 git 仓库中的 MCP 服务
+- 加载速度快，支持热重载，适合开发调试和自定义 MCP 服务
+- 需要先 git clone 对应仓库到指定路径
+
+### 配置参数说明
+
+- `url`: 远程 HTTP 服务器的 URL（仅 streamable_http 传输）
+- `command`: 启动 MCP 服务的命令
+- `args`: 启动参数列表
+- `env`: 环境变量配置，用于数据库连接等敏感信息
+- `transport`: 传输协议，支持 `stdio`（本地）和 `streamable_http`（远程）
+
+### 动态工具加载
+
+系统支持动态加载 MCP 工具：
+
+```python
+from src.agents.common.mcp import get_mcp_tools, add_mcp_server
+
+# 获取特定服务器的工具
+tools = await get_mcp_tools("sequentialthinking")
+
+# 动态添加新的 MCP 服务器
+add_mcp_server("custom-server", {
+    "url": "https://your-mcp-server.com/mcp",
+    "transport": "streamable_http"
+})
+
+# 获取所有 MCP 工具
+all_tools = await get_all_mcp_tools()
+```
 ### MySQL 数据库
 
 设置数据库连接时，在 `.env` 中提供以下字段：

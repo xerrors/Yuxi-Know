@@ -32,7 +32,6 @@ dependencies = [
     "networkx>=3.5",
     "openai>=1.109",
     "opencv-python-headless>=4.11.0.86",
-    "paddleocr>=3.3",
     "pyjwt>=2.8.0",
     "pymilvus>=2.5.8",
     "pymupdf>=1.25.5",
