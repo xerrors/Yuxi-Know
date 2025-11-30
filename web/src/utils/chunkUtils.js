@@ -16,7 +16,7 @@ export function findOverlap(str1, str2) {
   let overlap = '';
 
   // 从最长可能的重叠开始检查
-  for (let i = maxOverlap; i > 0; i--) {
+  for (let i = maxOverlap; i > 10; i--) {
     const endStr1 = str1.slice(-i);
     const startStr2 = str2.slice(0, i);
 
@@ -63,7 +63,11 @@ export function mergeChunks(chunks) {
 
       if (newContent.length > 0) {
         const startOffset = currentContent.length;
-        currentContent += newContent;
+        if (overlap.length > 0) {
+          currentContent += newContent;
+        } else {
+          currentContent += `\n${newContent}`;
+        }
         merged.push({
           ...chunk,
           startOffset,
