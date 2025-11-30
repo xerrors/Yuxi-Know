@@ -66,6 +66,12 @@
       <a-form-item label="知识库描述" name="description">
         <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
       </a-form-item>
+      
+      <a-form-item label="自动生成问题" name="auto_generate_questions">
+        <a-switch v-model:checked="editForm.auto_generate_questions" checked-children="开启" un-checked-children="关闭" />
+        <span style="margin-left: 8px; font-size: 12px; color: var(--gray-500);">上传文件后自动生成测试问题</span>
+      </a-form-item>
+
       <!-- 仅对 LightRAG 类型显示 LLM 配置 -->
       <a-form-item v-if="database.kb_type === 'lightrag'" label="语言模型 (LLM)" name="llm_info">
         <ModelSelectorComponent
@@ -144,6 +150,7 @@ const editFormRef = ref(null);
 const editForm = reactive({
   name: '',
   description: '',
+  auto_generate_questions: false,
   llm_info: {
     provider: '',
     model_name: ''
@@ -157,6 +164,8 @@ const rules = {
 const showEditModal = () => {
   editForm.name = database.value.name || '';
   editForm.description = database.value.description || '';
+  editForm.auto_generate_questions = database.value.additional_params?.auto_generate_questions || false;
+  
   // 如果是 LightRAG 类型，加载当前的 LLM 配置
   if (database.value.kb_type === 'lightrag') {
     const llmInfo = database.value.llm_info || {};
@@ -170,7 +179,10 @@ const handleEditSubmit = () => {
   editFormRef.value.validate().then(async () => {
     const updateData = {
       name: editForm.name,
-      description: editForm.description
+      description: editForm.description,
+      additional_params: {
+        auto_generate_questions: editForm.auto_generate_questions
+      }
     };
 
     // 如果是 LightRAG 类型，包含 llm_info

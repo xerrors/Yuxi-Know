@@ -246,12 +246,16 @@ class KnowledgeBaseManager:
         db_id = db_info["db_id"]
 
         async with self._metadata_lock:
+            # 准备 additional_params，包含 auto_generate_questions
+            saved_params = kwargs.copy()
+            saved_params["auto_generate_questions"] = False
+
             self.global_databases_meta[db_id] = {
                 "name": database_name,
                 "description": description,
                 "kb_type": kb_type,
                 "created_at": utc_isoformat(),
-                "additional_params": kwargs.copy(),
+                "additional_params": saved_params,
             }
             self._save_global_metadata()
 
@@ -303,9 +307,13 @@ class KnowledgeBaseManager:
             # 添加全局元数据中的additional_params信息
             if db_info and db_id in self.global_databases_meta:
                 global_meta = self.global_databases_meta[db_id]
-                additional_params = global_meta.get("additional_params", {})
-                if additional_params:
-                    db_info["additional_params"] = additional_params
+                additional_params = global_meta.get("additional_params", {}).copy()
+
+                # 确保 auto_generate_questions 存在，默认为 False
+                if "auto_generate_questions" not in additional_params:
+                    additional_params["auto_generate_questions"] = False
+
+                db_info["additional_params"] = additional_params
 
             return db_info
         except KBNotFoundError:
@@ -371,7 +379,9 @@ class KnowledgeBaseManager:
 
         return False
 
-    async def update_database(self, db_id: str, name: str, description: str, llm_info: dict = None) -> dict:
+    async def update_database(
+        self, db_id: str, name: str, description: str, llm_info: dict = None, additional_params: dict | None = None
+    ) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)
         result = kb_instance.update_database(db_id, name, description, llm_info)
@@ -380,6 +390,16 @@ class KnowledgeBaseManager:
             if db_id in self.global_databases_meta:
                 self.global_databases_meta[db_id]["name"] = name
                 self.global_databases_meta[db_id]["description"] = description
+
+                # 合并现有的 additional_params 和新的 additional_params
+                existing_additional_params = self.global_databases_meta[db_id].get("additional_params", {})
+                if additional_params:
+                    existing_additional_params.update(additional_params)
+                self.global_databases_meta[db_id]["additional_params"] = existing_additional_params
+
+                # 清理旧的 top-level key (如果存在)
+                self.global_databases_meta[db_id].pop("auto_generate_questions", None)
+
                 self._save_global_metadata()
 
         return result
