@@ -180,7 +180,7 @@
             <p>
               <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
               <span class="created-time-inline" v-if="database.created_at">
-                • {{ formatCreatedTime(database.created_at) }}
+                {{ formatCreatedTime(database.created_at) }}
               </span>
             </p>
           </div>
@@ -891,13 +891,12 @@ onMounted(() => {
     color: var(--gray-600);
     overflow: hidden;
     display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
+    line-clamp: 1;
+    -webkit-line-clamp: 1;
     -webkit-box-orient: vertical;
     text-overflow: ellipsis;
     margin-bottom: 12px;
     font-size: 13px;
-    line-height: 1.5;
     font-weight: 400;
     flex: 1;
   }
