@@ -124,57 +124,57 @@ const getSatisfactionClass = () => {
 
       &.primary {
         .stat-icon {
-          background-color: var(--stats-primary-bg);
-          color: var(--stats-primary-color);
+          background-color: var(--color-primary-50);
+          color: var(--main-color);
         }
       }
 
       &.success {
         .stat-icon {
-          background-color: var(--stats-success-bg);
-          color: var(--stats-success-color);
+          background-color: var(--color-success-50);
+          color: var(--color-success-700);
         }
       }
 
       &.info {
         .stat-icon {
-          background-color: var(--stats-info-bg);
-          color: var(--stats-info-color);
+          background-color: var(--color-info-50);
+          color: var(--color-info-700);
         }
       }
 
       &.warning {
         .stat-icon {
-          background-color: var(--stats-warning-bg);
-          color: var(--stats-warning-color);
+          background-color: var(--color-warning-50);
+          color: var(--color-warning-700);
         }
       }
 
       &.secondary {
         .stat-icon {
-          background-color: var(--stats-secondary-bg);
-          color: var(--stats-secondary-color);
+          background-color: var(--color-accent-50);
+          color: var(--color-accent-700);
         }
       }
 
       &.satisfaction-high {
         .stat-icon {
-          background-color: var(--stats-success-bg);
-          color: var(--stats-success-color);
+          background-color: var(--color-success-50);
+          color: var(--color-success-700);
         }
       }
 
       &.satisfaction-medium {
         .stat-icon {
-          background-color: var(--stats-warning-bg);
-          color: var(--stats-warning-color);
+          background-color: var(--color-warning-50);
+          color: var(--color-warning-700);
         }
       }
 
       &.satisfaction-low {
         .stat-icon {
-          background-color: var(--stats-error-bg);
-          color: var(--stats-error-color);
+          background-color: var(--color-error-50);
+          color: var(--color-error-700);
         }
       }
 
@@ -226,11 +226,11 @@ const getSatisfactionClass = () => {
             height: 14px;
 
             &.up {
-              color: var(--stats-success-color);
+              color: var(--color-success-700);
             }
 
             &.down {
-              color: var(--stats-error-color);
+              color: var(--color-error-700);
             }
           }
 

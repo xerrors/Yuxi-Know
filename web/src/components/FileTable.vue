@@ -121,10 +121,10 @@
         </a-button>
         <span v-else-if="column.key === 'type'" :class="['span-type', text]">{{ text?.toUpperCase() }}</span>
         <div v-else-if="column.key === 'status'" style="display: flex; align-items: center; justify-content: flex-end;">
-          <CheckCircleFilled v-if="text === 'done'" style="color: var(--color-success);"/>
-          <CloseCircleFilled v-else-if="text === 'failed'" style="color: var(--color-error);"/>
-          <HourglassFilled v-else-if="text === 'processing'" style="color: var(--color-info);"/>
-          <ClockCircleFilled v-else-if="text === 'waiting'" style="color: var(--color-warning);"/>
+          <CheckCircleFilled v-if="text === 'done'" style="color: var(--color-success-500);"/>
+          <CloseCircleFilled v-else-if="text === 'failed'" style="color: var(--color-error-500);"/>
+          <HourglassFilled v-else-if="text === 'processing'" style="color: var(--color-info-500);"/>
+          <ClockCircleFilled v-else-if="text === 'waiting'" style="color: var(--color-warning-500);"/>
         </div>
 
         <a-tooltip v-else-if="column.key === 'created_at'" :title="formatRelativeTime(text)" placement="left">
@@ -670,11 +670,11 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 }
 
 .my-table .rechunk-btn:hover {
-  color: var(--color-warning);
+  color: var(--color-warning-500);
 }
 
 .my-table .del-btn:hover {
-  color: var(--error-color);
+  color: var(--color-error-500);
 }
 
 .my-table .del-btn:disabled {

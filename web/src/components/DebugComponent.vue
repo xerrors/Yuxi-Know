@@ -549,7 +549,7 @@ const printAgentConfig = async () => {
 }
 
 .error {
-  color: var(--error-color);
+  color: var(--color-error-500);
 }
 
 .log-container {

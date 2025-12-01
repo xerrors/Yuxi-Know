@@ -11,7 +11,7 @@
     <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="createDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
 
       <!-- 知识库类型选择 -->
-      <h3>知识库类型<span style="color: var(--error-color)">*</span></h3>
+      <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
       <div class="kb-type-cards">
         <div
           v-for="(typeInfo, typeKey) in supportedKbTypes"
@@ -25,9 +25,6 @@
             <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
           </div>
           <div class="card-description">{{ typeInfo.description }}</div>
-          <div class="card-features">
-            <span class="feature-tag">{{ getKbTypeFeature(typeKey) }}</span>
-          </div>
         </div>
       </div>
 
@@ -41,7 +38,7 @@
         />
       </div> -->
 
-      <h3>知识库名称<span style="color: var(--error-color)">*</span></h3>
+      <h3>知识库名称<span style="color: var(--color-error-500)">*</span></h3>
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" size="large" />
 
       <h3>嵌入模型</h3>
@@ -398,14 +395,6 @@ const getKbTypeColor = (type) => {
   return colors[type] || 'blue'
 }
 
-const getKbTypeFeature = (type) => {
-  const features = {
-    lightrag: '图结构索引',
-    chroma: '轻量向量',
-    milvus: '生产级部署'
-  }
-  return features[type] || ''
-}
 
 // 格式化创建时间
 const formatCreatedTime = (createdAt) => {
@@ -612,6 +601,10 @@ onMounted(() => {
       justify-content: space-between;
       margin-bottom: 16px;
 
+      &:last-child {
+        margin-bottom: 0;
+      }
+
       .reranker-title {
         display: flex;
         align-items: center;
@@ -653,6 +646,10 @@ onMounted(() => {
           margin-top: 6px;
           font-size: 12px;
           color: var(--gray-500);
+
+          &:last-child {
+            margin-top: 0;
+          }
         }
       }
     }
@@ -672,7 +669,7 @@ onMounted(() => {
     .kb-type-card {
       border: 2px solid var(--gray-150);
       border-radius: 12px;
-      padding: 20px;
+      padding: 16px;
       cursor: pointer;
       transition: all 0.3s ease;
       background: var(--gray-0);
@@ -683,82 +680,24 @@ onMounted(() => {
         border-color: var(--main-color);
       }
 
-      // 为不同知识库类型设置不同的悬停颜色
-      &:nth-child(1):hover {
-        border-color: var(--chart-secondary-light);
+      // 为不同知识库类型设置不同的悬停颜色与主题色
+      &:nth-child(1):hover,
+      &:nth-child(1).active {
+        border-color: var(--color-accent-100);
+        .type-icon { color: var(--color-accent-500); }
       }
 
-      &:nth-child(2):hover {
-        border-color: var(--chart-warning-light);
+      &:nth-child(2):hover,
+      &:nth-child(2).active {
+        border-color: var(--color-warning-100);
+        .type-icon { color: var(--color-warning-500); }
       }
 
-      &:nth-child(3):hover {
-        border-color: var(--chart-error-light);
+      &:nth-child(3):hover,
+      &:nth-child(3).active {
+        border-color: var(--color-error-100);
+        .type-icon { color: var(--color-error-500); }
       }
-
-      &.active {
-        border-color: var(--main-color);
-        background: rgba(24, 144, 255, 0.05);
-
-        .type-icon {
-          color: var(--main-color);
-        }
-
-        .feature-tag {
-          background: rgba(24, 144, 255, 0.1);
-          color: var(--main-color);
-        }
-      }
-
-      // 为不同知识库类型设置不同的主题色
-      &:nth-child(1) {
-        &.active {
-          border-color: var(--chart-secondary-light);
-          background: rgba(114, 46, 209, 0.05);
-
-          .type-icon {
-            color: var(--chart-secondary);
-          }
-
-          .feature-tag {
-            background: rgba(114, 46, 209, 0.1);
-            color: var(--chart-secondary);
-          }
-        }
-      }
-
-      &:nth-child(2) {
-        &.active {
-          border-color: var(--chart-warning-light);
-          background: rgba(250, 140, 22, 0.05);
-
-          .type-icon {
-            color: var(--chart-warning);
-          }
-
-          .feature-tag {
-            background: rgba(250, 140, 22, 0.1);
-            color: var(--chart-warning);
-          }
-        }
-      }
-
-      &:nth-child(3) {
-        &.active {
-          border-color: var(--chart-error-light);
-          background: rgba(245, 34, 45, 0.05);
-
-          .type-icon {
-            color: var(--chart-error);
-          }
-
-          .feature-tag {
-            background: rgba(245, 34, 45, 0.1);
-            color: var(--chart-error);
-          }
-        }
-      }
-
       .card-header {
         display: flex;
         align-items: center;
@@ -783,20 +722,8 @@ onMounted(() => {
         font-size: 13px;
         color: var(--gray-600);
         line-height: 1.5;
-        margin-bottom: 12px;
+        margin-bottom: 0;
         // min-height: 40px;
-      }
-
-      .card-features {
-        .feature-tag {
-          display: inline-block;
-          padding: 4px 8px;
-          background: rgba(24, 144, 255, 0.08);
-          color: var(--main-color);
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 500;
-        }
       }
     }
   }
@@ -920,7 +847,7 @@ onMounted(() => {
       align-items: center;
       background: var(--main-30);
       border-radius: 12px;
-      border: 1px solid var(--gray-200);
+      border: 1px solid var(--gray-150);
       color: var(--main-color);
       position: relative;
     }

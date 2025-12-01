@@ -645,8 +645,8 @@ onMounted(() => {
 
               &.ant-btn-dangerous:hover {
                 background: var(--gray-25);
-                border-color: var(--color-error);
-                color: var(--color-error);
+                border-color: var(--color-error-500);
+                color: var(--color-error-500);
               }
             }
           }
@@ -698,7 +698,7 @@ onMounted(() => {
     }
 
     .error-text {
-      color: var(--color-error);
+      color: var(--color-error-500);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;

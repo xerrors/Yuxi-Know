@@ -393,16 +393,16 @@ const openLink = (url) => {
   display: inline-block;
 
   &.loading {
-    background-color: var(--color-warning);
+    background-color: var(--color-warning-500);
     animation: pulse 1.5s infinite ease-in-out;
   }
 
   &.open {
-    background-color: var(--color-success);
+    background-color: var(--color-success-500);
   }
 
   &.closed {
-    background-color: var(--color-error);
+    background-color: var(--color-error-500);
   }
 }
 

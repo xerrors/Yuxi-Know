@@ -7,14 +7,14 @@
           <a-statistic
             title="总调用次数"
             :value="toolStats?.total_calls || 0"
-            :value-style="{ color: 'var(--chart-info)' }"
+            :value-style="{ color: 'var(--color-info-500)' }"
           />
         </a-col>
         <a-col :span="8">
           <a-statistic
             title="失败调用"
             :value="toolStats?.failed_calls || 0"
-            :value-style="{ color: 'var(--chart-error)' }"
+            :value-style="{ color: 'var(--color-error-500)' }"
             suffix="次"
           />
         </a-col>
@@ -24,8 +24,8 @@
             :value="toolStats?.success_rate || 0"
             suffix="%"
             :value-style="{
-              color: (toolStats?.success_rate || 0) >= 90 ? 'var(--chart-success)' :
-                     (toolStats?.success_rate || 0) >= 70 ? 'var(--chart-warning)' : 'var(--chart-error)'
+              color: (toolStats?.success_rate || 0) >= 90 ? 'var(--color-success-500)' :
+                     (toolStats?.success_rate || 0) >= 70 ? 'var(--color-warning-500)' : 'var(--color-error-500)'
             }"
           />
         </a-col>
@@ -78,7 +78,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
-import { getColorByIndex, getChartColor, getColorPalette } from '@/utils/chartColors'
+import { getColorByIndex, getColorPalette } from '@/utils/chartColors'
 import { useThemeStore } from '@/stores/theme'
 
 // CSS 变量解析工具函数
@@ -205,14 +205,14 @@ const initToolsChart = () => {
       type: 'bar',
       data: data.map(item => item.count),
       itemStyle: {
-        color: getChartColor('primary'),
+        color: getColorByIndex(0),
         borderRadius: [0, 4, 4, 0]
       },
       emphasis: {
         itemStyle: {
-          color: getChartColor('primary'),
+          color: getColorByIndex(0),
           shadowBlur: 10,
-          shadowColor: getCSSVariable('--chart-info-shadow')
+          shadowColor: getCSSVariable('--color-info-50')
         }
       }
     }]
@@ -331,15 +331,3 @@ defineExpose({
   cleanup
 })
 </script>
-
-<style scoped lang="less">
-
-// ToolStatsComponent 特有的样式
-.error-analysis {
-  h4 {
-    margin-bottom: 16px;
-    color: var(--gray-1000);
-    font-weight: 500;
-  }
-}
-</style>

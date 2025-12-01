@@ -2,15 +2,7 @@
   <div class="chat-sidebar" :class="{'sidebar-open': chatUIStore.isSidebarOpen, 'no-transition': isInitialRender}">
     <div class="sidebar-content">
       <div class="sidebar-header">
-        <div class="header-title" v-if="singleMode">{{ selectedAgentName }}</div>
-        <div
-          v-else
-          class="agent-selector"
-          @click="openAgentModal"
-        >
-          <span class="agent-name">{{ selectedAgentName || '选择智能体' }}</span>
-          <ChevronDown size="16" class="switch-icon" />
-        </div>
+        <div class="header-title">{{ branding.name }}</div>
         <div class="header-actions">
           <div class="toggle-sidebar nav-btn" v-if="chatUIStore.isSidebarOpen" @click="toggleCollapse">
             <PanelLeftClose size="20" color="var(--gray-800)"/>
@@ -73,12 +65,17 @@ import {
   MoreOutlined
 } from '@ant-design/icons-vue';
 import { message, Modal } from 'ant-design-vue';
-import { PanelLeftClose, MessageSquarePlus, ChevronDown, LoaderCircle } from 'lucide-vue-next';
+import { PanelLeftClose, MessageSquarePlus, LoaderCircle } from 'lucide-vue-next';
 import dayjs, { parseToShanghai } from '@/utils/time';
 import { useChatUIStore } from '@/stores/chatUI';
+import { useInfoStore } from '@/stores/info';
+import { storeToRefs } from 'pinia';
 
 // 使用 chatUI store
 const chatUIStore = useChatUIStore();
+const infoStore = useInfoStore();
+
+const { branding } = storeToRefs(infoStore);
 
 const props = defineProps({
   currentAgentId: {
@@ -113,13 +110,7 @@ const props = defineProps({
 
 const emit = defineEmits(['create-chat', 'select-chat', 'delete-chat', 'rename-chat', 'toggle-sidebar', 'open-agent-modal']);
 
-const selectedAgentName = computed(() => {
-  if (props.selectedAgentId && props.agents && props.agents.length > 0) {
-    const agent = props.agents.find(a => a.id === props.selectedAgentId);
-    return agent ? agent.name : '';
-  }
-  return '';
-});
+
 
 const groupedChats = computed(() => {
   const groups = {
@@ -221,16 +212,14 @@ const toggleCollapse = () => {
   emit('toggle-sidebar');
 };
 
-const openAgentModal = () => {
-  emit('open-agent-modal');
-};
+
 </script>
 
 <style lang="less" scoped>
 .chat-sidebar {
   width: 0;
   height: 100%;
-  background-color: var(--gray-25);
+  background-color: var(--gray-0);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -280,7 +269,7 @@ const openAgentModal = () => {
     flex-shrink: 0;
 
     .header-title {
-      font-weight: 500;
+      font-weight: 600;
       font-size: 16px;
       color: var(--gray-900);
       white-space: nowrap;
@@ -479,34 +468,5 @@ const openAgentModal = () => {
   }
 }
 
-// 智能体选择器样式
-.agent-selector {
-  cursor: pointer;
-  font-size: 15px;
-  color: var(--gray-900);
-  transition: color 0.2s ease;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 
-  .agent-name {
-    transition: color 0.2s ease;
-  }
-
-  .switch-icon {
-    color: var(--gray-500);
-    transition: all 0.2s ease;
-  }
-
-  &:hover {
-    .agent-name {
-      color: var(--main-500);
-    }
-    .switch-icon {
-      color: var(--main-500);
-      transform: translateY(1px);
-    }
-  }
-}
 </style>

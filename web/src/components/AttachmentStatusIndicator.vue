@@ -286,7 +286,7 @@ const handleRemoveAttachment = (fileId) => {
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        color: var(--color-error);
+        color: var(--color-error-500);
       }
 
       &:disabled {

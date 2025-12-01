@@ -304,10 +304,10 @@ watch(() => props.agentId, () => {
 }
 
 .reason-content {
-  background: var(--color-warning-light);
+  background: var(--color-warning-50);
   padding: 10px;
   border-radius: 6px;
-  border-left: 3px solid var(--color-warning);
+  border-left: 3px solid var(--color-warning-500);
   font-size: 13px;
   line-height: 1.4;
   color: var(--gray-800);

@@ -491,8 +491,8 @@ function canCancel(task) {
 }
 
 .task-card-error {
-  background: var(--color-error-light);
-  color: var(--color-error);
+  background: var(--color-error-50);
+  color: var(--color-error-500);
 }
 
 .task-card-footer {
@@ -535,7 +535,7 @@ function canCancel(task) {
 }
 
 .completion-badge--success {
-  color: var(--color-success);
+  color: var(--color-success-500);
 }
 
 .completion-badge--success .completion-icon {
@@ -545,12 +545,12 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--stats-success-bg);
+  background: var(--color-success-50);
   font-size: 14px;
 }
 
 .completion-badge--failed {
-  color: var(--color-error);
+  color: var(--color-error-500);
 }
 
 .completion-badge--failed .completion-icon {
@@ -560,7 +560,7 @@ function canCancel(task) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--stats-error-bg);
+  background: var(--color-error-50);
   font-size: 14px;
 }
 

@@ -716,10 +716,10 @@ onUnmounted(() => {
 .error-message {
   margin-top: 16px;
   padding: 10px 12px;
-  background-color: var(--stats-error-bg);
-  border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
+  background-color: var(--color-error-50);
+  border: 1px solid color-mix(in srgb, var(--color-error-500) 25%, transparent);
   border-radius: 8px;
-  color: var(--stats-error-color);
+  color: var(--color-error-700);
   font-size: 14px;
 }
 
@@ -808,10 +808,10 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   padding: 12px 20px;
-  background: linear-gradient(135deg, var(--color-error), var(--chart-error-light));
+  background: linear-gradient(135deg, var(--color-error-500), var(--color-error-100));
   color: var(--gray-0);
   z-index: 1000;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-error) 30%, transparent);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-error-500) 30%, transparent);
 
   .alert-content {
     display: flex;
