@@ -8,7 +8,7 @@ from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
-from starlette.responses import FileResponse as StarletteFileResponse
+from starlette.responses import StreamingResponse
 
 from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
@@ -17,9 +17,46 @@ from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash, merge_processing_params
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
+from src.storage.minio.client import aupload_file_to_minio, get_minio_client
 from src.utils import hashstr, logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+media_types = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".json": "application/json",
+    ".csv": "text/csv",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".zip": "application/zip",
+    ".rar": "application/x-rar-compressed",
+    ".7z": "application/x-7z-compressed",
+    ".tar": "application/x-tar",
+    ".gz": "application/gzip",
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".xml": "text/xml",
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".py": "text/x-python",
+    ".java": "text/x-java-source",
+    ".cpp": "text/x-c++src",
+    ".c": "text/x-csrc",
+    ".h": "text/x-chdr",
+    ".hpp": "text/x-c++hdr",
+}
 
 # =============================================================================
 # === 数据库管理分组 ===
@@ -179,12 +216,6 @@ async def export_database(
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Exported file not found.")
 
-        media_types = {
-            "csv": "text/csv",
-            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "md": "text/markdown",
-            "txt": "text/plain",
-        }
         media_type = media_types.get(format, "application/octet-stream")
 
         return FileResponse(path=file_path, filename=os.path.basename(file_path), media_type=media_type)
@@ -277,6 +308,7 @@ async def add_documents(
 
         item_type = "URL" if content_type == "url" else "文件"
         failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])
+        success_items = [_p for _p in processed_items if _p.get("status") == "done"]
         summary = {
             "db_id": db_id,
             "item_type": item_type,
@@ -284,6 +316,17 @@ async def add_documents(
             "failed": failed_count,
         }
         message = f"{item_type}处理完成，失败 {failed_count} 个" if failed_count else f"{item_type}处理完成"
+
+        for success_item in success_items:
+            # 使用异步上传到minio的对应知识库,同名文件会被覆盖
+            async with aiofiles.open(success_item["path"], "rb") as f:
+                file_bytes = await f.read()
+            # 上传的bucket名为ref-{refdb},refdb中的_替换为-
+            refdb = db_id.replace("_", "-")
+            url = await aupload_file_to_minio(
+                f"ref-{refdb}", success_item["filename"], file_bytes, success_item["file_type"]
+            )
+            logger.info(f"上传文件成功: {url}")
         await context.set_result(summary | {"items": processed_items})
         await context.set_progress(100.0, message)
         return summary | {"items": processed_items}
@@ -354,6 +397,10 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
     """删除文档"""
     logger.debug(f"DELETE document {doc_id} info in {db_id}")
     try:
+        file_meta_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
+        file_name = file_meta_info.get("meta", {}).get("filename")
+        minio_client = get_minio_client()
+        await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
         await knowledge_base.delete_file(db_id, doc_id)
         return {"message": "删除成功"}
     except Exception as e:
@@ -473,24 +520,6 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
     logger.debug(f"Download document {doc_id} from {db_id}")
     try:
         file_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
-        if not file_info:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        file_path = file_info.get("meta", {}).get("path")
-        if not file_path:
-            raise HTTPException(status_code=404, detail="File path not found in metadata")
-
-        # 安全检查：验证文件路径
-        from src.knowledge.utils.kb_utils import validate_file_path
-
-        try:
-            normalized_path = validate_file_path(file_path, db_id)
-        except ValueError as e:
-            raise HTTPException(status_code=403, detail=str(e))
-
-        if not os.path.exists(normalized_path):
-            raise HTTPException(status_code=404, detail=f"File not found on disk: {file_info=}")
-
         # 获取文件扩展名和MIME类型，解码URL编码的文件名
         filename = file_info.get("meta", {}).get("filename", "file")
         logger.debug(f"Original filename from database: {filename}")
@@ -505,46 +534,31 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
 
         _, ext = os.path.splitext(decoded_filename)
 
-        media_types = {
-            ".pdf": "application/pdf",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".doc": "application/msword",
-            ".txt": "text/plain",
-            ".md": "text/markdown",
-            ".json": "application/json",
-            ".csv": "text/csv",
-            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".xls": "application/vnd.ms-excel",
-            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            ".ppt": "application/vnd.ms-powerpoint",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".bmp": "image/bmp",
-            ".svg": "image/svg+xml",
-            ".zip": "application/zip",
-            ".rar": "application/x-rar-compressed",
-            ".7z": "application/x-7z-compressed",
-            ".tar": "application/x-tar",
-            ".gz": "application/gzip",
-            ".html": "text/html",
-            ".htm": "text/html",
-            ".xml": "text/xml",
-            ".css": "text/css",
-            ".js": "application/javascript",
-            ".py": "text/x-python",
-            ".java": "text/x-java-source",
-            ".cpp": "text/x-c++src",
-            ".c": "text/x-csrc",
-            ".h": "text/x-chdr",
-            ".hpp": "text/x-c++hdr",
-        }
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
-        # 创建自定义FileResponse，避免文件名编码问题
-        response = StarletteFileResponse(path=normalized_path, media_type=media_type)
+        minio_client = get_minio_client()
+        minio_response = await minio_client.adownload_response(
+            bucket_name="ref-" + db_id.replace("_", "-"),
+            object_name=filename,
+        )
 
+        # 创建流式生成器
+        async def minio_stream():
+            try:
+                while True:
+                    chunk = await asyncio.to_thread(minio_response.read, 8192)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                minio_response.close()
+                minio_response.release_conn()
+
+        # 创建StreamingResponse
+        response = StreamingResponse(
+            minio_stream(),
+            media_type=media_type,
+        )
         # 正确处理中文文件名的HTTP头部设置
         # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码
         try:
@@ -1041,7 +1055,10 @@ async def upload_file(
         upload_dir = os.path.join(config.save_dir, "database", "uploads")
 
     basename, ext = os.path.splitext(file.filename)
-    filename = f"{basename}_{hashstr(basename, 4, with_salt=True)}{ext}".lower()
+    # TODO:
+    # 后续修改为遇到同名文件则在上传区域提示，是否删除旧文件，同时 filename name 也就不用添加 hash 了
+    filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt='fixed_salt')}{ext}".lower()
+
     file_path = os.path.join(upload_dir, filename)
 
     # 在线程池中执行同步文件系统操作，避免阻塞事件循环
@@ -1049,15 +1066,13 @@ async def upload_file(
 
     file_bytes = await file.read()
 
-    # 在线程池中执行计算密集型操作，避免阻塞事件循环
-    content_hash = await asyncio.to_thread(calculate_content_hash, file_bytes)
+    content_hash = await calculate_content_hash(file_bytes)
 
-    # 在线程池中执行同步数据库查询，避免阻塞事件循环
-    file_exists = await asyncio.to_thread(knowledge_base.file_existed_in_db, db_id, content_hash)
+    file_exists = await knowledge_base.file_existed_in_db(db_id, content_hash)
     if file_exists:
         raise HTTPException(
             status_code=409,
-            detail="数据库中已经存在了相同文件，File with the same content already exists in this database",
+            detail="数据库中已经存在了相同内容文件，File with the same content already exists in this database",
         )
 
     # 使用异步文件写入，避免阻塞事件循环

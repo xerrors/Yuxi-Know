@@ -226,7 +226,7 @@ class MilvusKB(KnowledgeBase):
         processed_items_info = []
 
         for item in items:
-            metadata = prepare_item_metadata(item, content_type, db_id, params=params)
+            metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
 

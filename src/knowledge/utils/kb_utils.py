@@ -3,6 +3,7 @@ import os
 import time
 from pathlib import Path
 
+import aiofiles
 from langchain_text_splitters import MarkdownTextSplitter
 
 from src import config
@@ -89,7 +90,7 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
             chunks.append(
                 {
                     "id": f"{file_id}_chunk_{chunk_index}",
-                    "content": chunk_content.strip(),
+                    "content": chunk_content,  # .strip(),
                     "file_id": file_id,
                     "filename": filename,
                     "chunk_index": chunk_index,
@@ -102,7 +103,7 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
     return chunks
 
 
-def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str] | Path) -> str:
+async def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str] | Path) -> str:
     """
     计算文件内容的 SHA-256 哈希值。
 
@@ -120,15 +121,18 @@ def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str] | Pa
 
     if isinstance(data, (str, os.PathLike, Path)):
         path = Path(data)
-        with path.open("rb") as file_handle:
-            for chunk in iter(lambda: file_handle.read(8192), b""):
+        async with aiofiles.open(path, "rb") as file_handle:
+            chunk = await file_handle.read(8192)
+            while chunk:
                 sha256.update(chunk)
+                chunk = await file_handle.read(8192)
+
         return sha256.hexdigest()
 
     raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")
 
 
-def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
+async def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
     """
     准备文件或URL的元数据
 
@@ -147,7 +151,7 @@ def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict
         content_hash = None
         try:
             if file_path.exists():
-                content_hash = calculate_content_hash(file_path)
+                content_hash = await calculate_content_hash(file_path)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Failed to calculate content hash for {file_path}: {exc}")
     else:

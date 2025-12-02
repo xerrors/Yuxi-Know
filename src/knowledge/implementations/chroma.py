@@ -173,7 +173,7 @@ class ChromaKB(KnowledgeBase):
 
         return chunks
 
-    async def add_content(self, db_id: str, items: list[str], params: dict | None) -> list[dict]:
+    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
@@ -187,7 +187,7 @@ class ChromaKB(KnowledgeBase):
 
         for item in items:
             # 准备文件元数据
-            metadata = prepare_item_metadata(item, content_type, db_id, params=params)
+            metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
             file_id = metadata["file_id"]
             filename = metadata["filename"]
 
