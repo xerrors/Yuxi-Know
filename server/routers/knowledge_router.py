@@ -516,29 +516,10 @@ async def rechunks_documents(
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}/download")
 async def download_document(db_id: str, doc_id: str, request: Request, current_user: User = Depends(get_admin_user)):
-    # TODO: 可以考虑修改为minio下载，将文件相关逻辑完全迁移到minio
     """下载原始文件"""
     logger.debug(f"Download document {doc_id} from {db_id}")
     try:
         file_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
-        if not file_info:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        file_path = file_info.get("meta", {}).get("path")
-        if not file_path:
-            raise HTTPException(status_code=404, detail="File path not found in metadata")
-
-        # 安全检查：验证文件路径
-        from src.knowledge.utils.kb_utils import validate_file_path
-
-        try:
-            normalized_path = validate_file_path(file_path, db_id)
-        except ValueError as e:
-            raise HTTPException(status_code=403, detail=str(e))
-
-        if not os.path.exists(normalized_path):
-            raise HTTPException(status_code=404, detail=f"File not found on disk: {file_info=}")
-
         # 获取文件扩展名和MIME类型，解码URL编码的文件名
         filename = file_info.get("meta", {}).get("filename", "file")
         logger.debug(f"Original filename from database: {filename}")
@@ -1075,9 +1056,7 @@ async def upload_file(
 
     basename, ext = os.path.splitext(file.filename)
     # TODO:
-    #   如果知识库中的文件多了，上传了内容修改过的同名文件应当把旧的文件删除掉
-    #   否则会保存两份相同的文档，建议固定salt，上传逻辑是：
-    #   若上传了同名文件时且hash相同则报错，不同则直接替换同名文件
+    # 后续修改为遇到同名文件则在上传区域提示，是否删除旧文件，同时 filename name 也就不用添加 hash 了
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt='fixed_salt')}{ext}".lower()
 
     file_path = os.path.join(upload_dir, filename)

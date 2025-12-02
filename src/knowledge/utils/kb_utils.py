@@ -90,7 +90,7 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
             chunks.append(
                 {
                     "id": f"{file_id}_chunk_{chunk_index}",
-                    "content": chunk_content, # .strip(),
+                    "content": chunk_content,  # .strip(),
                     "file_id": file_id,
                     "filename": filename,
                     "chunk_index": chunk_index,

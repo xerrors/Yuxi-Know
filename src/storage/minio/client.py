@@ -10,10 +10,10 @@ import uuid
 from datetime import timedelta
 from io import BytesIO
 
-from minio import Minio
-from minio.error import S3Error
 from urllib3 import BaseHTTPResponse
 
+from minio import Minio
+from minio.error import S3Error
 from src.utils import logger
 
 

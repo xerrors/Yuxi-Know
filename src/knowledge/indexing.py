@@ -371,11 +371,6 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
         return markdown_content.strip()
 
-        # TODO:
-        #   此处修改了excel的处理逻辑，原本的excel是转为markdown后切分
-        #   但是实际使用时发现，对于excel这种结构化数据，保留表头非常有必要
-        #   因此改为了每10行重复保存一次表头
-        #   目前前端显示有点问题，不知道为啥不能换行
     elif file_ext in [".xls", ".xlsx"]:
         # 处理 Excel 文件
         import pandas as pd
