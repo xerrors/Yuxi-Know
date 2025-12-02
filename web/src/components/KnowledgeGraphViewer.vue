@@ -594,7 +594,7 @@ const registerEvents = () => {
         const graph = sigmaInstance.getGraph()
         if (graph.hasEdge(edge)) {
           // 高亮悬停的边
-          graph.setEdgeAttribute(edge, 'color', getCSSVariable('--color-error'))
+          graph.setEdgeAttribute(edge, 'color', getCSSVariable('--color-error-500'))
           graph.setEdgeAttribute(edge, 'size', (graph.getEdgeAttribute(edge, 'size') || 1) * 1.5)
           sigmaInstance.refresh()
           console.log('悬停在边上:', edge)
@@ -1271,11 +1271,11 @@ defineExpose({
   }
 
   &.node-panel {
-    border-left: 4px solid var(--color-success); // 绿色边框标识节点面板
+    border-left: 4px solid var(--color-success-500); // 绿色边框标识节点面板
   }
 
   &.edge-panel {
-    border-left: 4px solid var(--color-info); // 蓝色边框标识边面板
+    border-left: 4px solid var(--color-info-500); // 蓝色边框标识边面板
   }
 }
 
@@ -1304,11 +1304,11 @@ defineExpose({
   flex-shrink: 0;
 
   &.node-indicator {
-    background: var(--color-success);
+    background: var(--color-success-500);
   }
 
   &.edge-indicator {
-    background: var(--color-info);
+    background: var(--color-info-500);
   }
 }
 

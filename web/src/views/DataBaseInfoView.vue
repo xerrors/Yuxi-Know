@@ -214,15 +214,24 @@ watch(
         setTimeout(async () => {
           console.log('文件数量变化，检查是否需要生成问题，querySectionRef:', querySectionRef.value);
           if (querySectionRef.value) {
-            console.log('开始重新生成问题...');
-            await querySectionRef.value.generateSampleQuestions(true);
+            // 检查是否开启了自动生成问题
+            if (database.value.additional_params?.auto_generate_questions) {
+              console.log('开始重新生成问题...');
+              await querySectionRef.value.generateSampleQuestions(true);
+            } else {
+              console.log('自动生成问题已关闭，跳过生成');
+            }
           } else {
             console.warn('querySectionRef 未准备好，稍后重试');
             // 如果组件还没准备好，再等一会儿
             setTimeout(async () => {
               if (querySectionRef.value) {
-                console.log('延迟后开始生成问题...');
-                await querySectionRef.value.generateSampleQuestions(true);
+                if (database.value.additional_params?.auto_generate_questions) {
+                  console.log('延迟后开始生成问题...');
+                  await querySectionRef.value.generateSampleQuestions(true);
+                } else {
+                  console.log('自动生成问题已关闭，跳过生成');
+                }
               }
             }, 2000);
           }

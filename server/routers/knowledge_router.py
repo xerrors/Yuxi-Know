@@ -171,12 +171,22 @@ async def update_database_info(
     name: str = Body(...),
     description: str = Body(...),
     llm_info: dict = Body(None),
+    additional_params: dict = Body({}), # Now accepts a dict
     current_user: User = Depends(get_admin_user),
 ):
     """更新知识库信息"""
-    logger.debug(f"Update database {db_id} info: {name}, {description}, llm_info: {llm_info}")
+    logger.debug(
+        f"Update database {db_id} info: {name}, {description}, llm_info: {llm_info}, "
+        f"additional_params: {additional_params}"
+    )
     try:
-        database = await knowledge_base.update_database(db_id, name, description, llm_info)
+        database = await knowledge_base.update_database(
+            db_id,
+            name,
+            description,
+            llm_info,
+            additional_params=additional_params, # Pass the dict to the manager
+        )
         return {"message": "更新成功", "database": database}
     except Exception as e:
         logger.error(f"更新数据库失败 {e}, {traceback.format_exc()}")

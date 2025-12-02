@@ -2,6 +2,7 @@ import asyncio
 import os
 import re
 import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import aiofiles
@@ -112,6 +113,85 @@ def _extract_word_text(file_path: Path) -> str:
     except Exception as unstructured_error:  # noqa: BLE001
         logger.error(f"Unstructured failed to parse {file_path.name}: {unstructured_error}")
         raise ValueError(f"无法解析 Word 文档: {file_path.name}") from unstructured_error
+
+
+def _extract_docx_markdown_with_images(file_path: Path, params: dict | None = None) -> str:
+    params = params or {}
+    db_id = params.get("db_id") or "word-docs"
+    minio_client = get_minio_client()
+    bucket_name = "kb-images"
+    minio_client.ensure_bucket_exists(bucket_name)
+    file_id = hashstr(file_path.name, length=16)
+
+    with zipfile.ZipFile(file_path, "r") as zf:
+        rels_path = "word/_rels/document.xml.rels"
+        rid_to_target: dict[str, str] = {}
+        try:
+            rels_xml = zf.read(rels_path).decode("utf-8")
+            rels_root = ET.fromstring(rels_xml)
+            for rel in list(rels_root):
+                rid = rel.attrib.get("Id")
+                target = rel.attrib.get("Target")
+                rtype = rel.attrib.get("Type")
+                if rid and target and rtype and rtype.endswith("/image"):
+                    rid_to_target[rid] = target
+        except Exception:
+            rid_to_target = {}
+
+        doc_xml = zf.read("word/document.xml").decode("utf-8")
+        ns = {
+            "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+            "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
+            "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        }
+        root = ET.fromstring(doc_xml)
+        md_lines: list[str] = []
+
+        for p in root.findall(".//w:p", ns):
+            texts = [t.text or "" for t in p.findall(".//w:t", ns)]
+            para_text = "".join(texts).strip()
+            image_urls: list[tuple[str, str]] = []
+
+            for blip in p.findall(".//a:blip", ns):
+                rid = blip.attrib.get(f"{{{ns['r']}}}embed")
+                if not rid:
+                    continue
+                target = rid_to_target.get(rid)
+                if not target:
+                    continue
+                media_path = target if target.startswith("word/") else f"word/{target}"
+                try:
+                    data = zf.read(media_path)
+                    object_name = f"{db_id}/{file_id}/images/{Path(target).name}"
+                    suffix = Path(target).suffix.lower()
+                    content_type = {
+                        ".jpg": "image/jpeg",
+                        ".jpeg": "image/jpeg",
+                        ".png": "image/png",
+                        ".gif": "image/gif",
+                        ".webp": "image/webp",
+                        ".bmp": "image/bmp",
+                        ".tif": "image/tiff",
+                        ".tiff": "image/tiff",
+                    }.get(suffix, "image/jpeg")
+                    result = minio_client.upload_file(
+                        bucket_name=bucket_name,
+                        object_name=object_name,
+                        data=data,
+                        content_type=content_type,
+                    )
+                    image_urls.append((Path(target).name, result.url))
+                except Exception as e:
+                    logger.error(f"上传图片失败 {Path(target).name}: {e}")
+                    continue
+
+            line = para_text
+            for name, url in image_urls:
+                line = f"{line}\n![{name}]({url})"
+            if line:
+                md_lines.append(line)
+
+    return "\n\n".join(md_lines)
 
 
 def chunk_with_parser(file_path, params=None):
@@ -336,8 +416,11 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             content = f.read()
         return f"# {file_path_obj.name}\n\n{content}"
 
-    elif file_ext in [".doc", ".docx"]:
-        # 处理 Word 文档
+    elif file_ext == ".docx":
+        text = _extract_docx_markdown_with_images(file_path_obj, params=params)
+        return f"# {file_path_obj.name}\n\n" + text
+
+    elif file_ext == ".doc":
         text = _extract_word_text(file_path_obj)
         return f"# {file_path_obj.name}\n\n{text}"
 

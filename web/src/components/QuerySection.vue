@@ -14,18 +14,29 @@
             />
             <div class="search-actions">
               <div class="query-examples-compact">
-                <span class="examples-label">示例：</span>
+                <div class="examples-label-group">
+                  <a-tooltip title="点击手动生成测试问题" placement="bottom">
+                    <a-button
+                      type="text"
+                      size="small"
+                      class="examples-label-btn"
+                      @click="() => generateSampleQuestions(false)"
+                    >
+                      示例<ReloadOutlined />:
+                    </a-button>
+                  </a-tooltip>
+                </div>
                 <div class="examples-container">
                   <!-- 加载中或生成中 -->
                   <div v-if="loadingQuestions || generatingQuestions" class="loading-text">
                     <a-spin size="small" />
                     <span>{{ generatingQuestions ? 'AI生成中...' : '加载中...' }}</span>
                   </div>
-                  
+
                   <!-- 示例轮播 -->
                   <transition v-else-if="queryExamples.length > 0" name="fade" mode="out-in">
                     <a-button
-                      type="text"
+                      type="link"
                       :key="currentExampleIndex"
                       @click="useQueryExample(queryExamples[currentExampleIndex])"
                       size="small"
@@ -34,9 +45,9 @@
                       {{ queryExamples[currentExampleIndex] }}
                     </a-button>
                   </transition>
-                  
+
                   <!-- 空状态 - 添加文件后会自动生成 -->
-                  <span v-else style="color: var(--gray-500); font-size: 12px;">添加文件后自动生成</span>
+                  <span v-else style="color: var(--gray-500); font-size: 12px;">暂无问题，请点击左侧按钮生成</span>
                 </div>
               </div>
               <div style="display: flex; gap: 12px; align-items: center;">
@@ -136,6 +147,7 @@ import { message } from 'ant-design-vue';
 import { queryApi } from '@/apis/knowledge_api';
 import {
   SearchOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons-vue';
 
 const store = useDatabaseStore();
@@ -170,7 +182,7 @@ let exampleCarouselInterval = null;
 // 加载示例问题
 const loadSampleQuestions = async () => {
   if (!store.database?.db_id) return;
-  
+
   try {
     loadingQuestions.value = true;
     const data = await queryApi.getSampleQuestions(store.database.db_id);
@@ -202,7 +214,7 @@ const clearQuestions = () => {
 // 生成示例问题
 const generateSampleQuestions = async (silent = false) => {
   if (!store.database?.db_id) return;
-  
+
   try {
     generatingQuestions.value = true;
     const data = await queryApi.generateSampleQuestions(store.database.db_id, 10);
@@ -311,10 +323,10 @@ const onQuery = async () => {
 onMounted(async () => {
   // 加载查询参数
   store.loadQueryParams();
-  
+
   // 加载示例问题
   await loadSampleQuestions();
-  
+
   // 如果有示例问题，启动轮播
   if (queryExamples.value.length > 0) {
     startExampleCarousel();
@@ -527,8 +539,8 @@ defineExpose({
         }
 
         .result-rerank-score {
-          background-color: var(--stats-warning-bg);
-          color: var(--stats-warning-color);
+          background-color: var(--color-warning-50);
+          color: var(--color-warning-700);
         }
       }
 
@@ -583,10 +595,21 @@ defineExpose({
   flex-wrap: wrap;
 }
 
-.examples-label {
-  font-size: 12px;
+.examples-label-btn {
   color: var(--gray-500);
-  white-space: nowrap;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  margin-left: -8px;
+
+  &:hover {
+    color: var(--main-color);
+    background-color: var(--gray-100);
+  }
+
+  .anticon { /* Target Ant Design icons directly */
+    font-size: 10px; /* Make icon smaller */
+  }
 }
 
 .examples-container {
@@ -607,8 +630,13 @@ defineExpose({
   text-align: left;
   white-space: normal;
   height: auto;
-  padding: 4px 8px;
+  padding: 0;
   font-size: 12px;
+  color: var(--gray-500);
+
+  &:hover {
+    color: var(--main-color);
+  }
 }
 
 .fade-enter-active,

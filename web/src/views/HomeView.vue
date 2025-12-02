@@ -92,6 +92,7 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
 import { useAgentStore } from '@/stores/agent'
+import { useThemeStore } from '@/stores/theme'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import {
   BookText,
@@ -109,6 +110,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
 const agentStore = useAgentStore()
+const themeStore = useThemeStore()
 
 const goToChat = async () => {
   // 检查用户是否登录
@@ -332,10 +334,20 @@ const actionLinks = computed(() => {
   svg {
     margin-right: 6px;
     transition: transform 0.3s ease;
+    fill: currentColor;
   }
 
   .stars-count {
     font-weight: 600;
+  }
+
+  // 暗色模式样式
+  :global(.dark) & {
+    color: var(--gray-400);
+
+    &:hover {
+      color: var(--gray-300);
+    }
   }
 }
 

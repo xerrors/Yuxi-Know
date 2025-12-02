@@ -97,7 +97,7 @@ defineEmits(['index-nodes', 'export-data'])
   font-size: 14px;
 
   &.warning {
-    color: var(--color-warning);
+    color: var(--color-warning-500);
   }
 }
 
@@ -111,7 +111,7 @@ defineEmits(['index-nodes', 'export-data'])
   font-weight: 600;
 
   &.warning {
-    color: var(--color-warning);
+    color: var(--color-warning-500);
   }
 }
 

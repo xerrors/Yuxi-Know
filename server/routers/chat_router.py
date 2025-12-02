@@ -224,15 +224,18 @@ async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message
         error_type: 错误类型标识
     """
     try:
+        extra_metadata = {
+            "error_type": error_type,
+            "is_error": True,
+            "error_message": error_message or f"发生错误: {error_type}"
+        }
         if full_msg:
             # 保存部分生成的AI消息
             msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
             content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
             extra_metadata = msg_dict | {"error_type": error_type}
         else:
-            # 保存纯错误消息
-            content = error_message or f"发生错误: {error_type}"
-            extra_metadata = {"error_type": error_type, "is_error": True}
+            content = ""
 
         saved_msg = conv_mgr.add_message_by_thread_id(
             thread_id=thread_id,
@@ -517,14 +520,24 @@ async def chat_agent(
 
         # Input guard
         if conf.enable_content_guard and await content_guard.check(query):
-            yield make_chunk(status="error", message="输入内容包含敏感词", meta=meta)
+            yield make_chunk(
+                status="error",
+                error_type="content_guard_blocked",
+                error_message="输入内容包含敏感词",
+                meta=meta
+            )
             return
 
         try:
             agent = agent_manager.get_agent(agent_id)
         except Exception as e:
             logger.error(f"Error getting agent {agent_id}: {e}, {traceback.format_exc()}")
-            yield make_chunk(message=f"Error getting agent {agent_id}: {e}", status="error")
+            yield make_chunk(
+                status="error",
+                error_type="agent_error",
+                error_message=f"智能体 {agent_id} 获取失败: {str(e)}",
+                meta=meta
+            )
             return
 
         messages = [human_message]
@@ -671,7 +684,12 @@ async def chat_agent(
             finally:
                 new_db.close()
 
-            yield make_chunk(message=error_msg, status="error")
+            yield make_chunk(
+                status="error",
+                error_type=error_type,
+                error_message=error_msg,
+                meta=meta
+            )
 
     return StreamingResponse(stream_messages(), media_type="application/json")
 
@@ -880,6 +898,8 @@ async def get_agent_history(
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat() if msg.created_at else None,
                 "error_type": msg.extra_metadata.get("error_type") if msg.extra_metadata else None,
+                "error_message": msg.extra_metadata.get("error_message") if msg.extra_metadata else None,
+                "extra_metadata": msg.extra_metadata,  # 保留完整的metadata以备前端需要
                 "message_type": msg.message_type,  # 添加消息类型字段
                 "image_content": msg.image_content,  # 添加图片内容字段
             }

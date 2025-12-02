@@ -30,8 +30,6 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getChartColor } from '@/utils/chartColors'
-import { dashboardApi } from '@/apis/dashboard_api'
 import { useThemeStore } from '@/stores/theme'
 
 // CSS 变量解析工具函数
@@ -121,7 +119,7 @@ const initActivityChart = () => {
       data: props.userStats.daily_active_users.map(item => item.active_users),
       smooth: true,
       lineStyle: {
-        color: getChartColor('primary'),
+        color: getCSSVariable('--main-color'),
         width: 3
       },
       areaStyle: {
@@ -132,24 +130,24 @@ const initActivityChart = () => {
           x2: 0,
           y2: 1,
           colorStops: [{
-            offset: 0, color: getCSSVariable('--chart-primary-light')
+            offset: 0, color: getCSSVariable('--main-500')
           }, {
-            offset: 1, color: getCSSVariable('--chart-primary-lighter')
+            offset: 1, color: getCSSVariable('--main-0')
           }]
         }
       },
       itemStyle: {
-        color: getChartColor('primary'),
+        color: getCSSVariable('--main-color'),
         borderWidth: 2,
         borderColor: getCSSVariable('--gray-0')
       },
       emphasis: {
         itemStyle: {
-          color: getChartColor('primary'),
+          color: getCSSVariable('--main-color'),
           borderWidth: 3,
           borderColor: getCSSVariable('--gray-0'),
           shadowBlur: 10,
-          shadowColor: getCSSVariable('--chart-primary-shadow')
+          shadowColor: getCSSVariable('--shadow-1')
         }
       }
     }]

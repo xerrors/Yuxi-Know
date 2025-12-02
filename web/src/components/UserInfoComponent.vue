@@ -1,6 +1,6 @@
 <template>
   <div class="user-info-component">
-    <a-dropdown :trigger="['click']" v-if="userStore.isLoggedIn">
+    <a-dropdown :trigger="['hover']" v-if="userStore.isLoggedIn">
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
           <img v-if="userStore.avatar" :src="userStore.avatar" :alt="userStore.username" class="avatar-image" />
@@ -30,6 +30,10 @@
             <span class="menu-text">{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式 (Beta)' }}</span>
           </a-menu-item>
           <a-menu-divider />
+          <a-menu-item key="setting" @click="goToSetting">
+            <Settings size="16"/>
+            <span class="menu-text">系统设置</span>
+          </a-menu-item>
           <a-menu-item key="logout" @click="logout">
             <LogOut size="16"/>
             <span class="menu-text">退出登录</span>
@@ -162,7 +166,7 @@ import { useUserStore } from '@/stores/user';
 //
 //
 import { message } from 'ant-design-vue';
-import { CircleUser, UserRoundCheck, BookOpen, Sun, Moon, User, LogOut, Upload } from 'lucide-vue-next';
+import { CircleUser, UserRoundCheck, BookOpen, Sun, Moon, User, LogOut, Upload, Settings } from 'lucide-vue-next';
 import { useThemeStore } from '@/stores/theme'
 
 const router = useRouter();
@@ -237,6 +241,11 @@ const openDocs = () => {
 
 const toggleTheme = () => {
   themeStore.toggleTheme()
+}
+
+// 前往设置页
+const goToSetting = () => {
+  router.push('/setting');
 }
 
 // 打开个人资料页面
@@ -421,15 +430,15 @@ const handleAvatarChange = async (info) => {
   border: 2px solid var(--gray-0);
 
   &.superadmin {
-    background-color: var(--color-warning);
+    background-color: var(--color-warning-500);
   }
 
   &.admin {
-    background-color: var(--color-info); /* 蓝色，管理员 */
+    background-color: var(--color-info-500); /* 蓝色，管理员 */
   }
 
   &.user {
-    background-color: var(--color-success); /* 绿色，普通用户 */
+    background-color: var(--color-success-500); /* 绿色，普通用户 */
   }
 }
 

@@ -4,6 +4,10 @@
 PYTEST_ARGS ?=
 
 start:
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found. Please create it from .env.template"; \
+		exit 1; \
+	fi
 	docker compose up -d
 
 stop:

@@ -7,8 +7,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-primary)' },
-      { offset: 1, color: 'var(--chart-primary-light)' }
+      { offset: 0, color: 'var(--chart-primary-500)' },
+      { offset: 1, color: 'var(--chart-primary-100)' }
     ]
   };
 
@@ -16,8 +16,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-success)' },
-      { offset: 1, color: 'var(--chart-success-light)' }
+      { offset: 0, color: 'var(--color-success-500)' },
+      { offset: 1, color: 'var(--color-success-100)' }
     ]
   };
 
@@ -25,8 +25,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-warning)' },
-      { offset: 1, color: 'var(--chart-warning-light)' }
+      { offset: 0, color: 'var(--color-warning-500)' },
+      { offset: 1, color: 'var(--color-warning-100)' }
     ]
   };
 
@@ -34,8 +34,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-error)' },
-      { offset: 1, color: 'var(--chart-error-light)' }
+      { offset: 0, color: 'var(--color-error-500)' },
+      { offset: 1, color: 'var(--color-error-100)' }
     ]
   };
 
@@ -43,8 +43,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-info)' },
-      { offset: 1, color: 'var(--chart-info-light)' }
+      { offset: 0, color: 'var(--color-info-500)' },
+      { offset: 1, color: 'var(--color-info-100)' }
     ]
   };
 
@@ -52,8 +52,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-secondary)' },
-      { offset: 1, color: 'var(--chart-secondary-light)' }
+      { offset: 0, color: 'var(--color-accent-500)' },
+      { offset: 1, color: 'var(--color-accent-100)' }
     ]
   };
 
@@ -61,8 +61,8 @@
     type: 'linear',
     x: 0, y: 0, x2: 0, y2: 1,
     colorStops: [
-      { offset: 0, color: 'var(--chart-accent)' },
-      { offset: 1, color: 'var(--chart-accent-light)' }
+      { offset: 0, color: 'var(--color-accent-500)' },
+      { offset: 1, color: 'var(--color-accent-100)' }
     ]
   };
 }
@@ -243,6 +243,11 @@
 
 .dashboard-card .ant-statistic-content {
   color: var(--gray-1000);
+}
+
+/* 强制设置所有统计卡片数字为粗体 */
+.dashboard-card .ant-statistic-content-value {
+  font-weight: 700 !important;
 }
 
 .dashboard-card .ant-table {

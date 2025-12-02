@@ -7,7 +7,7 @@
           <a-statistic
             title="智能体总数"
             :value="agentStats?.total_agents || 0"
-            :value-style="{ color: 'var(--chart-info)' }"
+            :value-style="{ color: 'var(--color-info-500)' }"
             suffix="个"
           />
         </a-col>
@@ -15,7 +15,7 @@
           <a-statistic
             title="总对话数"
             :value="totalConversations"
-            :value-style="{ color: 'var(--chart-secondary)' }"
+            :value-style="{ color: 'var(--color-accent-500)' }"
             suffix="次"
           />
         </a-col>
@@ -23,7 +23,7 @@
           <a-statistic
             title="工具调用总数"
             :value="totalToolUsage"
-            :value-style="{ color: 'var(--chart-warning)' }"
+            :value-style="{ color: 'var(--color-warning-500)' }"
             suffix="次"
           />
         </a-col>
@@ -65,22 +65,13 @@
           <template v-if="column.key === 'agent_id'">
             <a-tag color="blue">{{ record.agent_id }}</a-tag>
           </template>
-          <template v-if="column.key === 'score'">
-            <a-progress
-              :percent="record.score"
-              size="small"
-              :stroke-color="getScoreColor(record.score)"
-              :show-info="true"
-              :format="(percent) => `${percent}分`"
-            />
-          </template>
           <template v-if="column.key === 'satisfaction_rate'">
             <a-statistic
               :value="record.satisfaction_rate"
               suffix="%"
               :value-style="{
-                color: record.satisfaction_rate >= 80 ? 'var(--chart-success)' :
-                       record.satisfaction_rate >= 60 ? 'var(--chart-warning)' : 'var(--chart-error)',
+                color: record.satisfaction_rate >= 80 ? 'var(--color-success-500)' :
+                       record.satisfaction_rate >= 60 ? 'var(--color-warning-500)' : 'var(--color-error-500)',
                 fontSize: '14px'
               }"
             />
@@ -98,7 +89,7 @@
 <script setup>
 import { ref, onMounted, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
-import { getColorByIndex, getChartColor } from '@/utils/chartColors'
+import { getColorByIndex } from '@/utils/chartColors'
 import { useThemeStore } from '@/stores/theme'
 
 // CSS 变量解析工具函数
@@ -136,23 +127,18 @@ const performerColumns = [
   {
     title: '智能体ID',
     key: 'agent_id',
-    width: '25%'
-  },
-  {
-    title: '综合评分',
-    key: 'score',
-    width: '20%'
+    width: '30%'
   },
   {
     title: '满意度',
     key: 'satisfaction_rate',
-    width: '20%',
+    width: '25%',
     align: 'center'
   },
   {
     title: '对话数',
     key: 'conversation_count',
-    width: '15%',
+    width: '20%',
     align: 'center'
   }
 ]
@@ -172,12 +158,6 @@ const topPerformers = computed(() => {
   return props.agentStats?.top_performing_agents || []
 })
 
-// 颜色辅助函数
-const getScoreColor = (score) => {
-  if (score >= 80) return getChartColor('primary')
-  if (score >= 60) return getChartColor('warning')
-  return getChartColor('accent')
-}
 
 
 // 初始化对话数和工具调用数合并图表
@@ -288,14 +268,14 @@ const initConversationToolChart = () => {
           return item ? item.conversation_count : 0
         }),
         itemStyle: {
-          color: getChartColor('primary'),
+          color: getColorByIndex(0),
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: getChartColor('primary'),
+            color: getColorByIndex(0),
             shadowBlur: 10,
-            shadowColor: getCSSVariable('--chart-info-shadow')
+            shadowColor: getCSSVariable('--color-info-50')
           }
         }
       },
@@ -307,14 +287,14 @@ const initConversationToolChart = () => {
           return item ? item.tool_usage_count : 0
         }),
         itemStyle: {
-          color: getChartColor('accent'),
+          color: getColorByIndex(1),
           borderRadius: [4, 4, 0, 0]
         },
         emphasis: {
           itemStyle: {
-            color: getChartColor('primary'),
+            color: getColorByIndex(1),
             shadowBlur: 10,
-            shadowColor: getCSSVariable('--chart-info-shadow')
+            shadowColor: getCSSVariable('--color-info-50')
           }
         }
       }
@@ -429,6 +409,10 @@ defineExpose({
 
 :deep(.ant-progress-bg) {
   transition: all 0.3s ease;
+}
+
+:deep(.ant-statistic-content-value) {
+  font-weight: bold !important;
 }
 
 </style>

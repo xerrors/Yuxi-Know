@@ -1,35 +1,40 @@
 # 使用轻量级Python基础镜像
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /uvx /bin/
+COPY --from=node:20-slim /usr/local/bin /usr/local/bin
+COPY --from=node:20-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=node:20-slim /usr/local/include /usr/local/include
+COPY --from=node:20-slim /usr/local/share /usr/local/share
 
 # 设置工作目录
 WORKDIR /app
 
 # 环境变量设置
 ENV TZ=Asia/Shanghai \
-    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT="/usr/local" \
+    UV_COMPILE_BYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive
 
+RUN npm install -g npm@latest && npm cache clean --force
+
 # 设置代理和时区，更换镜像源，安装系统依赖 - 合并为一个RUN减少层数
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone && \
-    # 更换为阿里云镜像源加速下载
-    sed -i 's|http://deb.debian.org/debian|http://mirrors.tuna.tsinghua.edu.cn/debian|g' /etc/apt/sources.list.d/debian.sources && \
-    sed -i 's|http://security.debian.org/debian-security|http://mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources && \
-    # sed -i 's|mirrors.aliyun.com|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources && \
-    # 清理apt缓存并更新，避免空间不足问题
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* && \
-    apt-get update && \
-    # 安装系统依赖，减少缓存占用
-    apt-get install -y --no-install-recommends --fix-missing \
-        python3-dev \
+RUN set -ex \
+    # (A) 设置时区
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone \
+    # (B) 替换清华源 (针对 Debian Bookworm 的新版格式)
+    && sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's|security.debian.org/debian-security|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources \
+    # (C) 安装必要的系统库
+    && apt-get update \
+    && apt-get install -y --no-install-recommends --fix-missing \
+        curl \
         ffmpeg \
         libsm6 \
         libxext6 \
-        curl \
-        && apt-get autoremove -y && \
-        apt-get autoclean && \
-        rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
+    # (D) 清理垃圾，减小体积
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # 复制项目配置文件
 COPY ../pyproject.toml /app/pyproject.toml

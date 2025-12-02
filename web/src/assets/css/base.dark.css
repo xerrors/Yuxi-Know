@@ -20,7 +20,7 @@
   --main-1:    #000102;
   --main-0:    #000000;
 
-  --gray-10000: #ffffff;
+  --gray-10000: #fafafa;
   --gray-2000:  #f8fafa;
   --gray-1000:  #f5f7f7;
   --gray-900:   #eff2f2;
@@ -38,63 +38,64 @@
   --gray-10:    #080808;
   --gray-0:     #030303;
 
+  /* Standard Color System - 深色模式5档色阶系统 */
+  --color-primary-50: #023944;    /* 主色调-最深 */
+  --color-primary-100: #035065;   /* 主色调-深 */
+  --color-primary-500: #4a9fb8;   /* 主色调-标准 */
+  --color-primary-700: #5faec2;   /* 主色调-浅 */
+  --color-primary-900: #82c3d6;   /* 主色调-最浅 */
+
+  /* 保留原有的 main 变量 */
   --main-color: #4a9fb8;
   --main-bright: #5faec2;
-  --secondry-color: #8fa5b0;
-  --error-color: #ff6b6b;
-  --color-primary: #4a9fb8;
-  --color-primary-bg: #1a3a42;
-  --color-success: #52c41a;
-  --color-success-light: #162312;
-  --color-error: #ff4d4f;
-  --color-error-light: #2a1215;
-  --color-info: #3d8fff;
-  --color-info-light: #111b26;
-  --color-warning: #faad14;
-  --color-warning-light: #2b2111;
 
-  /* Chart Colors - 深色模式图表颜色 */
-  --chart-primary: var(--main-500);
-  --chart-primary-light: var(--main-600);
-  --chart-primary-dark: var(--main-400);
+  --color-secondary-50: #151616;   /* 次要色-最深 */
+  --color-secondary-100: #1e1f1f;  /* 次要色-深 */
+  --color-secondary-500: #8fa5b0;  /* 次要色-标准 */
+  --color-secondary-700: #9fb5c0;  /* 次要色-浅 */
+  --color-secondary-900: #b8c8d0;  /* 次要色-最浅 */
 
-  --chart-success: #52c41a;
-  --chart-success-light: #73d13d;
-  --chart-success-dark: #389e0d;
+  --color-success-50: #162312;     /* 成功色-最深 */
+  --color-success-100: #273921;    /* 成功色-深 */
+  --color-success-500: #52c41a;    /* 成功色-标准 */
+  --color-success-700: #73d13d;    /* 成功色-浅 */
+  --color-success-900: #95de64;    /* 成功色-最浅 */
 
-  --chart-warning: #faad14;
-  --chart-warning-light: #ffc53d;
-  --chart-warning-dark: #d48806;
+  --color-error-50: #2a1215;       /* 错误色-最深 */
+  --color-error-100: #58181c;      /* 错误色-深 */
+  --color-error-500: #ff4d4f;      /* 错误色-标准 */
+  --color-error-700: #ff7875;      /* 错误色-浅 */
+  --color-error-900: #ffa39e;      /* 错误色-最浅 */
 
-  --chart-error: #ff4d4f;
-  --chart-error-light: #ff7875;
-  --chart-error-dark: #cf1322;
+  --color-warning-50: #2b2111;     /* 警告色-最深 */
+  --color-warning-100: #614700;    /* 警告色-深 */
+  --color-warning-500: #faad14;    /* 警告色-标准 */
+  --color-warning-700: #ffc53d;    /* 警告色-浅 */
+  --color-warning-900: #ffd666;    /* 警告色-最浅 */
 
-  --chart-info: #1890ff;
-  --chart-info-light: #40a9ff;
-  --chart-info-dark: #096dd9;
+  --color-info-50: #111b26;        /* 信息色-最深 */
+  --color-info-100: #111d2c;       /* 信息色-深 */
+  --color-info-500: #3d8fff;       /* 信息色-标准 */
+  --color-info-700: #40a9ff;       /* 信息色-浅 */
+  --color-info-900: #69c0ff;       /* 信息色-最浅 */
 
-  --chart-secondary: #722ed1;
-  --chart-secondary-light: #9254de;
-  --chart-secondary-dark: #531dab;
+  --color-accent-50: #0f2e2e;      /* 强调色-最深 */
+  --color-accent-100: #164e63;     /* 强调色-深 */
+  --color-accent-500: #13c2c2;     /* 强调色-标准 */
+  --color-accent-700: #36cfc9;     /* 强调色-浅 */
+  --color-accent-900: #5cdbd3;     /* 强调色-最浅 */
 
-  --chart-accent: #13c2c2;
-  --chart-accent-light: #36cfc9;
-  --chart-accent-dark: #08979c;
+  --chart-palette-1: var(--main-300);
+  --chart-palette-2: #3EA896;
+  --chart-palette-3: #D6AD37;
+  --chart-palette-4: #CF6666;
+  --chart-palette-5: #8672B4;
+  --chart-palette-6: #529AB8;
+  --chart-palette-7: #D48242;
+  --chart-palette-8: #82B354;
+  --chart-palette-9: #C46E9E;
+  --chart-palette-10: #7A7A7A;
 
-  /* Stats Card Colors - 深色模式统计卡片 */
-  --stats-primary-bg: #1e3a8a;
-  --stats-primary-color: #93c5fd;
-  --stats-success-bg: #14532d;
-  --stats-success-color: #86efac;
-  --stats-info-bg: #0c4a6e;
-  --stats-info-color: #7dd3fc;
-  --stats-warning-bg: #78350f;
-  --stats-warning-color: #fcd34d;
-  --stats-secondary-bg: #581c87;
-  --stats-secondary-color: #d8b4fe;
-  --stats-error-bg: #7f1d1d;
-  --stats-error-color: #fca5a5;
 
   --bg-sider: #141414;
   --color-text: #ffffff;
@@ -113,11 +114,6 @@
   --shadow-4: rgba(0, 0, 0, 0.5);
   --shadow-5: rgba(0, 0, 0, 0.6);
 
-  /* Extended Chart Variables - 扩展图表变量 */
-  --chart-primary-lighter: var(--chart-primary-light);
-  --chart-info-lighter: var(--chart-info-light);
-  --chart-primary-shadow: rgba(74, 159, 184, 0.4);
-  --chart-info-shadow: rgba(24, 144, 255, 0.4);
 
   --color-trans-light: rgba(0, 0, 0, 0.85);
   --color-trans-dark: rgba(255, 255, 255, 0.85);
@@ -129,12 +125,12 @@
   --markmap-a-hover-color: var(--main-600);
   --markmap-code-bg: var(--gray-50);
   --markmap-code-color: var(--gray-700);
-  --markmap-highlight-bg: var(--color-warning-light);
+  --markmap-highlight-bg: var(--color-warning-50);
   --markmap-table-border: 1px solid currentColor;
   --markmap-font: 300 16px / 20px sans-serif;
   --markmap-circle-open-bg: var(--main-0);
   --markmap-text-color: var(--gray-700);
-  --markmap-highlight-node-bg: var(--color-error-light);
+  --markmap-highlight-node-bg: var(--color-error-50);
 }
 
 :root.dark .md-editor {
