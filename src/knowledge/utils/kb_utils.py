@@ -131,6 +131,7 @@ async def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str
 
     raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")
 
+
 async def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
     """
     准备文件或URL的元数据

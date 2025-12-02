@@ -22,6 +22,7 @@ class StorageError(Exception):
 
     pass
 
+
 class StorageUploadError(StorageError):
     """存储相关异常基类"""
 
@@ -123,13 +124,11 @@ class MinIOClient:
             logger.error(error_msg)
             raise StorageError(error_msg)
 
-    async def aupload_file(self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream") -> UploadResult:
+    async def aupload_file(
+        self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> UploadResult:
         result = await asyncio.to_thread(
-            self.upload_file,
-            bucket_name=bucket_name,
-            object_name=object_name,
-            data=data,
-            content_type=content_type
+            self.upload_file, bucket_name=bucket_name, object_name=object_name, data=data, content_type=content_type
         )
         return result
 
@@ -195,15 +194,10 @@ class MinIOClient:
                 raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
             raise StorageError(f"下载文件失败: {e}")
 
-
     async def adownload_file(self, bucket_name: str, object_name: str) -> bytes:
         """异步下载文件"""
         try:
-            response = await asyncio.to_thread(
-                self.client.get_object,
-                bucket_name=bucket_name,
-                object_name=object_name
-            )
+            response = await asyncio.to_thread(self.client.get_object, bucket_name=bucket_name, object_name=object_name)
             data = await asyncio.to_thread(response.read)
             response.close()
             logger.info(f"成功下载 '{object_name}' 从存储桶 '{bucket_name}'")
@@ -214,21 +208,17 @@ class MinIOClient:
                 raise StorageError(f"对象 '{object_name}' 在存储桶 '{bucket_name}' 中不存在")
             raise StorageError(f"下载文件失败: {e}")
 
-    def get_presigned_url(self, bucket_name: str, object_name: str,days=7) -> str:
+    def get_presigned_url(self, bucket_name: str, object_name: str, days=7) -> str:
         """将minio放在内网访问，外部通过返回代理链接访问"""
-        res_url = self.client.get_presigned_url(method="GET",
-                                                bucket_name=bucket_name,
-                                                object_name=object_name,
-                                                expires=timedelta(days=days))
+        res_url = self.client.get_presigned_url(
+            method="GET", bucket_name=bucket_name, object_name=object_name, expires=timedelta(days=days)
+        )
         return res_url
 
     def delete_file(self, bucket_name: str, object_name: str) -> bool:
         """删除文件"""
         try:
-            self.client.remove_object(
-                bucket_name=bucket_name,
-                object_name=object_name
-            )
+            self.client.remove_object(bucket_name=bucket_name, object_name=object_name)
             logger.info(f"成功删除 '{object_name}' 从存储桶 '{bucket_name}'")
             return True
 
@@ -250,10 +240,7 @@ class MinIOClient:
     def file_exists(self, bucket_name: str, object_name: str) -> bool:
         """检查文件是否存在"""
         try:
-            self.client.stat_object(
-                bucket_name=bucket_name,
-                object_name=object_name
-            )
+            self.client.stat_object(bucket_name=bucket_name, object_name=object_name)
             return True
         except S3Error as e:
             if "NoSuchKey" in str(e):
@@ -315,15 +302,12 @@ def upload_image_to_minio(bucket_name: str, data: bytes, file_extension: str = "
     """
     client = get_minio_client()
     file_name = f"{uuid.uuid4()}.{file_extension}"
-    result = client.upload_file(
+    client.upload_file(
         bucket_name=bucket_name, object_name=file_name, data=data, content_type=f"image/{file_extension}"
     )
-    res_url = client.get_presigned_url(
-        bucket_name=bucket_name,
-        object_name=file_name,
-        days=7
-    )
+    res_url = client.get_presigned_url(bucket_name=bucket_name, object_name=file_name, days=7)
     return res_url
+
 
 async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, file_extension: str) -> str:
     """
@@ -341,6 +325,6 @@ async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, f
     # 根据扩展名猜测 content_type
     content_type = client._guess_content_type(file_extension)
     # 上传文件
-    result = await client.aupload_file(bucket_name,file_name, data, content_type)
+    await client.aupload_file(bucket_name, file_name, data, content_type)
     res_url = client.get_presigned_url(bucket_name, file_name, days=7)
     return res_url

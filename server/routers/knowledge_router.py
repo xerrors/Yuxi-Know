@@ -8,7 +8,7 @@ from urllib.parse import quote, unquote
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
-from starlette.responses import FileResponse as StarletteFileResponse, StreamingResponse
+from starlette.responses import StreamingResponse
 
 from src.storage.db.models import User
 from server.utils.auth_middleware import get_admin_user
@@ -22,6 +22,41 @@ from src.utils import hashstr, logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
+media_types = {
+    ".pdf": "application/pdf",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+    ".txt": "text/plain",
+    ".md": "text/markdown",
+    ".json": "application/json",
+    ".csv": "text/csv",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".svg": "image/svg+xml",
+    ".zip": "application/zip",
+    ".rar": "application/x-rar-compressed",
+    ".7z": "application/x-7z-compressed",
+    ".tar": "application/x-tar",
+    ".gz": "application/gzip",
+    ".html": "text/html",
+    ".htm": "text/html",
+    ".xml": "text/xml",
+    ".css": "text/css",
+    ".js": "application/javascript",
+    ".py": "text/x-python",
+    ".java": "text/x-java-source",
+    ".cpp": "text/x-c++src",
+    ".c": "text/x-csrc",
+    ".h": "text/x-chdr",
+    ".hpp": "text/x-c++hdr",
+}
 
 # =============================================================================
 # === 数据库管理分组 ===
@@ -181,12 +216,6 @@ async def export_database(
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="Exported file not found.")
 
-        media_types = {
-            "csv": "text/csv",
-            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "md": "text/markdown",
-            "txt": "text/plain",
-        }
         media_type = media_types.get(format, "application/octet-stream")
 
         return FileResponse(path=file_path, filename=os.path.basename(file_path), media_type=media_type)
@@ -294,7 +323,9 @@ async def add_documents(
                 file_bytes = await f.read()
             # 上传的bucket名为ref-{refdb},refdb中的_替换为-
             refdb = db_id.replace("_", "-")
-            url = await aupload_file_to_minio(f"ref-{refdb}", success_item["filename"], file_bytes, success_item["file_type"])
+            url = await aupload_file_to_minio(
+                f"ref-{refdb}", success_item["filename"], file_bytes, success_item["file_type"]
+            )
             logger.info(f"上传文件成功: {url}")
         await context.set_result(summary | {"items": processed_items})
         await context.set_progress(100.0, message)
@@ -522,41 +553,6 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
 
         _, ext = os.path.splitext(decoded_filename)
 
-        media_types = {
-            ".pdf": "application/pdf",
-            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ".doc": "application/msword",
-            ".txt": "text/plain",
-            ".md": "text/markdown",
-            ".json": "application/json",
-            ".csv": "text/csv",
-            ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ".xls": "application/vnd.ms-excel",
-            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-            ".ppt": "application/vnd.ms-powerpoint",
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".bmp": "image/bmp",
-            ".svg": "image/svg+xml",
-            ".zip": "application/zip",
-            ".rar": "application/x-rar-compressed",
-            ".7z": "application/x-7z-compressed",
-            ".tar": "application/x-tar",
-            ".gz": "application/gzip",
-            ".html": "text/html",
-            ".htm": "text/html",
-            ".xml": "text/xml",
-            ".css": "text/css",
-            ".js": "application/javascript",
-            ".py": "text/x-python",
-            ".java": "text/x-java-source",
-            ".cpp": "text/x-c++src",
-            ".c": "text/x-csrc",
-            ".h": "text/x-chdr",
-            ".hpp": "text/x-c++hdr",
-        }
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
         minio_client = get_minio_client()
@@ -1082,7 +1078,7 @@ async def upload_file(
     #   如果知识库中的文件多了，上传了内容修改过的同名文件应当把旧的文件删除掉
     #   否则会保存两份相同的文档，建议固定salt，上传逻辑是：
     #   若上传了同名文件时且hash相同则报错，不同则直接替换同名文件
-    filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt="fixed_salt")}{ext}".lower()
+    filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt='fixed_salt')}{ext}".lower()
 
     file_path = os.path.join(upload_dir, filename)
 

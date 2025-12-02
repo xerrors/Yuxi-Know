@@ -226,7 +226,7 @@ class LightRagKB(KnowledgeBase):
 
         for item in items:
             # 准备文件元数据
-            metadata = prepare_item_metadata(item, content_type, db_id, params=params)
+            metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
             file_id = metadata["file_id"]
             item_path = metadata["path"]
 

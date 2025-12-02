@@ -405,9 +405,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
                 top_left_value = ws.cell(row=min_row, column=min_col).value
 
                 # 取消合并
-                ws.unmerge_cells(
-                    start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col
-                )
+                ws.unmerge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
 
                 # 在所有原合并单元格区域填充值
                 for row in range(min_row, max_row + 1):
@@ -432,13 +430,13 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
             # 在最左列添加标题字段
             table_title = f"{file_path_obj.stem} - {sheet_name}"  # 使用"文件名 - Sheet名"作为标题
-            df.insert(0, '表格标题', table_title)
+            df.insert(0, "表格标题", table_title)
 
             # 将每10行数据与表头组合成独立的表格
             chunk_size = 10
             for i in range(0, len(df), chunk_size):
                 # 获取当前10行数据(或剩余不足10行的数据)
-                chunk_df = df.iloc[i:i + chunk_size]
+                chunk_df = df.iloc[i : i + chunk_size]
                 markdown_content += f"### 数据行 {i + 1}-{min(i + chunk_size, len(df))}\n\n"
                 markdown_table = chunk_df.to_markdown(index=False)
                 markdown_content += f"{markdown_table}\n\n"
@@ -526,7 +524,7 @@ def _process_zip_file(zip_path: str, db_id: str) -> dict:
             markdown_content = _replace_image_links(markdown_content, images_info)
 
     # 4. 生成结果
-    content_hash = calculate_content_hash(markdown_content.encode("utf-8"))
+    content_hash = asyncio.run(calculate_content_hash(markdown_content.encode("utf-8")))
 
     return {
         "markdown_content": markdown_content,

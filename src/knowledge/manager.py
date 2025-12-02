@@ -370,14 +370,14 @@ class KnowledgeBaseManager:
 
         return False
 
-    async def update_file(self, db_id: str, region_file_id: str,file_name:str,params: dict | None = None) -> dict:
+    async def update_file(self, db_id: str, region_file_id: str, file_name: str, params: dict | None = None) -> dict:
         """对单个文件执行更新"""
         kb_instance = self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, region_file_id)
-        data_list =  await kb_instance.add_content(db_id,[file_name], params or {})
+        data_list = await kb_instance.add_content(db_id, [file_name], params or {})
         return data_list[0]
 
-    async def file_existed_in_db(self, db_id: str | None,content_hash: str | None) -> bool:
+    async def file_existed_in_db(self, db_id: str | None, content_hash: str | None) -> bool:
         """检查指定数据库中是否存在相同内容哈希的文件"""
         if not db_id or not content_hash:
             return False
