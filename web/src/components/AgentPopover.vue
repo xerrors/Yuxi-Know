@@ -40,7 +40,15 @@
                 class="todo-item"
               >
                 <span class="todo-status" :class="todo.status">
-                  {{ todo.status === 'completed' ? '✓' : todo.status === 'in_progress' ? '⟳' : '○' }}
+                  <svg v-if="todo.status === 'completed'" viewBox="0 0 24 24" fill="currentColor" class="icon">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                  <svg v-else-if="todo.status === 'in_progress'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon spinning">
+                    <circle cx="12" cy="12" r="10" stroke-dasharray="31.416" stroke-dashoffset="31.416" stroke-linecap="round"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
+                    <circle cx="12" cy="12" r="10"/>
+                  </svg>
                 </span>
                 <span class="todo-text">{{ todo.content }}</span>
               </div>
@@ -60,10 +68,19 @@
                 @click="showFileContent(fileItem.path, fileItem)"
               >
                 <div class="file-info">
-                  <div class="file-name">{{ getFileName(fileItem) }}</div>
-                  <div class="file-time" v-if="fileItem.modified_at">
-                    {{ formatDate(fileItem.modified_at) }}
+                  <div class="file-content-wrapper">
+                    <div class="file-name">{{ getFileName(fileItem) }}</div>
+                    <div class="file-time" v-if="fileItem.modified_at">
+                      {{ formatDate(fileItem.modified_at) }}
+                    </div>
                   </div>
+                  <button
+                    class="download-btn"
+                    @click.stop="downloadFile(fileItem)"
+                    title="下载文件"
+                  >
+                    <Download :size="18" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -92,6 +109,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { Download } from 'lucide-vue-next';
 
 const props = defineProps({
   visible: {
@@ -209,6 +227,24 @@ const closeModal = () => {
   modalVisible.value = false;
   currentFile.value = null;
   currentFilePath.value = '';
+};
+
+const downloadFile = (fileItem) => {
+  try {
+    const content = formatContent(fileItem.content);
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = getFileName(fileItem);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('下载文件失败:', error);
+  }
 };
 
 const emitRefresh = () => {
@@ -330,19 +366,35 @@ const emitRefresh = () => {
 
 .todo-status {
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
   margin-top: 2px;
   border-radius: 50%;
   transition: all 0.15s ease;
 
+  .icon {
+    width: 14px;
+    height: 14px;
+    transition: all 0.15s ease;
+  }
+
+  .spinning {
+    animation: spin 1.5s linear infinite;
+    stroke-dasharray: 31.416;
+    stroke-dashoffset: 0;
+    animation: spin 1.5s linear infinite;
+  }
+
   &.completed {
     background: var(--color-success-50);
     color: var(--color-success-700);
+
+    .icon {
+      transform: scale(1.1);
+    }
   }
 
   &.in_progress {
@@ -353,6 +405,20 @@ const emitRefresh = () => {
   &.pending {
     background: var(--gray-100);
     color: var(--gray-500);
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dashoffset: 15.708;
+  }
+  100% {
+    transform: rotate(360deg);
+    stroke-dashoffset: 0;
   }
 }
 
@@ -377,7 +443,7 @@ const emitRefresh = () => {
 
 .file-item {
   padding: 12px 14px;
-  background: var(--main-5);
+  background: var(--gray-0);
   border: 1px solid var(--gray-150);
   border-radius: 6px;
   cursor: pointer;
@@ -395,6 +461,15 @@ const emitRefresh = () => {
   justify-content: space-between;
   align-items: center;
   gap: 10px;
+  width: 100%;
+}
+
+.file-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .file-name {
@@ -413,6 +488,29 @@ const emitRefresh = () => {
   color: var(--gray-500);
   font-weight: 400;
   white-space: nowrap;
+}
+
+.download-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+
+  &:hover {
+    color: var(--main-600);
+  }
+
+  &:active {
+    color: var(--main-400);
+  }
 }
 
 .file-content {

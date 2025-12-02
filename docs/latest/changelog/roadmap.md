@@ -12,6 +12,10 @@
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - 集成 neo4j mcp （或者自己构建工具）
 - 文档解析部分的 markdown 中的图片替换为内部可访问的链接 (2/4)
+- 同名文件处理逻辑：遇到同名文件则在上传区域提示，是否删除旧文件
+- conversation 待修改为异步的版本
+- DBManager 需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
+- agent 状态中的文件区域，新增可以下载
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)

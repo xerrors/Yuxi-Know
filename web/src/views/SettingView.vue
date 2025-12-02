@@ -162,7 +162,6 @@
         <ModelProvidersComponent />
       </div>
 
-      <!-- TODO 用户管理优化，添加姓名（默认使用用户名配置项） -->
       <div class="setting" v-if="(state.windowWidth <= 520 || state.section === 'user') && userStore.isAdmin">
          <UserManagementComponent />
       </div>

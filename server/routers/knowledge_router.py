@@ -1065,8 +1065,6 @@ async def upload_file(
         upload_dir = os.path.join(config.save_dir, "database", "uploads")
 
     basename, ext = os.path.splitext(file.filename)
-    # TODO:
-    # 后续修改为遇到同名文件则在上传区域提示，是否删除旧文件，同时 filename name 也就不用添加 hash 了
     filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt='fixed_salt')}{ext}".lower()
 
     file_path = os.path.join(upload_dir, filename)
