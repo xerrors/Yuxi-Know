@@ -5,9 +5,8 @@ from collections.abc import Callable
 from typing import Any, cast
 import traceback
 
-from langchain_mcp_adapters.client import (  # type: ignore[import-untyped]
-    MultiServerMCPClient,
-)
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
 
 from src.utils import logger
 
@@ -21,7 +20,7 @@ MCP_SERVERS = {
         "transport": "streamable_http",
     },
     # "zhipu-web-search-sse": {
-    #     "url": f"https://open.bigmodel.cn/api/mcp/web_search/sse?Authorization={os.getenv('ZHIPU_API_KEY')}",
+    #     "url": f"https://open.bigmodel.cn/api/mcp/web_search/sse?Authorization={os.getenv('ZHIPUAI_API_KEY')}",
     #     "transport": "streamable_http",
     # },
     # 这些 stdio 的 MCP server 需要在本地启动，启动的时候需要安装对应的包，需要时间
@@ -42,10 +41,9 @@ async def get_mcp_client(
     server_configs: dict[str, Any] | None = None,
 ) -> MultiServerMCPClient | None:
     """Initializes an MCP client with the given server configurations."""
-    configs = server_configs or MCP_SERVERS
     try:
-        client = MultiServerMCPClient(configs)  # pyright: ignore[reportArgumentType]
-        logger.info(f"Initialized MCP client with servers: {list(configs.keys())}")
+        client = MultiServerMCPClient(server_configs)  # pyright: ignore[reportArgumentType]
+        logger.info(f"Initialized MCP client with servers: {list(server_configs.keys())}")
         return client
     except Exception as e:
         logger.error("Failed to initialize MCP client: {}", e)
@@ -63,7 +61,7 @@ async def get_mcp_tools(server_name: str, additional_servers: dict[str, dict] = 
     mcp_servers = MCP_SERVERS | (additional_servers or {})
 
     try:
-        assert server_name in mcp_servers, f"Server {server_name} not found in MCP_SERVERS"
+        assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
         client = await get_mcp_client({server_name: mcp_servers[server_name]})
         if client is None:
             return []
@@ -76,7 +74,7 @@ async def get_mcp_tools(server_name: str, additional_servers: dict[str, dict] = 
         logger.info(f"Loaded {len(tools)} tools from MCP server '{server_name}'")
         return tools
     except AssertionError as e:
-        logger.warning(f"Failed to load tools from MCP server '{server_name}': {e}")
+        logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
         return []
     except Exception as e:
         logger.error(f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}")

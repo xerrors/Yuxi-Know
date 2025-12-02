@@ -8,9 +8,10 @@ from src.utils import logger
 
 _mcp_servers = {
     "mcp-server-chart": {
-        "url": "https://mcp.api-inference.modelscope.net/9993ae42524c4c/mcp",
-        "transport": "streamable_http",
-    },
+        "command": "npx",
+        "args": ["-y", "@antv/mcp-server-chart"],
+        "transport": "stdio"
+    }
 }
 
 

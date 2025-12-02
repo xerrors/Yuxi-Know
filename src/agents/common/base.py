@@ -23,11 +23,11 @@ class BaseAgent:
     name = "base_agent"
     description = "base_agent"
     capabilities: list[str] = []  # 智能体能力列表，如 ["file_upload", "web_search"] 等
+    context_schema: type[BaseContext] = BaseContext  # 智能体上下文 schema
 
     def __init__(self, **kwargs):
         self.graph = None  # will be covered by get_graph
         self.checkpointer = None
-        self.context_schema = BaseContext
         self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
         self._metadata_cache = None  # Cache for metadata to avoid repeated file reads

@@ -131,7 +131,7 @@ MCP_SERVERS = {
 
 ```python
 MCP_SERVERS = {
-    "mcp_server_chart": {
+    "mcp-server-chart": {
         "command": "npx",
         "args": ["-y", "@antv/mcp-server-chart"],
         "transport": "stdio"
