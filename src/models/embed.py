@@ -11,7 +11,7 @@ from src.utils import get_docker_safe_url, hashstr, logger
 
 
 class BaseEmbeddingModel(ABC):
-    def __init__(self, model=None, name=None, dimension=None, url=None, base_url=None, api_key=None):
+    def __init__(self, model=None, name=None, dimension=None, url=None, base_url=None, api_key=None, model_id=None):
         """
         Args:
             model: 模型名称，冗余设计，同name
@@ -140,6 +140,7 @@ class OllamaEmbedding(BaseEmbeddingModel):
         payload = {"model": self.model, "input": message}
         async with httpx.AsyncClient() as client:
             try:
+                print(f"\n\n\nOllama Embedding request: {payload}\n\n\n")
                 response = await client.post(self.base_url, json=payload, timeout=60)
                 response.raise_for_status()
                 result = response.json()

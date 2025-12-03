@@ -29,7 +29,7 @@ class EmbedModelInfo(BaseModel):
     dimension: int = Field(..., description="向量维度")
     base_url: str = Field(..., description="API 基础 URL")
     api_key: str = Field(..., description="API Key 或环境变量名")
-
+    model_id: str | None = Field(None, description="可选的模型 ID")
 
 class RerankerInfo(BaseModel):
     """重排序模型配置"""
@@ -158,42 +158,49 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
 
 DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
     "siliconflow/BAAI/bge-m3": EmbedModelInfo(
+        model_id="siliconflow/BAAI/bge-m3",
         name="BAAI/bge-m3",
         dimension=1024,
         base_url="https://api.siliconflow.cn/v1/embeddings",
         api_key="SILICONFLOW_API_KEY",
     ),
     "siliconflow/Pro/BAAI/bge-m3": EmbedModelInfo(
+        model_id="siliconflow/Pro/BAAI/bge-m3",
         name="Pro/BAAI/bge-m3",
         dimension=1024,
         base_url="https://api.siliconflow.cn/v1/embeddings",
         api_key="SILICONFLOW_API_KEY",
     ),
     "siliconflow/Qwen/Qwen3-Embedding-0.6B": EmbedModelInfo(
+        model_id="siliconflow/Qwen/Qwen3-Embedding-0.6B",
         name="Qwen/Qwen3-Embedding-0.6B",
         dimension=1024,
         base_url="https://api.siliconflow.cn/v1/embeddings",
         api_key="SILICONFLOW_API_KEY",
     ),
     "vllm/Qwen/Qwen3-Embedding-0.6B": EmbedModelInfo(
+        model_id="vllm/Qwen/Qwen3-Embedding-0.6B",
         name="Qwen3-Embedding-0.6B",
         dimension=1024,
         base_url="http://localhost:8000/v1/embeddings",
         api_key="no_api_key",
     ),
     "ollama/nomic-embed-text": EmbedModelInfo(
+        model_id="ollama/nomic-embed-text",
         name="nomic-embed-text",
         dimension=768,
         base_url="http://localhost:11434/api/embed",
         api_key="no_api_key",
     ),
     "ollama/bge-m3": EmbedModelInfo(
+        model_id="ollama/bge-m3",
         name="bge-m3",
         dimension=1024,
         base_url="http://localhost:11434/api/embed",
         api_key="no_api_key",
     ),
     "dashscope/text-embedding-v4": EmbedModelInfo(
+        model_id="dashscope/text-embedding-v4",
         name="text-embedding-v4",
         dimension=1024,
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings",

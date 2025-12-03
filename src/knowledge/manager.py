@@ -246,16 +246,12 @@ class KnowledgeBaseManager:
         db_id = db_info["db_id"]
 
         async with self._metadata_lock:
-            # 准备 additional_params，包含 auto_generate_questions
-            saved_params = kwargs.copy()
-            saved_params["auto_generate_questions"] = False
-
             self.global_databases_meta[db_id] = {
                 "name": database_name,
                 "description": description,
                 "kb_type": kb_type,
                 "created_at": utc_isoformat(),
-                "additional_params": saved_params,
+                "additional_params": kwargs.copy(),
             }
             self._save_global_metadata()
 
