@@ -19,7 +19,7 @@ COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN pnpm install
+RUN pnpm install --registry=https://registry.npmmirror.com
 
 # 复制源代码
 COPY ./web .
