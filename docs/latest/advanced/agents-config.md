@@ -217,6 +217,8 @@ all_tools = await get_all_mcp_tools()
 ```
 ### MySQL 数据库
 
+在 数据库报表助手（SqlReporterAgent） 中，可以通过配置下面环境变量，让 Agent 能够连接到 MySQL 数据库。并通过执行 SQL 查询，获取数据库中的数据。
+
 设置数据库连接时，在 `.env` 中提供以下字段：
 
 ```env
@@ -229,7 +231,7 @@ MYSQL_PORT=3306
 MYSQL_CHARSET=utf8mb4
 ```
 
-所有查询限定在只读范围（SELECT、SHOW、DESCRIBE、EXPLAIN），请求会经过表名校验与超时控制，默认限制 60 秒与 100 行输出，并可通过配置调整上限。连接信息会反馈给 LangGraph，智能体可以自动陈述数据库用途并选择更准确的检索策略。
+所有查询限定在只读范围（SELECT、SHOW、DESCRIBE、EXPLAIN），请求会经过表名校验与超时控制，默认限制 60 秒与 100 行输出，并可通过配置调整上限。连接信息会反馈给 LangGraph，智能体可以自动陈述数据库用途并选择更准确的检索策略。详见代码部分 `src/agents/common/toolkits/mysql/`
 
 ### 多模态图片支持
 
