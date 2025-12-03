@@ -11,6 +11,7 @@ node_modules
 ### common gitignore
 .DS_Store
 .env
+.env.prod
 .env.test
 .env.local
 .env.*.local

@@ -41,7 +41,7 @@ COPY ./web/package*.json ./
 COPY ./web/pnpm-lock.yaml* ./
 
 # 安装依赖
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --registry=https://registry.npmmirror.com
 
 # 复制源代码并构建
 COPY ./web .

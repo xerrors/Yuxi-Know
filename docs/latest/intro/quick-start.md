@@ -34,7 +34,7 @@ cd Yuxi-Know
 cp .env.template .env
 ```
 
-编辑 `.env` 文件，配置必需的 API 密钥：
+编辑 `.env` 文件，配置必需的 API 密钥，这里强烈建议先使用硅基流动的 API 和模型（DeepSeek）验证平台的功能无误后，再尝试切换到自己的模型：
 
 
 <<< @/../.env.template#model_provider{bash 5}
@@ -91,10 +91,10 @@ docker logs web-dev -f
 
 ```bash
 # Linux/macOS
-bash docker/pull_image.sh python:3.11-slim
+bash docker/pull_image.sh python:3.12-slim
 
 # Windows PowerShell
-powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1 python:3.11-slim
+powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1 python:3.12-slim
 ```
 
 **离线部署方案**：

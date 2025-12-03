@@ -3,29 +3,17 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-    image: yuxi-api:0.4.dev
-    container_name: api-dev
+    image: yuxi-api:0.4.prod
+    container_name: api-prod
     working_dir: /app
-    volumes:
-      - ./server:/app/server
-      - ./src:/app/src
-      - ./saves:/app/saves
-      - ./test:/app/test
-      - ./scripts:/app/scripts
-      - ./.env:/app/.env
-      - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
-    ports:
-      - "5050:5050"
     networks:
       - app-network
+    volumes:
+      - ./saves:/app/saves
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
-      - .env
-    # region api_envs
+      - .env.prod
     environment:
       - HOST_IP=${HOST_IP:-}
       - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
@@ -38,10 +26,9 @@ services:
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
       - RUNNING_IN_DOCKER=true
-      - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
-      - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
-    # endregion api_envs
-    command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
+      - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,api.siliconflow.cn
+    command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5050/api/system/health || exit 1"]
@@ -50,8 +37,6 @@ services:
       retries: 8
       start_period: 180s
     depends_on:
-      # postgres:
-      #   condition: service_healthy
       milvus:
         condition: service_healthy
       minio:
@@ -61,33 +46,24 @@ services:
     build:
       context: .
       dockerfile: docker/web.Dockerfile
-      target: development
-    image: yuxi-web:0.4.dev
-    container_name: web-dev
-    volumes:
-      - ./web/src:/app/src
-      - ./web/public:/app/public
-      - ./web/index.html:/app/index.html
-      - ./web/vite.config.js:/app/vite.config.js
+      target: production
+    image: yuxi-web:0.4.prod
+    container_name: web-prod
     ports:
-      - "5173:5173"
+      - "80:80"
     depends_on:
       - api
     networks:
       - app-network
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - VITE_API_URL=http://api:5050
-    command: pnpm run server
+    command: nginx -g "daemon off;"
     restart: unless-stopped
 
-  # region neo4j
   graph:
     image: neo4j:5.26
     container_name: graph
-    ports:
-      - "7474:7474"
-      - "7687:7687"
     volumes:
       - ./docker/volumes/neo4j/data:/data
       - ./docker/volumes/neo4j/logs:/var/lib/neo4j/logs
@@ -105,10 +81,9 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-  # endregion neo4j
 
   etcd:
-    container_name: milvus-etcd-dev
+    container_name: milvus-etcd
     image: quay.io/coreos/etcd:v3.5.5
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
@@ -144,9 +119,6 @@ services:
       timeout: 30s
       retries: 5
       start_period: 30s
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     networks:
       - app-network
     restart: unless-stopped
@@ -170,9 +142,6 @@ services:
       start_period: 120s
       timeout: 30s
       retries: 5
-    ports:
-      - "19530:19530"
-      - "9091:9091"
     depends_on:
       - "etcd"
       - "minio"
@@ -180,7 +149,6 @@ services:
       - app-network
     restart: unless-stopped
 
-  # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
   mineru-vllm-server:
     build:
       context: .
@@ -191,17 +159,12 @@ services:
       - all
     env_file:
       - .env
-    ports:
-      - 30000:30000
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-vllm-server
     command:
       --host 0.0.0.0
       --port 30000
-      # parameters for vllm-engine
-      # --data-parallel-size 2  # If using multiple GPUs, increase throughput using vllm's multi-GPU parallel mode
-      # --gpu-memory-utilization 0.5  # If running on a single GPU and encountering VRAM shortage, reduce the KV cache size by this parameter, if VRAM issues persist, try lowering it further to `0.4` or below.
     ulimits:
       memlock: -1
       stack: 67108864
@@ -229,17 +192,12 @@ services:
       - all
     env_file:
       - .env
-    ports:
-      - 30001:30001
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-api
     command:
       --host 0.0.0.0
       --port 30001
-      # parameters for vllm-engine
-      # --data-parallel-size 2  # If using multiple GPUs, increase throughput using vllm's multi-GPU parallel mode
-      # --gpu-memory-utilization 0.5  # If running on a single GPU and encountering VRAM shortage, reduce the KV cache size by this parameter, if VRAM issues persist, try lowering it further to `0.4` or below.
     ulimits:
       memlock: -1
       stack: 67108864
@@ -263,8 +221,6 @@ services:
       - all
     volumes:
       - ./docker/volumes/paddlex:/paddlex
-    ports:
-      - "8080:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 20s
