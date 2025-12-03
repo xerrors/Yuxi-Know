@@ -15,12 +15,12 @@
 - 同名文件处理逻辑：遇到同名文件则在上传区域提示，是否删除旧文件
 - conversation 待修改为异步的版本
 - DBManager 需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
-- agent 状态中的文件区域，新增可以下载
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
 - DeepSeek 官方接口适配会出现问题
 - 目前的知识库的图片存在公开访问风险
+- 深度分析智能体需要考虑上下文超限的问题
 
 ### 新增
 - 优化知识库详情页面，更加简洁清晰
@@ -34,6 +34,8 @@
 - 新增自定义模型支持、新增 dashscope rerank/embeddings 模型的支持
 - 新增文档解析的图片支持，已支持 MinerU Officical、Docs、Markdown Zip格式
 - 新增暗色模式支持并调整整体 UI（[#343](https://github.com/xerrors/Yuxi-Know/pull/343)）
+- agent 状态中的文件区域，新增可以下载
+- 移除 Chroma 的支持，当前版本标记为移除
 
 ### 修复
 - 修复重排序模型实际未生效的问题
