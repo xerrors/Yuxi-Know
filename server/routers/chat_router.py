@@ -678,7 +678,7 @@ async def chat_agent(
                     new_conv_manager,
                     thread_id,
                     full_msg=full_msg,
-                    error_message=error_msg if not full_msg else None,
+                    error_message=error_msg,
                     error_type=error_type,
                 )
             finally:
