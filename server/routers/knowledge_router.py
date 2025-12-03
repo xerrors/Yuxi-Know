@@ -87,10 +87,12 @@ async def create_database(
     """创建知识库"""
     logger.debug(
         f"Create database {database_name} with kb_type {kb_type}, "
-        f"additional_params {additional_params}, llm_info {llm_info}"
+        f"additional_params {additional_params}, llm_info {llm_info}, "
+        f"embed_model_name {embed_model_name}"
     )
     try:
         additional_params = {**(additional_params or {})}
+        additional_params["auto_generate_questions"] = False  # 默认不生成问题
 
         def normalize_reranker_config(kb: str, params: dict) -> None:
             reranker_cfg = params.get("reranker_config")
@@ -112,12 +114,12 @@ async def create_database(
             if not isinstance(reranker_cfg, Mapping):
                 raise HTTPException(status_code=400, detail="reranker_config must be an object")
 
-            enabled = bool(reranker_cfg.get("enabled", False))
+            reranker_enabled = bool(reranker_cfg.get("enabled", False))
             model = (reranker_cfg.get("model") or "").strip()
             recall_top_k = max(1, int(reranker_cfg.get("recall_top_k", 50)))
             final_top_k = max(1, int(reranker_cfg.get("final_top_k", 10)))
 
-            if enabled:
+            if reranker_enabled:
                 if not model:
                     raise HTTPException(status_code=400, detail="reranker_config.model is required when enabled")
                 if model not in config.reranker_names:
@@ -132,7 +134,7 @@ async def create_database(
                 model = model if model in config.reranker_names else ""
 
             params["reranker_config"] = {
-                "enabled": enabled,
+                "enabled": reranker_enabled,
                 "model": model,
                 "recall_top_k": recall_top_k,
                 "final_top_k": final_top_k,

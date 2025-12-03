@@ -247,15 +247,23 @@ def get_embedding_config(embed_info: dict) -> dict:
 
     try:
         if embed_info:
-            # 处理 embed_info 可能是字典或 EmbedModelInfo 对象的情况
-            if hasattr(embed_info, "name"):
+            # 优先检查是否有 model_id 字段
+            if "model_id" in embed_info:
+                from src.models.embed import select_embedding_model
+
+                model = select_embedding_model(embed_info["model_id"])
+                config_dict["model"] = model.model
+                config_dict["api_key"] = model.api_key
+                config_dict["base_url"] = model.base_url
+                config_dict["dimension"] = getattr(model, "dimension", 1024)
+            elif hasattr(embed_info, "name"):
                 # EmbedModelInfo 对象
                 config_dict["model"] = embed_info.name
                 config_dict["api_key"] = os.getenv(embed_info.api_key) or embed_info.api_key
                 config_dict["base_url"] = embed_info.base_url
                 config_dict["dimension"] = embed_info.dimension
             else:
-                # 字典形式
+                # 字典形式（保持向后兼容）
                 config_dict["model"] = embed_info["name"]
                 config_dict["api_key"] = os.getenv(embed_info["api_key"]) or embed_info["api_key"]
                 config_dict["base_url"] = embed_info["base_url"]

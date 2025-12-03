@@ -7,6 +7,7 @@ from typing import Any
 
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
+from src import config
 from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils.kb_utils import (
@@ -91,10 +92,14 @@ class MilvusKB(KnowledgeBase):
         """创建 Milvus 集合"""
         logger.info(f"Creating Milvus collection for {db_id}")
 
-        if db_id not in self.databases_meta:
+        if not (metadata := self.databases_meta.get(db_id)):
             raise ValueError(f"Database {db_id} not found")
 
-        embed_info = self.databases_meta[db_id].get("embed_info", {})
+        # embed_info = metadata.get("embed_info", {})
+        if not (embed_info := metadata.get("embed_info")):
+            logger.error(f"Embedding info not found for database {db_id}, using default model")
+            embed_info = config.embed_model_names[config.embed_model]
+
         collection_name = db_id
 
         try:
@@ -117,8 +122,8 @@ class MilvusKB(KnowledgeBase):
 
         except Exception:
             # 创建新集合
-            embedding_dim = getattr(embed_info, "dimension", 1024) if embed_info else 1024
-            model_name = getattr(embed_info, "name", "default") if embed_info else "default"
+            embedding_dim = embed_info.get("dimension", 1024)
+            model_name = embed_info.get("name", "default")
 
             # 定义集合Schema
             fields = [
@@ -142,7 +147,7 @@ class MilvusKB(KnowledgeBase):
             index_params = {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
             collection.create_index("embedding", index_params)
 
-            logger.info(f"Created new Milvus collection: {collection_name}")
+            logger.info(f"Created new Milvus collection: {collection_name}: {model_name=}, {embedding_dim=}")
 
         return collection
 
@@ -154,25 +159,29 @@ class MilvusKB(KnowledgeBase):
         except Exception as e:
             logger.warning(f"Failed to load collection into memory: {e}")
 
-    def _get_async_embedding_function(self, embed_info: dict):
+    def _get_async_embedding(self, embed_info: dict):
         """获取 embedding 函数"""
+        # 检查是否有 model_id 字段，优先使用 select_embedding_model
+        if embed_info and "model_id" in embed_info:
+            from src.models.embed import select_embedding_model
+            return select_embedding_model(embed_info["model_id"])
+
+        # 使用原有的逻辑（兼容模式））
         config_dict = get_embedding_config(embed_info)
-        embedding_model = OtherEmbedding(
+        return OtherEmbedding(
             model=config_dict.get("model"),
             base_url=config_dict.get("base_url"),
             api_key=config_dict.get("api_key"),
         )
 
+    def _get_async_embedding_function(self, embed_info: dict):
+        """获取 embedding 函数"""
+        embedding_model = self._get_async_embedding(embed_info)
         return partial(embedding_model.abatch_encode, batch_size=40)
 
     def _get_embedding_function(self, embed_info: dict):
         """获取 embedding 函数"""
-        config_dict = get_embedding_config(embed_info)
-        embedding_model = OtherEmbedding(
-            model=config_dict.get("model"),
-            base_url=config_dict.get("base_url"),
-            api_key=config_dict.get("api_key"),
-        )
+        embedding_model = self._get_async_embedding(embed_info)
 
         return partial(embedding_model.batch_encode, batch_size=40)
 
