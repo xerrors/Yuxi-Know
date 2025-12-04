@@ -1,9 +1,10 @@
 import json
 import os
 import pathlib
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from server.utils.singleton import SingletonMeta
@@ -20,26 +21,34 @@ except ImportError:
     def validate_database_schema(db_path):
         return True, []
 
-# TODO:[优化建议]需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
+# TODO:[已完成]为DBManager添加异步支持
 # TODO:[已完成]为DBManager添加单例模式
 
 
 class DBManager(metaclass=SingletonMeta):
-    """数据库管理器 - 只提供基础的数据库连接和会话管理"""
+    """数据库管理器 - 提供异步数据库连接和会话管理"""
 
     def __init__(self):
         self.db_path = os.path.join(config.save_dir, "database", "server.db")
         self.ensure_db_dir()
 
-        # 创建SQLAlchemy引擎，配置JSON序列化器以支持中文
+        # 创建异步SQLAlchemy引擎，配置JSON序列化器以支持中文
         # 使用 ensure_ascii=False 确保中文字符不被转义为 Unicode 序列
+        self.async_engine = create_async_engine(
+            f"sqlite+aiosqlite:///{self.db_path}",
+            json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
+            json_deserializer=json.loads,
+        )
+
+        # 创建异步会话工厂
+        self.AsyncSession = async_sessionmaker(bind=self.async_engine, class_=AsyncSession, expire_on_commit=False)
+
+        # 保留同步引擎用于迁移等特殊操作
         self.engine = create_engine(
             f"sqlite:///{self.db_path}",
             json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
             json_deserializer=json.loads,
         )
-
-        # 创建会话工厂
         self.Session = sessionmaker(bind=self.engine)
 
         # 首先创建基本表结构
@@ -86,12 +95,12 @@ class DBManager(metaclass=SingletonMeta):
             logger.warning("=" * 60)
 
     def get_session(self):
-        """获取数据库会话"""
+        """获取同步数据库会话"""
         return self.Session()
 
     @contextmanager
     def get_session_context(self):
-        """获取数据库会话的上下文管理器"""
+        """获取同步数据库会话的上下文管理器"""
         session = self.Session()
         try:
             yield session
@@ -102,6 +111,24 @@ class DBManager(metaclass=SingletonMeta):
             raise
         finally:
             session.close()
+
+    async def get_async_session(self):
+        """获取异步数据库会话"""
+        return self.AsyncSession()
+
+    @asynccontextmanager
+    async def get_async_session_context(self):
+        """获取异步数据库会话的上下文管理器"""
+        session = self.AsyncSession()
+        try:
+            yield session
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            logger.error(f"Async database operation failed: {e}")
+            raise
+        finally:
+            await session.close()
 
     def check_first_run(self):
         """检查是否首次运行"""

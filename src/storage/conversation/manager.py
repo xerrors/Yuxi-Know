@@ -1,27 +1,28 @@
 """
-Conversation Storage Manager
+Conversation Storage Manager (Async)
 
 Manages conversation data storage including messages, tool calls, and statistics.
+All database operations are now asynchronous for improved performance.
 """
 
 import uuid
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.storage.db.models import Conversation, ConversationStats, Message, ToolCall
 from src.utils import logger
 from src.utils.datetime_utils import utc_now
 
-# TODO:[未完成]待修改为异步版本
-
 
 class ConversationManager:
-    """Manager for conversation storage operations"""
+    """Async Manager for conversation storage operations"""
 
-    def __init__(self, db_session: Session):
+    def __init__(self, db_session: AsyncSession):
         self.db = db_session
 
-    def create_conversation(
+    async def create_conversation(
         self,
         user_id: str,
         agent_id: str,
@@ -59,18 +60,18 @@ class ConversationManager:
 
         self.db.add(conversation)
         # Flush to assign primary key without committing
-        self.db.flush()
+        await self.db.flush()
 
         # Create associated stats record and commit once
         stats = ConversationStats(conversation_id=conversation.id)
         self.db.add(stats)
-        self.db.commit()
-        self.db.refresh(conversation)
+        await self.db.commit()
+        await self.db.refresh(conversation)
 
         logger.info(f"Created conversation: {conversation.thread_id} for user {user_id}")
         return conversation
 
-    def get_conversation_by_thread_id(self, thread_id: str) -> Conversation | None:
+    async def get_conversation_by_thread_id(self, thread_id: str) -> Conversation | None:
         """
         Get conversation by thread ID
 
@@ -80,10 +81,12 @@ class ConversationManager:
         Returns:
             Conversation object or None if not found
         """
-        return self.db.query(Conversation).filter(Conversation.thread_id == thread_id).first()
+        result = await self.db.execute(select(Conversation).filter(Conversation.thread_id == thread_id))
+        return result.scalar_one_or_none()
 
-    def _get_conversation_by_id(self, conversation_id: int) -> Conversation | None:
-        return self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    async def _get_conversation_by_id(self, conversation_id: int) -> Conversation | None:
+        result = await self.db.execute(select(Conversation).filter(Conversation.id == conversation_id))
+        return result.scalar_one_or_none()
 
     def _ensure_metadata(self, conversation: Conversation) -> dict:
         """
@@ -96,13 +99,13 @@ class ConversationManager:
         metadata["attachments"] = list(metadata.get("attachments", []))
         return metadata
 
-    def _save_metadata(self, conversation: Conversation, metadata: dict) -> None:
+    async def _save_metadata(self, conversation: Conversation, metadata: dict) -> None:
         conversation.extra_metadata = metadata
         conversation.updated_at = utc_now()
-        self.db.commit()
-        self.db.refresh(conversation)
+        await self.db.commit()
+        await self.db.refresh(conversation)
 
-    def add_message(
+    async def add_message(
         self,
         conversation_id: int,
         role: str,
@@ -136,20 +139,20 @@ class ConversationManager:
 
         self.db.add(message)
         # Mark the parent conversation as active for sorting/analytics
-        conversation = self._get_conversation_by_id(conversation_id)
+        conversation = await self._get_conversation_by_id(conversation_id)
         if conversation:
             conversation.updated_at = utc_now()
 
-        self.db.commit()
-        self.db.refresh(message)
+        await self.db.commit()
+        await self.db.refresh(message)
 
         # Update conversation stats
-        self._update_message_count(conversation_id)
+        await self._update_message_count(conversation_id)
 
         logger.debug(f"Added {role} message to conversation {conversation_id}")
         return message
 
-    def add_message_by_thread_id(
+    async def add_message_by_thread_id(
         self,
         thread_id: str,
         role: str,
@@ -172,12 +175,12 @@ class ConversationManager:
         Returns:
             Created Message object or None if conversation not found
         """
-        conversation = self.get_conversation_by_thread_id(thread_id)
+        conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
             logger.warning(f"Conversation not found for thread_id: {thread_id}")
             return None
 
-        return self.add_message(
+        return await self.add_message(
             conversation_id=conversation.id,
             role=role,
             content=content,
@@ -186,7 +189,7 @@ class ConversationManager:
             image_content=image_content,
         )
 
-    def add_tool_call(
+    async def add_tool_call(
         self,
         message_id: int,
         tool_name: str,
@@ -222,13 +225,13 @@ class ConversationManager:
         )
 
         self.db.add(tool_call)
-        self.db.commit()
-        self.db.refresh(tool_call)
+        await self.db.commit()
+        await self.db.refresh(tool_call)
 
         logger.debug(f"Added tool call {tool_name} to message {message_id}")
         return tool_call
 
-    def get_messages(self, conversation_id: int, limit: int | None = None, offset: int = 0) -> list[Message]:
+    async def get_messages(self, conversation_id: int, limit: int | None = None, offset: int = 0) -> list[Message]:
         """
         Get messages for a conversation
 
@@ -241,18 +244,21 @@ class ConversationManager:
             List of Message objects
         """
         query = (
-            self.db.query(Message)
+            select(Message)
+            .options(selectinload(Message.tool_calls))
             .filter(Message.conversation_id == conversation_id)
             .order_by(Message.created_at.asc())
-            .options(joinedload(Message.tool_calls))
         )
 
         if limit:
             query = query.limit(limit).offset(offset)
 
-        return query.all()
+        result = await self.db.execute(query)
+        return result.scalars().unique().all()
 
-    def get_messages_by_thread_id(self, thread_id: str, limit: int | None = None, offset: int = 0) -> list[Message]:
+    async def get_messages_by_thread_id(
+        self, thread_id: str, limit: int | None = None, offset: int = 0
+    ) -> list[Message]:
         """
         Get messages for a conversation by thread ID
 
@@ -264,14 +270,14 @@ class ConversationManager:
         Returns:
             List of Message objects
         """
-        conversation = self.get_conversation_by_thread_id(thread_id)
+        conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
             logger.warning(f"Conversation not found for thread_id: {thread_id}")
             return []
 
-        return self.get_messages(conversation.id, limit, offset)
+        return await self.get_messages(conversation.id, limit, offset)
 
-    def list_conversations(
+    async def list_conversations(
         self, user_id: str | None = None, agent_id: str | None = None, status: str = "active"
     ) -> list[Conversation]:
         """
@@ -285,7 +291,7 @@ class ConversationManager:
         Returns:
             List of Conversation objects
         """
-        query = self.db.query(Conversation).filter(Conversation.status == status)
+        query = select(Conversation).filter(Conversation.status == status)
 
         # Only filter by user_id if it's provided and not empty
         if user_id:
@@ -294,9 +300,11 @@ class ConversationManager:
         if agent_id:
             query = query.filter(Conversation.agent_id == agent_id)
 
-        return query.order_by(Conversation.updated_at.desc()).all()
+        query = query.order_by(Conversation.updated_at.desc())
+        result = await self.db.execute(query)
+        return result.scalars().all()
 
-    def update_conversation(
+    async def update_conversation(
         self,
         thread_id: str,
         title: str | None = None,
@@ -315,7 +323,7 @@ class ConversationManager:
         Returns:
             Updated Conversation object or None if not found
         """
-        conversation = self.get_conversation_by_thread_id(thread_id)
+        conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
             return None
 
@@ -331,13 +339,13 @@ class ConversationManager:
             conversation.extra_metadata = current_metadata
 
         conversation.updated_at = utc_now()
-        self.db.commit()
-        self.db.refresh(conversation)
+        await self.db.commit()
+        await self.db.refresh(conversation)
 
         logger.info(f"Updated conversation {thread_id}")
         return conversation
 
-    def delete_conversation(self, thread_id: str, soft_delete: bool = True) -> bool:
+    async def delete_conversation(self, thread_id: str, soft_delete: bool = True) -> bool:
         """
         Delete a conversation
 
@@ -348,22 +356,22 @@ class ConversationManager:
         Returns:
             True if successful, False otherwise
         """
-        conversation = self.get_conversation_by_thread_id(thread_id)
+        conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
             return False
 
         if soft_delete:
             conversation.status = "deleted"
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Soft deleted conversation {thread_id}")
         else:
             self.db.delete(conversation)
-            self.db.commit()
+            await self.db.commit()
             logger.info(f"Permanently deleted conversation {thread_id}")
 
         return True
 
-    def get_stats(self, conversation_id: int) -> ConversationStats | None:
+    async def get_stats(self, conversation_id: int) -> ConversationStats | None:
         """
         Get conversation statistics
 
@@ -373,9 +381,12 @@ class ConversationManager:
         Returns:
             ConversationStats object or None if not found
         """
-        return self.db.query(ConversationStats).filter(ConversationStats.conversation_id == conversation_id).first()
+        result = await self.db.execute(
+            select(ConversationStats).filter(ConversationStats.conversation_id == conversation_id)
+        )
+        return result.scalar_one_or_none()
 
-    def update_stats(
+    async def update_stats(
         self,
         conversation_id: int,
         tokens_used: int | None = None,
@@ -394,7 +405,7 @@ class ConversationManager:
         Returns:
             Updated ConversationStats object or None if not found
         """
-        stats = self.get_stats(conversation_id)
+        stats = await self.get_stats(conversation_id)
         if not stats:
             return None
 
@@ -406,12 +417,12 @@ class ConversationManager:
             stats.user_feedback = user_feedback
 
         stats.updated_at = utc_now()
-        self.db.commit()
-        self.db.refresh(stats)
+        await self.db.commit()
+        await self.db.refresh(stats)
 
         return stats
 
-    def get_tool_call_by_langgraph_id(self, langgraph_tool_call_id: str) -> ToolCall | None:
+    async def get_tool_call_by_langgraph_id(self, langgraph_tool_call_id: str) -> ToolCall | None:
         """
         Get tool call by LangGraph tool_call_id
 
@@ -421,9 +432,12 @@ class ConversationManager:
         Returns:
             ToolCall object or None if not found
         """
-        return self.db.query(ToolCall).filter(ToolCall.langgraph_tool_call_id == langgraph_tool_call_id).first()
+        result = await self.db.execute(
+            select(ToolCall).filter(ToolCall.langgraph_tool_call_id == langgraph_tool_call_id)
+        )
+        return result.scalar_one_or_none()
 
-    def update_tool_call_output(
+    async def update_tool_call_output(
         self,
         langgraph_tool_call_id: str,
         tool_output: str,
@@ -442,7 +456,7 @@ class ConversationManager:
         Returns:
             Updated ToolCall object or None if not found
         """
-        tool_call = self.get_tool_call_by_langgraph_id(langgraph_tool_call_id)
+        tool_call = await self.get_tool_call_by_langgraph_id(langgraph_tool_call_id)
         if not tool_call:
             logger.warning(f"Tool call not found for langgraph_tool_call_id: {langgraph_tool_call_id}")
             return None
@@ -452,44 +466,47 @@ class ConversationManager:
         if error_message:
             tool_call.error_message = error_message
 
-        self.db.commit()
-        self.db.refresh(tool_call)
+        await self.db.commit()
+        await self.db.refresh(tool_call)
 
         logger.debug(f"Updated tool call {langgraph_tool_call_id} with output")
         return tool_call
 
-    def _update_message_count(self, conversation_id: int) -> None:
+    async def _update_message_count(self, conversation_id: int) -> None:
         """
         Update message count in conversation stats
 
         Args:
             conversation_id: Conversation ID
         """
-        stats = self.get_stats(conversation_id)
+        from sqlalchemy import func
+
+        stats = await self.get_stats(conversation_id)
         if stats:
-            message_count = self.db.query(Message).filter(Message.conversation_id == conversation_id).count()
+            result = await self.db.execute(select(func.count()).filter(Message.conversation_id == conversation_id))
+            message_count = result.scalar()
             stats.message_count = message_count
-            self.db.commit()
+            await self.db.commit()
 
     # -------------------------------------------------------------------------
     # Attachment helpers
     # -------------------------------------------------------------------------
 
-    def get_attachments(self, conversation_id: int) -> list[dict]:
-        conversation = self._get_conversation_by_id(conversation_id)
+    async def get_attachments(self, conversation_id: int) -> list[dict]:
+        conversation = await self._get_conversation_by_id(conversation_id)
         if not conversation:
             return []
         metadata = self._ensure_metadata(conversation)
         return list(metadata.get("attachments", []))
 
-    def get_attachments_by_thread_id(self, thread_id: str) -> list[dict]:
-        conversation = self.get_conversation_by_thread_id(thread_id)
+    async def get_attachments_by_thread_id(self, thread_id: str) -> list[dict]:
+        conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
             return []
-        return self.get_attachments(conversation.id)
+        return await self.get_attachments(conversation.id)
 
-    def add_attachment(self, conversation_id: int, attachment_info: dict) -> dict | None:
-        conversation = self._get_conversation_by_id(conversation_id)
+    async def add_attachment(self, conversation_id: int, attachment_info: dict) -> dict | None:
+        conversation = await self._get_conversation_by_id(conversation_id)
         if not conversation:
             return None
 
@@ -498,13 +515,13 @@ class ConversationManager:
         attachments = [item for item in attachments if item.get("file_id") != attachment_info.get("file_id")]
         attachments.append(attachment_info)
         metadata["attachments"] = attachments
-        self._save_metadata(conversation, metadata)
+        await self._save_metadata(conversation, metadata)
         return attachment_info
 
-    def update_attachment_status(
+    async def update_attachment_status(
         self, conversation_id: int, file_id: str, status: str, update_fields: dict | None = None
     ) -> dict | None:
-        conversation = self._get_conversation_by_id(conversation_id)
+        conversation = await self._get_conversation_by_id(conversation_id)
         if not conversation:
             return None
 
@@ -521,11 +538,11 @@ class ConversationManager:
 
         if target is not None:
             metadata["attachments"] = attachments
-            self._save_metadata(conversation, metadata)
+            await self._save_metadata(conversation, metadata)
         return target
 
-    def remove_attachment(self, conversation_id: int, file_id: str) -> bool:
-        conversation = self._get_conversation_by_id(conversation_id)
+    async def remove_attachment(self, conversation_id: int, file_id: str) -> bool:
+        conversation = await self._get_conversation_by_id(conversation_id)
         if not conversation:
             return False
 
@@ -537,5 +554,5 @@ class ConversationManager:
             return False
 
         metadata["attachments"] = new_attachments
-        self._save_metadata(conversation, metadata)
+        await self._save_metadata(conversation, metadata)
         return True

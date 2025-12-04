@@ -983,8 +983,6 @@ const selectChat = async (chatId) => {
   chatUIStore.isLoadingMessages = true;
   try {
     await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId });
-    await loadThreadAttachments(chatId, { silent: true });
-    await fetchAgentState(currentAgentId.value, chatId);
   } catch (error) {
     handleChatError(error, 'load');
   } finally {
@@ -993,6 +991,8 @@ const selectChat = async (chatId) => {
 
   await nextTick();
   scrollController.scrollToBottomStaticForce();
+  await loadThreadAttachments(chatId, { silent: true });
+  await fetchAgentState(currentAgentId.value, chatId);
 };
 
 const deleteChat = async (chatId) => {

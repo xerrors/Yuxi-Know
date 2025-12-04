@@ -9,8 +9,8 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import String, cast, distinct, func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy import String, cast, distinct, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db
@@ -110,7 +110,7 @@ async def get_all_conversations(
     status: str = "active",
     limit: int = 100,
     offset: int = 0,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get all conversations (Admin only)"""
@@ -118,8 +118,9 @@ async def get_all_conversations(
 
     try:
         # Build query
-        query = db.query(Conversation, ConversationStats).outerjoin(
-            ConversationStats, Conversation.id == ConversationStats.conversation_id
+        query = (
+            select(Conversation, ConversationStats)
+            .outerjoin(ConversationStats, Conversation.id == ConversationStats.conversation_id)
         )
 
         # Apply filters
@@ -133,7 +134,8 @@ async def get_all_conversations(
         # Order and paginate
         query = query.order_by(Conversation.updated_at.desc()).limit(limit).offset(offset)
 
-        results = query.all()
+        result = await db.execute(query)
+        results = result.all()
 
         return [
             {
@@ -157,7 +159,7 @@ async def get_all_conversations(
 @dashboard.get("/conversations/{thread_id}", response_model=ConversationDetailResponse)
 async def get_conversation_detail(
     thread_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get conversation detail (Admin only)"""
@@ -225,7 +227,7 @@ async def get_conversation_detail(
 
 @dashboard.get("/stats/users", response_model=UserActivityStats)
 async def get_user_activity_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get user activity statistics (Admin only)"""
@@ -242,40 +244,38 @@ async def get_user_activity_stats(
         )
 
         # 基础用户统计（排除已删除用户）
-        total_users = db.query(func.count(User.id)).filter(User.is_deleted == 0).scalar() or 0
+        total_users_result = await db.execute(select(func.count(User.id)).filter(User.is_deleted == 0))
+        total_users = total_users_result.scalar() or 0
 
         # 不同时间段的活跃用户数（基于对话活动，排除已删除用户）
-        active_users_24h = (
-            db.query(func.count(distinct(User.id)))
+        active_users_24h_result = await db.execute(
+            select(func.count(distinct(User.id)))
             .select_from(Conversation)
             .join(User, user_join_condition)
             .filter(Conversation.updated_at >= now - timedelta(days=1), User.is_deleted == 0)
-            .scalar()
-            or 0
         )
+        active_users_24h = active_users_24h_result.scalar() or 0
 
-        active_users_30d = (
-            db.query(func.count(distinct(User.id)))
+        active_users_30d_result = await db.execute(
+            select(func.count(distinct(User.id)))
             .select_from(Conversation)
             .join(User, user_join_condition)
             .filter(Conversation.updated_at >= now - timedelta(days=30), User.is_deleted == 0)
-            .scalar()
-            or 0
         )
+        active_users_30d = active_users_30d_result.scalar() or 0
         # 最近7天每日活跃用户（排除已删除用户）
         daily_active_users = []
         for i in range(7):
             day_start = now - timedelta(days=i + 1)
             day_end = now - timedelta(days=i)
 
-            active_count = (
-                db.query(func.count(distinct(User.id)))
+            active_count_result = await db.execute(
+                select(func.count(distinct(User.id)))
                 .select_from(Conversation)
                 .join(User, user_join_condition)
                 .filter(Conversation.updated_at >= day_start, Conversation.updated_at < day_end, User.is_deleted == 0)
-                .scalar()
-                or 0
             )
+            active_count = active_count_result.scalar() or 0
 
             daily_active_users.append({"date": day_start.strftime("%Y-%m-%d"), "active_users": active_count})
 
@@ -299,7 +299,7 @@ async def get_user_activity_stats(
 
 @dashboard.get("/stats/tools", response_model=ToolCallStats)
 async def get_tool_call_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get tool call statistics (Admin only)"""
@@ -309,28 +309,31 @@ async def get_tool_call_stats(
         now = utc_now()
 
         # 基础工具调用统计
-        total_calls = db.query(func.count(ToolCall.id)).scalar() or 0
-        successful_calls = db.query(func.count(ToolCall.id)).filter(ToolCall.status == "success").scalar() or 0
+        total_calls_result = await db.execute(select(func.count(ToolCall.id)))
+        total_calls = total_calls_result.scalar() or 0
+
+        successful_calls_result = await db.execute(select(func.count(ToolCall.id)).filter(ToolCall.status == "success"))
+        successful_calls = successful_calls_result.scalar() or 0
         failed_calls = total_calls - successful_calls
         success_rate = round((successful_calls / total_calls * 100), 2) if total_calls > 0 else 0
 
         # 最常用工具
-        most_used_tools = (
-            db.query(ToolCall.tool_name, func.count(ToolCall.id).label("count"))
+        most_used_tools_result = await db.execute(
+            select(ToolCall.tool_name, func.count(ToolCall.id).label("count"))
             .group_by(ToolCall.tool_name)
             .order_by(func.count(ToolCall.id).desc())
             .limit(10)
-            .all()
         )
+        most_used_tools = most_used_tools_result.all()
         most_used_tools = [{"tool_name": name, "count": count} for name, count in most_used_tools]
 
         # 工具错误分布
-        tool_errors = (
-            db.query(ToolCall.tool_name, func.count(ToolCall.id).label("error_count"))
+        tool_errors_result = await db.execute(
+            select(ToolCall.tool_name, func.count(ToolCall.id).label("error_count"))
             .filter(ToolCall.status == "error")
             .group_by(ToolCall.tool_name)
-            .all()
         )
+        tool_errors = tool_errors_result.all()
         tool_error_distribution = {name: count for name, count in tool_errors}
 
         # 最近7天每日工具调用数
@@ -339,12 +342,11 @@ async def get_tool_call_stats(
             day_start = now - timedelta(days=i + 1)
             day_end = now - timedelta(days=i)
 
-            daily_count = (
-                db.query(func.count(ToolCall.id))
+            daily_count_result = await db.execute(
+                select(func.count(ToolCall.id))
                 .filter(ToolCall.created_at >= day_start, ToolCall.created_at < day_end)
-                .scalar()
-                or 0
             )
+            daily_count = daily_count_result.scalar() or 0
 
             daily_tool_calls.append({"date": day_start.strftime("%Y-%m-%d"), "call_count": daily_count})
 
@@ -371,7 +373,7 @@ async def get_tool_call_stats(
 
 @dashboard.get("/stats/knowledge", response_model=KnowledgeStats)
 async def get_knowledge_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get knowledge base statistics (Admin only)"""
@@ -502,7 +504,7 @@ async def get_knowledge_stats(
 
 @dashboard.get("/stats/agents", response_model=AgentAnalytics)
 async def get_agent_analytics(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get AI agent analytics (Admin only)"""
@@ -510,11 +512,11 @@ async def get_agent_analytics(
         from src.storage.db.models import Conversation, MessageFeedback, Message, ToolCall
 
         # 获取所有智能体
-        agents = (
-            db.query(Conversation.agent_id, func.count(Conversation.id).label("conversation_count"))
+        agents_result = await db.execute(
+            select(Conversation.agent_id, func.count(Conversation.id).label("conversation_count"))
             .group_by(Conversation.agent_id)
-            .all()
         )
+        agents = agents_result.all()
 
         total_agents = len(agents)
         agent_conversation_counts = [{"agent_id": agent_id, "conversation_count": count} for agent_id, count in agents]
@@ -522,23 +524,21 @@ async def get_agent_analytics(
         # 智能体满意度统计
         agent_satisfaction = []
         for agent_id, _ in agents:
-            total_feedbacks = (
-                db.query(func.count(MessageFeedback.id))
+            total_feedbacks_result = await db.execute(
+                select(func.count(MessageFeedback.id))
                 .join(Message, MessageFeedback.message_id == Message.id)
                 .join(Conversation, Message.conversation_id == Conversation.id)
                 .filter(Conversation.agent_id == agent_id)
-                .scalar()
-                or 0
             )
+            total_feedbacks = total_feedbacks_result.scalar() or 0
 
-            positive_feedbacks = (
-                db.query(func.count(MessageFeedback.id))
+            positive_feedbacks_result = await db.execute(
+                select(func.count(MessageFeedback.id))
                 .join(Message, MessageFeedback.message_id == Message.id)
                 .join(Conversation, Message.conversation_id == Conversation.id)
                 .filter(Conversation.agent_id == agent_id, MessageFeedback.rating == "like")
-                .scalar()
-                or 0
             )
+            positive_feedbacks = positive_feedbacks_result.scalar() or 0
 
             satisfaction_rate = round((positive_feedbacks / total_feedbacks * 100), 2) if total_feedbacks > 0 else 100
 
@@ -549,14 +549,13 @@ async def get_agent_analytics(
         # 智能体工具使用统计
         agent_tool_usage = []
         for agent_id, _ in agents:
-            tool_usage_count = (
-                db.query(func.count(ToolCall.id))
+            tool_usage_count_result = await db.execute(
+                select(func.count(ToolCall.id))
                 .join(Message, ToolCall.message_id == Message.id)
                 .join(Conversation, Message.conversation_id == Conversation.id)
                 .filter(Conversation.agent_id == agent_id)
-                .scalar()
-                or 0
             )
+            tool_usage_count = tool_usage_count_result.scalar() or 0
 
             agent_tool_usage.append({"agent_id": agent_id, "tool_usage_count": tool_usage_count})
 
@@ -601,7 +600,7 @@ async def get_agent_analytics(
 
 @dashboard.get("/stats")
 async def get_dashboard_stats(
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get dashboard statistics (Admin only)"""
@@ -609,16 +608,32 @@ async def get_dashboard_stats(
 
     try:
         # Basic counts
-        total_conversations = db.query(func.count(Conversation.id)).scalar() or 0
-        active_conversations = (
-            db.query(func.count(Conversation.id)).filter(Conversation.status == "active").scalar() or 0
+        total_conversations_result = await db.execute(select(func.count(Conversation.id)))
+        total_conversations = total_conversations_result.scalar() or 0
+
+        active_conversations_result = await db.execute(
+            select(func.count(Conversation.id)).filter(
+                Conversation.status == "active"
+            )
         )
-        total_messages = db.query(func.count(Message.id)).scalar() or 0
-        total_users = db.query(func.count(User.id)).filter(User.is_deleted == 0).scalar() or 0
+        active_conversations = active_conversations_result.scalar() or 0
+
+        total_messages_result = await db.execute(select(func.count(Message.id)))
+        total_messages = total_messages_result.scalar() or 0
+
+        total_users_result = await db.execute(select(func.count(User.id)).filter(User.is_deleted == 0))
+        total_users = total_users_result.scalar() or 0
 
         # Feedback statistics
-        total_feedbacks = db.query(func.count(MessageFeedback.id)).scalar() or 0
-        like_count = db.query(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "like").scalar() or 0
+        total_feedbacks_result = await db.execute(select(func.count(MessageFeedback.id)))
+        total_feedbacks = total_feedbacks_result.scalar() or 0
+
+        like_count_result = await db.execute(
+            select(func.count(MessageFeedback.id)).filter(
+                MessageFeedback.rating == "like"
+            )
+        )
+        like_count = like_count_result.scalar() or 0
 
         # Calculate satisfaction rate
         satisfaction_rate = round((like_count / total_feedbacks * 100), 2) if total_feedbacks > 0 else 100
@@ -663,7 +678,7 @@ class FeedbackListItem(BaseModel):
 async def get_all_feedbacks(
     rating: str | None = None,
     agent_id: str | None = None,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get all feedback records (Admin only)"""
@@ -673,10 +688,14 @@ async def get_all_feedbacks(
         # Build query with joins including User table
         # Try both User.id and User.user_id as MessageFeedback.user_id might be stored as either
         query = (
-            db.query(MessageFeedback, Message, Conversation, User)
+            select(MessageFeedback, Message, Conversation, User)
             .join(Message, MessageFeedback.message_id == Message.id)
             .join(Conversation, Message.conversation_id == Conversation.id)
-            .outerjoin(User, (MessageFeedback.user_id == User.id) | (MessageFeedback.user_id == User.user_id))
+            .outerjoin(
+                User,
+                (MessageFeedback.user_id == User.id)
+                | (MessageFeedback.user_id == User.user_id),
+            )
         )
 
         # Apply filters
@@ -688,7 +707,8 @@ async def get_all_feedbacks(
         # Order by creation time (most recent first)
         query = query.order_by(MessageFeedback.created_at.desc())
 
-        results = query.all()
+        results = await db.execute(query)
+        results = results.all()
 
         # Debug logging (privacy-safe)
         logger.info(f"Found {len(results)} feedback records")
@@ -736,7 +756,7 @@ class TimeSeriesStats(BaseModel):
 async def get_call_timeseries_stats(
     type: str = "models",  # models/agents/tokens/tools
     time_range: str = "14days",  # 14hours/14days/14weeks
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
     """Get time series statistics for call analytics (Admin only)"""
@@ -773,8 +793,8 @@ async def get_call_timeseries_stats(
         if type == "models":
             # 模型调用统计（基于消息数量，按模型分组）
             # 从message的extra_metadata中提取模型信息
-            query = (
-                db.query(
+            query_result = await db.execute(
+                select(
                     group_format.label("date"),
                     func.count(Message.id).label("count"),
                     func.json_extract(Message.extra_metadata, "$.response_metadata.model_name").label("category"),
@@ -784,6 +804,7 @@ async def get_call_timeseries_stats(
                 .group_by(group_format, func.json_extract(Message.extra_metadata, "$.response_metadata.model_name"))
                 .order_by(group_format)
             )
+            query = query_result.all()
         elif type == "agents":
             # 智能体调用统计（基于对话更新时间，按智能体分组）
             # 为对话创建独立的时间格式化器
@@ -794,8 +815,8 @@ async def get_call_timeseries_stats(
             else:  # 14days
                 conv_group_format = func.strftime("%Y-%m-%d", func.datetime(Conversation.updated_at, "+8 hours"))
 
-            query = (
-                db.query(
+            query_result = await db.execute(
+                select(
                     conv_group_format.label("date"),
                     func.count(Conversation.id).label("count"),
                     Conversation.agent_id.label("category"),
@@ -805,13 +826,14 @@ async def get_call_timeseries_stats(
                 .group_by(conv_group_format, Conversation.agent_id)
                 .order_by(conv_group_format)
             )
+            query = query_result.all()
         elif type == "tokens":
             # Token消耗统计（区分input/output tokens）
             # 先查询input tokens
             from sqlalchemy import literal
 
-            input_query = (
-                db.query(
+            input_query_result = await db.execute(
+                select(
                     group_format.label("date"),
                     func.sum(
                         func.coalesce(func.json_extract(Message.extra_metadata, "$.usage_metadata.input_tokens"), 0)
@@ -826,10 +848,11 @@ async def get_call_timeseries_stats(
                 .group_by(group_format)
                 .order_by(group_format)
             )
+            input_query = input_query_result.all()
 
             # 查询output tokens
-            output_query = (
-                db.query(
+            output_query_result = await db.execute(
+                select(
                     group_format.label("date"),
                     func.sum(
                         func.coalesce(func.json_extract(Message.extra_metadata, "$.usage_metadata.output_tokens"), 0)
@@ -844,10 +867,11 @@ async def get_call_timeseries_stats(
                 .group_by(group_format)
                 .order_by(group_format)
             )
+            output_query = output_query_result.all()
 
             # 合并两个查询结果
-            input_results = input_query.all()
-            output_results = output_query.all()
+            input_results = input_query
+            output_results = output_query
             results = input_results + output_results
         elif type == "tools":
             # 工具调用统计（按工具名称分组）
@@ -859,8 +883,8 @@ async def get_call_timeseries_stats(
             else:  # 14days
                 tool_group_format = func.strftime("%Y-%m-%d", func.datetime(ToolCall.created_at, "+8 hours"))
 
-            query = (
-                db.query(
+            query_result = await db.execute(
+                select(
                     tool_group_format.label("date"),
                     func.count(ToolCall.id).label("count"),
                     ToolCall.tool_name.label("category"),
@@ -869,11 +893,12 @@ async def get_call_timeseries_stats(
                 .group_by(tool_group_format, ToolCall.tool_name)
                 .order_by(tool_group_format)
             )
+            query = query_result.all()
         else:
             raise HTTPException(status_code=422, detail=f"Invalid type: {type}")
 
         if type != "tokens":
-            results = query.all()
+            results = query
 
         # 处理堆叠数据格式
         # 首先收集所有类别
@@ -953,7 +978,8 @@ async def get_call_timeseries_stats(
             # 对于工具调用，显示所有时间的总数（与ToolStatsComponent保持一致）
             from src.storage.db.models import ToolCall
 
-            total_count = db.query(func.count(ToolCall.id)).scalar() or 0
+            total_count_result = await db.execute(select(func.count(ToolCall.id)))
+            total_count = total_count_result.scalar() or 0
         else:
             # 其他类型使用时间序列数据的总和
             total_count = sum(item["total"] for item in data)

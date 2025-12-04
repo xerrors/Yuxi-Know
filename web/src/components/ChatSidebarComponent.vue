@@ -188,7 +188,7 @@ const renameChat = async (chatId) => {
       content: h('div', { style: { marginTop: '12px' } }, [
         h('input', {
           value: newTitle,
-          style: { width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px' },
+          style: { width: '100%', padding: '4px 8px', border: '1px solid var(--gray-150)', background: 'var(--gray-0)', borderRadius: '4px' },
           onInput: (e) => { newTitle = e.target.value; }
         })
       ]),

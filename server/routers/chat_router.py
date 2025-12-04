@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from langchain.messages import AIMessageChunk, HumanMessage
 from langgraph.types import Command
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from src.storage.db.models import User, MessageFeedback, Message, Conversation
 from src.storage.conversation import ConversationManager
@@ -193,8 +194,8 @@ def _save_tool_message(conv_mgr, msg_dict):
         logger.warning(f"Tool call {tool_call_id} not found for update")
 
 
-def _require_user_conversation(conv_mgr: ConversationManager, thread_id: str, user_id: str) -> Conversation:
-    conversation = conv_mgr.get_conversation_by_thread_id(thread_id)
+async def _require_user_conversation(conv_mgr: ConversationManager, thread_id: str, user_id: str) -> Conversation:
+    conversation = await conv_mgr.get_conversation_by_thread_id(thread_id)
     if not conversation or conversation.user_id != str(user_id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
     return conversation
@@ -455,7 +456,7 @@ async def chat_agent(
     meta: dict = Body({}),
     image_content: str | None = Body(None),
     current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """使用特定智能体进行对话（需要登录）"""
     start_time = asyncio.get_event_loop().time()
@@ -556,7 +557,7 @@ async def chat_agent(
 
         # Save user message
         try:
-            conv_manager.add_message_by_thread_id(
+            await conv_manager.add_message_by_thread_id(
                 thread_id=thread_id,
                 role="user",
                 content=query,
@@ -569,7 +570,7 @@ async def chat_agent(
 
         try:
             assert thread_id, "thread_id is required"
-            attachments = conv_manager.get_attachments_by_thread_id(thread_id)
+            attachments = await conv_manager.get_attachments_by_thread_id(thread_id)
             input_context["attachments"] = attachments
             logger.debug(f"Loaded {len(attachments)} attachments for thread_id={thread_id}")
         except Exception as e:
@@ -648,8 +649,7 @@ async def chat_agent(
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
             # 保存中断消息到数据库
-            new_db = db_manager.get_session()
-            try:
+            async with db_manager.get_async_session_context() as new_db:
                 new_conv_manager = ConversationManager(new_db)
                 await save_partial_message(
                     new_conv_manager,
@@ -658,8 +658,6 @@ async def chat_agent(
                     error_message="对话已中断" if not full_msg else None,
                     error_type="interrupted",
                 )
-            finally:
-                new_db.close()
 
             # 通知前端中断（可能发送不到，但用于一致性）
             yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
@@ -671,8 +669,7 @@ async def chat_agent(
             error_type = "unexpected_error"
 
             # 保存错误消息到数据库
-            new_db = db_manager.get_session()
-            try:
+            async with db_manager.get_async_session_context() as new_db:
                 new_conv_manager = ConversationManager(new_db)
                 await save_partial_message(
                     new_conv_manager,
@@ -681,8 +678,6 @@ async def chat_agent(
                     error_message=error_msg,
                     error_type=error_type,
                 )
-            finally:
-                new_db.close()
 
             yield make_chunk(
                 status="error",
@@ -739,7 +734,7 @@ async def resume_agent_chat(
     thread_id: str = Body(...),
     approved: bool = Body(...),
     current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """恢复被人工审批中断的对话（需要登录）"""
     start_time = asyncio.get_event_loop().time()
@@ -874,7 +869,7 @@ async def save_agent_config(agent_id: str, config: dict = Body(...), current_use
 
 @chat.get("/agent/{agent_id}/history")
 async def get_agent_history(
-    agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: Session = Depends(get_db)
+    agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)
 ):
     """获取智能体历史消息（需要登录）- NEW STORAGE ONLY"""
     try:
@@ -884,7 +879,7 @@ async def get_agent_history(
 
         # Use new storage system ONLY
         conv_manager = ConversationManager(db)
-        messages = conv_manager.get_messages_by_thread_id(thread_id)
+        messages = await conv_manager.get_messages_by_thread_id(thread_id)
 
         # Convert to frontend-compatible format
         history = []
@@ -934,14 +929,14 @@ async def get_agent_state(
     agent_id: str,
     thread_id: str,
     current_user: User = Depends(get_required_user),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     try:
         if not agent_manager.get_agent(agent_id):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
         conv_manager = ConversationManager(db)
-        _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+        await _require_user_conversation(conv_manager, thread_id, str(current_user.id))
 
         agent = agent_manager.get_agent(agent_id)
         graph = await agent.get_graph()
@@ -1019,7 +1014,7 @@ class AttachmentListResponse(BaseModel):
 
 @chat.post("/thread", response_model=ThreadResponse)
 async def create_thread(
-    thread: ThreadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)
+    thread: ThreadCreate, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)
 ):
     """创建新对话线程 (使用新存储系统)"""
     thread_id = str(uuid.uuid4())
@@ -1027,7 +1022,7 @@ async def create_thread(
 
     # Create conversation using new storage system
     conv_manager = ConversationManager(db)
-    conversation = conv_manager.create_conversation(
+    conversation = await conv_manager.create_conversation(
         user_id=str(current_user.id),
         agent_id=thread.agent_id,
         title=thread.title or "新的对话",
@@ -1048,7 +1043,7 @@ async def create_thread(
 
 
 @chat.get("/threads", response_model=list[ThreadResponse])
-async def list_threads(agent_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
+async def list_threads(agent_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)):
     """获取用户的所有对话线程 (使用新存储系统)"""
     assert agent_id, "agent_id 不能为空"
 
@@ -1056,7 +1051,7 @@ async def list_threads(agent_id: str, db: Session = Depends(get_db), current_use
 
     # Use new storage system
     conv_manager = ConversationManager(db)
-    conversations = conv_manager.list_conversations(
+    conversations = await conv_manager.list_conversations(
         user_id=str(current_user.id),
         agent_id=agent_id,
         status="active",
@@ -1076,17 +1071,17 @@ async def list_threads(agent_id: str, db: Session = Depends(get_db), current_use
 
 
 @chat.delete("/thread/{thread_id}")
-async def delete_thread(thread_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_required_user)):
+async def delete_thread(thread_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)):
     """删除对话线程 (使用新存储系统)"""
     # Use new storage system
     conv_manager = ConversationManager(db)
-    conversation = conv_manager.get_conversation_by_thread_id(thread_id)
+    conversation = await conv_manager.get_conversation_by_thread_id(thread_id)
 
     if not conversation or conversation.user_id != str(current_user.id):
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
     # Soft delete
-    success = conv_manager.delete_conversation(thread_id, soft_delete=True)
+    success = await conv_manager.delete_conversation(thread_id, soft_delete=True)
 
     if not success:
         raise HTTPException(status_code=500, detail="删除失败")
@@ -1102,19 +1097,19 @@ class ThreadUpdate(BaseModel):
 async def update_thread(
     thread_id: str,
     thread_update: ThreadUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """更新对话线程信息 (使用新存储系统)"""
     # Use new storage system
     conv_manager = ConversationManager(db)
-    conversation = conv_manager.get_conversation_by_thread_id(thread_id)
+    conversation = await conv_manager.get_conversation_by_thread_id(thread_id)
 
     if not conversation or conversation.user_id != str(current_user.id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
     # Update conversation
-    updated_conv = conv_manager.update_conversation(
+    updated_conv = await conv_manager.update_conversation(
         thread_id=thread_id,
         title=thread_update.title,
     )
@@ -1136,12 +1131,12 @@ async def update_thread(
 async def upload_thread_attachment(
     thread_id: str,
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """上传并解析附件为 Markdown，附加到指定对话线程。"""
     conv_manager = ConversationManager(db)
-    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+    conversation = await _require_user_conversation(conv_manager, thread_id, str(current_user.id))
 
     try:
         conversion = await convert_upload_to_markdown(file)
@@ -1161,7 +1156,7 @@ async def upload_thread_attachment(
         "uploaded_at": utc_isoformat(),
         "truncated": conversion.truncated,
     }
-    conv_manager.add_attachment(conversation.id, attachment_record)
+    await conv_manager.add_attachment(conversation.id, attachment_record)
 
     return _serialize_attachment(attachment_record)
 
@@ -1169,13 +1164,13 @@ async def upload_thread_attachment(
 @chat.get("/thread/{thread_id}/attachments", response_model=AttachmentListResponse)
 async def list_thread_attachments(
     thread_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """列出当前对话线程的所有附件元信息。"""
     conv_manager = ConversationManager(db)
-    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
-    attachments = conv_manager.get_attachments(conversation.id)
+    conversation = await _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+    attachments = await conv_manager.get_attachments(conversation.id)
     return {
         "attachments": [_serialize_attachment(item) for item in attachments],
         "limits": {
@@ -1189,13 +1184,13 @@ async def list_thread_attachments(
 async def delete_thread_attachment(
     thread_id: str,
     file_id: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """移除指定附件。"""
     conv_manager = ConversationManager(db)
-    conversation = _require_user_conversation(conv_manager, thread_id, str(current_user.id))
-    removed = conv_manager.remove_attachment(conversation.id, file_id)
+    conversation = await _require_user_conversation(conv_manager, thread_id, str(current_user.id))
+    removed = await conv_manager.remove_attachment(conversation.id, file_id)
     if not removed:
         raise HTTPException(status_code=404, detail="附件不存在或已被删除")
     return {"message": "附件已删除"}
@@ -1223,7 +1218,7 @@ class MessageFeedbackResponse(BaseModel):
 async def submit_message_feedback(
     message_id: int,
     feedback_data: MessageFeedbackRequest,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """Submit user feedback for a specific message"""
@@ -1233,20 +1228,23 @@ async def submit_message_feedback(
             raise HTTPException(status_code=422, detail="Rating must be 'like' or 'dislike'")
 
         # Verify message exists and get conversation to check permissions
-        message = db.query(Message).filter_by(id=message_id).first()
+        message_result = await db.execute(select(Message).filter_by(id=message_id))
+        message = message_result.scalar_one_or_none()
 
         if not message:
             raise HTTPException(status_code=404, detail="Message not found")
 
         # Verify user has access to this message (through conversation)
-        conversation = db.query(Conversation).filter_by(id=message.conversation_id).first()
+        conversation_result = await db.execute(select(Conversation).filter_by(id=message.conversation_id))
+        conversation = conversation_result.scalar_one_or_none()
         if not conversation or conversation.user_id != str(current_user.id):
             raise HTTPException(status_code=403, detail="Access denied")
 
         # Check if feedback already exists (user can only submit once)
-        existing_feedback = (
-            db.query(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)).first()
+        existing_feedback_result = await db.execute(
+            select(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id))
         )
+        existing_feedback = existing_feedback_result.scalar_one_or_none()
 
         if existing_feedback:
             raise HTTPException(status_code=409, detail="Feedback already submitted for this message")
@@ -1284,13 +1282,14 @@ async def submit_message_feedback(
 @chat.get("/message/{message_id}/feedback")
 async def get_message_feedback(
     message_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
     """Get feedback status for a specific message (for current user)"""
     try:
         # Get user's feedback for this message
-        feedback = db.query(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)).first()
+        feedback_result = await db.execute(select(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)))
+        feedback = feedback_result.scalar_one_or_none()
 
         if not feedback:
             return {"has_feedback": False, "feedback": None}

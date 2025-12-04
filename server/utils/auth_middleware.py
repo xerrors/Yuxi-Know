@@ -3,7 +3,7 @@ import re
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.db.manager import db_manager
 from src.storage.db.models import User
@@ -23,17 +23,14 @@ PUBLIC_PATHS = [
 ]
 
 
-# 获取数据库会话
-def get_db():
-    db = db_manager.get_session()
-    try:
+# 获取数据库会话（异步版本）
+async def get_db():
+    async with db_manager.get_async_session_context() as db:
         yield db
-    finally:
-        db.close()
 
 
-# 获取当前用户
-async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+# 获取当前用户（异步版本）
+async def get_current_user(token: str | None = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="无效的凭证",
@@ -61,8 +58,10 @@ async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Sessi
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # 查找用户
-    user = db.query(User).filter(User.id == user_id).first()
+    # 查找用户（异步版本）
+    from sqlalchemy import select
+    result = await db.execute(select(User).filter(User.id == user_id))
+    user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
 
@@ -79,7 +78,6 @@ async def get_required_user(user: User | None = Depends(get_current_user)):
         )
     return user
 
-
 # 获取管理员用户
 async def get_admin_user(current_user: User = Depends(get_required_user)):
     if current_user.role not in ["admin", "superadmin"]:
@@ -88,7 +86,6 @@ async def get_admin_user(current_user: User = Depends(get_required_user)):
             detail="需要管理员权限",
         )
     return current_user
-
 
 # 获取超级管理员用户
 async def get_superadmin_user(current_user: User = Depends(get_required_user)):
