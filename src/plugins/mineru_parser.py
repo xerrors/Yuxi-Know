@@ -159,7 +159,9 @@ class MinerUParser(BaseDocumentProcessor):
                 )
 
             # 检查响应状态
-            logger.debug(f"MinerU 响应状态: {response.status_code}, Content-Type: {response.headers.get('content-type', 'unknown')}")
+            logger.debug(
+                f"MinerU 响应状态: {response.status_code}, Content-Type: {response.headers.get('content-type')}"
+            )
 
             if response.status_code != 200:
                 error_detail = "未知错误"

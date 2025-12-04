@@ -60,6 +60,7 @@ async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Async
 
     # 查找用户（异步版本）
     from sqlalchemy import select
+
     result = await db.execute(select(User).filter(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
@@ -78,6 +79,7 @@ async def get_required_user(user: User | None = Depends(get_current_user)):
         )
     return user
 
+
 # 获取管理员用户
 async def get_admin_user(current_user: User = Depends(get_required_user)):
     if current_user.role not in ["admin", "superadmin"]:
@@ -86,6 +88,7 @@ async def get_admin_user(current_user: User = Depends(get_required_user)):
             detail="需要管理员权限",
         )
     return current_user
+
 
 # 获取超级管理员用户
 async def get_superadmin_user(current_user: User = Depends(get_required_user)):

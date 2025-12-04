@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 from src.agents.common.context import BaseContext
 
-
 DEEP_PROMPT = """你是一位专家级研究员。你的工作是进行彻底的研究，然后撰写一份精美的报告。
 
 你应该做的第一件事是把原始的用户问题写入 `question.txt`，以便你有一个记录。
@@ -89,6 +88,7 @@ DEEP_PROMPT = """你是一位专家级研究员。你的工作是进行彻底的
 
 你可以使用一些工具。
 """
+
 
 @dataclass
 class DeepContext(BaseContext):

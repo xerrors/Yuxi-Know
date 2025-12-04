@@ -6,13 +6,7 @@ from src.agents.common.middlewares import context_aware_prompt, context_based_mo
 from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.utils import logger
 
-_mcp_servers = {
-    "mcp-server-chart": {
-        "command": "npx",
-        "args": ["-y", "@antv/mcp-server-chart"],
-        "transport": "stdio"
-    }
-}
+_mcp_servers = {"mcp-server-chart": {"command": "npx", "args": ["-y", "@antv/mcp-server-chart"], "transport": "stdio"}}
 
 
 class SqlReporterAgent(BaseAgent):

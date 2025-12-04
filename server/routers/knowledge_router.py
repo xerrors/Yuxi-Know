@@ -173,7 +173,7 @@ async def update_database_info(
     name: str = Body(...),
     description: str = Body(...),
     llm_info: dict = Body(None),
-    additional_params: dict = Body({}), # Now accepts a dict
+    additional_params: dict = Body({}),  # Now accepts a dict
     current_user: User = Depends(get_admin_user),
 ):
     """更新知识库信息"""
@@ -187,7 +187,7 @@ async def update_database_info(
             name,
             description,
             llm_info,
-            additional_params=additional_params, # Pass the dict to the manager
+            additional_params=additional_params,  # Pass the dict to the manager
         )
         return {"message": "更新成功", "database": database}
     except Exception as e:

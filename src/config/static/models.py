@@ -31,6 +31,7 @@ class EmbedModelInfo(BaseModel):
     api_key: str = Field(..., description="API Key 或环境变量名")
     model_id: str | None = Field(None, description="可选的模型 ID")
 
+
 class RerankerInfo(BaseModel):
     """重排序模型配置"""
 

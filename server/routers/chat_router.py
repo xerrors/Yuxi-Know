@@ -228,7 +228,7 @@ async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message
         extra_metadata = {
             "error_type": error_type,
             "is_error": True,
-            "error_message": error_message or f"发生错误: {error_type}"
+            "error_message": error_message or f"发生错误: {error_type}",
         }
         if full_msg:
             # 保存部分生成的AI消息
@@ -522,10 +522,7 @@ async def chat_agent(
         # Input guard
         if conf.enable_content_guard and await content_guard.check(query):
             yield make_chunk(
-                status="error",
-                error_type="content_guard_blocked",
-                error_message="输入内容包含敏感词",
-                meta=meta
+                status="error", error_type="content_guard_blocked", error_message="输入内容包含敏感词", meta=meta
             )
             return
 
@@ -537,7 +534,7 @@ async def chat_agent(
                 status="error",
                 error_type="agent_error",
                 error_message=f"智能体 {agent_id} 获取失败: {str(e)}",
-                meta=meta
+                meta=meta,
             )
             return
 
@@ -679,12 +676,7 @@ async def chat_agent(
                     error_type=error_type,
                 )
 
-            yield make_chunk(
-                status="error",
-                error_type=error_type,
-                error_message=error_msg,
-                meta=meta
-            )
+            yield make_chunk(status="error", error_type=error_type, error_message=error_msg, meta=meta)
 
     return StreamingResponse(stream_messages(), media_type="application/json")
 
@@ -1043,7 +1035,9 @@ async def create_thread(
 
 
 @chat.get("/threads", response_model=list[ThreadResponse])
-async def list_threads(agent_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)):
+async def list_threads(
+    agent_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)
+):
     """获取用户的所有对话线程 (使用新存储系统)"""
     assert agent_id, "agent_id 不能为空"
 
@@ -1071,7 +1065,9 @@ async def list_threads(agent_id: str, db: AsyncSession = Depends(get_db), curren
 
 
 @chat.delete("/thread/{thread_id}")
-async def delete_thread(thread_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)):
+async def delete_thread(
+    thread_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)
+):
     """删除对话线程 (使用新存储系统)"""
     # Use new storage system
     conv_manager = ConversationManager(db)
@@ -1288,7 +1284,9 @@ async def get_message_feedback(
     """Get feedback status for a specific message (for current user)"""
     try:
         # Get user's feedback for this message
-        feedback_result = await db.execute(select(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id)))
+        feedback_result = await db.execute(
+            select(MessageFeedback).filter_by(message_id=message_id, user_id=str(current_user.id))
+        )
         feedback = feedback_result.scalar_one_or_none()
 
         if not feedback:

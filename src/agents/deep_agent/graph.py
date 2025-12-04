@@ -1,14 +1,13 @@
 """Deep Agent - 基于create_deep_agent的深度分析智能体"""
 
 from deepagents import create_deep_agent
-from langchain.agents.middleware import dynamic_prompt, ModelRequest
+from langchain.agents.middleware import ModelRequest, dynamic_prompt
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import context_based_model, inject_attachment_context
 from src.agents.common.tools import search
 
 from .prompts import DEEP_PROMPT
-
 
 search_tools = [search]
 
@@ -53,6 +52,7 @@ critique_sub_agent = {
 def context_aware_prompt(request: ModelRequest) -> str:
     """从 runtime context 动态生成系统提示词"""
     return DEEP_PROMPT + "\n\n\n" + request.runtime.context.system_prompt
+
 
 class DeepAgent(BaseAgent):
     name = "深度分析智能体"

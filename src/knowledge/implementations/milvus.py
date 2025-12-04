@@ -164,6 +164,7 @@ class MilvusKB(KnowledgeBase):
         # 检查是否有 model_id 字段，优先使用 select_embedding_model
         if embed_info and "model_id" in embed_info:
             from src.models.embed import select_embedding_model
+
             return select_embedding_model(embed_info["model_id"])
 
         # 使用原有的逻辑（兼容模式））
