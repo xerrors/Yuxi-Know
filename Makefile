@@ -7,7 +7,6 @@ pull:
 	bash docker/pull_image.sh python:3.12-slim
 	bash docker/pull_image.sh node:20-slim
 	bash docker/pull_image.sh node:20-alpine
-	bash docker/pull_image.sh quay.io/coreos/etcd:v3.5.5
 	bash docker/pull_image.sh milvusdb/milvus:v2.5.6
 	bash docker/pull_image.sh neo4j:5.26
 	bash docker/pull_image.sh minio/minio:RELEASE.2023-03-20T20-16-18Z
