@@ -29,7 +29,7 @@ def setup_logging():
         handler.setFormatter(formatter)
 
 
-def log_operation(db: Session, user_id: int, operation: str, details: str = None, request: Request = None):
+async def log_operation(db: Session, user_id: int, operation: str, details: str = None, request: Request = None):
     """记录用户操作日志"""
     ip_address = None
     if request:
@@ -37,7 +37,7 @@ def log_operation(db: Session, user_id: int, operation: str, details: str = None
 
     log = OperationLog(user_id=user_id, operation=operation, details=details, ip_address=ip_address)
     db.add(log)
-    db.commit()
+    await db.commit()
 
 
 def get_user_dict(user: User, include_password: bool = False) -> dict:

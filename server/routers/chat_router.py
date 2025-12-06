@@ -1254,8 +1254,8 @@ async def submit_message_feedback(
         )
 
         db.add(new_feedback)
-        db.commit()
-        db.refresh(new_feedback)
+        await db.commit()
+        await db.refresh(new_feedback)
 
         logger.info(f"User {current_user.id} submitted {feedback_data.rating} feedback for message {message_id}")
 

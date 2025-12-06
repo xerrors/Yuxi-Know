@@ -129,10 +129,10 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     if not AuthUtils.verify_password(user.password_hash, form_data.password):
         # 密码错误，增加失败次数
         user.increment_failed_login()
-        db.commit()
+        await db.commit()
 
         # 记录失败操作
-        log_operation(db, user.id if user else None, "登录失败", f"密码错误，失败次数: {user.login_failed_count}")
+        await log_operation(db, user.id if user else None, "登录失败", f"密码错误，失败次数: {user.login_failed_count}")
 
         # 检查是否需要锁定
         if user.is_login_locked():
@@ -152,14 +152,14 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     # 登录成功，重置失败计数器
     user.reset_failed_login()
     user.last_login = utc_now()
-    db.commit()
+    await db.commit()
 
     # 生成访问令牌
     token_data = {"sub": str(user.id)}
     access_token = AuthUtils.create_access_token(token_data)
 
     # 记录登录操作
-    log_operation(db, user.id, "登录")
+    await log_operation(db, user.id, "登录")
 
     return {
         "access_token": access_token,
@@ -224,15 +224,15 @@ async def initialize_admin(admin_data: InitializeAdmin, db: Session = Depends(ge
     )
 
     db.add(new_admin)
-    db.commit()
-    db.refresh(new_admin)
+    await db.commit()
+    await db.refresh(new_admin)
 
     # 生成访问令牌
     token_data = {"sub": str(new_admin.id)}
     access_token = AuthUtils.create_access_token(token_data)
 
     # 记录操作
-    log_operation(db, new_admin.id, "系统初始化", "创建超级管理员账户")
+    await log_operation(db, new_admin.id, "系统初始化", "创建超级管理员账户")
 
     return {
         "access_token": access_token,
@@ -310,11 +310,11 @@ async def update_profile(
         current_user.phone_number = profile_data.phone_number
         update_details.append(f"手机号: {profile_data.phone_number or '已清空'}")
 
-    db.commit()
+    await db.commit()
 
     # 记录操作
     if update_details:
-        log_operation(db, current_user.id, "更新个人资料", f"更新个人资料: {', '.join(update_details)}", request)
+        await log_operation(db, current_user.id, "更新个人资料", f"更新个人资料: {', '.join(update_details)}", request)
 
     return current_user.to_dict()
 
@@ -385,11 +385,11 @@ async def create_user(
     )
 
     db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    await db.commit()
+    await db.refresh(new_user)
 
     # 记录操作
-    log_operation(db, current_user.id, "创建用户", f"创建用户: {user_data.username}, 角色: {user_data.role}", request)
+    await log_operation(db, current_user.id, "创建用户", f"创建用户: {user_data.username}, 角色: {user_data.role}", request)
 
     return new_user.to_dict()
 
@@ -467,10 +467,10 @@ async def update_user(
         user.role = user_data.role
         update_details.append(f"角色: {user_data.role}")
 
-    db.commit()
+    await db.commit()
 
     # 记录操作
-    log_operation(db, current_user.id, "更新用户", f"更新用户ID {user_id}: {', '.join(update_details)}", request)
+    await log_operation(db, current_user.id, "更新用户", f"更新用户ID {user_id}: {', '.join(update_details)}", request)
 
     return user.to_dict()
 
@@ -533,10 +533,10 @@ async def delete_user(
     user.password_hash = "DELETED"  # 禁止登录
     user.avatar = None  # 清空头像
 
-    db.commit()
+    await db.commit()
 
     # 记录操作
-    log_operation(db, current_user.id, "删除用户", deletion_detail, request)
+    await log_operation(db, current_user.id, "删除用户", deletion_detail, request)
 
     return {"success": True, "message": "用户已删除"}
 
@@ -607,10 +607,10 @@ async def upload_user_avatar(
 
         # 更新用户头像
         current_user.avatar = avatar_url
-        db.commit()
+        await db.commit()
 
         # 记录操作
-        log_operation(db, current_user.id, "上传头像", f"更新头像: {avatar_url}")
+        await log_operation(db, current_user.id, "上传头像", f"更新头像: {avatar_url}")
 
         return {"success": True, "avatar_url": avatar_url, "message": "头像上传成功"}
 
