@@ -6,7 +6,6 @@ MinIO 存储客户端
 import asyncio
 import json
 import os
-import uuid
 from datetime import timedelta
 from io import BytesIO
 
@@ -289,24 +288,6 @@ def get_minio_client() -> MinIOClient:
     return _default_client
 
 
-def upload_image_to_minio(bucket_name: str, data: bytes, file_extension: str = "jpg") -> str:
-    """
-    上传图片到 MinIO（保持向后兼容）
-
-    Args:
-        data: 图片数据
-        file_extension: 文件扩展名
-
-    Returns:
-        str: 图片访问 URL
-    """
-    client = get_minio_client()
-    file_name = f"{uuid.uuid4()}.{file_extension}"
-    client.upload_file(
-        bucket_name=bucket_name, object_name=file_name, data=data, content_type=f"image/{file_extension}"
-    )
-    res_url = client.get_presigned_url(bucket_name=bucket_name, object_name=file_name, days=7)
-    return res_url
 
 
 async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, file_extension: str) -> str:
@@ -325,6 +306,5 @@ async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, f
     # 根据扩展名猜测 content_type
     content_type = client._guess_content_type(file_extension)
     # 上传文件
-    await client.aupload_file(bucket_name, file_name, data, content_type)
-    res_url = client.get_presigned_url(bucket_name, file_name, days=7)
-    return res_url
+    upload_result = await client.aupload_file(bucket_name, file_name, data, content_type)
+    return upload_result.url

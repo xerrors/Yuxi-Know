@@ -1,4 +1,5 @@
 import re
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
@@ -12,7 +13,7 @@ from server.utils.auth_middleware import get_admin_user, get_current_user, get_d
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
-from src.storage.minio import upload_image_to_minio
+from src.storage.minio import aupload_file_to_minio
 from src.utils.datetime_utils import utc_now
 
 # 创建路由器
@@ -627,7 +628,8 @@ async def upload_user_avatar(
         file_extension = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
 
         # 上传到MinIO
-        avatar_url = upload_image_to_minio("avatar", file_content, file_extension)
+        file_name = f"{uuid.uuid4()}.{file_extension}"
+        avatar_url = await aupload_file_to_minio("avatar", file_name, file_content, file_extension)
 
         # 更新用户头像
         current_user.avatar = avatar_url

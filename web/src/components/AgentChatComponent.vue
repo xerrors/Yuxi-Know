@@ -338,7 +338,7 @@ const currentAgentName = computed(() => {
     const agent = agents.value.find(a => a.id === agentId);
     return agent ? agent.name : '智能体';
   }
-  return '智能体';
+  return '智能体加载中……';
 });
 
 const currentAgent = computed(() => {

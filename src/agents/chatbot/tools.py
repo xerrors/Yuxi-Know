@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Any
 
 import requests
@@ -6,7 +7,7 @@ from langchain.tools import tool
 
 from src.agents.common import get_buildin_tools
 from src.agents.common.toolkits.mysql import get_mysql_tools
-from src.storage.minio import upload_image_to_minio
+from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 
 
@@ -39,7 +40,13 @@ async def text_to_img_qwen(text: str) -> str:
     response = requests.get(image_url)
     file_data = response.content
 
-    image_url = upload_image_to_minio(bucket_name="generated-images", data=file_data, file_extension="jpg")
+    file_name = f"{uuid.uuid4()}.jpg"
+    image_url = await aupload_file_to_minio(
+        bucket_name="generated-images",
+        file_name=file_name,
+        data=file_data,
+        file_extension="jpg"
+    )
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url
 
