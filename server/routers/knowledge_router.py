@@ -17,8 +17,8 @@ from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash, merge_processing_params
 from src.models.embed import test_embedding_model_status, test_all_embedding_models_status
-from src.storage.minio.client import aupload_file_to_minio, get_minio_client
-from src.utils import hashstr, logger
+from src.storage.minio.client import aupload_file_to_minio, get_minio_client, StorageError
+from src.utils import logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -328,17 +328,6 @@ async def add_documents(
             "failed": failed_count,
         }
         message = f"{item_type}处理完成，失败 {failed_count} 个" if failed_count else f"{item_type}处理完成"
-
-        for success_item in success_items:
-            # 使用异步上传到minio的对应知识库,同名文件会被覆盖
-            async with aiofiles.open(success_item["path"], "rb") as f:
-                file_bytes = await f.read()
-            # 上传的bucket名为ref-{refdb},refdb中的_替换为-
-            refdb = db_id.replace("_", "-")
-            url = await aupload_file_to_minio(
-                f"ref-{refdb}", success_item["filename"], file_bytes, success_item["file_type"]
-            )
-            logger.info(f"上传文件成功: {url}")
         await context.set_result(summary | {"items": processed_items})
         await context.set_progress(100.0, message)
         return summary | {"items": processed_items}
@@ -536,12 +525,16 @@ async def rechunks_documents(
 
 @knowledge.get("/databases/{db_id}/documents/{doc_id}/download")
 async def download_document(db_id: str, doc_id: str, request: Request, current_user: User = Depends(get_admin_user)):
-    """下载原始文件"""
+    """下载原始文件 - 根据path类型选择本地或MinIO下载"""
     logger.debug(f"Download document {doc_id} from {db_id}")
     try:
         file_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
-        # 获取文件扩展名和MIME类型，解码URL编码的文件名
-        filename = file_info.get("meta", {}).get("filename", "file")
+        file_meta = file_info.get("meta", {})
+
+        # 获取文件路径和文件名
+        file_path = file_meta.get("path", "")
+        filename = file_meta.get("filename", "file")
+        logger.debug(f"File path from database: {file_path}")
         logger.debug(f"Original filename from database: {filename}")
 
         # 解码URL编码的文件名（如果有的话）
@@ -553,45 +546,103 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
             decoded_filename = filename  # 如果解码失败，使用原文件名
 
         _, ext = os.path.splitext(decoded_filename)
-
         media_type = media_types.get(ext.lower(), "application/octet-stream")
 
-        minio_client = get_minio_client()
-        minio_response = await minio_client.adownload_response(
-            bucket_name="ref-" + db_id.replace("_", "-"),
-            object_name=filename,
-        )
+        # 根据path类型选择下载方式
+        from src.knowledge.utils.kb_utils import is_minio_url
+        if is_minio_url(file_path):
+            # MinIO下载
+            logger.debug(f"Downloading from MinIO: {file_path}")
 
-        # 创建流式生成器
-        async def minio_stream():
             try:
-                while True:
-                    chunk = await asyncio.to_thread(minio_response.read, 8192)
-                    if not chunk:
-                        break
-                    yield chunk
-            finally:
-                minio_response.close()
-                minio_response.release_conn()
+                # 使用通用函数解析MinIO URL
+                from src.knowledge.utils.kb_utils import parse_minio_url
+                bucket_name, object_name = parse_minio_url(file_path)
 
-        # 创建StreamingResponse
-        response = StreamingResponse(
-            minio_stream(),
-            media_type=media_type,
-        )
-        # 正确处理中文文件名的HTTP头部设置
-        # HTTP头部只能包含ASCII字符，所以需要对中文文件名进行编码
-        try:
-            # 尝试使用ASCII编码（适用于英文文件名）
-            decoded_filename.encode("ascii")
-            # 如果成功，直接使用简单格式
-            response.headers["Content-Disposition"] = f'attachment; filename="{decoded_filename}"'
-        except UnicodeEncodeError:
-            # 如果包含非ASCII字符（如中文），使用RFC 2231格式
-            encoded_filename = quote(decoded_filename.encode("utf-8"))
-            response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+                logger.debug(f"Parsed bucket_name: {bucket_name}, object_name: {object_name}")
 
-        return response
+                minio_client = get_minio_client()
+
+                # 直接使用解析出的完整对象名称下载
+                minio_response = await minio_client.adownload_response(
+                    bucket_name=bucket_name,
+                    object_name=object_name,
+                )
+                logger.debug(f"Successfully downloaded object: {object_name}")
+
+            except Exception as e:
+                logger.error(f"Failed to download MinIO file: {e}")
+                raise StorageError(f"下载文件失败: {e}")
+
+            # 创建流式生成器
+            async def minio_stream():
+                try:
+                    while True:
+                        chunk = await asyncio.to_thread(minio_response.read, 8192)
+                        if not chunk:
+                            break
+                        yield chunk
+                finally:
+                    minio_response.close()
+                    minio_response.release_conn()
+
+            # 创建StreamingResponse
+            response = StreamingResponse(
+                minio_stream(),
+                media_type=media_type,
+            )
+            # 正确处理中文文件名的HTTP头部设置
+            try:
+                # 尝试使用ASCII编码（适用于英文文件名）
+                decoded_filename.encode("ascii")
+                # 如果成功，直接使用简单格式
+                response.headers["Content-Disposition"] = f'attachment; filename="{decoded_filename}"'
+            except UnicodeEncodeError:
+                # 如果包含非ASCII字符（如中文），使用RFC 2231格式
+                encoded_filename = quote(decoded_filename.encode("utf-8"))
+                response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+
+            return response
+
+        else:
+            # 本地文件下载
+            logger.debug(f"Downloading from local filesystem: {file_path}")
+
+            if not os.path.exists(file_path):
+                raise StorageError(f"文件不存在: {file_path}")
+
+            # 获取文件大小
+            file_size = os.path.getsize(file_path)
+
+            # 创建文件流式生成器
+            async def file_stream():
+                async with aiofiles.open(file_path, "rb") as f:
+                    while True:
+                        chunk = await f.read(8192)
+                        if not chunk:
+                            break
+                        yield chunk
+
+            # 创建StreamingResponse
+            response = StreamingResponse(
+                file_stream(),
+                media_type=media_type,
+            )
+            # 正确处理中文文件名的HTTP头部设置
+            try:
+                # 尝试使用ASCII编码（适用于英文文件名）
+                decoded_filename.encode("ascii")
+                # 如果成功，直接使用简单格式
+                response.headers["Content-Disposition"] = f'attachment; filename="{decoded_filename}"'
+                response.headers["Content-Length"] = str(file_size)
+            except UnicodeEncodeError:
+                # 如果包含非ASCII字符（如中文），使用RFC 2231格式
+                encoded_filename = quote(decoded_filename.encode("utf-8"))
+                response.headers["Content-Disposition"] = f"attachment; filename*=UTF-8''{encoded_filename}"
+                response.headers["Content-Length"] = str(file_size)
+
+            return response
+
     except HTTPException:
         raise
     except Exception as e:
@@ -1068,19 +1119,9 @@ async def upload_file(
     elif not (is_supported_file_extension(file.filename) or ext == ".zip"):
         raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-    # 根据db_id获取上传路径，如果db_id为None则使用默认路径
-    if db_id:
-        upload_dir = knowledge_base.get_db_upload_path(db_id)
-    else:
-        upload_dir = os.path.join(config.save_dir, "database", "uploads")
-
     basename, ext = os.path.splitext(file.filename)
-    filename = f"{basename}_{hashstr(basename, 4, with_salt=True, salt='fixed_salt')}{ext}".lower()
-
-    file_path = os.path.join(upload_dir, filename)
-
-    # 在线程池中执行同步文件系统操作，避免阻塞事件循环
-    await asyncio.to_thread(os.makedirs, upload_dir, exist_ok=True)
+    # 直接使用原始文件名（小写）
+    filename = f"{basename}{ext}".lower()
 
     file_bytes = await file.read()
 
@@ -1093,15 +1134,36 @@ async def upload_file(
             detail="数据库中已经存在了相同内容文件，File with the same content already exists in this database",
         )
 
-    # 使用异步文件写入，避免阻塞事件循环
-    async with aiofiles.open(file_path, "wb") as buffer:
-        await buffer.write(file_bytes)
+    # 直接上传到MinIO，添加时间戳区分版本
+    import time
+    timestamp = int(time.time() * 1000)
+    minio_filename = f"{basename}_{timestamp}{ext}"
+
+    # 生成符合MinIO规范的存储桶名称（将下划线替换为连字符）
+    if db_id:
+        bucket_name = f"ref-{db_id.replace('_', '-')}"
+    else:
+        bucket_name = "default-uploads"
+
+    # 上传到MinIO
+    minio_url = await aupload_file_to_minio(bucket_name, minio_filename, file_bytes, ext.lstrip('.'))
+
+    # 检测同名文件（基于原始文件名）
+    same_name_files = await knowledge_base.get_same_name_files(db_id, filename)
+    has_same_name = len(same_name_files) > 0
 
     return {
         "message": "File successfully uploaded",
-        "file_path": file_path,
+        "file_path": minio_url,              # MinIO路径作为主要路径
+        "minio_path": minio_url,             # MinIO路径
         "db_id": db_id,
         "content_hash": content_hash,
+        "filename": filename,                # 原始文件名（小写）
+        "original_filename": basename,       # 原始文件名（去掉后缀）
+        "minio_filename": minio_filename,    # MinIO中的文件名（带时间戳）
+        "bucket_name": bucket_name,          # MinIO存储桶名称
+        "same_name_files": same_name_files,   # 同名文件列表
+        "has_same_name": has_same_name       # 是否包含同名文件标志
     }
 
 

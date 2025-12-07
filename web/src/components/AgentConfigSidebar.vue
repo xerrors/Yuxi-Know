@@ -696,7 +696,7 @@ watch(() => props.isOpen, (newVal) => {
         }
 
         .config-item {
-          background-color: var(--gray-50);
+          background-color: var(--gray-25);
           padding: 12px;
           border-radius: 8px;
           box-shadow: 0px 1px 1px var(--shadow-2);

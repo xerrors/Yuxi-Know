@@ -533,7 +533,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   overflow: hidden;
   border-radius: 12px;
   border: 1px solid var(--gray-150);
-  padding-top: 6px;
+  /* padding-top: 6px; */
 }
 
 .panel-header {
@@ -542,7 +542,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   align-items: center;
   margin-bottom: 4px;
   flex-shrink: 0;
-  padding: 4px 2px;
+  padding: 4px 4px;
 }
 
 .search-container {

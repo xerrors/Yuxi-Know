@@ -837,9 +837,9 @@ onMounted(() => {
 
 .dbcard, .database {
   width: 100%;
-  padding: 24px;
+  padding: 16px;
   border-radius: 16px;
-  height: 180px;
+  height: 156px;
   cursor: pointer;
   display: flex;
   flex-direction: column;

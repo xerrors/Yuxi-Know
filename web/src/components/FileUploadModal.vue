@@ -102,7 +102,32 @@
         </a-upload-dragger>
       </div>
 
-      
+      <!-- 同名文件提示 -->
+      <div v-if="sameNameFiles.length > 0" class="same-name-files-section">
+        <div class="same-name-files-header">
+          <InfoCircleOutlined />
+          <span>当前知识库中已存在以下同名文件：</span>
+        </div>
+        <div class="same-name-files-list">
+          <div v-for="file in sameNameFiles" :key="file.file_id" class="same-name-file-item">
+            <div class="same-name-file-info">
+              <span class="same-name-file-name">{{ file.filename }}</span>
+              <span class="same-name-file-time">{{ formatFileTime(file.created_at) }}</span>
+            </div>
+            <div class="same-name-file-actions">
+              <a-button size="small" type="link" class="download-btn" @click="downloadSameNameFile(file)">
+                <template #icon><DownloadOutlined /></template>
+                下载
+              </a-button>
+              <a-button size="small" type="link" danger @click="deleteSameNameFile(file)">
+                <template #icon><DeleteOutlined /></template>
+                删除
+              </a-button>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </a-modal>
 
@@ -123,18 +148,20 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
-import { message, Upload, Tooltip } from 'ant-design-vue';
+import { message, Upload, Tooltip, Modal } from 'ant-design-vue';
 import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
 import { ocrApi } from '@/apis/system_api';
-import { fileApi } from '@/apis/knowledge_api';
+import { fileApi, documentApi } from '@/apis/knowledge_api';
 import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 import {
   FileOutlined,
   LinkOutlined,
   SettingOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
+  InfoCircleOutlined,
+  DownloadOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue';
 import { h } from 'vue';
 
@@ -264,6 +291,9 @@ const uploadModeOptions = computed(() => [
 
 // 文件列表
 const fileList = ref([]);
+
+// 同名文件列表（用于显示提示）
+const sameNameFiles = ref([]);
 
 
 // URL相关功能已移除
@@ -507,11 +537,109 @@ const beforeUpload = (file) => {
   return true;
 };
 
+const formatFileSize = (bytes) => {
+  if (bytes === 0 || !bytes) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+const formatFileTime = (timestamp) => {
+  if (!timestamp) return '';
+  try {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  } catch (e) {
+    return timestamp;
+  }
+};
+
+const showSameNameFilesInUploadArea = (files) => {
+  sameNameFiles.value = files;
+  // 可以在这里添加其他逻辑，比如自动滚动到提示区域
+};
+
+const downloadSameNameFile = async (file) => {
+  try {
+    // 获取当前数据库ID
+    const currentDbId = databaseId.value;
+    if (!currentDbId) {
+      message.error('知识库ID不存在');
+      return;
+    }
+
+    message.loading('正在下载文件...', 0);
+    const response = await documentApi.downloadDocument(currentDbId, file.file_id);
+    message.destroy();
+
+    // 创建下载链接
+    const blob = await response.blob();  // 从 Response 对象中提取 Blob 数据
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    message.success(`文件 ${file.filename} 下载成功`);
+  } catch (error) {
+    message.destroy();
+    console.error('下载文件失败:', error);
+    message.error(`下载文件失败: ${error.message || '未知错误'}`);
+  }
+};
+
+const deleteSameNameFile = (file) => {
+  Modal.confirm({
+    title: '确认删除文件',
+    content: `确定要删除文件 "${file.filename}" 吗？此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        // 获取当前数据库ID
+        const currentDbId = databaseId.value;
+        if (!currentDbId) {
+          message.error('知识库ID不存在');
+          return;
+        }
+
+        message.loading('正在删除文件...', 0);
+        await documentApi.deleteDocument(currentDbId, file.file_id);
+        message.destroy();
+
+        // 从同名文件列表中移除
+        sameNameFiles.value = sameNameFiles.value.filter(f => f.file_id !== file.file_id);
+
+        message.success(`文件 ${file.filename} 删除成功`);
+      } catch (error) {
+        message.destroy();
+        console.error('删除文件失败:', error);
+        message.error(`删除文件失败: ${error.message || '未知错误'}`);
+      }
+    }
+  });
+};
+
 const handleFileUpload = (info) => {
   if (info?.file?.status === 'error') {
     const errorMessage = info.file?.response?.detail || `文件上传失败：${info.file.name}`;
     message.error(errorMessage);
   }
+
+  // 检查是否有同名文件提示
+  if (info?.file?.status === 'done' && info.file.response) {
+    const response = info.file.response;
+    if (response.has_same_name && response.same_name_files && response.same_name_files.length > 0) {
+      // 显示同名文件提示
+      showSameNameFilesInUploadArea(response.same_name_files);
+    }
+  }
+
   fileList.value = info?.fileList ?? [];
 };
 
@@ -613,6 +741,7 @@ const chunkData = async () => {
   if (success) {
     emit('update:visible', false);
     fileList.value = [];
+    sameNameFiles.value = [];  // 清空同名文件列表
   }
 };
 
@@ -734,5 +863,83 @@ const chunkData = async () => {
 .zip-support-tip {
   font-size: 12px;
   color: var(--color-warning-500);
+}
+
+// 同名文件提示样式
+.same-name-files-section {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--main-50);
+  border: 1px solid var(--main-200);
+  border-radius: 6px;
+}
+
+.same-name-files-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  color: var(--main-700);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.same-name-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.same-name-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid var(--gray-300);
+  border-radius: 6px;
+}
+
+.same-name-file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.same-name-file-name {
+  font-weight: 500;
+  color: var(--gray-800);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.same-name-file-size {
+  font-size: 12px;
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+.same-name-file-time {
+  font-size: 12px;
+  color: var(--gray-500);
+  flex-shrink: 0;
+}
+
+.same-name-file-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.download-btn {
+  color: var(--main-600);
+}
+
+.download-btn:hover {
+  color: var(--main-700);
+  background-color: var(--main-50);
 }
 </style>

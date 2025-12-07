@@ -388,10 +388,10 @@ async def parse_image_async(file, params=None):
 
 async def process_file_to_markdown(file_path: str, params: dict | None = None) -> str:
     """
-    将不同类型的文件转换为markdown格式
+    将不同类型的文件转换为markdown格式 - 支持本地文件和MinIO文件
 
     Args:
-        file_path: 文件路径
+        file_path: 文件路径或MinIO URL
         params: 处理参数，对于ZIP文件需要包含 db_id
 
     Returns:
@@ -402,105 +402,161 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
         - params['_zip_images_info']: 图片信息列表
         - params['_zip_content_hash']: 内容哈希值
     """
-    file_path_obj = Path(file_path)
-    file_ext = file_path_obj.suffix.lower()
+    import tempfile
+    import aiofiles
+    import os
 
-    if file_ext == ".pdf":
-        # 使用 OCR 处理 PDF
-        text = await parse_pdf_async(str(file_path_obj), params=params)
-        return f"# {file_path_obj.name}\n\n{text}"
+    # 检测是否是MinIO URL
+    from src.knowledge.utils.kb_utils import is_minio_url
 
-    elif file_ext in [".txt", ".md"]:
-        # 直接读取文本文件
-        with open(file_path_obj, encoding="utf-8") as f:
-            content = f.read()
-        return f"# {file_path_obj.name}\n\n{content}"
+    if is_minio_url(file_path):
+        # 从MinIO下载文件到临时位置
+        logger.debug(f"Downloading file from MinIO: {file_path}")
 
-    elif file_ext == ".docx":
-        text = _extract_docx_markdown_with_images(file_path_obj, params=params)
-        return f"# {file_path_obj.name}\n\n" + text
+        # 从MinIO URL中提取文件名
+        if "?" in file_path:
+            file_path_clean = file_path.split("?")[0]
+        else:
+            file_path_clean = file_path
 
-    elif file_ext == ".doc":
-        text = _extract_word_text(file_path_obj)
-        return f"# {file_path_obj.name}\n\n{text}"
+        original_filename = file_path_clean.split("/")[-1]
 
-    elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
-        # 使用 OCR 处理图片
-        text = await parse_image_async(str(file_path_obj), params=params)
-        return f"# {file_path_obj.name}\n\n{text}"
+        # 创建临时文件
+        with tempfile.NamedTemporaryFile(delete=False, suffix=Path(original_filename).suffix) as temp_file:
+            temp_path = temp_file.name
 
-    elif file_ext in [".html", ".htm"]:
-        # 使用 BeautifulSoup 处理 HTML 文件
-        from markdownify import markdownify as md
+        try:
+            # 使用通用函数解析MinIO URL并下载文件
+            from src.knowledge.utils.kb_utils import parse_minio_url
+            from src.storage.minio.client import get_minio_client
 
-        with open(file_path_obj, encoding="utf-8") as f:
-            content = f.read()
-        text = md(content, heading_style="ATX")
-        return f"# {file_path_obj.name}\n\n{text}"
+            # 解析MinIO URL获取bucket_name和object_name
+            bucket_name, object_name = parse_minio_url(file_path)
 
-    elif file_ext == ".csv":
-        # 处理 CSV 文件
-        import pandas as pd
+            # 获取MinIO客户端并下载文件
+            minio_client = get_minio_client()
+            file_content = await minio_client.adownload_file(bucket_name, object_name)
 
-        df = pd.read_csv(file_path_obj)
-        # 将每一行数据与表头组合成独立的表格
-        markdown_content = f"# {file_path_obj.name}\n\n"
+            # 写入临时文件
+            async with aiofiles.open(temp_path, "wb") as f:
+                await f.write(file_content)
 
-        for index, row in df.iterrows():
-            # 创建包含表头和当前行的小表格
-            row_df = pd.DataFrame([row], columns=df.columns)
-            markdown_table = row_df.to_markdown(index=False)
-            markdown_content += f"{markdown_table}\n\n"
+            logger.debug(f"File downloaded to temp path: {temp_path}")
 
-        return markdown_content.strip()
+            # 使用临时文件路径
+            actual_file_path = temp_path
 
-    elif file_ext in [".xls", ".xlsx"]:
-        # 处理 Excel 文件
-        import pandas as pd
-        from openpyxl import load_workbook
+        except Exception as e:
+            # 清理临时文件
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            logger.error(f"Failed to download file from MinIO: {e}")
+            raise ValueError(f"无法从MinIO下载文件: {e}")
+    else:
+        # 本地文件
+        actual_file_path = file_path
 
-        markdown_content = f"# {file_path_obj.name}\n\n"
+    try:
+        file_path_obj = Path(actual_file_path)
+        file_ext = file_path_obj.suffix.lower()
+        original_filename = file_path_obj.name
 
-        # 使用 openpyxl 加载工作簿以正确处理合并单元格
-        wb = load_workbook(file_path_obj, data_only=True)
+        if file_ext == ".pdf":
+            # 使用 OCR 处理 PDF
+            text = await parse_pdf_async(str(file_path_obj), params=params)
+            result = f"{text}"
 
-        for sheet_name in wb.sheetnames:
-            ws = wb[sheet_name]
+        elif file_ext in [".txt", ".md"]:
+            # 直接读取文本文件
+            with open(file_path_obj, encoding="utf-8") as f:
+                content = f.read()
+            result = f"{content}"
 
-            # 先取消所有合并单元格，并填充值
-            merged_ranges = list(ws.merged_cells.ranges)
+        elif file_ext == ".docx":
+            text = _extract_docx_markdown_with_images(file_path_obj, params=params)
+            result = f"" + text
 
-            for merged_range in merged_ranges:
-                # 获取合并区域左上角单元格的值
-                min_row, min_col, max_row, max_col = (
-                    merged_range.min_row,
-                    merged_range.min_col,
-                    merged_range.max_row,
-                    merged_range.max_col,
-                )
+        elif file_ext == ".doc":
+            text = _extract_word_text(file_path_obj)
+            result = f"{text}"
 
-                # 获取左上角单元格的值
-                top_left_value = ws.cell(row=min_row, column=min_col).value
+        elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
+            # 使用 OCR 处理图片
+            text = await parse_image_async(str(file_path_obj), params=params)
+            result = f"{text}"
 
-                # 取消合并
-                ws.unmerge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
+        elif file_ext in [".html", ".htm"]:
+            # 使用 BeautifulSoup 处理 HTML 文件
+            from markdownify import markdownify as md
 
-                # 在所有原合并单元格区域填充值
-                for row in range(min_row, max_row + 1):
-                    for col in range(min_col, max_col + 1):
-                        ws.cell(row=row, column=col).value = top_left_value
+            with open(file_path_obj, encoding="utf-8") as f:
+                content = f.read()
+            text = md(content, heading_style="ATX")
+            result = f"{text}"
 
-            # 转换为DataFrame
-            data = []
-            for row in ws.iter_rows(values_only=True):
-                data.append(row)
+        elif file_ext == ".csv":
+            # 处理 CSV 文件
+            import pandas as pd
 
-            # 第一行作为列名
-            columns = data[0] if data else []
-            df_data = data[1:] if len(data) > 1 else []
+            df = pd.read_csv(file_path_obj)
+            # 将每一行数据与表头组合成独立的表格
+            markdown_content = f""
 
-            # 处理重复的列名,给重复的列添加后缀
-            columns = _make_unique_columns(columns)
+            for index, row in df.iterrows():
+                # 创建包含表头和当前行的小表格
+                row_df = pd.DataFrame([row], columns=df.columns)
+                markdown_table = row_df.to_markdown(index=False)
+                markdown_content += f"{markdown_table}\n\n"
+
+            result = markdown_content.strip()
+
+        elif file_ext in [".xls", ".xlsx"]:
+            # 处理 Excel 文件
+            import pandas as pd
+            from openpyxl import load_workbook
+
+            markdown_content = f""
+
+            # 使用 openpyxl 加载工作簿以正确处理合并单元格
+            wb = load_workbook(file_path_obj, data_only=True)
+
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
+
+                # 先取消所有合并单元格，并填充值
+                merged_ranges = list(ws.merged_cells.ranges)
+
+                for merged_range in merged_ranges:
+                    # 获取合并区域左上角单元格的值
+                    min_row, min_col, max_row, max_col = (
+                        merged_range.min_row,
+                        merged_range.min_col,
+                        merged_range.max_row,
+                        merged_range.max_col,
+                    )
+
+                    # 获取左上角单元格的值
+                    top_left_value = ws.cell(row=min_row, column=min_col).value
+
+                    # 取消合并
+                    ws.unmerge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
+
+                    # 在所有原合并单元格区域填充值
+                    for row in range(min_row, max_row + 1):
+                        for col in range(min_col, max_col + 1):
+                            ws.cell(row=row, column=col).value = top_left_value
+
+                # 转换为DataFrame
+                data = []
+                for row in ws.iter_rows(values_only=True):
+                    data.append(row)
+
+                # 第一行作为列名
+                columns = data[0] if data else []
+                df_data = data[1:] if len(data) > 1 else []
+
+                # 处理重复的列名,给重复的列添加后缀
+                columns = _make_unique_columns(columns)
 
             df = pd.DataFrame(df_data, columns=columns)
 
@@ -519,34 +575,55 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
                 markdown_table = chunk_df.to_markdown(index=False)
                 markdown_content += f"{markdown_table}\n\n"
 
-        return markdown_content.strip()
+            result = markdown_content.strip()
 
-    elif file_ext == ".json":
-        # 处理 JSON 文件
-        import json
+        elif file_ext == ".json":
+            # 处理 JSON 文件
+            import json
 
-        async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
-            content = await f.read()
-        data = json.loads(content)
-        # 将 JSON 数据格式化为 markdown 代码块
-        json_str = json.dumps(data, ensure_ascii=False, indent=2)
-        return f"# {file_path_obj.name}\n\n```json\n{json_str}\n```"
+            async with aiofiles.open(file_path_obj, encoding="utf-8") as f:
+                content = await f.read()
+            data = json.loads(content)
+            # 将 JSON 数据格式化为 markdown 代码块
+            json_str = json.dumps(data, ensure_ascii=False, indent=2)
+            result = f"```json\n{json_str}\n```"
 
-    elif file_ext == ".zip":
-        if not params or "db_id" not in params:
-            raise ValueError("ZIP文件处理需要在params中提供db_id参数")
+        elif file_ext == ".zip":
+            if not params or "db_id" not in params:
+                raise ValueError("ZIP文件处理需要在params中提供db_id参数")
 
-        result = await asyncio.to_thread(_process_zip_file, str(file_path_obj), params["db_id"])
+            zip_result = await asyncio.to_thread(_process_zip_file, str(file_path_obj), params["db_id"])
 
-        # 将处理结果保存到params中供调用方使用
-        params["_zip_images_info"] = result["images_info"]
-        params["_zip_content_hash"] = result["content_hash"]
+            # 将处理结果保存到params中供调用方使用
+            params["_zip_images_info"] = zip_result["images_info"]
+            params["_zip_content_hash"] = zip_result["content_hash"]
 
-        return result["markdown_content"]
+            result = zip_result["markdown_content"]
 
-    else:
-        # 尝试作为文本文件读取
-        raise ValueError(f"Unsupported file type: {file_ext}")
+        else:
+            # 尝试作为文本文件读取
+            raise ValueError(f"Unsupported file type: {file_ext}")
+
+    except Exception as e:
+        # 清理临时文件
+        if is_minio_url(file_path) and os.path.exists(actual_file_path):
+            try:
+                os.unlink(actual_file_path)
+                logger.debug(f"Cleaned up temp file: {actual_file_path}")
+            except Exception as cleanup_e:
+                logger.warning(f"Failed to clean up temp file {actual_file_path}: {cleanup_e}")
+        raise
+
+    finally:
+        # 清理临时文件
+        if is_minio_url(file_path) and os.path.exists(actual_file_path):
+            try:
+                os.unlink(actual_file_path)
+                logger.debug(f"Cleaned up temp file: {actual_file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {actual_file_path}: {e}")
+
+    return result
 
 
 def _process_zip_file(zip_path: str, db_id: str) -> dict:

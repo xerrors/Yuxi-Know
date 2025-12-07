@@ -565,8 +565,8 @@ const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
         if (preserveMessages) {
           setTimeout(() => {
             if (threadState.onGoingConv) {
-        threadState.onGoingConv = createOnGoingConvState();
-      }
+              threadState.onGoingConv = createOnGoingConvState();
+            }
           }, 100);
         } else {
           threadState.onGoingConv = createOnGoingConvState();

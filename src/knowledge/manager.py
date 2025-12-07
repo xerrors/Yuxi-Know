@@ -374,6 +374,52 @@ class KnowledgeBaseManager:
 
         return False
 
+    async def get_same_name_files(self, db_id: str, filename: str) -> list[dict]:
+        """获取同一知识库中同名文件列表
+        基于原始文件名直接比较
+        返回基础信息：文件名、大小、上传时间
+
+        Args:
+            db_id: 数据库ID
+            filename: 要检测的文件名（原始文件名）
+
+        Returns:
+            同名文件列表，每项包含：
+            - filename: 文件名
+            - size: 文件大小
+            - created_at: 上传时间
+            - file_id: 文件ID（用于下载）
+        """
+        if not db_id or not filename:
+            return []
+        try:
+            kb_instance = self._get_kb_for_database(db_id)
+        except KBNotFoundError:
+            return []
+
+        same_name_files = []
+        for file_id, file_info in kb_instance.files_meta.items():
+            if file_info.get("database_id") != db_id:
+                continue
+            if file_info.get("status") == "failed":
+                continue
+
+            # 直接比较文件名（现在就是原始文件名）
+            current_filename = file_info.get("filename", "")
+
+            if current_filename.lower() == filename.lower():
+                same_name_files.append({
+                    "file_id": file_id,
+                    "filename": current_filename,
+                    "size": file_info.get("size", 0),
+                    "created_at": file_info.get("created_at", ""),
+                    "content_hash": file_info.get("content_hash", "")
+                })
+
+        # 按上传时间降序排序
+        same_name_files.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return same_name_files
+
     async def update_file(self, db_id: str, region_file_id: str, file_name: str, params: dict | None = None) -> dict:
         """对单个文件执行更新"""
         kb_instance = self._get_kb_for_database(db_id)
