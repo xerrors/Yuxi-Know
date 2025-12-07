@@ -131,9 +131,9 @@ def _extract_agent_state(values: dict) -> dict:
     return result
 
 
-def _get_existing_message_ids(conv_mgr, thread_id):
+async def _get_existing_message_ids(conv_mgr, thread_id):
     """获取已保存的消息ID集合"""
-    existing_messages = conv_mgr.get_messages_by_thread_id(thread_id)
+    existing_messages = await conv_mgr.get_messages_by_thread_id(thread_id)
     return {msg.extra_metadata["id"] for msg in existing_messages if msg.extra_metadata and "id" in msg.extra_metadata}
 
 
@@ -143,7 +143,7 @@ async def _save_ai_message(conv_mgr, thread_id, msg_dict):
     tool_calls_data = msg_dict.get("tool_calls", [])
 
     # 保存AI消息
-    ai_msg = conv_mgr.add_message_by_thread_id(
+    ai_msg = await conv_mgr.add_message_by_thread_id(
         thread_id=thread_id,
         role="assistant",
         content=content,
@@ -155,7 +155,7 @@ async def _save_ai_message(conv_mgr, thread_id, msg_dict):
     if tool_calls_data:
         logger.debug(f"Saving {len(tool_calls_data)} tool calls from AI message")
         for tc in tool_calls_data:
-            conv_mgr.add_tool_call(
+            await conv_mgr.add_tool_call(
                 message_id=ai_msg.id,
                 tool_name=tc.get("name", "unknown"),
                 tool_input=tc.get("args", {}),
@@ -166,7 +166,7 @@ async def _save_ai_message(conv_mgr, thread_id, msg_dict):
     logger.debug(f"Saved AI message {ai_msg.id} with {len(tool_calls_data)} tool calls")
 
 
-def _save_tool_message(conv_mgr, msg_dict):
+async def _save_tool_message(conv_mgr, msg_dict):
     """保存工具执行结果"""
     tool_call_id = msg_dict.get("tool_call_id")
     content = msg_dict.get("content", "")
@@ -182,7 +182,7 @@ def _save_tool_message(conv_mgr, msg_dict):
         tool_output = str(content)
 
     # 更新工具调用结果
-    updated_tc = conv_mgr.update_tool_call_output(
+    updated_tc = await conv_mgr.update_tool_call_output(
         langgraph_tool_call_id=tool_call_id,
         tool_output=tool_output,
         status="success",
@@ -238,7 +238,7 @@ async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message
         else:
             content = ""
 
-        saved_msg = conv_mgr.add_message_by_thread_id(
+        saved_msg = await conv_mgr.add_message_by_thread_id(
             thread_id=thread_id,
             role="assistant",
             content=content,
@@ -271,7 +271,7 @@ async def save_messages_from_langgraph_state(
             return
 
         logger.debug(f"Retrieved {len(messages)} messages from LangGraph state")
-        existing_ids = _get_existing_message_ids(conv_mgr, thread_id)
+        existing_ids = await _get_existing_message_ids(conv_mgr, thread_id)
 
         for msg in messages:
             msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
@@ -283,7 +283,7 @@ async def save_messages_from_langgraph_state(
             if msg_type == "ai":
                 await _save_ai_message(conv_mgr, thread_id, msg_dict)
             elif msg_type == "tool":
-                _save_tool_message(conv_mgr, msg_dict)
+                await _save_tool_message(conv_mgr, msg_dict)
             else:
                 logger.warning(f"Unknown message type: {msg_type}, skipping")
                 continue
@@ -808,14 +808,11 @@ async def resume_agent_chat(
             logger.warning(f"Client disconnected during resume: {e}")
 
             # 保存中断消息到数据库
-            new_db = db_manager.get_session()
-            try:
+            async with db_manager.get_async_session_context() as new_db:
                 new_conv_manager = ConversationManager(new_db)
                 await save_partial_message(
                     new_conv_manager, thread_id, error_message="对话恢复已中断", error_type="resume_interrupted"
                 )
-            finally:
-                new_db.close()
 
             yield make_resume_chunk(status="interrupted", message="对话恢复已中断", meta=meta)
 
@@ -824,14 +821,11 @@ async def resume_agent_chat(
             logger.error(f"Error during resume: {e}, {traceback.format_exc()}")
 
             # 保存错误消息到数据库
-            new_db = db_manager.get_session()
-            try:
+            async with db_manager.get_async_session_context() as new_db:
                 new_conv_manager = ConversationManager(new_db)
                 await save_partial_message(
                     new_conv_manager, thread_id, error_message=f"Error during resume: {e}", error_type="resume_error"
                 )
-            finally:
-                new_db.close()
 
             yield make_resume_chunk(message=f"Error during resume: {e}", status="error")
 
@@ -1271,7 +1265,7 @@ async def submit_message_feedback(
         raise
     except Exception as e:
         logger.error(f"Error submitting message feedback: {e}, {traceback.format_exc()}")
-        db.rollback()
+        await db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
 
 

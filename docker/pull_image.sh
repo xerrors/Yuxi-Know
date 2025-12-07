@@ -25,6 +25,7 @@ else
 fi
 
 # Pull image from mirror
+echo "Pulling image from mirror: $MIRROR_URL/$IMAGE_TAG"
 docker pull $MIRROR_URL/$IMAGE_TAG
 
 # Tag image with original name
