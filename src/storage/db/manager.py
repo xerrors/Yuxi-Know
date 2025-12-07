@@ -3,7 +3,7 @@ import os
 import pathlib
 from contextlib import asynccontextmanager, contextmanager
 
-from sqlalchemy import create_engine, select, func
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 

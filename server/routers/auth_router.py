@@ -5,7 +5,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 
 from src.storage.db.manager import db_manager
 from src.storage.db.models import User
@@ -96,16 +95,12 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     login_identifier = form_data.username  # OAuth2表单中的username字段作为登录标识符
 
     # 尝试通过user_id查找
-    result = await db.execute(
-        select(User).filter(User.user_id == login_identifier)
-    )
+    result = await db.execute(select(User).filter(User.user_id == login_identifier))
     user = result.scalar_one_or_none()
 
     # 如果通过user_id没找到，尝试通过phone_number查找
     if not user:
-        result = await db.execute(
-            select(User).filter(User.phone_number == login_identifier)
-        )
+        result = await db.execute(select(User).filter(User.phone_number == login_identifier))
         user = result.scalar_one_or_none()
 
     # 如果用户不存在，为防止用户名枚举攻击，返回通用错误信息
@@ -309,8 +304,7 @@ async def update_profile(
         # 检查手机号是否已被其他用户使用
         if profile_data.phone_number:
             result = await db.execute(
-                select(User)
-                .filter(User.phone_number == profile_data.phone_number, User.id != current_user.id)
+                select(User).filter(User.phone_number == profile_data.phone_number, User.id != current_user.id)
             )
             existing_phone = result.scalar_one_or_none()
             if existing_phone:
@@ -336,7 +330,10 @@ async def update_profile(
 
 @auth.post("/users", response_model=UserResponse)
 async def create_user(
-    user_data: UserCreate, request: Request, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
+    user_data: UserCreate,
+    request: Request,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
 ):
     # 验证用户名
     is_valid, error_msg = validate_username(user_data.username)
@@ -347,9 +344,7 @@ async def create_user(
         )
 
     # 检查用户名是否已存在
-    result = await db.execute(
-        select(User).filter(User.username == user_data.username)
-    )
+    result = await db.execute(select(User).filter(User.username == user_data.username))
     existing_user = result.scalar_one_or_none()
     if existing_user:
         raise HTTPException(
@@ -359,9 +354,7 @@ async def create_user(
 
     # 检查手机号是否已存在（如果提供了）
     if user_data.phone_number:
-        result = await db.execute(
-            select(User).filter(User.phone_number == user_data.phone_number)
-        )
+        result = await db.execute(select(User).filter(User.phone_number == user_data.phone_number))
         existing_phone = result.scalar_one_or_none()
         if existing_phone:
             raise HTTPException(
@@ -405,7 +398,9 @@ async def create_user(
     await db.refresh(new_user)
 
     # 记录操作
-    await log_operation(db, current_user.id, "创建用户", f"创建用户: {user_data.username}, 角色: {user_data.role}", request)
+    await log_operation(
+        db, current_user.id, "创建用户", f"创建用户: {user_data.username}, 角色: {user_data.role}", request
+    )
 
     return new_user.to_dict()
 
@@ -415,12 +410,7 @@ async def create_user(
 async def read_users(
     skip: int = 0, limit: int = 100, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(User)
-        .filter(User.is_deleted == 0)
-        .offset(skip)
-        .limit(limit)
-    )
+    result = await db.execute(select(User).filter(User.is_deleted == 0).offset(skip).limit(limit))
     users = result.scalars().all()
     return [user.to_dict() for user in users]
 
@@ -428,9 +418,7 @@ async def read_users(
 # 路由：获取特定用户信息（管理员权限）
 @auth.get("/users/{user_id}", response_model=UserResponse)
 async def read_user(user_id: int, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(User).filter(User.id == user_id, User.is_deleted == 0)
-    )
+    result = await db.execute(select(User).filter(User.id == user_id, User.is_deleted == 0))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -449,9 +437,7 @@ async def update_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(User).filter(User.id == user_id, User.is_deleted == 0)
-    )
+    result = await db.execute(select(User).filter(User.id == user_id, User.is_deleted == 0))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -478,9 +464,7 @@ async def update_user(
 
     if user_data.username is not None:
         # 检查用户名是否已被其他用户使用
-        result = await db.execute(
-            select(User).filter(User.username == user_data.username, User.id != user_id)
-        )
+        result = await db.execute(select(User).filter(User.username == user_data.username, User.id != user_id))
         existing_user = result.scalar_one_or_none()
         if existing_user:
             raise HTTPException(
@@ -511,9 +495,7 @@ async def update_user(
 async def delete_user(
     user_id: int, request: Request, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(
-        select(User).filter(User.id == user_id, User.is_deleted == 0)
-    )
+    result = await db.execute(select(User).filter(User.id == user_id, User.is_deleted == 0))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -581,7 +563,9 @@ async def delete_user(
 # 路由：验证用户名并生成user_id
 @auth.post("/validate-username", response_model=UserIdGeneration)
 async def validate_username_and_generate_user_id(
-    validation_data: UsernameValidation, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
+    validation_data: UsernameValidation,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """验证用户名格式并生成可用的user_id"""
     # 验证用户名格式
@@ -593,9 +577,7 @@ async def validate_username_and_generate_user_id(
         )
 
     # 检查用户名是否已存在
-    result = await db.execute(
-        select(User).filter(User.username == validation_data.username)
-    )
+    result = await db.execute(select(User).filter(User.username == validation_data.username))
     existing_user = result.scalar_one_or_none()
     if existing_user:
         raise HTTPException(
@@ -617,9 +599,7 @@ async def check_user_id_availability(
     user_id: str, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
 ):
     """检查user_id是否可用"""
-    result = await db.execute(
-        select(User).filter(User.user_id == user_id)
-    )
+    result = await db.execute(select(User).filter(User.user_id == user_id))
     existing_user = result.scalar_one_or_none()
     return {"user_id": user_id, "is_available": existing_user is None}
 

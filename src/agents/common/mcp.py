@@ -1,6 +1,5 @@
 """MCP Client setup and management for LangGraph ReAct Agent."""
 
-
 import traceback
 from collections.abc import Callable
 from typing import Any, cast

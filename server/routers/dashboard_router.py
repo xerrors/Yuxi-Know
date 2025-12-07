@@ -118,9 +118,8 @@ async def get_all_conversations(
 
     try:
         # Build query
-        query = (
-            select(Conversation, ConversationStats)
-            .outerjoin(ConversationStats, Conversation.id == ConversationStats.conversation_id)
+        query = select(Conversation, ConversationStats).outerjoin(
+            ConversationStats, Conversation.id == ConversationStats.conversation_id
         )
 
         # Apply filters
@@ -343,8 +342,7 @@ async def get_tool_call_stats(
             day_end = now - timedelta(days=i)
 
             daily_count_result = await db.execute(
-                select(func.count(ToolCall.id))
-                .filter(ToolCall.created_at >= day_start, ToolCall.created_at < day_end)
+                select(func.count(ToolCall.id)).filter(ToolCall.created_at >= day_start, ToolCall.created_at < day_end)
             )
             daily_count = daily_count_result.scalar() or 0
 
@@ -513,8 +511,9 @@ async def get_agent_analytics(
 
         # 获取所有智能体
         agents_result = await db.execute(
-            select(Conversation.agent_id, func.count(Conversation.id).label("conversation_count"))
-            .group_by(Conversation.agent_id)
+            select(Conversation.agent_id, func.count(Conversation.id).label("conversation_count")).group_by(
+                Conversation.agent_id
+            )
         )
         agents = agents_result.all()
 
@@ -612,9 +611,7 @@ async def get_dashboard_stats(
         total_conversations = total_conversations_result.scalar() or 0
 
         active_conversations_result = await db.execute(
-            select(func.count(Conversation.id)).filter(
-                Conversation.status == "active"
-            )
+            select(func.count(Conversation.id)).filter(Conversation.status == "active")
         )
         active_conversations = active_conversations_result.scalar() or 0
 
@@ -629,9 +626,7 @@ async def get_dashboard_stats(
         total_feedbacks = total_feedbacks_result.scalar() or 0
 
         like_count_result = await db.execute(
-            select(func.count(MessageFeedback.id)).filter(
-                MessageFeedback.rating == "like"
-            )
+            select(func.count(MessageFeedback.id)).filter(MessageFeedback.rating == "like")
         )
         like_count = like_count_result.scalar() or 0
 
@@ -693,8 +688,7 @@ async def get_all_feedbacks(
             .join(Conversation, Message.conversation_id == Conversation.id)
             .outerjoin(
                 User,
-                (MessageFeedback.user_id == User.id)
-                | (MessageFeedback.user_id == User.user_id),
+                (MessageFeedback.user_id == User.id) | (MessageFeedback.user_id == User.user_id),
             )
         )
 
