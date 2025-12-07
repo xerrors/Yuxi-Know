@@ -50,7 +50,12 @@
       <a-input v-model:value="newDatabase.name" placeholder="新建知识库名称" size="large" />
 
       <h3>嵌入模型</h3>
-      <a-select v-model:value="newDatabase.embed_model_name" :options="embedModelOptions" style="width: 100%;" size="large" />
+      <EmbeddingModelSelector
+        v-model:value="newDatabase.embed_model_name"
+        style="width: 100%;"
+        size="large"
+        placeholder="请选择嵌入模型"
+      />
 
       <!-- 仅对 LightRAG 提供语言选择和LLM选择 -->
       <div v-if="newDatabase.kb_type === 'lightrag'">
@@ -237,6 +242,7 @@ import { LockOutlined, InfoCircleOutlined, QuestionCircleOutlined, PlusOutlined 
 import { databaseApi, typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
 import dayjs, { parseToShanghai } from '@/utils/time';
 
 const route = useRoute()
@@ -250,12 +256,6 @@ const state = reactive({
   openNewDatabaseModel: false,
 })
 
-const embedModelOptions = computed(() => {
-  return Object.keys(configStore.config?.embed_model_names || {}).map(key => ({
-    label: `${key} (${configStore.config?.embed_model_names[key]?.dimension})`,
-    value: key,
-  }))
-})
 
 // 语言选项（值使用英文，以保证后端/LightRAG 兼容；标签为中英文方便理解）
 const languageOptions = [
