@@ -3,7 +3,7 @@ import os
 import pathlib
 from contextlib import asynccontextmanager, contextmanager
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, func
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -131,13 +131,21 @@ class DBManager(metaclass=SingletonMeta):
             await session.close()
 
     def check_first_run(self):
-        """检查是否首次运行"""
+        """检查是否首次运行（同步版本）"""
         session = self.get_session()
         try:
             # 检查是否有任何用户存在
             return session.query(User).count() == 0
         finally:
             session.close()
+
+    async def async_check_first_run(self):
+        """检查是否首次运行（异步版本）"""
+        async with self.get_async_session_context() as session:
+            # 检查是否有任何用户存在
+            result = await session.execute(select(func.count(User.id)))
+            count = result.scalar()
+            return count == 0
 
 
 # 创建全局数据库管理器实例
