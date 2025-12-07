@@ -1,0 +1,169 @@
+# GitHub Actions workflow for Ruff code formatting and linting
+# 自动运行 Ruff 格式检查和修复
+#
+# 触发条件：
+# 1. Push 到 main 分支时：自动格式化并提交
+# 2. Pull Request 时：检查格式并标记问题（不自动提交）
+
+name: Ruff Format Check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'Makefile'
+      - '.github/workflows/ruff.yml'
+
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**.py'
+      - 'pyproject.toml'
+      - 'Makefile'
+
+# 设置写入权限，允许自动提交格式化代码
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  ruff:
+    name: Ruff Format & Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # 2. 安装 uv（项目使用 uv 作为包管理器）
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "0.7.2"
+
+      # 3. 设置 Python 环境
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 4. 安装 ruff 依赖（根据项目配置，ruff 在 dev 依赖组中）
+      - name: Install dependencies
+        run: |
+          uv sync --group dev
+
+      # 5. 运行 Ruff 格式检查（与项目的 make lint 命令一致）
+      - name: Run Ruff format check
+        id: ruff-format
+        run: |
+          echo "Running ruff check (uv run python -m ruff check .)..."
+          uv run python -m ruff check .
+
+          echo "Running ruff format diff check (uv run python -m ruff format src --diff)..."
+          uv run python -m ruff format src --diff
+
+          echo "Running import sorting check (uv run python -m ruff check --select I src)..."
+          uv run python -m ruff check --select I src
+
+          # 保存检查结果状态
+          if [ $? -eq 0 ]; then
+            echo "ruff_format_passed=true" >> $GITHUB_OUTPUT
+            echo "✅ Ruff format check passed"
+          else
+            echo "ruff_format_passed=false" >> $GITHUB_OUTPUT
+            echo "❌ Ruff format check failed"
+          fi
+
+      # 6. 针对不同事件类型执行不同操作
+      - name: Process Ruff Results
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          echo "Processing push event to main branch..."
+
+          # 自动应用格式修复（与项目的 make format 命令一致）
+          echo "Running uv run ruff format ."
+          uv run ruff format .
+
+          echo "Running uv run ruff check . --fix"
+          uv run ruff check . --fix
+
+          echo "Running uv run python -m ruff check --select I src --fix"
+          uv run python -m ruff check --select I src --fix
+
+          # 检查是否有格式变更
+          git diff --exit-code --name-only || (
+            echo "Formatting changes detected"
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git add .
+            git commit -m "style: auto-format with ruff [skip ci]"
+            git push
+            echo "✅ Formatting changes committed and pushed"
+          )
+
+      - name: Create PR Comment on Failure
+        if: ${{ github.event_name == 'pull_request' && steps.ruff-format.outputs.ruff_format_passed == 'false' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = context.issue.number;
+            const repo = context.repo;
+
+            const commentBody = `## ⚠️ Ruff Format Check Failed
+
+            The Ruff format check failed on this pull request. Please run the following commands locally to fix formatting issues:
+
+            \`\`\`bash
+            # Format code using project make command
+            make format
+
+            # Or manually run ruff commands with uv (same as make lint)
+            uv run ruff check .
+            uv run python -m ruff format src --diff
+            uv run python -m ruff check --select I src
+            \`\`\`
+
+            To fix formatting issues:
+            \`\`\`bash
+            uv run ruff format .
+            uv run ruff check . --fix
+            uv run python -m ruff check --select I src --fix
+            \`\`\`
+
+            Once formatting issues are resolved, commit and push your changes.`;
+
+            github.rest.issues.createComment({
+              owner: repo.owner,
+              repo: repo.repo,
+              issue_number: issue_number,
+              body: commentBody
+            });
+
+      - name: Create PR Comment on Success
+        if: ${{ github.event_name == 'pull_request' && steps.ruff-format.outputs.ruff_format_passed == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue_number = context.issue.number;
+            const repo = context.repo;
+
+            const commentBody = `## ✅ Ruff Format Check Passed
+
+            All Python files follow the required formatting standards. Great work!`;
+
+            github.rest.issues.createComment({
+              owner: repo.owner,
+              repo: repo.repo,
+              issue_number: issue_number,
+              body: commentBody
+            });
