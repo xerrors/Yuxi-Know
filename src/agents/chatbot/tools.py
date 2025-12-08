@@ -42,10 +42,7 @@ async def text_to_img_qwen(text: str) -> str:
 
     file_name = f"{uuid.uuid4()}.jpg"
     image_url = await aupload_file_to_minio(
-        bucket_name="generated-images",
-        file_name=file_name,
-        data=file_data,
-        file_extension="jpg"
+        bucket_name="generated-images", file_name=file_name, data=file_data, file_extension="jpg"
     )
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url

@@ -143,11 +143,12 @@ class KnowledgeBase(ABC):
 
         # 创建数据库记录
         # 确保 Pydantic 模型被转换为字典，以便 JSON 序列化
+        embed_info_dump = embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info
         self.databases_meta[db_id] = {
             "name": database_name,
             "description": description,
             "kb_type": self.kb_type,
-            "embed_info": embed_info.model_dump() if hasattr(embed_info, "model_dump") else embed_info,
+            "embed_info": embed_info_dump,
             "llm_info": llm_info.model_dump() if hasattr(llm_info, "model_dump") else llm_info,
             "metadata": kwargs,
             "created_at": utc_isoformat(),
