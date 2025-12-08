@@ -288,8 +288,6 @@ def get_minio_client() -> MinIOClient:
     return _default_client
 
 
-
-
 async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, file_extension: str) -> str:
     """
     通过字节上传文件到 MinIO的异步接口，根据输入的file_extension确定文件格式，并返回资源url

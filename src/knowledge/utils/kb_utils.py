@@ -7,6 +7,7 @@ import aiofiles
 from langchain_text_splitters import MarkdownTextSplitter
 
 from src import config
+from src.config.static.models import EmbedModelInfo
 from src.utils import hashstr, logger
 from src.utils.datetime_utils import utc_isoformat
 
@@ -293,19 +294,9 @@ def get_embedding_config(embed_info: dict) -> dict:
         if embed_info:
             # 优先检查是否有 model_id 字段
             if "model_id" in embed_info:
-                from src.models.embed import select_embedding_model
-
-                model = select_embedding_model(embed_info["model_id"])
-                config_dict["model"] = model.model
-                config_dict["api_key"] = model.api_key
-                config_dict["base_url"] = model.base_url
-                config_dict["dimension"] = getattr(model, "dimension", 1024)
-            elif hasattr(embed_info, "name"):
-                # EmbedModelInfo 对象
-                config_dict["model"] = embed_info.name
-                config_dict["api_key"] = os.getenv(embed_info.api_key) or embed_info.api_key
-                config_dict["base_url"] = embed_info.base_url
-                config_dict["dimension"] = embed_info.dimension
+                return config.embed_model_names[embed_info["model_id"]].model_dump()
+            elif hasattr(embed_info, "name") and isinstance(embed_info, EmbedModelInfo):
+                return embed_info.model_dump()
             else:
                 # 字典形式（保持向后兼容）
                 config_dict["model"] = embed_info["name"]
@@ -313,13 +304,7 @@ def get_embedding_config(embed_info: dict) -> dict:
                 config_dict["base_url"] = embed_info["base_url"]
                 config_dict["dimension"] = embed_info.get("dimension", 1024)
         else:
-            from src.models import select_embedding_model
-
-            default_model = select_embedding_model(config.embed_model)
-            config_dict["model"] = default_model.model
-            config_dict["api_key"] = default_model.api_key
-            config_dict["base_url"] = default_model.base_url
-            config_dict["dimension"] = getattr(default_model, "dimension", 1024)
+            return config.embed_model_names[config.embed_model].model_dump()
 
     except Exception as e:
         logger.error(f"Error in get_embedding_config: {e}, {embed_info}")
