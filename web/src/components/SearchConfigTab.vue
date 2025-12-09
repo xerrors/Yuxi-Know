@@ -197,21 +197,19 @@ const saveConfig = async () => {
   // 确保 include_distances 始终为 true
   meta['include_distances'] = true;
 
-  // 保存到 localStorage（兼容性）
-  localStorage.setItem(`search-config-${props.databaseId}`, JSON.stringify(meta));
-
-  // 保存到知识库元数据
+  // 先保存到知识库元数据
   try {
-    const { knowledgeApi } = await import('@/apis/knowledge_api');
-    const response = await knowledgeApi.updateKnowledgeBaseQueryParams(props.databaseId, meta);
+    const response = await queryApi.updateKnowledgeBaseQueryParams(props.databaseId, meta);
     if (response.message === 'success') {
-      message.success('配置已保存到知识库');
+      // 服务器保存成功后，再保存到 localStorage（兼容性）
+      localStorage.setItem(`search-config-${props.databaseId}`, JSON.stringify(meta));
+      message.success('配置已保存');
     } else {
-      message.warning('配置已保存到本地，但同步到知识库失败');
+      throw new Error(response.message || '保存失败');
     }
   } catch (error) {
     console.error('保存配置到知识库失败:', error);
-    message.warning('配置已保存到本地，但同步到知识库失败');
+    message.error('保存配置失败：' + error.message);
   }
 
   // 更新 store 中的配置

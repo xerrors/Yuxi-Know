@@ -183,6 +183,13 @@
         </a-descriptions-item>
       </a-descriptions>
 
+      <!-- 检索配置 -->
+      <a-card size="small" title="检索配置" style="margin-bottom: 20px" v-if="selectedResult.retrieval_config">
+        <div class="json-viewer-container">
+          <pre class="json-viewer">{{ JSON.stringify(selectedResult.retrieval_config, null, 2) }}</pre>
+        </div>
+      </a-card>
+
       <!-- 整体评估报告 -->
       <div class="evaluation-report">
         <h4 style="margin-bottom: 16px">整体评估报告</h4>
@@ -417,22 +424,10 @@ const startEvaluation = async () => {
 
   startingEvaluation.value = true;
 
-  // 获取检索配置
-  let retrievalConfig = {};
-  try {
-    const savedConfig = localStorage.getItem(`search-config-${props.databaseId}`);
-    if (savedConfig) {
-      retrievalConfig = JSON.parse(savedConfig);
-    }
-  } catch (error) {
-    console.error('获取检索配置失败:', error);
-  }
-
-  // 合并配置，优先使用评估页面的模型配置
+  // 只传递模型配置，检索配置由服务器从知识库读取
   const params = {
     benchmark_id: selectedBenchmark.value.benchmark_id,
-    retrieval_config: {
-      ...retrievalConfig, // 包含所有检索参数如 top_k, similarity_threshold 等
+    model_config: {
       answer_llm: configForm.answer_llm, // 传递答案生成模型
       judge_llm: configForm.judge_llm // 传递评判模型
     }
@@ -544,8 +539,14 @@ const viewResults = async (taskId) => {
         completed_at: resultData.completed_at,
         total_questions: resultData.total_questions || 0,
         completed_questions: resultData.completed_questions || 0,
-        overall_score: resultData.overall_score
+        overall_score: resultData.overall_score,
+        retrieval_config: resultData.retrieval_config
       };
+
+      // 如果是从历史记录获取的，确保也有 retrieval_config
+      if (selectedResult.value && !selectedResult.value.retrieval_config) {
+        selectedResult.value.retrieval_config = resultData.retrieval_config;
+      }
 
       // 计算总耗时
       if (resultData.started_at && resultData.completed_at) {
@@ -704,6 +705,7 @@ const formatDuration = (seconds) => {
     return `${hours}小时${minutes}分`;
   }
 };
+
 
 // 组件挂载时加载数据
 onMounted(() => {
@@ -1134,6 +1136,27 @@ onMounted(() => {
   }
   :deep(.ant-table) {
     border: 1px solid var(--gray-100);
+  }
+}
+
+// JSON 查看器样式
+.json-viewer-container {
+  max-height: 400px;
+  overflow: auto;
+
+  .json-viewer {
+    margin: 0;
+    padding: 0;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', 'Menlo', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--gray-800);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 12px;
   }
 }
 

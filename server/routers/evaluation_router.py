@@ -149,7 +149,7 @@ async def run_evaluation(db_id: str, params: dict = Body(...), current_user: Use
         task_id = await service.run_evaluation(
             db_id=db_id,
             benchmark_id=params.get("benchmark_id"),
-            retrieval_config=params.get("retrieval_config", {}),
+            model_config=params.get("model_config", {}),
             created_by=current_user.user_id,
         )
         return {"message": "success", "data": {"task_id": task_id}}

@@ -390,7 +390,7 @@ export const evaluationApi = {
     return apiAdminPost(`/api/evaluation/databases/${dbId}/run`, params)
   },
 
-  
+
   /**
    * 获取评估结果
    * @param {string} taskId - 任务ID

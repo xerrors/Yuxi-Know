@@ -241,7 +241,7 @@ class EvaluationService:
         raise NotImplementedError("自动生成基准功能暂时不可用，请手动上传基准文件。")
 
     async def run_evaluation(
-        self, db_id: str, benchmark_id: str, retrieval_config: dict[str, Any], created_by: str
+        self, db_id: str, benchmark_id: str, model_config: dict[str, Any] = None, created_by: str = "system"
     ) -> str:
         """运行RAG评估"""
         try:
@@ -252,6 +252,21 @@ class EvaluationService:
             _, meta_file_path = self._find_benchmark_location(benchmark_id)
             with open(meta_file_path, encoding="utf-8") as f:
                 benchmark_meta = json.load(f)
+
+            # 从知识库元数据中获取检索配置
+            retrieval_config = {}
+            try:
+                kb_meta = knowledge_base.global_databases_meta.get(db_id, {})
+                query_params = kb_meta.get("query_params", {})
+                retrieval_config = query_params.get("options", {})
+                logger.info(f"从知识库 {db_id} 加载检索配置: {list(retrieval_config.keys())}")
+            except Exception as e:
+                logger.error(f"获取知识库检索配置失败: {e}")
+                # 使用空配置作为默认值
+
+            # 合并前端传递的模型配置
+            if model_config:
+                retrieval_config.update(model_config)
 
             # 初始化结果文件 (Status: running)
             result_dir = self._get_result_dir(db_id)
@@ -581,6 +596,8 @@ class EvaluationService:
                             "total_questions": data.get("total_questions"),
                             "completed_questions": data.get("completed_questions"),
                             "overall_score": data.get("overall_score"),
+                            # 包含检索配置
+                            "retrieval_config": data.get("retrieval_config", {}),
                             # 也可以带上部分 metrics 摘要
                             "metrics": data.get("metrics"),
                         }

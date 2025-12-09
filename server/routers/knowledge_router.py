@@ -702,12 +702,19 @@ async def update_knowledge_base_query_params(
             if db_id not in knowledge_base.global_databases_meta:
                 knowledge_base.global_databases_meta[db_id] = {}
 
-            # 保存查询参数到元数据
+            # 初始化 query_params 结构
             if "query_params" not in knowledge_base.global_databases_meta[db_id]:
                 knowledge_base.global_databases_meta[db_id]["query_params"] = {}
 
-            knowledge_base.global_databases_meta[db_id]["query_params"].update(params)
+            # 将参数保存到 options 下，与评估服务期望的结构一致
+            if "options" not in knowledge_base.global_databases_meta[db_id]["query_params"]:
+                knowledge_base.global_databases_meta[db_id]["query_params"]["options"] = {}
+
+            # 更新 options
+            knowledge_base.global_databases_meta[db_id]["query_params"]["options"].update(params)
             knowledge_base._save_global_metadata()
+
+            logger.info(f"更新知识库 {db_id} 查询参数: {params}")
 
         return {"message": "success", "data": params}
 
@@ -925,6 +932,22 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
                     }
                 ],
             }
+
+        # 获取用户保存的配置
+        saved_options = {}
+        try:
+            if db_id in knowledge_base.global_databases_meta:
+                query_params_meta = knowledge_base.global_databases_meta[db_id].get("query_params", {})
+                saved_options = query_params_meta.get("options", {})
+        except Exception as saved_error:
+            logger.warning(f"获取保存的配置失败: {saved_error}")
+
+        # 将保存的值合并到默认配置中
+        if saved_options:
+            for option in params.get("options", []):
+                key = option.get("key")
+                if key in saved_options:
+                    option["default"] = saved_options[key]
 
         return {"params": params, "message": "success"}
 
