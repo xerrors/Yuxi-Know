@@ -1,15 +1,5 @@
 <template>
   <div class="mindmap-section">
-    <div class="section-header">
-      <div class="header-left">
-        <BrainCircuit :size="16" />
-        <span>知识导图</span>
-        <a-tag v-if="!loading && mindmapData" color="blue" size="small">
-          已生成
-        </a-tag>
-      </div>
-    </div>
-
     <div class="section-content">
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-state">
@@ -65,7 +55,6 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  BrainCircuit,
   RefreshCw,
   Network,
   Sparkles,
@@ -315,21 +304,6 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.section-header {
-  padding: 10px 16px;
-  background: var(--gray-25);
-  border-bottom: 1px solid var(--border-color);
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text-color);
-  }
-}
-
 .section-content {
   flex: 1;
   min-height: 200px;
@@ -374,7 +348,7 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: flex-end;
 
   .toolbar-text {
     margin-left: 4px;
@@ -382,7 +356,6 @@ onUnmounted(() => {
   }
 
   :deep(.ant-btn-text) {
-    padding: 4px 12px;
     display: flex;
     align-items: center;
 

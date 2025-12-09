@@ -14,6 +14,17 @@
             />
             <div class="search-actions">
               <div class="query-examples-compact">
+                <!-- 检索配置按钮 -->
+                <a-tooltip title="检索配置" placement="bottom">
+                  <a-button
+                    type="text"
+                    size="small"
+                    class="config-label-btn"
+                    @click="openSearchConfigModal"
+                  >
+                    <SettingOutlined />
+                  </a-button>
+                </a-tooltip>
                 <div class="examples-label-group">
                   <a-tooltip title="点击手动生成测试问题" placement="bottom">
                     <a-button
@@ -138,6 +149,13 @@
       </div>
     </div>
   </div>
+
+  <!-- 检索配置弹窗 -->
+  <SearchConfigModal
+    v-model="searchConfigModalVisible"
+    :database-id="store.database?.db_id"
+    @save="handleSearchConfigSave"
+  />
 </template>
 
 <script setup>
@@ -148,7 +166,9 @@ import { queryApi } from '@/apis/knowledge_api';
 import {
   SearchOutlined,
   ReloadOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue';
+import SearchConfigModal from './SearchConfigModal.vue';
 
 const store = useDatabaseStore();
 
@@ -175,9 +195,23 @@ const queryExamples = ref([]);
 const currentExampleIndex = ref(0);
 const loadingQuestions = ref(false);
 const generatingQuestions = ref(false);
+const searchConfigModalVisible = ref(false);
 
 // 示例轮播相关
 let exampleCarouselInterval = null;
+
+// 方法定义
+
+// 打开检索配置弹窗
+const openSearchConfigModal = () => {
+  searchConfigModalVisible.value = true;
+};
+
+// 处理检索配置保存
+const handleSearchConfigSave = (config) => {
+  console.log('查询测试中的检索配置已更新:', config);
+  // 可以在这里添加配置更新后的处理逻辑，比如重新查询
+};
 
 // 加载示例问题
 const loadSampleQuestions = async () => {
@@ -595,12 +629,31 @@ defineExpose({
   flex-wrap: wrap;
 }
 
+.config-label-btn {
+  color: var(--gray-500);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  margin-left: -4px;
+
+  &:hover {
+    color: var(--main-color);
+    background-color: var(--gray-100);
+  }
+
+  .anticon {
+    font-size: 14px;
+  }
+}
+
 .examples-label-btn {
   color: var(--gray-500);
   font-size: 12px;
   display: flex;
   align-items: center;
   margin-left: -8px;
+  margin-right: -6px;
 
   &:hover {
     color: var(--main-color);

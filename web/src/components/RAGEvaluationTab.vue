@@ -9,7 +9,7 @@
           <a-select
             v-model:value="selectedBenchmarkId"
             placeholder="请选择评估基准"
-            style="width: 300px"
+            style="width: 180px"
             @change="onBenchmarkChanged"
             :loading="benchmarksLoading"
           >
@@ -22,8 +22,15 @@
             </a-select-option>
           </a-select>
         </div>
-      </div>
+
+        </div>
       <div class="toolbar-right">
+        <!-- 检索配置按钮 -->
+        <a-button
+          size="middle"
+          @click="openSearchConfigModal"
+          :icon="h(SettingOutlined)"
+        />
         <!-- 开始评估按钮 -->
         <a-button
           type="primary"
@@ -84,10 +91,22 @@
         </div>
       </template>
       <template v-else>
-  
+
         <!-- 历史评估记录 -->
         <div class="history-section">
-          <h4 class="section-title">历史评估记录</h4>
+          <div class="section-header">
+            <h4 class="section-title">历史评估记录</h4>
+            <a-button
+              type="text"
+              size="small"
+              :loading="refreshingHistory"
+              @click="refreshHistory"
+              :icon="h('ReloadOutlined')"
+              class="refresh-btn"
+            >
+              刷新
+            </a-button>
+          </div>
           <a-table
             class="history-table"
             :columns="historyColumns"
@@ -242,9 +261,9 @@
             </a-tooltip>
           </template>
           <template v-else-if="column.key === 'retrieval_score'">
-            <div v-if="record.metrics && Object.keys(record.metrics).some(k => k.startsWith('recall') || k.startsWith('f1') || k.startsWith('precision') || k === 'map' || k === 'ndcg')" class="retrieval-metrics">
+            <div v-if="record.metrics && Object.keys(record.metrics).some(k => k.startsWith('recall') || k.startsWith('precision') || k === 'map' || k === 'ndcg')" class="retrieval-metrics">
               <div v-for="(val, key) in record.metrics" :key="key" class="metric-item">
-                <span v-if="key.startsWith('recall') || key.startsWith('f1') || key.startsWith('precision') || key === 'map' || key === 'ndcg'"
+                <span v-if="key.startsWith('recall') || key.startsWith('precision') || key === 'map' || key === 'ndcg'"
                       class="metric-content"
                       :class="`metric-${getMetricType(key)}`">
                   <span class="metric-name">{{ getMetricShortName(key) }}</span>
@@ -277,13 +296,22 @@
       </a-empty>
     </div>
   </a-modal>
+
+    <!-- 检索配置弹窗 -->
+    <SearchConfigModal
+      v-model="searchConfigModalVisible"
+      :database-id="databaseId"
+      @save="handleSearchConfigSave"
+    />
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue';
+import { ref, reactive, onMounted, computed, h } from 'vue';
 import { message } from 'ant-design-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import SearchConfigModal from './SearchConfigModal.vue';
+import { SettingOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 
 const props = defineProps({
   databaseId: {
@@ -306,6 +334,9 @@ const selectedResult = ref(null);
 const detailedResults = ref([]);
 const evaluationStats = ref({});
 const resultsLoading = ref(false);
+const searchConfigModalVisible = ref(false);
+const refreshingHistory = ref(false);
+
 
 // 评估配置表单（使用知识库默认配置）
 const configForm = reactive({
@@ -358,10 +389,36 @@ const historyColumns = [
     width: 100
   },
   {
-    title: '总体评分',
-    dataIndex: 'overall_score',
-    key: 'overall_score',
-    width: 100
+    title: 'Recall@10',
+    key: 'recall_10',
+    width: 100,
+    customRender: ({ record }) => {
+      // 使用后端返回的 metrics.recall@10 数据
+      if (record.metrics && record.metrics['recall@10'] !== undefined && record.metrics['recall@10'] !== null) {
+        const recallValue = record.metrics['recall@10'];
+        const displayValue = formatMetricValue(recallValue);
+        return h('a-tag', {
+          color: getScoreTagColor(recallValue)
+        }, displayValue);
+      }
+
+      // 如果是运行中的任务，显示计算中
+      if (record.status === 'running') {
+        return h('a-tag', {
+          color: 'processing'
+        }, '计算中');
+      }
+
+      // 已完成但没有 recall@10 数据
+      if (record.status === 'completed') {
+        return h('a-tag', {
+          color: 'default'
+        }, '无数据');
+      }
+
+      // 其他情况显示横线
+      return h('span', '-');
+    }
   },
   {
     title: '操作',
@@ -378,6 +435,17 @@ const currentBenchmark = computed(() => {
   return availableBenchmarks.value.find(b => b.benchmark_id === selectedBenchmarkId.value);
 });
 
+// 打开检索配置弹窗
+const openSearchConfigModal = () => {
+  searchConfigModalVisible.value = true;
+};
+
+// 处理检索配置保存
+const handleSearchConfigSave = (config) => {
+  console.log('RAG评估中的检索配置已更新:', config);
+  // 可以在这里添加配置更新后的处理逻辑
+};
+
 // 加载基准列表
 const loadBenchmarks = async () => {
   if (!props.databaseId) return;
@@ -389,12 +457,19 @@ const loadBenchmarks = async () => {
     if (response && response.message === 'success' && Array.isArray(response.data)) {
       availableBenchmarks.value = response.data;
 
-      // 如果之前有选中的基准，重新验证其有效性
-      if (selectedBenchmarkId.value) {
+      // 如果没有选中的基准，且有可用基准，默认选中第一个
+      if (!selectedBenchmarkId.value && response.data.length > 0) {
+        selectedBenchmarkId.value = response.data[0].benchmark_id;
+        selectedBenchmark.value = response.data[0];
+      } else if (selectedBenchmarkId.value) {
+        // 如果之前有选中的基准，重新验证其有效性
         const exists = response.data.some(b => b.benchmark_id === selectedBenchmarkId.value);
         if (!exists) {
           selectedBenchmarkId.value = null;
           selectedBenchmark.value = null;
+        } else {
+          // 更新选中的基准对象
+          selectedBenchmark.value = response.data.find(b => b.benchmark_id === selectedBenchmarkId.value);
         }
       }
     } else {
@@ -414,6 +489,21 @@ const onBenchmarkChanged = (benchmarkId) => {
   const benchmark = availableBenchmarks.value.find(b => b.benchmark_id === benchmarkId);
   selectedBenchmark.value = benchmark || null;
 };
+
+// 刷新历史评估记录
+const refreshHistory = async () => {
+  refreshingHistory.value = true;
+  try {
+    await loadEvaluationHistory();
+    message.success('历史记录已刷新');
+  } catch (error) {
+    console.error('刷新历史记录失败:', error);
+    message.error('刷新历史记录失败');
+  } finally {
+    refreshingHistory.value = false;
+  }
+};
+
 
 // 开始评估
 const startEvaluation = async () => {
@@ -464,6 +554,7 @@ const loadEvaluationHistory = async () => {
   }
 };
 
+
 // 计算评估统计信息
 const calculateEvaluationStats = (results) => {
   if (!results || results.length === 0) {
@@ -493,7 +584,7 @@ const calculateEvaluationStats = (results) => {
     // 检索指标统计
     if (item.metrics) {
       Object.keys(item.metrics).forEach(key => {
-        if (key.startsWith('recall') || key.startsWith('f1') || key.startsWith('precision') || key === 'map' || key === 'ndcg') {
+        if (key.startsWith('recall') || key.startsWith('precision') || key === 'map' || key === 'ndcg') {
           if (!metricSums[key]) {
             metricSums[key] = 0;
             metricCounts[key] = 0;
@@ -643,7 +734,6 @@ const getMetricTitle = (key) => {
   const titles = {
     precision: '精确率',
     recall: '召回率',
-    f1: 'F1分数',
     map: '平均精度',
     ndcg: 'NDCG',
     bleu: 'BLEU分数',
@@ -653,9 +743,8 @@ const getMetricTitle = (key) => {
     reasoning: '理由',
     overall_score: '综合评分'
   };
-  // 处理 recall@k, f1@k
+  // 处理 recall@k
   if (key.startsWith('recall@')) return `召回率 (${key.split('@')[1]})`;
-  if (key.startsWith('f1@')) return `F1 (${key.split('@')[1]})`;
   if (key.startsWith('precision@')) return `精确率 (${key.split('@')[1]})`;
 
   return titles[key] || key;
@@ -665,7 +754,6 @@ const getMetricTitle = (key) => {
 const getMetricType = (key) => {
   if (key.startsWith('recall')) return 'recall';
   if (key.startsWith('precision')) return 'precision';
-  if (key.startsWith('f1')) return 'f1';
   if (key === 'map') return 'map';
   if (key === 'ndcg') return 'ndcg';
   return 'default';
@@ -675,10 +763,8 @@ const getMetricType = (key) => {
 const getMetricShortName = (key) => {
   if (key.startsWith('recall@')) return `R@${key.split('@')[1]}`;
   if (key.startsWith('precision@')) return `P@${key.split('@')[1]}`;
-  if (key.startsWith('f1@')) return `F1@${key.split('@')[1]}`;
   if (key === 'precision') return 'Precision';
   if (key === 'recall') return 'Recall';
-  if (key === 'f1') return 'F1';
   if (key === 'map') return 'MAP';
   if (key === 'ndcg') return 'NDCG';
   return key;
@@ -753,12 +839,9 @@ onMounted(() => {
   }
 
   .toolbar-right {
-    .ant-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      border-radius: 6px;
-    }
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 }
 
@@ -1006,10 +1089,6 @@ onMounted(() => {
     color: var(--color-success-900);
   }
 
-  &.metric-f1 {
-    background-color: var(--color-warning-50);
-    color: var(--color-warning-900);
-  }
 
   &.metric-map,
   &.metric-ndcg {
@@ -1128,12 +1207,43 @@ onMounted(() => {
 
 // 历史评估记录区域
 .history-section {
-  .section-title {
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--gray-700);
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+
+    .section-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-700);
+    }
+
+    .refresh-btn {
+      color: var(--gray-600);
+      border: none;
+      box-shadow: none;
+      padding: 4px 8px;
+      height: auto;
+      font-size: 13px;
+
+      &:hover {
+        color: var(--color-primary-600);
+        background-color: var(--color-primary-50);
+      }
+
+      &:active {
+        color: var(--color-primary-700);
+        background-color: var(--color-primary-100);
+      }
+
+      .anticon {
+        font-size: 14px;
+      }
+    }
   }
+
   :deep(.ant-table) {
     border: 1px solid var(--gray-100);
   }

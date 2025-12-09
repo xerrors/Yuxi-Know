@@ -1,14 +1,15 @@
 <template>
-  <div class="search-config-tab">
-    <div class="config-header">
-      <p class="config-title">检索配置</p>
-      <div class="config-actions">
-        <a-button size="small" @click="resetToDefaults">重置默认</a-button>
-        <a-button size="small" type="primary" @click="saveConfig">保存配置</a-button>
-      </div>
-    </div>
-
-    <div class="config-content">
+  <a-modal
+    :open="props.modelValue"
+    title="检索配置"
+    width="800px"
+    :confirm-loading="loading"
+    @ok="handleSave"
+    @cancel="handleCancel"
+    ok-text="保存"
+    cancel-text="取消"
+  >
+    <div class="search-config-modal">
       <div v-if="loading" class="config-loading">
         <a-spin size="large" />
         <p>加载配置参数中...</p>
@@ -66,21 +67,27 @@
         </a-form>
       </div>
     </div>
-  </div>
+  </a-modal>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue';
+import { ref, reactive, computed, watch } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { message } from 'ant-design-vue';
 import { queryApi } from '@/apis/knowledge_api';
 
 const props = defineProps({
+  modelValue: {
+    type: Boolean,
+    default: false
+  },
   databaseId: {
     type: String,
     required: true
   }
 });
+
+const emit = defineEmits(['update:modelValue', 'save']);
 
 const store = useDatabaseStore();
 
@@ -193,7 +200,7 @@ const resetToDefaults = () => {
 };
 
 // 保存配置
-const saveConfig = async () => {
+const handleSave = async () => {
   // 确保 include_distances 始终为 true
   meta['include_distances'] = true;
 
@@ -204,6 +211,13 @@ const saveConfig = async () => {
       // 服务器保存成功后，再保存到 localStorage（兼容性）
       localStorage.setItem(`search-config-${props.databaseId}`, JSON.stringify(meta));
       message.success('配置已保存');
+
+      // 更新 store 中的配置
+      Object.assign(store.meta, meta);
+
+      // 触发保存事件
+      emit('save', { ...meta });
+      emit('update:modelValue', false);
     } else {
       throw new Error(response.message || '保存失败');
     }
@@ -211,49 +225,22 @@ const saveConfig = async () => {
     console.error('保存配置到知识库失败:', error);
     message.error('保存配置失败：' + error.message);
   }
-
-  // 更新 store 中的配置
-  Object.assign(store.meta, meta);
 };
 
-// 组件挂载时加载数据
-onMounted(() => {
-  loadQueryParams();
+// 处理取消
+const handleCancel = () => {
+  emit('update:modelValue', false);
+};
+
+// 监听弹窗显示状态，显示时加载数据
+watch(() => props.modelValue, (newVal) => {
+  if (newVal && props.databaseId) {
+    loadQueryParams();
+  }
 });
 </script>
 
 <style lang="less" scoped>
-.search-config-tab {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--gray-0);
-}
-
-.config-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  // border-bottom: 1px solid var(--gray-200);
-  flex-shrink: 0;
-
-  .config-title {
-    margin: 0;
-    color: var(--gray-800);
-  }
-
-  .config-actions {
-    display: flex;
-    gap: 8px;
-  }
-}
-
-.config-content {
-  flex: 1;
-  padding: 16px;
-  overflow-y: auto;
-}
 
 .config-loading,
 .config-error {
@@ -261,7 +248,7 @@ onMounted(() => {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  height: 100%;
+  height: 300px;
   color: var(--gray-500);
 
   p {
@@ -271,9 +258,8 @@ onMounted(() => {
 }
 
 .config-forms {
-  max-width: 800px;
+  max-width: 100%;
 }
-
 
 // 表单样式优化
 :deep(.ant-form-item) {

@@ -41,9 +41,6 @@
             ref="mindmapSectionRef"
           />
         </a-tab-pane>
-        <a-tab-pane key="config" tab="检索配置">
-          <SearchConfigTab :database-id="databaseId" />
-        </a-tab-pane>
         <a-tab-pane key="evaluation" tab="RAG评估（Beta）">
           <RAGEvaluationTab
             v-if="databaseId"
@@ -84,7 +81,6 @@ import FileDetailModal from '@/components/FileDetailModal.vue';
 import FileUploadModal from '@/components/FileUploadModal.vue';
 import KnowledgeGraphSection from '@/components/KnowledgeGraphSection.vue';
 import QuerySection from '@/components/QuerySection.vue';
-import SearchConfigTab from '@/components/SearchConfigTab.vue';
 import MindMapSection from '@/components/MindMapSection.vue';
 import RAGEvaluationTab from '@/components/RAGEvaluationTab.vue';
 import EvaluationBenchmarks from '@/components/EvaluationBenchmarks.vue';
