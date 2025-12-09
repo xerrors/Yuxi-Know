@@ -37,7 +37,7 @@ class Config(BaseModel):
     enable_content_guard: bool = Field(default=False, description="是否启用内容审查")
 
     # 模型配置
-    default_model: str = Field(default="siliconflow/deepseek-ai/DeepSeek-V3.2-Exp")
+    default_model: str = Field(default="siliconflow/deepseek-ai/DeepSeek-V3.2")
     embed_model: str = Field(default="siliconflow/BAAI/bge-m3")
 
     # 运行时状态 (不持久化)
@@ -105,10 +105,10 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
         name="SiliconFlow",
         url="https://cloud.siliconflow.cn/models",
         base_url="https://api.siliconflow.cn/v1",
-        default="deepseek-ai/DeepSeek-V3.2-Exp",
+        default="deepseek-ai/DeepSeek-V3.2",
         env="SILICONFLOW_API_KEY",
         models=[
-            "deepseek-ai/DeepSeek-V3.2-Exp",
+            "deepseek-ai/DeepSeek-V3.2",
             "Qwen/Qwen3-235B-A22B-Instruct-2507",
             # ...
         ],
@@ -130,7 +130,7 @@ enable_content_guard = true
 # 模型配置修改
 [model_names.siliconflow]
 models = [
-    "deepseek-ai/DeepSeek-V3.2-Exp",
+    "deepseek-ai/DeepSeek-V3.2",
     "custom-model-name",
 ]
 ```
