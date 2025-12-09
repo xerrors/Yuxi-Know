@@ -165,7 +165,8 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
 
             # 如果文件名包含时间戳，提取原始文件名
             import re
-            timestamp_pattern = r'^(.+)_(\d{13})(\.[^.]+)$'
+
+            timestamp_pattern = r"^(.+)_(\d{13})(\.[^.]+)$"
             match = re.match(timestamp_pattern, filename)
             if match:
                 original_filename = match.group(1) + match.group(3)
@@ -347,10 +348,10 @@ def parse_minio_url(file_path: str) -> tuple[str, str]:
         parsed_url = urlparse(file_path)
 
         # 从URL路径中提取对象名称（去掉开头的斜杠）
-        object_name = parsed_url.path.lstrip('/')
+        object_name = parsed_url.path.lstrip("/")
 
         # 分离bucket名称和对象名称
-        path_parts = object_name.split('/', 1)
+        path_parts = object_name.split("/", 1)
         if len(path_parts) > 1:
             bucket_name = path_parts[0]
             object_name = path_parts[1]

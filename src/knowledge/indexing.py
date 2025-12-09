@@ -402,9 +402,8 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
         - params['_zip_images_info']: 图片信息列表
         - params['_zip_content_hash']: 内容哈希值
     """
-    import tempfile
-    import aiofiles
     import os
+    import tempfile
 
     # 检测是否是MinIO URL
     from src.knowledge.utils.kb_utils import is_minio_url
@@ -474,7 +473,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
         elif file_ext == ".docx":
             text = _extract_docx_markdown_with_images(file_path_obj, params=params)
-            result = f"" + text
+            result = "" + text
 
         elif file_ext == ".doc":
             text = _extract_word_text(file_path_obj)
@@ -500,7 +499,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
 
             df = pd.read_csv(file_path_obj)
             # 将每一行数据与表头组合成独立的表格
-            markdown_content = f""
+            markdown_content = ""
 
             for index, row in df.iterrows():
                 # 创建包含表头和当前行的小表格
@@ -515,7 +514,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             import pandas as pd
             from openpyxl import load_workbook
 
-            markdown_content = f""
+            markdown_content = ""
 
             # 使用 openpyxl 加载工作簿以正确处理合并单元格
             wb = load_workbook(file_path_obj, data_only=True)
@@ -604,7 +603,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             # 尝试作为文本文件读取
             raise ValueError(f"Unsupported file type: {file_ext}")
 
-    except Exception as e:
+    except Exception:
         # 清理临时文件
         if is_minio_url(file_path) and os.path.exists(actual_file_path):
             try:

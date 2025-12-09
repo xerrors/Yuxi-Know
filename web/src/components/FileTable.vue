@@ -82,7 +82,7 @@
 
     <!-- 重新分块参数配置模态框 -->
     <a-modal
-      v-model:visible="rechunkModalVisible"
+      v-model:open="rechunkModalVisible"
       title="重新分块参数配置"
       :confirm-loading="rechunkModalLoading"
       width="600px"

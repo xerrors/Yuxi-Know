@@ -320,7 +320,7 @@ async def add_documents(
 
         item_type = "URL" if content_type == "url" else "文件"
         failed_count = len([_p for _p in processed_items if _p.get("status") == "failed"])
-        success_items = [_p for _p in processed_items if _p.get("status") == "done"]
+        # success_items = [_p for _p in processed_items if _p.get("status") == "done"]
         summary = {
             "db_id": db_id,
             "item_type": item_type,
@@ -550,6 +550,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
 
         # 根据path类型选择下载方式
         from src.knowledge.utils.kb_utils import is_minio_url
+
         if is_minio_url(file_path):
             # MinIO下载
             logger.debug(f"Downloading from MinIO: {file_path}")
@@ -557,6 +558,7 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
             try:
                 # 使用通用函数解析MinIO URL
                 from src.knowledge.utils.kb_utils import parse_minio_url
+
                 bucket_name, object_name = parse_minio_url(file_path)
 
                 logger.debug(f"Parsed bucket_name: {bucket_name}, object_name: {object_name}")
@@ -681,6 +683,37 @@ async def query_test(
     except Exception as e:
         logger.error(f"测试查询失败 {e}, {traceback.format_exc()}")
         return {"message": f"测试查询失败: {e}", "status": "failed"}
+
+
+@knowledge.put("/databases/{db_id}/query-params")
+async def update_knowledge_base_query_params(
+    db_id: str, params: dict = Body(...), current_user: User = Depends(get_admin_user)
+):
+    """更新知识库查询参数配置"""
+    try:
+        # 获取知识库实例
+        kb_instance = knowledge_base.get_kb(db_id)
+        if not kb_instance:
+            raise HTTPException(status_code=404, detail="Knowledge base not found")
+
+        # 更新知识库元数据中的查询参数
+        async with knowledge_base._metadata_lock:
+            # 确保知识库元数据存在
+            if db_id not in knowledge_base.global_databases_meta:
+                knowledge_base.global_databases_meta[db_id] = {}
+
+            # 保存查询参数到元数据
+            if "query_params" not in knowledge_base.global_databases_meta[db_id]:
+                knowledge_base.global_databases_meta[db_id]["query_params"] = {}
+
+            knowledge_base.global_databases_meta[db_id]["query_params"].update(params)
+            knowledge_base._save_global_metadata()
+
+        return {"message": "success", "data": params}
+
+    except Exception as e:
+        logger.error(f"更新知识库查询参数失败: {e}")
+        raise HTTPException(status_code=500, detail=f"更新查询参数失败: {str(e)}")
 
 
 @knowledge.get("/databases/{db_id}/query-params")
@@ -1136,6 +1169,7 @@ async def upload_file(
 
     # 直接上传到MinIO，添加时间戳区分版本
     import time
+
     timestamp = int(time.time() * 1000)
     minio_filename = f"{basename}_{timestamp}{ext}"
 
@@ -1146,7 +1180,7 @@ async def upload_file(
         bucket_name = "default-uploads"
 
     # 上传到MinIO
-    minio_url = await aupload_file_to_minio(bucket_name, minio_filename, file_bytes, ext.lstrip('.'))
+    minio_url = await aupload_file_to_minio(bucket_name, minio_filename, file_bytes, ext.lstrip("."))
 
     # 检测同名文件（基于原始文件名）
     same_name_files = await knowledge_base.get_same_name_files(db_id, filename)
@@ -1154,16 +1188,16 @@ async def upload_file(
 
     return {
         "message": "File successfully uploaded",
-        "file_path": minio_url,              # MinIO路径作为主要路径
-        "minio_path": minio_url,             # MinIO路径
+        "file_path": minio_url,  # MinIO路径作为主要路径
+        "minio_path": minio_url,  # MinIO路径
         "db_id": db_id,
         "content_hash": content_hash,
-        "filename": filename,                # 原始文件名（小写）
-        "original_filename": basename,       # 原始文件名（去掉后缀）
-        "minio_filename": minio_filename,    # MinIO中的文件名（带时间戳）
-        "bucket_name": bucket_name,          # MinIO存储桶名称
-        "same_name_files": same_name_files,   # 同名文件列表
-        "has_same_name": has_same_name       # 是否包含同名文件标志
+        "filename": filename,  # 原始文件名（小写）
+        "original_filename": basename,  # 原始文件名（去掉后缀）
+        "minio_filename": minio_filename,  # MinIO中的文件名（带时间戳）
+        "bucket_name": bucket_name,  # MinIO存储桶名称
+        "same_name_files": same_name_files,  # 同名文件列表
+        "has_same_name": has_same_name,  # 是否包含同名文件标志
     }
 
 

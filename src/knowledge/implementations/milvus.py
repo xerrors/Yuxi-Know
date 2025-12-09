@@ -95,7 +95,7 @@ class MilvusKB(KnowledgeBase):
         if not (metadata := self.databases_meta.get(db_id)):
             raise ValueError(f"Database {db_id} not found")
 
-        # embed_info = metadata.get("embed_info", {})
+        # 获取嵌入模型信息
         if not (embed_info := metadata.get("embed_info")):
             logger.error(f"Embedding info not found for database {db_id}, using default model")
             embed_info = config.embed_model_names[config.embed_model]
@@ -109,45 +109,58 @@ class MilvusKB(KnowledgeBase):
 
                 # 检查嵌入模型是否匹配
                 description = collection.description
-                expected_model = getattr(embed_info, "name", "default") if embed_info else "default"
+                expected_model = embed_info["name"] if embed_info else "default"
 
                 if expected_model not in description:
-                    logger.warning(f"Collection {collection_name} model mismatch, recreating...")
+                    logger.warning(
+                        f"Collection {collection_name} model mismatch: "
+                        f"expected='{expected_model}', found_in_description='{description}'"
+                    )
                     utility.drop_collection(collection_name, using=self.connection_alias)
-                    raise Exception("Model mismatch, recreating collection")
+                    return self._create_new_collection(collection_name, embed_info, db_id)
 
                 logger.info(f"Retrieved existing collection: {collection_name}")
+                return collection
             else:
-                raise Exception("Collection not found, creating new one")
+                logger.info(f"Collection {collection_name} not found, creating new one")
+                return self._create_new_collection(collection_name, embed_info, db_id)
 
-        except Exception:
-            # 创建新集合
-            embedding_dim = embed_info.get("dimension", 1024)
-            model_name = embed_info.get("name", "default")
+        except (connections.MilvusException, RuntimeError) as e:
+            logger.error(f"Error checking collection {collection_name}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error while managing collection {collection_name}: {e}")
+            logger.debug(f"Traceback: {traceback.format_exc()}")
+            raise
 
-            # 定义集合Schema
-            fields = [
-                FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-                FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
-                FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=500),
-                FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
-                FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
-                FieldSchema(name="chunk_index", dtype=DataType.INT64),
-                FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim),
-            ]
+    def _create_new_collection(self, collection_name: str, embed_info: Any, db_id: str) -> Collection:
+        """创建新的 Milvus 集合"""
+        embedding_dim = embed_info.get("dimension", 1024)
+        model_name = embed_info.get("name", "default")
 
-            schema = CollectionSchema(
-                fields=fields, description=f"Knowledge base collection for {db_id} using {model_name}"
-            )
+        # 定义集合Schema
+        fields = [
+            FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
+            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=500),
+            FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
+            FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
+            FieldSchema(name="chunk_index", dtype=DataType.INT64),
+            FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim),
+        ]
 
-            # 创建集合
-            collection = Collection(name=collection_name, schema=schema, using=self.connection_alias)
+        schema = CollectionSchema(
+            fields=fields, description=f"Knowledge base collection for {db_id} using {model_name}"
+        )
 
-            # 创建索引
-            index_params = {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
-            collection.create_index("embedding", index_params)
+        # 创建集合
+        collection = Collection(name=collection_name, schema=schema, using=self.connection_alias)
 
-            logger.info(f"Created new Milvus collection: {collection_name}: {model_name=}, {embedding_dim=}")
+        # 创建索引
+        index_params = {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
+        collection.create_index("embedding", index_params)
+
+        logger.info(f"Created new Milvus collection: {collection_name} '{model_name=}', {embedding_dim=}")
 
         return collection
 

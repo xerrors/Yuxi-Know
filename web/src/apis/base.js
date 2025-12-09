@@ -163,7 +163,7 @@ export function apiPost(url, data = {}, options = {}, requiresAuth = true, respo
     url,
     {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data instanceof FormData ? data : JSON.stringify(data),
       ...options
     },
     requiresAuth,
@@ -195,7 +195,7 @@ export function apiPut(url, data = {}, options = {}, requiresAuth = true, respon
     url,
     {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data instanceof FormData ? data : JSON.stringify(data),
       ...options
     },
     requiresAuth,

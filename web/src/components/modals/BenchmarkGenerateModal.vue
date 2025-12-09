@@ -1,0 +1,318 @@
+<template>
+<a-modal
+  v-model:open="visible"
+  title="自动生成评估基准"
+  width="600px"
+  :confirmLoading="generating"
+  @ok="handleGenerate"
+  @cancel="handleCancel"
+>
+  <a-form
+    ref="formRef"
+    :model="formState"
+    :rules="rules"
+    layout="vertical"
+  >
+    <a-form-item label="基准名称" name="name">
+      <a-input
+        v-model:value="formState.name"
+        placeholder="请输入评估基准名称"
+      />
+    </a-form-item>
+
+    <a-form-item label="描述" name="description">
+      <a-textarea
+        v-model:value="formState.description"
+        placeholder="请输入评估基准描述（可选）"
+        :rows="3"
+      </a-textarea>
+    </a-form-item>
+
+    <a-form-item label="生成参数" name="params">
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="问题数量" name="count" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+            <a-input-number
+              v-model:value="formState.count"
+              :min="1"
+              :max="100"
+              style="width: 100%"
+              placeholder="生成问题数量"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="每个问题生成答案数量" name="answers_per_question" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+            <a-input-number
+              v-model:value="formState.answers_per_question"
+              :min="0"
+              :max="3"
+              style="width: 100%"
+              placeholder="每个问题生成答案数量"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="24">
+          <a-form-item label="黄金答案生成策略" name="answer_generation_strategy" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+            <a-select
+              v-model:value="formState.answer_generation_strategy"
+              placeholder="选择答案生成策略"
+            >
+              <a-select-option value="chunk_based">基于检索的文档块生成答案</a-select-option>
+              <a-select-option value="llm_based">基于LLM的知识理解生成答案</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="16">
+        <a-col :span="12">
+          <a-form-item label="采样数量" name="sample_count" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+            <a-input-number
+              v-model:value="formState.sample_count"
+              :min="1"
+              :max="1000"
+              style="width: 100%"
+              placeholder="采样文档块数量"
+            />
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item label="相似度阈值" name="similarity_threshold" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+            <a-input-number
+              v-model:value="formState.similarity_threshold"
+              :min="0"
+              :max="1"
+              :step="0.1"
+              style="width: 100%"
+              placeholder="文档块相似度阈值"
+            />
+          </a-form-item>
+        </a-col>
+      </a-row>
+    </a-form-item>
+
+    <a-form-item label="LLM配置" name="llm_config">
+      <a-card size="small" title="配置参数">
+        <a-form-item label="LLM模型配置" name="llm_model">
+          <ModelSelectorComponent
+            :model_spec="formState.llm_model_spec"
+            placeholder="选择用于生成问题的LLM模型"
+            size="default"
+            @select-model="handleSelectLLMModel"
+          />
+        </a-form-item>
+
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="Temperature" name="temperature" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+              <a-input-number
+                v-model:value="formState.llm_config.temperature"
+                :min="0"
+                :max="2"
+                :step="0.1"
+                style="width: 100%"
+                placeholder="控制生成内容的随机性"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="Max Tokens" name="max_tokens" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+              <a-input-number
+                v-model:value="formState.llm_config.max_tokens"
+                :min="100"
+                :max="4000"
+                :step="100"
+                style="width: 100%"
+                placeholder="生成内容的最大长度"
+              />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-card>
+    </a-form-item>
+
+    <a-form-item>
+      <a-alert
+        message="生成说明"
+        type="info"
+        show-icon
+      >
+        <template #description>
+          <ul>
+            <li>系统将从知识库中随机采样文档块</li>
+            <li>基于采样的文档块生成相关查询问题</li>
+            <li>可选择为每个问题生成对应的黄金答案</li>
+            <li>生成过程可能需要几分钟，请耐心等待</li>
+          </ul>
+        </template>
+      </a-alert>
+    </a-form-item>
+  </a-form>
+</a-modal>
+</template>
+
+<script setup>
+import { ref, reactive, computed, watch } from 'vue';
+import { message } from 'ant-design-vue';
+import { evaluationApi } from '@/apis/knowledge_api';
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+
+const props = defineProps({
+  visible: {
+    type: Boolean,
+    default: false
+  },
+  databaseId: {
+    type: String,
+    required: true
+  }
+});
+
+const emit = defineEmits(['update:visible', 'success']);
+
+// 响应式数据
+const formRef = ref();
+const generating = ref(false);
+
+const formState = reactive({
+  name: '',
+  description: '',
+  count: 10,
+  answers_per_question: 1,
+  answer_generation_strategy: 'chunk_based',
+  sample_count: 100,
+  similarity_threshold: 0.7,
+  llm_model_spec: '',
+  llm_config: {
+    model: '',
+    temperature: 0.7,
+    max_tokens: 1000
+  }
+});
+
+// 表单验证规则
+const rules = {
+  name: [
+    { required: true, message: '请输入基准名称', trigger: 'blur' },
+    { min: 2, max: 100, message: '基准名称长度应在2-100个字符之间', trigger: 'blur' }
+  ],
+  count: [
+    { required: true, message: '请输入生成问题数量', trigger: 'blur' }
+  ]
+};
+
+// 双向绑定visible
+const visible = computed({
+  get: () => props.visible,
+  set: (val) => emit('update:visible', val)
+});
+
+// 生成基准
+const handleGenerate = async () => {
+  try {
+    // 表单验证
+    await formRef.value.validate();
+
+    generating.value = true;
+
+    const params = {
+      name: formState.name,
+      description: formState.description,
+      count: formState.count,
+      answers_per_question: formState.answers_per_question,
+      answer_generation_strategy: formState.answer_generation_strategy,
+      sample_count: formState.sample_count,
+      similarity_threshold: formState.similarity_threshold,
+      llm_config: {
+        ...formState.llm_config,
+        model_spec: formState.llm_model_spec
+      }
+    };
+
+    const response = await evaluationApi.generateBenchmark(props.databaseId, params);
+
+    if (response.message === 'success') {
+      message.success('生成任务已提交，请稍后查看结果');
+      handleCancel();
+      emit('success');
+    } else {
+      message.error(response.message || '生成失败');
+    }
+  } catch (error) {
+    console.error('生成失败:', error);
+    message.error('生成失败');
+  } finally {
+    generating.value = false;
+  }
+};
+
+// 取消操作
+const handleCancel = () => {
+  visible.value = false;
+  resetForm();
+};
+
+// 重置表单
+const resetForm = () => {
+  formRef.value?.resetFields();
+  Object.assign(formState, {
+    name: '',
+    description: '',
+    count: 10,
+    answers_per_question: 1,
+    answer_generation_strategy: 'chunk_based',
+    sample_count: 100,
+    similarity_threshold: 0.7,
+    llm_model_spec: '',
+    llm_config: {
+      model: '',
+      temperature: 0.7,
+      max_tokens: 1000
+    }
+  });
+  generating.value = false;
+};
+
+// 选择LLM模型
+const handleSelectLLMModel = (modelSpec) => {
+  formState.llm_model_spec = modelSpec;
+  formState.llm_config.model = modelSpec;
+};
+
+// 监听visible变化
+watch(visible, (val) => {
+  if (!val) {
+    resetForm();
+  }
+});
+</script>
+
+<style lang="less" scoped>
+:deep(.ant-card) {
+  .ant-card-head {
+    min-height: auto;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--gray-200);
+
+    .ant-card-head-title {
+      font-size: 14px;
+      padding: 8px 0;
+    }
+  }
+}
+
+:deep(.ant-alert) {
+  ul {
+    margin: 8px 0;
+    padding-left: 20px;
+
+    li {
+      margin-bottom: 4px;
+    }
+  }
+}
+</style>

@@ -44,6 +44,30 @@
         <a-tab-pane key="config" tab="检索配置">
           <SearchConfigTab :database-id="databaseId" />
         </a-tab-pane>
+        <a-tab-pane key="evaluation" tab="RAG评估（Beta）">
+          <RAGEvaluationTab
+            v-if="databaseId"
+            :database-id="databaseId"
+            @switch-to-benchmarks="activeTab = 'benchmarks'"
+          />
+        </a-tab-pane>
+        <a-tab-pane key="benchmarks" tab="评估基准管理（Beta）">
+          <div class="benchmark-management-container">
+            <div class="benchmark-content">
+              <EvaluationBenchmarks
+                v-if="databaseId"
+                :database-id="databaseId"
+                @benchmark-selected="(benchmark) => {
+                  // 处理基准选择逻辑
+                  activeTab = 'evaluation';
+                }"
+                @refresh="() => {
+                  // 刷新逻辑
+                }"
+              />
+            </div>
+          </div>
+        </a-tab-pane>
       </a-tabs>
     </div>
   </div>
@@ -62,6 +86,8 @@ import KnowledgeGraphSection from '@/components/KnowledgeGraphSection.vue';
 import QuerySection from '@/components/QuerySection.vue';
 import SearchConfigTab from '@/components/SearchConfigTab.vue';
 import MindMapSection from '@/components/MindMapSection.vue';
+import RAGEvaluationTab from '@/components/RAGEvaluationTab.vue';
+import EvaluationBenchmarks from '@/components/EvaluationBenchmarks.vue';
 
 const route = useRoute();
 const store = useDatabaseStore();
@@ -528,5 +554,20 @@ const handleMouseUp = () => {
     flex: 1;
     overflow: hidden;
   }
+}
+
+// 基准管理样式
+.benchmark-management-container {
+  height: 100%;
+  background: var(--gray-0);
+  display: flex;
+  flex-direction: column;
+}
+
+.benchmark-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+  padding: 12px 16px;
 }
 </style>

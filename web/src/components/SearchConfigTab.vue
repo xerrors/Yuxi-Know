@@ -46,11 +46,12 @@
                 </a-select>
                 <a-select
                   v-else-if="param.type === 'boolean'"
-                  v-model:value="meta[param.key]"
+                  :value="computedMeta[param.key]"
+                  @update:value="(value) => updateMeta(param.key, value)"
                   style="width: 100%;"
                 >
-                  <a-select-option :value="true">启用</a-select-option>
-                  <a-select-option :value="false">关闭</a-select-option>
+                  <a-select-option value="true">启用</a-select-option>
+                  <a-select-option value="false">关闭</a-select-option>
                 </a-select>
                 <a-input-number
                   v-else-if="param.type === 'number'"
@@ -89,6 +90,32 @@ const error = ref('');
 const queryParams = ref([]);
 const meta = reactive({});
 
+// 计算属性：处理布尔类型的双向绑定
+const computedMeta = computed(() => {
+  const result = {};
+  for (const key in meta) {
+    const param = queryParams.value.find(p => p.key === key);
+    if (param?.type === 'boolean') {
+      // 对于布尔类型，返回字符串给 select，但保持内部为布尔值
+      result[key] = meta[key].toString();
+    } else {
+      result[key] = meta[key];
+    }
+  }
+  return result;
+});
+
+// 处理值更新
+const updateMeta = (key, value) => {
+  const param = queryParams.value.find(p => p.key === key);
+  if (param?.type === 'boolean') {
+    // 将字符串转换回布尔值
+    meta[key] = value === 'true';
+  } else {
+    meta[key] = value;
+  }
+};
+
 // 加载查询参数
 const loadQueryParams = async () => {
   try {
@@ -104,7 +131,12 @@ const loadQueryParams = async () => {
     // 初始化 meta 对象
     queryParams.value.forEach(param => {
       if (param.default !== undefined) {
-        meta[param.key] = param.default;
+        // 对于布尔类型，确保使用布尔值而不是字符串
+        if (param.type === 'boolean') {
+          meta[param.key] = Boolean(param.default);
+        } else {
+          meta[param.key] = param.default;
+        }
       }
     });
 
@@ -128,6 +160,17 @@ const loadSavedConfig = () => {
   if (saved) {
     try {
       const savedConfig = JSON.parse(saved);
+
+      // 处理布尔类型转换
+      queryParams.value.forEach(param => {
+        if (param.type === 'boolean' && savedConfig[param.key] !== undefined) {
+          // 将字符串值转换为布尔值
+          if (typeof savedConfig[param.key] === 'string') {
+            savedConfig[param.key] = savedConfig[param.key] === 'true';
+          }
+        }
+      });
+
       Object.assign(meta, savedConfig);
     } catch (e) {
       console.warn('Failed to parse saved config:', e);
@@ -150,16 +193,29 @@ const resetToDefaults = () => {
 };
 
 // 保存配置
-const saveConfig = () => {
+const saveConfig = async () => {
   // 确保 include_distances 始终为 true
   meta['include_distances'] = true;
 
+  // 保存到 localStorage（兼容性）
   localStorage.setItem(`search-config-${props.databaseId}`, JSON.stringify(meta));
+
+  // 保存到知识库元数据
+  try {
+    const { knowledgeApi } = await import('@/apis/knowledge_api');
+    const response = await knowledgeApi.updateKnowledgeBaseQueryParams(props.databaseId, meta);
+    if (response.message === 'success') {
+      message.success('配置已保存到知识库');
+    } else {
+      message.warning('配置已保存到本地，但同步到知识库失败');
+    }
+  } catch (error) {
+    console.error('保存配置到知识库失败:', error);
+    message.warning('配置已保存到本地，但同步到知识库失败');
+  }
 
   // 更新 store 中的配置
   Object.assign(store.meta, meta);
-
-  message.success('配置已保存');
 };
 
 // 组件挂载时加载数据

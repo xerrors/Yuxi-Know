@@ -41,6 +41,12 @@ class Task:
         data = asdict(self)
         return data
 
+    def to_summary_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data.pop("payload", None)
+        data.pop("result", None)
+        return data
+
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Task":
         return cls(
@@ -160,7 +166,7 @@ class Tasker:
         }
 
         return {
-            "tasks": [task.to_dict() for task in limited_tasks],
+            "tasks": [task.to_summary_dict() for task in limited_tasks],
             "summary": summary,
         }
 

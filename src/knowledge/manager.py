@@ -408,13 +408,15 @@ class KnowledgeBaseManager:
             current_filename = file_info.get("filename", "")
 
             if current_filename.lower() == filename.lower():
-                same_name_files.append({
-                    "file_id": file_id,
-                    "filename": current_filename,
-                    "size": file_info.get("size", 0),
-                    "created_at": file_info.get("created_at", ""),
-                    "content_hash": file_info.get("content_hash", "")
-                })
+                same_name_files.append(
+                    {
+                        "file_id": file_id,
+                        "filename": current_filename,
+                        "size": file_info.get("size", 0),
+                        "created_at": file_info.get("created_at", ""),
+                        "content_hash": file_info.get("content_hash", ""),
+                    }
+                )
 
         # 按上传时间降序排序
         same_name_files.sort(key=lambda x: x.get("created_at", ""), reverse=True)
