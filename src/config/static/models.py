@@ -73,10 +73,10 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
         name="SiliconFlow",
         url="https://cloud.siliconflow.cn/models",
         base_url="https://api.siliconflow.cn/v1",
-        default="deepseek-ai/DeepSeek-V3.2-Exp",
+        default="deepseek-ai/DeepSeek-V3.2",
         env="SILICONFLOW_API_KEY",
         models=[
-            "deepseek-ai/DeepSeek-V3.2-Exp",
+            "deepseek-ai/DeepSeek-V3.2",
             "Qwen/Qwen3-235B-A22B-Thinking-2507",
             "Qwen/Qwen3-235B-A22B-Instruct-2507",
             "moonshotai/Kimi-K2-Instruct-0905",
@@ -146,9 +146,9 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
         name="ModelScope",
         url="https://www.modelscope.cn/docs/model-service/API-Inference/intro",
         base_url="https://api-inference.modelscope.cn/v1/",
-        default="deepseek-ai/DeepSeek-V3.2-Exp",
+        default="deepseek-ai/DeepSeek-V3.2",
         env="MODELSCOPE_ACCESS_TOKEN",
-        models=["Qwen/Qwen3-32B", "deepseek-ai/DeepSeek-V3.2-Exp"],
+        models=["Qwen/Qwen3-32B", "deepseek-ai/DeepSeek-V3.2"],
     ),
 }
 

@@ -201,7 +201,7 @@ class LightRagKB(KnowledgeBase):
         """获取 embedding 函数"""
         config_dict = get_embedding_config(embed_info)
 
-        if config_dict["model_id"].startswith("ollama"):
+        if config_dict.get("model_id") and config_dict["model_id"].startswith("ollama"):
             from lightrag.llm.ollama import ollama_embed
 
             from src.utils import get_docker_safe_url

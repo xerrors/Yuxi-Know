@@ -26,7 +26,7 @@
 系统的默认对话模型通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
 
 ```yaml
-default_model: siliconflow/deepseek-ai/DeepSeek-V3.2-Exp
+default_model: siliconflow/deepseek-ai/DeepSeek-V3.2
 ```
 
 在 Web 界面中选择模型时也会自动按照这一格式保存。
