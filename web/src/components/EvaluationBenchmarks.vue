@@ -6,6 +6,10 @@
       <span class="total-count">{{ benchmarks.length }} 个基准</span>
     </div>
     <div class="header-right">
+      <a-button @click="loadBenchmarks">
+        <template #icon><ReloadOutlined /></template>
+        刷新
+      </a-button>
       <a-button type="primary" @click="showUploadModal">
         <template #icon><UploadOutlined /></template>
         上传基准
@@ -92,7 +96,6 @@
         <!-- 底部信息 -->
         <div class="benchmark-footer">
           <span class="benchmark-time">{{ formatDate(benchmark.created_at) }}</span>
-          <span class="benchmark-id">{{ benchmark.benchmark_id.slice(0, 8) }}</span>
           <span class="benchmark-count">{{ benchmark.question_count }} 个问题</span>
         </div>
       </div>
@@ -182,9 +185,11 @@ import {
   EyeOutlined,
   DeleteOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined
+  CloseCircleOutlined,
+  ReloadOutlined
 } from '@ant-design/icons-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
+import { useTaskerStore } from '@/stores/tasker';
 import BenchmarkUploadModal from './modals/BenchmarkUploadModal.vue';
 import BenchmarkGenerateModal from './modals/BenchmarkGenerateModal.vue';
 
@@ -196,6 +201,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['refresh']);
+
+const taskerStore = useTaskerStore();
 
 // 状态
 const loading = ref(false);
@@ -243,6 +250,7 @@ const showGenerateModal = () => {
 const onUploadSuccess = () => {
   loadBenchmarks();
   message.success('基准上传成功');
+  taskerStore.loadTasks(); // 刷新任务列表
   // 通知父组件刷新基准列表
   emit('refresh');
 };
@@ -250,7 +258,8 @@ const onUploadSuccess = () => {
 // 生成成功回调
 const onGenerateSuccess = () => {
   loadBenchmarks();
-  message.success('基准生成成功');
+  // message.success('基准生成成功'); // 移除，由模态框提示任务提交
+  taskerStore.loadTasks(); // 刷新任务列表
   // 通知父组件刷新基准列表
   emit('refresh');
 };

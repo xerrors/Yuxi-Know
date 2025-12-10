@@ -172,7 +172,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['update:visible']);
+const emit = defineEmits(['update:visible', 'success']);
 
 const store = useDatabaseStore();
 
@@ -740,6 +740,7 @@ const chunkData = async () => {
 
   if (success) {
     emit('update:visible', false);
+    emit('success');
     fileList.value = [];
     sameNameFiles.value = [];  // 清空同名文件列表
   }

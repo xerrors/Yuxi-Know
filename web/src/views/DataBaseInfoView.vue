@@ -4,6 +4,7 @@
 
   <FileUploadModal
     v-model:visible="addFilesModalVisible"
+    @success="onFileUploadSuccess"
   />
 
   <div class="unified-layout">
@@ -75,6 +76,7 @@
 import { onMounted, reactive, ref, watch, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
+import { useTaskerStore } from '@/stores/tasker';
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';
@@ -87,6 +89,7 @@ import EvaluationBenchmarks from '@/components/EvaluationBenchmarks.vue';
 
 const route = useRoute();
 const store = useDatabaseStore();
+const taskerStore = useTaskerStore();
 
 const databaseId = computed(() => store.databaseId);
 const database = computed(() => store.database);
@@ -165,6 +168,11 @@ const isInitialLoad = ref(true);
 // 显示添加文件弹窗
 const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
+};
+
+// 文件上传成功回调
+const onFileUploadSuccess = () => {
+  taskerStore.loadTasks();
 };
 
 // 重置文件选中状态
