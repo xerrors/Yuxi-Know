@@ -251,13 +251,18 @@
         :columns="resultColumns"
         :data-source="detailedResults"
         :pagination="{ pageSize: 10, showSizeChanger: true, showQuickJumper: true }"
-        :scroll="{ x: 800 }"
+        :scroll="{ x: 1000 }"
         size="small"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'query'">
             <a-tooltip :title="record.query">
               <span class="query-text">{{ truncateText(record.query, 50) }}</span>
+            </a-tooltip>
+          </template>
+          <template v-else-if="column.key === 'generated_answer'">
+            <a-tooltip :title="record.generated_answer">
+              <span class="answer-text">{{ truncateText(record.generated_answer || '-', 80) }}</span>
             </a-tooltip>
           </template>
           <template v-else-if="column.key === 'retrieval_score'">
@@ -351,6 +356,11 @@ const resultColumns = [
     dataIndex: 'query',
     key: 'query',
     width: 200
+  },
+  {
+    title: '生成答案',
+    key: 'generated_answer',
+    width: 250
   },
   {
     title: '检索指标',
@@ -611,7 +621,7 @@ const calculateEvaluationStats = (results) => {
 const viewResults = async (taskId) => {
   try {
     resultsLoading.value = true;
-    const response = await evaluationApi.getEvaluationResults(taskId);
+    const response = await evaluationApi.getEvaluationResultsByDb(props.databaseId, taskId);
     if (response.message === 'success' && response.data) {
       // API 返回的是直接的评估结果对象
       const resultData = response.data;
@@ -668,7 +678,7 @@ const deleteEvaluationRecord = async (taskId) => {
       record.deleting = true;
     }
 
-    const response = await evaluationApi.deleteEvaluationResult(taskId);
+    const response = await evaluationApi.deleteEvaluationResultByDb(props.databaseId, taskId);
     if (response.message === 'success') {
       message.success('删除成功');
       // 重新加载评估历史
@@ -932,6 +942,16 @@ onMounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.4;
+}
+
+.answer-text {
+  display: inline-block;
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+  color: var(--gray-700);
 }
 
 .log-time {

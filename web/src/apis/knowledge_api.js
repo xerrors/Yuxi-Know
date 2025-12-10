@@ -355,6 +355,14 @@ export const evaluationApi = {
   getBenchmark: async (benchmarkId) => {
     return apiAdminGet(`/api/evaluation/benchmarks/${benchmarkId}`)
   },
+  /**
+   * 获取评估基准详情（带db_id）
+   * @param {string} dbId - 知识库ID
+   * @param {string} benchmarkId - 基准ID
+   */
+  getBenchmarkByDb: async (dbId, benchmarkId) => {
+    return apiAdminGet(`/api/evaluation/databases/${dbId}/benchmarks/${benchmarkId}`)
+  },
 
   /**
    * 删除评估基准
@@ -397,6 +405,7 @@ export const evaluationApi = {
    * @returns {Promise} - 评估结果
    */
   getEvaluationResults: async (taskId) => {
+    // 已废弃：请改用 getEvaluationResultsByDb
     return apiAdminGet(`/api/evaluation/${taskId}/results`)
   },
 
@@ -406,7 +415,16 @@ export const evaluationApi = {
    * @returns {Promise} - 删除结果
    */
   deleteEvaluationResult: async (taskId) => {
+    // 已废弃：请改用 deleteEvaluationResultByDb
     return apiAdminDelete(`/api/evaluation/${taskId}`)
+  },
+
+  // 新接口：带 db_id 的评估结果查询与删除
+  getEvaluationResultsByDb: async (dbId, taskId) => {
+    return apiAdminGet(`/api/evaluation/databases/${dbId}/results/${taskId}`)
+  },
+  deleteEvaluationResultByDb: async (dbId, taskId) => {
+    return apiAdminDelete(`/api/evaluation/databases/${dbId}/results/${taskId}`)
   },
 
   /**

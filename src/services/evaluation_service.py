@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 
 from server.services.tasker import TaskContext, tasker
+from src import config
 from src.knowledge import knowledge_base
 from src.models import select_model
 from src.utils import logger
@@ -14,67 +15,28 @@ from src.utils.evaluation_metrics import EvaluationMetricsCalculator
 
 
 class EvaluationService:
-    """RAG评估服务 - 基于文件存储的版本"""
+    """RAG评估服务"""
 
     def __init__(self):
-        # 使用环境变量 DATA_DIR 或默认 'saves'
-        self.data_dir = os.environ.get("DATA_DIR", "saves")
-        self.root_eval_dir = os.path.join(self.data_dir, "evaluation")
+        pass
 
     def _get_benchmark_dir(self, db_id: str) -> str:
-        path = os.path.join(self.root_eval_dir, db_id, "benchmarks")
+        kb_instance = knowledge_base.get_kb(db_id)
+        base_dir = os.path.join(kb_instance.work_dir, db_id)
+        path = os.path.join(base_dir, "benchmarks")
         os.makedirs(path, exist_ok=True)
         return path
 
     def _get_result_dir(self, db_id: str) -> str:
-        path = os.path.join(self.root_eval_dir, db_id, "results")
+        kb_instance = knowledge_base.get_kb(db_id)
+        base_dir = os.path.join(kb_instance.work_dir, db_id)
+        path = os.path.join(base_dir, "results")
         os.makedirs(path, exist_ok=True)
         return path
 
-    def _find_benchmark_location(self, benchmark_id: str) -> tuple:
-        """
-        高效查找基准文件位置，返回 (db_id, meta_file_path)
-        避免全局搜索，先检查是否有索引映射
-        """
-        # 由于当前文件结构限制，仍然需要搜索
-        # 但可以优化搜索顺序和错误处理
-        try:
-            # 搜索所有 DB 目录找到该 benchmark
-            pattern = os.path.join(self.root_eval_dir, "*", "benchmarks", f"{benchmark_id}.meta.json")
-            matches = glob.glob(pattern)
+    # 已移除基准回退逻辑，统一使用集中元数据
 
-            if not matches:
-                raise ValueError(f"评估基准 {benchmark_id} 不存在")
-
-            meta_file_path = matches[0]
-            # 从路径推断 db_id (parent of parent)
-            # path: .../{db_id}/benchmarks/{bid}.meta.json
-            db_id = os.path.basename(os.path.dirname(os.path.dirname(meta_file_path)))
-
-            return db_id, meta_file_path
-        except Exception as e:
-            logger.error(f"查找基准文件失败: {e}")
-            raise
-
-    def _find_result_location(self, task_id: str) -> tuple:
-        """
-        高效查找评估结果文件位置，返回 (db_id, result_file_path)
-        """
-        try:
-            pattern = os.path.join(self.root_eval_dir, "*", "results", f"{task_id}.json")
-            matches = glob.glob(pattern)
-
-            if not matches:
-                raise ValueError(f"评估结果 {task_id} 不存在")
-
-            result_file_path = matches[0]
-            # 从路径推断 db_id
-            db_id = os.path.basename(os.path.dirname(os.path.dirname(result_file_path)))
-
-            return db_id, result_file_path
-        except Exception as e:
-            logger.error(f"查找评估结果文件失败: {e}")
-            raise
+    # 已移除结果回退逻辑，统一通过 db_id 定位
 
     async def upload_benchmark(
         self, db_id: str, file_content: bytes, filename: str, name: str, description: str, created_by: str
@@ -113,9 +75,8 @@ class EvaluationService:
             with open(data_file_path, "w", encoding="utf-8") as f:
                 f.write(content_str)
 
-            # 保存元数据文件 (.meta.json)
             meta = {
-                "id": benchmark_id,  # 前端期望字段可能是 id
+                "id": benchmark_id,
                 "benchmark_id": benchmark_id,
                 "name": name,
                 "description": description,
@@ -123,14 +84,16 @@ class EvaluationService:
                 "question_count": len(questions),
                 "has_gold_chunks": has_gold_chunks,
                 "has_gold_answers": has_gold_answers,
+                "benchmark_file": data_file_path,
                 "created_by": created_by,
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat(),
             }
-            meta_file_path = os.path.join(benchmark_dir, f"{benchmark_id}.meta.json")
-            with open(meta_file_path, "w", encoding="utf-8") as f:
-                json.dump(meta, f, ensure_ascii=False, indent=2)
-
+            kb_instance = knowledge_base.get_kb(db_id)
+            if db_id not in kb_instance.benchmarks_meta:
+                kb_instance.benchmarks_meta[db_id] = {}
+            kb_instance.benchmarks_meta[db_id][benchmark_id] = meta
+            kb_instance._save_metadata()
             return meta
 
         except Exception as e:
@@ -140,20 +103,9 @@ class EvaluationService:
     async def get_benchmarks(self, db_id: str) -> list[dict[str, Any]]:
         """获取知识库的评估基准列表"""
         try:
-            benchmark_dir = self._get_benchmark_dir(db_id)
-            benchmarks = []
-
-            # 查找所有 .meta.json 文件
-            meta_files = glob.glob(os.path.join(benchmark_dir, "*.meta.json"))
-            for meta_file in meta_files:
-                try:
-                    with open(meta_file, encoding="utf-8") as f:
-                        meta = json.load(f)
-                        benchmarks.append(meta)
-                except Exception as e:
-                    logger.error(f"Failed to load benchmark meta {meta_file}: {e}")
-
-            # 按创建时间倒序
+            kb_instance = knowledge_base.get_kb(db_id)
+            benchmarks_map = kb_instance.benchmarks_meta.get(db_id, {})
+            benchmarks = list(benchmarks_map.values())
             benchmarks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
             return benchmarks
 
@@ -164,24 +116,44 @@ class EvaluationService:
     async def get_benchmark_detail(self, benchmark_id: str) -> dict[str, Any]:
         """获取评估基准详情 (包含问题列表)"""
         try:
-            # 使用优化的查找方法
-            db_id, meta_file_path = self._find_benchmark_location(benchmark_id)
+            for kb_instance in knowledge_base.kb_instances.values():
+                for db_id, m in kb_instance.benchmarks_meta.items():
+                    if benchmark_id in m:
+                        meta = m[benchmark_id]
+                        data_file_path = meta.get("benchmark_file")
+                        questions = []
+                        if data_file_path and os.path.exists(data_file_path):
+                            with open(data_file_path, encoding="utf-8") as f:
+                                for line in f:
+                                    if line.strip():
+                                        questions.append(json.loads(line))
+                        meta_with_q = meta.copy()
+                        meta_with_q["questions"] = questions
+                        return meta_with_q
+            raise ValueError("Benchmark not found")
 
-            with open(meta_file_path, encoding="utf-8") as f:
-                found_meta = json.load(f)
+        except Exception as e:
+            logger.error(f"获取评估基准详情失败: {e}")
+            raise
 
-            # 加载数据文件
-            data_file_path = os.path.join(os.path.dirname(meta_file_path), f"{benchmark_id}.jsonl")
+    async def get_benchmark_detail_by_db(self, db_id: str, benchmark_id: str) -> dict[str, Any]:
+        """根据 db_id 直接获取评估基准详情"""
+        try:
+            kb_instance = knowledge_base.get_kb(db_id)
+            benchmarks_map = kb_instance.benchmarks_meta.get(db_id, {})
+            if benchmark_id not in benchmarks_map:
+                raise ValueError("Benchmark not found")
+            meta = benchmarks_map[benchmark_id]
+            data_file_path = meta.get("benchmark_file")
             questions = []
-            if os.path.exists(data_file_path):
+            if data_file_path and os.path.exists(data_file_path):
                 with open(data_file_path, encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             questions.append(json.loads(line))
-
-            found_meta["questions"] = questions
-            return found_meta
-
+            meta_with_q = meta.copy()
+            meta_with_q["questions"] = questions
+            return meta_with_q
         except Exception as e:
             logger.error(f"获取评估基准详情失败: {e}")
             raise
@@ -189,16 +161,19 @@ class EvaluationService:
     async def delete_benchmark(self, benchmark_id: str) -> None:
         """删除评估基准"""
         try:
-            # 使用优化的查找方法
-            _, meta_file_path = self._find_benchmark_location(benchmark_id)
-            data_file_path = meta_file_path.replace(".meta.json", ".jsonl")
-
-            if os.path.exists(meta_file_path):
-                os.remove(meta_file_path)
-            if os.path.exists(data_file_path):
-                os.remove(data_file_path)
-
-            logger.info(f"成功删除评估基准: {benchmark_id}")
+            # 在所有KB中查找并删除
+            for kb_instance in knowledge_base.kb_instances.values():
+                for db_id, m in list(kb_instance.benchmarks_meta.items()):
+                    if benchmark_id in m:
+                        meta = m[benchmark_id]
+                        data_file_path = meta.get("benchmark_file")
+                        if data_file_path and os.path.exists(data_file_path):
+                            os.remove(data_file_path)
+                        del kb_instance.benchmarks_meta[db_id][benchmark_id]
+                        kb_instance._save_metadata()
+                        logger.info(f"成功删除评估基准: {benchmark_id}")
+                        return
+            raise ValueError("Benchmark not found")
 
         except Exception as e:
             logger.error(f"删除评估基准失败: {e}")
@@ -206,39 +181,182 @@ class EvaluationService:
 
     async def delete_evaluation_result(self, task_id: str) -> None:
         """删除评估结果"""
-        try:
-            # 使用优化的查找方法
-            _, result_file_path = self._find_result_location(task_id)
-
-            # 删除结果文件
-            os.remove(result_file_path)
-
-            logger.info(f"成功删除评估结果: {task_id}")
-
-        except Exception as e:
-            logger.error(f"删除评估结果失败: {e}")
-            raise
+        raise ValueError("Endpoint requires db_id; use delete_evaluation_result_by_db")
 
     async def generate_benchmark(self, db_id: str, params: dict[str, Any], created_by: str) -> dict[str, Any]:
-        """自动生成评估基准 (Stub - Temporarily Disabled)"""
-        # 保持与之前的逻辑一致：暂不支持自动生成
-        # 我们可以保留接口但只返回错误，或者像之前一样进入 task 然后报错
-
         task_id = f"gen_benchmark_{uuid.uuid4().hex[:8]}"
-
         await tasker.enqueue(
-            name="生成评估基准(Disabled)",
+            name="生成评估基准",
             task_type="benchmark_generation",
             payload={"task_id": task_id, "db_id": db_id, "created_by": created_by, **params},
             coroutine=self._generate_benchmark_task,
         )
-
         return {"task_id": task_id, "message": "基准生成任务已提交"}
 
     async def _generate_benchmark_task(self, context: TaskContext):
-        """生成任务实现"""
+        import random
+        import math
+
         await context.set_progress(0, "初始化")
-        raise NotImplementedError("自动生成基准功能暂时不可用，请手动上传基准文件。")
+
+        task = context._tasker._tasks.get(context.task_id)
+        payload = task.payload if task else {}
+
+        db_id = payload.get("db_id")
+        name = payload.get("name", "自动生成评估基准")
+        description = payload.get("description", "")
+        count = int(payload.get("count", 10))
+        neighbors_count = int(payload.get("neighbors_count", 0))
+        embedding_model_id = payload.get("embedding_model_id")
+        llm_model_spec = payload.get("llm_model_spec") or (payload.get("llm_config") or {}).get("model_spec")
+
+        if neighbors_count < 0:
+            neighbors_count = 0
+        if neighbors_count > 10:
+            neighbors_count = 10
+
+        kb_instance = knowledge_base.get_kb(db_id)
+        if not kb_instance:
+            await context.set_message("知识库不存在")
+            raise ValueError("Knowledge Base not found")
+        if kb_instance.kb_type == "lightrag":
+            await context.set_message("暂不支持该类型知识库生成评估基准")
+            raise ValueError("Unsupported KB type for benchmark generation")
+
+        await context.set_progress(5, "加载chunks")
+
+        all_chunks = []
+        for fid, finfo in kb_instance.files_meta.items():
+            if finfo.get("database_id") != db_id:
+                continue
+            try:
+                content_info = await kb_instance.get_file_content(db_id, fid)
+                lines = content_info.get("lines", [])
+                for line in lines:
+                    all_chunks.append(
+                        {
+                            "id": line.get("id"),
+                            "content": line.get("content", ""),
+                            "file_id": fid,
+                            "chunk_index": line.get("chunk_order_index"),
+                        }
+                    )
+            except Exception:
+                continue
+
+        if not all_chunks:
+            await context.set_message("知识库为空或未解析到chunks")
+            raise ValueError("No chunks found in knowledge base")
+
+        contents = [c["content"] for c in all_chunks]
+
+        await context.set_progress(15, "向量化")
+
+        if not embedding_model_id:
+            db_meta = kb_instance.databases_meta.get(db_id, {})
+            embed_info = db_meta.get("embed_info", {})
+            embedding_model_id = embed_info.get("name") or embed_info.get("model") or ""
+        if not embedding_model_id:
+            raise ValueError("Embedding model not specified")
+
+        from src.models import select_embedding_model, select_model
+
+        embed_model = select_embedding_model(embedding_model_id)
+        # TODO: Performance Optimization
+        # Currently, we re-calculate embeddings for ALL chunks in the KB for every benchmark generation.
+        # This is inefficient for large KBs (O(N) embedding calls).
+        # Optimization: Reuse existing embeddings from Vector DB if embedding_model_id matches the KB's embedding model.
+        embeddings = await embed_model.abatch_encode(contents, batch_size=40)
+        norms = [math.sqrt(sum(x * x for x in vec)) or 1.0 for vec in embeddings]
+
+        def cosine(a, b, na, nb):
+            s = 0.0
+            for i in range(len(a)):
+                s += a[i] * b[i]
+            return s / (na * nb)
+
+        llm = select_model(model_spec=llm_model_spec)
+
+        benchmark_id = f"benchmark_{uuid.uuid4().hex[:8]}"
+        bench_dir = self._get_benchmark_dir(db_id)
+        data_file_path = os.path.join(bench_dir, f"{benchmark_id}.jsonl")
+
+        generated = 0
+        attempts = 0
+
+        await context.set_progress(25, "生成样本")
+
+        with open(data_file_path, "w", encoding="utf-8") as f:
+            while generated < count and attempts < count * 2:
+                attempts += 1
+                i0 = random.randrange(len(all_chunks))
+                e0 = embeddings[i0]
+                n0 = norms[i0]
+
+                sims = []
+                for j in range(len(all_chunks)):
+                    if j == i0:
+                        continue
+                    s = cosine(e0, embeddings[j], n0, norms[j])
+                    sims.append((j, s))
+                sims.sort(key=lambda x: x[1], reverse=True)
+                top_js = [j for j, _ in sims[:neighbors_count]]
+
+                ctx_items = []
+                ctx_items.append((all_chunks[i0]["id"], all_chunks[i0]["content"]))
+                for j in top_js:
+                    ctx_items.append((all_chunks[j]["id"], all_chunks[j]["content"]))
+                allowed_ids = {cid for cid, _ in ctx_items}
+                context_text = "\n\n".join([f"片段ID={cid}\n{content}" for cid, content in ctx_items])
+
+                prompt = (
+                    "你将基于以下上下文生成一个可由上下文准确回答的问题与标准答案。"
+                    "仅返回一个JSON对象，不要包含其他文字。"
+                    "键为 query、gold_answer、gold_chunk_ids。gold_chunk_ids 必须是上述上下文片段的ID子集。\n\n上下文：\n"
+                    + context_text
+                    + "\n"
+                )
+
+                try:
+                    resp = await asyncio.to_thread(llm.call, prompt, False)
+                    content = resp.content if resp else ""
+                    obj = json.loads(content)
+                    q = obj.get("query")
+                    a = obj.get("gold_answer")
+                    gids = obj.get("gold_chunk_ids")
+                    if not q or not a or not isinstance(gids, list):
+                        continue
+                    gids = [str(x) for x in gids if str(x) in allowed_ids]
+                    if not gids:
+                        continue
+                    line = {"query": q, "gold_chunk_ids": gids, "gold_answer": a}
+                    f.write(json.dumps(line, ensure_ascii=False) + "\n")
+                    generated += 1
+                    await context.set_progress(0 + int(99 * generated / max(count, 1)), f"已生成 {generated}/{count}")
+                except Exception:
+                    continue
+
+        meta = {
+            "id": benchmark_id,
+            "benchmark_id": benchmark_id,
+            "name": name,
+            "description": description,
+            "db_id": db_id,
+            "question_count": generated,
+            "has_gold_chunks": True,
+            "has_gold_answers": True,
+            "benchmark_file": data_file_path,
+            "created_by": payload.get("created_by"),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        kb_instance = knowledge_base.get_kb(db_id)
+        if db_id not in kb_instance.benchmarks_meta:
+            kb_instance.benchmarks_meta[db_id] = {}
+        kb_instance.benchmarks_meta[db_id][benchmark_id] = meta
+        kb_instance._save_metadata()
+
+        await context.set_progress(100, "完成")
 
     async def run_evaluation(
         self, db_id: str, benchmark_id: str, model_config: dict[str, Any] = None, created_by: str = "system"
@@ -247,11 +365,11 @@ class EvaluationService:
         try:
             task_id = f"eval_{uuid.uuid4().hex[:8]}"
 
-            # 获取基准元数据以验证是否存在
-            # 使用优化的查找方法
-            _, meta_file_path = self._find_benchmark_location(benchmark_id)
-            with open(meta_file_path, encoding="utf-8") as f:
-                benchmark_meta = json.load(f)
+            kb_instance = knowledge_base.get_kb(db_id)
+            bm = kb_instance.benchmarks_meta.get(db_id, {}).get(benchmark_id)
+            if not bm:
+                raise ValueError("Benchmark not found")
+            benchmark_meta = bm
 
             # 从知识库元数据中获取检索配置
             retrieval_config = {}
@@ -324,15 +442,13 @@ class EvaluationService:
 
             # 加载基准数据
             await context.set_progress(5, "加载基准数据")
-            # 这里我们需要重新找到 benchmark file，因为 payload 里可能没有完整路径
-            try:
-                _, meta_path = self._find_benchmark_location(benchmark_id)
-                data_path = meta_path.replace(".meta.json", ".jsonl")
-            except ValueError:
+            kb_instance = knowledge_base.get_kb(db_id)
+            benchmark_meta = kb_instance.benchmarks_meta.get(db_id, {}).get(benchmark_id)
+            if not benchmark_meta:
+                raise ValueError("Benchmark not found")
+            data_path = benchmark_meta.get("benchmark_file")
+            if not data_path or not os.path.exists(data_path):
                 raise ValueError("Benchmark file not found")
-
-            with open(meta_path, encoding="utf-8") as f:
-                benchmark_meta = json.load(f)
 
             benchmark_data = []
             with open(data_path, encoding="utf-8") as f:
@@ -561,18 +677,7 @@ class EvaluationService:
 
     async def get_evaluation_results(self, task_id: str) -> dict[str, Any]:
         """获取评估结果"""
-        try:
-            # 使用优化的查找方法
-            _, result_file_path = self._find_result_location(task_id)
-
-            with open(result_file_path, encoding="utf-8") as f:
-                return json.load(f)
-        except ValueError:
-            # 可能是内存中的任务状态？如果文件没创建（极早失败），检查 tasker
-            task = await tasker.get_task(task_id)
-            if task:
-                return {"task_id": task_id, "status": task.status, "progress": task.progress, "message": task.message}
-            raise ValueError(f"Result not found for task {task_id}")
+        raise ValueError("Endpoint requires db_id; use get_evaluation_results_by_db")
 
     async def get_evaluation_history(self, db_id: str) -> list[dict[str, Any]]:
         """获取知识库的评估历史记录"""
@@ -612,3 +717,27 @@ class EvaluationService:
         except Exception as e:
             logger.error(f"获取评估历史失败: {e}")
             raise
+        # 索引与回退逻辑已移除，统一通过 db_id 定位
+
+    async def get_evaluation_results_by_db(self, db_id: str, task_id: str) -> dict[str, Any]:
+        result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
+        if not os.path.exists(result_file_path):
+            task = await tasker.get_task(task_id)
+            if task:
+                return {
+                    "task_id": task_id,
+                    "status": task.status,
+                    "progress": task.progress,
+                    "message": task.message,
+                }
+            raise ValueError(f"Result not found for task {task_id}")
+        with open(result_file_path, encoding="utf-8") as f:
+            return json.load(f)
+
+    async def delete_evaluation_result_by_db(self, db_id: str, task_id: str) -> None:
+        result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
+        if os.path.exists(result_file_path):
+            os.remove(result_file_path)
+            logger.info(f"成功删除评估结果: {task_id}")
+            return
+        raise ValueError("Result not found")

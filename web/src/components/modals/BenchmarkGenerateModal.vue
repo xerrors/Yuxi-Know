@@ -42,67 +42,39 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="每个问题生成答案数量" name="answers_per_question" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
+          <a-form-item label="相似chunks数量" name="neighbors_count" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
             <a-input-number
-              v-model:value="formState.answers_per_question"
+              v-model:value="formState.neighbors_count"
               :min="0"
-              :max="3"
+              :max="10"
               style="width: 100%"
-              placeholder="每个问题生成答案数量"
+              placeholder="每次选取的相似chunks数量"
             />
           </a-form-item>
         </a-col>
       </a-row>
 
-      <a-row :gutter="16">
-        <a-col :span="24">
-          <a-form-item label="黄金答案生成策略" name="answer_generation_strategy" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
-            <a-select
-              v-model:value="formState.answer_generation_strategy"
-              placeholder="选择答案生成策略"
-            >
-              <a-select-option value="chunk_based">基于检索的文档块生成答案</a-select-option>
-              <a-select-option value="llm_based">基于LLM的知识理解生成答案</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-      </a-row>
 
-      <a-row :gutter="16">
-        <a-col :span="12">
-          <a-form-item label="采样数量" name="sample_count" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
-            <a-input-number
-              v-model:value="formState.sample_count"
-              :min="1"
-              :max="1000"
-              style="width: 100%"
-              placeholder="采样文档块数量"
-            />
-          </a-form-item>
-        </a-col>
-        <a-col :span="12">
-          <a-form-item label="相似度阈值" name="similarity_threshold" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
-            <a-input-number
-              v-model:value="formState.similarity_threshold"
-              :min="0"
-              :max="1"
-              :step="0.1"
-              style="width: 100%"
-              placeholder="文档块相似度阈值"
-            />
-          </a-form-item>
-        </a-col>
-      </a-row>
+
+
     </a-form-item>
 
     <a-form-item label="LLM配置" name="llm_config">
       <a-card size="small" title="配置参数">
-        <a-form-item label="LLM模型配置" name="llm_model">
+        <a-form-item label="LLM模型配置" name="llm_model_spec" :rules="[{ required: true, message: '请选择LLM模型' }]">
           <ModelSelectorComponent
             :model_spec="formState.llm_model_spec"
             placeholder="选择用于生成问题的LLM模型"
-            size="default"
+            size="small"
             @select-model="handleSelectLLMModel"
+          />
+        </a-form-item>
+
+        <a-form-item label="Embedding模型" name="embedding_model_id" :rules="[{ required: true, message: '请选择Embedding模型' }]">
+          <EmbeddingModelSelector
+            v-model:value="formState.embedding_model_id"
+            placeholder="请选择用于相似度计算的Embedding模型"
+            size="default"
           />
         </a-form-item>
 
@@ -160,6 +132,7 @@ import { ref, reactive, computed, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
 
 const props = defineProps({
   visible: {
@@ -182,10 +155,8 @@ const formState = reactive({
   name: '',
   description: '',
   count: 10,
-  answers_per_question: 1,
-  answer_generation_strategy: 'chunk_based',
-  sample_count: 100,
-  similarity_threshold: 0.7,
+  neighbors_count: 2,
+  embedding_model_id: '',
   llm_model_spec: '',
   llm_config: {
     model: '',
@@ -223,10 +194,8 @@ const handleGenerate = async () => {
       name: formState.name,
       description: formState.description,
       count: formState.count,
-      answers_per_question: formState.answers_per_question,
-      answer_generation_strategy: formState.answer_generation_strategy,
-      sample_count: formState.sample_count,
-      similarity_threshold: formState.similarity_threshold,
+      neighbors_count: formState.neighbors_count,
+      embedding_model_id: formState.embedding_model_id,
       llm_config: {
         ...formState.llm_config,
         model_spec: formState.llm_model_spec
@@ -263,10 +232,8 @@ const resetForm = () => {
     name: '',
     description: '',
     count: 10,
-    answers_per_question: 1,
-    answer_generation_strategy: 'chunk_based',
-    sample_count: 100,
-    similarity_threshold: 0.7,
+    neighbors_count: 2,
+    embedding_model_id: '',
     llm_model_spec: '',
     llm_config: {
       model: '',

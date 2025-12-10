@@ -46,6 +46,7 @@ class KnowledgeBase(ABC):
         self.work_dir = work_dir
         self.databases_meta: dict[str, dict] = {}
         self.files_meta: dict[str, dict] = {}
+        self.benchmarks_meta: dict[str, dict] = {}
 
         # 初始化类级别的锁
         if KnowledgeBase._processing_lock is None:
@@ -83,6 +84,17 @@ class KnowledgeBase(ABC):
                 normalized = self._normalize_timestamp(file_info.get("created_at"))
                 if normalized:
                     file_info["created_at"] = normalized
+
+        for db_benchmarks in self.benchmarks_meta.values():
+            for b in db_benchmarks.values():
+                if "created_at" in b:
+                    normalized = self._normalize_timestamp(b.get("created_at"))
+                    if normalized:
+                        b["created_at"] = normalized
+                if "updated_at" in b:
+                    normalized = self._normalize_timestamp(b.get("updated_at"))
+                    if normalized:
+                        b["updated_at"] = normalized
 
     @property
     @abstractmethod
@@ -560,6 +572,7 @@ class KnowledgeBase(ABC):
                     data = json.load(f)
                     self.databases_meta = data.get("databases", {})
                     self.files_meta = data.get("files", {})
+                    self.benchmarks_meta = data.get("benchmarks", {})
                 logger.info(f"Loaded {self.kb_type} metadata for {len(self.databases_meta)} databases")
             except Exception as e:
                 logger.error(f"Failed to load {self.kb_type} metadata: {e}")
@@ -571,6 +584,7 @@ class KnowledgeBase(ABC):
                             data = json.load(f)
                             self.databases_meta = data.get("databases", {})
                             self.files_meta = data.get("files", {})
+                            self.benchmarks_meta = data.get("benchmarks", {})
                         logger.info(f"Loaded {self.kb_type} metadata from backup")
                         # 恢复备份文件
                         shutil.copy2(backup_file, meta_file)
@@ -582,6 +596,7 @@ class KnowledgeBase(ABC):
                 logger.warning(f"Initializing empty {self.kb_type} metadata")
                 self.databases_meta = {}
                 self.files_meta = {}
+                self.benchmarks_meta = {}
 
     def _serialize_metadata(self, obj):
         """递归序列化元数据中的 Pydantic 模型"""
@@ -609,6 +624,7 @@ class KnowledgeBase(ABC):
             data = {
                 "databases": self._serialize_metadata(self.databases_meta),
                 "files": self._serialize_metadata(self.files_meta),
+                "benchmarks": self._serialize_metadata(self.benchmarks_meta),
                 "kb_type": self.kb_type,
                 "updated_at": utc_isoformat(),
             }

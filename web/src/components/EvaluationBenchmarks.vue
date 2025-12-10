@@ -258,7 +258,7 @@ const onGenerateSuccess = () => {
 // 预览基准
 const previewBenchmark = async (benchmark) => {
   try {
-    const response = await evaluationApi.getBenchmark(benchmark.benchmark_id);
+    const response = await evaluationApi.getBenchmarkByDb(props.databaseId, benchmark.benchmark_id);
     if (response.message === 'success') {
       previewData.value = response.data;
       previewQuestions.value = response.data.questions || [];

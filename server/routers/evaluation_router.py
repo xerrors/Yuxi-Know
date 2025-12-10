@@ -9,14 +9,19 @@ from src.utils import logger
 evaluation = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
 
-@evaluation.get("/benchmarks/{benchmark_id}")
-async def get_evaluation_benchmark(benchmark_id: str, current_user: User = Depends(get_admin_user)):
-    """获取评估基准详情"""
+# 移除旧详情接口，统一使用带 db_id 的接口
+
+
+@evaluation.get("/databases/{db_id}/benchmarks/{benchmark_id}")
+async def get_evaluation_benchmark_by_db(
+    db_id: str, benchmark_id: str, current_user: User = Depends(get_admin_user)
+):
+    """根据 db_id 获取评估基准详情"""
     from src.services.evaluation_service import EvaluationService
 
     try:
         service = EvaluationService()
-        benchmark = await service.get_benchmark_detail(benchmark_id)
+        benchmark = await service.get_benchmark_detail_by_db(db_id, benchmark_id)
         return {"message": "success", "data": benchmark}
     except Exception as e:
         logger.error(f"获取评估基准详情失败: {e}, {traceback.format_exc()}")
@@ -38,28 +43,28 @@ async def delete_evaluation_benchmark(benchmark_id: str, current_user: User = De
 
 
 
-@evaluation.get("/{task_id}/results")
-async def get_evaluation_results(task_id: str, current_user: User = Depends(get_admin_user)):
-    """获取评估结果"""
+@evaluation.get("/databases/{db_id}/results/{task_id}")
+async def get_evaluation_results_by_db(db_id: str, task_id: str, current_user: User = Depends(get_admin_user)):
+    """获取评估结果（带 db_id）"""
     from src.services.evaluation_service import EvaluationService
 
     try:
         service = EvaluationService()
-        results = await service.get_evaluation_results(task_id)
+        results = await service.get_evaluation_results_by_db(db_id, task_id)
         return {"message": "success", "data": results}
     except Exception as e:
         logger.error(f"获取评估结果失败: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取评估结果失败: {str(e)}")
 
 
-@evaluation.delete("/{task_id}")
-async def delete_evaluation_result(task_id: str, current_user: User = Depends(get_admin_user)):
-    """删除评估结果"""
+@evaluation.delete("/databases/{db_id}/results/{task_id}")
+async def delete_evaluation_result_by_db(db_id: str, task_id: str, current_user: User = Depends(get_admin_user)):
+    """删除评估结果（带 db_id）"""
     from src.services.evaluation_service import EvaluationService
 
     try:
         service = EvaluationService()
-        await service.delete_evaluation_result(task_id)
+        await service.delete_evaluation_result_by_db(db_id, task_id)
         return {"message": "success", "data": None}
     except Exception as e:
         logger.error(f"删除评估结果失败: {e}, {traceback.format_exc()}")
