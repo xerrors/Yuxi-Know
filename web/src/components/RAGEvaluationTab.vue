@@ -9,7 +9,7 @@
           <a-select
             v-model:value="selectedBenchmarkId"
             placeholder="请选择评估基准"
-            style="width: 180px"
+            style="width: 240px"
             @change="onBenchmarkChanged"
             :loading="benchmarksLoading"
           >
@@ -202,48 +202,53 @@
         </a-descriptions-item>
       </a-descriptions>
 
-      <!-- 检索配置 -->
-      <a-card size="small" title="检索配置" style="margin-bottom: 20px" v-if="selectedResult.retrieval_config">
-        <div class="json-viewer-container">
-          <pre class="json-viewer">{{ JSON.stringify(selectedResult.retrieval_config, null, 2) }}</pre>
-        </div>
-      </a-card>
+      <!-- 检索配置和整体评估报告 -->
+      <a-row :gutter="16" style="margin-bottom: 20px">
+        <!-- 检索配置 -->
+        <a-col :span="12" v-if="selectedResult.retrieval_config">
+          <a-card size="small" title="检索配置">
+            <div class="json-viewer-container">
+              <pre class="json-viewer">{{ JSON.stringify(selectedResult.retrieval_config, null, 2) }}</pre>
+            </div>
+          </a-card>
+        </a-col>
 
-      <!-- 整体评估报告 -->
-      <div class="evaluation-report">
-        <h4 style="margin-bottom: 16px">整体评估报告</h4>
-        <a-row :gutter="[16, 16]">
-          <a-col :span="12">
-            <a-card size="small" title="检索指标">
+        <!-- 整体评估报告 -->
+        <a-col :span="selectedResult.retrieval_config ? 12 : 24">
+          <a-card size="small" title="整体评估报告">
+            <!-- 检索指标 -->
+            <div style="margin-bottom: 20px;">
+              <h5 style="margin-bottom: 12px; font-size: 14px; font-weight: 500;">检索指标</h5>
               <div v-if="Object.keys(evaluationStats.retrievalMetrics || {}).length > 0">
                 <div v-for="(value, key) in evaluationStats.retrievalMetrics" :key="key" class="report-metric">
-                  <span class="metric-label">{{ getMetricTitle(key) }}</span>
+                  <span class="metric-label">{{ getMetricTitle(key) }}：</span>
                   <span class="metric-value" :style="{ color: getScoreColor(value) }">
                     {{ formatMetricValue(value) }}
                   </span>
                 </div>
               </div>
               <span v-else class="no-metrics">-</span>
-            </a-card>
-          </a-col>
-          <a-col :span="12">
-            <a-card size="small" title="答案准确性">
+            </div>
+
+            <!-- 答案准确性 -->
+            <div>
+              <h5 style="margin-bottom: 12px; font-size: 14px; font-weight: 500;">答案准确性</h5>
               <div class="accuracy-stats">
                 <div class="accuracy-item">
-                  <span class="accuracy-label">正确答案数</span>
+                  <span class="accuracy-label">正确答案数：</span>
                   <span class="accuracy-value">{{ evaluationStats.correctAnswers || 0 }} / {{ evaluationStats.totalQuestions || 0 }}</span>
                 </div>
                 <div class="accuracy-item">
-                  <span class="accuracy-label">准确率</span>
+                  <span class="accuracy-label">准确率：</span>
                   <span class="accuracy-value" :style="{ color: getScoreColor(evaluationStats.answerAccuracy) }">
                     {{ (evaluationStats.answerAccuracy * 100).toFixed(1) }}%
                   </span>
                 </div>
               </div>
-            </a-card>
-          </a-col>
-        </a-row>
-      </div>
+            </div>
+          </a-card>
+        </a-col>
+      </a-row>
 
       <!-- 详细结果表格 -->
       <h4 style="margin-bottom: 16px">详细评估结果</h4>
@@ -317,6 +322,7 @@ import { evaluationApi } from '@/apis/knowledge_api';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import SearchConfigModal from './SearchConfigModal.vue';
 import { SettingOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import { useTaskerStore } from '@/stores/tasker';
 
 const props = defineProps({
   databaseId: {
@@ -326,6 +332,9 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['switch-to-benchmarks']);
+
+// 使用任务中心 store
+const taskerStore = useTaskerStore();
 
 // 状态
 const selectedBenchmarkId = ref(null);
@@ -539,6 +548,8 @@ const startEvaluation = async () => {
     if (response.message === 'success') {
       message.success('评估任务已开始');
       loadEvaluationHistory();
+      // 刷新任务中心的任务列表
+      taskerStore.loadTasks();
     } else {
       message.error(response.message || '启动评估失败');
     }
@@ -1178,6 +1189,7 @@ onMounted(() => {
 
     .metric-label {
       font-size: 14px;
+      padding-right: 18px;
       color: var(--gray-700);
     }
 

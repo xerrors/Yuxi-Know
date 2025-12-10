@@ -287,7 +287,9 @@ class EvaluationService:
         await context.set_progress(25, "生成样本")
 
         with open(data_file_path, "w", encoding="utf-8") as f:
-            while generated < count and attempts < count * 2:
+            # Allow more attempts to generate enough questions
+            max_attempts = max(count * 5, 50)
+            while generated < count and attempts < max_attempts:
                 attempts += 1
                 i0 = random.randrange(len(all_chunks))
                 e0 = embeddings[i0]
@@ -320,20 +322,27 @@ class EvaluationService:
                 try:
                     resp = await asyncio.to_thread(llm.call, prompt, False)
                     content = resp.content if resp else ""
-                    obj = json.loads(content)
+
+                    import json_repair
+                    obj = json_repair.loads(content)
                     q = obj.get("query")
                     a = obj.get("gold_answer")
                     gids = obj.get("gold_chunk_ids")
                     if not q or not a or not isinstance(gids, list):
+                        logger.warning(f"Generated JSON missing fields or invalid format: {obj}")
                         continue
+
                     gids = [str(x) for x in gids if str(x) in allowed_ids]
                     if not gids:
+                        logger.warning("Generated gold_chunk_ids not found in allowed context")
                         continue
+
                     line = {"query": q, "gold_chunk_ids": gids, "gold_answer": a}
                     f.write(json.dumps(line, ensure_ascii=False) + "\n")
                     generated += 1
                     await context.set_progress(0 + int(99 * generated / max(count, 1)), f"已生成 {generated}/{count}")
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Benchmark generation failed for one item: {e}")
                     continue
 
         meta = {

@@ -42,14 +42,14 @@
             ref="mindmapSectionRef"
           />
         </a-tab-pane>
-        <a-tab-pane key="evaluation" tab="RAG评估（Beta）">
+        <a-tab-pane key="evaluation" tab="RAG评估">
           <RAGEvaluationTab
             v-if="databaseId"
             :database-id="databaseId"
             @switch-to-benchmarks="activeTab = 'benchmarks'"
           />
         </a-tab-pane>
-        <a-tab-pane key="benchmarks" tab="评估基准管理（Beta）">
+        <a-tab-pane key="benchmarks" tab="评估基准">
           <div class="benchmark-management-container">
             <div class="benchmark-content">
               <EvaluationBenchmarks
