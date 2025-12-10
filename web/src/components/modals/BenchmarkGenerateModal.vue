@@ -107,23 +107,7 @@
       </a-card>
     </a-form-item>
 
-    <a-form-item>
-      <a-alert
-        message="生成说明"
-        type="info"
-        show-icon
-      >
-        <template #description>
-          <ul>
-            <li>系统将从知识库中随机采样文档块</li>
-            <li>基于采样的文档块生成相关查询问题</li>
-            <li>可选择为每个问题生成对应的黄金答案</li>
-            <li>生成过程可能需要几分钟，请耐心等待</li>
-          </ul>
-        </template>
-      </a-alert>
-    </a-form-item>
-  </a-form>
+    </a-form>
 </a-modal>
 </template>
 
@@ -272,14 +256,4 @@ watch(visible, (val) => {
   }
 }
 
-:deep(.ant-alert) {
-  ul {
-    margin: 8px 0;
-    padding-left: 20px;
-
-    li {
-      margin-bottom: 4px;
-    }
-  }
-}
 </style>

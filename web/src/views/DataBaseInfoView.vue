@@ -42,18 +42,34 @@
             ref="mindmapSectionRef"
           />
         </a-tab-pane>
-        <a-tab-pane key="evaluation" tab="RAG评估">
+        <a-tab-pane key="evaluation" tab="RAG评估" :disabled="!isEvaluationSupported">
+          <template #tab>
+            <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
+              RAG评估
+              <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
+                <InfoCircleOutlined style="margin-left: 4px;" />
+              </a-tooltip>
+            </span>
+          </template>
           <RAGEvaluationTab
-            v-if="databaseId"
+            v-if="databaseId && isEvaluationSupported"
             :database-id="databaseId"
             @switch-to-benchmarks="activeTab = 'benchmarks'"
           />
         </a-tab-pane>
-        <a-tab-pane key="benchmarks" tab="评估基准">
+        <a-tab-pane key="benchmarks" tab="评估基准" :disabled="!isEvaluationSupported">
+          <template #tab>
+            <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
+              评估基准
+              <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
+                <InfoCircleOutlined style="margin-left: 4px;" />
+              </a-tooltip>
+            </span>
+          </template>
           <div class="benchmark-management-container">
             <div class="benchmark-content">
               <EvaluationBenchmarks
-                v-if="databaseId"
+                v-if="databaseId && isEvaluationSupported"
                 :database-id="databaseId"
                 @benchmark-selected="(benchmark) => {
                   // 处理基准选择逻辑
@@ -77,6 +93,7 @@ import { onMounted, reactive, ref, watch, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
 import { useTaskerStore } from '@/stores/tasker';
+import { InfoCircleOutlined } from '@ant-design/icons-vue';
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';
@@ -98,6 +115,12 @@ const state = computed(() => store.state);
 const isGraphSupported = computed(() => {
   const kbType = database.value.kb_type?.toLowerCase();
   return kbType === 'lightrag';
+});
+
+// 计算属性：是否支持评估功能
+const isEvaluationSupported = computed(() => {
+  const kbType = database.value.kb_type?.toLowerCase();
+  return kbType === 'milvus';
 });
 
 // Tab 切换逻辑 - 智能默认
@@ -123,9 +146,9 @@ const resetGraphStats = () => {
 
 // LightRAG 默认展示知识图谱
 watch(
-  () => [databaseId.value, isGraphSupported.value],
-  ([newDbId, supported], oldValue = []) => {
-    const [oldDbId, previouslySupported] = oldValue;
+  () => [databaseId.value, isGraphSupported.value, isEvaluationSupported.value],
+  ([newDbId, supported, evaluationSupported], oldValue = []) => {
+    const [oldDbId, previouslySupported, previouslyEvaluationSupported] = oldValue;
 
     if (!newDbId) {
       return;
@@ -143,6 +166,11 @@ watch(
     }
 
     if (!supported && activeTab.value === 'graph') {
+      activeTab.value = 'query';
+    }
+
+    // 如果知识库类型不支持评估功能且当前在评估相关 tab，切换到查询 tab
+    if (!isEvaluationSupported.value && (activeTab.value === 'evaluation' || activeTab.value === 'benchmarks')) {
       activeTab.value = 'query';
     }
   },

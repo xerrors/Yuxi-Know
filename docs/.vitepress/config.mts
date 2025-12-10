@@ -34,7 +34,8 @@ export default defineConfig({
             { text: '什么是 Yuxi-Know？', link: '/latest/intro/project-overview' },
             { text: '快速开始', link: '/latest/intro/quick-start' },
             { text: '模型配置', link: '/latest/intro/model-config' },
-            { text: '知识库与知识图谱', link: '/latest/intro/knowledge-base' }
+            { text: '知识库与知识图谱', link: '/latest/intro/knowledge-base' },
+            { text: '知识库评估', link: '/latest/intro/evaluation' }
           ]
         },
         {

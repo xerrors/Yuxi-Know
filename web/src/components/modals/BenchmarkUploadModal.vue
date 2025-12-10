@@ -47,27 +47,7 @@
       </a-upload-dragger>
     </a-form-item>
 
-    <a-form-item label="文件格式说明">
-      <a-alert
-        message="JSONL文件格式要求"
-        type="info"
-        show-icon
-      >
-        <template #description>
-          <div class="format-info">
-            <p>每行一个JSON对象，包含以下字段：</p>
-            <ul>
-              <li><code>query</code> (必需): 查询问题</li>
-              <li><code>gold_chunk_ids</code> (可选): 黄金文档块ID列表</li>
-              <li><code>gold_answer</code> (可选): 黄金答案</li>
-            </ul>
-            <p>示例：</p>
-            <pre class="format-example">{"query": "什么是人工智能？", "gold_chunk_ids": ["chunk_001"], "gold_answer": "人工智能是..."}</pre>
-          </div>
-        </template>
-      </a-alert>
-    </a-form-item>
-  </a-form>
+    </a-form>
 </a-modal>
 </template>
 
@@ -231,39 +211,6 @@ watch(visible, (val) => {
 </script>
 
 <style lang="less" scoped>
-.format-info {
-  p {
-    margin-bottom: 8px;
-  }
-
-  ul {
-    margin: 8px 0;
-    padding-left: 20px;
-
-    li {
-      margin-bottom: 4px;
-    }
-  }
-
-  code {
-    background-color: var(--gray-100);
-    padding: 2px 4px;
-    border-radius: 3px;
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-size: 13px;
-  }
-
-  .format-example {
-    background-color: var(--gray-100);
-    padding: 8px;
-    border-radius: 4px;
-    margin-top: 8px;
-    overflow-x: auto;
-    font-family: 'Monaco', 'Consolas', monospace;
-    font-size: 12px;
-    line-height: 1.4;
-  }
-}
 
 :deep(.ant-upload-dragger) {
   .ant-upload-text {
