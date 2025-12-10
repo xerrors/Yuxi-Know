@@ -83,7 +83,7 @@ const props = defineProps({
   },
   databaseId: {
     type: String,
-    required: true
+    default: ''
   }
 });
 
@@ -129,6 +129,13 @@ const loadQueryParams = async () => {
     loading.value = true;
     error.value = '';
 
+    // 如果没有 databaseId，不执行请求
+    if (!props.databaseId) {
+      queryParams.value = [];
+      loading.value = false;
+      return;
+    }
+
     const response = await queryApi.getKnowledgeBaseQueryParams(props.databaseId);
     queryParams.value = response.params?.options || [];
 
@@ -163,6 +170,8 @@ const loadQueryParams = async () => {
 
 // 加载保存的配置
 const loadSavedConfig = () => {
+  if (!props.databaseId) return;
+
   const saved = localStorage.getItem(`search-config-${props.databaseId}`);
   if (saved) {
     try {
@@ -201,6 +210,12 @@ const resetToDefaults = () => {
 
 // 保存配置
 const handleSave = async () => {
+  // 如果没有 databaseId，不执行保存
+  if (!props.databaseId) {
+    message.error('无法保存配置：缺少知识库ID');
+    return;
+  }
+
   // 确保 include_distances 始终为 true
   meta['include_distances'] = true;
 

@@ -5,6 +5,7 @@
       <div class="header-left">
         <a-button
           @click="backToDatabase"
+          class="back-button"
           shape="circle"
           :icon="h(LeftOutlined)"
           type="text"
@@ -33,8 +34,8 @@
     <!-- 卡片内容 -->
     <div class="card-content">
       <!-- 描述文本 -->
-      <div class="description" v-if="database.description">
-        <p class="description-text">{{ database.description }}</p>
+      <div class="description">
+        <p class="description-text">{{ database.description || '暂无描述' }}</p>
       </div>
 
       <!-- Tags -->
@@ -66,7 +67,7 @@
       <a-form-item label="知识库描述" name="description">
         <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
       </a-form-item>
-      
+
       <a-form-item label="自动生成问题" name="auto_generate_questions">
         <a-switch v-model:checked="editForm.auto_generate_questions" checked-children="开启" un-checked-children="关闭" />
         <span style="margin-left: 8px; font-size: 12px; color: var(--gray-500);">上传文件后自动生成测试问题</span>
@@ -165,7 +166,7 @@ const showEditModal = () => {
   editForm.name = database.value.name || '';
   editForm.description = database.value.description || '';
   editForm.auto_generate_questions = database.value.additional_params?.auto_generate_questions || false;
-  
+
   // 如果是 LightRAG 类型，加载当前的 LLM 配置
   if (database.value.kb_type === 'lightrag') {
     const llmInfo = database.value.llm_info || {};
@@ -244,9 +245,14 @@ const deleteDatabase = () => {
   .header-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     flex: 1;
     min-width: 0;
+
+    button.back-button {
+      margin-left: -5px;
+      font-size: 10px;
+    }
   }
 
   .card-title {
@@ -267,10 +273,12 @@ const deleteDatabase = () => {
     flex-shrink: 0;
 
     button {
+      color: var(--gray-500);
       height: 100%;
     }
 
     button:hover {
+      color: var(--gray-700);
       background-color: var(--gray-100);
     }
   }

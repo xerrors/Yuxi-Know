@@ -347,9 +347,6 @@ async def get_database_mindmap(db_id: str, current_user: User = Depends(get_admi
         db_meta = knowledge_base.global_databases_meta[db_id]
         mindmap_data = db_meta.get("mindmap")
 
-        if not mindmap_data:
-            raise HTTPException(status_code=404, detail="该知识库还没有生成思维导图")
-
         return {
             "message": "success",
             "mindmap": mindmap_data,

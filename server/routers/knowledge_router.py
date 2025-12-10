@@ -1132,9 +1132,6 @@ async def get_sample_questions(db_id: str, current_user: User = Depends(get_admi
         db_meta = knowledge_base.global_databases_meta[db_id]
         questions = db_meta.get("sample_questions", [])
 
-        if not questions:
-            raise HTTPException(status_code=404, detail="该知识库还没有生成测试问题")
-
         return {
             "message": "success",
             "questions": questions,

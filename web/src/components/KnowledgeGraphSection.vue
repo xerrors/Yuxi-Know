@@ -95,6 +95,9 @@ const props = defineProps({
   },
 });
 
+// 声明事件
+const emit = defineEmits(['toggleVisible']);
+
 const store = useDatabaseStore();
 
 const databaseId = computed(() => store.databaseId);
