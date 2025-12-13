@@ -284,7 +284,7 @@ class EvaluationService:
         generated = 0
         attempts = 0
 
-        await context.set_progress(25, "生成样本")
+        await context.set_progress(0, "准备生成样本")
 
         with open(data_file_path, "w", encoding="utf-8") as f:
             # Allow more attempts to generate enough questions

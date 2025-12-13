@@ -18,9 +18,18 @@
               :key="benchmark.benchmark_id"
               :value="benchmark.benchmark_id"
             >
-              {{ benchmark.name }}（{{ benchmark.question_count }} 个问题）
+              {{ benchmark.name }} ({{ benchmark.question_count }} 个问题)
             </a-select-option>
           </a-select>
+          <a-button
+            type="text"
+            size="middle"
+            :loading="benchmarksLoading"
+            @click="() => loadBenchmarks(true)"
+            :icon="h(ReloadOutlined)"
+            class="refresh-benchmarks-btn"
+            title="刷新评估基准列表"
+          />
         </div>
 
         </div>
@@ -466,7 +475,7 @@ const handleSearchConfigSave = (config) => {
 };
 
 // 加载基准列表
-const loadBenchmarks = async () => {
+const loadBenchmarks = async (showSuccessMessage = false) => {
   if (!props.databaseId) return;
 
   benchmarksLoading.value = true;
@@ -490,6 +499,11 @@ const loadBenchmarks = async () => {
           // 更新选中的基准对象
           selectedBenchmark.value = response.data.find(b => b.benchmark_id === selectedBenchmarkId.value);
         }
+      }
+
+      // 如果是手动刷新，显示成功提示
+      if (showSuccessMessage) {
+        message.success(`已刷新，找到 ${response.data.length} 个评估基准`);
       }
     } else {
       console.error('响应格式不符合预期:', response);
@@ -856,6 +870,10 @@ onMounted(() => {
       color: var(--gray-700);
       margin: 0;
       white-space: nowrap;
+    }
+
+    .refresh-benchmarks-btn {
+      color: var(--gray-600);
     }
   }
 

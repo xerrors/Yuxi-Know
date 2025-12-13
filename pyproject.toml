@@ -63,6 +63,7 @@ dependencies = [
     "aiohttp>=3.9.0",
     "deepagents>=0.2.5",
     "json-repair>=0.54.0",
+    "openpyxl>=3.1.5",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
