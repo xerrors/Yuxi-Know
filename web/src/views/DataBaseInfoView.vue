@@ -242,30 +242,10 @@ watch(
       return;
     }
 
-    // 如果文件数量发生变化（增加或减少），都重新生成问题和思维导图
+    // 如果文件数量发生变化（增加或减少），只重新生成问题，不自动生成思维导图
     if (newFileCount !== oldFileCount) {
       const changeType = newFileCount > oldFileCount ? '增加' : '减少';
-      console.log(`文件数量从 ${oldFileCount} ${changeType}到 ${newFileCount}，准备重新生成问题和思维导图`);
-
-      // 只要有文件，就重新生成思维导图（无论增加还是减少）
-      if (newFileCount > 0) {
-        setTimeout(() => {
-          if (mindmapSectionRef.value) {
-            if (oldFileCount === 0) {
-              // 首次添加文件，生成思维导图
-              console.log('首次添加文件，生成思维导图');
-              mindmapSectionRef.value.generateMindmap();
-            } else {
-              // 文件数量变化（增加或减少），重新生成思维导图
-              console.log(`文件数量变化，重新生成思维导图`);
-              mindmapSectionRef.value.refreshMindmap();
-            }
-          }
-        }, 2000); // 等待2秒让后端处理完成
-      } else {
-        // 如果文件数量变为0，清空思维导图（如果需要的话）
-        console.log('文件数量为0，思维导图将自动清空');
-      }
+      console.log(`文件数量从 ${oldFileCount} ${changeType}到 ${newFileCount}，准备重新生成问题`);
 
       // 只要有文件，就重新生成问题（无论之前是否有问题）
       if (newFileCount > 0) {
