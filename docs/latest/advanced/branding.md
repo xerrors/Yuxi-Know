@@ -42,8 +42,8 @@ YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
 ```css
 :root {
   --main-color: #1890ff;        /* 主色调 */
-  --main-bg: #f0f2f5;          /* 背景色 */
-  --main-text: #262626;        /* 文字色 */
-  --main-border: #d9d9d9;      /* 边框色 */
+  --main-1000: #f0f2f5;          /* 色板 */
+  --main-900: #e6f7ff;           /* 色板 */
+  /* ... 其他色板 */
 }
 ```
