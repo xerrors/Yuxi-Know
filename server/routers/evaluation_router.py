@@ -14,11 +14,7 @@ evaluation = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
 @evaluation.get("/databases/{db_id}/benchmarks/{benchmark_id}")
 async def get_evaluation_benchmark_by_db(
-    db_id: str,
-    benchmark_id: str,
-    page: int = 1,
-    page_size: int = 10,
-    current_user: User = Depends(get_admin_user)
+    db_id: str, benchmark_id: str, page: int = 1, page_size: int = 10, current_user: User = Depends(get_admin_user)
 ):
     """根据 db_id 获取评估基准详情（支持分页）"""
     from src.services.evaluation_service import EvaluationService
@@ -54,7 +50,6 @@ async def delete_evaluation_benchmark(benchmark_id: str, current_user: User = De
         raise HTTPException(status_code=500, detail=f"删除评估基准失败: {str(e)}")
 
 
-
 @evaluation.get("/databases/{db_id}/results/{task_id}")
 async def get_evaluation_results_by_db(
     db_id: str,
@@ -62,7 +57,7 @@ async def get_evaluation_results_by_db(
     page: int = 1,
     page_size: int = 20,
     error_only: bool = False,
-    current_user: User = Depends(get_admin_user)
+    current_user: User = Depends(get_admin_user),
 ):
     """获取评估结果（带 db_id，支持分页）"""
     from src.services.evaluation_service import EvaluationService
