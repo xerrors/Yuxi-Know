@@ -360,8 +360,12 @@ export const evaluationApi = {
    * @param {string} dbId - 知识库ID
    * @param {string} benchmarkId - 基准ID
    */
-  getBenchmarkByDb: async (dbId, benchmarkId) => {
-    return apiAdminGet(`/api/evaluation/databases/${dbId}/benchmarks/${benchmarkId}`)
+  getBenchmarkByDb: async (dbId, benchmarkId, page = 1, pageSize = 50) => {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString()
+    })
+    return apiAdminGet(`/api/evaluation/databases/${dbId}/benchmarks/${benchmarkId}?${params}`)
   },
 
   /**
@@ -420,8 +424,15 @@ export const evaluationApi = {
   },
 
   // 新接口：带 db_id 的评估结果查询与删除
-  getEvaluationResultsByDb: async (dbId, taskId) => {
-    return apiAdminGet(`/api/evaluation/databases/${dbId}/results/${taskId}`)
+  getEvaluationResultsByDb: async (dbId, taskId, params = {}) => {
+    const queryParams = new URLSearchParams();
+
+    if (params.page) queryParams.append('page', params.page);
+    if (params.pageSize) queryParams.append('page_size', params.pageSize);
+    if (params.errorOnly !== undefined) queryParams.append('error_only', params.errorOnly);
+
+    const url = `/api/evaluation/databases/${dbId}/results/${taskId}${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+    return apiAdminGet(url);
   },
   deleteEvaluationResultByDb: async (dbId, taskId) => {
     return apiAdminDelete(`/api/evaluation/databases/${dbId}/results/${taskId}`)

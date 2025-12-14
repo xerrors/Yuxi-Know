@@ -15,7 +15,7 @@
 - 同名文件处理逻辑：遇到同名文件则在上传区域提示，是否删除旧文件
 - conversation 待修改为异步的版本
 - DBManager 需要将数据库修改为异步的aiosqlite或者异步mysql，缓存使用Redis存储
-- 【eval】缺少自动生成评估的功能
+- 【eval】支持 easy dataset 的数据格式
 - chat_model 的 call 需要异步
 
 ### Bugs

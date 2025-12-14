@@ -14,15 +14,27 @@ evaluation = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
 @evaluation.get("/databases/{db_id}/benchmarks/{benchmark_id}")
 async def get_evaluation_benchmark_by_db(
-    db_id: str, benchmark_id: str, current_user: User = Depends(get_admin_user)
+    db_id: str,
+    benchmark_id: str,
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_admin_user)
 ):
-    """根据 db_id 获取评估基准详情"""
+    """根据 db_id 获取评估基准详情（支持分页）"""
     from src.services.evaluation_service import EvaluationService
 
     try:
+        # 验证分页参数
+        if page < 1:
+            raise HTTPException(status_code=400, detail="页码必须大于0")
+        if page_size < 1 or page_size > 100:
+            raise HTTPException(status_code=400, detail="每页大小必须在1-100之间")
+
         service = EvaluationService()
-        benchmark = await service.get_benchmark_detail_by_db(db_id, benchmark_id)
+        benchmark = await service.get_benchmark_detail_by_db(db_id, benchmark_id, page, page_size)
         return {"message": "success", "data": benchmark}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"获取评估基准详情失败: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取评估基准详情失败: {str(e)}")
@@ -44,13 +56,28 @@ async def delete_evaluation_benchmark(benchmark_id: str, current_user: User = De
 
 
 @evaluation.get("/databases/{db_id}/results/{task_id}")
-async def get_evaluation_results_by_db(db_id: str, task_id: str, current_user: User = Depends(get_admin_user)):
-    """获取评估结果（带 db_id）"""
+async def get_evaluation_results_by_db(
+    db_id: str,
+    task_id: str,
+    page: int = 1,
+    page_size: int = 20,
+    error_only: bool = False,
+    current_user: User = Depends(get_admin_user)
+):
+    """获取评估结果（带 db_id，支持分页）"""
     from src.services.evaluation_service import EvaluationService
 
     try:
+        # 验证分页参数
+        if page < 1:
+            raise HTTPException(status_code=400, detail="页码必须大于0")
+        if page_size < 1 or page_size > 100:
+            raise HTTPException(status_code=400, detail="每页大小必须在1-100之间")
+
         service = EvaluationService()
-        results = await service.get_evaluation_results_by_db(db_id, task_id)
+        results = await service.get_evaluation_results_by_db(
+            db_id, task_id, page=page, page_size=page_size, error_only=error_only
+        )
         return {"message": "success", "data": results}
     except Exception as e:
         logger.error(f"获取评估结果失败: {e}, {traceback.format_exc()}")

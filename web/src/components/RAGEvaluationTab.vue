@@ -260,23 +260,48 @@
       </a-row>
 
       <!-- 详细结果表格 -->
-      <h4 style="margin-bottom: 16px">详细评估结果</h4>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h4 style="margin: 0;">详细评估结果</h4>
+          <span style="font-size: 12px; color: var(--gray-600); margin-left: 8px;">
+            {{ showErrorsOnly ? `仅显示错误结果（共 ${paginationTotal} 条）` : `显示全部结果（共 ${paginationTotal} 条）` }}
+          </span>
+        </div>
+        <a-button
+          type="default"
+          size="small"
+          @click="toggleErrorOnly"
+          :class="{ 'error-only-active': showErrorsOnly }"
+        >
+          {{ showErrorsOnly ? '显示全部' : '仅查看错误' }}
+        </a-button>
+      </div>
       <a-table
         :columns="resultColumns"
         :data-source="detailedResults"
-        :pagination="{ pageSize: 10, showSizeChanger: true, showQuickJumper: true }"
+        :pagination="{
+          current: currentPage,
+          pageSize: pageSize,
+          total: paginationTotal,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+          onChange: handlePageChange,
+          onShowSizeChange: handlePageSizeChange
+        }"
         :scroll="{ x: 1000 }"
         size="small"
+        :loading="resultsLoading"
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'query'">
             <a-tooltip :title="record.query">
-              <span class="query-text">{{ truncateText(record.query, 50) }}</span>
+              <div class="query-text">{{ record.query }}</div>
             </a-tooltip>
           </template>
           <template v-else-if="column.key === 'generated_answer'">
             <a-tooltip :title="record.generated_answer">
-              <span class="answer-text">{{ truncateText(record.generated_answer || '-', 80) }}</span>
+              <div class="answer-text">{{ record.generated_answer || '-' }}</div>
             </a-tooltip>
           </template>
           <template v-else-if="column.key === 'retrieval_score'">
@@ -299,7 +324,7 @@
               </a-tag>
               <div v-if="record.metrics.reasoning" class="answer-reasoning">
                 <a-tooltip :title="record.metrics.reasoning">
-                  {{ truncateText(record.metrics.reasoning, 80) }}
+                  {{ record.metrics.reasoning }}
                 </a-tooltip>
               </div>
             </div>
@@ -359,6 +384,11 @@ const evaluationStats = ref({});
 const resultsLoading = ref(false);
 const searchConfigModalVisible = ref(false);
 const refreshingHistory = ref(false);
+const showErrorsOnly = ref(false);
+const currentPage = ref(1);
+const pageSize = ref(20);
+const paginationTotal = ref(0);
+const paginationTotalPages = ref(0);
 
 
 // 评估配置表单（使用知识库默认配置）
@@ -368,29 +398,48 @@ const configForm = reactive({
 });
 
 // 表格列定义
-const resultColumns = [
-  {
-    title: '问题',
-    dataIndex: 'query',
-    key: 'query',
-    width: 200
-  },
-  {
-    title: '生成答案',
-    key: 'generated_answer',
-    width: 250
-  },
-  {
-    title: '检索指标',
-    key: 'retrieval_score',
-    width: 300
-  },
-  {
-    title: '答案评判',
-    key: 'answer_score',
-    width: 200
+const resultColumns = computed(() => {
+  const columns = [
+    {
+      title: '问题',
+      dataIndex: 'query',
+      key: 'query',
+      width: 100
+    },
+    {
+      title: '生成答案',
+      key: 'generated_answer',
+      width: 180
+    },
+    {
+      title: '答案评判',
+      key: 'answer_score',
+      width: 260
+    }
+  ];
+
+  // 检查是否有检索指标数据
+  const hasRetrievalMetrics = detailedResults.value.some(item => {
+    if (!item.metrics) return false;
+    return Object.keys(item.metrics).some(key =>
+      key.startsWith('recall') ||
+      key.startsWith('precision') ||
+      key === 'map' ||
+      key === 'ndcg'
+    );
+  });
+
+  // 如果有检索指标数据，添加检索指标列
+  if (hasRetrievalMetrics) {
+    columns.splice(2, 0, {
+      title: '检索指标',
+      key: 'retrieval_score',
+      width: 100
+    });
   }
-];
+
+  return columns;
+});
 
 const historyColumns = [
   {
@@ -462,6 +511,93 @@ const currentBenchmark = computed(() => {
   }
   return availableBenchmarks.value.find(b => b.benchmark_id === selectedBenchmarkId.value);
 });
+
+// 切换错误显示模式
+const toggleErrorOnly = async () => {
+  resultsLoading.value = true;
+  showErrorsOnly.value = !showErrorsOnly.value;
+  currentPage.value = 1; // 切换模式时重置到第一页
+
+  // 立即加载新的分页数据
+  await loadResultsWithPagination();
+};
+
+// 处理分页变化
+const handlePageChange = (page, size) => {
+  currentPage.value = page;
+  if (size !== pageSize.value) {
+    pageSize.value = size;
+  }
+  loadResultsWithPagination();
+};
+
+// 处理页面大小变化
+const handlePageSizeChange = (current, size) => {
+  currentPage.value = 1;
+  pageSize.value = size;
+  loadResultsWithPagination();
+};
+
+// 加载分页结果
+const loadResultsWithPagination = async () => {
+  if (!selectedResult.value) return;
+
+  try {
+    resultsLoading.value = true;
+    const response = await evaluationApi.getEvaluationResultsByDb(
+      props.databaseId,
+      selectedResult.value.task_id,
+      {
+        page: currentPage.value,
+        pageSize: pageSize.value,
+        errorOnly: showErrorsOnly.value
+      }
+    );
+
+    if (response.message === 'success' && response.data) {
+      const resultData = response.data;
+
+      // 更新详细结果
+      detailedResults.value = resultData.interim_results || [];
+
+      // 更新分页信息
+      if (resultData.pagination) {
+        paginationTotal.value = resultData.pagination.total;
+        paginationTotalPages.value = resultData.pagination.total_pages;
+      } else {
+        // 兼容旧格式数据
+        paginationTotal.value = detailedResults.value.length;
+        paginationTotalPages.value = 1;
+      }
+
+      // 更新统计信息
+      // 如果是过滤模式，需要基于过滤后的总数计算统计
+      if (showErrorsOnly.value) {
+        // 在过滤模式下，只计算当前页的统计（避免重复计算）
+        evaluationStats.value = {
+          ...evaluationStats.value,
+          totalQuestions: paginationTotal.value,
+          // 可以在这里添加其他基于过滤后数据的统计
+        };
+      } else if (currentPage.value === 1) {
+        // 非过滤模式且是第一页时，才计算完整统计
+        evaluationStats.value = calculateEvaluationStats(detailedResults.value);
+      }
+
+      // 更新其他基本信息（保持原有的信息不变）
+      if (resultData.started_at && resultData.completed_at) {
+        const startTime = new Date(resultData.started_at);
+        const endTime = new Date(resultData.completed_at);
+        evaluationStats.value.totalDuration = (endTime - startTime) / 1000;
+      }
+    }
+  } catch (error) {
+    console.error('加载评估结果失败:', error);
+    message.error('加载评估结果失败');
+  } finally {
+    resultsLoading.value = false;
+  }
+};
 
 // 打开检索配置弹窗
 const openSearchConfigModal = () => {
@@ -646,16 +782,16 @@ const calculateEvaluationStats = (results) => {
 const viewResults = async (taskId) => {
   try {
     resultsLoading.value = true;
+
+    // 重置分页状态
+    currentPage.value = 1;
+    showErrorsOnly.value = false;
+
+    // 先获取基本信息（不分页）
     const response = await evaluationApi.getEvaluationResultsByDb(props.databaseId, taskId);
+
     if (response.message === 'success' && response.data) {
-      // API 返回的是直接的评估结果对象
       const resultData = response.data;
-
-      // 设置详细结果 - 如果有 interim_results 就用它，否则尝试其他字段
-      detailedResults.value = resultData.interim_results || resultData.results || [];
-
-      // 计算统计信息
-      evaluationStats.value = calculateEvaluationStats(detailedResults.value);
 
       // 从历史记录中找到对应的任务信息，如果没有则使用API返回的数据
       selectedResult.value = evaluationHistory.value.find(r => r.task_id === taskId) || {
@@ -674,14 +810,11 @@ const viewResults = async (taskId) => {
         selectedResult.value.retrieval_config = resultData.retrieval_config;
       }
 
-      // 计算总耗时
-      if (resultData.started_at && resultData.completed_at) {
-        const startTime = new Date(resultData.started_at);
-        const endTime = new Date(resultData.completed_at);
-        evaluationStats.value.totalDuration = (endTime - startTime) / 1000; // 秒
-      }
-
+      // 打开模态框
       resultModalVisible.value = true;
+
+      // 加载分页数据
+      await loadResultsWithPagination();
     } else {
       message.error('获取评估结果失败：数据格式错误');
     }
@@ -965,21 +1098,25 @@ onMounted(() => {
 }
 
 .query-text {
-  display: inline-block;
-  max-width: 200px;
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.5;
+  word-wrap: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.4;
 }
 
 .answer-text {
-  display: inline-block;
-  max-width: 250px;
+  font-size: 12px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-height: 1.5;
+  word-wrap: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  line-height: 1.4;
   color: var(--gray-700);
 }
 
@@ -993,7 +1130,8 @@ onMounted(() => {
 // 优化表格样式
 :deep(.ant-table) {
   .ant-table-tbody > tr > td {
-    padding: 8px 12px;
+    padding: 12px 12px;
+    vertical-align: top;
   }
 
   .ant-table-thead > tr > th {
@@ -1167,9 +1305,15 @@ onMounted(() => {
 .answer-reasoning {
   font-size: 12px;
   color: var(--gray-600);
-  margin-top: 4px;
-  line-height: 1.3;
+  margin-top: 8px;
+  line-height: 1.4;
   cursor: pointer;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  word-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   &:hover {
     color: var(--gray-800);
@@ -1317,6 +1461,23 @@ onMounted(() => {
     border: 1px solid var(--gray-200);
     border-radius: 6px;
     padding: 12px;
+  }
+}
+
+// 仅查看错误按钮样式
+.error-only-active {
+  background-color: var(--color-error-500) !important;
+  border-color: var(--color-error-500) !important;
+  color: white !important;
+
+  &:hover {
+    background-color: var(--color-error-600) !important;
+    border-color: var(--color-error-600) !important;
+  }
+
+  &:focus {
+    background-color: var(--color-error-500) !important;
+    border-color: var(--color-error-500) !important;
   }
 }
 

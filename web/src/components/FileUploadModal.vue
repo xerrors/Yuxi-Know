@@ -37,6 +37,9 @@
           >
             <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
           </a-button>
+          <a-button type="link" class="doc-link-btn" @click="openDocLink">
+            <InfoCircleOutlined /> 文档处理与 OCR 说明
+          </a-button>
         </div>
       </div>
 
@@ -691,6 +694,10 @@ const getAuthHeaders = () => {
   return userStore.getAuthHeaders();
 };
 
+const openDocLink = () => {
+  window.open('https://xerrors.github.io/Yuxi-Know/latest/advanced/document-processing.html', '_blank', 'noopener');
+};
+
 const chunkData = async () => {
   if (!databaseId.value) {
     message.error('请先选择知识库');
@@ -864,6 +871,11 @@ const chunkData = async () => {
 .zip-support-tip {
   font-size: 12px;
   color: var(--color-warning-500);
+}
+
+.doc-link-btn {
+  color: var(--main-600);
+  margin-left: 12px;
 }
 
 // 同名文件提示样式

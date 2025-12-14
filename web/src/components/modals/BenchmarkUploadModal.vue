@@ -28,7 +28,11 @@
       />
     </a-form-item>
 
-    <a-form-item label="基准文件" name="file">
+    <a-form-item
+      label="基准文件"
+      name="file"
+      :extra="extraText"
+    >
       <a-upload-dragger
         v-model:fileList="fileList"
         name="file"
@@ -52,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, h } from 'vue';
 import { message } from 'ant-design-vue';
 import { FileTextOutlined } from '@ant-design/icons-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
@@ -98,52 +102,67 @@ const visible = computed({
   set: (val) => emit('update:visible', val)
 });
 
+// 说明文本
+const extraText = computed(() => h('span', {}, [
+  '需要了解评估基准格式？查看',
+  h('a', {
+    href: 'https://xerrors.github.io/Yuxi-Know/latest/intro/evaluation.html',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  }, '使用说明')
+]));
+
 // 文件上传前验证
-const beforeUpload = (file) => {
+const beforeUpload = async (file) => {
   // 检查文件类型
   if (!file.name.endsWith('.jsonl')) {
     message.error('仅支持 JSONL 格式文件');
     return false;
   }
 
-  // 检查文件大小（限制为10MB）
-  const isLt10M = file.size / 1024 / 1024 < 10;
-  if (!isLt10M) {
-    message.error('文件大小不能超过 10MB');
+  // 检查文件大小（限制为100MB）
+  const isLt100M = file.size / 1024 / 1024 < 100;
+  if (!isLt100M) {
+    message.error('文件大小不能超过 100MB');
     return false;
   }
 
-  // 读取文件内容验证格式
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const content = e.target.result;
-      const lines = content.trim().split('\n');
+  try {
+    // 读取文件内容验证格式
+    const content = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsText(file);
+    });
 
-      // 验证至少有一行
-      if (lines.length === 0) {
-        message.error('文件不能为空');
-        return false;
-      }
+    const lines = content.trim().split('\n');
 
-      // 验证JSON格式
-      for (let i = 0; i < Math.min(5, lines.length); i++) {
-        const line = lines[i].trim();
-        if (line) {
-          JSON.parse(line);
-        }
-      }
-
-      formState.file = file;
-    } catch (error) {
-      message.error('文件格式错误，请检查JSONL格式');
+    // 验证至少有一行
+    if (lines.length === 0) {
+      message.error('文件不能为空');
       return false;
     }
-  };
-  reader.readAsText(file);
 
-  // 阻止自动上传
-  return false;
+    // 验证JSON格式
+    for (let i = 0; i < Math.min(5, lines.length); i++) {
+      const line = lines[i].trim();
+      if (line) {
+        JSON.parse(line);
+      }
+    }
+
+    // 验证通过，设置文件
+    formState.file = file;
+    return true;
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      message.error('文件格式错误，请检查JSONL格式');
+    } else {
+      message.error('文件验证失败: ' + error.message);
+    }
+    return false;
+  }
 };
 
 // 移除文件

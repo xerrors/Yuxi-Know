@@ -28,7 +28,7 @@
       </a-textarea>
     </a-form-item>
 
-    <a-form-item label="生成参数" name="params">
+    <a-form-item label="生成参数" name="params" :extra="extraText">
       <a-row :gutter="16">
         <a-col :span="12">
           <a-form-item label="问题数量" name="count" :labelCol="{ span: 24 }" :wrapperCol="{ span: 24 }">
@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue';
+import { ref, reactive, computed, watch, h } from 'vue';
 import { message } from 'ant-design-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
@@ -165,6 +165,16 @@ const visible = computed({
   get: () => props.visible,
   set: (val) => emit('update:visible', val)
 });
+
+// 说明文本
+const extraText = computed(() => h('span', {}, [
+  '需要了解评估基准生成原理？查看',
+  h('a', {
+    href: 'https://xerrors.github.io/Yuxi-Know/latest/intro/evaluation.html',
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  }, '使用说明')
+]));
 
 // 生成基准
 const handleGenerate = async () => {

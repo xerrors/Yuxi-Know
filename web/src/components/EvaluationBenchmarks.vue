@@ -120,7 +120,7 @@
   <a-modal
     v-model:open="previewModalVisible"
     title="评估基准详情"
-    width="800px"
+    width="1200px"
     :footer="null"
   >
     <div v-if="previewData" class="preview-content">
@@ -146,30 +146,44 @@
         </div>
       </div>
 
-      <div class="preview-questions" v-if="previewQuestions.length > 0">
-        <h4>问题示例 (前5条)</h4>
-        <div class="question-list">
-          <div
-            v-for="(item, index) in previewQuestions.slice(0, 5)"
-            :key="index"
-            class="question-item"
-          >
-            <div class="question-header">
-              <span class="question-num">Q{{ index + 1 }}</span>
-            </div>
-            <div class="question-body">
-              <p class="question-text">{{ item.query }}</p>
-              <div v-if="item.gold_chunk_ids" class="question-chunk">
-                黄金Chunk: {{ item.gold_chunk_ids.slice(0, 3).join(', ') }}
-                <span v-if="item.gold_chunk_ids.length > 3">...等{{ item.gold_chunk_ids.length }}个</span>
-              </div>
-              <div v-if="item.gold_answer" class="question-answer">
-                黄金答案: {{ item.gold_answer.slice(0, 150) }}
-                <span v-if="item.gold_answer.length > 150">...</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div class="preview-questions" v-if="previewQuestions && previewQuestions.length > 0">
+        <h4>问题列表 (共{{ previewPagination.total }}条)</h4>
+        <a-table
+          :dataSource="previewQuestions"
+          :columns="displayedQuestionColumns"
+          :pagination="paginationConfig"
+          size="small"
+          :rowKey="(_, index) => index"
+          :loading="previewPagination.loading"
+        >
+          <template #bodyCell="{ column, record, index }">
+            <template v-if="column.key === 'index'">
+              <span class="question-num">Q{{ (previewPagination.current - 1) * previewPagination.pageSize + index + 1 }}</span>
+            </template>
+            <template v-if="column.key === 'query'">
+              <a-tooltip :title="record?.query || ''" placement="topLeft">
+                <div class="question-text">{{ record?.query || '' }}</div>
+              </a-tooltip>
+            </template>
+            <template v-if="column.key === 'gold_chunk_ids'">
+              <a-tooltip v-if="record?.gold_chunk_ids && record.gold_chunk_ids.length > 0" :title="record.gold_chunk_ids.join(', ')" placement="topLeft">
+                <div class="question-chunk">
+                  {{ record.gold_chunk_ids.slice(0, 3).join(', ') }}
+                  <span v-if="record.gold_chunk_ids.length > 3">...等{{ record.gold_chunk_ids.length }}个</span>
+                </div>
+              </a-tooltip>
+              <span v-else class="no-data">-</span>
+            </template>
+            <template v-if="column.key === 'gold_answer'">
+              <a-tooltip v-if="record?.gold_answer" :title="record.gold_answer" placement="topLeft">
+                <div class="question-answer">
+                  {{ record.gold_answer }}
+                </div>
+              </a-tooltip>
+              <span v-else class="no-data">-</span>
+            </template>
+          </template>
+        </a-table>
       </div>
     </div>
   </a-modal>
@@ -177,7 +191,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
+import { ref, reactive, onMounted, computed } from 'vue';
 import { message, Modal } from 'ant-design-vue';
 import {
   UploadOutlined,
@@ -212,6 +226,64 @@ const generateModalVisible = ref(false);
 const previewModalVisible = ref(false);
 const previewData = ref(null);
 const previewQuestions = ref([]);
+const previewPagination = ref({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  loading: false
+});
+
+// 表格列定义
+const questionColumns = [
+  {
+    title: '#',
+    key: 'index',
+    width: 60,
+    align: 'center'
+  },
+  {
+    title: '问题',
+    dataIndex: 'query',
+    key: 'query',
+    width: 280,
+    ellipsis: false
+  },
+  {
+    title: '黄金Chunk',
+    dataIndex: 'gold_chunk_ids',
+    key: 'gold_chunk_ids',
+    width: 200,
+    ellipsis: false
+  },
+  {
+    title: '黄金答案',
+    dataIndex: 'gold_answer',
+    key: 'gold_answer',
+    width: 420,
+    ellipsis: false
+  }
+];
+
+const displayedQuestionColumns = computed(() => {
+  if (previewData.value && previewData.value.has_gold_chunks === false) {
+    return questionColumns.filter(c => c.key !== 'gold_chunk_ids');
+  }
+  return questionColumns;
+});
+
+// 分页配置
+const paginationConfig = computed(() => ({
+  current: previewPagination.value.current,
+  pageSize: previewPagination.value.pageSize,
+  total: previewPagination.value.total,
+  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+  showSizeChanger: true,
+  pageSizeOptions: ['5', '10', '20', '50'],
+  showQuickJumper: true,
+  size: 'small',
+  onChange: handlePageChange,
+  onShowSizeChange: handlePageSizeChange
+}));
 
 // 加载基准列表
 const loadBenchmarks = async () => {
@@ -264,13 +336,71 @@ const onGenerateSuccess = () => {
   emit('refresh');
 };
 
+// 分页处理函数
+const handlePageChange = (page, pageSize) => {
+  previewPagination.value.current = page;
+  previewPagination.value.pageSize = pageSize;
+  loadPreviewQuestions();
+};
+
+const handlePageSizeChange = (current, size) => {
+  previewPagination.value.current = 1;
+  previewPagination.value.pageSize = size;
+  loadPreviewQuestions();
+};
+
+// 加载预览问题（分页）
+const loadPreviewQuestions = async () => {
+  if (!previewData.value?.benchmark_id) return;
+
+  try {
+    previewPagination.value.loading = true;
+    const response = await evaluationApi.getBenchmarkByDb(
+      props.databaseId,
+      previewData.value.benchmark_id,
+      previewPagination.value.current,
+      previewPagination.value.pageSize
+    );
+
+    if (response.message === 'success') {
+      previewQuestions.value = response.data.questions || [];
+      previewPagination.value.total = response.data.pagination?.total_questions || 0;
+    }
+  } catch (error) {
+    console.error('加载预览问题失败:', error);
+    message.error('加载预览问题失败');
+  } finally {
+    previewPagination.value.loading = false;
+  }
+};
+
 // 预览基准
 const previewBenchmark = async (benchmark) => {
   try {
-    const response = await evaluationApi.getBenchmarkByDb(props.databaseId, benchmark.benchmark_id);
+    // 重置分页状态
+    previewPagination.value = {
+      current: 1,
+      pageSize: 10,
+      total: 0,
+      loading: false
+    };
+
+    const response = await evaluationApi.getBenchmarkByDb(
+      props.databaseId,
+      benchmark.benchmark_id,
+      previewPagination.value.current,
+      previewPagination.value.pageSize
+    );
+
     if (response.message === 'success') {
-      previewData.value = response.data;
+      // 保存基准ID用于后续分页请求
+      previewData.value = {
+        ...response.data,
+        benchmark_id: benchmark.benchmark_id  // 手动添加benchmark_id
+      };
       previewQuestions.value = response.data.questions || [];
+      previewPagination.value.total = response.data.pagination?.total_questions || 0;
+      console.log('预览问题数据:', response.data.questions); // 调试信息
       previewModalVisible.value = true;
     }
   } catch (error) {
@@ -563,42 +693,70 @@ onMounted(() => {
       color: var(--gray-900);
     }
 
-    .question-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
+    .question-num {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-700);
     }
 
-    .question-item {
-      padding: 16px;
-      background: var(--gray-50);
-      border-radius: 8px;
-      border: 1px solid var(--gray-200);
+    .question-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--gray-800);
+      word-break: break-all;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-height: 6em; // 4行 * 1.5em line-height
+      cursor: pointer;
+    }
 
-      .question-header {
-        margin-bottom: 8px;
+    .question-chunk,
+    .question-answer {
+      font-size: 13px;
+      color: var(--gray-600);
+      word-break: break-all;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-height: 6em; // 4行 * 1.5em line-height for 13px font
+      cursor: pointer;
+    }
 
-        .question-num {
-          font-size: 14px;
-          font-weight: 600;
-          color: var(--gray-700);
-        }
+    .no-data {
+      color: var(--gray-400);
+      font-style: italic;
+    }
+
+    :deep(.ant-table) {
+      .ant-table-thead > tr > th {
+        background-color: var(--gray-50);
+        border-bottom: 1px solid var(--gray-200);
+        font-weight: 600;
+        font-size: 13px;
+        padding: 8px 12px;
+        white-space: nowrap;
       }
 
-      .question-body {
-        .question-text {
-          margin: 0 0 12px;
-          font-size: 14px;
-          line-height: 1.6;
-          color: var(--gray-800);
-        }
+      .ant-table-tbody > tr > td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--gray-150);
+        font-size: 13px;
+        vertical-align: top;
+        line-height: 1.4;
+      }
 
-        .question-chunk,
-        .question-answer {
-          margin: 8px 0;
-          font-size: 13px;
-          color: var(--gray-600);
-        }
+      .ant-table-tbody > tr:hover > td {
+        background-color: var(--gray-50);
+      }
+
+      // 确保表格单元格内容可以换行
+      .ant-table-cell {
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        word-break: break-all !important;
       }
     }
   }

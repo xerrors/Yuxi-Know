@@ -136,8 +136,8 @@ class EvaluationService:
             logger.error(f"获取评估基准详情失败: {e}")
             raise
 
-    async def get_benchmark_detail_by_db(self, db_id: str, benchmark_id: str) -> dict[str, Any]:
-        """根据 db_id 直接获取评估基准详情"""
+    async def get_benchmark_detail_by_db(self, db_id: str, benchmark_id: str, page: int = 1, page_size: int = 10) -> dict[str, Any]:
+        """根据 db_id 获取评估基准详情（支持分页）"""
         try:
             kb_instance = knowledge_base.get_kb(db_id)
             benchmarks_map = kb_instance.benchmarks_meta.get(db_id, {})
@@ -145,14 +145,46 @@ class EvaluationService:
                 raise ValueError("Benchmark not found")
             meta = benchmarks_map[benchmark_id]
             data_file_path = meta.get("benchmark_file")
+
+            # 获取总问题数和分页数据
+            total_questions = meta.get("question_count", 0)
             questions = []
+
             if data_file_path and os.path.exists(data_file_path):
+                # 计算分页范围
+                start_index = (page - 1) * page_size
+                end_index = start_index + page_size
+
+                # 读取指定范围的问题
                 with open(data_file_path, encoding="utf-8") as f:
+                    current_index = 0
                     for line in f:
-                        if line.strip():
+                        if not line.strip():
+                            continue
+
+                        # 只处理指定范围内的问题
+                        if current_index >= start_index and current_index < end_index:
                             questions.append(json.loads(line))
+                        elif current_index >= end_index:
+                            break  # 已经读取到足够的问题，停止读取
+
+                        current_index += 1
+
+            # 计算分页信息
+            total_pages = (total_questions + page_size - 1) // page_size
+
             meta_with_q = meta.copy()
-            meta_with_q["questions"] = questions
+            meta_with_q.update({
+                "questions": questions,
+                "pagination": {
+                    "current_page": page,
+                    "page_size": page_size,
+                    "total_questions": total_questions,
+                    "total_pages": total_pages,
+                    "has_next": page < total_pages,
+                    "has_prev": page > 1
+                }
+            })
             return meta_with_q
         except Exception as e:
             logger.error(f"获取评估基准详情失败: {e}")
@@ -556,7 +588,8 @@ class EvaluationService:
                             f"基于以下上下文信息，请回答用户的问题。\n\n"
                             f"上下文信息：{context_text}\n\n"
                             f"用户问题：{question_data["query"]}\n\n"
-                            "请根据上下文信息准确回答问题。如果上下文中没有相关信息，请说明。\n\n"
+                            "请根据上下文信息准确回答问题。\n\n"
+                            "如果上下文中缺少相关信息，请回答“信息不足，无法回答”。\n\n"
                         )
 
                         # 生成答案 - 使用 asyncio.to_thread 避免阻塞事件循环
@@ -728,7 +761,14 @@ class EvaluationService:
             raise
         # 索引与回退逻辑已移除，统一通过 db_id 定位
 
-    async def get_evaluation_results_by_db(self, db_id: str, task_id: str) -> dict[str, Any]:
+    async def get_evaluation_results_by_db(
+        self,
+        db_id: str,
+        task_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        error_only: bool = False
+    ) -> dict[str, Any]:
         result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
         if not os.path.exists(result_file_path):
             task = await tasker.get_task(task_id)
@@ -740,8 +780,63 @@ class EvaluationService:
                     "message": task.message,
                 }
             raise ValueError(f"Result not found for task {task_id}")
+
+        # 加载JSON文件
         with open(result_file_path, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+
+        # 如果是分页请求，处理详细结果
+        if page and page_size:
+            all_results = data.get("interim_results", data.get("results", []))
+
+            # 如果只要错误结果，先过滤
+            if error_only:
+                filtered_results = []
+                for item in all_results:
+                    # 检查答案评分是否为错误（score <= 0.5）
+                    if item.get("metrics", {}).get("score", 1.0) <= 0.5:
+                        filtered_results.append(item)
+                        continue
+
+                    # 检查检索指标是否明显偏低
+                    metrics = item.get("metrics", {})
+                    has_low_recall = any(
+                        metrics.get(k, 1.0) < 0.3
+                        for k in metrics
+                        if k.startswith("recall@")
+                    )
+                    if has_low_recall:
+                        filtered_results.append(item)
+                all_results = filtered_results
+
+            # 计算分页
+            total = len(all_results)
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size
+            paged_results = all_results[start_idx:end_idx]
+
+            # 返回分页数据
+            return {
+                "task_id": data.get("task_id", task_id),
+                "status": data.get("status"),
+                "started_at": data.get("started_at"),
+                "completed_at": data.get("completed_at"),
+                "total_questions": data.get("total_questions", 0),
+                "completed_questions": data.get("completed_questions", 0),
+                "overall_score": data.get("overall_score"),
+                "retrieval_config": data.get("retrieval_config"),
+                "interim_results": paged_results,
+                "pagination": {
+                    "current_page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": (total + page_size - 1) // page_size,
+                    "error_only": error_only
+                }
+            }
+
+        # 非分页请求，返回完整数据（保持向后兼容）
+        return data
 
     async def delete_evaluation_result_by_db(self, db_id: str, task_id: str) -> None:
         result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
