@@ -200,6 +200,7 @@ class LightRagKB(KnowledgeBase):
     def _get_embedding_func(self, embed_info: dict):
         """获取 embedding 函数"""
         config_dict = get_embedding_config(embed_info)
+        logger.debug(f"Embedding config dict: {config_dict}")
 
         if config_dict.get("model_id") and config_dict["model_id"].startswith("ollama"):
             from lightrag.llm.ollama import ollama_embed
@@ -219,15 +220,22 @@ class LightRagKB(KnowledgeBase):
                 ),
             )
 
+        # 尝试获取模型名称，支持多种键名以保持兼容性
+        if "name" in config_dict and config_dict["name"]:
+            model_name = config_dict["name"]
+        elif "model" in config_dict and config_dict["model"]:
+            model_name = config_dict["model"]
+        else:
+            raise ValueError(f"Neither 'name' nor 'model' found in config_dict or both are empty: {config_dict}")
         return EmbeddingFunc(
             embedding_dim=config_dict["dimension"],
             max_token_size=8192,
             func=lambda texts: openai_embed(
                 texts=texts,
-                model=config_dict["model"],
+                model=model_name,
                 api_key=config_dict["api_key"],
                 base_url=config_dict["base_url"].replace("/embeddings", ""),
-            ),
+            )
         )
 
     async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
