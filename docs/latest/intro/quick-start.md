@@ -26,7 +26,32 @@ cd Yuxi-Know
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
-#### 2. 配置环境变量
+#### 2. 项目启动
+
+** 方法 1**：使用 init 脚本（推荐）
+
+我们提供了自动化的初始化脚本，可以帮您完成环境配置和 Docker 镜像拉取：
+
+```bash
+# Linux/macOS
+./scripts/init.sh
+
+# Windows PowerShell
+.\scripts\init.ps1
+```
+
+脚本会：
+- 检查并创建 `.env` 文件
+- 提示您输入 `SILICONFLOW_API_KEY`（必需）
+- 提示您输入 `TAVILY_API_KEY`（可选，用于搜索服务）
+- 自动拉取所有必需的 Docker 镜像
+
+::: tip API Key 获取
+- [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度
+- [Tavily](https://app.tavily.com/) 获取搜索服务 API Key（可选）
+:::
+
+** 方法 2**：手动配置环境变量
 
 复制环境变量模板并编辑：
 
