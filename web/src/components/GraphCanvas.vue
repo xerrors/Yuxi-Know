@@ -37,7 +37,7 @@ const props = defineProps({
   highlightKeywords: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['ready', 'data-rendered'])
+const emit = defineEmits(['ready', 'data-rendered', 'node-click', 'edge-click', 'canvas-click'])
 
 const container = ref(null)
 const rootEl = ref(null)
@@ -88,6 +88,7 @@ function formatData() {
     data: {
       label: n[props.labelField] ?? n.name ?? String(n.id),
       degree: degrees.get(String(n.id)) || 0,
+      original: n // 保存原始数据
     },
   }))
 
@@ -95,7 +96,10 @@ function formatData() {
     id: e.id ? String(e.id) : `edge-${idx}`,
     source: String(e.source_id),
     target: String(e.target_id),
-    data: { label: e.type ?? '' },
+    data: { 
+      label: e.type ?? '',
+      original: e // 保存原始数据
+    },
   }))
 
   return { nodes, edges }
@@ -185,9 +189,38 @@ function initGraph() {
         unselectedState: 'inactive', // 未选中节点状态
         multiple: true,
         trigger: ['shift'],
+        // 禁用默认的选中效果，避免与自定义事件冲突
+        disableDefault: false,
       }
     ],
   })
+
+  // 绑定事件
+  graphInstance.on('node:click', (evt) => {
+    const { target } = evt
+    // 获取节点ID
+    const nodeId = target.id
+    // 从 graph data 中找到对应的节点数据
+    // 注意：G6 v5 的事件对象结构可能有所不同，这里假设 target.id 是节点ID
+    // 也可以通过 graphInstance.getNodeData(nodeId) 获取
+    const nodeData = graphInstance.getNodeData(nodeId)
+    emit('node-click', nodeData)
+  })
+
+  graphInstance.on('edge:click', (evt) => {
+    const { target } = evt
+    const edgeId = target.id
+    const edgeData = graphInstance.getEdgeData(edgeId)
+    emit('edge-click', edgeData)
+  })
+
+  graphInstance.on('canvas:click', (evt) => {
+    // 只有点击画布空白处才触发
+    if (!evt.target) {
+        emit('canvas-click')
+    }
+  })
+
   emit('ready', graphInstance)
 }
 

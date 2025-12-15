@@ -8,14 +8,49 @@
           <p>只有 LightRAG 类型的知识库支持知识图谱。</p>
         </div>
       </div>
-      <KnowledgeGraphViewer
-        v-else
-        :initial-database-id="databaseId"
-        :hide-db-selector="true"
-        :initial-limit="graphLimit"
-        :initial-depth="graphDepth"
-        ref="graphViewerRef"
-      />
+      <div v-else class="graph-wrapper">
+        <GraphCanvas
+          ref="graphRef"
+          :graph-data="graph.graphData"
+          @node-click="graph.handleNodeClick"
+          @edge-click="graph.handleEdgeClick"
+          @canvas-click="graph.handleCanvasClick"
+        >
+          <template #top>
+             <div class="compact-actions">
+                <a-input-search
+                  v-model:value="searchInput"
+                  placeholder="搜索实体"
+                  style="width: 200px"
+                  @search="onSearch"
+                  allow-clear
+                />
+                <a-button
+                  type="text"
+                  :icon="h(ReloadOutlined)"
+                  :loading="graph.fetching"
+                  @click="loadGraph"
+                  title="刷新"
+                />
+                <a-button
+                  type="text"
+                  :icon="h(SettingOutlined)"
+                  @click="showSettings = true"
+                  title="设置"
+                />
+             </div>
+          </template>
+        </GraphCanvas>
+
+        <!-- 详情浮动卡片 -->
+        <GraphDetailPanel
+          :visible="graph.showDetailDrawer"
+          :item="graph.selectedItem"
+          :type="graph.selectedItemType"
+          @close="graph.handleCanvasClick"
+          style="top: 50px; right: 10px;"
+        />
+      </div>
     </div>
 
     <!-- 设置模态框 -->
@@ -53,40 +88,19 @@
         </a-form>
       </div>
     </a-modal>
-
-    <!-- 导出功能暂禁，等待 LightRAG 库修复
-    <a-modal
-      v-model:open="showExportModal"
-      title="导出图谱数据"
-      @ok="handleExport"
-      ok-text="导出"
-      cancel-text="取消"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="导出格式">
-          <a-select v-model:value="exportOptions.format">
-            <a-select-option value="zip">ZIP 压缩包</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item>
-          <a-checkbox v-model:checked="exportOptions.include_vectors" disabled>
-            包含向量数据 (暂不支持)
-          </a-checkbox>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-    -->
-
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue';
+import { ref, computed, watch, nextTick, onUnmounted, reactive, h } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
-import { ReloadOutlined } from '@ant-design/icons-vue';
-import KnowledgeGraphViewer from '@/components/KnowledgeGraphViewer.vue';
-import { h } from 'vue';
+import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue';
+import GraphCanvas from '@/components/GraphCanvas.vue';
+import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
 import { getKbTypeLabel } from '@/utils/kb_utils';
+import { unifiedApi } from '@/apis/graph_api';
+import { message } from 'ant-design-vue';
+import { useGraph } from '@/composables/useGraph';
 
 const props = defineProps({
   active: {
@@ -95,25 +109,19 @@ const props = defineProps({
   },
 });
 
-// 声明事件
-const emit = defineEmits(['toggleVisible']);
-
 const store = useDatabaseStore();
 
 const databaseId = computed(() => store.databaseId);
 const kbType = computed(() => store.database.kb_type);
 const kbTypeLabel = computed(() => getKbTypeLabel(kbType.value || 'lightrag'));
 
-const graphViewerRef = ref(null);
+const graphRef = ref(null);
 const showSettings = ref(false);
 const graphLimit = ref(50);
 const graphDepth = ref(2);
+const searchInput = ref('');
 
-const showExportModal = ref(false);
-const exportOptions = ref({
-  format: 'zip',
-  include_vectors: false,
-});
+const graph = reactive(useGraph(graphRef));
 
 // 计算属性：是否支持知识图谱
 const isGraphSupported = computed(() => {
@@ -124,104 +132,40 @@ const isGraphSupported = computed(() => {
 let pendingLoadTimer = null;
 
 const loadGraph = async () => {
-  console.log('loadGraph 调用:', {
-    hasRef: !!graphViewerRef.value,
-    hasLoadFullGraph: graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function'
-  });
+  if (!databaseId.value || !isGraphSupported.value) return;
 
-  // 等待一小段时间确保子组件已经完全初始化
-  await nextTick();
-
-  if (graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph === 'function') {
-    console.log('调用 loadFullGraph');
-    graphViewerRef.value.loadFullGraph();
-  } else {
-    console.warn('无法调用 loadFullGraph:', {
-      hasRef: !!graphViewerRef.value,
-      refValue: graphViewerRef.value,
-      hasMethod: graphViewerRef.value && typeof graphViewerRef.value.loadFullGraph
+  graph.fetching = true;
+  try {
+    const res = await unifiedApi.getSubgraph({
+      db_id: databaseId.value,
+      node_label: searchInput.value || '*',
+      max_nodes: graphLimit.value,
+      max_depth: graphDepth.value
     });
-  }
-};
 
-const clearGraph = () => {
-  if (graphViewerRef.value && typeof graphViewerRef.value.clearGraph === 'function') {
-    graphViewerRef.value.clearGraph();
+    if (res.success && res.data) {
+        graph.updateGraphData(res.data.nodes, res.data.edges);
+    }
+  } catch (e) {
+    console.error('Failed to load graph:', e);
+    message.error('加载图谱失败');
+  } finally {
+    graph.fetching = false;
   }
 };
 
 const applySettings = () => {
   showSettings.value = false;
-  // 设置已通过props传递给子组件，不需要额外操作
+  loadGraph();
 };
 
-// const handleExport = async () => {
-//   const dbId = store.databaseId;
-//   if (!dbId) {
-//     message.error('请先选择一个知识库');
-//     return;
-//   }
-//   try {
-//     const response = await fetch(`/api/knowledge/databases/${dbId}/export?format=${exportOptions.value.format}`, {
-//       headers: {
-//         ...userStore.getAuthHeaders()
-//       }
-//     });
-
-//     if (!response.ok) {
-//       const errorData = await response.json();
-//       throw new Error(errorData.detail || `导出失败: ${response.statusText}`);
-//     }
-
-//     const blob = await response.blob();
-//     const url = window.URL.createObjectURL(blob);
-//     const a = document.createElement('a');
-//     a.style.display = 'none';
-//     a.href = url;
-
-//     const disposition = response.headers.get('content-disposition');
-//     let filename = `export_${dbId}.zip`;
-//     if (disposition) {
-//         const filenameMatch = disposition.match(/filename="([^"]+)"/);
-//         if (filenameMatch && filenameMatch[1]) {
-//             filename = filenameMatch[1];
-//         }
-//     }
-//     a.download = filename;
-//     document.body.appendChild(a);
-//     a.click();
-//     window.URL.revokeObjectURL(url);
-//     document.body.removeChild(a);
-
-//     message.success('导出任务已开始');
-//     showExportModal.value = false;
-//   } catch (error) {
-//     console.error('导出图谱失败:', error);
-//     message.error(error.message || '导出图谱失败');
-//   }
-// };
+const onSearch = () => {
+    loadGraph();
+}
 
 const scheduleGraphLoad = (delay = 200) => {
-  console.log('scheduleGraphLoad 调用:', {
-    active: props.active,
-    supported: isGraphSupported.value,
-    databaseId: databaseId.value,
-    hasGraphViewer: !!graphViewerRef.value
-  });
-
   // 确保组件激活且数据库支持图谱功能
-  if (!props.active) {
-    console.log('组件未激活，跳过图谱加载');
-    return;
-  }
-
-  if (!isGraphSupported.value) {
-    console.log('数据库不支持图谱功能，跳过加载');
-    return;
-  }
-
-  if (!databaseId.value) {
-    console.log('没有选中数据库，跳过图谱加载');
+  if (!props.active || !isGraphSupported.value || !databaseId.value) {
     return;
   }
 
@@ -230,16 +174,8 @@ const scheduleGraphLoad = (delay = 200) => {
   }
   pendingLoadTimer = setTimeout(async () => {
     await nextTick();
-    // 再次检查条件，防止在延迟期间状态发生变化
     if (props.active && isGraphSupported.value && databaseId.value) {
-      console.log('执行图谱加载');
       await loadGraph();
-    } else {
-      console.log('延迟检查时条件不满足:', {
-        active: props.active,
-        supported: isGraphSupported.value,
-        databaseId: databaseId.value
-      });
     }
   }, delay);
 };
@@ -256,9 +192,7 @@ watch(
 );
 
 watch(databaseId, () => {
-  clearGraph();
-
-  // 只有在新数据库支持图谱时才加载
+  graph.clearGraph();
   if (isGraphSupported.value) {
     scheduleGraphLoad(300);
   }
@@ -266,7 +200,7 @@ watch(databaseId, () => {
 
 watch(isGraphSupported, (supported) => {
   if (!supported) {
-    clearGraph();
+    graph.clearGraph();
     return;
   }
   scheduleGraphLoad(200);
@@ -287,12 +221,34 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .graph-container-compact {
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.graph-wrapper {
+    height: 100%;
+    width: 100%;
+    position: relative;
+}
+
+.compact-actions {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--color-trans-light);
+    backdrop-filter: blur(4px);
+    padding: 6px;
+    border-radius: 8px;
+    box-shadow: 0 0px 4px var(--shadow-3);
 }
 
 .graph-disabled {

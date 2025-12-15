@@ -13,13 +13,23 @@
       title="图数据库"
     >
       <template #actions>
+        <div class="db-selector">
         <div class="status-wrapper">
           <div class="status-indicator" :class="graphStatusClass"></div>
           <span class="status-text">{{ graphStatusText }}</span>
         </div>
-        <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
+          <span class="label">知识库: </span>
+          <a-select
+            v-model:value="state.selectedDbId"
+            style="width: 200px"
+            :options="state.dbOptions"
+            @change="handleDbChange"
+            :loading="state.loadingDatabases"
+          />
+        </div>
+        <!-- <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
           Neo4j 浏览器
-        </a-button>
+        </a-button> -->
         <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
         <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
           <SyncOutlined v-if="!state.indexing"/> 为{{ unindexedCount }}个节点添加索引
@@ -30,15 +40,18 @@
     <div class="container-outter">
       <GraphCanvas
         ref="graphRef"
-        :graph-data="graphData"
+        :graph-data="graph.graphData"
         :highlight-keywords="[state.searchInput]"
+        @node-click="graph.handleNodeClick"
+        @edge-click="graph.handleEdgeClick"
+        @canvas-click="graph.handleCanvasClick"
       >
         <template #top>
           <div class="actions">
             <div class="actions-left">
               <a-input
                 v-model:value="state.searchInput"
-                placeholder="输入要查询的实体"
+                :placeholder="isNeo4j ? '输入要查询的实体' : '输入要查询的实体 (*为全部)'"
                 style="width: 300px"
                 @keydown.enter="onSearch"
                 allow-clear
@@ -47,44 +60,61 @@
                   <component :is="state.searchLoading ? LoadingOutlined : SearchOutlined" @click="onSearch" />
                 </template>
               </a-input>
+              <a-input
+                v-model:value="sampleNodeCount"
+                placeholder="查询数量"
+                style="width: 100px"
+                @keydown.enter="loadSampleNodes"
+                :loading="graph.fetching"
+              >
+                <template #suffix>
+                  <component :is="graph.fetching ? LoadingOutlined : ReloadOutlined" @click="loadSampleNodes" />
+                </template>
+              </a-input>
             </div>
             <div class="actions-right">
               <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
                 说明
               </a-button>
-              <a-input
-                v-model:value="sampleNodeCount"
-                placeholder="查询三元组数量"
-                style="width: 100px"
-                @keydown.enter="loadSampleNodes"
-                :loading="state.fetching"
-              >
-                <template #suffix>
-                  <component :is="state.fetching ? LoadingOutlined : ReloadOutlined" @click="loadSampleNodes" />
-                </template>
-              </a-input>
             </div>
           </div>
         </template>
         <template #content>
-          <a-empty v-show="graphData.nodes.length === 0" style="padding: 4rem 0;"/>
+          <a-empty v-show="graph.graphData.nodes.length === 0" style="padding: 4rem 0;"/>
         </template>
         <template #bottom>
           <div class="footer">
             <GraphInfoPanel
+              v-if="isNeo4j"
               :graph-info="graphInfo"
-              :graph-data="graphData"
+              :graph-data="graph.graphData"
               :unindexed-count="unindexedCount"
               :model-matched="modelMatched"
               @index-nodes="indexNodes"
               @export-data="exportGraphData"
             />
+            <LightRAGInfoPanel
+              v-else
+              :stats="state.lightragStats"
+              :graph-data="graph.graphData"
+              :database-name="getDatabaseName()"
+              @export-data="exportGraphData"
+            />
           </div>
         </template>
-      </GraphCanvas>
-    </div>
+        </GraphCanvas>
+        <!-- 详情浮动卡片 -->
+        <GraphDetailPanel
+          :visible="graph.showDetailDrawer"
+          :item="graph.selectedItem"
+          :type="graph.selectedItemType"
+          :nodes="graph.graphData.nodes"
+          @close="graph.handleCanvasClick"
+          style="width: 380px;"
+        />
+      </div>
 
-    <a-modal
+      <a-modal
       :open="state.showModal" title="上传文件"
       @ok="addDocumentByFile"
       @cancel="() => state.showModal = false"
@@ -122,7 +152,7 @@
       :footer="null"
       width="600px"
     >
-      <div class="info-content">
+      <div class="info-content" v-if="isNeo4j">
         <p>本页面展示的是 Neo4j 图数据库中的知识图谱信息。</p>
         <p>具体展示内容包括：</p>
         <ul>
@@ -132,15 +162,13 @@
         <p>注意：</p>
         <ul>
           <li>这里仅展示用户上传的实体和关系，不包含知识库中自动创建的图谱。</li>
-          <li>查询逻辑基于 <code>graphbase.py</code> 中的 <code>get_sample_nodes</code> 方法实现：</li>
+          <li>查询逻辑基于 <code>graphbase.py</code> 中的 <code>get_sample_nodes</code> 方法实现。</li>
         </ul>
-        <pre><code>MATCH (n:Entity)-[r]-&gt;(m:Entity)
-RETURN
-    {id: elementId(n), name: n.name} AS h,
-    {type: r.type, source_id: elementId(n), target_id: elementId(m)} AS r,
-    {id: elementId(m), name: m.name} AS t
-LIMIT $num</code></pre>
-        <p>如需查看完整的 Neo4j 数据库内容，请使用 "Neo4j 浏览器" 按钮访问原生界面。</p>
+      </div>
+      <div class="info-content" v-else>
+        <p>本页面展示的是 LightRAG 知识库生成的图谱信息。</p>
+        <p>数据来源于选定的知识库实例。</p>
+        <p>支持通过实体名称进行模糊搜索，输入 "*" 可查看采样全图。</p>
       </div>
     </a-modal>
   </div>
@@ -152,10 +180,14 @@ import { message } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
 import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined, HighlightOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
-import { neo4jApi } from '@/apis/graph_api';
+import { neo4jApi, unifiedApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 import GraphCanvas from '@/components/GraphCanvas.vue';
 import GraphInfoPanel from '@/components/GraphInfoPanel.vue';
+import LightRAGInfoPanel from '@/components/LightRAGInfoPanel.vue';
+import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
+import UploadModal from '@/components/FileUploadModal.vue';
+import { useGraph } from '@/composables/useGraph';
 
 const configStore = useConfigStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model);
@@ -165,14 +197,12 @@ const graphRef = ref(null)
 const graphInfo = ref(null)
 const fileList = ref([]);
 const sampleNodeCount = ref(100);
-const graphData = reactive({
-  nodes: [],
-  edges: [],
-});
+
+const graph = reactive(useGraph(graphRef));
 
 const state = reactive({
-  fetching: false,
   loadingGraphInfo: false,
+  loadingDatabases: false,
   searchInput: '',
   searchLoading: false,
   showModal: false,
@@ -180,12 +210,65 @@ const state = reactive({
   processing: false,
   indexing: false,
   showPage: true,
+  selectedDbId: 'neo4j',
+  dbOptions: [],
+  lightragStats: null,
 })
+
+const isNeo4j = computed(() => state.selectedDbId === 'neo4j');
 
 // 计算未索引节点数量
 const unindexedCount = computed(() => {
   return graphInfo.value?.unindexed_node_count || 0;
 });
+
+const loadDatabases = async () => {
+  state.loadingDatabases = true;
+  try {
+    const res = await unifiedApi.getGraphs();
+    if (res.success && res.data) {
+      state.dbOptions = res.data.map(db => ({
+        label: `${db.name} (${db.type})`,
+        value: db.id,
+        type: db.type
+      }));
+
+      // If no selection or invalid selection, select first
+      if (!state.selectedDbId || !state.dbOptions.find(o => o.value === state.selectedDbId)) {
+        if (state.dbOptions.length > 0) {
+          state.selectedDbId = state.dbOptions[0].value;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load databases:', error);
+  } finally {
+    state.loadingDatabases = false;
+  }
+};
+
+const handleDbChange = () => {
+  // Clear current data
+  graph.clearGraph();
+  state.searchInput = '';
+  state.lightragStats = null;
+
+  if (isNeo4j.value) {
+    loadGraphInfo();
+  } else {
+    // Also load stats for LightRAG
+    loadLightRAGStats();
+  }
+  loadSampleNodes();
+};
+
+const loadLightRAGStats = () => {
+  unifiedApi.getStats(state.selectedDbId).then(res => {
+    if(res.success) {
+      state.lightragStats = res.data;
+    }
+  }).catch(e => console.error(e));
+};
 
 const loadGraphInfo = () => {
   state.loadingGraphInfo = true
@@ -222,20 +305,24 @@ const addDocumentByFile = () => {
 };
 
 const loadSampleNodes = () => {
-  state.fetching = true
-  neo4jApi.getSampleNodes('neo4j', sampleNodeCount.value)
+  graph.fetching = true
+
+  unifiedApi.getSubgraph({
+    db_id: state.selectedDbId,
+    node_label: '*',
+    max_nodes: sampleNodeCount.value
+  })
     .then((data) => {
-      graphData.nodes = data.result.nodes
-      graphData.edges = data.result.edges
-      console.log(graphData)
-      // 初次加载后兜底刷新一次，避免容器初次可见尺寸未稳定
-      setTimeout(() => graphRef.value?.refreshGraph?.(), 500)
+      // Normalize data structure if needed
+      const result = data.data;
+      graph.updateGraphData(result.nodes, result.edges);
+      console.log(graph.graphData)
     })
     .catch((error) => {
       console.error(error)
       message.error(error.message || '加载节点失败');
     })
-    .finally(() => state.fetching = false)
+    .finally(() => graph.fetching = false)
 }
 
 const onSearch = () => {
@@ -244,29 +331,33 @@ const onSearch = () => {
     return
   }
 
-  if (graphInfo?.value?.embed_model_name !== cur_embed_model.value) {
+  if (isNeo4j.value && graphInfo?.value?.embed_model_name !== cur_embed_model.value) {
     // 可选：提示模型不一致
   }
 
-  if (!state.searchInput) {
+  if (!state.searchInput && isNeo4j.value) {
     message.error('请输入要查询的实体')
     return
   }
 
   state.searchLoading = true
-  neo4jApi.queryNode(state.searchInput)
+
+  unifiedApi.getSubgraph({
+    db_id: state.selectedDbId,
+    node_label: state.searchInput || '*',
+    max_nodes: sampleNodeCount.value
+  })
     .then((data) => {
-      if (!data.result || !data.result.nodes || !data.result.edges) {
+      const result = data.data;
+      if (!result || !result.nodes || !result.edges) {
         throw new Error('返回数据格式不正确');
       }
-      graphData.nodes = data.result.nodes
-      graphData.edges = data.result.edges
-      if (graphData.nodes.length === 0) {
+      graph.updateGraphData(result.nodes, result.edges);
+      if (graph.graphData.nodes.length === 0) {
         message.info('未找到相关实体')
       }
       console.log(data)
-      console.log(graphData)
-      graphRef.value?.refreshGraph?.()
+      console.log(graph.graphData)
     })
     .catch((error) => {
       console.error('查询错误:', error);
@@ -275,8 +366,9 @@ const onSearch = () => {
     .finally(() => state.searchLoading = false)
 };
 
-onMounted(() => {
-  loadGraphInfo();
+onMounted(async () => {
+  await loadDatabases();
+  loadGraphInfo(); // Load default (Neo4j) info
   loadSampleNodes();
 });
 
@@ -332,9 +424,10 @@ const indexNodes = () => {
 
 const exportGraphData = () => {
   const dataStr = JSON.stringify({
-    nodes: graphData.nodes,
-    edges: graphData.edges,
-    graphInfo: graphInfo.value,
+    nodes: graph.graphData.nodes,
+    edges: graph.graphData.edges,
+    graphInfo: isNeo4j.value ? graphInfo.value : state.lightragStats,
+    source: state.selectedDbId,
     exportTime: new Date().toISOString()
   }, null, 2);
 
@@ -342,7 +435,7 @@ const exportGraphData = () => {
   const url = URL.createObjectURL(dataBlob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `graph-data-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `graph-data-${state.selectedDbId}-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -360,6 +453,11 @@ const openLink = (url) => {
   window.open(url, '_blank')
 }
 
+const getDatabaseName = () => {
+  const selectedDb = state.dbOptions.find(db => db.value === state.selectedDbId);
+  return selectedDb ? selectedDb.label : state.selectedDbId;
+};
+
 </script>
 
 <style lang="less" scoped>
@@ -371,6 +469,18 @@ const openLink = (url) => {
 
   .header-container {
     height: @graph-header-height;
+  }
+}
+
+.db-selector {
+  display: flex;
+  align-items: center;
+  margin-right: 20px;
+
+  .label {
+    margin-right: 8px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
   }
 }
 
