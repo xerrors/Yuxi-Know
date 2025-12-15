@@ -12,6 +12,7 @@ pull:
 	bash docker/pull_image.sh minio/minio:RELEASE.2023-03-20T20-16-18Z
 	bash docker/pull_image.sh ghcr.io/astral-sh/uv:0.7.2
 	bash docker/pull_image.sh nginx:alpine
+	bash docker/pull_image.sh quay.io/coreos/etcd:v3.5.5
 
 start:
 	@if [ ! -f .env ]; then \
