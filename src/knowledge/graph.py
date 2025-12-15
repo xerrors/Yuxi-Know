@@ -64,6 +64,22 @@ class GraphDatabase:
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
 
+        def _process_record_props(record):
+            """处理记录中的属性：扁平化 properties 并移除 embedding"""
+            if record is None:
+                return None
+            
+            # 复制一份以避免修改原字典
+            data = dict(record)
+            props = data.pop("properties", {}) or {}
+            
+            # 移除 embedding
+            if "embedding" in props:
+                del props["embedding"]
+            
+            # 合并属性（优先保留原字典中的 id, name, type 等核心字段）
+            return {**props, **data}
+
         def query(tx, num):
             """Note: 使用连通性查询获取集中的节点子图"""
             # 首先尝试获取一个连通的子图
@@ -104,17 +120,18 @@ class GraphDatabase:
                 OPTIONAL MATCH (n)-[rel]-(m)
                 WHERE m IN final_nodes AND elementId(n) < elementId(m)
                 RETURN
-                    {id: elementId(n), name: n.name} AS h,
+                    {id: elementId(n), name: n.name, properties: properties(n)} AS h,
                     CASE WHEN rel IS NOT NULL THEN
                         {
                             id: elementId(rel),
                             type: rel.type,
                             source_id: elementId(startNode(rel)),
-                            target_id: elementId(endNode(rel))
+                            target_id: elementId(endNode(rel)),
+                            properties: properties(rel)
                         }
                     ELSE null END AS r,
                     CASE WHEN m IS NOT NULL THEN
-                        {id: elementId(m), name: m.name}
+                        {id: elementId(m), name: m.name, properties: properties(m)}
                     ELSE null END AS t
                 """
 
@@ -124,7 +141,7 @@ class GraphDatabase:
                 node_ids = set()
 
                 for item in results:
-                    h_node = item["h"]
+                    h_node = _process_record_props(item["h"])
 
                     # 始终添加头节点
                     if h_node["id"] not in node_ids:
@@ -133,14 +150,15 @@ class GraphDatabase:
 
                     # 只有当边和尾节点都存在时才处理
                     if item["r"] is not None and item["t"] is not None:
-                        t_node = item["t"]
+                        t_node = _process_record_props(item["t"])
+                        r_edge = _process_record_props(item["r"])
 
                         # 避免重复添加尾节点
                         if t_node["id"] not in node_ids:
                             formatted_results["nodes"].append(t_node)
                             node_ids.add(t_node["id"])
 
-                        formatted_results["edges"].append(item["r"])
+                        formatted_results["edges"].append(r_edge)
 
                 # 如果连通查询返回的节点数不足，补充更多节点
                 if len(formatted_results["nodes"]) < num:
@@ -150,14 +168,14 @@ class GraphDatabase:
                     supplement_query = """
                     MATCH (n:Entity)
                     WHERE NOT elementId(n) IN $existing_ids
-                    RETURN {id: elementId(n), name: n.name} AS node
+                    RETURN {id: elementId(n), name: n.name, properties: properties(n)} AS node
                     LIMIT $count
                     """
 
                     supplement_results = tx.run(supplement_query, existing_ids=list(node_ids), count=remaining_count)
 
                     for item in supplement_results:
-                        node = item["node"]
+                        node = _process_record_props(item["node"])
                         formatted_results["nodes"].append(node)
                         node_ids.add(node["id"])
 
@@ -170,14 +188,15 @@ class GraphDatabase:
                 MATCH (n:Entity)-[r]-(m:Entity)
                 WHERE elementId(n) < elementId(m)
                 RETURN
-                    {id: elementId(n), name: n.name} AS h,
+                    {id: elementId(n), name: n.name, properties: properties(n)} AS h,
                     {
                         id: elementId(r),
                         type: r.type,
                         source_id: elementId(startNode(r)),
-                        target_id: elementId(endNode(r))
+                        target_id: elementId(endNode(r)),
+                        properties: properties(r)
                     } AS r,
-                    {id: elementId(m), name: m.name} AS t
+                    {id: elementId(m), name: m.name, properties: properties(m)} AS t
                 LIMIT $num
                 """
                 results = tx.run(fallback_query, num=int(num))
@@ -185,8 +204,9 @@ class GraphDatabase:
                 node_ids = set()
 
                 for item in results:
-                    h_node = item["h"]
-                    t_node = item["t"]
+                    h_node = _process_record_props(item["h"])
+                    t_node = _process_record_props(item["t"])
+                    r_edge = _process_record_props(item["r"])
 
                     # 避免重复添加节点
                     if h_node["id"] not in node_ids:
@@ -196,7 +216,7 @@ class GraphDatabase:
                         formatted_results["nodes"].append(t_node)
                         node_ids.add(t_node["id"])
 
-                    formatted_results["edges"].append(item["r"])
+                    formatted_results["edges"].append(r_edge)
 
                 return formatted_results
 
@@ -240,18 +260,47 @@ class GraphDatabase:
                     return True
             return False
 
+        def _parse_node(node_data):
+            """解析节点数据，返回 (name, props)"""
+            if isinstance(node_data, dict):
+                props = node_data.copy()
+                name = props.pop("name", "")
+                return name, props
+            return str(node_data), {}
+
+        def _parse_relation(rel_data):
+            """解析关系数据，返回 (type, props)"""
+            if isinstance(rel_data, dict):
+                props = rel_data.copy()
+                rel_type = props.pop("type", "")
+                return rel_type, props
+            return str(rel_data), {}
+
         def _create_graph(tx, data):
             """添加一个三元组"""
             for entry in data:
+                h_name, h_props = _parse_node(entry.get("h"))
+                t_name, t_props = _parse_node(entry.get("t"))
+                r_type, r_props = _parse_relation(entry.get("r"))
+
+                if not h_name or not t_name or not r_type:
+                    continue
+
                 tx.run(
                     """
-                MERGE (h:Entity:Upload {name: $h})
-                MERGE (t:Entity:Upload {name: $t})
-                MERGE (h)-[r:RELATION {type: $r}]->(t)
+                MERGE (h:Entity:Upload {name: $h_name})
+                SET h += $h_props
+                MERGE (t:Entity:Upload {name: $t_name})
+                SET t += $t_props
+                MERGE (h)-[r:RELATION {type: $r_type}]->(t)
+                SET r += $r_props
                 """,
-                    h=entry["h"],
-                    t=entry["t"],
-                    r=entry["r"],
+                    h_name=h_name,
+                    h_props=h_props,
+                    t_name=t_name,
+                    t_props=t_props,
+                    r_type=r_type,
+                    r_props=r_props,
                 )
 
         def _create_vector_index(tx, dim):
@@ -272,6 +321,9 @@ class GraphDatabase:
             """获取没有embedding的节点列表"""
             # 构建参数字典，将列表转换为"param0"、"param1"等键值对形式
             params = {f"param{i}": name for i, name in enumerate(entity_names)}
+
+            if not params:
+                return []
 
             # 构建查询参数列表
             param_placeholders = ", ".join([f"${key}" for key in params.keys()])
@@ -315,20 +367,24 @@ class GraphDatabase:
             session.execute_write(_create_vector_index, getattr(cur_embed_info, "dimension", 1024))
 
             # 收集所有需要处理的实体名称，去重
-            all_entities = []
+            all_entities = set()
             for entry in triples:
-                if entry["h"] not in all_entities:
-                    all_entities.append(entry["h"])
-                if entry["t"] not in all_entities:
-                    all_entities.append(entry["t"])
+                h_name, _ = _parse_node(entry.get("h"))
+                t_name, _ = _parse_node(entry.get("t"))
+                if h_name:
+                    all_entities.add(h_name)
+                if t_name:
+                    all_entities.add(t_name)
+
+            all_entities_list = list(all_entities)
 
             # 筛选出没有embedding的节点
-            nodes_without_embedding = session.execute_read(_get_nodes_without_embedding, all_entities)
+            nodes_without_embedding = session.execute_read(_get_nodes_without_embedding, all_entities_list)
             if not nodes_without_embedding:
                 logger.info("所有实体已有embedding，无需重新计算")
                 return
 
-            logger.info(f"需要为{len(nodes_without_embedding)}/{len(all_entities)}个实体计算embedding")
+            logger.info(f"需要为{len(nodes_without_embedding)}/{len(all_entities_list)}个实体计算embedding")
 
             # 批量处理实体
             max_batch_size = 1024  # 限制此部分的主要是内存大小 1024 * 1024 * 4 / 1024 / 1024 = 4GB
@@ -597,30 +653,46 @@ class GraphDatabase:
 
         self.use_database(kgdb_name)
 
+        def _process_record_props(record):
+            """处理记录中的属性：扁平化 properties 并移除 embedding"""
+            if record is None:
+                return None
+            
+            # 复制一份以避免修改原字典
+            data = dict(record)
+            props = data.pop("properties", {}) or {}
+            
+            # 移除 embedding
+            if "embedding" in props:
+                del props["embedding"]
+            
+            # 合并属性（优先保留原字典中的 id, name, type 等核心字段）
+            return {**props, **data}
+
         def query(tx, entity_name, hops, limit):
             try:
                 query_str = """
                 WITH [
                     // 1跳出边
                     [(n {name: $entity_name})-[r1]->(m1) |
-                     {h: {id: elementId(n), name: n.name},
-                      r: {id: elementId(r1), type: r1.type, source_id: elementId(n), target_id: elementId(m1)},
-                      t: {id: elementId(m1), name: m1.name}}],
+                     {h: {id: elementId(n), name: n.name, properties: properties(n)},
+                      r: {id: elementId(r1), type: r1.type, source_id: elementId(n), target_id: elementId(m1), properties: properties(r1)},
+                      t: {id: elementId(m1), name: m1.name, properties: properties(m1)}}],
                     // 2跳出边
                     [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) |
-                     {h: {id: elementId(m1), name: m1.name},
-                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m1), target_id: elementId(m2)},
-                      t: {id: elementId(m2), name: m2.name}}],
+                     {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
+                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m1), target_id: elementId(m2), properties: properties(r2)},
+                      t: {id: elementId(m2), name: m2.name, properties: properties(m2)}}],
                     // 1跳入边
                     [(m1)-[r1]->(n {name: $entity_name}) |
-                     {h: {id: elementId(m1), name: m1.name},
-                      r: {id: elementId(r1), type: r1.type, source_id: elementId(m1), target_id: elementId(n)},
-                      t: {id: elementId(n), name: n.name}}],
+                     {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
+                      r: {id: elementId(r1), type: r1.type, source_id: elementId(m1), target_id: elementId(n), properties: properties(r1)},
+                      t: {id: elementId(n), name: n.name, properties: properties(n)}}],
                     // 2跳入边
                     [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) |
-                     {h: {id: elementId(m2), name: m2.name},
-                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m2), target_id: elementId(m1)},
-                      t: {id: elementId(m1), name: m1.name}}]
+                     {h: {id: elementId(m2), name: m2.name, properties: properties(m2)},
+                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m2), target_id: elementId(m1), properties: properties(r2)},
+                      t: {id: elementId(m1), name: m1.name, properties: properties(m1)}}]
                 ] AS all_results
                 UNWIND all_results AS result_list
                 UNWIND result_list AS item
@@ -636,9 +708,13 @@ class GraphDatabase:
                 formatted_results = {"nodes": [], "edges": [], "triples": []}
 
                 for item in results:
-                    formatted_results["nodes"].extend([item["h"], item["t"]])
-                    formatted_results["edges"].append(item["r"])
-                    formatted_results["triples"].append((item["h"]["name"], item["r"]["type"], item["t"]["name"]))
+                    h = _process_record_props(item["h"])
+                    r = _process_record_props(item["r"])
+                    t = _process_record_props(item["t"])
+                    
+                    formatted_results["nodes"].extend([h, t])
+                    formatted_results["edges"].append(r)
+                    formatted_results["triples"].append((h["name"], r["type"], t["name"]))
 
                 logger.debug(f"Query Results: {results}")
                 return formatted_results
