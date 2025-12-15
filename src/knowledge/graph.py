@@ -9,7 +9,7 @@ from neo4j import GraphDatabase as GD
 
 from src import config
 from src.models import select_embedding_model
-from src.storage.minio.client import get_minio_client, StorageError
+from src.storage.minio.client import get_minio_client
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
 
@@ -355,12 +355,12 @@ class GraphDatabase:
         temp_file_path = None
 
         try:
-            if parsed_url.scheme in ('http', 'https'):  # 如果是 URL
+            if parsed_url.scheme in ("http", "https"):  # 如果是 URL
                 logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
 
                 # 从 URL 解析 bucket_name 和 object_name
                 # URL 格式: http://host:port/bucket_name/object_name
-                path_parts = parsed_url.path.lstrip('/').split('/', 1)
+                path_parts = parsed_url.path.lstrip("/").split("/", 1)
                 if len(path_parts) < 2:
                     raise ValueError(f"无法解析 MinIO URL: {file_path}")
 
@@ -372,8 +372,10 @@ class GraphDatabase:
                 file_data = await minio_client.adownload_file(bucket_name, object_name)
 
                 # 创建临时文件保存下载的内容
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False, encoding='utf-8') as temp_file:
-                    temp_file.write(file_data.decode('utf-8'))
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+                ) as temp_file:
+                    temp_file.write(file_data.decode("utf-8"))
                     temp_file_path = temp_file.name
 
                 logger.info(f"文件已下载到临时路径: {temp_file_path}")
