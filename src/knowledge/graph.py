@@ -1,12 +1,15 @@
 import json
 import os
+import tempfile
 import traceback
 import warnings
+from urllib.parse import urlparse
 
 from neo4j import GraphDatabase as GD
 
 from src import config
 from src.models import select_embedding_model
+from src.storage.minio.client import get_minio_client, StorageError
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
 
@@ -347,15 +350,59 @@ class GraphDatabase:
         self.use_database(kgdb_name)  # 切换到指定数据库
         logger.info(f"Start adding entity to {kgdb_name} with {file_path}")
 
-        def read_triples(file_path):
-            with open(file_path, encoding="utf-8") as file:
-                for line in file:
-                    if line.strip():
-                        yield json.loads(line.strip())
+        # 检测 file_path 是否是 URL
+        parsed_url = urlparse(file_path)
+        temp_file_path = None
 
-        triples = list(read_triples(file_path))
+        try:
+            if parsed_url.scheme in ('http', 'https'):  # 如果是 URL
+                logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
 
-        await self.txt_add_vector_entity(triples, kgdb_name)
+                # 从 URL 解析 bucket_name 和 object_name
+                # URL 格式: http://host:port/bucket_name/object_name
+                path_parts = parsed_url.path.lstrip('/').split('/', 1)
+                if len(path_parts) < 2:
+                    raise ValueError(f"无法解析 MinIO URL: {file_path}")
+
+                bucket_name = path_parts[0]
+                object_name = path_parts[1]
+
+                # 从 MinIO 下载文件
+                minio_client = get_minio_client()
+                file_data = await minio_client.adownload_file(bucket_name, object_name)
+
+                # 创建临时文件保存下载的内容
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False, encoding='utf-8') as temp_file:
+                    temp_file.write(file_data.decode('utf-8'))
+                    temp_file_path = temp_file.name
+
+                logger.info(f"文件已下载到临时路径: {temp_file_path}")
+                actual_file_path = temp_file_path
+            else:
+                # 本地文件路径
+                actual_file_path = file_path
+
+            def read_triples(file_path):
+                with open(file_path, encoding="utf-8") as file:
+                    for line in file:
+                        if line.strip():
+                            yield json.loads(line.strip())
+
+            triples = list(read_triples(actual_file_path))
+
+            await self.txt_add_vector_entity(triples, kgdb_name)
+
+        except Exception as e:
+            logger.error(f"处理文件失败: {e}")
+            raise
+        finally:
+            # 清理临时文件
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                    logger.info(f"已删除临时文件: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"删除临时文件失败: {e}")
 
         self.status = "open"
         # 更新并保存图数据库信息
