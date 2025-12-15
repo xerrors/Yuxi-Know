@@ -30,7 +30,14 @@
         <!-- <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
           Neo4j 浏览器
         </a-button> -->
-        <a-button type="primary" @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
+        <a-button
+          v-if="isNeo4j"
+          type="primary"
+          @click="state.showModal = true" ><UploadOutlined/> 上传文件</a-button>
+        <a-button
+          v-else
+          type="primary"
+          @click="state.showUploadTipModal = true" ><UploadOutlined/> 上传文件</a-button>
         <a-button v-if="unindexedCount > 0" type="primary" @click="indexNodes" :loading="state.indexing">
           <SyncOutlined v-if="!state.indexing"/> 为{{ unindexedCount }}个节点添加索引
         </a-button>
@@ -73,6 +80,9 @@
               </a-input>
             </div>
             <div class="actions-right">
+              <a-button type="default" @click="exportGraphData" :icon="h(ExportOutlined)">
+                导出数据
+              </a-button>
               <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
                 说明
               </a-button>
@@ -91,14 +101,12 @@
               :unindexed-count="unindexedCount"
               :model-matched="modelMatched"
               @index-nodes="indexNodes"
-              @export-data="exportGraphData"
             />
             <LightRAGInfoPanel
               v-else
               :stats="state.lightragStats"
               :graph-data="graph.graphData"
               :database-name="getDatabaseName()"
-              @export-data="exportGraphData"
             />
           </div>
         </template>
@@ -144,6 +152,32 @@
       </div>
     </a-modal>
 
+    <!-- 上传提示弹窗 -->
+    <a-modal
+      :open="state.showUploadTipModal"
+      title="文件上传说明"
+      @cancel="() => state.showUploadTipModal = false"
+      :footer="null"
+      width="500px"
+    >
+      <div class="upload-tip-content">
+        <a-alert
+          :message="getUploadTipMessage()"
+          type="info"
+          show-icon
+          style="margin-bottom: 16px;"
+        />
+        <div v-if="!isNeo4j" class="upload-tip-actions">
+          <p>如需上传文档到当前选中的知识库，请前往对应的知识库详情页面进行操作：</p>
+          <div class="action-buttons">
+            <a-button type="primary" @click="goToDatabasePage">
+              <DatabaseOutlined/> 前往知识库详情页
+            </a-button>
+          </div>
+        </div>
+      </div>
+    </a-modal>
+
     <!-- 说明弹窗 -->
     <a-modal
       :open="state.showInfoModal"
@@ -176,9 +210,10 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, h } from 'vue';
+import { useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import { useConfigStore } from '@/stores/config';
-import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined, HighlightOutlined } from '@ant-design/icons-vue';
+import { UploadOutlined, SyncOutlined, GlobalOutlined, InfoCircleOutlined, SearchOutlined, ReloadOutlined, LoadingOutlined, HighlightOutlined, DatabaseOutlined, ExportOutlined } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi, unifiedApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
@@ -193,6 +228,7 @@ const configStore = useConfigStore();
 const cur_embed_model = computed(() => configStore.config?.embed_model);
 const modelMatched = computed(() => !graphInfo?.value?.embed_model_name || graphInfo.value.embed_model_name === cur_embed_model.value)
 
+const router = useRouter();
 const graphRef = ref(null)
 const graphInfo = ref(null)
 const fileList = ref([]);
@@ -207,6 +243,7 @@ const state = reactive({
   searchLoading: false,
   showModal: false,
   showInfoModal: false,
+  showUploadTipModal: false,
   processing: false,
   indexing: false,
   showPage: true,
@@ -458,6 +495,33 @@ const getDatabaseName = () => {
   return selectedDb ? selectedDb.label : state.selectedDbId;
 };
 
+const getUploadTipMessage = () => {
+  if (isNeo4j.value) {
+    return 'Neo4j 图数据库支持通过上传 JSONL 格式文件直接导入实体和关系数据。';
+  } else {
+    const selectedDb = state.dbOptions.find(db => db.value === state.selectedDbId);
+    const dbType = selectedDb?.type || '未知';
+    const dbName = selectedDb?.label || getDatabaseName();
+    return `当前选择的是 ${dbType.toUpperCase()} 类型的知识库"${dbName}"，该类型知识库需要在文档知识库页面上传文档，系统会自动从中提取知识图谱。`;
+  }
+};
+
+const goToDatabasePage = () => {
+  state.showUploadTipModal = false;
+
+  // 如果不是 Neo4j，需要找到对应的知识库 ID 并跳转
+  if (!isNeo4j.value) {
+    const selectedDb = state.dbOptions.find(db => db.value === state.selectedDbId);
+    if (selectedDb && selectedDb.type !== 'neo4j') {
+      // 跳转到对应的知识库详情页面
+      router.push(`/database/${state.selectedDbId}`);
+    } else {
+      // 如果找不到对应的数据库，跳转到数据库列表页面
+      router.push('/database');
+    }
+  }
+};
+
 </script>
 
 <style lang="less" scoped>
@@ -478,9 +542,8 @@ const getDatabaseName = () => {
   margin-right: 20px;
 
   .label {
+    font-size: 14px;
     margin-right: 8px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
   }
 }
 
@@ -577,6 +640,21 @@ const getDatabaseName = () => {
   button {
     height: 37px;
     box-shadow: none;
+  }
+}
+
+.upload-tip-content {
+  .upload-tip-actions {
+    p {
+      margin-bottom: 16px;
+      color: var(--color-text-secondary);
+    }
+  }
+
+  .action-buttons {
+    display: flex;
+    justify-content: center;
+    margin-top: 20px;
   }
 }
 </style>

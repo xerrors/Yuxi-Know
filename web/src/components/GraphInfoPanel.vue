@@ -12,11 +12,7 @@
       <span v-if="graphInfo?.relationship_count" class="info-total">/ {{ graphInfo.relationship_count }}</span>
     </div>
 
-    <div v-if="graphInfo?.graph_name" class="info-item">
-      <span class="info-label">图谱</span>
-      <span class="info-value">{{ graphInfo.graph_name }}</span>
-    </div>
-
+  
     <div v-if="unindexedCount > 0" class="info-item warning">
       <span class="info-label">未索引</span>
       <span class="info-value warning">{{ unindexedCount }}</span>
@@ -35,17 +31,10 @@
       </a-tooltip>
     </div>
 
-    <div class="actions">
-      <a-button type="default" size="small" @click="$emit('export-data')">
-        <ExportOutlined />
-        导出数据
-      </a-button>
     </div>
-  </div>
 </template>
 
 <script setup>
-import { ExportOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   graphInfo: {
@@ -66,7 +55,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['index-nodes', 'export-data'])
+defineEmits(['index-nodes'])
 </script>
 
 <style lang="less" scoped>
@@ -118,40 +107,6 @@ defineEmits(['index-nodes', 'export-data'])
 .info-total {
   color: var(--gray-600);
   font-size: 12px;
-}
-
-.actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-
-  @media (max-width: 768px) {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-
-:deep(.ant-btn-default) {
-  font-size: 12px;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 6px;
-  border-color: var(--main-300);
-  color: var(--main-600);
-  background: var(--main-20);
-  transition: all 0.2s ease;
-
-  &:hover {
-    border-color: var(--main-500);
-    color: var(--main-700);
-    background: var(--main-40);
-    box-shadow: 0 2px 4px rgba(1, 97, 121, 0.1);
-  }
-
-  &:active {
-    transform: translateY(1px);
-  }
 }
 
 :deep(.ant-btn-primary) {

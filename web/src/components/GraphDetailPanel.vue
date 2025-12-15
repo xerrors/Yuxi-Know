@@ -97,7 +97,7 @@ const filteredEdgeProperties = computed(() => {
 
 <style scoped lang="less">
 .detail-card {
-  position: fixed; // 改为 fixed，避免影响父组件布局
+  position: absolute; // 改为 fixed，避免影响父组件布局
   top: 80px;
   right: 24px;
   width: 300px;
