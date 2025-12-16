@@ -179,7 +179,27 @@
         </div>
 
         <div class="modal-models-section">
-          <div class="model-search">
+          <!-- 警告：检测到失效模型 -->
+          <div v-if="unsupportedModels.length > 0" class="simple-notice warning" style="margin-bottom: 20px;">
+            <p>检测到配置中包含当前供应商列表中不存在的模型。以下模型可能已失效或被供应商移除：</p>
+            <div class="unsupported-list">
+              <a-tag
+                closable
+                v-for="model in unsupportedModels"
+                :key="model"
+                color="error"
+                @close="removeModel(model)"
+                style="margin-bottom: 4px;"
+              >
+                {{ model }}
+              </a-tag>
+            </div>
+            <a-button size="small" type="primary" danger ghost @click="removeAllUnsupported" class="clear-btn">
+              一键移除所有失效模型
+            </a-button>
+          </div>
+
+          <div class="model-search" v-if="providerConfig.allModels.length > 0">
             <a-input
               v-model:value="providerConfig.searchQuery"
               placeholder="搜索模型..."
@@ -192,14 +212,14 @@
           </div>
 
           <!-- 显示选中统计信息 -->
-          <div class="selection-summary">
+          <div class="selection-summary" v-if="providerConfig.allModels.length > 0">
             <span>已选择 {{ providerConfig.selectedModels.length }} 个模型</span>
             <span v-if="providerConfig.searchQuery" class="filter-info">
               （当前筛选显示 {{ filteredModels.length }} 个）
             </span>
           </div>
 
-          <div class="modal-checkbox-list">
+          <div class="modal-checkbox-list" v-if="providerConfig.allModels.length > 0">
             <div v-for="(model, index) in filteredModels" :key="index" class="modal-checkbox-item">
               <a-checkbox
                 :checked="providerConfig.selectedModels.includes(model.id)"
@@ -209,14 +229,45 @@
               </a-checkbox>
             </div>
           </div>
-          <div v-if="providerConfig.allModels.length === 0" class="modal-no-models">
-            <a-alert v-if="!modelStatus[providerConfig.provider]" type="warning" message="请在 .env 中配置对应的 APIKEY，并重新启动服务" />
-            <div v-else>
-              <a-alert type="warning" message="该提供商暂未适配获取模型列表的方法，如需添加模型，请编辑 src/config/static/models.py 。">
-                <template #description>
-                  <a href="https://xerrors.github.io/Yuxi-Know/latest/intro/model-config.html" target="_blank">模型配置</a>
-                </template>
-              </a-alert>
+
+          <!-- 手动管理模式 (当无法获取模型列表时) -->
+          <div v-if="providerConfig.allModels.length === 0" class="modal-manual-manage">
+            <div v-if="!modelStatus[providerConfig.provider]" class="simple-notice warning" style="margin-bottom: 16px;">
+              请在 .env 中配置对应的 APIKEY，并重新启动服务
+            </div>
+
+            <div class="manual-manage-container">
+              <div class="manual-header">
+                <div class="simple-notice info">
+                  无法获取模型列表，您可以手动管理模型配置。该提供商暂未适配自动获取模型列表，或者网络请求失败。您可以在下方手动添加或移除模型。
+                </div>
+              </div>
+
+              <div class="manual-add-box" style="margin: 16px 0;">
+                <a-input-search
+                  v-model:value="manualModelInput"
+                  placeholder="请输入模型ID（如：gpt-4）"
+                  enter-button="添加模型"
+                  @search="addManualModel"
+                />
+              </div>
+
+              <div class="current-models-list">
+                <h4 style="margin-bottom: 10px; font-weight: 600;">当前配置的模型 ({{ providerConfig.selectedModels.length }})</h4>
+                <div v-if="providerConfig.selectedModels.length === 0" class="empty-text" style="color: var(--gray-500); padding: 8px 0;">暂无配置模型</div>
+                <div class="tags-container">
+                  <a-tag
+                    v-for="model in providerConfig.selectedModels"
+                    :key="model"
+                    closable
+                    color="blue"
+                    @close="removeModel(model)"
+                    style="margin-bottom: 8px; padding: 4px 8px;"
+                  >
+                    {{ model }}
+                  </a-tag>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -306,7 +357,7 @@
 import { computed, reactive, watch, h, ref } from 'vue'
 import { message } from 'ant-design-vue';
 import {
-  InfoCircleOutlined,
+  InfoCircleOutlined, // Keep if still used for other things, if not, remove. For now assume it might be used elsewhere.
   SettingOutlined,
   DownCircleOutlined,
   LoadingOutlined,
@@ -478,6 +529,46 @@ const filteredModels = computed(() => {
   const searchQuery = providerConfig.searchQuery.toLowerCase();
   return allModels.filter(model => model.id.toLowerCase().includes(searchQuery));
 });
+
+// 计算不支持/已失效的模型
+const unsupportedModels = computed(() => {
+  if (providerConfig.allModels.length === 0) return [];
+  const availableIds = new Set(providerConfig.allModels.map(m => m.id));
+  return providerConfig.selectedModels.filter(id => !availableIds.has(id));
+});
+
+// 手动管理相关
+const manualModelInput = ref('');
+
+// 添加手动输入的模型
+const addManualModel = () => {
+  const val = manualModelInput.value.trim();
+  if (!val) return;
+
+  if (providerConfig.selectedModels.includes(val)) {
+    message.warning('该模型已存在');
+    return;
+  }
+
+  providerConfig.selectedModels.push(val);
+  manualModelInput.value = '';
+  message.success('添加成功');
+};
+
+// 移除模型
+const removeModel = (modelId) => {
+  const idx = providerConfig.selectedModels.indexOf(modelId);
+  if (idx > -1) {
+    providerConfig.selectedModels.splice(idx, 1);
+  }
+};
+
+// 移除所有不支持的模型
+const removeAllUnsupported = () => {
+  const toRemove = unsupportedModels.value;
+  providerConfig.selectedModels = providerConfig.selectedModels.filter(id => !toRemove.includes(id));
+  message.success(`已移除 ${toRemove.length} 个失效模型`);
+};
 
 // 自定义供应商管理
 const customProviderForm = ref();
@@ -998,8 +1089,8 @@ const testCustomProvider = async (providerId, modelName) => {
     }
 
     .model-icon {
-      width: 28px;
-      height: 28px;
+      width: 36px;
+      height: 36px;
       border-radius: 6px;
       overflow: hidden;
       filter: grayscale(100%);
@@ -1436,6 +1527,45 @@ const testCustomProvider = async (providerId, modelName) => {
         width: 30px;
       }
     }
+  }
+}
+
+// Simple Notice Styles
+.simple-notice {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  border: 1px solid transparent; // Keep a subtle border
+
+  &.warning {
+    background-color: var(--color-warning-50);
+    color: var(--color-warning-700);
+    border-color: var(--color-warning-100);
+  }
+
+  &.info {
+    background-color: var(--color-info-50);
+    color: var(--color-info-700);
+    border-color: var(--color-info-100);
+  }
+
+  p { // For warning message, if it's multiline
+    margin: 0;
+  }
+
+  .unsupported-list {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .clear-btn {
+    margin-top: 8px;
+    font-size: 12px;
+    height: 24px;
+    padding: 0 8px;
   }
 }
 </style>

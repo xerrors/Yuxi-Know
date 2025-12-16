@@ -395,8 +395,8 @@ const handleAvatarChange = async (info) => {
 }
 
 .user-avatar {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -406,6 +406,7 @@ const handleAvatarChange = async (info) => {
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  box-shadow: 0 2px 8px var(--shadow-2);
 
   &:hover {
     opacity: 0.9;

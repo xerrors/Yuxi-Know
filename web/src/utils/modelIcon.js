@@ -7,6 +7,7 @@ import siliconflowIcon from '@/assets/providers/siliconflow.png'
 import arkIcon from '@/assets/providers/ark.png'
 import openrouterIcon from '@/assets/providers/openrouterai.png'
 import defaultIcon from '@/assets/providers/default.png'
+import modelscopeIcon from '@/assets/providers/modelscope.png'
 
 export const modelIcons = {
   openai: openaiIcon,
@@ -18,5 +19,6 @@ export const modelIcons = {
   ark: arkIcon,
   'together.ai': togetherIcon,
   openrouter: openrouterIcon,
+  modelscope: modelscopeIcon,
   default: defaultIcon // 添加默认图标
 }
