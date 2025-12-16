@@ -60,7 +60,8 @@ class DynamicToolMiddleware(AgentMiddleware):
                     logger.warning(f"MCP server '{mcp}' not pre-loaded. Please add it to mcp_servers list.")
 
         logger.info(
-            f"Dynamic tool selection: {len(enabled_tools)} tools enabled: {[tool.name for tool in enabled_tools]}"
+            f"Dynamic tool selection: {len(enabled_tools)} tools enabled: {[tool.name for tool in enabled_tools]}, "
+            f"selected_tools: {selected_tools}, selected_mcps: {selected_mcps}"
         )
 
         # 更新 request 中的工具列表

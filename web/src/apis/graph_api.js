@@ -7,15 +7,23 @@ import { apiGet, apiPost } from './base'
  */
 
 // =============================================================================
-// === LightRAG图知识库接口分组 ===
+// === 统一图谱接口 (Unified Graph API) ===
 // =============================================================================
 
-export const lightragApi = {
+export const unifiedApi = {
   /**
-   * 获取LightRAG知识图谱子图数据
+   * 获取所有可用的知识图谱列表
+   * @returns {Promise} - 图谱列表
+   */
+  getGraphs: async () => {
+    return await apiGet('/api/graph/list', {}, true)
+  },
+
+  /**
+   * 获取子图数据 (统一接口)
    * @param {Object} params - 查询参数
-   * @param {string} params.db_id - LightRAG数据库ID
-   * @param {string} params.node_label - 节点标签（"*"获取全图）
+   * @param {string} params.db_id - 图谱ID
+   * @param {string} params.node_label - 节点标签/关键词
    * @param {number} params.max_depth - 最大深度
    * @param {number} params.max_nodes - 最大节点数
    * @returns {Promise} - 子图数据
@@ -34,37 +42,12 @@ export const lightragApi = {
       max_nodes: max_nodes.toString()
     })
 
-    return await apiGet(`/api/graph/lightrag/subgraph?${queryParams.toString()}`, {}, true)
+    return await apiGet(`/api/graph/subgraph?${queryParams.toString()}`, {}, true)
   },
 
   /**
-   * 获取所有可用的LightRAG数据库
-   * @returns {Promise} - LightRAG数据库列表
-   */
-  getDatabases: async () => {
-    return await apiGet('/api/graph/lightrag/databases', {}, true)
-  },
-
-  /**
-   * 获取LightRAG图谱标签列表
-   * @param {string} db_id - LightRAG数据库ID
-   * @returns {Promise} - 标签列表
-   */
-  getLabels: async (db_id) => {
-    if (!db_id) {
-      throw new Error('db_id is required')
-    }
-
-    const queryParams = new URLSearchParams({
-      db_id: db_id
-    })
-
-    return await apiGet(`/api/graph/lightrag/labels?${queryParams.toString()}`, {}, true)
-  },
-
-  /**
-   * 获取LightRAG图谱统计信息
-   * @param {string} db_id - LightRAG数据库ID
+   * 获取图谱统计信息 (统一接口)
+   * @param {string} db_id - 图谱ID
    * @returns {Promise} - 统计信息
    */
   getStats: async (db_id) => {
@@ -76,9 +59,27 @@ export const lightragApi = {
       db_id: db_id
     })
 
-    return await apiGet(`/api/graph/lightrag/stats?${queryParams.toString()}`, {}, true)
+    return await apiGet(`/api/graph/stats?${queryParams.toString()}`, {}, true)
+  },
+
+  /**
+   * 获取图谱标签列表 (统一接口)
+   * @param {string} db_id - 图谱ID
+   * @returns {Promise} - 标签列表
+   */
+  getLabels: async (db_id) => {
+    if (!db_id) {
+      throw new Error('db_id is required')
+    }
+
+    const queryParams = new URLSearchParams({
+      db_id: db_id
+    })
+
+    return await apiGet(`/api/graph/labels?${queryParams.toString()}`, {}, true)
   }
 }
+
 
 // =============================================================================
 // === Neo4j图数据库接口分组 ===
@@ -222,11 +223,21 @@ export const getGraphStats = async () => {
   return neo4jApi.getInfo()
 }
 
-// 保持旧的分组导出，便于批量替换
+// 兼容性导出 - 使用统一接口替代旧有的 graphApi
 export const graphApi = {
-  getSubgraph: lightragApi.getSubgraph,
-  getDatabases: lightragApi.getDatabases,
-  getLabels: lightragApi.getLabels,
-  getStats: lightragApi.getStats,
-  ...neo4jApi  // 临时兼容
+  // 使用统一接口替代 LightRAG 接口
+  getSubgraph: unifiedApi.getSubgraph,
+  getDatabases: async () => {
+    // 使用统一接口获取所有图谱，然后过滤出 LightRAG 类型的
+    const response = await unifiedApi.getGraphs()
+    if (response.success) {
+      const lightragDbs = response.data.filter(graph => graph.type === 'lightrag')
+      return { success: true, data: { databases: lightragDbs } }
+    }
+    return response
+  },
+  getLabels: unifiedApi.getLabels,
+  getStats: unifiedApi.getStats,
+  // 保留 Neo4j 接口
+  ...neo4jApi
 }
