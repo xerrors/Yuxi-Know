@@ -68,15 +68,15 @@ class GraphDatabase:
             """处理记录中的属性：扁平化 properties 并移除 embedding"""
             if record is None:
                 return None
-            
+
             # 复制一份以避免修改原字典
             data = dict(record)
             props = data.pop("properties", {}) or {}
-            
+
             # 移除 embedding
             if "embedding" in props:
                 del props["embedding"]
-            
+
             # 合并属性（优先保留原字典中的 id, name, type 等核心字段）
             return {**props, **data}
 
@@ -657,15 +657,15 @@ class GraphDatabase:
             """处理记录中的属性：扁平化 properties 并移除 embedding"""
             if record is None:
                 return None
-            
+
             # 复制一份以避免修改原字典
             data = dict(record)
             props = data.pop("properties", {}) or {}
-            
+
             # 移除 embedding
             if "embedding" in props:
                 del props["embedding"]
-            
+
             # 合并属性（优先保留原字典中的 id, name, type 等核心字段）
             return {**props, **data}
 
@@ -676,22 +676,46 @@ class GraphDatabase:
                     // 1跳出边
                     [(n {name: $entity_name})-[r1]->(m1) |
                      {h: {id: elementId(n), name: n.name, properties: properties(n)},
-                      r: {id: elementId(r1), type: r1.type, source_id: elementId(n), target_id: elementId(m1), properties: properties(r1)},
+                      r: {
+                        id: elementId(r1),
+                        type: r1.type,
+                        source_id: elementId(n),
+                        target_id: elementId(m1),
+                        properties: properties(r1)
+                      },
                       t: {id: elementId(m1), name: m1.name, properties: properties(m1)}}],
                     // 2跳出边
                     [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) |
                      {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
-                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m1), target_id: elementId(m2), properties: properties(r2)},
+                      r: {
+                        id: elementId(r2),
+                        type: r2.type,
+                        source_id: elementId(m1),
+                        target_id: elementId(m2),
+                        properties: properties(r2)
+                      },
                       t: {id: elementId(m2), name: m2.name, properties: properties(m2)}}],
                     // 1跳入边
                     [(m1)-[r1]->(n {name: $entity_name}) |
                      {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
-                      r: {id: elementId(r1), type: r1.type, source_id: elementId(m1), target_id: elementId(n), properties: properties(r1)},
+                      r: {
+                        id: elementId(r1),
+                        type: r1.type,
+                        source_id: elementId(m1),
+                        target_id: elementId(n),
+                        properties: properties(r1)
+                      },
                       t: {id: elementId(n), name: n.name, properties: properties(n)}}],
                     // 2跳入边
                     [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) |
                      {h: {id: elementId(m2), name: m2.name, properties: properties(m2)},
-                      r: {id: elementId(r2), type: r2.type, source_id: elementId(m2), target_id: elementId(m1), properties: properties(r2)},
+                      r: {
+                        id: elementId(r2),
+                        type: r2.type,
+                        source_id: elementId(m2),
+                        target_id: elementId(m1),
+                        properties: properties(r2)
+                      },
                       t: {id: elementId(m1), name: m1.name, properties: properties(m1)}}]
                 ] AS all_results
                 UNWIND all_results AS result_list
@@ -711,7 +735,7 @@ class GraphDatabase:
                     h = _process_record_props(item["h"])
                     r = _process_record_props(item["r"])
                     t = _process_record_props(item["t"])
-                    
+
                     formatted_results["nodes"].extend([h, t])
                     formatted_results["edges"].append(r)
                     formatted_results["triples"].append((h["name"], r["type"], t["name"]))

@@ -19,15 +19,12 @@ class UploadGraphAdapter(GraphAdapter):
 
     async def query_nodes(self, keyword: str, **kwargs) -> dict[str, Any]:
         params = self._normalize_query_params(keyword, kwargs)
-        
+
         # 如果关键词是 "*" 或者为空，则执行采样查询
         if not params["keyword"] or params["keyword"] == "*":
             # 映射 max_nodes 到 num
             num = kwargs.get("max_nodes", 100)
-            raw_results = self.graph_db.get_sample_nodes(
-                kgdb_name=params.get("kgdb_name", "neo4j"),
-                num=num
-            )
+            raw_results = self.graph_db.get_sample_nodes(kgdb_name=params.get("kgdb_name", "neo4j"), num=num)
         else:
             # 否则执行关键词搜索
             # graph_db.query_node is sync
@@ -66,7 +63,7 @@ class UploadGraphAdapter(GraphAdapter):
             entity_type="entity",
             labels=["Entity", "Upload"],
             properties=raw_node,
-            source="upload"
+            source="upload",
         )
 
     def normalize_edge(self, raw_edge: Any) -> dict[str, Any]:
@@ -83,7 +80,7 @@ class UploadGraphAdapter(GraphAdapter):
             source_id=raw_edge.get("source_id"),
             target_id=raw_edge.get("target_id"),
             edge_type=raw_edge.get("type"),
-            properties=raw_edge
+            properties=raw_edge,
         )
 
     async def get_labels(self) -> list[str]:

@@ -57,29 +57,33 @@ async def get_graphs(current_user: User = Depends(get_admin_user)):
         # 1. 获取默认 Neo4j 图谱信息
         neo4j_info = graph_base.get_graph_info()
         if neo4j_info:
-            graphs.append({
-                "id": "neo4j",
-                "name": "默认图谱",
-                "type": "neo4j",
-                "description": "Default graph database for uploaded documents",
-                "status": neo4j_info.get("status", "unknown"),
-                "created_at": neo4j_info.get("last_updated"),
-                "node_count": neo4j_info.get("entity_count", 0),
-                "edge_count": neo4j_info.get("relationship_count", 0)
-            })
+            graphs.append(
+                {
+                    "id": "neo4j",
+                    "name": "默认图谱",
+                    "type": "neo4j",
+                    "description": "Default graph database for uploaded documents",
+                    "status": neo4j_info.get("status", "unknown"),
+                    "created_at": neo4j_info.get("last_updated"),
+                    "node_count": neo4j_info.get("entity_count", 0),
+                    "edge_count": neo4j_info.get("relationship_count", 0),
+                }
+            )
 
         # 2. 获取 LightRAG 数据库信息
         lightrag_dbs = knowledge_base.get_lightrag_databases()
         for db in lightrag_dbs:
-            graphs.append({
-                "id": db.get("db_id"),
-                "name": db.get("name"),
-                "type": "lightrag",
-                "description": db.get("description"),
-                "status": "active",  # LightRAG DBs are usually active if listed
-                "created_at": db.get("created_at"),
-                "metadata": db
-            })
+            graphs.append(
+                {
+                    "id": db.get("db_id"),
+                    "name": db.get("name"),
+                    "type": "lightrag",
+                    "description": db.get("description"),
+                    "status": "active",  # LightRAG DBs are usually active if listed
+                    "created_at": db.get("created_at"),
+                    "metadata": db,
+                }
+            )
 
         return {"success": True, "data": graphs}
 
@@ -118,7 +122,7 @@ async def get_subgraph(
             keyword=node_label,
             max_depth=max_depth,
             max_nodes=max_nodes,
-            kgdb_name=db_id if not knowledge_base.is_lightrag_database(db_id) else "neo4j"
+            kgdb_name=db_id if not knowledge_base.is_lightrag_database(db_id) else "neo4j",
         )
 
         return {
@@ -136,8 +140,7 @@ async def get_subgraph(
 
 @graph.get("/labels")
 async def get_graph_labels(
-    db_id: str = Query(..., description="知识图谱ID"),
-    current_user: User = Depends(get_admin_user)
+    db_id: str = Query(..., description="知识图谱ID"), current_user: User = Depends(get_admin_user)
 ):
     """
     获取图谱的所有标签
@@ -154,8 +157,7 @@ async def get_graph_labels(
 
 @graph.get("/stats")
 async def get_graph_stats(
-    db_id: str = Query(..., description="知识图谱ID"),
-    current_user: User = Depends(get_admin_user)
+    db_id: str = Query(..., description="知识图谱ID"), current_user: User = Depends(get_admin_user)
 ):
     """
     获取图谱统计信息
@@ -175,8 +177,7 @@ async def get_graph_stats(
                 entity_types[entity_type] = entity_types.get(entity_type, 0) + 1
 
             entity_types_list = [
-                {"type": k, "count": v}
-                for k, v in sorted(entity_types.items(), key=lambda x: x[1], reverse=True)
+                {"type": k, "count": v} for k, v in sorted(entity_types.items(), key=lambda x: x[1], reverse=True)
             ]
 
             return {
@@ -184,14 +185,14 @@ async def get_graph_stats(
                 "data": {
                     "total_nodes": len(knowledge_graph.nodes),
                     "total_edges": len(knowledge_graph.edges),
-                    "entity_types": entity_types_list
-                }
+                    "entity_types": entity_types_list,
+                },
             }
         else:
             # Neo4j stats
             info = graph_base.get_graph_info(graph_name=db_id)
             if not info:
-                 raise HTTPException(status_code=404, detail="Graph info not found")
+                raise HTTPException(status_code=404, detail="Graph info not found")
 
             return {
                 "success": True,
@@ -200,11 +201,8 @@ async def get_graph_stats(
                     "total_edges": info.get("relationship_count", 0),
                     # Neo4j info currently returns 'labels' list, not counts per label.
                     # Improving this would require updating GraphDatabase.get_graph_info
-                    "entity_types": [
-                        {"type": label, "count": "N/A"}
-                        for label in info.get("labels", [])
-                    ]
-                }
+                    "entity_types": [{"type": label, "count": "N/A"} for label in info.get("labels", [])],
+                },
             }
 
     except Exception as e:
@@ -227,11 +225,7 @@ async def get_lightrag_subgraph(
 ):
     """(Deprecated) Use /graph/subgraph instead"""
     return await get_subgraph(
-        db_id=db_id,
-        node_label=node_label,
-        max_depth=max_depth,
-        max_nodes=max_nodes,
-        current_user=current_user
+        db_id=db_id, node_label=node_label, max_depth=max_depth, max_nodes=max_nodes, current_user=current_user
     )
 
 

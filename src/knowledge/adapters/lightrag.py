@@ -63,7 +63,7 @@ class LightRAGGraphAdapter(GraphAdapter):
         # 优先使用 entity_id 作为显示名称，因为 Neo4j 中 LightRAG 存储的实体名称在 entity_id 字段
         # 如果不存在，则回退到 id
         name = properties.get("entity_id", node_id)
-        
+
         # 尝试从 properties 获取 entity_type，或者从 labels 中推断（排除 kb_ 前缀的 label）
         entity_type = properties.get("entity_type", "unknown")
         if entity_type == "unknown" and labels:
@@ -73,12 +73,7 @@ class LightRAGGraphAdapter(GraphAdapter):
                     break
 
         return self._create_standard_node(
-            node_id=node_id,
-            name=name,
-            entity_type=entity_type,
-            labels=labels,
-            properties=properties,
-            source="lightrag"
+            node_id=node_id, name=name, entity_type=entity_type, labels=labels, properties=properties, source="lightrag"
         )
 
     def normalize_edge(self, raw_edge: Any) -> dict[str, Any]:
@@ -102,7 +97,7 @@ class LightRAGGraphAdapter(GraphAdapter):
         properties = getattr(raw_edge, "properties", {})
         if not properties and hasattr(raw_edge, "get"):
             properties = raw_edge.get("properties", {})
-            
+
         # 优化边的显示类型
         # LightRAG 的边类型通常是 "DIRECTED"，具体含义在 keywords 或 description 中
         display_type = edge_type
@@ -116,14 +111,10 @@ class LightRAGGraphAdapter(GraphAdapter):
                 if len(desc) < 20:
                     display_type = desc
                 else:
-                    display_type = "related" # fallback
+                    display_type = "related"  # fallback
 
         return self._create_standard_edge(
-            edge_id=edge_id,
-            source_id=source,
-            target_id=target,
-            edge_type=display_type,
-            properties=properties
+            edge_id=edge_id, source_id=source, target_id=target, edge_type=display_type, properties=properties
         )
 
     async def get_labels(self) -> list[str]:

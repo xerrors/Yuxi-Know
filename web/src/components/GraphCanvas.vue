@@ -96,7 +96,7 @@ function formatData() {
     id: e.id ? String(e.id) : `edge-${idx}`,
     source: String(e.source_id),
     target: String(e.target_id),
-    data: { 
+    data: {
       label: e.type ?? '',
       original: e // 保存原始数据
     },
@@ -397,7 +397,7 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
-  background-color: var(--gray-0);
+  // background-color: var(--gray-0);
 
   .graph-canvas {
     width: 100%;
