@@ -38,7 +38,9 @@ def get_connection_manager() -> MySQLConnectionManager:
         required_keys = ["host", "user", "password", "database"]
         for key in required_keys:
             if not mysql_config[key]:
-                raise MySQLConnectionError(f"MySQL configuration missing required key: {key}")
+                raise MySQLConnectionError(
+                    f"MySQL configuration missing required key: {key}, please check your environment variables."
+                )
 
         _connection_manager = MySQLConnectionManager(mysql_config)
     return _connection_manager

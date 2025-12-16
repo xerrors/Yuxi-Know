@@ -1,0 +1,6 @@
+{"h": {"name": "孙悟空", "title": "齐天大圣", "weapon": "如意金箍棒", "species": "猴"}, "t": {"name": "唐僧", "title": "旃檀功德佛", "species": "人"}, "r": {"type": "徒弟", "order": 1}}
+{"h": {"name": "猪八戒", "title": "天蓬元帅", "weapon": "九齿钉耙", "species": "猪"}, "t": {"name": "唐僧"}, "r": {"type": "徒弟", "order": 2}}
+{"h": {"name": "沙悟净", "title": "卷帘大将", "weapon": "降妖宝杖"}, "t": {"name": "唐僧"}, "r": {"type": "徒弟", "order": 3}}
+{"h": {"name": "白龙马", "origin": "西海龙宫"}, "t": {"name": "唐僧"}, "r": {"type": "坐骑", "original_form": "龙"}}
+{"h": "孙悟空", "t": {"name": "猪八戒"}, "r": {"type": "师兄弟", "relationship": "conflict/cooperate"}}
+{"h": {"name": "如来佛祖", "location": "西天雷音寺"}, "t": {"name": "孙悟空"}, "r": {"type": "压制", "tool": "五指山", "duration": "500年"}}
