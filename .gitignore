@@ -24,6 +24,7 @@ logs
 *.log.*
 *.db
 *.lock
+!uv.lock
 tmp
 cache
 .cache
