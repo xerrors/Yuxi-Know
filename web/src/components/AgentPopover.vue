@@ -4,7 +4,7 @@
     :title="null"
     placement="bottomRight"
     trigger="click"
-    :overlayStyle="{ width: '400px', zIndex: 1030 }"
+    :overlayStyle="{ width: '400px', zIndex: 999 }"
   >
     <template #content>
       <div class="popover-content">
@@ -202,6 +202,7 @@ const formatDate = (dateString) => {
   try {
     const date = new Date(dateString);
     return date.toLocaleString('zh-CN', {
+      year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
@@ -438,11 +439,11 @@ const emitRefresh = () => {
 .file-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .file-item {
-  padding: 12px 14px;
+  padding: 8px 12px;
   background: var(--gray-0);
   border: 1px solid var(--gray-150);
   border-radius: 6px;
@@ -468,14 +469,13 @@ const emitRefresh = () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
 .file-name {
   font-size: 14px;
   color: var(--gray-1000);
-  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-weight: 500;
   flex: 1;
   overflow: hidden;

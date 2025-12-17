@@ -60,11 +60,10 @@
               </span>
             </div>
             <div class="tool-content" v-show="expandedToolCalls.has(toolCall.id)">
-              <div class="tool-params" v-if="toolCall.args || toolCall.function?.arguments">
+              <div class="tool-params" v-if="String(toolCall.args).length > 2 || String(toolCall.function?.arguments).length > 2">
                 <div class="tool-params-content">
-                  <strong>参数:</strong>
-                  <span v-if="getFormattedToolArgs(toolCall)">{{ getFormattedToolArgs(toolCall) }}</span>
-                  <span v-else>{{ toolCall.args || toolCall.function?.arguments }}</span>
+                  <strong>参数: </strong>
+                  <span>{{ getFormattedToolArgs(toolCall) }}</span>
                 </div>
               </div>
               <div class="tool-result" v-if="toolCall.tool_call_result && toolCall.tool_call_result.content">
@@ -205,7 +204,7 @@ const getToolNameByToolCall = (toolCall) => {
 };
 
 const getFormattedToolArgs = (toolCall) => {
-  const args = toolCall.args || toolCall.function?.arguments;
+  const args = toolCall.args ? toolCall.args : toolCall.function?.arguments;
   if (!args) return '';
 
   try {
@@ -213,9 +212,14 @@ const getFormattedToolArgs = (toolCall) => {
     if (typeof args === 'string' && args.trim().startsWith('{')) {
       const parsed = JSON.parse(args);
       return JSON.stringify(parsed, null, 2);
+    } else if (typeof args === 'object' && args !== null) {
+      // 如果是对象类型，直接转换为字符串
+      console.log('Object args:', args);
+      return JSON.stringify(args, null, 2);
     }
   } catch (e) {
     // 如果解析失败，直接返回原始字符串
+    console.log('Failed to parse tool arguments as JSON:', args);
   }
 
   return args;
@@ -513,7 +517,7 @@ const toggleToolCall = (toolCallId) => {
 
         .tool-params-content {
           margin: 0;
-          font-size: 13px;
+          font-size: 12px;
           overflow-x: auto;
           color: var(--gray-700);
           line-height: 1.5;
