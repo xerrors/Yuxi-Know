@@ -1,4 +1,5 @@
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.mcp import MCP_SERVERS
@@ -53,6 +54,7 @@ class ChatbotAgent(BaseAgent):
                 inject_attachment_context,  # 附件上下文注入（LangChain 标准中间件）
                 context_based_model,  # 动态模型选择
                 dynamic_tool_middleware,  # 动态工具选择（支持 MCP 工具注册）
+                ModelRetryMiddleware(),  # 模型重试中间件
             ],
             checkpointer=await self._get_checkpointer(),
         )

@@ -74,7 +74,7 @@ class BaseAgent:
 
         # 从 input_context 中提取 attachments（如果有）
         attachments = (input_context or {}).get("attachments", [])
-        input_config = {"configurable": input_context, "recursion_limit": 100}
+        input_config = {"configurable": input_context, "recursion_limit": 300}
 
         async for msg, metadata in graph.astream(
             {"messages": messages, "attachments": attachments},
