@@ -18,12 +18,14 @@
 
 **亮点**：提供全套的智能体开发套件，基于 MIT 开源协议，技术栈友好，适合基于此项目打造自己的智能体平台。
 
+<img width="1632" height="392" alt="image" src="https://github.com/user-attachments/assets/ec381fde-53dd-4845-a79f-116b823fe989" />
+
+
 > [!tip]
-> 🙏 **感谢 Star Star Star** ~ ⭐⭐⭐⭐⭐
-> 
 > 详细文档请查看全新的 📄[**文档中心**](https://xerrors.github.io/Yuxi-Know/)，
 > 哔哩哔哩观看 📽️[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
 
+---
 
 **🎉 最新动态**
 
@@ -71,7 +73,9 @@
 
 <div align="center">
   <!-- 视频缩略图 -->
-  <img width="5369" height="2934" alt="111" src="https://github.com/user-attachments/assets/acdf38eb-872f-4b70-b138-d69dc8be0db7" />
+<img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
+
+
 
   <br>
   <img width="5369" height="2934" alt="222" src="https://github.com/user-attachments/assets/839978d4-dcb8-47bd-a629-2912d2867e7e" />
