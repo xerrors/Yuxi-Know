@@ -319,7 +319,7 @@ def get_embedding_config(embed_info: dict) -> dict:
             "model": embed_info["name"],
             "api_key": os.getenv(embed_info["api_key"]) or embed_info["api_key"],
             "base_url": embed_info["base_url"],
-            "dimension": embed_info.get("dimension", 1024)
+            "dimension": embed_info.get("dimension", 1024),
         }
         logger.debug(f"Embedding config from dict: {config_dict}")
         return config_dict

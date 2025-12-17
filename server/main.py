@@ -12,6 +12,7 @@ from server.routers import router
 from server.utils.lifespan import lifespan
 from server.utils.auth_middleware import is_public_path
 from server.utils.common_utils import setup_logging
+from server.utils.access_log_middleware import AccessLogMiddleware
 
 # 设置日志配置
 setup_logging()
@@ -114,6 +115,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # 继续处理请求
         return await call_next(request)
 
+
+# 添加访问日志中间件（记录请求处理时间）
+app.add_middleware(AccessLogMiddleware)
 
 # 添加鉴权中间件
 app.add_middleware(LoginRateLimitMiddleware)

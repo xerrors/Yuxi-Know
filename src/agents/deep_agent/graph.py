@@ -1,14 +1,11 @@
 """Deep Agent - 基于create_deep_agent的深度分析智能体"""
 
-from langchain.agents.middleware import ModelRequest, dynamic_prompt, SummarizationMiddleware
-
-from langchain.agents import create_agent
-from langchain.agents.middleware import TodoListMiddleware
-from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
-
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
+from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRequest, SummarizationMiddleware, TodoListMiddleware, dynamic_prompt
+from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import context_based_model, inject_attachment_context
@@ -21,9 +18,7 @@ search_tools = [search]
 
 research_sub_agent = {
     "name": "research-agent",
-    "description": (
-        "利用搜索工具，用于研究更深入的问题。"
-    ),
+    "description": ("利用搜索工具，用于研究更深入的问题。"),
     "system_prompt": (
         "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
         "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"

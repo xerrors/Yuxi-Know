@@ -235,7 +235,7 @@ class LightRagKB(KnowledgeBase):
                 model=model_name,
                 api_key=config_dict["api_key"],
                 base_url=config_dict["base_url"].replace("/embeddings", ""),
-            )
+            ),
         )
 
     async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:

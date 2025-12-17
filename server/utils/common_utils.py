@@ -19,13 +19,14 @@ def setup_logging():
     uvicorn_logger = logging.getLogger("uvicorn")
     uvicorn_access_logger = logging.getLogger("uvicorn.access")
 
+    # 禁用默认的uvicorn访问日志（因为我们使用自定义中间件）
+    uvicorn_access_logger.handlers.clear()
+
     # 创建格式化器
     formatter = logging.Formatter(fmt="%(asctime)s %(levelname)s: %(message)s", datefmt="%m-%d %H:%M:%S")
 
-    # 为所有处理器设置格式化器
+    # 为uvicorn主日志设置格式化器
     for handler in uvicorn_logger.handlers:
-        handler.setFormatter(formatter)
-    for handler in uvicorn_access_logger.handlers:
         handler.setFormatter(formatter)
 
 

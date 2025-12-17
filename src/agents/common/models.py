@@ -32,7 +32,6 @@ def load_chat_model(fully_specified_name: str, **kwargs) -> BaseChatModel:
         logger.debug(f"[offical] Loading model {model_spec} with kwargs {kwargs}")
         return init_chat_model(model_spec, **kwargs)
 
-
     elif provider in ["dashscope"]:
         from langchain_deepseek import ChatDeepSeek
 
