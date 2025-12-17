@@ -234,7 +234,7 @@ async def save_partial_message(conv_mgr, thread_id, full_msg=None, error_message
             # 保存部分生成的AI消息
             msg_dict = full_msg.model_dump() if hasattr(full_msg, "model_dump") else {}
             content = full_msg.content if hasattr(full_msg, "content") else str(full_msg)
-            extra_metadata = msg_dict | {"error_type": error_type}
+            extra_metadata = msg_dict | extra_metadata
         else:
             content = ""
 

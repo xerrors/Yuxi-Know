@@ -1,7 +1,14 @@
 """Deep Agent - 基于create_deep_agent的深度分析智能体"""
 
-from deepagents import create_deep_agent
-from langchain.agents.middleware import ModelRequest, dynamic_prompt
+from langchain.agents.middleware import ModelRequest, dynamic_prompt, SummarizationMiddleware
+
+from langchain.agents import create_agent
+from langchain.agents.middleware import TodoListMiddleware
+from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
+
+from deepagents.middleware.filesystem import FilesystemMiddleware
+from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
+from deepagents.middleware.subagents import SubAgentMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import context_based_model, inject_attachment_context
@@ -15,8 +22,7 @@ search_tools = [search]
 research_sub_agent = {
     "name": "research-agent",
     "description": (
-        "用于研究更深入的问题。一次只给这个研究员一个主题。不要向这个研究员传递多个子问题。"
-        "相反，你应该将一个大主题分解成必要的组成部分，然后并行调用多个研究代理，每个子问题一个。"
+        "利用搜索工具，用于研究更深入的问题。"
     ),
     "system_prompt": (
         "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
@@ -81,15 +87,57 @@ class DeepAgent(BaseAgent):
         # 获取上下文配置
         context = self.context_schema.from_file(module_name=self.module_name)
 
+        model = load_chat_model(context.model)
+        tools = await self.get_tools()
+
+        if (
+            model.profile is not None
+            and isinstance(model.profile, dict)
+            and "max_input_tokens" in model.profile
+            and isinstance(model.profile["max_input_tokens"], int)
+        ):  # 此处参考 model.dev 中的 max_input_tokens
+            trigger = ("fraction", 0.85)
+            keep = ("fraction", 0.10)
+        else:
+            trigger = ("tokens", 110000)
+            keep = ("messages", 10)
+
         # 使用 create_deep_agent 创建深度智能体
-        graph = create_deep_agent(
-            model=load_chat_model(context.model),
-            tools=await self.get_tools(),
-            subagents=[critique_sub_agent, research_sub_agent],
+        graph = create_agent(
+            model=model,
+            tools=tools,
             middleware=[
                 context_based_model,  # 动态模型选择
                 context_aware_prompt,  # 动态系统提示词
                 inject_attachment_context,  # 附件上下文注入
+                TodoListMiddleware(),
+                FilesystemMiddleware(),
+                SubAgentMiddleware(
+                    default_model=load_chat_model(context.model),
+                    default_tools=tools,
+                    subagents=[critique_sub_agent, research_sub_agent],
+                    default_middleware=[
+                        TodoListMiddleware(),
+                        FilesystemMiddleware(),
+                        SummarizationMiddleware(
+                            model=model,
+                            trigger=trigger,
+                            keep=keep,
+                            trim_tokens_to_summarize=None,
+                        ),
+                        AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
+                        PatchToolCallsMiddleware(),
+                    ],
+                    general_purpose_agent=True,
+                ),
+                SummarizationMiddleware(
+                    model=model,
+                    trigger=trigger,
+                    keep=keep,
+                    trim_tokens_to_summarize=None,
+                ),
+                AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
+                PatchToolCallsMiddleware(),
             ],
             checkpointer=await self._get_checkpointer(),
         )
