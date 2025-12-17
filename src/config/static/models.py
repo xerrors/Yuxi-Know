@@ -83,14 +83,14 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
             "zai-org/GLM-4.6",
         ],
     ),
-    "together.ai": ChatModelProvider(
-        name="Together.ai",
-        url="https://api.together.ai/models",
-        base_url="https://api.together.xyz/v1/",
-        default="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-        env="TOGETHER_API_KEY",
-        models=["meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"],
-    ),
+    # "together": ChatModelProvider(
+    #     name="Together",
+    #     url="https://api.together.ai/models",
+    #     base_url="https://api.together.xyz/v1/",
+    #     default="meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
+    #     env="TOGETHER_API_KEY",
+    #     models=["meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"],
+    # ),
     "dashscope": ChatModelProvider(
         name="阿里百炼 (DashScope)",
         url="https://bailian.console.aliyun.com/?switchAgent=10226727&productCode=p_efm#/model-market",

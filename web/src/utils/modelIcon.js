@@ -17,7 +17,7 @@ export const modelIcons = {
   zhipu: zhipuIcon,
   siliconflow: siliconflowIcon,
   ark: arkIcon,
-  'together.ai': togetherIcon,
+  together: togetherIcon,
   openrouter: openrouterIcon,
   modelscope: modelscopeIcon,
   default: defaultIcon // 添加默认图标
