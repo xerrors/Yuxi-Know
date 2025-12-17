@@ -614,7 +614,7 @@ const _processStreamChunk = (chunk, threadId) => {
       }
 
       // Reload messages to show any partial content saved by the backend
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId });
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 });
       resetOnGoingConv(threadId);
       return true;
     case 'human_approval_required':
@@ -643,7 +643,7 @@ const _processStreamChunk = (chunk, threadId) => {
         }
       }
       // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 })
         .finally(() => {
           // 历史记录加载完成后，安全地清空当前进行中的对话
           resetOnGoingConv(threadId, true);
@@ -658,7 +658,7 @@ const _processStreamChunk = (chunk, threadId) => {
       if (chunkMessage) {
         message.info(chunkMessage);
       }
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId })
+      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 1000 })
         .finally(() => {
         resetOnGoingConv(threadId, true);
       });
@@ -1116,7 +1116,7 @@ const handleSendOrStop = async () => {
 
     // 中断后刷新消息历史，确保显示最新的状态
     try {
-      await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 100 });
+      await fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 });
       message.info('已中断对话生成');
     } catch (error) {
       console.error('刷新消息历史失败:', error);

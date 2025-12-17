@@ -174,7 +174,6 @@
       </div>
       <div v-else class="modal-config-content">
         <div class="modal-config-header">
-          <h3>选择 {{ providerConfig.providerName }} 的模型</h3>
           <p class="description">勾选您希望在系统中启用的模型，请注意，列表中可能包含非对话模型，请仔细甄别。</p>
         </div>
 
@@ -1096,12 +1095,14 @@ const testCustomProvider = async (providerId, modelName) => {
       filter: grayscale(100%);
       transition: filter 0.2s ease;
       flex-shrink: 0;
+      background-color: white;
+      border: 1px solid var(--gray-200);
 
       img {
         width: 100%;
         height: 100%;
-        object-fit: cover;
-        border: 1px solid var(--gray-100);
+        object-fit: contain;
+        padding: 4px;
         border-radius: 6px;
       }
 
