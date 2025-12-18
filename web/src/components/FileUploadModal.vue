@@ -186,7 +186,6 @@ const DEFAULT_SUPPORTED_TYPES = [
   '.jpeg',
   '.md',
   '.docx',
-  '.doc',
 ];
 
 const normalizeExtensions = (extensions) => {

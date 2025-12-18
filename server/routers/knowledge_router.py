@@ -25,7 +25,6 @@ knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 media_types = {
     ".pdf": "application/pdf",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    ".doc": "application/msword",
     ".txt": "text/plain",
     ".md": "text/markdown",
     ".json": "application/json",

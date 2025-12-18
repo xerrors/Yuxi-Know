@@ -24,7 +24,6 @@ from src.utils import hashstr, logger
 SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".txt",
     ".md",
-    ".doc",
     ".docx",
     ".html",
     ".htm",
