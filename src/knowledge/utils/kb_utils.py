@@ -302,7 +302,6 @@ def get_embedding_config(embed_info: dict) -> dict:
     except AssertionError as e:
         logger.error(f"AssertionError in get_embedding_config: {e}, embed_info={embed_info}")
 
-
     # 兼容性检查：旧版配置字段
     try:
         # 1. 检查 embed_info 是否有效
