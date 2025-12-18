@@ -61,6 +61,7 @@
       </div>
       <div style="display: flex; gap: 4px;">
         <a-button
+          v-if="!isLightRAG"
           type="link"
           @click="handleBatchRechunk"
           :loading="batchRechunking"
@@ -132,24 +133,25 @@
         </a-tooltip>
 
         <div v-else-if="column.key === 'action'" class="table-row-actions">
-          <a-button class="download-btn" type="link"
-            @click="handleDownloadFile(record)"
-            :disabled="lock || record.status !== 'done'"
-            :icon="h(Download)"
-            title="下载"
-            />
-          <a-button class="rechunk-btn" type="link"
-            @click="handleRechunkFile(record)"
-            :disabled="lock || record.status === 'processing' || record.status === 'waiting'"
-            :icon="h(RefreshCw)"
-            title="重新分块"
-            />
-          <a-button class="del-btn" type="link"
-            @click="handleDeleteFile(record.file_id)"
-            :disabled="lock || record.status === 'processing' || record.status === 'waiting'"
-            :icon="h(Trash2)"
-            title="删除"
-            />
+          <a-popover placement="bottomRight" trigger="click" overlayClassName="file-action-popover">
+            <template #content>
+              <div class="file-action-list">
+                <a-button type="text" block @click="handleDownloadFile(record)" :disabled="lock || record.status !== 'done'">
+                  <template #icon><component :is="h(Download)" style="width: 14px; height: 14px;" /></template>
+                  下载文件
+                </a-button>
+                <a-button v-if="!isLightRAG" type="text" block @click="handleRechunkFile(record)" :disabled="lock || record.status === 'processing' || record.status === 'waiting'">
+                  <template #icon><component :is="h(RefreshCw)" style="width: 14px; height: 14px;" /></template>
+                  重新分块
+                </a-button>
+                <a-button type="text" block danger @click="handleDeleteFile(record.file_id)" :disabled="lock || record.status === 'processing' || record.status === 'waiting'">
+                  <template #icon><component :is="h(Trash2)" style="width: 14px; height: 14px;" /></template>
+                  删除文件
+                </a-button>
+              </div>
+            </template>
+            <a-button type="text" :icon="h(Ellipsis)" class="action-trigger-btn" />
+          </a-popover>
         </div>
         <span v-else>{{ text }}</span>
       </template>
@@ -176,6 +178,7 @@ import {
   RefreshCw,
   ChevronLast,
   RefreshCcw,
+  Ellipsis,
 } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
@@ -194,6 +197,7 @@ const emit = defineEmits([
 ]);
 
 const files = computed(() => Object.values(store.database.files || {}));
+const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag');
 const refreshing = computed(() => store.state.refrashing);
 const lock = computed(() => store.state.lock);
 const batchDeleting = computed(() => store.state.batchDeleting);
@@ -259,7 +263,7 @@ const columnsCompact = [
     },
     sortDirections: ['ascend', 'descend']
   },
-  { title: '', key: 'action', dataIndex: 'file_id', width: 80, align: 'center' }
+  { title: '', key: 'action', dataIndex: 'file_id', width: 40, align: 'center' }
 ];
 
 // 过滤后的文件列表
@@ -734,6 +738,28 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   /* border: 1px solid var(--main-100); */
 }
 
+.action-trigger-btn {
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--gray-500);
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: var(--gray-100);
+    color: var(--main-color);
+  }
+
+  svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
 
 /* Table row selection styling */
 :deep(.ant-table-tbody > tr.ant-table-row-selected > td) {
@@ -746,5 +772,66 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
 :deep(.ant-table-tbody > tr:hover > td) {
   background-color: var(--main-5);
+}
+</style>
+
+<style lang="less">
+.file-action-popover {
+  .ant-popover-inner {
+    padding: 4px;
+  }
+
+  .ant-popover-inner {
+    border-radius: 8px;
+    border: 1px solid var(--gray-150);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+  }
+
+  .ant-popover-arrow {
+    display: none;
+  }
+}
+
+.file-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .ant-btn {
+    text-align: left;
+    height: 36px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    border-radius: 6px;
+    padding: 0 12px;
+    border: none;
+    box-shadow: none;
+
+    &:hover {
+      background-color: var(--gray-50);
+      color: var(--main-color);
+    }
+
+    &.ant-btn-dangerous:hover {
+      background-color: var(--color-error-50);
+      color: var(--color-error-500);
+    }
+
+    .anticon, .lucide {
+      margin-right: 10px;
+    }
+
+    span {
+      font-size: 13px;
+    }
+  }
+
+  .ant-btn:disabled {
+    background-color: transparent;
+    color: var(--gray-300);
+    cursor: not-allowed;
+  }
 }
 </style>
