@@ -68,12 +68,6 @@
               <span v-if="hasAgentStateContent" class="text">状态</span>
             </div>
           </AgentPopover>
-          <!-- <div class="nav-btn" @click="shareChat" v-if="currentChatId && currentAgent">
-            <ShareAltOutlined style="font-size: 18px;"/>
-          </div> -->
-          <!-- <div class="nav-btn test-history" @click="getAgentHistory" v-if="currentChatId && currentAgent">
-            <ThunderboltOutlined />
-          </div> -->
           <slot name="header-right"></slot>
         </div>
       </div>
@@ -87,61 +81,6 @@
       <div v-else-if="!conversations.length" class="chat-examples">
         <div style="margin-bottom: 150px"></div>
         <h1>您好，我是{{ currentAgentName }}！</h1>
-        <!-- <h1>{{ currentAgent ? currentAgent.name : '请选择一个智能体开始对话' }}</h1>
-        <p>{{ currentAgent ? currentAgent.description : '不同的智能体有不同的专长和能力' }}</p> -->
-
-        <div class="inputer-init">
-          <MessageInputComponent
-            ref="messageInputRef"
-            v-model="userInput"
-            :is-loading="isProcessing"
-            :disabled="!currentAgent"
-            :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
-            placeholder="输入问题..."
-            @send="handleSendOrStop"
-            @keydown="handleKeyDown"
-          >
-            <template #top>
-              <ImagePreviewComponent
-                v-if="currentImage"
-                :image-data="currentImage"
-                @remove="handleImageRemoved"
-                class="image-preview-wrapper"
-              />
-            </template>
-            <template #options-left>
-              <AttachmentOptionsComponent
-                v-if="supportsFileUpload"
-                :disabled="!currentAgent"
-                @upload="handleAttachmentUpload"
-                @upload-image="handleImageUpload"
-                @upload-image-success="handleImageUploadSuccess"
-              />
-            </template>
-            <template #actions-left>
-              <AttachmentStatusIndicator
-                :attachments="currentAttachments"
-                :disabled="!currentAgent"
-                @remove="handleAttachmentRemove"
-              />
-            </template>
-          </MessageInputComponent>
-
-          <!-- 示例问题 -->
-          <div class="example-questions" v-if="exampleQuestions.length > 0">
-            <div class="example-title">或试试这些问题：</div>
-            <div class="example-chips">
-              <div
-                v-for="question in exampleQuestions"
-                :key="question.id"
-                class="example-chip"
-                @click="handleExampleClick(question.text)"
-              >
-                {{ question.text }}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
       <div class="chat-box" ref="messagesContainer">
         <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
@@ -175,7 +114,7 @@
           </div>
         </div>
       </div>
-      <div class="bottom">
+      <div class="bottom" :class="{ 'start-screen': !conversations.length }">
         <!-- 人工审批弹窗 - 放在输入框上方 -->
         <HumanApprovalModal
           :visible="approvalState.showModal"
@@ -185,43 +124,36 @@
           @reject="handleReject"
         />
 
-        <div class="message-input-wrapper" v-if="conversations.length > 0">
-          <MessageInputComponent
+        <div class="message-input-wrapper">
+          <AgentInputArea
             ref="messageInputRef"
             v-model="userInput"
             :is-loading="isProcessing"
             :disabled="!currentAgent"
             :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
             placeholder="输入问题..."
+            :supports-file-upload="supportsFileUpload"
+            :agent-id="currentAgentId"
+            :thread-id="currentChatId"
+            :ensure-thread="ensureActiveThread"
             @send="handleSendOrStop"
-            @keydown="handleKeyDown"
-          >
-            <template #top>
-              <ImagePreviewComponent
-                v-if="currentImage"
-                :image-data="currentImage"
-                @remove="handleImageRemoved"
-                class="image-preview-wrapper"
-              />
-            </template>
-            <template #options-left>
-              <AttachmentOptionsComponent
-                v-if="supportsFileUpload"
-                :disabled="!currentAgent"
-                @upload="handleAttachmentUpload"
-                @upload-image="handleImageUpload"
-                @upload-image-success="handleImageUploadSuccess"
-              />
-            </template>
-            <template #actions-left>
-              <AttachmentStatusIndicator
-                :attachments="currentAttachments"
-                :disabled="!currentAgent"
-                @remove="handleAttachmentRemove"
-              />
-            </template>
-          </MessageInputComponent>
-          <div class="bottom-actions">
+          />
+
+          <!-- 示例问题 -->
+          <div class="example-questions" v-if="!conversations.length && exampleQuestions.length > 0">
+            <div class="example-chips">
+              <div
+                v-for="question in exampleQuestions"
+                :key="question.id"
+                class="example-chip"
+                @click="handleExampleClick(question.text)"
+              >
+                {{ question.text }}
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-actions" v-else>
             <p class="note">请注意辨别内容的可靠性</p>
           </div>
         </div>
@@ -234,11 +166,8 @@
 <script setup>
 import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
 import { message } from 'ant-design-vue';
-import MessageInputComponent from '@/components/MessageInputComponent.vue'
-import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
-import AttachmentStatusIndicator from '@/components/AttachmentStatusIndicator.vue'
+import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
-import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, FolderDotIcon, ChevronDown } from 'lucide-vue-next';
@@ -252,6 +181,7 @@ import { MessageProcessor } from '@/utils/messageProcessor';
 import { agentApi, threadApi } from '@/apis';
 import HumanApprovalModal from '@/components/HumanApprovalModal.vue';
 import { useApproval } from '@/composables/useApproval';
+import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler';
 import AgentPopover from '@/components/AgentPopover.vue';
 
 // ==================== PROPS & EMITS ====================
@@ -312,12 +242,6 @@ const localUIState = reactive({
   containerWidth: 0,
 });
 
-const attachmentState = reactive({
-  itemsByThread: {},
-  limits: null,
-  isUploading: false,
-})
-
 // AgentState Popover 状态
 const agentStatePopoverVisible = ref(false);
 
@@ -348,11 +272,6 @@ const currentChatId = computed(() => chatState.currentThreadId);
 const currentThread = computed(() => {
   if (!currentChatId.value) return null;
   return threads.value.find(thread => thread.id === currentChatId.value) || null;
-});
-
-const currentAttachments = computed(() => {
-  if (!currentChatId.value) return [];
-  return attachmentState.itemsByThread[currentChatId.value] || [];
 });
 
 // 检查当前智能体是否支持文件上传
@@ -451,7 +370,6 @@ const isMediumContainer = computed(() => localUIState.containerWidth <= 768);
 // ==================== SCROLL & RESIZE HANDLING ====================
 const chatContainerRef = ref(null);
 const messageInputRef = ref(null);
-const currentImage = ref(null);
 const scrollController = new ScrollController('.chat');
 let resizeObserver = null;
 
@@ -534,80 +452,6 @@ const resetOnGoingConv = (threadId = null) => {
   }
 };
 
-const _processStreamChunk = (chunk, threadId) => {
-  const { status, msg, request_id, message: chunkMessage } = chunk;
-  const threadState = getThreadState(threadId);
-  // console.log('Processing stream chunk:', chunk, 'for thread:', threadId);
-
-  if (!threadState) return false;
-
-  switch (status) {
-    case 'init':
-      threadState.onGoingConv.msgChunks[request_id] = [msg];
-      return false;
-    case 'loading':
-      if (msg.id) {
-        if (!threadState.onGoingConv.msgChunks[msg.id]) {
-          threadState.onGoingConv.msgChunks[msg.id] = [];
-                }
-        threadState.onGoingConv.msgChunks[msg.id].push(msg);
-      }
-        return false;
-    case 'error':
-      handleChatError({ message: chunkMessage }, 'stream');
-      // Stop the loading indicator
-      if (threadState) {
-        threadState.isStreaming = false;
-
-        // Abort the stream controller to stop processing further events
-        if (threadState.streamAbortController) {
-          threadState.streamAbortController.abort();
-          threadState.streamAbortController = null;
-        }
-      }
-      return true;
-    case 'human_approval_required':
-      // 使用审批 composable 处理审批请求
-      return processApprovalInStream(chunk, threadId, currentAgentId.value);
-    case 'agent_state':
-      if ((supportsTodo.value || supportsFiles.value) && chunk.agent_state) {
-        console.log('[AgentState]', {
-          threadId,
-          todos: chunk.agent_state?.todos || [],
-          files: chunk.agent_state?.files || []
-        });
-        threadState.agentState = chunk.agent_state;
-      }
-      return false;
-    case 'finished':
-      // 先标记流式结束，但保持消息显示直到历史记录加载完成
-      if (threadState) {
-        threadState.isStreaming = false;
-        if ((supportsTodo.value || supportsFiles.value) && threadState.agentState) {
-          console.log(`[AgentState|Final] ${new Date().toLocaleTimeString()}.${new Date().getMilliseconds()}`, {
-            threadId,
-            todos: threadState.agentState?.todos || [],
-            files: threadState.agentState?.files || []
-          });
-        }
-      }
-      return true;
-    case 'interrupted':
-      // 中断状态，刷新消息历史
-      console.warn("[Interrupted] case");
-      if (threadState) {
-        threadState.isStreaming = false;
-      }
-      // 如果有 message 字段，显示提示（例如：敏感内容检测）
-      if (chunkMessage) {
-        message.info(chunkMessage);
-      }
-      return true;
-  }
-
-  return false;
-};
-
 // ==================== 线程管理方法 ====================
 // 获取当前智能体的线程列表
 const fetchThreads = async (agentId = null) => {
@@ -618,12 +462,6 @@ const fetchThreads = async (agentId = null) => {
   try {
     const fetchedThreads = await threadApi.getThreads(targetAgentId);
     threads.value = fetchedThreads || [];
-    const validIds = new Set((threads.value || []).map(thread => thread.id));
-    Object.keys(attachmentState.itemsByThread).forEach((id) => {
-      if (!validIds.has(id)) {
-        delete attachmentState.itemsByThread[id];
-      }
-    });
   } catch (error) {
     console.error('Failed to fetch threads:', error);
     handleChatError(error, 'fetch');
@@ -643,7 +481,6 @@ const createThread = async (agentId, title = '新的对话') => {
     if (thread) {
       threads.value.unshift(thread);
       threadMessages.value[thread.id] = [];
-      attachmentState.itemsByThread[thread.id] = [];
     }
     return thread;
   } catch (error) {
@@ -664,7 +501,6 @@ const deleteThread = async (threadId) => {
     await threadApi.deleteThread(threadId);
     threads.value = threads.value.filter(thread => thread.id !== threadId);
     delete threadMessages.value[threadId];
-    delete attachmentState.itemsByThread[threadId];
 
     if (chatState.currentThreadId === threadId) {
       chatState.currentThreadId = null;
@@ -726,23 +562,6 @@ const fetchAgentState = async (agentId, threadId) => {
   } catch (error) {}
 };
 
-const loadThreadAttachments = async (threadId, { silent = false } = {}) => {
-  if (!threadId) return;
-  try {
-    const response = await threadApi.getThreadAttachments(threadId);
-    attachmentState.itemsByThread[threadId] = response.attachments || [];
-    if (response.limits) {
-      attachmentState.limits = response.limits;
-    }
-  } catch (error) {
-    if (silent) {
-      console.warn('Failed to load attachments:', error);
-    } else {
-      handleChatError(error, 'load');
-    }
-  }
-};
-
 const ensureActiveThread = async (title = '新的对话') => {
   if (currentChatId.value) return currentChatId.value;
   try {
@@ -757,66 +576,19 @@ const ensureActiveThread = async (title = '新的对话') => {
   return null;
 };
 
-const handleAttachmentUpload = async (files) => {
-  if (!files?.length) return;
-  if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '上传附件', handleValidationError)) return;
-
-  const preferredTitle = files[0]?.name || '新的对话';
-  const threadId = await ensureActiveThread(preferredTitle);
-  if (!threadId) {
-    message.error('创建对话失败，无法上传附件');
-    return;
-  }
-
-  attachmentState.isUploading = true;
-  try {
-    for (const file of files) {
-      await threadApi.uploadThreadAttachment(threadId, file);
-      message.success(`${file.name} 上传成功`);
-    }
-    await loadThreadAttachments(threadId, { silent: true });
-  } catch (error) {
-    handleChatError(error, 'upload');
-  } finally {
-    attachmentState.isUploading = false;
-  }
-};
-
-const handleAttachmentRemove = async (fileId) => {
-  if (!fileId || !currentChatId.value) return;
-  try {
-    await threadApi.deleteThreadAttachment(currentChatId.value, fileId);
-    await loadThreadAttachments(currentChatId.value, { silent: true });
-    message.success('附件已删除');
-  } catch (error) {
-    handleChatError(error, 'delete');
-  }
-};
-
-// 处理图片上传
-const handleImageUpload = (imageData) => {
-  if (imageData && imageData.success) {
-    currentImage.value = imageData;
-  }
-};
-
-// 处理图片移除
-const handleImageRemoved = () => {
-  currentImage.value = null;
-};
-
-// 处理图片上传成功，关闭选项面板
-const handleImageUploadSuccess = () => {
-  if (messageInputRef.value) {
-    messageInputRef.value.closeOptions();
-  }
-};
-
 // ==================== 审批功能管理 ====================
 const { approvalState, handleApproval, processApprovalInStream } = useApproval({
   getThreadState,
   resetOnGoingConv,
   fetchThreadMessages
+});
+
+const { handleAgentResponse } = useAgentStreamHandler({
+  getThreadState,
+  processApprovalInStream,
+  currentAgentId,
+  supportsTodo,
+  supportsFiles
 });
 
 // 发送消息并处理流式响应
@@ -931,7 +703,6 @@ const selectChat = async (chatId) => {
 
   await nextTick();
   scrollController.scrollToBottomStaticForce();
-  await loadThreadAttachments(chatId, { silent: true });
   await fetchAgentState(currentAgentId.value, chatId);
 };
 
@@ -963,9 +734,10 @@ const renameChat = async (data) => {
   }
 };
 
-const handleSendMessage = async () => {
+const handleSendMessage = async ({ image } = {}) => {
+  console.log('AgentChatComponent: handleSendMessage payload image:', image);
   const text = userInput.value.trim();
-  if (!text || !currentAgent.value || isProcessing.value) return;
+  if ((!text && !image) || !currentAgent.value || isProcessing.value) return;
 
   let threadId = currentChatId.value;
   if (!threadId) {
@@ -977,10 +749,6 @@ const handleSendMessage = async () => {
   }
 
   userInput.value = '';
-
-  // 保存当前图片数据，在发送后再清除
-  const imageData = currentImage.value;
-  currentImage.value = null;
 
   await nextTick();
   scrollController.scrollToBottom(true);
@@ -995,46 +763,13 @@ const handleSendMessage = async () => {
   try {
     const response = await sendMessage({
       agentId: currentAgentId.value,
-      threadId: currentChatId.value,
+      threadId: threadId,
       text: text,
       signal: threadState.streamAbortController?.signal,
-      imageData: imageData
+      imageData: image
     });
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let stopReading = false;
-
-    while (!stopReading) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine) {
-          try {
-            const chunk = JSON.parse(trimmedLine);
-            if (_processStreamChunk(chunk, threadId)) {
-              stopReading = true;
-              break;
-            }
-          } catch (e) { console.warn('Failed to parse stream chunk JSON:', e); }
-        }
-      }
-    }
-    if (!stopReading && buffer.trim()) {
-      try {
-        const chunk = JSON.parse(buffer.trim());
-        if (_processStreamChunk(chunk, threadId)) {
-          stopReading = true;
-        }
-      } catch (e) { console.warn('Failed to parse final stream chunk JSON:', e); }
-    }
+    await handleAgentResponse(response, threadId);
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Stream error:', error);
@@ -1056,7 +791,7 @@ const handleSendMessage = async () => {
 };
 
 // 发送或中断
-const handleSendOrStop = async () => {
+const handleSendOrStop = async (payload) => {
   const threadId = currentChatId.value;
   const threadState = getThreadState(threadId);
   if (isProcessing.value && threadState && threadState.streamAbortController) {
@@ -1073,7 +808,7 @@ const handleSendOrStop = async () => {
     }
     return;
   }
-  await handleSendMessage();
+  await handleSendMessage(payload);
 };
 
 // ==================== 人工审批处理 ====================
@@ -1103,53 +838,9 @@ const handleApprovalWithStream = async (approved) => {
     console.log('🔄 [STREAM] Processing resume streaming response');
 
     // 处理流式响应
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let stopReading = false;
-
-    while (!stopReading) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (trimmedLine) {
-          try {
-            const chunk = JSON.parse(trimmedLine);
-            console.log('🔄 [STREAM] Processing chunk:', chunk);
-
-            // 处理chunk并更新对话 - _processStreamChunk 已经处理了所有必要的逻辑
-            if (_processStreamChunk(chunk, threadId)) {
-              stopReading = true;
-              break;
-            }
-
-          } catch (e) {
-            console.warn('Failed to parse stream chunk JSON:', e, 'Line:', trimmedLine);
-          }
-        }
-      }
-    }
-
-    if (!stopReading && buffer.trim()) {
-      try {
-        const chunk = JSON.parse(buffer.trim());
-        console.log('🔄 [STREAM] Processing final chunk:', chunk);
-
-        // 处理最终chunk - _processStreamChunk 已经处理了所有必要的逻辑
-        if (_processStreamChunk(chunk, threadId)) {
-          stopReading = true;
-        }
-
-      } catch (e) {
-        console.warn('Failed to parse final stream chunk JSON:', e);
-      }
-    }
+    await handleAgentResponse(response, threadId, (chunk) => {
+      console.log('🔄 [STREAM] Processing chunk:', chunk);
+    });
 
     console.log('🔄 [STREAM] Resume stream processing completed');
 
@@ -1182,14 +873,6 @@ const handleApprove = () => {
 
 const handleReject = () => {
   handleApprovalWithStream(false);
-};
-
-// ==================== UI HANDLERS ====================
-const handleKeyDown = (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    handleSendMessage();
-  }
 };
 
 // 处理示例问题点击
@@ -1335,6 +1018,7 @@ watch(conversations, () => {
 
 <style lang="less" scoped>
 @import '@/assets/css/main.css';
+@import '@/assets/css/animations.less';
 
 .chat-container {
   display: flex;
@@ -1418,7 +1102,7 @@ watch(conversations, () => {
   padding: 0 50px;
   text-align: center;
   position: absolute;
-  top: 15%;
+  bottom: 65%;
   width: 100%;
   z-index: 9;
   animation: slideInUp 0.5s ease-out;
@@ -1437,56 +1121,44 @@ watch(conversations, () => {
   .agent-icons {
     height: 180px;
   }
+}
 
-  .example-questions {
-    margin-top: 16px;
-    text-align: center;
+.example-questions {
+  margin-top: 16px;
+  text-align: center;
 
-    .example-title {
-      font-size: 0.85rem;
-      color: var(--gray-600);
-      margin-bottom: 12px;
-    }
-
-    .example-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: center;
-    }
-
-    .example-chip {
-      padding: 6px 12px;
-      background: var(--gray-25);
-      // border: 1px solid var(--gray-100);
-      border-radius: 16px;
-      cursor: pointer;
-      font-size: 0.8rem;
-      color: var(--gray-700);
-      transition: all 0.15s ease;
-      white-space: nowrap;
-      max-width: 200px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-
-      &:hover {
-        // background: var(--main-25);
-        border-color: var(--main-200);
-        color: var(--main-700);
-        box-shadow: 0 0px 4px rgba(0, 0, 0, 0.03);
-      }
-
-      &:active {
-        transform: translateY(0);
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-      }
-    }
+  .example-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
   }
 
-  .inputer-init {
-    margin: 20px auto;
-    width: 90%;
-    max-width: 800px;
+  .example-chip {
+    padding: 6px 12px;
+    background: var(--gray-25);
+    // border: 1px solid var(--gray-100);
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--gray-700);
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    &:hover {
+      // background: var(--main-25);
+      border-color: var(--main-200);
+      color: var(--main-700);
+      box-shadow: 0 0px 4px rgba(0, 0, 0, 0.03);
+    }
+
+    &:active {
+      transform: translateY(0);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    }
   }
 }
 
@@ -1561,6 +1233,20 @@ watch(conversations, () => {
       user-select: none;
     }
   }
+
+  &.start-screen {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    bottom: auto;
+    max-width: 800px;
+    width: 90%;
+    background: transparent;
+    padding: 0;
+    border-top: none;
+    z-index: 100; /* Ensure it's above other elements */
+  }
 }
 
 .loading-dots {
@@ -1612,89 +1298,6 @@ watch(conversations, () => {
   }
 }
 
-@keyframes dotPulse {
-  0%, 80%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-}
-
-@keyframes shimmer {
-  0% {
-    left: -100%;
-  }
-  100% {
-    left: 100%;
-  }
-}
-
-@keyframes swing-in-top-fwd {
-  0% {
-    transform: rotateX(-100deg);
-    transform-origin: top;
-    opacity: 0;
-  }
-  100% {
-    transform: rotateX(0deg);
-    transform-origin: top;
-    opacity: 1;
-  }
-}
-
-@keyframes slideInUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeInDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
 
 @media (max-width: 1800px) {
 
@@ -1803,12 +1406,4 @@ watch(conversations, () => {
   background-color: var(--main-20);
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 </style>

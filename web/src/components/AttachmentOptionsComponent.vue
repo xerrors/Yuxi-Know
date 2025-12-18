@@ -118,7 +118,7 @@ const processImageUpload = async (file) => {
         width: result.width,
         height: result.height,
         format: result.format,
-        mimeType: result.mime_type,
+        mimeType: result.mime_type || file.type,
         sizeBytes: result.size_bytes,
         originalName: file.name
       });
