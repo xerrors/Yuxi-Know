@@ -53,6 +53,19 @@ export const databaseApi = {
    */
   deleteDatabase: async (dbId) => {
     return apiAdminDelete(`/api/knowledge/databases/${dbId}`)
+  },
+
+  /**
+   * 使用 AI 生成或优化知识库描述
+   * @param {string} name - 知识库名称
+   * @param {string} currentDescription - 当前描述（可选）
+   * @returns {Promise} - 生成结果
+   */
+  generateDescription: async (name, currentDescription = '') => {
+    return apiAdminPost('/api/knowledge/generate-description', {
+      name,
+      current_description: currentDescription
+    })
   }
 }
 

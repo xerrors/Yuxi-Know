@@ -65,7 +65,12 @@
         <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
       </a-form-item>
       <a-form-item label="知识库描述" name="description">
-        <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
+        <AiTextarea
+          v-model="editForm.description"
+          :name="editForm.name"
+          placeholder="请输入知识库描述"
+          :rows="4"
+        />
       </a-form-item>
 
       <a-form-item label="自动生成问题" name="auto_generate_questions">
@@ -99,6 +104,7 @@ import {
   CopyOutlined,
 } from '@ant-design/icons-vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import AiTextarea from '@/components/AiTextarea.vue';
 
 const router = useRouter();
 const store = useDatabaseStore();

@@ -1295,3 +1295,66 @@ async def get_all_embedding_models_status(current_user: User = Depends(get_admin
     except Exception as e:
         logger.error(f"获取所有embedding模型状态失败: {e}, {traceback.format_exc()}")
         return {"message": f"获取所有embedding模型状态失败: {e}", "status": {"models": {}, "total": 0, "available": 0}}
+
+
+# =============================================================================
+# === AI 辅助功能分组 ===
+# =============================================================================
+
+
+@knowledge.post("/generate-description")
+async def generate_description(
+    name: str = Body(..., description="知识库名称"),
+    current_description: str = Body("", description="当前描述（可选，用于优化）"),
+    current_user: User = Depends(get_admin_user),
+):
+    """使用 LLM 生成或优化知识库描述
+
+    根据知识库名称和现有描述，使用 LLM 生成适合作为智能体工具描述的内容。
+    """
+    from src.models import select_model
+
+    logger.debug(f"Generating description for knowledge base: {name}")
+
+    # 构建提示词
+    if current_description.strip():
+        prompt = textwrap.dedent(f"""
+            请帮我优化以下知识库的描述。
+
+            知识库名称: {name}
+            当前描述: {current_description}
+
+            要求:
+            1. 这个描述将作为智能体工具的描述使用
+            2. 智能体会根据知识库的标题和描述来选择合适的工具
+            3. 所以描述需要清晰、具体，说明该知识库包含什么内容、适合解答什么类型的问题
+            4. 描述应该简洁有力，通常 2-4 句话即可
+            5. 不要使用 Markdown 格式
+
+            请直接输出优化后的描述，不要有任何前缀说明。
+        """).strip()
+    else:
+        prompt = textwrap.dedent(f"""
+            请为以下知识库生成一个描述。
+
+            知识库名称: {name}
+
+            要求:
+            1. 这个描述将作为智能体工具的描述使用
+            2. 智能体会根据知识库的标题和描述来选择合适的工具
+            3. 所以描述需要清晰、具体，说明该知识库可能包含什么内容、适合解答什么类型的问题
+            4. 描述应该简洁有力，通常 2-4 句话即可
+            5. 不要使用 Markdown 格式
+
+            请直接输出描述，不要有任何前缀说明。
+        """).strip()
+
+    try:
+        model = select_model()
+        response = await asyncio.to_thread(model.call, prompt)
+        description = response.content.strip()
+        logger.debug(f"Generated description: {description}")
+        return {"description": description, "status": "success"}
+    except Exception as e:
+        logger.error(f"生成描述失败: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"生成描述失败: {e}")
