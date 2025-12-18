@@ -16,6 +16,8 @@
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
 - DeepSeek 官方接口适配会出现问题
 - 目前的知识库的图片存在公开访问风险
+- 工具传递给模型的时候，使用英文，显示的时候，使用中文（尽量保持一致）
+- 首页加载的问题
 
 ### 新增
 - 新增对于上传附件的智能体中间件，详见[文档](https://xerrors.github.io/Yuxi-Know/latest/advanced/agents-config.html#%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%AD%E9%97%B4%E4%BB%B6)

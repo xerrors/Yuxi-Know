@@ -225,8 +225,7 @@
           >
             {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
           </a-tag>
-          </div>
-
+        </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
     </div>

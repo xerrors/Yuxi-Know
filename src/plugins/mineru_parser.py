@@ -190,6 +190,7 @@ class MinerUParser(BaseDocumentProcessor):
 
                     try:
                         import asyncio
+
                         processed = asyncio.run(_process_zip_file(tmp_zip.name, params.get("db_id")))
                         text = processed["markdown_content"]
                     finally:

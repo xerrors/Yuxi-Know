@@ -155,6 +155,7 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 return text
 
             import asyncio
+
             from src.knowledge.indexing import _process_zip_file
 
             try:
