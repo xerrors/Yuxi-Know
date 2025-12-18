@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import pathlib
@@ -128,7 +129,9 @@ class DBManager(metaclass=SingletonMeta):
             logger.error(f"Async database operation failed: {e}")
             raise
         finally:
-            await session.close()
+            # Shield close operation to ensure connection is properly closed even if task is cancelled
+            # This prevents aiosqlite from raising errors during cancellation
+            await asyncio.shield(session.close())
 
     def check_first_run(self):
         """检查是否首次运行（同步版本）"""

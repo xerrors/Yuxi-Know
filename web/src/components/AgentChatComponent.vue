@@ -233,10 +233,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue';
-import { LoadingOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
-import AttachmentInputPanel from '@/components/AttachmentInputPanel.vue'
 import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
 import AttachmentStatusIndicator from '@/components/AttachmentStatusIndicator.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
@@ -431,27 +429,16 @@ const conversations = computed(() => {
   const threadState = currentThreadState.value;
 
   // 如果有进行中的消息且线程状态显示正在流式处理，添加进行中的对话
-  if (onGoingConvMessages.value.length > 0 && threadState?.isStreaming) {
+  if (onGoingConvMessages.value.length > 0) {
     const onGoingConv = {
       messages: onGoingConvMessages.value,
       status: 'streaming'
     };
     return [...historyConvs, onGoingConv];
   }
-
-  // 即使流式结束，如果历史记录为空但还有消息没有完全同步，也保持显示
-  if (historyConvs.length === 0 && onGoingConvMessages.value.length > 0 && !threadState?.isStreaming) {
-    const finalConv = {
-      messages: onGoingConvMessages.value,
-      status: 'finished'
-    };
-    return [finalConv];
-  }
-
   return historyConvs;
 });
 
-const isLoadingThreads = computed(() => chatUIStore.isLoadingThreads);
 const isLoadingMessages = computed(() => chatUIStore.isLoadingMessages);
 const isStreaming = computed(() => {
   const threadState = currentThreadState.value;
@@ -522,54 +509,28 @@ const cleanupThreadState = (threadId) => {
 };
 
 // ==================== STREAM HANDLING LOGIC ====================
-const resetOnGoingConv = (threadId = null, preserveMessages = false) => {
-  console.log('🔄 [RESET] Resetting on going conversation:', threadId, preserveMessages);
-  if (threadId) {
+const resetOnGoingConv = (threadId = null) => {
+  console.log(`🔄 [RESET] Resetting on going conversation: ${new Date().toLocaleTimeString()}.${new Date().getMilliseconds()}`, threadId);
+
+  const targetThreadId = threadId || currentChatId.value;
+
+  if (targetThreadId) {
     // 清理指定线程的状态
-    const threadState = getThreadState(threadId);
+    const threadState = getThreadState(targetThreadId);
     if (threadState) {
       if (threadState.streamAbortController) {
         threadState.streamAbortController.abort();
         threadState.streamAbortController = null;
       }
-      // 如果指定要保留消息，则延迟清空
-      if (preserveMessages) {
-        // 延迟清空消息，给历史记录加载足够时间
-        setTimeout(() => {
-          if (threadState.onGoingConv) {
+
+      // 直接重置对话状态
       threadState.onGoingConv = createOnGoingConvState();
     }
-        }, 100);
-      } else {
-        threadState.onGoingConv = createOnGoingConvState();
-      }
-    }
   } else {
-    // 清理当前线程或所有线程的状态
-    const targetThreadId = currentChatId.value;
-    if (targetThreadId) {
-      const threadState = getThreadState(targetThreadId);
-      if (threadState) {
-        if (threadState.streamAbortController) {
-          threadState.streamAbortController.abort();
-          threadState.streamAbortController = null;
-        }
-        if (preserveMessages) {
-          setTimeout(() => {
-            if (threadState.onGoingConv) {
-              threadState.onGoingConv = createOnGoingConvState();
-            }
-          }, 100);
-        } else {
-          threadState.onGoingConv = createOnGoingConvState();
-        }
-      }
-    } else {
-      // 如果没有当前线程，清理所有线程状态
-      Object.keys(chatState.threadStates).forEach(tid => {
-        cleanupThreadState(tid);
-      });
-    }
+    // 如果没有当前线程，清理所有线程状态
+    Object.keys(chatState.threadStates).forEach(tid => {
+      cleanupThreadState(tid);
+    });
   }
 };
 
@@ -604,10 +565,6 @@ const _processStreamChunk = (chunk, threadId) => {
           threadState.streamAbortController = null;
         }
       }
-
-      // Reload messages to show any partial content saved by the backend
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 });
-      resetOnGoingConv(threadId);
       return true;
     case 'human_approval_required':
       // 使用审批 composable 处理审批请求
@@ -627,22 +584,17 @@ const _processStreamChunk = (chunk, threadId) => {
       if (threadState) {
         threadState.isStreaming = false;
         if ((supportsTodo.value || supportsFiles.value) && threadState.agentState) {
-          console.log('[AgentState|Final]', {
+          console.log(`[AgentState|Final] ${new Date().toLocaleTimeString()}.${new Date().getMilliseconds()}`, {
             threadId,
             todos: threadState.agentState?.todos || [],
             files: threadState.agentState?.files || []
           });
         }
       }
-      // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 })
-      .finally(() => {
-        // 历史记录加载完成后，安全地清空当前进行中的对话
-        resetOnGoingConv(threadId, true);
-      });
       return true;
     case 'interrupted':
       // 中断状态，刷新消息历史
+      console.warn("[Interrupted] case");
       if (threadState) {
         threadState.isStreaming = false;
       }
@@ -650,10 +602,6 @@ const _processStreamChunk = (chunk, threadId) => {
       if (chunkMessage) {
         message.info(chunkMessage);
       }
-      fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 1000 })
-      .finally(() => {
-        resetOnGoingConv(threadId, true);
-      });
       return true;
   }
 
@@ -761,7 +709,7 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
 
   try {
     const response = await agentApi.getAgentHistory(agentId, threadId);
-    console.log('🔄 [FETCH] Thread messages:', response);
+    console.log(`🔄 [FETCH] Thread messages: ${new Date().toLocaleTimeString()}.${new Date().getMilliseconds()}`, response);
     threadMessages.value[threadId] = response.history || [];
   } catch (error) {
     handleChatError(error, 'load');
@@ -1089,12 +1037,21 @@ const handleSendMessage = async () => {
     }
   } catch (error) {
     if (error.name !== 'AbortError') {
+      console.error('Stream error:', error);
       handleChatError(error, 'send');
+    } else {
+      console.warn("[Interrupted] Catch");
     }
-  } finally {
     threadState.isStreaming = false;
+  } finally {
     threadState.streamAbortController = null;
-    resetOnGoingConv(threadId);
+    // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 })
+    .finally(() => {
+      // 历史记录加载完成后，安全地清空当前进行中的对话
+      resetOnGoingConv(threadId);
+      scrollController.scrollToBottom();
+    });
   }
 };
 
@@ -1208,6 +1165,14 @@ const handleApprovalWithStream = async (approved) => {
       threadState.isStreaming = false;
       threadState.streamAbortController = null;
     }
+
+    // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId, delay: 500 })
+    .finally(() => {
+      // 历史记录加载完成后，安全地清空当前进行中的对话
+      resetOnGoingConv(threadId);
+      scrollController.scrollToBottom();
+    });
   }
 };
 

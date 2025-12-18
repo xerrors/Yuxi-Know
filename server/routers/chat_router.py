@@ -549,112 +549,124 @@ async def chat_agent(
             thread_id = str(uuid.uuid4())
             logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
-        # Initialize conversation manager
-        conv_manager = ConversationManager(db)
-
-        # Save user message
         try:
-            await conv_manager.add_message_by_thread_id(
-                thread_id=thread_id,
-                role="user",
-                content=query,
-                message_type=message_type,
-                image_content=image_content,
-                extra_metadata={"raw_message": human_message.model_dump()},
-            )
-        except Exception as e:
-            logger.error(f"Error saving user message: {e}")
+            async with db_manager.get_async_session_context() as db:
+                # Initialize conversation manager
+                conv_manager = ConversationManager(db)
 
-        try:
-            assert thread_id, "thread_id is required"
-            attachments = await conv_manager.get_attachments_by_thread_id(thread_id)
-            input_context["attachments"] = attachments
-            logger.debug(f"Loaded {len(attachments)} attachments for thread_id={thread_id}")
-        except Exception as e:
-            logger.error(f"Error loading attachments for thread_id={thread_id}: {e}")
-            input_context["attachments"] = []
+                # Save user message
+                try:
+                    await conv_manager.add_message_by_thread_id(
+                        thread_id=thread_id,
+                        role="user",
+                        content=query,
+                        message_type=message_type,
+                        image_content=image_content,
+                        extra_metadata={"raw_message": human_message.model_dump()},
+                    )
+                except Exception as e:
+                    logger.error(f"Error saving user message: {e}")
 
-        try:
-            full_msg = None
-            langgraph_config = {"configurable": input_context}
-            async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
-                if isinstance(msg, AIMessageChunk):
-                    full_msg = msg if not full_msg else full_msg + msg
-                    if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
-                        logger.warning("Sensitive content detected in stream")
-                        await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
-                        meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-                        yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
-                        return
+                try:
+                    assert thread_id, "thread_id is required"
+                    attachments = await conv_manager.get_attachments_by_thread_id(thread_id)
+                    input_context["attachments"] = attachments
+                    logger.debug(f"Loaded {len(attachments)} attachments for thread_id={thread_id}")
+                except Exception as e:
+                    logger.error(f"Error loading attachments for thread_id={thread_id}: {e}")
+                    input_context["attachments"] = []
 
-                    yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
+                full_msg = None
+                langgraph_config = {"configurable": input_context}
+                async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
+                    if isinstance(msg, AIMessageChunk):
+                        full_msg = msg if not full_msg else full_msg + msg
+                        if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
+                            logger.warning("Sensitive content detected in stream")
+                            await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
+                            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                            yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
+                            return
 
-                else:
-                    msg_dict = msg.model_dump()
-                    yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
+                        yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
 
-                    try:
-                        if msg_dict.get("type") == "tool":
-                            graph = await agent.get_graph()
-                            state = await graph.aget_state(langgraph_config)
-                            agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
-                            if agent_state:
-                                yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
-                    except Exception:
-                        pass
+                    else:
+                        msg_dict = msg.model_dump()
+                        yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
 
-            if (
-                conf.enable_content_guard
-                and hasattr(full_msg, "content")
-                and await content_guard.check(full_msg.content)
-            ):
-                logger.warning("Sensitive content detected in final message")
-                await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
+                        try:
+                            if msg_dict.get("type") == "tool":
+                                graph = await agent.get_graph()
+                                state = await graph.aget_state(langgraph_config)
+                                agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
+                                if agent_state:
+                                    yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
+                        except Exception:
+                            pass
+
+                if (
+                    conf.enable_content_guard
+                    and hasattr(full_msg, "content")
+                    and await content_guard.check(full_msg.content)
+                ):
+                    logger.warning("Sensitive content detected in final message")
+                    await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
+                    meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                    yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
+                    return
+
+                # After streaming finished, check for interrupts and save messages
+
+                # Check for human approval interrupts
+                async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
+                    yield chunk
+
                 meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-                yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
-                return
+                try:
+                    graph = await agent.get_graph()
+                    state = await graph.aget_state(langgraph_config)
+                    agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
+                except Exception:
+                    agent_state = {}
 
-            # After streaming finished, check for interrupts and save messages
+                if agent_state:
+                    yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
 
-            # Check for human approval interrupts
-            async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
-                yield chunk
+                yield make_chunk(status="finished", meta=meta)
 
-            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-            try:
-                graph = await agent.get_graph()
-                state = await graph.aget_state(langgraph_config)
-                agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
-            except Exception:
-                agent_state = {}
-
-            if agent_state:
-                yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
-
-            yield make_chunk(status="finished", meta=meta)
-
-            # Save all messages from LangGraph state
-            await save_messages_from_langgraph_state(
-                agent_instance=agent,
-                thread_id=thread_id,
-                conv_mgr=conv_manager,
-                config_dict=langgraph_config,
-            )
+                # Save all messages from LangGraph state
+                await save_messages_from_langgraph_state(
+                    agent_instance=agent,
+                    thread_id=thread_id,
+                    conv_mgr=conv_manager,
+                    config_dict=langgraph_config,
+                )
 
         except (asyncio.CancelledError, ConnectionError) as e:
             # 客户端主动中断连接，检查中断并保存已生成的部分内容
             logger.warning(f"Client disconnected, cancelling stream: {e}")
 
-            # 保存中断消息到数据库
-            async with db_manager.get_async_session_context() as new_db:
-                new_conv_manager = ConversationManager(new_db)
-                await save_partial_message(
-                    new_conv_manager,
-                    thread_id,
-                    full_msg=full_msg,
-                    error_message="对话已中断" if not full_msg else None,
-                    error_type="interrupted",
-                )
+            # Run save in a separate task to avoid cancellation
+            async def save_cleanup():
+                async with db_manager.get_async_session_context() as new_db:
+                    new_conv_manager = ConversationManager(new_db)
+                    await save_partial_message(
+                        new_conv_manager,
+                        thread_id,
+                        full_msg=full_msg,
+                        error_message="对话已中断" if not full_msg else None,
+                        error_type="interrupted",
+                    )
+
+            # Create a task and await it, shielding it from cancellation
+            # ensuring the DB operation completes even if the stream is cancelled
+            cleanup_task = asyncio.create_task(save_cleanup())
+            try:
+                await asyncio.shield(cleanup_task)
+            except asyncio.CancelledError:
+                pass
+            except Exception as exc:
+                logger.error(f"Error during cleanup save: {exc}")
 
             # 通知前端中断（可能发送不到，但用于一致性）
             yield make_chunk(status="interrupted", message="对话已中断", meta=meta)
@@ -780,28 +792,29 @@ async def resume_agent_chat(
         )
 
         try:
-            async for msg, metadata in stream_source:
-                # 确保msg有正确的ID结构
-                msg_dict = msg.model_dump()
-                if "id" not in msg_dict:
-                    msg_dict["id"] = str(uuid.uuid4())
+            async with db_manager.get_async_session_context() as db:
+                async for msg, metadata in stream_source:
+                    # 确保msg有正确的ID结构
+                    msg_dict = msg.model_dump()
+                    if "id" not in msg_dict:
+                        msg_dict["id"] = str(uuid.uuid4())
 
-                yield make_resume_chunk(
-                    content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                    yield make_resume_chunk(
+                        content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
+                    )
+
+                meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                yield make_resume_chunk(status="finished", meta=meta)
+
+                # 保存消息到数据库
+                langgraph_config = {"configurable": input_context}
+                conv_manager = ConversationManager(db)
+                await save_messages_from_langgraph_state(
+                    agent_instance=agent,
+                    thread_id=thread_id,
+                    conv_mgr=conv_manager,
+                    config_dict=langgraph_config,
                 )
-
-            meta["time_cost"] = asyncio.get_event_loop().time() - start_time
-            yield make_resume_chunk(status="finished", meta=meta)
-
-            # 保存消息到数据库
-            langgraph_config = {"configurable": input_context}
-            conv_manager = ConversationManager(db)
-            await save_messages_from_langgraph_state(
-                agent_instance=agent,
-                thread_id=thread_id,
-                conv_mgr=conv_manager,
-                config_dict=langgraph_config,
-            )
 
         except (asyncio.CancelledError, ConnectionError) as e:
             # 客户端主动中断连接

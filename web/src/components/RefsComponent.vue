@@ -153,23 +153,6 @@ const getModelName = (msg) => {
   }
   return null;
 }
-
-// Load existing feedback on mount
-onMounted(async () => {
-  if (msg.value?.id) {
-    try {
-      const response = await agentApi.getMessageFeedback(msg.value.id)
-      if (response.has_feedback) {
-        feedbackState.hasSubmitted = true
-        feedbackState.rating = response.feedback.rating
-        feedbackState.reason = response.feedback.reason
-      }
-    } catch (error) {
-      console.error('Failed to load feedback:', error)
-    }
-  }
-})
-
 // Handle like action
 const likeThisResponse = async (msg) => {
   if (feedbackState.hasSubmitted) {
