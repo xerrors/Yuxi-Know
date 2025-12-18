@@ -1,0 +1,44 @@
+/* 导入项目的颜色变量 */
+@import url('../../../web/src/assets/css/base.css');
+@import url('../../../web/src/assets/css/base.dark.css');
+
+/* VitePress 主题色覆盖 */
+:root {
+  /* 覆盖 VitePress 的主题色，使用项目中定义的 main-color */
+  --vp-c-brand-1: var(--main-color);
+  --vp-c-brand-2: var(--main-bright);
+  --vp-c-brand-3: var(--main-700);
+  --vp-c-brand-4: var(--main-800);
+  --vp-c-brand-5: var(--main-900);
+  --vp-c-brand-6: var(--main-1000);
+
+  /* 浅色模式下的文本颜色 */
+  --vp-c-brand-light: var(--main-color);
+  --vp-c-brand-lighter: var(--main-bright);
+  --vp-c-brand-lightest: var(--main-400);
+
+  /* 深色模式下的文本颜色 */
+  --vp-c-brand-dark: var(--main-300);
+  --vp-c-brand-darker: var(--main-200);
+  --vp-c-brand-darkest: var(--main-100);
+}
+
+/* 深色模式覆盖 */
+.dark {
+  --vp-c-brand-1: var(--main-color);
+  --vp-c-brand-2: var(--main-bright);
+  --vp-c-brand-3: var(--main-700);
+  --vp-c-brand-4: var(--main-800);
+  --vp-c-brand-5: var(--main-900);
+  --vp-c-brand-6: var(--main-1000);
+
+  /* 浅色模式下的文本颜色 */
+  --vp-c-brand-light: var(--main-color);
+  --vp-c-brand-lighter: var(--main-bright);
+  --vp-c-brand-lightest: var(--main-400);
+
+  /* 深色模式下的文本颜色 */
+  --vp-c-brand-dark: var(--main-300);
+  --vp-c-brand-darker: var(--main-200);
+  --vp-c-brand-darkest: var(--main-100);
+}
