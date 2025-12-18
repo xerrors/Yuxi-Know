@@ -164,14 +164,14 @@ async def get_conversation_detail(
     """Get conversation detail (Admin only)"""
     try:
         conv_manager = ConversationManager(db)
-        conversation = conv_manager.get_conversation_by_thread_id(thread_id)
+        conversation = await conv_manager.get_conversation_by_thread_id(thread_id)
 
         if not conversation:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         # Get messages and stats
-        messages = conv_manager.get_messages(conversation.id)
-        stats = conv_manager.get_stats(conversation.id)
+        messages = await conv_manager.get_messages(conversation.id)
+        stats = await conv_manager.get_stats(conversation.id)
 
         # Format messages
         message_list = []
