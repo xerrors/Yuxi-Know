@@ -10,6 +10,7 @@
 - 集成 neo4j mcp （或者自己构建工具）
 - 文档解析部分的 markdown 中的图片替换为内部可访问的链接 (2/4)
 - chat_model 的 call 需要异步
+- 优化分块儿逻辑，移除 QA 分块，集成到普通分块儿中
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)

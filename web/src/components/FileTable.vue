@@ -56,7 +56,7 @@
           :disabled="lock"
           title="选择所有失败的文件"
         >
-          选择失败
+          选择所有失败的文件
         </a-button>
       </div>
       <div style="display: flex; gap: 4px;">

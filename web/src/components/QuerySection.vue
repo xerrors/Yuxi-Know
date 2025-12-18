@@ -63,6 +63,7 @@
               </div>
               <div style="display: flex; gap: 12px; align-items: center;">
                 <a-switch
+                  v-if="!isLightRAG"
                   v-model:checked="showRawData"
                   checked-children="格式化"
                   un-checked-children="原始"
@@ -189,6 +190,9 @@ const emit = defineEmits(['toggleVisible']);
 const searchLoading = computed(() => store.state.searchLoading);
 const queryResult = ref('');
 const showRawData = ref(true);
+
+// 判断是否为 LightRAG 类型知识库
+const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag');
 
 // 查询测试
 const queryText = ref('');
