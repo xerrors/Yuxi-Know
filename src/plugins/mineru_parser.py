@@ -155,7 +155,7 @@ class MinerUParser(BaseDocumentProcessor):
                     self.parse_endpoint,
                     files=files,
                     data=data,
-                    timeout=300,  # 5分钟超时
+                    timeout=os.environ.get("MINERU_TIMEOUT", 600),  # 10分钟超时
                 )
 
             # 检查响应状态
@@ -221,7 +221,7 @@ class MinerUParser(BaseDocumentProcessor):
         except DocumentParserException:
             raise
         except requests.exceptions.Timeout:
-            error_msg = f"MinerU 处理超时 ({time.time() - start_time:.2f}s)"
+            error_msg = f"MinerU 处理超时 ({time.time() - start_time:.2f}s), 可以配置 MINERU_TIMEOUT 环境变量。"
             logger.error(error_msg)
             raise DocumentParserException(error_msg, self.get_service_name(), "timeout")
         except requests.exceptions.ConnectionError:

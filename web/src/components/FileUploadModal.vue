@@ -30,15 +30,14 @@
           />
         </div>
         <div class="config-controls">
+          <a-button type="link" class="doc-link-btn" @click="openDocLink">
+            <InfoCircleOutlined /> 文档处理与 OCR 说明
+          </a-button>
           <a-button
-            type="dashed"
             @click="showChunkConfigModal"
             :disabled="isGraphBased"
           >
             <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
-          </a-button>
-          <a-button type="link" class="doc-link-btn" @click="openDocLink">
-            <InfoCircleOutlined /> 文档处理与 OCR 说明
           </a-button>
         </div>
       </div>
@@ -50,12 +49,10 @@
               <a-select
                 v-model:value="chunkParams.enable_ocr"
                 :options="enableOcrOptions"
-                style="width: 220px; margin-right: 12px;"
+                style="width: 220px;"
                 :disabled="ocrHealthChecking"
               />
               <a-button
-                size="small"
-                type="dashed"
                 @click="checkOcrHealth"
                 :loading="ocrHealthChecking"
                 :icon="h(CheckCircleOutlined)"
@@ -781,6 +778,13 @@ const chunkData = async () => {
 .config-controls {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+.doc-link-btn {
+  color: var(--main-600);
+  display: flex;
+  align-items: center;
 }
 
 .source-segmented {
@@ -817,6 +821,12 @@ const chunkData = async () => {
   padding: 16px;
   background-color: var(--gray-50);
   border-radius: 6px;
+
+  .ocr-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
 }
 
 .param-description {
