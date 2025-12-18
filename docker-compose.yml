@@ -186,7 +186,7 @@ services:
       context: .
       dockerfile: docker/mineru.Dockerfile
     image: mineru-vllm:latest
-    container_name: mineru
+    container_name: mineru-vllm-server
     profiles:
       - all
     env_file:
@@ -237,20 +237,10 @@ services:
     command:
       --host 0.0.0.0
       --port 30001
-      # parameters for vllm-engine
-      # --data-parallel-size 2  # If using multiple GPUs, increase throughput using vllm's multi-GPU parallel mode
-      # --gpu-memory-utilization 0.5  # If running on a single GPU and encountering VRAM shortage, reduce the KV cache size by this parameter, if VRAM issues persist, try lowering it further to `0.4` or below.
     ulimits:
       memlock: -1
       stack: 67108864
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ "0" ]
-              capabilities: [ gpu ]
     restart: unless-stopped
 
   paddlex:

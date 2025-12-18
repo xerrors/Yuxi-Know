@@ -154,10 +154,11 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 )
                 return text
 
+            import asyncio
             from src.knowledge.indexing import _process_zip_file
 
             try:
-                processed = _process_zip_file(zip_path, params.get("db_id") or "ocr-test")
+                processed = asyncio.run(_process_zip_file(zip_path, params.get("db_id") or "ocr-test"))
                 text = processed["markdown_content"]
             except Exception:
                 import zipfile

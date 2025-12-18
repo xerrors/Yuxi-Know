@@ -189,7 +189,8 @@ class MinerUParser(BaseDocumentProcessor):
                     tmp_zip.flush()
 
                     try:
-                        processed = _process_zip_file(tmp_zip.name, params.get("db_id"))
+                        import asyncio
+                        processed = asyncio.run(_process_zip_file(tmp_zip.name, params.get("db_id")))
                         text = processed["markdown_content"]
                     finally:
                         os.unlink(tmp_zip.name)

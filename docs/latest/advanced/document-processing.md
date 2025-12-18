@@ -48,18 +48,18 @@ docker compose up -d api
 需要在 `.env` 文件中配置：
 
 ```bash
-MINERU_VL_SERVER=http://localhost:30000
-MINERU_API_URI=http://localhost:30001
+MINERU_VL_SERVER=http://localhost:30000  # 对应 docker compose 中的 mineru-vllm-server 服务
+MINERU_API_URI=http://localhost:30001  # 对应 docker compose 中的 mineru-api 服务
 ```
 
 然后启动相关服务
 
 ```bash
 # 需要 GPU，启动 MinerU 服务
-docker compose up -d mineru-vllm-server mineru-api
+docker compose up mineru-vllm-server mineru-api -d
 
 # 启动主服务
-docker compose up -d api
+docker compose up api -d
 ```
 
 ### 3. 官方云服务 (MinerU Official)
@@ -73,7 +73,7 @@ API 密钥可以从 [MinerU 官网](https://mineru.net) 申请。
 MINERU_API_KEY="your-api-key-here"
 ```
 
-然后使用 `docker compose up -d api` 重启后端服务。
+然后使用 `docker compose up api -d` 重启后端服务。
 
 ### 4. 结构化解析 (PaddleX)
 

@@ -590,7 +590,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             if not params or "db_id" not in params:
                 raise ValueError("ZIP文件处理需要在params中提供db_id参数")
 
-            zip_result = await asyncio.to_thread(_process_zip_file, str(file_path_obj), params["db_id"])
+            zip_result = await _process_zip_file(str(file_path_obj), params["db_id"])
 
             # 将处理结果保存到params中供调用方使用
             params["_zip_images_info"] = zip_result["images_info"]
@@ -624,7 +624,7 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
     return result
 
 
-def _process_zip_file(zip_path: str, db_id: str) -> dict:
+async def _process_zip_file(zip_path: str, db_id: str) -> dict:
     """
     处理ZIP文件，提取markdown内容和图片（内部函数）
 
@@ -673,11 +673,11 @@ def _process_zip_file(zip_path: str, db_id: str) -> dict:
         images_dir = _find_images_directory(zf, md_file)
 
         if images_dir:
-            images_info = _process_images(zf, images_dir, db_id, md_file)
+            images_info = await _process_images(zf, images_dir, db_id, md_file)
             markdown_content = _replace_image_links(markdown_content, images_info)
 
     # 4. 生成结果
-    content_hash = asyncio.run(calculate_content_hash(markdown_content.encode("utf-8")))
+    content_hash = await calculate_content_hash(markdown_content.encode("utf-8"))
 
     return {
         "markdown_content": markdown_content,
@@ -722,9 +722,9 @@ async def _process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str
     image_names = [n for n in zip_file.namelist() if n.startswith(images_dir + "/")]
 
     # 上传图片到MinIO
-    minio_client = await get_minio_client()
+    minio_client = get_minio_client()
     bucket_name = "kb-images"
-    minio_client.ensure_bucket_exists(bucket_name)
+    await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
 
     file_id = hashstr(Path(md_file_path).name, length=16)
 
@@ -742,7 +742,7 @@ async def _process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str
             object_name = f"{db_id}/{file_id}/images/{Path(img_name).name}"
             content_type = CONTENT_TYPE_MAP.get(suffix, "image/jpeg")
 
-            result = minio_client.upload_file(
+            result = await minio_client.aupload_file(
                 bucket_name=bucket_name,
                 object_name=object_name,
                 data=data,
