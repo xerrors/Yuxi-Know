@@ -45,7 +45,12 @@
         <a-input v-model:value="editForm.name" placeholder="请输入知识库名称" />
       </a-form-item>
       <a-form-item label="知识库描述" name="description">
-        <a-textarea v-model:value="editForm.description" placeholder="请输入知识库描述" :rows="4" />
+        <AiTextarea
+          v-model="editForm.description"
+          :name="editForm.name"
+          placeholder="请输入知识库描述"
+          :rows="4"
+        />
       </a-form-item>
       <!-- 仅对 LightRAG 类型显示 LLM 配置 -->
       <a-form-item v-if="database.kb_type === 'lightrag'" label="语言模型 (LLM)" name="llm_info">
@@ -72,6 +77,7 @@ import {
 } from '@ant-design/icons-vue';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
+import AiTextarea from '@/components/AiTextarea.vue';
 import { h } from 'vue';
 
 const router = useRouter();

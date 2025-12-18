@@ -81,8 +81,9 @@
 
       <h3 style="margin-top: 20px;">知识库描述</h3>
       <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
-      <a-textarea
-        v-model:value="newDatabase.description"
+      <AiTextarea
+        v-model="newDatabase.description"
+        :name="newDatabase.name"
         placeholder="新建知识库描述"
         :auto-size="{ minRows: 3, maxRows: 10 }"
       />
@@ -244,6 +245,7 @@ import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
 import dayjs, { parseToShanghai } from '@/utils/time';
+import AiTextarea from '@/components/AiTextarea.vue';
 
 const route = useRoute()
 const router = useRouter()
