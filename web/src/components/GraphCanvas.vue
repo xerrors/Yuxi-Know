@@ -142,7 +142,7 @@ function initGraph() {
         labelFill: getCSSVariable('--gray-700'),
         labelWordWrap: true, // enable label ellipsis
         labelMaxWidth: '300%',
-        size: (d) => {
+          size: (d) => {
           if (!props.sizeByDegree) return 24
           const deg = d.data.degree || 0
           return Math.min(15 + deg * 5, 50)
@@ -228,14 +228,33 @@ function setGraphData() {
   if (!graphInstance) initGraph()
   if (!graphInstance) return
   const data = formatData()
+
+  console.log('开始设置图谱数据:', {
+    nodes: data.nodes.length,
+    edges: data.edges.length
+  })
+
   graphInstance.setData(data)
   graphInstance.render()
 
-  // 应用关键词高亮
+  // 手动触发布局重新计算，确保节点分布
   setTimeout(() => {
-    applyHighlightKeywords()
-    emit('data-rendered')
-  }, 100)
+    try {
+      if (graphInstance && graphInstance.layout) {
+        graphInstance.layout()
+        console.log('触发布局重新计算')
+      }
+    } catch (error) {
+      console.warn('布局重新计算失败:', error)
+    }
+
+    // 等待力导向布局稳定后再应用高亮
+    setTimeout(() => {
+      applyHighlightKeywords()
+      emit('data-rendered')
+      console.log('图谱渲染完成，布局已稳定')
+    }, 1500)
+  }, 10)  // 等待 1ms 确保布局完成
 }
 
 // 关键词高亮功能
