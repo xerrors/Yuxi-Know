@@ -1,9 +1,7 @@
-import logging
 from typing import Any
 
+from src.utils import logger
 from .base import GraphAdapter
-
-logger = logging.getLogger(__name__)
 
 
 class LightRAGGraphAdapter(GraphAdapter):
