@@ -1,6 +1,7 @@
 from typing import Any
 
 from src.utils import logger
+
 from .base import GraphAdapter
 
 

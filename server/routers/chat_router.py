@@ -581,7 +581,8 @@ async def chat_agent(
                 async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                     if isinstance(msg, AIMessageChunk):
                         full_msg = msg if not full_msg else full_msg + msg
-                        if conf.enable_content_guard and await content_guard.check_with_keywords(full_msg.content[-20:]):
+                        content_for_check = full_msg.content[-20:]
+                        if conf.enable_content_guard and await content_guard.check_with_keywords(content_for_check):
                             logger.warning("Sensitive content detected in stream")
                             await save_partial_message(conv_manager, thread_id, full_msg, "content_guard_blocked")
                             meta["time_cost"] = asyncio.get_event_loop().time() - start_time
@@ -601,7 +602,8 @@ async def chat_agent(
                                 agent_state = _extract_agent_state(getattr(state, "values", {})) if state else {}
                                 if agent_state:
                                     yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
-                        except Exception:
+                        except Exception as e:
+                            logger.error(f"Error processing tool message: {e}")
                             pass
 
                 if (
