@@ -3,7 +3,7 @@
     <a-empty>
       <template #description>
         <span>
-          前往 <router-link to="/setting" style="color: var(--main-color); font-weight: bold;">设置</router-link> 页面启用知识图谱。
+          点击右上角用户头像中的"系统设置"来启用知识图谱。
         </span>
       </template>
     </a-empty>

@@ -108,22 +108,11 @@
           <div class="provider-actions">
             <a-button
               type="text"
-              size="small"
               class="expand-button"
               @click.stop="openProviderConfig(item)"
               title="配置模型"
             >
               <SettingOutlined />
-            </a-button>
-            <a-button
-              type="text"
-              size="small"
-              class="expand-button"
-              @click.stop="toggleExpand(item)"
-            >
-              <span class="icon-wrapper" :class="{'rotated': expandedModels[item]}">
-                <DownCircleOutlined />
-              </span>
             </a-button>
           </div>
         </div>
@@ -784,20 +773,6 @@ const testCustomProvider = async (providerId, modelName) => {
 .custom-providers-section {
   margin-bottom: 24px;
 
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-
-    h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
-  }
-
   .section-description {
     margin: 0 0 16px 0;
     color: var(--gray-600);
@@ -850,13 +825,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
       .provider-actions {
         display: flex;
-        gap: 8px;
-
-        .ant-btn {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
+        gap: 0px;
       }
     }
 
@@ -898,19 +867,23 @@ const testCustomProvider = async (providerId, modelName) => {
   }
 }
 
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+}
+
 .builtin-providers-section {
   .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-
-    h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--gray-900);
-    }
 
     .providers-stats {
       display: flex;
@@ -923,13 +896,13 @@ const testCustomProvider = async (providerId, modelName) => {
         font-size: 12px;
 
         &.available {
-          background: rgba(34, 197, 94, 0.1);
-          color: #16a34a;
+          background: var(--color-success-50);
+          color: var(--color-success-700);
         }
 
         &.unavailable {
-          background: rgba(249, 115, 22, 0.1);
-          color: #ea580c;
+          background: var(--color-warning-50);
+          color: var(--color-warning-700);
         }
       }
     }
@@ -1007,13 +980,13 @@ const testCustomProvider = async (providerId, modelName) => {
       & > span {
         margin-left: 6px;
         user-select: all;
-        background-color: rgba(251, 146, 60, 0.15);
-        color: #d97706;
+        background-color: var(--color-warning-50);
+        color: var(--color-warning-700);
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(251, 146, 60, 0.2);
+        border: 1px solid var(--color-warning-100);
       }
     }
   }
@@ -1027,14 +1000,9 @@ const testCustomProvider = async (providerId, modelName) => {
     background: var(--gray-0);
     transition: all 0.3s ease;
 
-    &:hover {
-      background: var(--gray-50);
-    }
-
     .model-title-container {
       display: flex;
       flex-direction: column;
-      gap: 4px;
       flex: 1;
 
       h3 {
@@ -1056,8 +1024,8 @@ const testCustomProvider = async (providerId, modelName) => {
         }
 
         .provider-id {
-          background: var(--gray-100);
-          color: var(--gray-600);
+          background: var(--gray-50);
+          color: var(--gray-900);
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 11px;
@@ -1095,7 +1063,7 @@ const testCustomProvider = async (providerId, modelName) => {
       filter: grayscale(100%);
       transition: filter 0.2s ease;
       flex-shrink: 0;
-      background-color: white;
+      background-color: white;  /* 确保图标背景为白色 */
       border: 1px solid var(--gray-200);
 
       img {
@@ -1161,13 +1129,13 @@ const testCustomProvider = async (providerId, modelName) => {
       & > span {
         margin-left: 6px;
         user-select: all;
-        background-color: rgba(251, 146, 60, 0.15);
-        color: #d97706;
+        background-color: var(--color-warning-50);
+        color: var(--color-warning-700);
         padding: 3px 8px;
         border-radius: 6px;
         font-weight: 600;
         font-size: 11px;
-        border: 1px solid rgba(251, 146, 60, 0.2);
+        border: 1px solid var(--color-warning-100);
       }
     }
 
@@ -1215,7 +1183,6 @@ const testCustomProvider = async (providerId, modelName) => {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 12px;
     padding: 16px;
-    background: var(--gray-10);
 
     // 普通模型卡片样式
     .card-models {

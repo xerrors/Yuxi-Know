@@ -343,9 +343,12 @@ const onGoingConvMessages = computed(() => {
     : [];
 });
 
+const historyConversations = computed(() => {
+  return MessageProcessor.convertServerHistoryToMessages(currentThreadMessages.value);
+});
+
 const conversations = computed(() => {
-  const historyConvs = MessageProcessor.convertServerHistoryToMessages(currentThreadMessages.value);
-  const threadState = currentThreadState.value;
+  const historyConvs = historyConversations.value;
 
   // 如果有进行中的消息且线程状态显示正在流式处理，添加进行中的对话
   if (onGoingConvMessages.value.length > 0) {
@@ -369,7 +372,6 @@ const isMediumContainer = computed(() => localUIState.containerWidth <= 768);
 
 // ==================== SCROLL & RESIZE HANDLING ====================
 const chatContainerRef = ref(null);
-const messageInputRef = ref(null);
 const scrollController = new ScrollController('.chat');
 let resizeObserver = null;
 

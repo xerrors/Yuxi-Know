@@ -158,7 +158,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, inject } from 'vue';
 import { useRouter } from 'vue-router';
 import { useUserStore } from '@/stores/user';
 //
@@ -172,6 +172,9 @@ import { useThemeStore } from '@/stores/theme'
 const router = useRouter();
 const userStore = useUserStore();
 const themeStore = useThemeStore();
+
+// Inject settings modal methods
+const { openSettingsModal } = inject('settingsModal', {});
 
 // 个人资料弹窗状态
 const profileModalVisible = ref(false);
@@ -245,7 +248,9 @@ const toggleTheme = () => {
 
 // 前往设置页
 const goToSetting = () => {
-  router.push('/setting');
+  if (openSettingsModal) {
+    openSettingsModal()
+  }
 }
 
 // 打开个人资料页面

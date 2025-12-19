@@ -470,6 +470,7 @@ onMounted(() => {
 <style lang="less" scoped>
 .user-management {
   margin-top: 20px;
+  min-height: 50vh;
 
   .header-section {
     display: flex;
@@ -481,7 +482,7 @@ onMounted(() => {
 
       .description {
         font-size: 14px;
-        color: var(--gray-400);
+        color: var(--gray-600);
         margin: 0;
         line-height: 1.4;
         margin-bottom: 16px;
@@ -505,7 +506,7 @@ onMounted(() => {
 
       .user-cards-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
         gap: 16px;
         // padding: 16px;
 
@@ -670,7 +671,7 @@ onMounted(() => {
 .user-modal {
   :deep(.ant-modal-header) {
     padding: 20px 24px;
-    border-bottom: 1px solid var(--gray-800);
+    border-bottom: 1px solid var(--gray-150);
 
     .ant-modal-title {
       font-size: 16px;
@@ -705,7 +706,7 @@ onMounted(() => {
     }
 
     .help-text {
-      color: var(--gray-400);
+      color: var(--gray-600);
       font-size: 12px;
       margin-top: 4px;
       line-height: 1.3;

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, useTemplateRef, computed } from 'vue'
+import { ref, reactive, onMounted, useTemplateRef, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import {
   GithubOutlined,
@@ -15,6 +15,7 @@ import { storeToRefs } from 'pinia'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import DebugComponent from '@/components/DebugComponent.vue'
 import TaskCenterDrawer from '@/components/TaskCenterDrawer.vue'
+import SettingsModal from '@/components/SettingsModal.vue'
 
 const configStore = useConfigStore()
 const databaseStore = useDatabaseStore()
@@ -34,6 +35,14 @@ const isLoadingStars = ref(false)
 // Add state for debug modal
 const showDebugModal = ref(false)
 const htmlRefHook = useTemplateRef('htmlRefHook')
+
+// Add state for settings modal
+const showSettingsModal = ref(false)
+
+// Provide settings modal methods to child components
+const openSettingsModal = () => {
+  showSettingsModal.value = true
+}
 
 // Setup long press for debug modal
 onLongPress(
@@ -116,6 +125,11 @@ const mainList = [{
     activeIcon: BarChart3,
   }
 ]
+
+// Provide settings modal methods to child components
+provide('settingsModal', {
+  openSettingsModal
+})
 </script>
 
 <template>
@@ -195,7 +209,6 @@ const mainList = [{
     <div class="header-mobile">
       <RouterLink to="/agent" class="nav-item" active-class="active">对话</RouterLink>
       <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
-      <RouterLink to="/setting" class="nav-item" active-class="active">设置</RouterLink>
     </div>
     <router-view v-slot="{ Component, route }" id="app-router-view">
       <keep-alive v-if="route.meta.keepAlive !== false">
@@ -218,6 +231,10 @@ const mainList = [{
       <DebugComponent />
     </a-modal>
     <TaskCenterDrawer />
+    <SettingsModal
+      v-model:visible="showSettingsModal"
+      @close="() => showSettingsModal = false"
+    />
   </div>
 </template>
 

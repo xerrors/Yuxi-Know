@@ -77,20 +77,7 @@ const router = createRouter({
         }
       ]
     },
-    {
-      path: '/setting',
-      name: 'setting',
-      component: AppLayout,
-      children: [
-        {
-          path: '',
-          name: 'SettingComp',
-          component: () => import('../views/SettingView.vue'),
-          meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
-        }
-      ]
-    },
-    {
+      {
       path: '/dashboard',
       name: 'dashboard',
       component: AppLayout,

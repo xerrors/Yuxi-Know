@@ -16,10 +16,7 @@
           <router-link to="/database" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
             <span>知识库</span>
           </router-link>
-          <router-link to="/setting" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
-            <span>设置</span>
-          </router-link>
-        </nav>
+          </nav>
         <div class="header-actions">
           <div class="github-link">
             <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
