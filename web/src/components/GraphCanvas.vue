@@ -8,6 +8,19 @@
       <div class="canvas-content">
         <slot name="content" />
       </div>
+      <!-- Statistical Info Panel -->
+      <div class="graph-stats-panel" v-if="graphData.nodes.length > 0">
+        <div class="stat-item">
+          <span class="stat-label">节点</span>
+          <span class="stat-value">{{ graphData.nodes.length }}</span>
+          <span v-if="graphInfo?.node_count" class="stat-total">/ {{ graphInfo.node_count }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">边</span>
+          <span class="stat-value">{{ graphData.edges.length }}</span>
+          <span v-if="graphInfo?.edge_count" class="stat-total">/ {{ graphInfo.edge_count }}</span>
+        </div>
+      </div>
       <div v-if="$slots.bottom" class="overlay bottom">
         <slot name="bottom" />
       </div>
@@ -25,6 +38,10 @@ const props = defineProps({
     type: Object,
     required: true,
     default: () => ({ nodes: [], edges: [] })
+  },
+  graphInfo: {
+    type: Object,
+    default: () => ({})
   },
   labelField: { type: String, default: 'name' },
   autoFit: { type: Boolean, default: true },
@@ -421,6 +438,45 @@ defineExpose({
   .graph-canvas {
     width: 100%;
     height: 100%;
+  }
+
+  .graph-stats-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 6px 12px;
+    background: var(--color-trans-light);
+    border: 1px solid var(--color-border-secondary);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    pointer-events: auto;
+    z-index: 10;
+    font-size: 13px;
+    backdrop-filter: blur(4px);
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .stat-label {
+        color: var(--color-text-secondary);
+        font-weight: 500;
+      }
+
+      .stat-value {
+        color: var(--color-text);
+        font-weight: 600;
+      }
+
+      .stat-total {
+        color: var(--color-text-quaternary);
+        font-size: 11px;
+      }
+    }
   }
 
   .slots {
