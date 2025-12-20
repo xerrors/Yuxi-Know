@@ -5,9 +5,8 @@ import traceback
 import warnings
 from urllib.parse import urlparse
 
-from neo4j import GraphDatabase as GD
-
 from src import config
+from src.knowledge.adapters.base import Neo4jConnectionManager
 from src.models import select_embedding_model
 from src.storage.minio.client import get_minio_client
 from src.utils import logger
@@ -16,14 +15,15 @@ from src.utils.datetime_utils import utc_isoformat
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
-UIE_MODEL = None
+class UploadGraphService:
+    """
+    Upload 类型图谱业务逻辑服务
+    专门处理用户上传文件、实体管理、向量索引等业务逻辑
+    """
 
-
-class GraphDatabase:
-    def __init__(self):
-        self.driver = None
+    def __init__(self, db_manager: Neo4jConnectionManager = None):
+        self.connection = db_manager or Neo4jConnectionManager()
         self.files = []
-        self.status = "closed"
         self.kgdb_name = "neo4j"
         self.embed_model_name = os.getenv("GRAPH_EMBED_MODEL_NAME") or "siliconflow/BAAI/bge-m3"
         self.embed_model = select_embedding_model(self.embed_model_name)
@@ -34,195 +34,32 @@ class GraphDatabase:
         if not self.load_graph_info():
             logger.debug("创建新的图数据库配置")
 
-        self.start()
+    @property
+    def driver(self):
+        """获取数据库驱动"""
+        return self.connection.driver
+
+    @property
+    def status(self):
+        """获取连接状态"""
+        return self.connection.status
 
     def start(self):
-        uri = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
-        username = os.environ.get("NEO4J_USERNAME", "neo4j")
-        password = os.environ.get("NEO4J_PASSWORD", "0123456789")
-        logger.info(f"Connecting to Neo4j: {uri}/{self.kgdb_name}")
-        try:
-            self.driver = GD.driver(f"{uri}/{self.kgdb_name}", auth=(username, password))
-            self.status = "open"
+        """启动连接"""
+        # Neo4jConnectionManager 在初始化时已经自动连接
+        if not self.connection.is_running():
+            self.connection._connect()
             logger.info(f"Connected to Neo4j: {self.get_graph_info(self.kgdb_name)}")
             # 连接成功后保存图数据库信息
             self.save_graph_info(self.kgdb_name)
-        except Exception as e:
-            logger.error(f"Failed to connect to Neo4j: {e}, {uri}, {self.kgdb_name}, {username}, {password}")
 
     def close(self):
         """关闭数据库连接"""
-        assert self.driver is not None, "Database is not connected"
-        self.driver.close()
+        self.connection.close()
 
     def is_running(self):
         """检查图数据库是否正在运行"""
-        return self.status == "open" or self.status == "processing"
-
-    def get_sample_nodes(self, kgdb_name="neo4j", num=50):
-        """获取指定数据库的 num 个节点信息，优先返回连通的节点子图"""
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(kgdb_name)
-
-        def _process_record_props(record):
-            """处理记录中的属性：扁平化 properties 并移除 embedding"""
-            if record is None:
-                return None
-
-            # 复制一份以避免修改原字典
-            data = dict(record)
-            props = data.pop("properties", {}) or {}
-
-            # 移除 embedding
-            if "embedding" in props:
-                del props["embedding"]
-
-            # 合并属性（优先保留原字典中的 id, name, type 等核心字段）
-            return {**props, **data}
-
-        def query(tx, num):
-            """Note: 使用连通性查询获取集中的节点子图"""
-            # 首先尝试获取一个连通的子图
-            query_str = """
-                // 获取高度数节点作为种子节点
-                MATCH (seed:Entity)
-                WITH seed, COUNT{(seed)-[]->()} + COUNT{(seed)<-[]-()} as degree
-                WHERE degree > 0
-                ORDER BY degree DESC
-                LIMIT 5
-
-                // 为每个种子节点收集更多邻居节点
-                UNWIND seed as s
-                MATCH (s)-[*1..1]-(neighbor:Entity)
-                WITH s, neighbor, COUNT{(s)-[]->()} + COUNT{(s)<-[]-()} as s_degree
-                WITH s, s_degree, collect(DISTINCT neighbor) as neighbors
-                // 调整限制比例，允许更多的邻居节点
-                WITH s, s_degree, neighbors[0..toInteger($num * 0.15)] as limited_neighbors
-
-                // 从邻居节点扩展到二跳节点，形成开枝散叶结构
-                UNWIND limited_neighbors as neighbor
-                OPTIONAL MATCH (neighbor)-[*1..1]-(second_hop:Entity)
-                WHERE second_hop <> s
-                // 增加二跳节点的数量
-                WITH s, limited_neighbors, neighbor, collect(DISTINCT second_hop)[0..5] as second_hops
-
-                // 收集所有连通节点
-                WITH collect(DISTINCT s) as seeds,
-                    collect(DISTINCT neighbor) as first_hop_nodes,
-                    reduce(acc = [], x IN collect(second_hops) | acc + x) as second_hop_nodes
-                WITH seeds + first_hop_nodes + second_hop_nodes as connected_nodes
-
-                // 确保不会超过请求的节点数量
-                WITH connected_nodes[0..$num] as final_nodes
-
-                // 获取这些节点之间的关系，避免双向边
-                UNWIND final_nodes as n
-                OPTIONAL MATCH (n)-[rel]-(m)
-                WHERE m IN final_nodes AND elementId(n) < elementId(m)
-                RETURN
-                    {id: elementId(n), name: n.name, properties: properties(n)} AS h,
-                    CASE WHEN rel IS NOT NULL THEN
-                        {
-                            id: elementId(rel),
-                            type: rel.type,
-                            source_id: elementId(startNode(rel)),
-                            target_id: elementId(endNode(rel)),
-                            properties: properties(rel)
-                        }
-                    ELSE null END AS r,
-                    CASE WHEN m IS NOT NULL THEN
-                        {id: elementId(m), name: m.name, properties: properties(m)}
-                    ELSE null END AS t
-                """
-
-            try:
-                results = tx.run(query_str, num=int(num))
-                formatted_results = {"nodes": [], "edges": []}
-                node_ids = set()
-
-                for item in results:
-                    h_node = _process_record_props(item["h"])
-
-                    # 始终添加头节点
-                    if h_node["id"] not in node_ids:
-                        formatted_results["nodes"].append(h_node)
-                        node_ids.add(h_node["id"])
-
-                    # 只有当边和尾节点都存在时才处理
-                    if item["r"] is not None and item["t"] is not None:
-                        t_node = _process_record_props(item["t"])
-                        r_edge = _process_record_props(item["r"])
-
-                        # 避免重复添加尾节点
-                        if t_node["id"] not in node_ids:
-                            formatted_results["nodes"].append(t_node)
-                            node_ids.add(t_node["id"])
-
-                        formatted_results["edges"].append(r_edge)
-
-                # 如果连通查询返回的节点数不足，补充更多节点
-                if len(formatted_results["nodes"]) < num:
-                    remaining_count = num - len(formatted_results["nodes"])
-
-                    # 获取额外的节点来补充
-                    supplement_query = """
-                    MATCH (n:Entity)
-                    WHERE NOT elementId(n) IN $existing_ids
-                    RETURN {id: elementId(n), name: n.name, properties: properties(n)} AS node
-                    LIMIT $count
-                    """
-
-                    supplement_results = tx.run(supplement_query, existing_ids=list(node_ids), count=remaining_count)
-
-                    for item in supplement_results:
-                        node = _process_record_props(item["node"])
-                        formatted_results["nodes"].append(node)
-                        node_ids.add(node["id"])
-
-                return formatted_results
-
-            except Exception as e:
-                # 如果连通查询失败，使用原始查询作为备选
-                logger.warning(f"Connected subgraph query failed, falling back to simple query: {e}")
-                fallback_query = """
-                MATCH (n:Entity)-[r]-(m:Entity)
-                WHERE elementId(n) < elementId(m)
-                RETURN
-                    {id: elementId(n), name: n.name, properties: properties(n)} AS h,
-                    {
-                        id: elementId(r),
-                        type: r.type,
-                        source_id: elementId(startNode(r)),
-                        target_id: elementId(endNode(r)),
-                        properties: properties(r)
-                    } AS r,
-                    {id: elementId(m), name: m.name, properties: properties(m)} AS t
-                LIMIT $num
-                """
-                results = tx.run(fallback_query, num=int(num))
-                formatted_results = {"nodes": [], "edges": []}
-                node_ids = set()
-
-                for item in results:
-                    h_node = _process_record_props(item["h"])
-                    t_node = _process_record_props(item["t"])
-                    r_edge = _process_record_props(item["r"])
-
-                    # 避免重复添加节点
-                    if h_node["id"] not in node_ids:
-                        formatted_results["nodes"].append(h_node)
-                        node_ids.add(h_node["id"])
-                    if t_node["id"] not in node_ids:
-                        formatted_results["nodes"].append(t_node)
-                        node_ids.add(t_node["id"])
-
-                    formatted_results["edges"].append(r_edge)
-
-                return formatted_results
-
-        with self.driver.session() as session:
-            results = session.execute_read(query, num)
-            return results
+        return self.connection.is_running()
 
     def create_graph_database(self, kgdb_name):
         """创建新的数据库，如果已存在则返回已有数据库的名称"""
@@ -246,6 +83,75 @@ class GraphDatabase:
         )
         if self.status == "closed":
             self.start()
+
+    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j"):
+        """从JSONL文件添加实体三元组到Neo4j"""
+        assert self.driver is not None, "Database is not connected"
+        self.connection.status = "processing"
+        kgdb_name = kgdb_name or "neo4j"
+        self.use_database(kgdb_name)  # 切换到指定数据库
+        logger.info(f"Start adding entity to {kgdb_name} with {file_path}")
+
+        # 检测 file_path 是否是 URL
+        parsed_url = urlparse(file_path)
+        temp_file_path = None
+
+        try:
+            if parsed_url.scheme in ("http", "https"):  # 如果是 URL
+                logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
+
+                # 从 URL 解析 bucket_name 和 object_name
+                # URL 格式: http://host:port/bucket_name/object_name
+                path_parts = parsed_url.path.lstrip("/").split("/", 1)
+                if len(path_parts) < 2:
+                    raise ValueError(f"无法解析 MinIO URL: {file_path}")
+
+                bucket_name = path_parts[0]
+                object_name = path_parts[1]
+
+                # 从 MinIO 下载文件
+                minio_client = get_minio_client()
+                file_data = await minio_client.adownload_file(bucket_name, object_name)
+
+                # 创建临时文件保存下载的内容
+                with tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+                ) as temp_file:
+                    temp_file.write(file_data.decode("utf-8"))
+                    temp_file_path = temp_file.name
+
+                logger.info(f"文件已下载到临时路径: {temp_file_path}")
+                actual_file_path = temp_file_path
+            else:
+                # 本地文件路径
+                actual_file_path = file_path
+
+            def read_triples(file_path):
+                with open(file_path, encoding="utf-8") as file:
+                    for line in file:
+                        if line.strip():
+                            yield json.loads(line.strip())
+
+            triples = list(read_triples(actual_file_path))
+
+            await self.txt_add_vector_entity(triples, kgdb_name)
+
+        except Exception as e:
+            logger.error(f"处理文件失败: {e}")
+            raise
+        finally:
+            # 清理临时文件
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                    logger.info(f"已删除临时文件: {temp_file_path}")
+                except Exception as e:
+                    logger.warning(f"删除临时文件失败: {e}")
+
+        self.connection.status = "open"
+        # 更新并保存图数据库信息
+        self.save_graph_info()
+        return kgdb_name
 
     async def txt_add_vector_entity(self, triples, kgdb_name="neo4j"):
         """添加实体三元组"""
@@ -409,73 +315,34 @@ class GraphDatabase:
             # 数据添加完成后保存图信息
             self.save_graph_info()
 
-    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j"):
+    def add_embedding_to_nodes(self, node_names=None, kgdb_name="neo4j"):
+        """为节点添加嵌入向量
+
+        Args:
+            node_names (list, optional): 要添加嵌入向量的节点名称列表，None表示所有没有嵌入向量的节点
+            kgdb_name (str, optional): 图数据库名称，默认为'neo4j'
+
+        Returns:
+            int: 成功添加嵌入向量的节点数量
+        """
         assert self.driver is not None, "Database is not connected"
-        self.status = "processing"
-        kgdb_name = kgdb_name or "neo4j"
-        self.use_database(kgdb_name)  # 切换到指定数据库
-        logger.info(f"Start adding entity to {kgdb_name} with {file_path}")
+        self.use_database(kgdb_name)
 
-        # 检测 file_path 是否是 URL
-        parsed_url = urlparse(file_path)
-        temp_file_path = None
+        # 如果node_names为None，则获取所有没有嵌入向量的节点
+        if node_names is None:
+            node_names = self.query_nodes_without_embedding(kgdb_name)
 
-        try:
-            if parsed_url.scheme in ("http", "https"):  # 如果是 URL
-                logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
-
-                # 从 URL 解析 bucket_name 和 object_name
-                # URL 格式: http://host:port/bucket_name/object_name
-                path_parts = parsed_url.path.lstrip("/").split("/", 1)
-                if len(path_parts) < 2:
-                    raise ValueError(f"无法解析 MinIO URL: {file_path}")
-
-                bucket_name = path_parts[0]
-                object_name = path_parts[1]
-
-                # 从 MinIO 下载文件
-                minio_client = get_minio_client()
-                file_data = await minio_client.adownload_file(bucket_name, object_name)
-
-                # 创建临时文件保存下载的内容
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
-                ) as temp_file:
-                    temp_file.write(file_data.decode("utf-8"))
-                    temp_file_path = temp_file.name
-
-                logger.info(f"文件已下载到临时路径: {temp_file_path}")
-                actual_file_path = temp_file_path
-            else:
-                # 本地文件路径
-                actual_file_path = file_path
-
-            def read_triples(file_path):
-                with open(file_path, encoding="utf-8") as file:
-                    for line in file:
-                        if line.strip():
-                            yield json.loads(line.strip())
-
-            triples = list(read_triples(actual_file_path))
-
-            await self.txt_add_vector_entity(triples, kgdb_name)
-
-        except Exception as e:
-            logger.error(f"处理文件失败: {e}")
-            raise
-        finally:
-            # 清理临时文件
-            if temp_file_path and os.path.exists(temp_file_path):
+        count = 0
+        with self.driver.session() as session:
+            for node_name in node_names:
                 try:
-                    os.unlink(temp_file_path)
-                    logger.info(f"已删除临时文件: {temp_file_path}")
+                    embedding = self.get_embedding(node_name)
+                    session.execute_write(self.set_embedding, node_name, embedding)
+                    count += 1
                 except Exception as e:
-                    logger.warning(f"删除临时文件失败: {e}")
+                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}, {traceback.format_exc()}")
 
-        self.status = "open"
-        # 更新并保存图数据库信息
-        self.save_graph_info()
-        return kgdb_name
+        return count
 
     def delete_entity(self, entity_name=None, kgdb_name="neo4j"):
         """删除数据库中的指定实体三元组, 参数entity_name为空则删除全部实体"""
@@ -501,10 +368,148 @@ class GraphDatabase:
         """
         tx.run(query)
 
+    def query_nodes_without_embedding(self, kgdb_name="neo4j"):
+        """查询没有嵌入向量的节点
+
+        Returns:
+            list: 没有嵌入向量的节点列表
+        """
+        assert self.driver is not None, "Database is not connected"
+        self.use_database(kgdb_name)
+
+        def query(tx):
+            result = tx.run("""
+            MATCH (n:Entity)
+            WHERE n.embedding IS NULL
+            RETURN n.name AS name
+            """)
+            return [record["name"] for record in result]
+
+        with self.driver.session() as session:
+            return session.execute_read(query)
+
+    def get_graph_info(self, graph_name="neo4j"):
+        assert self.driver is not None, "Database is not connected"
+        self.use_database(graph_name)
+
+        def query(tx):
+            # 只统计包含Entity标签的节点
+            entity_count = tx.run("MATCH (n:Entity) RETURN count(n) AS count").single()["count"]
+            # 只统计包含RELATION标签的关系
+            relationship_count = tx.run("MATCH ()-[r:RELATION]->() RETURN count(r) AS count").single()["count"]
+            triples_count = tx.run("MATCH (n:Entity)-[r:RELATION]->(m:Entity) RETURN count(n) AS count").single()[
+                "count"
+            ]
+
+            # 获取所有标签
+            labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
+
+            return {
+                "graph_name": graph_name,
+                "entity_count": entity_count,
+                "relationship_count": relationship_count,
+                "triples_count": triples_count,
+                "labels": labels,
+                "status": self.status,
+                "embed_model_name": self.embed_model_name,
+                "unindexed_node_count": len(self.query_nodes_without_embedding(graph_name)),
+            }
+
+        try:
+            if self.is_running():
+                # 获取数据库信息
+                with self.driver.session() as session:
+                    graph_info = session.execute_read(query)
+
+                    # 添加时间戳
+                    graph_info["last_updated"] = utc_isoformat()
+                    return graph_info
+            else:
+                logger.warning(f"图数据库未连接或未运行:{self.status=}")
+                return None
+
+        except Exception as e:
+            logger.error(f"获取图数据库信息失败：{e}, {traceback.format_exc()}")
+            return None
+
+    def save_graph_info(self, graph_name="neo4j"):
+        """
+        将图数据库的基本信息保存到工作目录中的JSON文件
+        保存的信息包括：数据库名称、状态、嵌入模型名称等
+        """
+        try:
+            graph_info = self.get_graph_info(graph_name)
+            if graph_info is None:
+                logger.error("图数据库信息为空，无法保存")
+                return False
+
+            info_file_path = os.path.join(self.work_dir, "graph_info.json")
+            with open(info_file_path, "w", encoding="utf-8") as f:
+                json.dump(graph_info, f, ensure_ascii=False, indent=2)
+
+            # logger.info(f"图数据库信息已保存到：{info_file_path}")
+            return True
+        except Exception as e:
+            logger.error(f"保存图数据库信息失败：{e}")
+            return False
+
+    def load_graph_info(self):
+        """
+        从工作目录中的JSON文件加载图数据库的基本信息
+        返回True表示加载成功，False表示加载失败
+        """
+        try:
+            info_file_path = os.path.join(self.work_dir, "graph_info.json")
+            if not os.path.exists(info_file_path):
+                logger.debug(f"图数据库信息文件不存在：{info_file_path}")
+                return False
+
+            with open(info_file_path, encoding="utf-8") as f:
+                graph_info = json.load(f)
+
+            # 更新对象属性
+            if graph_info.get("embed_model_name"):
+                self.embed_model_name = graph_info["embed_model_name"]
+
+            # 如果需要，可以加载更多信息
+            # 注意：这里不更新self.kgdb_name，因为它是在初始化时设置的
+
+            logger.info(f"已加载图数据库信息，最后更新时间：{graph_info.get('last_updated')}")
+            return True
+        except Exception as e:
+            logger.error(f"加载图数据库信息失败：{e}")
+            return False
+
+    async def aget_embedding(self, text):
+        if isinstance(text, list):
+            outputs = await self.embed_model.abatch_encode(text, batch_size=40)
+            return outputs
+        else:
+            outputs = await self.embed_model.aencode(text)
+            return outputs
+
+    def get_embedding(self, text):
+        if isinstance(text, list):
+            outputs = self.embed_model.batch_encode(text, batch_size=40)
+            return outputs
+        else:
+            outputs = self.embed_model.encode([text])[0]
+            return outputs
+
+    def set_embedding(self, tx, entity_name, embedding):
+        tx.run(
+            """
+        MATCH (e:Entity {name: $name})
+        CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
+        """,
+            name=entity_name,
+            embedding=embedding,
+        )
+
     def query_node(
         self, keyword, threshold=0.9, kgdb_name="neo4j", hops=2, max_entities=8, return_format="graph", **kwargs
     ):
-        """知识图谱查询节点的入口:"""
+        """知识图谱查询节点的入口"""
         assert self.driver is not None, "Database is not connected"
         assert self.is_running(), "图数据库未启动"
 
@@ -754,233 +759,3 @@ class GraphDatabase:
         except Exception as e:
             logger.error(f"数据库会话异常: {str(e)}")
             return []
-
-    async def aget_embedding(self, text):
-        if isinstance(text, list):
-            outputs = await self.embed_model.abatch_encode(text, batch_size=40)
-            return outputs
-        else:
-            outputs = await self.embed_model.aencode(text)
-            return outputs
-
-    def get_embedding(self, text):
-        if isinstance(text, list):
-            outputs = self.embed_model.batch_encode(text, batch_size=40)
-            return outputs
-        else:
-            outputs = self.embed_model.encode([text])[0]
-            return outputs
-
-    def set_embedding(self, tx, entity_name, embedding):
-        tx.run(
-            """
-        MATCH (e:Entity {name: $name})
-        CALL db.create.setNodeVectorProperty(e, 'embedding', $embedding)
-        """,
-            name=entity_name,
-            embedding=embedding,
-        )
-
-    def get_graph_info(self, graph_name="neo4j"):
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(graph_name)
-
-        def query(tx):
-            # 只统计包含Entity标签的节点
-            entity_count = tx.run("MATCH (n:Entity) RETURN count(n) AS count").single()["count"]
-            # 只统计包含RELATION标签的关系
-            relationship_count = tx.run("MATCH ()-[r:RELATION]->() RETURN count(r) AS count").single()["count"]
-            triples_count = tx.run("MATCH (n:Entity)-[r:RELATION]->(m:Entity) RETURN count(n) AS count").single()[
-                "count"
-            ]
-
-            # 获取所有标签
-            labels = tx.run("CALL db.labels() YIELD label RETURN collect(label) AS labels").single()["labels"]
-
-            return {
-                "graph_name": graph_name,
-                "entity_count": entity_count,
-                "relationship_count": relationship_count,
-                "triples_count": triples_count,
-                "labels": labels,
-                "status": self.status,
-                "embed_model_name": self.embed_model_name,
-                "unindexed_node_count": len(self.query_nodes_without_embedding(graph_name)),
-            }
-
-        try:
-            if self.is_running():
-                # 获取数据库信息
-                with self.driver.session() as session:
-                    graph_info = session.execute_read(query)
-
-                    # 添加时间戳
-                    graph_info["last_updated"] = utc_isoformat()
-                    return graph_info
-            else:
-                logger.warning(f"图数据库未连接或未运行:{self.status=}")
-                return None
-
-        except Exception as e:
-            logger.error(f"获取图数据库信息失败：{e}, {traceback.format_exc()}")
-            return None
-
-    def save_graph_info(self, graph_name="neo4j"):
-        """
-        将图数据库的基本信息保存到工作目录中的JSON文件
-        保存的信息包括：数据库名称、状态、嵌入模型名称等
-        """
-        try:
-            graph_info = self.get_graph_info(graph_name)
-            if graph_info is None:
-                logger.error("图数据库信息为空，无法保存")
-                return False
-
-            info_file_path = os.path.join(self.work_dir, "graph_info.json")
-            with open(info_file_path, "w", encoding="utf-8") as f:
-                json.dump(graph_info, f, ensure_ascii=False, indent=2)
-
-            # logger.info(f"图数据库信息已保存到：{info_file_path}")
-            return True
-        except Exception as e:
-            logger.error(f"保存图数据库信息失败：{e}")
-            return False
-
-    def query_nodes_without_embedding(self, kgdb_name="neo4j"):
-        """查询没有嵌入向量的节点
-
-        Returns:
-            list: 没有嵌入向量的节点列表
-        """
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(kgdb_name)
-
-        def query(tx):
-            result = tx.run("""
-            MATCH (n:Entity)
-            WHERE n.embedding IS NULL
-            RETURN n.name AS name
-            """)
-            return [record["name"] for record in result]
-
-        with self.driver.session() as session:
-            return session.execute_read(query)
-
-    def load_graph_info(self):
-        """
-        从工作目录中的JSON文件加载图数据库的基本信息
-        返回True表示加载成功，False表示加载失败
-        """
-        try:
-            info_file_path = os.path.join(self.work_dir, "graph_info.json")
-            if not os.path.exists(info_file_path):
-                logger.debug(f"图数据库信息文件不存在：{info_file_path}")
-                return False
-
-            with open(info_file_path, encoding="utf-8") as f:
-                graph_info = json.load(f)
-
-            # 更新对象属性
-            if graph_info.get("embed_model_name"):
-                self.embed_model_name = graph_info["embed_model_name"]
-
-            # 如果需要，可以加载更多信息
-            # 注意：这里不更新self.kgdb_name，因为它是在初始化时设置的
-
-            logger.info(f"已加载图数据库信息，最后更新时间：{graph_info.get('last_updated')}")
-            return True
-        except Exception as e:
-            logger.error(f"加载图数据库信息失败：{e}")
-            return False
-
-    def add_embedding_to_nodes(self, node_names=None, kgdb_name="neo4j"):
-        """为节点添加嵌入向量
-
-        Args:
-            node_names (list, optional): 要添加嵌入向量的节点名称列表，None表示所有没有嵌入向量的节点
-            kgdb_name (str, optional): 图数据库名称，默认为'neo4j'
-
-        Returns:
-            int: 成功添加嵌入向量的节点数量
-        """
-        assert self.driver is not None, "Database is not connected"
-        self.use_database(kgdb_name)
-
-        # 如果node_names为None，则获取所有没有嵌入向量的节点
-        if node_names is None:
-            node_names = self.query_nodes_without_embedding(kgdb_name)
-
-        count = 0
-        with self.driver.session() as session:
-            for node_name in node_names:
-                try:
-                    embedding = self.get_embedding(node_name)
-                    session.execute_write(self.set_embedding, node_name, embedding)
-                    count += 1
-                except Exception as e:
-                    logger.error(f"为节点 '{node_name}' 添加嵌入向量失败: {e}, {traceback.format_exc()}")
-
-        return count
-
-    def format_general_results(self, results):
-        nodes = []
-        edges = []
-
-        for item in results:
-            nodes.extend([item["h"], item["t"]])
-            edges.append(item["r"])
-
-        formatted_results = {"nodes": nodes, "edges": edges}
-        return formatted_results
-
-    def _extract_relationship_info(self, relationship, source_name=None, target_name=None, node_dict=None):
-        """
-        提取关系信息并返回格式化的节点和边信息
-        """
-        rel_id = relationship.element_id
-        nodes = relationship.nodes
-        if len(nodes) != 2:
-            return None, None
-
-        source, target = nodes
-        source_id = source.element_id
-        target_id = target.element_id
-
-        # 如果没有提供 source_name 或 target_name，则需要 node_dict
-        if source_name is None or target_name is None:
-            assert node_dict is not None, "node_dict is required when source_name or target_name is None"
-            source_name = node_dict[source_id]["name"] if source_name is None else source_name
-            target_name = node_dict[target_id]["name"] if target_name is None else target_name
-
-        relationship_type = relationship._properties.get("type", "unknown")
-        if relationship_type == "unknown":
-            relationship_type = relationship.type
-
-        edge_info = {
-            "id": rel_id,
-            "type": relationship_type,
-            "source_id": source_id,
-            "target_id": target_id,
-            "source_name": source_name,
-            "target_name": target_name,
-        }
-
-        node_info = [
-            {"id": source_id, "name": source_name},
-            {"id": target_id, "name": target_name},
-        ]
-
-        return node_info, edge_info
-
-
-def clean_triples_embedding(triples):
-    for item in triples:
-        if hasattr(item[0], "_properties"):
-            item[0]._properties["embedding"] = None
-        if hasattr(item[2], "_properties"):
-            item[2]._properties["embedding"] = None
-    return triples
-
-
-if __name__ == "__main__":
-    pass

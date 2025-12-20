@@ -27,20 +27,25 @@ async def _get_graph_adapter(db_id: str) -> GraphAdapter:
     Returns:
         GraphAdapter: 对应的图谱适配器实例
     """
-    # 1. 检查是否是 LightRAG 数据库
-    if knowledge_base.is_lightrag_database(db_id):
-        rag_instance = await knowledge_base._get_lightrag_instance(db_id)
-        if not rag_instance:
-            raise HTTPException(status_code=404, detail=f"LightRAG database {db_id} not found or inaccessible")
-        return GraphAdapterFactory.create_adapter("lightrag", lightrag_instance=rag_instance)
-
-    # 2. 默认为 Upload/Neo4j 数据库 (假设 db_id 为 "neo4j" 或其他 Neo4j 数据库名)
-    # 这里我们假设非 LightRAG 的 ID 都是 Neo4j 的数据库名
-    # 如果未来有更多类型，需要更完善的 ID 区分机制 (例如前缀)
+    # 检查图数据库服务状态 (仅对 Upload 类型需要)
     if not graph_base.is_running():
-        raise HTTPException(status_code=503, detail="Graph database service is not running")
+        # 先尝试检测图谱类型，如果是不需要 graph_base 的类型则允许
+        graph_type = GraphAdapterFactory.detect_graph_type(db_id, knowledge_base)
+        if graph_type == "upload":
+            raise HTTPException(status_code=503, detail="Graph database service is not running")
 
-    return GraphAdapterFactory.create_adapter("upload", graph_db_instance=graph_base, config={"kgdb_name": db_id})
+    # 使用工厂方法自动创建适配器
+    return GraphAdapterFactory.create_adapter_by_db_id(
+        db_id=db_id, knowledge_base_manager=knowledge_base, graph_db_instance=graph_base
+    )
+
+
+def _get_capabilities_from_metadata(metadata) -> dict:
+    """从 GraphMetadata 对象提取 capabilities 字典"""
+    return {
+        "supports_embedding": metadata.supports_embedding,
+        "supports_threshold": metadata.supports_threshold,
+    }
 
 
 @graph.get("/list")
@@ -49,39 +54,53 @@ async def get_graphs(current_user: User = Depends(get_admin_user)):
     获取所有可用的知识图谱列表
 
     Returns:
-        包含所有图谱信息的列表 (包括 Neo4j 和 LightRAG)
+        包含所有图谱信息的列表 (包括 Neo4j 和 LightRAG)，以及每个类型的 capability 信息
     """
     try:
         graphs = []
 
-        # 1. 获取默认 Neo4j 图谱信息
+        # 1. 获取默认 Neo4j 图谱信息 (Upload 类型)
         neo4j_info = graph_base.get_graph_info()
         if neo4j_info:
+            # 直接使用 Upload 适配器的默认 metadata
+            from src.knowledge.adapters.upload import UploadGraphAdapter
+
+            capabilities = _get_capabilities_from_metadata(UploadGraphAdapter._get_metadata(None))
+
             graphs.append(
                 {
                     "id": "neo4j",
                     "name": "默认图谱",
-                    "type": "neo4j",
+                    "type": "upload",
                     "description": "Default graph database for uploaded documents",
                     "status": neo4j_info.get("status", "unknown"),
                     "created_at": neo4j_info.get("last_updated"),
                     "node_count": neo4j_info.get("entity_count", 0),
                     "edge_count": neo4j_info.get("relationship_count", 0),
+                    "capabilities": capabilities,
                 }
             )
 
         # 2. 获取 LightRAG 数据库信息
         lightrag_dbs = knowledge_base.get_lightrag_databases()
+        # 直接使用 LightRAG 适配器的默认 metadata
+        from src.knowledge.adapters.lightrag import LightRAGGraphAdapter
+
+        capabilities = _get_capabilities_from_metadata(LightRAGGraphAdapter._get_metadata(None))
+
         for db in lightrag_dbs:
+            db_id = db.get("db_id")
+
             graphs.append(
                 {
-                    "id": db.get("db_id"),
+                    "id": db_id,
                     "name": db.get("name"),
                     "type": "lightrag",
                     "description": db.get("description"),
                     "status": "active",  # LightRAG DBs are usually active if listed
                     "created_at": db.get("created_at"),
                     "metadata": db,
+                    "capabilities": capabilities,
                 }
             )
 
@@ -115,15 +134,14 @@ async def get_subgraph(
 
         adapter = await _get_graph_adapter(db_id)
 
-        # 统一查询参数
-        # 对于 UploadGraphAdapter, kgdb_name 通常通过 kwargs 传递
-        # 对于 LightRAGGraphAdapter, max_depth/max_nodes 通过 kwargs 传递
-        result_data = await adapter.query_nodes(
-            keyword=node_label,
-            max_depth=max_depth,
-            max_nodes=max_nodes,
-            kgdb_name=db_id if not knowledge_base.is_lightrag_database(db_id) else "neo4j",
-        )
+        # 统一查询参数 - 适配器会根据自己的配置处理这些参数
+        query_kwargs = {
+            "keyword": node_label,
+            "max_depth": max_depth,
+            "max_nodes": max_nodes,
+        }
+
+        result_data = await adapter.query_nodes(**query_kwargs)
 
         return {
             "success": True,
@@ -146,6 +164,7 @@ async def get_graph_labels(
     获取图谱的所有标签
     """
     try:
+        # 使用统一的适配器获取标签
         adapter = await _get_graph_adapter(db_id)
         labels = await adapter.get_labels()
         return {"success": True, "data": {"labels": labels}}
@@ -163,33 +182,13 @@ async def get_graph_stats(
     获取图谱统计信息
     """
     try:
-        if knowledge_base.is_lightrag_database(db_id):
-            # 复用原有的 LightRAG 统计逻辑
-            # 这里暂时直接调用原有逻辑，理想情况下也应该封装进 Adapter
-            rag_instance = await knowledge_base._get_lightrag_instance(db_id)
-            if not rag_instance:
-                raise HTTPException(status_code=404, detail="Database not found")
-
-            knowledge_graph = await rag_instance.get_knowledge_graph(node_label="*", max_depth=1, max_nodes=10000)
-            entity_types = {}
-            for node in knowledge_graph.nodes:
-                entity_type = node.properties.get("entity_type", "unknown")
-                entity_types[entity_type] = entity_types.get(entity_type, 0) + 1
-
-            entity_types_list = [
-                {"type": k, "count": v} for k, v in sorted(entity_types.items(), key=lambda x: x[1], reverse=True)
-            ]
-
-            return {
-                "success": True,
-                "data": {
-                    "total_nodes": len(knowledge_graph.nodes),
-                    "total_edges": len(knowledge_graph.edges),
-                    "entity_types": entity_types_list,
-                },
-            }
+        # 使用适配器的统计信息 (适用于 kb_ 开头的数据库和 LightRAG 数据库)
+        if db_id.startswith("kb_") or knowledge_base.is_lightrag_database(db_id):
+            adapter = await _get_graph_adapter(db_id)
+            stats_data = await adapter.get_stats()
+            return {"success": True, "data": stats_data}
         else:
-            # Neo4j stats
+            # Neo4j stats (直接管理的图谱)
             info = graph_base.get_graph_info(graph_name=db_id)
             if not info:
                 raise HTTPException(status_code=404, detail="Graph info not found")
@@ -316,6 +315,14 @@ async def add_neo4j_entities(
 ):
     """通过JSONL文件添加图谱实体到Neo4j"""
     try:
+        # 验证文件路径
+        if not file_path or not isinstance(file_path, str):
+            return {"success": False, "message": "文件路径不能为空", "status": "failed"}
+
+        file_path = file_path.strip()
+        if not file_path:
+            return {"success": False, "message": "文件路径不能为空", "status": "failed"}
+
         if not file_path.endswith(".jsonl"):
             return {"success": False, "message": "文件格式错误，请上传jsonl文件", "status": "failed"}
 

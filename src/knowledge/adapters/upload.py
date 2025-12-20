@@ -1,34 +1,58 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from src.knowledge.graph import GraphDatabase
+from src.knowledge.adapters.base import BaseNeo4jAdapter
 
-from .base import GraphAdapter
+from .base import GraphAdapter, GraphMetadata
+
+if TYPE_CHECKING:
+    pass
 
 
 class UploadGraphAdapter(GraphAdapter):
     """Upload图谱适配器 (Upload Graph Adapter)"""
 
-    def __init__(self, graph_db_instance: GraphDatabase, config: dict[str, Any] = None):
-        self.config = config or {
-            "node_label": "Entity:Upload",
-            "id_field": "name",
-            "relation_label": "RELATION",
-            "default_tags": ["upload", "user_generated"],
-        }
-        self.graph_db = graph_db_instance
+    def __init__(self, graph_db_instance=None, config: dict[str, Any] = None):
+        super().__init__(config)
+
+        # 延迟导入以避免循环导入
+        from src.knowledge.services.upload_graph_service import UploadGraphService
+
+        # 初始化业务逻辑服务
+        if graph_db_instance and hasattr(graph_db_instance, "_service"):
+            # 如果传入的是新的包装类 GraphDatabase
+            self.service = graph_db_instance._service
+        else:
+            self.service = graph_db_instance if graph_db_instance else UploadGraphService()
+            if not self.service.is_running():
+                self.service.start()
+
+        # 初始化查询适配器（使用纯查询操作）
+        self._db = BaseNeo4jAdapter()
+
+    def _get_metadata(self) -> GraphMetadata:
+        """获取 Upload 图谱元数据"""
+        return GraphMetadata(
+            graph_type="upload",
+            id_field="id",
+            name_field="name",
+            supports_embedding=True,
+            supports_threshold=True,
+        )
 
     async def query_nodes(self, keyword: str, **kwargs) -> dict[str, Any]:
         params = self._normalize_query_params(keyword, kwargs)
 
         # 如果关键词是 "*" 或者为空，则执行采样查询
         if not params["keyword"] or params["keyword"] == "*":
-            # 映射 max_nodes 到 num
+            # 使用 BaseNeo4jAdapter 的连通子图查询
             num = kwargs.get("max_nodes", 100)
-            raw_results = self.graph_db.get_sample_nodes(kgdb_name=params.get("kgdb_name", "neo4j"), num=num)
+            raw_results = self._db._get_sample_nodes_with_connections(
+                num=num,
+                label_filter=None,  # Upload 类型不需要标签过滤
+            )
         else:
-            # 否则执行关键词搜索
-            # graph_db.query_node is sync
-            raw_results = self.graph_db.query_node(
+            # 否则执行关键词搜索（使用 service 的查询功能）
+            raw_results = self.service.query_node(
                 keyword=params["keyword"],
                 threshold=params.get("threshold", 0.9),
                 kgdb_name=params.get("kgdb_name", "neo4j"),
@@ -36,18 +60,6 @@ class UploadGraphAdapter(GraphAdapter):
                 return_format="graph",
             )
 
-        return self._format_results(raw_results)
-
-    async def add_entity(self, triples: list[dict], **kwargs) -> bool:
-        kgdb_name = kwargs.get("kgdb_name", "neo4j")
-        # txt_add_vector_entity is async
-        await self.graph_db.txt_add_vector_entity(triples, kgdb_name=kgdb_name)
-        return True
-
-    async def get_sample_nodes(self, num: int = 50, **kwargs) -> dict[str, list]:
-        kgdb_name = kwargs.get("kgdb_name", "neo4j")
-        # get_sample_nodes is sync
-        raw_results = self.graph_db.get_sample_nodes(kgdb_name=kgdb_name, num=num)
         return self._format_results(raw_results)
 
     def normalize_node(self, raw_node: Any) -> dict[str, Any]:
@@ -84,8 +96,9 @@ class UploadGraphAdapter(GraphAdapter):
         )
 
     async def get_labels(self) -> list[str]:
+        """获取所有标签 - 使用 UploadGraphService"""
         kgdb_name = self.config.get("kgdb_name", "neo4j")
-        info = self.graph_db.get_graph_info(graph_name=kgdb_name)
+        info = self.service.get_graph_info(graph_name=kgdb_name)
         return info.get("labels", []) if info else []
 
     def _normalize_query_params(self, keyword: str, kwargs: dict) -> dict[str, Any]:

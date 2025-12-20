@@ -2,143 +2,310 @@ from typing import Any
 
 from src.utils import logger
 
-from .base import GraphAdapter
+from .base import BaseNeo4jAdapter, GraphAdapter, GraphMetadata
 
 
 class LightRAGGraphAdapter(GraphAdapter):
-    """LightRAG图谱适配器 (LightRAG Graph Adapter)"""
+    """LightRAG 图谱适配器 (LightRAG Graph Adapter)"""
 
-    def __init__(self, lightrag_instance: Any, config: dict[str, Any] = None):
-        self.config = config or {
-            "node_label_field": "labels",
-            "id_field": "id",
-            "type_field": "entity_type",
-            "relation_prefix": "HAS_",
-        }
-        self.lightrag = lightrag_instance
+    def __init__(self, config: dict[str, Any] = None):
+        super().__init__(config)
 
-    async def query_nodes(self, keyword: str, **kwargs) -> dict[str, Any]:
-        # Map keyword to node_label
-        # If keyword is empty or "*", query all (or sample)
-        node_label = keyword if keyword and keyword != "*" else "*"
+        # 使用公共的 Neo4j 适配器，而不是 GraphDatabase
+        self._db = BaseNeo4jAdapter()
 
-        max_depth = kwargs.get("max_depth", 2)
-        max_nodes = kwargs.get("max_nodes", 100)
+        # 从配置中获取 kb_id
+        self.kb_id = self.config.get("kb_id")
 
-        # lightrag.get_knowledge_graph is async
-        # Note: if node_label is "*", LightRAG might return a large graph or sample depending on implementation
-        raw_graph = await self.lightrag.get_knowledge_graph(
-            node_label=node_label, max_depth=max_depth, max_nodes=max_nodes
+    def _get_metadata(self) -> GraphMetadata:
+        """获取 LightRAG 图谱元数据"""
+        return GraphMetadata(
+            graph_type="lightrag",
+            id_field="element_id",
+            name_field="entity_id",  # LightRAG 使用 entity_id 存储实体名称
+            supports_embedding=False,
+            supports_threshold=False,
         )
 
-        return self._convert_lightrag_graph(raw_graph)
+    async def query_nodes(self, keyword: str, **kwargs) -> dict[str, Any]:
+        """查询节点 (Query nodes)"""
+        kb_id = kwargs.get("kb_id") or self.kb_id
+        limit = kwargs.get("max_nodes", kwargs.get("limit", 50))
+        max_depth = kwargs.get("max_depth", 1)  # 默认为 1，以返回边
 
-    async def add_entity(self, triples: list[dict], **kwargs) -> bool:
-        """
-        LightRAG typically builds graph from text.
-        Direct triple injection might not be supported or requires different API.
-        """
-        logger.warning("add_entity is not fully supported for LightRAG adapter yet.")
-        return False
+        # 如果 keyword 为 *，强制 max_depth=1 至少
+        if keyword == "*":
+            max_depth = max(max_depth, 1)
 
-    async def get_sample_nodes(self, num: int = 50, **kwargs) -> dict[str, list]:
-        # Use query_nodes with wildcard to get a subgraph
-        return await self.query_nodes("*", max_nodes=num, **kwargs)
+        query = self._build_cypher_query(keyword, kb_id, limit, max_depth)
+
+        try:
+            with self._db.driver.session() as session:
+                result = session.run(query, keyword=keyword, kb_id=kb_id, limit=limit)
+                return self._process_query_result(result)
+        except Exception as e:
+            logger.error(f"Neo4j query failed: {e}")
+            return {"nodes": [], "edges": []}
+
+    async def get_labels(self) -> list[str]:
+        """获取所有标签 (Get all labels)"""
+        query = "CALL db.labels()"
+        try:
+            with self._db.driver.session() as session:
+                result = session.run(query)
+                return [record["label"] for record in result if not record["label"].startswith("kb_")]
+        except Exception as e:
+            logger.error(f"Failed to get labels: {e}")
+            return []
+
+    async def get_stats(self, **kwargs) -> dict[str, Any]:
+        """获取统计信息 (Get statistics)"""
+        kb_id = kwargs.get("kb_id") or self.kb_id
+
+        # 安全检查
+        if kb_id and not all(c.isalnum() or c == "_" for c in kb_id):
+            logger.warning(f"Invalid kb_id format: {kb_id}")
+            return {"total_nodes": 0, "total_edges": 0, "entity_types": []}
+
+        if not kb_id:
+            # 如果没有 kb_id，可能返回全局统计或空
+            return {"total_nodes": 0, "total_edges": 0, "entity_types": []}
+
+        try:
+            # 统计节点和边
+            query = f"""
+            MATCH (n:`{kb_id}`)
+            WITH count(n) as node_count
+            OPTIONAL MATCH (n:`{kb_id}`)-[r]->(m:`{kb_id}`)
+            RETURN node_count, count(r) as edge_count
+            """
+
+            # 统计标签分布
+            label_query = f"""
+            MATCH (n:`{kb_id}`)
+            UNWIND labels(n) as label
+            WITH label, count(*) as count
+            WHERE label <> 'Entity' AND NOT label STARTS WITH 'kb_'
+            RETURN label, count
+            ORDER BY count DESC
+            """
+
+            with self._db.driver.session() as session:
+                stats = session.run(query).single()
+                label_stats = session.run(label_query)
+
+                entity_types_list = [{"type": record["label"], "count": record["count"]} for record in label_stats]
+
+                return {
+                    "total_nodes": stats["node_count"],
+                    "total_edges": stats["edge_count"],
+                    "entity_types": entity_types_list,
+                }
+        except Exception as e:
+            logger.error(f"Failed to get stats: {e}")
+            return {"total_nodes": 0, "total_edges": 0, "entity_types": []}
 
     def normalize_node(self, raw_node: Any) -> dict[str, Any]:
-        # Handle LightRAG Node object
-        node_id = getattr(raw_node, "id", None)
-        if node_id is None:
-            node_id = raw_node.get("id")
-
-        labels = getattr(raw_node, "labels", [])
-        if not labels and hasattr(raw_node, "get"):
+        """标准化节点格式 (Normalize node format)"""
+        if hasattr(raw_node, "element_id"):  # neo4j.graph.Node
+            node_id = raw_node.element_id
+            labels = list(raw_node.labels)
+            properties = dict(raw_node.items())
+        elif isinstance(raw_node, dict):
+            node_id = raw_node.get("id") or raw_node.get("element_id")
             labels = raw_node.get("labels", [])
-
-        properties = getattr(raw_node, "properties", {})
-        if not properties and hasattr(raw_node, "get"):
             properties = raw_node.get("properties", {})
+            if not properties:
+                properties = {k: v for k, v in raw_node.items() if k not in ["id", "element_id", "labels"]}
+        else:
+            return {}
 
-        # 优先使用 entity_id 作为显示名称，因为 Neo4j 中 LightRAG 存储的实体名称在 entity_id 字段
-        # 如果不存在，则回退到 id
-        name = properties.get("entity_id", node_id)
+        # 优先使用 entity_id 字段作为 name (LightRAG 风格)，如果不存在则使用 name 字段
+        # 很多时候 entity_id 存储了实体名称
+        name = properties.get("entity_id", properties.get("name", "Unknown"))
 
-        # 尝试从 properties 获取 entity_type，或者从 labels 中推断（排除 kb_ 前缀的 label）
-        entity_type = properties.get("entity_type", "unknown")
-        if entity_type == "unknown" and labels:
-            for label in labels:
-                if not label.startswith("kb_"):
-                    entity_type = label
-                    break
+        # 过滤掉 kb_ 开头的标签
+        filtered_labels = [label for label in labels if not label.startswith("kb_")]
+
+        # 提取实体类型
+        entity_type = "Entity"
+        for label in filtered_labels:
+            if label != "Entity":
+                entity_type = label
+                break
 
         return self._create_standard_node(
-            node_id=node_id, name=name, entity_type=entity_type, labels=labels, properties=properties, source="lightrag"
+            node_id=node_id,
+            name=name,
+            entity_type=entity_type,
+            labels=filtered_labels,
+            properties=properties,
+            source="neo4j",
         )
 
     def normalize_edge(self, raw_edge: Any) -> dict[str, Any]:
-        # Handle LightRAG Edge object
-        edge_id = getattr(raw_edge, "id", None)
-        if edge_id is None:
+        """标准化边格式 (Normalize edge format)"""
+        logger.info(raw_edge._properties)
+        if hasattr(raw_edge, "element_id"):  # neo4j.graph.Relationship
+            edge_id = raw_edge.element_id
+            edge_type = raw_edge._properties["keywords"] or raw_edge.type
+            start_node_id = raw_edge.start_node.element_id if hasattr(raw_edge.start_node, "element_id") else None
+            end_node_id = raw_edge.end_node.element_id if hasattr(raw_edge.end_node, "element_id") else None
+            properties = dict(raw_edge.items())
+        elif isinstance(raw_edge, dict):
             edge_id = raw_edge.get("id")
-
-        source = getattr(raw_edge, "source", None)
-        if source is None:
-            source = raw_edge.get("source")
-
-        target = getattr(raw_edge, "target", None)
-        if target is None:
-            target = raw_edge.get("target")
-
-        edge_type = getattr(raw_edge, "type", None)
-        if edge_type is None:
             edge_type = raw_edge.get("type")
-
-        properties = getattr(raw_edge, "properties", {})
-        if not properties and hasattr(raw_edge, "get"):
+            start_node_id = raw_edge.get("source_id")
+            end_node_id = raw_edge.get("target_id")
             properties = raw_edge.get("properties", {})
-
-        # 优化边的显示类型
-        # LightRAG 的边类型通常是 "DIRECTED"，具体含义在 keywords 或 description 中
-        display_type = edge_type
-        if edge_type == "DIRECTED":
-            keywords = properties.get("keywords", [])
-            if keywords and isinstance(keywords, list) and len(keywords) > 0:
-                display_type = keywords[0]
-            elif properties.get("description"):
-                # 如果没有 keywords，尝试从 description 截取（太长就算了）
-                desc = properties.get("description", "")
-                if len(desc) < 20:
-                    display_type = desc
-                else:
-                    display_type = "related"  # fallback
+        else:
+            return {}
 
         return self._create_standard_edge(
-            edge_id=edge_id, source_id=source, target_id=target, edge_type=display_type, properties=properties
+            edge_id=edge_id, source_id=start_node_id, target_id=end_node_id, edge_type=edge_type, properties=properties
         )
 
-    async def get_labels(self) -> list[str]:
-        return await self.lightrag.get_graph_labels()
+    def _build_cypher_query(self, keyword: str, kb_id: str = None, limit: int = 50, max_depth: int = 0) -> str:
+        """构建 Cypher 查询"""
+        # 安全性检查：kb_id 只能包含字母、数字和下划线
+        if kb_id:
+            if not all(c.isalnum() or c == "_" for c in kb_id):
+                logger.warning(f"Invalid kb_id: {kb_id}")
+                kb_id = None
 
-    def _convert_lightrag_graph(self, raw_graph) -> dict[str, Any]:
+        where_clauses = []
+
+        # 确定 MATCH 子句
+        if kb_id:
+            # 如果提供了 kb_id，直接匹配该标签
+            # 这样即使节点没有 Entity 标签也能匹配到
+            match_clause = f"MATCH (n:`{kb_id}`)"
+        else:
+            match_clause = "MATCH (n:Entity)"
+
+        if keyword and keyword != "*":
+            # 兼容 LightRAG 格式 (entity_id) 和普通格式 (name)
+            where_clauses.append(
+                "(toLower(n.name) CONTAINS toLower($keyword) OR toLower(n.entity_id) CONTAINS toLower($keyword))"
+            )
+
+        where_str = " AND ".join(where_clauses)
+        if where_str:
+            where_str = "WHERE " + where_str
+
+        # 如果 max_depth > 0，我们需要扩展查询
+        # 为了避免查询过于复杂，我们使用两步法：
+        # 1. 找到种子节点
+        # 2. 找到这些节点及其周围的关系
+
+        # 步骤 1: 找到种子节点
+        # 如果 keyword 是 * 且有 kb_id，我们使用采样逻辑进行随机采样
+        # 但这里 query_nodes 主要是为了搜索
+
+        if max_depth > 0:
+            # 如果需要扩展，返回子图
+            query = f"""
+            {match_clause}
+            {where_str}
+            WITH n LIMIT {limit}
+
+            // 收集种子节点
+            WITH collect(n) as seeds
+
+            // 扩展 1 跳 (如果 max_depth >= 1)
+            UNWIND seeds as s
+            OPTIONAL MATCH (s)-[r1]-(m1)
+            // 确保 m1 也在同一个 KB 中 (如果指定了 kb_id)
+            {f"WHERE m1:`{kb_id}`" if kb_id else ""}
+
+            WITH seeds, collect(DISTINCT {{h: s, r: r1, t: m1}}) as hop1
+
+            // 扩展 2 跳 (如果 max_depth >= 2)
+            // 这里为了简化，只做 1 跳扩展，或者如果需要 2 跳，可以在这里添加
+            // 考虑到性能，通常只做 1 跳或者只找种子节点内部的关系
+
+            // 重新整理返回结果
+            UNWIND hop1 as triple
+            RETURN triple.h as h, triple.r as r, triple.t as t
+            LIMIT {limit * 10}
+            """
+
+            # 简化版扩展查询：只返回种子节点及其直接连接的边（如果另一端也在 seeds 中，或者不限制）
+            # 下面这个查询返回种子节点以及它们之间的关系，加上它们的一跳邻居
+
+            query = f"""
+            {match_clause}
+            {where_str}
+            WITH n LIMIT {limit}
+
+            // 扩展查询：获取 n 和它的邻居
+            OPTIONAL MATCH (n)-[r]-(m)
+            {f"WHERE m:`{kb_id}`" if kb_id else ""}
+
+            RETURN n, r, m
+            """
+        else:
+            # 仅返回节点
+            query = f"""
+            {match_clause}
+            {where_str}
+            RETURN n
+            LIMIT {limit}
+            """
+
+        return query
+
+    def _build_subgraph_query(self, limit: int, kb_id: str = None) -> str:
+        """构建子图查询"""
+        # 安全性检查
+        if kb_id:
+            if not all(c.isalnum() or c == "_" for c in kb_id):
+                kb_id = None
+
+        if kb_id:
+            match_clause = f"MATCH (n:`{kb_id}`)"
+        else:
+            match_clause = "MATCH (n:Entity)"
+
+        query = f"""
+        {match_clause}
+        WITH n LIMIT {limit}
+        WITH collect(n) as nodes
+        UNWIND nodes as n
+        UNWIND nodes as m
+        OPTIONAL MATCH (n)-[r]-(m)
+        WHERE elementId(n) < elementId(m)
+        RETURN n, r, m
+        """
+
+        return query
+
+    def _process_query_result(self, result) -> dict[str, list]:
+        """处理查询结果"""
         nodes = []
         edges = []
+        node_ids = set()
+        edge_ids = set()
 
-        # raw_graph has .nodes and .edges lists
-        if hasattr(raw_graph, "nodes"):
-            for node in raw_graph.nodes:
-                nodes.append(self.normalize_node(node))
+        for record in result:
+            for key in record.keys():
+                val = record[key]
+                if val is None:
+                    continue
 
-        if hasattr(raw_graph, "edges"):
-            for edge in raw_graph.edges:
-                edges.append(self.normalize_edge(edge))
+                if hasattr(val, "element_id") and hasattr(val, "labels"):  # Node
+                    if val.element_id not in node_ids:
+                        nodes.append(self.normalize_node(val))
+                        node_ids.add(val.element_id)
+                elif hasattr(val, "element_id") and hasattr(val, "start_node"):  # Relationship
+                    if val.element_id not in edge_ids:
+                        edges.append(self.normalize_edge(val))
+                        edge_ids.add(val.element_id)
+                elif isinstance(val, list):
+                    for item in val:
+                        if hasattr(item, "element_id") and hasattr(item, "labels"):
+                            if item.element_id not in node_ids:
+                                nodes.append(self.normalize_node(item))
+                                node_ids.add(item.element_id)
 
-        result = {"nodes": nodes, "edges": edges}
-
-        # Add metadata if available
-        if hasattr(raw_graph, "is_truncated"):
-            result["is_truncated"] = raw_graph.is_truncated
-
-        result["total_nodes"] = len(nodes)
-        result["total_edges"] = len(edges)
-
-        return result
+        return {"nodes": nodes, "edges": edges}
