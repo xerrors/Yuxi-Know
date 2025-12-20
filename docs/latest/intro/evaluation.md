@@ -19,12 +19,12 @@
 ```
 
 **字段说明**：
-- `query`（必需）：测试问题
-- `gold_chunk_ids`（可选）：相关文档块的 ID 列表
-- `gold_answer`（可选）：标准答案
+- `query`（必需）：测试问题，用于触发 RAG 系统的检索
+- `gold_chunk_ids`（可选）：相关文档块的 ID 列表，用于验证检索效果
+- `gold_answer`（可选）：标准答案，用于验证生成效果
 
 ::: tip 数据集构建
-可以使用 [EasyDataset](https://github.com/ConardLi/easy-dataset) 从文档批量生成问答对、可视化编辑、导出多种格式和数据质量检查。挺好用的，推荐。注意导出的时候的字段需要修改为 `query`、`gold_chunk_ids`、`gold_answer`。
+可以使用 [EasyDataset](https://github.com/ConardLi/easy-dataset) 从文档批量生成问答对、可视化编辑、导出多种格式和数据质量检查。挺好用的，推荐。注意导出的时候的字段需要修改为 `query`、`gold_answer`。
 :::
 
 

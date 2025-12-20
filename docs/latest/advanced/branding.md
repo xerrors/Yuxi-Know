@@ -46,4 +46,6 @@ YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
   --main-900: #e6f7ff;           /* 色板 */
   /* ... 其他色板 */
 }
+
+**此外**，`web/src/stores/theme.js` 中也包含了主题相关的配置（需要修改 `colorPrimary`），可根据需要修改。
 ```
