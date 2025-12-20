@@ -48,7 +48,7 @@ class UploadGraphAdapter(GraphAdapter):
             num = kwargs.get("max_nodes", 100)
             raw_results = self._db._get_sample_nodes_with_connections(
                 num=num,
-                label_filter=None,  # Upload 类型不需要标签过滤
+                label_filter="Upload",
             )
         else:
             # 否则执行关键词搜索（使用 service 的查询功能）
