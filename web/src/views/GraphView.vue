@@ -25,6 +25,8 @@
             :options="state.dbOptions"
             @change="handleDbChange"
             :loading="state.loadingDatabases"
+            mode="combobox"
+            placeholder="选择或输入KB ID"
           />
         </div>
         <!-- <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
@@ -58,7 +60,7 @@
             <div class="actions-left">
               <a-input
                 v-model:value="state.searchInput"
-                :placeholder="isNeo4j ? '输入要查询的实体' : '输入要查询的实体 (*为全部)'"
+                placeholder="输入要查询的实体 (*为全部)"
                 style="width: 300px"
                 @keydown.enter="onSearch"
                 allow-clear
@@ -125,9 +127,10 @@
       <a-modal
       :open="state.showModal" title="上传文件"
       @ok="addDocumentByFile"
-      @cancel="() => state.showModal = false"
+      @cancel="handleModalCancel"
       ok-text="添加到图数据库" cancel-text="取消"
-      :confirm-loading="state.processing">
+      :confirm-loading="state.processing"
+      :ok-button-props="{ disabled: !hasValidFile }">
       <div class="upload">
         <div class="note">
           <p>上传的文件内容参考 test/data/A_Dream_of_Red_Mansions_tiny.jsonl 中的格式：</p>
@@ -177,34 +180,6 @@
         </div>
       </div>
     </a-modal>
-
-    <!-- 说明弹窗 -->
-    <a-modal
-      :open="state.showInfoModal"
-      title="图数据库说明"
-      @cancel="() => state.showInfoModal = false"
-      :footer="null"
-      width="600px"
-    >
-      <div class="info-content" v-if="isNeo4j">
-        <p>本页面展示的是 Neo4j 图数据库中的知识图谱信息。</p>
-        <p>具体展示内容包括：</p>
-        <ul>
-          <li>带有 <code>Entity</code> 标签的节点</li>
-          <li>带有 <code>RELATION</code> 类型的关系边</li>
-        </ul>
-        <p>注意：</p>
-        <ul>
-          <li>这里仅展示用户上传的实体和关系，不包含知识库中自动创建的图谱。</li>
-          <li>查询逻辑基于 <code>graphbase.py</code> 中的 <code>get_sample_nodes</code> 方法实现。</li>
-        </ul>
-      </div>
-      <div class="info-content" v-else>
-        <p>本页面展示的是 LightRAG 知识库生成的图谱信息。</p>
-        <p>数据来源于选定的知识库实例。</p>
-        <p>支持通过实体名称进行模糊搜索，输入 "*" 可查看采样全图。</p>
-      </div>
-    </a-modal>
   </div>
 </template>
 
@@ -252,7 +227,21 @@ const state = reactive({
   lightragStats: null,
 })
 
-const isNeo4j = computed(() => state.selectedDbId === 'neo4j');
+const isNeo4j = computed(() => {
+  // 当 selectedDbId 是 'neo4j' 时，或者以 'kb_' 开头时，我们认为它是 Neo4j 驱动的
+  // 但是对于 kb_ 开头的，我们可能想要使用 LightRAGInfoPanel 的展示风格（因为它有 stats）
+  // 或者复用 GraphInfoPanel。
+  // GraphInfoPanel 是为 'neo4j' 全局图设计的，包含了 model matching 检查等。
+  // KBs (kb_*) 使用 Neo4j 存储，但逻辑上更接近 LightRAG 的"知识库"概念。
+  // 为了让 LightRAGInfoPanel 能够展示 stats (get_stats 已经更新支持 kb_),
+  // 我们这里让 kb_ ID 返回 false，这样会进入 LightRAGInfoPanel 分支。
+  return state.selectedDbId === 'neo4j';
+});
+
+// 检查是否有有效的已上传文件
+const hasValidFile = computed(() => {
+  return fileList.value.some(file => file.status === 'done' && file.response?.file_path);
+});
 
 // 计算未索引节点数量
 const unindexedCount = computed(() => {
@@ -293,7 +282,7 @@ const handleDbChange = () => {
   if (isNeo4j.value) {
     loadGraphInfo();
   } else {
-    // Also load stats for LightRAG
+    // Also load stats for LightRAG or KB
     loadLightRAGStats();
   }
   loadSampleNodes();
@@ -323,13 +312,37 @@ const loadGraphInfo = () => {
 }
 
 const addDocumentByFile = () => {
+  // 使用计算属性验证文件
+  if (!hasValidFile.value) {
+    message.error('请先等待文件上传完成')
+    return
+  }
+
   state.processing = true
-  const files = fileList.value.filter(file => file.status === 'done').map(file => file.response.file_path)
-  neo4jApi.addEntities(files[0])
+
+  // 获取已上传的文件路径
+  const uploadedFile = fileList.value.find(file => file.status === 'done' && file.response?.file_path);
+  const filePath = uploadedFile?.response?.file_path;
+
+  // 再次验证文件路径
+  if (!filePath) {
+    message.error('文件路径获取失败，请重新上传文件')
+    state.processing = false
+    return
+  }
+
+  neo4jApi.addEntities(filePath)
     .then((data) => {
       if (data.status === 'success') {
         message.success(data.message);
         state.showModal = false;
+        // 清空文件列表
+        fileList.value = [];
+        // 刷新图谱数据
+        setTimeout(() => {
+          loadGraphInfo();
+          loadSampleNodes();
+        }, 500);
       } else {
         throw new Error(data.message);
       }
@@ -372,11 +385,6 @@ const onSearch = () => {
     // 可选：提示模型不一致
   }
 
-  if (!state.searchInput && isNeo4j.value) {
-    message.error('请输入要查询的实体')
-    return
-  }
-
   state.searchLoading = true
 
   unifiedApi.getSubgraph({
@@ -409,15 +417,34 @@ onMounted(async () => {
   loadSampleNodes();
 });
 
-const handleFileUpload = (event) => {
-  console.log(event)
-  console.log(fileList.value)
+const handleFileUpload = ({ file, fileList: newFileList }) => {
+  // 更新文件列表
+  fileList.value = newFileList;
+
+  // 如果上传失败，显示错误信息
+  if (file.status === 'error') {
+    message.error(`文件上传失败: ${file.name}`);
+  }
+
+  // 如果上传成功，显示成功信息
+  if (file.status === 'done' && file.response?.file_path) {
+    message.success(`文件上传成功: ${file.name}`);
+  }
+
+  console.log('File upload status:', file.status, file.name);
+  console.log('File list:', fileList.value);
 }
 
 const handleDrop = (event) => {
   console.log(event)
   console.log(fileList.value)
 }
+
+const handleModalCancel = () => {
+  state.showModal = false;
+  // 重置文件列表
+  fileList.value = [];
+};
 
 const graphStatusClass = computed(() => {
   if (state.loadingGraphInfo) return 'loading';
