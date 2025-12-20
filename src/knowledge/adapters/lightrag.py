@@ -64,7 +64,7 @@ class LightRAGGraphAdapter(GraphAdapter):
         # Use entity_id as BOTH the node ID AND display name for consistent edge matching
         # (edges reference nodes by entity name, not by Neo4j element ID)
         name = properties.get("entity_id", raw_node_id)
-        
+
         # Use entity name as node_id so edges can correctly reference it
         # (LightRAG edges use entity names as source/target)
         node_id = name  # This ensures edge source_id/target_id matches node id
@@ -140,11 +140,11 @@ class LightRAGGraphAdapter(GraphAdapter):
                 raw_node_id = getattr(node, "id", None)
                 props = getattr(node, "properties", {}) or {}
                 entity_name = props.get("entity_id", raw_node_id)
-                
+
                 # Map Neo4j ID to entity name
                 if raw_node_id is not None:
                     neo4j_id_to_entity_name[str(raw_node_id)] = entity_name
-                
+
                 nodes.append(self.normalize_node(node))
 
         if hasattr(raw_graph, "edges"):
@@ -152,11 +152,11 @@ class LightRAGGraphAdapter(GraphAdapter):
                 # Convert edge source/target from Neo4j IDs to entity names
                 raw_source = getattr(edge, "source", None)
                 raw_target = getattr(edge, "target", None)
-                
+
                 # Look up entity names using the mapping
                 source_name = neo4j_id_to_entity_name.get(str(raw_source), raw_source)
                 target_name = neo4j_id_to_entity_name.get(str(raw_target), raw_target)
-                
+
                 # Create edge with entity names instead of Neo4j IDs
                 normalized_edge = self._normalize_edge_with_names(edge, source_name, target_name)
                 edges.append(normalized_edge)
@@ -202,4 +202,3 @@ class LightRAGGraphAdapter(GraphAdapter):
         return self._create_standard_edge(
             edge_id=edge_id, source_id=source_name, target_id=target_name, edge_type=display_type, properties=properties
         )
-
