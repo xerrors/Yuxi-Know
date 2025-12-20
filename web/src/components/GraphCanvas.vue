@@ -68,14 +68,13 @@ const MAX_RETRIES = 5
 const defaultLayout = {
   type: 'd3-force',
   preventOverlap: true,
-  // 性能友好参数（参考 GraphView.vue）
   alphaDecay: 0.1,
   alphaMin: 0.01,
-  velocityDecay: 0.7,
-  iterations: 100,
+  velocityDecay: 0.6,
+  iterations: 150,
   force: {
     center: { x: 0.5, y: 0.5, strength: 0.1 },
-    charge: { strength: -400, distanceMax: 400 },
+    charge: { strength: -400, distanceMax: 600 },
     link: { distance: 100, strength: 0.8 },
   },
   collide: { radius: 40, strength: 0.8, iterations: 3 },
@@ -217,9 +216,6 @@ function initGraph() {
     const { target } = evt
     // 获取节点ID
     const nodeId = target.id
-    // 从 graph data 中找到对应的节点数据
-    // 注意：G6 v5 的事件对象结构可能有所不同，这里假设 target.id 是节点ID
-    // 也可以通过 graphInstance.getNodeData(nodeId) 获取
     const nodeData = graphInstance.getNodeData(nodeId)
     emit('node-click', nodeData)
   })
@@ -271,7 +267,7 @@ function setGraphData() {
       emit('data-rendered')
       console.log('图谱渲染完成，布局已稳定')
     }, 1500)
-  }, 10)  // 等待 1ms 确保布局完成
+  }, 10)  // 等待 10ms 确保布局完成
 }
 
 // 关键词高亮功能

@@ -86,9 +86,6 @@
               <a-button type="default" @click="exportGraphData" :icon="h(ExportOutlined)">
                 导出数据
               </a-button>
-              <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
-                说明
-              </a-button>
             </div>
           </div>
         </template>

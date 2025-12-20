@@ -18,26 +18,34 @@
         >
           <template #top>
              <div class="compact-actions">
-                <a-input-search
-                  v-model:value="searchInput"
-                  placeholder="搜索实体"
-                  style="width: 200px"
-                  @search="onSearch"
-                  allow-clear
-                />
-                <a-button
-                  type="text"
-                  :icon="h(ReloadOutlined)"
-                  :loading="graph.fetching"
-                  @click="loadGraph"
-                  title="刷新"
-                />
-                <a-button
-                  type="text"
-                  :icon="h(SettingOutlined)"
-                  @click="showSettings = true"
-                  title="设置"
-                />
+                <div class="actions-left">
+                  <a-input
+                    v-model:value="searchInput"
+                    placeholder="搜索实体"
+                    style="width: 240px"
+                    @keydown.enter="onSearch"
+                    allow-clear
+                  >
+                    <template #suffix>
+                       <component :is="graph.fetching ? LoadingOutlined : SearchOutlined" @click="onSearch" />
+                    </template>
+                  </a-input>
+                  <a-button
+                    class="action-btn"
+                    :icon="h(ReloadOutlined)"
+                    :loading="graph.fetching"
+                    @click="loadGraph"
+                    title="刷新"
+                  />
+                </div>
+                <div class="actions-right">
+                  <a-button
+                    class="action-btn"
+                    :icon="h(SettingOutlined)"
+                    @click="showSettings = true"
+                    title="设置"
+                  />
+                </div>
              </div>
           </template>
         </GraphCanvas>
@@ -94,7 +102,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted, reactive, h } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
-import { ReloadOutlined, SettingOutlined } from '@ant-design/icons-vue';
+import { ReloadOutlined, SettingOutlined, SearchOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import GraphCanvas from '@/components/GraphCanvas.vue';
 import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
 import { getKbTypeLabel } from '@/utils/kb_utils';
@@ -241,14 +249,59 @@ onUnmounted(() => {
     position: absolute;
     top: 10px;
     left: 10px;
+    right: 10px;
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 8px;
-    background: var(--color-trans-light);
-    backdrop-filter: blur(4px);
-    padding: 6px;
-    border-radius: 8px;
-    box-shadow: 0 0px 4px var(--shadow-3);
+    pointer-events: none; /* Let clicks pass through empty areas */
+
+    .actions-left, .actions-right {
+        pointer-events: auto; /* Re-enable clicks for buttons/inputs */
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--color-trans-light);
+        backdrop-filter: blur(4px);
+        padding: 2px;
+        border-radius: 8px;
+        box-shadow: 0 0px 4px var(--shadow-3);
+    }
+
+    :deep(.ant-input-affix-wrapper) {
+      padding: 4px 11px;
+      border-radius: 6px;
+      border-color: transparent;
+      box-shadow: none;
+      background: rgba(255, 255, 255, 0.6);
+
+      &:hover, &:focus, &-focused {
+        background: #fff;
+        border-color: var(--primary-color);
+      }
+
+      input {
+        background: transparent;
+      }
+    }
+
+    .action-btn {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        color: var(--gray-600);
+        border-radius: 6px;
+        box-shadow: none;
+
+        &:hover {
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--primary-color);
+        }
+    }
 }
 
 .graph-disabled {
