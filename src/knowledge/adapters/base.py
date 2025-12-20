@@ -78,6 +78,10 @@ class GraphAdapter(ABC):
             "id": edge_id,
             "source_id": source_id,
             "target_id": target_id,
+            # Add source/target aliases for frontend compatibility
+            # (frontend expects edge.source and edge.target)
+            "source": source_id,
+            "target": target_id,
             "type": edge_type,
             "properties": properties,
             "normalized": {

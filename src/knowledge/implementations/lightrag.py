@@ -238,6 +238,66 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
+    async def _sync_graph_to_neo4j(self, rag: LightRAG, db_id: str, file_id: str) -> None:
+        """
+        Sync LightRAG extracted graph to global Neo4j as Entity:Upload format.
+        
+        This allows LightRAG-extracted entities and relations to appear in the 
+        sidebar knowledge graph display alongside manually uploaded graphs.
+        
+        Args:
+            rag: LightRAG instance
+            db_id: Database ID
+            file_id: File ID being processed
+        """
+        try:
+            # Import here to avoid circular import
+            from src.knowledge import graph_base
+            
+            # Check if graph_base is available and running
+            if graph_base is None or not graph_base.is_running():
+                logger.debug("Graph database not available, skipping Neo4j sync")
+                return
+            
+            # Get extracted graph from LightRAG
+            graph = await rag.get_knowledge_graph(node_label="*", max_depth=1, max_nodes=500)
+            
+            if not hasattr(graph, "edges") or not graph.edges:
+                logger.info(f"No relations extracted for {file_id}, skipping Neo4j sync")
+                return
+            
+            # Convert to triples format compatible with txt_add_vector_entity
+            # Format: {h: {name: ...}, t: {name: ...}, r: {type: ...}}
+            triples = []
+            for edge in graph.edges:
+                props = getattr(edge, "properties", {}) or {}
+                keywords = props.get("keywords", [])
+                
+                # Use first keyword as relation type, or fallback to edge type
+                if isinstance(keywords, str):
+                    keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+                rel_type = keywords[0] if keywords else getattr(edge, "type", "related")
+                
+                source_id = getattr(edge, "source", "")
+                target_id = getattr(edge, "target", "")
+                
+                if source_id and target_id and rel_type:
+                    triples.append({
+                        "h": {"name": str(source_id), "source": f"lightrag:{db_id}"},
+                        "t": {"name": str(target_id), "source": f"lightrag:{db_id}"},
+                        "r": {"type": str(rel_type), "file_id": file_id, "db_id": db_id}
+                    })
+            
+            if triples:
+                await graph_base.txt_add_vector_entity(triples)
+                logger.info(f"Synced {len(triples)} relations from LightRAG to global Neo4j for {file_id}")
+            else:
+                logger.debug(f"No valid triples to sync for {file_id}")
+                
+        except Exception as e:
+            # Don't fail the main insert if sync fails
+            logger.warning(f"Failed to sync LightRAG graph to Neo4j for {file_id}: {e}")
+
     async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """添加内容（文件/URL）"""
         if db_id not in self.databases_meta:
@@ -279,6 +339,9 @@ class LightRagKB(KnowledgeBase):
                 await rag.ainsert(input=markdown_content, ids=file_id, file_paths=item_path)
 
                 logger.info(f"Inserted {content_type} {item} into LightRAG. Done.")
+
+                # Sync extracted graph to global Neo4j (for sidebar display)
+                await self._sync_graph_to_neo4j(rag, db_id, file_id)
 
                 # 更新状态为完成
                 self.files_meta[file_id]["status"] = "done"
@@ -351,6 +414,9 @@ class LightRagKB(KnowledgeBase):
                 await rag.ainsert(input=markdown_content, ids=file_id, file_paths=file_path)
 
                 logger.info(f"Updated {content_type} {file_path} in LightRAG. Done.")
+
+                # Sync extracted graph to global Neo4j (for sidebar display)
+                await self._sync_graph_to_neo4j(rag, db_id, file_id)
 
                 # 更新元数据状态
                 self.files_meta[file_id]["status"] = "done"
