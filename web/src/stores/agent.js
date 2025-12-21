@@ -160,6 +160,7 @@ export const useAgentStore = defineStore('agent', () => {
     try {
       const response = await agentApi.getAgentDetail(agentId)
       agentDetails.value[agentId] = response
+      // availableTools.value[agentId] = response.available_tools || []
       return response
     } catch (err) {
       console.error(`Failed to fetch agent detail for ${agentId}:`, err)
@@ -285,7 +286,7 @@ export const useAgentStore = defineStore('agent', () => {
     Object.assign(agentConfig.value, updates)
   }
 
-  
+
   /**
    * 清除错误状态
    */
