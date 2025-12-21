@@ -19,9 +19,6 @@ export const useAgentStore = defineStore('agent', () => {
   // 智能体详情相关状态
   const agentDetails = ref({}) // 存储每个智能体的详细信息（含 configurable_items）
 
-  // 工具相关状态
-  const availableTools = ref([])
-
   // 加载状态
   const isLoadingAgents = ref(false)
   const isLoadingConfig = ref(false)
@@ -66,6 +63,12 @@ export const useAgentStore = defineStore('agent', () => {
     return items
   })
 
+
+  // 工具相关状态
+  const availableTools = computed(() => {
+    return configurableItems.value.tools?.options || []
+  })
+
   const hasConfigChanges = computed(() =>
     JSON.stringify(agentConfig.value) !== JSON.stringify(originalAgentConfig.value)
   )
@@ -108,7 +111,6 @@ export const useAgentStore = defineStore('agent', () => {
         if (userStore.isAdmin) {
           await loadAgentConfig()
         }
-        await fetchTools()
       }
 
       isInitialized.value = true
@@ -159,6 +161,7 @@ export const useAgentStore = defineStore('agent', () => {
     try {
       const response = await agentApi.getAgentDetail(agentId)
       agentDetails.value[agentId] = response
+      // availableTools.value[agentId] = response.available_tools || []
       return response
     } catch (err) {
       console.error(`Failed to fetch agent detail for ${agentId}:`, err)
@@ -291,17 +294,8 @@ export const useAgentStore = defineStore('agent', () => {
     isLoadingTools.value = true
     error.value = null
 
-    try {
-      const response = await agentApi.getTools(selectedAgentId.value)
-      availableTools.value = response.tools
-    } catch (err) {
-      console.error('Failed to fetch tools:', err)
-      handleChatError(err, 'fetch')
-      error.value = err.message
-      throw err
-    } finally {
-      isLoadingTools.value = false
-    }
+    console.error('[DEPRECATED] THIS METHOD IS DEPRECATED. USE fetchAgentDetail INSTEAD.')
+    console.error('[DEPRECATED] fetchTools: selectedAgentId.value =', selectedAgentId.value)
   }
 
   /**
