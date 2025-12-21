@@ -4,6 +4,7 @@ from collections.abc import Callable
 
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
+from src.utils import logger
 from src.agents.common import load_chat_model
 
 
@@ -20,4 +21,5 @@ async def context_based_model(request: ModelRequest, handler: Callable[[ModelReq
     model = load_chat_model(model_spec)
 
     request = request.override(model=model)
+    logger.debug(f"Using model {model_spec} for request {request.messages[-1].content[:200]}")
     return await handler(request)
