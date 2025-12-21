@@ -4,8 +4,8 @@ from collections.abc import Callable
 
 from langchain.agents.middleware import ModelRequest, ModelResponse, dynamic_prompt, wrap_model_call
 
-from src.utils import logger
 from src.agents.common import load_chat_model
+from src.utils import logger
 
 
 @dynamic_prompt
