@@ -421,21 +421,9 @@ const getToolNameById = (toolId) => {
   return tool ? tool.name : toolId;
 };
 
-const loadAvailableTools = async () => {
-  try {
-    // 避免重复加载，如果已经有工具就直接返回
-    if (availableTools.value && Object.keys(availableTools.value).length > 0) {
-      return;
-    }
-    await agentStore.fetchTools();
-  } catch (error) {
-    console.error('加载工具列表失败:', error);
-  }
-};
-
 const openToolsModal = async () => {
+  console.log("availableTools.value", availableTools.value)
   try {
-    await loadAvailableTools();
     selectedTools.value = [...(agentConfig.value?.tools || [])];
     toolsModalOpen.value = true;
   } catch (error) {
@@ -563,13 +551,6 @@ const resetConfig = async () => {
     message.error('重置配置失败');
   }
 };
-
-// 监听器
-watch(() => props.isOpen, (newVal) => {
-  if (newVal && (!availableTools.value || Object.keys(availableTools.value).length === 0)) {
-    loadAvailableTools();
-  }
-});
 </script>
 
 <style lang="less" scoped>
