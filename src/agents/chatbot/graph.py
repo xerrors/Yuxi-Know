@@ -1,6 +1,6 @@
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
-
+from langchain.agents.middleware import HumanInTheLoopMiddleware
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.mcp import MCP_SERVERS
 from src.agents.common.middlewares import (
@@ -47,7 +47,7 @@ class ChatbotAgent(BaseAgent):
 
         # 使用 create_agent 创建智能体，并传入 middleware
         graph = create_agent(
-            model=load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507"),  # 默认模型，会被 middleware 覆盖
+            model=load_chat_model("openai//models/Qwen3-4B-Instruct-2507"),  # 默认模型，会被 middleware 覆盖
             tools=get_tools(),  # 注册基础工具
             middleware=[
                 context_aware_prompt,  # 动态系统提示词
@@ -55,6 +55,10 @@ class ChatbotAgent(BaseAgent):
                 context_based_model,  # 动态模型选择
                 dynamic_tool_middleware,  # 动态工具选择（支持 MCP 工具注册）
                 ModelRetryMiddleware(),  # 模型重试中间件
+                HumanInTheLoopMiddleware({
+                    "执行 SQL 查询": True,  # No editing allowed
+                    "计算器": True,  # No editing allowed
+                })
             ],
             checkpointer=await self._get_checkpointer(),
         )

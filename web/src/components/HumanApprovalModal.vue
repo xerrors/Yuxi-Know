@@ -6,12 +6,23 @@
           <h4>{{ question }}</h4>
         </div>
 
-        <div class="approval-operation">
+        <!-- <div class="approval-operation">
           <span class="label">操作：</span>
           <span class="operation-text">{{ operation }}</span>
+        </div> -->
+  
+        <div class="approval-operation-table">
+          <div v-if="typeof handleOperation === 'string'"> 
+              <span class="param-key">{{ handleOperation }}</span>
+          </div>
+          <div v-else>
+            <div v-for="(param, index) in handleOperation.params" :key="index" class="param-row">
+              <span class="param-key">{{ param.key }}</span>
+              <input class="param-value" v-model="param.value" type="text" />
+            </div>
+          </div>
         </div>
       </div>
-
       <div class="approval-actions">
         <button class="btn btn-reject" @click="handleReject" :disabled="isProcessing">
           ✕ 拒绝
@@ -30,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 
 const props = defineProps({
   visible: {
@@ -58,10 +69,33 @@ watch(() => props.visible, (newVal) => {
   }
 });
 
+const handleOperation = computed(() => {
+  try {
+    // 处理 Interrupt(value={...}) 格式的字符串
+    let operationData = props.operation;
+    let operationName = operationData['name']
+    let operationParams = operationData['args']
+    // 转换为键值对数组
+    return {
+      name: operationName,
+      params: Object.entries(operationParams).map(([key, value]) => ({ 
+            key, 
+            value 
+      }))
+    };
+    
+  } catch (e) {
+    // 如果解析失败，返回原始值
+    console.error('Error parsing operation:', e);
+    return props.operation;
+  }
+});
+
+
 const handleApprove = () => {
   if (isProcessing.value) return;
   isProcessing.value = true;
-  emit('approve');
+  emit('approve', handleOperation.value);
 };
 
 const handleReject = () => {
@@ -73,6 +107,47 @@ const handleReject = () => {
 </script>
 
 <style scoped>
+.param-row {
+  display: flex;
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.param-row:last-child {
+  border-bottom: none;
+}
+
+.param-key {
+  padding: 8px 12px;
+  font-weight: 500;
+  color: var(--gray-600);
+  background-color: var(--gray-100);
+  /* flex: 0 0 120px; 固定宽度 */
+  flex: none;              /* 或 flex: 0 0 auto */
+  display: flex;           /* 关键：让子元素可居中 */
+  align-items: center;     /* 垂直居中 */
+  justify-content: left; /* 水平居中 */
+  height: auto;           /* 高度自适应 */
+  padding: 8px 12px;      /* 添加内边距，让高度有内容 */
+  border-right: 1px solid var(--gray-200);
+  width: 50%;
+}
+
+.param-value {
+  padding: 8px 12px;
+  color: var(--gray-800);
+  background-color: var(--gray-100);
+  /* word-break: break-word;
+  white-space: pre-wrap;  */
+  flex: none;              /* 或 flex: 0 0 auto */
+  display: flex;           /* 关键：让子元素可居中 */
+  align-items: center;     /* 垂直居中 */
+  justify-content: left; /* 水平居中 */
+  height: auto;           /* 高度自适应 */
+  padding: 8px 12px;      /* 添加内边距，让高度有内容 */
+  border-right: 1px solid var(--gray-200);
+  width: 50%;
+}
+
 .approval-modal {
   background: var(--gray-0);
   border-radius: 12px 12px;
@@ -100,6 +175,16 @@ const handleReject = () => {
   font-weight: 500;
   color: var(--gray-800);
   text-align: center;
+}
+
+.approval-operation-table {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .approval-operation {

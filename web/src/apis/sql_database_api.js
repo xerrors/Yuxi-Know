@@ -1,0 +1,247 @@
+import { apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete } from './base'
+
+/**
+ * 知识库管理API模块
+ * 包含数据库管理、文档管理、查询接口等功能
+ */
+
+// =============================================================================
+// === 数据库管理分组 ===
+// =============================================================================
+
+export const databaseApi = {
+  /**
+   * 获取所有数据库列表
+   * @returns {Promise} - 数据库列表
+   */
+  getDatabases: async () => {
+    return apiAdminGet('/api/db/databases')
+  },
+
+  /**
+   * 选择数据库表
+   * @param {string} db_id - 数据库ID
+   * @param {Object} databaseData - 数据库数据
+   * @returns {Promise} - 创建结果
+   */
+  createChooseDatabaseTables: async (db_id, databaseData) => {
+    return apiAdminPost(`/api/db/databases/${db_id}/tables/choose`, databaseData)
+  },
+
+  /**
+   * 创建数据库
+   * @param {Object} databaseData - 数据库数据
+   * @returns {Promise} - 创建结果
+   */
+  createDatabase: async (databaseData) => {
+    return apiAdminPost('/api/db/database', databaseData)
+  },
+
+  deleteConnection: async (dbId) => {
+    return apiAdminDelete(`/api/db/database/${dbId}`)
+  },
+  /**
+   * 获取知识库详细信息
+   * @param {string} dbId - 知识库ID
+   * @returns {Promise} - 知识库信息
+   */
+  getDatabaseInfo: async (dbId) => {
+    return apiAdminGet(`/api/knowledge/databases/${dbId}`)
+  },
+
+  /**
+   * 更新知识库信息
+   * @param {string} dbId - 知识库ID
+   * @param {Object} updateData - 更新数据
+   * @returns {Promise} - 更新结果
+   */
+  updateDatabase: async (dbId, updateData) => {
+    return apiAdminPut(`/api/knowledge/databases/${dbId}`, updateData)
+  },
+
+  /**
+   * 删除知识库
+   * @param {string} dbId - 知识库ID
+   * @returns {Promise} - 删除结果
+   */
+  deleteDatabase: async (dbId) => {
+    return apiAdminDelete(`/api/knowledge/databases/${dbId}`)
+  },
+
+  updateDatabaseParams: async (dbId, params) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/params`, params)
+  },
+}
+
+// // =============================================================================
+// // === 文档管理分组 ===
+// // =============================================================================
+
+// export const documentApi = {
+//   /**
+//    * 添加文档到知识库
+//    * @param {string} dbId - 知识库ID
+//    * @param {Array} items - 文档列表
+//    * @param {Object} params - 处理参数
+//    * @returns {Promise} - 添加结果
+//    */
+//   addDocuments: async (dbId, items, params = {}) => {
+//     return apiAdminPost(`/api/knowledge/databases/${dbId}/documents`, {
+//       items,
+//       params
+//     })
+//   },
+
+//   /**
+//    * 获取文档信息
+//    * @param {string} dbId - 知识库ID
+//    * @param {string} docId - 文档ID
+//    * @returns {Promise} - 文档信息
+//    */
+//   getDocumentInfo: async (dbId, docId) => {
+//     return apiAdminGet(`/api/knowledge/databases/${dbId}/documents/${docId}`)
+//   },
+
+//   /**
+//    * 删除文档
+//    * @param {string} dbId - 知识库ID
+//    * @param {string} docId - 文档ID
+//    * @returns {Promise} - 删除结果
+//    */
+//   deleteDocument: async (dbId, docId) => {
+//     return apiAdminDelete(`/api/knowledge/databases/${dbId}/documents/${docId}`)
+//   },
+
+//   /**
+//    * 下载文档
+//    * @param {string} dbId - 知识库ID
+//    * @param {string} docId - 文档ID
+//    * @returns {Promise} - Response对象
+//    */
+//   downloadDocument: async (dbId, docId) => {
+//     return apiAdminGet(`/api/knowledge/databases/${dbId}/documents/${docId}/download`, {}, 'blob')
+//   }
+// }
+
+// // =============================================================================
+// // === 查询分组 ===
+// // =============================================================================
+
+// export const queryApi = {
+//   /**
+//    * 查询知识库
+//    * @param {string} dbId - 知识库ID
+//    * @param {string} query - 查询文本
+//    * @param {Object} meta - 查询参数
+//    * @returns {Promise} - 查询结果
+//    */
+//   queryKnowledgeBase: async (dbId, query, meta = {}) => {
+//     return apiAdminPost(`/api/knowledge/databases/${dbId}/query`, {
+//       query,
+//       meta
+//     })
+//   },
+
+//   /**
+//    * 测试查询知识库
+//    * @param {string} dbId - 知识库ID
+//    * @param {string} query - 查询文本
+//    * @param {Object} meta - 查询参数
+//    * @returns {Promise} - 测试结果
+//    */
+//   queryTest: async (dbId, query, meta = {}) => {
+//     return apiAdminPost(`/api/knowledge/databases/${dbId}/query-test`, {
+//       query,
+//       meta
+//     })
+//   },
+
+//   /**
+//    * 获取知识库查询参数
+//    * @param {string} dbId - 知识库ID
+//    * @returns {Promise} - 查询参数
+//    */
+//   getKnowledgeBaseQueryParams: async (dbId) => {
+//     return apiAdminGet(`/api/knowledge/databases/${dbId}/query-params`)
+//   }
+// }
+
+// // =============================================================================
+// // === 文件管理分组 ===
+// // =============================================================================
+
+// export const fileApi = {
+//   /**
+//    * 上传文件
+//    * @param {File} file - 文件对象
+//    * @param {string} dbId - 知识库ID（可选）
+//    * @returns {Promise} - 上传结果
+//    */
+//   uploadFile: async (file, dbId = null) => {
+//     const formData = new FormData()
+//     formData.append('file', file)
+
+//     const url = dbId
+//       ? `/api/knowledge/files/upload?db_id=${dbId}`
+//       : '/api/knowledge/files/upload'
+
+//     return apiAdminPost(url, formData, {
+//       headers: {
+//         'Content-Type': 'multipart/form-data'
+//       }
+//     })
+//   },
+
+//   /**
+//    * 获取支持的文件类型
+//    * @returns {Promise} - 文件类型列表
+//    */
+//   getSupportedFileTypes: async () => {
+//     return apiAdminGet('/api/knowledge/files/supported-types')
+//   }
+// }
+
+// // =============================================================================
+// // === 知识库类型分组 ===
+// // =============================================================================
+
+// export const typeApi = {
+//   /**
+//    * 获取支持的知识库类型
+//    * @returns {Promise} - 知识库类型列表
+//    */
+//   getKnowledgeBaseTypes: async () => {
+//     return apiAdminGet('/api/knowledge/types')
+//   },
+
+//   /**
+//    * 获取知识库统计信息
+//    * @returns {Promise} - 统计信息
+//    */
+//   getStatistics: async () => {
+//     return apiAdminGet('/api/knowledge/stats')
+//   }
+// }
+
+// // =============================================================================
+// // === Embedding模型状态检查分组 ===
+// // =============================================================================
+
+// export const embeddingApi = {
+//   /**
+//    * 获取指定embedding模型的状态
+//    * @param {string} modelId - 模型ID
+//    * @returns {Promise} - 模型状态
+//    */
+//   getModelStatus: async (modelId) => {
+//     return apiAdminGet(`/api/knowledge/embedding-models/${modelId}/status`)
+//   },
+
+//   /**
+//    * 获取所有embedding模型的状态
+//    * @returns {Promise} - 所有模型状态
+//    */
+//   getAllModelsStatus: async () => {
+//     return apiAdminGet('/api/knowledge/embedding-models/status')
+//   }
+// }

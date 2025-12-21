@@ -14,7 +14,7 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
   });
 
   // 处理审批逻辑
-  const handleApproval = async (approved, currentAgentId) => {
+  const handleApproval = async (approved, currentAgentId, toolName, toolArgs) => {
     const threadId = approvalState.threadId;
     if (!threadId) {
       message.error('无效的审批请求');
@@ -51,7 +51,9 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
         currentAgentId,
         {
           thread_id: threadId,
-          approved: approved
+          approved: approved,
+          tool_name: toolName,
+          tool_args: toolArgs
         },
         {
           signal: threadState.streamAbortController?.signal

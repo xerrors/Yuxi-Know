@@ -77,7 +77,20 @@ const router = createRouter({
         }
       ]
     },
-      {
+    {
+      path: '/sqldatabase',
+      name: 'SqlDatabase',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'SqlDatabaseComp',
+          component: () => import('../views/SqlDataBaseView.vue'),
+          meta: { keepAlive: false, requiresAuth: true, requiresAdmin: true }
+        }
+      ]
+    },
+    {
       path: '/dashboard',
       name: 'dashboard',
       component: AppLayout,

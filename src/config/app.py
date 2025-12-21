@@ -47,7 +47,7 @@ class Config(BaseModel):
     # 模型配置
     # ============================================================
     default_model: str = Field(
-        default="siliconflow/deepseek-ai/DeepSeek-V3.2",
+        default="openai//models/Qwen3-4B-Instruct-2507",
         description="默认对话模型",
     )
     fast_model: str = Field(

@@ -4,7 +4,25 @@
   </div>
   <div class="message-box" :class="[message.type, customClasses]">
     <!-- 用户消息 -->
-    <p v-if="message.type === 'human'" class="message-text">{{ message.content }}</p>
+    <div v-if="message.type === 'human'" class="human-message-container">
+      <div class="copy-button-wrapper" :class="{ 'show-copy-button': showCopyButton }">
+        <a-tooltip title="复制文本">
+          <a-button 
+            size="small" 
+            type="text" 
+            class="copy-button"
+            @click="copyText(message.content)"
+            @mouseenter="showCopyButton = true"
+            @mouseleave="showCopyButton = false">
+            <template #icon>
+              <CopyOutlined />
+            </template>
+          </a-button>
+        </a-tooltip>
+      </div>
+      <p class="message-text">{{ message.content }}</p>
+    </div>
+    <!-- <p v-if="message.type === 'human'" class="message-text">{{ message.content }}</p> -->
 
     <p v-else-if="message.type === 'system'" class="message-text-system">{{ message.content }}</p>
 
@@ -100,7 +118,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
-import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
+import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined, CopyOutlined } from '@ant-design/icons-vue';
 import RefsComponent from '@/components/RefsComponent.vue'
 import { Loader, CircleCheckBig } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
@@ -108,6 +126,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
+import { message as AntMessage } from 'ant-design-vue';
 
 
 import { MdPreview } from 'md-editor-v3'
@@ -146,6 +165,7 @@ const props = defineProps({
   }
 });
 
+const showCopyButton = ref(false)
 const editorRef = ref()
 
 const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
@@ -159,6 +179,25 @@ const displayError = computed(() => {
   // 简化错误判断：只检查明确的错误类型标识
   return !!(props.message.error_type || props.message.extra_metadata?.error_type);
 });
+
+// 复制文本功能
+const copyText = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    // 可以添加复制成功的提示
+    AntMessage.success('文本已复制到剪贴板');
+  } catch (err) {
+    console.error('复制失败:', err);
+    // 备用方法
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textArea);
+    console.log('文本已复制到剪贴板（备用方法）');
+  }
+};
 
 const getErrorMessage = computed(() => {
   // 优先使用直接的 error_message 字段
@@ -280,6 +319,53 @@ const toggleToolCall = (toolCallId) => {
 </script>
 
 <style lang="less" scoped>
+.human-message-container {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  
+  .copy-button-wrapper {
+    position: absolute;
+    left: -60px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+    
+    &.show-copy-button {
+      opacity: 1;
+    }
+    
+    .copy-button {
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      background-color: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      
+      &:hover {
+        background-color: #f0f0f0;
+      }
+      
+      .anticon {
+        font-size: 14px;
+        color: #666;
+      }
+    }
+  }
+  
+  .message-text {
+    flex: 1;
+    margin: 0;
+  }
+}
 .message-box {
   display: inline-block;
   border-radius: 1.5rem;

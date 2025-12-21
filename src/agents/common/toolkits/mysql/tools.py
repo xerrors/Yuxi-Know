@@ -1,5 +1,6 @@
 from typing import Annotated, Any
 
+from asyncpg import connect
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,7 @@ from .connection import (
 )
 from .exceptions import MySQLConnectionError
 from .security import MySQLSecurityChecker
+from src import sql_database
 
 # 全局连接管理器实例
 _connection_manager: MySQLConnectionManager | None = None
@@ -58,57 +60,81 @@ def mysql_list_tables() -> str:
 
     这个工具用来列出当前数据库中所有的表名，帮助你了解数据库的结构。
     """
+    result = []
     try:
-        conn_manager = get_connection_manager()
-
-        with conn_manager.get_cursor() as cursor:
-            # 获取表名
-            cursor.execute("SHOW TABLES")
-            logger.debug("Executed `SHOW TABLES` query")
-            tables = cursor.fetchall()
-
-            if not tables:
-                return "数据库中没有找到任何表"
-
-            # 提取表名
-            table_names = []
-            for table in tables:
-                table_name = list(table.values())[0]
-                table_names.append(table_name)
-
-            # 获取每个表的行数信息
-            # table_info = []
-            # for table_name in table_names:
-            #     try:
-            #         cursor.execute(f"SELECT COUNT(*) as count FROM `{table_name}`")
-            #         logger.debug(f"Executed `SELECT COUNT(*) FROM {table_name}` query")
-            #         count_result = cursor.fetchone()
-            #         row_count = count_result["count"]
-            #         table_info.append(f"- {table_name} (约 {row_count} 行)")
-            #     except Exception:
-            #         table_info.append(f"- {table_name} (无法获取行数)")
-
-            all_table_names = "\n".join(table_names)
-            result = f"数据库中的表:\n{all_table_names}"
-            if db_note := conn_manager.config.get("description"):
-                result = f"数据库说明: {db_note}\n\n" + result
-            logger.info(f"Retrieved {len(table_names)} tables from database")
-            return result
-
+        databases = sql_database.get_databases()
+        for db_infos in databases.values():
+            for db_info in db_infos:
+                table_names = []
+                db_desc = db_info['description']
+                db_name = db_info['connection_info']['database']
+                tables_info = db_info['selected_tables']
+                if not tables_info.values():
+                    continue
+                for table_info in tables_info.values():
+                    table_name = f"{db_name}.{table_info['table_name']}: {table_info['table_comment']}"
+                    table_names.append(table_name)
+                result.append(f"数据库说明\n{db_name}: {db_desc}\n数据库中的表:\n{'\n'.join(table_names)}")              
+        
+        return "\n---\n".join(result)
     except Exception as e:
         error_msg = f"获取表名失败: {str(e)}"
-        logger.error(error_msg)
         return error_msg
+
+    #     conn_manager = get_connection_manager()
+
+    #     with conn_manager.get_cursor() as cursor:
+    #         # 获取表名
+    #         cursor.execute("SHOW TABLES")
+    #         logger.debug("Executed `SHOW TABLES` query")
+    #         tables = cursor.fetchall()
+
+    #         if not tables:
+    #             return "数据库中没有找到任何表"
+
+    #         # 提取表名
+    #         table_names = []
+    #         for table in tables:
+    #             table_name = list(table.values())[0]
+    #             table_names.append(table_name)
+
+    #         # 获取每个表的行数信息
+    #         # table_info = []
+    #         # for table_name in table_names:
+    #         #     try:
+    #         #         cursor.execute(f"SELECT COUNT(*) as count FROM `{table_name}`")
+    #         #         logger.debug(f"Executed `SELECT COUNT(*) FROM {table_name}` query")
+    #         #         count_result = cursor.fetchone()
+    #         #         row_count = count_result["count"]
+    #         #         table_info.append(f"- {table_name} (约 {row_count} 行)")
+    #         #     except Exception:
+    #         #         table_info.append(f"- {table_name} (无法获取行数)")
+
+    #         all_table_names = "\n".join(table_names)
+    #         result = f"数据库中的表:\n{all_table_names}"
+    #         if db_note := conn_manager.config.get("description"):
+    #             result = f"数据库说明: {db_note}\n\n" + result
+    #         logger.info(f"Retrieved {len(table_names)} tables from database")
+    #         return result
+
+    # except Exception as e:
+    #     error_msg = f"获取表名失败: {str(e)}"
+    #     logger.error(error_msg)
+    #     return error_msg
 
 
 class TableDescribeModel(BaseModel):
     """获取表结构的参数模型"""
 
+    database_name: str = Field(description="要查询的数据库名", example="users")
     table_name: str = Field(description="要查询的表名", example="users")
 
 
 @tool(name_or_callable="描述表", args_schema=TableDescribeModel)
-def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"]) -> str:
+def mysql_describe_table(
+        database_name: Annotated[str, "要查询的数据库名"],
+        table_name: Annotated[str, "要查询结构的表名"]
+    ) -> str:
     """获取指定表的详细结构信息
 
     这个工具用来查看表的字段信息、数据类型、是否允许NULL、默认值、键类型等。
@@ -119,9 +145,10 @@ def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"])
         if not MySQLSecurityChecker.validate_table_name(table_name):
             return "表名包含非法字符，请检查表名"
 
-        conn_manager = get_connection_manager()
+        # conn_manager = get_connection_manager()
+        db_id = sql_database.db_name_to_id[database_name]
 
-        with conn_manager.get_cursor() as cursor:
+        with sql_database.get_cursor(db_id) as cursor:
             # 获取表结构
             cursor.execute(f"DESCRIBE `{table_name}`")
             columns = cursor.fetchall()
@@ -138,7 +165,7 @@ def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"])
                     FROM information_schema.COLUMNS
                     WHERE TABLE_NAME = %s AND TABLE_SCHEMA = %s
                     """,
-                    (table_name, conn_manager.database_name),
+                    (table_name, database_name),
                 )
                 comment_rows = cursor.fetchall()
                 for row in comment_rows:
@@ -199,12 +226,14 @@ def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"])
 class QueryModel(BaseModel):
     """执行SQL查询的参数模型"""
 
+    database_name: str = Field(description="要查询的数据库名", example="users")
     sql: str = Field(description="要执行的SQL查询语句（只能是SELECT语句）", example="SELECT * FROM users WHERE id = 1")
     timeout: int | None = Field(default=60, description="查询超时时间（秒），默认60秒，最大600秒", ge=1, le=600)
 
 
 @tool(name_or_callable="执行 SQL 查询", args_schema=QueryModel)
 def mysql_query(
+    database_name: Annotated[str, "要查询的数据库名"],
     sql: Annotated[str, "要执行的SQL查询语句（只能是SELECT语句）"],
     timeout: Annotated[int | None, "查询超时时间（秒），默认60秒，最大600秒"] = 60,
 ) -> str:
@@ -225,8 +254,10 @@ def mysql_query(
         if not MySQLSecurityChecker.validate_timeout(timeout):
             return "timeout参数必须在1-600之间"
 
-        conn_manager = get_connection_manager()
-        connection = conn_manager.get_connection()
+        # conn_manager = get_connection_manager()
+        # connection = conn_manager.get_connection()
+        db_id = sql_database.db_name_to_id[database_name]
+        connection = sql_database.get_connection(db_id)
 
         effective_timeout = timeout or 60
         try:
@@ -235,7 +266,7 @@ def mysql_query(
             logger.error(f"MySQL query timed out after {effective_timeout} seconds: {timeout_error}")
             raise
         except Exception:
-            conn_manager.invalidate_connection()
+            sql_database.invalidate_connection(db_id)
             raise
 
         if not result:

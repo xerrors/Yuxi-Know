@@ -338,21 +338,10 @@ async def check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta,
             # 提取中断信息
             question = "是否批准以下操作？"
             operation = "需要人工审批的操作"
-
-            if isinstance(interrupt_info, dict):
-                question = interrupt_info.get("question", question)
-                operation = interrupt_info.get("operation", operation)
-            elif isinstance(interrupt_info, (list, tuple)) and len(interrupt_info) > 0:
-                # 有些情况下中断信息可能是元组形式
-                first_interrupt = interrupt_info[0]
-                if isinstance(first_interrupt, dict):
-                    question = first_interrupt.get("question", question)
-                    operation = first_interrupt.get("operation", operation)
-                else:
-                    operation = str(first_interrupt)
-            else:
-                operation = str(interrupt_info)
-
+            action_requests = interrupt_info.value['action_requests']
+            if action_requests:
+                operation = action_requests[0]
+            
             # 发送人工审批请求到前端
             logger.info(f"Sending human approval request - question: {question}, operation: {operation}")
 
@@ -361,6 +350,28 @@ async def check_and_handle_interrupts(agent, langgraph_config, make_chunk, meta,
                 thread_id=thread_id,
                 interrupt_info={"question": question, "operation": operation},
             )
+            # if isinstance(interrupt_info, dict):
+            #     question = interrupt_info.get("question", question)
+            #     operation = interrupt_info.get("operation", operation)
+            # elif isinstance(interrupt_info, (list, tuple)) and len(interrupt_info) > 0:
+            #     # 有些情况下中断信息可能是元组形式
+            #     first_interrupt = interrupt_info[0]
+            #     if isinstance(first_interrupt, dict):
+            #         question = first_interrupt.get("question", question)
+            #         operation = first_interrupt.get("operation", operation)
+            #     else:
+            #         operation = str(first_interrupt)
+            # else:
+            #     operation = str(interrupt_info)
+
+            # # 发送人工审批请求到前端
+            # logger.info(f"Sending human approval request - question: {question}, operation: {operation}")
+
+            # yield make_chunk(
+            #     status="human_approval_required",
+            #     thread_id=thread_id,
+            #     interrupt_info={"question": question, "operation": operation},
+            # )
 
         else:
             logger.debug("No human approval interrupt detected")
@@ -739,6 +750,8 @@ async def resume_agent_chat(
     agent_id: str,
     thread_id: str = Body(...),
     approved: bool = Body(...),
+    tool_name: str | None = Body(None),  # New optional form data parameter
+    tool_args: dict | None = Body(None),  # New optional form data parameter
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -780,7 +793,15 @@ async def resume_agent_chat(
         yield make_resume_chunk(status="init", meta=meta, msg=init_msg)
 
         # 使用 Command(resume=approved) 恢复执行
-        resume_command = Command(resume=approved)
+        decision = {"type": "reject"} if not approved else {"type": "edit", "edited_action": {"name": tool_name, "args": tool_args}}
+        resume_command = Command(
+            resume={
+                "decisions": [
+                    decision
+                ]
+            }
+        )
+        # resume_command = Command(resume=approved)
         graph = await agent.get_graph()
 
         # 加载 context（包含 tools, model 等配置）
@@ -805,11 +826,18 @@ async def resume_agent_chat(
                         content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
                     )
 
+                langgraph_config = {"configurable": input_context}
+                #######################################
+                # Check for human approval interrupts #
+                #######################################
+                async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_resume_chunk, meta, thread_id):
+                    yield chunk
+
                 meta["time_cost"] = asyncio.get_event_loop().time() - start_time
                 yield make_resume_chunk(status="finished", meta=meta)
 
                 # 保存消息到数据库
-                langgraph_config = {"configurable": input_context}
+
                 conv_manager = ConversationManager(db)
                 await save_messages_from_langgraph_state(
                     agent_instance=agent,
