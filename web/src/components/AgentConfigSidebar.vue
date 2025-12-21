@@ -423,6 +423,10 @@ const getToolNameById = (toolId) => {
 
 const loadAvailableTools = async () => {
   try {
+    // 避免重复加载，如果已经有工具就直接返回
+    if (availableTools.value && Object.keys(availableTools.value).length > 0) {
+      return;
+    }
     await agentStore.fetchTools();
   } catch (error) {
     console.error('加载工具列表失败:', error);

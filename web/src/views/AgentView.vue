@@ -165,13 +165,6 @@ const loadAgentConfig = async () => {
   }
 };
 
-// 监听智能体选择变化
-watch(
-  () => selectedAgentId.value,
-  () => {
-    loadAgentConfig();
-  }
-);
 
 // 选择智能体（使用store方法）
 const selectAgent = (agentId) => {

@@ -33,6 +33,7 @@ export const useAgentStore = defineStore('agent', () => {
 
   // 初始化状态
   const isInitialized = ref(false)
+  const isInitializing = ref(false)
 
   // ==================== 计算属性 ====================
   const selectedAgent = computed(() =>
@@ -76,6 +77,10 @@ export const useAgentStore = defineStore('agent', () => {
   async function initialize() {
     if (isInitialized.value) return
 
+    // 防止并发初始化
+    if (isInitializing.value) return
+    isInitializing.value = true
+
     try {
       await fetchAgents()
       await fetchDefaultAgent()
@@ -111,6 +116,8 @@ export const useAgentStore = defineStore('agent', () => {
       console.error('Failed to initialize agent store:', err)
       handleChatError(err, 'initialize')
       error.value = err.message
+    } finally {
+      isInitializing.value = false
     }
   }
 
@@ -321,6 +328,7 @@ export const useAgentStore = defineStore('agent', () => {
     isLoadingAgentDetail.value = false
     error.value = null
     isInitialized.value = false
+    isInitializing.value = false
   }
 
   return {
