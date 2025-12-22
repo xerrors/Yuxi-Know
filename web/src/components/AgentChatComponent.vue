@@ -1049,7 +1049,7 @@ const initAll = async () => {
 onMounted(async () => {
   await initAll();
   scrollController.enableAutoScroll();
-  });
+});
 
 watch(currentAgentId, async (newAgentId, oldAgentId) => {
   if (newAgentId !== oldAgentId) {
