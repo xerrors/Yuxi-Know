@@ -4,6 +4,10 @@
   </div>
   <div class="message-box" :class="[message.type, customClasses]">
     <!-- 用户消息 -->
+    <div v-if="message.type === 'human'" class="message-copy-btn human-copy" @click="copyToClipboard(message.content)" :class="{ 'is-copied': isCopied }">
+      <Check v-if="isCopied" size="14" />
+      <Copy v-else size="14" />
+    </div>
     <p v-if="message.type === 'human'" class="message-text">{{ message.content }}</p>
 
     <p v-else-if="message.type === 'system'" class="message-text-system">{{ message.content }}</p>
@@ -102,7 +106,7 @@
 import { computed, ref } from 'vue';
 import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
 import RefsComponent from '@/components/RefsComponent.vue'
-import { Loader, CircleCheckBig } from 'lucide-vue-next';
+import { Loader, CircleCheckBig, Copy, Check } from 'lucide-vue-next';
 import { ToolResultRenderer } from '@/components/ToolCallingResult'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
@@ -149,6 +153,21 @@ const props = defineProps({
 const editorRef = ref()
 
 const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
+
+// 复制状态
+const isCopied = ref(false);
+
+const copyToClipboard = async (text) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    isCopied.value = true;
+    setTimeout(() => {
+      isCopied.value = false;
+    }, 2000);
+  } catch (err) {
+    console.error('Failed to copy: ', err);
+  }
+};
 
 // 推理面板展开状态
 const reasoningActiveKey = ref(['hide']);
@@ -319,6 +338,38 @@ const toggleToolCall = (toolCallId) => {
     max-width: 100%;
     margin-bottom: 0;
     white-space: pre-line;
+  }
+
+  .message-copy-btn {
+    cursor: pointer;
+    color: var(--gray-400);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    flex-shrink: 0;
+
+    &:hover {
+      color: var(--main-color);
+    }
+
+    &.is-copied {
+      color: var(--color-success-500);
+      opacity: 1;
+    }
+
+    &.human-copy {
+      position: absolute;
+      left: -28px;
+      bottom: 8px;
+    }
+  }
+
+  &:hover {
+    .message-copy-btn {
+      opacity: 1;
+    }
   }
 
   .message-text-system {

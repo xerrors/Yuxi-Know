@@ -684,7 +684,8 @@ const resetConfig = async () => {
           background-color: var(--gray-25);
           padding: 12px;
           border-radius: 8px;
-          box-shadow: 0px 1px 1px var(--shadow-2);
+          border: 1px solid var(--gray-100);
+          // box-shadow: 0px 0px 2px var(--shadow-3);
 
           :deep(label.form_item_model) {
             font-weight: 600;

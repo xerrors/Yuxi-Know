@@ -264,7 +264,7 @@ onUnmounted(() => {
         backdrop-filter: blur(4px);
         padding: 2px;
         border-radius: 8px;
-        box-shadow: 0 0px 4px var(--shadow-3);
+        box-shadow: 0 0 4px 0px var(--shadow-2);
     }
 
     :deep(.ant-input-affix-wrapper) {
@@ -272,10 +272,10 @@ onUnmounted(() => {
       border-radius: 6px;
       border-color: transparent;
       box-shadow: none;
-      background: rgba(255, 255, 255, 0.6);
+      background: var(--color-trans-light);
 
       &:hover, &:focus, &-focused {
-        background: #fff;
+        background: var(--main-0);
         border-color: var(--primary-color);
       }
 

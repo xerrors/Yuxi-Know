@@ -107,12 +107,12 @@
   --color-text-tertiary: rgba(255, 255, 255, 0.45);
 
   /* Shadow System - 深色模式阴影系统 */
-  --shadow-0: rgba(0, 0, 0, 0.1);
-  --shadow-1: rgba(0, 0, 0, 0.2);
-  --shadow-2: rgba(0, 0, 0, 0.3);
-  --shadow-3: rgba(0, 0, 0, 0.4);
-  --shadow-4: rgba(0, 0, 0, 0.5);
-  --shadow-5: rgba(0, 0, 0, 0.6);
+  --shadow-0: rgba(255, 255, 255, 0.02);
+  --shadow-1: rgba(255, 255, 255, 0.05);
+  --shadow-2: rgba(255, 255, 255, 0.08);
+  --shadow-3: rgba(255, 255, 255, 0.12);
+  --shadow-4: rgba(255, 255, 255, 0.16);
+  --shadow-5: rgba(255, 255, 255, 0.20);
 
 
   --color-trans-light: rgba(0, 0, 0, 0.85);

@@ -8,8 +8,7 @@
         @click="likeThisResponse(msg)"
         :title="feedbackState.hasSubmitted && feedbackState.rating === 'like' ? '已点赞' : '点赞'"
       >
-        <LikeFilled v-if="feedbackState.rating === 'like'" />
-        <LikeOutlined v-else />
+        <ThumbsUp size="12" :fill="feedbackState.rating === 'like' ? 'currentColor' : 'none'" />
       </span>
       <span
         class="item btn"
@@ -17,23 +16,24 @@
         @click="dislikeThisResponse(msg)"
         :title="feedbackState.hasSubmitted && feedbackState.rating === 'dislike' ? '已点踩' : '点踩'"
       >
-        <DislikeFilled v-if="feedbackState.rating === 'dislike'" />
-        <DislikeOutlined v-else />
+        <ThumbsDown size="12" :fill="feedbackState.rating === 'dislike' ? 'currentColor' : 'none'" />
       </span>
       <!-- 模型名称 -->
       <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
-        <BulbOutlined /> {{ getModelName(msg) }}
+        <Bot size="12" /> {{ getModelName(msg) }}
       </span>
       <!-- 复制 -->
       <span
         v-if="showKey('copy')"
-        class="item btn" @click="copyText(msg.content)" title="复制"><CopyOutlined />
+        class="item btn" @click="copyText(msg.content)" title="复制">
+        <Check v-if="isCopied" size="12" />
+        <Copy v-else size="12" />
       </span>
 
       <!-- 重试 -->
       <span
         v-if="showKey('regenerate')"
-        class="item btn" @click="regenerateMessage()" title="重新生成"><ReloadOutlined />
+        class="item btn" @click="regenerateMessage()" title="重新生成"><RotateCcw size="12" />
       </span>
       </div>
   </div>
@@ -63,14 +63,13 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
 import {
-  CopyOutlined,
-  BulbOutlined,
-  ReloadOutlined,
-  LikeOutlined,
-  LikeFilled,
-  DislikeOutlined,
-  DislikeFilled,
-} from '@ant-design/icons-vue'
+  ThumbsUp,
+  ThumbsDown,
+  Bot,
+  Copy,
+  Check,
+  RotateCcw,
+} from 'lucide-vue-next'
 import { agentApi } from '@/apis'
 
 const emit = defineEmits(['retry', 'openRefs']);
@@ -110,12 +109,19 @@ const showKey = (key) => {
   return props.showRefs.includes(key)
 }
 
+// 复制状态
+const isCopied = ref(false)
+
 // 定义 copy 方法
 const copyText = async (text) => {
   if (isSupported) {
     try {
       await copy(text)
       message.success('文本已复制到剪贴板')
+      isCopied.value = true
+      setTimeout(() => {
+        isCopied.value = false
+      }, 2000)
     } catch (error) {
       console.error('复制失败:', error)
       message.error('复制失败，请手动复制')
@@ -255,11 +261,16 @@ const cancelDislike = () => {
   .item {
     background: var(--gray-50);
     color: var(--gray-700);
-    padding: 2px 8px;
+    padding: 6px 8px;
     border-radius: 8px;
     font-size: 13px;
     user-select: none;
     transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    line-height: 1;
 
     &.btn {
       cursor: pointer;
@@ -272,8 +283,6 @@ const cancelDislike = () => {
 
       // Disabled state - when feedback has been submitted
       &.disabled {
-        cursor: not-allowed;
-        opacity: 0.7;
 
         &:hover {
           background: var(--gray-50);
