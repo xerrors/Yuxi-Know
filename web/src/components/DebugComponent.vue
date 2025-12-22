@@ -555,8 +555,8 @@ const printAgentConfig = async () => {
 .log-container {
   height: calc(80vh - 200px);
   overflow-y: auto;
-  background: #0C0C0C;
-  color: #D1D1D1;
+  background: var(--gray-900);
+  color: var(--gray-0);
   border-radius: 5px;
   font-family: 'Consolas', 'Monaco', monospace;
   font-size: 13px;
@@ -578,7 +578,7 @@ const printAgentConfig = async () => {
 }
 
 .timestamp {
-  color: #6A9955;
+  color: var(--color-success-500);
   min-width: 80px;
 }
 
@@ -588,7 +588,7 @@ const printAgentConfig = async () => {
 }
 
 .module {
-  color: #569CD6;
+  color: var(--color-info-500);
   min-width: 30px;
 }
 
@@ -599,19 +599,19 @@ const printAgentConfig = async () => {
 }
 
 .level-info {
-  .level { color: #4EC9B0; }
+  .level { color: var(--color-success-500); }
 }
 
 .level-error {
-  .level { color: #F14C4C; }
+  .level { color: var(--color-error-500); }
 }
 
 .level-debug {
-  .level { color: #9CDCFE; }
+  .level { color: var(--color-info-500); }
 }
 
 .level-warning {
-  .level { color: #DCD900; }
+  .level { color: var(--color-warning-500); }
 }
 
 .empty-logs {
@@ -622,7 +622,7 @@ const printAgentConfig = async () => {
 
 @media (prefers-color-scheme: dark) {
   .log-container {
-    background: #1E1E1E;
+    background: var(--gray-900);
   }
 }
 

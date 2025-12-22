@@ -836,11 +836,11 @@ const chunkData = async () => {
 }
 
 .ocr-warning {
-  color: #faad14;
+  color: var(--color-warning-500);
 }
 
 .ocr-healthy {
-  color: #52c41a;
+  color: var(--color-success-500);
 }
 
 .upload-dragger {
@@ -861,19 +861,19 @@ const chunkData = async () => {
 .ocr-warning-alert {
   margin: 12px 0;
   padding: 8px 12px;
-  background: #fff7e6;
-  border: 1px solid #ffd666;
+  background: var(--color-warning-50);
+  border: 1px solid var(--color-warning-300);
   border-radius: 4px;
-  color: #d46b08;
+  color: var(--color-warning-700);
   font-size: 13px;
 }
 
 .folder-upload-tip {
   margin-top: 12px;
   padding: 12px;
-  background: #f0f7ff;
+  background: var(--color-info-50);
   border-radius: 4px;
-  color: var(--gray-500);
+  color: var(--color-info-700);
   font-size: 12px;
 }
 
@@ -917,7 +917,7 @@ const chunkData = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  background: #fff;
+  background: var(--gray-0);
   border: 1px solid var(--gray-300);
   border-radius: 6px;
 }

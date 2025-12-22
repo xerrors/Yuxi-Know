@@ -150,11 +150,11 @@ const handleFileChange = (event) => {
 }
 
 .chip-status.status-parsed {
-  color: var(--green-600, #1a7f37);
+  color: var(--color-success-600);
 }
 
 .chip-status.status-failed {
-  color: var(--red-600, #c62828);
+  color: var(--color-error-600);
 }
 
 .chip-remove {
