@@ -50,6 +50,7 @@
       <GraphCanvas
         ref="graphRef"
         :graph-data="graph.graphData"
+        :graph-info="formattedGraphInfo"
         :highlight-keywords="[state.searchInput]"
         @node-click="graph.handleNodeClick"
         @edge-click="graph.handleEdgeClick"
@@ -85,32 +86,11 @@
               <a-button type="default" @click="exportGraphData" :icon="h(ExportOutlined)">
                 导出数据
               </a-button>
-              <a-button type="default" @click="state.showInfoModal = true" :icon="h(InfoCircleOutlined)">
-                说明
-              </a-button>
             </div>
           </div>
         </template>
         <template #content>
           <a-empty v-show="graph.graphData.nodes.length === 0" style="padding: 4rem 0;"/>
-        </template>
-        <template #bottom>
-          <div class="footer">
-            <GraphInfoPanel
-              v-if="isNeo4j"
-              :graph-info="graphInfo"
-              :graph-data="graph.graphData"
-              :unindexed-count="unindexedCount"
-              :model-matched="modelMatched"
-              @index-nodes="indexNodes"
-            />
-            <LightRAGInfoPanel
-              v-else
-              :stats="state.lightragStats"
-              :graph-data="graph.graphData"
-              :database-name="getDatabaseName()"
-            />
-          </div>
         </template>
         </GraphCanvas>
         <!-- 详情浮动卡片 -->
@@ -125,12 +105,12 @@
       </div>
 
       <a-modal
-      :open="state.showModal" title="上传文件"
-      @ok="addDocumentByFile"
-      @cancel="handleModalCancel"
-      ok-text="添加到图数据库" cancel-text="取消"
-      :confirm-loading="state.processing"
-      :ok-button-props="{ disabled: !hasValidFile }">
+        :open="state.showModal" title="上传文件"
+        @ok="addDocumentByFile"
+        @cancel="handleModalCancel"
+        ok-text="添加到图数据库" cancel-text="取消"
+        :confirm-loading="state.processing"
+        :ok-button-props="{ disabled: !hasValidFile }">
       <div class="upload">
         <div class="note">
           <p>上传的文件内容参考 test/data/A_Dream_of_Red_Mansions_tiny.jsonl 中的格式：</p>
@@ -193,8 +173,6 @@ import HeaderComponent from '@/components/HeaderComponent.vue';
 import { neo4jApi, unifiedApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 import GraphCanvas from '@/components/GraphCanvas.vue';
-import GraphInfoPanel from '@/components/GraphInfoPanel.vue';
-import LightRAGInfoPanel from '@/components/LightRAGInfoPanel.vue';
 import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
 import UploadModal from '@/components/FileUploadModal.vue';
 import { useGraph } from '@/composables/useGraph';
@@ -228,13 +206,6 @@ const state = reactive({
 })
 
 const isNeo4j = computed(() => {
-  // 当 selectedDbId 是 'neo4j' 时，或者以 'kb_' 开头时，我们认为它是 Neo4j 驱动的
-  // 但是对于 kb_ 开头的，我们可能想要使用 LightRAGInfoPanel 的展示风格（因为它有 stats）
-  // 或者复用 GraphInfoPanel。
-  // GraphInfoPanel 是为 'neo4j' 全局图设计的，包含了 model matching 检查等。
-  // KBs (kb_*) 使用 Neo4j 存储，但逻辑上更接近 LightRAG 的"知识库"概念。
-  // 为了让 LightRAGInfoPanel 能够展示 stats (get_stats 已经更新支持 kb_),
-  // 我们这里让 kb_ ID 返回 false，这样会进入 LightRAGInfoPanel 分支。
   return state.selectedDbId === 'neo4j';
 });
 
@@ -247,6 +218,20 @@ const hasValidFile = computed(() => {
 const unindexedCount = computed(() => {
   return graphInfo.value?.unindexed_node_count || 0;
 });
+
+const formattedGraphInfo = computed(() => {
+  if (isNeo4j.value) {
+    return {
+      node_count: graphInfo.value?.entity_count || 0,
+      edge_count: graphInfo.value?.relationship_count || 0
+    }
+  } else {
+    return {
+      node_count: state.lightragStats?.total_nodes || 0,
+      edge_count: state.lightragStats?.total_edges || 0
+    }
+  }
+})
 
 const loadDatabases = async () => {
   state.loadingDatabases = true;
@@ -636,8 +621,7 @@ const goToDatabasePage = () => {
   overflow: hidden;
   background: var(--gray-10);
 
-  .actions,
-  .footer {
+  .actions {
     display: flex;
     justify-content: space-between;
     margin: 20px 0;

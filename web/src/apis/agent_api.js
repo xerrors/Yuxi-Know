@@ -142,12 +142,6 @@ export const agentApi = {
   },
 
   /**
-   * 获取所有可用工具的信息
-   * @returns {Promise} - 工具信息列表
-   */
-  getTools: (agentId) => apiGet(`/api/chat/tools?agent_id=${agentId}`),
-
-  /**
    * 恢复被人工审批中断的对话（流式响应）
    * @param {string} agentId - 智能体ID
    * @param {Object} data - 恢复数据 { thread_id, approved }

@@ -209,51 +209,6 @@ async def get_graph_stats(
         raise HTTPException(status_code=500, detail=f"Failed to get stats: {str(e)}")
 
 
-# =============================================================================
-# === 兼容性接口 (Deprecated/Compatibility) ===
-# =============================================================================
-
-
-@graph.get("/lightrag/subgraph")
-async def get_lightrag_subgraph(
-    db_id: str = Query(..., description="数据库ID"),
-    node_label: str = Query(..., description="节点标签或实体名称"),
-    max_depth: int = Query(2, description="最大深度", ge=1, le=5),
-    max_nodes: int = Query(100, description="最大节点数", ge=1, le=1000),
-    current_user: User = Depends(get_admin_user),
-):
-    """(Deprecated) Use /graph/subgraph instead"""
-    return await get_subgraph(
-        db_id=db_id, node_label=node_label, max_depth=max_depth, max_nodes=max_nodes, current_user=current_user
-    )
-
-
-@graph.get("/lightrag/databases")
-async def get_lightrag_databases(current_user: User = Depends(get_admin_user)):
-    """(Deprecated) Use /graph/list instead"""
-    try:
-        lightrag_databases = knowledge_base.get_lightrag_databases()
-        return {"success": True, "data": {"databases": lightrag_databases}}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@graph.get("/lightrag/labels")
-async def get_lightrag_labels(
-    db_id: str = Query(..., description="数据库ID"), current_user: User = Depends(get_admin_user)
-):
-    """(Deprecated) Use /graph/labels instead"""
-    return await get_graph_labels(db_id=db_id, current_user=current_user)
-
-
-@graph.get("/lightrag/stats")
-async def get_lightrag_stats(
-    db_id: str = Query(..., description="数据库ID"), current_user: User = Depends(get_admin_user)
-):
-    """(Deprecated) Use /graph/stats instead"""
-    return await get_graph_stats(db_id=db_id, current_user=current_user)
-
-
 @graph.get("/neo4j/nodes")
 async def get_neo4j_nodes(
     kgdb_name: str = Query(..., description="知识图谱数据库名称"),

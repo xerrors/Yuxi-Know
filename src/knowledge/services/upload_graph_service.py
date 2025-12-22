@@ -601,7 +601,7 @@ class UploadGraphService:
         def query_fuzzy_match(tx, keyword):
             result = tx.run(
                 """
-            MATCH (n:Entity)
+            MATCH (n:Upload)
             WHERE toLower(n.name) CONTAINS toLower($keyword)
             RETURN DISTINCT n.name AS name
             """,
@@ -639,6 +639,7 @@ class UploadGraphService:
                 """
             CALL db.index.vector.queryNodes('entityEmbeddings', 10, $embedding)
             YIELD node AS similarEntity, score
+            WHERE 'Upload' IN labels(similarEntity)
             RETURN similarEntity.name AS name, score
             """,
                 embedding=embedding,
@@ -679,7 +680,7 @@ class UploadGraphService:
                 query_str = """
                 WITH [
                     // 1跳出边
-                    [(n {name: $entity_name})-[r1]->(m1) |
+                    [(n:Upload {name: $entity_name})-[r1]->(m1) |
                      {h: {id: elementId(n), name: n.name, properties: properties(n)},
                       r: {
                         id: elementId(r1),
@@ -690,7 +691,7 @@ class UploadGraphService:
                       },
                       t: {id: elementId(m1), name: m1.name, properties: properties(m1)}}],
                     // 2跳出边
-                    [(n {name: $entity_name})-[r1]->(m1)-[r2]->(m2) |
+                    [(n:Upload {name: $entity_name})-[r1]->(m1)-[r2]->(m2) |
                      {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
                       r: {
                         id: elementId(r2),
@@ -701,7 +702,7 @@ class UploadGraphService:
                       },
                       t: {id: elementId(m2), name: m2.name, properties: properties(m2)}}],
                     // 1跳入边
-                    [(m1)-[r1]->(n {name: $entity_name}) |
+                    [(m1)-[r1]->(n:Upload {name: $entity_name}) |
                      {h: {id: elementId(m1), name: m1.name, properties: properties(m1)},
                       r: {
                         id: elementId(r1),
@@ -712,7 +713,7 @@ class UploadGraphService:
                       },
                       t: {id: elementId(n), name: n.name, properties: properties(n)}}],
                     // 2跳入边
-                    [(m2)-[r2]->(m1)-[r1]->(n {name: $entity_name}) |
+                    [(m2)-[r2]->(m1)-[r1]->(n:Upload {name: $entity_name}) |
                      {h: {id: elementId(m2), name: m2.name, properties: properties(m2)},
                       r: {
                         id: elementId(r2),

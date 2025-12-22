@@ -5,7 +5,6 @@ from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRequest, SummarizationMiddleware, TodoListMiddleware, dynamic_prompt
-from langchain_anthropic.middleware import AnthropicPromptCachingMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import context_based_model, inject_attachment_context
@@ -18,7 +17,7 @@ search_tools = [search]
 
 research_sub_agent = {
     "name": "research-agent",
-    "description": ("利用搜索工具，用于研究更深入的问题。"),
+    "description": ("利用搜索工具，用于研究更深入的问题。将调研结果写入到主题研究文件中。"),
     "system_prompt": (
         "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
         "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
@@ -85,18 +84,6 @@ class DeepAgent(BaseAgent):
         model = load_chat_model(context.model)
         tools = await self.get_tools()
 
-        if (
-            model.profile is not None
-            and isinstance(model.profile, dict)
-            and "max_input_tokens" in model.profile
-            and isinstance(model.profile["max_input_tokens"], int)
-        ):  # 此处参考 model.dev 中的 max_input_tokens
-            trigger = ("fraction", 0.85)
-            keep = ("fraction", 0.10)
-        else:
-            trigger = ("tokens", 110000)
-            keep = ("messages", 10)
-
         # 使用 create_deep_agent 创建深度智能体
         graph = create_agent(
             model=model,
@@ -112,26 +99,25 @@ class DeepAgent(BaseAgent):
                     default_tools=tools,
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
+                        context_based_model,  # 动态模型选择
                         TodoListMiddleware(),
                         FilesystemMiddleware(),
                         SummarizationMiddleware(
                             model=model,
-                            trigger=trigger,
-                            keep=keep,
+                            trigger=("tokens", 110000),
+                            keep=("messages", 10),
                             trim_tokens_to_summarize=None,
                         ),
-                        AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
                         PatchToolCallsMiddleware(),
                     ],
                     general_purpose_agent=True,
                 ),
                 SummarizationMiddleware(
                     model=model,
-                    trigger=trigger,
-                    keep=keep,
+                    trigger=("tokens", 110000),
+                    keep=("messages", 10),
                     trim_tokens_to_summarize=None,
                 ),
-                AnthropicPromptCachingMiddleware(unsupported_model_behavior="ignore"),
                 PatchToolCallsMiddleware(),
             ],
             checkpointer=await self._get_checkpointer(),

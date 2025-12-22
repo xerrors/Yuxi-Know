@@ -29,8 +29,8 @@
             <component :is="themeStore.isDark ? Sun : Moon" size="16"/>
             <span class="menu-text">{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式 (Beta)' }}</span>
           </a-menu-item>
-          <a-menu-divider />
-          <a-menu-item key="setting" @click="goToSetting">
+          <a-menu-divider v-if="userStore.isAdmin"/>
+          <a-menu-item v-if="userStore.isAdmin" key="setting" @click="goToSetting">
             <Settings size="16"/>
             <span class="menu-text">系统设置</span>
           </a-menu-item>
