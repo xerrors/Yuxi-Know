@@ -159,6 +159,7 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
 
 DEFAULT_EMBED_MODELS: dict[str, EmbedModelInfo] = {
     "siliconflow/BAAI/bge-m3": EmbedModelInfo(
+        model_id="siliconflow/BAAI/bge-m3",
         name="bge-m3",
         dimension=1024,
         base_url="http://192.168.137.101:7656/v1/embeddings",

@@ -64,6 +64,7 @@ dependencies = [
     "deepagents>=0.2.5",
     "json-repair>=0.54.0",
     "openpyxl>=3.1.5",
+    "ipdb>=0.13.13",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

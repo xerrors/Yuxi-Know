@@ -631,7 +631,7 @@ class KnowledgeBase(ABC):
 
             # 原子性写入（使用临时文件）
             with tempfile.NamedTemporaryFile(
-                mode="w", dir=os.path.dirname(meta_file), prefix=".tmp_", suffix=".json", delete=False
+                mode="w", dir=os.path.dirname(meta_file), encoding='utf-8', prefix=".tmp_", suffix=".json", delete=False
             ) as tmp_file:
                 json.dump(data, tmp_file, ensure_ascii=False, indent=2)
                 temp_path = tmp_file.name

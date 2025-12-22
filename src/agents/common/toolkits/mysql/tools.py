@@ -76,6 +76,9 @@ def mysql_list_tables() -> str:
                     table_names.append(table_name)
                 result.append(f"数据库说明\n{db_name}: {db_desc}\n数据库中的表:\n{'\n'.join(table_names)}")              
         
+        if not result:
+            return "没有找到数据库信息, 请结束回复。"
+        
         return "\n---\n".join(result)
     except Exception as e:
         error_msg = f"获取表名失败: {str(e)}"

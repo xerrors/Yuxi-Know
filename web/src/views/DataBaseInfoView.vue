@@ -6,6 +6,9 @@
     v-model:visible="addFilesModalVisible"
     @success="onFileUploadSuccess"
   />
+  <DatabaseUploadModal
+    v-model:visible="uploadDatabaseModalVisible"
+  />
 
   <div class="unified-layout">
     <div class="left-panel" :style="{ width: leftPanelWidth + '%' }">
@@ -14,6 +17,7 @@
         :right-panel-visible="state.rightPanelVisible"
         @show-add-files-modal="showAddFilesModal"
         @toggle-right-panel="toggleRightPanel"
+        @show-upload-database-modal="showUploadDatabaseModal"
       />
     </div>
 
@@ -98,6 +102,7 @@ import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';
 import FileUploadModal from '@/components/FileUploadModal.vue';
+import DatabaseUploadModal from '@/components/DatabaseUploadModal.vue';
 import KnowledgeGraphSection from '@/components/KnowledgeGraphSection.vue';
 import QuerySection from '@/components/QuerySection.vue';
 import MindMapSection from '@/components/MindMapSection.vue';
@@ -196,6 +201,13 @@ const isInitialLoad = ref(true);
 // 显示添加文件弹窗
 const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
+};
+
+// 添加导入数据库数据弹窗
+const uploadDatabaseModalVisible = ref(false);
+// 显示添加文件弹窗
+const showUploadDatabaseModal = () => {
+  uploadDatabaseModalVisible.value = true;
 };
 
 // 文件上传成功回调

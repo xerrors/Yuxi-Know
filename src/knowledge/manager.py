@@ -8,6 +8,9 @@ from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.knowledge.factory import KnowledgeBaseFactory
 from src.utils import logger
 from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
+from src.knowledge.utils.db_utils import get_connection_manager
+from src.knowledge.utils.connection import execute_query_with_timeout, QueryTimeoutError
+from src.knowledge.utils.security import MySQLSecurityChecker
 
 
 class KnowledgeBaseManager:
@@ -108,7 +111,7 @@ class KnowledgeBaseManager:
 
             # 原子性写入（使用临时文件）
             with tempfile.NamedTemporaryFile(
-                mode="w", dir=os.path.dirname(meta_file), prefix=".tmp_", suffix=".json", delete=False
+                mode="w", dir=os.path.dirname(meta_file), encoding='utf-8', prefix=".tmp_", suffix=".json", delete=False
             ) as tmp_file:
                 json.dump(data, tmp_file, ensure_ascii=False, indent=2)
                 temp_path = tmp_file.name
@@ -354,6 +357,115 @@ class KnowledgeBaseManager:
         general_uploads = os.path.join(self.work_dir, "uploads")
         os.makedirs(general_uploads, exist_ok=True)
         return general_uploads
+
+    def check_mysql_connection(self, host, user, password, database, port):
+        timeout = 60
+
+        try:
+            sql = f"SELECT TABLE_NAME, TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '{database}';"
+            # 验证SQL安全性
+            if not MySQLSecurityChecker.validate_sql(sql):
+                raise Exception("SQL语句包含不安全的操作或可能的注入攻击，请检查SQL语句")
+
+            if not MySQLSecurityChecker.validate_timeout(timeout):
+                raise Exception("timeout参数必须在1-600之间")
+
+            logger.debug(f"正在执行数据库: {database}，sql: {sql}")
+            conn_manager = get_connection_manager(host, user, password, database, port)
+            connection = conn_manager.get_connection()
+            effective_timeout = timeout or 60
+            map_name_comment = {}
+            try:
+                result = execute_query_with_timeout(connection, sql, timeout=effective_timeout)
+            except QueryTimeoutError as timeout_error:
+                logger.error(f"MySQL query timed out after {effective_timeout} seconds: {timeout_error}")
+                raise
+            except Exception:
+                conn_manager.invalidate_connection()
+                raise
+            map_field_name_comment = {}
+            for row in result:
+                tb_name = row['TABLE_NAME']
+                field_sql = f"SELECT COLUMN_NAME, COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '{database}' AND TABLE_NAME = '{tb_name}' ORDER BY ORDINAL_POSITION;"
+                try:
+                    field_result = execute_query_with_timeout(connection, field_sql, timeout=effective_timeout)
+                except QueryTimeoutError as timeout_error:
+                    logger.error(f"MySQL query timed out after {effective_timeout} seconds: {timeout_error}")
+                    raise
+                except Exception:
+                    conn_manager.invalidate_connection()
+                    raise
+                
+                tmp_field = {}
+                for field in field_result:
+                    column_name = field['COLUMN_NAME']
+                    if 'id' in column_name:
+                        continue
+                    tmp_field[column_name] = field['COLUMN_COMMENT']
+                map_field_name_comment[tb_name] = tmp_field
+                
+                map_name_comment[row['TABLE_NAME']] = row['TABLE_COMMENT']
+
+            if not result:
+                raise Exception( "查询执行成功，但没有返回任何结果")
+            else:
+
+                return map_name_comment, map_field_name_comment
+
+        except Exception as e:
+            raise Exception(str(e))
+            # raise Exception("数据库连接或表查询失败")
+
+    def get_data_from_db(self, host, user, password, database, port, table, fields):
+        timeout = 60
+        try:
+            # fields = fields.split(',')
+            sql = f"SELECT {','.join(fields)} FROM {database}.{table};"
+            sql_comment = f"SELECT COLUMN_NAME, COLUMN_COMMENT FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = '{database}' AND TABLE_NAME = '{table}';"
+            # 验证SQL安全性
+            # if not MySQLSecurityChecker.validate_sql(sql):
+            #     raise Exception("SQL语句包含不安全的操作或可能的注入攻击，请检查SQL语句")
+
+            # if not MySQLSecurityChecker.validate_timeout(timeout):
+            #     raise Exception("timeout参数必须在1-600之间")
+
+            logger.debug(f"正在执行数据库: {database}，sql: {sql}")
+            conn_manager = get_connection_manager(host, user, password, database, port)
+            connection = conn_manager.get_connection()
+            effective_timeout = timeout or 60
+            map_name_comment = {}
+            try:
+                result = execute_query_with_timeout(connection, sql, timeout=effective_timeout)
+                result_comment = execute_query_with_timeout(connection, sql_comment, timeout=effective_timeout)
+            except QueryTimeoutError as timeout_error:
+                logger.error(f"MySQL query timed out after {effective_timeout} seconds: {timeout_error}")
+                raise
+            except Exception:
+                conn_manager.invalidate_connection()
+                raise
+            
+            for row_comment in result_comment:
+                map_name_comment[row_comment['COLUMN_NAME']] = row_comment['COLUMN_COMMENT']
+
+            if not result:
+                raise Exception( "查询执行成功，但没有返回任何结果")
+            else:
+                # 构建数据行
+                rows = []
+                for row in result:
+                    tmp = []
+                    for k, v in row.items():
+                        tmp.append(f"{map_name_comment[k]}: {v}")
+                    rows.append(";\t".join(tmp))
+
+                result_str = "\n\n".join(rows)
+
+                return result_str
+
+        except Exception as e:
+            error_msg = f"SQL查询执行失败: {str(e)}\n\n{sql}"
+            return error_msg
+
 
     async def file_name_existed_in_db(self, db_id: str | None, file_name: str | None) -> bool:
         """检查指定数据库中是否存在同名的文件"""
