@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => {
         usePolling: true,
         ignored: ['**/node_modules/**', '**/dist/**'],
       },
+      allowedHosts: ['.cloudstudio.club'],
       host: '0.0.0.0',
     }
   }

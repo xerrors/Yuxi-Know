@@ -5,7 +5,7 @@ import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from langchain.messages import AIMessageChunk, HumanMessage
+from langchain.messages import AIMessageChunk, HumanMessage, AIMessage
 from langgraph.types import Command
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -578,6 +578,44 @@ async def chat_agent(
 
                 full_msg = None
                 langgraph_config = {"configurable": input_context}
+                
+                # 检查智能体是否支持非流式输出
+                is_non_stream = False
+                if hasattr(agent, 'context_schema'):
+                    # 获取智能体配置检查streaming设置
+                    try:
+                        agent_config = agent.context_schema.from_file(
+                            module_name=agent.module_name, 
+                            input_context=input_context
+                        )
+                        is_non_stream = not getattr(agent_config, 'streaming', True)
+                        logger.debug(f"Agent {agent_id} streaming mode: {not is_non_stream}")
+                    except Exception as e:
+                        logger.warning(f"Failed to get agent streaming config: {e}")
+                
+                if is_non_stream and hasattr(agent, 'process_messages_non_stream'):
+                    # 使用非流式处理
+                    logger.info(f"Using non-streaming mode for agent {agent_id}")
+                    async for msg, metadata in agent.process_messages_non_stream(messages, input_context=input_context):
+                        if isinstance(msg, AIMessage):
+                            full_msg = msg
+                            if conf.enable_content_guard and await content_guard.check_with_keywords(msg.content):
+                                logger.warning("Sensitive content detected in non-stream mode")
+                                await save_partial_message(conv_manager, thread_id, msg, "content_guard_blocked")
+                                meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                                yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
+                                return
+                            
+                            yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="complete")
+                        else:
+                            msg_dict = msg.model_dump()
+                            yield make_chunk(msg=msg_dict, metadata=metadata, status="complete")
+                    
+                    # 保存消息到历史记录
+                    meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+                    return
+                
+                # 默认流式处理
                 async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
                     if isinstance(msg, AIMessageChunk):
                         full_msg = msg if not full_msg else full_msg + msg
