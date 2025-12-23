@@ -54,9 +54,13 @@ export const configApi = {
 
   /**
    * 获取系统日志
+   * @param {string} levels - 可选的日志级别过滤，多个级别用逗号分隔
    * @returns {Promise} - 系统日志
    */
-  getLogs: async () =>  apiAdminGet('/api/system/logs')
+  getLogs: async (levels) => {
+    const url = levels ? `/api/system/logs?levels=${encodeURIComponent(levels)}` : '/api/system/logs';
+    return apiAdminGet(url);
+  }
 }
 
 // =============================================================================

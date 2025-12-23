@@ -196,7 +196,6 @@ const processedLogs = computed(() => {
   return state.rawLogs
     .map(parseLogLine)
     .filter(log => log !== null)
-    .filter(log => state.selectedLevels.includes(log.level))
     .filter(log => {
       if (!state.searchText) return true;
       return log.raw.toLowerCase().includes(state.searchText.toLowerCase());
@@ -210,7 +209,9 @@ const fetchLogs = async () => {
   state.fetching = true;
   try {
     error.value = '';
-    const logData = await configApi.getLogs();
+    // 将选中的日志级别转换为逗号分隔的字符串传递给后端
+    const levelsParam = state.selectedLevels.join(',');
+    const logData = await configApi.getLogs(levelsParam);
     state.rawLogs = logData.log.split('\n').filter(line => line.trim());
 
     await nextTick();
@@ -248,12 +249,18 @@ const toggleLogLevel = (level) => {
   const index = currentLevels.indexOf(level);
 
   if (index > -1) {
+    // 如果取消选中后没有选中的级别，默认全选
+    if (currentLevels.length === 1) {
+      return;
+    }
     currentLevels.splice(index, 1);
   } else {
     currentLevels.push(level);
   }
 
   state.selectedLevels = currentLevels;
+  // 切换日志级别后重新获取数据
+  fetchLogs();
 };
 
 // 自动刷新
@@ -470,10 +477,6 @@ const printAgentConfig = async () => {
 </script>
 
 <style scoped>
-.log-viewer {
-  background: var(--gray-0);
-}
-
 .log-viewer.fullscreen {
   padding: 16px;
 }
@@ -555,11 +558,11 @@ const printAgentConfig = async () => {
 .log-container {
   height: calc(80vh - 200px);
   overflow-y: auto;
-  background: var(--gray-900);
-  color: var(--gray-0);
+  background: var(--gray-0);
+  color: var(--gray-1000);
   border-radius: 5px;
   font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .log-lines {

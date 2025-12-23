@@ -52,18 +52,42 @@ async def update_config_batch(items: dict = Body(...), current_user: User = Depe
 
 
 @system.get("/logs")
-async def get_system_logs(current_user: User = Depends(get_admin_user)):
-    """获取系统日志"""
+async def get_system_logs(
+    levels: str | None = None,
+    current_user: User = Depends(get_admin_user)
+):
+    """获取系统日志
+
+    Args:
+        levels: 可选的日志级别过滤，多个级别用逗号分隔，如 "INFO,ERROR,DEBUG,WARNING"
+    """
     try:
         from src.utils.logging_config import LOG_FILE
+
+        # 解析日志级别过滤条件
+        level_filter = None
+        if levels:
+            level_filter = set(level.strip().upper() for level in levels.split(',') if level.strip())
 
         async with aiofiles.open(LOG_FILE) as f:
             # 读取最后1000行
             lines = []
             async for line in f:
-                lines.append(line)
-                if len(lines) > 1000:
-                    lines.pop(0)
+                filtered_line = line.rstrip('\n\r')
+                # 如果指定了日志级别过滤，则按级别过滤
+                if level_filter:
+                    # 日志格式: 2025-03-10 08:26:37,269 - INFO - module - message
+                    # 提取日志级别
+                    parts = filtered_line.split(' - ')
+                    if len(parts) >= 2 and parts[1].strip() in level_filter:
+                        lines.append(filtered_line + '\n')
+                    # 继续读取以保持行数统计准确
+                    if len(lines) > 1000:
+                        lines.pop(0)
+                else:
+                    lines.append(filtered_line + '\n')
+                    if len(lines) > 1000:
+                        lines.pop(0)
 
         log = "".join(lines)
         return {"log": log, "message": "success", "log_file": LOG_FILE}
