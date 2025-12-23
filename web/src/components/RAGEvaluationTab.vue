@@ -941,7 +941,8 @@ const getMetricShortName = (key) => {
 // 格式化指标值
 const formatMetricValue = (val) => {
   if (typeof val !== 'number') return '-';
-  if (val < 1) return (val * 100).toFixed(1) + '%';
+  // 检索指标（recall, precision, f1 等）范围是 0.0-1.0，统一转换为百分比
+  if (val <= 1) return (val * 100).toFixed(1) + '%';
   return val.toFixed(3);
 };
 
