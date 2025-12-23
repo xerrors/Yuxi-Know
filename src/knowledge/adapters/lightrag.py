@@ -42,7 +42,7 @@ class LightRAGGraphAdapter(GraphAdapter):
         try:
             with self._db.driver.session() as session:
                 result = session.run(query, keyword=keyword, kb_id=kb_id, limit=limit)
-                return self._process_query_result(result)
+                return self._process_query_result(result, limit=limit)
         except Exception as e:
             logger.error(f"Neo4j query failed: {e}")
             return {"nodes": [], "edges": []}
@@ -280,14 +280,18 @@ class LightRAGGraphAdapter(GraphAdapter):
 
         return query
 
-    def _process_query_result(self, result) -> dict[str, list]:
-        """处理查询结果"""
+    def _process_query_result(self, result, limit: int = None) -> dict[str, list]:
+        """处理查询结果，并限制节点数量不超过 limit"""
         nodes = []
         edges = []
         node_ids = set()
         edge_ids = set()
 
         for record in result:
+            # 检查是否已达到节点限制
+            if limit is not None and len(node_ids) >= limit:
+                break
+
             for key in record.keys():
                 val = record[key]
                 if val is None:
@@ -295,6 +299,9 @@ class LightRAGGraphAdapter(GraphAdapter):
 
                 if hasattr(val, "element_id") and hasattr(val, "labels"):  # Node
                     if val.element_id not in node_ids:
+                        # 再次检查限制
+                        if limit is not None and len(node_ids) >= limit:
+                            break
                         nodes.append(self.normalize_node(val))
                         node_ids.add(val.element_id)
                 elif hasattr(val, "element_id") and hasattr(val, "start_node"):  # Relationship
@@ -305,6 +312,8 @@ class LightRAGGraphAdapter(GraphAdapter):
                     for item in val:
                         if hasattr(item, "element_id") and hasattr(item, "labels"):
                             if item.element_id not in node_ids:
+                                if limit is not None and len(node_ids) >= limit:
+                                    break
                                 nodes.append(self.normalize_node(item))
                                 node_ids.add(item.element_id)
 
