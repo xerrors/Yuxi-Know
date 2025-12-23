@@ -16,6 +16,10 @@ cp src/config/static/info.template.yaml src/config/static/info.local.yaml
 
 <<< @/../src/config/static/info.template.yaml
 
+上述中提到的 ICON 预设了下面这些，如果需要更多的 ICONS，可以手动从 `lucide-vue-next` 中引入。
+
+<<< @/../web/src/views/HomeView.vue#icon_mapping{js}
+
 ### 3. 环境变量配置
 
 在 `.env` 文件中指定配置文件路径：
@@ -47,5 +51,6 @@ YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
   /* ... 其他色板 */
 }
 
-**此外**，`web/src/stores/theme.js` 中也包含了主题相关的配置（需要修改 `colorPrimary`），可根据需要修改。
 ```
+
+**此外**，`web/src/stores/theme.js` 中也包含了主题相关的配置（需要修改 `colorPrimary`），可根据需要修改。

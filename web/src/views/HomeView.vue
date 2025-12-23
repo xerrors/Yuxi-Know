@@ -147,6 +147,7 @@ onMounted(async () => {
 
 const iconKey = (value) => typeof value === 'string' ? value.toLowerCase() : ''
 
+// region icon_mapping
 const featureIconMap = {
   stars: Star,
   issues: CheckCircle2,
@@ -169,6 +170,7 @@ const actionIconMap = {
   github: Github,
   default: Github
 }
+// endregion icon_mapping
 
 const featureCards = computed(() => {
   const list = Array.isArray(infoStore.features) ? infoStore.features : []

@@ -16,19 +16,19 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch v0.3.6-beta --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.4.0-beta --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
 - `v0.3.0`: 稳定版本
-- `v0.3.6-beta`：最新的 Beta 测试版
+- `v0.4.0-beta`：最新的 Beta 测试版
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
 #### 2. 项目启动
 
-** 方法 1**：使用 init 脚本（推荐）
+**方法 1**：使用 init 脚本（推荐）
 
 我们提供了自动化的初始化脚本，可以帮您完成环境配置和 Docker 镜像拉取：
 
@@ -51,7 +51,7 @@ cd Yuxi-Know
 - [Tavily](https://app.tavily.com/) 获取搜索服务 API Key（可选）
 :::
 
-** 方法 2**：手动配置环境变量
+**方法 2**：手动配置环境变量
 
 复制环境变量模板并编辑：
 
@@ -92,7 +92,17 @@ docker compose up --build -d
 docker compose down
 ```
 
-### 故障排除
+## 对话
+
+项目第一次启动后，会要求填写超级管理员账号和密码，请确保填写正确。
+
+然后在智能体页面可以进行对话，在右侧可以配置提示词、模型、工具等参数。
+
+![agent.png](/images/agent.png)
+
+
+
+## 故障排除
 
 #### 查看服务状态
 

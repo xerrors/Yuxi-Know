@@ -13,27 +13,27 @@
 | 智谱清言                                         | `ZHIPUAI_API_KEY`     | GLM 系列模型          |
 | 阿里云百炼                                       | `DASHSCOPE_API_KEY`   | 通义千问系列          |
 
-其余还支持火山、Together、vLLM、Ollama 等。
+其余还支持火山豆包、Together、vLLM、Ollama 等。
 
 ### 配置方法
 
 在 `.env` 文件中添加对应的环境变量：
 
-<<< @/../.env.template#model_provider{bash 5}
 
-### 默认对话模型格式
-
-系统的默认对话模型通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
-
-```yaml
-default_model: siliconflow/deepseek-ai/DeepSeek-V3.2
-```
-
-在 Web 界面中选择模型时也会自动按照这一格式保存。
 
 ::: tip 免费获取 API Key
 [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。
 :::
+
+<<< @/../.env.template#model_provider{bash 5}
+
+### 默认对话模型格式
+
+系统的默认对话模型可以在设置页面配置，也可以通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
+
+```yaml
+default_model: siliconflow/deepseek-ai/DeepSeek-V3.2
+```
 
 ## 自定义模型供应商
 
