@@ -221,10 +221,6 @@
           <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
             保存配置
           </a-button>
-          <!-- TODO：BUG 目前有 bug 暂时不展示 -->
-          <!-- <a-button @click="resetConfig" class="reset-btn">
-            重置
-          </a-button> -->
         </div>
       </div>
     </div>

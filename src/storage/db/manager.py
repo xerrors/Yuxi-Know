@@ -22,9 +22,6 @@ except ImportError:
     def validate_database_schema(db_path):
         return True, []
 
-# TODO:[已完成]为DBManager添加异步支持
-# TODO:[已完成]为DBManager添加单例模式
-
 
 class DBManager(metaclass=SingletonMeta):
     """数据库管理器 - 提供异步数据库连接和会话管理"""
