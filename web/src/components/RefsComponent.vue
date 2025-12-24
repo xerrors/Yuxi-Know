@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
 import {
@@ -93,6 +93,25 @@ const feedbackState = reactive({
   rating: null, // 'like' or 'dislike'
   reason: null,
 })
+
+// 初始化反馈状态 - 从 message.feedback 读取历史反馈
+const initFeedbackState = () => {
+  if (msg.value?.feedback) {
+    feedbackState.hasSubmitted = true
+    feedbackState.rating = msg.value.feedback.rating
+    feedbackState.reason = msg.value.feedback.reason
+  } else {
+    feedbackState.hasSubmitted = false
+    feedbackState.rating = null
+    feedbackState.reason = null
+  }
+}
+
+// 监听 message prop 变化 (用于切换对话时更新状态)
+watch(() => props.message, () => {
+  msg.value = props.message
+  initFeedbackState()
+}, { immediate: true })
 
 // Modal state for dislike
 const dislikeModalVisible = ref(false)

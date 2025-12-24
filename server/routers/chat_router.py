@@ -873,7 +873,7 @@ async def save_agent_config(agent_id: str, config: dict = Body(...), current_use
 async def get_agent_history(
     agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)
 ):
-    """获取智能体历史消息（需要登录）- NEW STORAGE ONLY"""
+    """获取智能体历史消息（需要登录）- 包含用户反馈状态"""
     try:
         # 获取Agent实例验证
         if not agent_manager.get_agent(agent_id):
@@ -883,11 +883,27 @@ async def get_agent_history(
         conv_manager = ConversationManager(db)
         messages = await conv_manager.get_messages_by_thread_id(thread_id)
 
+        # 当前用户ID - 用于过滤反馈
+        current_user_id = str(current_user.id)
+
         # Convert to frontend-compatible format
         history = []
         for msg in messages:
             # Map role to type that frontend expects
             role_type_map = {"user": "human", "assistant": "ai", "tool": "tool", "system": "system"}
+
+            # 查找当前用户的反馈
+            user_feedback = None
+            if msg.feedbacks:
+                for feedback in msg.feedbacks:
+                    if feedback.user_id == current_user_id:
+                        user_feedback = {
+                            "id": feedback.id,
+                            "rating": feedback.rating,
+                            "reason": feedback.reason,
+                            "created_at": feedback.created_at.isoformat() if feedback.created_at else None,
+                        }
+                        break
 
             msg_dict = {
                 "id": msg.id,  # Include message ID for feedback
@@ -899,6 +915,7 @@ async def get_agent_history(
                 "extra_metadata": msg.extra_metadata,  # 保留完整的metadata以备前端需要
                 "message_type": msg.message_type,  # 添加消息类型字段
                 "image_content": msg.image_content,  # 添加图片内容字段
+                "feedback": user_feedback,  # 添加当前用户反馈状态
             }
 
             # Add tool calls if present (for AI messages)
@@ -918,7 +935,7 @@ async def get_agent_history(
 
             history.append(msg_dict)
 
-        logger.info(f"Loaded {len(history)} messages from new storage for thread {thread_id}")
+        logger.info(f"Loaded {len(history)} messages with feedback for thread {thread_id}")
         return {"history": history}
 
     except Exception as e:

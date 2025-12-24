@@ -241,11 +241,14 @@ class ConversationManager:
             offset: Number of messages to skip
 
         Returns:
-            List of Message objects
+            List of Message objects with preloaded tool_calls and feedbacks
         """
         query = (
             select(Message)
-            .options(selectinload(Message.tool_calls))
+            .options(
+                selectinload(Message.tool_calls),  # Preload tool calls
+                selectinload(Message.feedbacks),   # Preload feedbacks for UI state
+            )
             .filter(Message.conversation_id == conversation_id)
             .order_by(Message.created_at.asc())
         )
