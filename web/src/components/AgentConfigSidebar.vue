@@ -424,6 +424,10 @@ const getToolNameById = (toolId) => {
 const openToolsModal = async () => {
   console.log("availableTools.value", availableTools.value)
   try {
+    // 强制刷新智能体详情以获取最新工具列表
+    if (selectedAgentId.value) {
+      await agentStore.fetchAgentDetail(selectedAgentId.value, true);
+    }
     selectedTools.value = [...(agentConfig.value?.tools || [])];
     toolsModalOpen.value = true;
   } catch (error) {

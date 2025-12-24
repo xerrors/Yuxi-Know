@@ -146,11 +146,11 @@ export const useAgentStore = defineStore('agent', () => {
    * 获取单个智能体的详细信息（包含配置选项）
    * @param {string} agentId - 智能体ID
    */
-  async function fetchAgentDetail(agentId) {
+  async function fetchAgentDetail(agentId, forceRefresh = false) {
     if (!agentId) return
 
-    // 如果已经缓存了详细信息，直接返回
-    if (agentDetails.value[agentId]) {
+    // 如果已经缓存了详细信息且不强制刷新，直接返回
+    if (!forceRefresh && agentDetails.value[agentId]) {
       return agentDetails.value[agentId]
     }
 
