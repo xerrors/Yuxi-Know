@@ -39,17 +39,13 @@
                 :key="index"
                 class="todo-item"
               >
-                <span class="todo-status" :class="todo.status">
-                  <svg v-if="todo.status === 'completed'" viewBox="0 0 24 24" fill="currentColor" class="icon">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                  </svg>
-                  <svg v-else-if="todo.status === 'in_progress'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon spinning">
-                    <circle cx="12" cy="12" r="10" stroke-dasharray="31.416" stroke-dashoffset="31.416" stroke-linecap="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon">
-                    <circle cx="12" cy="12" r="10"/>
-                  </svg>
-                </span>
+                <div class="todo-status">
+                  <CheckCircleOutlined v-if="todo.status === 'completed'" class="icon completed" />
+                  <SyncOutlined v-else-if="todo.status === 'in_progress'" class="icon in-progress" spin />
+                  <ClockCircleOutlined v-else-if="todo.status === 'pending'" class="icon pending" />
+                  <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" class="icon cancelled" />
+                  <QuestionCircleOutlined v-else class="icon unknown" />
+                </div>
                 <span class="todo-text">{{ todo.content }}</span>
               </div>
             </div>
@@ -110,6 +106,13 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Download } from 'lucide-vue-next';
+import { 
+  CheckCircleOutlined, 
+  SyncOutlined, 
+  ClockCircleOutlined, 
+  CloseCircleOutlined,
+  QuestionCircleOutlined
+} from '@ant-design/icons-vue'
 
 const props = defineProps({
   visible: {
@@ -367,59 +370,19 @@ const emitRefresh = () => {
 
 .todo-status {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-top: 2px;
-  border-radius: 50%;
-  transition: all 0.15s ease;
-
+  
   .icon {
-    width: 14px;
-    height: 14px;
-    transition: all 0.15s ease;
-  }
-
-  .spinning {
-    animation: spin 1.5s linear infinite;
-    stroke-dasharray: 31.416;
-    stroke-dashoffset: 0;
-    animation: spin 1.5s linear infinite;
-  }
-
-  &.completed {
-    background: var(--color-success-50);
-    color: var(--color-success-700);
-
-    .icon {
-      transform: scale(1.1);
-    }
-  }
-
-  &.in_progress {
-    background: var(--color-warning-50);
-    color: var(--color-warning-700);
-  }
-
-  &.pending {
-    background: var(--gray-100);
-    color: var(--gray-500);
-  }
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-    stroke-dashoffset: 0;
-  }
-  50% {
-    stroke-dashoffset: 15.708;
-  }
-  100% {
-    transform: rotate(360deg);
-    stroke-dashoffset: 0;
+    font-size: 16px;
+    
+    &.completed { color: #52c41a; }
+    &.in-progress { color: #1890ff; }
+    &.pending { color: #faad14; }
+    &.cancelled { color: #ff4d4f; }
+    &.unknown { color: var(--gray-400); }
   }
 }
 
