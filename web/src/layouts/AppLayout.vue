@@ -94,6 +94,8 @@ onMounted(async () => {
   getRemoteConfig()
   getRemoteDatabase()
   fetchGithubStars() // Fetch GitHub stars on mount
+  // 预加载任务数据，确保任务中心打开时有内容
+  taskerStore.loadTasks()
 })
 
 // 打印当前页面的路由信息，使用 vue3 的 setup composition API

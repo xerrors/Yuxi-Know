@@ -47,7 +47,7 @@
             <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
               RAG评估
               <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
-                <InfoCircleOutlined style="margin-left: 4px;" />
+                <Info :size="14" style="margin-left: 4px; vertical-align: middle;" />
               </a-tooltip>
             </span>
           </template>
@@ -62,7 +62,7 @@
             <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
               评估基准
               <a-tooltip v-if="!isEvaluationSupported" title="仅支持 Milvus 类型的知识库">
-                <InfoCircleOutlined style="margin-left: 4px;" />
+                <Info :size="14" style="margin-left: 4px; vertical-align: middle;" />
               </a-tooltip>
             </span>
           </template>
@@ -93,7 +93,7 @@ import { onMounted, reactive, ref, watch, onUnmounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
 import { useTaskerStore } from '@/stores/tasker';
-import { InfoCircleOutlined } from '@ant-design/icons-vue';
+import { Info } from 'lucide-vue-next';
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';

@@ -48,23 +48,52 @@
             </a-tag>
           </div>
 
-          <!-- 卡片内容：消息内容和对话信息 -->
+          <!-- 卡片内容：对话信息、消息内容和反馈原因 -->
           <div class="card-content">
-            <div class="message-section">
-              <div class="message-content">{{ feedback.message_content }}</div>
-            </div>
-
-            <div class="conversation-section">
+            <!-- 对话标题 -->
+            <div class="conversation-section" v-if="feedback.conversation_title">
               <div class="conversation-info">
                 <div class="info-item">
+                  <span
+                    class="conversation-title"
+                    :class="{ 'collapsed': !expandedStates.get(`${feedback.id}-conversation`) }"
+                  >
+                    标题：{{ feedback.conversation_title }}
+                  </span>
+                  <a-button
+                    v-if="shouldShowConversationExpandButton(feedback.conversation_title)"
+                    type="link"
+                    size="small"
+                    @click="toggleConversationExpand(feedback.id)"
+                    class="expand-button-inline"
+                  >
+                    {{ expandedStates.get(`${feedback.id}-conversation`) ? '收起' : '展开' }}
+                  </a-button>
+                </div>
+                <div class="info-item" v-if="!props.agentId">
                   <span class="label">智能体:</span>
                   <span class="value">{{ feedback.agent_id }}</span>
                 </div>
-                <div class="info-item" v-if="feedback.conversation_title">
-                  <span class="label">对话:</span>
-                  <span class="value">{{ feedback.conversation_title }}</span>
-                </div>
               </div>
+            </div>
+
+            <!-- 消息内容 -->
+            <div class="message-section">
+              <div
+                class="message-content"
+                :class="{ 'collapsed': !expandedStates.get(`${feedback.id}-message`) }"
+              >
+                {{ feedback.message_content }}
+              </div>
+              <a-button
+                v-if="shouldShowExpandButton(feedback.message_content)"
+                type="link"
+                size="small"
+                @click="toggleExpand(feedback.id)"
+                class="expand-button"
+              >
+                {{ expandedStates.get(`${feedback.id}-message`) ? '收起' : '展开全部' }}
+              </a-button>
             </div>
 
             <!-- 反馈原因 -->
@@ -98,6 +127,14 @@ import { LikeOutlined, DislikeOutlined, ClockCircleOutlined } from '@ant-design/
 import { dashboardApi } from '@/apis/dashboard_api'
 import { formatFullDateTime } from '@/utils/time'
 
+// 常量配置
+const CONFIG = {
+  MESSAGE_MAX_LINES: 8,          // 消息最大显示行数
+  CONVERSATION_MAX_LINES: 2,     // 对话标题最大显示行数
+  CONVERSATION_MAX_CHARS: 60,    // 对话标题字符数阈值
+  AVG_CHARS_PER_LINE: 30         // 每行平均字符数（中英文混合）
+}
+
 // Props
 const props = defineProps({
   agentId: {
@@ -119,6 +156,9 @@ const feedbackOptions = [
   { label: '点踩', value: 'dislike' }
 ]
 
+// 展开状态映射（使用 Map 避免直接修改对象）
+const expandedStates = ref(new Map())
+
 // 显示模态框
 const show = () => {
   modalVisible.value = true
@@ -127,6 +167,37 @@ const show = () => {
 
 // 暴露方法给父组件
 defineExpose({ show })
+
+// 计算文本行数的辅助函数（估算）
+const estimateLines = (text) => {
+  if (!text) return 0
+  return Math.ceil(text.length / CONFIG.AVG_CHARS_PER_LINE)
+}
+
+// 判断是否显示展开按钮
+const shouldShowExpandButton = (content) => {
+  return estimateLines(content) > CONFIG.MESSAGE_MAX_LINES
+}
+
+// 判断对话标题是否需要展开按钮
+const shouldShowConversationExpandButton = (title) => {
+  if (!title) return false
+  return title.length > CONFIG.CONVERSATION_MAX_CHARS
+}
+
+// 切换展开/收起状态
+const toggleExpand = (feedbackId) => {
+  const key = `${feedbackId}-message`
+  const currentState = expandedStates.value.get(key) ?? false
+  expandedStates.value.set(key, !currentState)
+}
+
+// 切换对话标题展开/收起状态
+const toggleConversationExpand = (feedbackId) => {
+  const key = `${feedbackId}-conversation`
+  const currentState = expandedStates.value.get(key) ?? false
+  expandedStates.value.set(key, !currentState)
+}
 
 // 加载反馈列表
 const loadFeedbacks = async () => {
@@ -139,9 +210,12 @@ const loadFeedbacks = async () => {
 
     const response = await dashboardApi.getFeedbacks(params)
     feedbacks.value = response
+    // 重置展开状态
+    expandedStates.value.clear()
   } catch (error) {
     console.error('加载反馈列表失败:', error)
-    message.error('加载反馈列表失败')
+    message.error('加载反馈列表失败，请稍后重试')
+    feedbacks.value = []
   } finally {
     loadingFeedbacks.value = false
   }
@@ -268,6 +342,25 @@ watch(() => props.agentId, () => {
   line-height: 1.4;
   color: var(--gray-800);
   word-break: break-word;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.message-content.collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 8;
+  line-clamp: 8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expand-button {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+  margin-top: 8px;
+  color: var(--main-color);
 }
 
 .conversation-section {
@@ -277,7 +370,7 @@ watch(() => props.agentId, () => {
 .conversation-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 
 .info-item {
@@ -297,6 +390,41 @@ watch(() => props.agentId, () => {
     font-weight: 400;
     word-break: break-all;
   }
+
+  // 对话标题样式（独立显示）
+  .conversation-title {
+    display: block;
+    color: var(--gray-700);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    word-break: break-word;
+    transition: all 0.3s ease;
+
+    &.collapsed {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  // 包含对话标题的 info-item 改为垂直布局
+  &:has(.conversation-title) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+.expand-button-inline {
+  padding: 0;
+  height: auto;
+  font-size: 11px;
+  color: var(--main-color);
+  align-self: flex-start;
 }
 
 .reason-section {
@@ -346,33 +474,14 @@ watch(() => props.agentId, () => {
     gap: 12px;
   }
 
-  .feedback-card {
-    margin-bottom: 0;
-  }
-
   .card-header {
     padding: 10px 12px;
-    flex-direction: column;
-    align-items: flex-start;
     gap: 8px;
   }
 
   .card-content {
     padding: 12px;
     gap: 10px;
-  }
-
-  .conversation-info {
-    .info-item {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
-
-      .label {
-        min-width: auto;
-        margin-right: 0;
-      }
-    }
   }
 
   .card-footer {

@@ -718,7 +718,7 @@ async def get_all_feedbacks(
                 "rating": feedback.rating,
                 "reason": feedback.reason,
                 "created_at": feedback.created_at.isoformat(),
-                "message_content": message.content[:100] + ("..." if len(message.content) > 100 else ""),
+                "message_content": message.content,
                 "conversation_title": conversation.title,
                 "agent_id": conversation.agent_id,
             }

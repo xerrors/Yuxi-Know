@@ -18,16 +18,22 @@
         <a-button
           type="text"
           size="small"
-          :icon="h(CopyOutlined)"
           @click="copyDatabaseId"
           title="复制知识库ID"
-        />
+        >
+          <template #icon>
+            <Copy :size="14" />
+          </template>
+        </a-button>
         <a-button
           @click="showEditModal"
           type="text"
           size="small"
-          :icon="h(EditOutlined)"
-        />
+        >
+          <template #icon>
+            <Pencil :size="14" />
+          </template>
+        </a-button>
       </div>
     </div>
 
@@ -55,7 +61,10 @@
   <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
     <template #footer>
       <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0;">
-        <DeleteOutlined /> 删除数据库
+        <template #icon>
+          <Trash2 :size="16" style="vertical-align: -3px; margin-right: 4px;" />
+        </template>
+        删除数据库
       </a-button>
       <a-button key="back" @click="editModalVisible = false">取消</a-button>
       <a-button key="submit" type="primary" @click="handleEditSubmit">确定</a-button>
@@ -97,12 +106,12 @@ import { useRouter } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
 import { getKbTypeLabel, getKbTypeColor } from '@/utils/kb_utils';
 import { message } from 'ant-design-vue';
+import { LeftOutlined } from '@ant-design/icons-vue';
 import {
-  LeftOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  CopyOutlined,
-} from '@ant-design/icons-vue';
+  Pencil,
+  Trash2,
+  Copy,
+} from 'lucide-vue-next';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import AiTextarea from '@/components/AiTextarea.vue';
 
