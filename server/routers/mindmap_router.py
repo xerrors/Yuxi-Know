@@ -362,38 +362,4 @@ async def get_database_mindmap(db_id: str, current_user: User = Depends(get_admi
         raise HTTPException(status_code=500, detail=f"获取思维导图失败: {str(e)}")
 
 
-@mindmap.post("/database/{db_id}")
-async def save_database_mindmap(
-    db_id: str,
-    mindmap: dict = Body(..., description="思维导图数据"),
-    current_user: User = Depends(get_admin_user),
-):
-    """
-    保存思维导图到知识库
 
-    Args:
-        db_id: 知识库ID
-        mindmap: 思维导图数据
-
-    Returns:
-        保存结果
-    """
-    try:
-        # 检查知识库是否存在
-        db_info = knowledge_base.get_database_info(db_id)
-        if not db_info:
-            raise HTTPException(status_code=404, detail=f"知识库 {db_id} 不存在")
-
-        # TODO: 将思维导图保存到知识库元数据中
-        # 这里需要实现一个方法来更新知识库的元数据
-
-        return {
-            "message": "success",
-            "db_id": db_id,
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"保存思维导图失败: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"保存思维导图失败: {str(e)}")

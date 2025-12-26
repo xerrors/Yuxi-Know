@@ -54,3 +54,7 @@ YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
 ```
 
 **此外**，`web/src/stores/theme.js` 中也包含了主题相关的配置（需要修改 `colorPrimary`），可根据需要修改。
+
+## 修改首页
+
+首页提供了一个插槽组件 `web/src/components/ProjectOverview.vue`，可以在该组件中自定义项目介绍，当前为空文件。（借助 AI 编程可以设计出更好看的首页的）

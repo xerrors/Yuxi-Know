@@ -19,6 +19,12 @@
       ref="graphResultRef"
     />
 
+    <!-- 待办事项结果 -->
+    <TodoListResult
+      v-else-if="isTodoListResult"
+      :data="todoListData"
+    />
+
     <!-- 计算器结果 -->
     <CalculatorResult
       v-else-if="isCalculatorResult"
@@ -49,6 +55,7 @@ import WebSearchResult from './WebSearchResult.vue'
 import KnowledgeBaseResult from './KnowledgeBaseResult.vue'
 import KnowledgeGraphResult from './KnowledgeGraphResult.vue'
 import CalculatorResult from './CalculatorResult.vue'
+import TodoListResult from './TodoListResult.vue'
 import { useAgentStore } from '@/stores/agent';
 
 const agentStore = useAgentStore()
@@ -79,6 +86,60 @@ const parsedData = computed(() => {
     }
   }
   return props.resultContent
+})
+
+const todoListData = computed(() => {
+  if (props.toolName !== 'write_todos') return []
+  
+  const raw = props.resultContent
+  
+  // 1. Try from parsedData (JSON object)
+  const data = parsedData.value
+  if (data && typeof data === 'object') {
+     if (Array.isArray(data)) return data
+     if (data.todos && Array.isArray(data.todos)) return data.todos
+  }
+  
+  // 2. Try parsing string if it matches specific pattern
+  if (typeof raw === 'string') {
+    let str = raw
+    if (str.startsWith('Updated todo list to ')) {
+      str = str.replace('Updated todo list to ', '')
+    }
+    
+    // Try regex parsing for Python-like string
+    const items = []
+    // Matches {'content': '...', 'status': '...'} with escaped quotes support
+    // content might contain escaped quotes
+    const contentRegex = /'content':\s*'((?:[^'\\]|\\.)*)'/
+    const statusRegex = /'status':\s*'((?:[^'\\]|\\.)*)'/
+    
+    // Split by "}, {" roughly, or just look for objects
+    // Since it is a list of dicts, we can match individual dicts
+    const dictRegex = /\{.*?\}/g
+    const dictMatches = str.match(dictRegex)
+    
+    if (dictMatches) {
+      for (const dictStr of dictMatches) {
+        const contentMatch = dictStr.match(contentRegex)
+        const statusMatch = dictStr.match(statusRegex)
+        
+        if (contentMatch && statusMatch) {
+          items.push({
+            content: contentMatch[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"),
+            status: statusMatch[1]
+          })
+        }
+      }
+    }
+    if (items.length > 0) return items
+  }
+  
+  return []
+})
+
+const isTodoListResult = computed(() => {
+  return props.toolName === 'write_todos' && todoListData.value.length > 0
 })
 
 // 判断是否为网页搜索结果

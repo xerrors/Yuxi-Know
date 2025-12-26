@@ -221,10 +221,6 @@
           <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
             保存配置
           </a-button>
-          <!-- TODO：BUG 目前有 bug 暂时不展示 -->
-          <!-- <a-button @click="resetConfig" class="reset-btn">
-            重置
-          </a-button> -->
         </div>
       </div>
     </div>
@@ -424,6 +420,10 @@ const getToolNameById = (toolId) => {
 const openToolsModal = async () => {
   console.log("availableTools.value", availableTools.value)
   try {
+    // 强制刷新智能体详情以获取最新工具列表
+    if (selectedAgentId.value) {
+      await agentStore.fetchAgentDetail(selectedAgentId.value, true);
+    }
     selectedTools.value = [...(agentConfig.value?.tools || [])];
     toolsModalOpen.value = true;
   } catch (error) {

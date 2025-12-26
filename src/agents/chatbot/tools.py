@@ -6,7 +6,6 @@ import requests
 from langchain.tools import tool
 
 from src.agents.common import get_buildin_tools
-from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 
@@ -52,5 +51,4 @@ def get_tools() -> list[Any]:
     """获取所有可运行的工具（给大模型使用）"""
     tools = get_buildin_tools()
     tools.append(text_to_img_demo)
-    tools.extend(get_mysql_tools())
     return tools

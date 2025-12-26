@@ -49,18 +49,6 @@ export const mindmapApi = {
    */
   getByDatabase: async (dbId) => {
     return apiAdminGet(`/api/mindmap/database/${dbId}`)
-  },
-
-  /**
-   * 保存思维导图到知识库
-   * @param {string} dbId - 知识库ID  
-   * @param {Object} mindmapData - 思维导图数据
-   * @returns {Promise} - 保存结果
-   */
-  saveToDatabase: async (dbId, mindmapData) => {
-    return apiAdminPost(`/api/mindmap/database/${dbId}`, {
-      mindmap: mindmapData
-    })
   }
 }
 

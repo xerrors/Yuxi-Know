@@ -107,10 +107,14 @@ class BaseContext:
                     # 提取 Annotated 的元数据
                     template_metadata = cls._extract_template_metadata(field_type)
 
+                    options = f.metadata.get("options", [])
+                    if callable(options):
+                        options = options()
+
                     configurable_items[f.name] = {
                         "type": type_name,
                         "name": f.metadata.get("name", f.name),
-                        "options": f.metadata.get("options", []),
+                        "options": options,
                         "default": f.default
                         if f.default is not MISSING
                         else f.default_factory()

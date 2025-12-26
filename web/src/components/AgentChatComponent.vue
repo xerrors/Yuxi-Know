@@ -1043,7 +1043,7 @@ watch(conversations, () => {
 
 .floating-sidebar {
   position: absolute !important;
-  z-index: 100;
+  z-index: 101;
   height: 100%;
   left: 0;
   top: 0;

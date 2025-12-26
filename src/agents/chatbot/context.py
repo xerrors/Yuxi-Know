@@ -13,12 +13,16 @@ class Context(BaseContext):
         default_factory=list,
         metadata={
             "name": "工具",
-            "options": gen_tool_info(get_tools()),  # 这里的选择是所有的工具
+            "options": lambda: gen_tool_info(get_tools()),  # 这里的选择是所有的工具
             "description": "工具列表",
         },
     )
 
     mcps: list[str] = field(
         default_factory=list,
-        metadata={"name": "MCP服务器", "options": list(MCP_SERVERS.keys()), "description": "MCP服务器列表"},
+        metadata={
+            "name": "MCP服务器",
+            "options": lambda: list(MCP_SERVERS.keys()),
+            "description": "MCP服务器列表",
+        },
     )
