@@ -4,7 +4,7 @@
 <div align="center">
     <a href="https://trendshift.io/repositories/15845" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15845" alt="Yuxi-Know | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-[![Stable](https://img.shields.io/badge/stable-v0.3.0-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.3.0)
+[![Stable](https://img.shields.io/badge/stable-v0.4.0-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.0)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -14,7 +14,7 @@
 
 <br/>
 
-📄 [**文档中心**](https://xerrors.github.io/Yuxi-Know/) | 
+📄 [**文档中心**](https://xerrors.github.io/Yuxi-Know/) |
 📽️ [**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
 
 </div>
@@ -35,8 +35,8 @@
 - **[2025/12/17] v0.4.0-beta 版本发布**
   <details>
   <summary>查看详细更新日志</summary>
-  
-  
+
+
   ### 新增
   - 新增对于上传附件的智能体中间件，详见[文档](https://xerrors.github.io/Yuxi-Know/latest/advanced/agents-config.html#%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%AD%E9%97%B4%E4%BB%B6)
   - 新增多模态模型支持（当前仅支持图片），详见[文档](https://xerrors.github.io/Yuxi-Know/latest/advanced/agents-config.html#%E5%A4%9A%E6%A8%A1%E6%80%81%E5%9B%BE%E7%89%87%E6%94%AF%E6%8C%81)
@@ -53,15 +53,15 @@
   - 优化图谱可视化方式，统一图谱数据结构，统一使用基于 G6 的可视化方式，同时支持上传带属性的图谱文件，详见[文档](https://xerrors.github.io/Yuxi-Know/latest/intro/knowledge-base.html#_1-%E4%BB%A5%E4%B8%89%E5%85%83%E7%BB%84%E5%BD%A2%E5%BC%8F%E5%AF%BC%E5%85%A5)
   - 优化 DBManager / ConversationManager，支持异步操作
   - 优化 知识库详情页面，更加简洁清晰，增强文件下载功能
-  
+
   ### 修复
   - 修复重排序模型实际未生效的问题
   - 修复消息中断后消息消失的问题，并改善异常效果
   - 修复当前版本如果调用结果为空的时候，工具调用状态会一直处于调用状态，尽管调用是成功的
   - 修复检索配置实际未生效的问题
-  
+
   ### 破坏性更新
-  
+
   - 移除 Chroma 的支持，当前版本标记为移除
   - 移除模型配置预设的 TogetherAI
   </details>

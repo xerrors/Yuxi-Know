@@ -58,35 +58,29 @@ export default defineConfig({
           ]
         }
       ],
-      '/v0.3.0/': [
+      '/v0.4.0/': [
         {
           text: '简介',
           items: [
-            { text: '什么是 Yuxi-Know？', link: '/v0.3.0/intro/project-overview' },
-            { text: '快速开始', link: '/v0.3.0/intro/quick-start' },
-            { text: '模型配置', link: '/v0.3.0/intro/model-config' },
-            { text: '知识库与知识图谱', link: '/v0.3.0/intro/knowledge-base' }
+            { text: '什么是 Yuxi-Know？', link: '/v0.4.0/intro/project-overview' },
+            { text: '快速开始', link: '/v0.4.0/intro/quick-start' },
+            { text: '模型配置', link: '/v0.4.0/intro/model-config' },
+            { text: '知识库与知识图谱', link: '/v0.4.0/intro/knowledge-base' },
+            { text: '知识库评估', link: '/v0.4.0/intro/evaluation' }
           ]
         },
         {
           text: '高级配置',
           items: [
-            { text: '配置系统详解', link: '/v0.3.0/advanced/configuration' },
-            { text: '文档解析', link: '/v0.3.0/advanced/document-processing' },
-            { text: '智能体', link: '/v0.3.0/advanced/agents-config' },
-            { text: '品牌自定义', link: '/v0.3.0/advanced/branding' },
-            { text: '其他配置', link: '/v0.3.0/advanced/misc' }
-          ]
-        },
-        {
-          text: '更新日志',
-          items: [
-            { text: '版本说明 v0.3', link: '/v0.3.0/changelog/0.3-release-notes' },
-            { text: '参与贡献', link: '/v0.3.0/changelog/contributing' },
-            { text: '常见问题', link: '/v0.3.0/changelog/faq' }
+            { text: '配置系统详解', link: '/v0.4.0/advanced/configuration' },
+            { text: '文档解析', link: '/v0.4.0/advanced/document-processing' },
+            { text: '智能体', link: '/v0.4.0/advanced/agents-config' },
+            { text: '品牌自定义', link: '/v0.4.0/advanced/branding' },
+            { text: '其他配置', link: '/v0.4.0/advanced/misc' },
+            { text: '生产部署', link: '/v0.4.0/advanced/deployment' }
           ]
         }
-      ]
+      ],
     },
 
     socialLinks: [
