@@ -21,7 +21,7 @@ export default defineConfig({
         text: 'Version',
         items: [
           { text: 'Latest (开发版)', link: '/latest/intro/quick-start' },
-          { text: 'v0.3.0 (稳定版)', link: '/v0.3.0/intro/quick-start' }
+          { text: 'v0.4.0 (稳定版)', link: '/v0.4.0/intro/quick-start' }
         ]
       }
     ],
