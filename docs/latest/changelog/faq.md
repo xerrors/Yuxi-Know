@@ -66,5 +66,5 @@
   - RapidOCR 本地模型：确保 `MODEL_DIR/SWHL/RapidOCR` 下存在 `PP-OCRv4` 模型
   - MinerU/PaddleX：检查健康检查接口与 GPU/CUDA 版本
 
-- 登录失败被锁定？
+### 登录失败被锁定？
   - 多次失败会临时锁定账户，请根据提示等待后重试

@@ -13,6 +13,8 @@
 - 优化chunk逻辑，移除 QA 分割，集成到普通分块中
 - 考虑修改附件的处理逻辑，考虑使用文件系统，将附件解析后放到文件系统中，智能体按需读取，用户可以使用 @ 来引用附件，例如 @file:reports.md 相较于现在的处理逻辑感觉会更加自然一点。在此之前可能还要考虑文件系统的后端支持问题
 - skills 如何实现还需要继续调研
+- 优化 paddle 的命名，paddlex 有歧义，修改为 PP-StructureV3
+- 增加 paddle-vl 以及 deepseek-ocr 的支持
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)

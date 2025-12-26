@@ -210,7 +210,7 @@ config.reranker_names["local/reranker-model"] = RerankerInfo(
 config.save()
 ```
 
-#### 2. 启动模型服务
+#### 3. 启动模型服务
 
 ```bash
 # 启动嵌入模型

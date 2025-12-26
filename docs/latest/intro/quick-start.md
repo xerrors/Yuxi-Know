@@ -1,7 +1,7 @@
 # 快速开始指南
 
 ::: tip 提示
-除了此文档网站外，小伙伴们还可以在 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 平台查看自动生成的详细项目文档。
+除了此文档网站外，用户还可以在 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 平台查看自动生成的详细项目文档。
 :::
 
 
@@ -16,13 +16,12 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch v0.4.0-beta --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.4.0 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
-- `v0.3.0`: 稳定版本
-- `v0.4.0-beta`：最新的 Beta 测试版
+- `v0.4.0`: 稳定版本
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
