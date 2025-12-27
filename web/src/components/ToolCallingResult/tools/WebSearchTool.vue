@@ -1,57 +1,72 @@
 <template>
-  <div class="web-search-result">
-    <div class="search-header">
-      <h4><GlobalOutlined /> 网页搜索结果</h4>
-      <div class="search-meta">
-        <span class="query-text">查询: {{ data.query }}</span>
-        <span class="response-time">响应时间: {{ data.response_time }}s</span>
+  <BaseToolCall :tool-call="toolCall">
+    <template #result="{ resultContent }">
+      <div class="web-search-result">
+        <div class="search-meta">
+          <span class="query-text">查询: {{ parsedData(resultContent).query }}</span>
+          <span class="response-time">响应时间: {{ parsedData(resultContent).response_time }}s</span>
+        </div>
+
+        <div class="search-results">
+          <div
+            v-for="(result, index) in parsedData(resultContent).results"
+            :key="index"
+            class="search-result-item"
+          >
+            <div class="result-header">
+              <h5 class="result-title">
+                <a :href="result.url" target="_blank" rel="noopener noreferrer">
+                  {{ result.title }}
+                </a>
+              </h5>
+              <span class="result-score">相关度: {{ (result.score * 100).toFixed(1) }}%</span>
+            </div>
+
+            <div class="result-meta">
+              <!-- <span class="result-url">{{ result.url }}</span> -->
+              <span v-if="result.published_date" class="result-date">
+                {{ formatDate(result.published_date) }}
+              </span>
+            </div>
+
+            <div class="result-content">
+              {{ result.content }}
+            </div>
+          </div>
+        </div>
+
+        <div v-if="parsedData(resultContent).results.length === 0" class="no-results">
+          <p>未找到相关搜索结果</p>
+        </div>
       </div>
-    </div>
-
-    <div class="search-results">
-      <div
-        v-for="(result, index) in data.results"
-        :key="index"
-        class="search-result-item"
-      >
-        <div class="result-header">
-          <h5 class="result-title">
-            <a :href="result.url" target="_blank" rel="noopener noreferrer">
-              {{ result.title }}
-            </a>
-          </h5>
-          <span class="result-score">相关度: {{ (result.score * 100).toFixed(1) }}%</span>
-        </div>
-
-        <div class="result-meta">
-          <!-- <span class="result-url">{{ result.url }}</span> -->
-          <span v-if="result.published_date" class="result-date">
-            {{ formatDate(result.published_date) }}
-          </span>
-        </div>
-
-        <div class="result-content">
-          {{ result.content }}
-        </div>
-      </div>
-    </div>
-
-    <div v-if="data.results.length === 0" class="no-results">
-      <p>未找到相关搜索结果</p>
-    </div>
-  </div>
+    </template>
+  </BaseToolCall>
 </template>
 
 <script setup>
+import BaseToolCall from '../BaseToolCall.vue';
 import { GlobalOutlined } from '@ant-design/icons-vue'
 import { parseToShanghai } from '@/utils/time'
 
 const props = defineProps({
-  data: {
+  toolCall: {
     type: Object,
     required: true
   }
 })
+
+const parseData = (content) => {
+  if (typeof content === 'string') {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      return { query: '', results: [], response_time: 0 };
+    }
+  }
+  return content || { query: '', results: [], response_time: 0 };
+};
+
+const parsedData = (content) => parseData(content);
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
@@ -66,30 +81,18 @@ const formatDate = (dateString) => {
   background: var(--gray-0);
   border-radius: 8px;
 
-  .search-header {
+  .search-meta {
     padding: 12px 16px;
     background: var(--gray-25);
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--gray-600);
+    border-bottom: 1px solid var(--gray-100);
 
-    h4 {
-      margin: 0 0 6px 0;
-      color: var(--main-color);
-      font-size: 14px;
+    .query-text {
       font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .search-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: var(--gray-600);
-
-      .query-text {
-        font-weight: 500;
-        color: var(--gray-800);
-      }
+      color: var(--gray-800);
     }
   }
 

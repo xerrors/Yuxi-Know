@@ -90,15 +90,32 @@
   <!-- 文件内容 Modal -->
   <a-modal
     v-model:open="modalVisible"
-    :title="currentFilePath"
     width="80%"
     :footer="null"
     @cancel="closeModal"
   >
+    <template #title>
+      <div class="modal-header-title">
+        <span class="file-path-title">{{ currentFilePath }}</span>
+        <a-button type="text" size="small" @click="downloadFile(currentFile)" v-if="currentFile">
+          <template #icon><DownloadOutlined /></template>
+          下载
+        </a-button>
+      </div>
+    </template>
     <div class="file-content">
-      <pre v-if="Array.isArray(currentFile?.content)">{{ formatContent(currentFile.content) }}</pre>
-      <div v-else-if="typeof currentFile?.content === 'string'">{{ currentFile.content }}</div>
-      <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
+      <template v-if="isMarkdown">
+        <MdPreview
+          :modelValue="formatContent(currentFile?.content)"
+          :theme="theme"
+          previewTheme="github"
+        />
+      </template>
+      <template v-else>
+        <pre v-if="Array.isArray(currentFile?.content)">{{ formatContent(currentFile.content) }}</pre>
+        <div v-else-if="typeof currentFile?.content === 'string'">{{ currentFile.content }}</div>
+        <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
+      </template>
     </div>
   </a-modal>
 </template>
@@ -111,8 +128,12 @@ import {
   SyncOutlined, 
   ClockCircleOutlined, 
   CloseCircleOutlined,
-  QuestionCircleOutlined
+  QuestionCircleOutlined,
+  DownloadOutlined
 } from '@ant-design/icons-vue'
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css';
+import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps({
   visible: {
@@ -131,6 +152,13 @@ const activeTab = ref('todos');
 const modalVisible = ref(false);
 const currentFile = ref(null);
 const currentFilePath = ref('');
+
+const themeStore = useThemeStore();
+const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
+
+const isMarkdown = computed(() => {
+  return currentFilePath.value?.toLowerCase().endsWith('.md');
+});
 
 // 计算属性
 const visible = computed({
@@ -502,18 +530,42 @@ const emitRefresh = () => {
     }
   }
 
-  pre {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    margin: 0;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    color: var(--gray-1000);
-    background: transparent;
-  }
+      pre {
+        font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        color: var(--gray-1000);
+        background: transparent;
+      }
+  
+      :deep(.md-editor-preview-wrapper) {
+        padding: 0;
+      }
+  
+      :deep(.md-editor-preview) {
+        font-size: 14px;
+      }
+    }
+
+.modal-header-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding-right: 32px;
 }
 
+.file-path-title {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-weight: 600;
+  color: var(--gray-1000);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Modal 样式优化 - shadcn 风格 */
 :deep(.ant-modal) {

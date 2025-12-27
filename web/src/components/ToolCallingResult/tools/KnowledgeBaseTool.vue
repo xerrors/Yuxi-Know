@@ -1,120 +1,136 @@
 <template>
-  <div class="knowledge-base-result">
-    <div class="kb-header">
-      <h4><FileTextOutlined /> 知识库检索结果</h4>
-      <div class="result-summary">
-        找到 {{ data.length }} 个相关文档片段，来自 {{ fileGroups.length }} 个文件
-      </div>
-    </div>
-
-    <div class="kb-results">
-      <div
-        v-for="fileGroup in fileGroups"
-        :key="fileGroup.filename"
-        class="file-group"
-      >
-        <!-- 文件级别的头部 -->
-        <div
-          class="file-header"
-          :class="{ 'expanded': expandedFiles.has(fileGroup.filename) }"
-          @click="toggleFile(fileGroup.filename)"
-        >
-          <div class="file-info">
-            <FileOutlined />
-            <span class="file-name">{{ fileGroup.filename }}</span>
-            <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
-          </div>
-          <div class="expand-icon">
-            <DownOutlined :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
-          </div>
+  <BaseToolCall :tool-call="toolCall">
+    <template #result="{ resultContent }">
+      <div class="knowledge-base-result">
+        <div class="result-summary">
+          找到 {{ parsedData(resultContent).length }} 个相关文档片段，来自 {{ fileGroups(parsedData(resultContent)).length }} 个文件
         </div>
 
-        <!-- 展开的chunks列表 -->
-        <div
-          v-if="expandedFiles.has(fileGroup.filename)"
-          class="chunks-container"
-        >
+        <div class="kb-results">
           <div
-            v-for="(chunk, index) in fileGroup.chunks"
-            :key="chunk.id"
-            class="chunk-item"
-            :class="{ 'high-relevance': chunk.score > 0.5 }"
-            @click="showChunkDetail(chunk, index + 1)"
+            v-for="fileGroup in fileGroups(parsedData(resultContent))"
+            :key="fileGroup.filename"
+            class="file-group"
           >
-            <div class="chunk-summary">
-              <span class="chunk-index">#{{ index + 1 }}</span>
-              <div class="chunk-scores">
-                <span class="score-item">相似度 {{ (chunk.score * 100).toFixed(0) }}%</span>
-                <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
+            <!-- 文件级别的头部 -->
+            <div
+              class="file-header"
+              :class="{ 'expanded': expandedFiles.has(fileGroup.filename) }"
+              @click="toggleFile(fileGroup.filename)"
+            >
+              <div class="file-info">
+                <FileOutlined />
+                <span class="file-name">{{ fileGroup.filename }}</span>
+                <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
               </div>
-              <span class="chunk-preview">{{ getPreviewText(chunk.content) }}</span>
-              <EyeOutlined class="view-icon" />
+              <div class="expand-icon">
+                <DownOutlined :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
+              </div>
+            </div>
+
+            <!-- 展开的chunks列表 -->
+            <div
+              v-if="expandedFiles.has(fileGroup.filename)"
+              class="chunks-container"
+            >
+              <div
+                v-for="(chunk, index) in fileGroup.chunks"
+                :key="chunk.id"
+                class="chunk-item"
+                :class="{ 'high-relevance': chunk.score > 0.5 }"
+                @click="showChunkDetail(chunk, index + 1)"
+              >
+                <div class="chunk-summary">
+                  <span class="chunk-index">#{{ index + 1 }}</span>
+                  <div class="chunk-scores">
+                    <span class="score-item">相似度 {{ (chunk.score * 100).toFixed(0) }}%</span>
+                    <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
+                  </div>
+                  <span class="chunk-preview">{{ getPreviewText(chunk.content) }}</span>
+                  <EyeOutlined class="view-icon" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        <div v-if="parsedData(resultContent).length === 0" class="no-results">
+          <p>未找到相关知识库内容</p>
+        </div>
+
+        <!-- 弹窗展示chunk详细信息 -->
+        <a-modal
+          v-model:open="modalVisible"
+          :title="`文档片段 #${selectedChunk?.index} - ${selectedChunk?.data?.metadata?.source}`"
+          width="800px"
+          :footer="null"
+          class="chunk-detail-modal"
+        >
+          <div v-if="selectedChunk" class="chunk-detail">
+            <div class="detail-header">
+              <div class="detail-scores">
+                <div class="score-card">
+                  <div class="score-label">相似度分数</div>
+                  <div class="score-value-large">{{ (selectedChunk.data.score * 100).toFixed(1) }}%</div>
+                  <a-progress
+                    :percent="getPercent(selectedChunk.data.score)"
+                    :stroke-color="getScoreColor(selectedChunk.data.score)"
+                    :show-info="false"
+                    stroke-width=6
+                  />
+                </div>
+                <div v-if="selectedChunk.data.rerank_score" class="score-card">
+                  <div class="score-label">重排序分数</div>
+                  <div class="score-value-large">{{ (selectedChunk.data.rerank_score * 100).toFixed(1) }}%</div>
+                  <a-progress
+                    :percent="getPercent(selectedChunk.data.rerank_score)"
+                    :stroke-color="getScoreColor(selectedChunk.data.rerank_score)"
+                    :show-info="false"
+                    stroke-width=6
+                  />
+                </div>
+              </div>
+              <div class="detail-meta">
+                <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
+              </div>
+            </div>
+
+            <div class="detail-content">
+              <h5>文档内容</h5>
+              <div class="content-text">{{ selectedChunk.data.content }}</div>
+            </div>
+          </div>
+        </a-modal>
       </div>
-    </div>
-
-    <div v-if="data.length === 0" class="no-results">
-      <p>未找到相关知识库内容</p>
-    </div>
-
-    <!-- 弹窗展示chunk详细信息 -->
-    <a-modal
-      v-model:open="modalVisible"
-      :title="`文档片段 #${selectedChunk?.index} - ${selectedChunk?.data?.metadata?.source}`"
-      width="800px"
-      :footer="null"
-      class="chunk-detail-modal"
-    >
-      <div v-if="selectedChunk" class="chunk-detail">
-        <div class="detail-header">
-          <div class="detail-scores">
-            <div class="score-card">
-              <div class="score-label">相似度分数</div>
-              <div class="score-value-large">{{ (selectedChunk.data.score * 100).toFixed(1) }}%</div>
-              <a-progress
-                :percent="getPercent(selectedChunk.data.score)"
-                :stroke-color="getScoreColor(selectedChunk.data.score)"
-                :show-info="false"
-                stroke-width=6
-              />
-            </div>
-            <div v-if="selectedChunk.data.rerank_score" class="score-card">
-              <div class="score-label">重排序分数</div>
-              <div class="score-value-large">{{ (selectedChunk.data.rerank_score * 100).toFixed(1) }}%</div>
-              <a-progress
-                :percent="getPercent(selectedChunk.data.rerank_score)"
-                :stroke-color="getScoreColor(selectedChunk.data.rerank_score)"
-                :show-info="false"
-                stroke-width=6
-              />
-            </div>
-          </div>
-          <div class="detail-meta">
-            <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
-          </div>
-        </div>
-
-        <div class="detail-content">
-          <h5>文档内容</h5>
-          <div class="content-text">{{ selectedChunk.data.content }}</div>
-        </div>
-      </div>
-    </a-modal>
-  </div>
+    </template>
+  </BaseToolCall>
 </template>
 
 <script setup>
+import BaseToolCall from '../BaseToolCall.vue';
 import { ref, computed } from 'vue'
 import { FileTextOutlined, FileOutlined, DownOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
-  data: {
-    type: Array,
+  toolCall: {
+    type: Object,
     required: true
   }
 })
+
+const parseData = (content) => {
+  if (typeof content === 'string') {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      return [];
+    }
+  }
+  return content || [];
+};
+
+const parsedData = (content) => parseData(content);
+
 
 // 管理展开状态
 const expandedFiles = ref(new Set())
@@ -124,10 +140,10 @@ const modalVisible = ref(false)
 const selectedChunk = ref(null)
 
 // 按文件名聚合数据
-const fileGroups = computed(() => {
+const fileGroups = (data) => {
   const groups = new Map()
 
-  props.data.forEach(item => {
+  data.forEach(item => {
     const filename = item.metadata.source
     if (!groups.has(filename)) {
       groups.set(filename, {
@@ -140,7 +156,7 @@ const fileGroups = computed(() => {
 
   // 转换为数组并按文件名排序
   return Array.from(groups.values()).sort((a, b) => a.filename.localeCompare(b.filename))
-})
+}
 
 // 切换文件展开/折叠状态
 const toggleFile = (filename) => {
@@ -186,30 +202,12 @@ const getScoreColor = (score) => {
   border-radius: 8px;
   // border: 1px solid var(--gray-200);
 
-  .kb-header {
+  .result-summary {
     padding: 12px 16px;
-    // border-bottom: 1px solid var(--gray-200);
     background: var(--gray-25);
-
-    h4 {
-      margin: 0 0 4px 0;
-      color: var(--gray-800);
-      font-size: 14px;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-
-      .anticon {
-        color: var(--main-color);
-        font-size: 13px;
-      }
-    }
-
-    .result-summary {
-      font-size: 12px;
-      color: var(--gray-500);
-    }
+    font-size: 12px;
+    color: var(--gray-500);
+    border-bottom: 1px solid var(--gray-100);
   }
 
   .kb-results {

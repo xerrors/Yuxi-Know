@@ -1,27 +1,42 @@
 <template>
-  <div class="calculator-result">
-    <!-- <div class="calc-header">
-      <h4><NumberOutlined /> 计算结果</h4>
-    </div> -->
+  <BaseToolCall :tool-call="toolCall">
+    <template #result="{ resultContent }">
+      <div class="calculator-result">
+        <!-- <div class="calc-header">
+          <h4><NumberOutlined /> 计算结果</h4>
+        </div> -->
 
-    <div class="calc-display">
-      <div class="result-container">
-        <div class="result-value">{{ formatNumber(data) }}</div>
+        <div class="calc-display">
+          <div class="result-container">
+            <div class="result-value">{{ formatNumber(parsedData(resultContent)) }}</div>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
+    </template>
+  </BaseToolCall>
 </template>
 
 <script setup>
+import BaseToolCall from '../BaseToolCall.vue';
 import { NumberOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
-  data: {
-    type: Number,
+  toolCall: {
+    type: Object,
     required: true
   }
-})
+});
 
+const parseData = (content) => {
+  if (typeof content === 'string') {
+    try {
+      return JSON.parse(content);
+    } catch (error) {
+      return content;
+    }
+  }
+  return content;
+};
 
 // 方法
 const formatNumber = (num) => {
@@ -40,8 +55,6 @@ const formatNumber = (num) => {
     useGrouping: true
   }).format(num)
 }
-
-
 </script>
 
 <style lang="less" scoped>
