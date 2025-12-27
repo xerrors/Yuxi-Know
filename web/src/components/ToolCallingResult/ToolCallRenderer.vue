@@ -21,6 +21,9 @@
   <!-- 图片 -->
   <ImageTool v-else-if="isImageResult" :tool-call="toolCall" />
 
+  <!-- 任务分配 -->
+  <TaskTool v-else-if="isTaskResult" :tool-call="toolCall" />
+
   <!-- 默认展示 -->
   <BaseToolCall v-else :tool-call="toolCall" />
 </template>
@@ -36,6 +39,7 @@ import KnowledgeGraphTool from './tools/KnowledgeGraphTool.vue';
 import CalculatorTool from './tools/CalculatorTool.vue';
 import TodoListTool from './tools/TodoListTool.vue';
 import ImageTool from './tools/ImageTool.vue';
+import TaskTool from './tools/TaskTool.vue';
 
 const props = defineProps({
   toolCall: {
@@ -63,10 +67,19 @@ const parseData = (content) => {
 // 识别逻辑
 const isWebSearchResult = computed(() => {
   const name = toolName.value.toLowerCase();
-  const isWebSearchTool = name.includes('search') || name.includes('tavily') || name.includes('web');
-  if (!isWebSearchTool) return false;
-  const data = parseData(props.toolCall.tool_call_result?.content);
-  return data && typeof data === 'object' && 'results' in data && Array.isArray(data.results);
+  return name.includes('search') || name.includes('tavily') || name.includes('web');
+});
+
+const isTaskResult = computed(() => {
+  let args = props.toolCall.args || props.toolCall.function?.arguments;
+  if (typeof args === 'string') {
+    try {
+      args = JSON.parse(args);
+    } catch {
+      return false;
+    }
+  }
+  return args && typeof args === 'object' && 'subagent_type' in args;
 });
 
 const isKnowledgeBaseResult = computed(() => {

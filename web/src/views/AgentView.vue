@@ -44,10 +44,10 @@
           @open-agent-modal="openAgentModal"
           @close-config-sidebar="() => chatUIStore.isConfigSidebarOpen = false"
         >
-          <template #header-right>
+          <template #header-right="{ isMediumContainer }">
             <div type="button" class="agent-nav-btn" @click="toggleConf">
               <Settings2 size="18" class="nav-btn-icon"/>
-              <span class="text">配置</span>
+              <span class="text" :class="{ 'hide-text': isMediumContainer }">配置</span>
             </div>
             <div v-if="selectedAgentId" ref="moreButtonRef" type="button" class="agent-nav-btn" @click="toggleMoreMenu">
               <Ellipsis size="18"  class="nav-btn-icon"/>
@@ -1008,5 +1008,9 @@ const handlePreview = () => {
     font-size: 14px;
     font-weight: 500;
   }
+}
+
+.hide-text {
+  display: none;
 }
 </style>

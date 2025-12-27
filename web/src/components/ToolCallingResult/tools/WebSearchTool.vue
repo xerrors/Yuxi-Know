@@ -1,12 +1,11 @@
 <template>
-  <BaseToolCall :tool-call="toolCall">
+  <BaseToolCall :tool-call="toolCall" :hide-params="true">
+    <template #header>
+      查询：
+      <span class="keywords">"{{ query }}"</span>
+    </template>
     <template #result="{ resultContent }">
       <div class="web-search-result">
-        <div class="search-meta">
-          <span class="query-text">查询: {{ parsedData(resultContent).query }}</span>
-          <span class="response-time">响应时间: {{ parsedData(resultContent).response_time }}s</span>
-        </div>
-
         <div class="search-results">
           <div
             v-for="(result, index) in parsedData(resultContent).results"
@@ -45,8 +44,8 @@
 
 <script setup>
 import BaseToolCall from '../BaseToolCall.vue';
-import { GlobalOutlined } from '@ant-design/icons-vue'
 import { parseToShanghai } from '@/utils/time'
+import { computed } from 'vue';
 
 const props = defineProps({
   toolCall: {
@@ -67,6 +66,23 @@ const parseData = (content) => {
 };
 
 const parsedData = (content) => parseData(content);
+
+const query = computed(() => {
+  // First try to get it from result
+  const result = parsedData(props.toolCall.tool_call_result?.content);
+  if (result?.query) return result.query;
+
+  // Fallback to args
+  const args = props.toolCall.args || props.toolCall.function?.arguments;
+  if (!args) return '';
+  if (typeof args === 'object') return args.query || args.q || '';
+  try {
+    const parsed = JSON.parse(args);
+    return parsed.query || parsed.q || '';
+  } catch (e) {
+    return '';
+  }
+});
 
 const formatDate = (dateString) => {
   if (!dateString) return ''

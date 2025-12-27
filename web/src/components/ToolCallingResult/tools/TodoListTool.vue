@@ -1,9 +1,7 @@
 <template>
   <BaseToolCall :tool-call="toolCall" hide-params>
     <template #header-success="{ resultContent }">
-      <span v-if="todoListData(resultContent).length > 0">
-        {{ getHeaderDisplayContent(resultContent) }}
-      </span>
+      <span v-if="todoListData(resultContent).length > 0" v-html="getHeaderDisplayContent(resultContent)"></span>
       <span v-else>
         待办事项工具执行完成
       </span>
@@ -106,15 +104,15 @@ const getHeaderDisplayContent = (content) => {
 
   // 1. 显示 in_progress
   const inProgress = list.find(item => item.status === 'in_progress');
-  if (inProgress) return `进行中: ${inProgress.content}`;
+  if (inProgress) return `进行中：<span class="keywords">${inProgress.content}</span>`;
 
   // 2. 显示第一个 pending
   const pending = list.find(item => item.status === 'pending');
-  if (pending) return `待处理: ${pending.content}`;
+  if (pending) return `待处理：<span class="keywords">${pending.content}</span>`;
 
   // 3. 显示最后一个 (fallback)
   const last = list[list.length - 1];
-  return `更新: ${last.content}`;
+  return `更新：<span class="keywords">${last.content}</span>`;
 };
 </script>
 

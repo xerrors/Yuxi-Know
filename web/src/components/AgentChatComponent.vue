@@ -68,7 +68,7 @@
               <span v-if="hasAgentStateContent" class="text">状态</span>
             </div>
           </AgentPopover>
-          <slot name="header-right"></slot>
+          <slot name="header-right" :is-medium-container="isMediumContainer"></slot>
         </div>
       </div>
 
@@ -1043,7 +1043,7 @@ watch(conversations, () => {
 
 .floating-sidebar {
   position: absolute !important;
-  z-index: 101;
+  z-index: 1001;
   height: 100%;
   left: 0;
   top: 0;
