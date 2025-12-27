@@ -273,10 +273,41 @@ const formatResultData = (data) => {
       white-space: nowrap;
       text-overflow: ellipsis;
 
+
+      :deep(.sep-header) {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        width: 100%;
+        overflow: hidden;
+      }
+
       :deep(.keywords) {
         color: var(--main-700);
         font-weight: 600;
         font-size: 14px;
+      }
+
+      :deep(.note) {
+        font-weight: 600;
+        color: var(--main-700);
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+
+      :deep(.separator) {
+        color: var(--gray-300);
+        flex-shrink: 0;
+      }
+
+      :deep(.description) {
+        color: var(--gray-600);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+        flex: 1;
       }
 
       :deep(.tag) {

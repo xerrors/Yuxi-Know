@@ -24,6 +24,9 @@
   <!-- 任务分配 -->
   <TaskTool v-else-if="isTaskResult" :tool-call="toolCall" />
 
+  <!-- 写文件 -->
+  <WriteFileTool v-else-if="isWriteFileResult" :tool-call="toolCall" />
+
   <!-- 默认展示 -->
   <BaseToolCall v-else :tool-call="toolCall" />
 </template>
@@ -40,6 +43,7 @@ import CalculatorTool from './tools/CalculatorTool.vue';
 import TodoListTool from './tools/TodoListTool.vue';
 import ImageTool from './tools/ImageTool.vue';
 import TaskTool from './tools/TaskTool.vue';
+import WriteFileTool from './tools/WriteFileTool.vue';
 
 const props = defineProps({
   toolCall: {
@@ -119,6 +123,10 @@ const isImageResult = computed(() => {
   if (!name.includes('chart')) return false;
   const data = parseData(props.toolCall.tool_call_result?.content);
   return data && typeof data === 'string' && data.startsWith('http');
+});
+
+const isWriteFileResult = computed(() => {
+  return toolName.value === 'write_file';
 });
 
 // 处理知识图谱刷新

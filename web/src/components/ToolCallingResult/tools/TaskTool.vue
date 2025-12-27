@@ -1,7 +1,7 @@
 <template>
   <BaseToolCall :tool-call="toolCall" :hide-params="true">
     <template #header>
-      <div class="task-header">
+      <div class="sep-header">
         <span class="subagent">{{ subagentType }}</span>
         <span class="separator" v-if="shortDescription">|</span>
         <span class="description" v-if="shortDescription">{{ shortDescription }}</span>
@@ -59,7 +59,7 @@ const shortDescription = computed(() => {
 </script>
 
 <style lang="less" scoped>
-.task-header {
+.sep-header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -74,19 +74,6 @@ const shortDescription = computed(() => {
     flex-shrink: 0;
   }
 
-  .separator {
-    color: var(--gray-300);
-    flex-shrink: 0;
-  }
-
-  .description {
-    color: var(--gray-600);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-    flex: 1;
-  }
 }
 
 .task-result {

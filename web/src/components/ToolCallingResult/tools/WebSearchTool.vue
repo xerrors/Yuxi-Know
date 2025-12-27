@@ -1,8 +1,11 @@
 <template>
   <BaseToolCall :tool-call="toolCall" :hide-params="true">
     <template #header>
-      查询：
-      <span class="keywords">"{{ query }}"</span>
+      <div class="sep-header">
+        <span class="note">websearch</span>
+        <span class="separator" v-if="query">|</span>
+        <span class="description">"{{ query }}"</span>
+      </div>
     </template>
     <template #result="{ resultContent }">
       <div class="web-search-result">

@@ -1,5 +1,12 @@
 <template>
-  <BaseToolCall :tool-call="toolCall">
+  <BaseToolCall :tool-call="toolCall" :hide-params="true">
+    <template #header>
+      <div class="sep-header">
+        <span class="note">knowledgegraph</span>
+        <span class="separator" v-if="query">|</span>
+        <span class="description">{{ query }}</span>
+      </div>
+    </template>
     <template #result="{ resultContent }">
       <div class="knowledge-graph-result">
         <div class="result-summary">
@@ -56,6 +63,24 @@ const graphContainer = ref(null)
 const graphContainerRef = ref(null)
 const isVisible = ref(false)
 const isRefreshing = ref(false)
+
+const query = computed(() => {
+  const args = props.toolCall.args || props.toolCall.function?.arguments;
+  if (!args) return '';
+  let parsedArgs = args;
+  if (typeof args === 'string') {
+    try {
+      parsedArgs = JSON.parse(args);
+    } catch (e) {
+      return '';
+    }
+  }
+  // Try common keys for KG queries
+  if (typeof parsedArgs === 'object') {
+    return parsedArgs.query || parsedArgs.keywords || parsedArgs.q || parsedArgs.entities || '';
+  }
+  return '';
+});
 
 // 计算属性：解析图谱数据
 const graphData = computed(() => {

@@ -1,10 +1,11 @@
 <template>
   <BaseToolCall :tool-call="toolCall" hide-params>
-    <template #header-success="{ resultContent }">
-      <span v-if="todoListData(resultContent).length > 0" v-html="getHeaderDisplayContent(resultContent)"></span>
-      <span v-else>
-        待办事项工具执行完成
-      </span>
+    <template #header>
+      <div class="sep-header">
+        <span class="note">todo</span>
+        <span class="separator" v-if="query">|</span>
+        <span class="description">{{ query }}</span>
+      </div>
     </template>
     <template #result="{ resultContent }">
       <div class="todo-list-result">
@@ -33,6 +34,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import BaseToolCall from '../BaseToolCall.vue';
 import {
   CheckCircleOutlined,
@@ -47,6 +49,43 @@ const props = defineProps({
     type: Object,
     required: true
   }
+});
+
+const query = computed(() => {
+  // 1. Try to get status from result content (Priority)
+  const content = props.toolCall.tool_call_result?.content;
+  if (content) {
+    const list = todoListData(content);
+    if (list && list.length > 0) {
+      // 1. In Progress
+      const inProgress = list.find(item => item.status === 'in_progress');
+      if (inProgress) return `进行中: ${inProgress.content}`;
+
+      // 2. Pending
+      const pending = list.find(item => item.status === 'pending');
+      if (pending) return `待处理: ${pending.content}`;
+
+      // 3. Last item fallback
+      const last = list[list.length - 1];
+      return `更新: ${last.content}`;
+    }
+  }
+
+  // 2. Fallback to args
+  const args = props.toolCall.args || props.toolCall.function?.arguments;
+  if (!args) return '';
+  let parsedArgs = args;
+  if (typeof args === 'string') {
+    try {
+      parsedArgs = JSON.parse(args);
+    } catch (e) {
+      return '';
+    }
+  }
+  if (typeof parsedArgs === 'object') {
+    return parsedArgs.content || parsedArgs.action || parsedArgs.todo || '';
+  }
+  return '';
 });
 
 const parseData = (content) => {
@@ -96,23 +135,6 @@ const todoListData = (content) => {
     if (items.length > 0) return items;
   }
   return [];
-};
-
-const getHeaderDisplayContent = (content) => {
-  const list = todoListData(content);
-  if (!list || list.length === 0) return '';
-
-  // 1. 显示 in_progress
-  const inProgress = list.find(item => item.status === 'in_progress');
-  if (inProgress) return `进行中：<span class="keywords">${inProgress.content}</span>`;
-
-  // 2. 显示第一个 pending
-  const pending = list.find(item => item.status === 'pending');
-  if (pending) return `待处理：<span class="keywords">${pending.content}</span>`;
-
-  // 3. 显示最后一个 (fallback)
-  const last = list[list.length - 1];
-  return `更新：<span class="keywords">${last.content}</span>`;
 };
 </script>
 
