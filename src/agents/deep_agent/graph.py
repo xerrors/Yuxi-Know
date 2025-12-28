@@ -10,6 +10,7 @@ from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import context_based_model, inject_attachment_context
 from src.agents.common.tools import search
 
+from .context import DeepContext
 from .prompts import DEEP_PROMPT
 
 search_tools = [search]
@@ -57,10 +58,12 @@ def context_aware_prompt(request: ModelRequest) -> str:
 class DeepAgent(BaseAgent):
     name = "深度分析智能体"
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
+    context_schema = DeepContext
     capabilities = [
         "file_upload",
         "todo",
         "files",
+        "reload_graph",
     ]
 
     def __init__(self, **kwargs):
@@ -82,6 +85,7 @@ class DeepAgent(BaseAgent):
         context = self.context_schema.from_file(module_name=self.module_name)
 
         model = load_chat_model(context.model)
+        sub_model = load_chat_model(context.subagents_model)
         tools = await self.get_tools()
 
         # 使用 create_deep_agent 创建深度智能体
@@ -95,15 +99,14 @@ class DeepAgent(BaseAgent):
                 TodoListMiddleware(),
                 FilesystemMiddleware(),
                 SubAgentMiddleware(
-                    default_model=load_chat_model(context.model),
+                    default_model=sub_model,
                     default_tools=tools,
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
-                        context_based_model,  # 动态模型选择
                         TodoListMiddleware(),
                         FilesystemMiddleware(),
                         SummarizationMiddleware(
-                            model=model,
+                            model=sub_model,
                             trigger=("tokens", 110000),
                             keep=("messages", 10),
                             trim_tokens_to_summarize=None,

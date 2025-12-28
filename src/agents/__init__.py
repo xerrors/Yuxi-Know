@@ -20,11 +20,15 @@ class AgentManager(metaclass=SingletonMeta):
         for agent_id in self._classes.keys():
             self.get_agent(agent_id)
 
-    def get_agent(self, agent_id, reload=False, **kwargs):
+    def get_agent(self, agent_id, reload=False, reload_graph=False, **kwargs):
         # 检查是否已经创建了该 agent 的实例
         if reload or agent_id not in self._instances:
             agent_class = self._classes[agent_id]
             self._instances[agent_id] = agent_class()
+
+        # 如果仅需要重新加载 graph，则清空 graph 缓存
+        if reload_graph and agent_id in self._instances:
+            self._instances[agent_id].reload_graph()
 
         return self._instances[agent_id]
 

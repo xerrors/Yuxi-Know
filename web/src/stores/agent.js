@@ -249,13 +249,14 @@ export const useAgentStore = defineStore('agent', () => {
 
   /**
    * 保存智能体配置
+   * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
    */
-  async function saveAgentConfig(agentId = null) {
-    const targetAgentId = agentId || selectedAgentId.value
+  async function saveAgentConfig(options = {}) {
+    const targetAgentId = selectedAgentId.value
     if (!targetAgentId) return
 
     try {
-      await agentApi.saveAgentConfig(targetAgentId, agentConfig.value)
+      await agentApi.saveAgentConfig(targetAgentId, agentConfig.value, options)
       originalAgentConfig.value = { ...agentConfig.value }
     } catch (err) {
       console.error('Failed to save agent config:', err)

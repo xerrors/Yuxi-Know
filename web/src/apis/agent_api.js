@@ -126,10 +126,13 @@ export const agentApi = {
    * 保存智能体配置
    * @param {string} agentName - 智能体名称
    * @param {Object} config - 配置对象
+   * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
    * @returns {Promise} - 保存结果
    */
-  saveAgentConfig: async (agentName, config) => {
-    return apiAdminPost(`/api/chat/agent/${agentName}/config`, config)
+  saveAgentConfig: async (agentName, config, options = {}) => {
+    const queryParams = new URLSearchParams(options).toString();
+    const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '');
+    return apiAdminPost(url, config)
   },
 
   /**

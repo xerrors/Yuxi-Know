@@ -88,6 +88,7 @@ const isTaskResult = computed(() => {
 
 const isKnowledgeBaseResult = computed(() => {
   const currentTool = tool.value;
+
   if (currentTool && currentTool.metadata) {
     const metadata = currentTool.metadata;
     const hasKnowledgebaseTag = metadata.tag && metadata.tag.includes('knowledgebase');

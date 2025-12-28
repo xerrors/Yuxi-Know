@@ -55,7 +55,7 @@
                 <!-- 模型选择 -->
                 <div v-if="value.template_metadata.kind === 'llm'" class="model-selector">
                   <ModelSelectorComponent
-                    @select-model="handleModelChange"
+                    @select-model="(spec) => handleModelChange(key, spec)"
                     :model_spec="agentConfig[key] || ''"
                   />
                 </div>
@@ -219,7 +219,7 @@
       <div class="sidebar-footer" v-if="!isEmptyConfig">
         <div class="form-actions">
           <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
-            保存配置
+            {{ needsReload ? '保存配置并重新加载' : '保存配置' }}
           </a-button>
         </div>
       </div>
@@ -333,6 +333,12 @@ const isEmptyConfig = computed(() => {
   return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0;
 });
 
+const needsReload = computed(() => {
+  return selectedAgent.value &&
+         selectedAgent.value.capabilities &&
+         selectedAgent.value.capabilities.includes('reload_graph');
+});
+
 const filteredTools = computed(() => {
   const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
   if (!toolsSearchText.value) {
@@ -363,10 +369,10 @@ const getPlaceholder = (key, value) => {
   return `（默认: ${value.default}）`;
 };
 
-const handleModelChange = (spec) => {
+const handleModelChange = (key, spec) => {
   if (typeof spec !== 'string' || !spec) return;
   agentStore.updateAgentConfig({
-    model: spec
+    [key]: spec
   });
 };
 
@@ -529,7 +535,12 @@ const saveConfig = async () => {
       message.info('检测到无效配置项，已自动过滤');
     }
 
-    await agentStore.saveAgentConfig();
+    const options = {};
+    if (selectedAgent.value && selectedAgent.value.capabilities && selectedAgent.value.capabilities.includes('reload_graph')) {
+      options.reload_graph = true;
+    }
+
+    await agentStore.saveAgentConfig(options);
     message.success('配置已保存到服务器');
   } catch (error) {
     console.error('保存配置到服务器出错:', error);

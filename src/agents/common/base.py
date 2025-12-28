@@ -132,6 +132,11 @@ class BaseAgent:
             logger.error(f"获取智能体 {self.name} 历史消息出错: {e}")
             return []
 
+    def reload_graph(self):
+        """重置 graph 缓存，强制下次调用 get_graph 时重新构建"""
+        self.graph = None
+        logger.info(f"{self.name} graph 缓存已清空，将在下次调用时重新构建")
+
     @abstractmethod
     async def get_graph(self, **kwargs) -> CompiledStateGraph:
         """

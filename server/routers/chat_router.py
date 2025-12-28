@@ -3,7 +3,7 @@ import json
 import traceback
 import uuid
 
-from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from langchain.messages import AIMessageChunk, HumanMessage
 from langgraph.types import Command
@@ -849,7 +849,12 @@ async def resume_agent_chat(
 
 
 @chat.post("/agent/{agent_id}/config")
-async def save_agent_config(agent_id: str, config: dict = Body(...), current_user: User = Depends(get_required_user)):
+async def save_agent_config(
+    agent_id: str,
+    config: dict = Body(...),
+    reload_graph: bool = Query(False),
+    current_user: User = Depends(get_required_user),
+):
     """保存智能体配置到YAML文件（需要登录）"""
     try:
         # 获取Agent实例和配置类
@@ -860,6 +865,8 @@ async def save_agent_config(agent_id: str, config: dict = Body(...), current_use
         result = agent.context_schema.save_to_file(config, agent.module_name)
 
         if result:
+            if reload_graph:
+                agent_manager.get_agent(agent_id, reload_graph=True)
             return {"success": True, "message": f"智能体 {agent.name} 配置已保存"}
         else:
             raise HTTPException(status_code=500, detail="保存智能体配置失败")

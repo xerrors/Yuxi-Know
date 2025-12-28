@@ -1,6 +1,7 @@
 """Deep Agent Context - 基于BaseContext的深度分析上下文配置"""
 
 from dataclasses import dataclass, field
+from typing import Annotated
 
 from src.agents.common.context import BaseContext
 
@@ -101,4 +102,11 @@ class DeepContext(BaseContext):
     system_prompt: str = field(
         default=DEEP_PROMPT,
         metadata={"name": "系统提示词", "description": "Deep智能体的角色和行为指导"},
+    )
+    subagents_model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
+        default="siliconflow/deepseek-ai/DeepSeek-V3.2",
+        metadata={
+            "name": "Sub-agent Model",
+            "description": "The model used by sub-agents (e.g., critique-agent, research-agent).",
+        },
     )
