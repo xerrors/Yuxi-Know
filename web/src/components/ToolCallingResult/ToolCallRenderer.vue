@@ -55,7 +55,10 @@ const props = defineProps({
 const agentStore = useAgentStore();
 
 const toolName = computed(() => props.toolCall.name || props.toolCall.function?.name || '');
-const tool = computed(() => agentStore?.availableTools?.[toolName.value] || null);
+const tool = computed(() => {
+  const toolsList = agentStore?.availableTools ? Object.values(agentStore.availableTools) : [];
+  return toolsList.find(t => t.name === toolName.value) || null;
+});
 
 const parseData = (content) => {
   if (typeof content === 'string') {

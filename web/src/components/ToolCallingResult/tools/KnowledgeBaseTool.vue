@@ -76,7 +76,7 @@
                     :percent="getPercent(selectedChunk.data.score)"
                     :stroke-color="getScoreColor(selectedChunk.data.score)"
                     :show-info="false"
-                    stroke-width=6
+                    :stroke-width="6"
                   />
                 </div>
                 <div v-if="selectedChunk.data.rerank_score" class="score-card">
@@ -86,7 +86,7 @@
                     :percent="getPercent(selectedChunk.data.rerank_score)"
                     :stroke-color="getScoreColor(selectedChunk.data.rerank_score)"
                     :show-info="false"
-                    stroke-width=6
+                    :stroke-width="6"
                   />
                 </div>
               </div>

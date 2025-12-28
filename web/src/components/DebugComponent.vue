@@ -459,9 +459,10 @@ const printAgentConfig = async () => {
     }
 
     // 工具信息
+    const toolsList = agentStore.availableTools ? Object.values(agentStore.availableTools) : [];
     console.log('可用工具:', {
-      count: agentStore.availableTools.length,
-      tools: toRaw(agentStore.availableTools)
+      count: toolsList.length,
+      tools: toolsList
     });
 
     // 配置项信息（管理员可见）
