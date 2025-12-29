@@ -260,8 +260,8 @@ const state = reactive({
 
 // 语言选项（值使用英文，以保证后端/LightRAG 兼容；标签为中英文方便理解）
 const languageOptions = [
-  { label: '英语 English', value: 'English' },
   { label: '中文 Chinese', value: 'Chinese' },
+  { label: '英语 English', value: 'English' },
   { label: '日语 Japanese', value: 'Japanese' },
   { label: '韩语 Korean', value: 'Korean' },
   { label: '德语 German', value: 'German' },
@@ -280,7 +280,7 @@ const createEmptyDatabaseForm = () => ({
   kb_type: 'milvus',
   is_private: false,
   storage: '',
-  language: 'English',
+  language: 'Chinese',
   llm_info: {
     provider: '',
     model_name: ''
@@ -396,7 +396,7 @@ const getKbTypeLabel = (type) => {
   const labels = {
     lightrag: 'LightRAG',
     chroma: 'Chroma',
-    milvus: 'Milvus'
+    milvus: 'CommonRAG'
   }
   return labels[type] || type
 }

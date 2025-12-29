@@ -4,7 +4,7 @@
       <div class="sep-header">
         <span class="note">{{ operationLabel }}</span>
         <span class="separator" v-if="queryText">|</span>
-        <span class="description">"{{ queryText }}"</span>
+        <span class="description">{{ queryText }}</span>
       </div>
     </template>
     <template #result="{ resultContent }">
@@ -146,6 +146,10 @@ const args = computed(() => {
   }
 });
 
+const toolName = computed(() => {
+  return props.toolCall.name || props.toolCall.function?.name || '知识库';
+});
+
 // 获取操作类型
 const operation = computed(() => {
   return args.value.operation || 'search';
@@ -154,8 +158,8 @@ const operation = computed(() => {
 // 获取操作标签
 const operationLabel = computed(() => {
   const labels = {
-    search: `${props.toolCall.name} 搜索`,
-    get_mindmap: props.toolCall.name
+    search: `${toolName.value} 搜索`,
+    get_mindmap: toolName.value
   };
   return labels[operation.value] || operation.value;
 });

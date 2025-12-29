@@ -2,9 +2,9 @@
   <BaseToolCall :tool-call="toolCall" :hide-params="true">
     <template #header>
       <div class="sep-header">
-        <span class="note">websearch</span>
+        <span class="note">网络搜索</span>
         <span class="separator" v-if="query">|</span>
-        <span class="description">"{{ query }}"</span>
+        <span class="description">{{ query }}</span>
       </div>
     </template>
     <template #result="{ resultContent }">
