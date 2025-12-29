@@ -393,6 +393,7 @@ const toggleCollapse = () => {
         .more-btn {
           color: var(--gray-600);
           background-color: transparent !important;
+          padding: 0;
           &:hover {
             color: var(--main-500);
             background-color: transparent !important;

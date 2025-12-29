@@ -1,5 +1,5 @@
 <template>
-  <BaseToolCall :tool-call="toolCall" :hide-params="true">
+  <BaseToolCall :tool-call="toolCall">
     <template #header>
       <div class="sep-header">
         <span class="subagent">{{ subagentType }}</span>
@@ -8,7 +8,12 @@
       </div>
     </template>
 
-    <template #result="{ resultContent }">      <div class="task-result">
+    <template #params>
+      <div v-if="description" class="task-description">{{ description }}</div>
+    </template>
+
+    <template #result="{ resultContent }">
+      <div class="task-result">
         <MdPreview
           :modelValue="String(resultContent)"
           :theme="theme"
@@ -74,6 +79,14 @@ const shortDescription = computed(() => {
     flex-shrink: 0;
   }
 
+}
+
+.task-description {
+  padding: 12px;
+  background: var(--gray-100);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--gray-800);
 }
 
 .task-result {

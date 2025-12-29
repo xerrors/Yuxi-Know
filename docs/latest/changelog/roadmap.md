@@ -17,6 +17,7 @@
 - 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
 - RAG 检索的时候，支持限定文件类型
 - 将现有的 Milvus 的命名调整为通用 RAG
+- 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
