@@ -247,7 +247,7 @@ class ConversationManager:
             select(Message)
             .options(
                 selectinload(Message.tool_calls),  # Preload tool calls
-                selectinload(Message.feedbacks),   # Preload feedbacks for UI state
+                selectinload(Message.feedbacks),  # Preload feedbacks for UI state
             )
             .filter(Message.conversation_id == conversation_id)
             .order_by(Message.created_at.asc())

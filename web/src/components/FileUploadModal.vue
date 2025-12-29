@@ -302,7 +302,8 @@ const ocrHealthStatus = ref({
   onnx_rapid_ocr: { status: 'unknown', message: '' },
   mineru_ocr: { status: 'unknown', message: '' },
   mineru_official: { status: 'unknown', message: '' },
-  paddlex_ocr: { status: 'unknown', message: '' }
+  paddlex_ocr: { status: 'unknown', message: '' },
+  deepseek_ocr: { status: 'unknown', message: '' }
 });
 
 // OCR健康检查状态
@@ -423,6 +424,12 @@ const enableOcrOptions = computed(() => [
     title: 'PaddleX OCR',
     disabled: ocrHealthStatus.value?.paddlex_ocr?.status === 'unavailable' || ocrHealthStatus.value?.paddlex_ocr?.status === 'error'
   },
+  {
+    value: 'deepseek_ocr',
+    label: getDeepSeekOcrLabel(),
+    title: 'DeepSeek OCR (SiliconFlow)',
+    disabled: ocrHealthStatus.value?.deepseek_ocr?.status === 'unavailable' || ocrHealthStatus.value?.deepseek_ocr?.status === 'error'
+  },
 ]);
 
 // 获取当前选中OCR服务的状态
@@ -436,6 +443,8 @@ const selectedOcrStatus = computed(() => {
       return ocrHealthStatus.value?.mineru_official?.status || 'unknown';
     case 'paddlex_ocr':
       return ocrHealthStatus.value?.paddlex_ocr?.status || 'unknown';
+    case 'deepseek_ocr':
+      return ocrHealthStatus.value?.deepseek_ocr?.status || 'unknown';
     default:
       return null;
   }
@@ -452,61 +461,35 @@ const selectedOcrMessage = computed(() => {
       return ocrHealthStatus.value?.mineru_official?.message || '';
     case 'paddlex_ocr':
       return ocrHealthStatus.value?.paddlex_ocr?.message || '';
+    case 'deepseek_ocr':
+      return ocrHealthStatus.value?.deepseek_ocr?.message || '';
     default:
       return '';
   }
 });
 
-// OCR选项标签生成函数
-const getRapidOcrLabel = () => {
-  const status = ocrHealthStatus.value?.onnx_rapid_ocr?.status || 'unknown';
-  const statusIcons = {
-    'healthy': '✅',
-    'unavailable': '❌',
-    'error': '⚠️',
-    'unknown': '❓'
-  };
-  return `${statusIcons[status] || '❓'} RapidOCR (ONNX)`;
+// OCR服务状态图标映射
+const STATUS_ICONS = {
+  'healthy': '✅',
+  'unavailable': '❌',
+  'unhealthy': '⚠️',
+  'timeout': '⏰',
+  'error': '⚠️',
+  'unknown': '❓'
 };
 
-const getMinerULabel = () => {
-  const status = ocrHealthStatus.value?.mineru_ocr?.status || 'unknown';
-  const statusIcons = {
-    'healthy': '✅',
-    'unavailable': '❌',
-    'unhealthy': '⚠️',
-    'timeout': '⏰',
-    'error': '⚠️',
-    'unknown': '❓'
-  };
-  return `${statusIcons[status] || '❓'} MinerU OCR`;
+// OCR选项标签生成通用函数
+const getOcrLabel = (serviceKey, displayName) => {
+  const status = ocrHealthStatus.value?.[serviceKey]?.status || 'unknown';
+  return `${STATUS_ICONS[status] || '❓'} ${displayName}`;
 };
 
-const getMinerUOfficialLabel = () => {
-  const status = ocrHealthStatus.value?.mineru_official?.status || 'unknown';
-  const statusIcons = {
-    'healthy': '✅',
-    'unavailable': '❌',
-    'unhealthy': '⚠️',
-    'timeout': '⏰',
-    'error': '⚠️',
-    'unknown': '❓'
-  };
-  return `${statusIcons[status] || '❓'} MinerU Official API`;
-};
-
-const getPaddleXLabel = () => {
-  const status = ocrHealthStatus.value?.paddlex_ocr?.status || 'unknown';
-  const statusIcons = {
-    'healthy': '✅',
-    'unavailable': '❌',
-    'unhealthy': '⚠️',
-    'timeout': '⏰',
-    'error': '⚠️',
-    'unknown': '❓'
-  };
-  return `${statusIcons[status] || '❓'} PaddleX OCR`;
-};
+// 兼容性包装器
+const getRapidOcrLabel = () => getOcrLabel('onnx_rapid_ocr', 'RapidOCR (ONNX)');
+const getMinerULabel = () => getOcrLabel('mineru_ocr', 'MinerU OCR');
+const getMinerUOfficialLabel = () => getOcrLabel('mineru_official', 'MinerU Official API');
+const getPaddleXLabel = () => getOcrLabel('paddlex_ocr', 'PaddleX OCR');
+const getDeepSeekOcrLabel = () => getOcrLabel('deepseek_ocr', 'DeepSeek OCR');
 
 // 验证OCR服务可用性
 const validateOcrService = () => {

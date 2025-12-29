@@ -360,6 +360,3 @@ async def get_database_mindmap(db_id: str, current_user: User = Depends(get_admi
     except Exception as e:
         logger.error(f"获取知识库思维导图失败: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取思维导图失败: {str(e)}")
-
-
-
