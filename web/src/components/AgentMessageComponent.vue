@@ -128,7 +128,22 @@ const isCopied = ref(false);
 
 const copyToClipboard = async (text) => {
   try {
-    await navigator.clipboard.writeText(text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // 降级处理：使用传统的 execCommand 方法
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (!successful) throw new Error('execCommand failed');
+    }
     isCopied.value = true;
     setTimeout(() => {
       isCopied.value = false;
@@ -662,11 +677,50 @@ const parsedData = computed(() => {
 
   cite {
     font-size: 12px;
-    color: var(--gray-700);
+    color: var(--gray-800);
     font-style: normal;
     background-color: var(--gray-200);
     border-radius: 4px;
     outline: 2px solid var(--gray-200);
+    padding: 0rem 0.25rem;
+    margin-left: 4px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+
+    &:hover::after {
+      content: attr(source);
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      background-color: var(--gray-900);
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.5;
+      border-radius: 6px;
+      min-width: 200px;
+      max-width: 400px;
+      width: max-content;
+      white-space: normal;
+      word-break: break-word;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      pointer-events: none;
+      text-align: center;
+    }
+
+    &:hover::before {
+      content: '';
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--gray-900);
+      z-index: 1000;
+    }
   }
 
   a {
