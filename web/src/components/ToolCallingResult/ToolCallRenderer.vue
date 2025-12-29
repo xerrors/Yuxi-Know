@@ -97,8 +97,9 @@ const isKnowledgeBaseResult = computed(() => {
     const hasKnowledgebaseTag = metadata.tag && metadata.tag.includes('knowledgebase');
     const isNotLightrag = metadata.kb_type !== 'lightrag';
     if (hasKnowledgebaseTag && isNotLightrag) {
-      const data = parseData(props.toolCall.tool_call_result?.content);
-      return Array.isArray(data) && data.length > 0;
+      // const data = parseData(props.toolCall.tool_call_result?.content);
+      // return Array.isArray(data) && data.length > 0;
+      return true
     }
   }
   return false;

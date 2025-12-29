@@ -1,7 +1,22 @@
 <template>
-  <BaseToolCall :tool-call="toolCall">
+  <BaseToolCall :tool-call="toolCall" :hide-params="true">
+    <template #header>
+      <div class="sep-header">
+        <span class="note">{{ operationLabel }}</span>
+        <span class="separator" v-if="queryText">|</span>
+        <span class="description">"{{ queryText }}"</span>
+      </div>
+    </template>
     <template #result="{ resultContent }">
-      <div class="knowledge-base-result">
+      <!-- get_mindmap 操作：纯文本显示 -->
+      <div v-if="operation === 'get_mindmap'" class="knowledge-base-result">
+        <div class="mindmap-result">
+          <pre class="mindmap-content">{{ formatMindmapResult(resultContent) }}</pre>
+        </div>
+      </div>
+
+      <!-- search 操作：原有的文件分组显示 -->
+      <div v-else class="knowledge-base-result">
         <div class="result-summary">
           找到 {{ parsedData(resultContent).length }} 个相关文档片段，来自 {{ fileGroups(parsedData(resultContent)).length }} 个文件
         </div>
@@ -109,7 +124,7 @@
 <script setup>
 import BaseToolCall from '../BaseToolCall.vue';
 import { ref, computed } from 'vue'
-import { FileTextOutlined, FileOutlined, DownOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
+import { FileOutlined, DownOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   toolCall: {
@@ -117,6 +132,38 @@ const props = defineProps({
     required: true
   }
 })
+
+// 解析参数
+const args = computed(() => {
+  const args = props.toolCall.args || props.toolCall.function?.arguments;
+  if (!args) return {};
+
+  if (typeof args === 'object') return args;
+  try {
+    return JSON.parse(args);
+  } catch (e) {
+    return {};
+  }
+});
+
+// 获取操作类型
+const operation = computed(() => {
+  return args.value.operation || 'search';
+});
+
+// 获取操作标签
+const operationLabel = computed(() => {
+  const labels = {
+    search: `${props.toolCall.name} 搜索`,
+    get_mindmap: props.toolCall.name
+  };
+  return labels[operation.value] || operation.value;
+});
+
+// 获取查询文本
+const queryText = computed(() => {
+  return args.value.query_text || '';
+});
 
 const parseData = (content) => {
   if (typeof content === 'string') {
@@ -194,6 +241,17 @@ const getScoreColor = (score) => {
   if (score >= 0.5) return '#faad14'  // 橙色 - 中等相关性
   return '#ff4d4f'  // 红色 - 低相关性
 }
+
+// 格式化思维导图结果
+const formatMindmapResult = (content) => {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (typeof content === 'object') {
+    return JSON.stringify(content, null, 2);
+  }
+  return String(content);
+}
 </script>
 
 <style lang="less" scoped>
@@ -201,6 +259,22 @@ const getScoreColor = (score) => {
   background: var(--gray-0);
   border-radius: 8px;
   // border: 1px solid var(--gray-200);
+
+  .mindmap-result {
+    padding: 12px 16px;
+    max-height: 300px;
+    overflow-y: auto;
+
+    .mindmap-content {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--gray-700);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+  }
 
   .result-summary {
     padding: 12px 16px;
