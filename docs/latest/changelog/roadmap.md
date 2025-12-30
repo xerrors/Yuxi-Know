@@ -2,7 +2,7 @@
 
 路线图可能会经常变更，如果有强烈的建议，可以在 [issue](https://github.com/xerrors/Yuxi-Know/issues) 中提。
 
-## v0.4
+v0.5
 
 ### 看板
 
@@ -27,6 +27,8 @@
 - 目前的知识库的图片存在公开访问风险
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini）
 - 首页加载的问题
+
+## v0.4
 
 ### 新增
 - 新增对于上传附件的智能体中间件，详见[文档](https://xerrors.github.io/Yuxi-Know/latest/advanced/agents-config.html#%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%AD%E9%97%B4%E4%BB%B6)

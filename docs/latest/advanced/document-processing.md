@@ -5,7 +5,7 @@
 - **RapidOCR**: CPU 友好，无需 GPU，适合基础文字识别
 - **MinerU**: 本地化高精度 VLM 解析，适合复杂 PDF 和表格文档
 - **MinerU Official**: 官方云服务 API，无需本地部署，开箱即用
-- **PaddleX**: 结构化解析，适合表格、票据等特殊格式
+- **PP-StructureV3**: 结构化解析，适合表格、票据等特殊格式
 - **DeepSeek OCR**: 基于 SiliconFlow API 的 DeepSeek OCR OCR 服务
 
 ## 支持的文件类型
@@ -83,17 +83,17 @@ MINERU_API_KEY="your-api-key-here"
 
 然后使用 `docker compose up api -d` 重启后端服务。
 
-### 4. 结构化解析 (PaddleX)
+### 4. 结构化解析 (PP-StructureV3)
 
 ```bash
-# 需要 GPU，启动 PaddleX 服务
+# 需要 GPU，启动 PP-StructureV3 服务
 docker compose up -d paddlex
 
 # 启动主服务
 docker compose up -d api
 ```
 
-### 5. 智能云端 OCR (DeepSeek OCR)
+### 5. DeepSeek OCR (SiliconFlow)
 
 DeepSeek OCR 基于 SiliconFlow API，提供智能文档理解和 Markdown 格式输出。
 
@@ -121,7 +121,7 @@ docker compose restart api
 | **RapidOCR** | 基础文字识别 | CPU | 速度快，资源占用低 |
 | **MinerU** | 复杂 PDF、表格、公式 | GPU | 精度高，版面分析好 |
 | **MinerU Official** | 复杂文档解析（云服务） | 无特殊要求 | 官方云服务，开箱即用，有 API 配额 |
-| **PaddleX** | 表格、票据、结构化文档 | GPU | 专业版面解析 |
+| **PP-StructureV3** | 表格、票据、结构化文档 | GPU | 专业版面解析 |
 | **DeepSeek OCR** | 智能文档理解和 Markdown 输出 | 无特殊要求 | 云端服务 |
 
 ## 参数说明
@@ -134,12 +134,12 @@ docker compose restart api
 - `onnx_rapid_ocr`: RapidOCR 处理
 - `mineru_ocr`: MinerU HTTP API 处理
 - `mineru_official`: MinerU 官方云服务 API 处理
-- `paddlex_ocr`: PaddleX 处理
+- `paddlex_ocr`: PP-StructureV3 处理
 - `deepseek_ocr`: DeepSeek OCR（SiliconFlow API）处理
 
 ### 注意事项
 - **图片文件必须启用 OCR**，否则无法提取内容
-- MinerU 和 PaddleX 需要 GPU 支持
+- MinerU 和 PP-StructureV3 需要 GPU 支持
 - MinerU Official 需要设置 `MINERU_API_KEY` 环境变量
 - DeepSeek OCR 需要设置 `SILICONFLOW_API_KEY` 环境变量
 - RapidOCR 适合 CPU 环境和基础识别需求

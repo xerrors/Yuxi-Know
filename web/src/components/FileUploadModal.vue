@@ -421,7 +421,7 @@ const enableOcrOptions = computed(() => [
   {
     value: 'paddlex_ocr',
     label: getPaddleXLabel(),
-    title: 'PaddleX OCR',
+    title: 'PP-StructureV3',
     disabled: ocrHealthStatus.value?.paddlex_ocr?.status === 'unavailable' || ocrHealthStatus.value?.paddlex_ocr?.status === 'error'
   },
   {
@@ -488,7 +488,7 @@ const getOcrLabel = (serviceKey, displayName) => {
 const getRapidOcrLabel = () => getOcrLabel('onnx_rapid_ocr', 'RapidOCR (ONNX)');
 const getMinerULabel = () => getOcrLabel('mineru_ocr', 'MinerU OCR');
 const getMinerUOfficialLabel = () => getOcrLabel('mineru_official', 'MinerU Official API');
-const getPaddleXLabel = () => getOcrLabel('paddlex_ocr', 'PaddleX OCR');
+const getPaddleXLabel = () => getOcrLabel('paddlex_ocr', 'PP-StructureV3');
 const getDeepSeekOcrLabel = () => getOcrLabel('deepseek_ocr', 'DeepSeek OCR');
 
 // 验证OCR服务可用性
@@ -707,7 +707,7 @@ const chunkData = async () => {
 
     if (hasImageFiles && chunkParams.value.enable_ocr === 'disable') {
       message.error({
-        content: '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PaddleX) 或移除图片文件。',
+        content: '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PP-StructureV3) 或移除图片文件。',
         duration: 5,
       });
       return;

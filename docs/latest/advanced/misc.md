@@ -43,7 +43,7 @@
 | **9000/9001** | MinIO | milvus-minio | 对象存储 |
 | **19530/9091** | Milvus | milvus | 向量数据库 |
 | **30000** | MinerU | mineru | PDF 解析（可选）|
-| **8080** | PaddleX | paddlex-ocr | OCR 服务（可选）|
+| **8080** | PP-StructureV3 | paddlex-ocr | OCR 服务（可选）|
 | **8081** | vLLM | - | 本地推理（可选）|
 
 ::: tip 端口访问

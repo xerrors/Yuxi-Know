@@ -1,7 +1,7 @@
 """
-PaddleX 文档解析器
+PP-StructureV3 文档解析器
 
-使用 PaddleX PP-StructureV3 进行文档版面解析和内容提取
+使用 PP-StructureV3 进行文档版面解析和内容提取
 """
 
 import base64
@@ -17,7 +17,7 @@ from src.utils import logger
 
 
 class PaddleXDocumentParser(BaseDocumentProcessor):
-    """PaddleX 文档解析器 - 使用 PP-StructureV3 进行版面解析"""
+    """PP-StructureV3 文档解析器 - 使用 PP-StructureV3 进行版面解析"""
 
     def __init__(self, server_url: str | None = None):
         self.server_url = server_url or os.getenv("PADDLEX_URI") or "http://localhost:8080"
@@ -28,7 +28,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
         return "paddlex_ocr"
 
     def get_supported_extensions(self) -> list[str]:
-        """PaddleX 支持 PDF 和多种图像格式"""
+        """PP-StructureV3 支持 PDF 和多种图像格式"""
         return [".pdf", ".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]
 
     def _encode_file_to_base64(self, file_path: str) -> str:
@@ -64,7 +64,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
         use_seal_recognition: bool = False,
         **kwargs,
     ) -> dict[str, Any]:
-        """调用PaddleX版面解析API"""
+        """调用PP-StructureV3版面解析API"""
         # 处理文件输入
         processed_file_input = self._process_file_input(file_input)
         payload = {"file": processed_file_input}
@@ -92,7 +92,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
         if response.status_code == 200:
             return response.json()
         else:
-            error_msg = f"PaddleX API请求失败: {response.status_code}"
+            error_msg = f"PP-StructureV3 API请求失败: {response.status_code}"
             try:
                 error_result = response.json()
                 raise DocumentParserException(f"{error_msg}: {error_result}", self.get_service_name(), "api_error")
@@ -157,45 +157,45 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
         return parsed_result
 
     def check_health(self) -> dict:
-        """检查 PaddleX 服务健康状态"""
+        """检查 PP-StructureV3 服务健康状态"""
         try:
             response = requests.get(f"{self.base_url}/health", timeout=5)
 
             if response.status_code == 200:
                 return {
                     "status": "healthy",
-                    "message": "PaddleX 服务运行正常",
+                    "message": "PP-StructureV3 服务运行正常",
                     "details": {"server_url": self.server_url},
                 }
             else:
                 return {
                     "status": "unhealthy",
-                    "message": f"PaddleX 服务响应异常: {response.status_code}",
+                    "message": f"PP-StructureV3 服务响应异常: {response.status_code}",
                     "details": {"server_url": self.server_url},
                 }
 
         except requests.exceptions.ConnectionError:
             return {
                 "status": "unavailable",
-                "message": "PaddleX 服务无法连接,请检查服务是否启动",
+                "message": "PP-StructureV3 服务无法连接,请检查服务是否启动",
                 "details": {"server_url": self.server_url},
             }
         except requests.exceptions.Timeout:
             return {
                 "status": "timeout",
-                "message": "PaddleX 服务连接超时",
+                "message": "PP-StructureV3 服务连接超时",
                 "details": {"server_url": self.server_url},
             }
         except Exception as e:
             return {
                 "status": "error",
-                "message": f"PaddleX 健康检查失败: {str(e)}",
+                "message": f"PP-StructureV3 健康检查失败: {str(e)}",
                 "details": {"server_url": self.server_url, "error": str(e)},
             }
 
     def process_file(self, file_path: str, params: dict | None = None) -> str:
         """
-        使用 PaddleX 处理文档
+        使用 PP-StructureV3 处理文档
 
         Args:
             file_path: 文件路径
@@ -220,7 +220,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
         health = self.check_health()
         if health["status"] != "healthy":
             raise DocumentParserException(
-                f"PaddleX 服务不可用: {health['message']}", self.get_service_name(), health["status"]
+                f"PP-StructureV3 服务不可用: {health['message']}", self.get_service_name(), health["status"]
             )
 
         try:
@@ -230,7 +230,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             # 判断文件类型
             file_type = 0 if file_ext == ".pdf" else 1
 
-            logger.info(f"PaddleX 开始处理: {os.path.basename(file_path)}")
+            logger.info(f"PP-StructureV3 开始处理: {os.path.basename(file_path)}")
 
             # 调用API
             api_result = self._call_layout_api(
@@ -244,7 +244,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             # 检查API调用是否成功
             if api_result.get("errorCode") != 0:
                 raise DocumentParserException(
-                    f"PaddleX API错误: {api_result.get('errorMsg', '未知错误')}", self.get_service_name(), "api_error"
+                    f"PP-StructureV3 API错误: {api_result.get('errorMsg', '未知错误')}", self.get_service_name(), "api_error"
                 )
 
             # 解析结果
@@ -252,7 +252,7 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             text = result.get("full_text", "")
 
             processing_time = time.time() - start_time
-            logger.info(f"PaddleX 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)")
+            logger.info(f"PP-StructureV3 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)")
 
             # 记录统计信息
             summary = result.get("summary", {})
@@ -265,6 +265,6 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             raise
         except Exception as e:
             processing_time = time.time() - start_time
-            error_msg = f"PaddleX 处理失败: {str(e)}"
+            error_msg = f"PP-StructureV3 处理失败: {str(e)}"
             logger.error(f"{error_msg} ({processing_time:.2f}s)")
             raise DocumentParserException(error_msg, self.get_service_name(), "processing_failed")

@@ -1292,10 +1292,34 @@ watch(conversations, () => {
 
   .generating-text {
     margin-left: 12px;
-    color: var(--gray-700);
     font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.025em;
+    /* 恢复灰色调：深灰 -> 亮灰(高光) -> 深灰 */
+    background: linear-gradient(
+      90deg,
+      var(--gray-700) 0%,
+      var(--gray-700) 40%,
+      var(--gray-300) 45%,
+      var(--gray-200) 50%,
+      var(--gray-300) 55%,
+      var(--gray-700) 60%,
+      var(--gray-700) 100%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: waveFlash 2s linear infinite;
+  }
+}
+
+@keyframes waveFlash {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
   }
 }
 
