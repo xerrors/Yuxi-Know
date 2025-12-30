@@ -122,6 +122,11 @@ class KnowledgeRetrieverModel(BaseModel):
     )
 
 
+class CommonKnowledgeRetriever(KnowledgeRetrieverModel):
+    """Common knowledge retriever model."""
+    file_name: str = Field(description="限定文件名称，当操作类型为 'search' 时，可以指定文件名称，支持模糊匹配")
+
+
 def get_kb_based_tools(db_names: list[str] | None = None) -> list:
     """获取所有知识库基于的工具"""
     # 获取所有知识库
@@ -132,7 +137,9 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
     def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
         """创建检索器包装函数的工厂函数，避免闭包变量捕获问题"""
 
-        async def async_retriever_wrapper(query_text: str, operation: str = "search") -> Any:
+        async def async_retriever_wrapper(
+            query_text: str, operation: str = "search", file_name: str | None = None
+        ) -> Any:
             """异步检索器包装函数，支持检索和获取思维导图"""
 
             # 获取思维导图
@@ -173,10 +180,14 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
             retriever = retriever_info["retriever"]
             try:
                 logger.debug(f"Retrieving from database {db_id} with query: {query_text}")
+                kwargs = {}
+                if file_name:
+                    kwargs["file_name"] = file_name
+
                 if asyncio.iscoroutinefunction(retriever):
-                    result = await retriever(query_text)
+                    result = await retriever(query_text, **kwargs)
                 else:
-                    result = retriever(query_text)
+                    result = retriever(query_text, **kwargs)
                 logger.debug(f"Retrieved {len(result) if isinstance(result, list) else 'N/A'} results from {db_id}")
                 return result
             except Exception as e:
@@ -207,12 +218,16 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
 
             safename = retrieve_info["name"].replace(" ", "_")[:20]
 
+            args_schema = KnowledgeRetrieverModel
+            if retrieve_info["metadata"]["kb_type"] in ["milvus"]:
+                args_schema = CommonKnowledgeRetriever
+
             # 使用 StructuredTool.from_function 创建异步工具
             tool = StructuredTool.from_function(
                 coroutine=retriever_wrapper,
                 name=safename,
                 description=description,
-                args_schema=KnowledgeRetrieverModel,
+                args_schema=args_schema,
                 metadata=retrieve_info["metadata"] | {"tag": ["knowledgebase"]},
             )
 

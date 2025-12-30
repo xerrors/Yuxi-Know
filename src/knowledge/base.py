@@ -549,8 +549,8 @@ class KnowledgeBase(ABC):
         for db_id, meta in self.databases_meta.items():
 
             def make_retriever(db_id):
-                async def retriever(query_text):
-                    return await self.aquery(query_text, db_id)
+                async def retriever(query_text, **kwargs):
+                    return await self.aquery(query_text, db_id, **kwargs)
 
                 return retriever
 

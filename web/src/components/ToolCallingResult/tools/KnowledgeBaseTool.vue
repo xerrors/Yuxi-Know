@@ -5,6 +5,8 @@
         <span class="note">{{ operationLabel }}</span>
         <span class="separator" v-if="queryText">|</span>
         <span class="description">{{ queryText }}</span>
+        <span class="separator" v-if="fileName">|</span>
+        <span class="description" v-if="fileName">文件: {{ fileName }}</span>
       </div>
     </template>
     <template #result="{ resultContent }">
@@ -167,6 +169,10 @@ const operationLabel = computed(() => {
 // 获取查询文本
 const queryText = computed(() => {
   return args.value.query_text || '';
+});
+
+const fileName = computed(() => {
+  return args.value.file_name || '';
 });
 
 const parseData = (content) => {

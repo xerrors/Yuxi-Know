@@ -307,7 +307,6 @@ const formatResultData = (data) => {
         text-overflow: ellipsis;
         white-space: nowrap;
         min-width: 0;
-        flex: 1;
       }
 
       :deep(.tag) {

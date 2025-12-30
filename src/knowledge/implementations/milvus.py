@@ -458,11 +458,26 @@ class MilvusKB(KnowledgeBase):
             query_embedding = embedding_function([query_text])
 
             search_params = {"metric_type": metric_type, "params": {"nprobe": 10}}
+
+            # 构建过滤表达式
+            expr = None
+            if file_name := kwargs.get("file_name"):
+                # 使用 like 支持模糊匹配
+                # 注意：需要转义双引号以防止注入
+                safe_file_name = file_name.replace('"', '\\"')
+                # 如果没有提供通配符，默认前后添加 %
+                if "%" not in safe_file_name:
+                    expr = f'source like "%{safe_file_name}%"'
+                else:
+                    expr = f'source like "{safe_file_name}"'
+                logger.debug(f"Using filter expression: {expr}")
+
             results = collection.search(
                 data=query_embedding,
                 anns_field="embedding",
                 param=search_params,
                 limit=recall_top_k,
+                expr=expr,
                 output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"],
             )
 
