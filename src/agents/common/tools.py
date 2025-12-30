@@ -124,6 +124,7 @@ class KnowledgeRetrieverModel(BaseModel):
 
 class CommonKnowledgeRetriever(KnowledgeRetrieverModel):
     """Common knowledge retriever model."""
+
     file_name: str = Field(description="限定文件名称，当操作类型为 'search' 时，可以指定文件名称，支持模糊匹配")
 
 
