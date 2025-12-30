@@ -211,11 +211,11 @@ const folderTree = computed(() => {
     // 为了快速实现，我们这里简单实现一个仅用于选择的树构建
     const files = store.database.files || {};
     const fileList = Object.values(files);
-    
+
     // 构建树的简化版逻辑 (只关心文件夹)
     const nodeMap = new Map();
     const roots = [];
-    
+
     // 1. 初始化节点
     fileList.forEach(file => {
         if (file.is_folder) {
@@ -223,7 +223,7 @@ const folderTree = computed(() => {
             nodeMap.set(file.file_id, item);
         }
     });
-    
+
     // 2. 构建层级
     fileList.forEach(file => {
         if (file.is_folder && file.parent_id && nodeMap.has(file.parent_id)) {
@@ -242,7 +242,7 @@ const folderTree = computed(() => {
              }
         }
     });
-    
+
     return roots;
 });
 

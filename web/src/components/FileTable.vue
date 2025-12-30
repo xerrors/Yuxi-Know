@@ -12,7 +12,7 @@
           type="secondary"
           @click="showCreateFolderModal"
           :loading="refreshing"
-          :icon="h(FolderOutlined)"
+          :icon="h(FolderAddOutlined)"
           style="margin-left: 8px;"
         >新建文件夹</a-button>
       </div>
@@ -141,8 +141,8 @@
       <template #bodyCell="{ column, text, record }">
         <div v-if="column.key === 'filename'">
           <template v-if="record.is_folder">
-            <span class="folder-row" style="padding-left: 0; color: var(--gray-900); font-weight: 500; cursor: pointer;" @click="toggleExpand(record)">
-              <component :is="expandedRowKeys.includes(record.file_id) ? h(FolderOpenOutlined) : h(FolderOutlined)" style="margin-right: 6px; color: #ffb800;" />
+            <span class="folder-row" @click="toggleExpand(record)">
+              <component :is="expandedRowKeys.includes(record.file_id) ? h(FolderOpenFilled) : h(FolderFilled)" style="margin-right: 12px; color: #ffb800;" />
               {{ record.filename }}
             </span>
           </template>
@@ -173,7 +173,7 @@
               <div class="file-action-list">
                 <template v-if="record.is_folder">
                   <a-button type="text" block @click="showCreateFolderModal(record.file_id)">
-                    <template #icon><component :is="h(PlusOutlined)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(FolderPlus)" style="width: 14px; height: 14px;" /></template>
                     新建子文件夹
                   </a-button>
                   <a-button type="text" block danger @click="handleDeleteFolder(record)">
@@ -219,8 +219,9 @@ import {
   ClockCircleFilled,
   PlusOutlined,
   ReloadOutlined,
-  FolderOpenOutlined,
-  FolderOutlined,
+  FolderFilled,
+  FolderAddOutlined,
+  FolderOpenFilled,
 } from '@ant-design/icons-vue';
 import {
   Trash2,
@@ -228,6 +229,7 @@ import {
   RefreshCw,
   ChevronLast,
   Ellipsis,
+  FolderPlus,
 } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
@@ -277,7 +279,7 @@ const showCreateFolderModal = (parentId = null) => {
 
 const toggleExpand = (record) => {
   if (!record.is_folder) return;
-  
+
   const index = expandedRowKeys.value.indexOf(record.file_id);
   if (index > -1) {
     expandedRowKeys.value.splice(index, 1);
@@ -291,7 +293,7 @@ const handleCreateFolder = async () => {
     message.warning('请输入文件夹名称');
     return;
   }
-  
+
   createFolderLoading.value = true;
   try {
     await documentApi.createFolder(store.databaseId, newFolderName.value, currentParentId.value);
@@ -317,7 +319,7 @@ const customRow = (record) => {
            event.preventDefault();
            return;
        }
-       
+
        event.dataTransfer.setData('application/json', JSON.stringify({
            file_id: record.file_id,
            filename: record.filename
@@ -343,14 +345,14 @@ const customRow = (record) => {
     onDrop: async (event) => {
         event.preventDefault();
         event.currentTarget.classList.remove('drop-over-folder');
-        
+
         const data = event.dataTransfer.getData('application/json');
         if (!data) return;
-        
+
         try {
             const { file_id, filename } = JSON.parse(data);
             if (file_id === record.file_id) return;
-            
+
             // 确认移动
             Modal.confirm({
                 title: '移动文件',
@@ -437,7 +439,7 @@ const buildFileTree = (fileList) => {
   const nodeMap = new Map();
   const roots = [];
   const processedIds = new Set();
-  
+
   // 1. 初始化节点映射，确保 explicit folder 有 children
   fileList.forEach(file => {
     const item = { ...file, displayName: file.filename };
@@ -495,10 +497,10 @@ const buildFileTree = (fileList) => {
       for (let i = 0; i < parts.length - 1; i++) {
         const part = parts[i];
         currentPath = currentPath ? `${currentPath}/${part}` : part;
-        
+
         // Find existing node in currentLevel
         let node = currentLevel.find(n => n.filename === part && n.is_folder);
-        
+
         if (!node) {
           node = {
             file_id: `folder-${currentPath}`,
@@ -513,7 +515,7 @@ const buildFileTree = (fileList) => {
         }
         currentLevel = node.children;
       }
-      
+
       const fileName = parts[parts.length - 1];
       item.displayName = fileName;
       currentLevel.push(item);
@@ -616,7 +618,7 @@ const onSelectChange = (keys, selectedRows) => {
   const fileKeys = selectedRows
     .filter(row => !row.is_folder)
     .map(row => row.file_id);
-    
+
   selectedRowKeys.value = fileKeys;
 };
 
@@ -1070,7 +1072,8 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 .folder-row {
   display: flex;
   align-items: center;
-  
+  cursor: pointer;
+
   &:hover {
     color: var(--main-color);
   }
@@ -1081,7 +1084,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   outline: 2px dashed var(--main-color);
   outline-offset: -2px;
   z-index: 10;
-  
+
   td {
     background-color: transparent !important;
   }
