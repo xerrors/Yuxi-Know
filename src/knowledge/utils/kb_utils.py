@@ -213,6 +213,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         "created_at": utc_isoformat(),
         "file_id": file_id,
         "content_hash": content_hash,
+        "parent_id": params.get("parent_id") if params else None,
     }
 
     # 保存处理参数到元数据

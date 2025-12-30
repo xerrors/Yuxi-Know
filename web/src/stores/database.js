@@ -215,7 +215,22 @@ export const useDatabaseStore = defineStore('database', () => {
     return hasPending;
   }
 
-  async function addFiles({ items, contentType, params }) {
+  async function moveFile(fileId, newParentId) {
+    state.lock = true;
+    try {
+      await documentApi.moveDocument(databaseId.value, fileId, newParentId);
+      await getDatabaseInfo(undefined, true); // Skip query params for file movement
+      message.success('移动成功');
+    } catch (error) {
+      console.error(error);
+      message.error(error.message || '移动失败');
+      throw error;
+    } finally {
+      state.lock = false;
+    }
+  }
+
+  async function addFiles({ items, contentType, params, parentId }) {
     if (items.length === 0) {
       message.error(contentType === 'file' ? '请先上传文件' : '请输入有效的网页链接');
       return;
@@ -223,7 +238,11 @@ export const useDatabaseStore = defineStore('database', () => {
 
     state.chunkLoading = true;
     try {
-      const data = await documentApi.addDocuments(databaseId.value, items, { ...params, content_type: contentType });
+      const requestParams = { ...params, content_type: contentType };
+      if (parentId) {
+        requestParams.parent_id = parentId;
+      }
+      const data = await documentApi.addDocuments(databaseId.value, items, requestParams);
       if (data.status === 'success' || data.status === 'queued') {
         const itemType = contentType === 'file' ? '文件' : 'URL';
         enableAutoRefresh('auto');
@@ -417,6 +436,7 @@ export const useDatabaseStore = defineStore('database', () => {
     deleteFile,
     handleDeleteFile,
     handleBatchDelete,
+    moveFile,
     addFiles,
     rechunksFiles,
     openFileDetail,

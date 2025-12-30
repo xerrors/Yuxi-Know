@@ -44,6 +44,23 @@
 
       <div class="ocr-config" v-if="uploadMode === 'file'">
         <a-form layout="horizontal">
+          <a-form-item label="目标文件夹" style="margin-bottom: 12px;">
+             <a-tree-select
+                v-model:value="selectedFolderId"
+                show-search
+                style="width: 100%"
+                :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
+                placeholder="请选择目标文件夹（默认为根目录）"
+                allow-clear
+                tree-default-expand-all
+                :tree-data="folderTreeData"
+                tree-node-filter-prop="title"
+             >
+             </a-tree-select>
+          </a-form-item>
+          <a-form-item style="margin-bottom: 0;">
+             <a-checkbox v-model:checked="isFolderUpload">上传文件夹</a-checkbox>
+          </a-form-item>
           <a-form-item label="使用OCR" name="enable_ocr">
             <div class="ocr-controls">
               <a-select
@@ -84,9 +101,11 @@
           v-model:fileList="fileList"
           name="file"
           :multiple="true"
+          :directory="isFolderUpload"
           :disabled="chunkLoading"
           :accept="acceptedFileTypes"
           :before-upload="beforeUpload"
+          :customRequest="customRequest"
           :action="'/api/knowledge/files/upload?db_id=' + databaseId"
           :headers="getAuthHeaders()"
           @change="handleFileUpload"
@@ -170,11 +189,43 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  folderTree: {
+    type: Array,
+    default: () => []
+  },
+  currentFolderId: {
+    type: String,
+    default: null
+  }
 });
 
 const emit = defineEmits(['update:visible', 'success']);
 
 const store = useDatabaseStore();
+
+// 文件夹选择相关
+const selectedFolderId = ref(null);
+const folderTreeData = computed(() => {
+    // 转换 folderTree 数据为 TreeSelect 需要的格式
+    const transformData = (nodes) => {
+        return nodes.map(node => {
+            if (!node.is_folder) return null;
+            return {
+                title: node.filename,
+                value: node.file_id,
+                key: node.file_id,
+                children: node.children ? transformData(node.children).filter(Boolean) : []
+            };
+        }).filter(Boolean);
+    };
+    return transformData(props.folderTree);
+});
+
+watch(() => props.visible, (newVal) => {
+  if (newVal) {
+    selectedFolderId.value = props.currentFolderId;
+  }
+});
 
 const DEFAULT_SUPPORTED_TYPES = [
   '.txt',
@@ -339,6 +390,8 @@ const isGraphBased = computed(() => {
   const type = kbType.value?.toLowerCase();
   return type === 'lightrag';
 });
+
+const isFolderUpload = ref(false);
 
 // 计算属性：是否启用了OCR
 const isOcrEnabled = computed(() => {
@@ -607,6 +660,59 @@ const deleteSameNameFile = (file) => {
   });
 };
 
+const customRequest = async (options) => {
+  const { file, onProgress, onSuccess, onError } = options;
+
+  const formData = new FormData();
+  // 如果是文件夹上传，使用相对路径作为文件名
+  const filename = (isFolderUpload.value && file.webkitRelativePath) ? file.webkitRelativePath : file.name;
+  formData.append('file', file, filename);
+
+  const dbId = databaseId.value;
+  if (!dbId) {
+    onError(new Error('Database ID is missing'));
+    return;
+  }
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `/api/knowledge/files/upload?db_id=${dbId}`);
+
+  const headers = getAuthHeaders();
+  for (const [key, value] of Object.entries(headers)) {
+    xhr.setRequestHeader(key, value);
+  }
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      onProgress({ percent: (e.loaded / e.total) * 100 });
+    }
+  };
+
+  xhr.onload = () => {
+    if (xhr.status >= 200 && xhr.status < 300) {
+      try {
+        const response = JSON.parse(xhr.responseText);
+        onSuccess(response, xhr);
+      } catch (e) {
+        onError(e);
+      }
+    } else {
+      try {
+        const errorResp = JSON.parse(xhr.responseText);
+        onError(new Error(errorResp.detail || 'Upload failed'));
+      } catch (e) {
+        onError(new Error(xhr.responseText || 'Upload failed'));
+      }
+    }
+  };
+
+  xhr.onerror = (e) => {
+    onError(e);
+  };
+
+  xhr.send(formData);
+};
+
 const handleFileUpload = (info) => {
   if (info?.file?.status === 'error') {
     const errorMessage = info.file?.response?.detail || `文件上传失败：${info.file.name}`;
@@ -715,7 +821,19 @@ const chunkData = async () => {
 
     try {
       store.state.chunkLoading = true;
-      success = await store.addFiles({ items: validFiles, contentType: 'file', params: chunkParams.value });
+      // 调用 store 的 addFiles 方法
+      await store.addFiles({
+        items: validFiles,
+        contentType: 'file',
+        params: { ...chunkParams.value },
+        parentId: selectedFolderId.value // 传递选中的文件夹 ID
+      });
+
+      emit('success');
+      handleCancel();
+      fileList.value = [];
+      sameNameFiles.value = [];
+      success = true;
     } catch (error) {
       console.error('文件上传失败:', error);
       message.error('文件上传失败: ' + (error.message || '未知错误'));

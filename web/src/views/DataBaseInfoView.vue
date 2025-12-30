@@ -3,9 +3,11 @@
   <FileDetailModal />
 
   <FileUploadModal
-    v-model:visible="addFilesModalVisible"
-    @success="onFileUploadSuccess"
-  />
+        v-model:visible="addFilesModalVisible"
+        :folder-tree="folderTree"
+        :current-folder-id="currentFolderId"
+        @success="onFileUploadSuccess"
+      />
 
   <div class="unified-layout">
     <div class="left-panel" :style="{ width: leftPanelWidth + '%' }">
@@ -189,6 +191,7 @@ const resizeHandle = ref(null);
 
 // 添加文件弹窗
 const addFilesModalVisible = ref(false);
+const currentFolderId = ref(null);
 
 // 标记是否是初次加载
 const isInitialLoad = ref(true);
@@ -196,7 +199,52 @@ const isInitialLoad = ref(true);
 // 显示添加文件弹窗
 const showAddFilesModal = () => {
   addFilesModalVisible.value = true;
+  currentFolderId.value = null; // 重置
 };
+
+// 传递给 FileUploadModal 的文件夹树
+const folderTree = computed(() => {
+    // 复用 FileTable 中构建文件树的逻辑，或者从 store 中获取
+    // 简单起见，这里假设 store.database.files 是扁平列表，我们在 FileTable 中已经有了构建好的树
+    // 但 FileTable 是子组件，最好将树的构建逻辑放到 store 或 composable 中，或者在这里重新构建
+    // 既然 FileTable 中已经实现了 buildFileTree，我们可以考虑将其提取出来
+    // 为了快速实现，我们这里简单实现一个仅用于选择的树构建
+    const files = store.database.files || {};
+    const fileList = Object.values(files);
+    
+    // 构建树的简化版逻辑 (只关心文件夹)
+    const nodeMap = new Map();
+    const roots = [];
+    
+    // 1. 初始化节点
+    fileList.forEach(file => {
+        if (file.is_folder) {
+            const item = { ...file, title: file.filename, value: file.file_id, children: [] };
+            nodeMap.set(file.file_id, item);
+        }
+    });
+    
+    // 2. 构建层级
+    fileList.forEach(file => {
+        if (file.is_folder && file.parent_id && nodeMap.has(file.parent_id)) {
+            const parent = nodeMap.get(file.parent_id);
+            const child = nodeMap.get(file.file_id);
+            if (parent && child) {
+                parent.children.push(child);
+            }
+        } else if (file.is_folder && !file.parent_id) {
+             // 只有显式根文件夹才放入 roots
+             // 对于隐式路径生成的文件夹，目前简化处理暂不支持在上传时选择（因为它们没有物理ID）
+             // 除非我们复用 FileTable 的复杂逻辑。
+             // 如果用户只用新建文件夹功能创建文件夹，那么逻辑是够用的。
+             if (nodeMap.has(file.file_id)) {
+                 roots.push(nodeMap.get(file.file_id));
+             }
+        }
+    });
+    
+    return roots;
+});
 
 // 文件上传成功回调
 const onFileUploadSuccess = () => {

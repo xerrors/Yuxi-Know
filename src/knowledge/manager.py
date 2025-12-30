@@ -174,6 +174,13 @@ class KnowledgeBaseManager:
         logger.info(f"Created {kb_type} knowledge base instance")
         return kb_instance
 
+    async def move_file(self, db_id: str, file_id: str, new_parent_id: str | None) -> dict:
+        """
+        移动文件/文件夹
+        """
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.move_file(db_id, file_id, new_parent_id)
+
     def _get_kb_for_database(self, db_id: str) -> KnowledgeBase:
         """
         根据数据库ID获取对应的知识库实例
@@ -220,8 +227,13 @@ class KnowledgeBaseManager:
 
         return {"databases": all_databases}
 
+    async def create_folder(self, db_id: str, folder_name: str, parent_id: str = None) -> dict:
+        """Create a folder in the database."""
+        kb_instance = self._get_kb_for_database(db_id)
+        return kb_instance.create_folder(db_id, folder_name, parent_id)
+
     async def create_database(
-        self, database_name: str, description: str, kb_type: str, embed_info: dict | None = None, **kwargs
+        self, database_name: str, description: str, kb_type: str = "lightrag", embed_info: dict | None = None, **kwargs
     ) -> dict:
         """
         创建数据库
@@ -314,6 +326,11 @@ class KnowledgeBaseManager:
             return db_info
         except KBNotFoundError:
             return None
+
+    async def delete_folder(self, db_id: str, folder_id: str) -> None:
+        """递归删除文件夹"""
+        kb_instance = self._get_kb_for_database(db_id)
+        await kb_instance.delete_folder(db_id, folder_id)
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""
