@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from src import config, graph_base, knowledge_base
 from src.utils import logger
 
-search = TavilySearch(max_results=10)
+search = TavilySearch()
 search.metadata = {"name": "Tavily 网页搜索"}
 
 
@@ -122,11 +122,12 @@ class KnowledgeRetrieverModel(BaseModel):
     )
 
 
-def get_kb_based_tools() -> list:
+def get_kb_based_tools(db_names: list[str] | None = None) -> list:
     """获取所有知识库基于的工具"""
     # 获取所有知识库
     kb_tools = []
     retrievers = knowledge_base.get_retrievers()
+    db_ids = [kb_id for kb_id, kb in retrievers.items() if kb["name"] in db_names] or None
 
     def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
         """创建检索器包装函数的工厂函数，避免闭包变量捕获问题"""
@@ -185,6 +186,9 @@ def get_kb_based_tools() -> list:
         return async_retriever_wrapper
 
     for db_id, retrieve_info in retrievers.items():
+        if db_ids is not None and db_id not in db_ids:
+            continue
+
         try:
             # 构建工具描述
             description = (
@@ -227,8 +231,6 @@ def get_buildin_tools() -> list:
     tools = []
 
     try:
-        # 获取所有知识库基于的工具
-        tools.extend(get_kb_based_tools())
         tools.extend(get_static_tools())
 
         from src.agents.common.toolkits.mysql.tools import get_mysql_tools

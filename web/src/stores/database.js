@@ -5,21 +5,25 @@ import { message, Modal } from 'ant-design-vue';
 import { databaseApi, documentApi, queryApi } from '@/apis/knowledge_api';
 import { useTaskerStore } from '@/stores/tasker';
 import { useRouter } from 'vue-router';
+import { parseToShanghai } from '@/utils/time';
 
 export const useDatabaseStore = defineStore('database', () => {
   const router = useRouter();
   const taskerStore = useTaskerStore();
 
   // State
+  const databases = ref([]);
   const database = ref({});
   const databaseId = ref(null);
   const selectedFile = ref(null);
 
   const queryParams = ref([]);
   const meta = reactive({});
-    const selectedRowKeys = ref([]);
+  const selectedRowKeys = ref([]);
 
   const state = reactive({
+    listLoading: false,
+    creating: false,
     databaseLoading: false,
     refrashing: false,
     searchLoading: false,
@@ -38,6 +42,64 @@ export const useDatabaseStore = defineStore('database', () => {
   let autoRefreshManualOverride = false; // Indicates user explicitly disabled auto-refresh
 
   // Actions
+  async function loadDatabases() {
+    state.listLoading = true;
+    try {
+      const data = await databaseApi.getDatabases();
+      databases.value = data.databases.sort((a, b) => {
+        const timeA = parseToShanghai(a.created_at);
+        const timeB = parseToShanghai(b.created_at);
+        if (!timeA && !timeB) return 0;
+        if (!timeA) return 1;
+        if (!timeB) return -1;
+        return timeB.valueOf() - timeA.valueOf(); // 降序排列，最新的在前面
+      });
+    } catch (error) {
+      console.error('加载数据库列表失败:', error);
+      if (error.message.includes('权限')) {
+        message.error('需要管理员权限访问知识库');
+      }
+      throw error;
+    } finally {
+      state.listLoading = false;
+    }
+  }
+
+  async function createDatabase(formData) {
+    // 验证
+    if (!formData.database_name?.trim()) {
+      message.error('数据库名称不能为空');
+      return false;
+    }
+
+    if (!formData.kb_type) {
+      message.error('请选择知识库类型');
+      return false;
+    }
+
+    // 向量数据库的重排序模型验证
+    if (['chroma', 'milvus'].includes(formData.kb_type)) {
+      if (formData.reranker_config?.enabled && !formData.reranker_config?.model) {
+        message.error('请选择重排序模型');
+        return false;
+      }
+    }
+
+    state.creating = true;
+    try {
+      const data = await databaseApi.createDatabase(formData);
+      message.success('创建成功');
+      await loadDatabases(); // 刷新列表
+      return data;
+    } catch (error) {
+      console.error('创建数据库失败:', error);
+      message.error(error.message || '创建失败');
+      throw error;
+    } finally {
+      state.creating = false;
+    }
+  }
+
   async function getDatabaseInfo(id, skipQueryParams = false) {
     const db_id = id || databaseId.value;
     if (!db_id) return;
@@ -404,6 +466,7 @@ export const useDatabaseStore = defineStore('database', () => {
   }
 
   return {
+    databases,
     database,
     databaseId,
     selectedFile,
@@ -411,6 +474,8 @@ export const useDatabaseStore = defineStore('database', () => {
     meta,
     selectedRowKeys,
     state,
+    loadDatabases,
+    createDatabase,
     getDatabaseInfo,
     updateDatabaseInfo,
     deleteDatabase,

@@ -1,9 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, useTemplateRef, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import {
-  GithubOutlined,
-} from '@ant-design/icons-vue'
+import { GithubOutlined } from '@ant-design/icons-vue'
 import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck } from 'lucide-vue-next';
 import { onLongPress } from '@vueuse/core'
 
@@ -69,7 +67,7 @@ const getRemoteConfig = () => {
 }
 
 const getRemoteDatabase = () => {
-  databaseStore.getDatabaseInfo(undefined, false) // Explicitly load query params for remote database
+  databaseStore.loadDatabases()
 }
 
 // Fetch GitHub stars count

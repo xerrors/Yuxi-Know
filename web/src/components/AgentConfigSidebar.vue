@@ -152,6 +152,7 @@
                     <a-button
                       type="link"
                       size="small"
+                      class="clear-btn"
                       @click="clearSelection(key)"
                       v-if="getSelectedCount(key) > 0"
                     >
@@ -819,12 +820,6 @@ const resetConfig = async () => {
         color: var(--gray-900);
         font-weight: 500;
       }
-
-      .clear-btn {
-        padding: 0;
-        height: auto;
-        font-size: 12px;
-      }
     }
 
     .select-tools-btn {
@@ -1130,6 +1125,19 @@ const resetConfig = async () => {
         }
       }
     }
+  }
+}
+
+
+.clear-btn {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--main-700);
+
+  &:hover {
+    color: var(--main-800);
   }
 }
 

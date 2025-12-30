@@ -1,6 +1,6 @@
 <template>
   <div class="database-container layout-container">
-    <HeaderComponent title="文档知识库" :loading="state.loading">
+    <HeaderComponent title="文档知识库" :loading="dbState.listLoading">
       <template #actions>
         <a-button type="primary" @click="state.openNewDatabaseModel=true">
           新建知识库
@@ -8,7 +8,7 @@
       </template>
     </HeaderComponent>
 
-    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="createDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
+    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="handleCreateDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
 
       <!-- 知识库类型选择 -->
       <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
@@ -162,12 +162,12 @@
       </div>
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
-        <a-button key="submit" type="primary" :loading="state.creating" @click="createDatabase">创建</a-button>
+        <a-button key="submit" type="primary" :loading="dbState.creating" @click="handleCreateDatabase">创建</a-button>
       </template>
     </a-modal>
 
     <!-- 加载状态 -->
-    <div v-if="state.loading" class="loading-container">
+    <div v-if="dbState.listLoading" class="loading-container">
       <a-spin size="large" />
       <p>正在加载知识库...</p>
     </div>
@@ -235,11 +235,12 @@
 <script setup>
 import { ref, onMounted, reactive, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import { useConfigStore } from '@/stores/config';
-import { message } from 'ant-design-vue'
-import { Database, Zap, FileDigit,  Waypoints, Building2 } from 'lucide-vue-next';
+import { useDatabaseStore } from '@/stores/database';
+import { Database, FileDigit, Waypoints, Building2 } from 'lucide-vue-next';
 import { LockOutlined, InfoCircleOutlined, QuestionCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
-import { databaseApi, typeApi } from '@/apis/knowledge_api';
+import { typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
@@ -248,12 +249,13 @@ import AiTextarea from '@/components/AiTextarea.vue';
 
 const route = useRoute()
 const router = useRouter()
-const databases = ref([])
 const configStore = useConfigStore()
+const databaseStore = useDatabaseStore()
+
+// 使用 store 的状态
+const { databases, state: dbState } = storeToRefs(databaseStore)
 
 const state = reactive({
-  loading: false,
-  creating: false,
   openNewDatabaseModel: false,
 })
 
@@ -357,32 +359,6 @@ const loadSupportedKbTypes = async () => {
 
 // 重排序模型信息现在直接从 configStore.config.reranker_names 获取，无需单独加载
 
-const loadDatabases = () => {
-  state.loading = true
-  // loadGraph()
-  databaseApi.getDatabases()
-    .then(data => {
-      console.log(data)
-      // 按照创建时间排序，最新的在前面
-      databases.value = data.databases.sort((a, b) => {
-        const timeA = parseToShanghai(a.created_at)
-        const timeB = parseToShanghai(b.created_at)
-        if (!timeA && !timeB) return 0
-        if (!timeA) return 1
-        if (!timeB) return -1
-        return timeB.valueOf() - timeA.valueOf() // 降序排列，最新的在前面
-      })
-      state.loading = false
-    })
-    .catch(error => {
-      console.error('加载数据库列表失败:', error);
-      if (error.message.includes('权限')) {
-        message.error('需要管理员权限访问知识库')
-      }
-      state.loading = false
-    })
-}
-
 const resetNewDatabase = () => {
   Object.assign(newDatabase, createEmptyDatabaseForm())
 }
@@ -473,19 +449,8 @@ const handleLLMSelect = (spec) => {
   newDatabase.llm_info.model_name = modelName
 }
 
-const createDatabase = () => {
-  if (!newDatabase.name?.trim()) {
-    message.error('数据库名称不能为空')
-    return
-  }
-
-  if (!newDatabase.kb_type) {
-    message.error('请选择知识库类型')
-    return
-  }
-
-  state.creating = true
-
+// 构建请求数据（只负责表单数据转换）
+const buildRequestData = () => {
   const requestData = {
     database_name: newDatabase.name.trim(),
     description: newDatabase.description?.trim() || '',
@@ -496,18 +461,12 @@ const createDatabase = () => {
     }
   }
 
-  // 添加类型特有的配置
-  if (newDatabase.kb_type === 'chroma' || newDatabase.kb_type === 'milvus') {
+  // 根据类型添加特定配置
+  if (['chroma', 'milvus'].includes(newDatabase.kb_type)) {
     if (newDatabase.storage) {
       requestData.additional_params.storage = newDatabase.storage
     }
-
     if (newDatabase.reranker.enabled) {
-      if (!newDatabase.reranker.model) {
-        message.error('请选择重排序模型')
-        state.creating = false
-        return
-      }
       requestData.additional_params.reranker_config = {
         enabled: true,
         model: newDatabase.reranker.model,
@@ -519,7 +478,6 @@ const createDatabase = () => {
 
   if (newDatabase.kb_type === 'lightrag') {
     requestData.additional_params.language = newDatabase.language || 'English'
-    // 添加LLM信息到请求数据
     if (newDatabase.llm_info.provider && newDatabase.llm_info.model_name) {
       requestData.llm_info = {
         provider: newDatabase.llm_info.provider,
@@ -528,21 +486,19 @@ const createDatabase = () => {
     }
   }
 
-  databaseApi.createDatabase(requestData)
-    .then(data => {
-      console.log('创建成功:', data)
-      loadDatabases()
-      resetNewDatabase()
-      message.success('创建成功')
-    })
-    .catch(error => {
-      console.error('创建数据库失败:', error)
-      message.error(error.message || '创建失败')
-    })
-    .finally(() => {
-      state.creating = false
-      state.openNewDatabaseModel = false
-    })
+  return requestData
+}
+
+// 创建按钮处理
+const handleCreateDatabase = async () => {
+  const requestData = buildRequestData()
+  try {
+    await databaseStore.createDatabase(requestData)
+    resetNewDatabase()
+    state.openNewDatabaseModel = false
+  } catch (error) {
+    // 错误已在 store 中处理
+  }
 }
 
 const navigateToDatabase = (databaseId) => {
@@ -585,15 +541,15 @@ watch(
   }
 )
 
-watch(() => route.path, (newPath, oldPath) => {
+watch(() => route.path, (newPath) => {
   if (newPath === '/database') {
-    loadDatabases();
+    databaseStore.loadDatabases();
   }
 });
 
 onMounted(() => {
   loadSupportedKbTypes()
-  loadDatabases()
+  databaseStore.loadDatabases()
   // 重排序模型信息现在直接从 configStore 获取，无需单独加载
 })
 

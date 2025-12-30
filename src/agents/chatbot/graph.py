@@ -2,14 +2,13 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.mcp import MCP_SERVERS
+from src.agents.common.mcp import get_mcp_tools
 from src.agents.common.middlewares import (
-    DynamicToolMiddleware,
     context_aware_prompt,
     context_based_model,
     inject_attachment_context,
 )
-from src.agents.common.subagents import calc_agent_tool
+from src.agents.common.tools import get_kb_based_tools
 
 from .context import Context
 from .tools import get_tools
@@ -18,7 +17,7 @@ from .tools import get_tools
 class ChatbotAgent(BaseAgent):
     name = "智能体助手"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
-    capabilities = ["file_upload"]  # 支持文件上传功能
+    capabilities = ["file_upload", "reload_graph"]  # 支持文件上传功能和重载图
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -26,34 +25,48 @@ class ChatbotAgent(BaseAgent):
         self.checkpointer = None
         self.context_schema = Context
 
-    def get_tools(self):
-        """返回基本工具"""
-        base_tools = get_tools()
-        base_tools.append(calc_agent_tool)
-        return base_tools
+    async def get_tools(self, tools: list[str] = None, mcps=None, knowledges=None):
+
+        # 1. 基础工具 (从 context.tools 中筛选)
+        all_basic_tools = get_tools()
+        selected_tools = []
+
+        if tools:
+            # 创建工具映射表
+            tools_map = {t.name: t for t in all_basic_tools}
+            for tool_name in tools:
+                if tool_name in tools_map:
+                    selected_tools.append(tools_map[tool_name])
+
+        # 2. 知识库工具
+        if knowledges:
+            kb_tools = get_kb_based_tools(db_names=knowledges)
+            selected_tools.extend(kb_tools)
+
+        # 3. MCP 工具
+        if mcps:
+            for server_name in mcps:
+                mcp_tools = await get_mcp_tools(server_name)
+                selected_tools.extend(mcp_tools)
+
+        return selected_tools
 
     async def get_graph(self, **kwargs):
         """构建图"""
         if self.graph:
             return self.graph
 
-        # 创建动态工具中间件实例，并传入所有可用的 MCP 服务器列表
-        dynamic_tool_middleware = DynamicToolMiddleware(
-            base_tools=self.get_tools(), mcp_servers=list(MCP_SERVERS.keys())
-        )
+        # 获取上下文配置
+        context = self.context_schema.from_file(module_name=self.module_name)
 
-        # 预加载所有 MCP 工具并注册到 middleware.tools
-        await dynamic_tool_middleware.initialize_mcp_tools()
-
-        # 使用 create_agent 创建智能体，并传入 middleware
+        # 使用 create_agent 创建智能体
         graph = create_agent(
-            model=load_chat_model("siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507"),  # 默认模型，会被 middleware 覆盖
-            tools=get_tools(),  # 注册基础工具
+            model=load_chat_model(context.model),  # 使用 context 中的模型配置
+            tools=await self.get_tools(context.tools, context.mcps, context.knowledges),
             middleware=[
                 context_aware_prompt,  # 动态系统提示词
-                inject_attachment_context,  # 附件上下文注入（LangChain 标准中间件）
+                inject_attachment_context,  # 附件上下文注入
                 context_based_model,  # 动态模型选择
-                dynamic_tool_middleware,  # 动态工具选择（支持 MCP 工具注册）
                 ModelRetryMiddleware(),  # 模型重试中间件
             ],
             checkpointer=await self._get_checkpointer(),

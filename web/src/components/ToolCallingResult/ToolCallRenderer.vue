@@ -35,6 +35,7 @@
 import { computed, ref } from 'vue';
 import BaseToolCall from './BaseToolCall.vue';
 import { useAgentStore } from '@/stores/agent';
+import { useDatabaseStore } from '@/stores/database';
 
 import WebSearchTool from './tools/WebSearchTool.vue';
 import KnowledgeBaseTool from './tools/KnowledgeBaseTool.vue';
@@ -53,12 +54,17 @@ const props = defineProps({
 });
 
 const agentStore = useAgentStore();
+const databaseStore = useDatabaseStore();
 
 const toolName = computed(() => props.toolCall.name || props.toolCall.function?.name || '');
 const tool = computed(() => {
   const toolsList = agentStore?.availableTools ? Object.values(agentStore.availableTools) : [];
-  return toolsList.find(t => t.name === toolName.value) || null;
+  const tool = toolsList.find(t => t.name === toolName.value)
+  return tool || null;
 });
+
+const databases = computed(() => databaseStore.databases || []);
+
 
 const parseData = (content) => {
   if (typeof content === 'string') {
@@ -90,17 +96,9 @@ const isTaskResult = computed(() => {
 });
 
 const isKnowledgeBaseResult = computed(() => {
-  const currentTool = tool.value;
-
-  if (currentTool && currentTool.metadata) {
-    const metadata = currentTool.metadata;
-    const hasKnowledgebaseTag = metadata.tag && metadata.tag.includes('knowledgebase');
-    const isNotLightrag = metadata.kb_type !== 'lightrag';
-    if (hasKnowledgebaseTag && isNotLightrag) {
-      // const data = parseData(props.toolCall.tool_call_result?.content);
-      // return Array.isArray(data) && data.length > 0;
-      return true
-    }
+  const databaseInfo = databases.value.find(db => db.name === toolName.value);
+  if (databaseInfo && databaseInfo.kb_type !== 'lightrag') {
+    return true
   }
   return false;
 });
