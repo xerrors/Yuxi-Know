@@ -75,6 +75,34 @@ export const databaseApi = {
 
 export const documentApi = {
   /**
+   * 创建文件夹
+   * @param {string} dbId - 知识库ID
+   * @param {string} folderName - 文件夹名称
+   * @param {string} parentId - 父文件夹ID
+   * @returns {Promise} - 创建结果
+   */
+  createFolder: async (dbId, folderName, parentId = null) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/folders`, {
+      folder_name: folderName,
+      parent_id: parentId
+    })
+  },
+
+  /**
+   * 移动文档/文件夹
+   * @param {string} dbId - 知识库ID
+   * @param {string} docId - 文档/文件夹ID
+   * @param {string} newParentId - 新的父文件夹ID
+   * @returns {Promise} - 移动结果
+   */
+  moveDocument: async (dbId, docId, newParentId) => {
+    return apiAdminPut(`/api/knowledge/databases/${dbId}/documents/${docId}/move`, {
+      new_parent_id: newParentId
+    })
+  },
+
+
+  /**
    * 添加文档到知识库
    * @param {string} dbId - 知识库ID
    * @param {Array} items - 文档列表

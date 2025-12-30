@@ -394,10 +394,17 @@ async def get_document_content(db_id: str, doc_id: str, current_user: User = Dep
 
 @knowledge.delete("/databases/{db_id}/documents/{doc_id}")
 async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(get_admin_user)):
-    """删除文档"""
+    """删除文档或文件夹"""
     logger.debug(f"DELETE document {doc_id} info in {db_id}")
     try:
         file_meta_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
+        
+        # Check if it is a folder
+        is_folder = file_meta_info.get("meta", {}).get("is_folder", False)
+        if is_folder:
+             await knowledge_base.delete_folder(db_id, doc_id)
+             return {"message": "文件夹删除成功"}
+
         file_name = file_meta_info.get("meta", {}).get("filename")
 
         # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
@@ -1148,6 +1155,38 @@ async def get_sample_questions(db_id: str, current_user: User = Depends(get_admi
 # =============================================================================
 # === 文件管理分组 ===
 # =============================================================================
+
+
+@knowledge.post("/databases/{db_id}/folders")
+async def create_folder(
+    db_id: str, 
+    folder_name: str = Body(..., embed=True), 
+    parent_id: str | None = Body(None, embed=True), 
+    current_user: User = Depends(get_admin_user)
+    ):
+    """创建文件夹"""
+    try:
+        return await knowledge_base.create_folder(db_id, folder_name, parent_id)
+    except Exception as e:
+        logger.error(f"创建文件夹失败 {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@knowledge.put("/databases/{db_id}/documents/{doc_id}/move")
+async def move_document(
+    db_id: str, 
+    doc_id: str, 
+    new_parent_id: str | None = Body(..., embed=True), 
+    current_user: User = Depends(get_admin_user)
+):
+    """移动文件或文件夹"""
+    logger.debug(f"Move document {doc_id} to {new_parent_id} in {db_id}")
+    try:
+        return await knowledge_base.move_file(db_id, doc_id, new_parent_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"移动文件失败 {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @knowledge.post("/files/upload")

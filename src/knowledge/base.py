@@ -210,6 +210,25 @@ class KnowledgeBase(ABC):
 
         return {"message": "删除成功"}
 
+    def create_folder(self, db_id: str, folder_name: str, parent_id: str | None = None) -> dict:
+        """Create a folder in the database."""
+        import uuid
+        folder_id = f"folder-{uuid.uuid4()}"
+        
+        self.files_meta[folder_id] = {
+            "file_id": folder_id,
+            "filename": folder_name,
+            "is_folder": True,
+            "parent_id": parent_id,
+            "database_id": db_id,
+            "created_at": utc_isoformat(),
+            "status": "done",
+            "path": folder_name,
+            "file_type": "folder"
+        }
+        self._save_metadata()
+        return self.files_meta[folder_id]
+
     @abstractmethod
     async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
         """
@@ -300,14 +319,16 @@ class KnowledgeBase(ABC):
             if file_info.get("database_id") == db_id:
                 created_at = self._normalize_timestamp(file_info.get("created_at"))
                 db_files[file_id] = {
-                    "file_id": file_id,
-                    "filename": file_info.get("filename", ""),
-                    "path": file_info.get("path", ""),
-                    "type": file_info.get("file_type", ""),
-                    "status": file_info.get("status", "done"),
-                    "created_at": created_at,
-                    "processing_params": file_info.get("processing_params", None),
-                }
+                        "file_id": file_id,
+                        "filename": file_info.get("filename", ""),
+                        "path": file_info.get("path", ""),
+                        "type": file_info.get("file_type", ""),
+                        "status": file_info.get("status", "done"),
+                        "created_at": created_at,
+                        "processing_params": file_info.get("processing_params", None),
+                        "is_folder": file_info.get("is_folder", False),
+                        "parent_id": file_info.get("parent_id", None),
+                    }
 
         # 按创建时间倒序排序文件列表
         sorted_files = dict(
@@ -350,6 +371,8 @@ class KnowledgeBase(ABC):
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
                         "created_at": created_at,
+                        "is_folder": file_info.get("is_folder", False),
+                        "parent_id": file_info.get("parent_id", None),
                     }
 
             # 按创建时间倒序排序文件列表
@@ -438,6 +461,71 @@ class KnowledgeBase(ABC):
 
         except Exception as e:
             logger.error(f"Error checking processing status for database {db_id}: {e}")
+
+    async def delete_folder(self, db_id: str, folder_id: str) -> None:
+        """
+        Recursively delete a folder and its content.
+        
+        Args:
+            db_id: Database ID
+            folder_id: Folder ID to delete
+        """
+        # Find all children
+        children = [
+            fid for fid, meta in self.files_meta.items()
+            if meta.get("database_id") == db_id and meta.get("parent_id") == folder_id
+        ]
+        
+        for child_id in children:
+            child_meta = self.files_meta.get(child_id)
+            if child_meta and child_meta.get("is_folder"):
+                await self.delete_folder(db_id, child_id)
+            else:
+                await self.delete_file(db_id, child_id)
+        
+        # Delete the folder itself
+        # We call delete_file which should handle the actual removal.
+        # Implementations should ensure they handle folder deletion gracefully (e.g. skip vector deletion)
+        await self.delete_file(db_id, folder_id)
+
+    async def move_file(self, db_id: str, file_id: str, new_parent_id: str | None) -> dict:
+        """
+        Move a file or folder to a new parent folder.
+
+        Args:
+            db_id: Database ID
+            file_id: File/Folder ID to move
+            new_parent_id: New parent folder ID (None for root)
+
+        Returns:
+            dict: Updated metadata
+        """
+        if file_id not in self.files_meta:
+            raise ValueError(f"File {file_id} not found")
+
+        meta = self.files_meta[file_id]
+        if meta.get("database_id") != db_id:
+            raise ValueError(f"File {file_id} does not belong to database {db_id}")
+
+        # Basic cycle detection for folders
+        if meta.get("is_folder") and new_parent_id:
+            # Check if new_parent_id is a child of file_id (or is file_id itself)
+            if new_parent_id == file_id:
+                raise ValueError("Cannot move a folder into itself")
+            
+            # Walk up the tree from new_parent_id
+            current = new_parent_id
+            while current:
+                parent_meta = self.files_meta.get(current)
+                if not parent_meta:
+                    break # Should not happen if integrity is maintained
+                if current == file_id:
+                    raise ValueError("Cannot move a folder into its own subfolder")
+                current = parent_meta.get("parent_id")
+
+        meta["parent_id"] = new_parent_id
+        self._save_metadata()
+        return meta
 
     @abstractmethod
     async def delete_file(self, db_id: str, file_id: str) -> None:
