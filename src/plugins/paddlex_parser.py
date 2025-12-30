@@ -244,7 +244,9 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             # 检查API调用是否成功
             if api_result.get("errorCode") != 0:
                 raise DocumentParserException(
-                    f"PP-StructureV3 API错误: {api_result.get('errorMsg', '未知错误')}", self.get_service_name(), "api_error"
+                    f"PP-StructureV3 API错误: {api_result.get('errorMsg', '未知错误')}",
+                    self.get_service_name(),
+                    "api_error",
                 )
 
             # 解析结果
@@ -252,7 +254,9 @@ class PaddleXDocumentParser(BaseDocumentProcessor):
             text = result.get("full_text", "")
 
             processing_time = time.time() - start_time
-            logger.info(f"PP-StructureV3 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)")
+            logger.info(
+                f"PP-StructureV3 处理成功: {os.path.basename(file_path)} - {len(text)} 字符 ({processing_time:.2f}s)"
+            )
 
             # 记录统计信息
             summary = result.get("summary", {})
