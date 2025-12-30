@@ -2,7 +2,6 @@ from langchain.agents import create_agent
 
 from src import config
 from src.agents.common import BaseAgent, get_buildin_tools, load_chat_model
-from src.agents.common.middlewares import context_aware_prompt, context_based_model
 
 
 class MiniAgent(BaseAgent):
@@ -19,11 +18,13 @@ class MiniAgent(BaseAgent):
         if self.graph:
             return self.graph
 
+        context = self.context_schema.from_file(module_name=self.module_name)
+
         # 创建 MiniAgent
         graph = create_agent(
-            model=load_chat_model(config.default_model),  # 实际会被覆盖
+            model=load_chat_model(config.default_model),
+            system_prompt=context.system_prompt,
             tools=self.get_tools(),
-            middleware=[context_aware_prompt, context_based_model],
             checkpointer=await self._get_checkpointer(),
         )
 

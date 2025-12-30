@@ -4,8 +4,6 @@ from langchain.agents.middleware import ModelRetryMiddleware
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.mcp import get_mcp_tools
 from src.agents.common.middlewares import (
-    context_aware_prompt,
-    context_based_model,
     inject_attachment_context,
 )
 from src.agents.common.tools import get_kb_based_tools
@@ -17,7 +15,7 @@ from .tools import get_tools
 class ChatbotAgent(BaseAgent):
     name = "智能体助手"
     description = "基础的对话机器人，可以回答问题，默认不使用任何工具，可在配置中启用需要的工具。"
-    capabilities = ["file_upload", "reload_graph"]  # 支持文件上传功能和重载图
+    capabilities = ["file_upload"]  # 支持文件上传功能
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -26,7 +24,6 @@ class ChatbotAgent(BaseAgent):
         self.context_schema = Context
 
     async def get_tools(self, tools: list[str] = None, mcps=None, knowledges=None):
-
         # 1. 基础工具 (从 context.tools 中筛选)
         all_basic_tools = get_tools()
         selected_tools = []
@@ -63,10 +60,9 @@ class ChatbotAgent(BaseAgent):
         graph = create_agent(
             model=load_chat_model(context.model),  # 使用 context 中的模型配置
             tools=await self.get_tools(context.tools, context.mcps, context.knowledges),
+            system_prompt=context.system_prompt,
             middleware=[
-                context_aware_prompt,  # 动态系统提示词
                 inject_attachment_context,  # 附件上下文注入
-                context_based_model,  # 动态模型选择
                 ModelRetryMiddleware(),  # 模型重试中间件
             ],
             checkpointer=await self._get_checkpointer(),

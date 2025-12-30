@@ -36,6 +36,7 @@ class Context(BaseContext):
             "options": lambda: list(MCP_SERVERS.keys()),
             "description": (
                 "MCP服务器列表，建议使用支持 SSE 的 MCP 服务器，"
-                "如果需要使用 uvx 或 npx 运行的服务器，也请在项目外部启动 MCP 服务器，并在项目中配置 MCP 服务器。"),
+                "如果需要使用 uvx 或 npx 运行的服务器，也请在项目外部启动 MCP 服务器，并在项目中配置 MCP 服务器。"
+            ),
         },
     )

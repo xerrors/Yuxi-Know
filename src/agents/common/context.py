@@ -49,7 +49,7 @@ class BaseContext:
         metadata={
             "name": "智能体模型",
             "options": [],
-            "description": "智能体的驱动模型，建议选择 Agent 能力较强的模型，不建议使用小参数模型。"
+            "description": "智能体的驱动模型，建议选择 Agent 能力较强的模型，不建议使用小参数模型。",
         },
     )
 

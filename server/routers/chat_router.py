@@ -865,7 +865,7 @@ async def resume_agent_chat(
 async def save_agent_config(
     agent_id: str,
     config: dict = Body(...),
-    reload_graph: bool = Query(False),
+    reload_graph: bool = Query(True),
     current_user: User = Depends(get_required_user),
 ):
     """保存智能体配置到YAML文件（需要登录）"""
