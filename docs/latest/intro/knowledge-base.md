@@ -113,5 +113,5 @@ Neo4j 访问信息可以参考 `docker-compose.yml` 中配置对应的环境变�
 
 
 ::: warning 注意事项
-确保每个节点都有 `Entity` 标签，每个关系都有 `RELATION` 类型，否则会影响图的检索与构建功能。
+确保每个节点都有 `Entity` 标签和 `name` 属性，每个关系都有 `RELATION` 类型和 `type` 属性，否则会影响图的检索与构建功能。
 :::
