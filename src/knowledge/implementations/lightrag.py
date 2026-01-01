@@ -4,7 +4,7 @@ import traceback
 from lightrag import LightRAG, QueryParam
 from lightrag.kg.shared_storage import initialize_pipeline_status
 from lightrag.llm.openai import openai_complete_if_cache, openai_embed
-from lightrag.utils import EmbeddingFunc, setup_logger
+from lightrag.utils import EmbeddingFunc
 from neo4j import GraphDatabase
 from pymilvus import connections, utility
 
@@ -13,7 +13,6 @@ from src.knowledge.base import KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
 from src.utils import hashstr, logger
-from src.utils.datetime_utils import shanghai_now
 
 
 class LightRagKB(KnowledgeBase):
