@@ -238,7 +238,7 @@ import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useConfigStore } from '@/stores/config';
 import { useDatabaseStore } from '@/stores/database';
-import { Database, FileDigit, Waypoints, Building2 } from 'lucide-vue-next';
+import { Database, FileDigit, Waypoints, Building2, DatabaseZap } from 'lucide-vue-next';
 import { LockOutlined, InfoCircleOutlined, QuestionCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
@@ -381,7 +381,7 @@ const getKbTypeIcon = (type) => {
   const icons = {
     lightrag: Waypoints,
     chroma: FileDigit,
-    milvus: Building2
+    milvus: DatabaseZap
   }
   return icons[type] || Database
 }
@@ -760,14 +760,7 @@ onMounted(() => {
       .top {
         .info {
           h3 {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-
-            .kb-type-tag {
-              margin-left: auto;
-            }
+            display: block;
           }
         }
       }
@@ -840,6 +833,9 @@ onMounted(() => {
     }
 
     .info {
+      flex: 1;
+      min-width: 0;
+
       h3, p {
         margin: 0;
         color: var(--gray-10000);
@@ -850,6 +846,9 @@ onMounted(() => {
         font-weight: 600;
         letter-spacing: -0.02em;
         line-height: 1.4;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       p {
@@ -863,7 +862,7 @@ onMounted(() => {
         font-weight: 400;
 
         .created-time-inline {
-          color: var(--gray-500);
+          color: var(--gray-700);
           font-size: 11px;
           font-weight: 400;
           background: var(--gray-50);
