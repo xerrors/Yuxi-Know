@@ -115,6 +115,17 @@
         <div class="note">
           <p>上传的文件内容参考 test/data/A_Dream_of_Red_Mansions_tiny.jsonl 中的格式：</p>
         </div>
+        <div style="margin-bottom: 16px;">
+          <span>嵌入模型:</span>
+          <EmbeddingModelSelector
+            v-model:value="state.embedModelName"
+            :disabled="!embedModelConfigurable"
+            style="width: 100%;"
+          />
+           <div v-if="!embedModelConfigurable" style="font-size: 12px; margin-top: 4px;">
+            * 图数据库已有数据或已设定模型，不可更改
+          </div>
+        </div>
         <a-upload-dragger
           class="upload-dragger"
           v-model:fileList="fileList"
@@ -174,7 +185,7 @@ import { neo4jApi, unifiedApi } from '@/apis/graph_api';
 import { useUserStore } from '@/stores/user';
 import GraphCanvas from '@/components/GraphCanvas.vue';
 import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
-import UploadModal from '@/components/FileUploadModal.vue';
+import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
 import { useGraph } from '@/composables/useGraph';
 
 const configStore = useConfigStore();
@@ -203,11 +214,16 @@ const state = reactive({
   selectedDbId: 'neo4j',
   dbOptions: [],
   lightragStats: null,
+  embedModelName: '',
 })
 
 const isNeo4j = computed(() => {
   return state.selectedDbId === 'neo4j';
 });
+
+const embedModelConfigurable = computed(() => {
+  return graphInfo.value?.embed_model_configurable ?? true
+})
 
 // 检查是否有有效的已上传文件
 const hasValidFile = computed(() => {
@@ -287,6 +303,12 @@ const loadGraphInfo = () => {
     .then(data => {
       console.log(data)
       graphInfo.value = data.data
+      if (graphInfo.value?.embed_model_name) {
+        state.embedModelName = graphInfo.value.embed_model_name
+      } else {
+         // Default if not set (though backend usually sends default)
+         state.embedModelName = cur_embed_model.value
+      }
       state.loadingGraphInfo = false
     })
     .catch(error => {
@@ -303,6 +325,11 @@ const addDocumentByFile = () => {
     return
   }
 
+  if (!state.embedModelName) {
+     message.error('请选择嵌入模型')
+     return
+  }
+
   state.processing = true
 
   // 获取已上传的文件路径
@@ -316,7 +343,7 @@ const addDocumentByFile = () => {
     return
   }
 
-  neo4jApi.addEntities(filePath)
+  neo4jApi.addEntities(filePath, 'neo4j', state.embedModelName)
     .then((data) => {
       if (data.status === 'success') {
         message.success(data.message);

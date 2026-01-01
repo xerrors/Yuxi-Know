@@ -266,7 +266,10 @@ async def index_neo4j_entities(data: dict = Body(default={}), current_user: User
 
 @graph.post("/neo4j/add-entities")
 async def add_neo4j_entities(
-    file_path: str = Body(...), kgdb_name: str | None = Body(None), current_user: User = Depends(get_admin_user)
+    file_path: str = Body(...),
+    kgdb_name: str | None = Body(None),
+    embed_model_name: str | None = Body(None),
+    current_user: User = Depends(get_admin_user),
 ):
     """通过JSONL文件添加图谱实体到Neo4j"""
     try:
@@ -281,7 +284,7 @@ async def add_neo4j_entities(
         if not file_path.endswith(".jsonl"):
             return {"success": False, "message": "文件格式错误，请上传jsonl文件", "status": "failed"}
 
-        await graph_base.jsonl_file_add_entity(file_path, kgdb_name)
+        await graph_base.jsonl_file_add_entity(file_path, kgdb_name, embed_model_name)
         return {"success": True, "message": "实体添加成功", "status": "success"}
     except Exception as e:
         logger.error(f"添加实体失败: {e}, {traceback.format_exc()}")

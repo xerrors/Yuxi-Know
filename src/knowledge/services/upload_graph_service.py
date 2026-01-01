@@ -29,6 +29,7 @@ class UploadGraphService:
         self.embed_model = select_embedding_model(self.embed_model_name)
         self.work_dir = os.path.join(config.save_dir, "knowledge_graph", self.kgdb_name)
         os.makedirs(self.work_dir, exist_ok=True)
+        self.is_initialized_from_file = False
 
         # 尝试加载已保存的图数据库信息
         if not self.load_graph_info():
@@ -51,7 +52,6 @@ class UploadGraphService:
             self.connection._connect()
             logger.info(f"Connected to Neo4j: {self.get_graph_info(self.kgdb_name)}")
             # 连接成功后保存图数据库信息
-            self.save_graph_info(self.kgdb_name)
 
     def close(self):
         """关闭数据库连接"""
@@ -84,7 +84,7 @@ class UploadGraphService:
         if self.status == "closed":
             self.start()
 
-    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j"):
+    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j", embed_model_name=None):
         """从JSONL文件添加实体三元组到Neo4j"""
         assert self.driver is not None, "Database is not connected"
         self.connection.status = "processing"
@@ -134,7 +134,7 @@ class UploadGraphService:
 
             triples = list(read_triples(actual_file_path))
 
-            await self.txt_add_vector_entity(triples, kgdb_name)
+            await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name)
 
         except Exception as e:
             logger.error(f"处理文件失败: {e}")
@@ -153,7 +153,7 @@ class UploadGraphService:
         self.save_graph_info()
         return kgdb_name
 
-    async def txt_add_vector_entity(self, triples, kgdb_name="neo4j"):
+    async def txt_add_vector_entity(self, triples, kgdb_name="neo4j", embed_model_name=None):
         """添加实体三元组"""
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
@@ -258,12 +258,24 @@ class UploadGraphService:
                     embedding=embedding,
                 )
 
+        # 检查是否允许更新模型
+        if embed_model_name and not self.is_initialized_from_file:
+            if embed_model_name != self.embed_model_name:
+                logger.info(f"Changing embedding model from {self.embed_model_name} to {embed_model_name}")
+                self.embed_model_name = embed_model_name
+                self.embed_model = select_embedding_model(self.embed_model_name)
+
         # 判断模型名称是否匹配
-        self.embed_model_name = self.embed_model_name or config.embed_model
+        if not self.embed_model_name:
+            self.embed_model_name = config.embed_model
+
         cur_embed_info = config.embed_model_names.get(self.embed_model_name)
         logger.warning(f"embed_model_name={self.embed_model_name}, {cur_embed_info=}")
-        assert self.embed_model_name == config.embed_model or self.embed_model_name is None, (
-            f"embed_model_name={self.embed_model_name}, {config.embed_model=}"
+
+        # 允许 self.embed_model_name 与 config.embed_model 不同（用户自定义选择的情况）
+        # 但必须在支持的模型列表中
+        assert self.embed_model_name in config.embed_model_names, (
+            f"Unsupported embed model: {self.embed_model_name}"
         )
 
         with self.driver.session() as session:
@@ -412,6 +424,7 @@ class UploadGraphService:
                 "labels": labels,
                 "status": self.status,
                 "embed_model_name": self.embed_model_name,
+                "embed_model_configurable": not self.is_initialized_from_file,
                 "unindexed_node_count": len(self.query_nodes_without_embedding(graph_name)),
             }
 
@@ -448,6 +461,8 @@ class UploadGraphService:
                 json.dump(graph_info, f, ensure_ascii=False, indent=2)
 
             # logger.info(f"图数据库信息已保存到：{info_file_path}")
+            # 保存成功后，标记为从文件初始化（锁定配置）
+            self.is_initialized_from_file = True
             return True
         except Exception as e:
             logger.error(f"保存图数据库信息失败：{e}")
@@ -471,9 +486,14 @@ class UploadGraphService:
             if graph_info.get("embed_model_name"):
                 self.embed_model_name = graph_info["embed_model_name"]
 
+            # 重新选择embedding model
+            if self.embed_model_name:
+                self.embed_model = select_embedding_model(self.embed_model_name)
+
             # 如果需要，可以加载更多信息
             # 注意：这里不更新self.kgdb_name，因为它是在初始化时设置的
 
+            self.is_initialized_from_file = True
             logger.info(f"已加载图数据库信息，最后更新时间：{graph_info.get('last_updated')}")
             return True
         except Exception as e:
