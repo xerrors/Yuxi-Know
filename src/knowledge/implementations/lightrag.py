@@ -35,10 +35,13 @@ class LightRagKB(KnowledgeBase):
         # 设置 LightRAG 日志
         log_dir = os.path.join(work_dir, "logs", "lightrag")
         os.makedirs(log_dir, exist_ok=True)
-        setup_logger(
-            "lightrag",
-            log_file_path=os.path.join(log_dir, f"lightrag_{shanghai_now().strftime('%Y-%m-%d')}.log"),
-        )
+        # 禁止调用 lightrag.utils.setup_logger，因为它会重置全局 logger 配置（调用 logger.remove()）
+        # 导致主程序的控制台输出丢失。
+        # 全局 logger 已在 src/utils/logging_config.py 中配置好。
+        # setup_logger(
+        #     "lightrag",
+        #     log_file_path=os.path.join(log_dir, f"lightrag_{shanghai_now().strftime('%Y-%m-%d')}.log"),
+        # )
 
         logger.info("LightRagKB initialized")
 

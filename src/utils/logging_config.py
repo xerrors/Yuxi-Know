@@ -1,4 +1,5 @@
 import os
+import sys
 
 from loguru import logger as loguru_logger
 
@@ -25,12 +26,13 @@ def setup_logger(name, level="DEBUG", console=True):
         rotation="10 MB",  # 文件大小达到 10MB 时轮转
         retention="30 days",  # 保留30天的日志
         compression="zip",  # 压缩旧日志文件
+        enqueue=True,  # 异步写入，确保线程安全
     )
 
     # 添加控制台日志（有颜色）
     if console:
         loguru_logger.add(
-            lambda msg: print(msg, end=""),
+            sys.stderr,
             level=level,
             format=(
                 "<green>{time:MM-DD HH:mm:ss}</green> "
@@ -39,6 +41,7 @@ def setup_logger(name, level="DEBUG", console=True):
                 "<level>{message}</level>"
             ),
             colorize=True,
+            enqueue=True,  # 异步写入，确保线程安全
         )
 
     return loguru_logger
