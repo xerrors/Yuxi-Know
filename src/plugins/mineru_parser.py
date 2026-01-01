@@ -155,7 +155,7 @@ class MinerUParser(BaseDocumentProcessor):
                     self.parse_endpoint,
                     files=files,
                     data=data,
-                    timeout=os.environ.get("MINERU_TIMEOUT", 600),  # 10分钟超时
+                    timeout=os.environ.get("MINERU_TIMEOUT", 1800),  # 30分钟超时
                 )
 
             # 检查响应状态

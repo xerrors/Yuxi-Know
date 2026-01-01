@@ -66,7 +66,7 @@ docker compose up api -d
 ```
 
 ::: tip 处理超时
-文档解析超时时间默认 600 秒，可通过 `MINERU_TIMEOUT` 环境变量调整。
+文档解析超时时间默认 1800 秒，可通过 `MINERU_TIMEOUT` 环境变量调整。
 :::
 
 
