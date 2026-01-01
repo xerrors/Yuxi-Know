@@ -327,8 +327,8 @@ div.header, #app-router-view {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     padding: 4px;
     border: 1px solid transparent;
     border-radius: 12px;

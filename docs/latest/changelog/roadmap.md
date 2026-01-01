@@ -2,7 +2,6 @@
 
 路线图可能会经常变更，如果有强烈的建议，可以在 [issue](https://github.com/xerrors/Yuxi-Know/issues) 中提。
 
-v0.5
 
 ### 看板
 
@@ -15,9 +14,10 @@ v0.5
 - skills 如何实现还需要继续调研
 - 优化 paddle 的命名，paddlex 有歧义，修改为 PP-StructureV3
 - 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
-- RAG 检索的时候，支持限定文件类型
 - 将现有的 Milvus 的命名调整为通用 RAG
 - 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
+- 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
+- 支持更多类型的文档源的导入功能
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -27,6 +27,20 @@ v0.5
 - 目前的知识库的图片存在公开访问风险
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini）
 - 首页加载的问题
+- 当前的 upload 图谱查询为同步操作，可能会导致页面卡顿
+
+## v0.5
+
+### 新增
+
+- 优化 OCR 体验并新增对 Deepseek OCR 的支持
+- 优化 RAG 检索，支持根据文件 pattern 来检索（Agentic Mode）
+- 重构智能体对于“工具变更/模型变更”的处理逻辑，无需导入更复杂的中间件
+- 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
+
+### 修复
+
+- 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
 
 ## v0.4
 

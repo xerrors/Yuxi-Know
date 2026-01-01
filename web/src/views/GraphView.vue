@@ -115,15 +115,33 @@
         <div class="note">
           <p>上传的文件内容参考 test/data/A_Dream_of_Red_Mansions_tiny.jsonl 中的格式：</p>
         </div>
-        <div style="margin-bottom: 16px;">
-          <span>嵌入模型:</span>
-          <EmbeddingModelSelector
-            v-model:value="state.embedModelName"
-            :disabled="!embedModelConfigurable"
-            style="width: 100%;"
-          />
-           <div v-if="!embedModelConfigurable" style="font-size: 12px; margin-top: 4px;">
+        <div class="upload-config">
+          <div class="config-row">
+            <label class="config-label">嵌入模型</label>
+            <div class="config-field">
+              <EmbeddingModelSelector
+                v-model:value="state.embedModelName"
+                :disabled="!embedModelConfigurable"
+                :style="{ width: '100%' }"
+              />
+            </div>
+          </div>
+          <div v-if="!embedModelConfigurable" class="config-hint-row">
             * 图数据库已有数据或已设定模型，不可更改
+          </div>
+          <div class="config-row">
+            <label class="config-label">批处理大小</label>
+            <div class="config-field">
+              <a-input-number
+                v-model:value="state.batchSize"
+                :min="1"
+                :max="1000"
+                style="width: 100%"
+              />
+            </div>
+          </div>
+          <div class="config-hint-row">
+            默认值: 40，范围: 1-1000
           </div>
         </div>
         <a-upload-dragger
@@ -215,6 +233,7 @@ const state = reactive({
   dbOptions: [],
   lightragStats: null,
   embedModelName: '',
+  batchSize: 40,
 })
 
 const isNeo4j = computed(() => {
@@ -343,7 +362,7 @@ const addDocumentByFile = () => {
     return
   }
 
-  neo4jApi.addEntities(filePath, 'neo4j', state.embedModelName)
+  neo4jApi.addEntities(filePath, 'neo4j', state.embedModelName, state.batchSize)
     .then((data) => {
       if (data.status === 'success') {
         message.success(data.message);
@@ -639,6 +658,49 @@ const goToDatabasePage = () => {
 
   .upload-dragger {
     margin: 0px;
+  }
+
+  .upload-config {
+    margin: 24px 0;
+    padding: 16px;
+    background-color: var(--gray-0);
+    border-radius: 4px;
+
+    .config-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+
+      &:last-of-type {
+        margin-bottom: 0;
+      }
+
+      .config-label {
+        width: 100px;
+        flex-shrink: 0;
+        font-size: 14px;
+        color: var(--color-text);
+        text-align: right;
+        margin-right: 16px;
+      }
+
+      .config-field {
+        flex: 1;
+        min-width: 0;
+      }
+    }
+
+    .config-hint-row {
+      margin-bottom: 16px;
+      padding-left: 116px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 }
 

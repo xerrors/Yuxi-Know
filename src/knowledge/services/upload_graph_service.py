@@ -25,8 +25,8 @@ class UploadGraphService:
         self.connection = db_manager or Neo4jConnectionManager()
         self.files = []
         self.kgdb_name = "neo4j"
-        self.embed_model_name = os.getenv("GRAPH_EMBED_MODEL_NAME") or "siliconflow/BAAI/bge-m3"
-        self.embed_model = select_embedding_model(self.embed_model_name)
+        self.embed_model_name = None  # self.load_graph_info() 时加载
+        self.embed_model = None  # self.load_graph_info() 时加载
         self.work_dir = os.path.join(config.save_dir, "knowledge_graph", self.kgdb_name)
         os.makedirs(self.work_dir, exist_ok=True)
         self.is_initialized_from_file = False
@@ -51,7 +51,6 @@ class UploadGraphService:
         if not self.connection.is_running():
             self.connection._connect()
             logger.info(f"Connected to Neo4j: {self.get_graph_info(self.kgdb_name)}")
-            # 连接成功后保存图数据库信息
 
     def close(self):
         """关闭数据库连接"""
@@ -84,7 +83,7 @@ class UploadGraphService:
         if self.status == "closed":
             self.start()
 
-    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j", embed_model_name=None):
+    async def jsonl_file_add_entity(self, file_path, kgdb_name="neo4j", embed_model_name=None, batch_size=None):
         """从JSONL文件添加实体三元组到Neo4j"""
         assert self.driver is not None, "Database is not connected"
         self.connection.status = "processing"
@@ -134,7 +133,7 @@ class UploadGraphService:
 
             triples = list(read_triples(actual_file_path))
 
-            await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name)
+            await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name, batch_size)
 
         except Exception as e:
             logger.error(f"处理文件失败: {e}")
@@ -153,7 +152,7 @@ class UploadGraphService:
         self.save_graph_info()
         return kgdb_name
 
-    async def txt_add_vector_entity(self, triples, kgdb_name="neo4j", embed_model_name=None):
+    async def txt_add_vector_entity(self, triples, kgdb_name="neo4j", embed_model_name=None, batch_size=None):
         """添加实体三元组"""
         assert self.driver is not None, "Database is not connected"
         self.use_database(kgdb_name)
@@ -274,9 +273,7 @@ class UploadGraphService:
 
         # 允许 self.embed_model_name 与 config.embed_model 不同（用户自定义选择的情况）
         # 但必须在支持的模型列表中
-        assert self.embed_model_name in config.embed_model_names, (
-            f"Unsupported embed model: {self.embed_model_name}"
-        )
+        assert self.embed_model_name in config.embed_model_names, f"Unsupported embed model: {self.embed_model_name}"
 
         with self.driver.session() as session:
             logger.info(f"Adding entity to {kgdb_name}")
@@ -316,7 +313,7 @@ class UploadGraphService:
                 )
 
                 # 批量获取嵌入向量
-                batch_embeddings = await self.aget_embedding(batch_entities)
+                batch_embeddings = await self.aget_embedding(batch_entities, batch_size=batch_size)
 
                 # 将实体名称和嵌入向量配对
                 entity_embedding_pairs = list(zip(batch_entities, batch_embeddings))
@@ -327,12 +324,13 @@ class UploadGraphService:
             # 数据添加完成后保存图信息
             self.save_graph_info()
 
-    def add_embedding_to_nodes(self, node_names=None, kgdb_name="neo4j"):
+    async def add_embedding_to_nodes(self, node_names=None, kgdb_name="neo4j", batch_size=None):
         """为节点添加嵌入向量
 
         Args:
             node_names (list, optional): 要添加嵌入向量的节点名称列表，None表示所有没有嵌入向量的节点
             kgdb_name (str, optional): 图数据库名称，默认为'neo4j'
+            batch_size (int, optional): 嵌入批次大小
 
         Returns:
             int: 成功添加嵌入向量的节点数量
@@ -348,7 +346,7 @@ class UploadGraphService:
         with self.driver.session() as session:
             for node_name in node_names:
                 try:
-                    embedding = self.get_embedding(node_name)
+                    embedding = await self.aget_embedding(node_name, batch_size=batch_size)
                     session.execute_write(self.set_embedding, node_name, embedding)
                     count += 1
                 except Exception as e:
@@ -500,23 +498,24 @@ class UploadGraphService:
             logger.error(f"加载图数据库信息失败：{e}")
             return False
 
-    async def aget_embedding(self, text):
+    async def aget_embedding(self, text, batch_size=40):
         if isinstance(text, list):
-            outputs = await self.embed_model.abatch_encode(text, batch_size=40)
+            outputs = await self.embed_model.abatch_encode(text, batch_size=batch_size)
             return outputs
         else:
             outputs = await self.embed_model.aencode(text)
             return outputs
 
-    def get_embedding(self, text):
+    def get_embedding(self, text, batch_size=40):
         if isinstance(text, list):
-            outputs = self.embed_model.batch_encode(text, batch_size=40)
+            outputs = self.embed_model.batch_encode(text, batch_size=batch_size)
             return outputs
         else:
             outputs = self.embed_model.encode([text])[0]
             return outputs
 
     def set_embedding(self, tx, entity_name, embedding):
+        """为单个实体设置嵌入向量"""
         tx.run(
             """
         MATCH (e:Entity {name: $name})
@@ -564,9 +563,8 @@ class UploadGraphService:
                 entity_to_score[name] = max(entity_to_score.get(name, 0.0), 0.3)
 
         # 排序并截断
-        qualified_entities = [name for name, _ in sorted(entity_to_score.items(), key=lambda x: x[1], reverse=True)][
-            :max_entities
-        ]
+        sorted_entity_to_score = sorted(entity_to_score.items(), key=lambda x: x[1], reverse=True)
+        qualified_entities = [name for name, _ in sorted_entity_to_score][:max_entities]
 
         logger.debug(f"Graph Query Entities: {keyword}, {qualified_entities=}")
 

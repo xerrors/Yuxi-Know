@@ -123,13 +123,15 @@ export const neo4jApi = {
    * @param {string} file_path - JSONL文件路径
    * @param {string} kgdb_name - Neo4j数据库名称（默认为'neo4j'）
    * @param {string} embed_model_name - 嵌入模型名称 (可选)
+   * @param {number} batch_size - 批处理大小 (可选)
    * @returns {Promise} - 添加结果
    */
-  addEntities: async (file_path, kgdb_name = 'neo4j', embed_model_name = null) => {
+  addEntities: async (file_path, kgdb_name = 'neo4j', embed_model_name = null, batch_size = null) => {
     return await apiPost('/api/graph/neo4j/add-entities', {
       file_path: file_path,
       kgdb_name: kgdb_name,
-      embed_model_name: embed_model_name
+      embed_model_name: embed_model_name,
+      batch_size: batch_size
     }, {}, true)
   },
 
