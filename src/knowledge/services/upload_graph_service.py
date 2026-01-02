@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 import traceback
 import warnings
 from urllib.parse import urlparse
@@ -93,61 +92,38 @@ class UploadGraphService:
 
         # 检测 file_path 是否是 URL
         parsed_url = urlparse(file_path)
-        temp_file_path = None
 
         try:
             if parsed_url.scheme in ("http", "https"):  # 如果是 URL
                 logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
 
-                # 从 URL 解析 bucket_name 和 object_name
-                # URL 格式: http://host:port/bucket_name/object_name
-                path_parts = parsed_url.path.lstrip("/").split("/", 1)
-                if len(path_parts) < 2:
-                    raise ValueError(f"无法解析 MinIO URL: {file_path}")
-
-                bucket_name = path_parts[0]
-                object_name = path_parts[1]
-
-                # 从 MinIO 下载文件
+                # 使用 MinIO 客户端下载到临时文件（使用上下文管理器）
                 minio_client = get_minio_client()
-                file_data = await minio_client.adownload_file(bucket_name, object_name)
+                async with minio_client.temp_file_from_url(
+                    file_path, allowed_extensions=[".jsonl"]
+                ) as actual_file_path:
+                    def read_triples(file_path):
+                        with open(file_path, encoding="utf-8") as file:
+                            for line in file:
+                                if line.strip():
+                                    yield json.loads(line.strip())
 
-                # 创建临时文件保存下载的内容
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
-                ) as temp_file:
-                    temp_file.write(file_data.decode("utf-8"))
-                    temp_file_path = temp_file.name
+                    triples = list(read_triples(actual_file_path))
+                    await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name, batch_size)
+                    # 退出 with 块后，临时文件自动清理
 
-                logger.info(f"文件已下载到临时路径: {temp_file_path}")
-                actual_file_path = temp_file_path
             else:
-                # 本地文件路径
-                actual_file_path = file_path
-
-            def read_triples(file_path):
-                with open(file_path, encoding="utf-8") as file:
-                    for line in file:
-                        if line.strip():
-                            yield json.loads(line.strip())
-
-            triples = list(read_triples(actual_file_path))
-
-            await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name, batch_size)
+                # 本地文件路径 - 拒绝不安全的本地路径
+                raise ValueError(
+                    "不支持本地文件路径，只允许 MinIO URL。请先通过文件上传接口上传文件。"
+                )
 
         except Exception as e:
             logger.error(f"处理文件失败: {e}")
             raise
         finally:
-            # 清理临时文件
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.unlink(temp_file_path)
-                    logger.info(f"已删除临时文件: {temp_file_path}")
-                except Exception as e:
-                    logger.warning(f"删除临时文件失败: {e}")
+            self.connection.status = "open"
 
-        self.connection.status = "open"
         # 更新并保存图数据库信息
         self.save_graph_info()
         return kgdb_name
