@@ -67,8 +67,8 @@
     </div>
 
     <!-- 服务链接部分 -->
+    <h3 v-if="userStore.isAdmin" class="section-title">服务链接</h3>
     <div v-if="userStore.isAdmin">
-      <h3 class="section-title">服务链接</h3>
       <p class="service-description">快速访问系统相关的外部服务，需要将 localhost 替换为实际的 IP 地址。</p>
       <div class="services-grid">
         <div class="service-link-card">
@@ -186,6 +186,10 @@ const openLink = (url) => {
     font-weight: 600;
     margin: 24px 0 12px 0;
     padding-bottom: 8px;
+
+    &:first-child {
+      margin-top: 8px;
+    }
   }
 
   .service-description {
@@ -198,7 +202,7 @@ const openLink = (url) => {
   .section {
     margin-top: 10px;
     background-color: var(--gray-0);
-    padding: 16px;
+    padding: 10px 16px;
     border-radius: 8px;
     display: flex;
     flex-direction: column;

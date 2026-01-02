@@ -3,7 +3,7 @@
     v-model:open="visible"
     title="系统设置"
     width="90%"
-    :style="{ maxWidth: '1200px', minWidth: '320px' }"
+    :style="{ maxWidth: '1200px', minWidth: '320px', top: '3%' }"
     :footer="null"
     @cancel="handleClose"
     class="settings-modal"
@@ -78,9 +78,6 @@
           </div>
 
           <div v-show="activeTab === 'model'" v-if="userStore.isSuperAdmin">
-            <h3>模型配置</h3>
-            <p>请在 <code>.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
-            <a-divider />
             <ModelProvidersComponent />
           </div>
 
@@ -153,7 +150,7 @@ watch(() => props.visible, (newVal) => {
 })
 </script>
 
-<style lang="less" scoped>
+<style lang="less">
 .settings-modal {
   :deep(.ant-modal-header) {
     padding: 16px 24px;
@@ -166,16 +163,8 @@ watch(() => props.visible, (newVal) => {
     }
   }
 
-  :deep(.ant-modal-body) {
-    padding: 0;
-    height: calc(80vh - 55px); /* Header height approx 55px */
-    overflow: hidden;
-  }
-
   :deep(.ant-modal-content) {
     border-radius: 8px;
-    overflow: hidden;
-    max-height: 80vh;
     display: flex;
     flex-direction: column;
   }
@@ -191,14 +180,12 @@ watch(() => props.visible, (newVal) => {
 .settings-sider {
   width: 140px;
   height: 100%;
-  // padding: 20px 20px 0 0; /* Matches SettingView .sider */
-  padding-top: 20px;
+  padding-top: 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  overflow-y: auto;
 
   .sider-item {
     width: 100%;
@@ -232,18 +219,18 @@ watch(() => props.visible, (newVal) => {
 .settings-content-wrapper {
   flex: 1;
   height: 100%;
-  overflow-y: auto;
   /* background-color: #fff; SettingView seems to use default background */
 
   .settings-content {
     padding: 0 20px; /* Matches SettingView .setting padding */
-    margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
+    // margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
+    overflow-y: scroll;
+    height: 80vh;
 
     h3 {
       font-size: 18px;
       font-weight: 600;
       color: var(--gray-900);
-      margin-top: 20px;
       margin-bottom: 0.5em;
     }
 
@@ -272,41 +259,6 @@ watch(() => props.visible, (newVal) => {
     &.active {
       color: var(--main-color);
       border-bottom-color: var(--main-color);
-    }
-  }
-}
-
-@media (max-width: 768px) {
-  .settings-container {
-    flex-direction: column;
-  }
-
-  .settings-content-wrapper {
-    .settings-content {
-      padding: 20px;
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .settings-modal {
-    :deep(.ant-modal) {
-      margin: 0;
-      max-width: 100vw;
-      width: 100vw !important;
-      height: 100vh;
-      top: 0;
-      padding: 0;
-    }
-
-    :deep(.ant-modal-content) {
-      height: 100vh;
-      border-radius: 0;
-      max-height: 100vh;
-    }
-
-    :deep(.ant-modal-body) {
-      height: calc(100vh - 55px);
     }
   }
 }

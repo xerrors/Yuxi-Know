@@ -1,6 +1,9 @@
 <template>
-  <div>
+  <div class="model-providers-section">
     <!-- 自定义供应商管理区域 -->
+    <h3>模型配置</h3>
+    <p>请在 <code>.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
+    <a-divider />
     <div class="custom-providers-section">
       <div class="section-header">
         <h3>自定义供应商</h3>
@@ -769,7 +772,10 @@ const testCustomProvider = async (providerId, modelName) => {
 </script>
 
 <style lang="less" scoped>
-// 自定义供应商区域样式
+.model-providers-section {
+  padding-top: 12px;
+}
+
 .custom-providers-section {
   margin-bottom: 24px;
 
@@ -788,11 +794,6 @@ const testCustomProvider = async (providerId, modelName) => {
     overflow: hidden;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
-    &:hover {
-      border-color: var(--gray-300);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    }
-
     .card-header {
       display: flex;
       justify-content: space-between;
@@ -808,7 +809,6 @@ const testCustomProvider = async (providerId, modelName) => {
 
         h4 {
           margin: 0;
-          font-size: 16px;
           font-weight: 600;
           color: var(--gray-900);
         }
@@ -876,7 +876,6 @@ const testCustomProvider = async (providerId, modelName) => {
 
   h3 {
     margin: 0;
-    font-size: 16px;
     font-weight: 600;
     color: var(--gray-900);
   }
@@ -923,30 +922,12 @@ const testCustomProvider = async (providerId, modelName) => {
   border-radius: 8px;
   margin-bottom: 16px;
   padding: 0;
-  transition: all 0.3s ease;
   overflow: hidden;
-
-  &:hover {
-    border-color: var(--gray-200);
-  }
-
-  // 自定义模型容器特殊样式
-  &.custom-models-card {
-    .card-header {
-
-      h3 {
-        color: var(--main-color);
-        font-weight: 600;
-      }
-    }
-  }
 
   // 已配置provider的样式
   &.configured-provider {
     .model-icon {
-      &.available {
-        filter: grayscale(0%);
-      }
+      filter: grayscale(0%);
     }
 
     .provider-meta {
@@ -971,24 +952,6 @@ const testCustomProvider = async (providerId, modelName) => {
         filter: grayscale(100%);
       }
     }
-
-    .missing-keys {
-      color: var(--gray-700);
-      font-size: 12px;
-      font-weight: 500;
-
-      & > span {
-        margin-left: 6px;
-        user-select: all;
-        background-color: var(--color-warning-50);
-        color: var(--color-warning-700);
-        padding: 3px 8px;
-        border-radius: 6px;
-        font-weight: 600;
-        font-size: 11px;
-        border: 1px solid var(--color-warning-100);
-      }
-    }
   }
 
   .card-header {
@@ -998,7 +961,6 @@ const testCustomProvider = async (providerId, modelName) => {
     cursor: pointer;
     padding: 8px 16px;
     background: var(--gray-0);
-    transition: all 0.3s ease;
 
     .model-title-container {
       display: flex;
@@ -1007,7 +969,7 @@ const testCustomProvider = async (providerId, modelName) => {
 
       h3 {
         margin: 0;
-        font-size: 15px;
+        font-size: 14px;
         font-weight: 600;
         color: var(--gray-900);
       }
@@ -1032,15 +994,6 @@ const testCustomProvider = async (providerId, modelName) => {
           font-weight: 500;
           font-family: 'Courier New', monospace;
         }
-
-        .provider-link {
-          color: var(--gray-500);
-          transition: color 0.2s ease;
-
-          &:hover {
-            color: var(--main-color);
-          }
-        }
       }
     }
 
@@ -1061,9 +1014,8 @@ const testCustomProvider = async (providerId, modelName) => {
       border-radius: 6px;
       overflow: hidden;
       filter: grayscale(100%);
-      transition: filter 0.2s ease;
       flex-shrink: 0;
-      background-color: white;  /* 确保图标背景为白色 */
+      background-color: white;
       border: 1px solid var(--gray-200);
 
       img {
@@ -1095,15 +1047,6 @@ const testCustomProvider = async (providerId, modelName) => {
         background-color: var(--gray-50);
         color: var(--gray-700);
       }
-
-      .icon-wrapper {
-        display: inline-flex;
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-        &.rotated {
-          transform: rotate(180deg);
-        }
-      }
     }
 
     a {
@@ -1117,11 +1060,8 @@ const testCustomProvider = async (providerId, modelName) => {
       }
     }
 
-    .details, .missing-keys {
-      margin-left: auto;
-    }
-
     .missing-keys {
+      margin-left: auto;
       color: var(--gray-700);
       font-size: 12px;
       font-weight: 500;
@@ -1138,39 +1078,11 @@ const testCustomProvider = async (providerId, modelName) => {
         border: 1px solid var(--color-warning-100);
       }
     }
-
-    .expand-button, .config-button {
-      height: 32px;
-      width: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0;
-      cursor: pointer;
-      color: var(--gray-500);
-      border-radius: 6px;
-      transition: all 0.2s ease;
-
-      &:hover {
-        background-color: var(--gray-50);
-        color: var(--gray-700);
-      }
-
-      .icon-wrapper {
-        display: inline-flex;
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-        &.rotated {
-          transform: rotate(180deg);
-        }
-      }
-    }
   }
 
   .card-body-wrapper {
     max-height: 0;
     overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     background: var(--gray-0);
 
     &.expanded {
@@ -1195,13 +1107,7 @@ const testCustomProvider = async (providerId, modelName) => {
       align-items: center;
       box-sizing: border-box;
       background: var(--gray-0);
-      transition: all 0.3s ease;
       min-height: 48px;
-
-      &:hover {
-        box-shadow: 0 1px 8px rgba(0, 0, 0, 0.03);
-        border-color: var(--gray-200);
-      }
 
       .model_name {
         font-size: 14px;
@@ -1212,148 +1118,6 @@ const testCustomProvider = async (providerId, modelName) => {
         white-space: nowrap;
         line-height: 1.4;
       }
-
-      .select-btn {
-        width: 16px;
-        height: 16px;
-        flex: 0 0 16px;
-        border-radius: 50%;
-        border: 2px solid var(--gray-300);
-        background: var(--gray-0);
-        transition: all 0.2s ease;
-
-        &:hover {
-          border-color: var(--main-color);
-        }
-      }
-    }
-
-    // 自定义模型卡片样式 - 统一设计
-    .custom-model {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      padding: 12px 16px;
-      gap: 8px;
-      cursor: pointer;
-      min-height: 72px;
-      background: var(--gray-0);
-      border-radius: 6px;
-      border: 1px solid var(--gray-150);
-      transition: all 0.3s ease;
-
-      &:hover {
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-        border-color: var(--gray-200);
-
-        .card-models__header .action {
-          opacity: 1;
-        }
-      }
-
-        .card-models__header {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        min-height: 18px;
-
-        .name {
-          font-size: 14px;
-          font-weight: 500;
-          color: var(--gray-900);
-          line-height: 1.4;
-          flex: 1;
-          margin-right: 8px;
-          word-break: break-word;
-        }
-
-        .action {
-          opacity: 0;
-          transition: opacity 0.2s ease;
-          display: flex;
-          gap: 4px;
-          flex-shrink: 0;
-          margin-top: -1px;
-
-          button {
-            padding: 4px;
-            height: 24px;
-            width: 24px;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s ease;
-
-            &:hover {
-              background-color: var(--gray-100);
-            }
-
-            &:disabled {
-              opacity: 0.4;
-              cursor: not-allowed;
-
-              &:hover {
-                background-color: transparent;
-              }
-            }
-          }
-        }
-      }
-
-      .api_base {
-        font-size: 12px;
-        color: var(--gray-600);
-        line-height: 1.3;
-        word-break: break-all;
-        margin-top: auto;
-      }
-
-      // 添加模型的special样式
-      &.add-model {
-        border: 2px dashed var(--gray-300);
-        background: var(--gray-0);
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        min-height: 64px;
-
-        &:hover {
-          border-color: var(--main-color);
-          background: var(--gray-25);
-        }
-
-        .card-models__header {
-          justify-content: center;
-          align-items: center;
-          text-align: center;
-
-          .name {
-            color: var(--main-color);
-            font-weight: 600;
-            margin-right: 0;
-            text-align: center;
-          }
-        }
-
-        .api_base {
-          color: var(--gray-500);
-          text-align: center;
-          margin-top: 4px;
-        }
-      }
-    }
-  }
-}
-
-.custom-model-modal {
-  .ant-form-item {
-    margin-bottom: 10px;
-    .form-item-description {
-      font-size: 12px;
-      color: var(--gray-600);
-      margin-bottom: 10px;
     }
   }
 }
@@ -1396,12 +1160,6 @@ const testCustomProvider = async (providerId, modelName) => {
 
           .ant-input-affix-wrapper {
             border-radius: 6px;
-            &:hover, &:focus {
-              border-color: var(--main-color);
-            }
-            .anticon {
-              color: var(--gray-500);
-            }
           }
         }
         .selection-summary {
@@ -1423,10 +1181,6 @@ const testCustomProvider = async (providerId, modelName) => {
             border-radius: 6px;
             background-color: var(--gray-0);
             border: 1px solid var(--gray-150);
-
-            &:hover {
-              background-color: var(--gray-50);
-            }
           }
         }
       }
@@ -1444,25 +1198,7 @@ const testCustomProvider = async (providerId, modelName) => {
       .model_name {
         color: var(--gray-500);
       }
-
-      &:hover {
-        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-        border-color: var(--gray-200);
-      }
     }
-  }
-}
-
-// 添加简单的脉冲动画
-@keyframes pulse {
-  0% {
-    opacity: 0.7;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.7;
   }
 }
 
@@ -1480,20 +1216,6 @@ const testCustomProvider = async (providerId, modelName) => {
     .card-header {
       padding: 10px;
       gap: 8px;
-
-      .model-icon {
-        width: 24px;
-        height: 24px;
-      }
-
-      h3 {
-        font-size: 14px;
-      }
-
-      .expand-button, .config-button {
-        height: 30px;
-        width: 30px;
-      }
     }
   }
 }

@@ -469,7 +469,7 @@ onMounted(() => {
 
 <style lang="less" scoped>
 .user-management {
-  margin-top: 20px;
+  margin-top: 12px;
   min-height: 50vh;
 
   .header-section {
