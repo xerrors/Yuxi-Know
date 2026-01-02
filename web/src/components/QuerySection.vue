@@ -13,21 +13,10 @@
               @press-enter.prevent="onQuery"
             />
             <div class="search-actions">
-              <div class="query-examples-compact">
-                <!-- 检索配置按钮 -->
-                <a-tooltip title="检索配置" placement="bottom">
-                  <a-button
-                    type="text"
-                    size="small"
-                    class="config-label-btn"
-                    @click="openSearchConfigModal"
-                  >
-                    <SettingOutlined />
-                  </a-button>
-                </a-tooltip>
-                <div class="examples-label-group">
-                  <a-tooltip title="点击手动生成测试问题" placement="bottom">
-                    <a-button
+                <div class="query-examples-compact">
+                  <div class="examples-label-group">
+                    <a-tooltip title="点击手动生成测试问题" placement="bottom">
+                      <a-button
                       type="text"
                       size="small"
                       class="examples-label-btn"
@@ -150,13 +139,6 @@
       </div>
     </div>
   </div>
-
-  <!-- 检索配置弹窗 -->
-  <SearchConfigModal
-    v-model="searchConfigModalVisible"
-    :database-id="store.database?.db_id"
-    @save="handleSearchConfigSave"
-  />
 </template>
 
 <script setup>
@@ -167,9 +149,7 @@ import { queryApi } from '@/apis/knowledge_api';
 import {
   SearchOutlined,
   ReloadOutlined,
-  SettingOutlined,
 } from '@ant-design/icons-vue';
-import SearchConfigModal from './SearchConfigModal.vue';
 
 const store = useDatabaseStore();
 
@@ -634,24 +614,6 @@ defineExpose({
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.config-label-btn {
-  color: var(--gray-500);
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  padding: 0 4px;
-  margin-left: -4px;
-
-  &:hover {
-    color: var(--main-color);
-    background-color: var(--gray-100);
-  }
-
-  .anticon {
-    font-size: 14px;
-  }
 }
 
 .examples-label-btn {

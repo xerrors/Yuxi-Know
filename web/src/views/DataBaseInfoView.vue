@@ -2,6 +2,13 @@
 <div class="database-info-container">
   <FileDetailModal />
 
+  <!-- 检索配置弹窗 -->
+  <SearchConfigModal
+    v-model="searchConfigModalVisible"
+    :database-id="databaseId"
+    @save="handleSearchConfigSave"
+  />
+
   <FileUploadModal
         v-model:visible="addFilesModalVisible"
         :folder-tree="folderTree"
@@ -23,6 +30,17 @@
 
     <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%', display: store.state.rightPanelVisible ? 'flex' : 'none' }">
       <a-tabs v-model:activeKey="activeTab" class="knowledge-tabs" :tabBarStyle="{ margin: 0, padding: '0 16px' }">
+        <template #tabBarExtraContent>
+          <a-tooltip title="检索配置" placement="bottom">
+            <a-button
+              type="text"
+              class="config-btn"
+              @click="openSearchConfigModal"
+            >
+              <SettingOutlined />
+            </a-button>
+          </a-tooltip>
+        </template>
         <a-tab-pane key="graph" tab="知识图谱" v-if="isGraphSupported">
           <KnowledgeGraphSection
             :visible="true"
@@ -96,6 +114,7 @@ import { useRoute } from 'vue-router';
 import { useDatabaseStore } from '@/stores/database';
 import { useTaskerStore } from '@/stores/tasker';
 import { Info } from 'lucide-vue-next';
+import { SettingOutlined } from '@ant-design/icons-vue';
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue';
 import FileTable from '@/components/FileTable.vue';
 import FileDetailModal from '@/components/FileDetailModal.vue';
@@ -105,6 +124,7 @@ import QuerySection from '@/components/QuerySection.vue';
 import MindMapSection from '@/components/MindMapSection.vue';
 import RAGEvaluationTab from '@/components/RAGEvaluationTab.vue';
 import EvaluationBenchmarks from '@/components/EvaluationBenchmarks.vue';
+import SearchConfigModal from '@/components/SearchConfigModal.vue';
 
 const route = useRoute();
 const store = useDatabaseStore();
@@ -188,6 +208,18 @@ const toggleRightPanel = () => {
 const leftPanelWidth = ref(50);
 const isDragging = ref(false);
 const resizeHandle = ref(null);
+
+// 检索配置弹窗
+const searchConfigModalVisible = ref(false);
+
+const handleSearchConfigSave = () => {
+  store.getDatabaseInfo();
+};
+
+// 打开检索配置弹窗
+const openSearchConfigModal = () => {
+  searchConfigModalVisible.value = true;
+};
 
 // 添加文件弹窗
 const addFilesModalVisible = ref(false);
@@ -494,6 +526,29 @@ const handleMouseUp = () => {
     margin-bottom: 0;
     // background-color: var(--gray-0);
     border-bottom: 1px solid var(--gray-200);
+  }
+
+  :deep(.ant-tabs-extra-content) {
+    display: flex;
+    align-items: center;
+    height: 100%;
+  }
+}
+
+.config-btn {
+  color: var(--gray-500);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--main-color);
+    background-color: var(--gray-100);
   }
 }
 
