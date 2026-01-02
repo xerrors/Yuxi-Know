@@ -22,7 +22,7 @@
                       class="examples-label-btn"
                       @click="() => generateSampleQuestions(false)"
                     >
-                      示例<ReloadOutlined />:
+                      示例:
                     </a-button>
                   </a-tooltip>
                 </div>

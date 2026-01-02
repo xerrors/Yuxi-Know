@@ -4,12 +4,12 @@ import { ref, computed } from 'vue'
 export const useUserStore = defineStore('user', () => {
   // 状态
   const token = ref(localStorage.getItem('user_token') || '')
-  const userId = ref(parseInt(localStorage.getItem('user_id') || '0') || null)
-  const username = ref(localStorage.getItem('username') || '')
-  const userIdLogin = ref(localStorage.getItem('user_id_login') || '') // 用于登录的user_id
-  const phoneNumber = ref(localStorage.getItem('phone_number') || '')
-  const avatar = ref(localStorage.getItem('avatar') || '')
-  const userRole = ref(localStorage.getItem('user_role') || '')
+  const userId = ref(null)
+  const username = ref('')
+  const userIdLogin = ref('')
+  const phoneNumber = ref('')
+  const avatar = ref('')
+  const userRole = ref('')
 
   // 计算属性
   const isLoggedIn = computed(() => !!token.value)
@@ -54,14 +54,8 @@ export const useUserStore = defineStore('user', () => {
       avatar.value = data.avatar || ''
       userRole.value = data.role
 
-      // 保存到本地存储
+      // 只保存 token 到本地存储
       localStorage.setItem('user_token', data.access_token)
-      localStorage.setItem('user_id', data.user_id)
-      localStorage.setItem('username', data.username)
-      localStorage.setItem('user_id_login', data.user_id_login)
-      localStorage.setItem('phone_number', data.phone_number || '')
-      localStorage.setItem('avatar', data.avatar || '')
-      localStorage.setItem('user_role', data.role)
 
       return true
     } catch (error) {
@@ -80,14 +74,8 @@ export const useUserStore = defineStore('user', () => {
     avatar.value = ''
     userRole.value = ''
 
-    // 清除本地存储
+    // 只清除 token
     localStorage.removeItem('user_token')
-    localStorage.removeItem('user_id')
-    localStorage.removeItem('username')
-    localStorage.removeItem('user_id_login')
-    localStorage.removeItem('phone_number')
-    localStorage.removeItem('avatar')
-    localStorage.removeItem('user_role')
   }
 
   async function initialize(admin) {
@@ -116,14 +104,8 @@ export const useUserStore = defineStore('user', () => {
       avatar.value = data.avatar || ''
       userRole.value = data.role
 
-      // 保存到本地存储
+      // 只保存 token 到本地存储
       localStorage.setItem('user_token', data.access_token)
-      localStorage.setItem('user_id', data.user_id)
-      localStorage.setItem('username', data.username)
-      localStorage.setItem('user_id_login', data.user_id_login)
-      localStorage.setItem('phone_number', data.phone_number || '')
-      localStorage.setItem('avatar', data.avatar || '')
-      localStorage.setItem('user_role', data.role)
 
       return true
     } catch (error) {
@@ -284,7 +266,6 @@ export const useUserStore = defineStore('user', () => {
 
       // 更新本地头像状态
       avatar.value = data.avatar_url
-      localStorage.setItem('avatar', data.avatar_url)
 
       return data
     } catch (error) {
@@ -309,18 +290,12 @@ export const useUserStore = defineStore('user', () => {
       const userData = await response.json()
 
       // 更新本地状态
+      userId.value = userData.id
       username.value = userData.username
       userIdLogin.value = userData.user_id
       phoneNumber.value = userData.phone_number || ''
       avatar.value = userData.avatar || ''
       userRole.value = userData.role
-
-      // 更新本地存储
-      localStorage.setItem('username', userData.username)
-      localStorage.setItem('user_id_login', userData.user_id)
-      localStorage.setItem('phone_number', userData.phone_number || '')
-      localStorage.setItem('avatar', userData.avatar || '')
-      localStorage.setItem('user_role', userData.role)
 
       return userData
     } catch (error) {
@@ -351,11 +326,9 @@ export const useUserStore = defineStore('user', () => {
       // 更新本地状态
       if (typeof userData.username === 'string') {
         username.value = userData.username
-        localStorage.setItem('username', userData.username)
       }
       if (typeof userData.phone_number !== 'undefined') {
         phoneNumber.value = userData.phone_number || ''
-        localStorage.setItem('phone_number', userData.phone_number || '')
       }
 
       return userData

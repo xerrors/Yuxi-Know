@@ -106,6 +106,18 @@ router.beforeEach(async (to, from, next) => {
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin);
 
   const userStore = useUserStore();
+
+  // 如果有 token 但用户信息未加载，先获取用户信息
+  if (userStore.token && !userStore.userId) {
+    try {
+      await userStore.getCurrentUser();
+    } catch (error) {
+      // 如果获取用户信息失败（如 token 过期），清除 token
+      console.error('获取用户信息失败:', error);
+      userStore.logout();
+    }
+  }
+
   const isLoggedIn = userStore.isLoggedIn;
   const isAdmin = userStore.isAdmin;
 
