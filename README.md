@@ -71,30 +71,49 @@
   - 文档解析升级，适配 mineru-2.6 以及 mineru-api。
   - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 
+<table align="center">
 
-<div align="center">
-  <!-- 视频缩略图 -->
-<img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
+  <tr>
+    <td align="center">
+      <strong>支持亮色 / 暗色模式切换</strong><br>
+      <img width="4420" height="2510" alt="image"
+           src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
+    </td>
+  </tr>
 
+  <tr>
+    <td align="center">
+      <strong>Dashboard 页面查看用量</strong><br>
+      <img width="2208" height="1255" alt="image"
+           src="https://github.com/user-attachments/assets/51a38d0a-caf9-4f46-981f-5ac0602d1e8b" />
+    </td>
+  </tr>
 
+  <tr>
+    <td align="center">
+      <strong>知识图谱可视化页面（支持展示 liaghtrag 图谱）</strong><br>
+      <img width="2208" height="1255" alt="image"
+           src="https://github.com/user-attachments/assets/25532b80-cf69-46e2-8dc1-6736b902bc3c" />
+    </td>
+  </tr>
 
-  <br>
-  <img width="5369" height="2934" alt="222" src="https://github.com/user-attachments/assets/839978d4-dcb8-47bd-a629-2912d2867e7e" />
+  <tr>
+    <td align="center">
+      <strong>智能体调用知识库的案例</strong><br>
+      <img width="2208" height="1255" alt="image"
+           src="https://github.com/user-attachments/assets/f4e2d31e-7e7b-4f88-a485-67fc5fab24d6" />
+    </td>
+  </tr>
 
-  <br>
-  <img width="5369" height="2934" alt="333" src="https://github.com/user-attachments/assets/6387abce-45ab-4cd2-bd2f-e478d59a145f" />
+  <tr>
+    <td align="center">
+      <strong>深度智能体调用子智能体与文件系统的案例</strong><br>
+      <img width="2208" height="1255" alt="image"
+           src="https://github.com/user-attachments/assets/b45e6883-187b-4b63-b43e-6b8a8cb2bf0e" />
+    </td>
+  </tr>
 
-  <br>
-  <img width="5369" height="2934" alt="444" src="https://github.com/user-attachments/assets/aff737c4-4b58-4b2e-b7aa-b0ff92d84e9b" />
-
-  <br>
-  <img width="5369" height="2934" alt="555" src="https://github.com/user-attachments/assets/3fda0e48-ff6e-4b35-88b2-f7f7bc99a436" />
-
-  <br>
-  <img width="5369" height="2934" alt="666" src="https://github.com/user-attachments/assets/8fdf0407-056d-40e2-949c-8dd4247dc59d" />
-
-
-</div>
+</table>
 
 
 ## 参与贡献
