@@ -95,7 +95,7 @@
               {{ queryResult }}
             </div>
 
-            <!-- Chroma/Milvus 返回列表格式 -->
+            <!-- Milvus 返回列表格式 -->
             <div v-else-if="Array.isArray(queryResult)" class="result-list">
               <div v-if="queryResult.length === 0" class="no-results">
                 <p>未找到相关结果</p>

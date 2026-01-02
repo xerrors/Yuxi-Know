@@ -10,7 +10,6 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "langchain>=1.2.0",
     "langchain-core >= 1.2.5",
-    "chromadb>=1.3",
     "colorlog>=6.9.0",
     "dashscope>=1.23.2",
     "docx2txt>=0.9",

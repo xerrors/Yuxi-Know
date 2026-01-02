@@ -95,7 +95,7 @@ async def create_database(
 
         def normalize_reranker_config(kb: str, params: dict) -> None:
             reranker_cfg = params.get("reranker_config")
-            if kb not in {"chroma", "milvus"}:
+            if kb not in {"milvus"}:
                 if kb == "lightrag" and reranker_cfg:
                     logger.warning("LightRAG does not support reranker, ignoring reranker_config")
                     params.pop("reranker_config", None)
@@ -786,68 +786,6 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
                     },
                 ],
             }
-        elif kb_type == "chroma":
-            top_k_default = reranker_config.get("final_top_k", 10)
-            params_list = [
-                {
-                    "key": "top_k",
-                    "label": "TopK",
-                    "type": "number",
-                    "default": top_k_default,
-                    "min": 1,
-                    "max": 100,
-                    "description": "返回的最大结果数量",
-                },
-                {
-                    "key": "similarity_threshold",
-                    "label": "相似度阈值",
-                    "type": "number",
-                    "default": 0.0,
-                    "min": 0.0,
-                    "max": 1.0,
-                    "step": 0.1,
-                    "description": "过滤相似度低于此值的结果",
-                },
-                {
-                    "key": "include_distances",
-                    "label": "显示相似度",
-                    "type": "boolean",
-                    "default": True,
-                    "description": "在结果中显示相似度分数",
-                },
-                {
-                    "key": "use_reranker",
-                    "label": "启用重排序",
-                    "type": "boolean",
-                    "default": reranker_enabled,
-                    "description": "是否使用精排模型对检索结果进行重排序",
-                },
-                {
-                    "key": "recall_top_k",
-                    "label": "召回数量",
-                    "type": "number",
-                    "default": reranker_config.get("recall_top_k", 50),
-                    "min": 10,
-                    "max": 200,
-                    "description": "启用重排序时向量检索的候选数量",
-                },
-            ]
-
-            if config.reranker_names:
-                params_list.append(
-                    {
-                        "key": "reranker_model",
-                        "label": "重排序模型",
-                        "type": "select",
-                        "default": reranker_config.get("model", ""),
-                        "options": [
-                            {"label": info.name, "value": model_id} for model_id, info in config.reranker_names.items()
-                        ],
-                        "description": "覆盖默认配置，选择用于本次查询的重排序模型",
-                    }
-                )
-
-            params = {"type": "chroma", "options": params_list}
         elif kb_type == "milvus":
             top_k_default = reranker_config.get("final_top_k", 10)
             params_list = [

@@ -78,7 +78,7 @@ export const useDatabaseStore = defineStore('database', () => {
     }
 
     // 向量数据库的重排序模型验证
-    if (['chroma', 'milvus'].includes(formData.kb_type)) {
+    if (['milvus'].includes(formData.kb_type)) {
       if (formData.reranker_config?.enabled && !formData.reranker_config?.model) {
         message.error('请选择重排序模型');
         return false;

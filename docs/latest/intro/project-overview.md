@@ -9,7 +9,7 @@ Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知�
 - **后端服务**: [FastAPI](https://github.com/tiangolo/fastapi) + Python 3.12+
 - **前端界面**: [Vue.js 3](https://github.com/vuejs/vue) + [Ant Design Vue](https://github.com/vueComponent/ant-design-vue)
 - **数据库存储**: [SQLite](https://github.com/sqlite/sqlite) + [MinIO](https://github.com/minio/minio)
-- **知识存储**: [Milvus](https://github.com/milvus-io/milvus)、[Chroma](https://github.com/chroma-core/chroma)（向量数据库）+ [Neo4j](https://github.com/neo4j/neo4j)（图数据库）
+- **知识存储**: [Milvus](https://github.com/milvus-io/milvus)（向量数据库）+ [Neo4j](https://github.com/neo4j/neo4j)（图数据库）
 - **智能体框架**: [LangGraph](https://github.com/langchain-ai/langgraph)
 - **文档解析**: [LightRAG](https://github.com/HKUDS/LightRAG) + [MinerU](https://github.com/HKUDS/MinerU) + [PP-Structure-V3](https://github.com/PaddlePaddle/PaddleOCR)
 - **容器编排**: [Docker Compose](https://github.com/docker/compose)
@@ -17,7 +17,7 @@ Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知�
 ### 核心功能
 
 - **智能问答**: 支持多种大语言模型，提供智能对话和问答服务
-- **知识库管理**: 支持多种存储形式（Chroma、Milvus、LightRAG）
+- **知识库管理**: 支持多种存储形式（Milvus、LightRAG）
 - **知识图谱**: 自动构建和可视化知识图谱，支持图查询
 - **文档解析**: 支持 PDF、Word、图片等多种格式的智能解析
 - **权限管理**: 三级权限体系（超级管理员、管理员、普通用户）

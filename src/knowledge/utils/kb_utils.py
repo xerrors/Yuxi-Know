@@ -119,7 +119,7 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
     # 如果设置了分隔符，先分割后以当前的分割逻辑处理
     if separator:
         # 转换分隔符为可视格式（换行符显示为 \n）
-        separator_display = separator.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+        separator_display = separator.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
         logger.debug(f"启用预分割模式，使用分隔符: '{separator_display}'")
         pre_chunks = text.split(separator)
         text_chunks = []

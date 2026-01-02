@@ -24,13 +24,6 @@
           <div class="card-header">
             <component :is="getKbTypeIcon(typeKey)" class="type-icon" />
             <span class="type-title">{{ getKbTypeLabel(typeKey) }}</span>
-            <a-tooltip
-              v-if="typeKey === 'chroma'"
-              title="Chroma 已标记为弃用状态，建议使用 Milvus 替代。同时会在下个正式版本中移除。"
-              placement="top"
-            >
-              <span class="deprecated-badge">弃用</span>
-            </a-tooltip>
           </div>
           <div class="card-description">{{ typeInfo.description }}</div>
         </div>
@@ -103,7 +96,7 @@
       </div>
 
       <div
-        v-if="['chroma', 'milvus'].includes(newDatabase.kb_type)"
+        v-if="['milvus'].includes(newDatabase.kb_type)"
         class="reranker-config"
       >
         <div class="reranker-row">
@@ -304,7 +297,7 @@ const rerankerOptions = computed(() =>
   }))
 )
 
-const isVectorKb = computed(() => ['chroma', 'milvus'].includes(newDatabase.kb_type))
+const isVectorKb = computed(() => ['milvus'].includes(newDatabase.kb_type))
 
 const llmModelSpec = computed(() => {
   const provider = newDatabase.llm_info?.provider || ''
@@ -318,26 +311,8 @@ const llmModelSpec = computed(() => {
 // 支持的知识库类型
 const supportedKbTypes = ref({})
 
-// 有序的知识库类型（Chroma 排在最后）
-const orderedKbTypes = computed(() => {
-  const types = { ...supportedKbTypes.value }
-  const ordered = {}
-  const chromaData = types.chroma
-
-  // 先添加除了 Chroma 之外的所有类型
-  Object.keys(types).forEach(key => {
-    if (key !== 'chroma') {
-      ordered[key] = types[key]
-    }
-  })
-
-  // 最后添加 Chroma（如果存在）
-  if (chromaData) {
-    ordered.chroma = chromaData
-  }
-
-  return ordered
-})
+// 有序的知识库类型
+const orderedKbTypes = computed(() => supportedKbTypes.value)
 
 // 加载支持的知识库类型
 const loadSupportedKbTypes = async () => {
@@ -371,7 +346,6 @@ const cancelCreateDatabase = () => {
 const getKbTypeLabel = (type) => {
   const labels = {
     lightrag: 'LightRAG',
-    chroma: 'Chroma',
     milvus: 'CommonRAG'
   }
   return labels[type] || type
@@ -380,7 +354,6 @@ const getKbTypeLabel = (type) => {
 const getKbTypeIcon = (type) => {
   const icons = {
     lightrag: Waypoints,
-    chroma: FileDigit,
     milvus: DatabaseZap
   }
   return icons[type] || Database
@@ -389,7 +362,6 @@ const getKbTypeIcon = (type) => {
 const getKbTypeColor = (type) => {
   const colors = {
     lightrag: 'purple',
-    chroma: 'orange',
     milvus: 'red'
   }
   return colors[type] || 'blue'
@@ -431,7 +403,7 @@ const handleKbTypeChange = (type) => {
   console.log('知识库类型改变:', type)
   resetNewDatabase()
   newDatabase.kb_type = type
-  if (!['chroma', 'milvus'].includes(type)) {
+  if (!['milvus'].includes(type)) {
     newDatabase.reranker.enabled = false
   }
 }
@@ -462,7 +434,7 @@ const buildRequestData = () => {
   }
 
   // 根据类型添加特定配置
-  if (['chroma', 'milvus'].includes(newDatabase.kb_type)) {
+  if (['milvus'].includes(newDatabase.kb_type)) {
     if (newDatabase.storage) {
       requestData.additional_params.storage = newDatabase.storage
     }

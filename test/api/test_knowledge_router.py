@@ -59,7 +59,7 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
         "database_name": db_name,
         "description": "Vector DB with reranker",
         "embed_model_name": "siliconflow/BAAI/bge-m3",
-        "kb_type": "chroma",
+        "kb_type": "milvus",
         "additional_params": {
             "reranker_config": {
                 "enabled": True,

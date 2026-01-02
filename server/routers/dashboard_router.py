@@ -452,7 +452,6 @@ async def get_knowledge_stats(
                 kb_type = kb_info.get("kb_type", "unknown")
                 display_type = {
                     "lightrag": "LightRAG",
-                    "chroma": "Chroma",
                     "faiss": "FAISS",
                     "milvus": "Milvus",
                     "qdrant": "Qdrant",

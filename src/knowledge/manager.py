@@ -626,23 +626,12 @@ class KnowledgeBaseManager:
             包含不一致信息的字典，按知识库类型分组
         """
         inconsistencies = {
-            "chroma": {"missing_collections": [], "missing_files": []},
             "milvus": {"missing_collections": [], "missing_files": []},
             "total_missing_collections": 0,
             "total_missing_files": 0,
         }
 
         logger.info("开始检测向量数据库与元数据的一致性...")
-
-        # 检测 ChromaDB 数据不一致
-        if "chroma" in self.kb_instances:
-            try:
-                chroma_inconsistencies = await self._detect_chroma_inconsistencies()
-                inconsistencies["chroma"] = chroma_inconsistencies
-                inconsistencies["total_missing_collections"] += len(chroma_inconsistencies["missing_collections"])
-                inconsistencies["total_missing_files"] += len(chroma_inconsistencies["missing_files"])
-            except Exception as e:
-                logger.error(f"检测 ChromaDB 数据不一致时出错: {e}")
 
         # 检测 Milvus 数据不一致
         if "milvus" in self.kb_instances:
@@ -656,79 +645,6 @@ class KnowledgeBaseManager:
 
         # 输出检测结果到日志
         self._log_inconsistencies(inconsistencies)
-
-        return inconsistencies
-
-    async def _detect_chroma_inconsistencies(self) -> dict:
-        """检测 ChromaDB 中的数据不一致"""
-        inconsistencies = {"missing_collections": [], "missing_files": []}
-
-        chroma_kb = self.kb_instances["chroma"]
-
-        # 获取 ChromaDB 中所有实际的集合
-        try:
-            actual_collections = chroma_kb.chroma_client.list_collections()
-            actual_collection_names = {col.name for col in actual_collections}
-
-            # 获取 metadata 中记录的数据库ID
-            metadata_collection_names = set()
-            for db_id, db_meta in chroma_kb.databases_meta.items():
-                metadata_collection_names.add(db_id)
-
-            # 找出存在于 ChromaDB 但不在 metadata 中的集合
-            missing_collections = actual_collection_names - metadata_collection_names
-            for collection_name in missing_collections:
-                # 跳过一些系统集合
-                if not collection_name.startswith("kb_"):
-                    continue
-
-                collection_info = {"collection_name": collection_name, "detected_at": utc_isoformat()}
-
-                # 尝试获取集合的基本信息
-                try:
-                    collection = chroma_kb.chroma_client.get_collection(name=collection_name)
-                    collection_info["count"] = collection.count()
-                    collection_info["metadata"] = collection.metadata
-                except Exception as e:
-                    logger.warning(f"无法获取集合 {collection_name} 的详细信息: {e}")
-                    collection_info["count"] = "unknown"
-
-                inconsistencies["missing_collections"].append(collection_info)
-                logger.warning(
-                    f"发现 ChromaDB 中存在但 metadata 中缺失的集合: {collection_name} "
-                    f"(文档数: {collection_info['count']})"
-                )
-
-            # 检查文件级别的不一致（针对已知的数据库）
-            for db_id in metadata_collection_names:
-                try:
-                    collection = chroma_kb.chroma_client.get_collection(name=db_id)
-                    actual_count = collection.count()
-
-                    # 获取 metadata 中记录的文件数量
-                    metadata_files_count = sum(
-                        1 for file_info in chroma_kb.files_meta.values() if file_info.get("database_id") == db_id
-                    )
-
-                    # 如果向量数据库中有数据但 metadata 中没有文件记录，可能存在文件缺失
-                    if actual_count > 0 and metadata_files_count == 0:
-                        inconsistencies["missing_files"].append(
-                            {
-                                "database_id": db_id,
-                                "vector_count": actual_count,
-                                "metadata_files_count": metadata_files_count,
-                                "detected_at": utc_isoformat(),
-                            }
-                        )
-                        logger.warning(
-                            f"发现数据库 {db_id} 在 ChromaDB 中有 {actual_count} 条向量数据，但 metadata 中没有文件记录"
-                        )
-
-                except Exception as e:
-                    logger.debug(f"检查数据库 {db_id} 的文件一致性时出错: {e}")
-
-        except Exception as e:
-            logger.error(f"检测 ChromaDB 数据不一致时出错: {e}")
 
         return inconsistencies
 
@@ -822,21 +738,6 @@ class KnowledgeBaseManager:
         logger.warning("=" * 80)
         logger.warning("数据一致性检测完成，发现以下不一致情况：")
         logger.warning("=" * 80)
-
-        # ChromaDB 不一致情况
-        chroma_missing = inconsistencies["chroma"]["missing_collections"]
-        chroma_files_missing = inconsistencies["chroma"]["missing_files"]
-        if chroma_missing or chroma_files_missing:
-            logger.warning("ChromaDB 不一致情况：")
-            logger.warning(f"  缺失集合数量: {len(chroma_missing)}")
-            for collection_info in chroma_missing:
-                logger.warning(f"    - 集合: {collection_info['collection_name']}, 向量数: {collection_info['count']}")
-            logger.warning(f"  缺失文件记录数量: {len(chroma_files_missing)}")
-            for file_info in chroma_files_missing:
-                logger.warning(
-                    f"    - 数据库: {file_info['database_id']}, 向量数: {file_info['vector_count']}, "
-                    f"元数据文件数: {file_info['metadata_files_count']}"
-                )
 
         # Milvus 不一致情况
         milvus_missing = inconsistencies["milvus"]["missing_collections"]
