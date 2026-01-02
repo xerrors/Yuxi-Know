@@ -19,8 +19,6 @@ class ChatbotAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.graph = None
-        self.checkpointer = None
         self.context_schema = Context
 
     async def get_tools(self, tools: list[str] = None, mcps=None, knowledges=None):
