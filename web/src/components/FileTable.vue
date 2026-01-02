@@ -379,8 +379,7 @@ const rechunkModalLoading = computed(() => store.state.chunkLoading);
 const rechunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
-  use_qa_split: false,
-  qa_separator: '\n\n\n'
+  qa_separator: '\\n\\n\\n'
 });
 const currentRechunkFileIds = ref([]);
 const isBatchRechunk = ref(false);
@@ -788,8 +787,7 @@ const handleRechunkConfirm = async () => {
       rechunkParams.value = {
         chunk_size: 1000,
         chunk_overlap: 200,
-        use_qa_split: false,
-        qa_separator: '\n\n\n'
+        qa_separator: '\\n\\n\\n'
       };
     } else {
       message.error(`重新分块失败: ${result.message}`);
@@ -811,8 +809,7 @@ const handleRechunkCancel = () => {
   rechunkParams.value = {
     chunk_size: 1000,
     chunk_overlap: 200,
-    use_qa_split: false,
-    qa_separator: '\n\n\n'
+    qa_separator: '\\n\\n\\n'
   };
 };
 

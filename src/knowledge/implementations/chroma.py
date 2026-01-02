@@ -14,7 +14,6 @@ from src.knowledge.utils.kb_utils import (
     get_embedding_config,
     prepare_item_metadata,
     split_text_into_chunks,
-    split_text_into_qa_chunks,
 )
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
@@ -151,16 +150,7 @@ class ChromaKB(KnowledgeBase):
 
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
-        # 检查是否使用QA分割模式
-        use_qa_split = params.get("use_qa_split", False)
-
-        if use_qa_split:
-            # 使用QA分割模式
-            qa_separator = params.get("qa_separator", "\n\n\n")
-            chunks = split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
-        else:
-            # 使用传统分割模式
-            chunks = split_text_into_chunks(text, file_id, filename, params)
+        chunks = split_text_into_chunks(text, file_id, filename, params)
 
         # 为 ChromaDB 添加特定的 metadata 格式
         for chunk in chunks:

@@ -365,8 +365,7 @@ const chunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
   enable_ocr: 'disable',
-  use_qa_split: false,
-  qa_separator: '\n\n\n',
+  qa_separator: '',
 });
 
 // 分块参数配置弹窗
@@ -376,8 +375,7 @@ const chunkConfigModalVisible = ref(false);
 const tempChunkParams = ref({
   chunk_size: 1000,
   chunk_overlap: 200,
-  use_qa_split: false,
-  qa_separator: '\n\n\n',
+  qa_separator: '',
 });
 
 // 计算属性：是否支持QA分割
@@ -739,7 +737,6 @@ const showChunkConfigModal = () => {
   tempChunkParams.value = {
     chunk_size: chunkParams.value.chunk_size,
     chunk_overlap: chunkParams.value.chunk_overlap,
-    use_qa_split: isQaSplitSupported.value ? chunkParams.value.use_qa_split : false,
     qa_separator: chunkParams.value.qa_separator,
   };
   chunkConfigModalVisible.value = true;
@@ -750,10 +747,7 @@ const handleChunkConfigSubmit = () => {
   chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
   // 只有支持QA分割的知识库类型才保存QA分割配置
   if (isQaSplitSupported.value) {
-    chunkParams.value.use_qa_split = tempChunkParams.value.use_qa_split;
     chunkParams.value.qa_separator = tempChunkParams.value.qa_separator;
-  } else {
-    chunkParams.value.use_qa_split = false;
   }
   chunkConfigModalVisible.value = false;
   message.success('分块参数配置已更新');

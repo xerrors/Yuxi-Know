@@ -14,7 +14,6 @@ from src.knowledge.utils.kb_utils import (
     get_embedding_config,
     prepare_item_metadata,
     split_text_into_chunks,
-    split_text_into_qa_chunks,
 )
 from src.models.embed import OtherEmbedding
 from src.utils import hashstr, logger
@@ -222,16 +221,7 @@ class MilvusKB(KnowledgeBase):
 
     def _split_text_into_chunks(self, text: str, file_id: str, filename: str, params: dict) -> list[dict]:
         """将文本分割成块"""
-        # 检查是否使用QA分割模式
-        use_qa_split = params.get("use_qa_split", False)
-
-        if use_qa_split:
-            # 使用QA分割模式
-            qa_separator = params.get("qa_separator", "\n\n\n")
-            return split_text_into_qa_chunks(text, file_id, filename, qa_separator, params)
-        else:
-            # 使用传统分割模式
-            return split_text_into_chunks(text, file_id, filename, params)
+        return split_text_into_chunks(text, file_id, filename, params)
 
     async def add_content(self, db_id: str, items: list[str], params: dict | None = {}) -> list[dict]:
         """添加内容（文件/URL）"""

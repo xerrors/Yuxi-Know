@@ -11,7 +11,6 @@ from .kb_utils import (
     merge_processing_params,
     prepare_item_metadata,
     split_text_into_chunks,
-    split_text_into_qa_chunks,
     validate_file_path,
 )
 
@@ -20,7 +19,6 @@ __all__ = [
     "get_embedding_config",
     "prepare_item_metadata",
     "split_text_into_chunks",
-    "split_text_into_qa_chunks",
     "merge_processing_params",
     "validate_file_path",
 ]

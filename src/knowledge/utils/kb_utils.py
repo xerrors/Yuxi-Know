@@ -74,6 +74,23 @@ def validate_file_path(file_path: str, db_id: str = None) -> str:
         raise ValueError(f"Invalid file path: {file_path}")
 
 
+def _unescape_separator(separator: str | None) -> str | None:
+    """将前端传入的字面量转义字符转换为实际字符
+
+    例如: "\\n\\n\\n" -> "\n\n\n"
+    """
+    if not separator:
+        return None
+
+    # 处理常见的转义序列
+    separator = separator.replace("\\n", "\n")
+    separator = separator.replace("\\r", "\r")
+    separator = separator.replace("\\t", "\t")
+    separator = separator.replace("\\\\", "\\")
+
+    return separator
+
+
 def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict = {}) -> list[dict]:
     """
     将文本分割成块，使用 LangChain 的 MarkdownTextSplitter 进行智能分割
@@ -82,6 +99,16 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
     chunk_size = params.get("chunk_size", 1000)
     chunk_overlap = params.get("chunk_overlap", 200)
 
+    # 获取分隔符并转换为实际字符
+    separator = params.get("qa_separator")
+    separator = _unescape_separator(separator)
+
+    # 向后兼容：如果旧配置设置了 use_qa_split=True 但未指定 separator，使用默认分隔符
+    use_qa_split = params.get("use_qa_split", False)
+    if use_qa_split and not separator:
+        separator = "\n\n\n"
+        logger.debug("启用了向后兼容模式：use_qa_split=True，使用默认分隔符 \\n\\n\\n")
+
     # 使用 MarkdownTextSplitter 进行智能分割
     # MarkdownTextSplitter 会尝试沿着 Markdown 格式的标题进行分割
     text_splitter = MarkdownTextSplitter(
@@ -89,7 +116,18 @@ def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict 
         chunk_overlap=chunk_overlap,
     )
 
-    text_chunks = text_splitter.split_text(text)
+    # 如果设置了分隔符，先分割后以当前的分割逻辑处理
+    if separator:
+        # 转换分隔符为可视格式（换行符显示为 \n）
+        separator_display = separator.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+        logger.debug(f"启用预分割模式，使用分隔符: '{separator_display}'")
+        pre_chunks = text.split(separator)
+        text_chunks = []
+        for pre_chunk in pre_chunks:
+            if pre_chunk.strip():
+                text_chunks.extend(text_splitter.split_text(pre_chunk))
+    else:
+        text_chunks = text_splitter.split_text(text)
 
     # 转换为标准格式
     for chunk_index, chunk_content in enumerate(text_chunks):
@@ -136,7 +174,8 @@ async def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str
 
         return sha256.hexdigest()
 
-    raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")
+    # 理论上不会执行到这里，但保留作为防御性编程
+    raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")  # type: ignore[unreachable]
 
 
 async def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
@@ -221,39 +260,6 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         metadata["processing_params"] = params.copy()
 
     return metadata
-
-
-def split_text_into_qa_chunks(
-    text: str, file_id: str, filename: str, qa_separator: None | str = None, params: dict = {}
-) -> list[dict]:
-    """
-    将文本按QA对分割成块，使用 LangChain 的 CharacterTextSplitter 进行分割"""
-    qa_separator = qa_separator or "\n\n"
-    text_chunks = text.split(qa_separator)
-
-    # 转换为标准格式
-    chunks = []
-    for chunk_index, chunk_content in enumerate(text_chunks):
-        if chunk_content.strip():  # 跳过空块
-            chunk_content = chunk_content.strip()[:4096]
-            chunks.append(
-                {
-                    "id": f"{file_id}_qa_chunk_{chunk_index}",
-                    "content": chunk_content.strip(),
-                    "file_id": file_id,
-                    "filename": filename,
-                    "chunk_index": chunk_index,
-                    "source": filename,
-                    "chunk_id": f"{file_id}_qa_chunk_{chunk_index}",
-                    "chunk_type": "qa",  # 标识为QA类型的chunk
-                }
-            )
-
-    logger.debug(f"QA chunks: {chunks[0]}")
-    logger.debug(
-        f"Successfully split QA text into {len(chunks)} chunks using CharacterTextSplitter with `{qa_separator=}`"
-    )
-    return chunks
 
 
 def merge_processing_params(metadata_params: dict | None, request_params: dict | None) -> dict:

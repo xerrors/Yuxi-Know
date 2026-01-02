@@ -114,7 +114,7 @@ const currentChunk = ref(null);
 const tooltipStyle = ref({ top: '0px', left: '0px' });
 const activeChunkIndex = ref(null);
 const highlightedChunkIndex = ref(null);
-const chunkPanelVisible = ref(true);
+const chunkPanelVisible = ref(false);
 
 // 主题设置 - 根据系统主题动态切换
 const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
