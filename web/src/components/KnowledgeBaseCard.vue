@@ -77,6 +77,7 @@
         <AiTextarea
           v-model="editForm.description"
           :name="editForm.name"
+          :files="fileList"
           placeholder="请输入知识库描述"
           :rows="4"
         />
@@ -119,6 +120,11 @@ const router = useRouter();
 const store = useDatabaseStore();
 
 const database = computed(() => store.database);
+
+const fileList = computed(() => {
+  if (!database.value?.files) return [];
+  return Object.values(database.value.files).map(f => f.filename).filter(Boolean);
+});
 
 // 复制数据库ID
 const copyDatabaseId = async () => {

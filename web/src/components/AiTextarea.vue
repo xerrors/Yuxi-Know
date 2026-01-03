@@ -50,6 +50,10 @@ const props = defineProps({
   autoSize: {
     type: [Boolean, Object],
     default: false
+  },
+  files: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -65,7 +69,7 @@ const generateDescription = async () => {
 
   loading.value = true
   try {
-    const result = await databaseApi.generateDescription(props.name, props.modelValue)
+    const result = await databaseApi.generateDescription(props.name, props.modelValue, props.files)
     if (result.status === 'success' && result.description) {
       emit('update:modelValue', result.description)
       message.success('描述生成成功')

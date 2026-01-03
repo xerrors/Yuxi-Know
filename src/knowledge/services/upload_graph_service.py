@@ -102,6 +102,7 @@ class UploadGraphService:
                 async with minio_client.temp_file_from_url(
                     file_path, allowed_extensions=[".jsonl"]
                 ) as actual_file_path:
+
                     def read_triples(file_path):
                         with open(file_path, encoding="utf-8") as file:
                             for line in file:
@@ -114,9 +115,7 @@ class UploadGraphService:
 
             else:
                 # 本地文件路径 - 拒绝不安全的本地路径
-                raise ValueError(
-                    "不支持本地文件路径，只允许 MinIO URL。请先通过文件上传接口上传文件。"
-                )
+                raise ValueError("不支持本地文件路径，只允许 MinIO URL。请先通过文件上传接口上传文件。")
 
         except Exception as e:
             logger.error(f"处理文件失败: {e}")

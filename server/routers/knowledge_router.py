@@ -1284,6 +1284,7 @@ async def get_all_embedding_models_status(current_user: User = Depends(get_admin
 async def generate_description(
     name: str = Body(..., description="知识库名称"),
     current_description: str = Body("", description="当前描述（可选，用于优化）"),
+    file_list: list[str] = Body([], description="文件列表"),
     current_user: User = Depends(get_admin_user),
 ):
     """使用 LLM 生成或优化知识库描述
@@ -1292,40 +1293,35 @@ async def generate_description(
     """
     from src.models import select_model
 
-    logger.debug(f"Generating description for knowledge base: {name}")
+    logger.debug(f"Generating description for knowledge base: {name}, files: {len(file_list)}")
+
+    # 构建文件列表文本
+    if file_list:
+        # 限制文件数量，避免 prompt 过长
+        display_files = file_list[:50]
+        files_str = "\n".join([f"- {f}" for f in display_files])
+        more_text = f"\n... (还有 {len(file_list) - 50} 个文件)" if len(file_list) > 50 else ""
+        current_description += f"\n\n知识库包含的文件:\n{files_str}{more_text}"
+
+    current_description = current_description or "暂无描述"
 
     # 构建提示词
-    if current_description.strip():
-        prompt = textwrap.dedent(f"""
-            请帮我优化以下知识库的描述。
+    prompt = textwrap.dedent(f"""
+        请帮我优化以下知识库的描述。
 
-            知识库名称: {name}
-            当前描述: {current_description}
+        知识库名称: {name}
+        当前描述: {current_description}
 
-            要求:
-            1. 这个描述将作为智能体工具的描述使用
-            2. 智能体会根据知识库的标题和描述来选择合适的工具
-            3. 所以描述需要清晰、具体，说明该知识库包含什么内容、适合解答什么类型的问题
-            4. 描述应该简洁有力，通常 2-4 句话即可
-            5. 不要使用 Markdown 格式
+        要求:
+        1. 这个描述将作为智能体工具的描述使用
+        2. 智能体会根据知识库的标题和描述来选择合适的工具
+        3. 所以描述需要清晰、具体，说明该知识库包含什么内容、适合解答什么类型的问题
+        4. 描述应该简洁有力，通常 2-4 句话即可
+        5. 不要使用 Markdown 格式
+        {"6. 请参考提供的文件列表来准确概括知识库内容" if file_list else ""}
 
-            请直接输出优化后的描述，不要有任何前缀说明。
-        """).strip()
-    else:
-        prompt = textwrap.dedent(f"""
-            请为以下知识库生成一个描述。
-
-            知识库名称: {name}
-
-            要求:
-            1. 这个描述将作为智能体工具的描述使用
-            2. 智能体会根据知识库的标题和描述来选择合适的工具
-            3. 所以描述需要清晰、具体，说明该知识库可能包含什么内容、适合解答什么类型的问题
-            4. 描述应该简洁有力，通常 2-4 句话即可
-            5. 不要使用 Markdown 格式
-
-            请直接输出描述，不要有任何前缀说明。
-        """).strip()
+        请直接输出优化后的描述，不要有任何前缀说明。
+    """).strip()
 
     try:
         model = select_model()

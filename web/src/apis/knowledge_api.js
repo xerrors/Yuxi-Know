@@ -59,12 +59,14 @@ export const databaseApi = {
    * 使用 AI 生成或优化知识库描述
    * @param {string} name - 知识库名称
    * @param {string} currentDescription - 当前描述（可选）
+   * @param {Array} fileList - 文件列表（可选）
    * @returns {Promise} - 生成结果
    */
-  generateDescription: async (name, currentDescription = '') => {
+  generateDescription: async (name, currentDescription = '', fileList = []) => {
     return apiAdminPost('/api/knowledge/generate-description', {
       name,
-      current_description: currentDescription
+      current_description: currentDescription,
+      file_list: fileList
     })
   }
 }
