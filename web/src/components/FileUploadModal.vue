@@ -19,85 +19,108 @@
     </template>
 
     <div class="add-files-content">
-      <div class="upload-header">
-        <div class="source-selector">
+      <!-- 1. 顶部操作栏 -->
+      <div class="top-action-bar">
+        <div class="mode-switch">
           <a-segmented
             v-model:value="uploadMode"
             :options="uploadModeOptions"
-            size="large"
-            class="source-segmented"
+            class="custom-segmented"
             :disabled="true"
           />
         </div>
-        <div class="config-controls">
-          <a-button type="link" class="doc-link-btn" @click="openDocLink">
-            <InfoCircleOutlined /> 文档处理与 OCR 说明
-          </a-button>
-          <a-button
-            @click="showChunkConfigModal"
-            :disabled="isGraphBased"
-          >
-            <SettingOutlined /> 分块参数 ({{ chunkParams.chunk_size }}/{{ chunkParams.chunk_overlap }})
-          </a-button>
-        </div>
+        <a-button type="link" class="help-link-btn" @click="openDocLink">
+          <QuestionCircleOutlined /> 文档处理说明
+        </a-button>
       </div>
 
-      <div class="ocr-config" v-if="uploadMode === 'file'">
-        <a-form layout="horizontal">
-          <a-form-item label="目标文件夹" style="margin-bottom: 12px;">
+      <!-- 2. 配置面板 (仅文件模式显示) -->
+      <div class="settings-panel" v-if="uploadMode === 'file'">
+        <!-- 第一行：存储位置 -->
+        <div class="setting-row">
+          <div class="setting-label">存储位置</div>
+          <div class="setting-content flex-row">
              <a-tree-select
                 v-model:value="selectedFolderId"
                 show-search
-                style="width: 100%"
+                class="folder-select"
                 :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
-                placeholder="请选择目标文件夹（默认为根目录）"
+                placeholder="选择目标文件夹（默认为根目录）"
                 allow-clear
                 tree-default-expand-all
                 :tree-data="folderTreeData"
                 tree-node-filter-prop="title"
              >
              </a-tree-select>
-          </a-form-item>
-          <a-form-item style="margin-bottom: 0;">
-             <a-checkbox v-model:checked="isFolderUpload">上传文件夹</a-checkbox>
-          </a-form-item>
-          <a-form-item label="使用OCR" name="enable_ocr">
-            <div class="ocr-controls">
+             <a-checkbox v-model:checked="isFolderUpload" class="folder-checkbox">上传文件夹</a-checkbox>
+          </div>
+        </div>
+
+        <!-- 第二行：OCR 与 分块 (两列布局) -->
+        <div class="setting-row two-cols">
+          <!-- OCR 配置 -->
+          <div class="col-item">
+            <div class="setting-label">
+              OCR 引擎
+              <a-tooltip title="检查服务状态">
+                <ReloadOutlined
+                  class="action-icon refresh-icon"
+                  :class="{ spinning: ocrHealthChecking }"
+                  @click="checkOcrHealth"
+                />
+              </a-tooltip>
+            </div>
+            <div class="setting-content">
               <a-select
                 v-model:value="chunkParams.enable_ocr"
                 :options="enableOcrOptions"
-                style="width: 220px;"
+                style="width: 100%"
                 :disabled="ocrHealthChecking"
+                class="ocr-select"
               />
-              <a-button
-                @click="checkOcrHealth"
-                :loading="ocrHealthChecking"
-                :icon="h(CheckCircleOutlined)"
+              <!-- 紧凑的状态提示 -->
+              <div class="status-mini-tip" v-if="chunkParams.enable_ocr !== 'disable'">
+                <span v-if="selectedOcrStatus === 'healthy'" class="text-success">
+                   <CheckCircleOutlined /> {{ selectedOcrMessage || '服务正常' }}
+                </span>
+                <span v-else-if="selectedOcrStatus && selectedOcrStatus !== 'unknown'" class="text-warning">
+                   ⚠️ {{ selectedOcrMessage || '服务异常' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分块配置 -->
+          <div class="col-item">
+            <div class="setting-label">分块参数</div>
+            <div class="setting-content">
+              <div
+                class="chunk-display-card"
+                :class="{ disabled: isGraphBased }"
+                @click="!isGraphBased && showChunkConfigModal()"
               >
-                检查OCR服务
-              </a-button>
-            </div>
-            <div class="param-description">
-              <div v-if="chunkParams.enable_ocr !== 'disable' && selectedOcrStatus && selectedOcrStatus !== 'healthy'" class="ocr-warning">
-                ⚠️ {{ selectedOcrMessage }}
-              </div>
-              <div v-else-if="chunkParams.enable_ocr !== 'disable' && selectedOcrStatus === 'healthy'" class="ocr-healthy">
-                ✅ {{ selectedOcrMessage }}
+                <div class="chunk-info">
+                  <span class="chunk-val">Size: <b>{{ chunkParams.chunk_size }}</b></span>
+                  <span class="divider">|</span>
+                  <span class="chunk-val">Overlap: <b>{{ chunkParams.chunk_overlap }}</b></span>
+                </div>
+                <SettingOutlined class="edit-icon" />
               </div>
             </div>
-          </a-form-item>
-        </a-form>
+          </div>
+        </div>
       </div>
 
-            <!-- PDF/图片OCR提醒 -->
-      <div v-if="uploadMode === 'file' && hasPdfOrImageFiles && !isOcrEnabled" class="ocr-warning-alert">
-        ⚠️ 检测到PDF或图片文件，请启用OCR功能以提取文本内容
+      <!-- PDF/图片OCR提醒 (Alert样式优化) -->
+      <div v-if="uploadMode === 'file' && hasPdfOrImageFiles && !isOcrEnabled" class="inline-alert warning">
+        <InfoCircleOutlined />
+        <span>检测到PDF或图片文件，建议启用 OCR 以提取文本内容</span>
       </div>
 
       <!-- 文件上传区域 -->
-      <div class="upload" v-if="uploadMode === 'file'">
+      <div class="upload-area" v-if="uploadMode === 'file'">
         <a-upload-dragger
-          class="upload-dragger"
+          class="custom-dragger"
           v-model:fileList="fileList"
           name="file"
           :multiple="true"
@@ -111,36 +134,34 @@
           @change="handleFileUpload"
           @drop="handleDrop"
         >
-          <p class="ant-upload-text">点击或者把文件拖拽到这里上传</p>
+          <p class="ant-upload-text">点击或将文件拖拽到此处</p>
           <p class="ant-upload-hint">
-            支持的文件类型：{{ uploadHint }}
+            支持类型: {{ uploadHint }}
           </p>
-          <div class="zip-support-tip" v-if="hasZipFiles">
-            📦 zip 包会自动提取 Markdown 文件和图片，图片链接将替换为可访问的 URL
+          <div class="zip-tip" v-if="hasZipFiles">
+            📦 ZIP包将自动解压提取 Markdown 与图片
           </div>
         </a-upload-dragger>
       </div>
 
       <!-- 同名文件提示 -->
-      <div v-if="sameNameFiles.length > 0" class="same-name-files-section">
-        <div class="same-name-files-header">
-          <InfoCircleOutlined />
-          <span>当前知识库中已存在以下同名文件：</span>
+      <div v-if="sameNameFiles.length > 0" class="conflict-files-panel">
+        <div class="panel-header">
+          <InfoCircleOutlined class="icon-warning" />
+          <span>已存在同名文件 ({{ sameNameFiles.length }})</span>
         </div>
-        <div class="same-name-files-list">
-          <div v-for="file in sameNameFiles" :key="file.file_id" class="same-name-file-item">
-            <div class="same-name-file-info">
-              <span class="same-name-file-name">{{ file.filename }}</span>
-              <span class="same-name-file-time">{{ formatFileTime(file.created_at) }}</span>
+        <div class="file-list-scroll">
+          <div v-for="file in sameNameFiles" :key="file.file_id" class="conflict-item">
+            <div class="file-meta">
+              <span class="fname" :title="file.filename">{{ file.filename }}</span>
+              <span class="ftime">{{ formatFileTime(file.created_at) }}</span>
             </div>
-            <div class="same-name-file-actions">
-              <a-button size="small" type="link" class="download-btn" @click="downloadSameNameFile(file)">
-                <template #icon><DownloadOutlined /></template>
-                下载
+            <div class="file-actions">
+              <a-button type="text" size="small" class="action-btn download" @click="downloadSameNameFile(file)">
+                <DownloadOutlined />
               </a-button>
-              <a-button size="small" type="link" danger @click="deleteSameNameFile(file)">
-                <template #icon><DeleteOutlined /></template>
-                删除
+              <a-button type="text" size="small" danger class="action-btn delete" @click="deleteSameNameFile(file)">
+                <DeleteOutlined />
               </a-button>
             </div>
           </div>
@@ -181,6 +202,8 @@ import {
   InfoCircleOutlined,
   DownloadOutlined,
   DeleteOutlined,
+  ReloadOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons-vue';
 import { h } from 'vue';
 
@@ -848,215 +871,330 @@ const chunkData = async () => {
 
 <style lang="less" scoped>
 .add-files-content {
-  padding: 16px 0;
+  padding: 8px 0;
   display: flex;
   flex-direction: column;
-  height: 100%;
-
-  .ant-form-item {
-    margin: 0;
-  }
+  gap: 16px;
 }
 
-.upload-header {
+/* Top Bar */
+.top-action-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 0 4px;
 }
 
-.source-selector {
+.help-link-btn {
+  color: var(--gray-600);
+  font-size: 13px;
   display: flex;
   align-items: center;
+  gap: 6px;
+
+  &:hover {
+    color: var(--main-color);
+  }
 }
 
-.config-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.doc-link-btn {
-  color: var(--main-600);
-  display: flex;
-  align-items: center;
-}
-
-.source-segmented {
+.custom-segmented {
   background-color: var(--gray-100);
-  border: 1px solid var(--gray-200);
-}
+  padding: 3px;
 
-
-.source-segmented :deep(.ant-segmented-item-label) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: var(--gray-600);
-}
-
-.source-segmented :deep(.ant-segmented-item-selected .ant-segmented-item-label) {
-  color: var(--main-color);
-}
-
-.source-segmented :deep(.segmented-option) {
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.source-segmented :deep(.option-icon) {
-  font-size: 14px;
-}
-
-.ocr-config {
-  margin-bottom: 20px;
-  padding: 16px;
-  background-color: var(--gray-50);
-  border-radius: 6px;
-
-  .ocr-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  .segmented-option .option-text {
+    margin-left: 6px;
   }
 }
 
-.param-description {
-  font-size: 12px;
-  color: var(--gray-600);
-  margin-top: 4px;
-}
-
-.ocr-warning {
-  color: var(--color-warning-500);
-}
-
-.ocr-healthy {
-  color: var(--color-success-500);
-}
-
-.upload-dragger {
-  margin-bottom: 16px;
-}
-
-.url-hint {
-  font-size: 12px;
-  color: var(--gray-600);
-  margin-top: 8px;
-}
-
-.chunk-config-content .params-info {
-  margin-bottom: 16px;
-}
-
-// OCR警告提醒样式
-.ocr-warning-alert {
-  margin: 12px 0;
-  padding: 8px 12px;
-  background: var(--color-warning-50);
-  border: 1px solid var(--color-warning-300);
-  border-radius: 4px;
-  color: var(--color-warning-700);
-  font-size: 13px;
-}
-
-.folder-upload-tip {
-  margin-top: 12px;
-  padding: 12px;
-  background: var(--color-info-50);
-  border-radius: 4px;
-  color: var(--color-info-700);
-  font-size: 12px;
-}
-
-.zip-support-tip {
-  font-size: 12px;
-  color: var(--color-warning-500);
-}
-
-.doc-link-btn {
-  color: var(--main-600);
-  margin-left: 12px;
-}
-
-// 同名文件提示样式
-.same-name-files-section {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--main-50);
-  border: 1px solid var(--main-200);
-  border-radius: 6px;
-}
-
-.same-name-files-header {
+/* Settings Panel */
+.settings-panel {
+  background-color: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  padding: 16px;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  color: var(--main-700);
-  font-weight: 500;
-  font-size: 14px;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.same-name-files-list {
+.setting-row {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
+  &.two-cols {
+    flex-direction: row;
+    gap: 20px;
+
+    .col-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0; // Fix flex overflow
+    }
+  }
 }
 
-.same-name-file-item {
+.setting-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-700);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  gap: 8px;
+}
+
+.action-icon {
+  color: var(--gray-400);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    color: var(--main-color);
+  }
+
+  &.spinning {
+    animation: spin 1s linear infinite;
+    color: var(--main-color);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.flex-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.folder-select {
+  flex: 1;
+}
+
+.folder-checkbox {
+  margin-left: 12px;
+  white-space: nowrap;
+}
+
+.status-mini-tip {
+  margin-top: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  .text-success { color: var(--color-success-500); }
+  .text-warning { color: var(--color-warning-500); }
+}
+
+/* Chunk Display Card */
+.chunk-display-card {
   background: var(--gray-0);
   border: 1px solid var(--gray-300);
   border-radius: 6px;
+  padding: 0 12px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: var(--main-color);
+    box-shadow: 0 0 0 2px var(--main-100);
+
+    .edit-icon {
+      color: var(--main-color);
+    }
+  }
+
+  &.disabled {
+    background: var(--gray-100);
+    cursor: not-allowed;
+    color: var(--gray-400);
+    &:hover {
+      border-color: var(--gray-300);
+      box-shadow: none;
+    }
+  }
 }
 
-.same-name-file-info {
+.chunk-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--gray-700);
+
+  .divider {
+    color: var(--gray-300);
+    font-size: 10px;
+  }
+
+  b {
+    font-weight: 600;
+    color: var(--gray-900);
+  }
+}
+
+.edit-icon {
+  color: var(--gray-400);
+  font-size: 14px;
+}
+
+/* Alerts */
+.inline-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+
+  &.warning {
+    background: var(--color-warning-50);
+    border: 1px solid var(--color-warning-200);
+    color: var(--color-warning-700);
+  }
+}
+
+/* Upload Area */
+.upload-area {
+  flex: 1;
+}
+
+.custom-dragger {
+  :deep(.ant-upload-drag) {
+    background: var(--gray-0);
+    border-radius: 8px;
+    border: 1px dashed var(--gray-300);
+    transition: all 0.3s;
+
+    &:hover {
+      border-color: var(--main-color);
+      background: var(--main-50);
+    }
+  }
+
+  .ant-upload-drag-icon {
+    font-size: 32px;
+    color: var(--main-300);
+    margin-bottom: 8px;
+  }
+
+  .ant-upload-text {
+    font-size: 15px;
+    color: var(--gray-800);
+    margin-bottom: 4px;
+  }
+
+  .ant-upload-hint {
+    font-size: 12px;
+    color: var(--gray-500);
+  }
+}
+
+.zip-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-warning-600);
+  background: var(--color-warning-50);
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Conflict Files Panel */
+.conflict-files-panel {
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--gray-0);
+  margin-top: 4px;
+}
+
+.panel-header {
+  background: var(--gray-50);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-700);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--gray-200);
+
+  .icon-warning {
+    color: var(--color-warning-500);
+  }
+}
+
+.file-list-scroll {
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.conflict-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gray-100);
+  transition: background 0.2s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: var(--gray-50);
+  }
+}
+
+.file-meta {
   display: flex;
   align-items: center;
   gap: 12px;
   flex: 1;
   min-width: 0;
+  font-size: 13px;
+
+  .fname {
+    font-weight: 500;
+    color: var(--gray-800);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ftime {
+    color: var(--gray-400);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
 }
 
-.same-name-file-name {
-  font-weight: 500;
-  color: var(--gray-800);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.same-name-file-size {
-  font-size: 12px;
-  color: var(--gray-500);
-  flex-shrink: 0;
-}
-
-.same-name-file-time {
-  font-size: 12px;
-  color: var(--gray-500);
-  flex-shrink: 0;
-}
-
-.same-name-file-actions {
+.file-actions {
   display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
+  gap: 4px;
 
-.download-btn {
-  color: var(--main-600);
-}
+  .action-btn {
+    color: var(--gray-500);
 
-.download-btn:hover {
-  color: var(--main-700);
-  background-color: var(--main-50);
+    &:hover {
+      color: var(--main-600);
+      background: var(--main-50);
+    }
+
+    &.delete:hover {
+      color: var(--color-error-500);
+      background: var(--color-error-50);
+    }
+  }
 }
 </style>
