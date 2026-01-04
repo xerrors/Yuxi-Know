@@ -52,7 +52,6 @@
                 tree-node-filter-prop="title"
              >
              </a-tree-select>
-             <a-checkbox v-model:checked="isFolderUpload" class="folder-checkbox">上传文件夹</a-checkbox>
           </div>
         </div>
 
@@ -185,6 +184,10 @@ const props = defineProps({
   currentFolderId: {
     type: String,
     default: null
+  },
+  isFolderMode: {
+    type: Boolean,
+    default: false
   }
 });
 
@@ -213,6 +216,7 @@ const folderTreeData = computed(() => {
 watch(() => props.visible, (newVal) => {
   if (newVal) {
     selectedFolderId.value = props.currentFolderId;
+    isFolderUpload.value = props.isFolderMode;
   }
 });
 

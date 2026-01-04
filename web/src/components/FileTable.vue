@@ -1,54 +1,88 @@
 <template>
   <div class="file-table-container">
     <div class="panel-header">
-      <div class="search-container">
-        <a-button
-          type="secondary"
-          @click="showAddFilesModal"
-          :loading="refreshing"
-          :icon="h(PlusOutlined)"
-        >文件</a-button>
-        <a-button
-          type="secondary"
-          @click="showCreateFolderModal"
-          :loading="refreshing"
-          :icon="h(FolderAddOutlined)"
-        >文件夹</a-button>
+      <div class="upload-btn-group">
+        <a-dropdown trigger="click">
+          <a-button type="primary" size="small" class="upload-btn">
+            <FileUp size="14" style="margin-left: 4px;" />
+            上传
+            <ChevronDown size="14" style="margin-left: 4px;" />
+          </a-button>
+          <template #overlay>
+            <a-menu>
+              <a-menu-item key="upload-file" @click="showAddFilesModal({ isFolder: false })" :icon="h(FileUp, { size: 16 })">
+                上传文件
+              </a-menu-item>
+              <a-menu-item key="upload-folder" @click="showAddFilesModal({ isFolder: true })" :icon="h(FolderUp, { size: 16 })">
+                上传文件夹
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+
+        <a-button class="panel-action-btn" type="text" size="small" @click="showCreateFolderModal" title="新建文件夹">
+            <template #icon><FolderPlus size="16" /></template>
+        </a-button>
       </div>
       <div class="panel-actions">
-        <a-select
-          v-model:value="statusFilter"
-          placeholder="状态"
-          size="small"
-          style="width: 100px; margin-right: 8px;"
-          allow-clear
-          :options="statusOptions"
-          @change="onFilterChange"
-        />
         <a-input
           v-model:value="filenameFilter"
-          placeholder="搜索文件名"
+          placeholder="搜索"
           size="small"
           class="action-searcher"
           allow-clear
           @change="onFilterChange"
-        />
+        >
+          <template #prefix>
+            <Search size="14" style="color: var(--gray-400);" />
+          </template>
+        </a-input>
+
+        <a-dropdown trigger="click">
+          <a-button type="text" class="panel-action-btn" title="排序">
+            <template #icon><ArrowUpDown size="16" /></template>
+          </a-button>
+          <template #overlay>
+            <a-menu :selectedKeys="[sortField]" @click="handleSortMenuClick">
+              <a-menu-item v-for="opt in sortOptions" :key="opt.value">
+                {{ opt.label }}
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+
+        <a-dropdown trigger="click">
+          <a-button type="text" class="panel-action-btn" :class="{ 'active': statusFilter }" title="筛选状态">
+            <template #icon><Filter size="16" /></template>
+          </a-button>
+          <template #overlay>
+            <a-menu :selectedKeys="statusFilter ? [statusFilter] : []" @click="handleStatusMenuClick">
+              <a-menu-item key="all">全部状态</a-menu-item>
+              <a-menu-item v-for="opt in statusOptions" :key="opt.value">
+                {{ opt.label }}
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
+
         <a-button
           type="text"
           @click="handleRefresh"
           :loading="refreshing"
-          :icon="h(ReloadOutlined)"
           title="刷新"
           class="panel-action-btn"
-        />
+        >
+          <template #icon><RotateCw size="16" /></template>
+        </a-button>
         <a-button
           type="text"
           @click="toggleSelectionMode"
-          :icon="h(CheckSquare)"
           title="多选"
           class="panel-action-btn"
           :class="{ 'active': isSelectionMode }"
-        />
+        >
+          <template #icon><CheckSquare size="16" /></template>
+        </a-button>
         <!-- <a-button
           @click="toggleAutoRefresh"
           size="small"
@@ -61,11 +95,12 @@
         <a-button
           type="text"
           @click="toggleRightPanel"
-          :icon="h(ChevronLast)"
           title="切换右侧面板"
           class="panel-action-btn expand"
           :class="{ 'expanded': props.rightPanelVisible }"
-        />
+        >
+          <template #icon><ChevronLast size="16" /></template>
+        </a-button>
       </div>
     </div>
 
@@ -79,7 +114,7 @@
           @click="handleBatchParse"
           :loading="batchParsing"
           :disabled="!canBatchParse"
-          :icon="h(FileText)"
+          :icon="h(FileText, { size: 16 })"
           title="批量解析"
         />
         <a-button
@@ -87,7 +122,7 @@
           @click="handleBatchIndex"
           :loading="batchIndexing"
           :disabled="!canBatchIndex"
-          :icon="h(Database)"
+          :icon="h(Database, { size: 16 })"
           title="批量入库"
         />
         <a-button
@@ -96,7 +131,7 @@
           @click="handleBatchDelete"
           :loading="batchDeleting"
           :disabled="!canBatchDelete"
-          :icon="h(Trash2)"
+          :icon="h(Trash2, { size: 16 })"
           title="批量删除"
         />
       </div>
@@ -198,40 +233,40 @@
               <div class="file-action-list">
                 <template v-if="record.is_folder">
                   <a-button type="text" block @click="showCreateFolderModal(record.file_id)">
-                    <template #icon><component :is="h(FolderPlus)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(FolderPlus)" size="14" /></template>
                     新建子文件夹
                   </a-button>
                   <a-button type="text" block danger @click="handleDeleteFolder(record)">
-                    <template #icon><component :is="h(Trash2)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(Trash2)" size="14" /></template>
                     删除文件夹
                   </a-button>
                 </template>
                 <template v-else>
                   <a-button type="text" block @click="handleDownloadFile(record)" :disabled="lock || !['done', 'indexed', 'parsed', 'error_indexing'].includes(record.status)">
-                    <template #icon><component :is="h(Download)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(Download)" size="14" /></template>
                     下载文件
                   </a-button>
 
                   <!-- Parse Action -->
                   <a-button v-if="record.status === 'uploaded' || record.status === 'error_parsing'" type="text" block @click="handleParseFile(record)" :disabled="lock">
-                    <template #icon><component :is="h(FileText)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(FileText)" size="14" /></template>
                     {{ record.status === 'error_parsing' ? '重试解析' : '解析文件' }}
                   </a-button>
 
                   <!-- Index Action -->
                   <a-button v-if="record.status === 'parsed' || record.status === 'error_indexing'" type="text" block @click="handleIndexFile(record)" :disabled="lock">
-                    <template #icon><component :is="h(Database)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(Database)" size="14" /></template>
                     {{ record.status === 'error_indexing' ? '重试入库' : '入库' }}
                   </a-button>
 
                   <!-- Reindex Action -->
                   <a-button v-if="!isLightRAG && (record.status === 'done' || record.status === 'indexed')" type="text" block @click="handleReindexFile(record)" :disabled="lock">
-                    <template #icon><component :is="h(RefreshCw)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(RotateCw)" size="14" /></template>
                     重新入库
                   </a-button>
 
                   <a-button type="text" block danger @click="handleDeleteFile(record.file_id)" :disabled="lock || ['processing', 'parsing', 'indexing'].includes(record.status)">
-                    <template #icon><component :is="h(Trash2)" style="width: 14px; height: 14px;" /></template>
+                    <template #icon><component :is="h(Trash2)" size="14" /></template>
                     删除文件
                   </a-button>
                 </template>
@@ -260,14 +295,11 @@ import {
   FolderFilled,
   FolderOpenFilled,
   FileTextFilled,
-  PlusOutlined,
-  FolderAddOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons-vue';
 import {
   Trash2,
   Download,
-  RefreshCw,
+  RotateCw,
   ChevronLast,
   Ellipsis,
   FolderPlus,
@@ -276,10 +308,35 @@ import {
   FileCheck,
   Plus,
   Database,
+  FileUp,
+  FolderUp,
+  Search,
+  Filter,
+  ArrowUpDown,
+  ChevronDown,
 } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
 const userStore = useUserStore();
+
+const sortField = ref('filename');
+const sortOptions = [
+  { label: '文件名', value: 'filename' },
+  { label: '创建时间', value: 'created_at' },
+  { label: '状态', value: 'status' },
+];
+
+const handleSortMenuClick = (e) => {
+  sortField.value = e.key;
+};
+
+const handleStatusMenuClick = (e) => {
+  if (e.key === 'all') {
+    statusFilter.value = null;
+  } else {
+    statusFilter.value = e.key;
+  }
+};
 
 // Status text mapping
 const getStatusText = (status) => {
@@ -613,7 +670,21 @@ const buildFileTree = (fileList) => {
     nodes.sort((a, b) => {
       if (a.is_folder && !b.is_folder) return -1;
       if (!a.is_folder && b.is_folder) return 1;
-      return (a.filename || '').localeCompare(b.filename || '');
+
+      if (sortField.value === 'filename') {
+          return (a.filename || '').localeCompare(b.filename || '');
+      } else if (sortField.value === 'created_at') {
+          return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      } else if (sortField.value === 'status') {
+          const statusOrder = {
+            'done': 1, 'indexed': 1,
+            'processing': 2, 'indexing': 2, 'parsing': 2,
+            'waiting': 3, 'uploaded': 3, 'parsed': 3,
+            'failed': 4, 'error_indexing': 4, 'error_parsing': 4
+          };
+          return (statusOrder[a.status] || 5) - (statusOrder[b.status] || 5);
+      }
+      return 0;
     });
     nodes.forEach(node => {
       if (node.children) sortNodes(node.children);
@@ -692,15 +763,15 @@ const canBatchIndex = computed(() => {
   return selectedRowKeys.value.some(key => {
     const file = filteredFiles.value.find(f => f.file_id === key);
     return file && !lock.value && (
-      file.status === 'parsed' || 
-      file.status === 'error_indexing' || 
+      file.status === 'parsed' ||
+      file.status === 'error_indexing' ||
       (!isLightRAG.value && (file.status === 'done' || file.status === 'indexed'))
     );
   });
 });
 
-const showAddFilesModal = () => {
-  emit('showAddFilesModal');
+const showAddFilesModal = (options = {}) => {
+  emit('showAddFilesModal', options);
 };
 
 const handleRefresh = () => {
@@ -779,8 +850,8 @@ const handleBatchIndex = async () => {
   const validKeys = selectedRowKeys.value.filter(key => {
     const file = files.value.find(f => f.file_id === key);
     return file && (
-      file.status === 'parsed' || 
-      file.status === 'error_indexing' || 
+      file.status === 'parsed' ||
+      file.status === 'error_indexing' ||
       (!isLightRAG.value && (file.status === 'done' || file.status === 'indexed'))
     );
   });
@@ -978,29 +1049,10 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 4px;
   flex-shrink: 0;
-  padding: 4px 4px;
+  padding: 8px 8px;
 }
 
-.search-container {
-  display: flex;
-  align-items: center;
-
-  button {
-    padding: 0 8px;
-
-    svg {
-      width: 16px;
-      height: 16px;
-    }
-  }
-
-  button:hover {
-    background-color: var(--gray-50);
-    color: var(--main-color);
-  }
-}
 
 .panel-actions {
   display: flex;
@@ -1225,14 +1277,29 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
 :deep(.drop-over-folder) {
   background-color: var(--primary-50) !important;
-  outline: 2px dashed var(--main-color);
-  outline-offset: -2px;
-  z-index: 10;
+    outline: 2px dashed var(--main-color);
+    outline-offset: -2px;
+    z-index: 10;
 
-  td {
-    background-color: transparent !important;
+    td {
+      background-color: transparent !important;
+    }
   }
-}
+
+  .upload-btn-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    .upload-btn {
+      height: 28px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+  }
 </style>
 
 <style lang="less">

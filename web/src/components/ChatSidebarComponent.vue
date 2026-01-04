@@ -33,11 +33,11 @@
                 <a-dropdown :trigger="['click']" @click.stop>
                   <template #overlay>
                     <a-menu>
-                      <a-menu-item key="rename" @click.stop="renameChat(chat.id)">
-                        <EditOutlined /> 重命名
+                      <a-menu-item key="rename" @click.stop="renameChat(chat.id)" :icon="h(EditOutlined)">
+                        重命名
                       </a-menu-item>
-                      <a-menu-item key="delete" @click.stop="deleteChat(chat.id)">
-                        <DeleteOutlined /> 删除
+                      <a-menu-item key="delete" @click.stop="deleteChat(chat.id)" :icon="h(DeleteOutlined)">
+                        删除
                       </a-menu-item>
                     </a-menu>
                   </template>
