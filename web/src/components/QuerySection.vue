@@ -51,12 +51,18 @@
                 </div>
               </div>
               <div style="display: flex; gap: 12px; align-items: center;">
-                <a-switch
-                  v-if="!isLightRAG"
-                  v-model:checked="showRawData"
-                  checked-children="格式化"
-                  un-checked-children="原始"
-                />
+                <a-tooltip :title="showRawData ? '切换至格式化显示' : '切换至原始数据'">
+                  <a-button
+                    v-if="!isLightRAG"
+                    type="text"
+                    shape="circle"
+                    @click="showRawData = !showRawData"
+                    class="format-toggle-btn"
+                    :class="{ active: showRawData }"
+                  >
+                    <template #icon><Braces :size="18" /></template>
+                  </a-button>
+                </a-tooltip>
                 <a-button
                   @click="onQuery"
                   :loading="searchLoading"
@@ -73,7 +79,7 @@
 
         <div class="query-results" v-if="queryResult">
           <!-- 原始数据显示 -->
-          <div v-if="!showRawData" class="result-raw">
+          <div v-if="showRawData" class="result-raw">
             <pre>{{ JSON.stringify(queryResult, null, 2) }}</pre>
           </div>
 
@@ -150,6 +156,7 @@ import {
   SearchOutlined,
   ReloadOutlined,
 } from '@ant-design/icons-vue';
+import { Braces } from 'lucide-vue-next';
 
 const store = useDatabaseStore();
 
@@ -169,7 +176,7 @@ const emit = defineEmits(['toggleVisible']);
 
 const searchLoading = computed(() => store.state.searchLoading);
 const queryResult = ref('');
-const showRawData = ref(true);
+const showRawData = ref(false);
 
 // 判断是否为 LightRAG 类型知识库
 const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag');
@@ -455,7 +462,7 @@ defineExpose({
   box-shadow: 0 2px 4px var(--shadow-3);
   transition: all 0.2s ease;
 
-  &:hover:not(:disabled) {
+  &:hover {
     background-color: var(--main-bright);
     border-color: var(--main-bright);
     box-shadow: 0 4px 8px rgba(1, 136, 166, 0.25);
@@ -468,6 +475,24 @@ defineExpose({
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
+  }
+}
+
+.format-toggle-btn {
+  color: var(--gray-500);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+
+  &:hover {
+    color: var(--main-color);
+    background-color: var(--main-50);
+  }
+
+  &.active {
+    color: var(--main-color);
+    background-color: var(--main-50);
   }
 }
 

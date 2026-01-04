@@ -39,6 +39,7 @@
           :key="task.id"
           class="task-card"
           :class="taskCardClasses(task)"
+          @click="handleTaskCardClick(task)"
         >
           <div class="task-card-header">
             <div class="task-card-info">
@@ -234,6 +235,10 @@ function handleClose() {
 
 function handleRefresh() {
   taskerStore.loadTasks()
+}
+
+function handleTaskCardClick(task) {
+  console.log('Task clicked:', task)
 }
 
 function handleDetail(taskId) {

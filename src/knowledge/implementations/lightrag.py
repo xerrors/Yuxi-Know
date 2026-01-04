@@ -9,10 +9,11 @@ from neo4j import GraphDatabase
 from pymilvus import connections, utility
 
 from src import config
-from src.knowledge.base import KnowledgeBase
+from src.knowledge.base import FileStatus, KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown
-from src.knowledge.utils.kb_utils import get_embedding_config, prepare_item_metadata
+from src.knowledge.utils.kb_utils import get_embedding_config
 from src.utils import hashstr, logger
+from src.utils.datetime_utils import utc_isoformat
 
 
 class LightRagKB(KnowledgeBase):
@@ -240,8 +241,18 @@ class LightRagKB(KnowledgeBase):
             ),
         )
 
-    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
-        """添加内容（文件/URL）"""
+    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """
+        Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
+
+        Args:
+            db_id: Database ID
+            file_id: File ID
+            operator_id: ID of the user performing the operation
+
+        Returns:
+            Updated file metadata
+        """
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
 
@@ -249,58 +260,79 @@ class LightRagKB(KnowledgeBase):
         if not rag:
             raise ValueError(f"Failed to get LightRAG instance for {db_id}")
 
-        content_type = params.get("content_type", "file") if params else "file"
-        processed_items_info = []
+        # Get file meta
+        if file_id not in self.files_meta:
+            raise ValueError(f"File {file_id} not found")
+        file_meta = self.files_meta[file_id]
 
-        for item in items:
-            # 准备文件元数据
-            metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
-            file_id = metadata["file_id"]
-            item_path = metadata["path"]
+        # Validate current status - only allow indexing from these states
+        current_status = file_meta.get("status")
+        allowed_statuses = {
+            FileStatus.PARSED,
+            FileStatus.ERROR_INDEXING,
+            FileStatus.INDEXED,  # For re-indexing
+            "done",  # Legacy status
+        }
 
-            # 添加文件记录
-            file_record = metadata.copy()
-            self.files_meta[file_id] = file_record
+        if current_status not in allowed_statuses:
+            raise ValueError(
+                f"Cannot index file with status '{current_status}'. "
+                f"File must be parsed first (status should be one of: {', '.join(allowed_statuses)})"
+            )
+
+        # Check markdown file exists
+        if not file_meta.get("markdown_file"):
+            raise ValueError("File has not been parsed yet (no markdown_file)")
+
+        # Clear previous error if any
+        if "error" in file_meta:
+            self.files_meta[file_id].pop("error", None)
+
+        # Update status and add to processing queue
+        self.files_meta[file_id]["status"] = FileStatus.INDEXING
+        self.files_meta[file_id]["updated_at"] = utc_isoformat()
+        if operator_id:
+            self.files_meta[file_id]["updated_by"] = operator_id
+        self._save_metadata()
+
+        # Add to processing queue
+        self._add_to_processing_queue(file_id)
+
+        try:
+            # Read markdown
+            markdown_content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+            file_path = file_meta.get("path")
+
+            # Clean up existing chunks if any (for re-indexing)
+            await self.delete_file_chunks_only(db_id, file_id)
+
+            # Insert
+            await rag.ainsert(input=markdown_content, ids=file_id, file_paths=file_path)
+
+            logger.info(f"Indexed file {file_id} into LightRAG")
+
+            # Update status
+            self.files_meta[file_id]["status"] = FileStatus.INDEXED
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
             self._save_metadata()
 
-            self._add_to_processing_queue(file_id)
-            try:
-                # 确保params中包含db_id（ZIP文件处理需要）
-                if params is None:
-                    params = {}
-                params["db_id"] = db_id
+            return self.files_meta[file_id]
 
-                # 根据内容类型处理内容
-                if content_type != "file":
-                    raise ValueError("URL 内容解析已禁用")
-                markdown_content = await process_file_to_markdown(item, params=params)
-                markdown_content_lines = markdown_content[:100].replace("\n", " ")
-                logger.info(f"Markdown content: {markdown_content_lines}...")
+        except Exception as e:
+            logger.error(f"Indexing failed for {file_id}: {e}")
+            self.files_meta[file_id]["status"] = FileStatus.ERROR_INDEXING
+            self.files_meta[file_id]["error"] = str(e)
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
+            self._save_metadata()
+            raise
 
-                # 使用 LightRAG 插入内容
-                await rag.ainsert(input=markdown_content, ids=file_id, file_paths=item_path)
-
-                logger.info(f"Inserted {content_type} {item} into LightRAG. Done.")
-
-                # 更新状态为完成
-                self.files_meta[file_id]["status"] = "done"
-                self._save_metadata()
-                file_record["status"] = "done"
-
-            except Exception as e:
-                error_msg = str(e)
-                logger.error(f"处理{content_type} {item} 失败: {error_msg}, {traceback.format_exc()}")
-                self.files_meta[file_id]["status"] = "failed"
-                self.files_meta[file_id]["error"] = error_msg
-                self._save_metadata()
-                file_record["status"] = "failed"
-                file_record["error"] = error_msg
-            finally:
-                self._remove_from_processing_queue(file_id)
-
-            processed_items_info.append(file_record)
-
-        return processed_items_info
+        finally:
+            # Remove from processing queue
+            self._remove_from_processing_queue(file_id)
 
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """更新内容 - 根据file_ids重新解析文件并更新向量库"""
@@ -494,12 +526,19 @@ class LightRagKB(KnowledgeBase):
                 # 按 chunk_order_index 排序
                 doc_chunks.sort(key=lambda x: x.get("chunk_order_index", 0))
                 content_info["lines"] = doc_chunks
-                return content_info
 
             except Exception as e:
                 logger.error(f"Failed to get file content from LightRAG: {e}")
                 content_info["lines"] = []
-                return content_info
+
+        # Try to read markdown content if available
+        file_meta = self.files_meta[file_id]
+        if file_meta.get("markdown_file"):
+            try:
+                content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+                content_info["content"] = content
+            except Exception as e:
+                logger.error(f"Failed to read markdown file for {file_id}: {e}")
 
         return content_info
 

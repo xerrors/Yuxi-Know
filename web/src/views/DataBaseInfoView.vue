@@ -30,7 +30,7 @@
 
     <div class="right-panel" :style="{ width: (100 - leftPanelWidth) + '%', display: store.state.rightPanelVisible ? 'flex' : 'none' }">
       <a-tabs v-model:activeKey="activeTab" class="knowledge-tabs" :tabBarStyle="{ margin: 0, padding: '0 16px' }">
-        <template #tabBarExtraContent>
+        <template #rightExtra>
           <a-tooltip title="检索配置" placement="bottom">
             <a-button
               type="text"

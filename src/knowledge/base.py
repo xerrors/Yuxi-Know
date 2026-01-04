@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import shutil
@@ -7,6 +8,19 @@ from typing import Any
 
 from src.utils import logger
 from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
+
+
+class FileStatus:
+    UPLOADED = "uploaded"
+    PARSING = "parsing"
+    PARSED = "parsed"
+    ERROR_PARSING = "error_parsing"
+    INDEXING = "indexing"
+    INDEXED = "indexed"
+    ERROR_INDEXING = "error_indexing"
+    # Legacy status mapping
+    DONE = "done"  # Map to INDEXED
+    FAILED = "failed"  # Generic failure
 
 
 class KnowledgeBaseException(Exception):
@@ -126,6 +140,208 @@ class KnowledgeBase(ABC):
         """
         pass
 
+    async def add_file_record(
+        self, db_id: str, item: str, params: dict | None = None, operator_id: str | None = None
+    ) -> dict:
+        """
+        Add a file record to metadata (Status: UPLOADED)
+
+        Args:
+            db_id: Database ID
+            item: File path or URL
+            params: Parameters
+            operator_id: Operator ID who created the file
+
+        Returns:
+            File metadata record
+        """
+        from src.knowledge.utils.kb_utils import prepare_item_metadata
+
+        params = params or {}
+        content_type = params.get("content_type", "file")
+
+        # Prepare metadata
+        metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
+        file_id = metadata["file_id"]
+
+        # Initial status
+        metadata["status"] = FileStatus.UPLOADED
+        metadata["created_at"] = utc_isoformat()
+        if operator_id:
+            metadata["created_by"] = operator_id
+
+        # Save to metadata
+        self.files_meta[file_id] = metadata
+        self._save_metadata()
+
+        return metadata
+
+    async def parse_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """
+        Parse file to Markdown and save to MinIO (Status: PARSING -> PARSED/ERROR_PARSING)
+
+        Args:
+            db_id: Database ID
+            file_id: File ID
+            operator_id: ID of the user performing the operation
+
+        Returns:
+            Updated file metadata
+        """
+        if file_id not in self.files_meta:
+            raise ValueError(f"File {file_id} not found")
+
+        file_meta = self.files_meta[file_id]
+        current_status = file_meta.get("status")
+
+        # Validate current status - only allow parsing from these states
+        allowed_statuses = {
+            FileStatus.UPLOADED,
+            FileStatus.ERROR_PARSING,
+            "failed",  # Legacy status
+        }
+
+        if current_status not in allowed_statuses:
+            raise ValueError(
+                f"Cannot parse file with status '{current_status}'. "
+                f"File must be in one of these states: {', '.join(allowed_statuses)}"
+            )
+
+        file_path = file_meta.get("path")
+        if not file_path:
+            raise ValueError(f"File {file_id} has no valid path in metadata")
+
+        # Clear previous error if any
+        if "error" in file_meta:
+            self.files_meta[file_id].pop("error", None)
+
+        # Update status to PARSING and add to processing queue
+        self.files_meta[file_id]["status"] = FileStatus.PARSING
+        self.files_meta[file_id]["updated_at"] = utc_isoformat()
+        if operator_id:
+            self.files_meta[file_id]["updated_by"] = operator_id
+        self._save_metadata()
+
+        # Add to processing queue
+        self._add_to_processing_queue(file_id)
+
+        try:
+            from src.knowledge.indexing import process_file_to_markdown
+
+            # Prepare params
+            params = file_meta.get("processing_params", {}) or {}
+            params["db_id"] = db_id
+
+            # Process to Markdown
+            markdown_content = await process_file_to_markdown(file_path, params=params)
+
+            # Save Markdown to MinIO
+            markdown_file_path = await self._save_markdown_to_minio(db_id, file_id, markdown_content)
+
+            # Update metadata
+            self.files_meta[file_id]["status"] = FileStatus.PARSED
+            self.files_meta[file_id]["markdown_file"] = markdown_file_path
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
+            self._save_metadata()
+
+            return self.files_meta[file_id]
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Failed to parse file {file_id}: {error_msg}")
+
+            self.files_meta[file_id]["status"] = FileStatus.ERROR_PARSING
+            self.files_meta[file_id]["error"] = error_msg
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
+            self._save_metadata()
+
+            raise
+
+        finally:
+            # Remove from processing queue
+            self._remove_from_processing_queue(file_id)
+
+    async def update_file_params(self, db_id: str, file_id: str, params: dict, operator_id: str | None = None) -> None:
+        """Update file processing params"""
+        if file_id not in self.files_meta:
+            raise ValueError(f"File {file_id} not found")
+
+        # Skip if no params to update
+        if not params:
+            return
+
+        # Merge or overwrite? Usually merge is safer, or replace.
+        # User might want to change chunk size.
+        current_params = self.files_meta[file_id].get("processing_params", {}) or {}
+
+        logger.debug(f"[update_file_params] file_id={file_id}, current_params={current_params}, new_params={params}")
+
+        current_params.update(params)
+
+        self.files_meta[file_id]["processing_params"] = current_params
+        self.files_meta[file_id]["updated_at"] = utc_isoformat()
+        if operator_id:
+            self.files_meta[file_id]["updated_by"] = operator_id
+
+        logger.debug(f"[update_file_params] file_id={file_id}, updated_params={current_params}")
+
+        self._save_metadata()
+
+    async def _save_markdown_to_minio(self, db_id: str, file_id: str, content: str) -> str:
+        """Save markdown content to MinIO and return HTTP URL"""
+        from src.storage.minio import get_minio_client
+
+        minio_client = get_minio_client()
+        bucket_name = "kb-documents"  # Or reuse existing bucket strategy?
+        # Maybe store in 'kb-files' or 'kb-markdowns'
+        # Current uploads go to 'kb-files' usually?
+        # Let's use 'kb-parsed'
+        bucket_name = "kb-parsed"
+        await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
+
+        object_name = f"{db_id}/{file_id}/parsed.md"
+        data = content.encode("utf-8")
+
+        # Return standard HTTP URL from UploadResult
+        upload_result = await minio_client.aupload_file(
+            bucket_name=bucket_name, object_name=object_name, data=data, content_type="text/markdown"
+        )
+
+        return upload_result.url
+
+    async def _read_markdown_from_minio(self, file_path: str) -> str:
+        """Read markdown content from MinIO"""
+        from src.knowledge.utils.kb_utils import parse_minio_url
+        from src.storage.minio import get_minio_client
+
+        if not file_path.startswith(("http://", "https://")):
+            raise ValueError(f"Invalid MinIO path format: {file_path}")
+
+        bucket_name, object_name = parse_minio_url(file_path)
+        minio_client = get_minio_client()
+
+        content_bytes = await minio_client.adownload_file(bucket_name, object_name)
+        return content_bytes.decode("utf-8")
+
+    @abstractmethod
+    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """
+        Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
+
+        Args:
+            db_id: Database ID
+            file_id: File ID
+            operator_id: ID of the user performing the operation
+
+        Returns:
+            Updated file metadata
+        """
+        pass
+
     def create_database(
         self,
         database_name: str,
@@ -231,21 +447,6 @@ class KnowledgeBase(ABC):
         return self.files_meta[folder_id]
 
     @abstractmethod
-    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
-        """
-        添加内容（文件/URL）
-
-        Args:
-            db_id: 数据库ID
-            items: 文件路径或URL列表
-            params: 处理参数
-
-        Returns:
-            处理结果列表
-        """
-        pass
-
-    @abstractmethod
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """
         更新内容 - 根据file_ids重新解析文件并更新向量库
@@ -323,6 +524,7 @@ class KnowledgeBase(ABC):
                     "file_id": file_id,
                     "filename": file_info.get("filename", ""),
                     "path": file_info.get("path", ""),
+                    "markdown_file": file_info.get("markdown_file", ""),
                     "type": file_info.get("file_type", ""),
                     "status": file_info.get("status", "done"),
                     "created_at": created_at,
@@ -369,6 +571,7 @@ class KnowledgeBase(ABC):
                         "file_id": file_id,
                         "filename": file_info.get("filename", ""),
                         "path": file_info.get("path", ""),
+                        "markdown_file": file_info.get("markdown_file", ""),
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
                         "created_at": created_at,
@@ -432,8 +635,8 @@ class KnowledgeBase(ABC):
 
     def _check_and_fix_processing_status(self, db_id: str) -> None:
         """
-        检查并修复异常的processing状态
-        如果文件状态为processing但实际不在处理队列中，则修改为error状态
+        检查并修复异常的处理中状态
+        如果文件状态为处理中但实际不在处理队列中，则修改为相应的错误状态
 
         Args:
             db_id: 数据库ID
@@ -441,24 +644,37 @@ class KnowledgeBase(ABC):
         try:
             status_changed = False
 
-            # 检查该数据库下所有processing状态的文件
+            # 定义需要检查的中间状态及其对应的错误状态
+            intermediate_states = {
+                FileStatus.PARSING: FileStatus.ERROR_PARSING,
+                FileStatus.INDEXING: FileStatus.ERROR_INDEXING,
+                "processing": "failed",  # 兼容旧状态
+            }
+
+            # 检查该数据库下所有中间状态的文件
             for file_id, file_info in self.files_meta.items():
-                if file_info.get("database_id") == db_id and file_info.get("status") == "processing":
-                    # 检查文件是否真的在处理队列中
-                    if not self._is_file_in_processing_queue(file_id):
-                        logger.warning(
-                            f"File {file_id} has processing status but is not in processing queue, marking as error"
-                        )
-                        self.files_meta[file_id]["status"] = "error"
-                        self.files_meta[file_id]["error"] = (
-                            "Processing interrupted - file not found in processing queue"
-                        )
-                        status_changed = True
+                if file_info.get("database_id") == db_id:
+                    current_status = file_info.get("status")
+
+                    if current_status in intermediate_states:
+                        # 检查文件是否真的在处理队列中
+                        if not self._is_file_in_processing_queue(file_id):
+                            error_status = intermediate_states[current_status]
+                            logger.warning(
+                                f"File {file_id} has {current_status} status but is not in processing queue, "
+                                f"marking as {error_status}"
+                            )
+                            self.files_meta[file_id]["status"] = error_status
+                            self.files_meta[file_id]["error"] = (
+                                f"{current_status.capitalize()} interrupted - process not found in queue"
+                            )
+                            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                            status_changed = True
 
             # 如果有状态变更，保存元数据
             if status_changed:
                 self._save_metadata()
-                logger.info(f"Fixed processing status for database {db_id}")
+                logger.info(f"Fixed interrupted processing status for database {db_id}")
 
         except Exception as e:
             logger.error(f"Error checking processing status for database {db_id}: {e}")

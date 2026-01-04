@@ -8,15 +8,15 @@ from typing import Any
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
 
 from src import config
-from src.knowledge.base import KnowledgeBase
+from src.knowledge.base import FileStatus, KnowledgeBase
 from src.knowledge.indexing import process_file_to_markdown
 from src.knowledge.utils.kb_utils import (
     get_embedding_config,
-    prepare_item_metadata,
     split_text_into_chunks,
 )
 from src.models.embed import OtherEmbedding
 from src.utils import hashstr, logger
+from src.utils.datetime_utils import utc_isoformat
 
 MILVUS_AVAILABLE = True
 
@@ -223,11 +223,22 @@ class MilvusKB(KnowledgeBase):
         """将文本分割成块"""
         return split_text_into_chunks(text, file_id, filename, params)
 
-    async def add_content(self, db_id: str, items: list[str], params: dict | None = {}) -> list[dict]:
-        """添加内容（文件/URL）"""
+    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """
+        Index parsed file (Status: INDEXING -> INDEXED/ERROR_INDEXING)
+
+        Args:
+            db_id: Database ID
+            file_id: File ID
+            operator_id: ID of the user performing the operation
+
+        Returns:
+            Updated file metadata
+        """
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
 
+        # Get/Create collection
         collection = await self._get_milvus_collection(db_id)
         if not collection:
             raise ValueError(f"Failed to get Milvus collection for {db_id}")
@@ -235,80 +246,110 @@ class MilvusKB(KnowledgeBase):
         embed_info = self.databases_meta[db_id].get("embed_info", {})
         embedding_function = self._get_async_embedding_function(embed_info)
 
-        content_type = params.get("content_type", "file") if params else "file"
-        processed_items_info = []
+        # Get file meta
+        async with self._metadata_lock:
+            if file_id not in self.files_meta:
+                raise ValueError(f"File {file_id} not found")
+            file_meta = self.files_meta[file_id]
 
-        for item in items:
-            metadata = await prepare_item_metadata(item, content_type, db_id, params=params)
-            file_id = metadata["file_id"]
-            filename = metadata["filename"]
+            # Validate current status - only allow indexing from these states
+            current_status = file_meta.get("status")
+            allowed_statuses = {
+                FileStatus.PARSED,
+                FileStatus.ERROR_INDEXING,
+                FileStatus.INDEXED,  # For re-indexing
+                "done",  # Legacy status
+            }
 
-            file_record = metadata.copy()
-            del file_record["file_id"]
+            if current_status not in allowed_statuses:
+                raise ValueError(
+                    f"Cannot index file with status '{current_status}'. "
+                    f"File must be parsed first (status should be one of: {', '.join(allowed_statuses)})"
+                )
+
+            # Check markdown file exists
+            if not file_meta.get("markdown_file"):
+                raise ValueError("File has not been parsed yet (no markdown_file)")
+
+            # Clear previous error if any
+            if "error" in file_meta:
+                self.files_meta[file_id].pop("error", None)
+
+            # Update status and add to processing queue
+            self.files_meta[file_id]["status"] = FileStatus.INDEXING
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
+            self._save_metadata()
+
+            # Read processing params inside lock to ensure we get the latest values
+            params = file_meta.get("processing_params", {}) or {}
+            logger.debug(f"[index_file] file_id={file_id}, processing_params={params}")
+
+        # Add to processing queue
+        self._add_to_processing_queue(file_id)
+
+        try:
+            # Read markdown
+            markdown_content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+            filename = file_meta.get("filename")
+
+            # Split
+            chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
+            logger.info(
+                f"Split {filename} into {len(chunks)} chunks with params: "
+                f"chunk_size={params.get('chunk_size')}, "
+                f"chunk_overlap={params.get('chunk_overlap')}, "
+                f"qa_separator={params.get('qa_separator')}"
+            )
+
+            if chunks:
+                texts = [chunk["content"] for chunk in chunks]
+                embeddings = await embedding_function(texts)
+
+                entities = [
+                    [chunk["id"] for chunk in chunks],
+                    [chunk["content"] for chunk in chunks],
+                    [chunk["source"] for chunk in chunks],
+                    [chunk["chunk_id"] for chunk in chunks],
+                    [chunk["file_id"] for chunk in chunks],
+                    [chunk["chunk_index"] for chunk in chunks],
+                    embeddings,
+                ]
+
+                # Clean up existing chunks if any (for re-indexing)
+                await self.delete_file_chunks_only(db_id, file_id)
+
+                def _insert_records():
+                    collection.insert(entities)
+
+                await asyncio.to_thread(_insert_records)
+
+            logger.info(f"Indexed file {file_id} into Milvus")
+
+            # Update status
             async with self._metadata_lock:
-                self.files_meta[file_id] = file_record
+                self.files_meta[file_id]["status"] = FileStatus.INDEXED
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
                 self._save_metadata()
+                return self.files_meta[file_id]
 
-            file_record["file_id"] = file_id
+        except Exception as e:
+            logger.error(f"Indexing failed for {file_id}: {e}")
+            async with self._metadata_lock:
+                self.files_meta[file_id]["status"] = FileStatus.ERROR_INDEXING
+                self.files_meta[file_id]["error"] = str(e)
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
+                self._save_metadata()
+            raise
 
-            # 添加到处理队列
-            self._add_to_processing_queue(file_id)
-
-            try:
-                # 确保params中包含db_id（ZIP文件处理需要）
-                if params is None:
-                    params = {}
-                params["db_id"] = db_id
-
-                if content_type != "file":
-                    raise ValueError("URL 内容解析已禁用")
-                markdown_content = await process_file_to_markdown(item, params=params)
-
-                chunks = self._split_text_into_chunks(markdown_content, file_id, filename, params)
-                logger.info(f"Split {filename} into {len(chunks)} chunks")
-
-                if chunks:
-                    texts = [chunk["content"] for chunk in chunks]
-                    embeddings = await embedding_function(texts)
-
-                    entities = [
-                        [chunk["id"] for chunk in chunks],
-                        [chunk["content"] for chunk in chunks],
-                        [chunk["source"] for chunk in chunks],
-                        [chunk["chunk_id"] for chunk in chunks],
-                        [chunk["file_id"] for chunk in chunks],
-                        [chunk["chunk_index"] for chunk in chunks],
-                        embeddings,
-                    ]
-
-                    def _insert_records():
-                        collection.insert(entities)
-
-                    await asyncio.to_thread(_insert_records)
-
-                logger.info(f"Inserted {content_type} {item} into Milvus. Done.")
-
-                async with self._metadata_lock:
-                    self.files_meta[file_id]["status"] = "done"
-                    self._save_metadata()
-                file_record["status"] = "done"
-                # 从处理队列中移除
-                self._remove_from_processing_queue(file_id)
-
-            except Exception as e:
-                logger.error(f"处理{content_type} {item} 失败: {e}, {traceback.format_exc()}")
-                async with self._metadata_lock:
-                    self.files_meta[file_id]["status"] = "failed"
-                    self._save_metadata()
-                file_record["status"] = "failed"
-                # 从处理队列中移除
-                self._remove_from_processing_queue(file_id)
-            finally:
-                pass
-
-            processed_items_info.append(file_record)
-
-        return processed_items_info
+        finally:
+            # Remove from processing queue
+            self._remove_from_processing_queue(file_id)
 
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """更新内容 - 根据file_ids重新解析文件并更新向量库"""
@@ -606,12 +647,19 @@ class MilvusKB(KnowledgeBase):
                 # 按 chunk_order_index 排序
                 doc_chunks.sort(key=lambda x: x.get("chunk_order_index", 0))
                 content_info["lines"] = doc_chunks
-                return content_info
 
             except Exception as e:
                 logger.error(f"Failed to get file content from Milvus: {e}")
                 content_info["lines"] = []
-                return content_info
+
+        # Try to read markdown content if available
+        file_meta = self.files_meta[file_id]
+        if file_meta.get("markdown_file"):
+            try:
+                content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+                content_info["content"] = content
+            except Exception as e:
+                logger.error(f"Failed to read markdown file for {file_id}: {e}")
 
         return content_info
 

@@ -286,10 +286,27 @@ class KnowledgeBaseManager:
             logger.warning(f"Database {db_id} not found during deletion: {e}")
             return {"message": "删除成功"}
 
-    async def add_content(self, db_id: str, items: list[str], params: dict | None = None) -> list[dict]:
-        """添加内容（文件/URL）"""
+    async def add_file_record(
+        self, db_id: str, item: str, params: dict | None = None, operator_id: str | None = None
+    ) -> dict:
+        """Add file record to metadata"""
         kb_instance = self._get_kb_for_database(db_id)
-        return await kb_instance.add_content(db_id, items, params or {})
+        return await kb_instance.add_file_record(db_id, item, params, operator_id)
+
+    async def parse_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """Parse file to Markdown"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.parse_file(db_id, file_id, operator_id)
+
+    async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
+        """Index parsed file"""
+        kb_instance = self._get_kb_for_database(db_id)
+        return await kb_instance.index_file(db_id, file_id, operator_id)
+
+    async def update_file_params(self, db_id: str, file_id: str, params: dict, operator_id: str | None = None) -> None:
+        """Update file processing params"""
+        kb_instance = self._get_kb_for_database(db_id)
+        await kb_instance.update_file_params(db_id, file_id, params, operator_id)
 
     async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
         """异步查询知识库"""
@@ -438,13 +455,6 @@ class KnowledgeBaseManager:
         # 按上传时间降序排序
         same_name_files.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return same_name_files
-
-    async def update_file(self, db_id: str, region_file_id: str, file_name: str, params: dict | None = None) -> dict:
-        """对单个文件执行更新"""
-        kb_instance = self._get_kb_for_database(db_id)
-        await kb_instance.delete_file(db_id, region_file_id)
-        data_list = await kb_instance.add_content(db_id, [file_name], params or {})
-        return data_list[0]
 
     async def file_existed_in_db(self, db_id: str | None, content_hash: str | None) -> bool:
         """检查指定数据库中是否存在相同内容哈希的文件"""

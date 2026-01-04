@@ -149,18 +149,29 @@ export const documentApi = {
   },
 
   /**
-   * 重新分块文档
+   * 手动触发文档解析
+   * @param {string} dbId - 知识库ID
+   * @param {Array} fileIds - 文件ID列表
+   * @returns {Promise} - 解析任务结果
+   */
+  parseDocuments: async (dbId, fileIds) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/documents/parse`, fileIds)
+  },
+
+  /**
+   * 手动触发文档入库
    * @param {string} dbId - 知识库ID
    * @param {Array} fileIds - 文件ID列表
    * @param {Object} params - 处理参数
-   * @returns {Promise} - 重新分块结果
+   * @returns {Promise} - 入库任务结果
    */
-  rechunksDocuments: async (dbId, fileIds, params = {}) => {
-    return apiAdminPost(`/api/knowledge/databases/${dbId}/documents/rechunks`, {
+  indexDocuments: async (dbId, fileIds, params = {}) => {
+    return apiAdminPost(`/api/knowledge/databases/${dbId}/documents/index`, {
       file_ids: fileIds,
       params
     })
-  }
+  },
+
 }
 
 // =============================================================================

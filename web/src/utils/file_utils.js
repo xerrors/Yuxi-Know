@@ -110,5 +110,15 @@ export const getStatusText = (status) => {
     'processing': '处理中',
     'waiting': '等待处理'
   }
-  return statusMap[status] || status
+  return map[status] || status
+}
+
+// 格式化文件大小
+export const formatFileSize = (bytes) => {
+  if (bytes === 0 || bytes === '0') return '0 B';
+  if (!bytes) return '-';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }

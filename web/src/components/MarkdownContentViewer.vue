@@ -4,11 +4,12 @@
       <h4>文件内容</h4>
       <div class="header-controls">
         <div class="header-info">
-          <span>共 {{ mappedChunks.length }} 个片段</span>
+          <span v-if="mappedChunks.length > 0">共 {{ mappedChunks.length }} 个片段</span>
           <span>总长度 {{ formatTextLength(mergedContent.length) }}</span>
         </div>
         <button
           class="toggle-btn"
+          v-if="mappedChunks.length > 0"
           @click="toggleChunkPanel"
           :title="chunkPanelVisible ? '隐藏片段列表' : '显示片段列表'"
         >
@@ -102,6 +103,10 @@ const props = defineProps({
   chunks: {
     type: Array,
     default: () => []
+  },
+  content: {
+    type: String,
+    default: ''
   }
 });
 
@@ -121,7 +126,7 @@ const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
 
 // 合并chunks
 const mergeResult = computed(() => mergeChunks(props.chunks));
-const mergedContent = computed(() => mergeResult.value.content);
+const mergedContent = computed(() => props.content || mergeResult.value.content);
 const mappedChunks = computed(() => mergeResult.value.chunks);
 
 // 格式化文本长度

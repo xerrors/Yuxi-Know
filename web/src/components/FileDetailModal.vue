@@ -26,7 +26,7 @@
             size="small"
             @click="handleDownloadMarkdown"
             :loading="downloadingMarkdown"
-            :disabled="!file.lines || file.lines.length === 0"
+            :disabled="!((file.lines && file.lines.length > 0) || file.content)"
             :icon="h(DownloadOutlined)"
           >
             下载 Markdown
@@ -35,8 +35,8 @@
       </div>
     </template>
     <div class="file-detail-content" v-if="file">
-      <div class="file-content-section" v-if="file.lines && file.lines.length > 0">
-        <MarkdownContentViewer :chunks="file.lines" />
+      <div class="file-content-section" v-if="(file.lines && file.lines.length > 0) || file.content">
+        <MarkdownContentViewer :chunks="file.lines" :content="file.content" />
       </div>
 
       <div v-else-if="loading" class="loading-container">
@@ -143,16 +143,20 @@ const handleDownloadOriginal = async () => {
 
 // 下载 Markdown
 const handleDownloadMarkdown = () => {
-  if (!file.value || !file.value.lines || file.value.lines.length === 0) {
+  let content = '';
+  if (file.value.content) {
+    content = file.value.content;
+  } else if (file.value.lines && file.value.lines.length > 0) {
+    content = mergeChunks(file.value.lines).content;
+  }
+
+  if (!content) {
     message.error('没有可下载的 Markdown 内容');
     return;
   }
 
   downloadingMarkdown.value = true;
   try {
-    // 合并 chunks 生成完整的 Markdown 内容
-    const { content } = mergeChunks(file.value.lines);
-
     // 生成文件名（如果原文件没有 .md 扩展名，则添加）
     let filename = file.value.filename || 'document.md';
     if (!filename.toLowerCase().endsWith('.md')) {

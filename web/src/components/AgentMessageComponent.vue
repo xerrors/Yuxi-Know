@@ -695,12 +695,12 @@ const parsedData = computed(() => {
       left: 50%;
       transform: translateX(-50%);
       padding: 8px 12px;
-      background-color: var(--gray-900);
+      background-color: #222;
       color: #fff;
       font-size: 13px;
       line-height: 1.5;
       border-radius: 6px;
-      min-width: 200px;
+      min-width: 100px;
       max-width: 400px;
       width: max-content;
       white-space: normal;

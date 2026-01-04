@@ -355,8 +355,11 @@ def parse_minio_url(file_path: str) -> tuple[str, str]:
     """
     解析MinIO URL，提取bucket名称和对象名称
 
+    支持标准 HTTP/HTTPS URL 格式：
+    - http(s)://host/bucket-name/path/to/object
+
     Args:
-        file_path: MinIO文件URL
+        file_path: MinIO文件URL (http:// 或 https://)
 
     Returns:
         tuple[str, str]: (bucket_name, object_name)
@@ -370,16 +373,19 @@ def parse_minio_url(file_path: str) -> tuple[str, str]:
         # 解析URL
         parsed_url = urlparse(file_path)
 
-        # 从URL路径中提取对象名称（去掉开头的斜杠）
-        object_name = parsed_url.path.lstrip("/")
-
-        # 分离bucket名称和对象名称
-        path_parts = object_name.split("/", 1)
-        if len(path_parts) > 1:
-            bucket_name = path_parts[0]
-            object_name = path_parts[1]
+        # 对于 minio:// 协议，bucket名称在netloc中
+        if parsed_url.scheme == "minio":
+            bucket_name = parsed_url.netloc
+            object_name = parsed_url.path.lstrip("/")
         else:
-            raise ValueError(f"无法解析MinIO URL中的bucket名称: {file_path}")
+            # 对于 http/https 协议，bucket名称在path的第一部分
+            object_name = parsed_url.path.lstrip("/")
+            path_parts = object_name.split("/", 1)
+            if len(path_parts) > 1:
+                bucket_name = path_parts[0]
+                object_name = path_parts[1]
+            else:
+                raise ValueError(f"无法解析MinIO URL中的bucket名称: {file_path}")
 
         logger.debug(f"Parsed MinIO URL: bucket_name={bucket_name}, object_name={object_name}")
         return bucket_name, object_name

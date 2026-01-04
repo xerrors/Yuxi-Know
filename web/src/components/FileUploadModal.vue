@@ -56,8 +56,8 @@
           </div>
         </div>
 
-        <!-- 第二行：OCR 与 分块 (两列布局) -->
-        <div class="setting-row two-cols">
+        <!-- 第二行：OCR (单列布局) -->
+        <div class="setting-row">
           <!-- OCR 配置 -->
           <div class="col-item">
             <div class="setting-label">
@@ -86,25 +86,6 @@
                 <span v-else-if="selectedOcrStatus && selectedOcrStatus !== 'unknown'" class="text-warning">
                    ⚠️ {{ selectedOcrMessage || '服务异常' }}
                 </span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 分块配置 -->
-          <div class="col-item">
-            <div class="setting-label">分块参数</div>
-            <div class="setting-content">
-              <div
-                class="chunk-display-card"
-                :class="{ disabled: isGraphBased }"
-                @click="!isGraphBased && showChunkConfigModal()"
-              >
-                <div class="chunk-info">
-                  <span class="chunk-val">Size: <b>{{ chunkParams.chunk_size }}</b></span>
-                  <span class="divider">|</span>
-                  <span class="chunk-val">Overlap: <b>{{ chunkParams.chunk_overlap }}</b></span>
-                </div>
-                <SettingOutlined class="edit-icon" />
               </div>
             </div>
           </div>
@@ -170,20 +151,6 @@
 
     </div>
   </a-modal>
-
-  <!-- 分块参数配置弹窗 -->
-  <a-modal v-model:open="chunkConfigModalVisible" title="分块参数配置" width="500px">
-    <template #footer>
-      <a-button key="back" @click="chunkConfigModalVisible = false">取消</a-button>
-      <a-button key="submit" type="primary" @click="handleChunkConfigSubmit">确定</a-button>
-    </template>
-    <div class="chunk-config-content">
-      <ChunkParamsConfig
-        :temp-chunk-params="tempChunkParams"
-        :show-qa-split="isQaSplitSupported"
-      />
-    </div>
-  </a-modal>
 </template>
 
 <script setup>
@@ -193,7 +160,6 @@ import { useUserStore } from '@/stores/user';
 import { useDatabaseStore } from '@/stores/database';
 import { ocrApi } from '@/apis/system_api';
 import { fileApi, documentApi } from '@/apis/knowledge_api';
-import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 import {
   FileOutlined,
   LinkOutlined,
@@ -385,20 +351,7 @@ const ocrHealthChecking = ref(false);
 
 // 分块参数
 const chunkParams = ref({
-  chunk_size: 1000,
-  chunk_overlap: 200,
   enable_ocr: 'disable',
-  qa_separator: '',
-});
-
-// 分块参数配置弹窗
-const chunkConfigModalVisible = ref(false);
-
-// 临时分块参数（用于配置弹窗）
-const tempChunkParams = ref({
-  chunk_size: 1000,
-  chunk_overlap: 200,
-  qa_separator: '',
 });
 
 // 计算属性：是否支持QA分割
@@ -755,26 +708,6 @@ const handleFileUpload = (info) => {
 const handleDrop = () => {};
 
 // 已移除文件夹上传逻辑
-
-const showChunkConfigModal = () => {
-  tempChunkParams.value = {
-    chunk_size: chunkParams.value.chunk_size,
-    chunk_overlap: chunkParams.value.chunk_overlap,
-    qa_separator: chunkParams.value.qa_separator,
-  };
-  chunkConfigModalVisible.value = true;
-};
-
-const handleChunkConfigSubmit = () => {
-  chunkParams.value.chunk_size = tempChunkParams.value.chunk_size;
-  chunkParams.value.chunk_overlap = tempChunkParams.value.chunk_overlap;
-  // 只有支持QA分割的知识库类型才保存QA分割配置
-  if (isQaSplitSupported.value) {
-    chunkParams.value.qa_separator = tempChunkParams.value.qa_separator;
-  }
-  chunkConfigModalVisible.value = false;
-  message.success('分块参数配置已更新');
-};
 
 const checkOcrHealth = async () => {
   if (ocrHealthChecking.value) return;
