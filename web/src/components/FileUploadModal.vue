@@ -6,16 +6,23 @@
     @cancel="handleCancel"
   >
     <template #footer>
-      <a-button key="back" @click="handleCancel">取消</a-button>
-      <a-button
-        key="submit"
-        type="primary"
-        @click="chunkData"
-        :loading="chunkLoading"
-        :disabled="fileList.length === 0"
-      >
-        添加到知识库
-      </a-button>
+      <div class="footer-container">
+        <a-button type="link" class="help-link-btn" @click="openDocLink">
+          <CircleHelp :size="14" /> 文档处理说明
+        </a-button>
+        <div class="footer-buttons">
+          <a-button key="back" @click="handleCancel">取消</a-button>
+          <a-button
+            key="submit"
+            type="primary"
+            @click="chunkData"
+            :loading="chunkLoading"
+            :disabled="fileList.length === 0"
+          >
+            添加到知识库
+          </a-button>
+        </div>
+      </div>
     </template>
 
     <div class="add-files-content">
@@ -26,16 +33,12 @@
             v-model:value="uploadMode"
             :options="uploadModeOptions"
             class="custom-segmented"
-            :disabled="true"
           />
         </div>
-        <a-button type="link" class="help-link-btn" @click="openDocLink">
-          <QuestionCircleOutlined /> 文档处理说明
-        </a-button>
       </div>
 
-      <!-- 2. 配置面板 (仅文件模式显示) -->
-      <div class="settings-panel" v-if="uploadMode === 'file'">
+      <!-- 2. 配置面板 -->
+      <div class="settings-panel">
         <!-- 第一行：存储位置 -->
         <div class="setting-row">
           <div class="setting-label">存储位置</div>
@@ -80,7 +83,7 @@
               <!-- 紧凑的状态提示 -->
               <div class="status-mini-tip" v-if="chunkParams.enable_ocr !== 'disable'">
                 <span v-if="selectedOcrStatus === 'healthy'" class="text-success">
-                   <CheckCircleOutlined /> {{ selectedOcrMessage || '服务正常' }}
+                   <CheckCircleFilled /> {{ selectedOcrMessage || '服务正常' }}
                 </span>
                 <span v-else-if="selectedOcrStatus && selectedOcrStatus !== 'unknown'" class="text-warning">
                    ⚠️ {{ selectedOcrMessage || '服务异常' }}
@@ -92,13 +95,13 @@
       </div>
 
       <!-- PDF/图片OCR提醒 (Alert样式优化) -->
-      <div v-if="uploadMode === 'file' && hasPdfOrImageFiles && !isOcrEnabled" class="inline-alert warning">
-        <InfoCircleOutlined />
+      <div v-if="hasPdfOrImageFiles && !isOcrEnabled" class="inline-alert warning">
+        <Info :size="16" />
         <span>检测到PDF或图片文件，建议启用 OCR 以提取文本内容</span>
       </div>
 
       <!-- 文件上传区域 -->
-      <div class="upload-area" v-if="uploadMode === 'file'">
+      <div class="upload-area">
         <a-upload-dragger
           class="custom-dragger"
           v-model:fileList="fileList"
@@ -127,7 +130,7 @@
       <!-- 同名文件提示 -->
       <div v-if="sameNameFiles.length > 0" class="conflict-files-panel">
         <div class="panel-header">
-          <InfoCircleOutlined class="icon-warning" />
+          <Info :size="14" class="icon-warning" />
           <span>已存在同名文件 ({{ sameNameFiles.length }})</span>
         </div>
         <div class="file-list-scroll">
@@ -138,10 +141,10 @@
             </div>
             <div class="file-actions">
               <a-button type="text" size="small" class="action-btn download" @click="downloadSameNameFile(file)">
-                <DownloadOutlined />
+                <Download :size="14" />
               </a-button>
               <a-button type="text" size="small" danger class="action-btn delete" @click="deleteSameNameFile(file)">
-                <DeleteOutlined />
+                <Trash2 :size="14" />
               </a-button>
             </div>
           </div>
@@ -160,16 +163,18 @@ import { useDatabaseStore } from '@/stores/database';
 import { ocrApi } from '@/apis/system_api';
 import { fileApi, documentApi } from '@/apis/knowledge_api';
 import {
-  FileOutlined,
-  LinkOutlined,
-  SettingOutlined,
-  CheckCircleOutlined,
-  InfoCircleOutlined,
-  DownloadOutlined,
-  DeleteOutlined,
+  CheckCircleFilled,
   ReloadOutlined,
-  QuestionCircleOutlined,
 } from '@ant-design/icons-vue';
+import {
+  FileUp,
+  FolderUp,
+  RotateCw,
+  CircleHelp,
+  Info,
+  Download,
+  Trash2,
+} from 'lucide-vue-next';
 import { h } from 'vue';
 
 const props = defineProps({
@@ -217,6 +222,7 @@ watch(() => props.visible, (newVal) => {
   if (newVal) {
     selectedFolderId.value = props.currentFolderId;
     isFolderUpload.value = props.isFolderMode;
+    uploadMode.value = props.isFolderMode ? 'folder' : 'file';
   }
 });
 
@@ -317,20 +323,25 @@ const uploadModeOptions = computed(() => [
   {
     value: 'file',
     label: h('div', { class: 'segmented-option' }, [
-      h(FileOutlined, { class: 'option-icon' }),
+      h(FileUp, { size: 16, class: 'option-icon' }),
       h('span', { class: 'option-text' }, '上传文件'),
     ]),
   },
   {
-    value: 'url',
-    label: h(Tooltip, { title: 'URL 文档上传与解析功能已禁用，出于安全考虑，当前版本仅支持文件上传' }, {
-      default: () => h('div', { class: 'segmented-option' }, [
-        h(LinkOutlined, { class: 'option-icon' }),
-        h('span', { class: 'option-text' }, '输入网址'),
-      ])
-    }),
+    value: 'folder',
+    label: h('div', { class: 'segmented-option' }, [
+      h(FolderUp, { size: 16, class: 'option-icon' }),
+      h('span', { class: 'option-text' }, '上传文件夹'),
+    ]),
   },
 ]);
+
+watch(uploadMode, (val) => {
+  isFolderUpload.value = val === 'folder';
+  // 切换模式时清空已选文件，避免混淆
+  fileList.value = [];
+  sameNameFiles.value = [];
+});
 
 // 文件列表
 const fileList = ref([]);
@@ -749,51 +760,49 @@ const chunkData = async () => {
   }
 
   let success = false;
-  if (uploadMode.value === 'file') {
-    const files = fileList.value.filter(file => file.status === 'done').map(file => file.response?.file_path);
-    // 过滤掉 undefined 或 null 的文件路径
-    const validFiles = files.filter(file => file);
-    if (validFiles.length === 0) {
-      message.error('请先上传文件');
-      return;
-    }
+  const files = fileList.value.filter(file => file.status === 'done').map(file => file.response?.file_path);
+  // 过滤掉 undefined 或 null 的文件路径
+  const validFiles = files.filter(file => file);
+  if (validFiles.length === 0) {
+    message.error('请先上传文件');
+    return;
+  }
 
-    // 验证图片文件是否启用OCR
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'];
-    const hasImageFiles = validFiles.some(filePath => {
-      const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
-      return imageExtensions.includes(ext);
+  // 验证图片文件是否启用OCR
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'];
+  const hasImageFiles = validFiles.some(filePath => {
+    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+    return imageExtensions.includes(ext);
+  });
+
+  if (hasImageFiles && chunkParams.value.enable_ocr === 'disable') {
+    message.error({
+      content: '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PP-StructureV3) 或移除图片文件。',
+      duration: 5,
+    });
+    return;
+  }
+
+  try {
+    store.state.chunkLoading = true;
+    // 调用 store 的 addFiles 方法
+    await store.addFiles({
+      items: validFiles,
+      contentType: 'file',
+      params: { ...chunkParams.value },
+      parentId: selectedFolderId.value // 传递选中的文件夹 ID
     });
 
-    if (hasImageFiles && chunkParams.value.enable_ocr === 'disable') {
-      message.error({
-        content: '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PP-StructureV3) 或移除图片文件。',
-        duration: 5,
-      });
-      return;
-    }
-
-    try {
-      store.state.chunkLoading = true;
-      // 调用 store 的 addFiles 方法
-      await store.addFiles({
-        items: validFiles,
-        contentType: 'file',
-        params: { ...chunkParams.value },
-        parentId: selectedFolderId.value // 传递选中的文件夹 ID
-      });
-
-      emit('success');
-      handleCancel();
-      fileList.value = [];
-      sameNameFiles.value = [];
-      success = true;
-    } catch (error) {
-      console.error('文件上传失败:', error);
-      message.error('文件上传失败: ' + (error.message || '未知错误'));
-    } finally {
-      store.state.chunkLoading = false;
-    }
+    emit('success');
+    handleCancel();
+    fileList.value = [];
+    sameNameFiles.value = [];
+    success = true;
+  } catch (error) {
+    console.error('文件上传失败:', error);
+    message.error('文件上传失败: ' + (error.message || '未知错误'));
+  } finally {
+    store.state.chunkLoading = false;
   }
 
   if (success) {
@@ -807,6 +816,18 @@ const chunkData = async () => {
 </script>
 
 <style lang="less" scoped>
+.footer-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.footer-buttons {
+  display: flex;
+  gap: 8px;
+}
+
 .add-files-content {
   padding: 8px 0;
   display: flex;
@@ -838,8 +859,14 @@ const chunkData = async () => {
   background-color: var(--gray-100);
   padding: 3px;
 
-  .segmented-option .option-text {
-    margin-left: 6px;
+  .segmented-option {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 32px;
+    .option-text {
+      margin-left: 6px;
+    }
   }
 }
 
@@ -862,14 +889,15 @@ const chunkData = async () => {
   &.two-cols {
     flex-direction: row;
     gap: 20px;
+  }
 
-    .col-item {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      min-width: 0; // Fix flex overflow
-    }
+
+  .col-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0; // Fix flex overflow
   }
 }
 

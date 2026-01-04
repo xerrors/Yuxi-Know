@@ -302,7 +302,7 @@ const formatResultData = (data) => {
       }
 
       :deep(.description) {
-        color: var(--gray-600);
+        color: var(--gray-700);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;

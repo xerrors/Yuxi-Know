@@ -36,12 +36,12 @@
               @click="toggleFile(fileGroup.filename)"
             >
               <div class="file-info">
-                <FileOutlined />
+                <FileText :size="14" />
                 <span class="file-name">{{ fileGroup.filename }}</span>
                 <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
               </div>
               <div class="expand-icon">
-                <DownOutlined :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
+                <ChevronDown :size="14" :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
               </div>
             </div>
 
@@ -64,7 +64,7 @@
                     <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
                   </div>
                   <span class="chunk-preview">{{ getPreviewText(chunk.content) }}</span>
-                  <EyeOutlined class="view-icon" />
+                  <Eye :size="14" class="view-icon" />
                 </div>
               </div>
             </div>
@@ -108,7 +108,7 @@
                 </div>
               </div>
               <div class="detail-meta">
-                <span class="meta-item"><DatabaseOutlined /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
+                <span class="meta-item"><Database :size="12" /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
               </div>
             </div>
 
@@ -126,7 +126,7 @@
 <script setup>
 import BaseToolCall from '../BaseToolCall.vue';
 import { ref, computed } from 'vue'
-import { FileOutlined, DownOutlined, EyeOutlined, DatabaseOutlined } from '@ant-design/icons-vue'
+import { FileText, ChevronDown, Eye, Database } from 'lucide-vue-next'
 
 const props = defineProps({
   toolCall: {
@@ -290,7 +290,7 @@ const formatMindmapResult = (content) => {
     padding: 12px 16px;
     background: var(--gray-25);
     font-size: 12px;
-    color: var(--gray-500);
+    color: var(--gray-700);
     border-bottom: 1px solid var(--gray-100);
   }
 
@@ -332,9 +332,8 @@ const formatMindmapResult = (content) => {
         flex: 1;
         min-width: 0;
 
-        .anticon {
-          color: var(--gray-500);
-          font-size: 13px;
+        svg {
+          color: var(--gray-700);
         }
 
         .file-name {
@@ -350,16 +349,15 @@ const formatMindmapResult = (content) => {
 
         .chunk-count {
           font-size: 11px;
-          color: var(--gray-500);
+          color: var(--gray-700);
           white-space: nowrap;
           margin-right: 4px;
         }
       }
 
       .expand-icon {
-        color: var(--gray-400);
+        color: var(--gray-700);
         transition: transform 0.2s ease;
-        font-size: 12px;
 
         .rotated {
           transform: rotate(180deg);
@@ -399,7 +397,7 @@ const formatMindmapResult = (content) => {
         gap: 10px;
 
         .chunk-index {
-          color: var(--gray-500);
+          color: var(--gray-700);
           font-size: 11px;
           font-weight: 500;
           min-width: 20px;
@@ -415,7 +413,7 @@ const formatMindmapResult = (content) => {
 
           .score-item {
             font-size: 11px;
-            color: var(--gray-600);
+            color: var(--gray-700);
             background: var(--gray-25);
             padding: 1px 5px;
             border-radius: 4px;
@@ -427,7 +425,7 @@ const formatMindmapResult = (content) => {
         .chunk-preview {
           flex: 1;
           font-size: 12px;
-          color: var(--gray-600);
+          color: var(--gray-700);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -435,8 +433,7 @@ const formatMindmapResult = (content) => {
         }
 
         .view-icon {
-          color: var(--gray-400);
-          font-size: 12px;
+          color: var(--gray-700);
           opacity: 0.5;
           transition: opacity 0.2s ease;
         }
@@ -446,7 +443,7 @@ const formatMindmapResult = (content) => {
 
   .no-results {
     text-align: center;
-    color: var(--gray-500);
+    color: var(--gray-700);
     padding: 20px;
     font-size: 12px;
   }
@@ -482,7 +479,7 @@ const formatMindmapResult = (content) => {
 
         .score-label {
           font-size: 12px;
-          color: var(--gray-500);
+          color: var(--gray-700);
           margin-bottom: 6px;
           font-weight: 500;
         }
@@ -502,13 +499,13 @@ const formatMindmapResult = (content) => {
 
       .meta-item {
         font-size: 11px;
-        color: var(--gray-400);
+        color: var(--gray-700);
         display: flex;
         align-items: center;
         gap: 4px;
 
-        .anticon {
-          color: var(--gray-500);
+        svg {
+          color: var(--gray-700);
         }
       }
     }

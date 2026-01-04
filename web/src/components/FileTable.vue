@@ -177,7 +177,7 @@
         class="my-table"
         size="small"
         :show-header="false"
-        :pagination="paginationCompact"
+        :pagination="false"
         v-model:expandedRowKeys="expandedRowKeys"
         :custom-row="customRow"
         :row-selection="isSelectionMode ? {
@@ -196,7 +196,7 @@
               {{ record.filename }}
             </span>
           </template>
-          <a-popover v-else placement="right" overlayClassName="file-info-popover" :mouseEnterDelay="1">
+          <a-popover v-else placement="right" overlayClassName="file-info-popover" :mouseEnterDelay="0.5">
             <template #content>
               <div class="file-info-card">
                  <div class="info-row"><span class="label">ID:</span> <span class="value">{{ record.file_id }}</span></div>
@@ -720,27 +720,6 @@ const filteredFiles = computed(() => {
 const emptyText = computed(() => {
   return filenameFilter.value ? `没有找到包含"${filenameFilter.value}"的文件` : '暂无文件';
 });
-
-// 紧凑分页配置
-const paginationCompact = ref({
-  pageSize: 20,
-  current: 1,
-  total: 0,
-  showSizeChanger: false,
-  showTotal: (total) => `${total}`,
-  size: 'small',
-  showQuickJumper: false,
-  onChange: (page, pageSize) => {
-    paginationCompact.value.current = page;
-    paginationCompact.value.pageSize = pageSize;
-    selectedRowKeys.value = [];
-  },
-});
-
-// 监听过滤后的文件列表变化，更新分页总数
-watch(filteredFiles, (newFiles) => {
-  paginationCompact.value.total = newFiles.length;
-}, { immediate: true });
 
 // 计算是否可以批量删除
 const canBatchDelete = computed(() => {
