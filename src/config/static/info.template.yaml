@@ -16,7 +16,7 @@ branding:
 
 features:
   - label: "GitHub Stars"
-    value: "3000+"
+    value: "3800+"
     description: "开发者社区的认可与支持"
     icon: "stars"
   - label: "已解决 Issues"
@@ -24,7 +24,7 @@ features:
     description: "持续改进和问题解决能力"
     icon: "issues"
   - label: "累计 Commits"
-    value: "1100+"
+    value: "1200+"
     description: "活跃的开发迭代和功能更新"
     icon: "commits"
   - label: "开源协议"

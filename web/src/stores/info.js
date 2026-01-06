@@ -27,7 +27,7 @@ export const useInfoStore = defineStore('info', () => {
   // 计算属性 - 功能特性
   const features = computed(() => infoConfig.value.features || [{
     label: "GitHub Stars",
-    value: "3000+",
+    value: "3200+",
     description: "开发者社区的认可与支持",
     icon: "stars"
   }, {
@@ -37,7 +37,7 @@ export const useInfoStore = defineStore('info', () => {
     icon: "issues"
   }, {
     label: "累计 Commits",
-    value: "1100+",
+    value: "1200+",
     description: "活跃的开发迭代和功能更新",
     icon: "commits"
   }, {

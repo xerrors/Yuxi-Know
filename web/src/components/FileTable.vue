@@ -104,8 +104,14 @@
       </div>
     </div>
 
-    <div class="batch-actions" v-if="selectedRowKeys.length > 0">
+    <div class="batch-actions" v-if="isSelectionMode">
       <div class="batch-info">
+        <a-checkbox
+          :checked="isAllSelected"
+          :indeterminate="isPartiallySelected"
+          @change="onSelectAllChange"
+          style="margin-right: 8px;"
+        />
         <span>{{ selectedRowKeys.length }} 项</span>
       </div>
       <div style="display: flex; gap: 4px;">
@@ -382,6 +388,46 @@ const selectedRowKeys = computed({
 });
 
 const isSelectionMode = ref(false);
+
+const allSelectableFiles = computed(() => {
+  const nameFilter = filenameFilter.value.trim().toLowerCase();
+  const status = statusFilter.value;
+
+  return files.value.filter(file => {
+    if (file.is_folder) return false;
+    // Follow getCheckboxProps logic
+    if (lock.value || file.status === 'processing' || file.status === 'waiting') return false;
+
+    if (nameFilter || status) {
+      const nameMatch = !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter));
+      const statusMatch = !status || file.status === status ||
+                          (status === 'indexed' && file.status === 'done') ||
+                          (status === 'error_indexing' && file.status === 'failed');
+      return nameMatch && statusMatch;
+    }
+    return true;
+  });
+});
+
+const isAllSelected = computed(() => {
+  const selectableIds = allSelectableFiles.value.map(f => f.file_id);
+  if (selectableIds.length === 0) return false;
+  return selectableIds.every(id => selectedRowKeys.value.includes(id));
+});
+
+const isPartiallySelected = computed(() => {
+  const selectableIds = allSelectableFiles.value.map(f => f.file_id);
+  const selectedCount = selectableIds.filter(id => selectedRowKeys.value.includes(id)).length;
+  return selectedCount > 0 && selectedCount < selectableIds.length;
+});
+
+const onSelectAllChange = (e) => {
+  if (e.target.checked) {
+    selectedRowKeys.value = allSelectableFiles.value.map(f => f.file_id);
+  } else {
+    selectedRowKeys.value = [];
+  }
+};
 
 const expandedRowKeys = ref([]);
 
