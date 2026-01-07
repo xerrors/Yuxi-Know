@@ -114,23 +114,25 @@
         />
         <span>{{ selectedRowKeys.length }} 项</span>
       </div>
-      <div style="display: flex; gap: 4px;">
+      <div style="display: flex; gap: 8px;">
         <a-button
           type="link"
           @click="handleBatchParse"
           :loading="batchParsing"
           :disabled="!canBatchParse"
           :icon="h(FileText, { size: 16 })"
-          title="批量解析"
-        />
+        >
+          批量解析
+        </a-button>
         <a-button
           type="link"
           @click="handleBatchIndex"
           :loading="batchIndexing"
           :disabled="!canBatchIndex"
           :icon="h(Database, { size: 16 })"
-          title="批量入库"
-        />
+        >
+          批量入库
+        </a-button>
         <a-button
           type="link"
           danger
@@ -138,8 +140,9 @@
           :loading="batchDeleting"
           :disabled="!canBatchDelete"
           :icon="h(Trash2, { size: 16 })"
-          title="批量删除"
-        />
+        >
+          批量删除
+        </a-button>
       </div>
     </div>
 
@@ -1082,7 +1085,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 0px;
+  gap: 4px;
 
   .action-searcher {
     width: 120px;
@@ -1097,7 +1100,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 2px 12px;
+  padding: 4px 12px;
   background-color: var(--main-10);
   border-radius: 4px;
   margin-bottom: 4px;
@@ -1118,9 +1121,12 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
 .batch-actions .ant-btn {
   font-size: 12px;
-  padding: 0 6px;
-  height: 22px;
-  border-radius: 3px;
+  padding: 4px 8px;
+  height: auto;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 
   svg {
     width: 14px;
@@ -1218,8 +1224,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   align-items: center;
   justify-content: center;
   border-radius: 6px;
-  /* border: 1px solid var(--gray-300); */
-  /* background-color: var(--gray-50); */
+  padding: 0 4px;
   color: var(--gray-700);
   transition: all 0.1s ease;
   font-size: 12px;
@@ -1251,7 +1256,8 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
 .panel-action-btn.active {
   color: var(--main-color);
-  background-color: var(--main-10);
+  background-color: var(--gray-100);
+  font-weight: 600;
 }
 
 .action-trigger-btn {

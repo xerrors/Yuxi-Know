@@ -18,6 +18,9 @@
 - 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能
+- 支持 markitdown 或者 docling 的功能
+- 支持设置上传后自动入库（indexing）
+- 添加对于 lightrag 的结果解析
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -28,6 +31,7 @@
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini）
 - 首页加载的问题
 - 当前的 upload 图谱查询为同步操作，可能会导致页面卡顿
+- FileTable 的自动刷新失效
 
 ## v0.5
 

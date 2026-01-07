@@ -100,12 +100,14 @@ export const useDatabaseStore = defineStore('database', () => {
     }
   }
 
-  async function getDatabaseInfo(id, skipQueryParams = false) {
+  async function getDatabaseInfo(id, skipQueryParams = false, isBackground = false) {
     const db_id = id || databaseId.value;
     if (!db_id) return;
 
-    state.lock = true;
-    state.databaseLoading = true;
+    if (!isBackground) {
+      state.lock = true;
+      state.databaseLoading = true;
+    }
     try {
       const data = await databaseApi.getDatabaseInfo(db_id);
       database.value = data;
@@ -119,8 +121,10 @@ export const useDatabaseStore = defineStore('database', () => {
       console.error(error);
       message.error(error.message || '获取数据库信息失败');
     } finally {
-      state.lock = false;
-      state.databaseLoading = false;
+      if (!isBackground) {
+        state.lock = false;
+        state.databaseLoading = false;
+      }
     }
   }
 
@@ -243,7 +247,7 @@ export const useDatabaseStore = defineStore('database', () => {
     });
   }
 
-  const processingStatuses = new Set(['processing', 'waiting']);
+  const processingStatuses = new Set(['processing', 'waiting', 'parsing', 'indexing']);
 
   function enableAutoRefresh(source = 'auto') {
     if (autoRefreshManualOverride && source === 'auto') {
@@ -469,7 +473,7 @@ export const useDatabaseStore = defineStore('database', () => {
   function startAutoRefresh() {
     if (state.autoRefresh && !refreshInterval) {
       refreshInterval = setInterval(() => {
-        getDatabaseInfo(undefined, true); // Skip loading query params during auto-refresh
+        getDatabaseInfo(undefined, true, true); // Skip loading query params during auto-refresh
       }, 1000);
     }
   }
