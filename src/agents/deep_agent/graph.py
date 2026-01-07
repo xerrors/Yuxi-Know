@@ -8,25 +8,26 @@ from langchain.agents.middleware import ModelRequest, SummarizationMiddleware, T
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import inject_attachment_context
-from src.agents.common.tools import search
+from src.agents.common.tools import get_tavily_search
 
 from .context import DeepContext
 from .prompts import DEEP_PROMPT
 
-search_tools = [search]
 
+def _get_research_sub_agent(search_tools: list) -> dict:
+    """Get research sub-agent config with search tools."""
+    return {
+        "name": "research-agent",
+        "description": ("利用搜索工具，用于研究更深入的问题。将调研结果写入到主题研究文件中。"),
+        "system_prompt": (
+            "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
+            "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
+            "除了你的最终信息，他们不会知道任何其他事情，所以你的最终报告应该就是你的最终信息！"
+            "将调研结果保存到主题研究文件中 /sub_research/xxx.md 中。"
+        ),
+        "tools": search_tools,
+    }
 
-research_sub_agent = {
-    "name": "research-agent",
-    "description": ("利用搜索工具，用于研究更深入的问题。将调研结果写入到主题研究文件中。"),
-    "system_prompt": (
-        "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
-        "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
-        "除了你的最终信息，他们不会知道任何其他事情，所以你的最终报告应该就是你的最终信息！"
-        "将调研结果保存到主题研究文件中 /sub_research/xxx.md 中。"
-    ),
-    "tools": search_tools,
-}
 
 critique_sub_agent = {
     "name": "critique-agent",
@@ -73,7 +74,16 @@ class DeepAgent(BaseAgent):
 
     async def get_tools(self):
         """返回 Deep Agent 的专用工具"""
-        tools = search_tools
+        tools = []
+        tavily_search = get_tavily_search()
+        if tavily_search:
+            tools.append(tavily_search)
+
+        # Assert that search tool is available for DeepAgent
+        assert tools, (
+            "DeepAgent requires at least one search tool. "
+            "Please configure TAVILY_API_KEY environment variable to enable web search."
+        )
         return tools
 
     async def get_graph(self, **kwargs):
@@ -87,6 +97,9 @@ class DeepAgent(BaseAgent):
         model = load_chat_model(context.model)
         sub_model = load_chat_model(context.subagents_model)
         tools = await self.get_tools()
+
+        # Build subagents with search tools
+        research_sub_agent = _get_research_sub_agent(tools)
 
         # 使用 create_deep_agent 创建深度智能体
         graph = create_agent(

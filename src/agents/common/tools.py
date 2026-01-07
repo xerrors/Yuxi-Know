@@ -4,15 +4,25 @@ from typing import Annotated, Any
 
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
-from langchain_tavily import TavilySearch
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from src import config, graph_base, knowledge_base
 from src.utils import logger
 
-search = TavilySearch()
-search.metadata = {"name": "Tavily 网页搜索"}
+# Lazy initialization for TavilySearch (only when TAVILY_API_KEY is available)
+_tavily_search_instance = None
+
+
+def get_tavily_search():
+    """Get TavilySearch instance lazily, only when API key is available."""
+    global _tavily_search_instance
+    if _tavily_search_instance is None and config.enable_web_search:
+        from langchain_tavily import TavilySearch
+
+        _tavily_search_instance = TavilySearch()
+        _tavily_search_instance.metadata = {"name": "Tavily 网页搜索"}
+    return _tavily_search_instance
 
 
 @tool(name_or_callable="计算器", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
@@ -101,7 +111,9 @@ def get_static_tools() -> list:
 
     # 检查是否启用网页搜索
     if config.enable_web_search:
-        static_tools.append(search)
+        tavily_search = get_tavily_search()
+        if tavily_search:
+            static_tools.append(tavily_search)
 
     return static_tools
 
