@@ -80,7 +80,7 @@ const parseData = (content) => {
 // 识别逻辑
 const isWebSearchResult = computed(() => {
   const name = toolName.value.toLowerCase();
-  return name.includes('search') || name.includes('tavily') || name.includes('web');
+  return name.includes('tavily_search');
 });
 
 const isTaskResult = computed(() => {

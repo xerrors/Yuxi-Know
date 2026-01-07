@@ -176,8 +176,6 @@ provide('settingsModal', {
         ref="htmlRefHook"
         class="fill debug-trigger"
       ></div>
-
-
       <div class="github nav-item">
         <a-tooltip placement="right">
           <template #title>欢迎 Star</template>
@@ -189,23 +187,11 @@ provide('settingsModal', {
           </a>
         </a-tooltip>
       </div>
-
-
-        <!-- <div class="nav-item api-docs">
-        <a-tooltip placement="right">
-          <template #title>接口文档 {{ apiDocsUrl }}</template>
-          <a :href="apiDocsUrl" target="_blank" class="github-link">
-            <ApiOutlined class="icon" style="color: var(--gray-1000);"/>
-          </a>
-        </a-tooltip>
-      </div> -->
-
       <!-- 用户信息组件 -->
       <div class="nav-item user-info">
         <UserInfoComponent />
       </div>
-
-      </div>
+    </div>
     <div class="header-mobile">
       <RouterLink to="/agent" class="nav-item" active-class="active">对话</RouterLink>
       <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
