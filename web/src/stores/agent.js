@@ -87,8 +87,8 @@ export const useAgentStore = defineStore('agent', () => {
       await fetchAgents()
       await fetchDefaultAgent()
 
-      if (!selectedAgentId.value || !agents.value.find(a => a.id === selectedAgentId.value)) {
-        if (defaultAgentId.value && agents.value.find(a => a.id === defaultAgentId.value)) {
+      if (!selectedAgent.value) {
+        if (defaultAgent.value) {
           await selectAgent(defaultAgentId.value)
         } else if (agents.value.length > 0) {
           const firstAgentId = agents.value[0].id
@@ -356,6 +356,6 @@ export const useAgentStore = defineStore('agent', () => {
   persist: {
     key: 'agent-store',
     storage: localStorage,
-    paths: ['selectedAgentId', 'defaultAgentId']
+    pick: ['selectedAgentId']
   }
 })
