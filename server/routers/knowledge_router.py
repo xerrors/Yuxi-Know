@@ -364,8 +364,9 @@ async def add_documents(
         return summary | {"items": processed_items}
 
     try:
+        database = knowledge_base.get_database_info(db_id)
         task = await tasker.enqueue(
-            name=f"知识库文档处理({db_id})",
+            name=f"知识库文档处理 ({database['name']})",
             task_type="knowledge_ingest",
             payload={
                 "db_id": db_id,
@@ -421,8 +422,9 @@ async def parse_documents(db_id: str, file_ids: list[str] = Body(...), current_u
         return {"items": processed_items}
 
     try:
+        database = knowledge_base.get_database_info(db_id)
         task = await tasker.enqueue(
-            name=f"文档解析({db_id})",
+            name=f"文档解析 ({database['name']})",
             task_type="knowledge_parse",
             payload={"db_id": db_id, "file_ids": file_ids},
             coroutine=run_parse,
@@ -499,8 +501,9 @@ async def index_documents(
         return {"items": processed_items}
 
     try:
+        database = knowledge_base.get_database_info(db_id)
         task = await tasker.enqueue(
-            name=f"文档入库({db_id})",
+            name=f"文档入库 ({database['name']})",
             task_type="knowledge_index",
             payload={"db_id": db_id, "file_ids": file_ids, "params": params},
             coroutine=run_index,
