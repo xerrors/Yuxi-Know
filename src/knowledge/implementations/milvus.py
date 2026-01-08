@@ -689,6 +689,88 @@ class MilvusKB(KnowledgeBase):
         # Call base method to delete local files and metadata
         return super().delete_database(db_id)
 
+    def get_query_params_config(self, db_id: str, **kwargs) -> dict:
+        """获取 Milvus 知识库的查询参数配置"""
+        # 从 metadata 中获取 reranker 配置
+        db_meta = self.databases_meta.get(db_id, {})
+        metadata = db_meta.get("metadata", {}) or {}
+        reranker_config = metadata.get("reranker_config", {}) or {}
+        reranker_enabled = bool(reranker_config.get("enabled", False))
+
+        # 构建 Milvus 特定参数
+        options = [
+            {
+                "key": "top_k",
+                "label": "TopK",
+                "type": "number",
+                "default": reranker_config.get("final_top_k", 10),
+                "min": 1,
+                "max": 100,
+                "description": "返回的最大结果数量",
+            },
+            {
+                "key": "similarity_threshold",
+                "label": "相似度阈值",
+                "type": "number",
+                "default": 0.0,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "过滤相似度低于此值的结果",
+            },
+            {
+                "key": "include_distances",
+                "label": "显示相似度",
+                "type": "boolean",
+                "default": True,
+                "description": "在结果中显示相似度分数",
+            },
+            {
+                "key": "metric_type",
+                "label": "距离度量类型",
+                "type": "select",
+                "default": "COSINE",
+                "options": [
+                    {"value": "COSINE", "label": "余弦相似度", "description": "适合文本语义相似度"},
+                    {"value": "L2", "label": "欧几里得距离", "description": "适合数值型数据"},
+                    {"value": "IP", "label": "内积", "description": "适合标准化向量"},
+                ],
+                "description": "向量相似度计算方法",
+            },
+            {
+                "key": "use_reranker",
+                "label": "启用重排序",
+                "type": "boolean",
+                "default": reranker_enabled,
+                "description": "是否使用精排模型对检索结果进行重排序",
+            },
+            {
+                "key": "recall_top_k",
+                "label": "召回数量",
+                "type": "number",
+                "default": reranker_config.get("recall_top_k", 50),
+                "min": 10,
+                "max": 200,
+                "description": "启用重排序时向量检索的候选数量",
+            },
+        ]
+
+        # 动态添加 reranker 模型选择
+        reranker_names = kwargs.get("reranker_names", {})
+        if reranker_names:
+            options.append(
+                {
+                    "key": "reranker_model",
+                    "label": "重排序模型",
+                    "type": "select",
+                    "default": reranker_config.get("model", ""),
+                    "options": [{"label": info.name, "value": model_id} for model_id, info in reranker_names.items()],
+                    "description": "覆盖默认配置，选择用于本次查询的重排序模型",
+                }
+            )
+
+        return {"type": "milvus", "options": options}
+
     def __del__(self):
         """清理连接"""
         try:

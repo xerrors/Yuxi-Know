@@ -553,6 +553,49 @@ class LightRagKB(KnowledgeBase):
 
         return {**basic_info, **content_info}
 
+    def get_query_params_config(self, db_id: str, **kwargs) -> dict:
+        """获取 LightRAG 知识库的查询参数配置"""
+        options = [
+            {
+                "key": "mode",
+                "label": "检索模式",
+                "type": "select",
+                "default": "mix",
+                "options": [
+                    {"value": "local", "label": "Local", "description": "上下文相关信息"},
+                    {"value": "global", "label": "Global", "description": "全局知识"},
+                    {"value": "hybrid", "label": "Hybrid", "description": "本地和全局混合"},
+                    {"value": "naive", "label": "Naive", "description": "基本搜索"},
+                    {"value": "mix", "label": "Mix", "description": "知识图谱和向量检索混合"},
+                ],
+            },
+            {
+                "key": "only_need_context",
+                "label": "只使用上下文",
+                "type": "boolean",
+                "default": True,
+                "description": "只返回上下文，不生成回答",
+            },
+            {
+                "key": "only_need_prompt",
+                "label": "只使用提示",
+                "type": "boolean",
+                "default": False,
+                "description": "只返回提示，不进行检索",
+            },
+            {
+                "key": "top_k",
+                "label": "TopK",
+                "type": "number",
+                "default": 10,
+                "min": 1,
+                "max": 100,
+                "description": "返回的最大结果数量",
+            },
+        ]
+
+        return {"type": "lightrag", "options": options}
+
     async def export_data(self, db_id: str, format: str = "csv", **kwargs) -> str:
         """
         使用 LightRAG 原生功能导出知识库数据。

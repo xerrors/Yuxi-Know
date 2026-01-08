@@ -476,6 +476,36 @@ class KnowledgeBase(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_query_params_config(self, db_id: str, **kwargs) -> dict:
+        """
+        获取知识库类型的查询参数配置
+
+        Args:
+            db_id: 数据库ID
+            **kwargs: 额外参数(如 reranker_names 等)
+
+        Returns:
+            dict: {
+                "type": "kb_type",
+                "options": [
+                    {
+                        "key": "param_name",
+                        "label": "参数名称",
+                        "type": "select|number|boolean",
+                        "default": default_value,
+                        "options": [...],  # 对于 select 类型
+                        "description": "参数描述",
+                        "min": 1,  # 对于 number 类型
+                        "max": 100,
+                        "step": 0.1
+                    },
+                    ...
+                ]
+            }
+        """
+        pass
+
     async def export_data(self, db_id: str, format: str = "zip", **kwargs) -> str:
         pass
 
