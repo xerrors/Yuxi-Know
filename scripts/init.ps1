@@ -41,7 +41,7 @@ SILICONFLOW_API_KEY=$apiKey
 "@
 
     if (-not [string]::IsNullOrEmpty($TAVILY_API_KEY)) {
-        $envContent += "TAVILY_API_KEY=$TAVILY_API_KEY"
+        $envContent += "`nTAVILY_API_KEY=$TAVILY_API_KEY"
     }
 
     $envContent | Out-File -FilePath ".env" -Encoding UTF8
