@@ -101,14 +101,14 @@ async def test_admin_can_create_vector_db_with_reranker(test_client, admin_heade
             "recall_top_k": 20,
         }
         update_response = await test_client.put(
-            f"/api/knowledge/databases/{db_id}/query-params",
-            json=update_params,
-            headers=admin_headers
+            f"/api/knowledge/databases/{db_id}/query-params", json=update_params, headers=admin_headers
         )
         assert update_response.status_code == 200, update_response.text
 
         # 再次获取参数，验证保存成功
-        params_response2 = await test_client.get(f"/api/knowledge/databases/{db_id}/query-params", headers=admin_headers)
+        params_response2 = await test_client.get(
+            f"/api/knowledge/databases/{db_id}/query-params", headers=admin_headers
+        )
         assert params_response2.status_code == 200, params_response2.text
 
         params_payload2 = params_response2.json()

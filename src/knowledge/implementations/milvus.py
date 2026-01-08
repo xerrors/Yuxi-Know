@@ -565,9 +565,7 @@ class MilvusKB(KnowledgeBase):
                         key=lambda item: item.get("rerank_score", item.get("score", 0.0)), reverse=True
                     )
                     elapsed = time.time() - rerank_start
-                    logger.info(
-                        f"Reranking completed for {db_id} in {elapsed:.3f}s with model {reranker_model}"
-                    )
+                    logger.info(f"Reranking completed for {db_id} in {elapsed:.3f}s with model {reranker_model}")
                 finally:
                     await reranker.aclose()
 

@@ -100,9 +100,7 @@ async def create_database(
             reranker_cfg = params.get("reranker_config")
             if reranker_cfg:
                 if kb == "milvus":
-                    logger.info(
-                        "reranker_config is deprecated, please use query_params.options instead"
-                    )
+                    logger.info("reranker_config is deprecated, please use query_params.options instead")
                 else:
                     logger.warning(f"{kb} does not support reranker, ignoring reranker_config")
                 # 移除 reranker_config，不再保存
@@ -766,6 +764,7 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
     except Exception as e:
         logger.error(f"获取知识库查询参数失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 def _merge_saved_options(params: dict, saved_options: dict) -> dict:
     """将用户保存的配置合并到默认配置中"""
