@@ -53,7 +53,6 @@
               <div style="display: flex; gap: 12px; align-items: center;">
                 <a-tooltip :title="showRawData ? '切换至格式化显示' : '切换至原始数据'">
                   <a-button
-                    v-if="!isLightRAG"
                     type="text"
                     shape="circle"
                     @click="showRawData = !showRawData"
@@ -69,7 +68,7 @@
                   class="search-button"
                   type="primary"
                   :disabled="!queryText.trim()"
-                  :icon=h(SearchOutlined)
+                  :icon="h(SearchOutlined)"
                   shape="circle"
                 />
               </div>
@@ -85,8 +84,183 @@
 
           <!-- 格式化显示 -->
           <div v-else>
+            <!-- LightRAG 返回对象格式 -->
+            <div v-if="isLightRAGResult" class="lightrag-result">
+              <!-- 元数据信息 -->
+              <div v-if="queryResult.metadata" class="lightrag-metadata">
+                <div class="metadata-row">
+                  <span class="metadata-label">查询模式:</span>
+                  <span class="metadata-value query-mode">{{ queryResult.metadata.query_mode }}</span>
+                </div>
+                <div v-if="queryResult.metadata.processing_info" class="metadata-row">
+                  <span class="metadata-label">统计:</span>
+                  <span class="metadata-value">
+                    找到 {{ queryResult.metadata.processing_info.total_entities_found || 0 }} 个实体,
+                    {{ queryResult.metadata.processing_info.total_relations_found || 0 }} 个关系,
+                    使用 {{ queryResult.metadata.processing_info.final_chunks_count || 0 }} 个文档块
+                  </span>
+                </div>
+                <!-- 高级关键词 -->
+                <div v-if="queryResult.metadata.keywords?.high_level" class="metadata-row">
+                  <span class="metadata-label">高级关键词:</span>
+                  <span class="keywords-text">{{ queryResult.metadata.keywords.high_level.join('、') }}</span>
+                </div>
+                <!-- 低级关键词 -->
+                <div v-if="queryResult.metadata.keywords?.low_level" class="metadata-row">
+                  <span class="metadata-label">低级关键词:</span>
+                  <span class="keywords-text">{{ queryResult.metadata.keywords.low_level.join('、') }}</span>
+                </div>
+              </div>
+
+              <a-collapse v-model:activeKey="lightragActiveKeys" ghost>
+                <!-- 实体信息 -->
+                <a-collapse-panel v-if="queryResult.data.entities && queryResult.data.entities.length > 0" key="entities">
+                  <template #header>
+                    <div class="collapse-header">
+                      <Network :size="16" />
+                      <span>实体 ({{ queryResult.data.entities.length }})</span>
+                    </div>
+                  </template>
+                  <div class="lightrag-entities">
+                    <div
+                      v-for="(entity, index) in queryResult.data.entities"
+                      :key="index"
+                      class="lightrag-entity-card"
+                    >
+                      <div class="entity-header">
+                        <span class="entity-name">{{ entity.entity_name }}</span>
+                        <span class="entity-type">{{ entity.entity_type }}</span>
+                      </div>
+                      <div class="entity-description">
+                        <strong>描述:</strong> {{ entity.description }}
+                      </div>
+                      <div class="entity-meta">
+                        <span class="meta-item">
+                          <strong>来源:</strong> {{ formatSourceIds(entity.source_id) }}
+                        </span>
+                        <a
+                          v-if="entity.file_path"
+                          :href="entity.file_path"
+                          target="_blank"
+                          class="meta-link"
+                        >
+                          <FileText :size="14" />
+                          查看文件
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </a-collapse-panel>
+
+                <!-- 关系信息 -->
+                <a-collapse-panel v-if="queryResult.data.relationships && queryResult.data.relationships.length > 0" key="relationships">
+                  <template #header>
+                    <div class="collapse-header">
+                      <Link :size="16" />
+                      <span>关系 ({{ queryResult.data.relationships.length }})</span>
+                    </div>
+                  </template>
+                  <div class="lightrag-relationships">
+                    <div
+                      v-for="(rel, index) in queryResult.data.relationships"
+                      :key="index"
+                      class="lightrag-relationship-card"
+                    >
+                      <div class="relationship-header">
+                        <span class="rel-src">{{ rel.src_id }}</span>
+                        <ArrowRight :size="14" class="rel-arrow" />
+                        <span class="rel-tgt">{{ rel.tgt_id }}</span>
+                        <span v-if="rel.weight !== undefined" class="rel-weight">
+                          权重: {{ rel.weight.toFixed(2) }}
+                        </span>
+                      </div>
+                      <div class="relationship-description">
+                        <strong>描述:</strong> {{ rel.description }}
+                      </div>
+                      <div v-if="rel.keywords" class="relationship-keywords">
+                        <Tags :size="14" />
+                        <span class="keywords-text">{{ rel.keywords }}</span>
+                      </div>
+                      <div class="relationship-meta">
+                        <span class="meta-item">
+                          <strong>来源:</strong> {{ rel.source_id }}
+                        </span>
+                        <a
+                          v-if="rel.file_path"
+                          :href="rel.file_path"
+                          target="_blank"
+                          class="meta-link"
+                        >
+                          <FileText :size="14" />
+                          查看文件
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </a-collapse-panel>
+
+                <!-- 文档块 -->
+                <a-collapse-panel v-if="queryResult.data.chunks && queryResult.data.chunks.length > 0" key="chunks">
+                  <template #header>
+                    <div class="collapse-header">
+                      <FileText :size="16" />
+                      <span>文档块 ({{ queryResult.data.chunks.length }})</span>
+                    </div>
+                  </template>
+                  <div class="lightrag-chunks">
+                    <div
+                      v-for="(chunk, index) in queryResult.data.chunks"
+                      :key="index"
+                      class="lightrag-chunk-card"
+                    >
+                      <div class="chunk-header">
+                        <span class="chunk-ref">引用 [{{ chunk.reference_id }}]</span>
+                        <span class="chunk-id">{{ chunk.chunk_id }}</span>
+                      </div>
+                      <div class="chunk-content">
+                        {{ chunk.content }}
+                      </div>
+                      <div class="chunk-meta">
+                        <a
+                          v-if="chunk.file_path"
+                          :href="chunk.file_path"
+                          target="_blank"
+                          class="meta-link"
+                        >
+                          <FileText :size="14" />
+                          查看文件
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </a-collapse-panel>
+
+                <!-- 参考文档 -->
+                <a-collapse-panel v-if="queryResult.data.references && queryResult.data.references.length > 0" key="references">
+                  <template #header>
+                    <div class="collapse-header">
+                      <FileText :size="16" />
+                      <span>参考文档 ({{ queryResult.data.references.length }})</span>
+                    </div>
+                  </template>
+                  <div class="lightrag-references">
+                    <div
+                      v-for="(ref, index) in queryResult.data.references"
+                      :key="index"
+                      class="reference-item"
+                    >
+                      <span class="reference-id">[{{ ref.reference_id }}]</span>
+                      <a :href="ref.file_path" target="_blank" class="reference-link">
+                        {{ extractFileName(ref.file_path) }}
+                      </a>
+                    </div>
+                  </div>
+                </a-collapse-panel>
+              </a-collapse>
+            </div>
+
             <!-- LightRAG 返回字符串格式 -->
-            <div v-if="typeof queryResult === 'string'" class="result-text">
+            <div v-else-if="typeof queryResult === 'string'" class="result-text">
               {{ queryResult }}
             </div>
 
@@ -152,11 +326,15 @@ import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue';
 import { useDatabaseStore } from '@/stores/database';
 import { message } from 'ant-design-vue';
 import { queryApi } from '@/apis/knowledge_api';
+import { SearchOutlined } from '@ant-design/icons-vue';
 import {
-  SearchOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons-vue';
-import { Braces } from 'lucide-vue-next';
+  Braces,
+  Tags,
+  Network,
+  Link,
+  FileText,
+  ArrowRight,
+} from 'lucide-vue-next';
 
 const store = useDatabaseStore();
 
@@ -181,6 +359,14 @@ const showRawData = ref(false);
 // 判断是否为 LightRAG 类型知识库
 const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag');
 
+// 判断是否是 LightRAG 格式的查询结果
+const isLightRAGResult = computed(() => {
+  return queryResult.value &&
+    typeof queryResult.value === 'object' &&
+    queryResult.value.data &&
+    (queryResult.value.data.entities || queryResult.value.data.relationships);
+});
+
 // 查询测试
 const queryText = ref('');
 
@@ -194,7 +380,31 @@ const searchConfigModalVisible = ref(false);
 // 示例轮播相关
 let exampleCarouselInterval = null;
 
+// LightRAG 折叠面板激活的 key
+const lightragActiveKeys = ref(['entities', 'relationships', 'chunks']);
+
 // 方法定义
+
+// 格式化 source_id（限制显示长度）
+const formatSourceIds = (sourceId) => {
+  if (!sourceId) return '';
+  const ids = sourceId.split('<SEP>');
+  if (ids.length > 1) {
+    return `${ids[0]} ... (+${ids.length - 1} 个来源)`;
+  }
+  return sourceId;
+};
+
+// 从文件路径中提取文件名
+const extractFileName = (filePath) => {
+  if (!filePath) return '';
+  try {
+    const parts = filePath.split('/');
+    return parts[parts.length - 1];
+  } catch {
+    return filePath;
+  }
+};
 
 // 打开检索配置弹窗
 const openSearchConfigModal = () => {
@@ -499,15 +709,14 @@ defineExpose({
 .query-results {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
   background-color: var(--gray-25);
   min-height: 0;
 
   .result-raw {
+    padding: 16px;
     background-color: var(--gray-50);
     border: 1px solid var(--gray-200);
     border-radius: 6px;
-    padding: 16px;
     overflow-x: auto;
 
     pre {
@@ -522,6 +731,7 @@ defineExpose({
   }
 
   .result-text {
+    padding: 16px;
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.6;
@@ -529,6 +739,8 @@ defineExpose({
   }
 
   .result-list {
+    padding: 16px;
+
     .no-results {
       text-align: center;
       padding: 32px;
@@ -537,11 +749,11 @@ defineExpose({
 
     .result-summary {
       margin-bottom: 12px;
-      padding: 8px 12px;
+      padding: 10px 14px;
       background-color: var(--main-50);
-      border-left: 3px solid var(--main-color);
-      border-radius: 2px;
+      border-radius: 6px;
       color: var(--gray-800);
+      font-weight: 500;
     }
 
     .result-item {
@@ -621,6 +833,8 @@ defineExpose({
   }
 
   .result-unknown {
+    padding: 16px;
+
     pre {
       background-color: var(--gray-0);
       border: 1px solid var(--gray-200);
@@ -696,4 +910,345 @@ defineExpose({
   opacity: 0;
 }
 
+// LightRAG 结果样式
+.lightrag-metadata {
+  padding: 12px 16px;
+  background-color: var(--gray-0);
+  border-radius: 8px;
+  margin: 16px;
+  border: 1px solid var(--gray-200);
+
+  .metadata-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    .metadata-label {
+      font-weight: 600;
+      color: var(--gray-700);
+      font-size: 13px;
+    }
+
+    .metadata-value {
+      color: var(--gray-700);
+      font-size: 13px;
+    }
+
+    .query-mode {
+      padding: 2px 8px;
+      background-color: var(--main-100);
+      color: var(--main-700);
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+  }
+
+  .keywords-text {
+    color: var(--gray-700);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.collapse-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.lightrag-entities {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lightrag-entity-card {
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-300);
+  }
+
+  .entity-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gray-150);
+
+    .entity-name {
+      font-weight: 600;
+      color: var(--main-color);
+      font-size: 14px;
+    }
+
+    .entity-type {
+      font-size: 12px;
+      color: var(--gray-600);
+      font-weight: 400;
+    }
+  }
+
+  .entity-description {
+    margin-bottom: 8px;
+    line-height: 1.6;
+    color: var(--gray-900);
+    font-size: 13px;
+  }
+
+  .entity-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--gray-700);
+
+    .meta-item {
+      strong {
+        color: var(--gray-500);
+        font-weight: 500;
+        margin-right: 4px;
+      }
+    }
+
+    .meta-link {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--main-color);
+      text-decoration: none;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: var(--main-bright);
+      }
+    }
+  }
+}
+
+.lightrag-relationships {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lightrag-relationship-card {
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-300);
+    box-shadow: 0 2px 8px rgba(1, 97, 121, 0.08);
+  }
+
+  .relationship-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gray-150);
+
+    .rel-src,
+    .rel-tgt {
+      font-weight: 600;
+      color: var(--main-color);
+      font-size: 14px;
+    }
+
+    .rel-arrow {
+      color: var(--gray-500);
+      font-size: 12px;
+    }
+
+    .rel-weight {
+      font-size: 12px;
+      color: var(--gray-600);
+      font-weight: 400;
+      margin-left: auto;
+    }
+  }
+
+  .relationship-description {
+    margin-bottom: 8px;
+    line-height: 1.6;
+    color: var(--gray-900);
+    font-size: 13px;
+  }
+
+  .relationship-keywords {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+    background-color: var(--gray-50);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--gray-700);
+
+    .keywords-text {
+      flex: 1;
+    }
+  }
+
+  .relationship-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--gray-700);
+
+    .meta-item {
+      strong {
+        color: var(--gray-500);
+        font-weight: 500;
+        margin-right: 4px;
+      }
+    }
+
+    .meta-link {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--main-color);
+      text-decoration: none;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: var(--main-bright);
+      }
+    }
+  }
+}
+
+.lightrag-chunks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lightrag-chunk-card {
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  padding: 12px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-300);
+    box-shadow: 0 2px 8px rgba(1, 97, 121, 0.08);
+  }
+
+  .chunk-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--gray-150);
+
+    .chunk-ref {
+      font-weight: 600;
+      color: var(--main-color);
+      font-size: 13px;
+    }
+
+    .chunk-id {
+      font-size: 11px;
+      color: var(--gray-500);
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+  }
+
+  .chunk-content {
+    margin-bottom: 8px;
+    padding: 8px;
+    background-color: var(--gray-50);
+    border-radius: 4px;
+    line-height: 1.6;
+    color: var(--gray-900);
+    font-size: 13px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .chunk-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .meta-link {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--main-color);
+      text-decoration: none;
+      transition: color 0.2s ease;
+
+      &:hover {
+        color: var(--main-bright);
+      }
+    }
+  }
+}
+
+.lightrag-references {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reference-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: var(--main-300);
+    background-color: var(--gray-50);
+  }
+
+  .reference-id {
+    font-size: 12px;
+    color: var(--gray-600);
+    font-weight: 500;
+  }
+
+  .reference-link {
+    flex: 1;
+    color: var(--gray-900);
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: var(--main-color);
+    }
+  }
+}
 </style>

@@ -458,7 +458,7 @@ class MilvusKB(KnowledgeBase):
 
         return processed_items_info
 
-    async def aquery(self, query_text: str, db_id: str, **kwargs) -> list[dict]:
+    async def aquery(self, query_text: str, db_id: str, agent_call: bool = False, **kwargs) -> list[dict]:
         """异步查询知识库"""
         collection = await self._get_milvus_collection(db_id)
         if not collection:

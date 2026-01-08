@@ -886,7 +886,7 @@ class KnowledgeBase(ABC):
 
             def make_retriever(db_id):
                 async def retriever(query_text, **kwargs):
-                    return await self.aquery(query_text, db_id, **kwargs)
+                    return await self.aquery(query_text, db_id, agent_call=True, **kwargs)
 
                 return retriever
 

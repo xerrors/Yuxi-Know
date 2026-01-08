@@ -418,7 +418,7 @@ class LightRagKB(KnowledgeBase):
 
         return processed_items_info
 
-    async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
+    async def aquery(self, query_text: str, db_id: str, agent_call: bool = False, **kwargs) -> str:
         """异步查询知识库"""
         rag = await self._get_lightrag_instance(db_id)
         if not rag:
@@ -459,8 +459,11 @@ class LightRagKB(KnowledgeBase):
             param = QueryParam(**params_dict)
 
             # 执行查询
-            response = await rag.aquery(query_text, param)
-            logger.debug(f"Query response: {response}")
+            response = await rag.aquery_data(query_text, param)
+            logger.debug(f"Query response: {str(response)[:1000]}...")
+
+            if agent_call:
+                return response["data"]["chunks"]
 
             return response
 
