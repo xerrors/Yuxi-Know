@@ -94,65 +94,6 @@
           <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help;" />
         </a-tooltip>
       </div>
-
-      <div
-        v-if="['milvus'].includes(newDatabase.kb_type)"
-        class="reranker-config"
-      >
-        <div class="reranker-row">
-          <div class="reranker-title">
-            <span>启用重排序</span>
-            <a-tooltip title="向量检索后使用交叉编码模型对候选文档重新排序，提升召回质量。">
-              <QuestionCircleOutlined class="hint-icon" />
-            </a-tooltip>
-          </div>
-          <a-switch
-            v-model:checked="newDatabase.reranker.enabled"
-            :disabled="rerankerOptions.length === 0"
-          />
-        </div>
-
-        <transition name="fade">
-          <div v-if="newDatabase.reranker.enabled" class="reranker-form">
-            <div class="form-field">
-              <label>重排序模型</label>
-              <a-select
-                v-model:value="newDatabase.reranker.model"
-                :options="rerankerOptions"
-                placeholder="选择重排序模型"
-                :disabled="rerankerOptions.length === 0"
-              />
-              <p class="field-hint" v-if="rerankerOptions.length === 0">
-                暂无可用模型，请在系统配置中添加。
-              </p>
-            </div>
-
-            <div class="form-grid">
-              <div class="form-field">
-                <label>召回数量</label>
-                <a-input-number
-                  v-model:value="newDatabase.reranker.recall_top_k"
-                  :min="10"
-                  :max="200"
-                  :step="5"
-                  style="width: 100%;"
-                />
-                <p class="field-hint">向量检索阶段保留的候选数量</p>
-              </div>
-              <div class="form-field">
-                <label>最终返回数</label>
-                <a-input-number
-                  v-model:value="newDatabase.reranker.final_top_k"
-                  :min="1"
-                  :max="100"
-                  style="width: 100%;"
-                />
-                <p class="field-hint">重排序后返回给前端的文档数量</p>
-              </div>
-            </div>
-          </div>
-        </transition>
-      </div>
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button key="submit" type="primary" :loading="dbState.creating" @click="handleCreateDatabase">创建</a-button>
@@ -279,25 +220,10 @@ const createEmptyDatabaseForm = () => ({
   llm_info: {
     provider: '',
     model_name: ''
-  },
-  reranker: {
-    enabled: false,
-    model: '',
-    recall_top_k: 50,
-    final_top_k: 10,
   }
 })
 
 const newDatabase = reactive(createEmptyDatabaseForm())
-
-const rerankerOptions = computed(() =>
-  Object.entries(configStore?.config?.reranker_names || {}).map(([value, info]) => ({
-    label: info?.name || value,
-    value
-  }))
-)
-
-const isVectorKb = computed(() => ['milvus'].includes(newDatabase.kb_type))
 
 const llmModelSpec = computed(() => {
   const provider = newDatabase.llm_info?.provider || ''
@@ -403,9 +329,6 @@ const handleKbTypeChange = (type) => {
   console.log('知识库类型改变:', type)
   resetNewDatabase()
   newDatabase.kb_type = type
-  if (!['milvus'].includes(type)) {
-    newDatabase.reranker.enabled = false
-  }
 }
 
 // 处理LLM选择
@@ -438,14 +361,6 @@ const buildRequestData = () => {
     if (newDatabase.storage) {
       requestData.additional_params.storage = newDatabase.storage
     }
-    if (newDatabase.reranker.enabled) {
-      requestData.additional_params.reranker_config = {
-        enabled: true,
-        model: newDatabase.reranker.model,
-        recall_top_k: Number(newDatabase.reranker.recall_top_k) || 50,
-        final_top_k: Number(newDatabase.reranker.final_top_k) || 10,
-      }
-    }
   }
 
   if (newDatabase.kb_type === 'lightrag') {
@@ -477,42 +392,6 @@ const navigateToDatabase = (databaseId) => {
   router.push({ path: `/database/${databaseId}` });
 };
 
-watch(() => newDatabase.reranker.enabled, (enabled) => {
-  if (
-    enabled &&
-    !newDatabase.reranker.model &&
-    rerankerOptions.value.length > 0
-  ) {
-    newDatabase.reranker.model = rerankerOptions.value[0].value
-  }
-})
-
-watch(rerankerOptions, (options) => {
-  if (!newDatabase.reranker.enabled || options.length === 0) {
-    return
-  }
-  const exists = options.some(option => option.value === newDatabase.reranker.model)
-  if (!exists) {
-    newDatabase.reranker.model = options[0].value
-  }
-})
-
-watch(isVectorKb, (isVector) => {
-  if (!isVector) {
-    newDatabase.reranker.enabled = false
-  }
-})
-
-watch(
-  () => newDatabase.reranker.final_top_k,
-  (value) => {
-    if (!newDatabase.reranker.enabled) return
-    if (value > newDatabase.reranker.recall_top_k) {
-      newDatabase.reranker.recall_top_k = value
-    }
-  }
-)
-
 watch(() => route.path, (newPath) => {
   if (newPath === '/database') {
     databaseStore.loadDatabases();
@@ -522,7 +401,6 @@ watch(() => route.path, (newPath) => {
 onMounted(() => {
   loadSupportedKbTypes()
   databaseStore.loadDatabases()
-  // 重排序模型信息现在直接从 configStore 获取，无需单独加载
 })
 
 </script>
@@ -537,73 +415,6 @@ onMounted(() => {
     display: flex;
     align-items: center;
     margin-bottom: 12px;
-  }
-
-  .reranker-config {
-    border: 1px solid var(--gray-200);
-    border-radius: 12px;
-    padding: 16px;
-    margin-top: 16px;
-    background: var(--gray-25);
-
-    .reranker-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-
-      &:last-child {
-        margin-bottom: 0;
-      }
-
-      .reranker-title {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-weight: 500;
-        color: var(--gray-800);
-      }
-
-      .hint-icon {
-        color: var(--gray-500);
-        cursor: help;
-      }
-    }
-
-    .reranker-form {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-
-      .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 16px;
-
-        @media (max-width: 768px) {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .form-field {
-        label {
-          display: block;
-          font-size: 14px;
-          margin-bottom: 8px;
-          color: var(--gray-700);
-        }
-
-        .field-hint {
-          margin-top: 6px;
-          font-size: 12px;
-          color: var(--gray-500);
-
-          &:last-child {
-            margin-top: 0;
-          }
-        }
-      }
-    }
   }
 
   .kb-type-cards {

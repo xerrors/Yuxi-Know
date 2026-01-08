@@ -526,6 +526,13 @@ class KnowledgeBase(ABC):
         logger.warning("query is deprecated, use aquery instead")
         return asyncio.run(self.aquery(query_text, db_id, **kwargs))
 
+    def _get_query_params(self, db_id: str) -> dict:
+        """从实例元数据中加载查询参数"""
+        if db_id in self.databases_meta:
+            query_params_meta = self.databases_meta[db_id].get("query_params", {})
+            return query_params_meta.get("options", {})
+        return {}
+
     def get_database_info(self, db_id: str) -> dict | None:
         """
         获取数据库详细信息

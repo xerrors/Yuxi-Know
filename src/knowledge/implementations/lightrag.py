@@ -448,7 +448,9 @@ class LightRagKB(KnowledgeBase):
             }
 
             # 过滤 kwargs，只保留 QueryParam 支持的参数
-            filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_params}
+            query_params = self._get_query_params(db_id)
+            query_params = query_params | kwargs
+            filtered_kwargs = {k: v for k, v in query_params.items() if k in valid_params}
 
             # 设置查询参数
             params_dict = {

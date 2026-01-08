@@ -2,7 +2,6 @@ import asyncio
 import os
 import textwrap
 import traceback
-from collections.abc import Mapping
 from urllib.parse import quote, unquote
 
 import aiofiles
@@ -93,53 +92,23 @@ async def create_database(
         additional_params = {**(additional_params or {})}
         additional_params["auto_generate_questions"] = False  # 默认不生成问题
 
-        def normalize_reranker_config(kb: str, params: dict) -> None:
+        def remove_reranker_config(kb: str, params: dict) -> None:
+            """
+            移除 reranker_config（已废弃）
+            所有 reranker 参数现在通过 query_params.options 配置
+            """
             reranker_cfg = params.get("reranker_config")
-            if kb not in {"milvus"}:
-                if kb == "lightrag" and reranker_cfg:
-                    logger.warning("LightRAG does not support reranker, ignoring reranker_config")
-                    params.pop("reranker_config", None)
-                return
-
-            if not reranker_cfg:
-                params["reranker_config"] = {
-                    "enabled": False,
-                    "model": "",
-                    "recall_top_k": 50,
-                    "final_top_k": 10,
-                }
-                return
-
-            if not isinstance(reranker_cfg, Mapping):
-                raise HTTPException(status_code=400, detail="reranker_config must be an object")
-
-            reranker_enabled = bool(reranker_cfg.get("enabled", False))
-            model = (reranker_cfg.get("model") or "").strip()
-            recall_top_k = max(1, int(reranker_cfg.get("recall_top_k", 50)))
-            final_top_k = max(1, int(reranker_cfg.get("final_top_k", 10)))
-
-            if reranker_enabled:
-                if not model:
-                    raise HTTPException(status_code=400, detail="reranker_config.model is required when enabled")
-                if model not in config.reranker_names:
-                    raise HTTPException(status_code=400, detail=f"Unsupported reranker model: {model}")
-                if final_top_k > recall_top_k:
-                    logger.warning(
-                        f"final_top_k ({final_top_k}) cannot exceed recall_top_k ({recall_top_k}); "
-                        "adjusting recall_top_k to match final_top_k"
+            if reranker_cfg:
+                if kb == "milvus":
+                    logger.info(
+                        "reranker_config is deprecated, please use query_params.options instead"
                     )
-                    recall_top_k = final_top_k
-            else:
-                model = model if model in config.reranker_names else ""
+                else:
+                    logger.warning(f"{kb} does not support reranker, ignoring reranker_config")
+                # 移除 reranker_config，不再保存
+                params.pop("reranker_config", None)
 
-            params["reranker_config"] = {
-                "enabled": reranker_enabled,
-                "model": model,
-                "recall_top_k": recall_top_k,
-                "final_top_k": final_top_k,
-            }
-
-        normalize_reranker_config(kb_type, additional_params)
+        remove_reranker_config(kb_type, additional_params)
 
         embed_info = config.embed_model_names[embed_model_name]
         database_info = await knowledge_base.create_database(
@@ -754,23 +723,16 @@ async def update_knowledge_base_query_params(
         if not kb_instance:
             raise HTTPException(status_code=404, detail="Knowledge base not found")
 
-        # 更新知识库元数据中的查询参数
+        # 更新实例元数据中的查询参数
         async with knowledge_base._metadata_lock:
-            # 确保知识库元数据存在
-            if db_id not in knowledge_base.global_databases_meta:
-                knowledge_base.global_databases_meta[db_id] = {}
+            # 确保 db_id 在实例的 databases_meta 中
+            if db_id not in kb_instance.databases_meta:
+                raise HTTPException(status_code=404, detail="Database not found in instance metadata")
 
-            # 初始化 query_params 结构
-            if "query_params" not in knowledge_base.global_databases_meta[db_id]:
-                knowledge_base.global_databases_meta[db_id]["query_params"] = {}
-
-            # 将参数保存到 options 下，与评估服务期望的结构一致
-            if "options" not in knowledge_base.global_databases_meta[db_id]["query_params"]:
-                knowledge_base.global_databases_meta[db_id]["query_params"]["options"] = {}
-
-            # 更新 options
-            knowledge_base.global_databases_meta[db_id]["query_params"]["options"].update(params)
-            knowledge_base._save_global_metadata()
+            # 使用 setdefault 简化嵌套字典的初始化
+            options = kb_instance.databases_meta[db_id].setdefault("query_params", {}).setdefault("options", {})
+            options.update(params)
+            kb_instance._save_metadata()
 
             logger.info(f"更新知识库 {db_id} 查询参数: {params}")
 
@@ -794,8 +756,8 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
             reranker_names=config.reranker_names,  # 传递动态配置
         )
 
-        # 获取用户保存的配置并合并
-        saved_options = _get_saved_query_options(db_id)
+        # 获取用户保存的配置并合并（从实例 metadata 读取）
+        saved_options = kb_instance._get_query_params(db_id)
         if saved_options:
             params = _merge_saved_options(params, saved_options)
 
@@ -804,18 +766,6 @@ async def get_knowledge_base_query_params(db_id: str, current_user: User = Depen
     except Exception as e:
         logger.error(f"获取知识库查询参数失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-def _get_saved_query_options(db_id: str) -> dict:
-    """获取用户保存的查询参数配置"""
-    try:
-        if db_id in knowledge_base.global_databases_meta:
-            query_params_meta = knowledge_base.global_databases_meta[db_id].get("query_params", {})
-            return query_params_meta.get("options", {})
-    except Exception as e:
-        logger.warning(f"获取保存的配置失败: {e}")
-    return {}
-
 
 def _merge_saved_options(params: dict, saved_options: dict) -> dict:
     """将用户保存的配置合并到默认配置中"""

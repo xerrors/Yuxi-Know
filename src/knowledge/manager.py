@@ -43,6 +43,12 @@ class KnowledgeBaseManager:
         # 初始化已存在的知识库实例
         self._initialize_existing_kbs()
 
+        # 迁移 query_params 到 instance metadata
+        try:
+            self._migrate_all_query_params()
+        except Exception as e:
+            logger.warning(f"Failed to migrate query_params: {e}")
+
         logger.info("KnowledgeBaseManager initialized")
 
         # 在后台运行数据一致性检测（不阻塞初始化）
@@ -322,6 +328,36 @@ class KnowledgeBaseManager:
         """同步查询知识库（兼容性方法）"""
         kb_instance = self._get_kb_for_database(db_id)
         return kb_instance.query(query_text, db_id, **kwargs)
+
+    def _migrate_all_query_params(self):
+        """将所有 query_params 从 global metadata 迁移到 instance metadata"""
+        migration_count = 0
+
+        for db_id, global_meta in list(self.global_databases_meta.items()):
+            if "query_params" not in global_meta:
+                continue
+
+            kb_type = global_meta.get("kb_type", "lightrag")
+            kb_instance = self.kb_instances.get(kb_type)
+
+            if not kb_instance or db_id not in kb_instance.databases_meta:
+                logger.warning(f"Cannot migrate query_params for {db_id}, skipping")
+                continue
+
+            # 检查是否已迁移
+            if "query_params" in kb_instance.databases_meta[db_id]:
+                # 已经迁移过，直接清理 global metadata 并跳过
+                del global_meta["query_params"]
+                continue
+
+            # 执行迁移
+            kb_instance.databases_meta[db_id]["query_params"] = global_meta["query_params"]
+            del global_meta["query_params"]
+            migration_count += 1
+
+        if migration_count > 0:
+            self._save_global_metadata()
+            logger.info(f"Successfully migrated query_params for {migration_count} databases")
 
     def get_database_info(self, db_id: str) -> dict | None:
         """获取数据库详细信息"""
