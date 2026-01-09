@@ -24,7 +24,8 @@
 
 **亮点**：提供全套的智能体开发套件，基于 MIT 开源协议，技术栈友好，适合基于此项目打造自己的智能体平台。
 
-<img width="1808" height="426" alt="image" src="https://github.com/user-attachments/assets/df06c4d6-8208-4666-9fbb-e7cd021b5cd6" />
+<img width="2992" height="692" alt="image" src="https://github.com/user-attachments/assets/93a64d05-8b38-41f0-b3a8-b527c80c3d60" />
+
 
 ---
 
