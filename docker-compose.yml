@@ -180,6 +180,17 @@ services:
       - app-network
     restart: unless-stopped
 
+  sqlite-web:
+    image: coleifer/sqlite-web:latest
+    container_name: sqlite-web
+    volumes:
+      - ./saves/database:/data
+    ports:
+      - "9092:8080"
+    environment:
+      SQLITE_DATABASE: server.db
+    restart: unless-stopped
+
   # lastest version: wget https://gcore.jsdelivr.net/gh/opendatalab/MinerU@master/docker/compose.yaml
   mineru-vllm-server:
     build:
