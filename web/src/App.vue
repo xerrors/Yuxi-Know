@@ -1,4 +1,5 @@
 <script setup>
+import zhCN from 'ant-design-vue/es/locale/zh_CN';
 import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
 import { useThemeStore } from '@/stores/theme'
@@ -17,6 +18,7 @@ onMounted(async () => {
 <template>
   <a-config-provider
     :theme="themeStore.currentTheme"
+    :locale="zhCN"
   >
     <router-view />
   </a-config-provider>
