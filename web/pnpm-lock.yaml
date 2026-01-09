@@ -84,9 +84,9 @@ importers:
         specifier: ^4.5.1
         version: 4.5.1(vue@3.5.21)
     devDependencies:
-      '@rushstack/eslint-patch':
-        specifier: ^1.12.0
-        version: 1.12.0
+      '@eslint/js':
+        specifier: ^9.39.2
+        version: 9.39.2
       '@vitejs/plugin-vue':
         specifier: ^6.0.1
         version: 6.0.1(vite@7.1.5(@types/node@24.5.2)(less@4.4.1)(terser@5.44.0)(yaml@2.8.1))(vue@3.5.21)
@@ -99,15 +99,15 @@ importers:
       eslint-plugin-vue:
         specifier: ^10.4.0
         version: 10.5.0(eslint@9.36.0)(vue-eslint-parser@10.2.0(eslint@9.36.0))
+      globals:
+        specifier: ^17.0.0
+        version: 17.0.0
       prettier:
         specifier: ^3.6.2
         version: 3.6.2
       vite:
         specifier: ^7.1.5
         version: 7.1.5(@types/node@24.5.2)(less@4.4.1)(terser@5.44.0)(yaml@2.8.1)
-      vue-eslint-parser:
-        specifier: ^10.2.0
-        version: 10.2.0(eslint@9.36.0)
 
 packages:
 
@@ -507,6 +507,10 @@ packages:
     resolution: {integrity: sha512-uhCbYtYynH30iZErszX78U+nR3pJU3RHGQ57NXy5QupD4SBVwDeU8TNBy+MjMngc1UyIW9noKqsRqfjQTBU2dw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@eslint/js@9.39.2':
+    resolution: {integrity: sha512-q1mjIoW1VX4IvSocvM/vbTiveKC4k9eLrajNEuSsmjymSDEbpGddtpfOoN7YGAqBK3NG+uqo8ia4PDTt8buCYA==}
+    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
   '@eslint/object-schema@2.1.6':
     resolution: {integrity: sha512-RBMg5FRL0I0gs51M/guSAj5/e14VQ4tpZnQNWwuDT66P14I43ItmPfIZRhO9fUVIPOAQXU47atlywZ/czoqFPA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -729,9 +733,6 @@ packages:
     resolution: {integrity: sha512-6iKDCVSIUQ8jPMoIV0OytRKniaYyy5EbY/RRydmLW8ZR3cEBhxbWl5ro0rkUNe0ef6sScvhbY79HrjRm8i3vDQ==}
     cpu: [x64]
     os: [win32]
-
-  '@rushstack/eslint-patch@1.12.0':
-    resolution: {integrity: sha512-5EwMtOqvJMMa3HbmxLlF74e+3/HhwBTMcvt3nqVJgGCozO6hzIPOBlwm8mGVNR9SN2IJpxSnlxczyDjcn7qIyw==}
 
   '@sigma/edge-curve@3.1.0':
     resolution: {integrity: sha512-OFWkfAXEsm+X8l1K4K49cC0psB0gQ+gqxKA08HG5piNPdzrDZ5gG9Gza6htZ5AirOVwd/4/uq/gPpD5En+H+3Q==}
@@ -1525,6 +1526,10 @@ packages:
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
+    engines: {node: '>=18'}
+
+  globals@17.0.0:
+    resolution: {integrity: sha512-gv5BeD2EssA793rlFWVPMMCqefTlpusw6/2TbAVMy0FzcG8wKJn4O+NqJ4+XWmmwrayJgw5TzrmWjFgmz1XPqw==}
     engines: {node: '>=18'}
 
   graceful-fs@4.2.11:
@@ -2923,6 +2928,8 @@ snapshots:
 
   '@eslint/js@9.36.0': {}
 
+  '@eslint/js@9.39.2': {}
+
   '@eslint/object-schema@2.1.6': {}
 
   '@eslint/plugin-kit@0.3.5':
@@ -3134,8 +3141,6 @@ snapshots:
 
   '@rollup/rollup-win32-x64-msvc@4.52.0':
     optional: true
-
-  '@rushstack/eslint-patch@1.12.0': {}
 
   '@sigma/edge-curve@3.1.0(sigma@3.0.2(graphology-types@0.24.8))':
     dependencies:
@@ -4047,6 +4052,8 @@ snapshots:
   glob-to-regexp@0.4.1: {}
 
   globals@14.0.0: {}
+
+  globals@17.0.0: {}
 
   graceful-fs@4.2.11: {}
 
