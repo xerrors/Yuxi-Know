@@ -223,7 +223,7 @@ async def add_documents(
     indexing_params = {
         "chunk_size": params.get("chunk_size", 1000),
         "chunk_overlap": params.get("chunk_overlap", 200),
-        "qa_separator": params.get("qa_separator", "")
+        "qa_separator": params.get("qa_separator", ""),
     }
 
     # 禁止 URL 解析与入库
@@ -326,18 +326,22 @@ async def add_documents(
 
                     try:
                         # 1. 更新入库参数
-                        await knowledge_base.update_file_params(db_id, file_id, indexing_params, operator_id=current_user.id)
+                        await knowledge_base.update_file_params(
+                            db_id, file_id, indexing_params, operator_id=current_user.id
+                        )
                         # 2. 执行入库
                         result = await knowledge_base.index_file(db_id, file_id, operator_id=current_user.id)
                         processed_items.append(result)
                     except Exception as index_error:
                         logger.error(f"自动入库失败 {item} (file_id={file_id}): {index_error}")
-                        processed_items.append({
-                            "item": item,
-                            "status": "failed",
-                            "error": f"入库失败: {str(index_error)}",
-                            "error_type": "index_failed",
-                        })
+                        processed_items.append(
+                            {
+                                "item": item,
+                                "status": "failed",
+                                "error": f"入库失败: {str(index_error)}",
+                                "error_type": "index_failed",
+                            }
+                        )
 
         except asyncio.CancelledError:
             await context.set_progress(100.0, "任务已取消")
