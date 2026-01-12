@@ -41,6 +41,7 @@
 - 优化 RAG 检索，支持根据文件 pattern 来检索（Agentic Mode）
 - 重构智能体对于“工具变更/模型变更”的处理逻辑，无需导入更复杂的中间件
 - 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
+- 新增Sqlite Web UI 方便通过Web页面管理数据库中数据[#463](https://github.com/xerrors/Yuxi-Know/pull/463)）
 
 ### 修复
 
