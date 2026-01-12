@@ -92,6 +92,29 @@
             </div>
           </div>
         </div>
+
+        <!-- 第三行：自动入库配置 -->
+        <div class="setting-row">
+          <div class="col-item">
+            <div class="setting-label">
+              <a-checkbox v-model:checked="autoIndex">上传后自动入库</a-checkbox>
+            </div>
+            <div class="setting-content" v-if="autoIndex">
+              <template v-if="!isGraphBased">
+                <ChunkParamsConfig
+                  :temp-chunk-params="indexParams"
+                  :show-qa-split="true"
+                />
+              </template>
+              <template v-else>
+                <div class="lightrag-tip">
+                  <Info :size="14" style="margin-right: 6px;" />
+                  <span>LightRAG 将使用默认参数自动入库</span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- PDF/图片OCR提醒 (Alert样式优化) -->
@@ -176,6 +199,7 @@ import {
   Trash2,
 } from 'lucide-vue-next';
 import { h } from 'vue';
+import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 
 const props = defineProps({
   visible: {
@@ -367,6 +391,14 @@ const ocrHealthChecking = ref(false);
 // 分块参数
 const chunkParams = ref({
   enable_ocr: 'disable',
+});
+
+// 自动入库相关
+const autoIndex = ref(false);
+const indexParams = ref({
+  chunk_size: 1000,
+  chunk_overlap: 200,
+  qa_separator: ''
 });
 
 // 计算属性：是否支持QA分割
@@ -785,11 +817,17 @@ const chunkData = async () => {
 
   try {
     store.state.chunkLoading = true;
+    // 构建参数
+    const params = { ...chunkParams.value };
+    if (autoIndex.value) {
+      params.auto_index = true;
+      Object.assign(params, indexParams.value);
+    }
     // 调用 store 的 addFiles 方法
     await store.addFiles({
       items: validFiles,
       contentType: 'file',
-      params: { ...chunkParams.value },
+      params,
       parentId: selectedFolderId.value // 传递选中的文件夹 ID
     });
 
@@ -1161,5 +1199,28 @@ const chunkData = async () => {
       background: var(--color-error-50);
     }
   }
+}
+
+.auto-index-params {
+  margin-top: 8px;
+  padding: 12px;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+}
+
+.lightrag-tip {
+  display: flex;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--main-50);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--gray-600);
+}
+
+.setting-label .ant-checkbox {
+  margin-right: 8px;
 }
 </style>
