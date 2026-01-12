@@ -9,17 +9,14 @@
 - 集成 neo4j mcp （或者自己构建工具）
 - 文档解析部分的 markdown 中的图片替换为内部可访问的链接 (2/4)
 - chat_model 的 call 需要异步
-- 优化chunk逻辑，移除 QA 分割，集成到普通分块中
 - 考虑修改附件的处理逻辑，考虑使用文件系统，将附件解析后放到文件系统中，智能体按需读取，用户可以使用 @ 来引用附件，例如 @file:reports.md 相较于现在的处理逻辑感觉会更加自然一点。在此之前可能还要考虑文件系统的后端支持问题
 - skills 如何实现还需要继续调研
 - 优化 paddle 的命名，paddlex 有歧义，修改为 PP-StructureV3
 - 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
 - 将现有的 Milvus 的命名调整为通用 RAG
-- 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能
 - 支持 markitdown 或者 docling 的功能
-- 支持设置上传后自动入库（indexing）
 - 添加对于 lightrag 的结果解析
 
 ### Bugs
@@ -42,6 +39,9 @@
 - 重构智能体对于“工具变更/模型变更”的处理逻辑，无需导入更复杂的中间件
 - 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
 - 新增Sqlite Web UI 方便通过Web页面管理数据库中数据[#463](https://github.com/xerrors/Yuxi-Know/pull/463)）
+- 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
+- 优化chunk逻辑，移除 QA 分割，集成到普通分块中
+- 重构知识库处理逻辑，分为 上传—解析—入库 三个阶段
 
 ### 修复
 

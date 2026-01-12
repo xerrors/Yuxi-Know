@@ -1,15 +1,7 @@
 # 开发阶段
 FROM node:20-alpine AS development
 WORKDIR /app
-
-ARG http_proxy
-ARG https_proxy
 ENV TZ=Asia/Shanghai
-
-
-# 只有当代理变量不为空时才设置代理
-RUN if [ -n "$http_proxy" ]; then echo "export http_proxy=$http_proxy" >> /etc/environment; fi
-RUN if [ -n "$https_proxy" ]; then echo "export https_proxy=$https_proxy" >> /etc/environment; fi
 
 # 安装 pnpm
 RUN npm install -g pnpm@latest
