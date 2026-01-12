@@ -113,7 +113,7 @@
 
         <div class="service-link-card">
           <div class="service-info">
-            <h4>SQLite Web</h4>
+            <h4>SQLite WebUI</h4>
             <p>SQLite 数据库管理界面</p>
           </div>
           <a-button type="default" @click="openLink('http://localhost:9092/')" :icon="h(GlobalOutlined)">
