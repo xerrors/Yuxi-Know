@@ -54,14 +54,14 @@ async def create_mcp_server(
     # 校验传输类型
     if transport not in ("sse", "streamable_http"):
         raise HTTPException(status_code=400, detail="传输类型必须是 sse 或 streamable_http")
-    
+
     try:
         # 检查名称是否已存在
         result = await db.execute(select(MCPServer).filter(MCPServer.name == name))
         existing = result.scalar_one_or_none()
         if existing:
             raise HTTPException(status_code=400, detail=f"服务器名称 '{name}' 已存在")
-        
+
         server = MCPServer(
             name=name,
             description=description,
@@ -79,10 +79,10 @@ async def create_mcp_server(
         db.add(server)
         await db.commit()
         await db.refresh(server)
-        
+
         # 同步到缓存
         sync_mcp_server_to_cache(name, server.to_mcp_config())
-        
+
         return {"success": True, "data": server.to_dict()}
     except HTTPException:
         raise
@@ -129,13 +129,13 @@ async def update_mcp_server(
     # 校验传输类型
     if transport is not None and transport not in ("sse", "streamable_http"):
         raise HTTPException(status_code=400, detail="传输类型必须是 sse 或 streamable_http")
-    
+
     try:
         result = await db.execute(select(MCPServer).filter(MCPServer.name == name))
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         # 更新字段
         if description is not None:
             server.description = description
@@ -153,15 +153,15 @@ async def update_mcp_server(
             server.tags = tags
         if icon is not None:
             server.icon = icon
-        
+
         server.updated_by = current_user.username
         await db.commit()
         await db.refresh(server)
-        
+
         # 同步到缓存（如果启用）
         if server.enabled:
             sync_mcp_server_to_cache(name, server.to_mcp_config())
-        
+
         return {"success": True, "data": server.to_dict()}
     except HTTPException:
         raise
@@ -182,13 +182,13 @@ async def delete_mcp_server(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         await db.delete(server)
         await db.commit()
-        
+
         # 从缓存中删除
         sync_mcp_server_to_cache(name, None)
-        
+
         return {"success": True, "message": f"服务器 '{name}' 已删除"}
     except HTTPException:
         raise
@@ -214,10 +214,10 @@ async def test_mcp_server(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         # 获取配置用于测试
         config = server.to_mcp_config()
-        
+
         try:
             tools = await get_mcp_tools(name, {name: config})
             return {
@@ -249,19 +249,19 @@ async def toggle_mcp_server(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         # 切换状态
         server.enabled = 0 if server.enabled else 1
         server.updated_by = current_user.username
         await db.commit()
-        
+
         # 获取更新后的状态
         is_enabled = bool(server.enabled)
         server_config = server.to_mcp_config() if is_enabled else None
-        
+
         # 同步到缓存
         sync_mcp_server_to_cache(name, server_config)
-        
+
         return {
             "success": True,
             "enabled": is_enabled,
@@ -291,19 +291,19 @@ async def get_mcp_server_tools(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         # 获取配置
         config = server.to_mcp_config()
         disabled_tools = server.disabled_tools or []
-        
+
         try:
             tools = await get_mcp_tools(name, {name: config})
             tool_list = []
-            
+
             for tool in tools:
                 original_name = tool.name
                 unique_id = tool.metadata.get("id") if tool.metadata else original_name
-                
+
                 tool_info = {
                     "name": original_name,
                     "id": unique_id,
@@ -319,7 +319,7 @@ async def get_mcp_server_tools(
                     tool_info["parameters"] = {}
                     tool_info["required"] = []
                 tool_list.append(tool_info)
-            
+
             return {
                 "success": True,
                 "data": tool_list,
@@ -352,13 +352,13 @@ async def refresh_mcp_server_tools(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         # 清除该服务器的工具缓存
         clear_mcp_server_tools_cache(name)
-        
+
         # 获取配置
         config = server.to_mcp_config()
-        
+
         try:
             tools = await get_mcp_tools(name, {name: config})
             return {
@@ -391,9 +391,9 @@ async def toggle_mcp_server_tool(
         server = result.scalar_one_or_none()
         if not server:
             raise HTTPException(status_code=404, detail=f"服务器 '{name}' 不存在")
-        
+
         disabled_tools = list(server.disabled_tools or [])
-        
+
         if tool_name in disabled_tools:
             # 当前禁用，改为启用
             disabled_tools.remove(tool_name)
@@ -402,11 +402,11 @@ async def toggle_mcp_server_tool(
             # 当前启用，改为禁用
             disabled_tools.append(tool_name)
             enabled = False
-        
+
         server.disabled_tools = disabled_tools
         server.updated_by = current_user.username
         await db.commit()
-        
+
         return {
             "success": True,
             "tool_name": tool_name,

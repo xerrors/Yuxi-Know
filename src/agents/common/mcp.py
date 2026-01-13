@@ -25,15 +25,17 @@ _DEFAULT_MCP_SERVERS = {
     },
 }
 
+
 async def load_mcp_servers_from_db() -> None:
     """从数据库加载所有启用的 MCP 服务器配置到 MCP_SERVERS 缓存"""
     global MCP_SERVERS
-    
+
     # 延迟导入以避免循环引用
     from sqlalchemy import select
+
     from src.storage.db.manager import db_manager
     from src.storage.db.models import MCPServer
-    
+
     try:
         async with db_manager.get_async_session_context() as session:
             result = await session.execute(select(MCPServer).filter(MCPServer.enabled == 1))
@@ -48,41 +50,42 @@ async def load_mcp_servers_from_db() -> None:
 
 def sync_mcp_server_to_cache(name: str, config: dict[str, Any] | None) -> None:
     """同步单个 MCP 服务器配置到缓存
-    
+
     Args:
         name: 服务器名称
         config: 服务器配置，如果为 None 则从缓存中删除
     """
     global MCP_SERVERS
-    
+
     if config is None:
         MCP_SERVERS.pop(name, None)
         logger.info(f"Removed MCP server '{name}' from cache")
     else:
         MCP_SERVERS[name] = config
         logger.info(f"Synced MCP server '{name}' to cache")
-    
+
     # 清除该服务器的工具缓存
     _mcp_tools_cache.pop(name, None)
 
 
 async def init_mcp_servers() -> None:
     """初始化 MCP 服务器配置
-    
+
     首次启动时，如果数据库为空，将默认配置导入数据库
     然后从数据库加载配置到 MCP_SERVERS 缓存
     """
     # 延迟导入以避免循环引用
     from sqlalchemy import func, select
+
     from src.storage.db.manager import db_manager
     from src.storage.db.models import MCPServer
-    
+
     try:
         async with db_manager.get_async_session_context() as session:
             # 检查数据库是否有 MCP 配置
             result = await session.execute(select(func.count(MCPServer.name)))
             count = result.scalar()
-            
+
             if count == 0:
                 # 数据库为空，导入默认配置
                 logger.info("No MCP servers in database, importing default configurations...")
@@ -104,10 +107,10 @@ async def init_mcp_servers() -> None:
                     session.add(server)
                 await session.commit()
                 logger.info(f"Imported {len(_DEFAULT_MCP_SERVERS)} default MCP servers to database")
-        
+
         # 从数据库加载配置到缓存
         await load_mcp_servers_from_db()
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize MCP servers: {e}, traceback: {traceback.format_exc()}")
 
@@ -128,8 +131,9 @@ async def get_mcp_client(
 def to_camel_case(s: str) -> str:
     """将字符串转换为小驼峰格式"""
     import re
+
     # 处理 - 和 _
-    s = re.sub(r'[-_]+(.)', lambda m: m.group(1).upper(), s)
+    s = re.sub(r"[-_]+(.)", lambda m: m.group(1).upper(), s)
     # 首字母小写
     if len(s) > 0:
         s = s[0].lower() + s[1:]
@@ -159,18 +163,18 @@ async def get_mcp_tools(server_name: str, additional_servers: dict[str, dict] = 
         # 渲染 ID 规则: mcp__[camelCaseServer]__[camelCaseTool]
         server_cc = to_camel_case(server_name)
         processed_tools = []
-        
+
         for tool in raw_tools:
             # 渲染唯一 ID 规则: mcp__[camelCaseServer]__[camelCaseTool]
             original_name = tool.name
             tool_cc = to_camel_case(original_name)
             unique_id = f"mcp__{server_cc}__{tool_cc}"
-            
+
             # 使用 metadata 存储，这是 LangChain 工具扩展属性的标准做法
             if tool.metadata is None:
                 tool.metadata = {}
             tool.metadata["id"] = unique_id
-            
+
             processed_tools.append(tool)
 
         _mcp_tools_cache[server_name] = processed_tools
