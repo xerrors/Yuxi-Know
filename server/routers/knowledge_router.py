@@ -214,10 +214,17 @@ async def export_database(
 async def add_documents(
     db_id: str, items: list[str] = Body(...), params: dict = Body(...), current_user: User = Depends(get_admin_user)
 ):
-    """添加文档到知识库（上传 -> 解析）"""
+    """添加文档到知识库（上传 -> 解析 -> 可选入库）"""
     logger.debug(f"Add documents for db_id {db_id}: {items} {params=}")
 
     content_type = params.get("content_type", "file")
+    # 自动入库参数
+    auto_index = params.get("auto_index", False)
+    indexing_params = {
+        "chunk_size": params.get("chunk_size", 1000),
+        "chunk_overlap": params.get("chunk_overlap", 200),
+        "qa_separator": params.get("qa_separator", ""),
+    }
 
     # 禁止 URL 解析与入库
     if content_type == "url":
@@ -276,12 +283,14 @@ async def add_documents(
             # ========== 第二阶段：批量解析文件 ==========
             await context.set_message("第二阶段：解析文件")
             parse_success_count = 0
+            # 计算解析阶段的进度范围
+            parse_progress_range = 30.0 if not auto_index else 25.0
 
             for idx, (item, (file_id, add_file_meta)) in enumerate(added_files.items(), 1):
                 await context.raise_if_cancelled()
 
-                # 第二阶段进度：30% ~ 95%
-                progress = 30.0 + (idx / len(added_files)) * 65.0
+                # 第二阶段进度：25%~55% 或 30%~60%
+                progress = parse_progress_range + (idx / len(added_files)) * 30.0
                 await context.set_progress(progress, f"[2/2] 解析文件 {idx}/{len(added_files)}")
 
                 try:
@@ -301,6 +310,38 @@ async def add_documents(
                             "error_type": error_type,
                         }
                     )
+
+            # ========== 第三阶段：自动入库 ==========
+            if auto_index:
+                await context.set_message("第三阶段：自动入库")
+                parsed_files = [(item, data) for item, data in added_files.items() if data[1].get("status") == "parsed"]
+                total_parsed = len(parsed_files)
+
+                for idx, (item, (file_id, file_meta)) in enumerate(parsed_files, 1):
+                    await context.raise_if_cancelled()
+
+                    # 第三阶段进度：55%~95% 或 60%~95%
+                    progress = 55.0 + (idx / total_parsed) * 40.0
+                    await context.set_progress(progress, f"[3/3] 入库文件 {idx}/{total_parsed}")
+
+                    try:
+                        # 1. 更新入库参数
+                        await knowledge_base.update_file_params(
+                            db_id, file_id, indexing_params, operator_id=current_user.id
+                        )
+                        # 2. 执行入库
+                        result = await knowledge_base.index_file(db_id, file_id, operator_id=current_user.id)
+                        processed_items.append(result)
+                    except Exception as index_error:
+                        logger.error(f"自动入库失败 {item} (file_id={file_id}): {index_error}")
+                        processed_items.append(
+                            {
+                                "item": item,
+                                "status": "failed",
+                                "error": f"入库失败: {str(index_error)}",
+                                "error_type": "index_failed",
+                            }
+                        )
 
         except asyncio.CancelledError:
             await context.set_progress(100.0, "任务已取消")
