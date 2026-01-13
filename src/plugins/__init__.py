@@ -3,7 +3,6 @@ from src.plugins.document_processor_factory import DocumentProcessorFactory
 from src.plugins.mineru_official_parser import MinerUOfficialParser
 from src.plugins.mineru_parser import MinerUParser
 from src.plugins.paddlex_parser import PaddleXDocumentParser
-from src.plugins.qwen3_vl_parser import Qwen3VLParser
 from src.plugins.rapid_ocr_processor import RapidOCRProcessor
 
 __all__ = [
@@ -12,5 +11,4 @@ __all__ = [
     "MinerUParser",
     "MinerUOfficialParser",
     "PaddleXDocumentParser",
-    "Qwen3VLParser",
 ]
