@@ -35,7 +35,7 @@ class Qwen3VLParser(BaseDocumentProcessor):
         self.api_key = api_key or os.getenv("SILICONFLOW_API_KEY")
         if not self.api_key:
             raise DocumentParserException(
-                "SILICONFLOW_API_KEY environment variable not set", "deepseek_ocr", "missing_api_key"
+                "SILICONFLOW_API_KEY environment variable not set", "qwen3_vl", "missing_api_key"
             )
 
         self.api_url = "https://api.siliconflow.cn/v1/chat/completions"
