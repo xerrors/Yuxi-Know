@@ -42,6 +42,7 @@
 - 重构智能体对于“工具变更/模型变更”的处理逻辑，无需导入更复杂的中间件
 - 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
 - 新增Sqlite Web UI 方便通过Web页面管理数据库中数据[#463](https://github.com/xerrors/Yuxi-Know/pull/463)）
+- 新增 OCR 引擎添加 QwenVL 模型的支持[#465](https://github.com/xerrors/Yuxi-Know/pull/465)）
 
 ### 修复
 

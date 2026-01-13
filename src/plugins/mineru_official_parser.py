@@ -22,9 +22,6 @@ class MinerUOfficialParser(BaseDocumentProcessor):
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or os.getenv("MINERU_API_KEY")
-        if not self.api_key:
-            raise DocumentParserException("MINERU_API_KEY 环境变量未设置", "mineru_official", "missing_api_key")
-
         self.api_base = "https://mineru.net/api/v4"
         self.headers = {
             "Content-Type": "application/json",
@@ -41,6 +38,13 @@ class MinerUOfficialParser(BaseDocumentProcessor):
     def check_health(self) -> dict[str, Any]:
         """检查 API 可用性和密钥有效性"""
         try:
+            if not self.api_key:
+                return {
+                    "status": "unhealthy",
+                    "message": "MINERU_API_KEY 环境变量未设置",
+                    "details": {"error_code": "-10002"},
+                }
+
             # 使用一个简单的测试请求来验证 API 密钥
             # 由于没有专门的 ping 接口，我们尝试创建一个测试任务的请求
             test_data = {"url": "https://cdn-mineru.openxlab.org.cn/demo/example.pdf", "is_ocr": True}
