@@ -24,4 +24,3 @@ router.include_router(mindmap)  # /api/mindmap/*
 router.include_router(graph)  # /api/graph/*
 router.include_router(tasks)  # /api/tasks/*
 router.include_router(mcp)  # /api/system/mcp-servers/*
-

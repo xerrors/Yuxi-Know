@@ -11,8 +11,7 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan事件管理器"""
     # 初始化 MCP 服务器配置
     await init_mcp_servers()
-    
+
     await tasker.start()
     yield
     await tasker.shutdown()
-
