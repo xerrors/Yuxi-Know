@@ -680,6 +680,11 @@ const startEvaluation = async () => {
     message.error('请先选择评估基准');
     return;
   }
+  // 答案生成模型 & 答案评估模型 必选
+  if (!configForm.answer_llm || !configForm.judge_llm) {
+    message.error('请选择答案生成模型和评判模型');
+    return;
+  }
 
   startingEvaluation.value = true;
 
