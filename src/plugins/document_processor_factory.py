@@ -12,6 +12,7 @@ from src.plugins.mineru_official_parser import MinerUOfficialParser
 from src.plugins.mineru_parser import MinerUParser
 from src.plugins.paddlex_parser import PaddleXDocumentParser
 from src.plugins.rapid_ocr_processor import RapidOCRProcessor
+from src.plugins.qwen3_vl_parser import Qwen3VLParser
 from src.utils import logger
 
 # 处理器实例缓存
@@ -28,6 +29,7 @@ class DocumentProcessorFactory:
         "mineru_official": MinerUOfficialParser,
         "paddlex_ocr": PaddleXDocumentParser,
         "deepseek_ocr": DeepSeekOCRParser,
+        "qwen3_vl": Qwen3VLParser,
     }
 
     @classmethod

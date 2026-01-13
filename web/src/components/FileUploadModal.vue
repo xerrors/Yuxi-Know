@@ -504,6 +504,12 @@ const enableOcrOptions = computed(() => [
     title: 'DeepSeek OCR (SiliconFlow)',
     disabled: ocrHealthStatus.value?.deepseek_ocr?.status === 'unavailable' || ocrHealthStatus.value?.deepseek_ocr?.status === 'error'
   },
+  {
+    value: 'qwen3_vl',
+    label: getQwen3VLOcrLabel(),
+    title: 'Qwen3VL OCR (SiliconFlow)',
+    disabled: ocrHealthStatus.value?.qwen3_vl?.status === 'unavailable' || ocrHealthStatus.value?.qwen3_vl?.status === 'error'
+  },
 ]);
 
 // 获取当前选中OCR服务的状态
@@ -564,6 +570,7 @@ const getMinerULabel = () => getOcrLabel('mineru_ocr', 'MinerU OCR');
 const getMinerUOfficialLabel = () => getOcrLabel('mineru_official', 'MinerU Official API');
 const getPaddleXLabel = () => getOcrLabel('paddlex_ocr', 'PP-StructureV3');
 const getDeepSeekOcrLabel = () => getOcrLabel('deepseek_ocr', 'DeepSeek OCR');
+const getQwen3VLOcrLabel = () => getOcrLabel('qwen3_vl', 'Qwen3VL OCR');
 
 // 验证OCR服务可用性
 const validateOcrService = () => {
