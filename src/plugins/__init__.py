@@ -3,8 +3,8 @@ from src.plugins.document_processor_factory import DocumentProcessorFactory
 from src.plugins.mineru_official_parser import MinerUOfficialParser
 from src.plugins.mineru_parser import MinerUParser
 from src.plugins.paddlex_parser import PaddleXDocumentParser
-from src.plugins.rapid_ocr_processor import RapidOCRProcessor
 from src.plugins.qwen3_vl_parser import Qwen3VLParser
+from src.plugins.rapid_ocr_processor import RapidOCRProcessor
 
 __all__ = [
     "DocumentProcessorFactory",  # 推荐使用
