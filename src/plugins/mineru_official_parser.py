@@ -39,11 +39,9 @@ class MinerUOfficialParser(BaseDocumentProcessor):
         """检查 API 可用性和密钥有效性"""
         try:
             if not self.api_key:
-                return {
-                    "status": "unhealthy",
-                    "message": "MINERU_API_KEY 环境变量未设置(mineru_official missing_api_key)",
-                    "details": {"error_code": "-10002"}
-                }
+                return {"status": "unhealthy",
+                "message": "MINERU_API_KEY 环境变量未设置",
+                "details": {"error_code": "-10002"}}
 
             # 使用一个简单的测试请求来验证 API 密钥
             # 由于没有专门的 ping 接口，我们尝试创建一个测试任务的请求
