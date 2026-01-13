@@ -42,7 +42,7 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 return {
                     "status": "unhealthy",
                     "message": "MINERU_API_KEY 环境变量未设置(mineru_official missing_api_key)",
-                    "details": {"error_code": "A0202"}
+                    "details": {"error_code": "-10002"}
                 }
 
             # 使用一个简单的测试请求来验证 API 密钥
