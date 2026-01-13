@@ -46,6 +46,7 @@
 ### 修复
 
 - 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
+- 修复答案生成模型 & 答案评估模型 必选[#468](https://github.com/xerrors/Yuxi-Know/pull/468)）
 
 ## v0.4
 
