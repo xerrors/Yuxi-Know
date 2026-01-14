@@ -3,7 +3,6 @@
 #
 # 触发条件：
 # 1. Push 到 main 分支时：自动格式化并提交
-# 2. Pull Request 时：检查格式并标记问题（不自动提交）
 
 name: Ruff Format Check
 
@@ -17,18 +16,9 @@ on:
       - 'Makefile'
       - '.github/workflows/ruff.yml'
 
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '**.py'
-      - 'pyproject.toml'
-      - 'Makefile'
-
 # 设置写入权限，允许自动提交格式化代码
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   ruff:
@@ -63,8 +53,6 @@ jobs:
       # 5. 运行 Ruff 格式检查（与项目的 make lint 命令一致）
       - name: Run Ruff format check
         id: ruff-format
-        # PR 事件中不失败，仅报告问题；Push 事件中仍然会失败
-        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           set +e  # 不立即退出失败
 
@@ -86,7 +74,7 @@ jobs:
             echo "✅ Ruff format check passed"
           else
             echo "ruff_format_passed=false" >> $GITHUB_OUTPUT
-            echo "❌ Ruff format check failed (this is expected for PR reviews)"
+            echo "❌ Ruff format check failed"
             echo "::warning::Ruff format check found issues that should be addressed"
 
             # 汇总错误信息
@@ -164,146 +152,3 @@ jobs:
             git push
             echo "✅ Formatting changes committed and pushed"
           fi
-
-      - name: Create PR Comment with Format Issues
-        if: ${{ github.event_name == 'pull_request' && steps.ruff-format.outputs.ruff_format_passed == 'false' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const issue_number = context.issue.number;
-            const repo = context.repo;
-
-            // 获取工作流运行 ID 以链接到特定的检查运行
-            const run_id = process.env.GITHUB_RUN_ID;
-            const run_url = `https://github.com/${repo.owner}/${repo.repo}/actions/runs/${run_id}`;
-
-            const commentBody = `## 📋 Ruff Format Review
-
-            The Ruff format check found some issues in this pull request. **This does not block the PR** - it's just a review of code style:
-
-            🔍 **Issues found**:
-            - Unused imports
-            - Line length violations (>120 characters)
-            - Import sorting issues
-
-            ⚙️ **To fix these issues locally**:
-
-            \`\`\`bash
-            # Run automatic formatting (same as make format)
-            make format
-
-            # Or manually with uv:
-            uv run ruff format .
-            uv run ruff check . --fix
-            uv run python -m ruff check --select I src --fix
-            \`\`\`
-
-            📝 **To just check without fixing**:
-            \`\`\`bash
-            make lint
-            \`\`\`
-
-            🔗 **View detailed linting output**: [Ruff Check Run #${run_id}](${run_url})
-
-            ---
-            *Note: This is an automated review for code formatting consistency. The PR can still be merged even with these formatting issues.*`;
-
-            // 先尝试更新已有的评论（如果存在）
-            try {
-              const comments = await github.rest.issues.listComments({
-                owner: repo.owner,
-                repo: repo.repo,
-                issue_number: issue_number,
-              });
-
-              const botComment = comments.data.find(comment =>
-                comment.user.login.includes('github-actions') ||
-                comment.body.includes('Ruff Format Review')
-              );
-
-              if (botComment) {
-                await github.rest.issues.updateComment({
-                  owner: repo.owner,
-                  repo: repo.repo,
-                  comment_id: botComment.id,
-                  body: commentBody
-                });
-                console.log("✅ Updated existing comment");
-              } else {
-                await github.rest.issues.createComment({
-                  owner: repo.owner,
-                  repo: repo.repo,
-                  issue_number: issue_number,
-                  body: commentBody
-                });
-                console.log("✅ Created new comment");
-              }
-            } catch (error) {
-              console.error("Error managing comment:", error);
-              // 如果出错，仍然尝试创建新评论
-              await github.rest.issues.createComment({
-                owner: repo.owner,
-                repo: repo.repo,
-                issue_number: issue_number,
-                body: commentBody
-              });
-            }
-
-      - name: Create PR Comment on Success
-        if: ${{ github.event_name == 'pull_request' && steps.ruff-format.outputs.ruff_format_passed == 'true' }}
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const issue_number = context.issue.number;
-            const repo = context.repo;
-
-            const commentBody = `## ✅ Ruff Format Review Passed
-
-            ✅ **All Python files follow the project's formatting standards!**
-
-            Great work maintaining code consistency! 🎉
-
-            ---
-            *Note: This is an automated review for code formatting. Your code follows the project's Ruff configuration.*`;
-
-            // 清理可能存在的失败评论（如果之前有失败，现在修复了）
-            try {
-              const comments = await github.rest.issues.listComments({
-                owner: repo.owner,
-                repo: repo.repo,
-                issue_number: issue_number,
-              });
-
-              const botComment = comments.data.find(comment =>
-                comment.user.login.includes('github-actions') ||
-                comment.body.includes('Ruff Format Review')
-              );
-
-              if (botComment) {
-                await github.rest.issues.updateComment({
-                  owner: repo.owner,
-                  repo: repo.repo,
-                  comment_id: botComment.id,
-                  body: commentBody
-                });
-                console.log("✅ Updated existing comment");
-              } else {
-                await github.rest.issues.createComment({
-                  owner: repo.owner,
-                  repo: repo.repo,
-                  issue_number: issue_number,
-                  body: commentBody
-                });
-                console.log("✅ Created new comment");
-              }
-            } catch (error) {
-              console.error("Error managing comment:", error);
-              await github.rest.issues.createComment({
-                owner: repo.owner,
-                repo: repo.repo,
-                issue_number: issue_number,
-                body: commentBody
-              });
-            }
