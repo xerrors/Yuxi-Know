@@ -1,6 +1,6 @@
 {
   "name": "yuxi-know-web",
-  "version": "0.4.2.web",
+  "version": "0.4.3.web",
   "private": true,
   "scripts": {
     "dev": "vite",

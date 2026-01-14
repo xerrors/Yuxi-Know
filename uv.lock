@@ -7823,7 +7823,7 @@ wheels = [
 
 [[package]]
 name = "yuxi-know"
-version = "0.4.2.dev0"
+version = "0.4.3.dev0"
 source = { virtual = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -7863,14 +7863,12 @@ dependencies = [
     { name = "networkx" },
     { name = "openai" },
     { name = "opencv-python-headless" },
-    { name = "openpyxl" },
     { name = "pillow" },
     { name = "pyjwt" },
     { name = "pymilvus" },
     { name = "pymupdf" },
     { name = "pymysql" },
     { name = "pypinyin" },
-    { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "python-jose", extra = ["cryptography"] },
     { name = "python-multipart" },
@@ -7939,14 +7937,12 @@ requires-dist = [
     { name = "networkx", specifier = ">=3.5" },
     { name = "openai", specifier = ">=1.109" },
     { name = "opencv-python-headless", specifier = ">=4.11.0.86" },
-    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pillow", specifier = ">=10.5.0" },
     { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pymilvus", specifier = ">=2.5.8" },
     { name = "pymupdf", specifier = ">=1.25.5" },
     { name = "pymysql", specifier = ">=1.1.0" },
     { name = "pypinyin", specifier = ">=0.55.0" },
-    { name = "python-docx", specifier = ">=1.2.0" },
     { name = "python-dotenv", specifier = ">=1.1.0" },
     { name = "python-jose", extras = ["cryptography"], specifier = ">=3.4.0" },
     { name = "python-multipart", specifier = ">=0.0.20" },

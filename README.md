@@ -6,7 +6,7 @@
 
 <a href="https://trendshift.io/repositories/15845" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15845" alt="Yuxi-Know | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
-[![Stable](https://img.shields.io/badge/stable-v0.4.2-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.2)
+[![Stable](https://img.shields.io/badge/stable-v0.4.3-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.3)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
