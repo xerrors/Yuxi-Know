@@ -133,7 +133,10 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
     # 获取所有知识库
     kb_tools = []
     retrievers = knowledge_base.get_retrievers()
-    db_ids = [kb_id for kb_id, kb in retrievers.items() if kb["name"] in db_names] or None
+    if db_names is None:
+        db_ids = None
+    else:
+        db_ids = [kb_id for kb_id, kb in retrievers.items() if kb["name"] in db_names]
 
     def _create_retriever_wrapper(db_id: str, retriever_info: dict[str, Any]):
         """创建检索器包装函数的工厂函数，避免闭包变量捕获问题"""
