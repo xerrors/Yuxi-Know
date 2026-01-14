@@ -9,6 +9,15 @@ from src.utils.datetime_utils import coerce_datetime, utc_isoformat, utc_now
 Base = declarative_base()
 
 
+def _format_utc_datetime(dt_value):
+    """Helper to format datetime to UTC ISO string, assuming naive datetimes are UTC."""
+    if dt_value is None:
+        return None
+    if dt_value.tzinfo is None:
+        dt_value = dt_value.replace(tzinfo=dt.UTC)
+    return utc_isoformat(dt_value)
+
+
 ## Removed legacy RDBMS knowledge models (KnowledgeDatabase/KnowledgeFile/KnowledgeNode)
 
 
@@ -34,13 +43,6 @@ class Conversation(Base):
     )
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "thread_id": self.thread_id,
@@ -48,8 +50,8 @@ class Conversation(Base):
             "agent_id": self.agent_id,
             "title": self.title,
             "status": self.status,
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
+            "created_at": _format_utc_datetime(self.created_at),
+            "updated_at": _format_utc_datetime(self.updated_at),
             "metadata": self.extra_metadata or {},
         }
 
@@ -76,20 +78,13 @@ class Message(Base):
     tool_calls = relationship("ToolCall", back_populates="message", cascade="all, delete-orphan")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "conversation_id": self.conversation_id,
             "role": self.role,
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": format_utc_datetime(self.created_at),
+            "created_at": _format_utc_datetime(self.created_at),
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
             "image_content": self.image_content,
@@ -124,13 +119,6 @@ class ToolCall(Base):
     message = relationship("Message", back_populates="tool_calls")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "message_id": self.message_id,
@@ -140,7 +128,7 @@ class ToolCall(Base):
             "tool_output": self.tool_output,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": format_utc_datetime(self.created_at),
+            "created_at": _format_utc_datetime(self.created_at),
         }
 
 
@@ -164,13 +152,6 @@ class ConversationStats(Base):
     conversation = relationship("Conversation", back_populates="stats")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "conversation_id": self.conversation_id,
@@ -178,8 +159,8 @@ class ConversationStats(Base):
             "total_tokens": self.total_tokens,
             "model_used": self.model_used,
             "user_feedback": self.user_feedback or {},
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
+            "created_at": _format_utc_datetime(self.created_at),
+            "updated_at": _format_utc_datetime(self.updated_at),
         }
 
 
@@ -212,14 +193,6 @@ class User(Base):
 
     def to_dict(self, include_password=False):
         # SQLite 存储 naive datetime，需要标记为 UTC 后再转换
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            # 如果是 naive datetime，假设它是 UTC（因为代码中使用 utc_now() 存储）
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         result = {
             "id": self.id,
             "username": self.username,
@@ -227,13 +200,13 @@ class User(Base):
             "phone_number": self.phone_number,
             "avatar": self.avatar,
             "role": self.role,
-            "created_at": format_utc_datetime(self.created_at),
-            "last_login": format_utc_datetime(self.last_login),
+            "created_at": _format_utc_datetime(self.created_at),
+            "last_login": _format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,
-            "last_failed_login": format_utc_datetime(self.last_failed_login),
-            "login_locked_until": format_utc_datetime(self.login_locked_until),
+            "last_failed_login": _format_utc_datetime(self.last_failed_login),
+            "login_locked_until": _format_utc_datetime(self.login_locked_until),
             "is_deleted": self.is_deleted,
-            "deleted_at": format_utc_datetime(self.deleted_at),
+            "deleted_at": _format_utc_datetime(self.deleted_at),
         }
         if include_password:
             result["password_hash"] = self.password_hash
@@ -298,20 +271,13 @@ class OperationLog(Base):
     user = relationship("User", back_populates="operation_logs")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "user_id": self.user_id,
             "operation": self.operation,
             "details": self.details,
             "ip_address": self.ip_address,
-            "timestamp": format_utc_datetime(self.timestamp),
+            "timestamp": _format_utc_datetime(self.timestamp),
         }
 
 
@@ -333,20 +299,13 @@ class MessageFeedback(Base):
     message = relationship("Message", backref="feedbacks")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "id": self.id,
             "message_id": self.message_id,
             "user_id": self.user_id,
             "rating": self.rating,
             "reason": self.reason,
-            "created_at": format_utc_datetime(self.created_at),
+            "created_at": _format_utc_datetime(self.created_at),
         }
 
 
@@ -360,8 +319,10 @@ class MCPServer(Base):
     description = Column(String(500), nullable=True, comment="描述")
 
     # 连接配置
-    transport = Column(String(20), nullable=False, comment="传输类型：sse/streamable_http")
-    url = Column(String(500), nullable=False, comment="服务器 URL")
+    transport = Column(String(20), nullable=False, comment="传输类型：sse/streamable_http/stdio")
+    url = Column(String(500), nullable=True, comment="服务器 URL（sse/streamable_http）")
+    command = Column(String(500), nullable=True, comment="命令（stdio）")
+    args = Column(JSON, nullable=True, comment="命令参数数组（stdio）")
     headers = Column(JSON, nullable=True, comment="HTTP 请求头")
     timeout = Column(Integer, nullable=True, comment="HTTP 超时时间（秒）")
     sse_read_timeout = Column(Integer, nullable=True, comment="SSE 读取超时（秒）")
@@ -383,18 +344,13 @@ class MCPServer(Base):
     updated_at = Column(DateTime, default=utc_now, onupdate=utc_now, comment="更新时间")
 
     def to_dict(self):
-        def format_utc_datetime(dt_value):
-            if dt_value is None:
-                return None
-            if dt_value.tzinfo is None:
-                dt_value = dt_value.replace(tzinfo=dt.UTC)
-            return utc_isoformat(dt_value)
-
         return {
             "name": self.name,
             "description": self.description,
             "transport": self.transport,
             "url": self.url,
+            "command": self.command,
+            "args": self.args or [],
             "headers": self.headers or {},
             "timeout": self.timeout,
             "sse_read_timeout": self.sse_read_timeout,
@@ -404,20 +360,27 @@ class MCPServer(Base):
             "disabled_tools": self.disabled_tools or [],
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "created_at": format_utc_datetime(self.created_at),
-            "updated_at": format_utc_datetime(self.updated_at),
+            "created_at": _format_utc_datetime(self.created_at),
+            "updated_at": _format_utc_datetime(self.updated_at),
         }
 
     def to_mcp_config(self) -> dict:
         """转换为 MCP 配置格式（用于加载到 MCP_SERVERS 缓存）"""
         config = {
             "transport": self.transport,
-            "url": self.url,
         }
+        if self.url:
+            config["url"] = self.url
+        if self.command:
+            config["command"] = self.command
+        if self.args:
+            config["args"] = self.args
         if self.headers:
             config["headers"] = self.headers
         if self.timeout is not None:
             config["timeout"] = self.timeout
         if self.sse_read_timeout is not None:
             config["sse_read_timeout"] = self.sse_read_timeout
+        if self.disabled_tools:
+            config["disabled_tools"] = self.disabled_tools
         return config

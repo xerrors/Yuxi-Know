@@ -35,30 +35,51 @@
               <div class="info-item">
                 <label>传输类型</label>
                 <span>
-                  <a-tag :color="server.transport === 'sse' ? 'orange' : 'blue'">
+                  <a-tag :color="getTransportColor(server.transport)">
                     {{ server.transport }}
                   </a-tag>
                 </span>
               </div>
-              <div class="info-item">
-                <label>服务器 URL</label>
-                <span class="url-text">{{ server.url }}</span>
-              </div>
+
+              <!-- HTTP 类型显示 URL -->
+              <template v-if="server.transport === 'streamable_http' || server.transport === 'sse'">
+                <div class="info-item">
+                  <label>服务器 URL</label>
+                  <span class="url-text">{{ server.url || '-' }}</span>
+                </div>
+                <div class="info-item" v-if="server.headers && Object.keys(server.headers).length > 0">
+                  <label>请求头</label>
+                  <pre class="headers-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre>
+                </div>
+                <div class="info-item" v-if="server.timeout">
+                  <label>HTTP 超时</label>
+                  <span>{{ server.timeout }} 秒</span>
+                </div>
+                <div class="info-item" v-if="server.sse_read_timeout">
+                  <label>SSE 读取超时</label>
+                  <span>{{ server.sse_read_timeout }} 秒</span>
+                </div>
+              </template>
+
+              <!-- StdIO 类型显示 command/args -->
+              <template v-if="server.transport === 'stdio'">
+                <div class="info-item">
+                  <label>命令</label>
+                  <span class="command-text">{{ server.command || '-' }}</span>
+                </div>
+                <div class="info-item" v-if="server.args && server.args.length > 0">
+                  <label>参数</label>
+                  <span>
+                    <a-tag v-for="(arg, index) in server.args" :key="index" size="small">
+                      {{ arg }}
+                    </a-tag>
+                  </span>
+                </div>
+              </template>
+
               <div class="info-item" v-if="server.description">
                 <label>描述</label>
                 <span>{{ server.description }}</span>
-              </div>
-              <div class="info-item" v-if="server.timeout">
-                <label>HTTP 超时</label>
-                <span>{{ server.timeout }} 秒</span>
-              </div>
-              <div class="info-item" v-if="server.sse_read_timeout">
-                <label>SSE 读取超时</label>
-                <span>{{ server.sse_read_timeout }} 秒</span>
-              </div>
-              <div class="info-item" v-if="server.headers && Object.keys(server.headers).length > 0">
-                <label>请求头</label>
-                <pre class="headers-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre>
               </div>
               <div class="info-item" v-if="server.tags && server.tags.length > 0">
                 <label>标签</label>
@@ -344,6 +365,16 @@ const copyToolName = async (name) => {
 // 格式化时间
 const formatTime = (timeStr) => formatDateTime(timeStr)
 
+// 获取传输类型颜色
+const getTransportColor = (transport) => {
+  const colors = {
+    sse: 'orange',
+    stdio: 'green',
+    streamable_http: 'blue',
+  }
+  return colors[transport] || 'blue'
+}
+
 // 关闭弹框
 const handleClose = () => {
   emit('update:visible', false)
@@ -437,6 +468,14 @@ const handleClose = () => {
         font-family: 'Monaco', 'Consolas', monospace;
         font-size: 13px;
         word-break: break-all;
+        background: var(--gray-50);
+        padding: 8px 12px;
+        border-radius: 4px;
+      }
+
+      .command-text {
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 13px;
         background: var(--gray-50);
         padding: 8px 12px;
         border-radius: 4px;
