@@ -106,116 +106,107 @@ async def get_graph(self):
 
 系统会根据配置自动组装工具集合，涵盖知识图谱查询、向量检索生成的动态工具、MySQL 只读查询能力、Tavily 搜索以及所有注册的 MCP 工具。
 
-工具的启用状态和描述由配置文件或环境变量决定，当依赖缺失时会被中间件自动忽略，从而避免在图中加载不可用能力。MCP Server 的接入方式保持不变，只需在 `src/services/mcp_service.py` 的 `MCP_SERVERS` 中填入服务地址与 `transport` 类型，如需更多范式可参阅 LangChain 官方文档。
+MCP (Model Context Protocol) 服务的配置现已全面支持通过系统管理界面或 API 进行动态管理，数据持久化存储在数据库中。`src/services/mcp_service.py` 仅作为核心逻辑层和默认配置的存放处，不再建议直接修改代码来添加服务器。
 
-### MCP 服务器配置方式
+### MCP 服务器管理
 
-系统支持四种 MCP 服务器配置方式，可根据具体场景选择：
+系统提供了完善的 API (`/system/mcp-servers`) 和管理界面来执行 MCP 服务器的增删改查操作。
 
-#### 1. 远程 HTTP 服务器
+#### 支持的传输协议
 
-```python
-MCP_SERVERS = {
-    "sequentialthinking": {
-        "url": "https://remote.mcpservers.org/sequentialthinking/mcp",
-        "transport": "streamable_http",
-    }
-}
-```
+系统支持三种 MCP 传输协议：
+
+1.  **SSE (Server-Sent Events)**: 标准的 HTTP SSE 连接
+2.  **Streamable HTTP**: 支持流式传输的 HTTP 连接（远程）
+3.  **Stdio**: 通过标准输入/输出运行本地进程（支持 Python/Node.js 等）
+
+#### 配置示例
+
+以下是通过管理界面添加 MCP 服务器时的常见配置参数示例（对应 API 请求体）：
+
+##### 1. 远程 HTTP/SSE 服务器
+
+*   **Server Name**: `sequentialthinking`
+*   **Transport**: `streamable_http` (或 `sse`)
+*   **URL**: `https://remote.mcpservers.org/sequentialthinking/mcp`
 
 **特点**：
-- 通过 HTTP 远程访问，无需本地安装，适合公开可用的 MCP 服务
+- 无需本地安装，适合公开可用的 MCP 服务
 - 启动速度快，无需本地依赖
 
-#### 2. 使用 npx 运行 Node.js 包
+##### 2. 使用 npx 运行 Node.js 包
 
-```python
-MCP_SERVERS = {
-    "mcp-server-chart": {
-        "command": "npx",
-        "args": ["-y", "@antv/mcp-server-chart"],
-        "transport": "stdio"
-    },
-}
-```
+*   **Server Name**: `mcp-server-chart`
+*   **Transport**: `stdio`
+*   **Command**: `npx`
+*   **Args**: `["-y", "@antv/mcp-server-chart"]`
 
 **特点**：
-- 使用 npx 直接运行 Node.js 包，`-y` 参数自动下载并运行指定包
-- 适合 Node.js 生态的 MCP 服务，需要确保 npx 可以使用
+- 自动下载并运行 Node.js 包
+- 适合 Node.js 生态的 MCP 服务
 
-#### 3. 使用 uvx 运行 Python 包
+##### 3. 使用 uvx 运行 Python 包
 
-```python
-MCP_SERVERS = {
-    "mysql-mcp-server": {
-        "command": "uvx",
-        "args": ["mysql_mcp_server"],
-        "env": {
-            "MYSQL_DATABASE": "your_database",
-            "MYSQL_HOST": "localhost",
-            "MYSQL_PASSWORD": "your_password",
-            "MYSQL_PORT": "3306",
-            "MYSQL_USER": "your_username"
-        },
-        "transport": "stdio"
+*   **Server Name**: `mysql-mcp-server`
+*   **Transport**: `stdio`
+*   **Command**: `uvx`
+*   **Args**: `["mysql_mcp_server"]`
+*   **Environment Variables**:
+    ```json
+    {
+        "MYSQL_DATABASE": "your_database",
+        "MYSQL_HOST": "localhost",
+        "MYSQL_PASSWORD": "your_password",
+        "MYSQL_PORT": "3306",
+        "MYSQL_USER": "your_username"
     }
-}
-```
+    ```
 
 **特点**：
-- 使用 uvx 运行已发布的 Python 包，自动管理虚拟环境和依赖
+- 自动管理 Python 虚拟环境和依赖
 - 适合 PyPI 上已发布的 MCP 服务
 
-#### 4. 使用 uv 运行本地仓库
+##### 4. 使用 uv 运行本地仓库
 
-```python
-MCP_SERVERS = {
-    "arxiv-mcp-server": {
-        "command": "uv",
-        "args": [
-            "tool",
-            "run",
-            "arxiv-mcp-server",
-            "--storage-path", "src/agents/mcp_repos/arxiv-mcp-server"
-        ],
-        "transport": "stdio"
-    }
-}
-```
+*   **Server Name**: `arxiv-mcp-server`
+*   **Transport**: `stdio`
+*   **Command**: `uv`
+*   **Args**:
+    ```json
+    [
+        "tool",
+        "run",
+        "arxiv-mcp-server",
+        "--storage-path", "src/agents/mcp_repos/arxiv-mcp-server"
+    ]
+    ```
 
 **特点**：
 - 直接运行本地 git 仓库中的 MCP 服务
-- 加载速度快，支持热重载，适合开发调试和自定义 MCP 服务
-- 需要先 git clone 对应仓库到指定路径
+- 支持热重载，适合开发调试
 
-### 配置参数说明
-
-- `url`: 远程 HTTP 服务器的 URL（仅 streamable_http 传输）
-- `command`: 启动 MCP 服务的命令
-- `args`: 启动参数列表
-- `env`: 环境变量配置，用于数据库连接等敏感信息
-- `transport`: 传输协议，支持 `stdio`（本地）和 `streamable_http`（远程）
-
-### 动态工具加载
+### 动态工具加载与管理
 
 系统提供统一的 MCP 服务层 (`src/services/mcp_service.py`) 封装所有 MCP 相关操作。
 
-#### 智能体获取工具（自动过滤禁用工具）
+#### 1. 智能体获取工具
 
-智能体应使用 `get_enabled_mcp_tools()` 获取工具，该函数会自动过滤 `disabled_tools` 中的工具：
+智能体开发时，应使用 `get_enabled_mcp_tools()` 获取工具。该函数会自动根据数据库中的配置，过滤掉被禁用的工具。
 
 ```python
-from src.services.mcp_service import get_enabled_mcp_tools, add_mcp_server
+from src.services.mcp_service import get_enabled_mcp_tools
 
-# 获取指定服务器的工具（自动过滤 disabled_tools）
+# 获取指定服务器的工具（自动过滤掉在管理界面禁用的工具）
 tools = await get_enabled_mcp_tools("sequentialthinking")
-
-# 动态添加新的 MCP 服务器
-add_mcp_server("custom-server", {
-    "url": "https://your-mcp-server.com/mcp",
-    "transport": "streamable_http"
-})
 ```
+
+#### 2. 工具粒度控制
+
+通过管理界面或 API (`PUT /system/mcp-servers/{name}/tools/{tool_name}/toggle`)，管理员可以启用或禁用特定的 MCP 工具。禁用后的工具不会出现在 `get_enabled_mcp_tools` 的返回列表中，从而防止智能体调用不需要的能力。
+
+#### 3. 默认服务器配置
+
+系统首次启动时，会加载 `src/services/mcp_service.py` 中 `_DEFAULT_MCP_SERVERS` 定义的默认服务器（如 `sequentialthinking` 和 `mcp-server-chart`）到数据库中。后续的修改将以数据库为准。
 
 ### MySQL 数据库
 
