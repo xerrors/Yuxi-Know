@@ -454,7 +454,28 @@ class LightRagKB(KnowledgeBase):
             logger.debug(f"Query response: {str(response)[:1000]}...")
 
             if agent_call:
-                return response["data"]["chunks"]
+                scope = query_params.get("retrieval_content_scope", "chunks")
+                data = response.get("data", {}) or {}
+
+                if scope == "chunks":
+                    return data.get("chunks", [])
+
+                result = {}
+                if scope in ["graph", "all"]:
+                    # 过滤掉无关信息，保留实体和关系的核心内容
+                    exclude_keys = {"source_id", "file_path", "created_at"}
+
+                    ents = data.get("entities", [])
+                    rels = data.get("relationships", [])
+
+                    result["entities"] = [{k: v for k, v in e.items() if k not in exclude_keys} for e in ents]
+                    result["relationships"] = [{k: v for k, v in r.items() if k not in exclude_keys} for r in rels]
+                    result["references"] = data.get("references", [])
+
+                if scope == "all":
+                    result["chunks"] = data.get("chunks", [])
+
+                return result
 
             return response
 
@@ -585,6 +606,17 @@ class LightRagKB(KnowledgeBase):
                 "min": 1,
                 "max": 100,
                 "description": "返回的最大结果数量",
+            },
+            {
+                "key": "retrieval_content_scope",
+                "label": "传递给 LLM 的内容",
+                "type": "select",
+                "default": "chunks",
+                "options": [
+                    {"value": "chunks", "label": "仅 Chunks", "description": "仅返回文档片段"},
+                    {"value": "graph", "label": "仅 Entity/Relation", "description": "仅返回知识图谱信息"},
+                    {"value": "all", "label": "全部", "description": "返回文档片段和知识图谱信息"},
+                ],
             },
         ]
 
