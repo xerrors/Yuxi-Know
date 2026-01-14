@@ -89,6 +89,13 @@ async def create_database(
         f"embed_model_name {embed_model_name}"
     )
     try:
+        # 先检查名称是否已存在
+        if knowledge_base.database_name_exists(database_name):
+            raise HTTPException(
+                status_code=409,
+                detail=f"知识库名称 '{database_name}' 已存在，请使用其他名称",
+            )
+
         additional_params = {**(additional_params or {})}
         additional_params["auto_generate_questions"] = False  # 默认不生成问题
 
@@ -119,9 +126,11 @@ async def create_database(
         await agent_manager.reload_all()
 
         return database_info
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"创建数据库失败 {e}, {traceback.format_exc()}")
-        return {"message": f"创建数据库失败 {e}", "status": "failed"}
+        raise HTTPException(status_code=400, detail=f"创建数据库失败: {e}")
 
 
 @knowledge.get("/databases/{db_id}")

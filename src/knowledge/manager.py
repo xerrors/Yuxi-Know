@@ -233,6 +233,20 @@ class KnowledgeBaseManager:
 
         return {"databases": all_databases}
 
+    def database_name_exists(self, database_name: str) -> bool:
+        """检查知识库名称是否已存在
+
+        Args:
+            database_name: 要检查的知识库名称
+
+        Returns:
+            True 如果名称已存在，False 否则
+        """
+        for db_id, meta in self.global_databases_meta.items():
+            if meta.get("name", "").lower() == database_name.lower():
+                return True
+        return False
+
     async def create_folder(self, db_id: str, folder_name: str, parent_id: str = None) -> dict:
         """Create a folder in the database."""
         kb_instance = self._get_kb_for_database(db_id)
@@ -257,6 +271,10 @@ class KnowledgeBaseManager:
         if not KnowledgeBaseFactory.is_type_supported(kb_type):
             available_types = list(KnowledgeBaseFactory.get_available_types().keys())
             raise ValueError(f"Unsupported knowledge base type: {kb_type}. Available types: {available_types}")
+
+        # 检查名称是否已存在
+        if self.database_name_exists(database_name):
+            raise ValueError(f"知识库名称 '{database_name}' 已存在，请使用其他名称")
 
         kb_instance = self._get_or_create_kb_instance(kb_type)
 

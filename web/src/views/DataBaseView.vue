@@ -8,7 +8,7 @@
       </template>
     </HeaderComponent>
 
-    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" @ok="handleCreateDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
+    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" :confirm-loading="dbState.creating" @ok="handleCreateDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
 
       <!-- 知识库类型选择 -->
       <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
@@ -172,8 +172,8 @@ import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useConfigStore } from '@/stores/config';
 import { useDatabaseStore } from '@/stores/database';
-import { Database, FileDigit, Waypoints, Building2, DatabaseZap } from 'lucide-vue-next';
-import { LockOutlined, InfoCircleOutlined, QuestionCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
+import { Database, Waypoints, DatabaseZap } from 'lucide-vue-next';
+import { LockOutlined, InfoCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
@@ -266,6 +266,7 @@ const resetNewDatabase = () => {
 
 const cancelCreateDatabase = () => {
   state.openNewDatabaseModel = false
+  resetNewDatabase()
 }
 
 // 知识库类型相关工具方法
