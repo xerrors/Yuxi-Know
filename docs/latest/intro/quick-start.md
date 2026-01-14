@@ -170,6 +170,10 @@ $env:HTTPS_PROXY="http://IP:PORT"
 
 如果已配置代理但构建失败，尝试移除代理后重试。
 
+如果出现，FetchError: request to https://registry.npmjs.org/npm failed, reason: connect ECONNREFUSED 127.0.0.1:7890
+
+新建一个终端重新执行，并确保没有代理干扰。
+
 </details>
 
 <details>

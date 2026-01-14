@@ -3,7 +3,7 @@ from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 
-from src.agents.common import get_mcp_tools
+from src.services.mcp_service import get_mcp_tools
 from src.utils import logger
 
 

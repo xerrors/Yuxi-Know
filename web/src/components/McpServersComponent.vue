@@ -18,7 +18,7 @@
     <div class="stats-section" v-if="servers.length > 0">
       <span class="stats-text">
         已配置 {{ servers.length }} 个 MCP 服务器：
-        HTTP: {{ httpCount }} · SSE: {{ sseCount }}
+        HTTP: {{ httpCount }} · SSE: {{ sseCount }} · StdIO: {{ stdioCount }}
       </span>
     </div>
 
@@ -36,9 +36,9 @@
             </a-empty>
           </div>
           <div v-else class="server-cards-grid">
-            <div 
-              v-for="server in servers" 
-              :key="server.name" 
+            <div
+              v-for="server in servers"
+              :key="server.name"
               class="server-card"
               :class="{ disabled: !server.enabled }"
             >
@@ -48,29 +48,22 @@
                   <div class="server-basic-info">
                     <h4 class="server-name">{{ server.name }}</h4>
                     <div class="server-transport">
-                      <a-tag :color="getTransportColor(server.transport)" size="small">
+                      <a-tag size="small" class="transport-tag">
                         {{ server.transport }}
                       </a-tag>
                     </div>
                   </div>
                 </div>
-                <a-switch 
-                  :checked="server.enabled" 
+                <a-switch
+                  :checked="server.enabled"
                   @change="handleToggleServer(server)"
                   :loading="toggleLoading === server.name"
                 />
               </div>
 
               <div class="card-content">
-                <div class="server-description" v-if="server.description">
-                  {{ server.description }}
-                </div>
-                <div class="server-url">
-                  <span class="url-label">URL:</span>
-                  <span class="url-value">{{ truncateUrl(server.url) }}</span>
-                </div>
-                <div class="server-tags" v-if="server.tags && server.tags.length > 0">
-                  <a-tag v-for="tag in server.tags" :key="tag" size="small">{{ tag }}</a-tag>
+                <div class="server-description">
+                  {{ server.description || '暂无描述' }}
                 </div>
               </div>
 
@@ -82,10 +75,10 @@
                   </a-button>
                 </a-tooltip>
                 <a-tooltip title="测试连接">
-                  <a-button 
-                    type="text" 
-                    size="small" 
-                    @click="handleTestServer(server)" 
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="handleTestServer(server)"
                     class="action-btn"
                     :loading="testLoading === server.name"
                   >
@@ -99,11 +92,12 @@
                     <span>编辑</span>
                   </a-button>
                 </a-tooltip>
-                <a-tooltip title="删除服务器">
+                <a-tooltip :title="server.created_by === 'system' ? '内置 MCP 无法删除' : '删除服务器'">
                   <a-button
                     type="text"
                     size="small"
                     danger
+                    :disabled="server.created_by === 'system'"
                     @click="confirmDeleteServer(server)"
                     class="action-btn"
                   >
@@ -160,6 +154,7 @@
               <a-select v-model:value="form.transport">
                 <a-select-option value="streamable_http">streamable_http</a-select-option>
                 <a-select-option value="sse">sse</a-select-option>
+                <a-select-option value="stdio">stdio</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
@@ -170,33 +165,55 @@
           </a-col>
         </a-row>
 
-        <a-form-item label="服务器 URL" required class="form-item">
-          <a-input
-            v-model:value="form.url"
-            placeholder="https://example.com/mcp"
-          />
-        </a-form-item>
+        <!-- HTTP 类型 -->
+        <template v-if="form.transport === 'streamable_http' || form.transport === 'sse'">
+          <a-form-item label="服务器 URL" required class="form-item">
+            <a-input
+              v-model:value="form.url"
+              placeholder="https://example.com/mcp"
+            />
+          </a-form-item>
 
-        <a-form-item label="HTTP 请求头" class="form-item">
-          <a-textarea
-            v-model:value="form.headersText"
-            placeholder='JSON 格式，如：{"Authorization": "Bearer xxx"}'
-            :rows="3"
-          />
-        </a-form-item>
+          <a-form-item label="HTTP 请求头" class="form-item">
+            <a-textarea
+              v-model:value="form.headersText"
+              placeholder='JSON 格式，如：{"Authorization": "Bearer xxx"}'
+              :rows="3"
+            />
+          </a-form-item>
 
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="HTTP 超时（秒）" class="form-item">
-              <a-input-number v-model:value="form.timeout" :min="1" :max="300" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="SSE 读取超时（秒）" class="form-item">
-              <a-input-number v-model:value="form.sse_read_timeout" :min="1" :max="300" style="width: 100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <a-form-item label="HTTP 超时（秒）" class="form-item">
+                <a-input-number v-model:value="form.timeout" :min="1" :max="300" style="width: 100%" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="SSE 读取超时（秒）" class="form-item">
+                <a-input-number v-model:value="form.sse_read_timeout" :min="1" :max="300" style="width: 100%" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+        </template>
+
+        <!-- StdIO 类型 -->
+        <template v-if="form.transport === 'stdio'">
+          <a-form-item label="命令" required class="form-item">
+            <a-input
+              v-model:value="form.command"
+              placeholder="例如：npx 或 /path/to/server"
+            />
+          </a-form-item>
+
+          <a-form-item label="参数" class="form-item">
+            <a-select
+              v-model:value="form.args"
+              mode="tags"
+              placeholder="输入参数后回车添加，如：-m"
+              style="width: 100%"
+            />
+          </a-form-item>
+        </template>
 
         <a-form-item label="标签" class="form-item">
           <a-select
@@ -271,6 +288,8 @@ const form = reactive({
   description: '',
   transport: 'streamable_http',
   url: '',
+  command: '',
+  args: [],
   headersText: '',
   timeout: null,
   sse_read_timeout: null,
@@ -285,6 +304,7 @@ const selectedServer = ref(null)
 // 计算属性
 const httpCount = computed(() => servers.value.filter(s => s.transport === 'streamable_http').length)
 const sseCount = computed(() => servers.value.filter(s => s.transport === 'sse').length)
+const stdioCount = computed(() => servers.value.filter(s => s.transport === 'stdio').length)
 
 // 获取服务器列表
 const fetchServers = async () => {
@@ -314,6 +334,8 @@ const showAddModal = () => {
     description: '',
     transport: 'streamable_http',
     url: '',
+    command: '',
+    args: [],
     headersText: '',
     timeout: null,
     sse_read_timeout: null,
@@ -332,7 +354,9 @@ const showEditModal = (server) => {
     name: server.name,
     description: server.description || '',
     transport: server.transport,
-    url: server.url,
+    url: server.url || '',
+    command: server.command || '',
+    args: server.args || [],
     headersText: server.headers ? JSON.stringify(server.headers, null, 2) : '',
     timeout: server.timeout,
     sse_read_timeout: server.sse_read_timeout,
@@ -352,7 +376,7 @@ const showDetailModal = (server) => {
 const handleFormSubmit = async () => {
   try {
     formLoading.value = true
-    
+
     let data
     if (formMode.value === 'json') {
       try {
@@ -372,12 +396,14 @@ const handleFormSubmit = async () => {
           return
         }
       }
-      
+
       data = {
         name: form.name,
         description: form.description || null,
         transport: form.transport,
-        url: form.url,
+        url: form.url || null,
+        command: form.command || null,
+        args: form.args.length > 0 ? form.args : null,
         headers,
         timeout: form.timeout || null,
         sse_read_timeout: form.sse_read_timeout || null,
@@ -385,21 +411,31 @@ const handleFormSubmit = async () => {
         icon: form.icon || null,
       }
     }
-    
+
     // 校验必填字段
     if (!data.name?.trim()) {
       notification.error({ message: '服务器名称不能为空' })
-      return
-    }
-    if (!data.url?.trim()) {
-      notification.error({ message: '服务器 URL 不能为空' })
       return
     }
     if (!data.transport) {
       notification.error({ message: '请选择传输类型' })
       return
     }
-    
+    // HTTP 类型校验 URL
+    if (['sse', 'streamable_http'].includes(data.transport)) {
+      if (!data.url?.trim()) {
+        notification.error({ message: 'HTTP 类型必须填写服务器 URL' })
+        return
+      }
+    }
+    // StdIO 类型校验 command
+    if (data.transport === 'stdio') {
+      if (!data.command?.trim()) {
+        notification.error({ message: 'StdIO 类型必须填写命令' })
+        return
+      }
+    }
+
     if (editMode.value) {
       const result = await mcpApi.updateMcpServer(data.name, data)
       if (result.success) {
@@ -417,7 +453,7 @@ const handleFormSubmit = async () => {
         return
       }
     }
-    
+
     formModalVisible.value = false
     await fetchServers()
   } catch (err) {
@@ -467,6 +503,15 @@ const handleTestServer = async (server) => {
 
 // 确认删除服务器
 const confirmDeleteServer = (server) => {
+  // system 创建的服务器不允许删除
+  if (server.created_by === 'system') {
+    notification.warning({
+      message: '无法删除系统服务器',
+      description: '系统内置的 MCP 服务器无法删除，如需停用可切换禁用开关。',
+    })
+    return
+  }
+
   Modal.confirm({
     title: '确认删除服务器',
     content: `确定要删除服务器 "${server.name}" 吗？此操作不可撤销。`,
@@ -514,6 +559,8 @@ const parseJsonToForm = () => {
       description: obj.description || '',
       transport: obj.transport || 'streamable_http',
       url: obj.url || '',
+      command: obj.command || '',
+      args: obj.args || [],
       headersText: obj.headers ? JSON.stringify(obj.headers, null, 2) : '',
       timeout: obj.timeout || null,
       sse_read_timeout: obj.sse_read_timeout || null,
@@ -525,16 +572,6 @@ const parseJsonToForm = () => {
   } catch {
     notification.error({ message: 'JSON 格式错误' })
   }
-}
-
-// 辅助函数
-const getTransportColor = (transport) => {
-  return transport === 'sse' ? 'orange' : 'blue'
-}
-
-const truncateUrl = (url) => {
-  if (!url) return '-'
-  return url.length > 40 ? url.substring(0, 40) + '...' : url
 }
 
 // 初始化
@@ -568,7 +605,7 @@ onMounted(() => {
 
   .stats-section {
     margin-bottom: 16px;
-    
+
     .stats-text {
       font-size: 13px;
       color: var(--gray-600);
@@ -632,40 +669,32 @@ onMounted(() => {
                   font-weight: 600;
                   color: var(--gray-900);
                 }
+
+                .server-transport {
+                  .transport-tag {
+                    background: var(--gray-100);
+                    border: none;
+                    color: var(--gray-600);
+                    border-radius: 4px;
+                  }
+                }
               }
             }
           }
 
           .card-content {
-            margin-bottom: 12px;
+            min-height: 44px;
 
             .server-description {
               font-size: 13px;
               color: var(--gray-600);
-              margin-bottom: 8px;
               line-height: 1.4;
-            }
-
-            .server-url {
-              font-size: 12px;
-              margin-bottom: 8px;
-              
-              .url-label {
-                color: var(--gray-500);
-                margin-right: 4px;
-              }
-              
-              .url-value {
-                color: var(--gray-700);
-                font-family: 'Monaco', 'Consolas', monospace;
-                word-break: break-all;
-              }
-            }
-
-            .server-tags {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 4px;
+              display: -webkit-box;
+              -webkit-line-clamp: 2;
+              line-clamp: 2;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
           }
 

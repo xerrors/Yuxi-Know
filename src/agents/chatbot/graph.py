@@ -2,11 +2,11 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.mcp import get_mcp_tools
 from src.agents.common.middlewares import (
     inject_attachment_context,
 )
 from src.agents.common.tools import get_kb_based_tools
+from src.services.mcp_service import get_enabled_mcp_tools
 
 from .context import Context
 from .tools import get_tools
@@ -38,10 +38,10 @@ class ChatbotAgent(BaseAgent):
             kb_tools = get_kb_based_tools(db_names=knowledges)
             selected_tools.extend(kb_tools)
 
-        # 3. MCP 工具
+        # 3. MCP 工具（使用统一入口，自动过滤 disabled_tools）
         if mcps:
             for server_name in mcps:
-                mcp_tools = await get_mcp_tools(server_name)
+                mcp_tools = await get_enabled_mcp_tools(server_name)
                 selected_tools.extend(mcp_tools)
 
         return selected_tools

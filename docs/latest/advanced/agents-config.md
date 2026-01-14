@@ -106,7 +106,7 @@ async def get_graph(self):
 
 系统会根据配置自动组装工具集合，涵盖知识图谱查询、向量检索生成的动态工具、MySQL 只读查询能力、Tavily 搜索以及所有注册的 MCP 工具。
 
-工具的启用状态和描述由配置文件或环境变量决定，当依赖缺失时会被中间件自动忽略，从而避免在图中加载不可用能力。MCP Server 的接入方式保持不变，只需在 `src/agents/common/mcp.py` 的 `MCP_SERVERS` 中填入服务地址与 `transport` 类型，如需更多范式可参阅 LangChain 官方文档。
+工具的启用状态和描述由配置文件或环境变量决定，当依赖缺失时会被中间件自动忽略，从而避免在图中加载不可用能力。MCP Server 的接入方式保持不变，只需在 `src/services/mcp_service.py` 的 `MCP_SERVERS` 中填入服务地址与 `transport` 类型，如需更多范式可参阅 LangChain 官方文档。
 
 ### MCP 服务器配置方式
 
@@ -198,23 +198,25 @@ MCP_SERVERS = {
 
 ### 动态工具加载
 
-系统支持动态加载 MCP 工具：
+系统提供统一的 MCP 服务层 (`src/services/mcp_service.py`) 封装所有 MCP 相关操作。
+
+#### 智能体获取工具（自动过滤禁用工具）
+
+智能体应使用 `get_enabled_mcp_tools()` 获取工具，该函数会自动过滤 `disabled_tools` 中的工具：
 
 ```python
-from src.agents.common.mcp import get_mcp_tools, add_mcp_server
+from src.services.mcp_service import get_enabled_mcp_tools, add_mcp_server
 
-# 获取特定服务器的工具
-tools = await get_mcp_tools("sequentialthinking")
+# 获取指定服务器的工具（自动过滤 disabled_tools）
+tools = await get_enabled_mcp_tools("sequentialthinking")
 
 # 动态添加新的 MCP 服务器
 add_mcp_server("custom-server", {
     "url": "https://your-mcp-server.com/mcp",
     "transport": "streamable_http"
 })
-
-# 获取所有 MCP 工具
-all_tools = await get_all_mcp_tools()
 ```
+
 ### MySQL 数据库
 
 在 数据库报表助手（SqlReporterAgent） 中，可以通过配置下面环境变量，让 Agent 能够连接到 MySQL 数据库。并通过执行 SQL 查询，获取数据库中的数据。
