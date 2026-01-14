@@ -394,7 +394,7 @@ function canCancel(task) {
 }
 
 .task-card {
-  background: #fff;
+  background: var(--gray-0);
   border: 1px solid var(--gray-200);
   border-radius: 10px;
   padding: 14px 16px;
@@ -407,7 +407,7 @@ function canCancel(task) {
 
 .task-card:hover {
   border-color: var(--gray-300);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px var(--shadow-1);
 }
 
 /* 状态指示器 */
@@ -429,26 +429,26 @@ function canCancel(task) {
   flex-shrink: 0;
 }
 
-.status-pending .status-dot { background: #3b82f6; }
-.status-pending .status-text { color: #3b82f6; }
+.status-pending .status-dot { background: var(--color-info-500); }
+.status-pending .status-text { color: var(--color-info-500); }
 
-.status-queued .status-dot { background: #3b82f6; }
-.status-queued .status-text { color: #3b82f6; }
+.status-queued .status-dot { background: var(--color-info-500); }
+.status-queued .status-text { color: var(--color-info-500); }
 
 .status-running .status-dot {
-  background: #10b981;
+  background: var(--color-success-500);
   animation: pulse 1.5s ease-in-out infinite;
 }
-.status-running .status-text { color: #10b981; }
+.status-running .status-text { color: var(--color-success-500); }
 
-.status-success .status-dot { background: #10b981; }
-.status-success .status-text { color: #10b981; }
+.status-success .status-dot { background: var(--color-success-500); }
+.status-success .status-text { color: var(--color-success-500); }
 
-.status-failed .status-dot { background: #ef4444; }
-.status-failed .status-text { color: #ef4444; }
+.status-failed .status-dot { background: var(--color-error-500); }
+.status-failed .status-text { color: var(--color-error-500); }
 
-.status-cancelled .status-dot { background: #9ca3af; }
-.status-cancelled .status-text { color: #6b7280; }
+.status-cancelled .status-dot { background: var(--gray-500); }
+.status-cancelled .status-text { color: var(--gray-600); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
