@@ -308,6 +308,8 @@ const openLink = (url) => {
       }
 
       &.card-select {
+        gap: 0px;
+        padding: 0;
         .label {
           margin-top: 0;
         }

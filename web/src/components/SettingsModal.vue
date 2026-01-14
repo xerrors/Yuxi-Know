@@ -3,7 +3,7 @@
     v-model:open="visible"
     title="系统设置"
     width="90%"
-    :style="{ maxWidth: '1200px', minWidth: '320px', top: '3%' }"
+    :style="{ maxWidth: '980px', minWidth: '320px', top: '10%' }"
     :footer="null"
     @cancel="handleClose"
     class="settings-modal"
@@ -12,7 +12,7 @@
   >
     <div class="settings-container">
       <!-- 侧边栏 (Desktop) -->
-      <div class="settings-sider" v-if="!isMobile">
+      <div class="settings-sider">
         <div
           class="sider-item"
           :class="{ activesec: activeTab === 'base' }"
@@ -52,7 +52,7 @@
       </div>
 
       <!-- 顶部导航 (Mobile) -->
-      <div class="settings-mobile-nav" v-else>
+      <div class="settings-mobile-nav">
         <div
           class="nav-item"
           :class="{ active: activeTab === 'base' }"
@@ -112,7 +112,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import {
   SettingOutlined,
@@ -136,9 +136,6 @@ const emit = defineEmits(['update:visible', 'close'])
 
 const userStore = useUserStore()
 const activeTab = ref('base')
-const windowWidth = ref(window?.innerWidth || 0)
-
-const isMobile = computed(() => windowWidth.value <= 768)
 
 const visible = computed({
   get: () => props.visible,
@@ -148,18 +145,6 @@ const visible = computed({
 const handleClose = () => {
   emit('close')
 }
-
-const updateWindowWidth = () => {
-  windowWidth.value = window?.innerWidth || 0
-}
-
-onMounted(() => {
-  window.addEventListener('resize', updateWindowWidth)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', updateWindowWidth)
-})
 
 // 根据用户权限设置默认标签页
 watch(() => props.visible, (newVal) => {
@@ -197,11 +182,15 @@ watch(() => props.visible, (newVal) => {
   display: flex;
   height: 100%;
   width: 100%;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
 }
 
 /* Sidebar Styles - Matching SettingView.vue style */
 .settings-sider {
-  width: 140px;
+  width: 128px;
   height: 100%;
   padding-top: 8px;
   display: flex;
@@ -210,9 +199,13 @@ watch(() => props.visible, (newVal) => {
   gap: 8px;
   flex-shrink: 0;
 
+  @media (max-width: 768px) {
+    display: none;
+  }
+
   .sider-item {
     width: 100%;
-    padding: 6px 16px; /* Matches SettingView .sider > * */
+    padding: 6px 12px; /* Matches SettingView .sider > * */
     cursor: pointer;
     transition: all 0.1s; /* Matches SettingView */
     text-align: left;
@@ -222,6 +215,7 @@ watch(() => props.visible, (newVal) => {
     display: flex;
     align-items: center;
     gap: 10px;
+    margin-left: -20px;
 
     .icon {
       font-size: 14px; /* Slightly adjusted to align better, SettingView uses h() icon defaults */
@@ -248,10 +242,14 @@ watch(() => props.visible, (newVal) => {
     padding: 0 20px; /* Matches SettingView .setting padding */
     // margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
     overflow-y: scroll;
-    height: 80vh;
+    height: 70vh;
+
+    @media (max-width: 768px) {
+      height: 70vh;
+      padding: 0px;
+    }
 
     h3 {
-      font-size: 18px;
       font-weight: 600;
       color: var(--gray-900);
       margin-bottom: 0.5em;
@@ -263,12 +261,16 @@ watch(() => props.visible, (newVal) => {
 
 /* Mobile Styles */
 .settings-mobile-nav {
-  display: flex;
+  display: none;
   overflow-x: auto;
   border-bottom: 1px solid var(--gray-150);
   background: var(--gray-0);
-  padding: 0 16px;
+  padding: 0;
   flex-shrink: 0;
+
+  @media (max-width: 768px) {
+    display: flex;
+  }
 
   .nav-item {
     padding: 12px 16px;
