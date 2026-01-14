@@ -182,8 +182,9 @@ watch(() => props.visible, (newVal) => {
   display: flex;
   height: 100%;
   width: 100%;
+  gap: 6px;
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     flex-direction: column;
   }
 }
@@ -199,7 +200,7 @@ watch(() => props.visible, (newVal) => {
   gap: 8px;
   flex-shrink: 0;
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     display: none;
   }
 
@@ -236,15 +237,19 @@ watch(() => props.visible, (newVal) => {
 .settings-content-wrapper {
   flex: 1;
   height: 100%;
-  /* background-color: #fff; SettingView seems to use default background */
+  max-width: calc(100% - 128px);
+
+  @media (max-width: 900px) {
+    max-width: 100%;
+  }
 
   .settings-content {
-    padding: 0 20px; /* Matches SettingView .setting padding */
+    padding: 0; /* Matches SettingView .setting padding */
     // margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
     overflow-y: scroll;
     height: 70vh;
 
-    @media (max-width: 768px) {
+    @media (max-width: 900px) {
       height: 70vh;
       padding: 0px;
     }
@@ -268,7 +273,7 @@ watch(() => props.visible, (newVal) => {
   padding: 0;
   flex-shrink: 0;
 
-  @media (max-width: 768px) {
+  @media (max-width: 900px) {
     display: flex;
   }
 

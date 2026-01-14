@@ -103,19 +103,15 @@
           </div>
           <div class="model-title-container">
             <h3>{{ modelNames[item].name }}</h3>
-            <div class="provider-meta">
-              <span class="model-count">{{ modelNames[item].models?.length || 0 }} 个模型</span>
-              <span class="provider-id">{{ item }}</span>
-            </div>
           </div>
-          <div class="provider-actions">
+          <div class="provider-meta">
             <a-button
               type="text"
               class="expand-button"
               @click.stop="openProviderConfig(item)"
               title="配置模型"
             >
-              <SettingOutlined />
+              <SettingOutlined /> 已选 {{ modelNames[item].models?.length || 0 }} 个模型
             </a-button>
           </div>
         </div>
@@ -798,7 +794,7 @@ const testCustomProvider = async (providerId, modelName) => {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
+      padding: 8px 12px;
       background: var(--gray-25);
       border-bottom: 1px solid var(--gray-200);
 
@@ -830,17 +826,16 @@ const testCustomProvider = async (providerId, modelName) => {
     }
 
     .card-content {
-      padding: 16px 20px;
+      padding: 8px 12px;
 
       .provider-details {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 12px;
+        gap: 12px 8px;
 
         .detail-item {
           display: flex;
           flex-direction: column;
-          gap: 4px;
 
           .label {
             font-size: 12px;
@@ -929,13 +924,6 @@ const testCustomProvider = async (providerId, modelName) => {
     .model-icon {
       filter: grayscale(0%);
     }
-
-    .provider-meta {
-      .model-count {
-        color: var(--gray-600);
-        font-weight: 500;
-      }
-    }
   }
 
   // 未配置provider的样式
@@ -957,9 +945,9 @@ const testCustomProvider = async (providerId, modelName) => {
   .card-header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 6px 10px;
     background: var(--gray-0);
 
     .model-title-container {
@@ -972,28 +960,6 @@ const testCustomProvider = async (providerId, modelName) => {
         font-size: 14px;
         font-weight: 600;
         color: var(--gray-900);
-      }
-
-      .provider-meta {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-
-        .model-count {
-          color: var(--gray-600);
-          font-weight: 500;
-        }
-
-        .provider-id {
-          background: var(--gray-50);
-          color: var(--gray-900);
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 11px;
-          font-weight: 500;
-          font-family: 'Courier New', monospace;
-        }
       }
     }
 
@@ -1009,21 +975,21 @@ const testCustomProvider = async (providerId, modelName) => {
     }
 
     .model-icon {
-      width: 36px;
-      height: 36px;
+      width: 32px;
+      height: 32px;
       border-radius: 6px;
       overflow: hidden;
       filter: grayscale(100%);
       flex-shrink: 0;
       background-color: white;
-      border: 1px solid var(--gray-200);
+      // border: 1px solid var(--gray-200);
 
       img {
         width: 100%;
         height: 100%;
         object-fit: contain;
         padding: 4px;
-        border-radius: 6px;
+        border-radius: 8px;
       }
 
       &.available {
@@ -1032,16 +998,16 @@ const testCustomProvider = async (providerId, modelName) => {
     }
 
     .expand-button, .config-button {
-      height: 32px;
-      width: 32px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 0;
+      padding: 4px 6px;
       cursor: pointer;
-      color: var(--gray-500);
+      color: var(--gray-800);
       border-radius: 6px;
       transition: all 0.2s ease;
+      font-size: 12px;
 
       &:hover {
         background-color: var(--gray-50);
@@ -1093,21 +1059,22 @@ const testCustomProvider = async (providerId, modelName) => {
   .card-body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
-    padding: 16px;
+    gap: 8px;
+    padding: 10px;
+    padding-top: 4px;
 
     // 普通模型卡片样式
     .card-models {
       width: 100%;
       border-radius: 6px;
       border: 1px solid var(--gray-150);
-      padding: 12px 16px;
+      padding: 8px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       box-sizing: border-box;
       background: var(--gray-0);
-      min-height: 48px;
+      // min-height: 48px;
 
       .model_name {
         font-size: 14px;
@@ -1156,7 +1123,7 @@ const testCustomProvider = async (providerId, modelName) => {
       .modal-models-section {
         .model-search {
           margin-bottom: 10px;
-          padding: 0 6px;
+          padding: 0;
 
           .ant-input-affix-wrapper {
             border-radius: 6px;
@@ -1177,6 +1144,7 @@ const testCustomProvider = async (providerId, modelName) => {
           .modal-checkbox-item {
             display: inline-block;
             margin-bottom: 4px;
+            margin-right: 4px;
             padding: 4px 6px;
             border-radius: 6px;
             background-color: var(--gray-0);
@@ -1198,24 +1166,6 @@ const testCustomProvider = async (providerId, modelName) => {
       .model_name {
         color: var(--gray-500);
       }
-    }
-  }
-}
-
-// 响应式调整
-@media (max-width: 768px) {
-  .model-provider-card {
-    margin-bottom: 10px;
-
-    .card-body {
-      grid-template-columns: 1fr;
-      gap: 8px;
-      padding: 10px;
-    }
-
-    .card-header {
-      padding: 10px;
-      gap: 8px;
     }
   }
 }
