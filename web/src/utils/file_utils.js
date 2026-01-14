@@ -1,5 +1,5 @@
 // 文件相关工具函数
-import { FileTextFilled, FileMarkdownFilled, FilePdfFilled, FileWordFilled, FileExcelFilled, FileImageFilled, FileUnknownFilled } from '@ant-design/icons-vue';
+import { FileTextFilled, FileMarkdownFilled, FilePdfFilled, FileWordFilled, FileExcelFilled, FileImageFilled, FileUnknownFilled, FilePptFilled } from '@ant-design/icons-vue';
 import { formatRelative, parseToShanghai } from '@/utils/time';
 
 // 根据文件扩展名获取文件图标
@@ -29,6 +29,10 @@ export const getFileIcon = (filename) => {
     'xls': FileExcelFilled,
     'xlsx': FileExcelFilled,
     'csv': FileExcelFilled,
+
+    // PPT文档
+    'ppt': FilePptFilled,
+    'pptx': FilePptFilled,
 
     // 图片文件
     'jpg': FileImageFilled,
@@ -74,6 +78,10 @@ export const getFileIconColor = (filename) => {
     'xls': '#52c41a',
     'xlsx': '#52c41a',
     'csv': '#52c41a',
+
+    // PPT文档 - 橙色
+    'ppt': '#f6720d',
+    'pptx': '#f6720d',
 
     // 图片文件 - 紫色
     'jpg': '#722ed1',

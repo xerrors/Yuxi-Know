@@ -1,11 +1,13 @@
 import asyncio
+import base64
 import os
 import re
-import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
 import aiofiles
+from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
 from langchain_community.document_loaders import (
     CSVLoader,
     JSONLoader,
@@ -32,6 +34,7 @@ SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".xls",
     ".xlsx",
     ".pdf",
+    ".pptx",
     ".jpg",
     ".jpeg",
     ".png",
@@ -47,150 +50,117 @@ def is_supported_file_extension(file_name: str | os.PathLike[str]) -> bool:
     return Path(file_name).suffix.lower() in SUPPORTED_FILE_EXTENSIONS
 
 
-def _make_unique_columns(columns: list) -> list:
+# Docling 文档转换器（单例模式）
+_docling_converter: DocumentConverter | None = None
+
+
+def _get_docling_converter() -> DocumentConverter:
+    """获取 Docling 文档转换器单例"""
+    global _docling_converter
+    if _docling_converter is None:
+        _docling_converter = DocumentConverter(
+            format_options={
+                InputFormat.DOCX: None,
+                InputFormat.XLSX: None,
+                InputFormat.PPTX: None,
+            }
+        )
+    return _docling_converter
+
+
+def _upload_image_to_minio(image_data: bytes, filename: str, db_id: str) -> str:
+    """上传图片到 MinIO，返回 URL"""
+    minio_client = get_minio_client()
+    minio_client.ensure_bucket_exists("kb-images")
+    file_id = hashstr(filename, length=16)
+    object_name = f"{db_id}/{file_id}/images/{Path(filename).name}"
+
+    suffix = Path(filename).suffix.lower()
+    content_type_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+        ".tif": "image/tiff",
+        ".tiff": "image/tiff",
+    }
+    content_type = content_type_map.get(suffix, "image/jpeg")
+
+    result = minio_client.upload_file(
+        bucket_name="kb-images",
+        object_name=object_name,
+        data=image_data,
+        content_type=content_type,
+    )
+    return result.url
+
+
+def _parse_data_uri(data_uri: str) -> tuple[bytes, str]:
+    """解析 data URI，返回 (image_data, mime_type)"""
+    header, base64_data = data_uri.split(",", 1)
+    mime_type = header.split(":")[1].split(";")[0]
+    image_data = base64.b64decode(base64_data)
+    return image_data, mime_type
+
+
+def _convert_with_docling(file_path: Path, params: dict | None = None) -> str:
     """
-    处理重复的列名,给重复的列添加数字后缀
+    使用 Docling 将 docx/xlsx/pptx 转换为 Markdown
 
     Args:
-        columns: 原始列名列表
+        file_path: 文件路径
+        params: 参数，包含 db_id 用于图片上传
 
     Returns:
-        处理后的唯一列名列表
-
-    Example:
-        ['A', 'B', 'A', 'C', 'B'] -> ['A', 'B', 'A_2', 'C', 'B_2']
+        Markdown 字符串
     """
-    if not columns:
-        return columns
-
-    seen = {}
-    unique_columns = []
-
-    for col in columns:
-        # 处理 None 或空值
-        if col is None or (isinstance(col, str) and not col.strip()):
-            col = "Unnamed"
-
-        # 转换为字符串
-        col_str = str(col)
-
-        # 如果这个列名已经出现过
-        if col_str in seen:
-            seen[col_str] += 1
-            # 添加后缀
-            unique_col = f"{col_str}_{seen[col_str]}"
-            unique_columns.append(unique_col)
-        else:
-            # 第一次出现
-            seen[col_str] = 1
-            unique_columns.append(col_str)
-
-    return unique_columns
-
-
-def _extract_word_text(file_path: Path) -> str:
-    """
-    Parse Word documents (.doc/.docx) into plain text.
-
-    Try python-docx first for docx files and fall back to the unstructured
-    loader so legacy .doc files are still parsed when possible.
-    """
-    try:
-        from docx import Document  # type: ignore
-
-        doc = Document(file_path)
-        text = "\n".join(paragraph.text for paragraph in doc.paragraphs).strip()
-        if text:
-            return text
-    except Exception as docx_error:  # noqa: BLE001
-        logger.warning(f"python-docx failed to parse {file_path.name}: {docx_error}")
-
-    try:
-        loader = UnstructuredWordDocumentLoader(str(file_path))
-        docs = loader.load()
-        return "\n".join(doc.page_content for doc in docs).strip()
-    except Exception as unstructured_error:  # noqa: BLE001
-        logger.error(f"Unstructured failed to parse {file_path.name}: {unstructured_error}")
-        raise ValueError(f"无法解析 Word 文档: {file_path.name}") from unstructured_error
-
-
-def _extract_docx_markdown_with_images(file_path: Path, params: dict | None = None) -> str:
     params = params or {}
-    db_id = params.get("db_id") or "word-docs"
-    minio_client = get_minio_client()
-    bucket_name = "kb-images"
-    minio_client.ensure_bucket_exists(bucket_name)
-    file_id = hashstr(file_path.name, length=16)
+    db_id = params.get("db_id") or "docling-docs"
 
-    with zipfile.ZipFile(file_path, "r") as zf:
-        rels_path = "word/_rels/document.xml.rels"
-        rid_to_target: dict[str, str] = {}
-        try:
-            rels_xml = zf.read(rels_path).decode("utf-8")
-            rels_root = ET.fromstring(rels_xml)
-            for rel in list(rels_root):
-                rid = rel.attrib.get("Id")
-                target = rel.attrib.get("Target")
-                rtype = rel.attrib.get("Type")
-                if rid and target and rtype and rtype.endswith("/image"):
-                    rid_to_target[rid] = target
-        except Exception:
-            rid_to_target = {}
+    converter = _get_docling_converter()
+    result = converter.convert(file_path)
 
-        doc_xml = zf.read("word/document.xml").decode("utf-8")
-        ns = {
-            "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-            "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-            "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-        }
-        root = ET.fromstring(doc_xml)
-        md_lines: list[str] = []
+    if result.status.name != "SUCCESS":
+        raise RuntimeError(f"Docling 转换失败: {result.status}")
 
-        for p in root.findall(".//w:p", ns):
-            texts = [t.text or "" for t in p.findall(".//w:t", ns)]
-            para_text = "".join(texts).strip()
-            image_urls: list[tuple[str, str]] = []
+    doc = result.document
 
-            for blip in p.findall(".//a:blip", ns):
-                rid = blip.attrib.get(f"{{{ns['r']}}}embed")
-                if not rid:
-                    continue
-                target = rid_to_target.get(rid)
-                if not target:
-                    continue
-                media_path = target if target.startswith("word/") else f"word/{target}"
-                try:
-                    data = zf.read(media_path)
-                    object_name = f"{db_id}/{file_id}/images/{Path(target).name}"
-                    suffix = Path(target).suffix.lower()
-                    content_type = {
-                        ".jpg": "image/jpeg",
-                        ".jpeg": "image/jpeg",
-                        ".png": "image/png",
-                        ".gif": "image/gif",
-                        ".webp": "image/webp",
-                        ".bmp": "image/bmp",
-                        ".tif": "image/tiff",
-                        ".tiff": "image/tiff",
-                    }.get(suffix, "image/jpeg")
-                    result = minio_client.upload_file(
-                        bucket_name=bucket_name,
-                        object_name=object_name,
-                        data=data,
-                        content_type=content_type,
-                    )
-                    image_urls.append((Path(target).name, result.url))
-                except Exception as e:
-                    logger.error(f"上传图片失败 {Path(target).name}: {e}")
-                    continue
+    # 提取图片并上传到 MinIO
+    if hasattr(doc, "pictures") and doc.pictures:
+        image_refs: list[tuple[str, bytes]] = []
 
-            line = para_text
-            for name, url in image_urls:
-                line = f"{line}\n![{name}]({url})"
-            if line:
-                md_lines.append(line)
+        for pic in doc.pictures:
+            if hasattr(pic, "image") and hasattr(pic.image, "uri"):
+                uri = str(pic.image.uri)
+                if uri.startswith("data:"):
+                    image_data, mime_type = _parse_data_uri(uri)
+                    filename = f"image_{len(image_refs)}.{mime_type.split('/')[-1]}"
+                    image_refs.append((filename, image_data))
 
-    return "\n\n".join(md_lines)
+        # 上传图片并收集 URL
+        image_urls: list[str] = []
+        for filename, image_data in image_refs:
+            try:
+                url = _upload_image_to_minio(image_data, filename, db_id)
+                image_urls.append(f"![{filename}]({url})")
+            except Exception as e:
+                logger.error(f"上传图片失败 {filename}: {e}")
+                image_urls.append(f"[图片: {filename}]")
+
+        # 导出 Markdown
+        markdown = doc.export_to_markdown()
+
+        # 替换 <!-- image --> 占位符为图片 URL
+        # Docling 使用 <!-- image --> 作为占位符
+        for url in reversed(image_urls):
+            markdown = re.sub(r"<!--\s*image\s*-->", url, markdown, count=1)
+
+        return markdown
+
+    # 无图片时直接导出
+    return doc.export_to_markdown()
 
 
 def chunk_with_parser(file_path, params=None):
@@ -470,13 +440,17 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
                 content = f.read()
             result = f"{content}"
 
-        elif file_ext == ".docx":
-            text = _extract_docx_markdown_with_images(file_path_obj, params=params)
-            result = "" + text
+        elif file_ext in [".docx", ".pptx"]:
+            # 使用 Docling 处理 docx 和 pptx
+            result = _convert_with_docling(file_path_obj, params=params)
 
         elif file_ext == ".doc":
-            text = _extract_word_text(file_path_obj)
-            result = f"{text}"
+            # 旧版 .doc 文件仍使用原有解析方式
+            from langchain_community.document_loaders import UnstructuredWordDocumentLoader
+
+            loader = UnstructuredWordDocumentLoader(str(file_path_obj))
+            docs = loader.load()
+            result = "\n".join(doc.page_content for doc in docs).strip()
 
         elif file_ext in [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif"]:
             # 使用 OCR 处理图片
@@ -509,71 +483,8 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             result = markdown_content.strip()
 
         elif file_ext in [".xls", ".xlsx"]:
-            # 处理 Excel 文件
-            import pandas as pd
-            from openpyxl import load_workbook
-
-            markdown_content = ""
-
-            # 使用 openpyxl 加载工作簿以正确处理合并单元格
-            wb = load_workbook(file_path_obj, data_only=True)
-
-            for sheet_name in wb.sheetnames:
-                ws = wb[sheet_name]
-
-                # 先取消所有合并单元格，并填充值
-                merged_ranges = list(ws.merged_cells.ranges)
-
-                for merged_range in merged_ranges:
-                    # 获取合并区域左上角单元格的值
-                    min_row, min_col, max_row, max_col = (
-                        merged_range.min_row,
-                        merged_range.min_col,
-                        merged_range.max_row,
-                        merged_range.max_col,
-                    )
-
-                    # 获取左上角单元格的值
-                    top_left_value = ws.cell(row=min_row, column=min_col).value
-
-                    # 取消合并
-                    ws.unmerge_cells(start_row=min_row, start_column=min_col, end_row=max_row, end_column=max_col)
-
-                    # 在所有原合并单元格区域填充值
-                    for row in range(min_row, max_row + 1):
-                        for col in range(min_col, max_col + 1):
-                            ws.cell(row=row, column=col).value = top_left_value
-
-                # 转换为DataFrame
-                data = []
-                for row in ws.iter_rows(values_only=True):
-                    data.append(row)
-
-                # 第一行作为列名
-                columns = data[0] if data else []
-                df_data = data[1:] if len(data) > 1 else []
-
-                # 处理重复的列名,给重复的列添加后缀
-                columns = _make_unique_columns(columns)
-
-            df = pd.DataFrame(df_data, columns=columns)
-
-            markdown_content += f"## {sheet_name}\n\n"
-
-            # 在最左列添加标题字段
-            table_title = f"{file_path_obj.stem} - {sheet_name}"  # 使用"文件名 - Sheet名"作为标题
-            df.insert(0, "表格标题", table_title)
-
-            # 将每10行数据与表头组合成独立的表格
-            chunk_size = 10
-            for i in range(0, len(df), chunk_size):
-                # 获取当前10行数据(或剩余不足10行的数据)
-                chunk_df = df.iloc[i : i + chunk_size]
-                markdown_content += f"### 数据行 {i + 1}-{min(i + chunk_size, len(df))}\n\n"
-                markdown_table = chunk_df.to_markdown(index=False)
-                markdown_content += f"{markdown_table}\n\n"
-
-            result = markdown_content.strip()
+            # 使用 Docling 处理 Excel 文件
+            result = _convert_with_docling(file_path_obj, params=params)
 
         elif file_ext == ".json":
             # 处理 JSON 文件

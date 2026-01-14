@@ -37,7 +37,6 @@ dependencies = [
     "pyjwt>=2.8.0",
     "pymilvus>=2.5.8",
     "pymupdf>=1.25.5",
-    "python-docx>=1.2.0",
     "python-dotenv>=1.1.0",
     "python-jose[cryptography]>=3.4.0",
     "python-multipart>=0.0.20",
@@ -64,7 +63,7 @@ dependencies = [
     "chardet>=5.0.0",
     "deepagents>=0.2.5",
     "json-repair>=0.54.0",
-    "openpyxl>=3.1.5",
+    "docling>=2.68.0",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
