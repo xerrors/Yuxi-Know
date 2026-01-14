@@ -114,12 +114,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import {
-  SettingOutlined,
-  CodeOutlined,
-  UserOutlined,
-  ApiOutlined
-} from '@ant-design/icons-vue'
+import { SettingOutlined, CodeOutlined, UserOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import BasicSettingsSection from '@/components/BasicSettingsSection.vue'
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue'
 import UserManagementComponent from '@/components/UserManagementComponent.vue'
@@ -147,15 +142,18 @@ const handleClose = () => {
 }
 
 // 根据用户权限设置默认标签页
-watch(() => props.visible, (newVal) => {
-  if (newVal) {
-    if (userStore.isSuperAdmin) {
-      activeTab.value = 'base'
-    } else if (userStore.isAdmin) {
-      activeTab.value = 'user'
+watch(
+  () => props.visible,
+  (newVal) => {
+    if (newVal) {
+      if (userStore.isSuperAdmin) {
+        activeTab.value = 'base'
+      } else if (userStore.isAdmin) {
+        activeTab.value = 'user'
+      }
     }
   }
-})
+)
 </script>
 
 <style lang="less">

@@ -18,7 +18,6 @@
   margin-right: 8px;
 }
 
-
 .m-3 {
   margin: 12px;
 }
@@ -39,8 +38,7 @@
   margin-right: 12px;
 }
 
-
 .bn-1px {
-    position: relative;
-    bottom: -1px;
+  position: relative;
+  bottom: -1px;
 }

@@ -3,7 +3,12 @@
     <a-dropdown :trigger="['hover']" v-if="userStore.isLoggedIn">
       <div class="user-info-dropdown" :data-align="showRole ? 'left' : 'center'">
         <div class="user-avatar">
-          <img v-if="userStore.avatar" :src="userStore.avatar" :alt="userStore.username" class="avatar-image" />
+          <img
+            v-if="userStore.avatar"
+            :src="userStore.avatar"
+            :alt="userStore.username"
+            class="avatar-image"
+          />
           <CircleUser v-else />
           <!-- <div class="user-role-badge" :class="userRoleClass"></div> -->
         </div>
@@ -24,11 +29,22 @@
           <a-menu-item key="docs" @click="openDocs" :icon="h(BookOpen, { size: '16' })">
             <span class="menu-text">文档中心</span>
           </a-menu-item>
-          <a-menu-item key="theme" @click="toggleTheme" :icon="h(themeStore.isDark ? Sun : Moon, { size: '16' })">
-            <span class="menu-text">{{ themeStore.isDark ? '切换到浅色模式' : '切换到深色模式 (Beta)' }}</span>
+          <a-menu-item
+            key="theme"
+            @click="toggleTheme"
+            :icon="h(themeStore.isDark ? Sun : Moon, { size: '16' })"
+          >
+            <span class="menu-text">{{
+              themeStore.isDark ? '切换到浅色模式' : '切换到深色模式 (Beta)'
+            }}</span>
           </a-menu-item>
-          <a-menu-divider v-if="userStore.isAdmin"/>
-          <a-menu-item v-if="userStore.isAdmin" key="setting" @click="goToSetting" :icon="h(Settings, { size: '16' })">
+          <a-menu-divider v-if="userStore.isAdmin" />
+          <a-menu-item
+            v-if="userStore.isAdmin"
+            key="setting"
+            @click="goToSetting"
+            :icon="h(Settings, { size: '16' })"
+          >
             <span class="menu-text">系统设置</span>
           </a-menu-item>
           <a-menu-item key="logout" @click="logout" :icon="h(LogOut, { size: '16' })">
@@ -37,9 +53,7 @@
         </a-menu>
       </template>
     </a-dropdown>
-    <a-button v-else-if="showButton" type="primary" @click="goToLogin">
-      登录
-    </a-button>
+    <a-button v-else-if="showButton" type="primary" @click="goToLogin"> 登录 </a-button>
 
     <!-- 个人资料弹窗 -->
     <a-modal
@@ -54,7 +68,12 @@
         <div class="avatar-section">
           <div class="avatar-container">
             <div class="avatar-display">
-              <img v-if="userStore.avatar" :src="userStore.avatar" :alt="userStore.username" class="large-avatar" />
+              <img
+                v-if="userStore.avatar"
+                :src="userStore.avatar"
+                :alt="userStore.username"
+                class="large-avatar"
+              />
               <div v-else class="default-avatar">
                 <CircleUser :size="60" />
               </div>
@@ -67,13 +86,11 @@
                 accept="image/*"
               >
                 <a-button type="primary" size="small" :loading="avatarUploading">
-                  <template #icon><Upload size="14"/></template>
+                  <template #icon><Upload size="14" /></template>
                   {{ userStore.avatar ? '更换头像' : '上传头像' }}
                 </a-button>
               </a-upload>
-              <div class="avatar-tips">
-                支持 JPG、PNG 格式，文件不超过 5MB
-              </div>
+              <div class="avatar-tips">支持 JPG、PNG 格式，文件不超过 5MB</div>
             </div>
           </div>
         </div>
@@ -82,25 +99,25 @@
         <div class="info-section">
           <div class="info-item">
             <div class="info-label">用户名</div>
-            <div class="info-value" v-if="!profileEditing">{{ userStore.username || '未设置' }}</div>
+            <div class="info-value" v-if="!profileEditing">
+              {{ userStore.username || '未设置' }}
+            </div>
             <div class="info-value" v-else>
               <a-input
                 v-model:value="editedProfile.username"
                 placeholder="请输入用户名（2-20个字符）"
                 :max-length="20"
-                style="width: 240px;"
+                style="width: 240px"
               />
             </div>
           </div>
           <div class="info-item">
             <div class="info-label">用户ID</div>
-            <div class="info-value user-id" v-if="!profileEditing">{{ userStore.userIdLogin || '未设置' }}</div>
+            <div class="info-value user-id" v-if="!profileEditing">
+              {{ userStore.userIdLogin || '未设置' }}
+            </div>
             <div class="info-value" v-else>
-              <a-input
-                :value="userStore.userIdLogin || ''"
-                disabled
-                style="width: 240px;"
-              />
+              <a-input :value="userStore.userIdLogin || ''" disabled style="width: 240px" />
             </div>
           </div>
           <div class="info-item">
@@ -113,7 +130,7 @@
                 v-model:value="editedProfile.phone_number"
                 placeholder="请输入手机号"
                 :max-length="11"
-                style="width: 200px;"
+                style="width: 200px"
               />
             </div>
           </div>
@@ -131,20 +148,14 @@
         <div class="actions-section">
           <a-space>
             <template v-if="!profileEditing">
-              <a-button type="primary" @click="startEdit">
-                编辑资料
-              </a-button>
-              <a-button @click="profileModalVisible = false">
-                关闭
-              </a-button>
+              <a-button type="primary" @click="startEdit"> 编辑资料 </a-button>
+              <a-button @click="profileModalVisible = false"> 关闭 </a-button>
             </template>
             <template v-else>
               <a-button type="primary" @click="saveProfile" :loading="avatarUploading">
                 保存
               </a-button>
-              <a-button @click="cancelEdit">
-                取消
-              </a-button>
+              <a-button @click="cancelEdit"> 取消 </a-button>
             </template>
           </a-space>
         </div>
@@ -154,32 +165,42 @@
 </template>
 
 <script setup>
-import { computed, ref, inject, h } from 'vue';
-import { useRouter } from 'vue-router';
-import { useUserStore } from '@/stores/user';
+import { computed, ref, inject, h } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
 //
 //
 //
 //
-import { message } from 'ant-design-vue';
-import { CircleUser, UserRoundCheck, BookOpen, Sun, Moon, User, LogOut, Upload, Settings } from 'lucide-vue-next';
+import { message } from 'ant-design-vue'
+import {
+  CircleUser,
+  UserRoundCheck,
+  BookOpen,
+  Sun,
+  Moon,
+  User,
+  LogOut,
+  Upload,
+  Settings
+} from 'lucide-vue-next'
 import { useThemeStore } from '@/stores/theme'
 
-const router = useRouter();
-const userStore = useUserStore();
-const themeStore = useThemeStore();
+const router = useRouter()
+const userStore = useUserStore()
+const themeStore = useThemeStore()
 
 // Inject settings modal methods
-const { openSettingsModal } = inject('settingsModal', {});
+const { openSettingsModal } = inject('settingsModal', {})
 
 // 个人资料弹窗状态
-const profileModalVisible = ref(false);
-const avatarUploading = ref(false);
-const profileEditing = ref(false);
+const profileModalVisible = ref(false)
+const avatarUploading = ref(false)
+const profileEditing = ref(false)
 const editedProfile = ref({
   username: '',
   phone_number: ''
-});
+})
 
 const props = defineProps({
   showRole: {
@@ -194,45 +215,45 @@ const props = defineProps({
 
 // 用户名首字母（用于显示在头像中）
 const userInitial = computed(() => {
-  if (!userStore.username) return '?';
-  return userStore.username.charAt(0).toUpperCase();
-});
+  if (!userStore.username) return '?'
+  return userStore.username.charAt(0).toUpperCase()
+})
 
 // 用户角色显示文本
 const userRoleText = computed(() => {
   switch (userStore.userRole) {
     case 'superadmin':
-      return '超级管理员';
+      return '超级管理员'
     case 'admin':
-      return '管理员';
+      return '管理员'
     case 'user':
-      return '普通用户';
+      return '普通用户'
     default:
-      return '未知角色';
+      return '未知角色'
   }
-});
+})
 
 // 用户角色徽章样式类
 const userRoleClass = computed(() => {
   return {
-    'superadmin': userStore.userRole === 'superadmin',
-    'admin': userStore.userRole === 'admin',
-    'user': userStore.userRole === 'user'
-  };
-});
+    superadmin: userStore.userRole === 'superadmin',
+    admin: userStore.userRole === 'admin',
+    user: userStore.userRole === 'user'
+  }
+})
 
 // 退出登录
 const logout = () => {
-  userStore.logout();
-  message.success('已退出登录');
+  userStore.logout()
+  message.success('已退出登录')
   // 跳转到首页
-  router.push('/login');
-};
+  router.push('/login')
+}
 
 // 前往登录页
 const goToLogin = () => {
-  router.push('/login');
-};
+  router.push('/login')
+}
 
 const openDocs = () => {
   window.open('https://xerrors.github.io/Yuxi-Know/', '_blank', 'noopener,noreferrer')
@@ -251,124 +272,135 @@ const goToSetting = () => {
 
 // 打开个人资料页面
 const openProfile = async () => {
-  profileModalVisible.value = true;
-  profileEditing.value = false;
+  profileModalVisible.value = true
+  profileEditing.value = false
 
   // 刷新用户信息并初始化编辑表单
   try {
-    await userStore.getCurrentUser();
+    await userStore.getCurrentUser()
     editedProfile.value = {
       username: userStore.username || '',
       phone_number: userStore.phoneNumber || ''
-    };
+    }
   } catch (error) {
-    console.error('刷新用户信息失败:', error);
+    console.error('刷新用户信息失败:', error)
   }
-};
+}
 
 // 角色标签颜色
 const getRoleColor = (role) => {
   switch (role) {
-    case 'superadmin': return 'red';
-    case 'admin': return 'blue';
-    case 'user': return 'green';
-    default: return 'default';
+    case 'superadmin':
+      return 'red'
+    case 'admin':
+      return 'blue'
+    case 'user':
+      return 'green'
+    default:
+      return 'default'
   }
-};
+}
 
 // 开始编辑个人资料
 const startEdit = () => {
-  profileEditing.value = true;
+  profileEditing.value = true
   editedProfile.value = {
     username: userStore.username || '',
     phone_number: userStore.phoneNumber || ''
-  };
-};
+  }
+}
 
 // 取消编辑
 const cancelEdit = () => {
-  profileEditing.value = false;
+  profileEditing.value = false
   editedProfile.value = {
     username: userStore.username || '',
     phone_number: userStore.phoneNumber || ''
-  };
-};
+  }
+}
 
 // 保存个人资料
 const saveProfile = async () => {
   try {
     // 验证用户名
-    if (editedProfile.value.username && (editedProfile.value.username.trim().length < 2 || editedProfile.value.username.trim().length > 20)) {
-      message.error('用户名长度必须在 2-20 个字符之间');
-      return;
+    if (
+      editedProfile.value.username &&
+      (editedProfile.value.username.trim().length < 2 ||
+        editedProfile.value.username.trim().length > 20)
+    ) {
+      message.error('用户名长度必须在 2-20 个字符之间')
+      return
     }
 
     // 验证手机号格式
-    if (editedProfile.value.phone_number && !validatePhoneNumber(editedProfile.value.phone_number)) {
-      message.error('请输入正确的手机号格式');
-      return;
+    if (
+      editedProfile.value.phone_number &&
+      !validatePhoneNumber(editedProfile.value.phone_number)
+    ) {
+      message.error('请输入正确的手机号格式')
+      return
     }
 
     await userStore.updateProfile({
       username: editedProfile.value.username?.trim() || undefined,
-      phone_number: editedProfile.value.phone_number || undefined,
-    });
-    message.success('个人资料更新成功！');
-    profileEditing.value = false;
+      phone_number: editedProfile.value.phone_number || undefined
+    })
+    message.success('个人资料更新成功！')
+    profileEditing.value = false
   } catch (error) {
-    console.error('更新个人资料失败:', error);
-    message.error('更新失败：' + (error.message || '请稍后重试'));
+    console.error('更新个人资料失败:', error)
+    message.error('更新失败：' + (error.message || '请稍后重试'))
   }
-};
+}
 
 // 手机号验证
 const validatePhoneNumber = (phone) => {
-  if (!phone) return true; // 空手机号允许
-  const phoneRegex = /^1[3-9]\d{9}$/;
-  return phoneRegex.test(phone);
-};
+  if (!phone) return true // 空手机号允许
+  const phoneRegex = /^1[3-9]\d{9}$/
+  return phoneRegex.test(phone)
+}
 
 // 头像上传前验证
 const beforeUpload = (file) => {
-  const isImage = file.type.startsWith('image/');
+  const isImage = file.type.startsWith('image/')
   if (!isImage) {
-    message.error('只能上传图片文件！');
-    return false;
+    message.error('只能上传图片文件！')
+    return false
   }
 
-  const isLt5M = file.size / 1024 / 1024 < 5;
+  const isLt5M = file.size / 1024 / 1024 < 5
   if (!isLt5M) {
-    message.error('图片大小不能超过 5MB！');
-    return false;
+    message.error('图片大小不能超过 5MB！')
+    return false
   }
 
-  return true;
-};
+  return true
+}
 
 // 处理头像上传
 const handleAvatarChange = async (info) => {
   if (info.file.status === 'uploading') {
-    avatarUploading.value = true;
-    return;
+    avatarUploading.value = true
+    return
   }
 
   if (info.file.status === 'done') {
-    avatarUploading.value = false;
-    return;
+    avatarUploading.value = false
+    return
   }
 
   // 手动处理文件上传
   try {
-    avatarUploading.value = true;
-    const result = await userStore.uploadAvatar(info.file.originFileObj || info.file);
-    message.success('头像上传成功！');
+    avatarUploading.value = true
+    const result = await userStore.uploadAvatar(info.file.originFileObj || info.file)
+    message.success('头像上传成功！')
   } catch (error) {
-    console.error('头像上传失败:', error);
-    message.error('头像上传失败：' + (error.message || '请稍后重试'));
+    console.error('头像上传失败:', error)
+    message.error('头像上传失败：' + (error.message || '请稍后重试'))
   } finally {
-    avatarUploading.value = false;
+    avatarUploading.value = false
   }
-};
+}
 </script>
 
 <style lang="less" scoped>
@@ -386,11 +418,11 @@ const handleAvatarChange = async (info) => {
   align-items: center;
   gap: 8px;
 
-  &[data-align="center"] {
+  &[data-align='center'] {
     justify-content: center;
   }
 
-  &[data-align="left"] {
+  &[data-align='left'] {
     justify-content: flex-start;
   }
 }
@@ -480,7 +512,9 @@ const handleAvatarChange = async (info) => {
   justify-content: center;
   cursor: pointer;
   border-radius: 50%;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
   color: var(--gray-900);
 
   &:hover {

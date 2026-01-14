@@ -32,11 +32,19 @@
     </div>
     <template #overlay>
       <a-menu class="scrollable-menu">
-                <a-menu-item-group v-for="(item, key) in modelKeys" :key="key" :title="modelNames[item]?.name">
-          <a-menu-item v-for="(model, idx) in modelNames[item]?.models" :key="`${item}-${idx}`" @click="handleSelectModel(item, model)">
+        <a-menu-item-group
+          v-for="(item, key) in modelKeys"
+          :key="key"
+          :title="modelNames[item]?.name"
+        >
+          <a-menu-item
+            v-for="(model, idx) in modelNames[item]?.models"
+            :key="`${item}-${idx}`"
+            @click="handleSelectModel(item, model)"
+          >
             {{ model }}
-            </a-menu-item>
-                  </a-menu-item-group>
+          </a-menu-item>
+        </a-menu-item-group>
       </a-menu>
     </template>
   </a-dropdown>
@@ -63,9 +71,9 @@ const props = defineProps({
   size: {
     type: String,
     default: 'small',
-    validator: value => ['small', 'middle', 'large'].includes(value)
+    validator: (value) => ['small', 'middle', 'large'].includes(value)
   }
-});
+})
 
 const configStore = useConfigStore()
 const emit = defineEmits(['select-model'])
@@ -82,7 +90,7 @@ const modelStatus = computed(() => configStore.config?.model_provider_status)
 
 // 筛选 modelStatus 中为真的key
 const modelKeys = computed(() => {
-  return Object.keys(modelStatus.value || {}).filter(key => modelStatus.value?.[key])
+  return Object.keys(modelStatus.value || {}).filter((key) => modelStatus.value?.[key])
 })
 
 const resolvedSep = computed(() => props.sep || '/')
@@ -152,7 +160,6 @@ const modelStatusIcon = computed(() => {
   return '○'
 })
 
-
 // 获取当前模型状态提示文本
 const getCurrentModelStatusTooltip = () => {
   const status = currentModelStatus.value
@@ -167,7 +174,6 @@ const getCurrentModelStatusTooltip = () => {
   return `${statusText}: ${message}`
 }
 
-
 // 选择模型的方法
 const handleSelectModel = async (provider, name) => {
   const sep = resolvedSep.value || '/'
@@ -175,7 +181,6 @@ const handleSelectModel = async (provider, name) => {
   const spec = `${provider}${separator}${name}`
   emit('select-model', spec)
 }
-
 </script>
 
 <style lang="less" scoped>

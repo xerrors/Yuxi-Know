@@ -8,7 +8,7 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue';
+import { defineProps } from 'vue'
 
 const props = defineProps({
   visible: {
@@ -19,7 +19,7 @@ const props = defineProps({
     type: String,
     default: '加载中...'
   }
-});
+})
 </script>
 
 <style scoped>
@@ -58,7 +58,11 @@ const props = defineProps({
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>

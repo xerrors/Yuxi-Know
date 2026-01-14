@@ -5,8 +5,7 @@
   </div>
 </template>
 
-<script setup>
-</script>
+<script setup></script>
 
 <style scoped>
 .not-found {
@@ -27,5 +26,4 @@
   font-size: 1.5rem;
   margin-bottom: 2rem;
 }
-
 </style>

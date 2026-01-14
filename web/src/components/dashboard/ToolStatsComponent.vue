@@ -24,8 +24,12 @@
             :value="toolStats?.success_rate || 0"
             suffix="%"
             :value-style="{
-              color: (toolStats?.success_rate || 0) >= 90 ? 'var(--color-success-500)' :
-                     (toolStats?.success_rate || 0) >= 70 ? 'var(--color-warning-500)' : 'var(--color-error-500)'
+              color:
+                (toolStats?.success_rate || 0) >= 90
+                  ? 'var(--color-success-500)'
+                  : (toolStats?.success_rate || 0) >= 70
+                    ? 'var(--color-warning-500)'
+                    : 'var(--color-error-500)'
             }"
           />
         </a-col>
@@ -125,8 +129,10 @@ const errorColumns = [
 ]
 
 const hasErrorData = computed(() => {
-  return props.toolStats?.tool_error_distribution &&
-         Object.keys(props.toolStats.tool_error_distribution).length > 0
+  return (
+    props.toolStats?.tool_error_distribution &&
+    Object.keys(props.toolStats.tool_error_distribution).length > 0
+  )
 })
 
 const errorData = computed(() => {
@@ -189,7 +195,7 @@ const initToolsChart = () => {
     },
     yAxis: {
       type: 'category',
-      data: data.map(item => item.tool_name),
+      data: data.map((item) => item.tool_name),
       axisLine: {
         lineStyle: {
           color: getCSSVariable('--gray-200')
@@ -200,22 +206,24 @@ const initToolsChart = () => {
         interval: 0
       }
     },
-    series: [{
-      name: '调用次数',
-      type: 'bar',
-      data: data.map(item => item.count),
-      itemStyle: {
-        color: getColorByIndex(0),
-        borderRadius: [0, 4, 4, 0]
-      },
-      emphasis: {
+    series: [
+      {
+        name: '调用次数',
+        type: 'bar',
+        data: data.map((item) => item.count),
         itemStyle: {
           color: getColorByIndex(0),
-          shadowBlur: 10,
-          shadowColor: getCSSVariable('--color-info-50')
+          borderRadius: [0, 4, 4, 0]
+        },
+        emphasis: {
+          itemStyle: {
+            color: getColorByIndex(0),
+            shadowBlur: 10,
+            shadowColor: getCSSVariable('--color-info-50')
+          }
         }
       }
-    }]
+    ]
   }
 
   toolsChart.setOption(option)
@@ -246,33 +254,35 @@ const initErrorChart = () => {
       },
       formatter: '{a} <br/>{b}: {c} ({d}%)'
     },
-    series: [{
-      name: '错误分布',
-      type: 'pie',
-      radius: ['30%', '70%'],
-      center: ['50%', '60%'],
-      data: data.map(item => ({
-        name: item.tool_name,
-        value: item.error_count
-      })),
-      itemStyle: {
-        borderRadius: 6,
-        borderColor: getCSSVariable('--gray-0'),
-        borderWidth: 2
-      },
-      label: {
-        show: true,
-        formatter: '{b}: {c}'
-      },
-      emphasis: {
+    series: [
+      {
+        name: '错误分布',
+        type: 'pie',
+        radius: ['30%', '70%'],
+        center: ['50%', '60%'],
+        data: data.map((item) => ({
+          name: item.tool_name,
+          value: item.error_count
+        })),
         itemStyle: {
-          shadowBlur: 10,
-          shadowOffsetX: 0,
-          shadowColor: getCSSVariable('--shadow-300')
-        }
-      },
-      color: getColorPalette()
-    }]
+          borderRadius: 6,
+          borderColor: getCSSVariable('--gray-0'),
+          borderWidth: 2
+        },
+        label: {
+          show: true,
+          formatter: '{b}: {c}'
+        },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: getCSSVariable('--shadow-300')
+          }
+        },
+        color: getColorPalette()
+      }
+    ]
   }
 
   errorChart.setOption(option)
@@ -289,9 +299,13 @@ const updateCharts = () => {
 }
 
 // 监听数据变化
-watch(() => props.toolStats, () => {
-  updateCharts()
-}, { deep: true })
+watch(
+  () => props.toolStats,
+  () => {
+    updateCharts()
+  },
+  { deep: true }
+)
 
 // 窗口大小变化时重新调整图表
 const handleResize = () => {
@@ -305,13 +319,16 @@ onMounted(() => {
 })
 
 // 监听主题变化，重新渲染图表
-watch(() => themeStore.isDark, () => {
-  if (props.toolStats && (toolsChart || errorChart)) {
-    nextTick(() => {
-      updateCharts()
-    })
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (props.toolStats && (toolsChart || errorChart)) {
+      nextTick(() => {
+        updateCharts()
+      })
+    }
   }
-})
+)
 
 // 组件卸载时清理
 const cleanup = () => {

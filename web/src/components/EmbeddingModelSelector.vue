@@ -8,12 +8,17 @@
     :placeholder="placeholder"
     :disabled="disabled"
   >
-    <a-select-option
-      v-for="(name, idx) in embedModelChoices" :key="idx"
-      :value="name"
-    >
-      <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
-        <span style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+    <a-select-option v-for="(name, idx) in embedModelChoices" :key="idx" :value="name">
+      <div style="display: flex; align-items: center; gap: 8px; min-width: 0">
+        <span
+          style="
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          "
+        >
           {{ name }} ({{ configStore.config?.embed_model_names[name]?.dimension }})
         </span>
         <span
@@ -23,7 +28,7 @@
             fontWeight: 'bold',
             flexShrink: 0,
             padding: '2px 4px',
-            borderRadius: '3px',
+            borderRadius: '3px'
           }"
           :title="getModelStatusTooltip(name)"
         >

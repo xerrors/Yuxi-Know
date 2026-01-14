@@ -47,7 +47,10 @@
                   <label>服务器 URL</label>
                   <span class="url-text">{{ server.url || '-' }}</span>
                 </div>
-                <div class="info-item" v-if="server.headers && Object.keys(server.headers).length > 0">
+                <div
+                  class="info-item"
+                  v-if="server.headers && Object.keys(server.headers).length > 0"
+                >
                   <label>请求头</label>
                   <pre class="headers-pre">{{ JSON.stringify(server.headers, null, 2) }}</pre>
                 </div>
@@ -125,9 +128,9 @@
                 <a-empty :description="toolsError || '暂无工具'" />
               </div>
               <div v-else class="tools-list">
-                <div 
-                  v-for="tool in filteredTools" 
-                  :key="tool.name" 
+                <div
+                  v-for="tool in filteredTools"
+                  :key="tool.name"
                   class="tool-card"
                   :class="{ disabled: !tool.enabled }"
                 >
@@ -155,17 +158,22 @@
                   <div class="tool-description" v-if="tool.description">
                     {{ tool.description }}
                   </div>
-                  <a-collapse v-if="tool.parameters && Object.keys(tool.parameters).length > 0" ghost>
+                  <a-collapse
+                    v-if="tool.parameters && Object.keys(tool.parameters).length > 0"
+                    ghost
+                  >
                     <a-collapse-panel key="params" header="参数">
                       <div class="params-list">
-                        <div 
-                          v-for="(param, paramName) in tool.parameters" 
+                        <div
+                          v-for="(param, paramName) in tool.parameters"
                           :key="paramName"
                           class="param-item"
                         >
                           <div class="param-header">
                             <span class="param-name">{{ paramName }}</span>
-                            <span class="param-required" v-if="tool.required?.includes(paramName)">必填</span>
+                            <span class="param-required" v-if="tool.required?.includes(paramName)"
+                              >必填</span
+                            >
                             <span class="param-type">{{ param.type || 'any' }}</span>
                           </div>
                           <div class="param-desc" v-if="param.description">
@@ -212,7 +220,7 @@ import {
   ApiOutlined,
   ReloadOutlined,
   InfoCircleOutlined,
-  CopyOutlined,
+  CopyOutlined
 } from '@ant-design/icons-vue'
 import { mcpApi } from '@/apis/mcp_api'
 import { formatDateTime } from '@/utils/time'
@@ -248,24 +256,29 @@ const modalVisible = computed({
 const filteredTools = computed(() => {
   if (!toolSearchText.value) return tools.value
   const search = toolSearchText.value.toLowerCase()
-  return tools.value.filter(t => 
-    t.name.toLowerCase().includes(search) || 
-    (t.description && t.description.toLowerCase().includes(search))
+  return tools.value.filter(
+    (t) =>
+      t.name.toLowerCase().includes(search) ||
+      (t.description && t.description.toLowerCase().includes(search))
   )
 })
 
 // 监听服务器变化，加载工具列表
-watch(() => props.server, (newServer) => {
-  if (newServer) {
-    activeTab.value = 'general'
-    fetchTools()
-  }
-}, { immediate: true })
+watch(
+  () => props.server,
+  (newServer) => {
+    if (newServer) {
+      activeTab.value = 'general'
+      fetchTools()
+    }
+  },
+  { immediate: true }
+)
 
 // 获取工具列表
 const fetchTools = async () => {
   if (!props.server) return
-  
+
   try {
     toolsLoading.value = true
     toolsError.value = null
@@ -288,7 +301,7 @@ const fetchTools = async () => {
 // 刷新工具列表
 const handleRefreshTools = async () => {
   if (!props.server) return
-  
+
   try {
     toolsLoading.value = true
     const result = await mcpApi.refreshMcpServerTools(props.server.name)
@@ -309,7 +322,7 @@ const handleRefreshTools = async () => {
 // 测试连接
 const handleTestConnection = async () => {
   if (!props.server) return
-  
+
   try {
     testLoading.value = true
     const result = await mcpApi.testMcpServer(props.server.name)
@@ -329,14 +342,14 @@ const handleTestConnection = async () => {
 // 切换工具启用状态
 const handleToggleTool = async (tool) => {
   if (!props.server) return
-  
+
   try {
     toggleToolLoading.value = tool.name
     const result = await mcpApi.toggleMcpServerTool(props.server.name, tool.name)
     if (result.success) {
       notification.success({ message: result.message })
       // 更新本地状态
-      const targetTool = tools.value.find(t => t.name === tool.name)
+      const targetTool = tools.value.find((t) => t.name === tool.name)
       if (targetTool) {
         targetTool.enabled = result.enabled
       }
@@ -370,7 +383,7 @@ const getTransportColor = (transport) => {
   const colors = {
     sse: 'orange',
     stdio: 'green',
-    streamable_http: 'blue',
+    streamable_http: 'blue'
   }
   return colors[transport] || 'blue'
 }

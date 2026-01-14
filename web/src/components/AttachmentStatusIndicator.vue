@@ -22,7 +22,8 @@
                 <div class="file-details">
                   <div class="file-name">{{ attachment.file_name }}</div>
                   <div class="file-meta">
-                    {{ formatFileSize(attachment.file_size) }} · {{ getStatusLabel(attachment.status) }}
+                    {{ formatFileSize(attachment.file_size) }} ·
+                    {{ getStatusLabel(attachment.status) }}
                   </div>
                 </div>
               </div>
@@ -39,12 +40,7 @@
         </div>
       </template>
 
-      <a-button
-        type="text"
-        size="small"
-        class="status-indicator has-multiple"
-        :disabled="disabled"
-      >
+      <a-button type="text" size="small" class="status-indicator has-multiple" :disabled="disabled">
         <template #icon>
           <Paperclip :size="14" />
         </template>
@@ -57,13 +53,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import {
-  Paperclip,
-  FileText,
-  File,
-  X
-} from 'lucide-vue-next';
+import { ref, computed } from 'vue'
+import { Paperclip, FileText, File, X } from 'lucide-vue-next'
 
 const props = defineProps({
   attachments: {
@@ -74,16 +65,16 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-});
+})
 
-const emit = defineEmits(['remove']);
+const emit = defineEmits(['remove'])
 
-const detailsVisible = ref(false);
+const detailsVisible = ref(false)
 
 // 是否有附件
 const hasAttachments = computed(() => {
-  return props.attachments && props.attachments.length > 0;
-});
+  return props.attachments && props.attachments.length > 0
+})
 
 // 根据文件类型获取图标
 const getFileIcon = (fileType) => {
@@ -92,37 +83,37 @@ const getFileIcon = (fileType) => {
     'text/markdown': FileText,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': File,
     'text/html': File,
-    'text/htm': File,
-  };
-  return iconMap[fileType] || File;
-};
+    'text/htm': File
+  }
+  return iconMap[fileType] || File
+}
 
 // 格式化文件大小
 const formatFileSize = (bytes) => {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-};
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
 
 // 获取状态标签
 const getStatusLabel = (status) => {
   const statusMap = {
-    'uploaded': '已上传',
-    'processing': '处理中',
-    'parsed': '已解析',
-    'failed': '解析失败',
-    'pending': '待处理'
-  };
-  return statusMap[status] || status || '未知';
-};
+    uploaded: '已上传',
+    processing: '处理中',
+    parsed: '已解析',
+    failed: '解析失败',
+    pending: '待处理'
+  }
+  return statusMap[status] || status || '未知'
+}
 
 // 处理删除附件
 const handleRemoveAttachment = (fileId) => {
-  if (props.disabled) return;
-  emit('remove', fileId);
-};
+  if (props.disabled) return
+  emit('remove', fileId)
+}
 </script>
 
 <style lang="less" scoped>
@@ -189,7 +180,9 @@ const handleRemoveAttachment = (fileId) => {
   .ant-popover-inner {
     border-radius: 8px;
     border: 1px solid var(--border);
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
   }
 
   .ant-popover-arrow {

@@ -54,12 +54,7 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import {
-  RefreshCw,
-  Network,
-  Sparkles,
-  Maximize2
-} from 'lucide-vue-next'
+import { RefreshCw, Network, Sparkles, Maximize2 } from 'lucide-vue-next'
 import { mindmapApi } from '@/apis/mindmap_api'
 import { Markmap } from 'markmap-view'
 import { Transformer } from 'markmap-lib'
@@ -106,7 +101,11 @@ const loadMindmap = async () => {
     }
   } catch (error) {
     // 如果是404错误，说明还没有生成，静默处理
-    if (error?.message?.includes('404') || error?.message?.includes('不存在') || error?.message?.includes('还没有生成')) {
+    if (
+      error?.message?.includes('404') ||
+      error?.message?.includes('不存在') ||
+      error?.message?.includes('还没有生成')
+    ) {
       mindmapData.value = null
     } else {
       console.error('加载思维导图失败:', error)
@@ -257,11 +256,15 @@ defineExpose({
 // ============================================================================
 
 // 监听数据库ID变化
-watch(() => props.databaseId, (newId) => {
-  if (newId) {
-    loadMindmap()
-  }
-}, { immediate: true })
+watch(
+  () => props.databaseId,
+  (newId) => {
+    if (newId) {
+      loadMindmap()
+    }
+  },
+  { immediate: true }
+)
 
 // 监听容器大小变化，自动适应
 let resizeObserver = null
@@ -385,4 +388,3 @@ onUnmounted(() => {
   height: 100% !important;
 }
 </style>
-

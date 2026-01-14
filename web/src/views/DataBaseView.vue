@@ -2,14 +2,19 @@
   <div class="database-container layout-container">
     <HeaderComponent title="文档知识库" :loading="dbState.listLoading">
       <template #actions>
-        <a-button type="primary" @click="state.openNewDatabaseModel=true">
-          新建知识库
-        </a-button>
+        <a-button type="primary" @click="state.openNewDatabaseModel = true"> 新建知识库 </a-button>
       </template>
     </HeaderComponent>
 
-    <a-modal :open="state.openNewDatabaseModel" title="新建知识库" :confirm-loading="dbState.creating" @ok="handleCreateDatabase" @cancel="cancelCreateDatabase" class="new-database-modal" width="800px">
-
+    <a-modal
+      :open="state.openNewDatabaseModel"
+      title="新建知识库"
+      :confirm-loading="dbState.creating"
+      @ok="handleCreateDatabase"
+      @cancel="cancelCreateDatabase"
+      class="new-database-modal"
+      width="800px"
+    >
       <!-- 知识库类型选择 -->
       <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
       <div class="kb-type-cards">
@@ -45,35 +50,37 @@
       <h3>嵌入模型</h3>
       <EmbeddingModelSelector
         v-model:value="newDatabase.embed_model_name"
-        style="width: 100%;"
+        style="width: 100%"
         size="large"
         placeholder="请选择嵌入模型"
       />
 
       <!-- 仅对 LightRAG 提供语言选择和LLM选择 -->
       <div v-if="newDatabase.kb_type === 'lightrag'">
-        <h3 style="margin-top: 20px;">语言</h3>
+        <h3 style="margin-top: 20px">语言</h3>
         <a-select
           v-model:value="newDatabase.language"
           :options="languageOptions"
-          style="width: 100%;"
+          style="width: 100%"
           size="large"
           :dropdown-match-select-width="false"
         />
 
-        <h3 style="margin-top: 20px;">语言模型 (LLM)</h3>
-        <p style="color: var(--gray-700); font-size: 14px;">可以在设置中配置语言模型</p>
+        <h3 style="margin-top: 20px">语言模型 (LLM)</h3>
+        <p style="color: var(--gray-700); font-size: 14px">可以在设置中配置语言模型</p>
         <ModelSelectorComponent
           :model_spec="llmModelSpec"
           placeholder="请选择模型"
           @select-model="handleLLMSelect"
           size="large"
-          style="width: 100%; height: 60px;"
+          style="width: 100%; height: 60px"
         />
       </div>
 
-      <h3 style="margin-top: 20px;">知识库描述</h3>
-      <p style="color: var(--gray-700); font-size: 14px;">在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。</p>
+      <h3 style="margin-top: 20px">知识库描述</h3>
+      <p style="color: var(--gray-700); font-size: 14px">
+        在智能体流程中，这里的描述会作为工具的描述。智能体会根据知识库的标题和描述来选择合适的工具。所以这里描述的越详细，智能体越容易选择到合适的工具。
+      </p>
       <AiTextarea
         v-model="newDatabase.description"
         :name="newDatabase.name"
@@ -81,7 +88,7 @@
         :auto-size="{ minRows: 3, maxRows: 10 }"
       />
 
-      <h3 style="margin-top: 20px;">隐私设置</h3>
+      <h3 style="margin-top: 20px">隐私设置</h3>
       <div class="privacy-config">
         <a-switch
           v-model:checked="newDatabase.is_private"
@@ -89,14 +96,22 @@
           un-checked-children="公开"
           size="default"
         />
-        <span style="margin-left: 12px;">设置为私有知识库</span>
-        <a-tooltip title="当前未使用此属性。在部分智能体的设计中，可以根据隐私标志来决定启用什么模型和策略。例如，对于私有知识库，可以选择更严格的数据处理和访问控制策略，以保护敏感信息的安全性和隐私性。">
-          <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help;" />
+        <span style="margin-left: 12px">设置为私有知识库</span>
+        <a-tooltip
+          title="当前未使用此属性。在部分智能体的设计中，可以根据隐私标志来决定启用什么模型和策略。例如，对于私有知识库，可以选择更严格的数据处理和访问控制策略，以保护敏感信息的安全性和隐私性。"
+        >
+          <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help" />
         </a-tooltip>
       </div>
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
-        <a-button key="submit" type="primary" :loading="dbState.creating" @click="handleCreateDatabase">创建</a-button>
+        <a-button
+          key="submit"
+          type="primary"
+          :loading="dbState.creating"
+          @click="handleCreateDatabase"
+          >创建</a-button
+        >
       </template>
     </a-modal>
 
@@ -124,7 +139,8 @@
         v-for="database in databases"
         :key="database.db_id"
         class="database dbcard"
-        @click="navigateToDatabase(database.db_id)">
+        @click="navigateToDatabase(database.db_id)"
+      >
         <!-- 私有知识库锁定图标 -->
         <LockOutlined
           v-if="database.metadata?.is_private"
@@ -150,7 +166,9 @@
         </a-tooltip> -->
         <p class="description">{{ database.description || '暂无描述' }}</p>
         <div class="tags">
-          <a-tag color="blue" v-if="database.embed_info?.name">{{ database.embed_info.name }}</a-tag>
+          <a-tag color="blue" v-if="database.embed_info?.name">{{
+            database.embed_info.name
+          }}</a-tag>
           <!-- <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag> -->
           <a-tag
             :color="getKbTypeColor(database.kb_type || 'lightrag')"
@@ -168,18 +186,18 @@
 
 <script setup>
 import { ref, onMounted, reactive, watch, computed } from 'vue'
-import { useRouter, useRoute } from 'vue-router';
-import { storeToRefs } from 'pinia';
-import { useConfigStore } from '@/stores/config';
-import { useDatabaseStore } from '@/stores/database';
-import { LockOutlined, InfoCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
-import { typeApi } from '@/apis/knowledge_api';
-import HeaderComponent from '@/components/HeaderComponent.vue';
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
-import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
-import dayjs, { parseToShanghai } from '@/utils/time';
-import AiTextarea from '@/components/AiTextarea.vue';
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils';
+import { useRouter, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useConfigStore } from '@/stores/config'
+import { useDatabaseStore } from '@/stores/database'
+import { LockOutlined, InfoCircleOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { typeApi } from '@/apis/knowledge_api'
+import HeaderComponent from '@/components/HeaderComponent.vue'
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
+import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
+import dayjs, { parseToShanghai } from '@/utils/time'
+import AiTextarea from '@/components/AiTextarea.vue'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
 
 const route = useRoute()
 const router = useRouter()
@@ -190,9 +208,8 @@ const databaseStore = useDatabaseStore()
 const { databases, state: dbState } = storeToRefs(databaseStore)
 
 const state = reactive({
-  openNewDatabaseModel: false,
+  openNewDatabaseModel: false
 })
-
 
 // 语言选项（值使用英文，以保证后端/LightRAG 兼容；标签为中英文方便理解）
 const languageOptions = [
@@ -206,7 +223,7 @@ const languageOptions = [
   { label: '葡萄牙语 Portuguese', value: 'Portuguese' },
   { label: '俄语 Russian', value: 'Russian' },
   { label: '阿拉伯语 Arabic', value: 'Arabic' },
-  { label: '印地语 Hindi', value: 'Hindi' },
+  { label: '印地语 Hindi', value: 'Hindi' }
 ]
 
 const createEmptyDatabaseForm = () => ({
@@ -251,8 +268,8 @@ const loadSupportedKbTypes = async () => {
     // 如果加载失败，设置默认类型
     supportedKbTypes.value = {
       lightrag: {
-        description: "基于图检索的知识库，支持实体关系构建和复杂查询",
-        class_name: "LightRagKB"
+        description: '基于图检索的知识库，支持实体关系构建和复杂查询',
+        class_name: 'LightRagKB'
       }
     }
   }
@@ -365,20 +382,22 @@ const handleCreateDatabase = async () => {
 }
 
 const navigateToDatabase = (databaseId) => {
-  router.push({ path: `/database/${databaseId}` });
-};
+  router.push({ path: `/database/${databaseId}` })
+}
 
-watch(() => route.path, (newPath) => {
-  if (newPath === '/database') {
-    databaseStore.loadDatabases();
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath === '/database') {
+      databaseStore.loadDatabases()
+    }
   }
-});
+)
 
 onMounted(() => {
   loadSupportedKbTypes()
   databaseStore.loadDatabases()
 })
-
 </script>
 
 <style lang="less" scoped>
@@ -421,7 +440,9 @@ onMounted(() => {
       &.active {
         border-color: var(--main-color);
         background: var(--main-10);
-        .type-icon { color: var(--main-color); }
+        .type-icon {
+          color: var(--main-color);
+        }
       }
 
       .card-header {
@@ -470,7 +491,6 @@ onMounted(() => {
           color: var(--color-error-700);
         }
       }
-
     }
   }
 
@@ -526,7 +546,8 @@ onMounted(() => {
     }
   }
 }
-.database-actions, .document-actions {
+.database-actions,
+.document-actions {
   margin-bottom: 20px;
 }
 .databases {
@@ -536,7 +557,8 @@ onMounted(() => {
   gap: 16px;
 }
 
-.database, .graphbase {
+.database,
+.graphbase {
   background: linear-gradient(145deg, var(--gray-0) 0%, var(--gray-10) 100%);
   box-shadow: 0px 1px 2px 0px var(--shadow-2);
   border: 1px solid var(--gray-100);
@@ -544,7 +566,8 @@ onMounted(() => {
   position: relative;
 }
 
-.dbcard, .database {
+.dbcard,
+.database {
   width: 100%;
   padding: 16px;
   border-radius: 16px;
@@ -568,7 +591,6 @@ onMounted(() => {
     box-shadow: 0px 2px 4px var(--shadow-2);
     border: 1px solid var(--gray-100);
   }
-
 
   .top {
     display: flex;
@@ -595,7 +617,8 @@ onMounted(() => {
       flex: 1;
       min-width: 0;
 
-      h3, p {
+      h3,
+      p {
         margin: 0;
         color: var(--gray-10000);
       }

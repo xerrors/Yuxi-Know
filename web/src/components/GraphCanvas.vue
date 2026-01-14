@@ -75,9 +75,9 @@ const defaultLayout = {
   force: {
     center: { x: 0.5, y: 0.5, strength: 0.1 },
     charge: { strength: -400, distanceMax: 600 },
-    link: { distance: 100, strength: 0.8 },
+    link: { distance: 100, strength: 0.8 }
   },
-  collide: { radius: 40, strength: 0.8, iterations: 3 },
+  collide: { radius: 40, strength: 0.8, iterations: 3 }
 }
 
 // CSS 变量解析工具函数
@@ -105,7 +105,7 @@ function formatData() {
       label: n[props.labelField] ?? n.name ?? String(n.id),
       degree: degrees.get(String(n.id)) || 0,
       original: n // 保存原始数据
-    },
+    }
   }))
 
   const edges = (data.edges || []).map((e, idx) => ({
@@ -115,7 +115,7 @@ function formatData() {
     data: {
       label: e.type ?? '',
       original: e // 保存原始数据
-    },
+    }
   }))
 
   return { nodes, edges }
@@ -140,7 +140,9 @@ function initGraph() {
   container.value.innerHTML = ''
 
   if (graphInstance) {
-    try { graphInstance.destroy() } catch (e) {}
+    try {
+      graphInstance.destroy()
+    } catch (e) {}
     graphInstance = null
   }
 
@@ -158,7 +160,7 @@ function initGraph() {
         labelFill: getCSSVariable('--gray-700'),
         labelWordWrap: true, // enable label ellipsis
         labelMaxWidth: '300%',
-          size: (d) => {
+        size: (d) => {
           if (!props.sizeByDegree) return 24
           const deg = d.data.degree || 0
           return Math.min(15 + deg * 5, 50)
@@ -168,15 +170,23 @@ function initGraph() {
         lineWidth: 1.5,
         shadowColor: getCSSVariable('--gray-400'),
         shadowBlur: 4,
-        ...(props.nodeStyleOptions.style || {}),
+        ...(props.nodeStyleOptions.style || {})
       },
       palette: props.nodeStyleOptions.palette || {
         field: 'label',
         color: [
-          '#60a5fa', '#34d399', '#f59e0b', '#f472b6', '#22d3ee',
-          '#a78bfa', '#f97316', '#4ade80', '#f43f5e', '#2dd4bf',
-        ],
-      },
+          '#60a5fa',
+          '#34d399',
+          '#f59e0b',
+          '#f472b6',
+          '#22d3ee',
+          '#a78bfa',
+          '#f97316',
+          '#4ade80',
+          '#f43f5e',
+          '#2dd4bf'
+        ]
+      }
     },
     edge: {
       type: 'quadratic',
@@ -189,8 +199,8 @@ function initGraph() {
         opacity: 0.8,
         lineWidth: 1.2,
         endArrow: true,
-        ...(props.edgeStyleOptions.style || {}),
-      },
+        ...(props.edgeStyleOptions.style || {})
+      }
     },
     behaviors: [
       'drag-element',
@@ -206,9 +216,9 @@ function initGraph() {
         multiple: true,
         trigger: ['shift'],
         // 禁用默认的选中效果，避免与自定义事件冲突
-        disableDefault: false,
+        disableDefault: false
       }
-    ],
+    ]
   })
 
   // 绑定事件
@@ -230,7 +240,7 @@ function initGraph() {
   graphInstance.on('canvas:click', (evt) => {
     // 只有点击画布空白处才触发
     if (!evt.target) {
-        emit('canvas-click')
+      emit('canvas-click')
     }
   })
 
@@ -267,7 +277,7 @@ function setGraphData() {
       emit('data-rendered')
       console.log('图谱渲染完成，布局已稳定')
     }, 1500)
-  }, 10)  // 等待 10ms 确保布局完成
+  }, 10) // 等待 10ms 确保布局完成
 }
 
 // 关键词高亮功能
@@ -277,10 +287,10 @@ function applyHighlightKeywords() {
   const { nodes } = graphInstance.getData()
   const updates = {}
 
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     const nodeLabel = node.data.label || node.data[props.labelField] || String(node.id)
-    const shouldHighlight = props.highlightKeywords.some(keyword =>
-      keyword.trim() !== '' && nodeLabel.toLowerCase().includes(keyword.toLowerCase())
+    const shouldHighlight = props.highlightKeywords.some(
+      (keyword) => keyword.trim() !== '' && nodeLabel.toLowerCase().includes(keyword.toLowerCase())
     )
 
     if (shouldHighlight) {
@@ -301,7 +311,7 @@ function clearHighlights() {
   const { nodes } = graphInstance.getData()
   const updates = {}
 
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     updates[node.id] = []
   })
 
@@ -318,36 +328,57 @@ function renderGraph() {
 
 function refreshGraph() {
   if (graphInstance) {
-    try { graphInstance.destroy() } catch (e) {}
+    try {
+      graphInstance.destroy()
+    } catch (e) {}
     graphInstance = null
   }
   if (container.value) container.value.innerHTML = ''
   retryCount = 0
   clearTimeout(renderTimeout)
-  renderTimeout = setTimeout(() => { renderGraph() }, 300)
+  renderTimeout = setTimeout(() => {
+    renderGraph()
+  }, 300)
 }
 
-function fitView() { if (graphInstance) try { graphInstance.fitView() } catch (_) {} }
-function fitCenter() { if (graphInstance) try { graphInstance.fitCenter() } catch (_) {} }
-function getInstance() { return graphInstance }
+function fitView() {
+  if (graphInstance)
+    try {
+      graphInstance.fitView()
+    } catch (_) {}
+}
+function fitCenter() {
+  if (graphInstance)
+    try {
+      graphInstance.fitCenter()
+    } catch (_) {}
+}
+function getInstance() {
+  return graphInstance
+}
 
 async function focusNode(id) {
   if (!graphInstance || !props.enableFocusNeighbor) return
   const { nodes, edges } = graphInstance.getData()
-  const nodeIds = nodes.map(n => n.id)
-  const edgeIds = edges.map(e => e.id)
+  const nodeIds = nodes.map((n) => n.id)
+  const edgeIds = edges.map((e) => e.id)
   const updates = {}
-  nodeIds.forEach(nid => updates[nid] = ['hidden'])
-  edgeIds.forEach(eid => updates[eid] = ['hidden'])
+  nodeIds.forEach((nid) => (updates[nid] = ['hidden']))
+  edgeIds.forEach((eid) => (updates[eid] = ['hidden']))
   const neighborSet = new Set()
   const related = []
   edges.forEach((e) => {
-    if (e.source === id) { neighborSet.add(e.target); related.push(e.id) }
-    else if (e.target === id) { neighborSet.add(e.source); related.push(e.id) }
+    if (e.source === id) {
+      neighborSet.add(e.target)
+      related.push(e.id)
+    } else if (e.target === id) {
+      neighborSet.add(e.source)
+      related.push(e.id)
+    }
   })
   updates[id] = ['focus']
-  Array.from(neighborSet).forEach(nid => updates[nid] = ['focus'])
-  related.forEach(eid => updates[eid] = ['focus'])
+  Array.from(neighborSet).forEach((nid) => (updates[nid] = ['focus']))
+  related.forEach((eid) => (updates[eid] = ['focus']))
   await graphInstance.setElementState(updates)
   await graphInstance.draw()
 }
@@ -355,34 +386,45 @@ async function focusNode(id) {
 async function clearFocus() {
   if (!graphInstance) return
   const { nodes, edges } = graphInstance.getData()
-  const nodeIds = nodes.map(n => n.id)
-  const edgeIds = edges.map(e => e.id)
+  const nodeIds = nodes.map((n) => n.id)
+  const edgeIds = edges.map((e) => e.id)
   const updates = {}
-  nodeIds.forEach(nid => updates[nid] = [])
-  edgeIds.forEach(eid => updates[eid] = [])
+  nodeIds.forEach((nid) => (updates[nid] = []))
+  edgeIds.forEach((eid) => (updates[eid] = []))
   await graphInstance.setElementState(updates)
   await graphInstance.draw()
 }
 
-watch(() => props.graphData, () => {
-  clearTimeout(renderTimeout)
-  renderTimeout = setTimeout(() => setGraphData(), 50)
-}, { deep: true })
+watch(
+  () => props.graphData,
+  () => {
+    clearTimeout(renderTimeout)
+    renderTimeout = setTimeout(() => setGraphData(), 50)
+  },
+  { deep: true }
+)
 
 // 监听关键词变化
-watch(() => props.highlightKeywords, () => {
-  if (graphInstance) {
-    clearHighlights()
-    setTimeout(() => applyHighlightKeywords(), 50)
-  }
-}, { deep: true })
+watch(
+  () => props.highlightKeywords,
+  () => {
+    if (graphInstance) {
+      clearHighlights()
+      setTimeout(() => applyHighlightKeywords(), 50)
+    }
+  },
+  { deep: true }
+)
 
 // 监听主题切换，重新加载图形
-watch(() => themeStore.isDark, () => {
-  if (graphInstance) {
-    refreshGraph()
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (graphInstance) {
+      refreshGraph()
+    }
   }
-})
+)
 
 onMounted(() => {
   // ResizeObserver 监听容器尺寸，自动重渲染
@@ -397,7 +439,9 @@ onMounted(() => {
   }
 
   clearTimeout(renderTimeout)
-  renderTimeout = setTimeout(() => { renderGraph() }, 300)
+  renderTimeout = setTimeout(() => {
+    renderGraph()
+  }, 300)
 
   window.addEventListener('resize', refreshGraph)
 })
@@ -406,7 +450,9 @@ onUnmounted(() => {
   window.removeEventListener('resize', refreshGraph)
   if (resizeObserver && container.value) resizeObserver.unobserve(container.value)
   clearTimeout(renderTimeout)
-  try { graphInstance?.destroy() } catch (e) {}
+  try {
+    graphInstance?.destroy()
+  } catch (e) {}
   graphInstance = null
 })
 
@@ -493,8 +539,12 @@ defineExpose({
       flex-grow: 0;
       pointer-events: auto;
 
-      &.top { top: 0; }
-      &.bottom { bottom: 0; }
+      &.top {
+        top: 0;
+      }
+      &.bottom {
+        bottom: 0;
+      }
     }
     .canvas-content {
       // 中间内容层及其子元素全部穿透
@@ -507,8 +557,6 @@ defineExpose({
     }
   }
 }
-
-
 
 /* 高亮节点的脉冲动画效果 */
 @keyframes highlightPulse {
@@ -526,5 +574,4 @@ defineExpose({
 .highlight-animation {
   animation: highlightPulse 2s infinite ease-in-out;
 }
-
 </style>

@@ -1,123 +1,113 @@
 <template>
   <!-- 反馈列表模态框 -->
-  <a-modal
-    v-model:open="modalVisible"
-    title="用户反馈详情"
-    width="1200px"
-    :footer="null"
-  >
-      <a-space style="margin-bottom: 16px">
-        <a-segmented
-          v-model:value="feedbackFilter"
-          :options="feedbackOptions"
-          @change="loadFeedbacks"
-        />
-      </a-space>
+  <a-modal v-model:open="modalVisible" title="用户反馈详情" width="1200px" :footer="null">
+    <a-space style="margin-bottom: 16px">
+      <a-segmented
+        v-model:value="feedbackFilter"
+        :options="feedbackOptions"
+        @change="loadFeedbacks"
+      />
+    </a-space>
 
-      <!-- 卡片列表 -->
-      <div v-if="loadingFeedbacks" class="loading-container">
-        <a-spin size="large" />
-      </div>
+    <!-- 卡片列表 -->
+    <div v-if="loadingFeedbacks" class="loading-container">
+      <a-spin size="large" />
+    </div>
 
-      <div v-else class="feedback-cards-container">
-        <div
-          v-for="feedback in feedbacks"
-          :key="feedback.id"
-          class="feedback-card"
-        >
-          <!-- 卡片头部：用户信息和反馈类型 -->
-          <div class="card-header">
-            <div class="user-info">
-              <a-avatar
-                :src="feedback.avatar"
-                :size="32"
-                class="user-avatar"
-              >
-                {{ feedback.username ? feedback.username.charAt(0).toUpperCase() : 'U' }}
-              </a-avatar>
-              <div class="user-details">
-                <div class="username">{{ feedback.username || '未知用户' }}</div>
-              </div>
+    <div v-else class="feedback-cards-container">
+      <div v-for="feedback in feedbacks" :key="feedback.id" class="feedback-card">
+        <!-- 卡片头部：用户信息和反馈类型 -->
+        <div class="card-header">
+          <div class="user-info">
+            <a-avatar :src="feedback.avatar" :size="32" class="user-avatar">
+              {{ feedback.username ? feedback.username.charAt(0).toUpperCase() : 'U' }}
+            </a-avatar>
+            <div class="user-details">
+              <div class="username">{{ feedback.username || '未知用户' }}</div>
             </div>
-            <a-tag :color="feedback.rating === 'like' ? 'green' : 'red'" class="rating-tag" size="small">
-              <template #icon>
-                <LikeOutlined v-if="feedback.rating === 'like'" />
-                <DislikeOutlined v-else />
-              </template>
-              {{ feedback.rating === 'like' ? '点赞' : '点踩' }}
-            </a-tag>
           </div>
+          <a-tag
+            :color="feedback.rating === 'like' ? 'green' : 'red'"
+            class="rating-tag"
+            size="small"
+          >
+            <template #icon>
+              <LikeOutlined v-if="feedback.rating === 'like'" />
+              <DislikeOutlined v-else />
+            </template>
+            {{ feedback.rating === 'like' ? '点赞' : '点踩' }}
+          </a-tag>
+        </div>
 
-          <!-- 卡片内容：对话信息、消息内容和反馈原因 -->
-          <div class="card-content">
-            <!-- 对话标题 -->
-            <div class="conversation-section" v-if="feedback.conversation_title">
-              <div class="conversation-info">
-                <div class="info-item">
-                  <span
-                    class="conversation-title"
-                    :class="{ 'collapsed': !expandedStates.get(`${feedback.id}-conversation`) }"
-                  >
-                    标题：{{ feedback.conversation_title }}
-                  </span>
-                  <a-button
-                    v-if="shouldShowConversationExpandButton(feedback.conversation_title)"
-                    type="link"
-                    size="small"
-                    @click="toggleConversationExpand(feedback.id)"
-                    class="expand-button-inline"
-                  >
-                    {{ expandedStates.get(`${feedback.id}-conversation`) ? '收起' : '展开' }}
-                  </a-button>
-                </div>
-                <div class="info-item" v-if="!props.agentId">
-                  <span class="label">智能体:</span>
-                  <span class="value">{{ feedback.agent_id }}</span>
-                </div>
+        <!-- 卡片内容：对话信息、消息内容和反馈原因 -->
+        <div class="card-content">
+          <!-- 对话标题 -->
+          <div class="conversation-section" v-if="feedback.conversation_title">
+            <div class="conversation-info">
+              <div class="info-item">
+                <span
+                  class="conversation-title"
+                  :class="{ collapsed: !expandedStates.get(`${feedback.id}-conversation`) }"
+                >
+                  标题：{{ feedback.conversation_title }}
+                </span>
+                <a-button
+                  v-if="shouldShowConversationExpandButton(feedback.conversation_title)"
+                  type="link"
+                  size="small"
+                  @click="toggleConversationExpand(feedback.id)"
+                  class="expand-button-inline"
+                >
+                  {{ expandedStates.get(`${feedback.id}-conversation`) ? '收起' : '展开' }}
+                </a-button>
               </div>
-            </div>
-
-            <!-- 消息内容 -->
-            <div class="message-section">
-              <div
-                class="message-content"
-                :class="{ 'collapsed': !expandedStates.get(`${feedback.id}-message`) }"
-              >
-                {{ feedback.message_content }}
+              <div class="info-item" v-if="!props.agentId">
+                <span class="label">智能体:</span>
+                <span class="value">{{ feedback.agent_id }}</span>
               </div>
-              <a-button
-                v-if="shouldShowExpandButton(feedback.message_content)"
-                type="link"
-                size="small"
-                @click="toggleExpand(feedback.id)"
-                class="expand-button"
-              >
-                {{ expandedStates.get(`${feedback.id}-message`) ? '收起' : '展开全部' }}
-              </a-button>
-            </div>
-
-            <!-- 反馈原因 -->
-            <div v-if="feedback.reason" class="reason-section">
-              <div class="reason-content">{{ feedback.reason }}</div>
             </div>
           </div>
 
-          <!-- 卡片底部：时间信息 -->
-          <div class="card-footer">
-            <div class="time-info">
-              <ClockCircleOutlined />
-              <span>{{ formatFullDate(feedback.created_at) }}</span>
+          <!-- 消息内容 -->
+          <div class="message-section">
+            <div
+              class="message-content"
+              :class="{ collapsed: !expandedStates.get(`${feedback.id}-message`) }"
+            >
+              {{ feedback.message_content }}
             </div>
+            <a-button
+              v-if="shouldShowExpandButton(feedback.message_content)"
+              type="link"
+              size="small"
+              @click="toggleExpand(feedback.id)"
+              class="expand-button"
+            >
+              {{ expandedStates.get(`${feedback.id}-message`) ? '收起' : '展开全部' }}
+            </a-button>
+          </div>
+
+          <!-- 反馈原因 -->
+          <div v-if="feedback.reason" class="reason-section">
+            <div class="reason-content">{{ feedback.reason }}</div>
           </div>
         </div>
 
-        <!-- 空状态 -->
-        <div v-if="feedbacks.length === 0" class="empty-state">
-          <a-empty description="暂无反馈数据" />
+        <!-- 卡片底部：时间信息 -->
+        <div class="card-footer">
+          <div class="time-info">
+            <ClockCircleOutlined />
+            <span>{{ formatFullDate(feedback.created_at) }}</span>
+          </div>
         </div>
       </div>
 
-    </a-modal>
+      <!-- 空状态 -->
+      <div v-if="feedbacks.length === 0" class="empty-state">
+        <a-empty description="暂无反馈数据" />
+      </div>
+    </div>
+  </a-modal>
 </template>
 
 <script setup>
@@ -129,10 +119,10 @@ import { formatFullDateTime } from '@/utils/time'
 
 // 常量配置
 const CONFIG = {
-  MESSAGE_MAX_LINES: 8,          // 消息最大显示行数
-  CONVERSATION_MAX_LINES: 2,     // 对话标题最大显示行数
-  CONVERSATION_MAX_CHARS: 60,    // 对话标题字符数阈值
-  AVG_CHARS_PER_LINE: 30         // 每行平均字符数（中英文混合）
+  MESSAGE_MAX_LINES: 8, // 消息最大显示行数
+  CONVERSATION_MAX_LINES: 2, // 对话标题最大显示行数
+  CONVERSATION_MAX_CHARS: 60, // 对话标题字符数阈值
+  AVG_CHARS_PER_LINE: 30 // 每行平均字符数（中英文混合）
 }
 
 // Props
@@ -205,7 +195,7 @@ const loadFeedbacks = async () => {
   try {
     const params = {
       rating: feedbackFilter.value === 'all' ? undefined : feedbackFilter.value,
-      agent_id: props.agentId || undefined,
+      agent_id: props.agentId || undefined
     }
 
     const response = await dashboardApi.getFeedbacks(params)
@@ -225,11 +215,14 @@ const loadFeedbacks = async () => {
 const formatFullDate = (dateString) => formatFullDateTime(dateString)
 
 // 监听 agentId 变化，重新加载数据
-watch(() => props.agentId, () => {
-  if (modalVisible.value) {
-    loadFeedbacks()
+watch(
+  () => props.agentId,
+  () => {
+    if (modalVisible.value) {
+      loadFeedbacks()
+    }
   }
-})
+)
 </script>
 
 <style scoped lang="less">
@@ -466,7 +459,6 @@ watch(() => props.agentId, () => {
   align-items: center;
   padding: 60px 0;
 }
-
 
 // 响应式设计
 @media (max-width: 768px) {

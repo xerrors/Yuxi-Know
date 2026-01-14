@@ -1,26 +1,23 @@
 <template>
-  <div class="input-box" :class="[customClasses, { 'single-line': isSingleLine }]" @click="focusInput">
+  <div
+    class="input-box"
+    :class="[customClasses, { 'single-line': isSingleLine }]"
+    @click="focusInput"
+  >
     <div class="top-slot">
       <slot name="top"></slot>
     </div>
 
     <div class="expand-options" v-if="hasOptionsLeft">
-      <a-popover
-        v-model:open="optionsExpanded"
-        placement="bottomLeft"
-        trigger="click"
-      >
+      <a-popover v-model:open="optionsExpanded" placement="bottomLeft" trigger="click">
         <template #content>
           <slot name="options-left">
             <div class="no-options">没有配置 options</div>
           </slot>
         </template>
-        <a-button
-          type="text"
-          class="expand-btn"
-        >
+        <a-button type="text" class="expand-btn">
           <template #icon>
-            <PlusOutlined :class="{ 'rotated': optionsExpanded }" />
+            <PlusOutlined :class="{ rotated: optionsExpanded }" />
           </template>
         </a-button>
       </a-popover>
@@ -48,7 +45,7 @@
           class="send-button"
         >
           <template #icon>
-            <component :is="getIcon" class="send-btn"/>
+            <component :is="getIcon" class="send-btn" />
           </template>
         </a-button>
       </a-tooltip>
@@ -61,22 +58,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount, useSlots } from 'vue';
+import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount, useSlots } from 'vue'
 import {
   SendOutlined,
   ArrowUpOutlined,
   LoadingOutlined,
   PauseOutlined,
   PlusOutlined
-} from '@ant-design/icons-vue';
+} from '@ant-design/icons-vue'
 
-
-const inputRef = ref(null);
-const isSingleLine = ref(true);
-const optionsExpanded = ref(false);
-const singleLineHeight = ref(0); // Add this
+const inputRef = ref(null)
+const isSingleLine = ref(true)
+const optionsExpanded = ref(false)
+const singleLineHeight = ref(0) // Add this
 // 用于防抖的定时器
-const debounceTimer = ref(null);
+const debounceTimer = ref(null)
 const props = defineProps({
   modelValue: {
     type: String,
@@ -110,85 +106,84 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   }
-});
+})
 
-const emit = defineEmits(['update:modelValue', 'send', 'keydown']);
-const slots = useSlots();
+const emit = defineEmits(['update:modelValue', 'send', 'keydown'])
+const slots = useSlots()
 const hasOptionsLeft = computed(() => {
-  const slot = slots['options-left'];
+  const slot = slots['options-left']
   if (!slot) {
-    return false;
+    return false
   }
-  const renderedNodes = slot();
-  return Boolean(renderedNodes && renderedNodes.length);
-});
+  const renderedNodes = slot()
+  return Boolean(renderedNodes && renderedNodes.length)
+})
 
 const hasActionsLeft = computed(() => {
-  const slot = slots['actions-left'];
+  const slot = slots['actions-left']
   if (!slot) {
-    return false;
+    return false
   }
-  const renderedNodes = slot();
-  return Boolean(renderedNodes && renderedNodes.length);
-});
+  const renderedNodes = slot()
+  return Boolean(renderedNodes && renderedNodes.length)
+})
 
 // 图标映射
 const iconComponents = {
-  'SendOutlined': SendOutlined,
-  'ArrowUpOutlined': ArrowUpOutlined,
-  'PauseOutlined': PauseOutlined
-};
+  SendOutlined: SendOutlined,
+  ArrowUpOutlined: ArrowUpOutlined,
+  PauseOutlined: PauseOutlined
+}
 
 // 根据传入的图标名动态获取组件
 const getIcon = computed(() => {
   if (props.isLoading) {
-    return PauseOutlined;
+    return PauseOutlined
   }
-  return iconComponents[props.sendIcon] || ArrowUpOutlined;
-});
+  return iconComponents[props.sendIcon] || ArrowUpOutlined
+})
 
 // 创建本地引用以进行双向绑定
 const inputValue = computed({
   get: () => props.modelValue,
   set: (val) => emit('update:modelValue', val)
-});
-
+})
 
 // 处理键盘事件
 const handleKeyPress = (e) => {
-  emit('keydown', e);
-};
+  emit('keydown', e)
+}
 
 // 处理输入事件
 const handleInput = (e) => {
-  const value = e.target.value;
-  emit('update:modelValue', value);
-};
+  const value = e.target.value
+  emit('update:modelValue', value)
+}
 
 // 处理发送按钮点击
 const handleSendOrStop = () => {
-  emit('send');
-};
+  emit('send')
+}
 
 // 用于存储固定的单行宽度基准
-const singleLineWidth = ref(0);
+const singleLineWidth = ref(0)
 
 // 检查行数
 const checkLineCount = () => {
   if (!inputRef.value || singleLineHeight.value === 0) {
-    return;
+    return
   }
-  const textarea = inputRef.value;
-  const content = inputValue.value;
+  const textarea = inputRef.value
+  const content = inputValue.value
 
   // 主要判断依据：内容是否包含换行符
-  const hasNewlines = content.includes('\n');
+  const hasNewlines = content.includes('\n')
 
   // 辅助判断：内容是否超出单行宽度（使用固定的单行宽度基准）
-  let contentExceedsWidth = false;
+  let contentExceedsWidth = false
   if (!hasNewlines && content.trim() && singleLineWidth.value > 0) {
     // 使用固定的单行宽度作为测量基准，避免因模式切换导致的宽度变化
-    const measureDiv = document.createElement('div');
+    const measureDiv = document.createElement('div')
     measureDiv.style.cssText = `
       position: absolute;
       visibility: hidden;
@@ -199,44 +194,42 @@ const checkLineCount = () => {
       padding: 0;
       border: none;
       width: ${singleLineWidth.value}px;
-    `;
-    measureDiv.textContent = content;
-    document.body.appendChild(measureDiv);
+    `
+    measureDiv.textContent = content
+    document.body.appendChild(measureDiv)
 
     // 检查内容是否会换行（基于固定的单行宽度）
-    contentExceedsWidth = measureDiv.scrollWidth > measureDiv.clientWidth;
-    document.body.removeChild(measureDiv);
+    contentExceedsWidth = measureDiv.scrollWidth > measureDiv.clientWidth
+    document.body.removeChild(measureDiv)
   }
 
-  const shouldBeMultiLine = hasNewlines || contentExceedsWidth;
-  isSingleLine.value = !shouldBeMultiLine;
+  const shouldBeMultiLine = hasNewlines || contentExceedsWidth
+  isSingleLine.value = !shouldBeMultiLine
 
   // 根据模式调整高度
   if (shouldBeMultiLine) {
     // 多行模式：让textarea自适应内容高度
-    textarea.style.height = 'auto';
-    textarea.style.height = `${Math.max(textarea.scrollHeight, singleLineHeight.value)}px`;
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.max(textarea.scrollHeight, singleLineHeight.value)}px`
   } else {
     // 单行模式：清除内联样式，让CSS控制高度
-    textarea.style.height = '';
+    textarea.style.height = ''
   }
-};
-
-
+}
 
 // 聚焦输入框
 const focusInput = () => {
   if (inputRef.value && !props.disabled) {
-    inputRef.value.focus();
+    inputRef.value.focus()
   }
-};
+}
 
 // 监听输入值变化
 watch(inputValue, () => {
   nextTick(() => {
-    checkLineCount();
-  });
-});
+    checkLineCount()
+  })
+})
 
 // 监听输入框尺寸变化
 /* const observeTextareaResize = () => {
@@ -263,30 +256,29 @@ onMounted(() => {
   nextTick(() => {
     if (inputRef.value) {
       // 记录单行模式下的高度和宽度基准
-      singleLineHeight.value = inputRef.value.clientHeight;
-      singleLineWidth.value = inputRef.value.clientWidth;
-      checkLineCount();
-      inputRef.value.focus();
+      singleLineHeight.value = inputRef.value.clientHeight
+      singleLineWidth.value = inputRef.value.clientWidth
+      checkLineCount()
+      inputRef.value.focus()
     }
-  });
+  })
   // observeTextareaResize();
-});
+})
 
 // 组件卸载时清除定时器
 onBeforeUnmount(() => {
   if (debounceTimer.value) {
-    clearTimeout(debounceTimer.value);
+    clearTimeout(debounceTimer.value)
   }
-});
+})
 
 // 公开方法供父组件调用
 defineExpose({
   focus: () => inputRef.value?.focus(),
   closeOptions: () => {
-    optionsExpanded.value = false;
+    optionsExpanded.value = false
   }
-});
-
+})
 </script>
 
 <style lang="less" scoped>
@@ -305,9 +297,9 @@ defineExpose({
   grid-template-columns: auto 1fr;
   grid-template-rows: auto auto auto;
   grid-template-areas:
-    "top top"
-    "input input"
-    "options send";
+    'top top'
+    'input input'
+    'options send';
 
   .top-slot {
     display: flex;
@@ -347,9 +339,9 @@ defineExpose({
     grid-template-columns: auto 1fr auto;
     grid-template-rows: auto 1fr auto;
     grid-template-areas:
-      "top top top"
-      "options input send"
-      "bottom bottom bottom";
+      'top top top'
+      'options input send'
+      'bottom bottom bottom';
     align-items: center;
     gap: 0px;
 
@@ -361,7 +353,8 @@ defineExpose({
       overflow: hidden;
     }
 
-    .expand-options, .send-button-container {
+    .expand-options,
+    .send-button-container {
       align-self: center;
     }
 
@@ -520,7 +513,6 @@ defineExpose({
     box-shadow: none;
   }
 }
-
 
 @media (max-width: 520px) {
   .input-box {

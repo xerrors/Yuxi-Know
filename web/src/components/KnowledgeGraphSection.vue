@@ -17,36 +17,39 @@
           @canvas-click="graph.handleCanvasClick"
         >
           <template #top>
-             <div class="compact-actions">
-                <div class="actions-left">
-                  <a-input
-                    v-model:value="searchInput"
-                    placeholder="搜索实体"
-                    style="width: 240px"
-                    @keydown.enter="onSearch"
-                    allow-clear
-                  >
-                    <template #suffix>
-                       <component :is="graph.fetching ? LoadingOutlined : SearchOutlined" @click="onSearch" />
-                    </template>
-                  </a-input>
-                  <a-button
-                    class="action-btn"
-                    :icon="h(ReloadOutlined)"
-                    :loading="graph.fetching"
-                    @click="loadGraph"
-                    title="刷新"
-                  />
-                </div>
-                <div class="actions-right">
-                  <a-button
-                    class="action-btn"
-                    :icon="h(SettingOutlined)"
-                    @click="showSettings = true"
-                    title="设置"
-                  />
-                </div>
-             </div>
+            <div class="compact-actions">
+              <div class="actions-left">
+                <a-input
+                  v-model:value="searchInput"
+                  placeholder="搜索实体"
+                  style="width: 240px"
+                  @keydown.enter="onSearch"
+                  allow-clear
+                >
+                  <template #suffix>
+                    <component
+                      :is="graph.fetching ? LoadingOutlined : SearchOutlined"
+                      @click="onSearch"
+                    />
+                  </template>
+                </a-input>
+                <a-button
+                  class="action-btn"
+                  :icon="h(ReloadOutlined)"
+                  :loading="graph.fetching"
+                  @click="loadGraph"
+                  title="刷新"
+                />
+              </div>
+              <div class="actions-right">
+                <a-button
+                  class="action-btn"
+                  :icon="h(SettingOutlined)"
+                  @click="showSettings = true"
+                  title="设置"
+                />
+              </div>
+            </div>
           </template>
         </GraphCanvas>
 
@@ -56,18 +59,13 @@
           :item="graph.selectedItem"
           :type="graph.selectedItemType"
           @close="graph.handleCanvasClick"
-          style="top: 50px; right: 10px;"
+          style="top: 50px; right: 10px"
         />
       </div>
     </div>
 
     <!-- 设置模态框 -->
-    <a-modal
-      v-model:open="showSettings"
-      title="图谱设置"
-      :footer="null"
-      width="300px"
-    >
+    <a-modal v-model:open="showSettings" title="图谱设置" :footer="null" width="300px">
       <div class="settings-form">
         <a-form layout="vertical">
           <a-form-item label="最大节点数 (limit)">
@@ -89,9 +87,7 @@
             />
           </a-form-item>
           <a-form-item>
-            <a-button type="primary" @click="applySettings" style="width: 100%">
-              应用
-            </a-button>
+            <a-button type="primary" @click="applySettings" style="width: 100%"> 应用 </a-button>
           </a-form-item>
         </a-form>
       </div>
@@ -100,127 +96,130 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onUnmounted, reactive, h } from 'vue';
-import { useDatabaseStore } from '@/stores/database';
-import { ReloadOutlined, SettingOutlined, SearchOutlined, LoadingOutlined } from '@ant-design/icons-vue';
-import GraphCanvas from '@/components/GraphCanvas.vue';
-import GraphDetailPanel from '@/components/GraphDetailPanel.vue';
-import { getKbTypeLabel } from '@/utils/kb_utils';
-import { unifiedApi } from '@/apis/graph_api';
-import { message } from 'ant-design-vue';
-import { useGraph } from '@/composables/useGraph';
+import { ref, computed, watch, nextTick, onUnmounted, reactive, h } from 'vue'
+import { useDatabaseStore } from '@/stores/database'
+import {
+  ReloadOutlined,
+  SettingOutlined,
+  SearchOutlined,
+  LoadingOutlined
+} from '@ant-design/icons-vue'
+import GraphCanvas from '@/components/GraphCanvas.vue'
+import GraphDetailPanel from '@/components/GraphDetailPanel.vue'
+import { getKbTypeLabel } from '@/utils/kb_utils'
+import { unifiedApi } from '@/apis/graph_api'
+import { message } from 'ant-design-vue'
+import { useGraph } from '@/composables/useGraph'
 
 const props = defineProps({
   active: {
     type: Boolean,
-    default: false,
-  },
-});
+    default: false
+  }
+})
 
-const store = useDatabaseStore();
+const store = useDatabaseStore()
 
-const databaseId = computed(() => store.databaseId);
-const kbType = computed(() => store.database.kb_type);
-const kbTypeLabel = computed(() => getKbTypeLabel(kbType.value || 'lightrag'));
+const databaseId = computed(() => store.databaseId)
+const kbType = computed(() => store.database.kb_type)
+const kbTypeLabel = computed(() => getKbTypeLabel(kbType.value || 'lightrag'))
 
-const graphRef = ref(null);
-const showSettings = ref(false);
-const graphLimit = ref(50);
-const graphDepth = ref(2);
-const searchInput = ref('');
+const graphRef = ref(null)
+const showSettings = ref(false)
+const graphLimit = ref(50)
+const graphDepth = ref(2)
+const searchInput = ref('')
 
-const graph = reactive(useGraph(graphRef));
+const graph = reactive(useGraph(graphRef))
 
 // 计算属性：是否支持知识图谱
 const isGraphSupported = computed(() => {
-  const type = kbType.value?.toLowerCase();
-  return type === 'lightrag';
-});
+  const type = kbType.value?.toLowerCase()
+  return type === 'lightrag'
+})
 
-let pendingLoadTimer = null;
+let pendingLoadTimer = null
 
 const loadGraph = async () => {
-  if (!databaseId.value || !isGraphSupported.value) return;
+  if (!databaseId.value || !isGraphSupported.value) return
 
-  graph.fetching = true;
+  graph.fetching = true
   try {
     const res = await unifiedApi.getSubgraph({
       db_id: databaseId.value,
       node_label: searchInput.value || '*',
       max_nodes: graphLimit.value,
       max_depth: graphDepth.value
-    });
+    })
 
     if (res.success && res.data) {
-        graph.updateGraphData(res.data.nodes, res.data.edges);
+      graph.updateGraphData(res.data.nodes, res.data.edges)
     }
   } catch (e) {
-    console.error('Failed to load graph:', e);
-    message.error('加载图谱失败');
+    console.error('Failed to load graph:', e)
+    message.error('加载图谱失败')
   } finally {
-    graph.fetching = false;
+    graph.fetching = false
   }
-};
+}
 
 const applySettings = () => {
-  showSettings.value = false;
-  loadGraph();
-};
+  showSettings.value = false
+  loadGraph()
+}
 
 const onSearch = () => {
-    loadGraph();
+  loadGraph()
 }
 
 const scheduleGraphLoad = (delay = 200) => {
   // 确保组件激活且数据库支持图谱功能
   if (!props.active || !isGraphSupported.value || !databaseId.value) {
-    return;
+    return
   }
 
   if (pendingLoadTimer) {
-    clearTimeout(pendingLoadTimer);
+    clearTimeout(pendingLoadTimer)
   }
   pendingLoadTimer = setTimeout(async () => {
-    await nextTick();
+    await nextTick()
     if (props.active && isGraphSupported.value && databaseId.value) {
-      await loadGraph();
+      await loadGraph()
     }
-  }, delay);
-};
-
+  }, delay)
+}
 
 watch(
   () => props.active,
   (active) => {
     if (active) {
-      scheduleGraphLoad();
+      scheduleGraphLoad()
     }
   },
   { immediate: true }
-);
+)
 
 watch(databaseId, () => {
-  graph.clearGraph();
+  graph.clearGraph()
   if (isGraphSupported.value) {
-    scheduleGraphLoad(300);
+    scheduleGraphLoad(300)
   }
-});
+})
 
 watch(isGraphSupported, (supported) => {
   if (!supported) {
-    graph.clearGraph();
-    return;
+    graph.clearGraph()
+    return
   }
-  scheduleGraphLoad(200);
-});
+  scheduleGraphLoad(200)
+})
 
 onUnmounted(() => {
   if (pendingLoadTimer) {
-    clearTimeout(pendingLoadTimer);
-    pendingLoadTimer = null;
+    clearTimeout(pendingLoadTimer)
+    pendingLoadTimer = null
   }
-});
-
+})
 </script>
 
 <style scoped lang="less">
@@ -240,68 +239,71 @@ onUnmounted(() => {
 }
 
 .graph-wrapper {
-    height: 100%;
-    width: 100%;
-    position: relative;
+  height: 100%;
+  width: 100%;
+  position: relative;
 }
 
 .compact-actions {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: none; /* Let clicks pass through empty areas */
+
+  .actions-left,
+  .actions-right {
+    pointer-events: auto; /* Re-enable clicks for buttons/inputs */
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    pointer-events: none; /* Let clicks pass through empty areas */
+    gap: 4px;
+    background: var(--color-trans-light);
+    backdrop-filter: blur(4px);
+    padding: 2px;
+    border-radius: 8px;
+    box-shadow: 0 0 4px 0px var(--shadow-2);
+  }
 
-    .actions-left, .actions-right {
-        pointer-events: auto; /* Re-enable clicks for buttons/inputs */
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        background: var(--color-trans-light);
-        backdrop-filter: blur(4px);
-        padding: 2px;
-        border-radius: 8px;
-        box-shadow: 0 0 4px 0px var(--shadow-2);
+  :deep(.ant-input-affix-wrapper) {
+    padding: 4px 11px;
+    border-radius: 6px;
+    border-color: transparent;
+    box-shadow: none;
+    background: var(--color-trans-light);
+
+    &:hover,
+    &:focus,
+    &-focused {
+      background: var(--main-0);
+      border-color: var(--primary-color);
     }
 
-    :deep(.ant-input-affix-wrapper) {
-      padding: 4px 11px;
-      border-radius: 6px;
-      border-color: transparent;
-      box-shadow: none;
-      background: var(--color-trans-light);
-
-      &:hover, &:focus, &-focused {
-        background: var(--main-0);
-        border-color: var(--primary-color);
-      }
-
-      input {
-        background: transparent;
-      }
+    input {
+      background: transparent;
     }
+  }
 
-    .action-btn {
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        background: transparent;
-        color: var(--gray-600);
-        border-radius: 6px;
-        box-shadow: none;
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: var(--gray-600);
+    border-radius: 6px;
+    box-shadow: none;
 
-        &:hover {
-            background: rgba(0, 0, 0, 0.05);
-            color: var(--primary-color);
-        }
+    &:hover {
+      background: rgba(0, 0, 0, 0.05);
+      color: var(--primary-color);
     }
+  }
 }
 
 .graph-disabled {

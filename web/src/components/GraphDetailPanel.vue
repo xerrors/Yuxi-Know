@@ -30,7 +30,9 @@
                 <!-- 标签 -->
                 <a-descriptions-item label="标签" v-if="item.data?.original?.labels">
                   <div class="tags-container">
-                    <a-tag v-for="tag in item.data.original.labels" :key="tag" color="blue">{{ tag }}</a-tag>
+                    <a-tag v-for="tag in item.data.original.labels" :key="tag" color="blue">{{
+                      tag
+                    }}</a-tag>
                   </div>
                 </a-descriptions-item>
               </template>
@@ -58,41 +60,41 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import { CloseOutlined } from '@ant-design/icons-vue';
+import { computed } from 'vue'
+import { CloseOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   visible: Boolean,
   item: Object,
   type: String // 'node' | 'edge'
-});
+})
 
-defineEmits(['close']);
+defineEmits(['close'])
 
 const title = computed(() => {
-  return props.type === 'node' ? '节点详情' : '关系详情';
-});
+  return props.type === 'node' ? '节点详情' : '关系详情'
+})
 
 // 过滤边的属性，隐藏内部字段
 const filteredEdgeProperties = computed(() => {
   if (!props.item?.data?.original?.properties) {
-    return {};
+    return {}
   }
 
-  const properties = props.item.data.original.properties;
-  const filtered = {};
+  const properties = props.item.data.original.properties
+  const filtered = {}
 
   // 定义需要隐藏的内部字段
-  const hiddenFields = ['source_id', 'target_id', '_id', 'truncate'];
+  const hiddenFields = ['source_id', 'target_id', '_id', 'truncate']
 
-  Object.keys(properties).forEach(key => {
+  Object.keys(properties).forEach((key) => {
     if (!hiddenFields.includes(key)) {
-      filtered[key] = properties[key];
+      filtered[key] = properties[key]
     }
-  });
+  })
 
-  return filtered;
-});
+  return filtered
+})
 </script>
 
 <style scoped lang="less">

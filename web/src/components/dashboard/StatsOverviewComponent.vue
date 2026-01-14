@@ -70,7 +70,16 @@
 </template>
 
 <script setup>
-import { MessageCircle, Activity, Mail, Users, BarChart3, Heart, TrendingUp, TrendingDown } from 'lucide-vue-next'
+import {
+  MessageCircle,
+  Activity,
+  Mail,
+  Users,
+  BarChart3,
+  Heart,
+  TrendingUp,
+  TrendingDown
+} from 'lucide-vue-next'
 
 // Props
 const props = defineProps({
@@ -92,7 +101,6 @@ const getSatisfactionClass = () => {
 <style lang="less" scoped>
 // 使用 dashboard.css 中定义的样式，这里只需要导入
 @import '@/assets/css/dashboard.css';
-
 
 /* Stats Overview Component - 统计概览组件样式 */
 .stats-overview-container {

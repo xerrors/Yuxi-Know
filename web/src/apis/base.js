@@ -22,8 +22,8 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
       ...options,
       headers: {
         ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
-        ...options.headers,
-      },
+        ...options.headers
+      }
     }
 
     // 如果需要认证，添加认证头
@@ -50,12 +50,12 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
         status: response.status,
         statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries())
-      });
+      })
 
       try {
         errorData = await response.json()
         errorMessage = errorData.detail || errorData.message || errorMessage
-        console.log('API错误详情:', errorData);
+        console.log('API错误详情:', errorData)
 
         // 如果是422错误，打印更详细的信息
         if (response.status === 422) {
@@ -65,11 +65,11 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
             requestHeaders: requestOptions.headers,
             requestBody: requestOptions.body,
             responseData: errorData
-          });
+          })
         }
       } catch (e) {
         // 如果无法解析JSON，使用默认错误信息
-        console.log('无法解析错误响应JSON:', e);
+        console.log('无法解析错误响应JSON:', e)
       }
 
       // 特殊处理401和403错误
@@ -78,11 +78,12 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
         const userStore = useUserStore()
 
         // 检查是否是token过期
-        const isTokenExpired = errorData &&
+        const isTokenExpired =
+          errorData &&
           (errorData.detail?.includes('令牌已过期') ||
-           errorData.detail?.includes('token expired') ||
-           errorMessage?.includes('令牌已过期') ||
-           errorMessage?.includes('token expired'))
+            errorData.detail?.includes('token expired') ||
+            errorMessage?.includes('令牌已过期') ||
+            errorMessage?.includes('token expired'))
 
         message.error(isTokenExpired ? '登录已过期，请重新登录' : '认证失败，请重新登录')
 
@@ -225,12 +226,10 @@ export function apiDelete(url, options = {}, requiresAuth = true, responseType =
   return apiRequest(url, { method: 'DELETE', ...options }, requiresAuth, responseType)
 }
 
-
 export function apiAdminDelete(url, options = {}) {
   checkAdminPermission()
   return apiDelete(url, options, true)
 }
-
 
 export function apiSuperAdminDelete(url, options = {}) {
   checkSuperAdminPermission()

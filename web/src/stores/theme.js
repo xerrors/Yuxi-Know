@@ -9,22 +9,23 @@ export const useThemeStore = defineStore('theme', () => {
   // 公共主题配置
   const commonTheme = {
     token: {
-      fontFamily: "'HarmonyOS Sans SC', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;",
+      fontFamily:
+        "'HarmonyOS Sans SC', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;",
       colorPrimary: '#198cb2',
       borderRadius: 8,
-      wireframe: false,
-    },
+      wireframe: false
+    }
   }
 
   // 浅色主题配置
   const lightTheme = {
-    ...commonTheme,
+    ...commonTheme
   }
 
   // 深色主题配置
   const darkTheme = {
     ...commonTheme,
-    algorithm: theme.darkAlgorithm,
+    algorithm: theme.darkAlgorithm
   }
 
   // 当前主题配置
@@ -59,6 +60,6 @@ export const useThemeStore = defineStore('theme', () => {
     isDark,
     currentTheme,
     toggleTheme,
-    setTheme,
+    setTheme
   }
 })

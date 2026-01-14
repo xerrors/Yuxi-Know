@@ -1,25 +1,25 @@
-import { nextTick } from 'vue';
+import { nextTick } from 'vue'
 
 /**
  * 滚动控制工具类
  */
 export class ScrollController {
   constructor(containerSelector = '.chat', options = {}) {
-    this.containerSelector = containerSelector;
+    this.containerSelector = containerSelector
     this.options = {
       threshold: 100,
       scrollDelay: 100,
       retryDelays: [50, 150],
       ...options
-    };
+    }
 
-    this.scrollTimer = null;
-    this.isUserScrolling = false;
-    this.shouldAutoScroll = true;
-    this.isProgrammaticScroll = false;
+    this.scrollTimer = null
+    this.isUserScrolling = false
+    this.shouldAutoScroll = true
+    this.isProgrammaticScroll = false
 
     // Bind the context of 'this' for the event handler
-    this.handleScroll = this.handleScroll.bind(this);
+    this.handleScroll = this.handleScroll.bind(this)
   }
 
   /**
@@ -27,7 +27,7 @@ export class ScrollController {
    * @returns {Element|null}
    */
   getContainer() {
-    return document.querySelector(this.containerSelector);
+    return document.querySelector(this.containerSelector)
   }
 
   /**
@@ -35,11 +35,11 @@ export class ScrollController {
    * @returns {boolean}
    */
   isAtBottom() {
-    const container = this.getContainer();
-    if (!container) return false;
+    const container = this.getContainer()
+    if (!container) return false
 
-    const { threshold } = this.options;
-    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold;
+    const { threshold } = this.options
+    return container.scrollHeight - container.scrollTop - container.clientHeight <= threshold
   }
 
   /**
@@ -47,25 +47,25 @@ export class ScrollController {
    */
   handleScroll() {
     if (this.scrollTimer) {
-      clearTimeout(this.scrollTimer);
+      clearTimeout(this.scrollTimer)
     }
 
     // 如果是程序性滚动，忽略此次事件
     if (this.isProgrammaticScroll) {
-      this.isProgrammaticScroll = false;
-      return;
+      this.isProgrammaticScroll = false
+      return
     }
 
     // 标记用户正在滚动
-    this.isUserScrolling = true;
+    this.isUserScrolling = true
 
     // 检查是否在底部
-    this.shouldAutoScroll = this.isAtBottom();
+    this.shouldAutoScroll = this.isAtBottom()
 
     // 滚动结束后一段时间重置用户滚动状态
     this.scrollTimer = setTimeout(() => {
-      this.isUserScrolling = false;
-    }, this.options.scrollDelay);
+      this.isUserScrolling = false
+    }, this.options.scrollDelay)
   }
 
   /**
@@ -73,67 +73,67 @@ export class ScrollController {
    * @param {boolean} force - 是否强制滚动
    */
   async scrollToBottom(force = false) {
-    await nextTick();
+    await nextTick()
 
     // 只有在应该自动滚动时才执行（除非强制）
-    if (!force && !this.shouldAutoScroll) return;
+    if (!force && !this.shouldAutoScroll) return
 
-    const container = this.getContainer();
-    if (!container) return;
+    const container = this.getContainer()
+    if (!container) return
 
     // 标记为程序性滚动
-    this.isProgrammaticScroll = true;
+    this.isProgrammaticScroll = true
 
     const scrollOptions = {
       top: container.scrollHeight,
       behavior: 'smooth'
-    };
+    }
 
     // 立即滚动
-    container.scrollTo(scrollOptions);
+    container.scrollTo(scrollOptions)
 
     // 多次重试确保滚动成功
     this.options.retryDelays.forEach((delay, index) => {
       setTimeout(() => {
         if (force || this.shouldAutoScroll) {
-          this.isProgrammaticScroll = true;
-          const behavior = index === this.options.retryDelays.length - 1 ? 'auto' : 'smooth';
+          this.isProgrammaticScroll = true
+          const behavior = index === this.options.retryDelays.length - 1 ? 'auto' : 'smooth'
           container.scrollTo({
             top: container.scrollHeight,
             behavior
-          });
+          })
         }
-      }, delay);
-    });
+      }, delay)
+    })
   }
 
   async scrollToBottomStaticForce() {
-    const container = this.getContainer();
-    if (!container) return;
+    const container = this.getContainer()
+    if (!container) return
 
     // 标记为程序性滚动
-    this.isProgrammaticScroll = true;
+    this.isProgrammaticScroll = true
 
     const scrollOptions = {
       top: container.scrollHeight,
       behavior: 'auto'
-    };
+    }
 
-    container.scrollTo(scrollOptions);
+    container.scrollTo(scrollOptions)
   }
 
   /**
    * 启用自动滚动
    */
   enableAutoScroll() {
-    this.shouldAutoScroll = true;
+    this.shouldAutoScroll = true
   }
 
   /**
    * 禁用自动滚动
    */
   disableAutoScroll() {
-    this.shouldAutoScroll = false;
+    this.shouldAutoScroll = false
   }
 
   /**
@@ -144,7 +144,7 @@ export class ScrollController {
       isUserScrolling: this.isUserScrolling,
       shouldAutoScroll: this.shouldAutoScroll,
       isAtBottom: this.isAtBottom()
-    };
+    }
   }
 
   /**
@@ -152,8 +152,8 @@ export class ScrollController {
    */
   cleanup() {
     if (this.scrollTimer) {
-      clearTimeout(this.scrollTimer);
-      this.scrollTimer = null;
+      clearTimeout(this.scrollTimer)
+      this.scrollTimer = null
     }
   }
 
@@ -161,10 +161,10 @@ export class ScrollController {
    * 重置滚动状态
    */
   reset() {
-    this.cleanup();
-    this.isUserScrolling = false;
-    this.shouldAutoScroll = true;
-    this.isProgrammaticScroll = false;
+    this.cleanup()
+    this.isUserScrolling = false
+    this.shouldAutoScroll = true
+    this.isProgrammaticScroll = false
   }
 }
 
@@ -172,7 +172,7 @@ export class ScrollController {
  * 创建默认的滚动控制器实例
  */
 export const createScrollController = (containerSelector, options) => {
-  return new ScrollController(containerSelector, options);
-};
+  return new ScrollController(containerSelector, options)
+}
 
-export default ScrollController;
+export default ScrollController

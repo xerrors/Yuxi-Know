@@ -54,10 +54,16 @@ export const useTaskerStore = defineStore('tasker', () => {
   const statusCounts = computed(() => summary.value?.status_counts || {})
 
   const activeCount = computed(() =>
-    Array.from(ACTIVE_STATUSES).reduce((count, status) => count + (statusCounts.value?.[status] || 0), 0)
+    Array.from(ACTIVE_STATUSES).reduce(
+      (count, status) => count + (statusCounts.value?.[status] || 0),
+      0
+    )
   )
   const failedCount = computed(() =>
-    Array.from(FAILED_STATUSES).reduce((count, status) => count + (statusCounts.value?.[status] || 0), 0)
+    Array.from(FAILED_STATUSES).reduce(
+      (count, status) => count + (statusCounts.value?.[status] || 0),
+      0
+    )
   )
   const successCount = computed(() => statusCounts.value?.success || 0)
   const totalCount = computed(() => summary.value?.total || 0)
@@ -65,7 +71,7 @@ export const useTaskerStore = defineStore('tasker', () => {
   function upsertTask(rawTask) {
     if (!rawTask || !rawTask.id) return
     const task = toTask(rawTask)
-    const index = tasks.value.findIndex(item => item.id === task.id)
+    const index = tasks.value.findIndex((item) => item.id === task.id)
     if (index >= 0) {
       tasks.value.splice(index, 1, { ...tasks.value[index], ...task })
     } else {

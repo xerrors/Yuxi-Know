@@ -51,4 +51,3 @@ export const mindmapApi = {
     return apiAdminGet(`/api/mindmap/database/${dbId}`)
   }
 }
-

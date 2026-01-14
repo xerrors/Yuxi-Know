@@ -3,36 +3,45 @@
     <div class="params-info">
       <p>调整分块参数可以控制文本的切分方式，影响检索质量和文档加载效率。</p>
     </div>
-    <a-form
-      :model="tempChunkParams"
-      name="chunkConfig"
-      autocomplete="off"
-      layout="vertical"
-      >
-        <div class="chunk-row">
-          <a-form-item label="Chunk Size" name="chunk_size">
-            <a-input-number v-model:value="tempChunkParams.chunk_size" :min="100" :max="10000" style="width: 100%;" />
-            <p class="param-description">每个文本片段的最大字符数</p>
-          </a-form-item>
-          <a-form-item label="Chunk Overlap" name="chunk_overlap">
-            <a-input-number v-model:value="tempChunkParams.chunk_overlap" :min="0" :max="1000" style="width: 100%;" />
-            <p class="param-description">相邻文本片段间的重叠字符数</p>
-          </a-form-item>
-        </div>
-        <a-form-item v-if="showQaSplit" class="qa-separator-item" label="分隔符 (Separator)" name="qa_separator">
-          <a-input
-            v-model:value="tempChunkParams.qa_separator"
-            placeholder="输入分隔符，例如 \n\n\n 或 ---"
-            style="width: 100%;"
+    <a-form :model="tempChunkParams" name="chunkConfig" autocomplete="off" layout="vertical">
+      <div class="chunk-row">
+        <a-form-item label="Chunk Size" name="chunk_size">
+          <a-input-number
+            v-model:value="tempChunkParams.chunk_size"
+            :min="100"
+            :max="10000"
+            style="width: 100%"
           />
-          <p class="param-description">支持 \n、\t 等转义字符。留空则不启用预分割</p>
+          <p class="param-description">每个文本片段的最大字符数</p>
         </a-form-item>
-      </a-form>
+        <a-form-item label="Chunk Overlap" name="chunk_overlap">
+          <a-input-number
+            v-model:value="tempChunkParams.chunk_overlap"
+            :min="0"
+            :max="1000"
+            style="width: 100%"
+          />
+          <p class="param-description">相邻文本片段间的重叠字符数</p>
+        </a-form-item>
+      </div>
+      <a-form-item
+        v-if="showQaSplit"
+        class="qa-separator-item"
+        label="分隔符 (Separator)"
+        name="qa_separator"
+      >
+        <a-input
+          v-model:value="tempChunkParams.qa_separator"
+          placeholder="输入分隔符，例如 \n\n\n 或 ---"
+          style="width: 100%"
+        />
+        <p class="param-description">支持 \n、\t 等转义字符。留空则不启用预分割</p>
+      </a-form-item>
+    </a-form>
   </div>
 </template>
 
 <script setup>
-
 defineProps({
   tempChunkParams: {
     type: Object,
@@ -41,8 +50,8 @@ defineProps({
   showQaSplit: {
     type: Boolean,
     default: true
-  },
-});
+  }
+})
 </script>
 
 <style scoped>

@@ -28,7 +28,12 @@
               <div class="card-header">
                 <div class="user-info">
                   <div class="user-avatar">
-                    <img v-if="user.avatar" :src="user.avatar" :alt="user.username" class="avatar-img" />
+                    <img
+                      v-if="user.avatar"
+                      :src="user.avatar"
+                      :alt="user.username"
+                      class="avatar-img"
+                    />
                     <div v-else class="avatar-placeholder">
                       {{ user.username.charAt(0).toUpperCase() }}
                     </div>
@@ -60,7 +65,12 @@
 
               <div class="card-actions">
                 <a-tooltip title="编辑用户">
-                  <a-button type="text" size="small" @click="showEditUserModal(user)" class="action-btn">
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="showEditUserModal(user)"
+                    class="action-btn"
+                  >
                     <EditOutlined />
                     <span>编辑</span>
                   </a-button>
@@ -71,7 +81,10 @@
                     size="small"
                     danger
                     @click="confirmDeleteUser(user)"
-                    :disabled="user.id === userStore.userId || (user.role === 'superadmin' && userStore.userRole !== 'superadmin')"
+                    :disabled="
+                      user.id === userStore.userId ||
+                      (user.role === 'superadmin' && userStore.userRole !== 'superadmin')
+                    "
                     class="action-btn"
                   >
                     <DeleteOutlined />
@@ -111,7 +124,11 @@
         </a-form-item>
 
         <!-- 显示自动生成的用户ID -->
-        <a-form-item v-if="userManagement.form.generatedUserId || userManagement.editMode" label="用户ID" class="form-item">
+        <a-form-item
+          v-if="userManagement.form.generatedUserId || userManagement.editMode"
+          label="用户ID"
+          class="form-item"
+        >
           <a-input
             :value="userManagement.form.generatedUserId"
             placeholder="自动生成"
@@ -119,7 +136,9 @@
             disabled
             :addon-before="userManagement.editMode ? '已存在ID' : '登录ID'"
           />
-          <div v-if="!userManagement.editMode" class="help-text">此ID将用于登录，根据用户名自动生成</div>
+          <div v-if="!userManagement.editMode" class="help-text">
+            此ID将用于登录，根据用户名自动生成
+          </div>
           <div v-else class="help-text">编辑模式下不能修改用户ID</div>
         </a-form-item>
 
@@ -166,7 +185,9 @@
           <a-select v-model:value="userManagement.form.role" size="large">
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
-            <a-select-option value="superadmin" v-if="userStore.isSuperAdmin">超级管理员</a-select-option>
+            <a-select-option value="superadmin" v-if="userStore.isSuperAdmin"
+              >超级管理员</a-select-option
+            >
           </a-select>
         </a-form-item>
       </a-form>
@@ -175,17 +196,13 @@
 </template>
 
 <script setup>
-import { reactive, onMounted, watch } from 'vue';
-import { notification, Modal } from 'ant-design-vue';
-import { useUserStore } from '@/stores/user';
-import {
-  DeleteOutlined,
-  EditOutlined,
-  PlusOutlined
-} from '@ant-design/icons-vue';
-import { formatDateTime } from '@/utils/time';
+import { reactive, onMounted, watch } from 'vue'
+import { notification, Modal } from 'ant-design-vue'
+import { useUserStore } from '@/stores/user'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { formatDateTime } from '@/utils/time'
 
-const userStore = useUserStore();
+const userStore = useUserStore()
 
 // 用户管理相关状态
 const userManagement = reactive({
@@ -206,105 +223,111 @@ const userManagement = reactive({
     usernameError: '', // 用户名错误信息
     phoneError: '' // 手机号错误信息
   },
-  displayPasswordFields: true, // 编辑时是否显示密码字段
-});
+  displayPasswordFields: true // 编辑时是否显示密码字段
+})
 
 // 添加验证用户名并生成user_id的函数
 const validateAndGenerateUserId = async () => {
-  const username = userManagement.form.username.trim();
+  const username = userManagement.form.username.trim()
 
   // 清空之前的错误和生成的ID
-  userManagement.form.usernameError = '';
-  userManagement.form.generatedUserId = '';
+  userManagement.form.usernameError = ''
+  userManagement.form.generatedUserId = ''
 
   if (!username) {
-    return;
+    return
   }
 
   // 在编辑模式下，不需要重新生成user_id
   if (userManagement.editMode) {
-    return;
+    return
   }
 
   try {
-    const result = await userStore.validateUsernameAndGenerateUserId(username);
-    userManagement.form.generatedUserId = result.user_id;
+    const result = await userStore.validateUsernameAndGenerateUserId(username)
+    userManagement.form.generatedUserId = result.user_id
   } catch (error) {
-    userManagement.form.usernameError = error.message || '用户名验证失败';
+    userManagement.form.usernameError = error.message || '用户名验证失败'
   }
-};
+}
 
 // 验证手机号格式
 const validatePhoneNumber = (phone) => {
   if (!phone) {
-    return true; // 手机号可选
+    return true // 手机号可选
   }
 
   // 中国大陆手机号格式验证
-  const phoneRegex = /^1[3-9]\d{9}$/;
-  return phoneRegex.test(phone);
-};
+  const phoneRegex = /^1[3-9]\d{9}$/
+  return phoneRegex.test(phone)
+}
 
 // 监听密码字段显示状态变化
-watch(() => userManagement.displayPasswordFields, (newVal) => {
-  // 当取消显示密码字段时，清空密码输入
-  if (!newVal) {
-    userManagement.form.password = '';
-    userManagement.form.confirmPassword = '';
+watch(
+  () => userManagement.displayPasswordFields,
+  (newVal) => {
+    // 当取消显示密码字段时，清空密码输入
+    if (!newVal) {
+      userManagement.form.password = ''
+      userManagement.form.confirmPassword = ''
+    }
   }
-});
+)
 
 // 监听手机号输入变化
-watch(() => userManagement.form.phoneNumber, (newPhone) => {
-  userManagement.form.phoneError = '';
+watch(
+  () => userManagement.form.phoneNumber,
+  (newPhone) => {
+    userManagement.form.phoneError = ''
 
-  if (newPhone && !validatePhoneNumber(newPhone)) {
-    userManagement.form.phoneError = '请输入正确的手机号格式';
+    if (newPhone && !validatePhoneNumber(newPhone)) {
+      userManagement.form.phoneError = '请输入正确的手机号格式'
+    }
   }
-});
+)
 
 // 格式化时间显示
-const formatTime = (timeStr) => formatDateTime(timeStr);
+const formatTime = (timeStr) => formatDateTime(timeStr)
 
 // 获取用户列表
 const fetchUsers = async () => {
   try {
-    userManagement.loading = true;
-    const users = await userStore.getUsers();
-    userManagement.users = users;
-    userManagement.error = null;
+    userManagement.loading = true
+    const users = await userStore.getUsers()
+    userManagement.users = users
+    userManagement.error = null
   } catch (error) {
-    console.error('获取用户列表失败:', error);
-    userManagement.error = '获取用户列表失败';
+    console.error('获取用户列表失败:', error)
+    userManagement.error = '获取用户列表失败'
   } finally {
-    userManagement.loading = false;
+    userManagement.loading = false
   }
-};
+}
 
 // 打开添加用户模态框
 const showAddUserModal = () => {
-  userManagement.modalTitle = '添加用户';
-  userManagement.editMode = false;
-  userManagement.editUserId = null;
+  userManagement.modalTitle = '添加用户'
+  userManagement.editMode = false
+  userManagement.editUserId = null
   userManagement.form = {
     username: '',
     generatedUserId: '',
     phoneNumber: '',
     password: '',
     confirmPassword: '',
-    role: 'user',  // 默认角色为普通用户
+    role: 'user', // 默认角色为普通用户
     usernameError: '',
     phoneError: ''
-  };
-  userManagement.displayPasswordFields = true;
-  userManagement.modalVisible = true;
-};
+  }
+  userManagement.displayPasswordFields = true
+  userManagement.modalVisible = true
+}
 
 // 打开编辑用户模态框
 const showEditUserModal = (user) => {
-  userManagement.modalTitle = '编辑用户';
-  userManagement.editMode = true;
-  userManagement.editUserId = user.id;
+  userManagement.modalTitle = '编辑用户'
+  userManagement.editMode = true
+  userManagement.editUserId = user.id
   userManagement.form = {
     username: user.username,
     generatedUserId: user.user_id || '', // 编辑模式显示现有的user_id
@@ -314,45 +337,48 @@ const showEditUserModal = (user) => {
     role: user.role,
     usernameError: '',
     phoneError: ''
-  };
-  userManagement.displayPasswordFields = false; // 默认不显示密码字段
-  userManagement.modalVisible = true;
-};
+  }
+  userManagement.displayPasswordFields = false // 默认不显示密码字段
+  userManagement.modalVisible = true
+}
 
 // 处理用户表单提交
 const handleUserFormSubmit = async () => {
   try {
     // 简单验证
     if (!userManagement.form.username.trim()) {
-      notification.error({ message: '用户名不能为空' });
-      return;
+      notification.error({ message: '用户名不能为空' })
+      return
     }
 
     // 验证用户名长度
-    if (userManagement.form.username.trim().length < 2 || userManagement.form.username.trim().length > 20) {
-      notification.error({ message: '用户名长度必须在 2-20 个字符之间' });
-      return;
+    if (
+      userManagement.form.username.trim().length < 2 ||
+      userManagement.form.username.trim().length > 20
+    ) {
+      notification.error({ message: '用户名长度必须在 2-20 个字符之间' })
+      return
     }
 
     // 验证手机号
     if (userManagement.form.phoneNumber && !validatePhoneNumber(userManagement.form.phoneNumber)) {
-      notification.error({ message: '请输入正确的手机号格式' });
-      return;
+      notification.error({ message: '请输入正确的手机号格式' })
+      return
     }
 
     if (userManagement.displayPasswordFields) {
       if (!userManagement.form.password) {
-        notification.error({ message: '密码不能为空' });
-        return;
+        notification.error({ message: '密码不能为空' })
+        return
       }
 
       if (userManagement.form.password !== userManagement.form.confirmPassword) {
-        notification.error({ message: '两次输入的密码不一致' });
-        return;
+        notification.error({ message: '两次输入的密码不一致' })
+        return
       }
     }
 
-    userManagement.loading = true;
+    userManagement.loading = true
 
     // 根据模式决定创建还是更新用户
     if (userManagement.editMode) {
@@ -360,57 +386,57 @@ const handleUserFormSubmit = async () => {
       const updateData = {
         username: userManagement.form.username.trim(),
         role: userManagement.form.role
-      };
+      }
 
       // 添加手机号字段
       if (userManagement.form.phoneNumber) {
-        updateData.phone_number = userManagement.form.phoneNumber;
+        updateData.phone_number = userManagement.form.phoneNumber
       }
 
       // 如果显示了密码字段并且填写了密码，才更新密码
       if (userManagement.displayPasswordFields && userManagement.form.password) {
-        updateData.password = userManagement.form.password;
+        updateData.password = userManagement.form.password
       }
 
-      await userStore.updateUser(userManagement.editUserId, updateData);
-      notification.success({ message: '用户更新成功' });
+      await userStore.updateUser(userManagement.editUserId, updateData)
+      notification.success({ message: '用户更新成功' })
     } else {
       // 创建新用户
       const createData = {
         username: userManagement.form.username.trim(),
         password: userManagement.form.password,
         role: userManagement.form.role
-      };
+      }
 
       // 添加手机号字段（如果填写了）
       if (userManagement.form.phoneNumber) {
-        createData.phone_number = userManagement.form.phoneNumber;
+        createData.phone_number = userManagement.form.phoneNumber
       }
 
-      await userStore.createUser(createData);
-      notification.success({ message: '用户创建成功' });
+      await userStore.createUser(createData)
+      notification.success({ message: '用户创建成功' })
     }
 
     // 重新获取用户列表
-    await fetchUsers();
-    userManagement.modalVisible = false;
+    await fetchUsers()
+    userManagement.modalVisible = false
   } catch (error) {
-    console.error('用户操作失败:', error);
+    console.error('用户操作失败:', error)
     notification.error({
       message: '操作失败',
       description: error.message || '请稍后重试'
-    });
+    })
   } finally {
-    userManagement.loading = false;
+    userManagement.loading = false
   }
-};
+}
 
 // 删除用户
 const confirmDeleteUser = (user) => {
   // 自己不能删除自己
   if (user.id === userStore.userId) {
-    notification.error({ message: '不能删除自己的账户' });
-    return;
+    notification.error({ message: '不能删除自己的账户' })
+    return
   }
 
   // 确认对话框
@@ -422,49 +448,56 @@ const confirmDeleteUser = (user) => {
     cancelText: '取消',
     async onOk() {
       try {
-        userManagement.loading = true;
-        await userStore.deleteUser(user.id);
-        notification.success({ message: '用户删除成功' });
+        userManagement.loading = true
+        await userStore.deleteUser(user.id)
+        notification.success({ message: '用户删除成功' })
         // 重新获取用户列表
-        await fetchUsers();
+        await fetchUsers()
       } catch (error) {
-        console.error('删除用户失败:', error);
+        console.error('删除用户失败:', error)
         notification.error({
           message: '删除失败',
           description: error.message || '请稍后重试'
-        });
+        })
       } finally {
-        userManagement.loading = false;
+        userManagement.loading = false
       }
     }
-  });
-};
-
+  })
+}
 
 // 角色显示辅助函数
 const getRoleLabel = (role) => {
   switch (role) {
-    case 'superadmin': return '超级管理员';
-    case 'admin': return '管理员';
-    case 'user': return '普通用户';
-    default: return role;
+    case 'superadmin':
+      return '超级管理员'
+    case 'admin':
+      return '管理员'
+    case 'user':
+      return '普通用户'
+    default:
+      return role
   }
-};
+}
 
 // 角色标签颜色
 const getRoleColor = (role) => {
   switch (role) {
-    case 'superadmin': return 'red';
-    case 'admin': return 'blue';
-    case 'user': return 'green';
-    default: return 'default';
+    case 'superadmin':
+      return 'red'
+    case 'admin':
+      return 'blue'
+    case 'user':
+      return 'green'
+    default:
+      return 'default'
   }
-};
+}
 
 // 在组件挂载时获取用户列表
 onMounted(() => {
-  fetchUsers();
-});
+  fetchUsers()
+})
 </script>
 
 <style lang="less" scoped>
@@ -488,7 +521,6 @@ onMounted(() => {
         margin-bottom: 16px;
       }
     }
-
   }
 
   .content-section {
@@ -661,7 +693,8 @@ onMounted(() => {
     color: var(--gray-700);
   }
 
-  .phone-text, .user-id-text {
+  .phone-text,
+  .user-id-text {
     font-size: 13px;
     color: var(--gray-900);
     font-family: 'Monaco', 'Consolas', monospace;

@@ -7,8 +7,6 @@ import { useUserStore } from '@/stores/user'
  * 权限要求: 任何已登录用户（普通用户、管理员、超级管理员）
  */
 
-
-
 // =============================================================================
 // === 智能体聊天分组 ===
 // =============================================================================
@@ -21,11 +19,11 @@ export const agentApi = {
    * @returns {Promise} - 聊天响应流
    */
   sendAgentMessage: (agentId, data, options = {}) => {
-    const { signal, headers: extraHeaders, ...restOptions } = options || {};
+    const { signal, headers: extraHeaders, ...restOptions } = options || {}
     const baseHeaders = {
       'Content-Type': 'application/json',
       ...useUserStore().getAuthHeaders()
-    };
+    }
 
     return fetch(`/api/chat/agent/${agentId}`, {
       method: 'POST',
@@ -71,7 +69,8 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - 历史消息
    */
-  getAgentHistory: (agentId, threadId) => apiGet(`/api/chat/agent/${agentId}/history?thread_id=${threadId}`),
+  getAgentHistory: (agentId, threadId) =>
+    apiGet(`/api/chat/agent/${agentId}/history?thread_id=${threadId}`),
 
   /**
    * 获取指定会话的 AgentState
@@ -79,7 +78,8 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - AgentState
    */
-  getAgentState: (agentId, threadId) => apiGet(`/api/chat/agent/${agentId}/state?thread_id=${threadId}`),
+  getAgentState: (agentId, threadId) =>
+    apiGet(`/api/chat/agent/${agentId}/state?thread_id=${threadId}`),
 
   /**
    * Submit feedback for a message
@@ -111,7 +111,8 @@ export const agentApi = {
    * @param {Array} models - 选中的模型列表
    * @returns {Promise} - 更新结果
    */
-  updateProviderModels: (provider, models) => apiPost(`/api/chat/models/update?model_provider=${provider}`, models),
+  updateProviderModels: (provider, models) =>
+    apiPost(`/api/chat/models/update?model_provider=${provider}`, models),
 
   /**
    * 获取智能体配置
@@ -130,8 +131,8 @@ export const agentApi = {
    * @returns {Promise} - 保存结果
    */
   saveAgentConfig: async (agentName, config, options = {}) => {
-    const queryParams = new URLSearchParams(options).toString();
-    const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '');
+    const queryParams = new URLSearchParams(options).toString()
+    const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '')
     return apiAdminPost(url, config)
   },
 
@@ -152,11 +153,11 @@ export const agentApi = {
    * @returns {Promise} - 恢复响应流
    */
   resumeAgentChat: (agentId, data, options = {}) => {
-    const { signal, headers: extraHeaders, ...restOptions } = options || {};
+    const { signal, headers: extraHeaders, ...restOptions } = options || {}
     const baseHeaders = {
       'Content-Type': 'application/json',
       ...useUserStore().getAuthHeaders()
-    };
+    }
 
     return fetch(`/api/chat/agent/${agentId}/resume`, {
       method: 'POST',
@@ -171,7 +172,6 @@ export const agentApi = {
   }
 }
 
-
 // =============================================================================
 // === 多模态图片支持分组 ===
 // =============================================================================
@@ -183,16 +183,19 @@ export const multimodalApi = {
    * @returns {Promise} - 上传结果
    */
   uploadImage: (file) => {
-    const formData = new FormData();
-    formData.append('file', file);
+    const formData = new FormData()
+    formData.append('file', file)
 
-    return apiRequest('/api/chat/image/upload', {
-      method: 'POST',
-      body: formData,
-    }, true);
-  },
-
-  };
+    return apiRequest(
+      '/api/chat/image/upload',
+      {
+        method: 'POST',
+        body: formData
+      },
+      true
+    )
+  }
+}
 
 // =============================================================================
 // === 对话线程分组 ===
@@ -205,8 +208,8 @@ export const threadApi = {
    * @returns {Promise} - 对话线程列表
    */
   getThreads: (agentId) => {
-    const url = `/api/chat/threads?agent_id=${agentId}`;
-    return apiGet(url);
+    const url = `/api/chat/threads?agent_id=${agentId}`
+    return apiGet(url)
   },
 
   /**
@@ -216,11 +219,12 @@ export const threadApi = {
    * @param {Object} metadata - 元数据
    * @returns {Promise} - 创建结果
    */
-  createThread: (agentId, title, metadata) => apiPost('/api/chat/thread', {
-    agent_id: agentId,
-    title: title || '新的对话',
-    metadata: metadata || {}
-  }),
+  createThread: (agentId, title, metadata) =>
+    apiPost('/api/chat/thread', {
+      agent_id: agentId,
+      title: title || '新的对话',
+      metadata: metadata || {}
+    }),
 
   /**
    * 更新对话线程
@@ -229,10 +233,11 @@ export const threadApi = {
    * @param {string} description - 对话描述
    * @returns {Promise} - 更新结果
    */
-  updateThread: (threadId, title, description) => apiPut(`/api/chat/thread/${threadId}`, {
-    title,
-    description
-  }),
+  updateThread: (threadId, title, description) =>
+    apiPut(`/api/chat/thread/${threadId}`, {
+      title,
+      description
+    }),
 
   /**
    * 删除对话线程
@@ -269,5 +274,6 @@ export const threadApi = {
    * @param {string} fileId
    * @returns {Promise}
    */
-  deleteThreadAttachment: (threadId, fileId) => apiDelete(`/api/chat/thread/${threadId}/attachments/${fileId}`)
-};
+  deleteThreadAttachment: (threadId, fileId) =>
+    apiDelete(`/api/chat/thread/${threadId}/attachments/${fileId}`)
+}

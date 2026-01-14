@@ -3,25 +3,44 @@
     <div class="hero-section">
       <div class="glass-header">
         <div class="logo">
-          <img :src="infoStore.organization.logo" :alt="infoStore.organization.name" class="logo-img" />
+          <img
+            :src="infoStore.organization.logo"
+            :alt="infoStore.organization.name"
+            class="logo-img"
+          />
           <span class="logo-text">{{ infoStore.organization.name }}</span>
         </div>
         <nav class="nav-links">
-          <router-link to="/agent" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
+          <router-link
+            to="/agent"
+            class="nav-link"
+            v-if="userStore.isLoggedIn && userStore.isAdmin"
+          >
             <span>智能体</span>
           </router-link>
-          <router-link to="/graph" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
+          <router-link
+            to="/graph"
+            class="nav-link"
+            v-if="userStore.isLoggedIn && userStore.isAdmin"
+          >
             <span>知识图谱</span>
           </router-link>
-          <router-link to="/database" class="nav-link" v-if="userStore.isLoggedIn && userStore.isAdmin">
+          <router-link
+            to="/database"
+            class="nav-link"
+            v-if="userStore.isLoggedIn && userStore.isAdmin"
+          >
             <span>知识库</span>
           </router-link>
-          </nav>
+        </nav>
         <div class="header-actions">
           <div class="github-link">
             <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
               <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
-                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                <path
+                  fill-rule="evenodd"
+                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+                ></path>
               </svg>
             </a>
           </div>
@@ -36,7 +55,12 @@
           <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
           <div class="hero-actions">
             <button class="button-base primary" @click="goToChat">开始对话</button>
-            <a class="button-base secondary" href="https://xerrors.github.io/Yuxi-Know/" target="_blank">查看文档</a>
+            <a
+              class="button-base secondary"
+              href="https://xerrors.github.io/Yuxi-Know/"
+              target="_blank"
+              >查看文档</a
+            >
           </div>
         </div>
         <div class="insight-panel" v-if="featureCards.length">
@@ -116,39 +140,39 @@ const goToChat = async () => {
   // 检查用户是否登录
   if (!userStore.isLoggedIn) {
     // 登录后应该跳转到默认智能体而不是/agent
-    sessionStorage.setItem('redirect', '/');  // 设置为首页，登录后会通过路由守卫处理重定向
-    router.push('/login');
-    return;
+    sessionStorage.setItem('redirect', '/') // 设置为首页，登录后会通过路由守卫处理重定向
+    router.push('/login')
+    return
   }
 
   // 根据用户角色进行跳转
   if (userStore.isAdmin) {
     // 管理员用户跳转到聊天页面
-    router.push('/agent');
-    return;
+    router.push('/agent')
+    return
   }
 
   // 普通用户跳转到默认智能体
   try {
     // 获取默认智能体
-    const defaultAgent = agentStore.defaultAgent;
+    const defaultAgent = agentStore.defaultAgent
     if (defaultAgent?.id) {
-      router.push(`/agent/${defaultAgent.id}`);
+      router.push(`/agent/${defaultAgent.id}`)
     } else {
-      router.push('/agent');
+      router.push('/agent')
     }
   } catch (error) {
-    console.error('跳转到智能体页面失败:', error);
-    router.push("/");
+    console.error('跳转到智能体页面失败:', error)
+    router.push('/')
   }
-};
+}
 
 onMounted(async () => {
   // 加载信息配置
   await infoStore.loadInfoConfig()
 })
 
-const iconKey = (value) => typeof value === 'string' ? value.toLowerCase() : ''
+const iconKey = (value) => (typeof value === 'string' ? value.toLowerCase() : '')
 
 // region icon_mapping
 const featureIconMap = {
@@ -216,7 +240,6 @@ const actionLinks = computed(() => {
     })
     .filter((item) => item.name && item.url)
 })
-
 </script>
 
 <style lang="less" scoped>
@@ -274,14 +297,14 @@ const actionLinks = computed(() => {
   }
 
   &.router-link-active {
-      background: linear-gradient(135deg, var(--main-600), var(--main-500));
-      color: var(--gray-0);
-      border-radius: 1.5rem;
+    background: linear-gradient(135deg, var(--main-600), var(--main-500));
+    color: var(--gray-0);
+    border-radius: 1.5rem;
 
-      &:hover {
-        background: linear-gradient(135deg, var(--main-700), var(--main-600));
-      }
+    &:hover {
+      background: linear-gradient(135deg, var(--main-700), var(--main-600));
     }
+  }
 
   span {
     white-space: nowrap;
@@ -550,7 +573,9 @@ const actionLinks = computed(() => {
   color: inherit;
   border: 1px solid var(--gray-50);
   background: var(--gray-0);
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
 
   &:hover {
     background: var(--gray-0);
@@ -684,7 +709,7 @@ const actionLinks = computed(() => {
     padding: 0.8rem 1.25rem;
     flex-wrap: wrap;
     gap: 1rem;
-    }
+  }
 
   .nav-links {
     order: 3;

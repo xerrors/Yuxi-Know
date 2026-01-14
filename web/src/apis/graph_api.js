@@ -29,7 +29,7 @@ export const unifiedApi = {
    * @returns {Promise} - 子图数据
    */
   getSubgraph: async (params) => {
-    const { db_id, node_label = "*", max_depth = 2, max_nodes = 100 } = params
+    const { db_id, node_label = '*', max_depth = 2, max_nodes = 100 } = params
 
     if (!db_id) {
       throw new Error('db_id is required')
@@ -80,7 +80,6 @@ export const unifiedApi = {
   }
 }
 
-
 // =============================================================================
 // === Neo4j图数据库接口分组 ===
 // =============================================================================
@@ -126,13 +125,23 @@ export const neo4jApi = {
    * @param {number} batch_size - 批处理大小 (可选)
    * @returns {Promise} - 添加结果
    */
-  addEntities: async (file_path, kgdb_name = 'neo4j', embed_model_name = null, batch_size = null) => {
-    return await apiPost('/api/graph/neo4j/add-entities', {
-      file_path: file_path,
-      kgdb_name: kgdb_name,
-      embed_model_name: embed_model_name,
-      batch_size: batch_size
-    }, {}, true)
+  addEntities: async (
+    file_path,
+    kgdb_name = 'neo4j',
+    embed_model_name = null,
+    batch_size = null
+  ) => {
+    return await apiPost(
+      '/api/graph/neo4j/add-entities',
+      {
+        file_path: file_path,
+        kgdb_name: kgdb_name,
+        embed_model_name: embed_model_name,
+        batch_size: batch_size
+      },
+      {},
+      true
+    )
   },
 
   /**
@@ -141,9 +150,14 @@ export const neo4jApi = {
    * @returns {Promise} - 索引结果
    */
   indexEntities: async (kgdb_name = 'neo4j') => {
-    return await apiPost('/api/graph/neo4j/index-entities', {
-      kgdb_name: kgdb_name
-    }, {}, true)
+    return await apiPost(
+      '/api/graph/neo4j/index-entities',
+      {
+        kgdb_name: kgdb_name
+      },
+      {},
+      true
+    )
   },
 
   /**
@@ -166,18 +180,18 @@ export const neo4jApi = {
  */
 export const getEntityTypeColor = (entityType) => {
   const colorMap = {
-    'person': '#FF6B6B',      // 红色 - 人物
-    'organization': '#4ECDC4', // 青色 - 组织
-    'location': '#45B7D1',    // 蓝色 - 地点
-    'geo': '#45B7D1',         // 蓝色 - 地理位置
-    'event': '#96CEB4',       // 绿色 - 事件
-    'category': '#FFEAA7',    // 黄色 - 分类
-    'equipment': '#DDA0DD',   // 紫色 - 设备
-    'athlete': '#FF7675',     // 红色 - 运动员
-    'record': '#FD79A8',      // 粉色 - 记录
-    'year': '#FDCB6E',        // 橙色 - 年份
-    'UNKNOWN': '#B2BEC3',     // 灰色 - 未知
-    'unknown': '#B2BEC3'      // 灰色 - 未知
+    person: '#FF6B6B', // 红色 - 人物
+    organization: '#4ECDC4', // 青色 - 组织
+    location: '#45B7D1', // 蓝色 - 地点
+    geo: '#45B7D1', // 蓝色 - 地理位置
+    event: '#96CEB4', // 绿色 - 事件
+    category: '#FFEAA7', // 黄色 - 分类
+    equipment: '#DDA0DD', // 紫色 - 设备
+    athlete: '#FF7675', // 红色 - 运动员
+    record: '#FD79A8', // 粉色 - 记录
+    year: '#FDCB6E', // 橙色 - 年份
+    UNKNOWN: '#B2BEC3', // 灰色 - 未知
+    unknown: '#B2BEC3' // 灰色 - 未知
   }
 
   return colorMap[entityType] || colorMap['unknown']
@@ -235,7 +249,7 @@ export const graphApi = {
     // 使用统一接口获取所有图谱，然后过滤出 LightRAG 类型的
     const response = await unifiedApi.getGraphs()
     if (response.success) {
-      const lightragDbs = response.data.filter(graph => graph.type === 'lightrag')
+      const lightragDbs = response.data.filter((graph) => graph.type === 'lightrag')
       return { success: true, data: { databases: lightragDbs } }
     }
     return response

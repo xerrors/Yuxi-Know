@@ -22,7 +22,7 @@
 </template>
 
 <script setup>
-import { LoadingOutlined } from '@ant-design/icons-vue';
+import { LoadingOutlined } from '@ant-design/icons-vue'
 const props = defineProps({
   title: {
     type: String,
@@ -36,7 +36,7 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-});
+})
 </script>
 
 <style scoped lang="less">

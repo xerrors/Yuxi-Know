@@ -20,7 +20,8 @@
       <!-- search 操作：原有的文件分组显示 -->
       <div v-else class="knowledge-base-result">
         <div class="result-summary">
-          找到 {{ parsedData(resultContent).length }} 个相关文档片段，来自 {{ fileGroups(parsedData(resultContent)).length }} 个文件
+          找到 {{ parsedData(resultContent).length }} 个相关文档片段，来自
+          {{ fileGroups(parsedData(resultContent)).length }} 个文件
         </div>
 
         <div class="kb-results">
@@ -32,7 +33,7 @@
             <!-- 文件级别的头部 -->
             <div
               class="file-header"
-              :class="{ 'expanded': expandedFiles.has(fileGroup.filename) }"
+              :class="{ expanded: expandedFiles.has(fileGroup.filename) }"
               @click="toggleFile(fileGroup.filename)"
             >
               <div class="file-info">
@@ -41,15 +42,15 @@
                 <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
               </div>
               <div class="expand-icon">
-                <ChevronDown :size="14" :class="{ 'rotated': expandedFiles.has(fileGroup.filename) }" />
+                <ChevronDown
+                  :size="14"
+                  :class="{ rotated: expandedFiles.has(fileGroup.filename) }"
+                />
               </div>
             </div>
 
             <!-- 展开的chunks列表 -->
-            <div
-              v-if="expandedFiles.has(fileGroup.filename)"
-              class="chunks-container"
-            >
+            <div v-if="expandedFiles.has(fileGroup.filename)" class="chunks-container">
               <div
                 v-for="(chunk, index) in fileGroup.chunks"
                 :key="chunk.id"
@@ -61,7 +62,9 @@
                   <span class="chunk-index">#{{ index + 1 }}</span>
                   <div class="chunk-scores">
                     <span class="score-item">相似度 {{ (chunk.score * 100).toFixed(0) }}%</span>
-                    <span v-if="chunk.rerank_score" class="score-item">重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span>
+                    <span v-if="chunk.rerank_score" class="score-item"
+                      >重排序 {{ (chunk.rerank_score * 100).toFixed(0) }}%</span
+                    >
                   </div>
                   <span class="chunk-preview">{{ getPreviewText(chunk.content) }}</span>
                   <Eye :size="14" class="view-icon" />
@@ -88,7 +91,9 @@
               <div class="detail-scores">
                 <div class="score-card">
                   <div class="score-label">相似度分数</div>
-                  <div class="score-value-large">{{ (selectedChunk.data.score * 100).toFixed(1) }}%</div>
+                  <div class="score-value-large">
+                    {{ (selectedChunk.data.score * 100).toFixed(1) }}%
+                  </div>
                   <a-progress
                     :percent="getPercent(selectedChunk.data.score)"
                     :stroke-color="getScoreColor(selectedChunk.data.score)"
@@ -98,7 +103,9 @@
                 </div>
                 <div v-if="selectedChunk.data.rerank_score" class="score-card">
                   <div class="score-label">重排序分数</div>
-                  <div class="score-value-large">{{ (selectedChunk.data.rerank_score * 100).toFixed(1) }}%</div>
+                  <div class="score-value-large">
+                    {{ (selectedChunk.data.rerank_score * 100).toFixed(1) }}%
+                  </div>
                   <a-progress
                     :percent="getPercent(selectedChunk.data.rerank_score)"
                     :stroke-color="getScoreColor(selectedChunk.data.rerank_score)"
@@ -108,7 +115,12 @@
                 </div>
               </div>
               <div class="detail-meta">
-                <span class="meta-item"><Database :size="12" /> ID: {{ selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id }}</span>
+                <span class="meta-item"
+                  ><Database :size="12" /> ID:
+                  {{
+                    selectedChunk.data.metadata.chunk_id || selectedChunk.data.metadata.file_id
+                  }}</span
+                >
               </div>
             </div>
 
@@ -124,7 +136,7 @@
 </template>
 
 <script setup>
-import BaseToolCall from '../BaseToolCall.vue';
+import BaseToolCall from '../BaseToolCall.vue'
 import { ref, computed } from 'vue'
 import { FileText, ChevronDown, Eye, Database } from 'lucide-vue-next'
 
@@ -137,57 +149,56 @@ const props = defineProps({
 
 // 解析参数
 const args = computed(() => {
-  const args = props.toolCall.args || props.toolCall.function?.arguments;
-  if (!args) return {};
+  const args = props.toolCall.args || props.toolCall.function?.arguments
+  if (!args) return {}
 
-  if (typeof args === 'object') return args;
+  if (typeof args === 'object') return args
   try {
-    return JSON.parse(args);
+    return JSON.parse(args)
   } catch (e) {
-    return {};
+    return {}
   }
-});
+})
 
 const toolName = computed(() => {
-  return props.toolCall.name || props.toolCall.function?.name || '知识库';
-});
+  return props.toolCall.name || props.toolCall.function?.name || '知识库'
+})
 
 // 获取操作类型
 const operation = computed(() => {
-  return args.value.operation || 'search';
-});
+  return args.value.operation || 'search'
+})
 
 // 获取操作标签
 const operationLabel = computed(() => {
   const labels = {
     search: `${toolName.value} 搜索`,
     get_mindmap: toolName.value
-  };
-  return labels[operation.value] || operation.value;
-});
+  }
+  return labels[operation.value] || operation.value
+})
 
 // 获取查询文本
 const queryText = computed(() => {
-  return args.value.query_text || '';
-});
+  return args.value.query_text || ''
+})
 
 const fileName = computed(() => {
-  return args.value.file_name || '';
-});
+  return args.value.file_name || ''
+})
 
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return [];
+      return []
     }
   }
-  return content || [];
-};
+  return content || []
+}
 
-const parsedData = (content) => parseData(content);
-
+const parsedData = (content) => parseData(content)
 
 // 管理展开状态
 const expandedFiles = ref(new Set())
@@ -200,7 +211,7 @@ const selectedChunk = ref(null)
 const fileGroups = (data) => {
   const groups = new Map()
 
-  data.forEach(item => {
+  data.forEach((item) => {
     const filename = item.metadata.source
     if (!groups.has(filename)) {
       groups.set(filename, {
@@ -247,20 +258,20 @@ const getPercent = (score) => {
 }
 
 const getScoreColor = (score) => {
-  if (score >= 0.7) return '#52c41a'  // 绿色 - 高相关性
-  if (score >= 0.5) return '#faad14'  // 橙色 - 中等相关性
-  return '#ff4d4f'  // 红色 - 低相关性
+  if (score >= 0.7) return '#52c41a' // 绿色 - 高相关性
+  if (score >= 0.5) return '#faad14' // 橙色 - 中等相关性
+  return '#ff4d4f' // 红色 - 低相关性
 }
 
 // 格式化思维导图结果
 const formatMindmapResult = (content) => {
   if (typeof content === 'string') {
-    return content;
+    return content
   }
   if (typeof content === 'object') {
-    return JSON.stringify(content, null, 2);
+    return JSON.stringify(content, null, 2)
   }
-  return String(content);
+  return String(content)
 }
 </script>
 

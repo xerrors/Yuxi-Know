@@ -44,9 +44,8 @@
               @change="handleChange('reranker', $event)"
               placeholder="请选择重排序模型"
             >
-              <a-select-option
-                v-for="(name, idx) in rerankerChoices" :key="idx"
-                :value="name">{{ name }}
+              <a-select-option v-for="(name, idx) in rerankerChoices" :key="idx" :value="name"
+                >{{ name }}
               </a-select-option>
             </a-select>
           </div>
@@ -70,7 +69,12 @@
           @change="handleChange('enable_content_guard_llm', $event)"
         />
       </div>
-      <div class="card card-select" v-if="configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm">
+      <div
+        class="card card-select"
+        v-if="
+          configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm
+        "
+      >
         <span class="label">{{ items?.content_guard_llm_model.des }}</span>
         <ModelSelectorComponent
           @select-model="handleContentGuardModelSelect"
@@ -83,14 +87,20 @@
     <!-- 服务链接部分 -->
     <h3 v-if="userStore.isAdmin" class="section-title">服务链接</h3>
     <div v-if="userStore.isAdmin">
-      <p class="service-description">快速访问系统相关的外部服务，需要将 localhost 替换为实际的 IP 地址。</p>
+      <p class="service-description">
+        快速访问系统相关的外部服务，需要将 localhost 替换为实际的 IP 地址。
+      </p>
       <div class="services-grid">
         <div class="service-link-card">
           <div class="service-info">
             <h4>Neo4j 浏览器</h4>
             <p>图数据库管理界面</p>
           </div>
-          <a-button type="default" @click="openLink('http://localhost:7474/')" :icon="h(GlobalOutlined)">
+          <a-button
+            type="default"
+            @click="openLink('http://localhost:7474/')"
+            :icon="h(GlobalOutlined)"
+          >
             访问
           </a-button>
         </div>
@@ -100,7 +110,11 @@
             <h4>API 接口文档</h4>
             <p>系统接口文档和调试工具</p>
           </div>
-          <a-button type="default" @click="openLink('http://localhost:5050/docs')" :icon="h(GlobalOutlined)">
+          <a-button
+            type="default"
+            @click="openLink('http://localhost:5050/docs')"
+            :icon="h(GlobalOutlined)"
+          >
             访问
           </a-button>
         </div>
@@ -110,7 +124,11 @@
             <h4>MinIO 对象存储</h4>
             <p>文件存储管理控制台</p>
           </div>
-          <a-button type="default" @click="openLink('http://localhost:9001')" :icon="h(GlobalOutlined)">
+          <a-button
+            type="default"
+            @click="openLink('http://localhost:9001')"
+            :icon="h(GlobalOutlined)"
+          >
             访问
           </a-button>
         </div>
@@ -120,7 +138,11 @@
             <h4>Milvus WebUI</h4>
             <p>向量数据库管理界面</p>
           </div>
-          <a-button type="default" @click="openLink('http://localhost:9091/webui/')" :icon="h(GlobalOutlined)">
+          <a-button
+            type="default"
+            @click="openLink('http://localhost:9091/webui/')"
+            :icon="h(GlobalOutlined)"
+          >
             访问
           </a-button>
         </div>
@@ -130,11 +152,14 @@
             <h4>SQLite WebUI</h4>
             <p>SQLite 数据库管理界面</p>
           </div>
-          <a-button type="default" @click="openLink('http://localhost:9092/')" :icon="h(GlobalOutlined)">
+          <a-button
+            type="default"
+            @click="openLink('http://localhost:9092/')"
+            :icon="h(GlobalOutlined)"
+          >
             访问
           </a-button>
         </div>
-
       </div>
     </div>
   </div>

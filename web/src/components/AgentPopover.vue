@@ -30,20 +30,21 @@
         <div class="tab-content">
           <!-- Todo Display -->
           <div v-if="activeTab === 'todos'" class="todo-display">
-            <div v-if="!todos.length" class="empty">
-              暂无任务
-            </div>
+            <div v-if="!todos.length" class="empty">暂无任务</div>
             <div v-else class="todo-list">
-              <div
-                v-for="(todo, index) in todos"
-                :key="index"
-                class="todo-item"
-              >
+              <div v-for="(todo, index) in todos" :key="index" class="todo-item">
                 <div class="todo-status">
                   <CheckCircleOutlined v-if="todo.status === 'completed'" class="icon completed" />
-                  <SyncOutlined v-else-if="todo.status === 'in_progress'" class="icon in-progress" spin />
+                  <SyncOutlined
+                    v-else-if="todo.status === 'in_progress'"
+                    class="icon in-progress"
+                    spin
+                  />
                   <ClockCircleOutlined v-else-if="todo.status === 'pending'" class="icon pending" />
-                  <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" class="icon cancelled" />
+                  <CloseCircleOutlined
+                    v-else-if="todo.status === 'cancelled'"
+                    class="icon cancelled"
+                  />
                   <QuestionCircleOutlined v-else class="icon unknown" />
                 </div>
                 <span class="todo-text">{{ todo.content }}</span>
@@ -53,9 +54,7 @@
 
           <!-- Files Display -->
           <div v-if="activeTab === 'files'" class="files-display">
-            <div v-if="!fileCount" class="empty">
-              暂无文件
-            </div>
+            <div v-if="!fileCount" class="empty">暂无文件</div>
             <div v-else class="file-list">
               <div
                 v-for="(fileItem, index) in normalizedFiles"
@@ -88,12 +87,7 @@
   </a-popover>
 
   <!-- 文件内容 Modal -->
-  <a-modal
-    v-model:open="modalVisible"
-    width="80%"
-    :footer="null"
-    @cancel="closeModal"
-  >
+  <a-modal v-model:open="modalVisible" width="80%" :footer="null" @cancel="closeModal">
     <template #title>
       <div class="modal-header-title">
         <span class="file-path-title">{{ currentFilePath }}</span>
@@ -112,7 +106,9 @@
         />
       </template>
       <template v-else>
-        <pre v-if="Array.isArray(currentFile?.content)">{{ formatContent(currentFile.content) }}</pre>
+        <pre v-if="Array.isArray(currentFile?.content)">{{
+          formatContent(currentFile.content)
+        }}</pre>
         <div v-else-if="typeof currentFile?.content === 'string'">{{ currentFile.content }}</div>
         <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
       </template>
@@ -121,18 +117,18 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { Download } from 'lucide-vue-next';
-import { 
-  CheckCircleOutlined, 
-  SyncOutlined, 
-  ClockCircleOutlined, 
+import { computed, ref, watch } from 'vue'
+import { Download } from 'lucide-vue-next'
+import {
+  CheckCircleOutlined,
+  SyncOutlined,
+  ClockCircleOutlined,
   CloseCircleOutlined,
   QuestionCircleOutlined,
   DownloadOutlined
 } from '@ant-design/icons-vue'
 import { MdPreview } from 'md-editor-v3'
-import 'md-editor-v3/lib/preview.css';
+import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps({
@@ -144,144 +140,148 @@ const props = defineProps({
     type: Object,
     default: () => ({})
   }
-});
+})
 
-const emit = defineEmits(['update:visible', 'refresh']);
+const emit = defineEmits(['update:visible', 'refresh'])
 
-const activeTab = ref('todos');
-const modalVisible = ref(false);
-const currentFile = ref(null);
-const currentFilePath = ref('');
+const activeTab = ref('todos')
+const modalVisible = ref(false)
+const currentFile = ref(null)
+const currentFilePath = ref('')
 
-const themeStore = useThemeStore();
-const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
+const themeStore = useThemeStore()
+const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 const isMarkdown = computed(() => {
-  return currentFilePath.value?.toLowerCase().endsWith('.md');
-});
+  return currentFilePath.value?.toLowerCase().endsWith('.md')
+})
 
 // 计算属性
 const visible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value)
-});
+})
 
 const todos = computed(() => {
-  return props.agentState?.todos || [];
-});
+  return props.agentState?.todos || []
+})
 
 const files = computed(() => {
-  return props.agentState?.files || [];
-});
+  return props.agentState?.files || []
+})
 
 const hasTodos = computed(() => {
-  return todos.value.length > 0;
-});
+  return todos.value.length > 0
+})
 
 const hasFiles = computed(() => {
-  return files.value.length > 0;
-});
+  return files.value.length > 0
+})
 
 const todoCount = computed(() => {
-  return todos.value.length;
-});
+  return todos.value.length
+})
 
 // 适配实际数据格式
 const normalizedFiles = computed(() => {
-  if (!Array.isArray(files.value)) return [];
+  if (!Array.isArray(files.value)) return []
 
-  const result = [];
-  files.value.forEach(item => {
+  const result = []
+  files.value.forEach((item) => {
     if (typeof item === 'object' && item !== null) {
       Object.entries(item).forEach(([filePath, fileData]) => {
         result.push({
           path: filePath,
           ...fileData
-        });
-      });
+        })
+      })
     }
-  });
+  })
 
-  return result;
-});
+  return result
+})
 
 const fileCount = computed(() => {
-  return normalizedFiles.value.length;
-});
+  return normalizedFiles.value.length
+})
 
 // 监听 agentState 变化，自动选择有内容的标签
-watch(() => props.agentState, (newState) => {
-  if (newState) {
-    if (hasFiles.value && !hasTodos.value) {
-      activeTab.value = 'files';
-    } else {
-      activeTab.value = 'todos';
+watch(
+  () => props.agentState,
+  (newState) => {
+    if (newState) {
+      if (hasFiles.value && !hasTodos.value) {
+        activeTab.value = 'files'
+      } else {
+        activeTab.value = 'todos'
+      }
     }
-  }
-}, { immediate: true });
+  },
+  { immediate: true }
+)
 
 // 方法
 const getFileName = (fileItem) => {
   if (fileItem.path) {
-    return fileItem.path.split('/').pop() || fileItem.path;
+    return fileItem.path.split('/').pop() || fileItem.path
   }
-  return '未知文件';
-};
+  return '未知文件'
+}
 
 const formatDate = (dateString) => {
-  if (!dateString) return '';
+  if (!dateString) return ''
   try {
-    const date = new Date(dateString);
+    const date = new Date(dateString)
     return date.toLocaleString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit'
-    });
+    })
   } catch (error) {
-    return dateString;
+    return dateString
   }
-};
+}
 
 const formatContent = (contentArray) => {
-  if (!Array.isArray(contentArray)) return String(contentArray);
-  return contentArray.join('\n');
-};
+  if (!Array.isArray(contentArray)) return String(contentArray)
+  return contentArray.join('\n')
+}
 
 const showFileContent = (filePath, fileData) => {
-  currentFilePath.value = filePath;
-  currentFile.value = fileData;
-  modalVisible.value = true;
-};
+  currentFilePath.value = filePath
+  currentFile.value = fileData
+  modalVisible.value = true
+}
 
 const closeModal = () => {
-  modalVisible.value = false;
-  currentFile.value = null;
-  currentFilePath.value = '';
-};
+  modalVisible.value = false
+  currentFile.value = null
+  currentFilePath.value = ''
+}
 
 const downloadFile = (fileItem) => {
   try {
-    const content = formatContent(fileItem.content);
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    const content = formatContent(fileItem.content)
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
 
-    link.href = url;
-    link.download = getFileName(fileItem);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    link.href = url
+    link.download = getFileName(fileItem)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   } catch (error) {
-    console.error('下载文件失败:', error);
+    console.error('下载文件失败:', error)
   }
-};
+}
 
 const emitRefresh = () => {
-  emit('refresh');
-};
+  emit('refresh')
+}
 </script>
 
 <style scoped lang="less">
@@ -402,15 +402,25 @@ const emitRefresh = () => {
   align-items: center;
   justify-content: center;
   margin-top: 2px;
-  
+
   .icon {
     font-size: 16px;
-    
-    &.completed { color: #52c41a; }
-    &.in-progress { color: #1890ff; }
-    &.pending { color: #faad14; }
-    &.cancelled { color: #ff4d4f; }
-    &.unknown { color: var(--gray-400); }
+
+    &.completed {
+      color: #52c41a;
+    }
+    &.in-progress {
+      color: #1890ff;
+    }
+    &.pending {
+      color: #faad14;
+    }
+    &.cancelled {
+      color: #ff4d4f;
+    }
+    &.unknown {
+      color: var(--gray-400);
+    }
   }
 }
 
@@ -530,25 +540,25 @@ const emitRefresh = () => {
     }
   }
 
-      pre {
-        font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 13px;
-        line-height: 1.5;
-        margin: 0;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        color: var(--gray-1000);
-        background: transparent;
-      }
-  
-      :deep(.md-editor-preview-wrapper) {
-        padding: 0;
-      }
-  
-      :deep(.md-editor-preview) {
-        font-size: 14px;
-      }
-    }
+  pre {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: var(--gray-1000);
+    background: transparent;
+  }
+
+  :deep(.md-editor-preview-wrapper) {
+    padding: 0;
+  }
+
+  :deep(.md-editor-preview) {
+    font-size: 14px;
+  }
+}
 
 .modal-header-title {
   display: flex;
@@ -617,5 +627,4 @@ const emitRefresh = () => {
   margin-left: auto;
   color: var(--gray-700);
 }
-
 </style>

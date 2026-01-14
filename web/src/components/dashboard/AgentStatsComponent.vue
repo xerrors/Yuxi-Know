@@ -70,8 +70,12 @@
               :value="record.satisfaction_rate"
               suffix="%"
               :value-style="{
-                color: record.satisfaction_rate >= 80 ? 'var(--color-success-500)' :
-                       record.satisfaction_rate >= 60 ? 'var(--color-warning-500)' : 'var(--color-error-500)',
+                color:
+                  record.satisfaction_rate >= 80
+                    ? 'var(--color-success-500)'
+                    : record.satisfaction_rate >= 60
+                      ? 'var(--color-warning-500)'
+                      : 'var(--color-error-500)',
                 fontSize: '14px'
               }"
             />
@@ -82,7 +86,6 @@
         </template>
       </a-table>
     </div>
-
   </a-card>
 </template>
 
@@ -158,13 +161,14 @@ const topPerformers = computed(() => {
   return props.agentStats?.top_performing_agents || []
 })
 
-
-
 // 初始化对话数和工具调用数合并图表
 const initConversationToolChart = () => {
-  if (!conversationToolChartRef.value ||
-      (!props.agentStats?.agent_conversation_counts?.length &&
-       !props.agentStats?.agent_tool_usage?.length)) return
+  if (
+    !conversationToolChartRef.value ||
+    (!props.agentStats?.agent_conversation_counts?.length &&
+      !props.agentStats?.agent_tool_usage?.length)
+  )
+    return
 
   // 如果已存在图表实例，先销毁
   if (conversationToolChart) {
@@ -181,7 +185,7 @@ const initConversationToolChart = () => {
   const allAgentStats = {}
 
   // 统计每个智能体的总数据量（对话数 + 工具调用数）
-  conversationData.forEach(item => {
+  conversationData.forEach((item) => {
     if (!allAgentStats[item.agent_id]) {
       allAgentStats[item.agent_id] = { conversation: 0, tool: 0, total: 0 }
     }
@@ -189,7 +193,7 @@ const initConversationToolChart = () => {
     allAgentStats[item.agent_id].total += item.conversation_count
   })
 
-  toolData.forEach(item => {
+  toolData.forEach((item) => {
     if (!allAgentStats[item.agent_id]) {
       allAgentStats[item.agent_id] = { conversation: 0, tool: 0, total: 0 }
     }
@@ -199,7 +203,7 @@ const initConversationToolChart = () => {
 
   // 按总数据量降序排序，取前3个
   const topAgentIds = Object.entries(allAgentStats)
-    .sort(([,a], [,b]) => b.total - a.total)
+    .sort(([, a], [, b]) => b.total - a.total)
     .slice(0, 3)
     .map(([agentId]) => agentId)
 
@@ -239,7 +243,7 @@ const initConversationToolChart = () => {
       },
       axisLabel: {
         color: getCSSVariable('--gray-500'),
-        interval: 0,
+        interval: 0
         // rotate: 45
       }
     },
@@ -263,8 +267,8 @@ const initConversationToolChart = () => {
       {
         name: '对话数',
         type: 'bar',
-        data: topAgentIds.map(agentId => {
-          const item = conversationData.find(d => d.agent_id === agentId)
+        data: topAgentIds.map((agentId) => {
+          const item = conversationData.find((d) => d.agent_id === agentId)
           return item ? item.conversation_count : 0
         }),
         itemStyle: {
@@ -282,8 +286,8 @@ const initConversationToolChart = () => {
       {
         name: '工具调用数',
         type: 'bar',
-        data: topAgentIds.map(agentId => {
-          const item = toolData.find(d => d.agent_id === agentId)
+        data: topAgentIds.map((agentId) => {
+          const item = toolData.find((d) => d.agent_id === agentId)
           return item ? item.tool_usage_count : 0
         }),
         itemStyle: {
@@ -304,8 +308,6 @@ const initConversationToolChart = () => {
   conversationToolChart.setOption(option)
 }
 
-
-
 // 更新图表
 const updateCharts = () => {
   nextTick(() => {
@@ -314,9 +316,13 @@ const updateCharts = () => {
 }
 
 // 监听数据变化
-watch(() => props.agentStats, () => {
-  updateCharts()
-}, { deep: true })
+watch(
+  () => props.agentStats,
+  () => {
+    updateCharts()
+  },
+  { deep: true }
+)
 
 // 窗口大小变化时重新调整图表
 const handleResize = () => {
@@ -329,13 +335,16 @@ onMounted(() => {
 })
 
 // 监听主题变化，重新渲染图表
-watch(() => themeStore.isDark, () => {
-  if (props.agentStats && conversationToolChart) {
-    nextTick(() => {
-      updateCharts()
-    })
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (props.agentStats && conversationToolChart) {
+      nextTick(() => {
+        updateCharts()
+      })
+    }
   }
-})
+)
 
 // 组件卸载时清理
 const cleanup = () => {
@@ -353,14 +362,12 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-
 /* 指标值样式 */
 .metric-value {
   font-weight: 500;
   color: var(--gray-1000);
   font-size: 14px;
 }
-
 
 /* 排名显示样式 */
 .rank-display {
@@ -388,7 +395,8 @@ defineExpose({
 }
 
 // AgentStatsComponent 特有的样式
-.top-performers, .metrics-comparison {
+.top-performers,
+.metrics-comparison {
   h4 {
     margin-bottom: 16px;
     font-weight: 600;
@@ -406,7 +414,6 @@ defineExpose({
   }
 }
 
-
 :deep(.ant-progress-bg) {
   transition: all 0.3s ease;
 }
@@ -414,5 +421,4 @@ defineExpose({
 :deep(.ant-statistic-content-value) {
   font-weight: bold !important;
 }
-
 </style>

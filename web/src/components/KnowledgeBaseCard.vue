@@ -12,24 +12,14 @@
           size="small"
         ></a-button>
         <h3 class="card-title">{{ database.name || '数据库信息加载中' }}</h3>
-
       </div>
       <div class="header-right">
-        <a-button
-          type="text"
-          size="small"
-          @click="copyDatabaseId"
-          title="复制知识库ID"
-        >
+        <a-button type="text" size="small" @click="copyDatabaseId" title="复制知识库ID">
           <template #icon>
             <Copy :size="14" />
           </template>
         </a-button>
-        <a-button
-          @click="showEditModal"
-          type="text"
-          size="small"
-        >
+        <a-button @click="showEditModal" type="text" size="small">
           <template #icon>
             <Pencil :size="14" />
           </template>
@@ -46,10 +36,7 @@
 
       <!-- Tags -->
       <div class="tags-section">
-        <a-tag
-          :color="getKbTypeColor(database.kb_type || 'lightrag')"
-          size="small"
-        >
+        <a-tag :color="getKbTypeColor(database.kb_type || 'lightrag')" size="small">
           {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
         </a-tag>
         <a-tag color="blue" size="small">{{ database.embed_info?.name || 'N/A' }}</a-tag>
@@ -60,9 +47,9 @@
   <!-- 编辑对话框 -->
   <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
     <template #footer>
-      <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0;">
+      <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0">
         <template #icon>
-          <Trash2 :size="16" style="vertical-align: -3px; margin-right: 4px;" />
+          <Trash2 :size="16" style="vertical-align: -3px; margin-right: 4px" />
         </template>
         删除数据库
       </a-button>
@@ -84,8 +71,14 @@
       </a-form-item>
 
       <a-form-item label="自动生成问题" name="auto_generate_questions">
-        <a-switch v-model:checked="editForm.auto_generate_questions" checked-children="开启" un-checked-children="关闭" />
-        <span style="margin-left: 8px; font-size: 12px; color: var(--gray-500);">上传文件后自动生成测试问题</span>
+        <a-switch
+          v-model:checked="editForm.auto_generate_questions"
+          checked-children="开启"
+          un-checked-children="关闭"
+        />
+        <span style="margin-left: 8px; font-size: 12px; color: var(--gray-500)"
+          >上传文件后自动生成测试问题</span
+        >
       </a-form-item>
 
       <!-- 仅对 LightRAG 类型显示 LLM 配置 -->
@@ -94,7 +87,7 @@
           :model_spec="llmModelSpec"
           placeholder="请选择模型"
           @select-model="handleLLMSelect"
-          style="width: 100%;"
+          style="width: 100%"
         />
       </a-form-item>
     </a-form>
@@ -102,73 +95,71 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, h } from 'vue';
-import { useRouter } from 'vue-router';
-import { useDatabaseStore } from '@/stores/database';
-import { getKbTypeLabel, getKbTypeColor } from '@/utils/kb_utils';
-import { message } from 'ant-design-vue';
-import { LeftOutlined } from '@ant-design/icons-vue';
-import {
-  Pencil,
-  Trash2,
-  Copy,
-} from 'lucide-vue-next';
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
-import AiTextarea from '@/components/AiTextarea.vue';
+import { ref, reactive, computed, h } from 'vue'
+import { useRouter } from 'vue-router'
+import { useDatabaseStore } from '@/stores/database'
+import { getKbTypeLabel, getKbTypeColor } from '@/utils/kb_utils'
+import { message } from 'ant-design-vue'
+import { LeftOutlined } from '@ant-design/icons-vue'
+import { Pencil, Trash2, Copy } from 'lucide-vue-next'
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
+import AiTextarea from '@/components/AiTextarea.vue'
 
-const router = useRouter();
-const store = useDatabaseStore();
+const router = useRouter()
+const store = useDatabaseStore()
 
-const database = computed(() => store.database);
+const database = computed(() => store.database)
 
 const fileList = computed(() => {
-  if (!database.value?.files) return [];
-  return Object.values(database.value.files).map(f => f.filename).filter(Boolean);
-});
+  if (!database.value?.files) return []
+  return Object.values(database.value.files)
+    .map((f) => f.filename)
+    .filter(Boolean)
+})
 
 // 复制数据库ID
 const copyDatabaseId = async () => {
   if (!database.value.db_id) {
-    message.warning('知识库ID为空');
-    return;
+    message.warning('知识库ID为空')
+    return
   }
 
   try {
-    await navigator.clipboard.writeText(database.value.db_id);
-    message.success('知识库ID已复制到剪贴板');
+    await navigator.clipboard.writeText(database.value.db_id)
+    message.success('知识库ID已复制到剪贴板')
   } catch (err) {
     // 降级方案
-    const textArea = document.createElement('textarea');
-    textArea.value = database.value.db_id;
-    document.body.appendChild(textArea);
-    textArea.select();
-    document.execCommand('copy');
-    document.body.removeChild(textArea);
-    message.success('知识库ID已复制到剪贴板');
+    const textArea = document.createElement('textarea')
+    textArea.value = database.value.db_id
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    message.success('知识库ID已复制到剪贴板')
   }
-};
+}
 
 // 格式化日期
 const formatDate = (dateStr) => {
-  if (!dateStr) return 'N/A';
-  const date = new Date(dateStr);
+  if (!dateStr) return 'N/A'
+  const date = new Date(dateStr)
   return date.toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit'
-  });
-};
+  })
+}
 
 // 返回数据库列表
 const backToDatabase = () => {
-  router.push('/database');
-};
+  router.push('/database')
+}
 
 // 编辑相关逻辑（复用自 DatabaseHeader）
-const editModalVisible = ref(false);
-const editFormRef = ref(null);
+const editModalVisible = ref(false)
+const editFormRef = ref(null)
 const editForm = reactive({
   name: '',
   description: '',
@@ -177,76 +168,80 @@ const editForm = reactive({
     provider: '',
     model_name: ''
   }
-});
+})
 
 const rules = {
   name: [{ required: true, message: '请输入知识库名称' }]
-};
+}
 
 const showEditModal = () => {
-  editForm.name = database.value.name || '';
-  editForm.description = database.value.description || '';
-  editForm.auto_generate_questions = database.value.additional_params?.auto_generate_questions || false;
+  editForm.name = database.value.name || ''
+  editForm.description = database.value.description || ''
+  editForm.auto_generate_questions =
+    database.value.additional_params?.auto_generate_questions || false
 
   // 如果是 LightRAG 类型，加载当前的 LLM 配置
   if (database.value.kb_type === 'lightrag') {
-    const llmInfo = database.value.llm_info || {};
-    editForm.llm_info.provider = llmInfo.provider || '';
-    editForm.llm_info.model_name = llmInfo.model_name || '';
+    const llmInfo = database.value.llm_info || {}
+    editForm.llm_info.provider = llmInfo.provider || ''
+    editForm.llm_info.model_name = llmInfo.model_name || ''
   }
-  editModalVisible.value = true;
-};
+  editModalVisible.value = true
+}
 
 const handleEditSubmit = () => {
-  editFormRef.value.validate().then(async () => {
-    const updateData = {
-      name: editForm.name,
-      description: editForm.description,
-      additional_params: {
-        auto_generate_questions: editForm.auto_generate_questions
+  editFormRef.value
+    .validate()
+    .then(async () => {
+      const updateData = {
+        name: editForm.name,
+        description: editForm.description,
+        additional_params: {
+          auto_generate_questions: editForm.auto_generate_questions
+        }
       }
-    };
 
-    // 如果是 LightRAG 类型，包含 llm_info
-    if (database.value.kb_type === 'lightrag') {
-      updateData.llm_info = {
-        provider: editForm.llm_info.provider,
-        model_name: editForm.llm_info.model_name
-      };
-    }
+      // 如果是 LightRAG 类型，包含 llm_info
+      if (database.value.kb_type === 'lightrag') {
+        updateData.llm_info = {
+          provider: editForm.llm_info.provider,
+          model_name: editForm.llm_info.model_name
+        }
+      }
 
-    await store.updateDatabaseInfo(updateData);
-    editModalVisible.value = false;
-  }).catch(err => {
-    console.error('表单验证失败:', err);
-  });
-};
+      await store.updateDatabaseInfo(updateData)
+      editModalVisible.value = false
+    })
+    .catch((err) => {
+      console.error('表单验证失败:', err)
+    })
+}
 
 // LLM 模型选择处理
 const llmModelSpec = computed(() => {
-  const provider = editForm.llm_info?.provider || '';
-  const modelName = editForm.llm_info?.model_name || '';
+  const provider = editForm.llm_info?.provider || ''
+  const modelName = editForm.llm_info?.model_name || ''
   if (provider && modelName) {
-    return `${provider}/${modelName}`;
+    return `${provider}/${modelName}`
   }
-  return '';
-});
+  return ''
+})
 
 const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec);
-  if (typeof spec !== 'string' || !spec) return;
+  console.log('LLM选择:', spec)
+  if (typeof spec !== 'string' || !spec) return
 
-  const index = spec.indexOf('/');
-  const provider = index !== -1 ? spec.slice(0, index) : '';
-  const modelName = index !== -1 ? spec.slice(index + 1) : '';
+  const index = spec.indexOf('/')
+  const provider = index !== -1 ? spec.slice(0, index) : ''
+  const modelName = index !== -1 ? spec.slice(index + 1) : ''
 
-  editForm.llm_info.provider = provider;
-  editForm.llm_info.model_name = modelName;
-};
+  editForm.llm_info.provider = provider
+  editForm.llm_info.model_name = modelName
+}
 
 const deleteDatabase = () => {
-  store.deleteDatabase();
-};
+  store.deleteDatabase()
+}
 </script>
 
 <style lang="less" scoped>
@@ -326,5 +321,4 @@ const deleteDatabase = () => {
   align-items: center;
   flex-wrap: wrap;
 }
-
 </style>

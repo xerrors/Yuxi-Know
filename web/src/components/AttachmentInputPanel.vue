@@ -12,9 +12,7 @@
       <span>{{ isUploading ? '上传中…' : '添加附件' }}</span>
     </label>
 
-    <p class="attachment-hint" v-if="limits">
-      支持 {{ extensionsText }}，单文件 ≤ {{ sizeHint }}
-    </p>
+    <p class="attachment-hint" v-if="limits">支持 {{ extensionsText }}，单文件 ≤ {{ sizeHint }}</p>
 
     <div class="attachment-list" v-if="attachments.length">
       <div class="attachment-chip" v-for="item in attachments" :key="item.file_id">
@@ -56,7 +54,7 @@ const emit = defineEmits(['upload', 'remove'])
 
 const extensionsText = computed(() => {
   if (!props.limits?.allowed_extensions?.length) return 'txt/md/docx/html'
-  return props.limits.allowed_extensions.map(item => item.replace('.', '')).join(' / ')
+  return props.limits.allowed_extensions.map((item) => item.replace('.', '')).join(' / ')
 })
 
 const sizeHint = computed(() => {

@@ -1,71 +1,8 @@
 /* Dashboard 共享样式文件 */
 
 /* Chart Color System - 图表颜色系统 */
-:root {
-  /* ECharts 图表颜色配置 */
-  --echarts-primary-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--chart-primary-500)' },
-      { offset: 1, color: 'var(--chart-primary-100)' }
-    ]
-  };
-
-  --echarts-success-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-success-500)' },
-      { offset: 1, color: 'var(--color-success-100)' }
-    ]
-  };
-
-  --echarts-warning-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-warning-500)' },
-      { offset: 1, color: 'var(--color-warning-100)' }
-    ]
-  };
-
-  --echarts-error-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-error-500)' },
-      { offset: 1, color: 'var(--color-error-100)' }
-    ]
-  };
-
-  --echarts-info-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-info-500)' },
-      { offset: 1, color: 'var(--color-info-100)' }
-    ]
-  };
-
-  --echarts-secondary-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-accent-500)' },
-      { offset: 1, color: 'var(--color-accent-100)' }
-    ]
-  };
-
-  --echarts-accent-gradient: {
-    type: 'linear',
-    x: 0, y: 0, x2: 0, y2: 1,
-    colorStops: [
-      { offset: 0, color: 'var(--color-accent-500)' },
-      { offset: 1, color: 'var(--color-accent-100)' }
-    ]
-  };
-}
+/* 注意：CSS 变量不支持对象语法，这些渐变定义仅作为参考 */
+/* 如需在 ECharts 中使用渐变，请在 JavaScript 中配置 */
 
 /* Chart Color Palette - 图表调色板 */
 .chart-color-palette {
@@ -83,31 +20,19 @@
 
 /* Chart Area Gradient - 图表区域渐变 */
 .chart-area-gradient-primary {
-  background: linear-gradient(180deg,
-    rgba(57, 150, 174, 0.3) 0%,
-    rgba(57, 150, 174, 0.05) 100%
-  );
+  background: linear-gradient(180deg, rgba(57, 150, 174, 0.3) 0%, rgba(57, 150, 174, 0.05) 100%);
 }
 
 .chart-area-gradient-success {
-  background: linear-gradient(180deg,
-    rgba(82, 196, 26, 0.3) 0%,
-    rgba(82, 196, 26, 0.05) 100%
-  );
+  background: linear-gradient(180deg, rgba(82, 196, 26, 0.3) 0%, rgba(82, 196, 26, 0.05) 100%);
 }
 
 .chart-area-gradient-warning {
-  background: linear-gradient(180deg,
-    rgba(250, 173, 20, 0.3) 0%,
-    rgba(250, 173, 20, 0.05) 100%
-  );
+  background: linear-gradient(180deg, rgba(250, 173, 20, 0.3) 0%, rgba(250, 173, 20, 0.05) 100%);
 }
 
 .chart-area-gradient-error {
-  background: linear-gradient(180deg,
-    rgba(245, 34, 45, 0.3) 0%,
-    rgba(245, 34, 45, 0.05) 100%
-  );
+  background: linear-gradient(180deg, rgba(245, 34, 45, 0.3) 0%, rgba(245, 34, 45, 0.05) 100%);
 }
 
 /* Chart Shadow Effects - 图表阴影效果 */
@@ -126,7 +51,6 @@
 .chart-shadow-error {
   box-shadow: 0 4px 12px rgba(245, 34, 45, 0.15);
 }
-
 
 /* 共享的卡片样式 */
 .dashboard-card {
@@ -196,7 +120,8 @@
 
 /* 图表容器样式 */
 .chart-container {
-  h4, h5 {
+  h4,
+  h5 {
     margin-bottom: 16px;
     font-weight: 600;
     color: var(--gray-1000);
@@ -294,4 +219,3 @@
     font-size: 12px;
   }
 }
-

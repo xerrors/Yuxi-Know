@@ -34,7 +34,7 @@
             :tool-name="toolName"
             :result-content="resultContent"
           >
-            工具&nbsp;  <span class="tool-name">{{ toolName }}</span> &nbsp; 执行完成
+            工具&nbsp; <span class="tool-name">{{ toolName }}</span> &nbsp; 执行完成
           </slot>
 
           <slot
@@ -43,15 +43,11 @@
             :tool-name="toolName"
             :error-message="toolCall.error_message"
           >
-            工具&nbsp;  <span class="tool-name">{{ toolName }}</span> &nbsp; 执行失败
+            工具&nbsp; <span class="tool-name">{{ toolName }}</span> &nbsp; 执行失败
             <span v-if="toolCall.error_message">（{{ toolCall.error_message }}）</span>
           </slot>
 
-          <slot
-            name="header-running"
-            v-else
-            :tool-name="toolName"
-          >
+          <slot name="header-running" v-else :tool-name="toolName">
             正在调用工具: &nbsp; <span class="tool-name">{{ toolName }}</span>
           </slot>
         </template>
@@ -96,10 +92,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { Loader, CircleCheckBig, ChevronsUpDown, ChevronsDownUp } from 'lucide-vue-next';
-import { useAgentStore } from '@/stores/agent';
-import { storeToRefs } from 'pinia';
+import { ref, computed } from 'vue'
+import { Loader, CircleCheckBig, ChevronsUpDown, ChevronsDownUp } from 'lucide-vue-next'
+import { useAgentStore } from '@/stores/agent'
+import { storeToRefs } from 'pinia'
 
 const props = defineProps({
   toolCall: {
@@ -114,76 +110,76 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-});
+})
 
-const agentStore = useAgentStore();
-const { availableTools } = storeToRefs(agentStore);
+const agentStore = useAgentStore()
+const { availableTools } = storeToRefs(agentStore)
 
-const isExpanded = ref(props.defaultExpanded);
+const isExpanded = ref(props.defaultExpanded)
 
 const toggleExpand = () => {
-  isExpanded.value = !isExpanded.value;
-};
+  isExpanded.value = !isExpanded.value
+}
 
 // Tool Name Logic
 const toolName = computed(() => {
-  const toolId = props.toolCall.name || props.toolCall.function?.name;
-  const toolsList = availableTools.value ? Object.values(availableTools.value) : [];
-  const tool = toolsList.find(t => t.id === toolId);
-  return tool ? tool.name : toolId;
-});
+  const toolId = props.toolCall.name || props.toolCall.function?.name
+  const toolsList = availableTools.value ? Object.values(availableTools.value) : []
+  const tool = toolsList.find((t) => t.id === toolId)
+  return tool ? tool.name : toolId
+})
 
 // Args Logic
 const formattedArgs = computed(() => {
-  const args = props.toolCall.args ? props.toolCall.args : props.toolCall.function?.arguments;
-  if (!args) return '';
+  const args = props.toolCall.args ? props.toolCall.args : props.toolCall.function?.arguments
+  if (!args) return ''
 
   try {
     if (typeof args === 'string' && args.trim().startsWith('{')) {
-      const parsed = JSON.parse(args);
-      return JSON.stringify(parsed, null, 2);
+      const parsed = JSON.parse(args)
+      return JSON.stringify(parsed, null, 2)
     } else if (typeof args === 'object' && args !== null) {
-      return JSON.stringify(args, null, 2);
+      return JSON.stringify(args, null, 2)
     }
   } catch (e) {
     // ignore
   }
-  return args;
-});
+  return args
+})
 
 const hasParams = computed(() => {
-  const argsStr = String(props.toolCall.args || props.toolCall.function?.arguments || '');
-  return argsStr.length > 2;
-});
+  const argsStr = String(props.toolCall.args || props.toolCall.function?.arguments || '')
+  return argsStr.length > 2
+})
 
 // Result Logic
 const resultContent = computed(() => {
-  return props.toolCall.tool_call_result?.content;
-});
+  return props.toolCall.tool_call_result?.content
+})
 
 const hasResult = computed(() => {
-  return !!resultContent.value;
-});
+  return !!resultContent.value
+})
 
 // Default Result Rendering Logic
 const parsedResultData = computed(() => {
-  const content = resultContent.value;
+  const content = resultContent.value
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return content;
+      return content
     }
   }
-  return content;
-});
+  return content
+})
 
 const formatResultData = (data) => {
   if (typeof data === 'object') {
-    return JSON.stringify(data, null, 2);
+    return JSON.stringify(data, null, 2)
   }
-  return String(data);
-};
+  return String(data)
+}
 
 // Auto expand if loading
 // Note: In the original code, expansion was managed by parent.
@@ -272,7 +268,6 @@ const formatResultData = (data) => {
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
-
 
       :deep(.sep-header) {
         display: flex;

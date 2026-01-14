@@ -2,10 +2,14 @@
   <div :class="['log-viewer', { fullscreen: state.isFullscreen }]" ref="logViewer">
     <div class="control-panel">
       <div class="button-group">
-        <a-button @click="fetchLogs" :loading="state.fetching" :icon="h(ReloadOutlined)" class="icon-only">
+        <a-button
+          @click="fetchLogs"
+          :loading="state.fetching"
+          :icon="h(ReloadOutlined)"
+          class="icon-only"
+        >
         </a-button>
-        <a-button @click="clearLogs" :icon="h(ClearOutlined)" class="icon-only">
-        </a-button>
+        <a-button @click="clearLogs" :icon="h(ClearOutlined)" class="icon-only"> </a-button>
         <a-button @click="printSystemConfig">
           <template #icon><SettingOutlined /></template>
           系统配置
@@ -51,7 +55,7 @@
         <a-input-search
           v-model:value="state.searchText"
           placeholder="搜索日志..."
-          style="width: 200px; height: 32px;"
+          style="width: 200px; height: 32px"
           @search="onSearch"
         />
         <div class="log-level-selector">
@@ -61,8 +65,8 @@
               :key="level.value"
               class="option-card"
               :class="{
-                'selected': isLogLevelSelected(level.value),
-                'unselected': !isLogLevelSelected(level.value)
+                selected: isLogLevelSelected(level.value),
+                unselected: !isLogLevelSelected(level.value)
               }"
               @click="toggleLogLevel(level.value)"
             >
@@ -98,14 +102,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onUnmounted, nextTick, reactive, computed, h, toRaw } from 'vue';
-import { useConfigStore } from '@/stores/config';
-import { useUserStore } from '@/stores/user';
-import { useDatabaseStore } from '@/stores/database';
-import { useAgentStore } from '@/stores/agent';
-import { useInfoStore } from '@/stores/info';
-import { useThrottleFn } from '@vueuse/core';
-import { message } from 'ant-design-vue';
+import {
+  ref,
+  onMounted,
+  onActivated,
+  onUnmounted,
+  nextTick,
+  reactive,
+  computed,
+  h,
+  toRaw
+} from 'vue'
+import { useConfigStore } from '@/stores/config'
+import { useUserStore } from '@/stores/user'
+import { useDatabaseStore } from '@/stores/database'
+import { useAgentStore } from '@/stores/agent'
+import { useInfoStore } from '@/stores/info'
+import { useThrottleFn } from '@vueuse/core'
+import { message } from 'ant-design-vue'
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
@@ -119,18 +133,17 @@ import {
   DatabaseOutlined,
   RobotOutlined,
   BugOutlined
-} from '@ant-design/icons-vue';
-import dayjs from '@/utils/time';
-import { configApi } from '@/apis/system_api';
-import { checkAdminPermission } from '@/stores/user';
+} from '@ant-design/icons-vue'
+import dayjs from '@/utils/time'
+import { configApi } from '@/apis/system_api'
+import { checkAdminPermission } from '@/stores/user'
 
 const configStore = useConfigStore()
-const userStore = useUserStore();
-const databaseStore = useDatabaseStore();
-const agentStore = useAgentStore();
-const infoStore = useInfoStore();
-const config = configStore.config;
-
+const userStore = useUserStore()
+const databaseStore = useDatabaseStore()
+const agentStore = useAgentStore()
+const infoStore = useInfoStore()
+const config = configStore.config
 
 // 定义日志级别
 const logLevels = [
@@ -138,28 +151,30 @@ const logLevels = [
   { value: 'ERROR', label: 'ERROR' },
   { value: 'DEBUG', label: 'DEBUG' },
   { value: 'WARNING', label: 'WARNING' }
-];
+]
 
-const logViewer = ref(null);
+const logViewer = ref(null)
 
 // 状态管理
 const state = reactive({
   fetching: false,
   autoRefresh: false,
   searchText: '',
-  selectedLevels: logLevels.map(l => l.value),
+  selectedLevels: logLevels.map((l) => l.value),
   rawLogs: [],
-  isFullscreen: false,
-});
+  isFullscreen: false
+})
 
-const error = ref('');
-const logContainer = ref(null);
-let autoRefreshInterval = null;
+const error = ref('')
+const logContainer = ref(null)
+let autoRefreshInterval = null
 
 // 解析日志行
 const parseLogLine = (line) => {
   // 支持两种时间戳格式：带毫秒和不带毫秒
-  const match = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d{3})?)\s*-\s*(\w+)\s*-\s*([^-]+?)\s*-\s*(.+)$/);
+  const match = line.match(
+    /^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:,\d{3})?)\s*-\s*(\w+)\s*-\s*([^-]+?)\s*-\s*(.+)$/
+  )
   if (match) {
     return {
       timestamp: match[1],
@@ -167,194 +182,192 @@ const parseLogLine = (line) => {
       module: match[3].trim(),
       message: match[4].trim(),
       raw: line
-    };
+    }
   }
-  return null;
-};
+  return null
+}
 
 // 格式化时间戳
 const formatTimestamp = (timestamp) => {
   try {
     // 处理带毫秒的格式：将 "2025-03-10 08:26:37,269" 转换为 "2025-03-10 08:26:37.269"
-    let normalizedTimestamp = timestamp.replace(',', '.');
+    let normalizedTimestamp = timestamp.replace(',', '.')
 
     // 如果没有毫秒，添加 .000
     if (!/\.\d{3}$/.test(normalizedTimestamp)) {
-      normalizedTimestamp += '.000';
+      normalizedTimestamp += '.000'
     }
 
-    const date = dayjs(normalizedTimestamp);
-    return date.isValid() ? date.format('HH:mm:ss.SSS') : timestamp;
+    const date = dayjs(normalizedTimestamp)
+    return date.isValid() ? date.format('HH:mm:ss.SSS') : timestamp
   } catch (err) {
-    console.error('时间戳格式化错误:', err);
-    return timestamp;
+    console.error('时间戳格式化错误:', err)
+    return timestamp
   }
-};
+}
 
 // 处理日志显示
 const processedLogs = computed(() => {
   return state.rawLogs
     .map(parseLogLine)
-    .filter(log => log !== null)
-    .filter(log => {
-      if (!state.searchText) return true;
-      return log.raw.toLowerCase().includes(state.searchText.toLowerCase());
-    });
-});
+    .filter((log) => log !== null)
+    .filter((log) => {
+      if (!state.searchText) return true
+      return log.raw.toLowerCase().includes(state.searchText.toLowerCase())
+    })
+})
 
 // 获取日志数据
 const fetchLogs = async () => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
-  state.fetching = true;
+  state.fetching = true
   try {
-    error.value = '';
+    error.value = ''
     // 将选中的日志级别转换为逗号分隔的字符串传递给后端
-    const levelsParam = state.selectedLevels.join(',');
-    const logData = await configApi.getLogs(levelsParam);
-    state.rawLogs = logData.log.split('\n').filter(line => line.trim());
+    const levelsParam = state.selectedLevels.join(',')
+    const logData = await configApi.getLogs(levelsParam)
+    state.rawLogs = logData.log.split('\n').filter((line) => line.trim())
 
-    await nextTick();
+    await nextTick()
     const scrollToBottom = useThrottleFn(() => {
       if (logContainer.value) {
-        logContainer.value.scrollTop = logContainer.value.scrollHeight;
+        logContainer.value.scrollTop = logContainer.value.scrollHeight
       }
-    }, 100);
-    scrollToBottom();
+    }, 100)
+    scrollToBottom()
   } catch (err) {
-    error.value = `错误: ${err.message}`;
+    error.value = `错误: ${err.message}`
   } finally {
-    state.fetching = false;
+    state.fetching = false
   }
-};
+}
 
 // 清空日志
 const clearLogs = () => {
-  if (!checkAdminPermission()) return;
-  state.rawLogs = [];
-};
+  if (!checkAdminPermission()) return
+  state.rawLogs = []
+}
 
 // 搜索功能
 const onSearch = () => {
   // 搜索会通过computed自动触发
-};
+}
 
 // 日志级别选择相关方法
 const isLogLevelSelected = (level) => {
-  return state.selectedLevels.includes(level);
-};
+  return state.selectedLevels.includes(level)
+}
 
 const toggleLogLevel = (level) => {
-  const currentLevels = [...state.selectedLevels];
-  const index = currentLevels.indexOf(level);
+  const currentLevels = [...state.selectedLevels]
+  const index = currentLevels.indexOf(level)
 
   if (index > -1) {
     // 如果取消选中后没有选中的级别，默认全选
     if (currentLevels.length === 1) {
-      return;
+      return
     }
-    currentLevels.splice(index, 1);
+    currentLevels.splice(index, 1)
   } else {
-    currentLevels.push(level);
+    currentLevels.push(level)
   }
 
-  state.selectedLevels = currentLevels;
+  state.selectedLevels = currentLevels
   // 切换日志级别后重新获取数据
-  fetchLogs();
-};
+  fetchLogs()
+}
 
 // 自动刷新
 const toggleAutoRefresh = (value) => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
   if (value) {
-    autoRefreshInterval = setInterval(fetchLogs, 5000);
-    state.autoRefresh = true;
+    autoRefreshInterval = setInterval(fetchLogs, 5000)
+    state.autoRefresh = true
   } else {
     if (autoRefreshInterval) {
-      clearInterval(autoRefreshInterval);
-      autoRefreshInterval = null;
+      clearInterval(autoRefreshInterval)
+      autoRefreshInterval = null
     }
-    state.autoRefresh = false;
+    state.autoRefresh = false
   }
-};
+}
 
 // 全屏切换
 const toggleFullscreen = async () => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
   try {
     if (!state.isFullscreen) {
       if (logViewer.value.requestFullscreen) {
-        await logViewer.value.requestFullscreen();
+        await logViewer.value.requestFullscreen()
       } else if (logViewer.value.webkitRequestFullscreen) {
-        await logViewer.value.webkitRequestFullscreen();
+        await logViewer.value.webkitRequestFullscreen()
       } else if (logViewer.value.msRequestFullscreen) {
-        await logViewer.value.msRequestFullscreen();
+        await logViewer.value.msRequestFullscreen()
       }
     } else {
       if (document.exitFullscreen) {
-        await document.exitFullscreen();
+        await document.exitFullscreen()
       } else if (document.webkitExitFullscreen) {
-        await document.webkitExitFullscreen();
+        await document.webkitExitFullscreen()
       } else if (document.msExitFullscreen) {
-        await document.msExitFullscreen();
+        await document.msExitFullscreen()
       }
     }
   } catch (err) {
-    console.error('全屏切换失败:', err);
+    console.error('全屏切换失败:', err)
   }
-};
+}
 
 // 监听全屏变化
 const handleFullscreenChange = () => {
   state.isFullscreen = Boolean(
-    document.fullscreenElement ||
-    document.webkitFullscreenElement ||
-    document.msFullscreenElement
-  );
-};
+    document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement
+  )
+}
 
 onMounted(() => {
   if (checkAdminPermission()) {
-    fetchLogs();
+    fetchLogs()
   }
-  document.addEventListener('fullscreenchange', handleFullscreenChange);
-  document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-  document.addEventListener('msfullscreenchange', handleFullscreenChange);
-});
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
+  document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.addEventListener('msfullscreenchange', handleFullscreenChange)
+})
 
 onActivated(() => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
   if (state.autoRefresh) {
-    toggleAutoRefresh(true);
+    toggleAutoRefresh(true)
   } else {
-    fetchLogs();
+    fetchLogs()
   }
-});
+})
 
 onUnmounted(() => {
   if (autoRefreshInterval) {
-    clearInterval(autoRefreshInterval);
-    autoRefreshInterval = null;
+    clearInterval(autoRefreshInterval)
+    autoRefreshInterval = null
   }
-  document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-  document.removeEventListener('msfullscreenchange', handleFullscreenChange);
-});
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  document.removeEventListener('webkitfullscreenchange', handleFullscreenChange)
+  document.removeEventListener('msfullscreenchange', handleFullscreenChange)
+})
 
 // 打印系统配置
 const printSystemConfig = () => {
-  if (!checkAdminPermission()) return;
-  console.log('=== 系统配置 ===');
-  console.log(config);
-};
+  if (!checkAdminPermission()) return
+  console.log('=== 系统配置 ===')
+  console.log(config)
+}
 
 // 打印用户信息
 const printUserInfo = () => {
-  if (!checkAdminPermission()) return;
-  console.log('=== 用户信息 ===');
+  if (!checkAdminPermission()) return
+  console.log('=== 用户信息 ===')
   const userInfo = {
     token: userStore.token ? '*** (已隐藏)' : null,
     userId: userStore.userId,
@@ -366,22 +379,22 @@ const printUserInfo = () => {
     isLoggedIn: userStore.isLoggedIn,
     isAdmin: userStore.isAdmin,
     isSuperAdmin: userStore.isSuperAdmin
-  };
-  console.log(JSON.stringify(userInfo, null, 2));
-};
+  }
+  console.log(JSON.stringify(userInfo, null, 2))
+}
 
 // 打印知识库信息
 const printDatabaseInfo = async () => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
   try {
-    console.log('=== 知识库信息 ===');
+    console.log('=== 知识库信息 ===')
     console.log('基本信息:', {
       databaseId: databaseStore.databaseId,
       databaseName: databaseStore.database.name,
       databaseDesc: databaseStore.database.description,
       fileCount: Object.keys(databaseStore.database.files || {}).length
-    });
+    })
 
     console.log('状态信息:', {
       databaseLoading: databaseStore.state.databaseLoading,
@@ -390,32 +403,31 @@ const printDatabaseInfo = async () => {
       lock: databaseStore.state.lock,
       autoRefresh: databaseStore.state.autoRefresh,
       queryParamsLoading: databaseStore.state.queryParamsLoading
-    });
+    })
 
     console.log('查询参数:', {
       queryParams: databaseStore.queryParams,
       meta: databaseStore.meta,
       selectedFileCount: databaseStore.selectedRowKeys.length
-    });
-
+    })
   } catch (error) {
-    console.error('获取知识库信息失败:', error);
-    message.error('获取知识库信息失败: ' + error.message);
+    console.error('获取知识库信息失败:', error)
+    message.error('获取知识库信息失败: ' + error.message)
   }
-};
+}
 
 // 切换Debug模式
 const toggleDebugMode = () => {
-  if (!checkAdminPermission()) return;
-  infoStore.toggleDebugMode();
-};
+  if (!checkAdminPermission()) return
+  infoStore.toggleDebugMode()
+}
 
 // 打印智能体配置
 const printAgentConfig = async () => {
-  if (!checkAdminPermission()) return;
+  if (!checkAdminPermission()) return
 
   try {
-    console.log('=== 智能体配置信息 ===');
+    console.log('=== 智能体配置信息 ===')
 
     // Store状态信息
     console.log('Store 状态:', {
@@ -430,13 +442,13 @@ const printAgentConfig = async () => {
       },
       error: agentStore.error,
       hasConfigChanges: agentStore.hasConfigChanges
-    });
+    })
 
     // 智能体列表信息
     console.log('智能体列表:', {
       count: agentStore.agentsList.length,
       agents: toRaw(agentStore.agentsList)
-    });
+    })
 
     // 当前选中智能体信息
     if (agentStore.selectedAgent) {
@@ -444,7 +456,7 @@ const printAgentConfig = async () => {
         agent: toRaw(agentStore.selectedAgent),
         isDefault: agentStore.isDefaultAgent,
         configurableItemsCount: Object.keys(agentStore.configurableItems).length
-      });
+      })
 
       // 当前智能体配置（仅管理员可见）
       if (userStore.isAdmin) {
@@ -452,29 +464,28 @@ const printAgentConfig = async () => {
           current: toRaw(agentStore.agentConfig),
           original: toRaw(agentStore.originalAgentConfig),
           hasChanges: agentStore.hasConfigChanges
-        });
+        })
       } else {
-        console.log('智能体配置: 需要管理员权限查看详细配置');
+        console.log('智能体配置: 需要管理员权限查看详细配置')
       }
     }
 
     // 工具信息
-    const toolsList = agentStore.availableTools ? Object.values(agentStore.availableTools) : [];
+    const toolsList = agentStore.availableTools ? Object.values(agentStore.availableTools) : []
     console.log('可用工具:', {
       count: toolsList.length,
       tools: toolsList
-    });
+    })
 
     // 配置项信息（管理员可见）
     if (userStore.isAdmin && agentStore.selectedAgent) {
-      console.log('可配置项:', toRaw(agentStore.configurableItems));
+      console.log('可配置项:', toRaw(agentStore.configurableItems))
     }
-
   } catch (error) {
-    console.error('获取智能体配置失败:', error);
-    message.error('获取智能体配置失败: ' + error.message);
+    console.error('获取智能体配置失败:', error)
+    message.error('获取智能体配置失败: ' + error.message)
   }
-};
+}
 </script>
 
 <style scoped>
@@ -603,19 +614,27 @@ const printAgentConfig = async () => {
 }
 
 .level-info {
-  .level { color: var(--color-success-500); }
+  .level {
+    color: var(--color-success-500);
+  }
 }
 
 .level-error {
-  .level { color: var(--color-error-500); }
+  .level {
+    color: var(--color-error-500);
+  }
 }
 
 .level-debug {
-  .level { color: var(--color-info-500); }
+  .level {
+    color: var(--color-info-500);
+  }
 }
 
 .level-warning {
-  .level { color: var(--color-warning-500); }
+  .level {
+    color: var(--color-warning-500);
+  }
 }
 
 .empty-logs {
@@ -631,17 +650,16 @@ const printAgentConfig = async () => {
 }
 
 :fullscreen .log-container {
-  height: calc(100vh - 160PX);
+  height: calc(100vh - 160px);
 }
 
 :-webkit-full-screen .log-container {
-  height: calc(100vh - 160PX);
+  height: calc(100vh - 160px);
 }
 
 :-ms-fullscreen .log-container {
-  height: calc(100vh - 160PX);
+  height: calc(100vh - 160px);
 }
-
 
 .multi-select-cards {
   display: flex;
@@ -721,5 +739,4 @@ const printAgentConfig = async () => {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-
 </style>

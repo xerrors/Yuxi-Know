@@ -5,7 +5,8 @@
       <div class="header-content">
         <h3 class="title">MCP 服务器管理</h3>
         <p class="description">
-          管理 MCP（Model Context Protocol）服务器配置。添加、编辑或删除 MCP 服务器以扩展 AI 的能力。
+          管理 MCP（Model Context Protocol）服务器配置。添加、编辑或删除 MCP 服务器以扩展 AI
+          的能力。
         </p>
       </div>
       <a-button type="primary" @click="showAddModal" class="add-btn">
@@ -17,8 +18,8 @@
     <!-- 统计信息 -->
     <div class="stats-section" v-if="servers.length > 0">
       <span class="stats-text">
-        已配置 {{ servers.length }} 个 MCP 服务器：
-        HTTP: {{ httpCount }} · SSE: {{ sseCount }} · StdIO: {{ stdioCount }}
+        已配置 {{ servers.length }} 个 MCP 服务器： HTTP: {{ httpCount }} · SSE: {{ sseCount }} ·
+        StdIO: {{ stdioCount }}
       </span>
     </div>
 
@@ -69,7 +70,12 @@
 
               <div class="card-actions">
                 <a-tooltip title="查看详情">
-                  <a-button type="text" size="small" @click="showDetailModal(server)" class="action-btn">
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="showDetailModal(server)"
+                    class="action-btn"
+                  >
                     <EyeOutlined />
                     <span>详情</span>
                   </a-button>
@@ -87,12 +93,19 @@
                   </a-button>
                 </a-tooltip>
                 <a-tooltip title="编辑配置">
-                  <a-button type="text" size="small" @click="showEditModal(server)" class="action-btn">
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="showEditModal(server)"
+                    class="action-btn"
+                  >
                     <EditOutlined />
                     <span>编辑</span>
                   </a-button>
                 </a-tooltip>
-                <a-tooltip :title="server.created_by === 'system' ? '内置 MCP 无法删除' : '删除服务器'">
+                <a-tooltip
+                  :title="server.created_by === 'system' ? '内置 MCP 无法删除' : '删除服务器'"
+                >
                   <a-button
                     type="text"
                     size="small"
@@ -142,10 +155,7 @@
         </a-form-item>
 
         <a-form-item label="描述" class="form-item">
-          <a-input
-            v-model:value="form.description"
-            placeholder="请输入服务器描述"
-          />
+          <a-input v-model:value="form.description" placeholder="请输入服务器描述" />
         </a-form-item>
 
         <a-row :gutter="16">
@@ -168,10 +178,7 @@
         <!-- HTTP 类型 -->
         <template v-if="form.transport === 'streamable_http' || form.transport === 'sse'">
           <a-form-item label="服务器 URL" required class="form-item">
-            <a-input
-              v-model:value="form.url"
-              placeholder="https://example.com/mcp"
-            />
+            <a-input v-model:value="form.url" placeholder="https://example.com/mcp" />
           </a-form-item>
 
           <a-form-item label="HTTP 请求头" class="form-item">
@@ -185,12 +192,22 @@
           <a-row :gutter="16">
             <a-col :span="12">
               <a-form-item label="HTTP 超时（秒）" class="form-item">
-                <a-input-number v-model:value="form.timeout" :min="1" :max="300" style="width: 100%" />
+                <a-input-number
+                  v-model:value="form.timeout"
+                  :min="1"
+                  :max="300"
+                  style="width: 100%"
+                />
               </a-form-item>
             </a-col>
             <a-col :span="12">
               <a-form-item label="SSE 读取超时（秒）" class="form-item">
-                <a-input-number v-model:value="form.sse_read_timeout" :min="1" :max="300" style="width: 100%" />
+                <a-input-number
+                  v-model:value="form.sse_read_timeout"
+                  :min="1"
+                  :max="300"
+                  style="width: 100%"
+                />
               </a-form-item>
             </a-col>
           </a-row>
@@ -199,10 +216,7 @@
         <!-- StdIO 类型 -->
         <template v-if="form.transport === 'stdio'">
           <a-form-item label="命令" required class="form-item">
-            <a-input
-              v-model:value="form.command"
-              placeholder="例如：npx 或 /path/to/server"
-            />
+            <a-input v-model:value="form.command" placeholder="例如：npx 或 /path/to/server" />
           </a-form-item>
 
           <a-form-item label="参数" class="form-item">
@@ -265,7 +279,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   EyeOutlined,
-  ApiOutlined,
+  ApiOutlined
 } from '@ant-design/icons-vue'
 import { mcpApi } from '@/apis/mcp_api'
 import McpServerDetailModal from './McpServerDetailModal.vue'
@@ -294,7 +308,7 @@ const form = reactive({
   timeout: null,
   sse_read_timeout: null,
   tags: [],
-  icon: '',
+  icon: ''
 })
 
 // 详情模态框
@@ -302,9 +316,11 @@ const detailModalVisible = ref(false)
 const selectedServer = ref(null)
 
 // 计算属性
-const httpCount = computed(() => servers.value.filter(s => s.transport === 'streamable_http').length)
-const sseCount = computed(() => servers.value.filter(s => s.transport === 'sse').length)
-const stdioCount = computed(() => servers.value.filter(s => s.transport === 'stdio').length)
+const httpCount = computed(
+  () => servers.value.filter((s) => s.transport === 'streamable_http').length
+)
+const sseCount = computed(() => servers.value.filter((s) => s.transport === 'sse').length)
+const stdioCount = computed(() => servers.value.filter((s) => s.transport === 'stdio').length)
 
 // 获取服务器列表
 const fetchServers = async () => {
@@ -340,7 +356,7 @@ const showAddModal = () => {
     timeout: null,
     sse_read_timeout: null,
     tags: [],
-    icon: '',
+    icon: ''
   })
   jsonContent.value = ''
   formModalVisible.value = true
@@ -361,7 +377,7 @@ const showEditModal = (server) => {
     timeout: server.timeout,
     sse_read_timeout: server.sse_read_timeout,
     tags: server.tags || [],
-    icon: server.icon || '',
+    icon: server.icon || ''
   })
   formModalVisible.value = true
 }
@@ -408,7 +424,7 @@ const handleFormSubmit = async () => {
         timeout: form.timeout || null,
         sse_read_timeout: form.sse_read_timeout || null,
         tags: form.tags.length > 0 ? form.tags : null,
-        icon: form.icon || null,
+        icon: form.icon || null
       }
     }
 
@@ -507,7 +523,7 @@ const confirmDeleteServer = (server) => {
   if (server.created_by === 'system') {
     notification.warning({
       message: '无法删除系统服务器',
-      description: '系统内置的 MCP 服务器无法删除，如需停用可切换禁用开关。',
+      description: '系统内置的 MCP 服务器无法删除，如需停用可切换禁用开关。'
     })
     return
   }
@@ -565,7 +581,7 @@ const parseJsonToForm = () => {
       timeout: obj.timeout || null,
       sse_read_timeout: obj.sse_read_timeout || null,
       tags: obj.tags || [],
-      icon: obj.icon || '',
+      icon: obj.icon || ''
     })
     formMode.value = 'form'
     notification.success({ message: '已解析到表单' })

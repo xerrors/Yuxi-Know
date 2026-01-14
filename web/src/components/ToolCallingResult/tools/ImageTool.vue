@@ -9,25 +9,25 @@
 </template>
 
 <script setup>
-import BaseToolCall from '../BaseToolCall.vue';
+import BaseToolCall from '../BaseToolCall.vue'
 
 const props = defineProps({
   toolCall: {
     type: Object,
     required: true
   }
-});
+})
 
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return content;
+      return content
     }
   }
-  return content;
-};
+  return content
+}
 </script>
 
 <style lang="less" scoped>

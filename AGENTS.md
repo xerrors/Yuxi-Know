@@ -25,7 +25,7 @@ Don't create helpers, utilities, or abstractions for one-time operations. Don't 
 - Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next （推荐，但是需要注意尺寸）
 - Vue 中的样式使用 less，非必要情况必须使用[base.css](web/src/assets/css/base.css) 中的颜色变量。
 - UI风格要简洁，同时要保持一致性，不要悬停位移，不要过度使用阴影以及渐变色。
-- 绝对不要尝试使用 npm/pnpm 等等运行前端开发服务器。
+- 开发完成后，可以在 docker 的 web 文件夹下，运行 npm run format 格式化代码
 
 
 ### 后端开发规范

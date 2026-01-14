@@ -31,18 +31,15 @@
       </div>
 
       <!-- 右侧：Chunk信息 -->
-      <div
-        class="chunk-panel"
-        v-show="chunkPanelVisible"
-      >
+      <div class="chunk-panel" v-show="chunkPanelVisible">
         <div class="chunk-list">
           <div
             v-for="(chunk, index) in mappedChunks"
             :key="chunk.id"
             class="chunk-item"
             :class="{
-              'active': activeChunkIndex === index,
-              'highlighted': highlightedChunkIndex === index
+              active: activeChunkIndex === index,
+              highlighted: highlightedChunkIndex === index
             }"
             @click="handleChunkClick(index)"
             @mouseenter="highlightChunk(index)"
@@ -63,11 +60,7 @@
     </div>
 
     <!-- 悬浮提示 -->
-    <div
-      v-if="showTooltip && currentChunk"
-      class="chunk-tooltip"
-      :style="tooltipStyle"
-    >
+    <div v-if="showTooltip && currentChunk" class="chunk-tooltip" :style="tooltipStyle">
       <div class="tooltip-header">
         <strong>片段信息</strong>
       </div>
@@ -94,12 +87,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { MdPreview } from 'md-editor-v3';
-import 'md-editor-v3/lib/preview.css';
-import { mergeChunks, getChunkPreview } from '@/utils/chunkUtils';
-import { useThemeStore } from '@/stores/theme';
-import { ChevronRight, ChevronLeft } from 'lucide-vue-next';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+import { mergeChunks, getChunkPreview } from '@/utils/chunkUtils'
+import { useThemeStore } from '@/stores/theme'
+import { ChevronRight, ChevronLeft } from 'lucide-vue-next'
 
 const props = defineProps({
   chunks: {
@@ -110,79 +103,79 @@ const props = defineProps({
     type: String,
     default: ''
   }
-});
+})
 
 // 使用主题store
-const themeStore = useThemeStore();
+const themeStore = useThemeStore()
 
 // 响应式引用
-const showTooltip = ref(false);
-const currentChunk = ref(null);
-const tooltipStyle = ref({ top: '0px', left: '0px' });
-const activeChunkIndex = ref(null);
-const highlightedChunkIndex = ref(null);
-const chunkPanelVisible = ref(false);
+const showTooltip = ref(false)
+const currentChunk = ref(null)
+const tooltipStyle = ref({ top: '0px', left: '0px' })
+const activeChunkIndex = ref(null)
+const highlightedChunkIndex = ref(null)
+const chunkPanelVisible = ref(false)
 
 // 主题设置 - 根据系统主题动态切换
-const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
+const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 // 合并chunks
-const mergeResult = computed(() => mergeChunks(props.chunks));
-const mergedContent = computed(() => props.content || mergeResult.value.content);
-const mappedChunks = computed(() => mergeResult.value.chunks);
+const mergeResult = computed(() => mergeChunks(props.chunks))
+const mergedContent = computed(() => props.content || mergeResult.value.content)
+const mappedChunks = computed(() => mergeResult.value.chunks)
 
 // 格式化文本长度
 function formatTextLength(length) {
-  if (!length && length !== 0) return '0 字符';
+  if (!length && length !== 0) return '0 字符'
 
   if (length < 1000) {
-    return `${length} 字符`;
+    return `${length} 字符`
   } else {
-    return `${(length / 1000).toFixed(1)}k 字符`;
+    return `${(length / 1000).toFixed(1)}k 字符`
   }
 }
 
 // 高亮chunk
 function highlightChunk(index) {
-  if (!mappedChunks.value?.[index]) return;
-  highlightedChunkIndex.value = index;
-  currentChunk.value = mappedChunks.value[index];
+  if (!mappedChunks.value?.[index]) return
+  highlightedChunkIndex.value = index
+  currentChunk.value = mappedChunks.value[index]
 }
 
 function unhighlightChunk() {
-  highlightedChunkIndex.value = null;
-  currentChunk.value = null;
+  highlightedChunkIndex.value = null
+  currentChunk.value = null
 }
 
 // 处理chunk点击
 function handleChunkClick(index) {
-  if (!mappedChunks.value?.[index]) return;
-  activeChunkIndex.value = index;
+  if (!mappedChunks.value?.[index]) return
+  activeChunkIndex.value = index
 }
 
 // 切换chunk面板显示
 function toggleChunkPanel() {
-  chunkPanelVisible.value = !chunkPanelVisible.value;
+  chunkPanelVisible.value = !chunkPanelVisible.value
 }
 
 // 处理鼠标移动显示tooltip
 function handleMouseMove(event) {
-  if (!currentChunk.value) return;
+  if (!currentChunk.value) return
 
   tooltipStyle.value = {
     top: event.clientY + 10 + 'px',
     left: event.clientX + 10 + 'px'
-  };
+  }
 }
 
 // 生命周期
 onMounted(() => {
-  document.addEventListener('mousemove', handleMouseMove);
-});
+  document.addEventListener('mousemove', handleMouseMove)
+})
 
 onUnmounted(() => {
-  document.removeEventListener('mousemove', handleMouseMove);
-});
+  document.removeEventListener('mousemove', handleMouseMove)
+})
 </script>
 
 <style scoped>

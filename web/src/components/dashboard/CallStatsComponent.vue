@@ -11,7 +11,8 @@
               class="simple-toggle"
               :class="{ active: callTimeRange === opt.value }"
               @click="switchTimeRange(opt.value)"
-            >{{ opt.label }}</span>
+              >{{ opt.label }}
+            </span>
           </div>
           <div class="divider"></div>
           <div class="simple-toggle-group">
@@ -22,7 +23,8 @@
               class="simple-toggle"
               :class="{ active: callDataType === opt.value }"
               @click="switchDataType(opt.value)"
-            >{{ opt.label }}</span>
+              >{{ opt.label }}
+            </span>
           </div>
           <!-- <div class="subtitle">总计：{{ callStatsData?.total_count || 0 }}</div> -->
         </div>
@@ -35,7 +37,6 @@
       </div>
     </a-card>
   </div>
-
 </template>
 
 <script setup>
@@ -51,7 +52,7 @@ function getCSSVariable(variableName, element = document.documentElement) {
 }
 
 const props = defineProps({
-  loading: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false }
 })
 
 // theme store
@@ -65,13 +66,13 @@ const callDataType = ref('agents')
 const timeRangeOptions = [
   { value: '14hours', label: '近14小时' },
   { value: '14days', label: '近14天' },
-  { value: '14weeks', label: '近14周' },
+  { value: '14weeks', label: '近14周' }
 ]
 const dataTypeOptions = [
   { value: 'models', label: '模型调用' },
   { value: 'agents', label: '智能体调用' },
   { value: 'tokens', label: 'Token消耗' },
-  { value: 'tools', label: '工具调用' },
+  { value: 'tools', label: '工具调用' }
 ]
 const isTokenView = computed(() => callDataType.value === 'tokens')
 
@@ -153,13 +154,12 @@ const renderCallStatsChart = () => {
     callStatsChart.dispose()
   }
 
-
   callStatsChart = echarts.init(container)
 
   const data = callStatsData.value.data || []
   const categories = callStatsData.value.categories || []
 
-  const xAxisData = data.map(item => {
+  const xAxisData = data.map((item) => {
     const date = item.date
     if (callTimeRange.value === '14hours') {
       return date.split(' ')[1]
@@ -175,10 +175,10 @@ const renderCallStatsChart = () => {
     type: 'bar',
     stack: 'total',
     emphasis: { focus: 'series' },
-    data: data.map(item => item.data[category] || 0),
+    data: data.map((item) => item.data[category] || 0),
     itemStyle: {
       color: getColorByIndex(index),
-      borderRadius: 0,
+      borderRadius: 0
     }
   }))
 
@@ -186,8 +186,8 @@ const renderCallStatsChart = () => {
     grid: {
       left: '3%',
       right: '4%',
-      top: '5%',     /* 减少顶部留白 */
-      bottom: 50,    /* 减少底部留白，从60减少到50 */
+      top: '5%' /* 减少顶部留白 */,
+      bottom: 50 /* 减少底部留白，从60减少到50 */,
       containLabel: true
     },
     xAxis: {
@@ -204,7 +204,7 @@ const renderCallStatsChart = () => {
       axisLabel: {
         color: getCSSVariable('--gray-500'),
         fontSize: 12,
-        formatter: (value) => (isTokenView.value ? formatTokenValue(value) : value),
+        formatter: (value) => (isTokenView.value ? formatTokenValue(value) : value)
       },
       splitLine: { lineStyle: { color: getCSSVariable('--gray-100') } }
     },
@@ -218,26 +218,31 @@ const renderCallStatsChart = () => {
         if (!params?.length) return ''
         let total = 0
         let result = `${params[0].name}<br/>`
-        params.forEach(param => {
+        params.forEach((param) => {
           total += param.value
           const truncatedName = truncateLegend(param.seriesName)
           result += `<span style=\"display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}\"></span>`
           result += `${truncatedName}: ${formatValueForDisplay(param.value)}<br/>`
         })
-        const labelMap = { models: '模型调用', agents: '智能体调用', tokens: 'Token消耗', tools: '工具调用' }
+        const labelMap = {
+          models: '模型调用',
+          agents: '智能体调用',
+          tokens: 'Token消耗',
+          tools: '工具调用'
+        }
         const formattedTotal = formatValueForDisplay(total)
         return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${formattedTotal}</strong>`
       }
     },
     legend: {
-      data: categories.map(cat => (cat === 'None' ? '未知模型' : cat)),
-      bottom: 5,        /* 调整图例位置，从0改为5 */
+      data: categories.map((cat) => (cat === 'None' ? '未知模型' : cat)),
+      bottom: 5 /* 调整图例位置，从0改为5 */,
       textStyle: { color: getCSSVariable('--gray-500'), fontSize: 12 },
       itemWidth: 14,
       itemHeight: 14,
       formatter: (name) => truncateLegend(name)
     },
-    series,
+    series
   }
 
   callStatsChart.setOption(option)
@@ -279,22 +284,28 @@ onMounted(() => {
   loadCallStats()
 })
 
-watch(() => props.loading, (now) => {
-  if (!now) {
-    if (callStatsData.value) {
-      nextTick().then(() => renderCallStatsChart())
+watch(
+  () => props.loading,
+  (now) => {
+    if (!now) {
+      if (callStatsData.value) {
+        nextTick().then(() => renderCallStatsChart())
+      }
     }
   }
-})
+)
 
 // 监听主题变化，重新渲染图表
-watch(() => themeStore.isDark, () => {
-  if (callStatsData.value && callStatsChart) {
-    nextTick(() => {
-      renderCallStatsChart()
-    })
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (callStatsData.value && callStatsChart) {
+      nextTick(() => {
+        renderCallStatsChart()
+      })
+    }
   }
-})
+)
 
 onUnmounted(() => {
   cleanup()
@@ -302,7 +313,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="less">
-
 /* 复用 dashboard.css 样式：此处仅做最小覆盖以避免重复 */
 .call-stats-section {
   background-color: var(--gray-0);
@@ -382,4 +392,3 @@ onUnmounted(() => {
   background-color: var(--gray-200);
 }
 </style>
-

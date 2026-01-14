@@ -15,9 +15,7 @@
     </div>
 
     <div class="login-top-action">
-      <a-button type="text" size="small" class="back-home-btn" @click="goHome">
-        返回首页
-      </a-button>
+      <a-button type="text" size="small" class="back-home-btn" @click="goHome"> 返回首页 </a-button>
     </div>
 
     <div class="login-layout">
@@ -39,11 +37,7 @@
             <!-- 初始化管理员表单 -->
             <div v-if="isFirstRun" class="login-form login-form--init">
               <h2>系统初始化，请创建超级管理员</h2>
-              <a-form
-                :model="adminForm"
-                @finish="handleInitialize"
-                layout="vertical"
-              >
+              <a-form :model="adminForm" @finish="handleInitialize" layout="vertical">
                 <a-form-item
                   label="用户ID"
                   name="user_id"
@@ -74,11 +68,11 @@
                     {
                       validator: async (rule, value) => {
                         if (!value || value.trim() === '') {
-                          return; // 空值允许
+                          return // 空值允许
                         }
-                        const phoneRegex = /^1[3-9]\d{9}$/;
+                        const phoneRegex = /^1[3-9]\d{9}$/
                         if (!phoneRegex.test(value)) {
-                          throw new Error('请输入正确的手机号格式');
+                          throw new Error('请输入正确的手机号格式')
                         }
                       }
                     }
@@ -111,18 +105,16 @@
                 </a-form-item>
 
                 <a-form-item>
-                  <a-button type="primary" html-type="submit" :loading="loading" block>创建管理员账户</a-button>
+                  <a-button type="primary" html-type="submit" :loading="loading" block
+                    >创建管理员账户</a-button
+                  >
                 </a-form-item>
               </a-form>
             </div>
 
             <!-- 登录表单 -->
             <div v-else class="login-form">
-              <a-form
-                :model="loginForm"
-                @finish="handleLogin"
-                layout="vertical"
-              >
+              <a-form :model="loginForm" @finish="handleLogin" layout="vertical">
                 <a-form-item
                   label="登录账号"
                   name="loginId"
@@ -149,7 +141,9 @@
 
                 <a-form-item>
                   <div class="login-options">
-                    <a-checkbox v-model:checked="rememberMe" @click="showDevMessage">记住我</a-checkbox>
+                    <a-checkbox v-model:checked="rememberMe" @click="showDevMessage"
+                      >记住我</a-checkbox
+                    >
                     <a class="forgot-password" @click="showDevMessage">忘记密码?</a>
                   </div>
                 </a-form-item>
@@ -203,7 +197,9 @@
           <div class="login-footer">
             <a href="https://github.com/xerrors" target="_blank">联系我们</a>
             <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">使用帮助</a>
-            <a href="https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE" target="_blank">隐私政策</a>
+            <a href="https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE" target="_blank"
+              >隐私政策</a
+            >
           </div>
         </div>
       </div>
@@ -212,58 +208,65 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useUserStore } from '@/stores/user';
-import { useInfoStore } from '@/stores/info';
-import { useAgentStore } from '@/stores/agent';
-import { message } from 'ant-design-vue';
-import { healthApi } from '@/apis/system_api';
-import { UserOutlined, LockOutlined, WechatOutlined, QrcodeOutlined, ThunderboltOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue';
-const router = useRouter();
-const userStore = useUserStore();
-const infoStore = useInfoStore();
-const agentStore = useAgentStore();
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+import { useInfoStore } from '@/stores/info'
+import { useAgentStore } from '@/stores/agent'
+import { message } from 'ant-design-vue'
+import { healthApi } from '@/apis/system_api'
+import {
+  UserOutlined,
+  LockOutlined,
+  WechatOutlined,
+  QrcodeOutlined,
+  ThunderboltOutlined,
+  ExclamationCircleOutlined
+} from '@ant-design/icons-vue'
+const router = useRouter()
+const userStore = useUserStore()
+const infoStore = useInfoStore()
+const agentStore = useAgentStore()
 
 // 品牌展示数据
 const loginBgImage = computed(() => {
-  return infoStore.organization?.login_bg || '/login-bg.jpg';
-});
+  return infoStore.organization?.login_bg || '/login-bg.jpg'
+})
 const brandName = computed(() => {
-  const rawName = infoStore.branding?.name ?? '';
-  const trimmed = rawName.trim();
-  return trimmed || 'Yuxi-Know';
-});
+  const rawName = infoStore.branding?.name ?? ''
+  const trimmed = rawName.trim()
+  return trimmed || 'Yuxi-Know'
+})
 const brandSubtitle = computed(() => {
-  const rawSubtitle = infoStore.branding?.subtitle ?? '';
-  const trimmed = rawSubtitle.trim();
-  return trimmed || '大模型驱动的知识库管理工具';
-});
+  const rawSubtitle = infoStore.branding?.subtitle ?? ''
+  const trimmed = rawSubtitle.trim()
+  return trimmed || '大模型驱动的知识库管理工具'
+})
 const brandDescription = computed(() => {
-  const rawDescription = infoStore.branding?.description ?? '';
-  const trimmed = rawDescription.trim();
-  return trimmed || '结合知识库与知识图谱，提供更准确、更全面的回答';
-});
+  const rawDescription = infoStore.branding?.description ?? ''
+  const trimmed = rawDescription.trim()
+  return trimmed || '结合知识库与知识图谱，提供更准确、更全面的回答'
+})
 
 // 状态
-const isFirstRun = ref(false);
-const loading = ref(false);
-const errorMessage = ref('');
-const rememberMe = ref(false);
-const serverStatus = ref('loading');
-const serverError = ref('');
-const healthChecking = ref(false);
+const isFirstRun = ref(false)
+const loading = ref(false)
+const errorMessage = ref('')
+const rememberMe = ref(false)
+const serverStatus = ref('loading')
+const serverError = ref('')
+const healthChecking = ref(false)
 
 // 登录锁定相关状态
-const isLocked = ref(false);
-const lockRemainingTime = ref(0);
-const lockCountdown = ref(null);
+const isLocked = ref(false)
+const lockRemainingTime = ref(0)
+const lockCountdown = ref(null)
 
 // 登录表单
 const loginForm = reactive({
   loginId: '', // 支持user_id或phone_number登录
   password: ''
-});
+})
 
 // 管理员初始化表单
 const adminForm = reactive({
@@ -271,247 +274,247 @@ const adminForm = reactive({
   password: '',
   confirmPassword: '',
   phone_number: '' // 手机号字段（可选）
-});
+})
 
 // 开发中功能提示
 const showDevMessage = () => {
-  message.info('该功能正在开发中，敬请期待！');
-};
+  message.info('该功能正在开发中，敬请期待！')
+}
 
 const goHome = () => {
-  router.push('/');
-};
+  router.push('/')
+}
 
 // 清理倒计时器
 const clearLockCountdown = () => {
   if (lockCountdown.value) {
-    clearInterval(lockCountdown.value);
-    lockCountdown.value = null;
+    clearInterval(lockCountdown.value)
+    lockCountdown.value = null
   }
-};
+}
 
 // 启动锁定倒计时
 const startLockCountdown = (remainingSeconds) => {
-  clearLockCountdown();
-  isLocked.value = true;
-  lockRemainingTime.value = remainingSeconds;
+  clearLockCountdown()
+  isLocked.value = true
+  lockRemainingTime.value = remainingSeconds
 
   lockCountdown.value = setInterval(() => {
-    lockRemainingTime.value--;
+    lockRemainingTime.value--
     if (lockRemainingTime.value <= 0) {
-      clearLockCountdown();
-      isLocked.value = false;
-      errorMessage.value = '';
+      clearLockCountdown()
+      isLocked.value = false
+      errorMessage.value = ''
     }
-  }, 1000);
-};
+  }, 1000)
+}
 
 // 格式化时间显示
 const formatTime = (seconds) => {
   if (seconds < 60) {
-    return `${seconds}秒`;
+    return `${seconds}秒`
   } else if (seconds < 3600) {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}分${remainingSeconds}秒`;
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}分${remainingSeconds}秒`
   } else if (seconds < 86400) {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return `${hours}小时${minutes}分钟`;
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return `${hours}小时${minutes}分钟`
   } else {
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    return `${days}天${hours}小时`;
+    const days = Math.floor(seconds / 86400)
+    const hours = Math.floor((seconds % 86400) / 3600)
+    return `${days}天${hours}小时`
   }
-};
+}
 
 // 密码确认验证
 const validateConfirmPassword = async (rule, value) => {
   if (value === '') {
-    throw new Error('请确认密码');
+    throw new Error('请确认密码')
   }
   if (value !== adminForm.password) {
-    throw new Error('两次输入的密码不一致');
+    throw new Error('两次输入的密码不一致')
   }
-};
+}
 
 // 处理登录
 const handleLogin = async () => {
   // 如果当前被锁定，不允许登录
   if (isLocked.value) {
-    message.warning(`账户被锁定，请等待 ${formatTime(lockRemainingTime.value)}`);
-    return;
+    message.warning(`账户被锁定，请等待 ${formatTime(lockRemainingTime.value)}`)
+    return
   }
 
   try {
-    loading.value = true;
-    errorMessage.value = '';
-    clearLockCountdown();
+    loading.value = true
+    errorMessage.value = ''
+    clearLockCountdown()
 
     await userStore.login({
       loginId: loginForm.loginId,
       password: loginForm.password
-    });
+    })
 
-    message.success('登录成功');
+    message.success('登录成功')
 
     // 获取重定向路径
-    const redirectPath = sessionStorage.getItem('redirect') || '/';
-    sessionStorage.removeItem('redirect'); // 清除重定向信息
+    const redirectPath = sessionStorage.getItem('redirect') || '/'
+    sessionStorage.removeItem('redirect') // 清除重定向信息
 
     // 根据用户角色决定重定向目标
     if (redirectPath === '/') {
       // 如果是管理员，直接跳转到/chat页面
       if (userStore.isAdmin) {
-        router.push('/agent');
-        return;
+        router.push('/agent')
+        return
       }
 
       // 普通用户跳转到默认智能体
       try {
         // 初始化agentStore并获取智能体信息
-        await agentStore.initialize();
+        await agentStore.initialize()
 
         // 尝试获取默认智能体
         if (agentStore.defaultAgentId) {
           // 如果存在默认智能体，直接跳转
-          router.push(`/agent/${agentStore.defaultAgentId}`);
-          return;
+          router.push(`/agent/${agentStore.defaultAgentId}`)
+          return
         }
 
         // 没有默认智能体，获取第一个可用智能体
-        const agentIds = Object.keys(agentStore.agents);
+        const agentIds = Object.keys(agentStore.agents)
         if (agentIds.length > 0) {
-          router.push(`/agent/${agentIds[0]}`);
-          return;
+          router.push(`/agent/${agentIds[0]}`)
+          return
         }
 
         // 没有可用智能体，回退到首页
-        router.push('/');
+        router.push('/')
       } catch (error) {
-        console.error('获取智能体信息失败:', error);
-        router.push('/');
+        console.error('获取智能体信息失败:', error)
+        router.push('/')
       }
     } else {
       // 跳转到其他预设的路径
-      router.push(redirectPath);
+      router.push(redirectPath)
     }
   } catch (error) {
-    console.error('登录失败:', error);
+    console.error('登录失败:', error)
 
     // 检查是否是锁定错误（HTTP 423）
     if (error.status === 423) {
       // 尝试从响应头中获取剩余时间
-      let remainingTime = 0;
+      let remainingTime = 0
       if (error.headers && error.headers.get) {
-        const lockRemainingHeader = error.headers.get('X-Lock-Remaining');
+        const lockRemainingHeader = error.headers.get('X-Lock-Remaining')
         if (lockRemainingHeader) {
-          remainingTime = parseInt(lockRemainingHeader);
+          remainingTime = parseInt(lockRemainingHeader)
         }
       }
 
       // 如果没有从头中获取到，尝试从错误消息中解析
       if (remainingTime === 0) {
-        const lockTimeMatch = error.message.match(/(\d+)\s*秒/);
+        const lockTimeMatch = error.message.match(/(\d+)\s*秒/)
         if (lockTimeMatch) {
-          remainingTime = parseInt(lockTimeMatch[1]);
+          remainingTime = parseInt(lockTimeMatch[1])
         }
       }
 
       if (remainingTime > 0) {
-        startLockCountdown(remainingTime);
-        errorMessage.value = `由于多次登录失败，账户已被锁定 ${formatTime(remainingTime)}`;
+        startLockCountdown(remainingTime)
+        errorMessage.value = `由于多次登录失败，账户已被锁定 ${formatTime(remainingTime)}`
       } else {
-        errorMessage.value = error.message || '账户被锁定，请稍后再试';
+        errorMessage.value = error.message || '账户被锁定，请稍后再试'
       }
     } else {
-      errorMessage.value = error.message || '登录失败，请检查用户名和密码';
+      errorMessage.value = error.message || '登录失败，请检查用户名和密码'
     }
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 // 处理初始化管理员
 const handleInitialize = async () => {
   try {
-    loading.value = true;
-    errorMessage.value = '';
+    loading.value = true
+    errorMessage.value = ''
 
     if (adminForm.password !== adminForm.confirmPassword) {
-      errorMessage.value = '两次输入的密码不一致';
-      return;
+      errorMessage.value = '两次输入的密码不一致'
+      return
     }
 
     await userStore.initialize({
       user_id: adminForm.user_id,
       password: adminForm.password,
       phone_number: adminForm.phone_number || null // 空字符串转为null
-    });
+    })
 
-    message.success('管理员账户创建成功');
-    router.push('/');
+    message.success('管理员账户创建成功')
+    router.push('/')
   } catch (error) {
-    console.error('初始化失败:', error);
-    errorMessage.value = error.message || '初始化失败，请重试';
+    console.error('初始化失败:', error)
+    errorMessage.value = error.message || '初始化失败，请重试'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 // 检查是否是首次运行
 const checkFirstRunStatus = async () => {
   try {
-    loading.value = true;
-    const isFirst = await userStore.checkFirstRun();
-    isFirstRun.value = isFirst;
+    loading.value = true
+    const isFirst = await userStore.checkFirstRun()
+    isFirstRun.value = isFirst
   } catch (error) {
-    console.error('检查首次运行状态失败:', error);
-    errorMessage.value = '系统出错，请稍后重试';
+    console.error('检查首次运行状态失败:', error)
+    errorMessage.value = '系统出错，请稍后重试'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 // 检查服务器健康状态
 const checkServerHealth = async () => {
   try {
-    healthChecking.value = true;
-    const response = await healthApi.checkHealth();
+    healthChecking.value = true
+    const response = await healthApi.checkHealth()
     if (response.status === 'ok') {
-      serverStatus.value = 'ok';
+      serverStatus.value = 'ok'
     } else {
-      serverStatus.value = 'error';
-      serverError.value = response.message || '服务端状态异常';
+      serverStatus.value = 'error'
+      serverError.value = response.message || '服务端状态异常'
     }
   } catch (error) {
-    console.error('检查服务器健康状态失败:', error);
-    serverStatus.value = 'error';
-    serverError.value = error.message || '无法连接到服务端，请检查网络连接';
+    console.error('检查服务器健康状态失败:', error)
+    serverStatus.value = 'error'
+    serverError.value = error.message || '无法连接到服务端，请检查网络连接'
   } finally {
-    healthChecking.value = false;
+    healthChecking.value = false
   }
-};
+}
 
 // 组件挂载时
 onMounted(async () => {
   // 如果已登录，跳转到首页
   if (userStore.isLoggedIn) {
-    router.push('/');
-    return;
+    router.push('/')
+    return
   }
 
   // 首先检查服务器健康状态
-  await checkServerHealth();
+  await checkServerHealth()
 
   // 检查是否是首次运行
-  await checkFirstRunStatus();
-});
+  await checkFirstRunStatus()
+})
 
 // 组件卸载时清理定时器
 onUnmounted(() => {
-  clearLockCountdown();
-});
+  clearLockCountdown()
+})
 </script>
 
 <style lang="less" scoped>
@@ -731,7 +734,8 @@ onUnmounted(() => {
     text-align: center;
     margin: 16px 0;
 
-    &::before, &::after {
+    &::before,
+    &::after {
       content: '';
       position: absolute;
       top: 50%;
@@ -769,7 +773,10 @@ onUnmounted(() => {
       height: 42px;
       color: var(--gray-600);
       border: 1px solid var(--gray-300);
-      transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+      transition:
+        color 0.2s ease,
+        border-color 0.2s ease,
+        background-color 0.2s ease;
 
       &:hover {
         color: var(--main-color);
@@ -779,7 +786,6 @@ onUnmounted(() => {
     }
   }
 }
-
 
 .login-footer {
   margin-top: 16px;

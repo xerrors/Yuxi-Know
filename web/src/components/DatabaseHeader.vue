@@ -5,7 +5,12 @@
     class="database-info-header"
   >
     <template #left>
-      <a-button @click="backToDatabase" shape="circle" :icon="h(LeftOutlined)" type="text"></a-button>
+      <a-button
+        @click="backToDatabase"
+        shape="circle"
+        :icon="h(LeftOutlined)"
+        type="text"
+      ></a-button>
     </template>
     <template #behind-title>
       <a-button type="link" @click="showEditModal" :style="{ padding: '0px', color: 'inherit' }">
@@ -14,10 +19,13 @@
     </template>
     <template #actions>
       <div class="header-info">
-        <span class="db-id">ID:
-          <span style="user-select: all;">{{ database.db_id || 'N/A' }}</span>
+        <span class="db-id"
+          >ID:
+          <span style="user-select: all">{{ database.db_id || 'N/A' }}</span>
         </span>
-        <span class="file-count">{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+        <span class="file-count"
+          >{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span
+        >
         <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
         <a-tag
           :color="getKbTypeColor(database.kb_type || 'lightrag')"
@@ -34,7 +42,7 @@
   <!-- 添加编辑对话框 -->
   <a-modal v-model:open="editModalVisible" title="编辑知识库信息">
     <template #footer>
-      <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0;">
+      <a-button danger @click="deleteDatabase" style="margin-right: auto; margin-left: 0">
         <DeleteOutlined /> 删除数据库
       </a-button>
       <a-button key="back" @click="editModalVisible = false">取消</a-button>
@@ -58,7 +66,7 @@
           :model_spec="llmModelSpec"
           placeholder="请选择模型"
           @select-model="handleLLMSelect"
-          style="width: 100%;"
+          style="width: 100%"
         />
       </a-form-item>
     </a-form>
@@ -66,28 +74,24 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import { useDatabaseStore } from '@/stores/database';
-import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils';
-import {
-  LeftOutlined,
-  EditOutlined,
-  DeleteOutlined,
-} from '@ant-design/icons-vue';
-import HeaderComponent from '@/components/HeaderComponent.vue';
-import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
-import AiTextarea from '@/components/AiTextarea.vue';
-import { h } from 'vue';
+import { ref, reactive, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useDatabaseStore } from '@/stores/database'
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
+import { LeftOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import HeaderComponent from '@/components/HeaderComponent.vue'
+import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
+import AiTextarea from '@/components/AiTextarea.vue'
+import { h } from 'vue'
 
-const router = useRouter();
-const store = useDatabaseStore();
+const router = useRouter()
+const store = useDatabaseStore()
 
-const database = computed(() => store.database);
-const loading = computed(() => store.state.databaseLoading);
+const database = computed(() => store.database)
+const loading = computed(() => store.state.databaseLoading)
 
-const editModalVisible = ref(false);
-const editFormRef = ref(null);
+const editModalVisible = ref(false)
+const editFormRef = ref(null)
 const editForm = reactive({
   name: '',
   description: '',
@@ -95,75 +99,78 @@ const editForm = reactive({
     provider: '',
     model_name: ''
   }
-});
+})
 
 const rules = {
   name: [{ required: true, message: '请输入知识库名称' }]
-};
+}
 
 const backToDatabase = () => {
-  router.push('/database');
-};
+  router.push('/database')
+}
 
 const showEditModal = () => {
-  editForm.name = database.value.name || '';
-  editForm.description = database.value.description || '';
+  editForm.name = database.value.name || ''
+  editForm.description = database.value.description || ''
   // 如果是 LightRAG 类型，加载当前的 LLM 配置
   if (database.value.kb_type === 'lightrag') {
-    const llmInfo = database.value.llm_info || {};
-    editForm.llm_info.provider = llmInfo.provider || '';
-    editForm.llm_info.model_name = llmInfo.model_name || '';
+    const llmInfo = database.value.llm_info || {}
+    editForm.llm_info.provider = llmInfo.provider || ''
+    editForm.llm_info.model_name = llmInfo.model_name || ''
   }
-  editModalVisible.value = true;
-};
+  editModalVisible.value = true
+}
 
 const handleEditSubmit = () => {
-  editFormRef.value.validate().then(async () => {
-    const updateData = {
-      name: editForm.name,
-      description: editForm.description
-    };
+  editFormRef.value
+    .validate()
+    .then(async () => {
+      const updateData = {
+        name: editForm.name,
+        description: editForm.description
+      }
 
-    // 如果是 LightRAG 类型，包含 llm_info
-    if (database.value.kb_type === 'lightrag') {
-      updateData.llm_info = {
-        provider: editForm.llm_info.provider,
-        model_name: editForm.llm_info.model_name
-      };
-    }
+      // 如果是 LightRAG 类型，包含 llm_info
+      if (database.value.kb_type === 'lightrag') {
+        updateData.llm_info = {
+          provider: editForm.llm_info.provider,
+          model_name: editForm.llm_info.model_name
+        }
+      }
 
-    await store.updateDatabaseInfo(updateData);
-    editModalVisible.value = false;
-  }).catch(err => {
-    console.error('表单验证失败:', err);
-  });
-};
+      await store.updateDatabaseInfo(updateData)
+      editModalVisible.value = false
+    })
+    .catch((err) => {
+      console.error('表单验证失败:', err)
+    })
+}
 
 // LLM 模型选择处理
 const llmModelSpec = computed(() => {
-  const provider = editForm.llm_info?.provider || '';
-  const modelName = editForm.llm_info?.model_name || '';
+  const provider = editForm.llm_info?.provider || ''
+  const modelName = editForm.llm_info?.model_name || ''
   if (provider && modelName) {
-    return `${provider}/${modelName}`;
+    return `${provider}/${modelName}`
   }
-  return '';
-});
+  return ''
+})
 
 const handleLLMSelect = (spec) => {
-  console.log('LLM选择:', spec);
-  if (typeof spec !== 'string' || !spec) return;
+  console.log('LLM选择:', spec)
+  if (typeof spec !== 'string' || !spec) return
 
-  const index = spec.indexOf('/');
-  const provider = index !== -1 ? spec.slice(0, index) : '';
-  const modelName = index !== -1 ? spec.slice(index + 1) : '';
+  const index = spec.indexOf('/')
+  const provider = index !== -1 ? spec.slice(0, index) : ''
+  const modelName = index !== -1 ? spec.slice(index + 1) : ''
 
-  editForm.llm_info.provider = provider;
-  editForm.llm_info.model_name = modelName;
-};
+  editForm.llm_info.provider = provider
+  editForm.llm_info.model_name = modelName
+}
 
 const deleteDatabase = () => {
-  store.deleteDatabase();
-};
+  store.deleteDatabase()
+}
 </script>
 
 <style scoped>

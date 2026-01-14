@@ -1,27 +1,12 @@
 <template>
-  <a-drawer
-    :open="isOpen"
-    :width="620"
-    title="任务中心"
-    placement="right"
-    @close="handleClose"
-  >
+  <a-drawer :open="isOpen" :width="620" title="任务中心" placement="right" @close="handleClose">
     <div class="task-center">
       <div class="task-toolbar">
         <div class="task-filter-group">
-          <a-segmented
-            v-model:value="statusFilter"
-            :options="taskFilterOptions"
-          />
+          <a-segmented v-model:value="statusFilter" :options="taskFilterOptions" />
         </div>
         <div class="task-toolbar-actions">
-          <a-button
-            type="text"
-            @click="handleRefresh"
-            :loading="loadingState"
-          >
-            刷新
-          </a-button>
+          <a-button type="text" @click="handleRefresh" :loading="loadingState"> 刷新 </a-button>
         </div>
       </div>
 
@@ -53,7 +38,9 @@
               <div class="task-card-meta">
                 <span class="task-card-id">#{{ formatTaskId(task.id) }}</span>
                 <span class="task-card-type">{{ taskTypeLabel(task.type) }}</span>
-                <span v-if="getTaskDuration(task)" class="task-card-duration">{{ getTaskDuration(task) }}</span>
+                <span v-if="getTaskDuration(task)" class="task-card-duration">{{
+                  getTaskDuration(task)
+                }}</span>
               </div>
             </div>
           </div>
@@ -79,7 +66,9 @@
           <div class="task-card-footer">
             <div class="task-card-times">
               <span v-if="task.started_at">开始 {{ formatTime(task.started_at, 'short') }}</span>
-              <span v-if="task.completed_at">· 完成 {{ formatTime(task.completed_at, 'short') }}</span>
+              <span v-if="task.completed_at"
+                >· 完成 {{ formatTime(task.completed_at, 'short') }}</span
+              >
               <span v-if="!task.started_at">创建 {{ formatTime(task.created_at, 'short') }}</span>
             </div>
             <div class="task-card-actions">
@@ -103,7 +92,9 @@
       <div v-else class="task-empty">
         <div class="task-empty-icon">🗂️</div>
         <div class="task-empty-title">暂无任务</div>
-        <div class="task-empty-subtitle">当你提交知识库导入或其他后台任务时，会在这里展示实时进度（仅展示最近的 100 个任务）。</div>
+        <div class="task-empty-subtitle">
+          当你提交知识库导入或其他后台任务时，会在这里展示实时进度（仅展示最近的 100 个任务）。
+        </div>
       </div>
     </div>
   </a-drawer>
@@ -245,7 +236,7 @@ function handleTaskCardClick(task) {
 }
 
 function handleDetail(taskId) {
-  const task = tasks.value.find(item => item.id === taskId)
+  const task = tasks.value.find((item) => item.id === taskId)
   if (!task) {
     return
   }
@@ -341,7 +332,6 @@ function progressStatus(status) {
 function canCancel(task) {
   return ['pending', 'running', 'queued'].includes(task.status) && !task.cancel_requested
 }
-
 </script>
 <style scoped lang="less">
 .task-center {
@@ -429,30 +419,59 @@ function canCancel(task) {
   flex-shrink: 0;
 }
 
-.status-pending .status-dot { background: var(--color-info-500); }
-.status-pending .status-text { color: var(--color-info-500); }
+.status-pending .status-dot {
+  background: var(--color-info-500);
+}
+.status-pending .status-text {
+  color: var(--color-info-500);
+}
 
-.status-queued .status-dot { background: var(--color-info-500); }
-.status-queued .status-text { color: var(--color-info-500); }
+.status-queued .status-dot {
+  background: var(--color-info-500);
+}
+.status-queued .status-text {
+  color: var(--color-info-500);
+}
 
 .status-running .status-dot {
   background: var(--color-success-500);
   animation: pulse 1.5s ease-in-out infinite;
 }
-.status-running .status-text { color: var(--color-success-500); }
+.status-running .status-text {
+  color: var(--color-success-500);
+}
 
-.status-success .status-dot { background: var(--color-success-500); }
-.status-success .status-text { color: var(--color-success-500); }
+.status-success .status-dot {
+  background: var(--color-success-500);
+}
+.status-success .status-text {
+  color: var(--color-success-500);
+}
 
-.status-failed .status-dot { background: var(--color-error-500); }
-.status-failed .status-text { color: var(--color-error-500); }
+.status-failed .status-dot {
+  background: var(--color-error-500);
+}
+.status-failed .status-text {
+  color: var(--color-error-500);
+}
 
-.status-cancelled .status-dot { background: var(--gray-500); }
-.status-cancelled .status-text { color: var(--gray-600); }
+.status-cancelled .status-dot {
+  background: var(--gray-500);
+}
+.status-cancelled .status-text {
+  color: var(--gray-600);
+}
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.6; transform: scale(0.9); }
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
 }
 
 .task-card-header {

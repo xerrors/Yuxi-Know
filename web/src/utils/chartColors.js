@@ -27,7 +27,7 @@ const buildColorPalette = () => {
       ['--color-success-500', '#52c41a'],
       ['--color-warning-500', '#faad14'],
       ['--color-error-500', '#ff4d4f'],
-      ['--color-accent-500', '#13c2c2'],
+      ['--color-accent-500', '#13c2c2']
     ]
 
     // Extended palette colors
@@ -41,7 +41,7 @@ const buildColorPalette = () => {
       ['--chart-palette-7', '#F28B30'],
       ['--chart-palette-8', '#65C466'],
       ['--chart-palette-9', '#C2589E'],
-      ['--chart-palette-10', '#4F4F4F'],
+      ['--chart-palette-10', '#4F4F4F']
     ]
 
     const baseColors = baseVars.map(([n, f]) => pick(n, f))
@@ -58,8 +58,16 @@ const buildColorPalette = () => {
     console.warn('Failed to build color palette from CSS variables, using fallback:', e)
     // Fallback palette
     colorPalette = [
-      '#3996ae', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2',
-      '#265C96', '#009485', '#E8A035', '#D64B55', '#7D54C4'
+      '#3996ae',
+      '#52c41a',
+      '#faad14',
+      '#ff4d4f',
+      '#13c2c2',
+      '#265C96',
+      '#009485',
+      '#E8A035',
+      '#D64B55',
+      '#7D54C4'
     ]
     isInitialized = true
   }

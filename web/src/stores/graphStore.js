@@ -37,7 +37,7 @@ export const useGraphStore = defineStore('graph', {
     // 获取选中节点的详细信息
     selectedNodeData: (state) => {
       if (!state.selectedNode || !state.rawGraph) return null
-      return state.rawGraph.nodes.find(node => node.id === state.selectedNode)
+      return state.rawGraph.nodes.find((node) => node.id === state.selectedNode)
     },
 
     // 获取选中边的详细信息
@@ -47,14 +47,14 @@ export const useGraphStore = defineStore('graph', {
       console.log('查找边数据，选中边ID:', state.selectedEdge)
 
       // 首先尝试通过dynamicId匹配（Sigma使用的ID格式）
-      let foundEdge = state.rawGraph.edges.find(edge => edge.dynamicId === state.selectedEdge)
+      let foundEdge = state.rawGraph.edges.find((edge) => edge.dynamicId === state.selectedEdge)
       if (foundEdge) {
         console.log('通过dynamicId找到边:', foundEdge)
         return foundEdge
       }
 
       // 如果没找到，尝试通过原始ID匹配
-      foundEdge = state.rawGraph.edges.find(edge => edge.id === state.selectedEdge)
+      foundEdge = state.rawGraph.edges.find((edge) => edge.id === state.selectedEdge)
       if (foundEdge) {
         console.log('通过id找到边:', foundEdge)
         return foundEdge
@@ -65,8 +65,8 @@ export const useGraphStore = defineStore('graph', {
       const match = state.selectedEdge.match(dynamicIdPattern)
       if (match) {
         const [, source, target, index] = match
-        foundEdge = state.rawGraph.edges.find(edge =>
-          edge.source === source && edge.target === target
+        foundEdge = state.rawGraph.edges.find(
+          (edge) => edge.source === source && edge.target === target
         )
         if (foundEdge) {
           console.log('通过解析dynamicId找到边:', foundEdge)
@@ -79,8 +79,8 @@ export const useGraphStore = defineStore('graph', {
       const arrowMatch = state.selectedEdge.match(arrowPattern)
       if (arrowMatch) {
         const [, source, target] = arrowMatch
-        foundEdge = state.rawGraph.edges.find(edge =>
-          edge.source === source.trim() && edge.target === target.trim()
+        foundEdge = state.rawGraph.edges.find(
+          (edge) => edge.source === source.trim() && edge.target === target.trim()
         )
         if (foundEdge) {
           console.log('通过箭头格式找到边:', foundEdge)
@@ -161,7 +161,7 @@ export const useGraphStore = defineStore('graph', {
         '#FF7675', // 运动员 - 红色
         '#FD79A8', // 记录 - 粉色
         '#FDCB6E', // 年份 - 橙色
-        '#B2BEC3'  // 未知 - 灰色
+        '#B2BEC3' // 未知 - 灰色
       ]
 
       const typeColorMap = new Map()
@@ -254,7 +254,7 @@ export const useGraphStore = defineStore('graph', {
 
       // 计算节点度数
       const nodeDegrees = {}
-      edgesData.forEach(edge => {
+      edgesData.forEach((edge) => {
         const sourceId = String(edge.source)
         const targetId = String(edge.target)
         nodeDegrees[sourceId] = (nodeDegrees[sourceId] || 0) + 1
@@ -262,7 +262,7 @@ export const useGraphStore = defineStore('graph', {
       })
 
       // 更新节点度数和大小
-      rawGraph.nodes.forEach(node => {
+      rawGraph.nodes.forEach((node) => {
         node.degree = nodeDegrees[node.id] || 0
         node.size = this.calculateNodeSize({ degree: node.degree })
       })
@@ -314,19 +314,24 @@ export const useGraphStore = defineStore('graph', {
 
     // 计算边大小
     calculateEdgeSize(weight) {
-      const minSize = 3  // 与Sigma配置中的minEdgeThickness保持一致
-      const maxSize = 8  // 与Sigma配置中的maxEdgeThickness保持一致
+      const minSize = 3 // 与Sigma配置中的minEdgeThickness保持一致
+      const maxSize = 8 // 与Sigma配置中的maxEdgeThickness保持一致
       const normalizedWeight = Math.max(0, Math.min(1, (weight - 1) / 9)) // 假设权重范围1-10
       return minSize + normalizedWeight * (maxSize - minSize)
     },
 
     // 创建Sigma图实例
     createSigmaGraph(rawGraph) {
-      console.log('开始创建Sigma图，节点数量:', rawGraph.nodes.length, '边数量:', rawGraph.edges.length)
+      console.log(
+        '开始创建Sigma图，节点数量:',
+        rawGraph.nodes.length,
+        '边数量:',
+        rawGraph.edges.length
+      )
       const sigmaGraph = new DirectedGraph()
 
       // 添加节点
-      rawGraph.nodes.forEach(node => {
+      rawGraph.nodes.forEach((node) => {
         // 确保所有属性都是正确的类型
         const nodeAttributes = {
           label: String(node.properties?.entity_id || node.id),
@@ -376,7 +381,12 @@ export const useGraphStore = defineStore('graph', {
 
             // 检查是否已存在相同的边
             if (!sigmaGraph.hasEdge(sigmaEdgeId)) {
-              sigmaGraph.addEdgeWithKey(sigmaEdgeId, String(edge.source), String(edge.target), edgeAttributes)
+              sigmaGraph.addEdgeWithKey(
+                sigmaEdgeId,
+                String(edge.source),
+                String(edge.target),
+                edgeAttributes
+              )
               edgeAddedCount++
             } else {
               edgeSkippedCount++

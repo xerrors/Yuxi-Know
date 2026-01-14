@@ -128,7 +128,7 @@ export const useUserStore = defineStore('user', () => {
   // 用于API请求的授权头
   function getAuthHeaders() {
     return {
-      'Authorization': `Bearer ${token.value}`
+      Authorization: `Bearer ${token.value}`
     }
   }
 

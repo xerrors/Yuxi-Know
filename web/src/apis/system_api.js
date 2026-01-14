@@ -5,8 +5,6 @@ import { apiGet, apiPost, apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete
  * 包含系统配置、健康检查、信息管理等功能
  */
 
-
-
 // =============================================================================
 // === 健康检查分组 ===
 // =============================================================================
@@ -34,7 +32,7 @@ export const configApi = {
    * 获取系统配置
    * @returns {Promise} - 系统配置
    */
-  getConfig: async () =>  apiAdminGet('/api/system/config'),
+  getConfig: async () => apiAdminGet('/api/system/config'),
 
   /**
    * 更新单个配置项
@@ -51,15 +49,16 @@ export const configApi = {
    */
   updateConfigBatch: async (items) => apiAdminPost('/api/system/config/update', items),
 
-
   /**
    * 获取系统日志
    * @param {string} levels - 可选的日志级别过滤，多个级别用逗号分隔
    * @returns {Promise} - 系统日志
    */
   getLogs: async (levels) => {
-    const url = levels ? `/api/system/logs?levels=${encodeURIComponent(levels)}` : '/api/system/logs';
-    return apiAdminGet(url);
+    const url = levels
+      ? `/api/system/logs?levels=${encodeURIComponent(levels)}`
+      : '/api/system/logs'
+    return apiAdminGet(url)
   }
 }
 
@@ -78,7 +77,7 @@ export const brandApi = {
    * 重新加载信息配置
    * @returns {Promise} - 重新加载结果
    */
-  reloadInfoConfig: async () =>  apiPost('/api/system/info/reload', {}, {}, false)
+  reloadInfoConfig: async () => apiPost('/api/system/info/reload', {}, {}, false)
 }
 
 // =============================================================================
@@ -111,7 +110,9 @@ export const chatModelApi = {
    * @returns {Promise} - 模型状态
    */
   getModelStatus: async (provider, modelName) => {
-    return apiAdminGet(`/api/system/chat-models/status?provider=${encodeURIComponent(provider)}&model_name=${encodeURIComponent(modelName)}`)
+    return apiAdminGet(
+      `/api/system/chat-models/status?provider=${encodeURIComponent(provider)}&model_name=${encodeURIComponent(modelName)}`
+    )
   },
 
   /**
@@ -143,7 +144,10 @@ export const customProviderApi = {
    * @returns {Promise} - 添加结果
    */
   addCustomProvider: async (providerId, providerData) => {
-    return apiAdminPost('/api/system/custom-providers', { provider_id: providerId, provider_data: providerData })
+    return apiAdminPost('/api/system/custom-providers', {
+      provider_id: providerId,
+      provider_data: providerData
+    })
   },
 
   /**
@@ -153,7 +157,10 @@ export const customProviderApi = {
    * @returns {Promise} - 更新结果
    */
   updateCustomProvider: async (providerId, providerData) => {
-    return apiAdminPut(`/api/system/custom-providers/${encodeURIComponent(providerId)}`, providerData)
+    return apiAdminPut(
+      `/api/system/custom-providers/${encodeURIComponent(providerId)}`,
+      providerData
+    )
   },
 
   /**
@@ -172,9 +179,8 @@ export const customProviderApi = {
    * @returns {Promise} - 测试结果
    */
   testCustomProvider: async (providerId, modelName) => {
-    return apiAdminPost(`/api/system/custom-providers/${encodeURIComponent(providerId)}/test`, { model_name: modelName })
+    return apiAdminPost(`/api/system/custom-providers/${encodeURIComponent(providerId)}/test`, {
+      model_name: modelName
+    })
   }
 }
-
-
-

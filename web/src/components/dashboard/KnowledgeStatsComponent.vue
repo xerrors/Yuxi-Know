@@ -32,7 +32,7 @@
     <a-divider />
 
     <!-- 图表区域：拆分为两行 -->
-    <a-row :gutter="24" style="margin-bottom: 16px;">
+    <a-row :gutter="24" style="margin-bottom: 16px">
       <!-- 数据库类型分布 -->
       <a-col :span="24">
         <div class="chart-container">
@@ -40,7 +40,10 @@
             <h4>类型分布</h4>
             <div class="legend" v-if="dbTypeLegend.length">
               <div class="legend-item" v-for="(item, idx) in dbTypeLegend" :key="item.name">
-                <span class="legend-color" :style="{ backgroundColor: getLegendColorByIndex(idx) }"></span>
+                <span
+                  class="legend-color"
+                  :style="{ backgroundColor: getLegendColorByIndex(idx) }"
+                ></span>
                 <span class="legend-label">{{ item.name }}</span>
               </div>
             </div>
@@ -57,11 +60,17 @@
           <h4>文件类型分布</h4>
           <div ref="fileTypeChartRef" class="chart donut-chart-container">
             <div class="carousel-info" v-if="fileTypeData.length > 0">
-              <div class="carousel-item" :class="{ active: currentCarouselIndex === index }"
-                   v-for="(item, index) in fileTypeData" :key="item.name">
+              <div
+                class="carousel-item"
+                :class="{ active: currentCarouselIndex === index }"
+                v-for="(item, index) in fileTypeData"
+                :key="item.name"
+              >
                 <div class="carousel-label">{{ item.name }}</div>
                 <div class="carousel-value">{{ item.value }}</div>
-                <div class="carousel-percent">{{ ((item.value / totalFiles) * 100).toFixed(1) }}%</div>
+                <div class="carousel-percent">
+                  {{ ((item.value / totalFiles) * 100).toFixed(1) }}%
+                </div>
               </div>
             </div>
           </div>
@@ -162,7 +171,6 @@ const formattedStorageSize = computed(() => {
 // 使用统一的调色盘
 const getLegendColorByIndex = (index) => getColorByIndex(index)
 
-
 // 初始化数据库类型分布图 - 横向分段条
 const dbTypeLegend = ref([])
 const initDbTypeChart = () => {
@@ -170,7 +178,7 @@ const initDbTypeChart = () => {
 
   const entries = Object.entries(props.knowledgeStats.databases_by_type)
     .map(([type, count]) => ({ name: type || '未知', value: count }))
-    .filter(item => item.value > 0)
+    .filter((item) => item.value > 0)
 
   // update legend data
   dbTypeLegend.value = entries
@@ -244,12 +252,15 @@ const initFileTypeChart = () => {
   fileTypeChart = echarts.init(fileTypeChartRef.value)
 
   // 检查是否有文件类型数据 - 兼容旧字段名和新字段名
-  const fileTypesData = props.knowledgeStats?.files_by_type || props.knowledgeStats?.file_type_distribution || {}
+  const fileTypesData =
+    props.knowledgeStats?.files_by_type || props.knowledgeStats?.file_type_distribution || {}
   if (Object.keys(fileTypesData).length > 0) {
-    const data = Object.entries(fileTypesData).map(([type, count]) => ({
-      name: type || '未知',
-      value: count
-    })).sort((a, b) => b.value - a.value) // 按数量排序
+    const data = Object.entries(fileTypesData)
+      .map(([type, count]) => ({
+        name: type || '未知',
+        value: count
+      }))
+      .sort((a, b) => b.value - a.value) // 按数量排序
 
     // 设置轮播数据
     fileTypeData.value = data
@@ -281,33 +292,35 @@ const initFileTypeChart = () => {
           color: getCSSVariable('--gray-600')
         }
       },
-      series: [{
-        name: '文件类型',
-        type: 'pie',
-        radius: ['45%', '75%'], // 调整为更大的环，为中心信息留出更多空间
-        center: ['50%', '45%'], // 向上移动，为中心和底部图例留出空间
-        avoidLabelOverlap: true, // 避免标签重叠
-        itemStyle: {
-          borderRadius: 8,
-          borderColor: getCSSVariable('--gray-0'),
-          borderWidth: 2
-        },
-        label: {
-          show: false // 隐藏饼图上的标签，使用图例代替
-        },
-        emphasis: {
+      series: [
+        {
+          name: '文件类型',
+          type: 'pie',
+          radius: ['45%', '75%'], // 调整为更大的环，为中心信息留出更多空间
+          center: ['50%', '45%'], // 向上移动，为中心和底部图例留出空间
+          avoidLabelOverlap: true, // 避免标签重叠
           itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: getCSSVariable('--shadow-3')
-          }
-        },
-        labelLine: {
-          show: false // 隐藏标签线
-        },
-        data: data,
-        color: getColorPalette()
-      }]
+            borderRadius: 8,
+            borderColor: getCSSVariable('--gray-0'),
+            borderWidth: 2
+          },
+          label: {
+            show: false // 隐藏饼图上的标签，使用图例代替
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: getCSSVariable('--shadow-3')
+            }
+          },
+          labelLine: {
+            show: false // 隐藏标签线
+          },
+          data: data,
+          color: getColorPalette()
+        }
+      ]
     }
 
     fileTypeChart.setOption(option)
@@ -329,35 +342,35 @@ const initFileTypeChart = () => {
         },
         formatter: '{a} <br/>{b}: {c} ({d}%)'
       },
-      series: [{
-        name: '文件类型',
-        type: 'pie',
-        radius: ['45%', '75%'],
-        center: ['50%', '45%'],
-        avoidLabelOverlap: true,
-        itemStyle: {
-          borderRadius: 8,
-          borderColor: getCSSVariable('--gray-0'),
-          borderWidth: 2
-        },
-        label: {
-          show: false
-        },
-        emphasis: {
+      series: [
+        {
+          name: '文件类型',
+          type: 'pie',
+          radius: ['45%', '75%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: true,
           itemStyle: {
-            shadowBlur: 10,
-            shadowOffsetX: 0,
-            shadowColor: getCSSVariable('--shadow-3')
-          }
-        },
-        labelLine: {
-          show: false
-        },
-        data: [
-          { name: '暂无数据', value: 1 }
-        ],
-        color: [getCSSVariable('--color-info-500')]
-      }]
+            borderRadius: 8,
+            borderColor: getCSSVariable('--gray-0'),
+            borderWidth: 2
+          },
+          label: {
+            show: false
+          },
+          emphasis: {
+            itemStyle: {
+              shadowBlur: 10,
+              shadowOffsetX: 0,
+              shadowColor: getCSSVariable('--shadow-3')
+            }
+          },
+          labelLine: {
+            show: false
+          },
+          data: [{ name: '暂无数据', value: 1 }],
+          color: [getCSSVariable('--color-info-500')]
+        }
+      ]
     }
 
     fileTypeChart.setOption(option)
@@ -394,9 +407,13 @@ const updateCharts = () => {
 }
 
 // 监听数据变化
-watch(() => props.knowledgeStats, () => {
-  updateCharts()
-}, { deep: true })
+watch(
+  () => props.knowledgeStats,
+  () => {
+    updateCharts()
+  },
+  { deep: true }
+)
 
 // 窗口大小变化时重新调整图表
 const handleResize = () => {
@@ -410,13 +427,16 @@ onMounted(() => {
 })
 
 // 监听主题变化，重新渲染图表
-watch(() => themeStore.isDark, () => {
-  if (props.knowledgeStats && (dbTypeChart || fileTypeChart)) {
-    nextTick(() => {
-      updateCharts()
-    })
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (props.knowledgeStats && (dbTypeChart || fileTypeChart)) {
+      nextTick(() => {
+        updateCharts()
+      })
+    }
   }
-})
+)
 
 // 组件卸载时清理
 const cleanup = () => {

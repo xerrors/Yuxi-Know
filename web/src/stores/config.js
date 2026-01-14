@@ -12,7 +12,6 @@ export const useCounterStore = defineStore('counter', () => {
   return { count, doubleCount, increment }
 })
 
-
 export const useConfigStore = defineStore('config', () => {
   const config = ref({})
   function setConfig(newConfig) {
@@ -21,11 +20,10 @@ export const useConfigStore = defineStore('config', () => {
 
   function setConfigValue(key, value) {
     config.value[key] = value
-    configApi.updateConfigBatch({ [key]: value })
-      .then(data => {
-        console.debug('Success:', data)
-        setConfig(data)
-      })
+    configApi.updateConfigBatch({ [key]: value }).then((data) => {
+      console.debug('Success:', data)
+      setConfig(data)
+    })
   }
 
   function setConfigValues(items) {
@@ -35,19 +33,17 @@ export const useConfigStore = defineStore('config', () => {
     }
 
     // 发送到服务器
-    configApi.updateConfigBatch(items)
-      .then(data => {
-        console.debug('Success:', data)
-        setConfig(data)
-      })
+    configApi.updateConfigBatch(items).then((data) => {
+      console.debug('Success:', data)
+      setConfig(data)
+    })
   }
 
   function refreshConfig() {
-    configApi.getConfig()
-      .then(data => {
-        console.log("config", data)
-        setConfig(data)
-      })
+    configApi.getConfig().then((data) => {
+      console.log('config', data)
+      setConfig(data)
+    })
   }
 
   return { config, setConfig, setConfigValue, refreshConfig, setConfigValues }

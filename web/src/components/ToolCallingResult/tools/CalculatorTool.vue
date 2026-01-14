@@ -17,7 +17,7 @@
 </template>
 
 <script setup>
-import BaseToolCall from '../BaseToolCall.vue';
+import BaseToolCall from '../BaseToolCall.vue'
 import { NumberOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
@@ -25,18 +25,18 @@ const props = defineProps({
     type: Object,
     required: true
   }
-});
+})
 
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return content;
+      return content
     }
   }
-  return content;
-};
+  return content
+}
 
 // 方法
 const formatNumber = (num) => {

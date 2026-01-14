@@ -10,14 +10,14 @@
     <template #result="{ resultContent }">
       <div class="todo-list-result">
         <div class="todo-list">
-          <div
-            v-for="(todo, index) in todoListData(resultContent)"
-            :key="index"
-            class="todo-item"
-          >
+          <div v-for="(todo, index) in todoListData(resultContent)" :key="index" class="todo-item">
             <div class="todo-status">
               <CheckCircleOutlined v-if="todo.status === 'completed'" class="icon completed" />
-              <SyncOutlined v-else-if="todo.status === 'in_progress'" class="icon in-progress" spin />
+              <SyncOutlined
+                v-else-if="todo.status === 'in_progress'"
+                class="icon in-progress"
+                spin
+              />
               <ClockCircleOutlined v-else-if="todo.status === 'pending'" class="icon pending" />
               <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" class="icon cancelled" />
               <QuestionCircleOutlined v-else class="icon unknown" />
@@ -34,108 +34,108 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
-import BaseToolCall from '../BaseToolCall.vue';
+import { computed } from 'vue'
+import BaseToolCall from '../BaseToolCall.vue'
 import {
   CheckCircleOutlined,
   SyncOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
   QuestionCircleOutlined
-} from '@ant-design/icons-vue';
+} from '@ant-design/icons-vue'
 
 const props = defineProps({
   toolCall: {
     type: Object,
     required: true
   }
-});
+})
 
 const query = computed(() => {
   // 1. Try to get status from result content (Priority)
-  const content = props.toolCall.tool_call_result?.content;
+  const content = props.toolCall.tool_call_result?.content
   if (content) {
-    const list = todoListData(content);
+    const list = todoListData(content)
     if (list && list.length > 0) {
       // 1. In Progress
-      const inProgress = list.find(item => item.status === 'in_progress');
-      if (inProgress) return `进行中: ${inProgress.content}`;
+      const inProgress = list.find((item) => item.status === 'in_progress')
+      if (inProgress) return `进行中: ${inProgress.content}`
 
       // 2. Pending
-      const pending = list.find(item => item.status === 'pending');
-      if (pending) return `待处理: ${pending.content}`;
+      const pending = list.find((item) => item.status === 'pending')
+      if (pending) return `待处理: ${pending.content}`
 
       // 3. Last item fallback
-      const last = list[list.length - 1];
-      return `更新: ${last.content}`;
+      const last = list[list.length - 1]
+      return `更新: ${last.content}`
     }
   }
 
   // 2. Fallback to args
-  const args = props.toolCall.args || props.toolCall.function?.arguments;
-  if (!args) return '';
-  let parsedArgs = args;
+  const args = props.toolCall.args || props.toolCall.function?.arguments
+  if (!args) return ''
+  let parsedArgs = args
   if (typeof args === 'string') {
     try {
-      parsedArgs = JSON.parse(args);
+      parsedArgs = JSON.parse(args)
     } catch (e) {
-      return '';
+      return ''
     }
   }
   if (typeof parsedArgs === 'object') {
-    return parsedArgs.content || parsedArgs.action || parsedArgs.todo || '';
+    return parsedArgs.content || parsedArgs.action || parsedArgs.todo || ''
   }
-  return '';
-});
+  return ''
+})
 
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return content;
+      return content
     }
   }
-  return content;
-};
+  return content
+}
 
 const todoListData = (content) => {
-  if (!content) return [];
-  const data = parseData(content);
+  if (!content) return []
+  const data = parseData(content)
 
   // 1. Try from parsed data
   if (data && typeof data === 'object') {
-     if (Array.isArray(data)) return data;
-     if (data.todos && Array.isArray(data.todos)) return data.todos;
+    if (Array.isArray(data)) return data
+    if (data.todos && Array.isArray(data.todos)) return data.todos
   }
 
   // 2. Try parsing string if it matches specific pattern
   if (typeof content === 'string') {
-    let str = content;
+    let str = content
     if (str.startsWith('Updated todo list to ')) {
-      str = str.replace('Updated todo list to ', '');
+      str = str.replace('Updated todo list to ', '')
     }
-    const items = [];
-    const contentRegex = /'content':\s*'((?:[^'\\]|\\.)*)'/;
-    const statusRegex = /'status':\s*'((?:[^'\\]|\\.)*)'/;
-    const dictRegex = /\{.*?\}/g;
-    const dictMatches = str.match(dictRegex);
+    const items = []
+    const contentRegex = /'content':\s*'((?:[^'\\]|\\.)*)'/
+    const statusRegex = /'status':\s*'((?:[^'\\]|\\.)*)'/
+    const dictRegex = /\{.*?\}/g
+    const dictMatches = str.match(dictRegex)
     if (dictMatches) {
       for (const dictStr of dictMatches) {
-        const contentMatch = dictStr.match(contentRegex);
-        const statusMatch = dictStr.match(statusRegex);
+        const contentMatch = dictStr.match(contentRegex)
+        const statusMatch = dictStr.match(statusRegex)
         if (contentMatch && statusMatch) {
           items.push({
-            content: contentMatch[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"),
+            content: contentMatch[1].replace(/\\'/g, "'").replace(/\\\\/g, '\\'),
             status: statusMatch[1]
-          });
+          })
         }
       }
     }
-    if (items.length > 0) return items;
+    if (items.length > 0) return items
   }
-  return [];
-};
+  return []
+}
 </script>
 
 <style lang="less" scoped>
@@ -169,11 +169,21 @@ const todoListData = (content) => {
       .icon {
         font-size: 16px;
 
-        &.completed { color: #52c41a; }
-        &.in-progress { color: #1890ff; }
-        &.pending { color: #faad14; }
-        &.cancelled { color: #ff4d4f; }
-        &.unknown { color: var(--gray-400); }
+        &.completed {
+          color: #52c41a;
+        }
+        &.in-progress {
+          color: #1890ff;
+        }
+        &.pending {
+          color: #faad14;
+        }
+        &.cancelled {
+          color: #ff4d4f;
+        }
+        &.unknown {
+          color: var(--gray-400);
+        }
       }
     }
 

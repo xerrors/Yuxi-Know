@@ -11,10 +11,10 @@ export class AgentValidator {
    */
   static validateAgentId(agentId, operation = '操作') {
     if (!agentId) {
-      console.warn(`未指定AgentID，无法${operation}`);
-      return false;
+      console.warn(`未指定AgentID，无法${operation}`)
+      return false
     }
-    return true;
+    return true
   }
 
   /**
@@ -26,13 +26,13 @@ export class AgentValidator {
    */
   static validateAgentIdWithError(agentId, operation, errorHandler) {
     if (!agentId) {
-      const message = `未指定AgentID，无法${operation}`;
+      const message = `未指定AgentID，无法${operation}`
       if (errorHandler) {
-        errorHandler(message);
+        errorHandler(message)
       }
-      return false;
+      return false
     }
-    return true;
+    return true
   }
 
   /**
@@ -46,19 +46,19 @@ export class AgentValidator {
   static validateChatOperation(agentId, chatId, operation, errorHandler) {
     // 验证AgentID
     if (!this.validateAgentIdWithError(agentId, operation, errorHandler)) {
-      return false;
+      return false
     }
 
     // 如果需要验证chatId
     if (chatId !== undefined && !chatId) {
-      const message = `请先选择对话`;
+      const message = `请先选择对话`
       if (errorHandler) {
-        errorHandler(message);
+        errorHandler(message)
       }
-      return false;
+      return false
     }
 
-    return true;
+    return true
   }
 
   /**
@@ -72,24 +72,24 @@ export class AgentValidator {
   static validateRenameOperation(chatId, title, agentId, errorHandler) {
     // 验证基本参数
     if (!chatId || !title) {
-      const message = '未指定对话ID或标题，无法重命名对话';
+      const message = '未指定对话ID或标题，无法重命名对话'
       if (errorHandler) {
-        errorHandler(message);
+        errorHandler(message)
       }
-      return false;
+      return false
     }
 
     // 验证标题不为空
     if (!title.trim()) {
-      const message = '标题不能为空';
+      const message = '标题不能为空'
       if (errorHandler) {
-        errorHandler(message);
+        errorHandler(message)
       }
-      return false;
+      return false
     }
 
     // 验证AgentID
-    return this.validateAgentIdWithError(agentId, '重命名对话', errorHandler);
+    return this.validateAgentIdWithError(agentId, '重命名对话', errorHandler)
   }
 
   /**
@@ -101,13 +101,13 @@ export class AgentValidator {
    */
   static validateShareOperation(chatId, agent, errorHandler) {
     if (!chatId || !agent) {
-      const message = '请先选择对话';
+      const message = '请先选择对话'
       if (errorHandler) {
-        errorHandler(message);
+        errorHandler(message)
       }
-      return false;
+      return false
     }
-    return true;
+    return true
   }
 
   /**
@@ -118,9 +118,9 @@ export class AgentValidator {
    */
   static validateLoadOperation(agentId, operation = '加载状态') {
     if (!agentId) {
-      console.warn(`未指定AgentID，无法${operation}`);
-      return false;
+      console.warn(`未指定AgentID，无法${operation}`)
+      return false
     }
-    return true;
+    return true
   }
 }

@@ -72,12 +72,8 @@
                 <a-select-option value="deleted">已删除</a-select-option>
                 <a-select-option value="all">全部</a-select-option>
               </a-select>
-              <a-button size="small" @click="loadConversations" :loading="loading">
-                刷新
-              </a-button>
-              <a-button size="small" @click="feedbackModal.show()">
-                反馈详情
-              </a-button>
+              <a-button size="small" @click="loadConversations" :loading="loading"> 刷新 </a-button>
+              <a-button size="small" @click="feedbackModal.show()"> 反馈详情 </a-button>
             </a-space>
           </template>
 
@@ -92,7 +88,12 @@
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'title'">
-                <a @click="handleViewDetail(record)" class="conversation-title" :class="{ 'loading': loadingDetail }">{{ record.title || '未命名对话' }}</a>
+                <a
+                  @click="handleViewDetail(record)"
+                  class="conversation-title"
+                  :class="{ loading: loadingDetail }"
+                  >{{ record.title || '未命名对话' }}</a
+                >
               </template>
               <template v-if="column.key === 'status'">
                 <a-tag :color="record.status === 'active' ? 'green' : 'red'" size="small">
@@ -103,7 +104,12 @@
                 <span class="time-text">{{ formatDate(record.updated_at) }}</span>
               </template>
               <template v-if="column.key === 'actions'">
-                <a-button type="link" size="small" @click="handleViewDetail(record)" :loading="loadingDetail">
+                <a-button
+                  type="link"
+                  size="small"
+                  @click="handleViewDetail(record)"
+                  :loading="loadingDetail"
+                >
                   详情
                 </a-button>
               </template>
@@ -150,7 +156,7 @@ const allStatsData = ref({
 const filters = reactive({
   user_id: '',
   agent_id: '',
-  status: 'active',
+  status: 'active'
 })
 
 // 对话列表
@@ -168,7 +174,7 @@ const conversationPagination = reactive({
   total: 0,
   showSizeChanger: false,
   showQuickJumper: false,
-  showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`,
+  showTotal: (total, range) => `${range[0]}-${range[1]} / ${total}`
 })
 
 // 表格列定义
@@ -177,41 +183,41 @@ const conversationColumns = [
     title: '对话标题',
     dataIndex: 'title',
     key: 'title',
-    ellipsis: true,
+    ellipsis: true
   },
   {
     title: '用户',
     dataIndex: 'user_id',
     key: 'user_id',
     width: '80px',
-    ellipsis: true,
+    ellipsis: true
   },
   {
     title: '消息数',
     dataIndex: 'message_count',
     key: 'message_count',
     width: '60px',
-    align: 'center',
+    align: 'center'
   },
   {
     title: '状态',
     dataIndex: 'status',
     key: 'status',
     width: '70px',
-    align: 'center',
+    align: 'center'
   },
   {
     title: '更新时间',
     dataIndex: 'updated_at',
     key: 'updated_at',
-    width: '120px',
+    width: '120px'
   },
   {
     title: '操作',
     key: 'actions',
     width: '60px',
-    align: 'center',
-  },
+    align: 'center'
+  }
 ]
 
 // 子组件引用
@@ -269,7 +275,7 @@ const loadConversations = async () => {
       agent_id: filters.agent_id || undefined,
       status: filters.status,
       limit: conversationPagination.pageSize,
-      offset: (conversationPagination.current - 1) * conversationPagination.pageSize,
+      offset: (conversationPagination.current - 1) * conversationPagination.pageSize
     }
 
     const response = await dashboardApi.getConversations(params)
@@ -329,7 +335,6 @@ const handleTableChange = (pag) => {
   loadConversations()
 }
 
-
 // 清理函数 - 清理所有子组件的图表实例
 const cleanupCharts = () => {
   if (userStatsRef.value?.cleanup) userStatsRef.value.cleanup()
@@ -352,7 +357,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="less">
-
 .dashboard-container {
   // padding: 0 24px 24px 24px;
   background-color: var(--gray-25);
@@ -696,5 +700,4 @@ onUnmounted(() => {
     }
   }
 }
-
 </style>

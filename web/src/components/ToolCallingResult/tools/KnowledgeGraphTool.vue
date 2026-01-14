@@ -9,13 +9,15 @@
     </template>
     <template #result="{ resultContent }">
       <div class="knowledge-graph-result">
-        <div class="result-summary">
-          找到 {{ totalNodes }} 个节点, {{ totalRelations }} 个关系
-        </div>
+        <div class="result-summary">找到 {{ totalNodes }} 个节点, {{ totalRelations }} 个关系</div>
 
         <!-- 图谱可视化容器 -->
-        <div class="graph-visualization" ref="graphContainerRef" v-if="totalNodes > 0 || totalRelations > 0">
-          <GraphCanvas :graph-data="graphData" ref="graphContainer" style="height: 360px;">
+        <div
+          class="graph-visualization"
+          ref="graphContainerRef"
+          v-if="totalNodes > 0 || totalRelations > 0"
+        >
+          <GraphCanvas :graph-data="graphData" ref="graphContainer" style="height: 360px">
             <template #top>
               <div class="graph-controls">
                 <a-button
@@ -26,7 +28,7 @@
                 >
                   <ReloadOutlined v-if="!isRefreshing" />
                 </a-button>
-                </div>
+              </div>
             </template>
           </GraphCanvas>
         </div>
@@ -36,8 +38,8 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick, onMounted, onUpdated } from 'vue';
-import BaseToolCall from '../BaseToolCall.vue';
+import { computed, ref, watch, nextTick, onMounted, onUpdated } from 'vue'
+import BaseToolCall from '../BaseToolCall.vue'
 import { DeploymentUnitOutlined, ReloadOutlined } from '@ant-design/icons-vue'
 import GraphCanvas from '@/components/GraphCanvas.vue'
 
@@ -46,18 +48,18 @@ const props = defineProps({
     type: Object,
     required: true
   }
-});
+})
 
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return { triples: [] };
+      return { triples: [] }
     }
   }
-  return content || { triples: [] };
-};
+  return content || { triples: [] }
+}
 
 const graphContainer = ref(null)
 const graphContainerRef = ref(null)
@@ -65,26 +67,26 @@ const isVisible = ref(false)
 const isRefreshing = ref(false)
 
 const query = computed(() => {
-  const args = props.toolCall.args || props.toolCall.function?.arguments;
-  if (!args) return '';
-  let parsedArgs = args;
+  const args = props.toolCall.args || props.toolCall.function?.arguments
+  if (!args) return ''
+  let parsedArgs = args
   if (typeof args === 'string') {
     try {
-      parsedArgs = JSON.parse(args);
+      parsedArgs = JSON.parse(args)
     } catch (e) {
-      return '';
+      return ''
     }
   }
   // Try common keys for KG queries
   if (typeof parsedArgs === 'object') {
-    return parsedArgs.query || parsedArgs.keywords || parsedArgs.q || parsedArgs.entities || '';
+    return parsedArgs.query || parsedArgs.keywords || parsedArgs.q || parsedArgs.entities || ''
   }
-  return '';
-});
+  return ''
+})
 
 // 计算属性：解析图谱数据
 const graphData = computed(() => {
-  const data = parseData(props.toolCall.tool_call_result?.content);
+  const data = parseData(props.toolCall.tool_call_result?.content)
   const nodes = new Map()
   const edges = []
   let edgeId = 0
@@ -94,7 +96,7 @@ const graphData = computed(() => {
     const { triples = [] } = data
 
     // 处理 triples 数据
-    triples.forEach(triple => {
+    triples.forEach((triple) => {
       if (Array.isArray(triple) && triple.length >= 3) {
         const [source, relation, target] = triple
 
@@ -119,10 +121,14 @@ const graphData = computed(() => {
         }
 
         // 添加边
-        if (source && target && relation &&
-            typeof source === 'string' &&
-            typeof target === 'string' &&
-            typeof relation === 'string') {
+        if (
+          source &&
+          target &&
+          relation &&
+          typeof source === 'string' &&
+          typeof target === 'string' &&
+          typeof relation === 'string'
+        ) {
           edges.push({
             source_id: source,
             target_id: target,
@@ -147,77 +153,85 @@ const totalRelations = computed(() => graphData.value.edges.length)
 // 检查容器是否可见
 const checkVisibility = () => {
   if (graphContainerRef.value) {
-    const rect = graphContainerRef.value.getBoundingClientRect();
-    isVisible.value = rect.width > 0 && rect.height > 0;
+    const rect = graphContainerRef.value.getBoundingClientRect()
+    isVisible.value = rect.width > 0 && rect.height > 0
   }
-};
+}
 
 // 当数据变化时强制刷新图表
-watch(() => props.toolCall, async (newData, oldData) => {
-  if (newData !== oldData) {
-    await nextTick();
-    if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
-      setTimeout(() => {
-        graphContainer.value.refreshGraph();
-      }, 300);
+watch(
+  () => props.toolCall,
+  async (newData, oldData) => {
+    if (newData !== oldData) {
+      await nextTick()
+      if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
+        setTimeout(() => {
+          graphContainer.value.refreshGraph()
+        }, 300)
+      }
     }
-  }
-}, { deep: true });
+  },
+  { deep: true }
+)
 
 // 组件挂载后确保图表正确初始化
 onMounted(() => {
-  checkVisibility();
+  checkVisibility()
   if (graphData.value.nodes.length > 0 || graphData.value.edges.length > 0) {
     nextTick(() => {
       if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
         setTimeout(() => {
-          graphContainer.value.refreshGraph();
-        }, 300);
+          graphContainer.value.refreshGraph()
+        }, 300)
       }
-    });
+    })
   }
 
   const visibilityChecker = setInterval(() => {
-    checkVisibility();
-    if (isVisible.value && graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
-      graphContainer.value.refreshGraph();
-      clearInterval(visibilityChecker);
+    checkVisibility()
+    if (
+      isVisible.value &&
+      graphContainer.value &&
+      typeof graphContainer.value.refreshGraph === 'function'
+    ) {
+      graphContainer.value.refreshGraph()
+      clearInterval(visibilityChecker)
     }
-  }, 500);
+  }, 500)
 
   setTimeout(() => {
-    clearInterval(visibilityChecker);
-  }, 5000);
-});
+    clearInterval(visibilityChecker)
+  }, 5000)
+})
 
 onUpdated(() => {
-  checkVisibility();
+  checkVisibility()
   if (graphData.value.nodes.length > 0 || graphData.value.edges.length > 0) {
     nextTick(() => {
       if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
         setTimeout(() => {
-          graphContainer.value.refreshGraph();
-        }, 300);
+          graphContainer.value.refreshGraph()
+        }, 300)
       }
-    });
+    })
   }
-});
+})
 
 const refreshGraph = () => {
-  isRefreshing.value = true;
+  isRefreshing.value = true
   if (graphContainer.value && typeof graphContainer.value.refreshGraph === 'function') {
     setTimeout(() => {
-      graphContainer.value.refreshGraph();
+      graphContainer.value.refreshGraph()
       setTimeout(() => {
-        isRefreshing.value = false;
-      }, 500);
-    }, 300);
+        isRefreshing.value = false
+      }, 500)
+    }, 300)
   } else {
-    isRefreshing.value = false;
+    isRefreshing.value = false
   }
-};
+}
 
-defineExpose({ refreshGraph });
+defineExpose({ refreshGraph })
 </script>
 
 <style lang="less" scoped>
@@ -347,5 +361,4 @@ defineExpose({ refreshGraph });
     }
   }
 }
-
 </style>

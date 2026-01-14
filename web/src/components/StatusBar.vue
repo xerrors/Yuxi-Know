@@ -22,11 +22,7 @@
           <span class="user-greeting">{{ greeting }}</span>
         </div>
         <div class="task-center-entry" @click="openTaskCenter">
-          <a-badge
-            :count="activeTaskCount"
-            :overflow-count="99"
-            class="task-center-badge"
-          >
+          <a-badge :count="activeTaskCount" :overflow-count="99" class="task-center-badge">
             <span class="task-center-button">
               <ClipboardList class="icon" />
               <span class="task-center-label">任务中心</span>
@@ -196,7 +192,10 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   border: 1px solid rgba(37, 99, 235, 0.3);
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .task-center-button .icon {

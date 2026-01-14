@@ -46,9 +46,9 @@
 </template>
 
 <script setup>
-import BaseToolCall from '../BaseToolCall.vue';
+import BaseToolCall from '../BaseToolCall.vue'
 import { parseToShanghai } from '@/utils/time'
-import { computed } from 'vue';
+import { computed } from 'vue'
 
 const props = defineProps({
   toolCall: {
@@ -60,32 +60,32 @@ const props = defineProps({
 const parseData = (content) => {
   if (typeof content === 'string') {
     try {
-      return JSON.parse(content);
+      return JSON.parse(content)
     } catch (error) {
-      return { query: '', results: [], response_time: 0 };
+      return { query: '', results: [], response_time: 0 }
     }
   }
-  return content || { query: '', results: [], response_time: 0 };
-};
+  return content || { query: '', results: [], response_time: 0 }
+}
 
-const parsedData = (content) => parseData(content);
+const parsedData = (content) => parseData(content)
 
 const query = computed(() => {
   // First try to get it from result
-  const result = parsedData(props.toolCall.tool_call_result?.content);
-  if (result?.query) return result.query;
+  const result = parsedData(props.toolCall.tool_call_result?.content)
+  if (result?.query) return result.query
 
   // Fallback to args
-  const args = props.toolCall.args || props.toolCall.function?.arguments;
-  if (!args) return '';
-  if (typeof args === 'object') return args.query || args.q || '';
+  const args = props.toolCall.args || props.toolCall.function?.arguments
+  if (!args) return ''
+  if (typeof args === 'object') return args.query || args.q || ''
   try {
-    const parsed = JSON.parse(args);
-    return parsed.query || parsed.q || '';
+    const parsed = JSON.parse(args)
+    return parsed.query || parsed.q || ''
   } catch (e) {
-    return '';
+    return ''
   }
-});
+})
 
 const formatDate = (dateString) => {
   if (!dateString) return ''

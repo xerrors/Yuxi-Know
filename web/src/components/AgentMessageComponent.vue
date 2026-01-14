@@ -1,10 +1,18 @@
 <template>
-  <div v-if="message.message_type === 'multimodal_image' && message.image_content" class="message-image">
+  <div
+    v-if="message.message_type === 'multimodal_image' && message.image_content"
+    class="message-image"
+  >
     <img :src="`data:image/jpeg;base64,${message.image_content}`" alt="用户上传的图片" />
   </div>
   <div class="message-box" :class="[message.type, customClasses]">
     <!-- 用户消息 -->
-    <div v-if="message.type === 'human'" class="message-copy-btn human-copy" @click="copyToClipboard(message.content)" :class="{ 'is-copied': isCopied }">
+    <div
+      v-if="message.type === 'human'"
+      class="message-copy-btn human-copy"
+      @click="copyToClipboard(message.content)"
+      :class="{ 'is-copied': isCopied }"
+    >
       <Check v-if="isCopied" size="14" />
       <Copy v-else size="14" />
     </div>
@@ -19,47 +27,73 @@
           <template #expandIcon="{ isActive }">
             <caret-right-outlined :rotate="isActive ? 90 : 0" />
           </template>
-          <a-collapse-panel key="show" :header="message.status=='reasoning' ? '正在思考...' : '推理过程'" class="reasoning-header">
+          <a-collapse-panel
+            key="show"
+            :header="message.status == 'reasoning' ? '正在思考...' : '推理过程'"
+            class="reasoning-header"
+          >
             <p class="reasoning-content">{{ parsedData.reasoning_content }}</p>
           </a-collapse-panel>
         </a-collapse>
       </div>
 
       <!-- 消息内容 -->
-      <MdPreview v-if="parsedData.content" ref="editorRef"
+      <MdPreview
+        v-if="parsedData.content"
+        ref="editorRef"
         editorId="preview-only"
         :theme="theme"
         previewTheme="github"
         :showCodeRowNumber="false"
         :modelValue="parsedData.content"
         :key="message.id"
-        class="message-md"/>
+        class="message-md"
+      />
 
-      <div v-else-if="parsedData.reasoning_content"  class="empty-block"></div>
+      <div v-else-if="parsedData.reasoning_content" class="empty-block"></div>
 
       <!-- 错误提示块 -->
       <div v-if="displayError" class="error-hint">
         <span v-if="getErrorMessage">{{ getErrorMessage }}</span>
         <span v-else-if="message.error_type === 'interrupted'">回答生成已中断</span>
         <span v-else-if="message.error_type === 'unexpect'">生成过程中出现异常</span>
-        <span v-else-if="message.error_type === 'content_guard_blocked'">检测到敏感内容，已中断输出</span>
+        <span v-else-if="message.error_type === 'content_guard_blocked'"
+          >检测到敏感内容，已中断输出</span
+        >
         <span v-else>{{ message.error_type || '未知错误' }}</span>
       </div>
 
       <div v-if="validToolCalls && validToolCalls.length > 0" class="tool-calls-container">
-        <div v-for="(toolCall, index) in validToolCalls" :key="toolCall.id || index" class="tool-call-container">
+        <div
+          v-for="(toolCall, index) in validToolCalls"
+          :key="toolCall.id || index"
+          class="tool-call-container"
+        >
           <ToolCallRenderer :tool-call="toolCall" />
         </div>
       </div>
 
       <div v-if="message.isStoppedByUser" class="retry-hint">
         你停止生成了本次回答
-        <span class="retry-link" @click="emit('retryStoppedMessage', message.id)">重新编辑问题</span>
+        <span class="retry-link" @click="emit('retryStoppedMessage', message.id)"
+          >重新编辑问题</span
+        >
       </div>
 
-
-      <div v-if="(message.role=='received' || message.role=='assistant') && message.status=='finished' && showRefs">
-        <RefsComponent :message="message" :show-refs="showRefs" :is-latest-message="isLatestMessage" @retry="emit('retry')" @openRefs="emit('openRefs', $event)" />
+      <div
+        v-if="
+          (message.role == 'received' || message.role == 'assistant') &&
+          message.status == 'finished' &&
+          showRefs
+        "
+      >
+        <RefsComponent
+          :message="message"
+          :show-refs="showRefs"
+          :is-latest-message="isLatestMessage"
+          @retry="emit('retry')"
+          @openRefs="emit('openRefs', $event)"
+        />
       </div>
       <!-- 错误消息 -->
     </div>
@@ -72,19 +106,18 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue';
+import { computed, ref } from 'vue'
+import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { Copy, Check } from 'lucide-vue-next';
+import { Copy, Check } from 'lucide-vue-next'
 import { ToolCallRenderer } from '@/components/ToolCallingResult'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
 
-
 import { MdPreview } from 'md-editor-v3'
-import 'md-editor-v3/lib/preview.css';
+import 'md-editor-v3/lib/preview.css'
 
 const props = defineProps({
   // 消息角色：'user'|'assistant'|'sent'|'received'
@@ -117,129 +150,131 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-});
+})
 
 const editorRef = ref()
 
-const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs']);
+const emit = defineEmits(['retry', 'retryStoppedMessage', 'openRefs'])
 
 // 复制状态
-const isCopied = ref(false);
+const isCopied = ref(false)
 
 const copyToClipboard = async (text) => {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text)
     } else {
       // 降级处理：使用传统的 execCommand 方法
-      const textArea = document.createElement('textarea');
-      textArea.value = text;
-      textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      const successful = document.execCommand('copy');
-      document.body.removeChild(textArea);
-      if (!successful) throw new Error('execCommand failed');
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      textArea.style.top = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+      if (!successful) throw new Error('execCommand failed')
     }
-    isCopied.value = true;
+    isCopied.value = true
     setTimeout(() => {
-      isCopied.value = false;
-    }, 2000);
+      isCopied.value = false
+    }, 2000)
   } catch (err) {
-    console.error('Failed to copy: ', err);
+    console.error('Failed to copy: ', err)
   }
-};
+}
 
 // 推理面板展开状态
-const reasoningActiveKey = ref(['hide']);
+const reasoningActiveKey = ref(['hide'])
 
 // 错误消息处理
 const displayError = computed(() => {
   // 简化错误判断：只检查明确的错误类型标识
-  return !!(props.message.error_type || props.message.extra_metadata?.error_type);
-});
+  return !!(props.message.error_type || props.message.extra_metadata?.error_type)
+})
 
 const getErrorMessage = computed(() => {
   // 优先使用直接的 error_message 字段
   if (props.message.error_message) {
-    return props.message.error_message;
+    return props.message.error_message
   }
 
   // 其次从 extra_metadata 中获取具体的错误信息
   if (props.message.extra_metadata?.error_message) {
-    return props.message.extra_metadata.error_message;
+    return props.message.extra_metadata.error_message
   }
 
   // 对于已知的错误类型，返回默认提示
   switch (props.message.error_type) {
     case 'interrupted':
-      return '回答生成已中断';
+      return '回答生成已中断'
     case 'content_guard_blocked':
-      return '检测到敏感内容，已中断输出';
+      return '检测到敏感内容，已中断输出'
     case 'unexpect':
-      return '生成过程中出现异常';
+      return '生成过程中出现异常'
     case 'agent_error':
-      return '智能体获取失败';
+      return '智能体获取失败'
     default:
-      return null;
+      return null
   }
-});
+})
 
 // 引入智能体 store
-const agentStore = useAgentStore();
-const infoStore = useInfoStore();
-const themeStore = useThemeStore();
+const agentStore = useAgentStore()
+const infoStore = useInfoStore()
+const themeStore = useThemeStore()
 
 // 主题设置 - 根据系统主题动态切换
-const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
+const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 // 过滤有效的工具调用
 const validToolCalls = computed(() => {
   if (!props.message.tool_calls || !Array.isArray(props.message.tool_calls)) {
-    return [];
+    return []
   }
 
-  return props.message.tool_calls.filter(toolCall => {
+  return props.message.tool_calls.filter((toolCall) => {
     // 过滤掉无效的工具调用
-    return toolCall &&
-           (toolCall.id || toolCall.name) &&
-           (toolCall.args !== undefined ||
-            toolCall.function?.arguments !== undefined ||
-            toolCall.tool_call_result !== undefined);
-  });
-});
+    return (
+      toolCall &&
+      (toolCall.id || toolCall.name) &&
+      (toolCall.args !== undefined ||
+        toolCall.function?.arguments !== undefined ||
+        toolCall.tool_call_result !== undefined)
+    )
+  })
+})
 
 const parsedData = computed(() => {
   // Start with default values from the prop to avoid mutation.
-  let content = props.message.content.trim() || '';
-  let reasoning_content = props.message.additional_kwargs?.reasoning_content || '';
+  let content = props.message.content.trim() || ''
+  let reasoning_content = props.message.additional_kwargs?.reasoning_content || ''
 
   if (reasoning_content) {
     return {
       content,
-      reasoning_content,
+      reasoning_content
     }
   }
 
   // Regex to find <think>...</think> or an unclosed <think>... at the end of the string.
-  const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s;
-  const thinkMatch = content.match(thinkRegex);
+  const thinkRegex = /<think>(.*?)<\/think>|<think>(.*?)$/s
+  const thinkMatch = content.match(thinkRegex)
 
   if (thinkMatch) {
     // The captured reasoning is in either group 1 (closed tag) or 2 (unclosed tag).
-    reasoning_content = (thinkMatch[1] || thinkMatch[2] || '').trim();
+    reasoning_content = (thinkMatch[1] || thinkMatch[2] || '').trim()
     // Remove the entire matched <think> block from the original content.
-    content = content.replace(thinkMatch[0], '').trim();
+    content = content.replace(thinkMatch[0], '').trim()
   }
 
   return {
     content,
-    reasoning_content,
-  };
-});
+    reasoning_content
+  }
+})
 </script>
 
 <style lang="less" scoped>
@@ -257,18 +292,21 @@ const parsedData = computed(() => {
   color: var(--gray-10000);
   max-width: 100%;
   position: relative;
-  letter-spacing: .25px;
+  letter-spacing: 0.25px;
 
-  &.human, &.sent {
+  &.human,
+  &.sent {
     max-width: 95%;
     color: var(--gray-1000);
     background-color: var(--main-50);
     align-self: flex-end;
-    border-radius: .5rem;
+    border-radius: 0.5rem;
     padding: 0.5rem 1rem;
   }
 
-  &.assistant, &.received, &.ai {
+  &.assistant,
+  &.received,
+  &.ai {
     color: initial;
     width: 100%;
     text-align: left;
@@ -588,9 +626,15 @@ const parsedData = computed(() => {
 }
 
 @keyframes colorPulse {
-  0% { color: var(--gray-700); }
-  50% { color: var(--gray-300); }
-  100% { color: var(--gray-700); }
+  0% {
+    color: var(--gray-700);
+  }
+  50% {
+    color: var(--gray-300);
+  }
+  100% {
+    color: var(--gray-700);
+  }
 }
 
 @keyframes fadeInUp {
@@ -637,7 +681,9 @@ const parsedData = computed(() => {
 :deep(.message-md .md-editor-preview-wrapper) {
   max-width: 100%;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Noto Sans SC', 'PingFang SC', 'Noto Sans SC',
+    'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
 
   #preview-only-preview {
     font-size: 1rem;
@@ -645,16 +691,18 @@ const parsedData = computed(() => {
     color: var(--gray-1000);
   }
 
-
-  h1, h2 {
+  h1,
+  h2 {
     font-size: 1.2rem;
   }
 
-  h3, h4 {
+  h3,
+  h4 {
     font-size: 1.1rem;
   }
 
-  h5, h6 {
+  h5,
+  h6 {
     font-size: 1rem;
   }
 
@@ -662,7 +710,9 @@ const parsedData = computed(() => {
     font-weight: 500;
   }
 
-  li > p, ol > p, ul > p {
+  li > p,
+  ol > p,
+  ul > p {
     margin: 0.25rem 0;
   }
 
@@ -671,7 +721,8 @@ const parsedData = computed(() => {
     color: var(--main-bright);
   }
 
-  ul, ol {
+  ul,
+  ol {
     padding-left: 1.625rem;
   }
 
@@ -743,7 +794,9 @@ const parsedData = computed(() => {
 
   code {
     font-size: 13px;
-    font-family: 'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
+    font-family:
+      'Menlo', 'Monaco', 'Consolas', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei',
+      'Hiragino Sans GB', 'Source Han Sans CN', 'Courier New', monospace;
     line-height: 1.5;
     letter-spacing: 0.025em;
     tab-size: 4;
@@ -765,7 +818,7 @@ const parsedData = computed(() => {
     outline-offset: 14px;
     border-radius: 12px;
 
-    thead tr th{
+    thead tr th {
       padding-top: 0;
     }
 
@@ -811,11 +864,13 @@ const parsedData = computed(() => {
 :deep(.chat-box.font-smaller #preview-only-preview) {
   font-size: 14px;
 
-  h1, h2 {
+  h1,
+  h2 {
     font-size: 1.1rem;
   }
 
-  h3, h4 {
+  h3,
+  h4 {
     font-size: 1rem;
   }
 }
@@ -823,15 +878,18 @@ const parsedData = computed(() => {
 :deep(.chat-box.font-larger #preview-only-preview) {
   font-size: 16px;
 
-  h1, h2 {
+  h1,
+  h2 {
     font-size: 1.3rem;
   }
 
-  h3, h4 {
+  h3,
+  h4 {
     font-size: 1.2rem;
   }
 
-  h5, h6 {
+  h5,
+  h6 {
     font-size: 1.1rem;
   }
 

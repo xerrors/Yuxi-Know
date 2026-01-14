@@ -130,5 +130,3 @@ export const dashboardApi = {
     return apiAdminGet(`/api/dashboard/stats/calls/timeseries?type=${type}&time_range=${timeRange}`)
   }
 }
-
-

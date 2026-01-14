@@ -19,15 +19,14 @@
         <div class="header-controls">
           <!-- 字符数/片段数显示在 segment 左边 -->
           <span class="view-info">
-            {{ viewMode === 'chunks' ? chunkCount + ' 个片段' : formatTextLength(charCount) + ' 字符' }}
+            {{
+              viewMode === 'chunks' ? chunkCount + ' 个片段' : formatTextLength(charCount) + ' 字符'
+            }}
           </span>
 
           <!-- 视图模式切换 -->
           <div class="view-controls" v-if="file && hasContent">
-            <a-segmented
-              v-model:value="viewMode"
-              :options="viewModeOptions"
-            />
+            <a-segmented v-model:value="viewMode" :options="viewModeOptions" />
           </div>
 
           <!-- 下载按钮下拉菜单 -->
@@ -35,7 +34,7 @@
             <a-button type="default" class="download-btn">
               <template #icon><Download :size="16" /></template>
               下载
-              <ChevronDown :size="16" style="margin-left: 4px;" />
+              <ChevronDown :size="16" style="margin-left: 4px" />
             </a-button>
             <template #overlay>
               <a-menu @click="handleDownloadMenuClick">
@@ -43,7 +42,10 @@
                   <template #icon><Download :size="16" /></template>
                   下载原文
                 </a-menu-item>
-                <a-menu-item key="markdown" :disabled="!((file.lines && file.lines.length > 0) || file.content)">
+                <a-menu-item
+                  key="markdown"
+                  :disabled="!((file.lines && file.lines.length > 0) || file.content)"
+                >
                   <template #icon><FileText :size="16" /></template>
                   下载 Markdown
                 </a-menu-item>
@@ -76,11 +78,7 @@
       <!-- Chunks 模式：使用 Grid 布局 -->
       <div v-else-if="viewMode === 'chunks'" class="chunks-panel">
         <div class="chunk-grid">
-          <div
-            v-for="chunk in mappedChunks"
-            :key="chunk.id"
-            class="chunk-card"
-          >
+          <div v-for="chunk in mappedChunks" :key="chunk.id" class="chunk-card">
             <div class="chunk-card-header">
               <span class="chunk-order">#{{ chunk.chunk_order_index }}</span>
             </div>
@@ -102,200 +100,202 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { useDatabaseStore } from '@/stores/database';
-import { useThemeStore } from '@/stores/theme';
-import { message } from 'ant-design-vue';
-import { documentApi } from '@/apis/knowledge_api';
-import { mergeChunks } from '@/utils/chunkUtils';
-import { getFileIcon, getFileIconColor } from '@/utils/file_utils';
-import { MdPreview } from 'md-editor-v3';
-import 'md-editor-v3/lib/preview.css';
-import { Download, ChevronDown, FileText, X } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue'
+import { useDatabaseStore } from '@/stores/database'
+import { useThemeStore } from '@/stores/theme'
+import { message } from 'ant-design-vue'
+import { documentApi } from '@/apis/knowledge_api'
+import { mergeChunks } from '@/utils/chunkUtils'
+import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+import { Download, ChevronDown, FileText, X } from 'lucide-vue-next'
 
-const store = useDatabaseStore();
-const themeStore = useThemeStore();
+const store = useDatabaseStore()
+const themeStore = useThemeStore()
 
 const visible = computed({
   get: () => store.state.fileDetailModalVisible,
-  set: (value) => store.state.fileDetailModalVisible = value
-});
+  set: (value) => (store.state.fileDetailModalVisible = value)
+})
 
-const file = computed(() => store.selectedFile);
-const loading = computed(() => store.state.fileDetailLoading);
+const file = computed(() => store.selectedFile)
+const loading = computed(() => store.state.fileDetailLoading)
 
 // 文件图标
-const fileIcon = computed(() => getFileIcon(file.value?.filename));
-const fileIconColor = computed(() => getFileIconColor(file.value?.filename));
+const fileIcon = computed(() => getFileIcon(file.value?.filename))
+const fileIconColor = computed(() => getFileIconColor(file.value?.filename))
 
-const downloadingOriginal = ref(false);
-const downloadingMarkdown = ref(false);
+const downloadingOriginal = ref(false)
+const downloadingMarkdown = ref(false)
 
 // 主题设置
-const theme = computed(() => themeStore.isDark ? 'dark' : 'light');
+const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 // 视图模式
-const viewMode = ref('markdown');
-const hasIndexed = computed(() => ['done', 'indexed'].includes(file.value?.status));
-const hasContent = computed(() => (file.value?.lines && file.value?.lines.length > 0) || file.value?.content);
+const viewMode = ref('markdown')
+const hasIndexed = computed(() => ['done', 'indexed'].includes(file.value?.status))
+const hasContent = computed(
+  () => (file.value?.lines && file.value?.lines.length > 0) || file.value?.content
+)
 
 const viewModeOptions = computed(() => {
-  const options = [{ label: 'Markdown', value: 'markdown' }];
+  const options = [{ label: 'Markdown', value: 'markdown' }]
   if (hasIndexed.value) {
-    options.push({ label: 'Chunks', value: 'chunks' });
+    options.push({ label: 'Chunks', value: 'chunks' })
   }
-  return options;
-});
+  return options
+})
 
 // 监听文件状态变化，重置视图模式
 watch(file, (newFile) => {
   if (newFile) {
     if (!hasIndexed.value) {
-      viewMode.value = 'markdown';
+      viewMode.value = 'markdown'
     }
   }
-});
+})
 
 // 统计信息
-const mergeResult = computed(() => mergeChunks(file.value?.lines || []));
-const mappedChunks = computed(() => mergeResult.value.chunks);
-const mergedContent = computed(() => file.value?.content || mergeResult.value.content || '');
-const charCount = computed(() => mergedContent.value.length);
-const chunkCount = computed(() => mappedChunks.value.length || file.value?.lines?.length || 0);
+const mergeResult = computed(() => mergeChunks(file.value?.lines || []))
+const mappedChunks = computed(() => mergeResult.value.chunks)
+const mergedContent = computed(() => file.value?.content || mergeResult.value.content || '')
+const charCount = computed(() => mergedContent.value.length)
+const chunkCount = computed(() => mappedChunks.value.length || file.value?.lines?.length || 0)
 
 // 格式化文本长度
 function formatTextLength(length) {
-  if (!length && length !== 0) return '0 字符';
+  if (!length && length !== 0) return '0 字符'
 
   if (length < 1000) {
-    return `${length}`;
+    return `${length}`
   } else {
-    return `${(length / 1000).toFixed(1)}k`;
+    return `${(length / 1000).toFixed(1)}k`
   }
 }
 
 const afterOpenChange = (open) => {
   if (!open) {
-    store.selectedFile = null;
-    viewMode.value = 'markdown';
+    store.selectedFile = null
+    viewMode.value = 'markdown'
   }
-};
+}
 
 // 下载菜单点击处理
 const handleDownloadMenuClick = ({ key }) => {
   if (key === 'original') {
-    handleDownloadOriginal();
+    handleDownloadOriginal()
   } else if (key === 'markdown') {
-    handleDownloadMarkdown();
+    handleDownloadMarkdown()
   }
-};
+}
 
 // 下载原文
 const handleDownloadOriginal = async () => {
   if (!file.value || !file.value.file_id) {
-    message.error('文件信息不完整');
-    return;
+    message.error('文件信息不完整')
+    return
   }
 
-  const dbId = store.databaseId;
+  const dbId = store.databaseId
   if (!dbId) {
-    message.error('无法获取数据库ID，请刷新页面后重试');
-    return;
+    message.error('无法获取数据库ID，请刷新页面后重试')
+    return
   }
 
-  downloadingOriginal.value = true;
+  downloadingOriginal.value = true
   try {
-    const response = await documentApi.downloadDocument(dbId, file.value.file_id);
+    const response = await documentApi.downloadDocument(dbId, file.value.file_id)
 
     // 获取文件名
-    const contentDisposition = response.headers.get('content-disposition');
-    let filename = file.value.filename;
+    const contentDisposition = response.headers.get('content-disposition')
+    let filename = file.value.filename
     if (contentDisposition) {
       // 首先尝试匹配RFC 2231格式 filename*=UTF-8''...
-      const rfc2231Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/);
+      const rfc2231Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/)
       if (rfc2231Match) {
         try {
-          filename = decodeURIComponent(rfc2231Match[1]);
+          filename = decodeURIComponent(rfc2231Match[1])
         } catch (error) {
-          console.warn('Failed to decode RFC2231 filename:', rfc2231Match[1], error);
+          console.warn('Failed to decode RFC2231 filename:', rfc2231Match[1], error)
         }
       } else {
         // 回退到标准格式 filename="..."
-        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
         if (filenameMatch && filenameMatch[1]) {
-          filename = filenameMatch[1].replace(/['"]/g, '');
+          filename = filenameMatch[1].replace(/['"]/g, '')
           // 解码URL编码的文件名
           try {
-            filename = decodeURIComponent(filename);
+            filename = decodeURIComponent(filename)
           } catch (error) {
-            console.warn('Failed to decode filename:', filename, error);
+            console.warn('Failed to decode filename:', filename, error)
           }
         }
       }
     }
 
     // 创建blob并下载
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    message.success('下载成功');
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    message.success('下载成功')
   } catch (error) {
-    console.error('下载文件时出错:', error);
-    message.error(error.message || '下载文件失败');
+    console.error('下载文件时出错:', error)
+    message.error(error.message || '下载文件失败')
   } finally {
-    downloadingOriginal.value = false;
+    downloadingOriginal.value = false
   }
-};
+}
 
 // 下载 Markdown
 const handleDownloadMarkdown = () => {
-  const content = mergedContent.value;
+  const content = mergedContent.value
 
   if (!content) {
-    message.error('没有可下载的 Markdown 内容');
-    return;
+    message.error('没有可下载的 Markdown 内容')
+    return
   }
 
-  downloadingMarkdown.value = true;
+  downloadingMarkdown.value = true
   try {
     // 生成文件名（如果原文件没有 .md 扩展名，则添加）
-    let filename = file.value.filename || 'document.md';
+    let filename = file.value.filename || 'document.md'
     if (!filename.toLowerCase().endsWith('.md')) {
       // 移除原扩展名，添加 .md
-      const lastDotIndex = filename.lastIndexOf('.');
+      const lastDotIndex = filename.lastIndexOf('.')
       if (lastDotIndex > 0) {
-        filename = filename.substring(0, lastDotIndex) + '.md';
+        filename = filename.substring(0, lastDotIndex) + '.md'
       } else {
-        filename = filename + '.md';
+        filename = filename + '.md'
       }
     }
 
     // 创建 blob 并下载
-    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    message.success('下载成功');
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    message.success('下载成功')
   } catch (error) {
-    console.error('下载 Markdown 时出错:', error);
-    message.error(error.message || '下载 Markdown 失败');
+    console.error('下载 Markdown 时出错:', error)
+    message.error(error.message || '下载 Markdown 失败')
   } finally {
-    downloadingMarkdown.value = false;
+    downloadingMarkdown.value = false
   }
-};
+}
 </script>
 
 <style scoped>

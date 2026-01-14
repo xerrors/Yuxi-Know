@@ -13,10 +13,10 @@
               @press-enter.prevent="onQuery"
             />
             <div class="search-actions">
-                <div class="query-examples-compact">
-                  <div class="examples-label-group">
-                    <a-tooltip title="点击手动生成测试问题" placement="bottom">
-                      <a-button
+              <div class="query-examples-compact">
+                <div class="examples-label-group">
+                  <a-tooltip title="点击手动生成测试问题" placement="bottom">
+                    <a-button
                       type="text"
                       size="small"
                       class="examples-label-btn"
@@ -47,10 +47,12 @@
                   </transition>
 
                   <!-- 空状态 - 添加文件后会自动生成 -->
-                  <span v-else style="color: var(--gray-500); font-size: 12px;">暂无问题，请点击左侧按钮生成</span>
+                  <span v-else style="color: var(--gray-500); font-size: 12px"
+                    >暂无问题，请点击左侧按钮生成</span
+                  >
                 </div>
               </div>
-              <div style="display: flex; gap: 12px; align-items: center;">
+              <div style="display: flex; gap: 12px; align-items: center">
                 <a-tooltip :title="showRawData ? '切换至格式化显示' : '切换至原始数据'">
                   <a-button
                     type="text"
@@ -90,12 +92,15 @@
               <div v-if="queryResult.metadata" class="lightrag-metadata">
                 <div class="metadata-row">
                   <span class="metadata-label">查询模式:</span>
-                  <span class="metadata-value query-mode">{{ queryResult.metadata.query_mode }}</span>
+                  <span class="metadata-value query-mode">{{
+                    queryResult.metadata.query_mode
+                  }}</span>
                 </div>
                 <div v-if="queryResult.metadata.processing_info" class="metadata-row">
                   <span class="metadata-label">统计:</span>
                   <span class="metadata-value">
-                    找到 {{ queryResult.metadata.processing_info.total_entities_found || 0 }} 个实体,
+                    找到
+                    {{ queryResult.metadata.processing_info.total_entities_found || 0 }} 个实体,
                     {{ queryResult.metadata.processing_info.total_relations_found || 0 }} 个关系,
                     使用 {{ queryResult.metadata.processing_info.final_chunks_count || 0 }} 个文档块
                   </span>
@@ -103,18 +108,25 @@
                 <!-- 高级关键词 -->
                 <div v-if="queryResult.metadata.keywords?.high_level" class="metadata-row">
                   <span class="metadata-label">高级关键词:</span>
-                  <span class="keywords-text">{{ queryResult.metadata.keywords.high_level.join('、') }}</span>
+                  <span class="keywords-text">{{
+                    queryResult.metadata.keywords.high_level.join('、')
+                  }}</span>
                 </div>
                 <!-- 低级关键词 -->
                 <div v-if="queryResult.metadata.keywords?.low_level" class="metadata-row">
                   <span class="metadata-label">低级关键词:</span>
-                  <span class="keywords-text">{{ queryResult.metadata.keywords.low_level.join('、') }}</span>
+                  <span class="keywords-text">{{
+                    queryResult.metadata.keywords.low_level.join('、')
+                  }}</span>
                 </div>
               </div>
 
               <a-collapse v-model:activeKey="lightragActiveKeys" ghost>
                 <!-- 实体信息 -->
-                <a-collapse-panel v-if="queryResult.data.entities && queryResult.data.entities.length > 0" key="entities">
+                <a-collapse-panel
+                  v-if="queryResult.data.entities && queryResult.data.entities.length > 0"
+                  key="entities"
+                >
                   <template #header>
                     <div class="collapse-header">
                       <Network :size="16" />
@@ -153,7 +165,10 @@
                 </a-collapse-panel>
 
                 <!-- 关系信息 -->
-                <a-collapse-panel v-if="queryResult.data.relationships && queryResult.data.relationships.length > 0" key="relationships">
+                <a-collapse-panel
+                  v-if="queryResult.data.relationships && queryResult.data.relationships.length > 0"
+                  key="relationships"
+                >
                   <template #header>
                     <div class="collapse-header">
                       <Link :size="16" />
@@ -182,9 +197,7 @@
                         <span class="keywords-text">{{ rel.keywords }}</span>
                       </div>
                       <div class="relationship-meta">
-                        <span class="meta-item">
-                          <strong>来源:</strong> {{ rel.source_id }}
-                        </span>
+                        <span class="meta-item"> <strong>来源:</strong> {{ rel.source_id }} </span>
                         <a
                           v-if="rel.file_path"
                           :href="rel.file_path"
@@ -200,7 +213,10 @@
                 </a-collapse-panel>
 
                 <!-- 文档块 -->
-                <a-collapse-panel v-if="queryResult.data.chunks && queryResult.data.chunks.length > 0" key="chunks">
+                <a-collapse-panel
+                  v-if="queryResult.data.chunks && queryResult.data.chunks.length > 0"
+                  key="chunks"
+                >
                   <template #header>
                     <div class="collapse-header">
                       <FileText :size="16" />
@@ -236,7 +252,10 @@
                 </a-collapse-panel>
 
                 <!-- 参考文档 -->
-                <a-collapse-panel v-if="queryResult.data.references && queryResult.data.references.length > 0" key="references">
+                <a-collapse-panel
+                  v-if="queryResult.data.references && queryResult.data.references.length > 0"
+                  key="references"
+                >
                   <template #header>
                     <div class="collapse-header">
                       <FileText :size="16" />
@@ -273,11 +292,7 @@
                 <div class="result-summary">
                   <strong>检索到 {{ queryResult.length }} 个相关文档块：</strong>
                 </div>
-                <div
-                  v-for="(chunk, index) in queryResult"
-                  :key="index"
-                  class="result-item"
-                >
+                <div v-for="(chunk, index) in queryResult" :key="index" class="result-item">
                   <div class="result-header">
                     <span class="result-index">#{{ index + 1 }}</span>
                     <span v-if="chunk.score" class="result-score">
@@ -314,7 +329,8 @@
             <div v-else class="result-unknown">
               <pre>{{ JSON.stringify(queryResult, null, 2) }}</pre>
             </div>
-          </div> <!-- 关闭格式化显示的div -->
+          </div>
+          <!-- 关闭格式化显示的div -->
         </div>
       </div>
     </div>
@@ -322,21 +338,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue';
-import { useDatabaseStore } from '@/stores/database';
-import { message } from 'ant-design-vue';
-import { queryApi } from '@/apis/knowledge_api';
-import { SearchOutlined } from '@ant-design/icons-vue';
-import {
-  Braces,
-  Tags,
-  Network,
-  Link,
-  FileText,
-  ArrowRight,
-} from 'lucide-vue-next';
+import { ref, computed, onMounted, onUnmounted, watch, h } from 'vue'
+import { useDatabaseStore } from '@/stores/database'
+import { message } from 'ant-design-vue'
+import { queryApi } from '@/apis/knowledge_api'
+import { SearchOutlined } from '@ant-design/icons-vue'
+import { Braces, Tags, Network, Link, FileText, ArrowRight } from 'lucide-vue-next'
 
-const store = useDatabaseStore();
+const store = useDatabaseStore()
 
 const props = defineProps({
   visible: {
@@ -346,169 +355,175 @@ const props = defineProps({
   style: {
     type: Object,
     default: () => ({})
-  },
-});
+  }
+})
 
 // 声明事件
-const emit = defineEmits(['toggleVisible']);
+const emit = defineEmits(['toggleVisible'])
 
-const searchLoading = computed(() => store.state.searchLoading);
-const queryResult = ref('');
-const showRawData = ref(false);
+const searchLoading = computed(() => store.state.searchLoading)
+const queryResult = ref('')
+const showRawData = ref(false)
 
 // 判断是否为 LightRAG 类型知识库
-const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag');
+const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag')
 
 // 判断是否是 LightRAG 格式的查询结果
 const isLightRAGResult = computed(() => {
-  return queryResult.value &&
+  return (
+    queryResult.value &&
     typeof queryResult.value === 'object' &&
     queryResult.value.data &&
-    (queryResult.value.data.entities || queryResult.value.data.relationships);
-});
+    (queryResult.value.data.entities || queryResult.value.data.relationships)
+  )
+})
 
 // 查询测试
-const queryText = ref('');
+const queryText = ref('')
 
 // 示例问题相关
-const queryExamples = ref([]);
-const currentExampleIndex = ref(0);
-const loadingQuestions = ref(false);
-const generatingQuestions = ref(false);
-const searchConfigModalVisible = ref(false);
+const queryExamples = ref([])
+const currentExampleIndex = ref(0)
+const loadingQuestions = ref(false)
+const generatingQuestions = ref(false)
+const searchConfigModalVisible = ref(false)
 
 // 示例轮播相关
-let exampleCarouselInterval = null;
+let exampleCarouselInterval = null
 
 // LightRAG 折叠面板激活的 key
-const lightragActiveKeys = ref(['entities', 'relationships', 'chunks']);
+const lightragActiveKeys = ref(['entities', 'relationships', 'chunks'])
 
 // 方法定义
 
 // 格式化 source_id（限制显示长度）
 const formatSourceIds = (sourceId) => {
-  if (!sourceId) return '';
-  const ids = sourceId.split('<SEP>');
+  if (!sourceId) return ''
+  const ids = sourceId.split('<SEP>')
   if (ids.length > 1) {
-    return `${ids[0]} ... (+${ids.length - 1} 个来源)`;
+    return `${ids[0]} ... (+${ids.length - 1} 个来源)`
   }
-  return sourceId;
-};
+  return sourceId
+}
 
 // 从文件路径中提取文件名
 const extractFileName = (filePath) => {
-  if (!filePath) return '';
+  if (!filePath) return ''
   try {
-    const parts = filePath.split('/');
-    return parts[parts.length - 1];
+    const parts = filePath.split('/')
+    return parts[parts.length - 1]
   } catch {
-    return filePath;
+    return filePath
   }
-};
+}
 
 // 打开检索配置弹窗
 const openSearchConfigModal = () => {
-  searchConfigModalVisible.value = true;
-};
+  searchConfigModalVisible.value = true
+}
 
 // 处理检索配置保存
 const handleSearchConfigSave = (config) => {
-  console.log('查询测试中的检索配置已更新:', config);
+  console.log('查询测试中的检索配置已更新:', config)
   // 可以在这里添加配置更新后的处理逻辑，比如重新查询
-};
+}
 
 // 加载示例问题
 const loadSampleQuestions = async () => {
-  if (!store.database?.db_id) return;
+  if (!store.database?.db_id) return
 
   try {
-    loadingQuestions.value = true;
-    const data = await queryApi.getSampleQuestions(store.database.db_id);
+    loadingQuestions.value = true
+    const data = await queryApi.getSampleQuestions(store.database.db_id)
     if (data.questions && data.questions.length > 0) {
-      queryExamples.value = data.questions;
+      queryExamples.value = data.questions
     } else {
       // 如果没有问题，清空列表
-      queryExamples.value = [];
+      queryExamples.value = []
     }
   } catch (error) {
     // 404表示还没有生成问题，清空问题列表
-    if (error.status === 404 || error?.message?.includes('404') || error?.message?.includes('还没有生成')) {
-      queryExamples.value = [];
+    if (
+      error.status === 404 ||
+      error?.message?.includes('404') ||
+      error?.message?.includes('还没有生成')
+    ) {
+      queryExamples.value = []
     } else {
-      console.error('加载示例问题失败:', error);
+      console.error('加载示例问题失败:', error)
     }
   } finally {
-    loadingQuestions.value = false;
+    loadingQuestions.value = false
   }
-};
+}
 
 // 清空问题列表
 const clearQuestions = () => {
-  queryExamples.value = [];
-  currentExampleIndex.value = 0;
-  stopExampleCarousel();
-};
+  queryExamples.value = []
+  currentExampleIndex.value = 0
+  stopExampleCarousel()
+}
 
 // 生成示例问题
 const generateSampleQuestions = async (silent = false) => {
-  if (!store.database?.db_id) return;
+  if (!store.database?.db_id) return
 
   try {
-    generatingQuestions.value = true;
-    const data = await queryApi.generateSampleQuestions(store.database.db_id, 10);
+    generatingQuestions.value = true
+    const data = await queryApi.generateSampleQuestions(store.database.db_id, 10)
     if (data.questions && data.questions.length > 0) {
-      queryExamples.value = data.questions;
+      queryExamples.value = data.questions
       if (!silent) {
-        message.success(`成功生成 ${data.questions.length} 个测试问题`);
+        message.success(`成功生成 ${data.questions.length} 个测试问题`)
       }
       // 开始轮播
       if (!exampleCarouselInterval) {
-        startExampleCarousel();
+        startExampleCarousel()
       }
     }
   } catch (error) {
-    console.error('生成示例问题失败:', error);
+    console.error('生成示例问题失败:', error)
     // 静默模式下不显示错误消息（自动生成时）
     if (!silent) {
       // 提取详细错误信息
-      let errorMsg = '未知错误';
+      let errorMsg = '未知错误'
       if (error.response?.data?.detail) {
-        errorMsg = error.response.data.detail;
+        errorMsg = error.response.data.detail
       } else if (error.detail) {
-        errorMsg = error.detail;
+        errorMsg = error.detail
       } else if (error.message) {
-        errorMsg = error.message;
+        errorMsg = error.message
       } else if (typeof error === 'string') {
-        errorMsg = error;
+        errorMsg = error
       } else {
-        errorMsg = JSON.stringify(error);
+        errorMsg = JSON.stringify(error)
       }
-      message.error('生成失败: ' + errorMsg);
+      message.error('生成失败: ' + errorMsg)
     }
   } finally {
-    generatingQuestions.value = false;
+    generatingQuestions.value = false
   }
-};
+}
 
 const useQueryExample = (example) => {
-  queryText.value = example;
-  onQuery();
-};
+  queryText.value = example
+  onQuery()
+}
 
 const startExampleCarousel = () => {
-  if (exampleCarouselInterval) return;
+  if (exampleCarouselInterval) return
 
   exampleCarouselInterval = setInterval(() => {
-    currentExampleIndex.value = (currentExampleIndex.value + 1) % queryExamples.value.length;
-  }, 10000); // 每10秒切换一次
-};
+    currentExampleIndex.value = (currentExampleIndex.value + 1) % queryExamples.value.length
+  }, 10000) // 每10秒切换一次
+}
 
 const stopExampleCarousel = () => {
   if (exampleCarouselInterval) {
-    clearInterval(exampleCarouselInterval);
-    exampleCarouselInterval = null;
+    clearInterval(exampleCarouselInterval)
+    exampleCarouselInterval = null
   }
-};
+}
 
 // 监听知识库ID变化，切换知识库时重新加载问题
 watch(
@@ -517,71 +532,69 @@ watch(
     // 如果知识库ID发生变化
     if (newDbId && newDbId !== oldDbId) {
       // 停止当前轮播
-      stopExampleCarousel();
+      stopExampleCarousel()
       // 清空当前问题列表
-      queryExamples.value = [];
-      currentExampleIndex.value = 0;
+      queryExamples.value = []
+      currentExampleIndex.value = 0
       // 重新加载新知识库的问题
-      await loadSampleQuestions();
+      await loadSampleQuestions()
       // 如果有问题，启动轮播
       if (queryExamples.value.length > 0) {
-        startExampleCarousel();
+        startExampleCarousel()
       }
     }
   },
   { immediate: false }
-);
-
+)
 
 const onQuery = async () => {
   if (!queryText.value.trim()) {
-    message.error('请输入查询内容');
-    return;
+    message.error('请输入查询内容')
+    return
   }
 
-  store.state.searchLoading = true;
+  store.state.searchLoading = true
 
   // 从store中获取配置参数
-  const queryMeta = { ...store.meta };
+  const queryMeta = { ...store.meta }
 
   try {
-    const data = await queryApi.queryTest(store.database.db_id, queryText.value.trim(), queryMeta);
-    queryResult.value = data;
-
+    const data = await queryApi.queryTest(store.database.db_id, queryText.value.trim(), queryMeta)
+    queryResult.value = data
   } catch (error) {
-    console.error(error);
-    message.error(error.message);
-    queryResult.value = '';
+    console.error(error)
+    message.error(error.message)
+    queryResult.value = ''
   } finally {
-    store.state.searchLoading = false;
+    store.state.searchLoading = false
   }
-};
+}
 
 // 组件挂载时启动示例轮播
 onMounted(async () => {
   // 加载查询参数
-  store.loadQueryParams();
+  store.loadQueryParams()
 
   // 加载示例问题
-  await loadSampleQuestions();
+  await loadSampleQuestions()
 
   // 如果有示例问题，启动轮播
   if (queryExamples.value.length > 0) {
-    startExampleCarousel();
+    startExampleCarousel()
   }
   // 不自动生成，只在创建知识库和添加文件时由 DataBaseInfoView 触发生成
-});
+})
 
 // 组件卸载时停止示例轮播
 onUnmounted(() => {
   // 停止示例轮播
-  stopExampleCarousel();
-});
+  stopExampleCarousel()
+})
 
 // 检查是否已有问题
 const hasQuestions = () => {
-  return queryExamples.value.length > 0;
-};
+  return queryExamples.value.length > 0
+}
 
 // 暴露给父组件的方法和属性
 defineExpose({
@@ -590,7 +603,7 @@ defineExpose({
   hasQuestions,
   clearQuestions,
   queryExamples
-});
+})
 </script>
 
 <style scoped lang="less">
@@ -631,7 +644,9 @@ defineExpose({
   border: 1px solid var(--gray-200);
   background-color: var(--gray-0);
   box-shadow: 0 1px 3px var(--shadow-1);
-  transition: border-color 0.5s ease, box-shadow 0.5s ease;
+  transition:
+    border-color 0.5s ease,
+    box-shadow 0.5s ease;
 
   &:hover {
     border-color: var(--main-400);
@@ -646,7 +661,9 @@ defineExpose({
     border: none;
     box-shadow: none;
     padding: 0;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
 
     &:focus {
       outline: none;
@@ -868,7 +885,8 @@ defineExpose({
     background-color: var(--gray-100);
   }
 
-  .anticon { /* Target Ant Design icons directly */
+  .anticon {
+    /* Target Ant Design icons directly */
     font-size: 10px; /* Make icon smaller */
   }
 }

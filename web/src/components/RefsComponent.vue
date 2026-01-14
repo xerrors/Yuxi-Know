@@ -4,7 +4,7 @@
       <!-- 反馈 -->
       <span
         class="item btn"
-        :class="{ 'disabled': feedbackState.hasSubmitted }"
+        :class="{ disabled: feedbackState.hasSubmitted }"
         @click="likeThisResponse(msg)"
         :title="feedbackState.hasSubmitted && feedbackState.rating === 'like' ? '已点赞' : '点赞'"
       >
@@ -12,20 +12,23 @@
       </span>
       <span
         class="item btn"
-        :class="{ 'disabled': feedbackState.hasSubmitted }"
+        :class="{ disabled: feedbackState.hasSubmitted }"
         @click="dislikeThisResponse(msg)"
-        :title="feedbackState.hasSubmitted && feedbackState.rating === 'dislike' ? '已点踩' : '点踩'"
+        :title="
+          feedbackState.hasSubmitted && feedbackState.rating === 'dislike' ? '已点踩' : '点踩'
+        "
       >
-        <ThumbsDown size="12" :fill="feedbackState.rating === 'dislike' ? 'currentColor' : 'none'" />
+        <ThumbsDown
+          size="12"
+          :fill="feedbackState.rating === 'dislike' ? 'currentColor' : 'none'"
+        />
       </span>
       <!-- 模型名称 -->
       <span v-if="showKey('model') && getModelName(msg)" class="item" @click="console.log(msg)">
         <Bot size="12" /> {{ getModelName(msg) }}
       </span>
       <!-- 复制 -->
-      <span
-        v-if="showKey('copy')"
-        class="item btn" @click="copyText(msg.content)" title="复制">
+      <span v-if="showKey('copy')" class="item btn" @click="copyText(msg.content)" title="复制">
         <Check v-if="isCopied" size="12" />
         <Copy v-else size="12" />
       </span>
@@ -33,9 +36,12 @@
       <!-- 重试 -->
       <span
         v-if="showKey('regenerate')"
-        class="item btn" @click="regenerateMessage()" title="重新生成"><RotateCcw size="12" />
+        class="item btn"
+        @click="regenerateMessage()"
+        title="重新生成"
+        ><RotateCcw size="12" />
       </span>
-      </div>
+    </div>
   </div>
 
   <!-- Dislike reason modal -->
@@ -62,17 +68,10 @@
 import { ref, computed, reactive, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
-import {
-  ThumbsUp,
-  ThumbsDown,
-  Bot,
-  Copy,
-  Check,
-  RotateCcw,
-} from 'lucide-vue-next'
+import { ThumbsUp, ThumbsDown, Bot, Copy, Check, RotateCcw } from 'lucide-vue-next'
 import { agentApi } from '@/apis'
 
-const emit = defineEmits(['retry', 'openRefs']);
+const emit = defineEmits(['retry', 'openRefs'])
 const props = defineProps({
   message: Object,
   showRefs: {
@@ -91,7 +90,7 @@ const msg = ref(props.message)
 const feedbackState = reactive({
   hasSubmitted: false,
   rating: null, // 'like' or 'dislike'
-  reason: null,
+  reason: null
 })
 
 // 初始化反馈状态 - 从 message.feedback 读取历史反馈
@@ -108,10 +107,14 @@ const initFeedbackState = () => {
 }
 
 // 监听 message prop 变化 (用于切换对话时更新状态)
-watch(() => props.message, () => {
-  msg.value = props.message
-  initFeedbackState()
-}, { immediate: true })
+watch(
+  () => props.message,
+  () => {
+    msg.value = props.message
+    initFeedbackState()
+  },
+  { immediate: true }
+)
 
 // Modal state for dislike
 const dislikeModalVisible = ref(false)
@@ -154,12 +157,14 @@ const copyText = async (text) => {
 const showRefs = computed(() => {
   // 如果只是为了显示模型信息，不需要检查状态
   if (props.showRefs && Array.isArray(props.showRefs) && props.showRefs.includes('model')) {
-    return true;
+    return true
   }
   // 原有的逻辑
-  return (msg.value.role=='received' || msg.value.role=='assistant') && msg.value.status=='finished';
+  return (
+    (msg.value.role == 'received' || msg.value.role == 'assistant') &&
+    msg.value.status == 'finished'
+  )
 })
-
 
 // 添加重新生成方法
 const regenerateMessage = () => {
@@ -170,13 +175,13 @@ const regenerateMessage = () => {
 const getModelName = (msg) => {
   // 优先检查 response_metadata.model_name
   if (msg.response_metadata?.model_name) {
-    return msg.response_metadata.model_name;
+    return msg.response_metadata.model_name
   }
   // 兼容旧格式 meta.server_model_name
   if (msg.meta?.server_model_name) {
-    return msg.meta.server_model_name;
+    return msg.meta.server_model_name
   }
-  return null;
+  return null
 }
 // Handle like action
 const likeThisResponse = async (msg) => {
@@ -233,11 +238,7 @@ const dislikeThisResponse = async (msg) => {
 const submitDislikeFeedback = async () => {
   try {
     submittingFeedback.value = true
-    await agentApi.submitMessageFeedback(
-      msg.value.id,
-      'dislike',
-      dislikeReason.value || null
-    )
+    await agentApi.submitMessageFeedback(msg.value.id, 'dislike', dislikeReason.value || null)
 
     feedbackState.hasSubmitted = true
     feedbackState.rating = 'dislike'
@@ -302,7 +303,6 @@ const cancelDislike = () => {
 
       // Disabled state - when feedback has been submitted
       &.disabled {
-
         &:hover {
           background: var(--gray-50);
         }

@@ -87,7 +87,7 @@ const initActivityChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: props.userStats.daily_active_users.map(item => item.date),
+      data: props.userStats.daily_active_users.map((item) => item.date),
       axisLine: {
         lineStyle: {
           color: getCSSVariable('--gray-200')
@@ -113,49 +113,55 @@ const initActivityChart = () => {
         }
       }
     },
-    series: [{
-      name: '活跃用户数',
-      type: 'line',
-      data: props.userStats.daily_active_users.map(item => item.active_users),
-      smooth: true,
-      lineStyle: {
-        color: getCSSVariable('--main-color'),
-        width: 3
-      },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0,
-          y: 0,
-          x2: 0,
-          y2: 1,
-          colorStops: [{
-            offset: 0, color: getCSSVariable('--main-500')
-          }, {
-            offset: 1, color: getCSSVariable('--main-0')
-          }]
-        }
-      },
-      itemStyle: {
-        color: getCSSVariable('--main-color'),
-        borderWidth: 2,
-        borderColor: getCSSVariable('--gray-0')
-      },
-      emphasis: {
+    series: [
+      {
+        name: '活跃用户数',
+        type: 'line',
+        data: props.userStats.daily_active_users.map((item) => item.active_users),
+        smooth: true,
+        lineStyle: {
+          color: getCSSVariable('--main-color'),
+          width: 3
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              {
+                offset: 0,
+                color: getCSSVariable('--main-500')
+              },
+              {
+                offset: 1,
+                color: getCSSVariable('--main-0')
+              }
+            ]
+          }
+        },
         itemStyle: {
           color: getCSSVariable('--main-color'),
-          borderWidth: 3,
-          borderColor: getCSSVariable('--gray-0'),
-          shadowBlur: 10,
-          shadowColor: getCSSVariable('--shadow-1')
+          borderWidth: 2,
+          borderColor: getCSSVariable('--gray-0')
+        },
+        emphasis: {
+          itemStyle: {
+            color: getCSSVariable('--main-color'),
+            borderWidth: 3,
+            borderColor: getCSSVariable('--gray-0'),
+            shadowBlur: 10,
+            shadowColor: getCSSVariable('--shadow-1')
+          }
         }
       }
-    }]
+    ]
   }
 
   activityChart.setOption(option)
 }
-
 
 // 更新图表
 const updateCharts = () => {
@@ -165,9 +171,13 @@ const updateCharts = () => {
 }
 
 // 监听数据变化
-watch(() => props.userStats, () => {
-  updateCharts()
-}, { deep: true })
+watch(
+  () => props.userStats,
+  () => {
+    updateCharts()
+  },
+  { deep: true }
+)
 
 // 窗口大小变化时重新调整图表
 const handleResize = () => {
@@ -180,13 +190,16 @@ onMounted(() => {
 })
 
 // 监听主题变化，重新渲染图表
-watch(() => themeStore.isDark, () => {
-  if (props.userStats?.daily_active_users && activityChart) {
-    nextTick(() => {
-      initActivityChart()
-    })
+watch(
+  () => themeStore.isDark,
+  () => {
+    if (props.userStats?.daily_active_users && activityChart) {
+      nextTick(() => {
+        initActivityChart()
+      })
+    }
   }
-})
+)
 
 // 组件卸载时清理
 const cleanup = () => {
@@ -204,7 +217,6 @@ defineExpose({
 </script>
 
 <style scoped lang="less">
-
 /* 紧凑型统计网格 */
 .compact-stats-grid {
   display: grid;
@@ -285,7 +297,6 @@ defineExpose({
   }
 }
 
-
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .compact-stats-grid {
@@ -332,5 +343,4 @@ defineExpose({
     }
   }
 }
-
 </style>

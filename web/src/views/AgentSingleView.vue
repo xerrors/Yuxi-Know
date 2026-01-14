@@ -15,7 +15,7 @@
             v-for="agent in agents"
             :key="agent.id"
             class="agent-card"
-            :class="{ 'selected': agent.id === agentId }"
+            :class="{ selected: agent.id === agentId }"
             @click="selectAgentFromModal(agent.id)"
           >
             <div class="agent-card-header">
@@ -23,7 +23,11 @@
                 <span class="agent-card-name">{{ agent.name || 'Unknown' }}</span>
               </div>
               <StarFilled v-if="agent.id === defaultAgentId" class="default-icon" />
-              <StarOutlined v-else @click.prevent="setAsDefaultAgent(agent.id)" class="default-icon" />
+              <StarOutlined
+                v-else
+                @click.prevent="setAsDefaultAgent(agent.id)"
+                class="default-icon"
+              />
             </div>
 
             <div class="agent-card-description">
@@ -54,104 +58,104 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue';
-import { message } from 'ant-design-vue';
-import { useRoute, useRouter } from 'vue-router';
-import { Share2, ChevronDown } from 'lucide-vue-next';
-import { StarFilled, StarOutlined } from '@ant-design/icons-vue';
-import AgentChatComponent from '@/components/AgentChatComponent.vue';
-import UserInfoComponent from '@/components/UserInfoComponent.vue';
-import { ChatExporter } from '@/utils/chatExporter';
-import { handleChatError } from '@/utils/errorHandler';
-import { useAgentStore } from '@/stores/agent';
-import { storeToRefs } from 'pinia';
+import { computed, ref, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Share2, ChevronDown } from 'lucide-vue-next'
+import { StarFilled, StarOutlined } from '@ant-design/icons-vue'
+import AgentChatComponent from '@/components/AgentChatComponent.vue'
+import UserInfoComponent from '@/components/UserInfoComponent.vue'
+import { ChatExporter } from '@/utils/chatExporter'
+import { handleChatError } from '@/utils/errorHandler'
+import { useAgentStore } from '@/stores/agent'
+import { storeToRefs } from 'pinia'
 
-const route = useRoute();
-const router = useRouter();
-const agentStore = useAgentStore();
+const route = useRoute()
+const router = useRouter()
+const agentStore = useAgentStore()
 
-const agentId = computed(() => route.params.agent_id);
-const chatComponentRef = ref(null);
+const agentId = computed(() => route.params.agent_id)
+const chatComponentRef = ref(null)
 
 // 智能体选择弹窗状态
-const agentModalOpen = ref(false);
+const agentModalOpen = ref(false)
 
 // 从 store 获取智能体数据
-const { agents, defaultAgentId } = storeToRefs(agentStore);
+const { agents, defaultAgentId } = storeToRefs(agentStore)
 
 // 当前智能体名称
 const currentAgentName = computed(() => {
-  if (!agentId.value || !agents.value?.length) return '智能体加载中……';
-  const agent = agents.value.find(a => a.id === agentId.value);
-  return agent ? agent.name : '未知智能体';
-});
+  if (!agentId.value || !agents.value?.length) return '智能体加载中……'
+  const agent = agents.value.find((a) => a.id === agentId.value)
+  return agent ? agent.name : '未知智能体'
+})
 
 // 打开智能体选择弹窗
 const openAgentModal = () => {
-  agentModalOpen.value = true;
-};
+  agentModalOpen.value = true
+}
 
 // 从弹窗中选择智能体 - 切换路由
 const selectAgentFromModal = (newAgentId) => {
   if (newAgentId === agentId.value) {
     // 如果选择的是当前智能体，只需要关闭弹窗
-    agentModalOpen.value = false;
-    return;
+    agentModalOpen.value = false
+    return
   }
 
   // 跳转到新的智能体页面
-  router.push(`/agent/${newAgentId}`);
-  agentModalOpen.value = false;
-};
+  router.push(`/agent/${newAgentId}`)
+  agentModalOpen.value = false
+}
 
 // 设置默认智能体
 const setAsDefaultAgent = async (agentIdToSet) => {
   try {
-    await agentStore.setDefaultAgent(agentIdToSet);
-    message.success('已设置为默认智能体');
+    await agentStore.setDefaultAgent(agentIdToSet)
+    message.success('已设置为默认智能体')
   } catch (error) {
-    handleChatError(error, 'save');
+    handleChatError(error, 'save')
   }
-};
+}
 
 const handleShareChat = async () => {
   try {
-    const exportData = chatComponentRef.value?.getExportPayload?.();
+    const exportData = chatComponentRef.value?.getExportPayload?.()
 
     if (!exportData) {
-      message.warning('当前没有可导出的对话内容');
-      return;
+      message.warning('当前没有可导出的对话内容')
+      return
     }
 
-    const hasMessages = Boolean(exportData.messages?.length);
-    const hasOngoingMessages = Boolean(exportData.onGoingMessages?.length);
+    const hasMessages = Boolean(exportData.messages?.length)
+    const hasOngoingMessages = Boolean(exportData.onGoingMessages?.length)
 
     if (!hasMessages && !hasOngoingMessages) {
-      message.warning('当前对话暂无内容可导出，请先进行对话');
-      return;
+      message.warning('当前对话暂无内容可导出，请先进行对话')
+      return
     }
 
-    const result = await ChatExporter.exportToHTML(exportData);
-    message.success(`对话已导出为HTML文件: ${result.filename}`);
+    const result = await ChatExporter.exportToHTML(exportData)
+    message.success(`对话已导出为HTML文件: ${result.filename}`)
   } catch (error) {
     if (error?.message?.includes('没有可导出的对话内容')) {
-      message.warning('当前对话暂无内容可导出，请先进行对话');
-      return;
+      message.warning('当前对话暂无内容可导出，请先进行对话')
+      return
     }
-    handleChatError(error, 'export');
+    handleChatError(error, 'export')
   }
-};
+}
 
 // 初始化时确保智能体 store 已加载
 onMounted(async () => {
   if (!agentStore.isInitialized) {
     try {
-      await agentStore.initialize();
+      await agentStore.initialize()
     } catch (error) {
-      console.error('初始化智能体 store 失败:', error);
+      console.error('初始化智能体 store 失败:', error)
     }
   }
-});
+})
 </script>
 
 <style lang="less" scoped>
@@ -370,4 +374,3 @@ onMounted(async () => {
   }
 }
 </style>
-

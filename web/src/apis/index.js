@@ -4,17 +4,28 @@
  */
 
 // 导出API模块
-export * from './system_api'      // 系统管理API
-export * from './knowledge_api'   // 知识库管理API
-export * from './graph_api'       // 图谱API
-export * from './agent_api'        // 智能体API
-export * from './tasker'          // 任务管理API
-export * from './mindmap_api'     // 思维导图API
+export * from './system_api' // 系统管理API
+export * from './knowledge_api' // 知识库管理API
+export * from './graph_api' // 图谱API
+export * from './agent_api' // 智能体API
+export * from './tasker' // 任务管理API
+export * from './mindmap_api' // 思维导图API
 
 // 导出基础工具函数
-export { apiGet, apiPost, apiPut, apiDelete,
-    apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete,
-    apiSuperAdminGet, apiSuperAdminPost, apiSuperAdminPut, apiSuperAdminDelete } from './base'
+export {
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete,
+  apiAdminGet,
+  apiAdminPost,
+  apiAdminPut,
+  apiAdminDelete,
+  apiSuperAdminGet,
+  apiSuperAdminPost,
+  apiSuperAdminPut,
+  apiSuperAdminDelete
+} from './base'
 
 /**
  * API模块说明:
