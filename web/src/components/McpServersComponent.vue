@@ -46,7 +46,7 @@
                 <div class="server-info">
                   <span class="server-icon">{{ server.icon || '🔌' }}</span>
                   <div class="server-basic-info">
-                    <h4 class="server-name">{{ server.name }}</h4>
+                    <h4 class="server-name" @click="showDetailModal(server)">{{ server.name }}</h4>
                     <div class="server-transport">
                       <a-tag size="small" class="transport-tag">
                         {{ server.transport }}
@@ -82,7 +82,7 @@
                     class="action-btn"
                     :loading="testLoading === server.name"
                   >
-                    <ApiOutlined />
+                    <ApiOutlined v-if="testLoading !== server.name" />
                     <span>测试</span>
                   </a-button>
                 </a-tooltip>
@@ -160,7 +160,7 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="图标" class="form-item">
-              <a-input v-model:value="form.icon" placeholder="输入 emoji，如 🧠" />
+              <a-input v-model:value="form.icon" placeholder="输入 emoji，如 🧠" :maxlength="2" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -668,6 +668,12 @@ onMounted(() => {
                   font-size: 15px;
                   font-weight: 600;
                   color: var(--gray-900);
+                  cursor: pointer;
+                  transition: color 0.2s ease;
+
+                  &:hover {
+                    color: var(--color-primary);
+                  }
                 }
 
                 .server-transport {
