@@ -643,6 +643,7 @@ const resetConfig = async () => {
 
         .save-btn {
           flex: 1;
+          height: 42px;
           background-color: var(--gray-100);
           border: none;
           border-radius: 6px;
@@ -1133,7 +1134,7 @@ const resetConfig = async () => {
 // 响应式适配
 @media (max-width: 768px) {
   .agent-config-sidebar.open {
-    width: 100vw;
+    width: 100%;
   }
 }
 </style>

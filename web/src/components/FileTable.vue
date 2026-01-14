@@ -39,7 +39,7 @@
         </a-input>
 
         <a-dropdown trigger="click">
-          <a-button type="text" class="panel-action-btn" title="排序">
+          <a-button type="text" class="panel-action-btn" :class="{ 'active': sortField !== 'filename' }" title="排序">
             <template #icon><ArrowUpDown size="16" /></template>
           </a-button>
           <template #overlay>
@@ -52,11 +52,11 @@
         </a-dropdown>
 
         <a-dropdown trigger="click">
-          <a-button type="text" class="panel-action-btn" :class="{ 'active': statusFilter }" title="筛选状态">
+          <a-button type="text" class="panel-action-btn" :class="{ 'active': statusFilter !== 'all' }" title="筛选状态">
             <template #icon><Filter size="16" /></template>
           </a-button>
           <template #overlay>
-            <a-menu :selectedKeys="statusFilter ? [statusFilter] : []" @click="handleStatusMenuClick">
+            <a-menu :selectedKeys="[statusFilter]" @click="handleStatusMenuClick">
               <a-menu-item key="all">全部状态</a-menu-item>
               <a-menu-item v-for="opt in statusOptions" :key="opt.value">
                 {{ opt.label }}
@@ -114,7 +114,7 @@
         />
         <span>{{ selectedRowKeys.length }} 项</span>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 2px;">
         <a-button
           type="link"
           @click="handleBatchParse"
@@ -202,7 +202,7 @@
         <div v-if="column.key === 'filename'">
           <template v-if="record.is_folder">
             <span class="folder-row" @click="toggleExpand(record)">
-              <component :is="expandedRowKeys.includes(record.file_id) ? h(FolderOpenFilled) : h(FolderFilled)" style="margin-right: 12px; color: #ffb800;" />
+              <component :is="expandedRowKeys.includes(record.file_id) ? h(FolderOpenFilled) : h(FolderFilled)" style="margin-right: 8px; color: #ffb800; font-size: 16px;" />
               {{ record.filename }}
             </span>
           </template>
@@ -216,7 +216,7 @@
               </div>
             </template>
             <a-button class="main-btn" type="link" @click="openFileDetail(record)">
-              <component :is="getFileIcon(record.displayName || text)" :style="{ marginRight: '6px', color: getFileIconColor(record.displayName || text) }" />
+              <component :is="getFileIcon(record.displayName || text)" :style="{ marginRight: '0', color: getFileIconColor(record.displayName || text), fontSize: '16px' }" />
               {{ record.displayName || text }}
             </a-button>
           </a-popover>
@@ -343,11 +343,7 @@ const handleSortMenuClick = (e) => {
 };
 
 const handleStatusMenuClick = (e) => {
-  if (e.key === 'all') {
-    statusFilter.value = null;
-  } else {
-    statusFilter.value = e.key;
-  }
+  statusFilter.value = e.key;
   // 状态筛选变化时重置到第一页
   paginationConfig.value.current = 1;
 };
@@ -406,9 +402,9 @@ const allSelectableFiles = computed(() => {
     // Follow getCheckboxProps logic
     if (lock.value || file.status === 'processing' || file.status === 'waiting') return false;
 
-    if (nameFilter || status) {
+    if (nameFilter || status !== 'all') {
       const nameMatch = !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter));
-      const statusMatch = !status || file.status === status ||
+      const statusMatch = status === 'all' || file.status === status ||
                           (status === 'indexed' && file.status === 'done') ||
                           (status === 'error_indexing' && file.status === 'failed');
       return nameMatch && statusMatch;
@@ -625,7 +621,7 @@ const handleTableChange = (pagination) => {
 
 // 文件名过滤
 const filenameFilter = ref('');
-const statusFilter = ref(null);
+const statusFilter = ref('all');
 const statusOptions = [
   { label: '已上传', value: 'uploaded' },
   { label: '解析中', value: 'parsing' },
@@ -796,11 +792,11 @@ const filteredFiles = computed(() => {
   const status = statusFilter.value;
 
   // 应用过滤
-  if (nameFilter || status) {
+  if (nameFilter || status !== 'all') {
     // 搜索/过滤模式下使用扁平列表
     return files.value.filter(file => {
       const nameMatch = !nameFilter || (file.filename && file.filename.toLowerCase().includes(nameFilter));
-      const statusMatch = !status || file.status === status ||
+      const statusMatch = status === 'all' || file.status === status ||
                           (status === 'indexed' && file.status === 'done') ||
                           (status === 'error_indexing' && file.status === 'failed');
       return nameMatch && statusMatch;
@@ -1134,7 +1130,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 
   .action-searcher {
     width: 120px;
@@ -1142,6 +1138,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
     border-radius: 6px;
     padding: 4px 8px;
     border: none;
+    box-shadow: 0 0 0 1px var(--shadow-1);
   }
 }
 
@@ -1188,7 +1185,9 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   flex: 1;
   overflow: auto;
   background-color: transparent;
-  min-height: 0; /* 让 flex 子项可以正确缩小 */
+  min-height: 0;
+  table-layout: fixed;
+  padding-left: 4px;
 }
 
 .my-table .main-btn {
@@ -1262,6 +1261,12 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   opacity: 0.9;
 }
 
+.my-table .span-type.md,
+.my-table .span-type.markdown {
+  background-color: var(--gray-200);
+  color: var(--gray-800);
+}
+
 .auto-refresh-btn {
   height: 24px;
   padding: 0 8px;
@@ -1272,15 +1277,13 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  padding: 0 4px;
-  color: var(--gray-700);
+  border-radius: 8px;
+  padding: 4px;
+  color: var(--gray-600);
   transition: all 0.1s ease;
   font-size: 12px;
-
-  svg {
-    height: 16px;
-  }
+  width: auto;
+  height: auto;
 
   &.expand {
     transform: scaleX(-1);
@@ -1307,6 +1310,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue';
   color: var(--main-color);
   background-color: var(--gray-100);
   font-weight: 600;
+  box-shadow: 0 0 0 1px var(--shadow-1);
 }
 
 .action-trigger-btn {

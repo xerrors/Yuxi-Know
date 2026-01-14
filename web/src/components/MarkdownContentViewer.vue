@@ -13,7 +13,8 @@
           @click="toggleChunkPanel"
           :title="chunkPanelVisible ? '隐藏片段列表' : '显示片段列表'"
         >
-          {{ chunkPanelVisible ? '«' : '»' }}
+          <ChevronLeft v-if="chunkPanelVisible" :size="14" />
+          <ChevronRight v-else :size="14" />
         </button>
       </div>
     </div>
@@ -98,6 +99,7 @@ import { MdPreview } from 'md-editor-v3';
 import 'md-editor-v3/lib/preview.css';
 import { mergeChunks, getChunkPreview } from '@/utils/chunkUtils';
 import { useThemeStore } from '@/stores/theme';
+import { ChevronRight, ChevronLeft } from 'lucide-vue-next';
 
 const props = defineProps({
   chunks: {
@@ -209,16 +211,18 @@ onUnmounted(() => {
 }
 
 .toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--gray-100);
-  /* color: var(--gray-0); */
   border: none;
   border-radius: 4px;
-  width: 28px;
+  width: 24px;
   height: 24px;
+  padding: 0;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: bold;
   transition: all 0.2s ease;
+  color: var(--gray-700);
 }
 
 .toggle-btn:hover {

@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-container" ref="chatContainerRef">
+  <div class="chat-container">
     <ChatSidebarComponent
       :current-chat-id="currentChatId"
       :chats-list="chatsList"
@@ -16,13 +16,10 @@
       @toggle-sidebar="toggleSidebar"
       @open-agent-modal="openAgentModal"
       :class="{
-        'floating-sidebar': isSmallContainer,
         'sidebar-open': chatUIStore.isSidebarOpen,
-        'no-transition': localUIState.isInitialRender,
-        'collapsed': isSmallContainer && !chatUIStore.isSidebarOpen
+        'no-transition': localUIState.isInitialRender
       }"
     />
-    <div class="sidebar-backdrop" v-if="chatUIStore.isSidebarOpen && isSmallContainer" @click="toggleSidebar"></div>
     <div class="chat">
       <div class="chat-header">
         <div class="header__left">
@@ -39,7 +36,7 @@
           >
             <LoaderCircle v-if="chatUIStore.creatingNewChat" class="nav-btn-icon loading-icon" size="18"/>
             <MessageCirclePlus v-else class="nav-btn-icon"  size="18"/>
-            <span class="text" :class="{'hide-text': isMediumContainer}">新对话</span>
+            <span class="text">新对话</span>
           </div>
           <div
             v-if="!props.singleMode"
@@ -68,7 +65,7 @@
               <span v-if="hasAgentStateContent" class="text">状态</span>
             </div>
           </AgentPopover>
-          <slot name="header-right" :is-medium-container="isMediumContainer"></slot>
+          <slot name="header-right"></slot>
         </div>
       </div>
 
@@ -239,7 +236,6 @@ const threadMessages = ref({});
 // 本地 UI 状态（仅在本组件使用）
 const localUIState = reactive({
   isInitialRender: true,
-  containerWidth: 0,
 });
 
 // AgentState Popover 状态
@@ -367,25 +363,12 @@ const isStreaming = computed(() => {
   return threadState ? threadState.isStreaming : false;
 });
 const isProcessing = computed(() => isStreaming.value);
-const isSmallContainer = computed(() => localUIState.containerWidth <= 520);
-const isMediumContainer = computed(() => localUIState.containerWidth <= 768);
 
 // ==================== SCROLL & RESIZE HANDLING ====================
-const chatContainerRef = ref(null);
 const scrollController = new ScrollController('.chat');
-let resizeObserver = null;
 
 onMounted(() => {
   nextTick(() => {
-    if (chatContainerRef.value) {
-      localUIState.containerWidth = chatContainerRef.value.offsetWidth;
-      resizeObserver = new ResizeObserver(entries => {
-        for (let entry of entries) {
-          localUIState.containerWidth = entry.contentRect.width;
-        }
-      });
-      resizeObserver.observe(chatContainerRef.value);
-    }
     const chatContainer = document.querySelector('.chat');
     if (chatContainer) {
       chatContainer.addEventListener('scroll', scrollController.handleScroll, { passive: true });
@@ -395,7 +378,6 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (resizeObserver) resizeObserver.disconnect();
   scrollController.cleanup();
     // 清理所有线程状态
   resetOnGoingConv();
@@ -1029,38 +1011,6 @@ watch(conversations, () => {
   position: relative;
 }
 
-.sidebar-backdrop {
-  display: none; /* 默认隐藏，通过v-if控制显示 */
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.4);
-  z-index: 99;
-  animation: fadeIn 0.3s ease;
-}
-
-.floating-sidebar {
-  position: absolute !important;
-  z-index: 1001;
-  height: 100%;
-  left: 0;
-  top: 0;
-  transform: translateX(0);
-  transition: transform 0.3s ease;
-  width: 80% !important;
-  max-width: 300px;
-
-  &.no-transition {
-    transition: none !important;
-  }
-
-  &.collapsed {
-    transform: translateX(-100%);
-  }
-}
-
 .chat {
   position: relative;
   flex: 1;
@@ -1332,14 +1282,7 @@ watch(conversations, () => {
   }
 }
 
-
-
 @media (max-width: 768px) {
-  .chat-sidebar.collapsed {
-    width: 0;
-    border: none;
-  }
-
   .chat-header {
     .header__left {
       .text {
@@ -1348,56 +1291,17 @@ watch(conversations, () => {
     }
   }
 }
-
-@media (max-width: 520px) {
-  .sidebar-backdrop {
-    display: block;
-  }
-
-  .chat-box {
-    padding: 1rem 1rem;
-  }
-
-  .bottom {
-    padding: 0.5rem 0.5rem;
-  }
-
-  .chat-header {
-    padding: 0.5rem 0 !important;
-
-  }
-
-  .floating-sidebar {
-    position: fixed;
-    z-index: 100;
-    height: 100%;
-    left: 0;
-    top: 0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    transform: translateX(0);
-    transition: transform 0.3s ease;
-    width: 80% !important;
-    max-width: 300px;
-
-    &.collapsed {
-      transform: translateX(-100%);
-    }
-  }
-}
-
-.hide-text {
-  display: none;
-}
 </style>
 
 <style lang="less">
 .agent-nav-btn {
   display: flex;
   gap: 10px;
-  padding: 6px 14px;
+  padding: 6px 8px;
+  height: 32px;
   justify-content: center;
   align-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--gray-900);
   cursor: pointer;
   width: auto;
@@ -1407,7 +1311,7 @@ watch(conversations, () => {
   background: transparent;
 
   &:hover:not(.is-disabled) {
-    background-color: var(--gray-50);
+    background-color: var(--gray-100);
   }
 
   &.is-disabled {
@@ -1417,7 +1321,7 @@ watch(conversations, () => {
   }
 
   .nav-btn-icon {
-    height: 24px;
+    height: 18px;
   }
 
   .loading-icon {

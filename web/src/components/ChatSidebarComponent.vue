@@ -243,12 +243,6 @@ const toggleCollapse = () => {
     transform: translateX(-12px);
   }
 
-  &.floating-sidebar .sidebar-content {
-    width: 100%;
-    min-width: 0;
-    max-width: 300px;
-  }
-
   &.no-transition {
     transition: none !important;
   }

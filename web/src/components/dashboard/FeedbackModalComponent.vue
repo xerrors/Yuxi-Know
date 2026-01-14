@@ -460,6 +460,7 @@ watch(() => props.agentId, () => {
 
 // 空状态
 .empty-state {
+  grid-column: 1 / -1;
   display: flex;
   justify-content: center;
   align-items: center;

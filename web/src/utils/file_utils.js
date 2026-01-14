@@ -63,9 +63,9 @@ export const getFileIconColor = (filename) => {
     'text': '#1890ff',
     'log': '#1890ff',
 
-    // Markdown文件 - 深蓝色
-    'md': '#0050b3',
-    'markdown': '#0050b3',
+    // Markdown文件 - 深灰色
+    'md': '#595959',
+    'markdown': '#595959',
 
     // PDF文件 - 红色
     'pdf': '#ff4d4f',

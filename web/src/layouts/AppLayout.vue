@@ -192,10 +192,6 @@ provide('settingsModal', {
         <UserInfoComponent />
       </div>
     </div>
-    <div class="header-mobile">
-      <RouterLink to="/agent" class="nav-item" active-class="active">对话</RouterLink>
-      <RouterLink to="/database" class="nav-item" active-class="active">知识</RouterLink>
-    </div>
     <router-view v-slot="{ Component, route }" id="app-router-view">
       <keep-alive v-if="route.meta.keepAlive !== false">
         <component :is="Component" />
@@ -234,10 +230,6 @@ provide('settingsModal', {
   width: 100%;
   height: 100vh;
   min-width: var(--min-width);
-
-  .header-mobile {
-    display: none;
-  }
 
   .debug-panel {
     position: absolute;
@@ -293,7 +285,7 @@ div.header, #app-router-view {
   .logo {
     width: 34px;
     height: 34px;
-    margin: 12px 0 20px 0;
+    margin: 6px 0 20px 0;
 
     img {
       width: 100%;
@@ -416,49 +408,6 @@ div.header, #app-router-view {
 
 }
 
-
-@media (max-width: 520px) {
-  .app-layout {
-    flex-direction: column-reverse;
-
-    div.header {
-      display: none;
-    }
-
-    .debug-panel {
-      bottom: 10rem;
-    }
-
-  }
-  .app-layout div.header-mobile {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    padding: 0 20px;
-    justify-content: space-around;
-    align-items: center;
-    flex: 0 0 60px;
-    border-right: none;
-    height: 40px;
-
-    .nav-item {
-      text-decoration: none;
-      width: 40px;
-      color: var(--gray-900);
-      font-size: 1rem;
-      font-weight: bold;
-      transition: color 0.1s ease-in-out, font-size 0.1s ease-in-out;
-
-      &.active {
-        color: var(--gray-10000);
-        font-size: 1.1rem;
-      }
-    }
-  }
-  .app-layout .chat-box::webkit-scrollbar {
-    width: 0;
-  }
-}
 
 .app-layout.use-top-bar {
   flex-direction: column;

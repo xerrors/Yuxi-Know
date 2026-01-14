@@ -16,9 +16,9 @@
         @click="generateDescription"
       >
         <template #icon>
-          <Sparkles size="14" />
+          <WandSparkles size="14" />
         </template>
-        <span v-if="!loading" class="ai-text">润色</span>
+        <span v-if="!loading" class="ai-text">{{ modelValue?.trim() ? '润色' : '生成' }}</span>
       </a-button>
     </a-tooltip>
   </div>
@@ -28,7 +28,7 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { databaseApi } from '@/apis/knowledge_api'
-import { Sparkles } from 'lucide-vue-next'
+import { WandSparkles } from 'lucide-vue-next'
 
 const props = defineProps({
   modelValue: {
@@ -97,7 +97,7 @@ const generateDescription = async () => {
     z-index: 1;
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     padding: 2px 6px;
     height: 24px;
     color: var(--main-color);

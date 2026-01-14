@@ -39,6 +39,7 @@
               @click="openSearchConfigModal"
             >
               <SettingOutlined />
+              <span class="config-text">检索配置</span>
             </a-button>
           </a-tooltip>
         </template>
@@ -540,12 +541,13 @@ const handleMouseUp = () => {
 }
 
 .config-btn {
-  color: var(--gray-500);
+  color: var(--gray-600);
   font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
+  gap: 4px;
+  padding: 4px 8px;
   height: 32px;
   border-radius: 6px;
   transition: all 0.2s;
@@ -554,24 +556,9 @@ const handleMouseUp = () => {
     color: var(--main-color);
     background-color: var(--gray-100);
   }
-}
 
-
-/* Responsive design for smaller screens */
-@media (max-width: 768px) {
-  .unified-layout {
-    flex-direction: column;
-  }
-
-  .unified-layout .left-panel {
-    border-right: none;
-    border-bottom: 1px solid var(--gray-200);
-  }
-
-  .unified-layout .resize-handle {
-    width: 100%;
-    height: 2px;
-    cursor: row-resize;
+  .config-text {
+    font-size: 13px;
   }
 }
 

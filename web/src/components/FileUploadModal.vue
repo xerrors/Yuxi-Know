@@ -39,28 +39,26 @@
 
       <!-- 2. 配置面板 -->
       <div class="settings-panel">
-        <!-- 第一行：存储位置 -->
-        <div class="setting-row">
-          <div class="setting-label">存储位置</div>
-          <div class="setting-content flex-row">
-             <a-tree-select
-                v-model:value="selectedFolderId"
-                show-search
-                class="folder-select"
-                :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
-                placeholder="选择目标文件夹（默认为根目录）"
-                allow-clear
-                tree-default-expand-all
-                :tree-data="folderTreeData"
-                tree-node-filter-prop="title"
-             >
-             </a-tree-select>
+        <!-- 第一行：存储位置 + OCR 引擎 -->
+        <div class="setting-row two-cols">
+          <div class="col-item">
+            <div class="setting-label">存储位置</div>
+            <div class="setting-content flex-row">
+               <a-tree-select
+                  v-model:value="selectedFolderId"
+                  show-search
+                  class="folder-select"
+                  :dropdown-style="{ maxHeight: '400px', overflow: 'auto' }"
+                  placeholder="选择目标文件夹（默认为根目录）"
+                  allow-clear
+                  tree-default-expand-all
+                  :tree-data="folderTreeData"
+                  tree-node-filter-prop="title"
+               >
+               </a-tree-select>
+            </div>
+            <p class="param-description">选择文件保存的目标文件夹</p>
           </div>
-        </div>
-
-        <!-- 第二行：OCR (单列布局) -->
-        <div class="setting-row">
-          <!-- OCR 配置 -->
           <div class="col-item">
             <div class="setting-label">
               OCR 引擎
@@ -80,15 +78,20 @@
                 :disabled="ocrHealthChecking"
                 class="ocr-select"
               />
-              <!-- 紧凑的状态提示 -->
-              <div class="status-mini-tip" v-if="chunkParams.enable_ocr !== 'disable'">
-                <span v-if="selectedOcrStatus === 'healthy'" class="text-success">
-                   <CheckCircleFilled /> {{ selectedOcrMessage || '服务正常' }}
-                </span>
-                <span v-else-if="selectedOcrStatus && selectedOcrStatus !== 'unknown'" class="text-warning">
-                   ⚠️ {{ selectedOcrMessage || '服务异常' }}
-                </span>
-              </div>
+              <p class="param-description">
+                <template v-if="!isOcrEnabled">
+                  不启用 OCR，仅处理文本文件
+                </template>
+                <template v-else-if="selectedOcrStatus === 'healthy'">
+                  {{ selectedOcrMessage || '服务正常' }}
+                </template>
+                <template v-else-if="selectedOcrStatus === 'unknown'">
+                  点击刷新图标检查服务状态
+                </template>
+                <template v-else>
+                  {{ selectedOcrMessage || '服务异常' }}
+                </template>
+              </p>
             </div>
           </div>
         </div>
@@ -878,7 +881,6 @@ const chunkData = async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 4px;
 }
 
 .help-link-btn {
@@ -934,7 +936,7 @@ const chunkData = async () => {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
     min-width: 0; // Fix flex overflow
   }
 }
@@ -983,15 +985,28 @@ const chunkData = async () => {
   white-space: nowrap;
 }
 
-.status-mini-tip {
-  margin-top: 6px;
+.param-description {
   font-size: 12px;
+  color: var(--gray-400);
+  margin: 4px 0 0 0;
+  line-height: 1.4;
   display: flex;
   align-items: center;
   gap: 4px;
 
-  .text-success { color: var(--color-success-500); }
-  .text-warning { color: var(--color-warning-500); }
+  .text-success {
+    color: var(--color-success-500);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .text-warning {
+    color: var(--color-warning-500);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
 }
 
 /* Chunk Display Card */

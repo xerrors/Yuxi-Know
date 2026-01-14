@@ -90,7 +90,7 @@
           size="default"
         />
         <span style="margin-left: 12px;">设置为私有知识库</span>
-        <a-tooltip title="在部分智能体的设计中，可以根据隐私标志来决定启用什么模型和策略。例如，对于私有知识库，可以选择更严格的数据处理和访问控制策略，以保护敏感信息的安全性和隐私性。">
+        <a-tooltip title="当前未使用此属性。在部分智能体的设计中，可以根据隐私标志来决定启用什么模型和策略。例如，对于私有知识库，可以选择更严格的数据处理和访问控制策略，以保护敏感信息的安全性和隐私性。">
           <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help;" />
         </a-tooltip>
       </div>
