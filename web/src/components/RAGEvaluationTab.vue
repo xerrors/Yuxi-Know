@@ -351,7 +351,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, h } from 'vue';
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 import { evaluationApi } from '@/apis/knowledge_api';
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import SearchConfigModal from './SearchConfigModal.vue';
@@ -681,33 +681,56 @@ const startEvaluation = async () => {
     return;
   }
 
-  startingEvaluation.value = true;
+  // 校验模型选择：必须同时选择或同时不选择
+  const hasAnswerModel = !!configForm.answer_llm;
+  const hasJudgeModel = !!configForm.judge_llm;
 
-  // 只传递模型配置，检索配置由服务器从知识库读取
-  const params = {
-    benchmark_id: selectedBenchmark.value.benchmark_id,
-    model_config: {
-      answer_llm: configForm.answer_llm, // 传递答案生成模型
-      judge_llm: configForm.judge_llm // 传递评判模型
+  if (hasAnswerModel !== hasJudgeModel) {
+    message.warning('生成模型和评估模型必须同时选择或者同时不选择');
+    return;
+  }
+
+  const runEvaluation = async () => {
+    startingEvaluation.value = true;
+
+    // 只传递模型配置，检索配置由服务器从知识库读取
+    const params = {
+      benchmark_id: selectedBenchmark.value.benchmark_id,
+      model_config: {
+        answer_llm: configForm.answer_llm, // 传递答案生成模型
+        judge_llm: configForm.judge_llm // 传递评判模型
+      }
+    };
+
+    try {
+      const response = await evaluationApi.runEvaluation(props.databaseId, params);
+
+      if (response.message === 'success') {
+        message.success('评估任务已开始');
+        loadEvaluationHistory();
+        // 刷新任务中心的任务列表
+        taskerStore.loadTasks();
+      } else {
+        message.error(response.message || '启动评估失败');
+      }
+    } catch (error) {
+      console.error('启动评估失败:', error);
+      message.error('启动评估失败');
+    } finally {
+      startingEvaluation.value = false;
     }
   };
 
-  try {
-    const response = await evaluationApi.runEvaluation(props.databaseId, params);
-
-    if (response.message === 'success') {
-      message.success('评估任务已开始');
-      loadEvaluationHistory();
-      // 刷新任务中心的任务列表
-      taskerStore.loadTasks();
-    } else {
-      message.error(response.message || '启动评估失败');
-    }
-  } catch (error) {
-    console.error('启动评估失败:', error);
-    message.error('启动评估失败');
-  } finally {
-    startingEvaluation.value = false;
+  if (!hasAnswerModel) {
+    Modal.confirm({
+      title: '确认评估模式',
+      content: '您未选择答案生成模型，将仅进行检索测试，不会进行问答测试。是否继续？',
+      okText: '继续',
+      cancelText: '取消',
+      onOk: runEvaluation
+    });
+  } else {
+    runEvaluation();
   }
 };
 
