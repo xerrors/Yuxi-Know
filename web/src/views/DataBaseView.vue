@@ -172,7 +172,6 @@ import { useRouter, useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useConfigStore } from '@/stores/config';
 import { useDatabaseStore } from '@/stores/database';
-import { Database, Waypoints, DatabaseZap } from 'lucide-vue-next';
 import { LockOutlined, InfoCircleOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import { typeApi } from '@/apis/knowledge_api';
 import HeaderComponent from '@/components/HeaderComponent.vue';
@@ -180,6 +179,7 @@ import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue';
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue';
 import dayjs, { parseToShanghai } from '@/utils/time';
 import AiTextarea from '@/components/AiTextarea.vue';
+import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils';
 
 const route = useRoute()
 const router = useRouter()
@@ -267,31 +267,6 @@ const resetNewDatabase = () => {
 const cancelCreateDatabase = () => {
   state.openNewDatabaseModel = false
   resetNewDatabase()
-}
-
-// 知识库类型相关工具方法
-const getKbTypeLabel = (type) => {
-  const labels = {
-    lightrag: 'LightRAG',
-    milvus: 'CommonRAG'
-  }
-  return labels[type] || type
-}
-
-const getKbTypeIcon = (type) => {
-  const icons = {
-    lightrag: Waypoints,
-    milvus: DatabaseZap
-  }
-  return icons[type] || Database
-}
-
-const getKbTypeColor = (type) => {
-  const colors = {
-    lightrag: 'purple',
-    milvus: 'red'
-  }
-  return colors[type] || 'blue'
 }
 
 // 格式化创建时间

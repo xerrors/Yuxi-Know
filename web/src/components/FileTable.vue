@@ -181,12 +181,13 @@
 
     <a-table
         :columns="columnsCompact"
-        :data-source="filteredFiles"
+        :data-source="paginatedFiles"
         row-key="file_id"
         class="my-table"
         size="small"
         :show-header="false"
-        :pagination="false"
+        :pagination="tablePagination"
+        @change="handleTableChange"
         v-model:expandedRowKeys="expandedRowKeys"
         :custom-row="customRow"
         :row-selection="isSelectionMode ? {
@@ -337,6 +338,8 @@ const sortOptions = [
 
 const handleSortMenuClick = (e) => {
   sortField.value = e.key;
+  // 排序变化时重置到第一页
+  paginationConfig.value.current = 1;
 };
 
 const handleStatusMenuClick = (e) => {
@@ -345,6 +348,8 @@ const handleStatusMenuClick = (e) => {
   } else {
     statusFilter.value = e.key;
   }
+  // 状态筛选变化时重置到第一页
+  paginationConfig.value.current = 1;
 };
 
 // Status text mapping
@@ -578,6 +583,46 @@ const indexParams = ref({
 const currentIndexFileIds = ref([]);
 const isBatchIndexOperation = ref(false);
 
+// 分页配置
+const paginationConfig = ref({
+  current: 1,
+  pageSize: 100,
+  pageSizeOptions: ['100', '300', '500', '1000']
+});
+
+// 文件总数
+const totalFiles = computed(() => files.value.length);
+
+// 是否显示分页
+const showPagination = computed(() => totalFiles.value > paginationConfig.value.pageSize);
+
+// 分页后的数据
+const paginatedFiles = computed(() => {
+  const list = filteredFiles.value;
+  if (!showPagination.value) return list;
+
+  const start = (paginationConfig.value.current - 1) * paginationConfig.value.pageSize;
+  const end = start + paginationConfig.value.pageSize;
+  return list.slice(start, end);
+});
+
+// 表格分页配置
+const tablePagination = computed(() => ({
+  current: paginationConfig.value.current,
+  pageSize: paginationConfig.value.pageSize,
+  total: filteredFiles.value.length,
+  showSizeChanger: true,
+  showTotal: (total) => `共 ${total} 项`,
+  pageSizeOptions: paginationConfig.value.pageSizeOptions,
+  hideOnSinglePage: true
+}));
+
+// 处理表格变化（分页、每页条数切换）
+const handleTableChange = (pagination) => {
+  paginationConfig.value.current = pagination.current;
+  paginationConfig.value.pageSize = pagination.pageSize;
+};
+
 // 文件名过滤
 const filenameFilter = ref('');
 const statusFilter = ref(null);
@@ -803,6 +848,8 @@ const showAddFilesModal = (options = {}) => {
 };
 
 const handleRefresh = () => {
+  // 刷新时重置分页
+  paginationConfig.value.current = 1;
   store.getDatabaseInfo(undefined, true); // Skip query params for manual refresh
 };
 
@@ -830,6 +877,8 @@ const getCheckboxProps = (record) => ({
 
 const onFilterChange = (e) => {
   filenameFilter.value = e.target.value;
+  // 过滤变化时重置到第一页
+  paginationConfig.value.current = 1;
 };
 
 const handleDeleteFile = (fileId) => {
