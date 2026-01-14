@@ -2,8 +2,8 @@
   <div class="agent-config-sidebar" :class="{ 'open': isOpen }">
     <!-- 侧边栏头部 -->
     <div class="sidebar-header">
-      <div class="sidebar-title">
-        <span>配置</span>
+      <div class="header-center">
+        <a-segmented v-model:value="activeTab" :options="segmentedOptions" />
       </div>
       <a-button
         type="text"
@@ -45,6 +45,7 @@
             <!-- 统一显示所有配置项 -->
             <template v-for="(value, key) in configurableItems" :key="key">
               <a-form-item
+                v-if="shouldShowConfig(key, value)"
                 :label="getConfigLabel(key, value)"
                 :name="key"
                 class="config-item"
@@ -216,13 +217,14 @@
         </div>
       </div>
 
-      <!-- 固定在底部的操作按钮 -->
-      <div class="sidebar-footer" v-if="!isEmptyConfig">
-        <div class="form-actions">
-          <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
-            保存配置并重新加载
-          </a-button>
-        </div>
+    </div>
+
+    <!-- 固定在底部的操作按钮 -->
+    <div class="sidebar-footer" v-if="!isEmptyConfig">
+      <div class="form-actions">
+        <a-button @click="saveConfig" class="save-btn" :class="{'changed': agentStore.hasConfigChanges}">
+          保存配置并重新加载
+        </a-button>
       </div>
     </div>
 
@@ -328,10 +330,37 @@ const toolsModalOpen = ref(false);
 const selectedTools = ref([]);
 const toolsSearchText = ref('');
 const systemPromptEditMode = ref(false);
-
+const activeTab = ref('basic');
 
 const isEmptyConfig = computed(() => {
   return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0;
+});
+
+const hasOtherConfigs = computed(() => {
+  if (isEmptyConfig.value) return false;
+  return Object.entries(configurableItems.value).some(([key, value]) => {
+    // 检查是否属于 basic (System Prompt, LLM)
+    const isBasic = key === 'system_prompt' || value.template_metadata?.kind === 'llm';
+    // 检查是否属于 tools (mcps, knowledges, tools)
+    const isTools = key === 'mcps' ||
+                   key === 'knowledges' ||
+                   value.template_metadata?.kind === 'tools' ||
+                   key === 'tools';
+    return !isBasic && !isTools;
+  });
+});
+
+const segmentedOptions = computed(() => {
+  const options = [
+    { label: '基础', value: 'basic' },
+    { label: '工具', value: 'tools' }
+  ];
+
+  if (hasOtherConfigs.value) {
+    options.push({ label: '其他', value: 'other' });
+  }
+
+  return options;
 });
 
 const filteredTools = computed(() => {
@@ -347,6 +376,28 @@ const filteredTools = computed(() => {
 });
 
 // 方法
+const shouldShowConfig = (key, value) => {
+  if (activeTab.value === 'basic') {
+    // 基础：System Prompt, LLM Model
+    return key === 'system_prompt' ||
+           value.template_metadata?.kind === 'llm';
+  } else if (activeTab.value === 'tools') {
+    // 工具：Tools, MCPs, Knowledges
+    return key === 'mcps' ||
+           key === 'knowledges' ||
+           value.template_metadata?.kind === 'tools' ||
+           key === 'tools';
+  } else {
+    // 其他：剩余所有配置
+    const isBasic = key === 'system_prompt' || value.template_metadata?.kind === 'llm';
+    const isTools = key === 'mcps' ||
+                   key === 'knowledges' ||
+                   value.template_metadata?.kind === 'tools' ||
+                   key === 'tools';
+    return !isBasic && !isTools;
+  }
+};
+
 const closeSidebar = () => {
   emit('close');
 };
@@ -577,23 +628,17 @@ const resetConfig = async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
+    padding: 8px 12px;
     border-bottom: 1px solid var(--gray-200);
     background: var(--gray-0);
     flex-shrink: 0;
     min-width: 400px;
+    height: 45px;
 
-    .sidebar-title {
+    .header-center {
+      flex: 1;
       display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 15px;
-      font-weight: 600;
-      color: var(--gray-900);
-
-      .title-icon {
-        color: var(--main-color);
-      }
+      justify-content: center;
     }
 
     .close-btn {
@@ -627,56 +672,8 @@ const resetConfig = async () => {
       }
     }
 
-    .sidebar-footer {
-      position: sticky;
-      bottom: 0px;
-      padding: 12px 0;
-      border-top: 1px solid var(--gray-100);
-      background: var(--gray-0);
-      // min-width: 400px;
-      z-index: 10;
-
-      .form-actions {
-        display: flex;
-        gap: 12px;
-        justify-content: space-between;
-
-        .save-btn {
-          flex: 1;
-          height: 42px;
-          background-color: var(--gray-100);
-          border: none;
-          border-radius: 6px;
-          font-weight: 500;
-          font-size: 14px;
-
-          &.changed {
-            background-color: var(--main-color);
-            color: var(--gray-0);
-          }
-
-          &:hover {
-            opacity: 0.9;
-          }
-        }
-
-        .reset-btn {
-          flex: 1;
-          border: 1px solid var(--gray-300);
-          border-radius: 6px;
-          color: var(--gray-700);
-          font-size: 14px;
-
-          &:hover {
-            border-color: var(--main-color);
-            color: var(--main-color);
-          }
-        }
-      }
-    }
-
     .config-form-content {
-      margin-bottom: 100px;
+      margin-bottom: 20px;
       .config-form {
         .config-alert {
           margin-bottom: 16px;
@@ -780,6 +777,53 @@ const resetConfig = async () => {
           .config-slider {
             width: 100%;
           }
+        }
+      }
+    }
+  }
+
+  .sidebar-footer {
+    padding: 8px 12px;
+    border-top: 1px solid var(--gray-100);
+    background: var(--gray-0);
+    // min-width: 400px;
+    z-index: 10;
+    flex-shrink: 0; // Ensure footer doesn't shrink
+
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+
+      .save-btn {
+        flex: 1;
+        height: 42px;
+        background-color: var(--gray-100);
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 14px;
+
+        &.changed {
+          background-color: var(--main-color);
+          color: var(--gray-0);
+        }
+
+        &:hover {
+          opacity: 0.9;
+        }
+      }
+
+      .reset-btn {
+        flex: 1;
+        border: 1px solid var(--gray-300);
+        border-radius: 6px;
+        color: var(--gray-700);
+        font-size: 14px;
+
+        &:hover {
+          border-color: var(--main-color);
+          color: var(--main-color);
         }
       }
     }
