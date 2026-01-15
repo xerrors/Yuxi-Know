@@ -54,7 +54,7 @@ class AgentManager(metaclass=SingletonMeta):
 
         # 遍历所有子目录
         for item in agents_dir.iterdir():
-            logger.info(f"尝试导入模块：{item}")
+            # logger.info(f"尝试导入模块：{item}")
             # 跳过非目录、common 目录、__pycache__ 等
             if not item.is_dir() or item.name.startswith("_") or item.name == "common":
                 continue

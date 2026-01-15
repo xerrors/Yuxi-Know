@@ -1,7 +1,7 @@
 from langchain.agents import create_agent
 
-from src import config
-from src.agents.common import BaseAgent, get_buildin_tools, load_chat_model
+from src.agents.common import BaseAgent, load_chat_model
+from src.agents.common.tools import get_tools_from_context
 
 
 class MiniAgent(BaseAgent):
@@ -11,9 +11,6 @@ class MiniAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def get_tools(self):
-        return get_buildin_tools()
-
     async def get_graph(self, **kwargs):
         if self.graph:
             return self.graph
@@ -22,9 +19,9 @@ class MiniAgent(BaseAgent):
 
         # 创建 MiniAgent
         graph = create_agent(
-            model=load_chat_model(config.default_model),
+            model=load_chat_model(context.model),
             system_prompt=context.system_prompt,
-            tools=self.get_tools(),
+            tools=await get_tools_from_context(context),
             checkpointer=await self._get_checkpointer(),
         )
 

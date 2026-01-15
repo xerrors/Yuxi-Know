@@ -19,7 +19,6 @@ from server.utils.auth_middleware import get_db, get_required_user
 from src import executor
 from src import config as conf
 from src.agents import agent_manager
-from src.agents.common.tools import gen_tool_info, get_buildin_tools
 from src.models import select_model
 from src.plugins.guard import content_guard
 from src.services.doc_converter import (
@@ -726,26 +725,6 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
     conf.model_names[model_provider].models = model_names
     conf._save_models_to_file(model_provider)
     return {"models": conf.model_names[model_provider].models}
-
-
-@chat.get("/tools")
-async def get_tools(agent_id: str, current_user: User = Depends(get_required_user)):
-    """获取所有可用工具（需要登录）"""
-    logger.error("[DEPRECATED] 该接口已被弃用，将在未来版本中移除")
-    # 获取Agent实例和配置类
-    if not (agent := agent_manager.get_agent(agent_id)):
-        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
-
-    if hasattr(agent, "get_tools") and callable(agent.get_tools):
-        if asyncio.iscoroutinefunction(agent.get_tools):
-            tools = await agent.get_tools()
-        else:
-            tools = agent.get_tools()
-    else:
-        tools = get_buildin_tools()
-
-    tools_info = gen_tool_info(tools)
-    return {"tools": {tool["id"]: tool for tool in tools_info}}
 
 
 @chat.post("/agent/{agent_id}/resume")

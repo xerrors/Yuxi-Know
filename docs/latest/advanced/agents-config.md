@@ -36,7 +36,67 @@
 
 <<< @/../src/agents/reporter/graph.py
 
+### 工具系统
 
+系统提供统一的工具获取函数 `get_tools_from_context(context)`，自动从上下文配置中组装工具列表：
+
+```python
+from src.agents.common.tools import get_tools_from_context
+
+async def get_graph(self, **kwargs):
+    context = self.get_context()
+    tools = await get_tools_from_context(context)
+    # tools 已包含：基础工具、知识库工具、MCP 工具
+```
+
+该函数会自动处理三类工具的组装：
+1. **基础工具**: 从 `context.tools` 筛选的内置工具
+2. **知识库工具**: 根据 `context.knowledges` 自动生成检索工具
+3. **MCP 工具**: 根据 `context.mcps` 加载并过滤的 MCP 服务器工具
+
+### BaseContext 配置字段
+
+`BaseContext` 已内置以下常用配置字段，所有智能体可直接复用：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `model` | str | 使用的 LLM 模型 |
+| `system_prompt` | str | 系统提示词 |
+| `tools` | list[str] | 启用的内置工具列表 |
+| `knowledges` | list[str] | 关联的知识库列表 |
+| `mcps` | list[str] | 启用的 MCP 服务器名称 |
+
+```python
+from src.agents.common import BaseContext
+
+@dataclass(kw_only=True)
+class MyAgentContext(BaseContext):
+    # 继承所有 BaseContext 字段
+    # 可在此添加智能体特有的额外配置
+    custom_field: str = "默认值"
+```
+
+如需自定义工具选项（如 ReporterAgent 的 MySQL 工具），可覆盖 `tools` 字段的 `options` 元数据：
+
+```python
+from src.agents.common import BaseContext, gen_tool_info
+from src.agents.common.tools import get_buildin_tools
+from src.agents.common.toolkits.mysql import get_mysql_tools
+
+@dataclass(kw_only=True)
+class ReporterContext(BaseContext):
+    tools: Annotated[list[dict], {"__template_metadata__": {"kind": "tools"}}] = field(
+        default_factory=lambda: [t.name for t in get_mysql_tools()],
+        metadata={
+            "name": "工具",
+            "options": lambda: gen_tool_info(get_buildin_tools() + get_mysql_tools()),
+            "description": "包含内置工具和 MySQL 工具包。",
+        },
+    )
+
+    def __post_init__(self):
+        self.mcps = ["mcp-server-chart"]  # 默认启用图表 MCP
+```
 
 智能体实例的生命周期交给管理器处理，会在自动发现时完成初始化并缓存单例，以便快速响应请求。在容器内热重载时，只要保存文件即可触发重新导入；需要强制刷新可调用 `agent_manager.get_agent(<id>, reload=True)`。
 
@@ -81,7 +141,7 @@ from src.agents.common.middlewares import inject_attachment_context
 async def get_graph(self):
     graph = create_agent(
         model=load_chat_model("..."),
-        tools=get_tools(),
+        tools=tools,
         middleware=[
             inject_attachment_context,  # 添加附件中间件
             context_aware_prompt,       # 其他中间件...

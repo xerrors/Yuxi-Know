@@ -1,13 +1,18 @@
 import asyncio
+import os
 import traceback
+import uuid
 from typing import Annotated, Any
 
+import requests
 from langchain.tools import tool
 from langchain_core.tools import StructuredTool
 from langgraph.types import interrupt
 from pydantic import BaseModel, Field
 
 from src import config, graph_base, knowledge_base
+from src.services.mcp_service import get_enabled_mcp_tools
+from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 
 # Lazy initialization for TavilySearch (only when TAVILY_API_KEY is available)
@@ -43,6 +48,43 @@ def calculator(a: float, b: float, operation: str) -> float:
     except Exception as e:
         logger.error(f"Calculator error: {e}")
         raise
+
+
+@tool
+async def text_to_img_demo(text: str) -> str:
+    """【测试用】使用模型生成图片， 会返回图片的URL"""
+
+    url = "https://api.siliconflow.cn/v1/images/generations"
+
+    payload = {
+        "model": "Qwen/Qwen-Image",
+        "prompt": text,
+    }
+    headers = {"Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}", "Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response_json = response.json()
+    except Exception as e:
+        logger.error(f"Failed to generate image with: {e}")
+        raise ValueError(f"Image generation failed: {e}")
+
+    try:
+        image_url = response_json["images"][0]["url"]
+    except (KeyError, IndexError, TypeError) as e:
+        logger.error(f"Failed to parse image URL from response: {e}, {response_json=}")
+        raise ValueError(f"Image URL extraction failed: {e}")
+
+    # 2. Upload to MinIO (Simplified)
+    response = requests.get(image_url)
+    file_data = response.content
+
+    file_name = f"{uuid.uuid4()}.jpg"
+    image_url = await aupload_file_to_minio(
+        bucket_name="generated-images", file_name=file_name, data=file_data, file_extension="jpg"
+    )
+    logger.info(f"Image uploaded. URL: {image_url}")
+    return image_url
 
 
 @tool(name_or_callable="人工审批工具(Debug)", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
@@ -103,19 +145,6 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
     except Exception as e:
         logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
         return f"知识图谱查询失败: {str(e)}"
-
-
-def get_static_tools() -> list:
-    """注册静态工具"""
-    static_tools = [query_knowledge_graph, get_approved_user_goal, calculator]
-
-    # 检查是否启用网页搜索
-    if config.enable_web_search:
-        tavily_search = get_tavily_search()
-        if tavily_search:
-            static_tools.append(tavily_search)
-
-    return static_tools
 
 
 class KnowledgeRetrieverModel(BaseModel):
@@ -257,23 +286,6 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
     return kb_tools
 
 
-def get_buildin_tools() -> list:
-    """获取所有可运行的工具（给大模型使用）"""
-    tools = []
-
-    try:
-        tools.extend(get_static_tools())
-
-        from src.agents.common.toolkits.mysql.tools import get_mysql_tools
-
-        tools.extend(get_mysql_tools())
-
-    except Exception as e:
-        logger.error(f"Failed to get knowledge base retrievers: {e}")
-
-    return tools
-
-
 def gen_tool_info(tools) -> list[dict[str, Any]]:
     """获取所有工具的信息（用于前端展示）"""
     tools_info = []
@@ -323,3 +335,53 @@ def gen_tool_info(tools) -> list[dict[str, Any]]:
 
     logger.info(f"Successfully extracted info for {len(tools_info)} tools")
     return tools_info
+
+
+def get_buildin_tools() -> list:
+    """注册静态工具"""
+    static_tools = [
+        query_knowledge_graph,
+        get_approved_user_goal,
+        calculator,
+        text_to_img_demo,
+    ]
+
+    # subagents 工具
+    from .subagents import calc_agent_tool
+
+    static_tools.append(calc_agent_tool)
+
+    # 检查是否启用网页搜索（即是否配置了 API_KEY）
+    if config.enable_web_search:
+        tavily_search = get_tavily_search()
+        if tavily_search:
+            static_tools.append(tavily_search)
+
+    return static_tools
+
+
+async def get_tools_from_context(context, extra_tools=None) -> list:
+    """从上下文配置中获取工具列表"""
+    # 1. 基础工具 (从 context.tools 中筛选)
+    all_basic_tools = get_buildin_tools() + (extra_tools or [])
+    selected_tools = []
+
+    if context.tools:
+        # 创建工具映射表
+        tools_map = {t.name: t for t in all_basic_tools}
+        for tool_name in context.tools:
+            if tool_name in tools_map:
+                selected_tools.append(tools_map[tool_name])
+
+    # 2. 知识库工具
+    if context.knowledges:
+        kb_tools = get_kb_based_tools(db_names=context.knowledges)
+        selected_tools.extend(kb_tools)
+
+    # 3. MCP 工具（使用统一入口，自动过滤 disabled_tools）
+    if context.mcps:
+        for server_name in context.mcps:
+            mcp_tools = await get_enabled_mcp_tools(server_name)
+            selected_tools.extend(mcp_tools)
+
+    return selected_tools
