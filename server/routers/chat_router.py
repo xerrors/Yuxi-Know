@@ -819,11 +819,17 @@ async def resume_agent_chat(
                         content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
                     )
 
+                # Check for new interrupts (support multiple human in the loop)
+                langgraph_config = {"configurable": input_context}
+                async for chunk in check_and_handle_interrupts(
+                    agent, langgraph_config, make_resume_chunk, meta, thread_id
+                ):
+                    yield chunk
+
                 meta["time_cost"] = asyncio.get_event_loop().time() - start_time
                 yield make_resume_chunk(status="finished", meta=meta)
 
                 # 保存消息到数据库
-                langgraph_config = {"configurable": input_context}
                 conv_manager = ConversationManager(db)
                 await save_messages_from_langgraph_state(
                     agent_instance=agent,
