@@ -2,6 +2,7 @@ import asyncio
 import base64
 import os
 import re
+import time
 import zipfile
 from pathlib import Path
 
@@ -73,9 +74,9 @@ def _upload_image_to_minio(image_data: bytes, filename: str, db_id: str) -> str:
     minio_client = get_minio_client()
     minio_client.ensure_bucket_exists("kb-images")
     file_id = hashstr(filename, length=16)
-    object_name = f"{db_id}/{file_id}/images/{Path(filename).name}"
-
+    timestamp = int(time.time() * 1000000)
     suffix = Path(filename).suffix.lower()
+    object_name = f"{db_id}/{file_id}/images/{timestamp}_{Path(filename).name}"
     content_type_map = {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -136,7 +137,8 @@ def _convert_with_docling(file_path: Path, params: dict | None = None) -> str:
                 uri = str(pic.image.uri)
                 if uri.startswith("data:"):
                     image_data, mime_type = _parse_data_uri(uri)
-                    filename = f"image_{len(image_refs)}.{mime_type.split('/')[-1]}"
+                    timestamp = int(time.time() * 1000000)  # 微秒级时间戳
+                    filename = f"image_{timestamp}.{mime_type.split('/')[-1]}"
                     image_refs.append((filename, image_data))
 
         # 上传图片并收集 URL
@@ -650,7 +652,8 @@ async def _process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str
                 data = f.read()
 
             # 上传到MinIO
-            object_name = f"{db_id}/{file_id}/images/{Path(img_name).name}"
+            timestamp = int(time.time() * 1000000)
+            object_name = f"{db_id}/{file_id}/images/{timestamp}_{Path(img_name).name}"
             content_type = CONTENT_TYPE_MAP.get(suffix, "image/jpeg")
 
             result = await minio_client.aupload_file(
