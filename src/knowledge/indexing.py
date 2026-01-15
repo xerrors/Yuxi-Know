@@ -6,8 +6,8 @@ import zipfile
 from pathlib import Path
 
 import aiofiles
-from docling.document_converter import DocumentConverter
 from docling.datamodel.base_models import InputFormat
+from docling.document_converter import DocumentConverter
 from langchain_community.document_loaders import (
     CSVLoader,
     JSONLoader,

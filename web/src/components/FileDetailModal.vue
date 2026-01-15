@@ -60,7 +60,10 @@
         </div>
       </div>
     </template>
-    <div class="file-detail-content" v-if="file">
+    <div v-if="loading" class="loading-container">
+      <a-spin tip="正在加载文档内容..." />
+    </div>
+    <div v-else-if="file && hasContent" class="file-detail-content">
       <!-- Markdown 模式 -->
       <div v-if="viewMode === 'markdown'" class="content-panel">
         <MdPreview
@@ -93,8 +96,8 @@
       </div>
     </div>
 
-    <div v-else-if="loading" class="loading-container">
-      <a-spin />
+    <div v-else-if="file" class="empty-content">
+      <p>暂无文件内容</p>
     </div>
   </a-modal>
 </template>
@@ -489,55 +492,52 @@ const handleDownloadMarkdown = () => {
     margin-right: 8px;
   }
 }
-</style>
-
-<style lang="less">
 /* MdPreview 覆盖样式 - 非 scoped */
-.markdown-content {
+.content-panel {
   .md-editor-preview-wrapper {
     padding: 0;
   }
 
-  #md-editor-v-2-preview-wrapper {
+  .md-editor-preview {
     font-size: 14px;
     line-height: 1.75;
     color: var(--gray-1000);
-  }
 
-  #md-editor-v-2-preview-wrapper h1 {
-    font-size: 1.5rem;
-    margin: 16px 0 12px;
-    font-weight: 600;
-  }
+    h1 {
+      font-size: 1.2rem;
+      margin: 16px 0 12px;
+      font-weight: 600;
+    }
 
-  #md-editor-v-2-preview-wrapper h2 {
-    font-size: 1.4rem;
-    margin: 16px 0 12px;
-    font-weight: 600;
-  }
+    h2 {
+      font-size: 1.2rem;
+      margin: 16px 0 12px;
+      font-weight: 600;
+    }
 
-  #md-editor-v-2-preview-wrapper h3 {
-    font-size: 1.3rem;
-    margin: 14px 0 10px;
-    font-weight: 600;
-  }
+    h3 {
+      font-size: 1.1rem;
+      margin: 14px 0 10px;
+      font-weight: 600;
+    }
 
-  #md-editor-v-2-preview-wrapper h4 {
-    font-size: 1.2rem;
-    margin: 14px 0 10px;
-    font-weight: 600;
-  }
+    h4 {
+      font-size: 1rem;
+      margin: 14px 0 10px;
+      font-weight: 600;
+    }
 
-  #md-editor-v-2-preview-wrapper h5 {
-    font-size: 1.1rem;
-    margin: 12px 0 8px;
-    font-weight: 600;
-  }
+    h5 {
+      font-size: 1rem;
+      margin: 12px 0 8px;
+      font-weight: 600;
+    }
 
-  #md-editor-v-2-preview-wrapper h6 {
-    font-size: 1rem;
-    margin: 12px 0 8px;
-    font-weight: 600;
+    h6 {
+      font-size: 1rem;
+      margin: 12px 0 8px;
+      font-weight: 600;
+    }
   }
 }
 </style>

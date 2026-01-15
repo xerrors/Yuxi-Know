@@ -36,16 +36,14 @@ logs:
 
 lint:
 	uv run python -m ruff check .
-	uv run python -m ruff format src --diff
+	uv run python -m ruff format --check src
 	uv run python -m ruff check --select I src
 
 format:
-	uv run ruff format .
-	uv run ruff check . --fix
+	uv run python -m ruff format .
+	uv run python -m ruff check . --fix
 	uv run python -m ruff check --select I src --fix
-
-format_diff:
-	uv run ruff format --diff .
+	cd web && npm run format
 
 router-tests:
 	docker compose exec -T api uv run --group test pytest test/api $(PYTEST_ARGS)
