@@ -2,6 +2,7 @@ import asyncio
 import glob
 import json
 import os
+import re
 import uuid
 from datetime import datetime
 from typing import Any
@@ -767,9 +768,10 @@ class EvaluationService:
     async def get_evaluation_results_by_db(
         self, db_id: str, task_id: str, page: int = 1, page_size: int = 20, error_only: bool = False
     ) -> dict[str, Any]:
-        # Prevent path traversal by using basename
-        safe_task_id = os.path.basename(task_id)
-        result_file_path = os.path.join(self._get_result_dir(db_id), f"{safe_task_id}.json")
+        # Validate task_id format to prevent path traversal
+        if not re.match(r'^eval_[a-f0-9]{8}$', task_id):
+            raise ValueError("Invalid task_id format")
+        result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
         if not os.path.exists(result_file_path):
             task = await tasker.get_task(task_id)
             if task:
@@ -835,9 +837,10 @@ class EvaluationService:
         return data
 
     async def delete_evaluation_result_by_db(self, db_id: str, task_id: str) -> None:
-        # Prevent path traversal by using basename
-        safe_task_id = os.path.basename(task_id)
-        result_file_path = os.path.join(self._get_result_dir(db_id), f"{safe_task_id}.json")
+        # Validate task_id format to prevent path traversal
+        if not re.match(r'^eval_[a-f0-9]{8}$', task_id):
+            raise ValueError("Invalid task_id format")
+        result_file_path = os.path.join(self._get_result_dir(db_id), f"{task_id}.json")
         if os.path.exists(result_file_path):
             os.remove(result_file_path)
             logger.info(f"成功删除评估结果: {task_id}")
