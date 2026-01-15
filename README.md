@@ -4,8 +4,6 @@
 
 <h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
 
-<a href="https://trendshift.io/repositories/15845" target="_blank"><img src="https://trendshift.io/api/badge/repositories/15845" alt="Yuxi-Know | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
-
 [![Stable](https://img.shields.io/badge/stable-v0.4.3-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.3)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
@@ -14,29 +12,37 @@
 [![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/xerrors/Yuxi-Know)
 [![demo](https://img.shields.io/badge/demo-00A1D6.svg?style=flat&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1DF14BTETq/)
 
-📄 [**文档中心**](https://xerrors.github.io/Yuxi-Know/) |
-📽️ [**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
+
+<a href="https://trendshift.io/repositories/15845" target="_blank">
+  <img src="https://trendshift.io/api/badge/repositories/15845" alt="Yuxi-Know | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
+</a>
+
+[**文档中心**](https://xerrors.github.io/Yuxi-Know/) |
+[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
 
 </div>
 
 
-语析是一个功能强大的智能体平台，融合了 RAG 知识库与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI + LightRAG 架构构建。
+## 核心特性
 
-**亮点**：提供全套的智能体开发套件，基于 MIT 开源协议，技术栈友好，适合基于此项目打造自己的智能体平台。
-
-<img width="2992" height="692" alt="image" src="https://github.com/user-attachments/assets/93a64d05-8b38-41f0-b3a8-b527c80c3d60" />
-
-
----
-
-**🎉 最新动态**
+- **智能体开发**：基于 LangGraph v1 的多智能体架构，支持子智能体、工具调用与中间件机制
+- **知识库（RAG）**：多格式文档上传，支持 Embedding / Rerank 配置及知识库评估
+- **知识图谱**：基于 LightRAG 的图谱构建与可视化，支持属性图谱并参与智能体推理
+- **平台与工程化**：Vue + FastAPI 架构，支持暗黑模式、Docker 与生产级部署
 
 
+## 你可以用语析做什么？
+
+- 构建 **面向真实业务的 RAG + 知识图谱智能体**
+- 将 PDF / Word / Markdown / 图片快速转化为可推理的知识库
+- 自动（LightRAG）或手动构建知识图谱，并用于智能体推理
+- 使用 LangGraph v1 构建多智能体 / 子智能体系统
+
+## 最新动态
 
 - **[2025/12/19] v0.4.0 版本发布**
   <details>
   <summary>查看详细更新日志</summary>
-
 
   ### 新增
   - 新增对于上传附件的智能体中间件，详见[文档](https://xerrors.github.io/Yuxi-Know/latest/advanced/agents-config.html#%E6%96%87%E4%BB%B6%E4%B8%8A%E4%BC%A0%E4%B8%AD%E9%97%B4%E4%BB%B6)
@@ -67,54 +73,56 @@
   - 移除模型配置预设的 TogetherAI
   </details>
 
-- **[2025/11/05] v0.3 版本发布**
+- **[2025/11/05] v0.3.0 版本发布**
+  <details>
+  <summary>查看详细更新日志</summary>
+
   - 全面适配 LangChain/LangGraph v1 版本的特性，使用 create_agent 创建智能体入口。
   - 文档解析升级，适配 mineru-2.6 以及 mineru-api。
   - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
+  </details>
 
-<table align="center">
 
-  <tr>
-    <td align="center">
-      <strong>支持亮色 / 暗色模式切换</strong><br>
-      <img width="4420" height="2510" alt="image"
-           src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
-    </td>
-  </tr>
+<img width="2592" height="610" alt="image" src="https://github.com/user-attachments/assets/92898cc6-b1f0-4f1d-9491-75297bdfacaa" />
 
-  <tr>
-    <td align="center">
-      <strong>Dashboard 页面查看用量</strong><br>
-      <img width="2208" height="1255" alt="image"
-           src="https://github.com/user-attachments/assets/51a38d0a-caf9-4f46-981f-5ac0602d1e8b" />
-    </td>
-  </tr>
 
-  <tr>
-    <td align="center">
-      <strong>知识图谱可视化页面（支持展示 liaghtrag 图谱）</strong><br>
-      <img width="2208" height="1255" alt="image"
-           src="https://github.com/user-attachments/assets/25532b80-cf69-46e2-8dc1-6736b902bc3c" />
-    </td>
-  </tr>
 
-  <tr>
-    <td align="center">
-      <strong>智能体调用知识库的案例</strong><br>
-      <img width="2208" height="1255" alt="image"
-           src="https://github.com/user-attachments/assets/f4e2d31e-7e7b-4f88-a485-67fc5fab24d6" />
-    </td>
-  </tr>
+## 快速开始
 
-  <tr>
-    <td align="center">
-      <strong>深度智能体调用子智能体与文件系统的案例</strong><br>
-      <img width="2208" height="1255" alt="image"
-           src="https://github.com/user-attachments/assets/b45e6883-187b-4b63-b43e-6b8a8cb2bf0e" />
-    </td>
-  </tr>
+克隆代码，并初始化
 
-</table>
+```
+git clone --branch v0.4.3 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+cd Yuxi-Know
+
+# Linux/macOS
+./scripts/init.sh
+
+# Windows PowerShell
+.\scripts\init.ps1
+```
+
+然后需要使用 docker 启动项目
+
+```
+docker compose up --build
+```
+
+等待启动完成后，访问 `http://localhost:5173`
+
+## 示例与演示
+
+
+<img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
+<br>
+<img width="10116" height="5751" alt="11111" src="https://github.com/user-attachments/assets/d3e4fe09-fa48-4686-93ea-2c50300ade21" />
+<br>    
+<img width="10116" height="5751" alt="22222" src="https://github.com/user-attachments/assets/734a7cce-8b38-48ae-8e21-ca88996e5dde" />
+
+<br>    
+<img width="10116" height="5751" alt="1212" src="https://github.com/user-attachments/assets/06d56525-69bf-463a-8360-286b2cf8796f" />
+<br>    
+<img width="10116" height="5751" alt="44444" src="https://github.com/user-attachments/assets/e390ec4b-8690-4aee-bbb2-3536f7f67dc9" />
 
 
 ## 参与贡献
@@ -122,7 +130,7 @@
 感谢所有贡献者的支持！
 
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
-    <img src="https://contributors.nn.ci/api?repo=xerrors/Yuxi-Know" alt="贡献者名单">
+  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi-Know&max=100&columns=15" />
 </a>
 
 
