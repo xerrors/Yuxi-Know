@@ -41,10 +41,14 @@ class MySQLSecurityChecker:
         if not any(sql_upper.startswith(op) for op in cls.ALLOWED_OPERATIONS):
             return False
 
-        # 检查危险关键词
-        for keyword in cls.DANGEROUS_KEYWORDS:
-            if keyword in sql_upper:
-                return False
+        # 检查危险关键词 - 只检查语句开头的关键字，避免列名/表名误报
+        # 提取语句开头的第一个词
+        first_word_match = re.match(r"^\s*(\w+)", sql_upper)
+        first_word = first_word_match.group(1) if first_word_match else ""
+
+        # 只在开头检查危险关键词
+        if first_word in cls.DANGEROUS_KEYWORDS:
+            return False
 
         # 检查SQL注入模式
         sql_injection_patterns = [
