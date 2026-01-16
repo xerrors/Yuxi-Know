@@ -258,6 +258,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
 
 @auth.get("/me", response_model=UserResponse)
 async def read_users_me(current_user: User = Depends(get_current_user)):
+    """获取当前登录用户的个人信息"""
     return current_user.to_dict()
 
 
@@ -336,6 +337,8 @@ async def create_user(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """创建新用户（管理员权限）"""
+
     # 验证用户名
     is_valid, error_msg = validate_username(user_data.username)
     if not is_valid:
@@ -482,6 +485,14 @@ async def update_user(
     if user_data.role is not None:
         user.role = user_data.role
         update_details.append(f"角色: {user_data.role}")
+
+    if user_data.phone_number is not None:
+        user.phone_number = user_data.phone_number
+        update_details.append(f"手机号: {user_data.phone_number or '已清空'}")
+
+    if user_data.avatar is not None:
+        user.avatar = user_data.avatar
+        update_details.append(f"头像: {user_data.avatar or '已清空'}")
 
     await db.commit()
 
