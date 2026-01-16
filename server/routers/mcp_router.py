@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.mcp_service import (
+    clear_mcp_server_tools_cache,
     create_mcp_server,
     get_mcp_tools_stats,
     delete_mcp_server,
@@ -291,7 +292,7 @@ async def get_mcp_server_tools(
                 }
                 # 提取参数信息
                 if hasattr(tool, "args_schema") and tool.args_schema:
-                    schema = tool.args_schema.schema() if hasattr(tool.args_schema, "schema") else {}
+                    schema = tool.args_schema
                     tool_info["parameters"] = schema.get("properties", {})
                     tool_info["required"] = schema.get("required", [])
                 else:
@@ -325,6 +326,9 @@ async def refresh_mcp_server_tools(
         await get_server_or_404(db, name)
 
         try:
+            # 清除缓存，强制刷新
+            clear_mcp_server_tools_cache(name)
+            
             # 获取所有工具（不过滤 disabled_tools）
             tools = await get_all_mcp_tools(name)
 

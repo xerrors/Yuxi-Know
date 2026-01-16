@@ -36,6 +36,15 @@ _mcp_tools_stats: dict[str, dict[str, int]] = {}
 # MCP Server configurations (Runtime cache, loaded from DB)
 MCP_SERVERS: dict[str, dict[str, Any]] = {}
 
+# Per-server locks for granular tool fetching (avoids blocking all servers)
+_server_locks: dict[str, asyncio.Lock] = {}
+
+def get_server_lock(name: str) -> asyncio.Lock:
+    """Get or create a lock for a specific server."""
+    if name not in _server_locks:
+        _server_locks[name] = asyncio.Lock()
+    return _server_locks[name]
+
 # Default MCP Server configurations (Imported to DB on first run)
 _DEFAULT_MCP_SERVERS = {
     "sequentialthinking": {
@@ -224,9 +233,9 @@ async def get_mcp_tools(
     """
     global _mcp_tools_cache
 
-    # 1. Prepare Server Config
+    # 1. Prepare Server Config (获取快照后立即释放锁，防止阻塞其他服务器的工具拉取)
     async with _mcp_lock:
-        mcp_servers = MCP_SERVERS | (additional_servers or {})
+        mcp_servers = (MCP_SERVERS | (additional_servers or {})).copy()
 
     all_processed_tools = []
 
@@ -235,62 +244,68 @@ async def get_mcp_tools(
     if not force_refresh and cache and server_name in _mcp_tools_cache:
         all_processed_tools = _mcp_tools_cache[server_name]
     else:
-        # Need to fetch from server
-        try:
-            assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
+        # 针对该服务器加锁，确保同一时间只有一个请求在初始化该服务器
+        # 且不阻塞其他服务器 (Server B) 的请求
+        async with get_server_lock(server_name):
+            # 再次检查缓存（双重检查锁定模式）
+            if not force_refresh and cache and server_name in _mcp_tools_cache:
+                return _mcp_tools_cache[server_name]
 
-            # Extract connection config
-            server_config = mcp_servers[server_name]
-            client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
+            try:
+                assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
 
-            client = await get_mcp_client({server_name: client_config})
-            if client is None:
+                # Extract connection config
+                server_config = mcp_servers[server_name]
+                client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
+
+                client = await get_mcp_client({server_name: client_config})
+                if client is None:
+                    return []
+
+                # Get ALL tools (Raw)
+                raw_tools = cast(list[Any], await client.get_tools())
+
+                # Render IDs for ALL tools
+                server_cc = to_camel_case(server_name)
+                for tool in raw_tools:
+                    # Render unique ID rule: mcp__[camelCaseServer]__[camelCaseTool]
+                    original_name = tool.name
+                    tool_cc = to_camel_case(original_name)
+                    unique_id = f"mcp__{server_cc}__{tool_cc}"
+
+                    # Use metadata to store
+                    if tool.metadata is None:
+                        tool.metadata = {}
+                    tool.metadata["id"] = unique_id
+
+                    all_processed_tools.append(tool)
+
+                # Update Cache (Store the FULL list)
+                if cache:
+                    _mcp_tools_cache[server_name] = all_processed_tools
+
+                    # Update Stats
+                    # Stats should reflect the GLOBAL configuration state
+                    # (How many are disabled in the stored config, not the transient arg)
+                    global_config_disabled = mcp_servers.get(server_name, {}).get("disabled_tools") or []
+                    enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
+
+                    _mcp_tools_stats[server_name] = {
+                        "total": len(all_processed_tools),
+                        "enabled": enabled_count,
+                        "disabled": len(all_processed_tools) - enabled_count,
+                    }
+
+                    logger.info(f"Refreshed MCP tools cache for '{server_name}': {len(all_processed_tools)} tools loaded.")
+
+            except AssertionError as e:
+                logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
                 return []
-
-            # Get ALL tools (Raw)
-            raw_tools = cast(list[Any], await client.get_tools())
-
-            # Render IDs for ALL tools
-            server_cc = to_camel_case(server_name)
-            for tool in raw_tools:
-                # Render unique ID rule: mcp__[camelCaseServer]__[camelCaseTool]
-                original_name = tool.name
-                tool_cc = to_camel_case(original_name)
-                unique_id = f"mcp__{server_cc}__{tool_cc}"
-
-                # Use metadata to store
-                if tool.metadata is None:
-                    tool.metadata = {}
-                tool.metadata["id"] = unique_id
-
-                all_processed_tools.append(tool)
-
-            # Update Cache (Store the FULL list)
-            if cache:
-                _mcp_tools_cache[server_name] = all_processed_tools
-
-                # Update Stats
-                # Stats should reflect the GLOBAL configuration state
-                # (How many are disabled in the stored config, not the transient arg)
-                global_config_disabled = mcp_servers.get(server_name, {}).get("disabled_tools") or []
-                enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
-
-                _mcp_tools_stats[server_name] = {
-                    "total": len(all_processed_tools),
-                    "enabled": enabled_count,
-                    "disabled": len(all_processed_tools) - enabled_count,
-                }
-
-                logger.info(f"Refreshed MCP tools cache for '{server_name}': {len(all_processed_tools)} tools loaded.")
-
-        except AssertionError as e:
-            logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
-            return []
-        except Exception as e:
-            logger.error(
-                f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}"
-            )
-            return []
+            except Exception as e:
+                logger.error(
+                    f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}"
+                )
+                return []
 
     # 3. Filtering (Apply to Return Value Only)
     if disabled_tools:
@@ -540,7 +555,7 @@ async def toggle_tool_enabled(
     await db.commit()
 
     # Clear tool cache (re-filtered on next fetch)
-    clear_mcp_server_tools_cache(server_name)
+    # clear_mcp_server_tools_cache(server_name)
 
     logger.info(f"Toggled tool '{tool_name}' for server '{server_name}' enabled={enabled}")
     return enabled, server
@@ -598,7 +613,7 @@ async def get_all_mcp_tools(server_name: str) -> list:
     """Get all tools of an MCP server (no filtering).
 
     For management UI to display tool list, supports viewing all tools and their enabled status.
-    Does NOT update the global tools cache to avoid polluting agent's filtered view.
+    Works for both enabled and disabled servers.
 
     Args:
         server_name: Server name
@@ -606,10 +621,32 @@ async def get_all_mcp_tools(server_name: str) -> list:
     Returns:
         List of all tools (unfiltered)
     """
+    # Try to get config from cache first (for enabled servers)
     config = MCP_SERVERS.get(server_name)
+    
+    # If not in cache (disabled server), load from database
     if not config:
-        logger.warning(f"MCP server '{server_name}' not found in cache")
-        return []
+        from src.storage.db.manager import db_manager
+        from src.storage.db.models import MCPServer
+        
+        try:
+            async with db_manager.get_async_session_context() as session:
+                result = await session.execute(
+                    select(MCPServer).filter(MCPServer.name == server_name)
+                )
+                server = result.scalar_one_or_none()
+                
+                if not server:
+                    logger.warning(f"MCP server '{server_name}' not found in database")
+                    return []
+                
+                config = server.to_mcp_config()
+                logger.info(f"Loaded config for disabled server '{server_name}' from database")
+        except Exception as e:
+            logger.error(f"Failed to load server config from database: {e}")
+            return []
 
-    # Get all tools (no filtering, force refresh, no cache update)
-    return await get_mcp_tools(server_name, disabled_tools=[], cache=False, force_refresh=True)
+    # Get all tools (no filtering, use cache by default)
+    # Pass the config as additional_servers in case it's not in MCP_SERVERS
+    return await get_mcp_tools(server_name, additional_servers={server_name: config}, disabled_tools=[])
+
