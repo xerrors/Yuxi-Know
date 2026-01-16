@@ -383,4 +383,11 @@ class MCPServer(Base):
             config["sse_read_timeout"] = self.sse_read_timeout
         if self.disabled_tools:
             config["disabled_tools"] = self.disabled_tools
+
+        if self.description:
+            config["description"] = self.description
+        if self.icon:
+            config["icon"] = self.icon
+        if self.enabled:
+            config["enabled"] = self.enabled
         return config

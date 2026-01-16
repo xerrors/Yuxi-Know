@@ -220,10 +220,12 @@ async def test_mcp_server(
 ):
     """测试 MCP 服务器连接"""
     try:
-        await get_server_or_404(db, name)
+        server = await get_server_or_404(db, name)
 
         try:
-            tools = await get_all_mcp_tools(name)
+            tools = await get_all_mcp_tools(
+                name, force_refresh=True, additional_servers={server.name: server.to_mcp_config()}
+            )
             return {
                 "success": True,
                 "message": f"连接成功，共发现 {len(tools)} 个工具",
@@ -277,7 +279,7 @@ async def get_mcp_server_tools(
 
         try:
             # 获取所有工具（不过滤 disabled_tools）
-            tools = await get_all_mcp_tools(name)
+            tools = await get_all_mcp_tools(name, additional_servers={server.name: server.to_mcp_config()})
             tool_list = []
 
             for tool in tools:
@@ -323,14 +325,16 @@ async def refresh_mcp_server_tools(
 ):
     """刷新 MCP 服务器的工具列表（清除缓存重新获取）"""
     try:
-        await get_server_or_404(db, name)
+        server = await get_server_or_404(db, name)
 
         try:
             # 清除缓存，强制刷新
             clear_mcp_server_tools_cache(name)
-            
+
             # 获取所有工具（不过滤 disabled_tools）
-            tools = await get_all_mcp_tools(name)
+            tools = await get_all_mcp_tools(
+                name, cache=True, force_refresh=True, additional_servers={server.name: server.to_mcp_config()}
+            )
 
             # 获取统计信息
             stats = get_mcp_tools_stats(name)
