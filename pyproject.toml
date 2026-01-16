@@ -3,7 +3,7 @@ name = "yuxi-know"
 version = "0.4.3.dev"
 description = "基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI + LightRAG 架构构建"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12,<3.14"
 dependencies = [
     "asyncpg>=0.30.0",
     "aiosqlite>=0.20.0",
@@ -16,7 +16,6 @@ dependencies = [
     "fastapi>=0.121",
     "langchain-community>=0.4",
     "langchain-deepseek>=1.0",
-    "langchain-huggingface>=1.0.1",
     "langchain-mcp-adapters>=0.1.9",
     "langchain-openai>=1.0.2",
     "langchain-tavily>=0.2.13",
@@ -49,7 +48,6 @@ dependencies = [
     "tqdm>=4.66.4",
     "rich>=13.7.1",
     "typer>=0.16.0",
-    "mineru[core]>=2.6",
     "tabulate>=0.9.0",
     "minio>=7.2.7",
     "Pillow>=10.5.0",
@@ -63,7 +61,10 @@ dependencies = [
     "chardet>=5.0.0",
     "deepagents>=0.2.5",
     "json-repair>=0.54.0",
+    "torch>=2.8.0",
+    "torchvision==0.23",
     "docling>=2.68.0",
+    "loguru>=0.7.3",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
@@ -73,6 +74,24 @@ lint.select = [         # 选择的规则
     "W",
     "UP",
 ]
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
 
 [tool.pytest.ini_options]
 addopts = "-v --tb=short"
