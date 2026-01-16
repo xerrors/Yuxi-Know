@@ -956,6 +956,7 @@ async def get_agent_state(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """获取智能体当前状态（需要登录）"""
     try:
         if not agent_manager.get_agent(agent_id):
             raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
@@ -1250,7 +1251,7 @@ async def submit_message_feedback(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
-    """Submit user feedback for a specific message"""
+    """提交消息反馈（需要登录）"""
     try:
         # Validate rating
         if feedback_data.rating not in ["like", "dislike"]:
@@ -1314,7 +1315,7 @@ async def get_message_feedback(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
-    """Get feedback status for a specific message (for current user)"""
+    """获取指定消息的用户反馈（需要登录）"""
     try:
         # Get user's feedback for this message
         feedback_result = await db.execute(

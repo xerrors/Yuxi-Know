@@ -1,7 +1,9 @@
 """
 Dashboard Router - Statistics and monitoring endpoints
+仪表板 - 统计和监控端点
 
 Provides centralized dashboard APIs for monitoring system-wide statistics.
+提供系统级统计和监控的API接口，用于监控系统运行状态、用户活动、工具调用、知识库使用等。
 """
 
 import traceback
@@ -99,7 +101,7 @@ class ConversationDetailResponse(BaseModel):
 
 
 # =============================================================================
-# Conversation Management
+# Conversation Management - 对话管理
 # =============================================================================
 
 
@@ -113,7 +115,7 @@ async def get_all_conversations(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get all conversations (Admin only)"""
+    """获取所有对话（管理员权限）"""
     from src.storage.db.models import Conversation, ConversationStats
 
     try:
@@ -161,7 +163,7 @@ async def get_conversation_detail(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get conversation detail (Admin only)"""
+    """获取指定对话详情（管理员权限）"""
     try:
         conv_manager = ConversationManager(db)
         conversation = await conv_manager.get_conversation_by_thread_id(thread_id)
@@ -220,7 +222,7 @@ async def get_conversation_detail(
 
 
 # =============================================================================
-# User Activity Statistics
+# 用户活动统计（管理员权限）
 # =============================================================================
 
 
@@ -229,7 +231,7 @@ async def get_user_activity_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get user activity statistics (Admin only)"""
+    """获取用户活动统计（管理员权限）"""
     try:
         from src.storage.db.models import User, Conversation
 
@@ -292,7 +294,7 @@ async def get_user_activity_stats(
 
 
 # =============================================================================
-# Tool Call Statistics
+# Tool Call Statistics - 工具调用统计
 # =============================================================================
 
 
@@ -301,7 +303,7 @@ async def get_tool_call_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get tool call statistics (Admin only)"""
+    """获取工具调用统计（管理员权限）"""
     try:
         from src.storage.db.models import ToolCall
 
@@ -365,7 +367,7 @@ async def get_tool_call_stats(
 
 
 # =============================================================================
-# Knowledge Base Statistics
+# 知识库统计（管理员权限）
 # =============================================================================
 
 
@@ -374,7 +376,7 @@ async def get_knowledge_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get knowledge base statistics (Admin only)"""
+    """获取知识库统计（管理员权限）"""
     try:
         from src.knowledge.manager import KnowledgeBaseManager
         import json
@@ -495,7 +497,7 @@ async def get_knowledge_stats(
 
 
 # =============================================================================
-# Agent Analytics
+# 智能体分析（管理员权限）
 # =============================================================================
 
 
@@ -504,7 +506,7 @@ async def get_agent_analytics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get AI agent analytics (Admin only)"""
+    """获取智能体分析（管理员权限）"""
     try:
         from src.storage.db.models import Conversation, MessageFeedback, Message, ToolCall
 
@@ -592,7 +594,7 @@ async def get_agent_analytics(
 
 
 # =============================================================================
-# Basic Statistics (保留原有接口)
+# 基础统计（管理员权限）
 # =============================================================================
 
 
@@ -601,7 +603,7 @@ async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get dashboard statistics (Admin only)"""
+    """获取基础统计（管理员权限）"""
     from src.storage.db.models import Conversation, Message, MessageFeedback
 
     try:
@@ -649,12 +651,12 @@ async def get_dashboard_stats(
 
 
 # =============================================================================
-# Feedback Management
+# 反馈管理（管理员权限）
 # =============================================================================
 
 
 class FeedbackListItem(BaseModel):
-    """Feedback list item"""
+    """反馈列表项"""
 
     id: int
     user_id: str
@@ -675,7 +677,7 @@ async def get_all_feedbacks(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get all feedback records (Admin only)"""
+    """获取所有反馈记录（管理员权限）"""
     from src.storage.db.models import MessageFeedback, Message, Conversation, User
 
     try:
@@ -730,7 +732,7 @@ async def get_all_feedbacks(
 
 
 # =============================================================================
-# Time Series Statistics for Call Analytics
+# 调用分析时间序列统计（管理员权限）
 # =============================================================================
 
 
@@ -752,7 +754,7 @@ async def get_call_timeseries_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_admin_user),
 ):
-    """Get time series statistics for call analytics (Admin only)"""
+    """获取调用分析时间序列统计（管理员权限）"""
     try:
         from src.storage.db.models import Conversation, Message, ToolCall
 

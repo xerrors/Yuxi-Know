@@ -10,7 +10,9 @@ evaluation = APIRouter(prefix="/evaluation", tags=["evaluation"])
 
 
 # 移除旧详情接口，统一使用带 db_id 的接口
-
+# ============================================================================
+# 评估基准
+# ============================================================================
 
 @evaluation.get("/databases/{db_id}/benchmarks/{benchmark_id}")
 async def get_evaluation_benchmark_by_db(
@@ -94,7 +96,7 @@ async def delete_evaluation_result_by_db(db_id: str, task_id: str, current_user:
 
 
 # ============================================================================
-# === Knowledge-specific evaluation endpoints ===
+# RAG评估
 # ============================================================================
 
 
