@@ -48,6 +48,7 @@
 
 - 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
 - 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi-Know/pull/470)
+- 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)
 
 ## v0.4
 
