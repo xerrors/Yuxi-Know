@@ -7,17 +7,12 @@
 
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - 集成 neo4j mcp （或者自己构建工具）
-- 文档解析部分的 markdown 中的图片替换为内部可访问的链接 (2/4)
 - chat_model 的 call 需要异步
 - 考虑修改附件的处理逻辑，考虑使用文件系统，将附件解析后放到文件系统中，智能体按需读取，用户可以使用 @ 来引用附件，例如 @file:reports.md 相较于现在的处理逻辑感觉会更加自然一点。在此之前可能还要考虑文件系统的后端支持问题
 - skills 如何实现还需要继续调研
-- 优化 paddle 的命名，paddlex 有歧义，修改为 PP-StructureV3
 - 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
-- 将现有的 Milvus 的命名调整为通用 RAG
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能
-- 支持 markitdown 或者 docling 的功能
-- 添加对于 lightrag 的结果解析
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -26,7 +21,6 @@
 - 部分推理后端与 langchain 的适配有问题：
 - 目前的知识库的图片存在公开访问风险
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini）
-- 首页加载的问题
 - 当前的 upload 图谱查询为同步操作，可能会导致页面卡顿
 - FileTable 的自动刷新失效
 
@@ -40,15 +34,19 @@
 - 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
 - 新增Sqlite Web UI 方便通过Web页面管理数据库中数据[#463](https://github.com/xerrors/Yuxi-Know/pull/463)
 - 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
-- 优化chunk逻辑，移除 QA 分割，集成到普通分块中
+- 优化chunk逻辑，移除 QA 分割，集成到普通分块中，并优化可视化逻辑
 - 重构知识库处理逻辑，分为 上传—解析—入库 三个阶段
 - 重构 MCP 相关配置，使用数据库来控制 [#469](https://github.com/xerrors/Yuxi-Know/pull/469)
+- 使用 docling 解析 office 文件（docx/xlsx/pptx）
+- 优化后端的依赖，减少镜像体积 [#428](https://github.com/xerrors/Yuxi-Know/issues/428)
+- 优化 liaghtrag 的知识库调用结果，提供 content/graph/both 多个选项
 
 ### 修复
 
 - 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
 - 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi-Know/pull/470)
 - 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)
+- 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi-Know/issues/453) [#475](https://github.com/xerrors/Yuxi-Know/pull/475)
 
 ## v0.4
 
