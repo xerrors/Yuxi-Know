@@ -23,7 +23,7 @@
           <a-table
             :dataSource="departmentManagement.departments"
             :columns="columns"
-            :rowKey="record => record.id"
+            :rowKey="(record) => record.id"
             :pagination="false"
             class="department-table"
           >
@@ -42,7 +42,12 @@
               <template v-if="column.key === 'action'">
                 <a-space>
                   <a-tooltip title="编辑部门">
-                    <a-button type="text" size="small" @click="showEditDepartmentModal(record)" class="action-btn">
+                    <a-button
+                      type="text"
+                      size="small"
+                      @click="showEditDepartmentModal(record)"
+                      class="action-btn"
+                    >
                       <EditOutlined />
                     </a-button>
                   </a-tooltip>
@@ -108,7 +113,9 @@
             <TeamOutlined />
             <span>部门管理员</span>
           </div>
-          <p class="admin-section-hint">创建部门时必须同时创建管理员，该管理员将负责管理本部门用户</p>
+          <p class="admin-section-hint">
+            创建部门时必须同时创建管理员，该管理员将负责管理本部门用户
+          </p>
 
           <a-form-item label="管理员用户ID" required class="form-item">
             <a-input
@@ -359,13 +366,18 @@ const handleDepartmentFormSubmit = async () => {
       return
     }
 
-    if (departmentManagement.form.adminPassword !== departmentManagement.form.adminConfirmPassword) {
+    if (
+      departmentManagement.form.adminPassword !== departmentManagement.form.adminConfirmPassword
+    ) {
       notification.error({ message: '两次输入的密码不一致' })
       return
     }
 
     // 验证手机号
-    if (departmentManagement.form.adminPhone && !validatePhoneNumber(departmentManagement.form.adminPhone)) {
+    if (
+      departmentManagement.form.adminPhone &&
+      !validatePhoneNumber(departmentManagement.form.adminPhone)
+    ) {
       notification.error({ message: '请输入正确的手机号格式' })
       return
     }

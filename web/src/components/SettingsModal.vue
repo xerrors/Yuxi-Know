@@ -135,7 +135,13 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { SettingOutlined, CodeOutlined, UserOutlined, ApiOutlined, TeamOutlined } from '@ant-design/icons-vue'
+import {
+  SettingOutlined,
+  CodeOutlined,
+  UserOutlined,
+  ApiOutlined,
+  TeamOutlined
+} from '@ant-design/icons-vue'
 import BasicSettingsSection from '@/components/BasicSettingsSection.vue'
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue'
 import UserManagementComponent from '@/components/UserManagementComponent.vue'
