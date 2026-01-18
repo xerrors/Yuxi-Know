@@ -66,7 +66,7 @@ async def get_system_logs(levels: str | None = None, current_user: User = Depend
         if levels:
             level_filter = set(level.strip().upper() for level in levels.split(",") if level.strip())
 
-        async with aiofiles.open(LOG_FILE) as f:
+        async with aiofiles.open(LOG_FILE, encoding="utf-8") as f:
             # 读取最后1000行
             lines = []
             async for line in f:

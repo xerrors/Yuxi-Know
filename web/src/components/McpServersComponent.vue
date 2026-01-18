@@ -59,6 +59,7 @@
                   :checked="server.enabled"
                   @change="handleToggleServer(server)"
                   :loading="toggleLoading === server.name"
+                  :disabled="processingServers.has(server.name)"
                 />
               </div>
 
@@ -267,6 +268,7 @@
       v-model:visible="detailModalVisible"
       :server="selectedServer"
       @update="handleServerUpdate"
+      @toolToggled="handleToolToggled"
     />
   </div>
 </template>
@@ -480,10 +482,24 @@ const handleFormSubmit = async () => {
   }
 }
 
+// 使用 Reactive Set 存储处理状态，控制 UI 禁用
+const processingServers = reactive(new Set())
+// 原生逻辑锁
+const serverLogicLock = new Set()
+
 // 切换服务器启用状态
 const handleToggleServer = async (server) => {
+  // 1. 逻辑同步锁拦截
+  if (serverLogicLock.has(server.name)) {
+    return
+  }
+  
   try {
+    // 2. 上双重锁
+    serverLogicLock.add(server.name)
+    processingServers.add(server.name)
     toggleLoading.value = server.name
+    
     const result = await mcpApi.toggleMcpServer(server.name)
     if (result.success) {
       notification.success({ message: result.message })
@@ -495,7 +511,12 @@ const handleToggleServer = async (server) => {
     console.error('切换状态失败:', err)
     notification.error({ message: err.message || '操作失败' })
   } finally {
-    toggleLoading.value = null
+    // 3. 强制冷却解锁
+    setTimeout(() => {
+      serverLogicLock.delete(server.name)
+      processingServers.delete(server.name)
+      toggleLoading.value = null
+    }, 300)
   }
 }
 
@@ -554,6 +575,33 @@ const confirmDeleteServer = (server) => {
 // 处理服务器更新（来自详情模态框）
 const handleServerUpdate = () => {
   fetchServers()
+}
+
+// 处理工具切换（来自详情模态框）
+// NOTE: 只更新本地状态，避免重新获取整个服务器列表
+const handleToolToggled = ({ serverName, toolName, enabled }) => {
+  const server = servers.value.find(s => s.name === serverName)
+  if (server) {
+    // 更新 disabled_tools 列表
+    if (!server.disabled_tools) {
+      server.disabled_tools = []
+    }
+    
+    if (enabled) {
+      // 启用：从 disabled_tools 中移除
+      server.disabled_tools = server.disabled_tools.filter(t => t !== toolName)
+    } else {
+      // 禁用：添加到 disabled_tools
+      if (!server.disabled_tools.includes(toolName)) {
+        server.disabled_tools.push(toolName)
+      }
+    }
+    
+    // 更新 selectedServer（如果是当前选中的服务器）
+    if (selectedServer.value?.name === serverName) {
+      selectedServer.value.disabled_tools = [...server.disabled_tools]
+    }
+  }
 }
 
 // 格式化 JSON

@@ -2,10 +2,8 @@ from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.middlewares import (
-    inject_attachment_context,
-)
-from src.agents.common.tools import get_tools_from_context
+from src.agents.common.middlewares import DynamicToolMiddleware, inject_attachment_context
+from src.agents.common.tools import get_basic_tools, get_mcp_tools, get_tools_from_context
 
 
 class ChatbotAgent(BaseAgent):
@@ -24,6 +22,12 @@ class ChatbotAgent(BaseAgent):
         # 获取上下文配置
         context = self.context_schema.from_file(module_name=self.module_name)
 
+        dynamic_tool_middleware = DynamicToolMiddleware(
+            base_tools=[],
+            basic_tools=get_basic_tools(context.tools),
+            mcp_tools=await get_mcp_tools(server_names=context.mcps),
+        )
+
         # 使用 create_agent 创建智能体
         graph = create_agent(
             model=load_chat_model(context.model),  # 使用 context 中的模型配置
@@ -32,6 +36,7 @@ class ChatbotAgent(BaseAgent):
             middleware=[
                 inject_attachment_context,  # 附件上下文注入
                 ModelRetryMiddleware(),  # 模型重试中间件
+                dynamic_tool_middleware,
             ],
             checkpointer=await self._get_checkpointer(),
         )

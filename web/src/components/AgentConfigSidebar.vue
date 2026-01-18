@@ -118,6 +118,45 @@
                   </div>
                 </div>
 
+                <!-- MCP-Servers选择 -->
+                <div v-else-if="key === 'mcps'" class="tools-selector">
+                  <div class="tools-summary">
+                    <div class="tools-summary-info">
+                      <span class="tools-count"
+                        >已选择 {{ getSelectedCount(key) }} 个MCP服务器配置</span
+                      >
+                      <a-button
+                        v-if="getSelectedCount(key) > 0"
+                        class="clear-btn"
+                        size="small"
+                        type="link"
+                        @click="clearSelection(key)"
+                      >
+                        清空
+                      </a-button>
+                    </div>
+                    <a-button
+                      class="select-tools-btn"
+                      size="small"
+                      type="primary"
+                      @click="openMcpsModal"
+                    >
+                      选择MCP服务器
+                    </a-button>
+                  </div>
+                  <div v-if="getSelectedCount(key) > 0" class="selected-tools-preview">
+                    <a-tag
+                      v-for="toolId in agentConfig[key]"
+                      :key="toolId"
+                      class="tool-tag"
+                      closable
+                      @close="removeSelectedMcp(toolId)"
+                    >
+                      {{ getMcpNameById(toolId) }}
+                    </a-tag>
+                  </div>
+                </div>
+
                 <!-- 布尔类型 -->
                 <a-switch
                   v-else-if="typeof agentConfig[key] === 'boolean'"
@@ -279,6 +318,60 @@
         </div>
       </div>
     </a-modal>
+
+    <!-- MCP选择弹窗 -->
+    <a-modal
+      v-model:open="mcpsModalOpen"
+      :footer="null"
+      :maskClosable="false"
+      :width="800"
+      class="tools-modal"
+      title="选择MCP"
+    >
+      <div class="tools-modal-content">
+        <div class="tools-search">
+          <a-input
+            v-model:value="mcpsSearchText"
+            allow-clear
+            class="search-input"
+            placeholder="搜索MCP..."
+          >
+            <template #prefix>
+              <SearchOutlined class="search-icon" />
+            </template>
+          </a-input>
+        </div>
+
+        <div class="tools-list">
+          <div
+            v-for="mcp in filteredMcps"
+            :key="mcp.id"
+            :class="{ selected: selectedMcps.includes(mcp.id) }"
+            class="tool-item"
+            @click="toggleMcpSelection(mcp.id)"
+          >
+            <div class="tool-content">
+              <div class="tool-header">
+                <span class="tool-name">{{ mcp.name }}</span>
+                <div class="tool-indicator">
+                  <CheckCircleOutlined v-if="selectedMcps.includes(mcp.id)" />
+                  <PlusCircleOutlined v-else />
+                </div>
+              </div>
+              <div class="tool-description">{{ mcp.description }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tools-modal-footer">
+          <div class="selected-count">已选择 {{ selectedMcps.length }} 个MCP</div>
+          <div class="modal-actions">
+            <a-button @click="cancelMcpsSelection">取消</a-button>
+            <a-button type="primary" @click="confirmMcpsSelection">确认</a-button>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -309,7 +402,7 @@ const emit = defineEmits(['close'])
 
 // Store 管理
 const agentStore = useAgentStore()
-const { availableTools, selectedAgent, selectedAgentId, agentConfig, configurableItems } =
+const { availableTools, selectedAgent, selectedAgentId, agentConfig, configurableItems, availableMcps } =
   storeToRefs(agentStore)
 
 // console.log(availableTools.value)
@@ -543,6 +636,15 @@ const validateAndFilterConfig = () => {
       if (validatedConfig[key].length !== currentValue.length) {
         console.warn(`工具配置 ${key} 中包含无效的工具ID，已自动过滤`)
       }
+    } else if (configItem.template_metadata?.kind === 'mcps' && Array.isArray(currentValue)) {
+      const availableMcpIds = availableMcps.value
+        ? Object.values(availableMcps.value).map((mcp) => mcp.id)
+        : []
+      validatedConfig[key] = currentValue.filter((mcpId) => availableMcpIds.includes(mcpId))
+
+      if (validatedConfig[key].length !== currentValue.length) {
+        console.warn(`MCP配置 ${key} 中包含无效的MCP-ID，已自动过滤`)
+      }
     }
 
     // 检查多选配置项 (type === 'list' 且有 options)
@@ -597,6 +699,73 @@ const resetConfig = async () => {
     console.error('重置配置出错:', error)
     message.error('重置配置失败')
   }
+}
+
+const mcpsModalOpen = ref(false)
+const selectedMcps = ref([])
+const mcpsSearchText = ref('')
+
+const filteredMcps = computed(() => {
+  const mcpsList = availableMcps.value ? Object.values(availableMcps.value) : []
+  if (!mcpsSearchText.value) {
+    return mcpsList
+  }
+  const searchLower = mcpsSearchText.value.toLowerCase()
+  return mcpsList.filter(
+    (mcp) =>
+      mcp.name.toLowerCase().includes(searchLower) ||
+      mcp.description.toLowerCase().includes(searchLower)
+  )
+})
+
+const getMcpNameById = (mcpId) => {
+  const mcpsList = availableMcps.value ? Object.values(availableMcps.value) : []
+  const mcp = mcpsList.find((t) => t.id === mcpId)
+  return mcp ? mcp.name : mcpId
+}
+
+const openMcpsModal = async () => {
+  try {
+    selectedMcps.value = [...(agentConfig.value?.mcps || [])]
+    mcpsModalOpen.value = true
+  } catch (error) {
+    console.error('打开MCP选择弹窗失败:', error)
+    message.error('打开MCP选择弹窗失败')
+  }
+}
+
+const toggleMcpSelection = (mcpId) => {
+  const index = selectedMcps.value.indexOf(mcpId)
+  if (index > -1) {
+    selectedMcps.value.splice(index, 1)
+  } else {
+    selectedMcps.value.push(mcpId)
+  }
+}
+
+const removeSelectedMcp = (mcpId) => {
+  const currentMcps = [...(agentConfig.value?.mcps || [])]
+  const index = currentMcps.indexOf(mcpId)
+  if (index > -1) {
+    currentMcps.splice(index, 1)
+    agentStore.updateAgentConfig({
+      mcps: currentMcps
+    })
+  }
+}
+
+const confirmMcpsSelection = () => {
+  agentStore.updateAgentConfig({
+    mcps: [...selectedMcps.value]
+  })
+  mcpsModalOpen.value = false
+  mcpsSearchText.value = ''
+}
+
+const cancelMcpsSelection = () => {
+  mcpsModalOpen.value = false
+  mcpsSearchText.value = ''
+  selectedMcps.value = []
 }
 </script>
 

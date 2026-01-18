@@ -100,7 +100,7 @@ async def sync_mcp_server_to_cache(name: str, config: dict[str, Any] | None) -> 
             logger.info(f"Synced MCP server '{name}' to cache")
 
         # Clear tools cache for this server
-        _mcp_tools_cache.pop(name, None)
+        # _mcp_tools_cache.pop(name, None)
 
 
 async def init_mcp_servers() -> None:
@@ -201,6 +201,68 @@ def to_camel_case(s: str) -> str:
     return s
 
 
+async def _fetch_tools_from_server(server_name: str, server_config: dict[str, Any]) -> list[Callable[..., Any]]:
+    """Fetch tools from MCP server and process them.
+
+    This function handles:
+    1. Connecting to the MCP server
+    2. Fetching all tools
+    3. Processing tool IDs and metadata
+
+    Args:
+        server_name: Server name
+        server_config: Server configuration (without non-connection fields)
+
+    Returns:
+        List of processed tools with unique IDs
+    """
+    try:
+        # Extract connection config
+        client_config = {
+            k: v
+            for k, v in server_config.items()
+            if k
+            not in (
+                "disabled_tools",
+                "description",
+                "icon",
+                "enabled",
+            )
+        }
+
+        client = await get_mcp_client({server_name: client_config})
+        if client is None:
+            return []
+
+        # Get ALL tools (Raw)
+        raw_tools = cast(list[Any], await client.get_tools())
+
+        # Render IDs for ALL tools
+        server_cc = to_camel_case(server_name)
+        all_processed_tools = []
+        for tool in raw_tools:
+            # Render unique ID rule: mcp__[camelCaseServer]__[camelCaseTool]
+            original_name = tool.name
+            tool_cc = to_camel_case(original_name)
+            unique_id = f"mcp__{server_cc}__{tool_cc}"
+
+            # Use metadata to store
+            if tool.metadata is None:
+                tool.metadata = {}
+            tool.metadata["id"] = unique_id
+
+            all_processed_tools.append(tool)
+
+        return all_processed_tools
+
+    except AssertionError as e:
+        logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}")
+        return []
+
+
 async def get_mcp_tools(
     server_name: str,
     additional_servers: dict[str, dict] = None,
@@ -236,61 +298,31 @@ async def get_mcp_tools(
         all_processed_tools = _mcp_tools_cache[server_name]
     else:
         # Need to fetch from server
-        try:
-            assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
+        assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
 
-            # Extract connection config
-            server_config = mcp_servers[server_name]
-            client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
+        # Extract connection config
+        server_config = mcp_servers[server_name]
 
-            client = await get_mcp_client({server_name: client_config})
-            if client is None:
-                return []
+        # Use the new helper function to fetch and process tools
+        all_processed_tools = await _fetch_tools_from_server(server_name, server_config)
 
-            # Get ALL tools (Raw)
-            raw_tools = cast(list[Any], await client.get_tools())
+        # Update Cache (Store the FULL list)
+        if cache:
+            _mcp_tools_cache[server_name] = all_processed_tools
 
-            # Render IDs for ALL tools
-            server_cc = to_camel_case(server_name)
-            for tool in raw_tools:
-                # Render unique ID rule: mcp__[camelCaseServer]__[camelCaseTool]
-                original_name = tool.name
-                tool_cc = to_camel_case(original_name)
-                unique_id = f"mcp__{server_cc}__{tool_cc}"
+            # Update Stats
+            # Stats should reflect the GLOBAL configuration state
+            # (How many are disabled in the stored config, not the transient arg)
+            global_config_disabled = mcp_servers.get(server_name, {}).get("disabled_tools") or []
+            enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
 
-                # Use metadata to store
-                if tool.metadata is None:
-                    tool.metadata = {}
-                tool.metadata["id"] = unique_id
+            _mcp_tools_stats[server_name] = {
+                "total": len(all_processed_tools),
+                "enabled": enabled_count,
+                "disabled": len(all_processed_tools) - enabled_count,
+            }
 
-                all_processed_tools.append(tool)
-
-            # Update Cache (Store the FULL list)
-            if cache:
-                _mcp_tools_cache[server_name] = all_processed_tools
-
-                # Update Stats
-                # Stats should reflect the GLOBAL configuration state
-                # (How many are disabled in the stored config, not the transient arg)
-                global_config_disabled = mcp_servers.get(server_name, {}).get("disabled_tools") or []
-                enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
-
-                _mcp_tools_stats[server_name] = {
-                    "total": len(all_processed_tools),
-                    "enabled": enabled_count,
-                    "disabled": len(all_processed_tools) - enabled_count,
-                }
-
-                logger.info(f"Refreshed MCP tools cache for '{server_name}': {len(all_processed_tools)} tools loaded.")
-
-        except AssertionError as e:
-            logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
-            return []
-        except Exception as e:
-            logger.error(
-                f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}"
-            )
-            return []
+            logger.info(f"Refreshed MCP tools cache for '{server_name}': {len(all_processed_tools)} tools loaded.")
 
     # 3. Filtering (Apply to Return Value Only)
     if disabled_tools:
@@ -540,7 +572,7 @@ async def toggle_tool_enabled(
     await db.commit()
 
     # Clear tool cache (re-filtered on next fetch)
-    clear_mcp_server_tools_cache(server_name)
+    # clear_mcp_server_tools_cache(server_name)
 
     logger.info(f"Toggled tool '{tool_name}' for server '{server_name}' enabled={enabled}")
     return enabled, server
@@ -557,6 +589,83 @@ def get_mcp_server_names() -> list[str]:
     Returns a copy of keys to avoid runtime modification issues during iteration.
     """
     return list(MCP_SERVERS.keys())
+
+
+def get_mcp_servers_info(include_disabled: bool = False) -> list[dict[str, Any]]:
+    """Get MCP servers information with tools list.
+
+    Args:
+        refresh_tools: Whether to force refresh tools from servers
+        include_disabled: Whether to include disabled servers in the result
+
+    Returns:
+        List of server info dictionaries containing name, description, tools, etc.
+    """
+    result = []
+
+    for server_name, config in MCP_SERVERS.items():
+        # Skip disabled servers if requested
+        if not include_disabled and not config.get("enabled", True):
+            continue
+
+        # Get server basic info
+        server_info = {
+            "id": server_name,
+            "name": server_name,
+            "description": config.get("description", ""),
+            "icon": config.get("icon", ""),
+            "enabled": config.get("enabled", True),
+            "transport": config.get("transport", ""),
+            "tools": [],
+        }
+
+        def _format_parameters(input_schema: dict) -> list:
+            """将JSON Schema格式的参数转换为前端可直接使用的对象数组"""
+            if not input_schema or not input_schema.get("properties"):
+                return []
+            required_params = input_schema.get("required", [])
+            return [
+                {
+                    "name": key,
+                    "type": value.get("type", "unknown"),
+                    "description": value.get("description", ""),
+                    "required": key in required_params,
+                }
+                for key, value in input_schema["properties"].items()
+            ]
+
+        # Get tools for this server
+        try:
+            # Get enabled tools (filter disabled_tools)
+            disabled_tools = config.get("disabled_tools") or []
+            tools = _mcp_tools_cache.get(server_name, [])
+            enabled_tools = [t for t in tools if t.name not in disabled_tools]
+            # 转换为响应模型，包含参数信息
+            tool_responses = []
+            for tool in enabled_tools:
+                # 获取参数信息
+                args_schema = getattr(tool, "args_schema", {}) or {}
+                parameters = _format_parameters(args_schema)
+
+                tool_id = getattr(tool, "metadata", {}).get("id", "unknown")
+                tool_name = getattr(tool, "name", "unknown")
+                tool_description = getattr(tool, "description", "")
+
+                tool_responses.append(
+                    {"id": tool_id, "name": tool_name, "description": tool_description, "parameters": parameters}
+                )
+
+            # Filter out disabled tools
+            server_info["tools"] = tool_responses
+
+        except Exception as e:
+            logger.warning(f"Failed to get tools for server '{server_name}': {e}")
+            # Keep server info but with empty tools list
+            server_info["tools"] = []
+
+        result.append(server_info)
+
+    return list(result)
 
 
 async def get_enabled_mcp_tools(server_name: str) -> list:
@@ -594,7 +703,9 @@ async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
     return {name: MCP_SERVERS[name] for name in names if name in MCP_SERVERS}
 
 
-async def get_all_mcp_tools(server_name: str) -> list:
+async def get_all_mcp_tools(
+    server_name: str, cache: bool = True, force_refresh: bool = False, additional_servers=None
+) -> list:
     """Get all tools of an MCP server (no filtering).
 
     For management UI to display tool list, supports viewing all tools and their enabled status.
@@ -602,6 +713,9 @@ async def get_all_mcp_tools(server_name: str) -> list:
 
     Args:
         server_name: Server name
+        cache: Whether to use/update the cache (default: True)
+        force_refresh: Whether to force a refresh from the server (default: False)
+        additional_servers: Additional server configurations
 
     Returns:
         List of all tools (unfiltered)
@@ -609,7 +723,10 @@ async def get_all_mcp_tools(server_name: str) -> list:
     config = MCP_SERVERS.get(server_name)
     if not config:
         logger.warning(f"MCP server '{server_name}' not found in cache")
-        return []
+        if not additional_servers:
+            return []
 
     # Get all tools (no filtering, force refresh, no cache update)
-    return await get_mcp_tools(server_name, disabled_tools=[], cache=False, force_refresh=True)
+    return await get_mcp_tools(
+        server_name, additional_servers, disabled_tools=[], cache=cache, force_refresh=force_refresh
+    )

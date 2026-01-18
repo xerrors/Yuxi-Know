@@ -10,7 +10,7 @@ import yaml
 
 from src import config as sys_config
 from src.knowledge import knowledge_base
-from src.services.mcp_service import get_mcp_server_names
+from src.services.mcp_service import get_mcp_servers_info
 from src.utils import logger
 
 from .tools import gen_tool_info, get_buildin_tools
@@ -26,6 +26,11 @@ class BaseContext:
     2. 文件配置(config.private.yaml)：中等优先级，从文件加载
     3. 类默认配置：最低优先级，类中定义的默认值
     """
+
+    def set(self, data: dict):
+        """设置配置字段"""
+        for key, value in data.items():
+            setattr(self, key, value)
 
     def update(self, data: dict):
         """更新配置字段"""
@@ -76,11 +81,11 @@ class BaseContext:
         },
     )
 
-    mcps: list[str] = field(
+    mcps: Annotated[list[dict], {"__template_metadata__": {"kind": "mcps"}}] = field(
         default_factory=list,
         metadata={
             "name": "MCP服务器",
-            "options": lambda: get_mcp_server_names(),
+            "options": lambda: get_mcp_servers_info(),
             "description": (
                 "MCP服务器列表，建议使用支持 SSE 的 MCP 服务器，"
                 "如果需要使用 uvx 或 npx 运行的服务器，也请在项目外部启动 MCP 服务器，并在项目中配置 MCP 服务器。"
@@ -106,7 +111,7 @@ class BaseContext:
             context.update(file_config)
 
         if input_context:
-            context.update(input_context)
+            context.set(input_context)
 
         return context
 

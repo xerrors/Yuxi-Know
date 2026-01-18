@@ -6,6 +6,7 @@
       :is-sidebar-open="chatUIStore.isSidebarOpen"
       :is-initial-render="localUIState.isInitialRender"
       :single-mode="props.singleMode"
+      :is-loading="isProcessing"
       :agents="agents"
       :selected-agent-id="currentAgentId"
       :is-creating-new-chat="chatUIStore.creatingNewChat"
@@ -79,10 +80,6 @@
         <span>正在加载消息...</span>
       </div>
 
-      <div v-else-if="!conversations.length" class="chat-examples">
-        <div style="margin-bottom: 150px"></div>
-        <h1>您好，我是{{ currentAgentName }}！</h1>
-      </div>
       <div class="chat-box" ref="messagesContainer">
         <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
           <AgentMessageComponent
@@ -99,14 +96,14 @@
           <!-- 显示对话最后一个消息使用的模型 -->
           <RefsComponent
             v-if="shouldShowRefs(conv)"
+            :is-latest-message="false"
             :message="getLastMessage(conv)"
             :show-refs="['model', 'copy']"
-            :is-latest-message="false"
           />
         </div>
 
         <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
-        <div class="generating-status" v-if="isProcessing && conversations.length > 0">
+        <div v-if="isProcessing && conversations.length > 0" class="generating-status">
           <div class="generating-indicator">
             <div class="loading-dots">
               <div></div>
@@ -117,31 +114,49 @@
           </div>
         </div>
       </div>
-      <div class="bottom" :class="{ 'start-screen': !conversations.length }">
+      <div :class="{ 'start-screen': !conversations.length }" class="bottom">
         <!-- 人工审批弹窗 - 放在输入框上方 -->
         <HumanApprovalModal
-          :visible="approvalState.showModal"
-          :question="approvalState.question"
           :operation="approvalState.operation"
+          :question="approvalState.question"
+          :visible="approvalState.showModal"
           @approve="handleApprove"
           @reject="handleReject"
         />
 
         <div class="message-input-wrapper">
-          <AgentInputArea
-            ref="messageInputRef"
-            v-model="userInput"
-            :is-loading="isProcessing"
-            :disabled="!currentAgent"
-            :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
-            placeholder="输入问题..."
-            :supports-file-upload="supportsFileUpload"
-            :agent-id="currentAgentId"
-            :thread-id="currentChatId"
-            :ensure-thread="ensureActiveThread"
-            @send="handleSendOrStop"
-          />
-
+          <!-- 添加欢迎词 -->
+          <div v-if="!conversations.length" class="welcome-message">
+            您好，我是{{ currentAgentName }}！
+          </div>
+          <div class="input-area-with-mcp">
+            <!-- 按钮容器 -->
+            <div v-if="currentAgent" class="button-container">
+              <!-- MCP工具按钮 -->
+              <div :title="getMCPTooltip" class="mcp-tools-btn" @click="openMCPSelector">
+                <span class="mcp-icon">⚙️</span>
+                <span class="mcp-text">MCP工具</span>
+                <span v-if="selectedMcpCount > 0" class="mcp-count-badge">
+                  {{ selectedMcpCount }}
+                </span>
+              </div>
+            </div>
+            <AgentInputArea
+              ref="messageInputRef"
+              v-model="userInput"
+              :is-loading="isProcessing"
+              :disabled="!currentAgent"
+              :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
+              placeholder="输入问题..."
+              :supports-file-upload="supportsFileUpload"
+              :agent-id="currentAgentId"
+              :thread-id="currentChatId"
+              :ensure-thread="ensureActiveThread"
+              @send="handleSendOrStop"
+            />
+          </div>
+          <!-- MCP选择器组件 -->
+          <McpSelector ref="mcpSelectorRef" :agentId="currentAgentId" />
           <!-- 示例问题 -->
           <div
             class="example-questions"
@@ -194,6 +209,7 @@ import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import AgentPopover from '@/components/AgentPopover.vue'
+import McpSelector from '@/components/McpSelector.vue'
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
@@ -621,7 +637,12 @@ const sendMessage = async ({
   const requestData = {
     query: text,
     config: {
-      thread_id: threadId
+      thread_id: threadId,
+      user_mcp_tools: [
+        ...(selectedMcpToolsConfig.value || [])
+          .filter((tool) => tool.enabled)
+          .map((tool) => tool.toolId)
+      ]
     }
   }
 
@@ -1066,6 +1087,54 @@ watch(
   },
   { deep: true, flush: 'post' }
 )
+
+// 引用 MCP 选择器组件
+const mcpSelectorRef = ref(null)
+
+// Store
+const { agentConfig, selectedMcpToolsConfig } = storeToRefs(agentStore)
+
+const selectedMcpCount = computed(() => {
+  const mcpsTools = selectedMcpToolsConfig.value || []
+  // 只计算 enabled 为 true 的工具
+  return mcpsTools.filter((tool) => tool.enabled).length
+})
+
+// 计算工具提示文本
+const getMCPTooltip = computed(() => {
+  const count = selectedMcpCount.value
+  if (count === 0) {
+    return '配置MCP工具（当前未选择任何工具）'
+  } else {
+    return `已选择 ${count} 个MCP工具（点击管理）`
+  }
+})
+
+// 打开 MCP 选择器
+const openMCPSelector = async () => {
+  if (!currentAgent.value) {
+    message.warning('请先选择智能体')
+    return
+  }
+
+  if (!mcpSelectorRef.value) {
+    console.error('MCP选择器组件未加载')
+    message.error('MCP工具加载失败')
+    return
+  }
+
+  try {
+    // 调用子组件的方法，传入当前选中的工具
+    await mcpSelectorRef.value.openMcpsModal(agentConfig.value?.mcps_tools || [])
+
+    // 注意：这里需要监听子组件的确认事件，或者通过Promise方式获取结果
+    // 假设子组件通过ref方法返回Promise
+  } catch (error) {
+    console.error('打开MCP工具选择器失败:', error)
+    message.error('打开MCP工具选择器失败')
+  }
+}
+
 </script>
 
 <style lang="less" scoped>
@@ -1146,6 +1215,48 @@ watch(
 .example-questions {
   margin-top: 16px;
   text-align: center;
+
+  .example-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+
+  .refresh-btn {
+    color: var(--gray-600); /* 默认浅灰色 */
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    /* 鼠标悬停时更明显 */
+    &:hover {
+      color: var(--main-500);
+      background: var(--main-50);
+      transform: rotate(90deg);
+    }
+
+    /* 点击效果 */
+    &:active {
+      transform: scale(0.9) rotate(90deg);
+    }
+  }
+
+  .example-title {
+    font-size: 0.85rem;
+    color: var(--gray-600);
+    margin-bottom: 0;
+    line-height: 1; /* 确保行高一致 */
+    display: flex;
+    align-items: center; /* 文本垂直居中 */
+    height: 28px; /* 与按钮高度保持一致 */
+  }
 
   .example-chips {
     display: flex;
@@ -1236,9 +1347,11 @@ watch(
   z-index: 1000;
 
   .message-input-wrapper {
+    position: relative;
     width: 100%;
     max-width: 800px;
     margin: 0 auto;
+    margin-bottom: 12px;
 
     .bottom-actions {
       display: flex;
@@ -1400,5 +1513,143 @@ watch(
 .agent-nav-btn.agent-state-btn.has-content:hover:not(.is-disabled) {
   color: var(--main-700);
   background-color: var(--main-20);
+}
+.welcome-message {
+  position: absolute;
+  top: -80px; /* 将欢迎词向上推，不影响输入框位置 */
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: var(--gray-700);
+  font-size: 1.3rem;
+  padding: 12px;
+  border-radius: 12px;
+  animation: fadeIn 0.5s ease;
+  z-index: 1;
+  pointer-events: none; /* 确保不会挡住输入框交互 */
+}
+
+.input-area-with-mcp {
+  position: relative;
+  width: 100%;
+}
+
+/* 按钮容器 */
+.button-container {
+  position: absolute;
+  top: -45px;
+  right: 0;
+  display: flex;
+  gap: 8px;
+}
+
+/* MCP工具按钮 */
+.mcp-tools-btn {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  color: var(--gray-700);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  z-index: 10;
+}
+
+/* 知识库按钮 */
+.knowledge-tools-btn {
+  position: relative; /* 改为相对定位，为徽章提供定位上下文 */
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--gray-0);
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  color: var(--gray-700);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  white-space: nowrap;
+  z-index: 11;
+}
+
+/* 通用按钮样式 */
+.mcp-tools-btn,
+.knowledge-tools-btn .mcp-icon,
+.knowledge-tools-btn .mcp-text {
+  font-size: 14px;
+}
+
+.mcp-tools-btn .mcp-text,
+.knowledge-tools-btn .mcp-text {
+  font-weight: 500;
+}
+
+/* 按钮徽章样式 */
+.mcp-tools-btn .mcp-count-badge,
+.knowledge-tools-btn .mcp-count-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  background: var(--main-500);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .button-container {
+    top: -45px;
+    right: 0;
+    gap: 6px;
+  }
+
+  .mcp-tools-btn,
+  .knowledge-tools-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .mcp-tools-btn .mcp-text,
+  .knowledge-tools-btn .mcp-text {
+    display: none; /* 在移动端隐藏文字，只显示图标 */
+  }
+
+  .mcp-tools-btn .mcp-icon,
+  .knowledge-tools-btn .mcp-icon {
+    font-size: 16px;
+  }
+
+  .mcp-tools-btn .mcp-count-badge,
+  .knowledge-tools-btn .mcp-count-badge {
+    top: -4px;
+    right: -4px;
+    min-width: 16px;
+    height: 16px;
+    font-size: 10px;
+  }
+}
+
+/* 如果输入框有边框，确保按钮覆盖在边框上 */
+:deep(.agent-input-area) {
+  position: relative;
+  z-index: 1;
 }
 </style>

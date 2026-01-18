@@ -542,7 +542,16 @@ async def chat_agent(
         # 构造运行时配置，如果没有thread_id则生成一个
         user_id = str(current_user.id)
         thread_id = config.get("thread_id")
-        input_context = {"user_id": user_id, "thread_id": thread_id}
+        user_priority_knowledge = config.get("user_priority_knowledge")
+        user_knowledges = config.get("user_knowledges")
+        user_mcp_tools = config.get("user_mcp_tools")
+        input_context = {
+            "user_id": user_id,
+            "thread_id": thread_id,
+            "user_priority_knowledge": user_priority_knowledge,
+            "user_knowledges": user_knowledges,
+            "user_mcp_tools": user_mcp_tools,
+        }
 
         if not thread_id:
             thread_id = str(uuid.uuid4())
