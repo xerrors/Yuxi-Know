@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 import traceback
 import warnings
 from urllib.parse import urlparse
@@ -97,12 +98,22 @@ class UploadGraphService:
             if parsed_url.scheme in ("http", "https"):  # 如果是 URL
                 logger.info(f"检测到 URL，正在从 MinIO 下载文件: {file_path}")
 
-                # 使用 MinIO 客户端下载到临时文件（使用上下文管理器）
-                minio_client = get_minio_client()
-                async with minio_client.temp_file_from_url(
-                    file_path, allowed_extensions=[".jsonl"]
-                ) as actual_file_path:
+                # 使用知识库的方式：直接解析 URL 并使用内部 endpoint 下载（避免 HOST_IP 配置问题）
+                from src.knowledge.utils.kb_utils import parse_minio_url
 
+                bucket_name, object_name = parse_minio_url(file_path)
+                minio_client = get_minio_client()
+
+                # 直接下载文件内容
+                file_data = await minio_client.adownload_file(bucket_name, object_name)
+                logger.info(f"成功从 MinIO 下载文件: {object_name} ({len(file_data)} bytes)")
+
+                # 创建临时文件
+                with tempfile.NamedTemporaryFile(mode="wb", suffix=".jsonl", delete=False) as temp_file:
+                    temp_file.write(file_data)
+                    actual_file_path = temp_file.name
+
+                try:
                     def read_triples(file_path):
                         with open(file_path, encoding="utf-8") as file:
                             for line in file:
@@ -111,7 +122,10 @@ class UploadGraphService:
 
                     triples = list(read_triples(actual_file_path))
                     await self.txt_add_vector_entity(triples, kgdb_name, embed_model_name, batch_size)
-                    # 退出 with 块后，临时文件自动清理
+                finally:
+                    # 清理临时文件
+                    if os.path.exists(actual_file_path):
+                        os.unlink(actual_file_path)
 
             else:
                 # 本地文件路径 - 拒绝不安全的本地路径
