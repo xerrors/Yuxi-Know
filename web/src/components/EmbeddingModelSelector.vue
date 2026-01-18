@@ -27,7 +27,6 @@
             fontSize: '11px',
             fontWeight: 'bold',
             flexShrink: 0,
-            padding: '2px 4px',
             borderRadius: '3px'
           }"
           :title="getModelStatusTooltip(name)"

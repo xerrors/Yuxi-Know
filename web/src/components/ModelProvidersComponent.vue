@@ -27,7 +27,7 @@
         <div class="card-header">
           <div class="provider-info">
             <h4>{{ provider.name }}</h4>
-            <span class="provider-id">{{ providerId }}</span>
+            <span class="provider-id">ID: {{ providerId }}</span>
           </div>
           <div class="provider-actions">
             <a-button
@@ -856,10 +856,8 @@ const testCustomProvider = async (providerId, modelName) => {
         }
 
         .provider-id {
-          background: var(--main-color);
-          color: var(--gray-0);
+          color: var(--gray-600);
           padding: 2px 8px;
-          border-radius: 12px;
           font-size: 12px;
           font-weight: 500;
         }

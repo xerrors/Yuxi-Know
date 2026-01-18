@@ -26,7 +26,7 @@
           <div v-else class="user-cards-grid">
             <div v-for="user in userManagement.users" :key="user.id" class="user-card">
               <div class="card-header">
-                <div class="user-info">
+                <div class="user-info-main">
                   <div class="user-avatar">
                     <img
                       v-if="user.avatar"
@@ -38,14 +38,28 @@
                       {{ user.username.charAt(0).toUpperCase() }}
                     </div>
                   </div>
-                  <div class="user-basic-info">
-                    <h4 class="username">{{ user.username }}</h4>
-                    <div class="user-id">ID: {{ user.user_id || '-' }}</div>
+                  <div class="user-info-content">
+                    <div class="name-tag-row">
+                      <h4 class="username">{{ user.username }}</h4>
+                      <div class="tags-row">
+                        <a-tag
+                          v-if="userStore.isSuperAdmin && user.department_name"
+                          class="dept-tag small-tag"
+                        >
+                          {{ user.department_name }}
+                        </a-tag>
+                        <a-tooltip :title="getRoleLabel(user.role)">
+                          <span class="role-icon-wrapper" :class="getRoleClass(user.role)">
+                            <UserLock v-if="user.role === 'superadmin'" :size="16" />
+                            <UserStar v-else-if="user.role === 'admin'" :size="16" />
+                            <User v-else :size="16" />
+                          </span>
+                        </a-tooltip>
+                      </div>
+                    </div>
+                    <div class="user-id-row">ID: {{ user.user_id || '-' }}</div>
                   </div>
                 </div>
-                <a-tag :color="getRoleColor(user.role)" class="role-tag">
-                  {{ getRoleLabel(user.role) }}
-                </a-tag>
               </div>
 
               <div class="card-content">
@@ -190,6 +204,15 @@
             >
           </a-select>
         </a-form-item>
+
+        <!-- 部门选择器（仅超级管理员可见） -->
+        <a-form-item v-if="userStore.isSuperAdmin" label="部门" class="form-item">
+          <a-select v-model:value="userManagement.form.departmentId" size="large" placeholder="请选择部门">
+            <a-select-option v-for="dept in departmentManagement.departments" :key="dept.id" :value="dept.id">
+              {{ dept.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
       </a-form>
     </a-modal>
   </div>
@@ -199,7 +222,9 @@
 import { reactive, onMounted, watch } from 'vue'
 import { notification, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/stores/user'
+import { departmentApi } from '@/apis'
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { User, UserLock, UserStar } from 'lucide-vue-next'
 import { formatDateTime } from '@/utils/time'
 
 const userStore = useUserStore()
@@ -220,11 +245,28 @@ const userManagement = reactive({
     password: '',
     confirmPassword: '',
     role: 'user', // 默认角色
+    departmentId: null, // 部门ID
     usernameError: '', // 用户名错误信息
     phoneError: '' // 手机号错误信息
   },
   displayPasswordFields: true // 编辑时是否显示密码字段
 })
+
+// 部门列表（仅超级管理员使用）
+const departmentManagement = reactive({
+  departments: []
+})
+
+// 获取部门列表
+const fetchDepartments = async () => {
+  if (!userStore.isSuperAdmin) return // 普通管理员不需要获取所有部门列表
+  try {
+    const departments = await departmentApi.getDepartments()
+    departmentManagement.departments = departments
+  } catch (error) {
+    console.error('获取部门列表失败:', error)
+  }
+}
 
 // 添加验证用户名并生成user_id的函数
 const validateAndGenerateUserId = async () => {
@@ -316,6 +358,7 @@ const showAddUserModal = () => {
     password: '',
     confirmPassword: '',
     role: 'user', // 默认角色为普通用户
+    departmentId: null,
     usernameError: '',
     phoneError: ''
   }
@@ -335,6 +378,7 @@ const showEditUserModal = (user) => {
     password: '',
     confirmPassword: '',
     role: user.role,
+    departmentId: user.department_id || null,
     usernameError: '',
     phoneError: ''
   }
@@ -393,6 +437,11 @@ const handleUserFormSubmit = async () => {
         updateData.phone_number = userManagement.form.phoneNumber
       }
 
+      // 超级管理员可以修改部门
+      if (userStore.isSuperAdmin && userManagement.form.departmentId) {
+        updateData.department_id = userManagement.form.departmentId
+      }
+
       // 如果显示了密码字段并且填写了密码，才更新密码
       if (userManagement.displayPasswordFields && userManagement.form.password) {
         updateData.password = userManagement.form.password
@@ -406,6 +455,11 @@ const handleUserFormSubmit = async () => {
         username: userManagement.form.username.trim(),
         password: userManagement.form.password,
         role: userManagement.form.role
+      }
+
+      // 超级管理员可以指定部门
+      if (userStore.isSuperAdmin && userManagement.form.departmentId) {
+        createData.department_id = userManagement.form.departmentId
       }
 
       // 添加手机号字段（如果填写了）
@@ -494,9 +548,23 @@ const getRoleColor = (role) => {
   }
 }
 
+const getRoleClass = (role) => {
+  switch (role) {
+    case 'superadmin':
+      return 'role-superadmin'
+    case 'admin':
+      return 'role-admin'
+    case 'user':
+      return 'role-user'
+    default:
+      return 'role-default'
+  }
+}
+
 // 在组件挂载时获取用户列表
-onMounted(() => {
-  fetchUsers()
+onMounted(async () => {
+  await fetchUsers()
+  await fetchDepartments()
 })
 </script>
 
@@ -546,7 +614,9 @@ onMounted(() => {
           background: var(--gray-0);
           border: 1px solid var(--gray-150);
           border-radius: 8px;
-          padding: 16px;
+          padding: 12px 16px;
+          padding-bottom: 6px;
+
           transition: all 0.2s ease;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 
@@ -556,15 +626,12 @@ onMounted(() => {
           }
 
           .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
 
-            .user-info {
+            .user-info-main {
               display: flex;
-              align-items: center;
               gap: 12px;
+              align-items: center;
 
               .user-avatar {
                 width: 40px;
@@ -590,33 +657,72 @@ onMounted(() => {
                 }
               }
 
-              .user-basic-info {
-                .username {
-                  margin: 0 0 2px 0;
-                  font-size: 15px;
-                  font-weight: 600;
-                  color: var(--gray-900);
+              .user-info-content {
+                flex: 1;
+                min-width: 0;
+
+                .name-tag-row {
+                  display: flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-bottom: 2px;
+                  flex-wrap: wrap;
+
+                  .username {
+                    margin: 0;
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: var(--gray-900);
+                    line-height: 1.2;
+                  }
+
+                  .tags-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+
+                    .role-icon-wrapper {
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      width: 20px;
+                      height: 20px;
+                      border-radius: 4px;
+
+                      &.role-superadmin {
+                        color: var(--color-error-700);
+                        background: var(--color-error-50);
+                      }
+                      &.role-admin {
+                        color: var(--color-info-700);
+                        background: var(--color-info-50);
+                      }
+                      &.role-user {
+                        color: var(--color-success-700);
+                        background: var(--color-success-50);
+                      }
+                    }
+
+                    .small-tag {
+                      font-size: 12px;
+                      height: 22px;
+                      padding: 0 4px;
+                      margin-right: 4px;
+                    }
+                  }
                 }
 
-                .user-id {
+                .user-id-row {
                   font-size: 12px;
-                  color: var(--gray-600);
+                  color: var(--gray-500);
                   font-family: 'Monaco', 'Consolas', monospace;
+                  line-height: 1.2;
                 }
               }
-            }
-
-            .role-tag {
-              font-weight: 500;
-              border-radius: 4px;
-              padding: 2px 8px;
-              font-size: 12px;
             }
           }
 
           .card-content {
-            margin-bottom: 12px;
-
             .info-item {
               display: flex;
               justify-content: space-between;
@@ -656,7 +762,7 @@ onMounted(() => {
             display: flex;
             justify-content: flex-end;
             gap: 6px;
-            padding-top: 8px;
+            padding-top: 6px;
             border-top: 1px solid var(--gray-25);
 
             .action-btn {

@@ -21,6 +21,28 @@ def _format_utc_datetime(dt_value):
 ## Removed legacy RDBMS knowledge models (KnowledgeDatabase/KnowledgeFile/KnowledgeNode)
 
 
+class Department(Base):
+    """部门模型"""
+
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), nullable=False, unique=True, index=True)
+    description = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=utc_now)
+
+    # 关联关系
+    users = relationship("User", back_populates="department")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "created_at": _format_utc_datetime(self.created_at),
+        }
+
+
 class Conversation(Base):
     """Conversation table - new storage system"""
 
@@ -176,6 +198,7 @@ class User(Base):
     avatar = Column(String, nullable=True)  # 头像URL
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")  # 角色: superadmin, admin, user
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)  # 部门ID
     created_at = Column(DateTime, default=utc_now)
     last_login = Column(DateTime, nullable=True)
 
@@ -191,6 +214,9 @@ class User(Base):
     # 关联操作日志
     operation_logs = relationship("OperationLog", back_populates="user", cascade="all, delete-orphan")
 
+    # 关联部门
+    department = relationship("Department", back_populates="users")
+
     def to_dict(self, include_password=False):
         # SQLite 存储 naive datetime，需要标记为 UTC 后再转换
         result = {
@@ -200,6 +226,7 @@ class User(Base):
             "phone_number": self.phone_number,
             "avatar": self.avatar,
             "role": self.role,
+            "department_id": self.department_id,
             "created_at": _format_utc_datetime(self.created_at),
             "last_login": _format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,

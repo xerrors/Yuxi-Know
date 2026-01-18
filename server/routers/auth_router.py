@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.db.manager import db_manager
-from src.storage.db.models import User
+from src.storage.db.models import User, Department
 from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_required_user
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
@@ -37,6 +37,7 @@ class UserCreate(BaseModel):
     password: str
     role: str = "user"
     phone_number: str | None = None
+    department_id: int | None = None
 
 
 class UserUpdate(BaseModel):
@@ -45,6 +46,7 @@ class UserUpdate(BaseModel):
     role: str | None = None
     phone_number: str | None = None
     avatar: str | None = None
+    department_id: int | None = None
 
 
 class UserProfileUpdate(BaseModel):
@@ -59,6 +61,8 @@ class UserResponse(BaseModel):
     phone_number: str | None = None
     avatar: str | None = None
     role: str
+    department_id: int | None = None
+    department_name: str | None = None  # 部门名称
     created_at: str
     last_login: str | None = None
 
@@ -82,6 +86,13 @@ class UserIdGeneration(BaseModel):
 # =============================================================================
 # === 工具函数 ===
 # =============================================================================
+
+
+async def get_default_department_id(db: AsyncSession) -> int | None:
+    """获取默认部门的ID"""
+    result = await db.execute(select(Department).filter(Department.name == "默认部门"))
+    default_dept = result.scalar_one_or_none()
+    return default_dept.id if default_dept else None
 
 
 # 路由：登录获取令牌
@@ -174,6 +185,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         "phone_number": user.phone_number,
         "avatar": user.avatar,
         "role": user.role,
+        "department_id": user.department_id,
     }
 
 
@@ -217,6 +229,14 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
     # 由于是首次初始化，直接使用输入的user_id
     user_id = admin_data.user_id
 
+    # 创建默认部门
+    default_department = Department(
+        name="默认部门",
+        description="系统初始化时创建的默认部门"
+    )
+    db.add(default_department)
+    await db.flush()  # 获取部门ID
+
     new_admin = User(
         username=admin_data.user_id,  # username和user_id设置为相同值
         user_id=user_id,
@@ -224,6 +244,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
         avatar=None,  # 初始化时头像为空
         password_hash=hashed_password,
         role="superadmin",
+        department_id=default_department.id,
         last_login=utc_now(),
     )
 
@@ -389,12 +410,29 @@ async def create_user(
             detail="管理员只能创建普通用户账户",
         )
 
+    # 部门分配逻辑
+    if current_user.role == "superadmin":
+        # 超级管理员创建用户时，使用指定的部门或默认部门
+        department_id = user_data.department_id
+        if department_id is None:
+            department_id = await get_default_department_id(db)
+    else:
+        # 普通管理员创建用户时，自动继承该管理员的部门
+        department_id = current_user.department_id
+        # 非超级管理员不能指定部门
+        if user_data.department_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="普通管理员不能指定部门",
+            )
+
     new_user = User(
         username=user_data.username,
         user_id=user_id,
         phone_number=user_data.phone_number,
         password_hash=hashed_password,
         role=user_data.role,
+        department_id=department_id,
     )
 
     db.add(new_user)
@@ -414,9 +452,35 @@ async def create_user(
 async def read_users(
     skip: int = 0, limit: int = 100, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).filter(User.is_deleted == 0).offset(skip).limit(limit))
-    users = result.scalars().all()
-    return [user.to_dict() for user in users]
+    # 部门隔离逻辑
+    if current_user.role == "superadmin":
+        # 超级管理员可以看到所有用户，使用 JOIN 获取部门名称
+        result = await db.execute(
+            select(User, Department.name.label("department_name"))
+            .outerjoin(Department, User.department_id == Department.id)
+            .filter(User.is_deleted == 0)
+            .offset(skip)
+            .limit(limit)
+        )
+    else:
+        # 普通管理员只能看到本部门用户
+        result = await db.execute(
+            select(User, Department.name.label("department_name"))
+            .outerjoin(Department, User.department_id == Department.id)
+            .filter(
+                User.is_deleted == 0,
+                User.department_id == current_user.department_id
+            )
+            .offset(skip)
+            .limit(limit)
+        )
+    rows = result.all()
+    users = []
+    for user, dept_name in rows:
+        user_dict = user.to_dict()
+        user_dict["department_name"] = dept_name
+        users.append(user_dict)
+    return users
 
 
 # 路由：获取特定用户信息（管理员权限）
@@ -493,6 +557,16 @@ async def update_user(
     if user_data.avatar is not None:
         user.avatar = user_data.avatar
         update_details.append(f"头像: {user_data.avatar or '已清空'}")
+
+    # 部门修改权限控制（只有超级管理员可以修改用户部门）
+    if user_data.department_id is not None:
+        if current_user.role != "superadmin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="只有超级管理员才能修改用户部门",
+            )
+        user.department_id = user_data.department_id
+        update_details.append(f"部门ID: {user_data.department_id}")
 
     await db.commit()
 

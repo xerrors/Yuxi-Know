@@ -650,7 +650,8 @@ onMounted(() => {
           background: var(--gray-0);
           border: 1px solid var(--gray-150);
           border-radius: 8px;
-          padding: 16px;
+          padding: 10px 16px;
+          padding-bottom: 8px;
           transition: all 0.2s ease;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 

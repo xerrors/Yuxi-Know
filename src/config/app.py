@@ -56,11 +56,11 @@ class Config(BaseModel):
     )
     embed_model: str = Field(
         default="siliconflow/BAAI/bge-m3",
-        description="Embedding 模型",
+        description="默认 Embedding 模型",
     )
     reranker: str = Field(
         default="siliconflow/BAAI/bge-reranker-v2-m3",
-        description="Re-Ranker 模型",
+        description="默认 Re-Ranker 模型",
     )
     content_guard_llm_model: str = Field(
         default="siliconflow/Qwen/Qwen3-235B-A22B-Instruct-2507",

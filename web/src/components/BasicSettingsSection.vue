@@ -238,7 +238,7 @@ const openLink = (url) => {
     padding-bottom: 8px;
 
     &:first-child {
-      margin-top: 8px;
+      margin-top: 12px;
     }
   }
 
@@ -337,7 +337,7 @@ const openLink = (url) => {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px;
+    padding: 10px 16px;
     border: 1px solid var(--gray-150);
     border-radius: 8px;
     background: var(--gray-0);

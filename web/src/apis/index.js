@@ -10,6 +10,7 @@ export * from './graph_api' // 图谱API
 export * from './agent_api' // 智能体API
 export * from './tasker' // 任务管理API
 export * from './mindmap_api' // 思维导图API
+export * from './department_api' // 部门管理API
 
 // 导出基础工具函数
 export {

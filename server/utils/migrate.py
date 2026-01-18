@@ -156,6 +156,27 @@ class DatabaseMigrator:
             if "conn" in locals():
                 conn.close()
 
+    def check_table_exists(self, table_name: str) -> bool:
+        """检查表是否存在"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name=?
+            """,
+                (table_name,),
+            )
+            return cursor.fetchone() is not None
+
+        except Exception:
+            return False
+        finally:
+            if "conn" in locals():
+                conn.close()
+
     def run_migrations(self):
         """运行所有待执行的迁移"""
         current_version = self.get_current_version()
@@ -265,6 +286,29 @@ class DatabaseMigrator:
             v3_commands.append("ALTER TABLE messages ADD COLUMN image_content TEXT")
 
         migrations.append((3, "为消息表添加多模态图片支持字段", v3_commands))
+
+        # 迁移 v4: 添加部门功能
+        v4_commands: list[str] = []
+
+        # 检查 departments 表是否存在
+        if not self.check_table_exists("departments"):
+            v4_commands.append("""
+                CREATE TABLE departments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR(50) NOT NULL UNIQUE,
+                    description VARCHAR(255),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            v4_commands.append("CREATE INDEX idx_departments_name ON departments(name)")
+
+        # 检查 users 表是否有 department_id 字段
+        if not self.check_column_exists("users", "department_id"):
+            v4_commands.append("ALTER TABLE users ADD COLUMN department_id INTEGER REFERENCES departments(id)")
+
+        v4_commands.append("CREATE INDEX idx_users_department_id ON users(department_id)")
+
+        migrations.append((4, "添加部门功能", v4_commands))
 
         # 未来的迁移可以在这里添加
         # migrations.append((
