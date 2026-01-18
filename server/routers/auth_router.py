@@ -230,10 +230,7 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
     user_id = admin_data.user_id
 
     # 创建默认部门
-    default_department = Department(
-        name="默认部门",
-        description="系统初始化时创建的默认部门"
-    )
+    default_department = Department(name="默认部门", description="系统初始化时创建的默认部门")
     db.add(default_department)
     await db.flush()  # 获取部门ID
 
@@ -467,10 +464,7 @@ async def read_users(
         result = await db.execute(
             select(User, Department.name.label("department_name"))
             .outerjoin(Department, User.department_id == Department.id)
-            .filter(
-                User.is_deleted == 0,
-                User.department_id == current_user.department_id
-            )
+            .filter(User.is_deleted == 0, User.department_id == current_user.department_id)
             .offset(skip)
             .limit(limit)
         )

@@ -114,6 +114,7 @@ class UploadGraphService:
                     actual_file_path = temp_file.name
 
                 try:
+
                     def read_triples(file_path):
                         with open(file_path, encoding="utf-8") as file:
                             for line in file:
