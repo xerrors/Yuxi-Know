@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.db.manager import db_manager
@@ -594,13 +594,29 @@ async def delete_user(
 
         # 检查是否是最后一个超级管理员
         result = await db.execute(
-            select(db.func.count(User.id)).filter(User.role == "superadmin", User.is_deleted == 0)
+            select(func.count(User.id)).filter(User.role == "superadmin", User.is_deleted == 0)
         )
         superadmin_count = result.scalar()
         if superadmin_count <= 1:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="不能删除最后一个超级管理员账户",
+            )
+
+    # 检查是否是部门的唯一管理员
+    if user.role == "admin":
+        result = await db.execute(
+            select(func.count(User.id)).filter(
+                User.department_id == user.department_id,
+                User.role == "admin",
+                User.is_deleted == 0
+            )
+        )
+        admin_count = result.scalar()
+        if admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="不能删除部门唯一的管理员",
             )
 
     # 不能删除自己的账户
