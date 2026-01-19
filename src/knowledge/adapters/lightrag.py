@@ -317,4 +317,12 @@ class LightRAGGraphAdapter(GraphAdapter):
                                 nodes.append(self.normalize_node(item))
                                 node_ids.add(item.element_id)
 
-        return {"nodes": nodes, "edges": edges}
+        # 过滤掉引用不存在节点的边
+        valid_edges = []
+        for edge in edges:
+            source_id = edge.get("source_id")
+            target_id = edge.get("target_id")
+            if source_id in node_ids and target_id in node_ids:
+                valid_edges.append(edge)
+
+        return {"nodes": nodes, "edges": valid_edges}
