@@ -282,13 +282,14 @@ async def generate_mindmap(
 @mindmap.get("/databases")
 async def get_databases_overview(current_user: User = Depends(get_admin_user)):
     """
-    获取所有知识库的概览信息，用于思维导图界面选择
+    获取所有知识库的概览信息，用于思维导图界面选择（根据用户权限过滤）
 
     Returns:
         知识库列表
     """
     try:
-        databases = knowledge_base.get_databases()
+        user_info = {"role": current_user.role, "department_id": current_user.department_id}
+        databases = knowledge_base.get_databases_by_user(user_info)
 
         # databases["databases"] 是一个列表，每个元素已经包含了基本信息
         db_list_raw = databases.get("databases", [])

@@ -30,6 +30,8 @@ class Token(BaseModel):
     phone_number: str | None = None
     avatar: str | None = None
     role: str
+    department_id: int | None = None
+    department_name: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -176,6 +178,12 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
     # 记录登录操作
     await log_operation(db, user.id, "登录")
 
+    # 获取部门名称
+    department_name = None
+    if user.department_id:
+        result = await db.execute(select(Department.name).filter(Department.id == user.department_id))
+        department_name = result.scalar_one_or_none()
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -186,6 +194,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
         "avatar": user.avatar,
         "role": user.role,
         "department_id": user.department_id,
+        "department_name": department_name,
     }
 
 
@@ -275,9 +284,15 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
 
 
 @auth.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_user)):
+async def read_users_me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """获取当前登录用户的个人信息"""
-    return current_user.to_dict()
+    user_dict = current_user.to_dict()
+
+    if current_user.department_id:
+        result = await db.execute(select(Department.name).filter(Department.id == current_user.department_id))
+        user_dict["department_name"] = result.scalar_one_or_none()
+
+    return user_dict
 
 
 # 路由：更新个人资料
@@ -393,11 +408,11 @@ async def create_user(
     hashed_password = AuthUtils.hash_password(user_data.password)
 
     # 检查角色权限
-    # 超级管理员可以创建任何类型的用户
-    if user_data.role == "superadmin" and current_user.role != "superadmin":
+    # 禁止创建超级管理员账户（系统只能有一个超级管理员）
+    if user_data.role == "superadmin":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="只有超级管理员才能创建超级管理员账户",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能创建超级管理员账户",
         )
 
     # 管理员只能创建普通用户
@@ -490,6 +505,18 @@ async def read_user(user_id: int, current_user: User = Depends(get_admin_user), 
     return user.to_dict()
 
 
+async def check_department_admin_count(db: AsyncSession, department_id: int, exclude_user_id: int) -> int:
+    """检查部门中管理员数量（排除指定用户）"""
+    result = await db.execute(
+        select(func.count(User.id)).filter(
+            User.department_id == department_id,
+            User.role == "admin",
+            User.id != exclude_user_id,
+        )
+    )
+    return result.scalar()
+
+
 # 路由：更新用户信息（管理员权限）
 @auth.put("/users/{user_id}", response_model=UserResponse)
 async def update_user(
@@ -541,6 +568,14 @@ async def update_user(
         update_details.append("密码已更新")
 
     if user_data.role is not None:
+        # 检查是否将管理员降级为普通用户
+        if user.role == "admin" and user_data.role == "user" and user.department_id is not None:
+            admin_count = await check_department_admin_count(db, user.department_id, user_id)
+            if admin_count <= 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="不能将管理员降级为普通用户，因为该用户是当前部门的唯一管理员",
+                )
         user.role = user_data.role
         update_details.append(f"角色: {user_data.role}")
 
@@ -553,12 +588,22 @@ async def update_user(
         update_details.append(f"头像: {user_data.avatar or '已清空'}")
 
     # 部门修改权限控制（只有超级管理员可以修改用户部门）
-    if user_data.department_id is not None:
+    if user_data.department_id is not None and user_data.department_id != user.department_id:
         if current_user.role != "superadmin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="只有超级管理员才能修改用户部门",
             )
+
+        # 检查该用户是否是当前部门的唯一管理员
+        if user.role == "admin" and user.department_id is not None:
+            admin_count = await check_department_admin_count(db, user.department_id, user_id)
+            if admin_count <= 1:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="不能修改该用户的部门，因为该用户是当前部门的唯一管理员",
+                )
+
         user.department_id = user_data.department_id
         update_details.append(f"部门ID: {user_data.department_id}")
 
@@ -583,25 +628,12 @@ async def delete_user(
             detail="用户不存在",
         )
 
-    # 检查权限
+    # 不能删除超级管理员账户
     if user.role == "superadmin":
-        # 只有超级管理员可以删除超级管理员
-        if current_user.role != "superadmin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="只有超级管理员才能删除超级管理员账户",
-            )
-
-        # 检查是否是最后一个超级管理员
-        result = await db.execute(
-            select(func.count(User.id)).filter(User.role == "superadmin", User.is_deleted == 0)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不能删除超级管理员账户",
         )
-        superadmin_count = result.scalar()
-        if superadmin_count <= 1:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="不能删除最后一个超级管理员账户",
-            )
 
     # 检查是否是部门的唯一管理员
     if user.role == "admin":

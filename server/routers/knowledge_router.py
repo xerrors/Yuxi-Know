@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import textwrap
 import traceback
@@ -7,10 +8,11 @@ from urllib.parse import quote, unquote
 import aiofiles
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from server.services.tasker import TaskContext, tasker
-from server.utils.auth_middleware import get_admin_user
+from server.utils.auth_middleware import get_admin_user, get_required_user
 from src import config, knowledge_base
 from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from src.knowledge.utils import calculate_content_hash
@@ -18,6 +20,7 @@ from src.models.embed import test_all_embedding_models_status, test_embedding_mo
 from src.storage.db.models import User
 from src.storage.minio.client import StorageError, aupload_file_to_minio, get_minio_client
 from src.utils import logger
+from src.utils.datetime_utils import utc_isoformat
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -63,10 +66,10 @@ media_types = {
 
 @knowledge.get("/databases")
 async def get_databases(current_user: User = Depends(get_admin_user)):
-    """获取所有知识库"""
+    """获取所有知识库（根据用户权限过滤）"""
     try:
-        database = knowledge_base.get_databases()
-        return database
+        user_info = {"role": current_user.role, "department_id": current_user.department_id}
+        return knowledge_base.get_databases_by_user(user_info)
     except Exception as e:
         logger.error(f"获取数据库列表失败 {e}, {traceback.format_exc()}")
         return {"message": f"获取数据库列表失败 {e}", "databases": []}
@@ -80,13 +83,14 @@ async def create_database(
     kb_type: str = Body("lightrag"),
     additional_params: dict = Body({}),
     llm_info: dict = Body(None),
+    share_config: dict = Body(None),
     current_user: User = Depends(get_admin_user),
 ):
     """创建知识库"""
     logger.debug(
         f"Create database {database_name} with kb_type {kb_type}, "
         f"additional_params {additional_params}, llm_info {llm_info}, "
-        f"embed_model_name {embed_model_name}"
+        f"embed_model_name {embed_model_name}, share_config {share_config}"
     )
     try:
         # 先检查名称是否已存在
@@ -117,7 +121,7 @@ async def create_database(
 
         embed_info = config.embed_model_names[embed_model_name]
         database_info = await knowledge_base.create_database(
-            database_name, description, kb_type=kb_type, embed_info=embed_info, llm_info=llm_info, **additional_params
+            database_name, description, kb_type=kb_type, embed_info=embed_info, llm_info=llm_info, share_config=share_config, **additional_params
         )
 
         # 需要重新加载所有智能体，因为工具刷新了
@@ -131,6 +135,28 @@ async def create_database(
     except Exception as e:
         logger.error(f"创建数据库失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=400, detail=f"创建数据库失败: {e}")
+
+
+@knowledge.get("/databases/accessible")
+async def get_accessible_databases(current_user: User = Depends(get_required_user)):
+    """获取当前用户有权访问的知识库列表（用于智能体配置）"""
+    try:
+        user_info = {"role": current_user.role, "department_id": current_user.department_id}
+        databases = knowledge_base.get_databases_by_user(user_info)
+
+        accessible = [
+            {
+                "name": db.get("name", ""),
+                "db_id": db.get("db_id"),
+                "description": db.get("description", ""),
+            }
+            for db in databases.get("databases", [])
+        ]
+
+        return {"databases": accessible}
+    except Exception as e:
+        logger.error(f"获取可访问知识库列表失败: {e}, {traceback.format_exc()}")
+        return {"message": f"获取可访问知识库列表失败: {str(e)}", "databases": []}
 
 
 @knowledge.get("/databases/{db_id}")
@@ -148,13 +174,14 @@ async def update_database_info(
     name: str = Body(...),
     description: str = Body(...),
     llm_info: dict = Body(None),
-    additional_params: dict = Body({}),  # Now accepts a dict
+    additional_params: dict = Body({}),
+    share_config: dict = Body(None),
     current_user: User = Depends(get_admin_user),
 ):
     """更新知识库信息"""
     logger.debug(
-        f"Update database {db_id} info: {name}, {description}, llm_info: {llm_info}, "
-        f"additional_params: {additional_params}"
+        f"[update_database_info] 接收到的参数: name={name}, llm_info={llm_info}, "
+        f"additional_params={additional_params}, share_config={share_config}"
     )
     try:
         database = await knowledge_base.update_database(
@@ -162,7 +189,8 @@ async def update_database_info(
             name,
             description,
             llm_info,
-            additional_params=additional_params,  # Pass the dict to the manager
+            additional_params=additional_params,
+            share_config=share_config,
         )
         return {"message": "更新成功", "database": database}
     except Exception as e:
@@ -872,8 +900,6 @@ async def generate_sample_questions(
         生成的问题列表
     """
     try:
-        import json
-
         from src.models import select_model
 
         # 从请求体中提取参数

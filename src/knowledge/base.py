@@ -357,6 +357,7 @@ class KnowledgeBase(ABC):
             database_name: 数据库名称
             description: 数据库描述
             embed_info: 嵌入模型信息
+            llm_info: LLM配置信息
             **kwargs: 其他配置参数
 
         Returns:

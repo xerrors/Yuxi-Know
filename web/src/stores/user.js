@@ -305,7 +305,7 @@ export const useUserStore = defineStore('user', () => {
       avatar.value = userData.avatar || ''
       userRole.value = userData.role
       departmentId.value = userData.department_id || null
-      departmentName.value = '' // 部门名称通过 departmentId 获取
+      departmentName.value = userData.department_name || ''
 
       return userData
     } catch (error) {
