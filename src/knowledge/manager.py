@@ -49,6 +49,12 @@ class KnowledgeBaseManager:
         except Exception as e:
             logger.warning(f"Failed to migrate query_params: {e}")
 
+        # 迁移 share_config 到 global metadata
+        try:
+            self._migrate_share_config()
+        except Exception as e:
+            logger.warning(f"Failed to migrate share_config: {e}")
+
         logger.info("KnowledgeBaseManager initialized")
 
         # 在后台运行数据一致性检测（不阻塞初始化）
@@ -77,7 +83,9 @@ class KnowledgeBaseManager:
                 with open(meta_file, encoding="utf-8") as f:
                     data = json.load(f)
                     self.global_databases_meta = data.get("databases", {})
-                logger.info(f"Loaded global metadata for {len(self.global_databases_meta)} databases")
+                logger.info(f"[_load_global_metadata] 加载了 {len(self.global_databases_meta)} 个数据库的全局元数据")
+                for db_id, meta in self.global_databases_meta.items():
+                    logger.debug(f"  [{db_id}] share_config: {meta.get('share_config')}")
             except Exception as e:
                 logger.error(f"Failed to load global metadata: {e}")
                 # 尝试从备份恢复
@@ -111,6 +119,7 @@ class KnowledgeBaseManager:
 
             # 准备数据
             data = {"databases": self.global_databases_meta, "updated_at": utc_isoformat(), "version": "2.0"}
+            logger.debug(f"[_save_global_metadata] 保存数据: databases count={len(self.global_databases_meta)}")
 
             # 原子性写入（使用临时文件）
             with tempfile.NamedTemporaryFile(
@@ -121,6 +130,12 @@ class KnowledgeBaseManager:
 
             os.replace(temp_path, meta_file)
             logger.debug("Saved global metadata")
+
+            # 验证写入
+            if os.path.exists(meta_file):
+                with open(meta_file, encoding="utf-8") as f:
+                    saved_data = json.load(f)
+                    logger.debug(f"[_save_global_metadata] 验证: 保存了 {len(saved_data.get('databases', {}))} 个数据库")
 
         except Exception as e:
             logger.error(f"Failed to save global metadata: {e}")
@@ -229,9 +244,94 @@ class KnowledgeBaseManager:
         # 收集所有知识库的数据库信息
         for kb_type, kb_instance in self.kb_instances.items():
             kb_databases = kb_instance.get_databases()["databases"]
+            
+            # 合并全局元数据
+            for db in kb_databases:
+                db_id = db.get("db_id")
+                if db_id and db_id in self.global_databases_meta:
+                    global_meta = self.global_databases_meta[db_id]
+                    
+                    # 合并 share_config
+                    db["share_config"] = global_meta.get("share_config", {"is_shared": True, "accessible_departments": []})
+                    
+                    # 合并 additional_params
+                    # 注意：kb_instance 返回的 metadata 字段可能已经包含了部分参数，
+                    # 但 global_databases_meta 中的 additional_params 是我们在 create/update 时保存的
+                    db["additional_params"] = global_meta.get("additional_params", {})
+
             all_databases.extend(kb_databases)
 
         return {"databases": all_databases}
+
+    def check_accessible(self, user: dict, db_id: str) -> bool:
+        """检查用户是否有权限访问数据库
+
+        Args:
+            user: 用户信息字典
+            db_id: 数据库ID
+
+        Returns:
+            bool: 是否有权限
+        """
+        # 超级管理员有权访问所有
+        if user.get("role") == "superadmin":
+            return True
+
+        if db_id not in self.global_databases_meta:
+            return False
+
+        share_config = self.global_databases_meta[db_id].get("share_config", {})
+        is_shared = share_config.get("is_shared", True)
+
+        # 如果是全员共享，则有权限
+        if is_shared:
+            return True
+
+        # 检查部门权限
+        user_department_id = user.get("department_id")
+        accessible_departments = share_config.get("accessible_departments", [])
+
+        if user_department_id is None:
+            return False
+
+        # 转换为整数进行比较（前端可能传递字符串，后端存储为整数）
+        try:
+            user_department_id = int(user_department_id)
+            accessible_departments = [int(d) for d in accessible_departments]
+        except (ValueError, TypeError):
+            return False
+
+        if user_department_id in accessible_departments:
+            return True
+
+        return False
+
+    def get_databases_by_user(self, user: dict) -> dict:
+        """根据用户权限获取知识库列表
+
+        Args:
+            user: 用户信息字典，包含 role 和 department_id
+
+        Returns:
+            过滤后的知识库列表
+        """
+        all_databases = self.get_databases().get("databases", [])
+
+        # 超级管理员可以看到所有知识库
+        if user.get("role") == "superadmin":
+            return {"databases": all_databases}
+
+        filtered_databases = []
+
+        for db in all_databases:
+            db_id = db.get("db_id")
+            if not db_id:
+                continue
+
+            if self.check_accessible(user, db_id):
+                filtered_databases.append(db)
+
+        return {"databases": filtered_databases}
 
     def database_name_exists(self, database_name: str) -> bool:
         """检查知识库名称是否已存在
@@ -253,7 +353,7 @@ class KnowledgeBaseManager:
         return kb_instance.create_folder(db_id, folder_name, parent_id)
 
     async def create_database(
-        self, database_name: str, description: str, kb_type: str = "lightrag", embed_info: dict | None = None, **kwargs
+        self, database_name: str, description: str, kb_type: str = "lightrag", embed_info: dict | None = None, share_config: dict | None = None, **kwargs
     ) -> dict:
         """
         创建数据库
@@ -263,6 +363,7 @@ class KnowledgeBaseManager:
             description: 数据库描述
             kb_type: 知识库类型，默认为lightrag
             embed_info: 嵌入模型信息
+            share_config: 共享配置
             **kwargs: 其他配置参数，包括chunk_size和chunk_overlap
 
         Returns:
@@ -275,9 +376,16 @@ class KnowledgeBaseManager:
         # 检查名称是否已存在
         if self.database_name_exists(database_name):
             raise ValueError(f"知识库名称 '{database_name}' 已存在，请使用其他名称")
+            
+        # 默认共享配置
+        if share_config is None:
+            share_config = {"is_shared": True, "accessible_departments": []}
 
         kb_instance = self._get_or_create_kb_instance(kb_type)
 
+        # 注意：不再传递 share_config 给 kb_instance，因为它由 Manager 管理
+        # 但为了兼容性，如果 kb_instance.create_database 签名还没改，可能会有问题？
+        # Base KB create_database 接受 **kwargs，所以没问题。我们这里不传 share_config 给它。
         db_info = kb_instance.create_database(database_name, description, embed_info, **kwargs)
         db_id = db_info["db_id"]
 
@@ -288,10 +396,15 @@ class KnowledgeBaseManager:
                 "kb_type": kb_type,
                 "created_at": utc_isoformat(),
                 "additional_params": kwargs.copy(),
+                "share_config": share_config,
             }
+            logger.debug(f"[create_database] 保存 global_databases_meta[{db_id}]: {self.global_databases_meta[db_id]}")
             self._save_global_metadata()
+            logger.debug(f"[create_database] _save_global_metadata 完成")
 
         logger.info(f"Created {kb_type} database: {database_name} ({db_id}) with {kwargs}")
+        # 返回信息中包含 share_config
+        db_info["share_config"] = share_config
         return db_info
 
     async def delete_database(self, db_id: str) -> dict:
@@ -377,6 +490,31 @@ class KnowledgeBaseManager:
             self._save_global_metadata()
             logger.info(f"Successfully migrated query_params for {migration_count} databases")
 
+    def _migrate_share_config(self):
+        """将 share_config 从 instance metadata 迁移到 global metadata"""
+        migration_count = 0
+        
+        for kb_type, kb_instance in self.kb_instances.items():
+            for db_id, instance_meta in kb_instance.databases_meta.items():
+                if db_id not in self.global_databases_meta:
+                    continue
+                
+                global_meta = self.global_databases_meta[db_id]
+                
+                # 如果 global metadata 中没有 share_config，但 instance metadata 中有
+                if "share_config" not in global_meta and "share_config" in instance_meta:
+                    global_meta["share_config"] = instance_meta["share_config"]
+                    # 可选：从 instance metadata 中移除？暂时保留以防万一，或者清理
+                    # del instance_meta["share_config"] 
+                    migration_count += 1
+        
+        if migration_count > 0:
+            self._save_global_metadata()
+            # 保存所有修改过的实例元数据
+            for kb_instance in self.kb_instances.values():
+                kb_instance._save_metadata()
+            logger.info(f"Successfully migrated share_config for {migration_count} databases")
+
     def get_database_info(self, db_id: str) -> dict | None:
         """获取数据库详细信息"""
         try:
@@ -384,7 +522,7 @@ class KnowledgeBaseManager:
             db_info = kb_instance.get_database_info(db_id)
 
             # 添加全局元数据中的additional_params信息
-            if db_info and db_id in self.global_databases_meta:
+            if db_id in self.global_databases_meta:
                 global_meta = self.global_databases_meta[db_id]
                 additional_params = global_meta.get("additional_params", {}).copy()
 
@@ -393,6 +531,9 @@ class KnowledgeBaseManager:
                     additional_params["auto_generate_questions"] = False
 
                 db_info["additional_params"] = additional_params
+                
+                # 添加 share_config
+                db_info["share_config"] = global_meta.get("share_config", {"is_shared": True, "accessible_departments": []})
 
             return db_info
         except KBNotFoundError:
@@ -531,11 +672,12 @@ class KnowledgeBaseManager:
         return False
 
     async def update_database(
-        self, db_id: str, name: str, description: str, llm_info: dict = None, additional_params: dict | None = None
+        self, db_id: str, name: str, description: str, llm_info: dict = None, additional_params: dict | None = None, share_config: dict | None = None
     ) -> dict:
         """更新数据库"""
         kb_instance = self._get_kb_for_database(db_id)
-        result = kb_instance.update_database(db_id, name, description, llm_info)
+        # 注意：这里 kb_instance.update_database 返回的是实例的元数据，不包含 global metadata 中的 share_config
+        kb_instance.update_database(db_id, name, description, llm_info)
 
         async with self._metadata_lock:
             if db_id in self.global_databases_meta:
@@ -551,9 +693,19 @@ class KnowledgeBaseManager:
                 # 清理旧的 top-level key (如果存在)
                 self.global_databases_meta[db_id].pop("auto_generate_questions", None)
 
+                # 更新共享配置
+                if share_config is not None:
+                    existing_share_config = self.global_databases_meta[db_id].get("share_config", {})
+                    logger.debug(f"[update_database] 原始 share_config: {existing_share_config}")
+                    logger.debug(f"[update_database] 新 share_config: {share_config}")
+                    existing_share_config.update(share_config)
+                    self.global_databases_meta[db_id]["share_config"] = existing_share_config
+                    logger.debug(f"[update_database] 合并后 share_config: {existing_share_config}")
+
                 self._save_global_metadata()
 
-        return result
+        # 返回包含 global metadata 的完整信息
+        return self.get_database_info(db_id)
 
     def get_retrievers(self) -> dict[str, dict]:
         """获取所有检索器"""

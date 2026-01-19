@@ -41,20 +41,18 @@
                   <div class="user-info-content">
                     <div class="name-tag-row">
                       <h4 class="username">{{ user.username }}</h4>
-                      <div class="tags-row">
-                        <a-tag
-                          v-if="userStore.isSuperAdmin && user.department_name"
-                          class="dept-tag small-tag"
-                        >
+                      <div
+                        v-if="user.role === 'admin' || user.role === 'superadmin' || user.department_name"
+                        class="role-dept-badge"
+                      >
+                        <span class="role-icon-wrapper" :class="getRoleClass(user.role)">
+                          <UserLock v-if="user.role === 'superadmin'" :size="14" />
+                          <UserStar v-else-if="user.role === 'admin'" :size="14" />
+                          <User v-else :size="14" />
+                        </span>
+                        <span v-if="user.department_name" class="dept-text">
                           {{ user.department_name }}
-                        </a-tag>
-                        <a-tooltip :title="getRoleLabel(user.role)">
-                          <span class="role-icon-wrapper" :class="getRoleClass(user.role)">
-                            <UserLock v-if="user.role === 'superadmin'" :size="16" />
-                            <UserStar v-else-if="user.role === 'admin'" :size="16" />
-                            <User v-else :size="16" />
-                          </span>
-                        </a-tooltip>
+                        </span>
                       </div>
                     </div>
                     <div class="user-id-row">ID: {{ user.user_id || '-' }}</div>
@@ -195,13 +193,14 @@
           </a-form-item>
         </template>
 
-        <a-form-item label="角色" class="form-item">
+        <a-form-item v-if="userManagement.editMode && userManagement.form.role === 'superadmin'" label="角色" class="form-item">
+          <a-input value="超级管理员" size="large" disabled />
+          <div class="help-text">超级管理员账户无法修改角色</div>
+        </a-form-item>
+        <a-form-item v-else label="角色" class="form-item">
           <a-select v-model:value="userManagement.form.role" size="large">
             <a-select-option value="user">普通用户</a-select-option>
             <a-select-option value="admin" v-if="userStore.isSuperAdmin">管理员</a-select-option>
-            <a-select-option value="superadmin" v-if="userStore.isSuperAdmin"
-              >超级管理员</a-select-option
-            >
           </a-select>
         </a-form-item>
 
@@ -622,7 +621,7 @@ onMounted(async () => {
           background: var(--gray-0);
           border: 1px solid var(--gray-150);
           border-radius: 8px;
-          padding: 12px 16px;
+          padding: 12px;
           padding-bottom: 6px;
 
           transition: all 0.2s ease;
@@ -672,6 +671,7 @@ onMounted(async () => {
                 .name-tag-row {
                   display: flex;
                   align-items: center;
+                  justify-content: space-between;
                   gap: 8px;
                   margin-bottom: 2px;
                   flex-wrap: wrap;
@@ -682,40 +682,39 @@ onMounted(async () => {
                     font-weight: 600;
                     color: var(--gray-900);
                     line-height: 1.2;
+                    flex-shrink: 0;
                   }
 
-                  .tags-row {
-                    display: flex;
+                  .role-dept-badge {
+                    display: inline-flex;
                     align-items: center;
-                    gap: 6px;
+                    gap: 4px;
+                    padding: 2px 8px 2px 4px;
+                    background: var(--gray-50);
+                    border-radius: 4px;
 
                     .role-icon-wrapper {
                       display: flex;
                       align-items: center;
                       justify-content: center;
-                      width: 20px;
-                      height: 20px;
-                      border-radius: 4px;
+                      width: 16px;
+                      height: 16px;
 
                       &.role-superadmin {
                         color: var(--color-error-700);
-                        background: var(--color-error-50);
                       }
                       &.role-admin {
                         color: var(--color-info-700);
-                        background: var(--color-info-50);
                       }
                       &.role-user {
                         color: var(--color-success-700);
-                        background: var(--color-success-50);
                       }
                     }
 
-                    .small-tag {
+                    .dept-text {
                       font-size: 12px;
-                      height: 22px;
-                      padding: 0 4px;
-                      margin-right: 4px;
+                      color: var(--gray-700);
+                      font-weight: 500;
                     }
                   }
                 }

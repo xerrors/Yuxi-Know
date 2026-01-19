@@ -88,6 +88,7 @@
         :auto-size="{ minRows: 3, maxRows: 10 }"
       />
 
+      <!-- 隐私设置（暂时隐藏）
       <h3 style="margin-top: 20px">隐私设置</h3>
       <div class="privacy-config">
         <a-switch
@@ -103,6 +104,14 @@
           <InfoCircleOutlined style="margin-left: 8px; color: var(--gray-500); cursor: help" />
         </a-tooltip>
       </div>
+      -->
+
+      <!-- 共享配置 -->
+      <h3>共享设置</h3>
+      <ShareConfigForm
+        v-model="shareConfig"
+        :auto-select-user-dept="true"
+      />
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button
@@ -195,6 +204,7 @@ import { typeApi } from '@/apis/knowledge_api'
 import HeaderComponent from '@/components/HeaderComponent.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
+import ShareConfigForm from '@/components/ShareConfigForm.vue'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import AiTextarea from '@/components/AiTextarea.vue'
 import { getKbTypeLabel, getKbTypeIcon, getKbTypeColor } from '@/utils/kb_utils'
@@ -209,6 +219,12 @@ const { databases, state: dbState } = storeToRefs(databaseStore)
 
 const state = reactive({
   openNewDatabaseModel: false
+})
+
+// 共享配置状态（用于提交数据）
+const shareConfig = reactive({
+  is_shared: true,
+  accessible_department_ids: []
 })
 
 // 语言选项（值使用英文，以保证后端/LightRAG 兼容；标签为中英文方便理解）
@@ -279,6 +295,9 @@ const loadSupportedKbTypes = async () => {
 
 const resetNewDatabase = () => {
   Object.assign(newDatabase, createEmptyDatabaseForm())
+  // 重置共享配置
+  shareConfig.is_shared = true
+  shareConfig.accessible_department_ids = []
 }
 
 const cancelCreateDatabase = () => {
@@ -347,6 +366,12 @@ const buildRequestData = () => {
     additional_params: {
       is_private: newDatabase.is_private || false
     }
+  }
+
+  // 添加共享配置
+  requestData.share_config = {
+    is_shared: shareConfig.is_shared,
+    accessible_departments: shareConfig.is_shared ? [] : (shareConfig.accessible_department_ids || [])
   }
 
   // 根据类型添加特定配置

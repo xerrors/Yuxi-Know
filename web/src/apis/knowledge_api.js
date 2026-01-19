@@ -68,6 +68,14 @@ export const databaseApi = {
       current_description: currentDescription,
       file_list: fileList
     })
+  },
+
+  /**
+   * 获取当前用户有权访问的知识库列表（用于智能体配置）
+   * @returns {Promise} - 可访问的知识库列表
+   */
+  getAccessibleDatabases: async () => {
+    return apiAdminGet('/api/knowledge/databases/accessible')
   }
 }
 

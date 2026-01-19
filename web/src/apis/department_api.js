@@ -2,16 +2,16 @@
  * 部门管理 API
  */
 
-import { apiSuperAdminGet, apiSuperAdminPost, apiSuperAdminPut, apiSuperAdminDelete } from './base'
+import { apiAdminGet, apiSuperAdminGet, apiSuperAdminPost, apiSuperAdminPut, apiSuperAdminDelete } from './base'
 
 const BASE_URL = '/api/departments'
 
 /**
- * 获取部门列表
+ * 获取部门列表（普通管理员可访问）
  * @returns {Promise<Array>} 部门列表
  */
 export const getDepartments = () => {
-  return apiSuperAdminGet(BASE_URL)
+  return apiAdminGet(BASE_URL)
 }
 
 /**
