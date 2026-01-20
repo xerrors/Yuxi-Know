@@ -21,6 +21,7 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-0123456789}
       - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
       - MILVUS_TOKEN=${MILVUS_TOKEN:-}
+      - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
       - MINERU_OCR_URI=${MINERU_OCR_URI:-http://mineru:30000}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
