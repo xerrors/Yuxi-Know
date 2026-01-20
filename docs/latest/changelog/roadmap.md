@@ -13,6 +13,7 @@
 - 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能
+- 检查非 Agent 场景下的知识库的可见情况
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -23,6 +24,7 @@
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini）
 - 当前的 upload 图谱查询为同步操作，可能会导致页面卡顿
 - FileTable 的自动刷新失效
+- lightrag 的知识库加载分块有bug
 
 ## v0.5
 
