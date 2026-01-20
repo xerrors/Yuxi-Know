@@ -1,5 +1,6 @@
 import re
 import uuid
+from src.utils import logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.db.manager import db_manager
 from src.storage.db.models import User, Department
-from server.utils.auth_middleware import get_admin_user, get_current_user, get_db, get_required_user
+from server.utils.auth_middleware import get_admin_user, get_superadmin_user, get_current_user, get_db, get_required_user
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
@@ -769,3 +770,58 @@ async def upload_user_avatar(
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"头像上传失败: {str(e)}")
+
+
+# 路由：模拟用户登录（超级管理员专用）
+@auth.post("/impersonate/{user_id}", response_model=Token)
+async def impersonate_user(
+    user_id: int,
+    request: Request,
+    current_user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """超级管理员模拟其他用户登录"""
+    # 查找目标用户
+    result = await db.execute(select(User).filter(User.id == user_id, User.is_deleted == 0))
+    target_user = result.scalar_one_or_none()
+    if target_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="用户不存在",
+        )
+
+    # 不能模拟超级管理员
+    if target_user.role == "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="不能模拟超级管理员账户",
+        )
+
+    # 生成访问令牌
+    token_data = {"sub": str(target_user.id)}
+    access_token = AuthUtils.create_access_token(token_data)
+
+    # 获取部门名称
+    department_name = None
+    if target_user.department_id:
+        result = await db.execute(select(Department.name).filter(Department.id == target_user.department_id))
+        department_name = result.scalar_one_or_none()
+
+    # 记录操作（危险操作标记）
+    await log_operation(db, current_user.id, "⚠️ 危险操作-模拟用户", f"模拟用户: {target_user.username}", request)
+
+    # 控制台警告日志
+    logger.warning(f"⚠️ [危险操作] 超级管理员 {current_user.username} 模拟登录用户: {target_user.username}")
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": target_user.id,
+        "username": target_user.username,
+        "user_id_login": target_user.user_id,
+        "phone_number": target_user.phone_number,
+        "avatar": target_user.avatar,
+        "role": target_user.role,
+        "department_id": target_user.department_id,
+        "department_name": department_name,
+    }
