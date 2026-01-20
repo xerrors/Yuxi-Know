@@ -714,12 +714,11 @@ const customRequest = async (options) => {
         onError(e)
       }
     } else {
-      try {
-        const errorResp = JSON.parse(xhr.responseText)
-        onError(new Error(errorResp.detail || 'Upload failed'))
-      } catch (e) {
-        onError(new Error(xhr.responseText || 'Upload failed'))
-      }
+      const errorResp = JSON.parse(xhr.responseText)
+      // 设置 file.response 让 handleFileUpload 能读取到错误信息
+      file.response = errorResp
+      const error = new Error(errorResp.detail || 'Upload failed')
+      onError(error, file)
     }
   }
 
@@ -732,15 +731,20 @@ const customRequest = async (options) => {
 
 const handleFileUpload = (info) => {
   if (info?.file?.status === 'error') {
-    const errorMessage = info.file?.response?.detail || `文件上传失败：${info.file.name}`
-    message.error(errorMessage)
+    const file = info.file
+    // 尝试多种方式获取错误信息
+    const detail = file?.response?.detail || file?.error?.message || ''
+    if (detail.includes('same content') || detail.includes('相同内容')) {
+      message.error(`${file.name} 已是相同内容文件，无需重复上传`)
+    } else {
+      message.error(detail || `文件上传失败：${file.name}`)
+    }
   }
 
   // 检查是否有同名文件提示
   if (info?.file?.status === 'done' && info.file.response) {
     const response = info.file.response
     if (response.has_same_name && response.same_name_files && response.same_name_files.length > 0) {
-      // 显示同名文件提示
       showSameNameFilesInUploadArea(response.same_name_files)
     }
   }
@@ -791,66 +795,60 @@ const chunkData = async () => {
     return
   }
 
-  let success = false
-  const files = fileList.value
-    .filter((file) => file.status === 'done')
-    .map((file) => file.response?.file_path)
-  // 过滤掉 undefined 或 null 的文件路径
-  const validFiles = files.filter((file) => file)
-  if (validFiles.length === 0) {
-    message.error('请先上传文件')
-    return
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
+
+  // 提取已上传的文件信息
+  const items = []
+  const content_hashes = {}
+  for (const file of fileList.value) {
+    if (file.status !== 'done') continue
+    const file_path = file.response?.file_path
+    const content_hash = file.response?.content_hash
+    if (!file_path) continue
+
+    items.push(file_path)
+    if (content_hash) content_hashes[file_path] = content_hash
+
+    // 检查是否需要OCR
+    const ext = file_path.substring(file_path.lastIndexOf('.')).toLowerCase()
+    if (imageExtensions.includes(ext) && chunkParams.value.enable_ocr === 'disable') {
+      message.error({
+        content: '检测到图片文件，必须启用 OCR 才能提取文本内容。',
+        duration: 5
+      })
+      return
+    }
   }
 
-  // 验证图片文件是否启用OCR
-  const imageExtensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
-  const hasImageFiles = validFiles.some((filePath) => {
-    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase()
-    return imageExtensions.includes(ext)
-  })
-
-  if (hasImageFiles && chunkParams.value.enable_ocr === 'disable') {
-    message.error({
-      content:
-        '检测到图片文件,必须启用 OCR 才能提取文本内容。请在上方选择 OCR 方式 (RapidOCR/MinerU/MinerU Official/PP-StructureV3) 或移除图片文件。',
-      duration: 5
-    })
+  if (items.length === 0) {
+    message.error('请先上传文件')
     return
   }
 
   try {
     store.state.chunkLoading = true
-    // 构建参数
-    const params = { ...chunkParams.value }
+    const params = { ...chunkParams.value, content_hashes }
     if (autoIndex.value) {
       params.auto_index = true
       Object.assign(params, indexParams.value)
     }
-    // 调用 store 的 addFiles 方法
+
     await store.addFiles({
-      items: validFiles,
+      items,
       contentType: 'file',
       params,
-      parentId: selectedFolderId.value // 传递选中的文件夹 ID
+      parentId: selectedFolderId.value
     })
 
     emit('success')
     handleCancel()
     fileList.value = []
     sameNameFiles.value = []
-    success = true
   } catch (error) {
     console.error('文件上传失败:', error)
     message.error('文件上传失败: ' + (error.message || '未知错误'))
   } finally {
     store.state.chunkLoading = false
-  }
-
-  if (success) {
-    emit('update:visible', false)
-    emit('success')
-    fileList.value = []
-    sameNameFiles.value = [] // 清空同名文件列表
   }
 }
 </script>

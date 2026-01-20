@@ -218,10 +218,13 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
             file_type = filename.split(".")[-1].lower() if "." in filename else ""
             item_path = item  # 保持MinIO URL作为路径
 
-            # 从URL或params中获取content_hash（如果有的话）
+            # 从 content_hashes 映射中获取 content_hash
             content_hash = None
-            if params and "content_hash" in params:
-                content_hash = params["content_hash"]
+            if params and "content_hashes" in params and isinstance(params["content_hashes"], dict):
+                content_hash = params["content_hashes"].get(item)
+
+            if not content_hash:
+                raise ValueError(f"Missing content_hash for file: {item}")
 
         else:
             # 本地文件处理
