@@ -1,125 +1,151 @@
 <template>
-  <div :class="['log-viewer', { fullscreen: state.isFullscreen }]" ref="logViewer">
-    <div class="control-panel">
-      <div class="button-group">
-        <a-button
-          @click="fetchLogs"
-          :loading="state.fetching"
-          :icon="h(ReloadOutlined)"
-          class="icon-only"
-        >
-        </a-button>
-        <a-button @click="clearLogs" :icon="h(ClearOutlined)" class="icon-only"> </a-button>
-        <a-button @click="printSystemConfig">
-          <template #icon><SettingOutlined /></template>
-          系统配置
-        </a-button>
-        <a-button @click="printUserInfo">
-          <template #icon><UserOutlined /></template>
-          用户信息
-        </a-button>
-        <a-button @click="printDatabaseInfo">
-          <template #icon><DatabaseOutlined /></template>
-          知识库信息
-        </a-button>
-        <a-button @click="printAgentConfig">
-          <template #icon><RobotOutlined /></template>
-          智能体配置
-        </a-button>
-        <a-button @click="toggleDebugMode" :type="infoStore.debugMode ? 'primary' : 'default'">
-          <template #icon><BugOutlined /></template>
-          Debug 模式: {{ infoStore.debugMode ? '开启' : '关闭' }}
-        </a-button>
-        <a-button @click="toggleFullscreen">
-          <template #icon>
-            <FullscreenOutlined v-if="!state.isFullscreen" />
-            <FullscreenExitOutlined v-else />
-          </template>
-          {{ state.isFullscreen ? '退出全屏' : '全屏' }}
-        </a-button>
-        <a-tooltip :title="state.autoRefresh ? '点击停止自动刷新' : '点击开启自动刷新'">
+  <a-modal
+    v-model:open="showModal"
+    title="调试面板（请在生产环境中谨慎使用）"
+    width="90%"
+    :footer="null"
+    :maskClosable="true"
+    :destroyOnClose="true"
+    class="debug-modal"
+  >
+    <div :class="['log-viewer', { fullscreen: state.isFullscreen }]" ref="logViewer">
+      <div class="control-panel">
+        <div class="button-group">
           <a-button
-            :type="state.autoRefresh ? 'primary' : 'default'"
-            :class="{ 'auto-refresh-button': state.autoRefresh }"
-            @click="toggleAutoRefresh(!state.autoRefresh)"
+            @click="fetchLogs"
+            :loading="state.fetching"
+            :icon="h(ReloadOutlined)"
+            class="icon-only"
           >
-            <template #icon>
-              <SyncOutlined :spin="state.autoRefresh" />
-            </template>
-            自动刷新
-            <span v-if="state.autoRefresh" class="refresh-interval">(5s)</span>
           </a-button>
-        </a-tooltip>
-      </div>
-      <div class="filter-group">
-        <a-input-search
-          v-model:value="state.searchText"
-          placeholder="搜索日志..."
-          style="width: 200px; height: 32px"
-          @search="onSearch"
-        />
-        <div class="log-level-selector">
-          <div class="multi-select-cards">
-            <div
-              v-for="level in logLevels"
-              :key="level.value"
-              class="option-card"
-              :class="{
-                selected: isLogLevelSelected(level.value),
-                unselected: !isLogLevelSelected(level.value)
-              }"
-              @click="toggleLogLevel(level.value)"
+          <a-button @click="clearLogs" :icon="h(ClearOutlined)" class="icon-only"> </a-button>
+          <a-button @click="printSystemConfig">
+            <template #icon><SettingOutlined /></template>
+            系统配置
+          </a-button>
+          <a-button @click="printUserInfo">
+            <template #icon><UserOutlined /></template>
+            用户信息
+          </a-button>
+          <a-button @click="printDatabaseInfo">
+            <template #icon><DatabaseOutlined /></template>
+            知识库信息
+          </a-button>
+          <a-button @click="printAgentConfig">
+            <template #icon><RobotOutlined /></template>
+            智能体配置
+          </a-button>
+          <a-button @click="toggleDebugMode" :type="infoStore.debugMode ? 'primary' : 'default'">
+            <template #icon><BugOutlined /></template>
+            Debug 模式: {{ infoStore.debugMode ? '开启' : '关闭' }}
+          </a-button>
+          <a-button @click="toggleFullscreen">
+            <template #icon>
+              <FullscreenOutlined v-if="!state.isFullscreen" />
+              <FullscreenExitOutlined v-else />
+            </template>
+            {{ state.isFullscreen ? '退出全屏' : '全屏' }}
+          </a-button>
+          <a-tooltip :title="state.autoRefresh ? '点击停止自动刷新' : '点击开启自动刷新'">
+            <a-button
+              :type="state.autoRefresh ? 'primary' : 'default'"
+              :class="{ 'auto-refresh-button': state.autoRefresh }"
+              @click="toggleAutoRefresh(!state.autoRefresh)"
             >
-              <div class="option-content">
-                <span class="option-text">{{ level.label }}</span>
-                <div class="option-indicator">
-                  <CheckCircleOutlined v-if="isLogLevelSelected(level.value)" />
-                  <PlusCircleOutlined v-else />
+              <template #icon>
+                <SyncOutlined :spin="state.autoRefresh" />
+              </template>
+              自动刷新
+              <span v-if="state.autoRefresh" class="refresh-interval">(5s)</span>
+            </a-button>
+          </a-tooltip>
+          <a-button @click="openUserSwitcher">
+            <template #icon><SwapOutlined /></template>
+            切换用户
+          </a-button>
+        </div>
+        <div class="filter-group">
+          <a-input-search
+            v-model:value="state.searchText"
+            placeholder="搜索日志..."
+            style="width: 200px; height: 32px"
+            @search="onSearch"
+          />
+          <div class="log-level-selector">
+            <div class="multi-select-cards">
+              <div
+                v-for="level in logLevels"
+                :key="level.value"
+                class="option-card"
+                :class="{
+                  selected: isLogLevelSelected(level.value),
+                  unselected: !isLogLevelSelected(level.value)
+                }"
+                @click="toggleLogLevel(level.value)"
+              >
+                <div class="option-content">
+                  <span class="option-text">{{ level.label }}</span>
+                  <div class="option-indicator">
+                    <CheckCircleOutlined v-if="isLogLevelSelected(level.value)" />
+                    <PlusCircleOutlined v-else />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-    <div ref="logContainer" class="log-container">
-      <div v-if="processedLogs.length" class="log-lines">
-        <div
-          v-for="(log, index) in processedLogs"
-          :key="index"
-          :class="['log-line', `level-${log.level.toLowerCase()}`]"
-        >
-          <span class="timestamp">{{ formatTimestamp(log.timestamp) }}</span>
-          <span class="level">{{ log.level }}</span>
-          <span class="module">{{ log.module }}</span>
-          <span class="message">{{ log.message }}</span>
+      <div ref="logContainer" class="log-container">
+        <div v-if="processedLogs.length" class="log-lines">
+          <div
+            v-for="(log, index) in processedLogs"
+            :key="index"
+            :class="['log-line', `level-${log.level.toLowerCase()}`]"
+          >
+            <span class="timestamp">{{ formatTimestamp(log.timestamp) }}</span>
+            <span class="level">{{ log.level }}</span>
+            <span class="module">{{ log.module }}</span>
+            <span class="message">{{ log.message }}</span>
+          </div>
         </div>
+        <div v-else class="empty-logs">暂无日志</div>
       </div>
-      <div v-else class="empty-logs">暂无日志</div>
+      <p v-if="error" class="error">{{ error }}</p>
+      <!-- 用户切换 Modal -->
+      <a-modal
+        v-model:open="state.showUserSwitcher"
+        title="切换用户"
+        :confirmLoading="state.switchingUser"
+        :footer="null"
+        :bodyStyle="{ padding: '12px' }"
+      >
+        <a-list item-layout="horizontal" :data-source="state.users">
+          <template #renderItem="{ item }">
+            <a-list-item @click="switchToUser(item)" style="cursor: pointer">
+              <a-list-item-meta :title="item.username" :description="item.role" />
+            </a-list-item>
+          </template>
+          <template #empty>
+            <a-empty description="暂无用户" />
+          </template>
+        </a-list>
+      </a-modal>
     </div>
-    <p v-if="error" class="error">{{ error }}</p>
-  </div>
+  </a-modal>
 </template>
 
 <script setup>
-import {
-  ref,
-  onMounted,
-  onActivated,
-  onUnmounted,
-  nextTick,
-  reactive,
-  computed,
-  h,
-  toRaw
-} from 'vue'
+import { ref, reactive, computed, defineModel, onMounted, onActivated, onUnmounted, nextTick, toRaw, h } from 'vue'
+
+const showModal = defineModel('show')
+
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThrottleFn } from '@vueuse/core'
-import { message } from 'ant-design-vue'
+import { message, Modal, List as AList, ListItem as AListItem, ListItemMeta as AListItemMeta, Empty as AEmpty } from 'ant-design-vue'
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,
@@ -132,11 +158,12 @@ import {
   UserOutlined,
   DatabaseOutlined,
   RobotOutlined,
-  BugOutlined
+  BugOutlined,
+  SwapOutlined
 } from '@ant-design/icons-vue'
 import dayjs from '@/utils/time'
 import { configApi } from '@/apis/system_api'
-import { checkAdminPermission } from '@/stores/user'
+import { checkSuperAdminPermission } from '@/stores/user'
 
 const configStore = useConfigStore()
 const userStore = useUserStore()
@@ -162,7 +189,10 @@ const state = reactive({
   searchText: '',
   selectedLevels: logLevels.map((l) => l.value),
   rawLogs: [],
-  isFullscreen: false
+  isFullscreen: false,
+  showUserSwitcher: false,
+  users: [],
+  switchingUser: false
 })
 
 const error = ref('')
@@ -219,7 +249,7 @@ const processedLogs = computed(() => {
 
 // 获取日志数据
 const fetchLogs = async () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   state.fetching = true
   try {
@@ -245,7 +275,7 @@ const fetchLogs = async () => {
 
 // 清空日志
 const clearLogs = () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
   state.rawLogs = []
 }
 
@@ -280,7 +310,7 @@ const toggleLogLevel = (level) => {
 
 // 自动刷新
 const toggleAutoRefresh = (value) => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   if (value) {
     autoRefreshInterval = setInterval(fetchLogs, 5000)
@@ -296,7 +326,7 @@ const toggleAutoRefresh = (value) => {
 
 // 全屏切换
 const toggleFullscreen = async () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   try {
     if (!state.isFullscreen) {
@@ -329,7 +359,7 @@ const handleFullscreenChange = () => {
 }
 
 onMounted(() => {
-  if (checkAdminPermission()) {
+  if (checkSuperAdminPermission()) {
     fetchLogs()
   }
   document.addEventListener('fullscreenchange', handleFullscreenChange)
@@ -338,7 +368,7 @@ onMounted(() => {
 })
 
 onActivated(() => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   if (state.autoRefresh) {
     toggleAutoRefresh(true)
@@ -359,14 +389,14 @@ onUnmounted(() => {
 
 // 打印系统配置
 const printSystemConfig = () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
   console.log('=== 系统配置 ===')
   console.log(config)
 }
 
 // 打印用户信息
 const printUserInfo = () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
   console.log('=== 用户信息 ===')
   const userInfo = {
     token: userStore.token ? '*** (已隐藏)' : null,
@@ -385,7 +415,7 @@ const printUserInfo = () => {
 
 // 打印知识库信息
 const printDatabaseInfo = async () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   try {
     console.log('=== 知识库信息 ===')
@@ -418,13 +448,13 @@ const printDatabaseInfo = async () => {
 
 // 切换Debug模式
 const toggleDebugMode = () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
   infoStore.toggleDebugMode()
 }
 
 // 打印智能体配置
 const printAgentConfig = async () => {
-  if (!checkAdminPermission()) return
+  if (!checkSuperAdminPermission()) return
 
   try {
     console.log('=== 智能体配置信息 ===')
@@ -485,6 +515,66 @@ const printAgentConfig = async () => {
     console.error('获取智能体配置失败:', error)
     message.error('获取智能体配置失败: ' + error.message)
   }
+}
+
+// 获取用户列表
+const fetchUsers = async () => {
+  try {
+    const response = await fetch('/api/auth/users', {
+      headers: userStore.getAuthHeaders()
+    })
+    if (!response.ok) {
+      throw new Error('获取用户列表失败')
+    }
+    state.users = await response.json()
+  } catch (err) {
+    message.error(`获取用户列表失败: ${err.message}`)
+  }
+}
+
+// 打开用户选择器
+const openUserSwitcher = () => {
+  if (!checkSuperAdminPermission()) return
+  state.showUserSwitcher = true
+  fetchUsers()
+}
+
+// 切换用户
+const switchToUser = async (user) => {
+  if (!checkSuperAdminPermission()) return
+
+  // 危险操作确认
+  Modal.confirm({
+    title: '⚠️ 危险操作确认',
+    content: `确定要切换为用户 "${user.username}" 吗？此操作将被记录。`,
+    okText: '确认切换',
+    cancelText: '取消',
+    okType: 'danger',
+    onOk: async () => {
+      state.switchingUser = true
+      try {
+        const response = await fetch(`/api/auth/impersonate/${user.id}`, {
+          method: 'POST',
+          headers: userStore.getAuthHeaders()
+        })
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.detail || '切换用户失败')
+        }
+        const data = await response.json()
+        // 设置新 token
+        localStorage.setItem('user_token', data.access_token)
+        message.success(`已切换用户: ${user.username}`)
+        state.showUserSwitcher = false
+        // 刷新页面以重新初始化应用
+        window.location.reload()
+      } catch (err) {
+        message.error(`切换失败: ${err.message}`)
+      } finally {
+        state.switchingUser = false
+      }
+    }
+  })
 }
 </script>
 

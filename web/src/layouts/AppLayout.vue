@@ -1,9 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted, useTemplateRef, computed, provide } from 'vue'
+import { ref, reactive, onMounted, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { GithubOutlined } from '@ant-design/icons-vue'
 import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck } from 'lucide-vue-next'
-import { onLongPress } from '@vueuse/core'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
@@ -32,7 +31,6 @@ const isLoadingStars = ref(false)
 
 // Add state for debug modal
 const showDebugModal = ref(false)
-const htmlRefHook = useTemplateRef('htmlRefHook')
 
 // Add state for settings modal
 const showSettingsModal = ref(false)
@@ -41,21 +39,6 @@ const showSettingsModal = ref(false)
 const openSettingsModal = () => {
   showSettingsModal.value = true
 }
-
-// Setup long press for debug modal
-onLongPress(
-  htmlRefHook,
-  () => {
-    console.log('long press')
-    showDebugModal.value = true
-  },
-  {
-    delay: 1000, // 1秒长按
-    modifiers: {
-      prevent: true
-    }
-  }
-)
 
 // Handle debug modal close
 const handleDebugModalClose = () => {
@@ -181,7 +164,7 @@ provide('settingsModal', {
           </a-tooltip>
         </div>
       </div>
-      <div ref="htmlRefHook" class="fill debug-trigger"></div>
+      <div class="fill"></div>
       <div class="github nav-item">
         <a-tooltip placement="right">
           <template #title>欢迎 Star</template>
@@ -233,15 +216,6 @@ provide('settingsModal', {
   width: 100%;
   height: 100vh;
   min-width: var(--min-width);
-
-  .debug-panel {
-    position: absolute;
-    z-index: 100;
-    right: 0;
-    bottom: 50px;
-    border-radius: 20px 0 0 20px;
-    cursor: pointer;
-  }
 }
 
 div.header,
@@ -277,12 +251,7 @@ div.header,
     gap: 16px;
   }
 
-  // 添加debug触发器样式
-  .debug-trigger {
-    position: relative;
-    height: 100%;
-    width: 100%;
-    min-height: 20px;
+  .fill {
     flex-grow: 1;
   }
 
