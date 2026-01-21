@@ -1,7 +1,10 @@
 from langchain.agents import create_agent
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.tools import get_tools_from_context
+from src.agents.common.middlewares import (
+    RuntimeConfigMiddleware,
+)
+from src.services.mcp_service import get_tools_from_all_servers
 
 
 class MiniAgent(BaseAgent):
@@ -12,13 +15,16 @@ class MiniAgent(BaseAgent):
         super().__init__(**kwargs)
 
     async def get_graph(self, **kwargs):
+        """构建图"""
         context = self.context_schema.from_file(module_name=self.module_name)
+        all_mcp_tools = await get_tools_from_all_servers()
 
-        # 创建 MiniAgent
         graph = create_agent(
             model=load_chat_model(context.model),
             system_prompt=context.system_prompt,
-            tools=await get_tools_from_context(context),
+            middleware=[
+                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
+            ],
             checkpointer=await self._get_checkpointer(),
         )
 

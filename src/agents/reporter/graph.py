@@ -2,10 +2,15 @@ from dataclasses import dataclass, field
 from typing import Annotated
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, BaseContext, load_chat_model
+from src.agents.common.middlewares import (
+    RuntimeConfigMiddleware,
+)
 from src.agents.common.toolkits.mysql import get_mysql_tools
-from src.agents.common.tools import gen_tool_info, get_buildin_tools, get_tools_from_context
+from src.agents.common.tools import gen_tool_info, get_buildin_tools
+from src.services.mcp_service import get_tools_from_all_servers
 from src.utils import logger
 
 
@@ -35,13 +40,18 @@ class SqlReporterAgent(BaseAgent):
         super().__init__(**kwargs)
 
     async def get_graph(self, **kwargs):
+        """构建图"""
         context = self.context_schema.from_file(module_name=self.module_name)
+        all_mcp_tools = await get_tools_from_all_servers()
+        # 合并 MySQL 工具和 MCP 工具
+        extra_tools = get_mysql_tools() + all_mcp_tools
 
-        # 创建 SqlReporterAgent
         graph = create_agent(
-            model=load_chat_model(context.model),  # 使用 context 中的模型配置
+            model=load_chat_model(context.model),
             system_prompt=context.system_prompt,
-            tools=await get_tools_from_context(context, extra_tools=get_mysql_tools()),
+            middleware=[
+                RuntimeConfigMiddleware(extra_tools=extra_tools),
+            ],
             checkpointer=await self._get_checkpointer(),
         )
 
