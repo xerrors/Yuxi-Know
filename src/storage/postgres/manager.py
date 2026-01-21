@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import declarative_base
 
 from server.utils.singleton import SingletonMeta
-from src.storage.postgres.models_knowledge import Base as KnowledgeBase
 from src.storage.postgres.models_business import Base as BusinessBase
+from src.storage.postgres.models_knowledge import Base as KnowledgeBase
 from src.utils import logger
 
 # 合并两个 Base

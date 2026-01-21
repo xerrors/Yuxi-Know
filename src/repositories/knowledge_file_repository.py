@@ -4,8 +4,8 @@ from typing import Any
 
 from sqlalchemy import select
 
-from src.storage.postgres.models_knowledge import KnowledgeFile
 from src.storage.postgres.manager import pg_manager
+from src.storage.postgres.models_knowledge import KnowledgeFile
 
 
 class KnowledgeFileRepository:
