@@ -59,7 +59,9 @@ class GraphAdapterFactory:
         return "upload"
 
     @classmethod
-    async def create_adapter_by_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
+    async def create_adapter_by_db_id(
+        cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None
+    ) -> GraphAdapter:
         """
         根据数据库ID自动创建对应的适配器
 
@@ -81,7 +83,9 @@ class GraphAdapterFactory:
             return cls.create_adapter("upload", graph_db_instance=graph_db_instance, config={"kgdb_name": db_id})
 
     @classmethod
-    async def create_adapter_for_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
+    async def create_adapter_for_db_id(
+        cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None
+    ) -> GraphAdapter:
         """
         兼容性方法，调用 create_adapter_by_db_id
         """

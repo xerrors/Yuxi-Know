@@ -59,9 +59,10 @@ const config = reactive({
 // 初始化 config
 const initConfig = () => {
   // 后端返回的是 accessible_departments，前端使用 accessible_department_ids
-  const sourceDepts = props.modelValue.accessible_department_ids ?? props.modelValue.accessible_departments ?? []
+  const sourceDepts =
+    props.modelValue.accessible_department_ids ?? props.modelValue.accessible_departments ?? []
   config.is_shared = props.modelValue.is_shared ?? true
-  config.accessible_department_ids = sourceDepts.map(id => Number(id))
+  config.accessible_department_ids = sourceDepts.map((id) => Number(id))
   console.log('[ShareConfigForm] initConfig:', JSON.stringify(config))
 }
 
@@ -71,13 +72,17 @@ onMounted(() => {
 })
 
 // 监听本地 config 变化，同步到父组件
-watch(config, (newVal) => {
-  console.log('[ShareConfigForm] config 变化，emit:', JSON.stringify(newVal))
-  emit('update:modelValue', {
-    is_shared: newVal.is_shared,
-    accessible_department_ids: newVal.accessible_department_ids
-  })
-}, { deep: true })
+watch(
+  config,
+  (newVal) => {
+    console.log('[ShareConfigForm] config 变化，emit:', JSON.stringify(newVal))
+    emit('update:modelValue', {
+      is_shared: newVal.is_shared,
+      accessible_department_ids: newVal.accessible_department_ids
+    })
+  },
+  { deep: true }
+)
 
 // 监听共享模式变化
 watch(
@@ -106,7 +111,12 @@ const tryAutoSelectUserDept = () => {
 watch(
   () => userStore.departmentId,
   (newDeptId) => {
-    if (props.autoSelectUserDept && !config.is_shared && config.accessible_department_ids.length === 0 && newDeptId) {
+    if (
+      props.autoSelectUserDept &&
+      !config.is_shared &&
+      config.accessible_department_ids.length === 0 &&
+      newDeptId
+    ) {
       tryAutoSelectUserDept()
     }
   }
@@ -127,7 +137,11 @@ const loadDepartments = async () => {
     departments.value = res.departments || res || []
 
     // 如果需要，自动选中用户所在部门
-    if (props.autoSelectUserDept && !config.is_shared && config.accessible_department_ids.length === 0) {
+    if (
+      props.autoSelectUserDept &&
+      !config.is_shared &&
+      config.accessible_department_ids.length === 0
+    ) {
       tryAutoSelectUserDept()
     }
   } catch (e) {

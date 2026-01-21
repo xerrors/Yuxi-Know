@@ -20,7 +20,7 @@ CombinedBase = declarative_base()
 for module in [KnowledgeBase, BusinessBase]:
     for table_name in dir(module):
         table = getattr(module, table_name)
-        if isinstance(table, type) and hasattr(table, '__tablename__'):
+        if isinstance(table, type) and hasattr(table, "__tablename__"):
             setattr(CombinedBase, table_name, table)
 
 
@@ -216,7 +216,7 @@ class PostgresManager(metaclass=SingletonMeta):
     async def commit(self):
         """提交当前会话"""
         self._check_initialized()
-        async with self.get_async_session_context() as session:
+        async with self.get_async_session_context():
             pass  # commit is automatic in context manager
 
 

@@ -42,7 +42,11 @@
                     <div class="name-tag-row">
                       <h4 class="username">{{ user.username }}</h4>
                       <div
-                        v-if="user.role === 'admin' || user.role === 'superadmin' || user.department_name"
+                        v-if="
+                          user.role === 'admin' ||
+                          user.role === 'superadmin' ||
+                          user.department_name
+                        "
                         class="role-dept-badge"
                       >
                         <span class="role-icon-wrapper" :class="getRoleClass(user.role)">
@@ -193,7 +197,11 @@
           </a-form-item>
         </template>
 
-        <a-form-item v-if="userManagement.editMode && userManagement.form.role === 'superadmin'" label="角色" class="form-item">
+        <a-form-item
+          v-if="userManagement.editMode && userManagement.form.role === 'superadmin'"
+          label="角色"
+          class="form-item"
+        >
           <a-input value="超级管理员" size="large" disabled />
           <div class="help-text">超级管理员账户无法修改角色</div>
         </a-form-item>

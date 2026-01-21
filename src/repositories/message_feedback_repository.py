@@ -20,9 +20,7 @@ class MessageFeedbackRepository:
     async def list_by_message(self, message_id: int) -> list[MessageFeedback]:
         """获取消息的反馈列表"""
         async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(MessageFeedback).where(MessageFeedback.message_id == message_id)
-            )
+            result = await session.execute(select(MessageFeedback).where(MessageFeedback.message_id == message_id))
             return list(result.scalars().all())
 
     async def create(self, data: dict[str, Any]) -> MessageFeedback:
@@ -37,8 +35,7 @@ class MessageFeedbackRepository:
         async with pg_manager.get_async_session_context() as session:
             result = await session.execute(
                 select(MessageFeedback.id).where(
-                    MessageFeedback.message_id == message_id,
-                    MessageFeedback.user_id == user_id
+                    MessageFeedback.message_id == message_id, MessageFeedback.user_id == user_id
                 )
             )
             return result.scalar_one_or_none() is not None

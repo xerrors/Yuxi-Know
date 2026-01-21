@@ -4,18 +4,9 @@ from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
-from src.utils.datetime_utils import coerce_datetime, utc_isoformat, utc_now
+from src.utils.datetime_utils import coerce_datetime, format_utc_datetime, utc_now
 
 Base = declarative_base()
-
-
-def _format_utc_datetime(dt_value):
-    """Helper to format datetime to UTC ISO string, assuming naive datetimes are UTC."""
-    if dt_value is None:
-        return None
-    if dt_value.tzinfo is None:
-        dt_value = dt_value.replace(tzinfo=dt.UTC)
-    return utc_isoformat(dt_value)
 
 
 ## Removed legacy RDBMS knowledge models (KnowledgeDatabase/KnowledgeFile/KnowledgeNode)
@@ -39,7 +30,7 @@ class Department(Base):
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -72,8 +63,8 @@ class Conversation(Base):
             "agent_id": self.agent_id,
             "title": self.title,
             "status": self.status,
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
             "metadata": self.extra_metadata or {},
         }
 
@@ -106,7 +97,7 @@ class Message(Base):
             "role": self.role,
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
             "image_content": self.image_content,
@@ -150,7 +141,7 @@ class ToolCall(Base):
             "tool_output": self.tool_output,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -181,8 +172,8 @@ class ConversationStats(Base):
             "total_tokens": self.total_tokens,
             "model_used": self.model_used,
             "user_feedback": self.user_feedback or {},
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
         }
 
 
@@ -227,13 +218,13 @@ class User(Base):
             "avatar": self.avatar,
             "role": self.role,
             "department_id": self.department_id,
-            "created_at": _format_utc_datetime(self.created_at),
-            "last_login": _format_utc_datetime(self.last_login),
+            "created_at": format_utc_datetime(self.created_at),
+            "last_login": format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,
-            "last_failed_login": _format_utc_datetime(self.last_failed_login),
-            "login_locked_until": _format_utc_datetime(self.login_locked_until),
+            "last_failed_login": format_utc_datetime(self.last_failed_login),
+            "login_locked_until": format_utc_datetime(self.login_locked_until),
             "is_deleted": self.is_deleted,
-            "deleted_at": _format_utc_datetime(self.deleted_at),
+            "deleted_at": format_utc_datetime(self.deleted_at),
         }
         if include_password:
             result["password_hash"] = self.password_hash
@@ -304,7 +295,7 @@ class OperationLog(Base):
             "operation": self.operation,
             "details": self.details,
             "ip_address": self.ip_address,
-            "timestamp": _format_utc_datetime(self.timestamp),
+            "timestamp": format_utc_datetime(self.timestamp),
         }
 
 
@@ -332,7 +323,7 @@ class MessageFeedback(Base):
             "user_id": self.user_id,
             "rating": self.rating,
             "reason": self.reason,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -387,8 +378,8 @@ class MCPServer(Base):
             "disabled_tools": self.disabled_tools or [],
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
         }
 
     def to_mcp_config(self) -> dict:

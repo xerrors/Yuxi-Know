@@ -27,13 +27,12 @@ async def test_admin_can_fetch_conversations(test_client, admin_headers):
 
 async def test_admin_can_fetch_stats(test_client, admin_headers):
     """Test that all stats endpoints return 200 and don't crash on DB queries."""
-    
+
     # Test call timeseries stats for all types
     types = ["models", "agents", "tokens", "tools"]
     for stats_type in types:
         response = await test_client.get(
-            f"/api/dashboard/stats/calls/timeseries?type={stats_type}&time_range=14days", 
-            headers=admin_headers
+            f"/api/dashboard/stats/calls/timeseries?type={stats_type}&time_range=14days", headers=admin_headers
         )
         assert response.status_code == 200, f"{stats_type} stats failed: {response.text}"
         data = response.json()

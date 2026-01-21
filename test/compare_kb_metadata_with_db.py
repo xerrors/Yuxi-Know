@@ -149,7 +149,8 @@ async def main() -> None:
         print(line)
 
     print(
-        f"evaluation_result_details: json_count={json_state.result_detail_count} db_count={db_state.result_detail_count}"
+        "evaluation_result_details: "
+        f"json_count={json_state.result_detail_count} db_count={db_state.result_detail_count}"
     )
 
 

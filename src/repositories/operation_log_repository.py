@@ -17,9 +17,7 @@ class OperationLogRepository:
             result = await session.execute(select(OperationLog).where(OperationLog.id == id))
             return result.scalar_one_or_none()
 
-    async def list_by_user(
-        self, user_id: int, skip: int = 0, limit: int = 100
-    ) -> list[OperationLog]:
+    async def list_by_user(self, user_id: int, skip: int = 0, limit: int = 100) -> list[OperationLog]:
         """获取用户的操作日志列表"""
         async with pg_manager.get_async_session_context() as session:
             result = await session.execute(
@@ -43,7 +41,5 @@ class OperationLogRepository:
         from sqlalchemy import func
 
         async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(
-                select(func.count(OperationLog.id)).where(OperationLog.user_id == user_id)
-            )
+            result = await session.execute(select(func.count(OperationLog.id)).where(OperationLog.user_id == user_id))
             return result.scalar() or 0
