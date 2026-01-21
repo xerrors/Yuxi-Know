@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from src.config import config
 from src.storage.postgres.manager import pg_manager
-from src.storage.db.models_knowledge import (
+from src.storage.postgres.models_knowledge import (
     EvaluationBenchmark,
     EvaluationResult,
     EvaluationResultDetail,

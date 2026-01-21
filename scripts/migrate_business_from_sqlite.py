@@ -30,21 +30,10 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 os.environ.setdefault("YUXI_SKIP_APP_INIT", "1")
 
-from sqlalchemy import create_engine, select, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, create_engine, select, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from src import config
-from src.storage.db.models import (
-    Department as SqliteDepartment,
-    User as SqliteUser,
-    Conversation as SqliteConversation,
-    Message as SqliteMessage,
-    ToolCall as SqliteToolCall,
-    ConversationStats as SqliteConversationStats,
-    OperationLog as SqliteOperationLog,
-    MessageFeedback as SqliteMessageFeedback,
-    MCPServer as SqliteMCPServer,
-)
 from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import (
     Department,
@@ -58,6 +47,141 @@ from src.storage.postgres.models_business import (
     MCPServer,
 )
 from src.utils import logger
+
+
+# ============================================================
+# SQLite 模型定义 (仅用于迁移脚本，内部使用)
+# ============================================================
+Base = declarative_base()
+
+
+class SqliteDepartment(Base):
+    __tablename__ = "departments"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime)
+
+
+class SqliteUser(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    username = Column(String(50), unique=True, nullable=False)
+    user_id = Column(String(50), unique=True)
+    phone_number = Column(String(20))
+    avatar = Column(String(500))
+    password_hash = Column(String(255))
+    role = Column(String(20), default="user")
+    department_id = Column(Integer)
+    created_at = Column(DateTime)
+    last_login = Column(DateTime)
+    login_failed_count = Column(Integer, default=0)
+    last_failed_login = Column(DateTime)
+    login_locked_until = Column(DateTime)
+    is_deleted = Column(Integer, default=0)  # 0=否, 1=是
+    deleted_at = Column(DateTime)
+
+
+class SqliteConversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True)
+    thread_id = Column(String(50), unique=True)
+    user_id = Column(String(64), nullable=False)
+    agent_id = Column(String(50))
+    title = Column(String(255))
+    status = Column(String(20), default="active")
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+    extra_metadata = Column(Text)
+
+
+class SqliteMessage(Base):
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, nullable=False)
+    role = Column(String(20), nullable=False)
+    content = Column(Text)
+    message_type = Column(String(20), default="text")
+    created_at = Column(DateTime)
+    token_count = Column(Integer)
+    extra_metadata = Column(Text)
+    image_content = Column(Text)
+
+
+class SqliteToolCall(Base):
+    __tablename__ = "tool_calls"
+
+    id = Column(Integer, primary_key=True)
+    message_id = Column(Integer, nullable=False)
+    langgraph_tool_call_id = Column(String(100))
+    tool_name = Column(String(100))
+    tool_input = Column(Text)
+    tool_output = Column(Text)
+    status = Column(String(20), default="pending")
+    error_message = Column(Text)
+    created_at = Column(DateTime)
+
+
+class SqliteConversationStats(Base):
+    __tablename__ = "conversation_stats"
+
+    id = Column(Integer, primary_key=True)
+    conversation_id = Column(Integer, nullable=False)
+    message_count = Column(Integer, default=0)
+    total_tokens = Column(Integer, default=0)
+    model_used = Column(String(100))
+    user_feedback = Column(String(20))
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
+
+
+class SqliteOperationLog(Base):
+    __tablename__ = "operation_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer)  # 外键到 users.id
+    operation = Column(String(100))
+    details = Column(Text)
+    ip_address = Column(String(50))
+    timestamp = Column(DateTime)
+
+
+class SqliteMessageFeedback(Base):
+    __tablename__ = "message_feedbacks"
+
+    id = Column(Integer, primary_key=True)
+    message_id = Column(Integer, nullable=False)
+    user_id = Column(String(64), nullable=False)
+    rating = Column(String(20))
+    reason = Column(Text)
+    created_at = Column(DateTime)
+
+
+class SqliteMCPServer(Base):
+    __tablename__ = "mcp_servers"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    description = Column(Text)
+    transport = Column(String(20), default="sse")
+    url = Column(String(500))
+    command = Column(String(255))
+    args = Column(Text)
+    headers = Column(Text)
+    timeout = Column(Integer)
+    sse_read_timeout = Column(Integer)
+    tags = Column(Text)
+    icon = Column(String(500))
+    enabled = Column(Integer, default=1)  # 1=是, 0=否
+    disabled_tools = Column(Text)
+    created_by = Column(String(100), nullable=False)  # 创建人用户名
+    updated_by = Column(String(100), nullable=False)  # 修改人用户名
+    created_at = Column(DateTime)
+    updated_at = Column(DateTime)
 
 
 def _utc_dt(value: Any) -> datetime | None:

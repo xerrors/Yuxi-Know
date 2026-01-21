@@ -26,7 +26,7 @@ from src.storage.minio import aupload_file_to_minio
 from datetime import datetime as dt, UTC
 
 # 使用 naive datetime 以兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE 列
-_utc_now = dt.now(UTC).replace(tzinfo=None)
+_utc_now = lambda: dt.now(UTC).replace(tzinfo=None)
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
