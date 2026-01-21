@@ -6,7 +6,7 @@ from src.agents.common.middlewares import (
     RuntimeConfigMiddleware,
     inject_attachment_context,
 )
-from src.agents.common.tools import get_buildin_tools
+from src.services.mcp_service import get_tools_from_all_servers
 
 
 class ChatbotAgent(BaseAgent):
@@ -20,15 +20,16 @@ class ChatbotAgent(BaseAgent):
     async def get_graph(self, **kwargs):
         """构建图"""
         context = self.context_schema()
+        all_mcp_tools = await get_tools_from_all_servers()  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
 
         # 使用 create_agent 创建智能体
+        # 注意：tools 参数由 RuntimeConfigMiddleware 在 wrap_model_call 中动态设置
         graph = create_agent(
             model=load_chat_model(context.model),
-            tools=get_buildin_tools(),
             system_prompt=context.system_prompt,
             middleware=[
                 inject_attachment_context,  # 附件上下文注入
-                RuntimeConfigMiddleware(),  # 运行时配置应用（模型/工具/知识库/MCP/提示词）
+                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/知识库/MCP/提示词）
                 ModelRetryMiddleware(),  # 模型重试中间件
             ],
             checkpointer=await self._get_checkpointer(),

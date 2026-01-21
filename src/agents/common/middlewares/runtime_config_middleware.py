@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 
-from src import knowledge_base
+from src.utils.logging_config import logger
 from src.agents.common import load_chat_model
-from src.agents.common.tools import get_tools_from_context
+from src.agents.common.tools import get_kb_based_tools, get_buildin_tools
+from src.services.mcp_service import get_enabled_mcp_tools
 
 
 def _is_system_message(msg: Any) -> bool:
@@ -28,38 +28,32 @@ def _get_message_content(msg: Any) -> str | None:
 
 
 class RuntimeConfigMiddleware(AgentMiddleware):
+    """运行时配置中间件 - 应用模型/工具/知识库/MCP/提示词配置
+
+    注意：所有可能用到的知识库工具必须在初始化时预加载并注册到 self.tools
+    运行时根据配置从 self.tools 中筛选工具，不能动态添加新工具
+    """
+
+    def __init__(self, *, extra_tools: list[Any] | None = None):
+        """初始化中间件
+
+        Args:
+            extra_tools: 额外工具列表（从 create_agent 的 tools 参数传入）
+        """
+        super().__init__()
+        # 这里的工具只是提供给 langchain 调用，并不是真正的绑定在模型上
+        self.kb_tools = get_kb_based_tools()
+        self.tools = self.kb_tools + (extra_tools or [])
+        logger.debug(f"Initialized tools: {len(self.tools)}")
+
     async def awrap_model_call(
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
     ) -> ModelResponse:
-        # 虽然功能实现了， 但是总感觉怪怪的 TODO 优化下
         runtime_context = request.runtime.context
 
-        effective_context = runtime_context
-        blocked_knowledges: list[str] = []
-        requested_knowledges = getattr(runtime_context, "knowledges", None)
-        department_id = getattr(runtime_context, "department_id", None)
-
-        if department_id and isinstance(requested_knowledges, list) and requested_knowledges:
-            user_info = {"role": "user", "department_id": department_id}
-            accessible_databases = await knowledge_base.get_databases_by_user(user_info)
-            accessible_kb_names = {
-                db.get("name")
-                for db in accessible_databases.get("databases", [])
-                if isinstance(db, dict) and db.get("name")
-            }
-            filtered_knowledges = [kb for kb in requested_knowledges if kb in accessible_kb_names]
-            blocked_knowledges = [kb for kb in requested_knowledges if kb not in accessible_kb_names]
-            if blocked_knowledges:
-                effective_context = replace(runtime_context)
-                effective_context.knowledges = filtered_knowledges
-
         model = load_chat_model(getattr(runtime_context, "model", None))
-        tools = await get_tools_from_context(effective_context)
-
+        enabled_tools = await self.get_tools_from_context(runtime_context)
         system_prompt = getattr(runtime_context, "system_prompt", None)
-        notice = None
-        if blocked_knowledges:
-            notice = f"注意：已自动过滤无权访问的知识库：{', '.join(blocked_knowledges)}"
 
         existing_systems: list[Any] = []
         remaining: list[Any] = []
@@ -83,10 +77,33 @@ class RuntimeConfigMiddleware(AgentMiddleware):
                 new_systems.append(existing_systems.pop(idx))
                 existing_contents.pop(idx)
 
-        if notice and notice not in existing_contents:
-            new_systems.append({"role": "system", "content": notice})
-
         messages = [*new_systems, *existing_systems, *remaining]
 
-        request = request.override(model=model, tools=tools, messages=messages)
+        request = request.override(model=model, tools=enabled_tools, messages=messages)
         return await handler(request)
+
+
+    async def get_tools_from_context(self, context) -> list:
+        """从上下文配置中获取工具列表"""
+        # 1. 基础工具 (从 context.tools 中筛选)
+        selected_tools = []
+
+        if context.tools:
+            # 创建工具映射表
+            tools_map = {t.name: t for t in self.tools}
+            for tool_name in context.tools:
+                if tool_name in tools_map:
+                    selected_tools.append(tools_map[tool_name])
+
+        # 2. 知识库工具
+        if context.knowledges:
+            kb_tools = get_kb_based_tools(db_names=context.knowledges)
+            selected_tools.extend(kb_tools)
+
+        # 3. MCP 工具（使用统一入口，自动过滤 disabled_tools）
+        if context.mcps:
+            for server_name in context.mcps:
+                mcp_tools = await get_enabled_mcp_tools(server_name)
+                selected_tools.extend(mcp_tools)
+
+        return selected_tools

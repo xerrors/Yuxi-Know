@@ -4,11 +4,12 @@ from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, SummarizationMiddleware, TodoListMiddleware, dynamic_prompt
+from langchain.agents.middleware import ModelRequest, ModelRetryMiddleware, SummarizationMiddleware, TodoListMiddleware, dynamic_prompt
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.middlewares import inject_attachment_context
+from src.agents.common.middlewares import RuntimeConfigMiddleware, inject_attachment_context
 from src.agents.common.tools import get_tavily_search
+from src.services.mcp_service import get_tools_from_all_servers
 
 from .context import DeepContext
 from .prompts import DEEP_PROMPT
@@ -93,24 +94,26 @@ class DeepAgent(BaseAgent):
 
         model = load_chat_model(context.model)
         sub_model = load_chat_model(context.subagents_model)
-        tools = await self.get_tools()
+        search_tools = await self.get_tools()
+        all_mcp_tools = await get_tools_from_all_servers()
+        # 合并搜索工具和 MCP 工具
 
         # Build subagents with search tools
-        research_sub_agent = _get_research_sub_agent(tools)
+        research_sub_agent = _get_research_sub_agent(search_tools)
 
         # 使用 create_deep_agent 创建深度智能体
         graph = create_agent(
             model=model,
-            tools=tools,
             system_prompt=context.system_prompt,
             middleware=[
                 context_aware_prompt,  # 动态系统提示词
                 inject_attachment_context,  # 附件上下文注入
+                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 TodoListMiddleware(),
                 FilesystemMiddleware(),
                 SubAgentMiddleware(
                     default_model=sub_model,
-                    default_tools=tools,
+                    default_tools=search_tools,
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
                         TodoListMiddleware(),  # 子智能体也有 todo 列表
