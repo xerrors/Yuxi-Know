@@ -1,4 +1,4 @@
-"""PostgreSQL 数据库管理器 - 专门用于知识库数据"""
+"""PostgreSQL 数据库管理器 - 支持知识库和业务数据"""
 
 import json
 import os
@@ -6,16 +6,26 @@ from contextlib import asynccontextmanager
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base
 
 from server.utils.singleton import SingletonMeta
-from src.storage.db.models_knowledge import (
-    Base,
-)
+from src.storage.db.models_knowledge import Base as KnowledgeBase
+from src.storage.postgres.models_business import Base as BusinessBase
 from src.utils import logger
+
+# 合并两个 Base
+CombinedBase = declarative_base()
+
+# 继承所有表
+for module in [KnowledgeBase, BusinessBase]:
+    for table_name in dir(module):
+        table = getattr(module, table_name)
+        if isinstance(table, type) and hasattr(table, '__tablename__'):
+            setattr(CombinedBase, table_name, table)
 
 
 class PostgresManager(metaclass=SingletonMeta):
-    """PostgreSQL 数据库管理器 - 专门用于知识库元数据"""
+    """PostgreSQL 数据库管理器 - 支持知识库和业务数据"""
 
     # 知识库 PostgreSQL URL 环境变量名
     KB_DATABASE_URL_ENV = "YUXI_KNOWLEDGE_DATABASE_URL"
@@ -65,17 +75,26 @@ class PostgresManager(metaclass=SingletonMeta):
             raise RuntimeError("PostgreSQL manager not initialized. Please check configuration.")
 
     async def create_tables(self):
-        """创建所有知识库相关表"""
+        """创建所有表（知识库和业务表）"""
         self._check_initialized()
         async with self.async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("PostgreSQL tables created/checked")
+            await conn.run_sync(KnowledgeBase.metadata.create_all)
+            await conn.run_sync(BusinessBase.metadata.create_all)
+        logger.info("PostgreSQL tables created/checked (knowledge + business)")
+
+    async def create_business_tables(self):
+        """创建所有业务数据表"""
+        self._check_initialized()
+        async with self.async_engine.begin() as conn:
+            await conn.run_sync(BusinessBase.metadata.create_all)
+        logger.info("PostgreSQL business tables created/checked")
 
     async def drop_tables(self):
-        """删除所有知识库相关表（慎用！）"""
+        """删除所有表（慎用！）"""
         self._check_initialized()
         async with self.async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(BusinessBase.metadata.drop_all)
+            await conn.run_sync(KnowledgeBase.metadata.drop_all)
         logger.info("PostgreSQL tables dropped")
 
     async def ensure_knowledge_schema(self):
@@ -169,6 +188,36 @@ class PostgresManager(metaclass=SingletonMeta):
         """关闭引擎"""
         if self.async_engine:
             await self.async_engine.dispose()
+
+    async def async_check_first_run(self):
+        """检查是否首次运行（异步版本）- 检查用户表是否有数据"""
+        from sqlalchemy import func, select
+
+        self._check_initialized()
+        async with self.get_async_session_context() as session:
+            from src.storage.postgres.models_business import User
+
+            result = await session.execute(select(func.count(User.id)))
+            count = result.scalar()
+            return count == 0
+
+    async def execute(self, statement):
+        """直接执行 SQL 语句（用于迁移脚本）"""
+        self._check_initialized()
+        async with self.get_async_session_context() as session:
+            return await session.execute(statement)
+
+    async def add(self, instance):
+        """添加实例到会话（用于迁移脚本）"""
+        self._check_initialized()
+        async with self.get_async_session_context() as session:
+            session.add(instance)
+
+    async def commit(self):
+        """提交当前会话"""
+        self._check_initialized()
+        async with self.get_async_session_context() as session:
+            pass  # commit is automatic in context manager
 
 
 # 创建全局 PostgreSQL 管理器实例

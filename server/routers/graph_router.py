@@ -31,12 +31,12 @@ async def _get_graph_adapter(db_id: str) -> GraphAdapter:
     # 检查图数据库服务状态 (仅对 Upload 类型需要)
     if not graph_base.is_running():
         # 先尝试检测图谱类型，如果是不需要 graph_base 的类型则允许
-        graph_type = GraphAdapterFactory.detect_graph_type(db_id, knowledge_base)
+        graph_type = await GraphAdapterFactory.detect_graph_type(db_id, knowledge_base)
         if graph_type == "upload":
             raise HTTPException(status_code=503, detail="Graph database service is not running")
 
     # 使用工厂方法自动创建适配器
-    return GraphAdapterFactory.create_adapter_by_db_id(
+    return await GraphAdapterFactory.create_adapter_by_db_id(
         db_id=db_id, knowledge_base_manager=knowledge_base, graph_db_instance=graph_base
     )
 
@@ -83,7 +83,7 @@ async def get_graphs(current_user: User = Depends(get_admin_user)):
             )
 
         # 2. 获取 LightRAG 数据库信息
-        lightrag_dbs = knowledge_base.get_lightrag_databases()
+        lightrag_dbs = await knowledge_base.get_lightrag_databases()
         # 直接使用 LightRAG 适配器的默认 metadata
         from src.knowledge.adapters.lightrag import LightRAGGraphAdapter
 
