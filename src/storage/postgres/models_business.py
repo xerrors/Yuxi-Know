@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -374,3 +374,46 @@ class MCPServer(Base):
         if self.disabled_tools:
             config["disabled_tools"] = self.disabled_tools
         return config
+
+
+class TaskRecord(Base):
+    __tablename__ = "tasks"
+
+    id = Column(String(32), primary_key=True)
+    name = Column(String(255), nullable=False)
+    type = Column(String(64), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    progress = Column(Float, nullable=False, default=0.0)
+    message = Column(Text, nullable=False, default="")
+    payload = Column(JSON, nullable=True)
+    result = Column(JSON, nullable=True)
+    error = Column(Text, nullable=True)
+    cancel_requested = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, default=utc_now_naive, index=True)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "status": self.status,
+            "progress": self.progress,
+            "message": self.message,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+            "started_at": format_utc_datetime(self.started_at),
+            "completed_at": format_utc_datetime(self.completed_at),
+            "payload": self.payload or {},
+            "result": self.result,
+            "error": self.error,
+            "cancel_requested": bool(self.cancel_requested),
+        }
+
+    def to_summary_dict(self) -> dict[str, Any]:
+        data = self.to_dict()
+        data.pop("payload", None)
+        data.pop("result", None)
+        return data

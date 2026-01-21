@@ -14,6 +14,7 @@
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能
 - 检查非 Agent 场景下的知识库的可见情况
+- Tasker 新增删除任务的接口
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
