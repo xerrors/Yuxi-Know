@@ -2,7 +2,19 @@
 
 from typing import Any
 
-from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -103,6 +115,60 @@ class User(Base):
         self.login_failed_count = 0
         self.last_failed_login = None
         self.login_locked_until = None
+
+
+class AgentConfig(Base):
+    """智能体配置（按部门共享，多份可切换）"""
+
+    __tablename__ = "agent_configs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False, index=True)
+    agent_id = Column(String(64), nullable=False, index=True)
+
+    name = Column(String(100), nullable=False)
+    description = Column(String(255), nullable=True)
+    icon = Column(String(255), nullable=True)
+
+    pics = Column(JSON, nullable=False, default=list)
+    examples = Column(JSON, nullable=False, default=list)
+    config_json = Column(JSON, nullable=False, default=dict)
+
+    is_default = Column(Boolean, nullable=False, default=False, index=True)
+
+    created_by = Column(String(64), nullable=True)
+    updated_by = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
+
+    __table_args__ = (
+        UniqueConstraint("department_id", "agent_id", "name", name="uq_agent_configs_department_agent_name"),
+        Index(
+            "uq_agent_configs_department_agent_default",
+            "department_id",
+            "agent_id",
+            unique=True,
+            postgresql_where=is_default.is_(True),
+        ),
+    )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "department_id": self.department_id,
+            "agent_id": self.agent_id,
+            "name": self.name,
+            "description": self.description,
+            "icon": self.icon,
+            "pics": self.pics or [],
+            "examples": self.examples or [],
+            "config_json": self.config_json or {},
+            "is_default": bool(self.is_default),
+            "created_by": self.created_by,
+            "updated_by": self.updated_by,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+        }
 
 
 class Conversation(Base):

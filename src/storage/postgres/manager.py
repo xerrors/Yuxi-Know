@@ -54,6 +54,8 @@ class PostgresManager(metaclass=SingletonMeta):
                 db_url,
                 json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
                 json_deserializer=json.loads,
+                pool_pre_ping=True,
+                pool_recycle=1800,
             )
 
             # 创建异步会话工厂

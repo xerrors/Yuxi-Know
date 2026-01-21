@@ -17,6 +17,8 @@ export const useAgentStore = defineStore(
     // 智能体配置相关状态
     const agentConfig = ref({})
     const originalAgentConfig = ref({})
+    const agentConfigs = ref({})
+    const selectedAgentConfigId = ref(null)
 
     // 智能体详情相关状态
     const agentDetails = ref({}) // 存储每个智能体的详细信息（含 configurable_items）
@@ -24,6 +26,7 @@ export const useAgentStore = defineStore(
     // 加载状态
     const isLoadingAgents = ref(false)
     const isLoadingConfig = ref(false)
+    const isLoadingAgentConfigs = ref(false)
     const isLoadingAgentDetail = ref(false)
 
     // 错误状态
@@ -79,6 +82,14 @@ export const useAgentStore = defineStore(
       () => JSON.stringify(agentConfig.value) !== JSON.stringify(originalAgentConfig.value)
     )
 
+    const selectedConfigSummary = computed(() => {
+      const agentId = selectedAgentId.value
+      const configId = selectedAgentConfigId.value
+      if (!agentId || !configId) return null
+      const list = agentConfigs.value[agentId] || []
+      return list.find((c) => c.id === configId) || null
+    })
+
     // ==================== 方法 ====================
     /**
      * 初始化 store
@@ -111,11 +122,22 @@ export const useAgentStore = defineStore(
               console.warn(`Failed to fetch agent detail for ${selectedAgentId.value}:`, err)
             }
           }
-        }
 
-        if (selectedAgentId.value) {
-          if (userStore.isAdmin) {
-            await loadAgentConfig()
+          if (selectedAgentId.value) {
+            try {
+              await fetchAgentConfigs(selectedAgentId.value)
+              const list = agentConfigs.value[selectedAgentId.value] || []
+              const persistedId = selectedAgentConfigId.value
+              const persistedItem = persistedId ? list.find((c) => c.id === persistedId) : null
+              const defaultItem = list.find((c) => c.is_default) || list[0]
+              const pickId = (persistedItem || defaultItem)?.id || null
+              selectedAgentConfigId.value = pickId
+              if (pickId) {
+                await loadAgentConfig(selectedAgentId.value, pickId)
+              }
+            } catch (err) {
+              console.warn(`Failed to init agent configs for ${selectedAgentId.value}:`, err)
+            }
           }
         }
 
@@ -217,35 +239,92 @@ export const useAgentStore = defineStore(
         // 清空之前的配置
         agentConfig.value = {}
         originalAgentConfig.value = {}
+        selectedAgentConfigId.value = null
 
-        // 自动获取智能体详细信息（包含 configurable_items）
-        try {
-          await fetchAgentDetail(agentId)
-        } catch (err) {
-          console.warn(`Failed to fetch agent detail for ${agentId}:`, err)
-          // 不抛出错误，允许继续选择智能体
-        }
+        // 并行获取智能体详情和配置列表
+        await Promise.all([
+          (async () => {
+            try {
+              await fetchAgentDetail(agentId)
+            } catch (err) {
+              console.warn(`Failed to fetch agent detail for ${agentId}:`, err)
+            }
+          })(),
+          (async () => {
+            try {
+              await fetchAgentConfigs(agentId)
+              const list = agentConfigs.value[agentId] || []
+              const defaultItem = list.find((c) => c.is_default) || list[0]
+              selectedAgentConfigId.value = defaultItem ? defaultItem.id : null
+              if (selectedAgentConfigId.value) {
+                await loadAgentConfig(agentId, selectedAgentConfigId.value)
+              }
+            } catch (err) {
+              console.warn(`Failed to fetch agent configs for ${agentId}:`, err)
+            }
+          })()
+        ])
       }
     }
 
     /**
      * 加载智能体配置
      */
-    async function loadAgentConfig(agentId = null) {
-      if (!userStore.isAdmin) return
-
+    async function fetchAgentConfigs(agentId = null) {
       const targetAgentId = agentId || selectedAgentId.value
       if (!targetAgentId) return
+
+      isLoadingAgentConfigs.value = true
+      error.value = null
+
+      try {
+        const response = await agentApi.getAgentConfigs(targetAgentId)
+        agentConfigs.value[targetAgentId] = response.configs || []
+      } catch (err) {
+        console.error('Failed to load agent configs:', err)
+        handleChatError(err, 'load')
+        error.value = err.message
+        throw err
+      } finally {
+        isLoadingAgentConfigs.value = false
+      }
+    }
+
+    async function loadAgentConfig(agentId = null, configId = null) {
+      const targetAgentId = agentId || selectedAgentId.value
+      const targetConfigId = configId || selectedAgentConfigId.value
+      if (!targetAgentId || !targetConfigId) return
 
       isLoadingConfig.value = true
       error.value = null
 
       try {
-        const response = await agentApi.getAgentConfig(targetAgentId)
-        agentConfig.value = { ...response.config }
-        originalAgentConfig.value = { ...response.config }
+        const response = await agentApi.getAgentConfigProfile(targetAgentId, targetConfigId)
+        const configJson = response.config?.config_json || {}
+        const contextConfig = configJson.context || configJson
+        const loadedConfig = { ...contextConfig }
+
+        // 确保 configurableItems 已加载
+        if (!agentDetails.value[targetAgentId]) {
+          await fetchAgentDetail(targetAgentId)
+        }
+
+        // 使用 configurableItems 中的默认值补全缺失的配置项
+        const items = configurableItems.value
+        Object.keys(items).forEach((key) => {
+          const item = items[key]
+          if (loadedConfig[key] === undefined || loadedConfig[key] === null) {
+            // 只有当默认值存在时才设置
+            if (item.default !== undefined) {
+              loadedConfig[key] = item.default
+            }
+          }
+        })
+
+        agentConfig.value = loadedConfig
+        originalAgentConfig.value = { ...loadedConfig }
       } catch (err) {
-        console.error('Failed to load agent config:', err)
+        console.error('Failed to load agent config profile:', err)
         handleChatError(err, 'load')
         error.value = err.message
         throw err
@@ -254,16 +333,27 @@ export const useAgentStore = defineStore(
       }
     }
 
+    async function selectAgentConfig(configId) {
+      const targetAgentId = selectedAgentId.value
+      if (!targetAgentId || !configId) return
+      selectedAgentConfigId.value = configId
+      await loadAgentConfig(targetAgentId, configId)
+    }
+
     /**
      * 保存智能体配置
      * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
      */
     async function saveAgentConfig(options = {}) {
       const targetAgentId = selectedAgentId.value
-      if (!targetAgentId) return
+      const targetConfigId = selectedAgentConfigId.value
+      if (!targetAgentId || !targetConfigId) return
+      if (!userStore.isAdmin) return
 
       try {
-        await agentApi.saveAgentConfig(targetAgentId, agentConfig.value, options)
+        await agentApi.updateAgentConfigProfile(targetAgentId, targetConfigId, {
+          config_json: { context: agentConfig.value }
+        })
         originalAgentConfig.value = { ...agentConfig.value }
       } catch (err) {
         console.error('Failed to save agent config:', err)
@@ -271,6 +361,57 @@ export const useAgentStore = defineStore(
         error.value = err.message
         throw err
       }
+    }
+
+    async function createAgentConfigProfile({ name, setDefault = false, fromCurrent = true } = {}) {
+      const targetAgentId = selectedAgentId.value
+      if (!targetAgentId) return null
+      if (!userStore.isAdmin) return null
+      if (!name) throw new Error('配置名称不能为空')
+
+      const baseContext = fromCurrent ? { ...agentConfig.value } : {}
+
+      const response = await agentApi.createAgentConfigProfile(targetAgentId, {
+        name,
+        config_json: { context: baseContext },
+        set_default: setDefault
+      })
+
+      await fetchAgentConfigs(targetAgentId)
+      const created = response?.config
+      if (created?.id) {
+        await selectAgentConfig(created.id)
+      }
+      return created
+    }
+
+    async function deleteSelectedAgentConfigProfile() {
+      const targetAgentId = selectedAgentId.value
+      const targetConfigId = selectedAgentConfigId.value
+      if (!targetAgentId || !targetConfigId) return
+      if (!userStore.isAdmin) return
+
+      await agentApi.deleteAgentConfigProfile(targetAgentId, targetConfigId)
+      await fetchAgentConfigs(targetAgentId)
+      const list = agentConfigs.value[targetAgentId] || []
+      const defaultItem = list.find((c) => c.is_default) || list[0]
+      selectedAgentConfigId.value = defaultItem ? defaultItem.id : null
+      if (selectedAgentConfigId.value) {
+        await loadAgentConfig(targetAgentId, selectedAgentConfigId.value)
+      } else {
+        agentConfig.value = {}
+        originalAgentConfig.value = {}
+      }
+    }
+
+    async function setSelectedAgentConfigDefault() {
+      const targetAgentId = selectedAgentId.value
+      const targetConfigId = selectedAgentConfigId.value
+      if (!targetAgentId || !targetConfigId) return
+      if (!userStore.isAdmin) return
+
+      await agentApi.setAgentConfigDefault(targetAgentId, targetConfigId)
+      await fetchAgentConfigs(targetAgentId)
     }
 
     /**
@@ -310,9 +451,12 @@ export const useAgentStore = defineStore(
       defaultAgentId.value = null
       agentConfig.value = {}
       originalAgentConfig.value = {}
+      agentConfigs.value = {}
+      selectedAgentConfigId.value = null
       agentDetails.value = {}
       isLoadingAgents.value = false
       isLoadingConfig.value = false
+      isLoadingAgentConfigs.value = false
       isLoadingAgentDetail.value = false
       error.value = null
       isInitialized.value = false
@@ -330,6 +474,7 @@ export const useAgentStore = defineStore(
       isLoadingAgents,
       isLoadingConfig,
       isLoadingAgentDetail,
+      isLoadingAgentConfigs,
       error,
       isInitialized,
 
@@ -341,6 +486,9 @@ export const useAgentStore = defineStore(
       configurableItems,
       availableTools,
       hasConfigChanges,
+      agentConfigs,
+      selectedAgentConfigId,
+      selectedConfigSummary,
 
       // 方法
       initialize,
@@ -349,8 +497,13 @@ export const useAgentStore = defineStore(
       fetchDefaultAgent,
       setDefaultAgent,
       selectAgent,
+      selectAgentConfig,
+      fetchAgentConfigs,
       loadAgentConfig,
       saveAgentConfig,
+      createAgentConfigProfile,
+      deleteSelectedAgentConfigProfile,
+      setSelectedAgentConfigDefault,
       resetAgentConfig,
       updateConfigItem,
       updateAgentConfig,
@@ -363,7 +516,7 @@ export const useAgentStore = defineStore(
     persist: {
       key: 'agent-store',
       storage: localStorage,
-      pick: ['selectedAgentId']
+      pick: ['selectedAgentId', 'selectedAgentConfigId']
     }
   }
 )

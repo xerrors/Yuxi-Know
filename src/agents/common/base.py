@@ -63,19 +63,30 @@ class BaseAgent:
 
     async def stream_values(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
-        context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
+        context = self.context_schema()
+        agent_config = (input_context or {}).get("agent_config")
+        if isinstance(agent_config, dict):
+            context.update(agent_config)
+        context.update(input_context or {})
         for event in graph.astream({"messages": messages}, stream_mode="values", context=context):
             yield event["messages"]
 
     async def stream_messages(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
-        context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
+        context = self.context_schema()
+        agent_config = (input_context or {}).get("agent_config")
+        if isinstance(agent_config, dict):
+            context.update(agent_config)
+        context.update(input_context or {})
         logger.debug(f"stream_messages: {context}")
         # TODO Checkpointer 似乎还没有适配最新的 1.0 Context API
 
         # 从 input_context 中提取 attachments（如果有）
         attachments = (input_context or {}).get("attachments", [])
-        input_config = {"configurable": input_context, "recursion_limit": 300}
+        input_config = {
+            "configurable": {"thread_id": context.thread_id, "user_id": context.user_id},
+            "recursion_limit": 300,
+        }
 
         async for msg, metadata in graph.astream(
             {"messages": messages, "attachments": attachments},
@@ -87,12 +98,19 @@ class BaseAgent:
 
     async def invoke_messages(self, messages: list[str], input_context=None, **kwargs):
         graph = await self.get_graph()
-        context = self.context_schema.from_file(module_name=self.module_name, input_context=input_context)
+        context = self.context_schema()
+        agent_config = (input_context or {}).get("agent_config")
+        if isinstance(agent_config, dict):
+            context.update(agent_config)
+        context.update(input_context or {})
         logger.debug(f"invoke_messages: {context}")
 
         # 从 input_context 中提取 attachments（如果有）
         attachments = (input_context or {}).get("attachments", [])
-        input_config = {"configurable": input_context, "recursion_limit": 100}
+        input_config = {
+            "configurable": {"thread_id": context.thread_id, "user_id": context.user_id},
+            "recursion_limit": 100,
+        }
 
         msg = await graph.ainvoke(
             {"messages": messages, "attachments": attachments}, context=context, config=input_config

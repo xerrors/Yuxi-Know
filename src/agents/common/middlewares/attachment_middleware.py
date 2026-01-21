@@ -73,12 +73,21 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
             if attachment_prompt:
                 logger.debug(f"Injecting {len(attachments)} attachments into model request")
 
-                # Inject attachment context at the beginning (as SystemMessage)
-                # 注意：这是 transient update，不会修改 state，只影响本次模型调用
-                messages = [
-                    {"role": "system", "content": attachment_prompt},
-                    *request.messages,
-                ]
+                messages = list(request.messages)
+                insert_idx = 0
+                for idx, msg in enumerate(messages):
+                    if isinstance(msg, dict):
+                        role = msg.get("role") or msg.get("type")
+                        is_system = role == "system"
+                    else:
+                        msg_type = getattr(msg, "type", None) or getattr(msg, "role", None)
+                        is_system = msg_type == "system"
+
+                    if not is_system:
+                        break
+                    insert_idx = idx + 1
+
+                messages.insert(insert_idx, {"role": "system", "content": attachment_prompt})
                 request = request.override(messages=messages)
 
         return await handler(request)

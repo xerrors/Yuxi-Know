@@ -205,7 +205,7 @@ const emit = defineEmits(['open-config', 'open-agent-modal'])
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore()
 const chatUIStore = useChatUIStore()
-const { agents, selectedAgentId, defaultAgentId } = storeToRefs(agentStore)
+const { agents, selectedAgentId, defaultAgentId, selectedAgentConfigId } = storeToRefs(agentStore)
 
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('')
@@ -621,7 +621,8 @@ const sendMessage = async ({
   const requestData = {
     query: text,
     config: {
-      thread_id: threadId
+      thread_id: threadId,
+      ...(selectedAgentConfigId.value ? { agent_config_id: selectedAgentConfigId.value } : {})
     }
   }
 
@@ -871,7 +872,11 @@ const handleApprovalWithStream = async (approved) => {
 
   try {
     // 使用审批 composable 处理审批
-    const response = await handleApproval(approved, currentAgentId.value)
+    const response = await handleApproval(
+      approved,
+      currentAgentId.value,
+      selectedAgentConfigId.value
+    )
 
     if (!response) return // 如果 handleApproval 抛出错误，这里不会执行
 

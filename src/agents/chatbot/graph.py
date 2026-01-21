@@ -3,9 +3,10 @@ from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import (
+    RuntimeConfigMiddleware,
     inject_attachment_context,
 )
-from src.agents.common.tools import get_tools_from_context
+from src.agents.common.tools import get_buildin_tools
 
 
 class ChatbotAgent(BaseAgent):
@@ -18,16 +19,16 @@ class ChatbotAgent(BaseAgent):
 
     async def get_graph(self, **kwargs):
         """构建图"""
-        # 获取上下文配置
-        context = self.context_schema.from_file(module_name=self.module_name)
+        context = self.context_schema()
 
         # 使用 create_agent 创建智能体
         graph = create_agent(
-            model=load_chat_model(context.model),  # 使用 context 中的模型配置
-            tools=await get_tools_from_context(context),
+            model=load_chat_model(context.model),
+            tools=get_buildin_tools(),
             system_prompt=context.system_prompt,
             middleware=[
                 inject_attachment_context,  # 附件上下文注入
+                RuntimeConfigMiddleware(),  # 运行时配置应用（模型/工具/知识库/MCP/提示词）
                 ModelRetryMiddleware(),  # 模型重试中间件
             ],
             checkpointer=await self._get_checkpointer(),
