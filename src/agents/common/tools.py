@@ -192,12 +192,15 @@ def get_kb_based_tools(db_names: list[str] | None = None) -> list:
                 try:
                     logger.debug(f"Getting mindmap for database {db_id}")
 
-                    # 从知识库元数据中获取思维导图
-                    if db_id not in knowledge_base.global_databases_meta:
+                    from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+                    kb_repo = KnowledgeBaseRepository()
+                    kb = await kb_repo.get_by_id(db_id)
+
+                    if kb is None:
                         return f"知识库 {retriever_info['name']} 不存在"
 
-                    db_meta = knowledge_base.global_databases_meta[db_id]
-                    mindmap_data = db_meta.get("mindmap")
+                    mindmap_data = kb.mindmap
 
                     if not mindmap_data:
                         return f"知识库 {retriever_info['name']} 还没有生成思维导图。"

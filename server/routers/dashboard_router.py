@@ -378,108 +378,66 @@ async def get_knowledge_stats(
 ):
     """获取知识库统计（管理员权限）"""
     try:
-        from src.knowledge.manager import KnowledgeBaseManager
-        import json
-        import os
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
 
-        # 从知识库管理系统获取数据
-        kb_manager = KnowledgeBaseManager(work_dir="/app/saves/knowledge_base_data")
+        kb_repo = KnowledgeBaseRepository()
+        file_repo = KnowledgeFileRepository()
 
-        # 读取全局元数据文件
-        metadata_file = "/app/saves/knowledge_base_data/global_metadata.json"
-        if os.path.exists(metadata_file):
-            with open(metadata_file, encoding="utf-8") as f:
-                global_metadata = json.load(f)
+        kb_rows = await kb_repo.get_all()
+        total_databases = len(kb_rows)
 
-            databases = global_metadata.get("databases", {})
-            total_databases = len(databases)
+        databases_by_type: dict[str, int] = {}
+        files_by_type: dict[str, int] = {}
+        total_files = 0
+        total_nodes = 0
+        total_storage_size = 0
 
-            # 统计不同类型的知识库
-            databases_by_type = {}
-            files_by_type = {}
-            total_files = 0
-            total_nodes = 0
-            total_storage_size = 0
+        file_type_mapping = {
+            "txt": "文本文件",
+            "pdf": "PDF文档",
+            "docx": "Word文档",
+            "doc": "Word文档",
+            "md": "Markdown",
+            "html": "HTML网页",
+            "htm": "HTML网页",
+            "json": "JSON数据",
+            "csv": "CSV表格",
+            "xlsx": "Excel表格",
+            "xls": "Excel表格",
+            "pptx": "PowerPoint",
+            "ppt": "PowerPoint",
+            "png": "PNG图片",
+            "jpg": "JPEG图片",
+            "jpeg": "JPEG图片",
+            "gif": "GIF图片",
+            "svg": "SVG图片",
+            "mp4": "MP4视频",
+            "mp3": "MP3音频",
+            "zip": "ZIP压缩包",
+            "rar": "RAR压缩包",
+            "7z": "7Z压缩包",
+        }
 
-            # 文件类型映射到中文友好名称
-            file_type_mapping = {
-                "txt": "文本文件",
-                "pdf": "PDF文档",
-                "docx": "Word文档",
-                "doc": "Word文档",
-                "md": "Markdown",
-                "html": "HTML网页",
-                "htm": "HTML网页",
-                "json": "JSON数据",
-                "csv": "CSV表格",
-                "xlsx": "Excel表格",
-                "xls": "Excel表格",
-                "pptx": "PowerPoint",
-                "ppt": "PowerPoint",
-                "png": "PNG图片",
-                "jpg": "JPEG图片",
-                "jpeg": "JPEG图片",
-                "gif": "GIF图片",
-                "svg": "SVG图片",
-                "mp4": "MP4视频",
-                "mp3": "MP3音频",
-                "zip": "ZIP压缩包",
-                "rar": "RAR压缩包",
-                "7z": "7Z压缩包",
-            }
+        for kb in kb_rows:
+            kb_type = (kb.kb_type or "unknown").lower()
+            display_type = {
+                "lightrag": "LightRAG",
+                "faiss": "FAISS",
+                "milvus": "Milvus",
+                "qdrant": "Qdrant",
+                "elasticsearch": "Elasticsearch",
+                "unknown": "未知类型",
+            }.get(kb_type, kb.kb_type or "未知类型")
+            databases_by_type[display_type] = databases_by_type.get(display_type, 0) + 1
 
-            # 统计文件：改为基于各知识库实现中的 files_meta，更加准确
-            # 注意：部分记录可能来源于 URL，此时无法统计物理大小
-            for kb_instance in kb_manager.kb_instances.values():
-                files_meta = getattr(kb_instance, "files_meta", {}) or {}
-                total_files += len(files_meta)
-
-                for _fid, finfo in files_meta.items():
-                    file_ext = (finfo.get("file_type") or "").lower()
-                    # 统一映射显示名
-                    display_name = file_type_mapping.get(file_ext, file_ext.upper() + "文件" if file_ext else "其他")
-                    files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
-
-                    # 估算大小（如果路径存在且是本地文件）
-                    path = finfo.get("path") or ""
-                    try:
-                        if path and os.path.exists(path) and os.path.isfile(path):
-                            total_storage_size += os.path.getsize(path)
-                    except Exception:
-                        # 忽略无法访问的路径
-                        pass
-
-            # 统计知识库类型分布
-            for kb_id, kb_info in databases.items():
-                kb_type = kb_info.get("kb_type", "unknown")
-                display_type = {
-                    "lightrag": "LightRAG",
-                    "faiss": "FAISS",
-                    "milvus": "Milvus",
-                    "qdrant": "Qdrant",
-                    "elasticsearch": "Elasticsearch",
-                    "unknown": "未知类型",
-                }.get(kb_type.lower(), kb_type)
-                databases_by_type[display_type] = databases_by_type.get(display_type, 0) + 1
-
-                # 尝试从各个知识库系统获取更详细的统计
-                try:
-                    kb_instance = kb_manager.get_kb(kb_id)
-                    if kb_instance and hasattr(kb_instance, "get_stats"):
-                        stats = kb_instance.get_stats()
-                        total_nodes += stats.get("node_count", 0)
-                except Exception as e:
-                    logger.warning(f"Failed to get stats for KB {kb_id}: {e}")
-                    continue
-
-        else:
-            # 如果没有元数据文件，返回空数据
-            total_databases = 0
-            total_files = 0
-            total_nodes = 0
-            total_storage_size = 0
-            databases_by_type = {}
-            files_by_type = {}
+            files = await file_repo.list_by_db_id(kb.db_id)
+            total_files += len(files)
+            for record in files:
+                file_ext = (record.file_type or "").lower()
+                display_name = file_type_mapping.get(file_ext, file_ext.upper() + "文件" if file_ext else "其他")
+                files_by_type[display_name] = files_by_type.get(display_name, 0) + 1
+                total_storage_size += int(record.file_size or 0)
 
         return KnowledgeStats(
             total_databases=total_databases,

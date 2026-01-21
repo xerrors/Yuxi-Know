@@ -1,20 +1,17 @@
 import asyncio
-import json
 import os
-import shutil
-import tempfile
 
 from src.knowledge.base import KBNotFoundError, KnowledgeBase
 from src.knowledge.factory import KnowledgeBaseFactory
 from src.utils import logger
-from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
+from src.utils.datetime_utils import utc_isoformat
 
 
 class KnowledgeBaseManager:
     """
     知识库管理器
 
-    统一管理多种类型的知识库实例，提供统一的外部接口
+    统一管理多种类型的知识库实例，直接通过 Repository 访问数据库，不维护冗余缓存。
     """
 
     def __init__(self, work_dir: str):
@@ -30,149 +27,53 @@ class KnowledgeBaseManager:
         # 知识库实例缓存 {kb_type: kb_instance}
         self.kb_instances: dict[str, KnowledgeBase] = {}
 
-        # 全局数据库元信息 {db_id: metadata_with_kb_type}
-        self.global_databases_meta: dict[str, dict] = {}
-
         # 元数据锁
         self._metadata_lock = asyncio.Lock()
 
-        # 加载全局元数据
-        self._load_global_metadata()
-        self._normalize_global_metadata()
-
+    async def initialize(self):
+        """异步初始化"""
         # 初始化已存在的知识库实例
         self._initialize_existing_kbs()
-
-        # 迁移 query_params 到 instance metadata
-        try:
-            self._migrate_all_query_params()
-        except Exception as e:
-            logger.warning(f"Failed to migrate query_params: {e}")
-
-        # 迁移 share_config 到 global metadata
-        try:
-            self._migrate_share_config()
-        except Exception as e:
-            logger.warning(f"Failed to migrate share_config: {e}")
-
         logger.info("KnowledgeBaseManager initialized")
 
-        # 在后台运行数据一致性检测（不阻塞初始化）
-        # try:
-        #     # 尝试获取当前事件循环，如果没有则创建新的
-        #     try:
-        #         loop = asyncio.get_event_loop()
-        #         if loop.is_running():
-        #             # 如果已经在事件循环中，创建任务
-        #             asyncio.create_task(self.detect_data_inconsistencies())
-        #         else:
-        #             # 如果事件循环未运行，直接运行
-        #             loop.run_until_complete(self.detect_data_inconsistencies())
-        #     except RuntimeError:
-        #         # 没有事件循环，创建一个来运行检测
-        #         asyncio.run(self.detect_data_inconsistencies())
-        # except Exception as e:
-        #     logger.warning(f"初始化时运行数据一致性检测失败: {e}")
-
-    def _load_global_metadata(self):
-        """加载全局元数据"""
-        meta_file = os.path.join(self.work_dir, "global_metadata.json")
-
-        if os.path.exists(meta_file):
-            try:
-                with open(meta_file, encoding="utf-8") as f:
-                    data = json.load(f)
-                    self.global_databases_meta = data.get("databases", {})
-                logger.info(f"[_load_global_metadata] 加载了 {len(self.global_databases_meta)} 个数据库的全局元数据")
-                for db_id, meta in self.global_databases_meta.items():
-                    logger.debug(f"  [{db_id}] share_config: {meta.get('share_config')}")
-            except Exception as e:
-                logger.error(f"Failed to load global metadata: {e}")
-                # 尝试从备份恢复
-                backup_file = f"{meta_file}.backup"
-                if os.path.exists(backup_file):
-                    try:
-                        with open(backup_file, encoding="utf-8") as f:
-                            data = json.load(f)
-                            self.global_databases_meta = data.get("databases", {})
-                        logger.info("Loaded global metadata from backup")
-                        # 恢复备份文件
-                        shutil.copy2(backup_file, meta_file)
-                        return
-                    except Exception as backup_e:
-                        logger.error(f"Failed to load backup: {backup_e}")
-
-                # 如果加载失败，初始化为空状态
-                logger.warning("Initializing empty global metadata")
-                self.global_databases_meta = {}
-
-    def _save_global_metadata(self):
-        """保存全局元数据"""
-        self._normalize_global_metadata()
-        meta_file = os.path.join(self.work_dir, "global_metadata.json")
-        backup_file = f"{meta_file}.backup"
-
-        try:
-            # 创建简单备份
-            if os.path.exists(meta_file):
-                shutil.copy2(meta_file, backup_file)
-
-            # 准备数据
-            data = {"databases": self.global_databases_meta, "updated_at": utc_isoformat(), "version": "2.0"}
-            logger.debug(f"[_save_global_metadata] 保存数据: databases count={len(self.global_databases_meta)}")
-
-            # 原子性写入（使用临时文件）
-            with tempfile.NamedTemporaryFile(
-                mode="w", dir=os.path.dirname(meta_file), prefix=".tmp_", suffix=".json", delete=False
-            ) as tmp_file:
-                json.dump(data, tmp_file, ensure_ascii=False, indent=2)
-                temp_path = tmp_file.name
-
-            os.replace(temp_path, meta_file)
-            logger.debug("Saved global metadata")
-
-            # 验证写入
-            if os.path.exists(meta_file):
-                with open(meta_file, encoding="utf-8") as f:
-                    saved_data = json.load(f)
-                    logger.debug(f"[_save_global_metadata] 验证: 保存了 {len(saved_data.get('databases', {}))} 个数据库")
-
-        except Exception as e:
-            logger.error(f"Failed to save global metadata: {e}")
-            # 尝试恢复备份
-            if os.path.exists(backup_file):
-                try:
-                    shutil.copy2(backup_file, meta_file)
-                    logger.info("Restored global metadata from backup")
-                except Exception as restore_e:
-                    logger.error(f"Failed to restore backup: {restore_e}")
-            raise e
-
-    def _normalize_global_metadata(self) -> None:
-        """Normalize stored timestamps within the global metadata cache."""
-        for meta in self.global_databases_meta.values():
-            if "created_at" in meta:
-                try:
-                    dt_value = coerce_any_to_utc_datetime(meta.get("created_at"))
-                    if dt_value:
-                        meta["created_at"] = utc_isoformat(dt_value)
-                        continue
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning(f"Failed to normalize database metadata timestamp {meta.get('created_at')!r}: {exc}")
+    async def _load_all_metadata(self):
+        """异步加载所有元数据 - 保留兼容性的空方法，现在由 KB 实例自行加载"""
+        pass
 
     def _initialize_existing_kbs(self):
         """初始化已存在的知识库实例"""
-        kb_types_in_use = set()
-        for db_meta in self.global_databases_meta.values():
-            kb_type = db_meta.get("kb_type", "lightrag")  # 默认为lightrag
-            kb_types_in_use.add(kb_type)
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
 
-        # 为每种使用中的知识库类型创建实例
-        for kb_type in kb_types_in_use:
-            try:
-                self._get_or_create_kb_instance(kb_type)
-            except Exception as e:
-                logger.error(f"Failed to initialize {kb_type} knowledge base: {e}")
+        async def _async_init():
+            kb_repo = KnowledgeBaseRepository()
+            rows = await kb_repo.get_all()
+
+            kb_types_in_use = set()
+            for row in rows:
+                kb_type = row.kb_type or "lightrag"
+                kb_types_in_use.add(kb_type)
+
+            logger.info(f"[InitializeKB] 发现 {len(kb_types_in_use)} 种知识库类型: {kb_types_in_use}")
+
+            # 为每种使用中的知识库类型创建实例并加载元数据
+            for kb_type in kb_types_in_use:
+                try:
+                    kb_instance = self._get_or_create_kb_instance(kb_type)
+                    # 让 KB 实例自行加载元数据
+                    await kb_instance._load_metadata()
+                    logger.info(f"[InitializeKB] {kb_type} 实例已初始化")
+                except Exception as e:
+                    logger.error(f"Failed to initialize {kb_type} knowledge base: {e}")
+                    import traceback
+
+                    logger.error(traceback.format_exc())
+
+        # 在事件循环中运行异步初始化
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_async_init())
+        except RuntimeError:
+            asyncio.run(_async_init())
 
     def _get_or_create_kb_instance(self, kb_type: str) -> KnowledgeBase:
         """
@@ -199,10 +100,10 @@ class KnowledgeBaseManager:
         """
         移动文件/文件夹
         """
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.move_file(db_id, file_id, new_parent_id)
 
-    def _get_kb_for_database(self, db_id: str) -> KnowledgeBase:
+    async def _get_kb_for_database(self, db_id: str) -> KnowledgeBase:
         """
         根据数据库ID获取对应的知识库实例
 
@@ -215,55 +116,74 @@ class KnowledgeBaseManager:
         Raises:
             KBNotFoundError: 数据库不存在或知识库类型不支持
         """
-        if db_id not in self.global_databases_meta:
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        kb = await kb_repo.get_by_id(db_id)
+
+        if kb is None:
             raise KBNotFoundError(f"Database {db_id} not found")
 
-        kb_type = self.global_databases_meta[db_id].get("kb_type", "lightrag")
+        kb_type = kb.kb_type or "lightrag"
 
         if not KnowledgeBaseFactory.is_type_supported(kb_type):
             raise KBNotFoundError(f"Unsupported knowledge base type: {kb_type}")
 
         return self._get_or_create_kb_instance(kb_type)
 
+    def _get_kb_for_database_sync(self, db_id: str) -> KnowledgeBase:
+        """同步版本的 _get_kb_for_database，用于兼容同步调用"""
+        try:
+            loop = asyncio.get_running_loop()
+            return loop.run_until_complete(self._get_kb_for_database(db_id))
+        except RuntimeError:
+            return asyncio.run(self._get_kb_for_database(db_id))
+
     # =============================================================================
     # 统一的外部接口 - 与原始 LightRagBasedKB 兼容
     # =============================================================================
 
-    def get_kb(self, db_id: str) -> KnowledgeBase:
-        """Public accessor to fetch the underlying knowledge base instance by database id.
+    async def aget_kb(self, db_id: str) -> KnowledgeBase:
+        """异步获取知识库实例
 
-        This provides a simple compatibility layer for callers that expect a
-        `get_kb` method on the manager.
+        Args:
+            db_id: 数据库ID
+
+        Returns:
+            知识库实例
         """
-        return self._get_kb_for_database(db_id)
+        return await self._get_kb_for_database(db_id)
 
-    def get_databases(self) -> dict:
+    def get_kb(self, db_id: str) -> KnowledgeBase:
+        """同步获取知识库实例（兼容性方法，用于同步上下文）
+
+        Args:
+            db_id: 数据库ID
+
+        Returns:
+            知识库实例
+        """
+        return self._get_kb_for_database_sync(db_id)
+
+    async def get_databases(self) -> dict:
         """获取所有数据库信息"""
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        rows = await kb_repo.get_all()
+
         all_databases = []
-
-        # 收集所有知识库的数据库信息
-        for kb_type, kb_instance in self.kb_instances.items():
-            kb_databases = kb_instance.get_databases()["databases"]
-            
-            # 合并全局元数据
-            for db in kb_databases:
-                db_id = db.get("db_id")
-                if db_id and db_id in self.global_databases_meta:
-                    global_meta = self.global_databases_meta[db_id]
-                    
-                    # 合并 share_config
-                    db["share_config"] = global_meta.get("share_config", {"is_shared": True, "accessible_departments": []})
-                    
-                    # 合并 additional_params
-                    # 注意：kb_instance 返回的 metadata 字段可能已经包含了部分参数，
-                    # 但 global_databases_meta 中的 additional_params 是我们在 create/update 时保存的
-                    db["additional_params"] = global_meta.get("additional_params", {})
-
-            all_databases.extend(kb_databases)
-
+        for row in rows:
+            kb_instance = self._get_or_create_kb_instance(row.kb_type or "lightrag")
+            db_info = kb_instance.get_database_info(row.db_id)
+            if db_info:
+                # 补充 share_config 和 additional_params
+                db_info["share_config"] = row.share_config or {"is_shared": True, "accessible_departments": []}
+                db_info["additional_params"] = row.additional_params or {}
+                all_databases.append(db_info)
         return {"databases": all_databases}
 
-    def check_accessible(self, user: dict, db_id: str) -> bool:
+    async def check_accessible(self, user: dict, db_id: str) -> bool:
         """检查用户是否有权限访问数据库
 
         Args:
@@ -277,10 +197,14 @@ class KnowledgeBaseManager:
         if user.get("role") == "superadmin":
             return True
 
-        if db_id not in self.global_databases_meta:
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        kb = await kb_repo.get_by_id(db_id)
+        if kb is None:
             return False
 
-        share_config = self.global_databases_meta[db_id].get("share_config", {})
+        share_config = kb.share_config or {}
         is_shared = share_config.get("is_shared", True)
 
         # 如果是全员共享，则有权限
@@ -301,12 +225,9 @@ class KnowledgeBaseManager:
         except (ValueError, TypeError):
             return False
 
-        if user_department_id in accessible_departments:
-            return True
+        return user_department_id in accessible_departments
 
-        return False
-
-    def get_databases_by_user(self, user: dict) -> dict:
+    async def get_databases_by_user(self, user: dict) -> dict:
         """根据用户权限获取知识库列表
 
         Args:
@@ -315,7 +236,7 @@ class KnowledgeBaseManager:
         Returns:
             过滤后的知识库列表
         """
-        all_databases = self.get_databases().get("databases", [])
+        all_databases = (await self.get_databases()).get("databases", [])
 
         # 超级管理员可以看到所有知识库
         if user.get("role") == "superadmin":
@@ -328,32 +249,40 @@ class KnowledgeBaseManager:
             if not db_id:
                 continue
 
-            if self.check_accessible(user, db_id):
+            if await self.check_accessible(user, db_id):
                 filtered_databases.append(db)
 
         return {"databases": filtered_databases}
 
-    def database_name_exists(self, database_name: str) -> bool:
-        """检查知识库名称是否已存在
+    async def database_name_exists(self, database_name: str) -> bool:
+        """检查知识库名称是否已存在"""
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+        from src.storage.postgres.manager import pg_manager
 
-        Args:
-            database_name: 要检查的知识库名称
+        # 确保 pg_manager 已初始化
+        if not pg_manager._initialized:
+            pg_manager.initialize()
 
-        Returns:
-            True 如果名称已存在，False 否则
-        """
-        for db_id, meta in self.global_databases_meta.items():
-            if meta.get("name", "").lower() == database_name.lower():
+        kb_repo = KnowledgeBaseRepository()
+        rows = await kb_repo.get_all()
+        for row in rows:
+            if (row.name or "").lower() == database_name.lower():
                 return True
         return False
 
     async def create_folder(self, db_id: str, folder_name: str, parent_id: str = None) -> dict:
         """Create a folder in the database."""
-        kb_instance = self._get_kb_for_database(db_id)
-        return kb_instance.create_folder(db_id, folder_name, parent_id)
+        kb_instance = await self._get_kb_for_database(db_id)
+        return await kb_instance.create_folder(db_id, folder_name, parent_id)
 
     async def create_database(
-        self, database_name: str, description: str, kb_type: str = "lightrag", embed_info: dict | None = None, share_config: dict | None = None, **kwargs
+        self,
+        database_name: str,
+        description: str,
+        kb_type: str = "lightrag",
+        embed_info: dict | None = None,
+        share_config: dict | None = None,
+        **kwargs,
     ) -> dict:
         """
         创建数据库
@@ -374,49 +303,50 @@ class KnowledgeBaseManager:
             raise ValueError(f"Unsupported knowledge base type: {kb_type}. Available types: {available_types}")
 
         # 检查名称是否已存在
-        if self.database_name_exists(database_name):
+        if await self.database_name_exists(database_name):
             raise ValueError(f"知识库名称 '{database_name}' 已存在，请使用其他名称")
-            
+
         # 默认共享配置
         if share_config is None:
             share_config = {"is_shared": True, "accessible_departments": []}
 
         kb_instance = self._get_or_create_kb_instance(kb_type)
-
-        # 注意：不再传递 share_config 给 kb_instance，因为它由 Manager 管理
-        # 但为了兼容性，如果 kb_instance.create_database 签名还没改，可能会有问题？
-        # Base KB create_database 接受 **kwargs，所以没问题。我们这里不传 share_config 给它。
-        db_info = kb_instance.create_database(database_name, description, embed_info, **kwargs)
+        db_info = await kb_instance.create_database(database_name, description, embed_info, **kwargs)
         db_id = db_info["db_id"]
 
-        async with self._metadata_lock:
-            self.global_databases_meta[db_id] = {
-                "name": database_name,
-                "description": description,
-                "kb_type": kb_type,
-                "created_at": utc_isoformat(),
-                "additional_params": kwargs.copy(),
-                "share_config": share_config,
-            }
-            logger.debug(f"[create_database] 保存 global_databases_meta[{db_id}]: {self.global_databases_meta[db_id]}")
-            self._save_global_metadata()
-            logger.debug(f"[create_database] _save_global_metadata 完成")
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        updated = await kb_repo.update(db_id, {"share_config": share_config})
+        if updated is None:
+            await kb_repo.create(
+                {
+                    "db_id": db_id,
+                    "name": database_name,
+                    "description": description,
+                    "kb_type": kb_type,
+                    "embed_info": embed_info,
+                    "llm_info": db_info.get("llm_info"),
+                    "additional_params": kwargs.copy(),
+                    "share_config": share_config,
+                }
+            )
 
         logger.info(f"Created {kb_type} database: {database_name} ({db_id}) with {kwargs}")
-        # 返回信息中包含 share_config
         db_info["share_config"] = share_config
         return db_info
 
     async def delete_database(self, db_id: str) -> dict:
         """删除数据库"""
-        try:
-            kb_instance = self._get_kb_for_database(db_id)
-            result = kb_instance.delete_database(db_id)
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
 
-            async with self._metadata_lock:
-                if db_id in self.global_databases_meta:
-                    del self.global_databases_meta[db_id]
-                    self._save_global_metadata()
+        try:
+            kb_instance = await self._get_kb_for_database(db_id)
+            result = await kb_instance.delete_database(db_id)
+
+            # 删除数据库记录
+            kb_repo = KnowledgeBaseRepository()
+            await kb_repo.delete(db_id)
 
             return result
         except KBNotFoundError as e:
@@ -427,153 +357,106 @@ class KnowledgeBaseManager:
         self, db_id: str, item: str, params: dict | None = None, operator_id: str | None = None
     ) -> dict:
         """Add file record to metadata"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.add_file_record(db_id, item, params, operator_id)
 
     async def parse_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
         """Parse file to Markdown"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.parse_file(db_id, file_id, operator_id)
 
     async def index_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
         """Index parsed file"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.index_file(db_id, file_id, operator_id)
 
     async def update_file_params(self, db_id: str, file_id: str, params: dict, operator_id: str | None = None) -> None:
         """Update file processing params"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         await kb_instance.update_file_params(db_id, file_id, params, operator_id)
 
     async def aquery(self, query_text: str, db_id: str, **kwargs) -> str:
         """异步查询知识库"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.aquery(query_text, db_id, **kwargs)
 
     async def export_data(self, db_id: str, format: str = "zip", **kwargs) -> str:
         """导出知识库数据"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.export_data(db_id, format=format, **kwargs)
 
     def query(self, query_text: str, db_id: str, **kwargs) -> str:
         """同步查询知识库（兼容性方法）"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = self._get_kb_for_database_sync(db_id)
         return kb_instance.query(query_text, db_id, **kwargs)
 
-    def _migrate_all_query_params(self):
-        """将所有 query_params 从 global metadata 迁移到 instance metadata"""
-        migration_count = 0
-
-        for db_id, global_meta in list(self.global_databases_meta.items()):
-            if "query_params" not in global_meta:
-                continue
-
-            kb_type = global_meta.get("kb_type", "lightrag")
-            kb_instance = self.kb_instances.get(kb_type)
-
-            if not kb_instance or db_id not in kb_instance.databases_meta:
-                logger.warning(f"Cannot migrate query_params for {db_id}, skipping")
-                continue
-
-            # 检查是否已迁移
-            if "query_params" in kb_instance.databases_meta[db_id]:
-                # 已经迁移过，直接清理 global metadata 并跳过
-                del global_meta["query_params"]
-                continue
-
-            # 执行迁移
-            kb_instance.databases_meta[db_id]["query_params"] = global_meta["query_params"]
-            del global_meta["query_params"]
-            migration_count += 1
-
-        if migration_count > 0:
-            self._save_global_metadata()
-            logger.info(f"Successfully migrated query_params for {migration_count} databases")
-
-    def _migrate_share_config(self):
-        """将 share_config 从 instance metadata 迁移到 global metadata"""
-        migration_count = 0
-        
-        for kb_type, kb_instance in self.kb_instances.items():
-            for db_id, instance_meta in kb_instance.databases_meta.items():
-                if db_id not in self.global_databases_meta:
-                    continue
-                
-                global_meta = self.global_databases_meta[db_id]
-                
-                # 如果 global metadata 中没有 share_config，但 instance metadata 中有
-                if "share_config" not in global_meta and "share_config" in instance_meta:
-                    global_meta["share_config"] = instance_meta["share_config"]
-                    # 可选：从 instance metadata 中移除？暂时保留以防万一，或者清理
-                    # del instance_meta["share_config"] 
-                    migration_count += 1
-        
-        if migration_count > 0:
-            self._save_global_metadata()
-            # 保存所有修改过的实例元数据
-            for kb_instance in self.kb_instances.values():
-                kb_instance._save_metadata()
-            logger.info(f"Successfully migrated share_config for {migration_count} databases")
-
-    def get_database_info(self, db_id: str) -> dict | None:
+    async def get_database_info(self, db_id: str) -> dict | None:
         """获取数据库详细信息"""
-        try:
-            kb_instance = self._get_kb_for_database(db_id)
-            db_info = kb_instance.get_database_info(db_id)
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
 
-            # 添加全局元数据中的additional_params信息
-            if db_id in self.global_databases_meta:
-                global_meta = self.global_databases_meta[db_id]
-                additional_params = global_meta.get("additional_params", {}).copy()
-
-                # 确保 auto_generate_questions 存在，默认为 False
-                if "auto_generate_questions" not in additional_params:
-                    additional_params["auto_generate_questions"] = False
-
-                db_info["additional_params"] = additional_params
-                
-                # 添加 share_config
-                db_info["share_config"] = global_meta.get("share_config", {"is_shared": True, "accessible_departments": []})
-
-            return db_info
-        except KBNotFoundError:
+        kb_repo = KnowledgeBaseRepository()
+        kb = await kb_repo.get_by_id(db_id)
+        if kb is None:
             return None
+
+        try:
+            kb_instance = await self._get_kb_for_database(db_id)
+            db_info = kb_instance.get_database_info(db_id)
+        except KBNotFoundError:
+            db_info = {
+                "db_id": db_id,
+                "name": kb.name,
+                "description": kb.description,
+                "kb_type": kb.kb_type,
+                "files": {},
+                "row_count": 0,
+                "status": "已连接",
+            }
+
+        # 添加数据库中的附加字段
+        db_info["additional_params"] = kb.additional_params or {}
+        db_info["share_config"] = kb.share_config or {"is_shared": True, "accessible_departments": []}
+        db_info["mindmap"] = kb.mindmap
+        db_info["sample_questions"] = kb.sample_questions or []
+        db_info["query_params"] = kb.query_params
+
+        return db_info
 
     async def delete_folder(self, db_id: str, folder_id: str) -> None:
         """递归删除文件夹"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         await kb_instance.delete_folder(db_id, folder_id)
 
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """删除文件"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
 
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """更新内容（重新分块）"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.update_content(db_id, file_ids, params or {})
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.get_file_basic_info(db_id, file_id)
 
     async def get_file_content(self, db_id: str, file_id: str) -> dict:
         """获取文件内容信息（chunks和lines）"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.get_file_content(db_id, file_id)
 
     async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """获取文件完整信息（基本信息+内容信息）- 保持向后兼容"""
-        kb_instance = self._get_kb_for_database(db_id)
+        kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.get_file_info(db_id, file_id)
 
     def get_db_upload_path(self, db_id: str | None = None) -> str:
         """获取数据库上传路径"""
         if db_id:
             try:
-                kb_instance = self._get_kb_for_database(db_id)
+                kb_instance = self._get_kb_for_database_sync(db_id)
                 return kb_instance.get_db_upload_path(db_id)
             except KBNotFoundError:
                 # 如果数据库不存在，创建通用上传路径
@@ -589,7 +472,7 @@ class KnowledgeBaseManager:
         if not db_id or not file_name:
             return False
         try:
-            kb_instance = self._get_kb_for_database(db_id)
+            kb_instance = await self._get_kb_for_database(db_id)
         except KBNotFoundError:
             return False
 
@@ -622,7 +505,7 @@ class KnowledgeBaseManager:
         if not db_id or not filename:
             return []
         try:
-            kb_instance = self._get_kb_for_database(db_id)
+            kb_instance = await self._get_kb_for_database(db_id)
         except KBNotFoundError:
             return []
 
@@ -657,7 +540,7 @@ class KnowledgeBaseManager:
             return False
 
         try:
-            kb_instance = self._get_kb_for_database(db_id)
+            kb_instance = await self._get_kb_for_database(db_id)
         except KBNotFoundError:
             return False
 
@@ -672,40 +555,37 @@ class KnowledgeBaseManager:
         return False
 
     async def update_database(
-        self, db_id: str, name: str, description: str, llm_info: dict = None, additional_params: dict | None = None, share_config: dict | None = None
+        self,
+        db_id: str,
+        name: str,
+        description: str,
+        llm_info: dict = None,
+        additional_params: dict | None = None,
+        share_config: dict | None = None,
     ) -> dict:
         """更新数据库"""
-        kb_instance = self._get_kb_for_database(db_id)
-        # 注意：这里 kb_instance.update_database 返回的是实例的元数据，不包含 global metadata 中的 share_config
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_instance = await self._get_kb_for_database(db_id)
         kb_instance.update_database(db_id, name, description, llm_info)
 
-        async with self._metadata_lock:
-            if db_id in self.global_databases_meta:
-                self.global_databases_meta[db_id]["name"] = name
-                self.global_databases_meta[db_id]["description"] = description
+        # 准备更新数据
+        update_data: dict = {
+            "name": name,
+            "description": description,
+        }
+        if llm_info is not None:
+            update_data["llm_info"] = llm_info
+        if additional_params is not None:
+            update_data["additional_params"] = additional_params
+        if share_config is not None:
+            update_data["share_config"] = share_config
 
-                # 合并现有的 additional_params 和新的 additional_params
-                existing_additional_params = self.global_databases_meta[db_id].get("additional_params", {})
-                if additional_params:
-                    existing_additional_params.update(additional_params)
-                self.global_databases_meta[db_id]["additional_params"] = existing_additional_params
+        # 保存到数据库
+        kb_repo = KnowledgeBaseRepository()
+        await kb_repo.update(db_id, update_data)
 
-                # 清理旧的 top-level key (如果存在)
-                self.global_databases_meta[db_id].pop("auto_generate_questions", None)
-
-                # 更新共享配置
-                if share_config is not None:
-                    existing_share_config = self.global_databases_meta[db_id].get("share_config", {})
-                    logger.debug(f"[update_database] 原始 share_config: {existing_share_config}")
-                    logger.debug(f"[update_database] 新 share_config: {share_config}")
-                    existing_share_config.update(share_config)
-                    self.global_databases_meta[db_id]["share_config"] = existing_share_config
-                    logger.debug(f"[update_database] 合并后 share_config: {existing_share_config}")
-
-                self._save_global_metadata()
-
-        # 返回包含 global metadata 的完整信息
-        return self.get_database_info(db_id)
+        return await self.get_database_info(db_id)
 
     def get_retrievers(self) -> dict[str, dict]:
         """获取所有检索器"""
@@ -737,20 +617,27 @@ class KnowledgeBaseManager:
             }
         return info
 
-    def get_statistics(self) -> dict:
+    async def get_statistics(self) -> dict:
         """获取统计信息"""
-        stats = {"total_databases": len(self.global_databases_meta), "kb_types": {}, "total_files": 0}
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        rows = await kb_repo.get_all()
+
+        stats = {"total_databases": len(rows), "kb_types": {}, "total_files": 0}
 
         # 按知识库类型统计
-        for db_meta in self.global_databases_meta.values():
-            kb_type = db_meta.get("kb_type", "lightrag")
+        for row in rows:
+            kb_type = row.kb_type or "lightrag"
             if kb_type not in stats["kb_types"]:
                 stats["kb_types"][kb_type] = 0
             stats["kb_types"][kb_type] += 1
 
         # 统计文件总数
-        for kb_instance in self.kb_instances.values():
-            stats["total_files"] += len(kb_instance.files_meta)
+        file_repo = KnowledgeFileRepository()
+        files = await file_repo.get_all()
+        stats["total_files"] = len(files)
 
         return stats
 
@@ -771,34 +658,29 @@ class KnowledgeBaseManager:
         Raises:
             ValueError: 如果数据库不存在或不是 lightrag 类型
         """
-        try:
-            # 检查数据库是否存在
-            if db_id not in self.global_databases_meta:
-                logger.error(f"Database {db_id} not found in global metadata")
-                return None
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
 
-            # 检查是否是 LightRAG 类型
-            kb_type = self.global_databases_meta[db_id].get("kb_type", "lightrag")
-            if kb_type != "lightrag":
-                logger.error(f"Database {db_id} is not a LightRAG type (actual type: {kb_type})")
-                raise ValueError(f"Database {db_id} is not a LightRAG knowledge base")
+        kb_repo = KnowledgeBaseRepository()
+        kb = await kb_repo.get_by_id(db_id)
 
-            # 获取 LightRAG 知识库实例
-            kb_instance = self._get_kb_for_database(db_id)
-
-            # 如果不是 LightRagKB 实例，返回错误
-            if not hasattr(kb_instance, "_get_lightrag_instance"):
-                logger.error(f"Knowledge base instance for {db_id} is not LightRagKB")
-                return None
-
-            # 调用 LightRagKB 的方法获取 LightRAG 实例
-            return await kb_instance._get_lightrag_instance(db_id)
-
-        except Exception as e:
-            logger.error(f"Failed to get LightRAG instance for {db_id}: {e}")
+        if kb is None:
+            logger.error(f"Database {db_id} not found in global metadata")
             return None
 
-    def is_lightrag_database(self, db_id: str) -> bool:
+        kb_type = kb.kb_type or "lightrag"
+        if kb_type != "lightrag":
+            logger.error(f"Database {db_id} is not a LightRAG type (actual type: {kb_type})")
+            raise ValueError(f"Database {db_id} is not a LightRAG knowledge base")
+
+        kb_instance = await self._get_kb_for_database(db_id)
+
+        if not hasattr(kb_instance, "_get_lightrag_instance"):
+            logger.error(f"Knowledge base instance for {db_id} is not LightRagKB")
+            return None
+
+        return await kb_instance._get_lightrag_instance(db_id)
+
+    async def is_lightrag_database(self, db_id: str) -> bool:
         """
         检查数据库是否是 LightRAG 类型
 
@@ -808,27 +690,23 @@ class KnowledgeBaseManager:
         Returns:
             是否是 LightRAG 类型的数据库
         """
-        if db_id not in self.global_databases_meta:
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        kb = await kb_repo.get_by_id(db_id)
+        if kb is None:
             return False
+        return (kb.kb_type or "lightrag") == "lightrag"
 
-        kb_type = self.global_databases_meta[db_id].get("kb_type", "lightrag")
-        return kb_type == "lightrag"
-
-    def get_lightrag_databases(self) -> list[dict]:
+    async def get_lightrag_databases(self) -> list[dict]:
         """
         获取所有 LightRAG 类型的数据库
 
         Returns:
             LightRAG 数据库列表
         """
-        lightrag_databases = []
-
-        all_databases = self.get_databases()["databases"]
-        for db in all_databases:
-            if db.get("kb_type", "lightrag") == "lightrag":
-                lightrag_databases.append(db)
-
-        return lightrag_databases
+        all_databases = (await self.get_databases())["databases"]
+        return [db for db in all_databases if db.get("kb_type", "lightrag") == "lightrag"]
 
     # =============================================================================
     # 数据一致性检测方法
@@ -866,6 +744,8 @@ class KnowledgeBaseManager:
 
     async def _detect_milvus_inconsistencies(self) -> dict:
         """检测 Milvus 中的数据不一致"""
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
         inconsistencies = {"missing_collections": [], "missing_files": []}
 
         milvus_kb = self.kb_instances["milvus"]
@@ -876,16 +756,40 @@ class KnowledgeBaseManager:
             # 获取 Milvus 中所有实际的集合
             actual_collection_names = set(utility.list_collections(using=milvus_kb.connection_alias))
 
-            # 获取 metadata 中记录的数据库ID
-            metadata_collection_names = set(milvus_kb.databases_meta.keys())
+            # 从数据库获取所有已知的数据库ID
+            kb_repo = KnowledgeBaseRepository()
+            rows = await kb_repo.get_all()
+            all_known_db_ids = {row.db_id for row in rows}
+
+            lightrag_suffixes = ["_chunks", "_relationships", "_entities"]
 
             # 找出存在于 Milvus 但不在 metadata 中的集合
-            missing_collections = actual_collection_names - metadata_collection_names
-            for collection_name in missing_collections:
+            # missing_collections = actual_collection_names - metadata_collection_names
+            for collection_name in actual_collection_names:
                 # 跳过一些系统集合
                 if not collection_name.startswith("kb_"):
                     continue
 
+                # 检查集合是否属于已知数据库
+                is_known = False
+
+                # 1. 精确匹配 (Milvus 类型的知识库)
+                if collection_name in all_known_db_ids:
+                    is_known = True
+                # 2. 后缀匹配 (LightRAG 类型的知识库)
+                else:
+                    for suffix in lightrag_suffixes:
+                        if collection_name.endswith(suffix):
+                            potential_db_id = collection_name[: -len(suffix)]
+                            if potential_db_id in all_known_db_ids:
+                                is_known = True
+                                break
+
+                # 如果是已知集合，跳过
+                if is_known:
+                    continue
+
+                # 如果是未知集合，记录下来
                 collection_info = {"collection_name": collection_name, "detected_at": utc_isoformat()}
 
                 # 尝试获取集合的基本信息
@@ -904,6 +808,9 @@ class KnowledgeBaseManager:
                     f"发现 Milvus 中存在但 metadata 中缺失的集合: {collection_name} "
                     f"(实体数: {collection_info['count']})"
                 )
+
+            # 获取 metadata 中记录的数据库ID（仅 Milvus 类型，用于检查文件一致性）
+            metadata_collection_names = set(milvus_kb.databases_meta.keys())
 
             # 检查文件级别的不一致（针对已知的数据库）
             for db_id in metadata_collection_names:

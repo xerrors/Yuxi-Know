@@ -866,22 +866,26 @@ async def save_agent_config(
             # 获取用户有权访问的知识库 ID
             try:
                 user_info = {"role": current_user.role, "department_id": current_user.department_id}
-                accessible_databases = knowledge_base.get_databases_by_user(user_info)
-                accessible_db_ids = {db.get("db_id") for db in accessible_databases.get("databases", []) if db.get("db_id")}
+                accessible_databases = await knowledge_base.get_databases_by_user(user_info)
+                accessible_db_ids = {
+                    db.get("db_id") for db in accessible_databases.get("databases", []) if db.get("db_id")
+                }
             except Exception as db_error:
                 logger.warning(f"获取知识库列表失败: {db_error}")
                 # 如果获取失败，superadmin 可以访问所有，非 superadmin 无法访问任何
                 if current_user.role != "superadmin":
                     raise HTTPException(status_code=500, detail="无法获取知识库列表")
-                accessible_db_ids = set(knowledge_base.global_databases_meta.keys())
+                # 回退：获取所有数据库 ID
+                from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
+                kb_repo = KnowledgeBaseRepository()
+                rows = await kb_repo.get_all()
+                accessible_db_ids = {row.db_id for row in rows}
 
             # 检查配置中的知识库是否都可用
             invalid_kbs = [kb for kb in config["knowledges"] if kb not in accessible_db_ids]
             if invalid_kbs:
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"无权访问以下知识库: {', '.join(invalid_kbs)}"
-                )
+                raise HTTPException(status_code=403, detail=f"无权访问以下知识库: {', '.join(invalid_kbs)}")
         # === 校验结束 ===
 
         # 使用配置类的save_to_file方法保存配置
