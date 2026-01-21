@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from server.services.tasker import TaskContext, tasker
+from src.services.task_service import TaskContext, tasker
 from src.knowledge import knowledge_base
 from src.models import select_model
 from src.repositories.evaluation_repository import EvaluationRepository

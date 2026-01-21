@@ -14,6 +14,7 @@ from src import config
 from src.repositories.evaluation_repository import EvaluationRepository
 from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
 from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+from src.repositories.task_repository import TaskRepository
 from src.utils import logger
 
 
@@ -64,7 +65,9 @@ async def rollback_all() -> None:
     eval_repo = EvaluationRepository()
     kb_repo = KnowledgeBaseRepository()
     file_repo = KnowledgeFileRepository()
+    task_repo = TaskRepository()
 
+    await task_repo.delete_all()
     await eval_repo.delete_all()
 
     rows = await kb_repo.get_all()
@@ -96,6 +99,7 @@ async def migrate(dry_run: bool, execute: bool, rollback: bool) -> None:
     kb_repo = KnowledgeBaseRepository()
     file_repo = KnowledgeFileRepository()
     eval_repo = EvaluationRepository()
+    task_repo = TaskRepository()
 
     kb_rows: list[dict[str, Any]] = []
     file_rows: list[tuple[str, dict[str, Any]]] = []
@@ -234,9 +238,13 @@ async def migrate(dry_run: bool, execute: bool, rollback: bool) -> None:
                         )
                     )
 
+    tasks_json_path = os.path.join(config.save_dir, "tasks", "tasks.json")
+    task_rows: list[dict[str, Any]] = _load_json(tasks_json_path).get("tasks", []) or []
+
     logger.info(
         f"Prepared: knowledge_bases={len(kb_rows)}, knowledge_files={len(file_rows)}, "
-        f"benchmarks={len(benchmark_rows)}, results={len(result_rows)}, result_details={len(result_detail_rows)}"
+        f"benchmarks={len(benchmark_rows)}, results={len(result_rows)}, result_details={len(result_detail_rows)}, "
+        f"tasks={len(task_rows)}"
     )
 
     if dry_run and not execute:
@@ -285,6 +293,31 @@ async def migrate(dry_run: bool, execute: bool, rollback: bool) -> None:
 
     for task_id, idx, data in result_detail_rows:
         await eval_repo.upsert_result_detail(task_id=task_id, query_index=idx, data=data)
+
+    for item in task_rows:
+        task_id = item.get("id")
+        if not task_id:
+            continue
+        payload = item.get("payload") or {}
+        result = item.get("result")
+        await task_repo.upsert(
+            task_id,
+            {
+                "name": item.get("name") or "Unnamed Task",
+                "type": item.get("type") or "general",
+                "status": item.get("status") or "pending",
+                "progress": float(item.get("progress") or 0.0),
+                "message": item.get("message") or "",
+                "payload": payload,
+                "result": result,
+                "error": item.get("error"),
+                "cancel_requested": 1 if item.get("cancel_requested") else 0,
+                "created_at": _utc_dt(item.get("created_at")),
+                "updated_at": _utc_dt(item.get("updated_at")) or _utc_dt(item.get("created_at")),
+                "started_at": _utc_dt(item.get("started_at")),
+                "completed_at": _utc_dt(item.get("completed_at")),
+            },
+        )
 
     logger.info("Migration completed")
 

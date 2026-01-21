@@ -1,23 +1,23 @@
 import asyncio
-import json
-import os
 import uuid
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
-from collections.abc import Awaitable, Callable
 from collections import Counter
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass, field
+from datetime import datetime
+from typing import Any
 
-from src.config import config
+from src.repositories.task_repository import TaskRepository
+from src.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
 from src.utils.logging_config import logger
-from src.utils.datetime_utils import utc_isoformat
 
 TaskCoroutine = Callable[["TaskContext"], Awaitable[Any]]
 TERMINAL_STATUSES = {"success", "failed", "cancelled"}
 
 
-def _utc_timestamp() -> str:
-    return utc_isoformat()
+def _iso_to_utc_naive(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    return coerce_any_to_utc_datetime(value).replace(tzinfo=None)
 
 
 @dataclass
@@ -28,8 +28,8 @@ class Task:
     status: str = "pending"
     progress: float = 0.0
     message: str = ""
-    created_at: str = field(default_factory=_utc_timestamp)
-    updated_at: str = field(default_factory=_utc_timestamp)
+    created_at: str = field(default_factory=utc_isoformat)
+    updated_at: str = field(default_factory=utc_isoformat)
     started_at: str | None = None
     completed_at: str | None = None
     payload: dict[str, Any] = field(default_factory=dict)
@@ -38,8 +38,7 @@ class Task:
     cancel_requested: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        return data
+        return asdict(self)
 
     def to_summary_dict(self) -> dict[str, Any]:
         data = asdict(self)
@@ -56,8 +55,8 @@ class Task:
             status=data.get("status", "pending"),
             progress=data.get("progress", 0.0),
             message=data.get("message", ""),
-            created_at=data.get("created_at", _utc_timestamp()),
-            updated_at=data.get("updated_at", _utc_timestamp()),
+            created_at=data.get("created_at", utc_isoformat()),
+            updated_at=data.get("updated_at", utc_isoformat()),
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
             payload=data.get("payload", {}),
@@ -100,9 +99,8 @@ class Tasker:
         self._tasks: dict[str, Task] = {}
         self._lock = asyncio.Lock()
         self._workers: list[asyncio.Task[Any]] = []
-        self._storage_path = Path(config.save_dir) / "tasks" / "tasks.json"
-        os.makedirs(self._storage_path.parent, exist_ok=True)
         self._started = False
+        self._repo = TaskRepository()
 
     async def start(self) -> None:
         async with self._lock:
@@ -123,7 +121,6 @@ class Tasker:
                 worker.cancel()
             await asyncio.gather(*self._workers, return_exceptions=True)
             self._workers.clear()
-            await self._persist_state()
             self._started = False
             logger.info("Tasker shutdown complete")
 
@@ -139,7 +136,7 @@ class Tasker:
         task = Task(id=task_id, name=name, type=task_type, payload=payload or {})
         async with self._lock:
             self._tasks[task_id] = task
-            await self._persist_state()
+            await self._persist_task(task)
             await self._queue.put((task_id, coroutine))
         logger.info("Enqueued task {} ({})", task_id, name)
         return task
@@ -180,11 +177,11 @@ class Tasker:
             task = self._tasks.get(task_id)
             if not task:
                 return False
-            if task.status in {"success", "failed", "cancelled"}:
+            if task.status in TERMINAL_STATUSES:
                 return False
             task.cancel_requested = True
-            task.updated_at = _utc_timestamp()
-            await self._persist_state()
+            task.updated_at = utc_isoformat()
+            await self._persist_task(task)
         logger.info("Cancellation requested for task {}", task_id)
         return True
 
@@ -200,7 +197,7 @@ class Tasker:
                         await self._mark_cancelled(task_id, "Task was cancelled before execution")
                         continue
                     await self._update_task(
-                        task_id, status="running", progress=0.0, message="任务开始执行", started_at=_utc_timestamp()
+                        task_id, status="running", progress=0.0, message="任务开始执行", started_at=utc_isoformat()
                     )
                     context = TaskContext(self, task_id)
                     try:
@@ -214,7 +211,7 @@ class Tasker:
                             progress=100.0,
                             message="任务已完成",
                             result=result,
-                            completed_at=_utc_timestamp(),
+                            completed_at=utc_isoformat(),
                         )
                     except asyncio.CancelledError:
                         await self._mark_cancelled(task_id, "任务被取消")
@@ -226,7 +223,7 @@ class Tasker:
                             progress=100.0,
                             message="任务执行失败",
                             error=str(exc),
-                            completed_at=_utc_timestamp(),
+                            completed_at=utc_isoformat(),
                         )
                 finally:
                     self._queue.task_done()
@@ -245,7 +242,7 @@ class Tasker:
             status="cancelled",
             progress=100.0,
             message=message,
-            completed_at=_utc_timestamp(),
+            completed_at=utc_isoformat(),
         )
 
     async def _update_task(
@@ -278,52 +275,55 @@ class Tasker:
                 task.started_at = started_at
             if completed_at is not None:
                 task.completed_at = completed_at
-            task.updated_at = _utc_timestamp()
-            await self._persist_state()
+            task.updated_at = utc_isoformat()
+            await self._persist_task(task)
 
     def _is_cancel_requested(self, task_id: str) -> bool:
         task = self._tasks.get(task_id)
         return bool(task and task.cancel_requested)
 
     async def _load_state(self) -> None:
-        if not self._storage_path.exists():
-            return
-        try:
-            content = await asyncio.to_thread(self._storage_path.read_text, encoding="utf-8")
-            if not content.strip():
-                return
-            data = json.loads(content)
-            tasks = data.get("tasks", [])
-            for item in tasks:
-                task = Task.from_dict(item)
-                if task.status == "running":
-                    task.status = "failed"
-                    task.message = "服务重启时任务中断"
-                    task.updated_at = _utc_timestamp()
-                elif task.status not in TERMINAL_STATUSES:
-                    task.status = "failed"
-                    task.message = "服务重启时任务未继续执行"
-                    task.updated_at = _utc_timestamp()
-                self._tasks[task.id] = task
-            logger.info("Loaded {} task records from storage", len(tasks))
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to load task state: {}", exc)
+        records = await self._repo.list_all()
+        updated: list[Task] = []
+        for record in records:
+            task = Task.from_dict(record.to_dict())
+            if task.status == "running":
+                task.status = "failed"
+                task.message = "服务重启时任务中断"
+                task.updated_at = utc_isoformat()
+                updated.append(task)
+            elif task.status not in TERMINAL_STATUSES:
+                task.status = "failed"
+                task.message = "服务重启时任务未继续执行"
+                task.updated_at = utc_isoformat()
+                updated.append(task)
+            self._tasks[task.id] = task
+        for task in updated:
+            await self._persist_task(task)
+        if records:
+            logger.info("Loaded {} task records from storage", len(records))
 
-    async def _persist_state(self) -> None:
-        tasks = [task.to_dict() for task in self._tasks.values()]
-        payload = {"tasks": tasks, "updated_at": _utc_timestamp()}
-
-        def _write() -> None:
-            self._storage_path.parent.mkdir(parents=True, exist_ok=True)
-            tmp_path = self._storage_path.with_suffix(".tmp")
-            with open(tmp_path, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, self._storage_path)
-
-        await asyncio.to_thread(_write)
+    async def _persist_task(self, task: Task) -> None:
+        data: dict[str, Any] = {
+            "name": task.name,
+            "type": task.type,
+            "status": task.status,
+            "progress": task.progress,
+            "message": task.message,
+            "payload": task.payload,
+            "result": task.result,
+            "error": task.error,
+            "cancel_requested": 1 if task.cancel_requested else 0,
+            "created_at": _iso_to_utc_naive(task.created_at),
+            "updated_at": _iso_to_utc_naive(task.updated_at),
+            "started_at": _iso_to_utc_naive(task.started_at),
+            "completed_at": _iso_to_utc_naive(task.completed_at),
+        }
+        await self._repo.upsert(task.id, data)
 
 
 tasker = Tasker()
 
 
 __all__ = ["tasker", "TaskContext", "Tasker"]
+
