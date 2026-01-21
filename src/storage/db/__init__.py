@@ -9,10 +9,22 @@ from src.storage.db.models import (  # noqa: E402, F401
     OperationLog,
     User,
 )  # noqa: E402
+from src.storage.db.models_knowledge import (  # noqa: E402, F401
+    EvaluationBenchmark,
+    EvaluationResult,
+    EvaluationResultDetail,
+    KnowledgeBase,
+    KnowledgeFile,
+)
 
 __all__ = [
     "Base",
     "User",
     "OperationLog",
+    "KnowledgeBase",
+    "KnowledgeFile",
+    "EvaluationBenchmark",
+    "EvaluationResult",
+    "EvaluationResultDetail",
     "db_manager",
 ]

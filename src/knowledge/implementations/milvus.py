@@ -280,7 +280,7 @@ class MilvusKB(KnowledgeBase):
             self.files_meta[file_id]["updated_at"] = utc_isoformat()
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
-            self._save_metadata()
+            await self._save_metadata()
 
             # Read processing params inside lock to ensure we get the latest values
             params = file_meta.get("processing_params", {}) or {}
@@ -333,7 +333,7 @@ class MilvusKB(KnowledgeBase):
                 self.files_meta[file_id]["updated_at"] = utc_isoformat()
                 if operator_id:
                     self.files_meta[file_id]["updated_by"] = operator_id
-                self._save_metadata()
+                await self._save_metadata()
                 return self.files_meta[file_id]
 
         except Exception as e:
@@ -344,7 +344,7 @@ class MilvusKB(KnowledgeBase):
                 self.files_meta[file_id]["updated_at"] = utc_isoformat()
                 if operator_id:
                     self.files_meta[file_id]["updated_by"] = operator_id
-                self._save_metadata()
+                await self._save_metadata()
             raise
 
         finally:
@@ -392,7 +392,7 @@ class MilvusKB(KnowledgeBase):
                 async with self._metadata_lock:
                     self.files_meta[file_id]["processing_params"] = params.copy()
                     self.files_meta[file_id]["status"] = "processing"
-                    self._save_metadata()
+                    await self._save_metadata()
 
                 # 重新解析文件为 markdown
                 if content_type != "file":
@@ -430,7 +430,7 @@ class MilvusKB(KnowledgeBase):
                 # 更新元数据状态
                 async with self._metadata_lock:
                     self.files_meta[file_id]["status"] = "done"
-                    self._save_metadata()
+                    await self._save_metadata()
 
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
@@ -445,7 +445,7 @@ class MilvusKB(KnowledgeBase):
                 logger.error(f"更新{content_type} {file_path} 失败: {e}, {traceback.format_exc()}")
                 async with self._metadata_lock:
                     self.files_meta[file_id]["status"] = "failed"
-                    self._save_metadata()
+                    await self._save_metadata()
 
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
@@ -614,7 +614,10 @@ class MilvusKB(KnowledgeBase):
         async with self._metadata_lock:
             if file_id in self.files_meta:
                 del self.files_meta[file_id]
-                self._save_metadata()
+                from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+                await KnowledgeFileRepository().delete(file_id)
+                await self._save_metadata()
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""

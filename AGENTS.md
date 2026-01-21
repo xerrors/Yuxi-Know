@@ -25,7 +25,6 @@ Don't create helpers, utilities, or abstractions for one-time operations. Don't 
 - Icon 应该从 @ant-design/icons-vue 或者 lucide-vue-next （推荐，但是需要注意尺寸）
 - Vue 中的样式使用 less，非必要情况必须使用[base.css](web/src/assets/css/base.css) 中的颜色变量。
 - UI风格要简洁，同时要保持一致性，不要悬停位移，不要过度使用阴影以及渐变色。
-- 开发完成后，可以在 docker 的 web 文件夹下，运行 npm run format 格式化代码
 
 
 ### 后端开发规范
@@ -40,12 +39,11 @@ docker compose exec api uv run python test/your_script.py  # 放在 test 文件�
 ```
 
 注意：
-
 - Python 代码要符合 Python 的规范，符合 pythonic 风格
 - 尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+）
+- 修改完成后使用 YUXI_SUPER_ADMIN_NAME / YUXI_SUPER_ADMIN_PASSWORD 环境变量调试接口（读取 .env 文件）
 
 **其他**：
 
-- 使用 YUXI_SUPER_ADMIN_NAME / YUXI_SUPER_ADMIN_PASSWORD 调试接口
 - 如果需要新建说明文档（仅开发者可见，非必要不创建），则保存在 `docs/vibe` 文件夹下面
 - 代码更新后要检查文档部分是否有需要更新的地方，文档的目录定义在 `docs/.vitepress/config.mts` 中。文档应该更新最新版（`docs/latest`）

@@ -10,7 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.storage.db.manager import db_manager
 from src.storage.db.models import User, Department
-from server.utils.auth_middleware import get_admin_user, get_superadmin_user, get_current_user, get_db, get_required_user
+from server.utils.auth_middleware import (
+    get_admin_user,
+    get_superadmin_user,
+    get_current_user,
+    get_db,
+    get_required_user,
+)
 from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
@@ -640,9 +646,7 @@ async def delete_user(
     if user.role == "admin":
         result = await db.execute(
             select(func.count(User.id)).filter(
-                User.department_id == user.department_id,
-                User.role == "admin",
-                User.is_deleted == 0
+                User.department_id == user.department_id, User.role == "admin", User.is_deleted == 0
             )
         )
         admin_count = result.scalar()

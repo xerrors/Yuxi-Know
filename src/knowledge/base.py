@@ -1,8 +1,5 @@
 import asyncio
-import json
 import os
-import shutil
-import tempfile
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -61,6 +58,7 @@ class KnowledgeBase(ABC):
         self.databases_meta: dict[str, dict] = {}
         self.files_meta: dict[str, dict] = {}
         self.benchmarks_meta: dict[str, dict] = {}
+        self._metadata_loaded = False  # 标记元数据是否已加载
 
         # 初始化类级别的锁
         if KnowledgeBase._processing_lock is None:
@@ -68,9 +66,47 @@ class KnowledgeBase(ABC):
 
         os.makedirs(work_dir, exist_ok=True)
 
-        # 自动加载元数据
-        self._load_metadata()
+        # 注意：不在 __init__ 中加载元数据，由 KnowledgeBaseManager 统一管理加载
+
+    def load_metadata(
+        self, global_databases_meta: dict[str, dict], files_meta: dict[str, dict], benchmarks_meta: dict[str, dict]
+    ):
+        """由 KnowledgeBaseManager 调用，同步加载元数据"""
+        # 过滤出当前 kb_type 的知识库
+        self.databases_meta = {}
+        for db_id, meta in global_databases_meta.items():
+            if meta.get("kb_type") == self.kb_type:
+                self.databases_meta[db_id] = {
+                    "name": meta.get("name"),
+                    "description": meta.get("description"),
+                    "kb_type": meta.get("kb_type"),
+                    "embed_info": meta.get("embed_info"),
+                    "llm_info": meta.get("llm_info"),
+                    "query_params": meta.get("query_params"),
+                    "metadata": meta.get("additional_params", {}),
+                    "created_at": meta.get("created_at"),
+                }
+
+        # 过滤文件
+        self.files_meta = {}
+        for file_id, meta in files_meta.items():
+            if meta.get("database_id") in self.databases_meta:
+                self.files_meta[file_id] = meta
+
+        # 过滤评估基准
+        self.benchmarks_meta = {}
+        for kb_id, benchmarks in benchmarks_meta.items():
+            if kb_id in self.databases_meta:
+                self.benchmarks_meta[kb_id] = benchmarks
+
         self._normalize_metadata_state()
+        self._metadata_loaded = True
+        logger.info(f"{self.kb_type}: 加载了 {len(self.databases_meta)} 个数据库的元数据")
+
+    def _ensure_metadata_loaded(self):
+        """确保元数据已加载（延迟加载）"""
+        if not self._metadata_loaded:
+            logger.warning(f"{self.kb_type}: 元数据尚未加载，请确保 KnowledgeBaseManager 已调用 load_metadata()")
 
     @staticmethod
     def _normalize_timestamp(value: Any) -> str | None:
@@ -172,7 +208,7 @@ class KnowledgeBase(ABC):
 
         # Save to metadata
         self.files_meta[file_id] = metadata
-        self._save_metadata()
+        await self._save_metadata()
 
         return metadata
 
@@ -220,7 +256,7 @@ class KnowledgeBase(ABC):
         self.files_meta[file_id]["updated_at"] = utc_isoformat()
         if operator_id:
             self.files_meta[file_id]["updated_by"] = operator_id
-        self._save_metadata()
+        await self._save_metadata()
 
         # Add to processing queue
         self._add_to_processing_queue(file_id)
@@ -244,7 +280,7 @@ class KnowledgeBase(ABC):
             self.files_meta[file_id]["updated_at"] = utc_isoformat()
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
-            self._save_metadata()
+            await self._save_metadata()
 
             return self.files_meta[file_id]
 
@@ -257,7 +293,7 @@ class KnowledgeBase(ABC):
             self.files_meta[file_id]["updated_at"] = utc_isoformat()
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
-            self._save_metadata()
+            await self._save_metadata()
 
             raise
 
@@ -289,7 +325,7 @@ class KnowledgeBase(ABC):
 
         logger.debug(f"[update_file_params] file_id={file_id}, updated_params={current_params}")
 
-        self._save_metadata()
+        await self._save_metadata()
 
     async def _save_markdown_to_minio(self, db_id: str, file_id: str, content: str) -> str:
         """Save markdown content to MinIO and return HTTP URL"""
@@ -342,7 +378,7 @@ class KnowledgeBase(ABC):
         """
         pass
 
-    def create_database(
+    async def create_database(
         self,
         database_name: str,
         description: str,
@@ -382,7 +418,7 @@ class KnowledgeBase(ABC):
             "metadata": kwargs,
             "created_at": utc_isoformat(),
         }
-        self._save_metadata()
+        await self._save_metadata()
 
         # 创建工作目录
         working_dir = os.path.join(self.work_dir, db_id)
@@ -395,7 +431,7 @@ class KnowledgeBase(ABC):
 
         return db_dict
 
-    def delete_database(self, db_id: str) -> dict:
+    async def delete_database(self, db_id: str) -> dict:
         """
         删除数据库
 
@@ -406,6 +442,8 @@ class KnowledgeBase(ABC):
             操作结果
         """
         if db_id in self.databases_meta:
+            from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+
             # 删除相关文件记录
             files_to_delete = [fid for fid, finfo in self.files_meta.items() if finfo.get("database_id") == db_id]
             for file_id in files_to_delete:
@@ -413,7 +451,8 @@ class KnowledgeBase(ABC):
 
             # 删除数据库记录
             del self.databases_meta[db_id]
-            self._save_metadata()
+            await KnowledgeBaseRepository().delete(db_id)
+            await self._save_metadata()
 
         # 删除工作目录
         working_dir = os.path.join(self.work_dir, db_id)
@@ -427,7 +466,7 @@ class KnowledgeBase(ABC):
 
         return {"message": "删除成功"}
 
-    def create_folder(self, db_id: str, folder_name: str, parent_id: str | None = None) -> dict:
+    async def create_folder(self, db_id: str, folder_name: str, parent_id: str | None = None) -> dict:
         """Create a folder in the database."""
         import uuid
 
@@ -444,7 +483,7 @@ class KnowledgeBase(ABC):
             "path": folder_name,
             "file_type": "folder",
         }
-        self._save_metadata()
+        await self._save_metadata()
         return self.files_meta[folder_id]
 
     @abstractmethod
@@ -525,12 +564,16 @@ class KnowledgeBase(ABC):
         import asyncio
 
         logger.warning("query is deprecated, use aquery instead")
-        return asyncio.run(self.aquery(query_text, db_id, **kwargs))
+        try:
+            loop = asyncio.get_running_loop()
+            return loop.run_until_complete(self.aquery(query_text, db_id, **kwargs))
+        except RuntimeError:
+            return asyncio.run(self.aquery(query_text, db_id, **kwargs))
 
     def _get_query_params(self, db_id: str) -> dict:
         """从实例元数据中加载查询参数"""
         if db_id in self.databases_meta:
-            query_params_meta = self.databases_meta[db_id].get("query_params", {})
+            query_params_meta = self.databases_meta[db_id].get("query_params") or {}
             return query_params_meta.get("options", {})
         return {}
 
@@ -592,6 +635,9 @@ class KnowledgeBase(ABC):
         Returns:
             数据库列表
         """
+        # 确保元数据已加载（延迟加载机制）
+        self._ensure_metadata_loaded()
+
         databases = []
         for db_id, meta in self.databases_meta.items():
             # 检查并修复异常的processing状态
@@ -711,7 +757,6 @@ class KnowledgeBase(ABC):
 
             # 如果有状态变更，保存元数据
             if status_changed:
-                self._save_metadata()
                 logger.info(f"Fixed interrupted processing status for database {db_id}")
 
         except Exception as e:
@@ -780,7 +825,7 @@ class KnowledgeBase(ABC):
                 current = parent_meta.get("parent_id")
 
         meta["parent_id"] = new_parent_id
-        self._save_metadata()
+        await self._save_metadata()
         return meta
 
     @abstractmethod
@@ -878,7 +923,7 @@ class KnowledgeBase(ABC):
         if llm_info is not None:
             self.databases_meta[db_id]["llm_info"] = llm_info
 
-        self._save_metadata()
+        asyncio.create_task(self._save_metadata())
 
         return self.get_database_info(db_id)
 
@@ -906,90 +951,159 @@ class KnowledgeBase(ABC):
             }
         return retrievers
 
-    def _load_metadata(self):
-        """加载元数据"""
-        meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
+    async def _load_metadata(self) -> None:
+        from src.repositories.evaluation_repository import EvaluationRepository
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
 
-        if os.path.exists(meta_file):
-            try:
-                with open(meta_file, encoding="utf-8") as f:
-                    data = json.load(f)
-                    self.databases_meta = data.get("databases", {})
-                    self.files_meta = data.get("files", {})
-                    self.benchmarks_meta = data.get("benchmarks", {})
-                logger.info(f"Loaded {self.kb_type} metadata for {len(self.databases_meta)} databases")
-            except Exception as e:
-                logger.error(f"Failed to load {self.kb_type} metadata: {e}")
-                # 尝试从备份恢复
-                backup_file = f"{meta_file}.backup"
-                if os.path.exists(backup_file):
-                    try:
-                        with open(backup_file, encoding="utf-8") as f:
-                            data = json.load(f)
-                            self.databases_meta = data.get("databases", {})
-                            self.files_meta = data.get("files", {})
-                            self.benchmarks_meta = data.get("benchmarks", {})
-                        logger.info(f"Loaded {self.kb_type} metadata from backup")
-                        # 恢复备份文件
-                        shutil.copy2(backup_file, meta_file)
-                        return
-                    except Exception as backup_e:
-                        logger.error(f"Failed to load backup: {backup_e}")
+        kb_repo = KnowledgeBaseRepository()
+        file_repo = KnowledgeFileRepository()
+        eval_repo = EvaluationRepository()
 
-                # 如果加载失败，初始化为空状态
-                logger.warning(f"Initializing empty {self.kb_type} metadata")
-                self.databases_meta = {}
-                self.files_meta = {}
-                self.benchmarks_meta = {}
-
-    def _serialize_metadata(self, obj):
-        """递归序列化元数据中的 Pydantic 模型"""
-        if hasattr(obj, "dict"):
-            return obj.dict()
-        elif isinstance(obj, dict):
-            return {k: self._serialize_metadata(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [self._serialize_metadata(item) for item in obj]
-        else:
-            return obj
-
-    def _save_metadata(self):
-        """保存元数据"""
-        self._normalize_metadata_state()
-        meta_file = os.path.join(self.work_dir, f"metadata_{self.kb_type}.json")
-        backup_file = f"{meta_file}.backup"
-
-        try:
-            # 创建简单备份
-            if os.path.exists(meta_file):
-                shutil.copy2(meta_file, backup_file)
-
-            # 准备数据并序列化 Pydantic 模型
-            data = {
-                "databases": self._serialize_metadata(self.databases_meta),
-                "files": self._serialize_metadata(self.files_meta),
-                "benchmarks": self._serialize_metadata(self.benchmarks_meta),
-                "kb_type": self.kb_type,
-                "updated_at": utc_isoformat(),
+        databases = [kb for kb in await kb_repo.get_all() if kb.kb_type == self.kb_type]
+        self.databases_meta = {
+            kb.db_id: {
+                "name": kb.name,
+                "description": kb.description,
+                "kb_type": kb.kb_type,
+                "embed_info": kb.embed_info,
+                "llm_info": kb.llm_info,
+                "query_params": kb.query_params,
+                "metadata": kb.additional_params or {},
+                "created_at": utc_isoformat(kb.created_at) if kb.created_at else utc_isoformat(),
             }
+            for kb in databases
+        }
 
-            # 原子性写入（使用临时文件）
-            with tempfile.NamedTemporaryFile(
-                mode="w", dir=os.path.dirname(meta_file), prefix=".tmp_", suffix=".json", delete=False
-            ) as tmp_file:
-                json.dump(data, tmp_file, ensure_ascii=False, indent=2)
-                temp_path = tmp_file.name
+        self.files_meta = {}
+        for kb in databases:
+            for record in await file_repo.list_by_db_id(kb.db_id):
+                self.files_meta[record.file_id] = {
+                    "file_id": record.file_id,
+                    "database_id": record.db_id,
+                    "parent_id": record.parent_id,
+                    "filename": record.filename,
+                    "file_type": record.file_type,
+                    "path": record.path,
+                    "markdown_file": record.markdown_file,
+                    "status": record.status,
+                    "content_hash": record.content_hash,
+                    "size": record.file_size,
+                    "content_type": record.content_type,
+                    "processing_params": record.processing_params,
+                    "is_folder": record.is_folder,
+                    "error": record.error_message,
+                    "created_by": record.created_by,
+                    "updated_by": record.updated_by,
+                    "created_at": utc_isoformat(record.created_at) if record.created_at else None,
+                    "updated_at": utc_isoformat(record.updated_at) if record.updated_at else None,
+                    "original_filename": record.original_filename,
+                    "minio_url": record.minio_url,
+                }
 
-            os.replace(temp_path, meta_file)
-            logger.debug(f"Saved {self.kb_type} metadata")
+        self.benchmarks_meta = {}
+        for kb in databases:
+            benchmarks = await eval_repo.list_benchmarks(kb.db_id)
+            if not benchmarks:
+                continue
+            self.benchmarks_meta[kb.db_id] = {}
+            for bench in benchmarks:
+                self.benchmarks_meta[kb.db_id][bench.benchmark_id] = {
+                    "id": bench.benchmark_id,
+                    "benchmark_id": bench.benchmark_id,
+                    "name": bench.name,
+                    "description": bench.description,
+                    "db_id": bench.db_id,
+                    "question_count": bench.question_count,
+                    "has_gold_chunks": bench.has_gold_chunks,
+                    "has_gold_answers": bench.has_gold_answers,
+                    "benchmark_file": bench.data_file_path,
+                    "created_by": bench.created_by,
+                    "created_at": utc_isoformat(bench.created_at) if bench.created_at else None,
+                    "updated_at": utc_isoformat(bench.updated_at) if bench.updated_at else None,
+                }
 
-        except Exception as e:
-            logger.error(f"Failed to save {self.kb_type} metadata: {e}")
-            # 尝试恢复备份
-            if os.path.exists(backup_file):
-                try:
-                    shutil.copy2(backup_file, meta_file)
-                    logger.info("Restored metadata from backup")
-                except Exception as restore_e:
-                    logger.error(f"Failed to restore backup: {restore_e}")
-            raise e
+        logger.info(f"Loaded {self.kb_type} metadata from database for {len(self.databases_meta)} databases")
+
+    async def _save_metadata(self) -> None:
+        from src.repositories.evaluation_repository import EvaluationRepository
+        from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+        from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+        kb_repo = KnowledgeBaseRepository()
+        file_repo = KnowledgeFileRepository()
+        eval_repo = EvaluationRepository()
+
+        self._normalize_metadata_state()
+
+        for db_id, meta in self.databases_meta.items():
+            existing = await kb_repo.get_by_id(db_id)
+            payload = {
+                "db_id": db_id,
+                "name": meta.get("name") or db_id,
+                "description": meta.get("description"),
+                "kb_type": meta.get("kb_type") or self.kb_type,
+                "embed_info": meta.get("embed_info"),
+                "llm_info": meta.get("llm_info"),
+                "query_params": meta.get("query_params"),
+                "additional_params": meta.get("metadata") or {},
+            }
+            if existing is None:
+                await kb_repo.create(payload)
+            else:
+                await kb_repo.update(
+                    db_id,
+                    {
+                        "name": payload["name"],
+                        "description": payload["description"],
+                        "kb_type": payload["kb_type"],
+                        "embed_info": payload["embed_info"],
+                        "llm_info": payload["llm_info"],
+                        "query_params": payload["query_params"],
+                        "additional_params": payload["additional_params"],
+                    },
+                )
+
+        for file_id, meta in self.files_meta.items():
+            db_id = meta.get("database_id")
+            if not db_id:
+                continue
+            await file_repo.upsert(
+                file_id=file_id,
+                data={
+                    "db_id": db_id,
+                    "parent_id": meta.get("parent_id"),
+                    "filename": meta.get("filename") or "",
+                    "original_filename": meta.get("original_filename"),
+                    "file_type": meta.get("file_type"),
+                    "path": meta.get("path"),
+                    "minio_url": meta.get("minio_url"),
+                    "markdown_file": meta.get("markdown_file"),
+                    "status": meta.get("status"),
+                    "content_hash": meta.get("content_hash"),
+                    "file_size": meta.get("size"),
+                    "content_type": meta.get("content_type"),
+                    "processing_params": meta.get("processing_params"),
+                    "is_folder": meta.get("is_folder", False),
+                    "error_message": meta.get("error"),
+                    "created_by": str(meta.get("created_by")) if meta.get("created_by") else None,
+                    "updated_by": str(meta.get("updated_by")) if meta.get("updated_by") else None,
+                },
+            )
+
+        for db_id, benchmarks in self.benchmarks_meta.items():
+            for benchmark_id, meta in benchmarks.items():
+                existing = await eval_repo.get_benchmark(benchmark_id)
+                payload = {
+                    "benchmark_id": benchmark_id,
+                    "db_id": db_id,
+                    "name": meta.get("name") or benchmark_id,
+                    "description": meta.get("description"),
+                    "question_count": int(meta.get("question_count") or 0),
+                    "has_gold_chunks": bool(meta.get("has_gold_chunks")),
+                    "has_gold_answers": bool(meta.get("has_gold_answers")),
+                    "data_file_path": meta.get("benchmark_file"),
+                    "created_by": str(meta.get("created_by")) if meta.get("created_by") else None,
+                }
+                if existing is None:
+                    await eval_repo.create_benchmark(payload)

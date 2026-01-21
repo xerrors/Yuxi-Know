@@ -8,6 +8,7 @@ import os
 import uuid
 from collections.abc import AsyncGenerator
 
+import anyio
 import httpx
 import pytest
 import pytest_asyncio
@@ -78,6 +79,69 @@ def admin_headers(admin_token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {admin_token}"}
 
 
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_knowledge_databases():
+    """
+    Best-effort cleanup for leftover test knowledge databases (e.g. pytest_* / py_test*).
+    """
+
+    async def run_cleanup() -> None:
+        global _ADMIN_TOKEN_CACHE
+
+        if not ADMIN_LOGIN or not ADMIN_PASSWORD:
+            return
+
+        if not _ADMIN_TOKEN_CACHE:
+            async with httpx.AsyncClient(
+                base_url=API_BASE_URL, timeout=HTTP_TIMEOUT, follow_redirects=True
+            ) as bootstrap_client:
+                response = await bootstrap_client.post(
+                    "/api/auth/token", data={"username": ADMIN_LOGIN, "password": ADMIN_PASSWORD}
+                )
+                if response.status_code != 200:
+                    return
+                token = response.json().get("access_token")
+                if not token:
+                    return
+                _ADMIN_TOKEN_CACHE = token
+
+        headers = {"Authorization": f"Bearer {_ADMIN_TOKEN_CACHE}"}
+
+        async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+            try:
+                list_response = await client.get("/api/knowledge/databases", headers=headers)
+            except Exception as e:
+                print(f"Warning: Failed to list knowledge databases for cleanup: {e}")
+                return
+
+            if list_response.status_code != 200:
+                return
+
+            databases = list_response.json().get("databases", [])
+            prefixes = ("pytest_", "py_test")
+            for entry in databases:
+                name = entry.get("name") or ""
+                db_id = entry.get("db_id")
+                if not db_id or not isinstance(name, str) or not name.startswith(prefixes):
+                    continue
+                try:
+                    delete_response = await client.delete(f"/api/knowledge/databases/{db_id}", headers=headers)
+                    if delete_response.status_code not in (200, 404):
+                        print(f"Warning: Failed to cleanup knowledge database {db_id}: {delete_response.text}")
+                except Exception as e:
+                    print(f"Warning: Exception during cleanup of {db_id}: {e}")
+
+    try:
+        anyio.run(run_cleanup)
+    except Exception as e:
+        print(f"Warning: Exception during session cleanup startup: {e}")
+    yield
+    try:
+        anyio.run(run_cleanup)
+    except Exception as e:
+        print(f"Warning: Exception during session cleanup teardown: {e}")
+
+
 @pytest_asyncio.fixture(scope="function")
 async def standard_user(test_client: httpx.AsyncClient, admin_headers: dict[str, str]) -> dict:
     """
@@ -126,30 +190,49 @@ async def knowledge_database(test_client: httpx.AsyncClient, admin_headers: dict
     """
     Create a temporary knowledge database for tests that need LightRAG metadata.
     """
-    db_name = f"pytest_kb_{uuid.uuid4().hex[:6]}"
-    create_response = await test_client.post(
-        "/api/knowledge/databases",
-        json={
-            "database_name": db_name,
-            "description": "Pytest managed knowledge base",
-            "embed_model_name": "siliconflow/BAAI/bge-m3",
-            "kb_type": "lightrag",
-            "additional_params": {},
-        },
-        headers=admin_headers,
-    )
-    if create_response.status_code != 200:
-        pytest.fail(
-            f"Failed to create knowledge database (status={create_response.status_code}): {create_response.text}"
-        )
+    import time
 
-    db_payload = create_response.json()
-    db_id = db_payload["db_id"]
+    # 使用UUID作为数据库名称的一部分，确保唯一性
+    unique_id = uuid.uuid4().hex
+    timestamp = int(time.time() * 1000000)  # 微秒级时间戳
+    db_name = f"pytest_kb_{timestamp}_{unique_id}"
+    db_id = None
 
     try:
-        yield db_payload
+        create_response = await test_client.post(
+            "/api/knowledge/databases",
+            json={
+                "database_name": db_name,
+                "description": "Pytest managed knowledge base",
+                "embed_model_name": "siliconflow/BAAI/bge-m3",
+                "kb_type": "lightrag",
+                "additional_params": {},
+            },
+            headers=admin_headers,
+        )
+
+        if create_response.status_code == 200:
+            db_payload = create_response.json()
+            db_id = db_payload["db_id"]
+        elif create_response.status_code == 409:
+            error_detail = create_response.json().get("detail", "")
+            pytest.fail(f"Knowledge database name conflict: {error_detail}. Please clean up old test databases first.")
+        else:
+            pytest.fail(
+                f"Failed to create knowledge database (status={create_response.status_code}): {create_response.text}"
+            )
+
+        yield db_payload if db_id else {"db_id": db_id, "name": db_name}
+
     finally:
-        await test_client.delete(f"/api/knowledge/databases/{db_id}", headers=admin_headers)
+        # 确保清理，即使测试失败
+        if db_id:
+            try:
+                delete_response = await test_client.delete(f"/api/knowledge/databases/{db_id}", headers=admin_headers)
+                if delete_response.status_code != 200:
+                    print(f"Warning: Failed to cleanup knowledge database {db_id}: {delete_response.text}")
+            except Exception as e:
+                print(f"Warning: Exception during cleanup of {db_id}: {e}")
 
 
 def pytest_configure(config: pytest.Config) -> None:

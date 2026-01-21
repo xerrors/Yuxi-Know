@@ -284,7 +284,7 @@ class LightRagKB(KnowledgeBase):
         self.files_meta[file_id]["updated_at"] = utc_isoformat()
         if operator_id:
             self.files_meta[file_id]["updated_by"] = operator_id
-        self._save_metadata()
+        await self._save_metadata()
 
         # Add to processing queue
         self._add_to_processing_queue(file_id)
@@ -307,7 +307,7 @@ class LightRagKB(KnowledgeBase):
             self.files_meta[file_id]["updated_at"] = utc_isoformat()
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
-            self._save_metadata()
+            await self._save_metadata()
 
             return self.files_meta[file_id]
 
@@ -318,7 +318,7 @@ class LightRagKB(KnowledgeBase):
             self.files_meta[file_id]["updated_at"] = utc_isoformat()
             if operator_id:
                 self.files_meta[file_id]["updated_by"] = operator_id
-            self._save_metadata()
+            await self._save_metadata()
             raise
 
         finally:
@@ -360,7 +360,7 @@ class LightRagKB(KnowledgeBase):
                 # 更新状态为处理中
                 self.files_meta[file_id]["processing_params"] = params.copy()
                 self.files_meta[file_id]["status"] = "processing"
-                self._save_metadata()
+                await self._save_metadata()
 
                 # 重新解析文件为 markdown
                 if content_type != "file":
@@ -379,7 +379,7 @@ class LightRagKB(KnowledgeBase):
 
                 # 更新元数据状态
                 self.files_meta[file_id]["status"] = "done"
-                self._save_metadata()
+                await self._save_metadata()
 
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
@@ -395,7 +395,7 @@ class LightRagKB(KnowledgeBase):
                 logger.error(f"更新{content_type} {file_path} 失败: {error_msg}, {traceback.format_exc()}")
                 self.files_meta[file_id]["status"] = "failed"
                 self.files_meta[file_id]["error"] = error_msg
-                self._save_metadata()
+                await self._save_metadata()
 
                 # 从处理队列中移除
                 self._remove_from_processing_queue(file_id)
@@ -505,7 +505,10 @@ class LightRagKB(KnowledgeBase):
         # 删除文件记录
         if file_id in self.files_meta:
             del self.files_meta[file_id]
-            self._save_metadata()
+            from src.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+            await KnowledgeFileRepository().delete(file_id)
+            await self._save_metadata()
 
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """获取文件基本信息（仅元数据）"""
