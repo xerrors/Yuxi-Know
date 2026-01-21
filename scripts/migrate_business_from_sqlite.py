@@ -30,7 +30,7 @@ from typing import Any
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 os.environ.setdefault("YUXI_SKIP_APP_INIT", "1")
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, create_engine, select, text
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, select, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from src import config

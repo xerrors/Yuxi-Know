@@ -6,11 +6,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from src.services.task_service import TaskContext, tasker
 from src.knowledge import knowledge_base
 from src.models import select_model
 from src.repositories.evaluation_repository import EvaluationRepository
 from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+from src.services.task_service import TaskContext, tasker
 from src.utils import logger
 from src.utils.evaluation_metrics import EvaluationMetricsCalculator
 

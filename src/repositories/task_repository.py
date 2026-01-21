@@ -43,4 +43,3 @@ class TaskRepository:
     async def delete_all(self) -> None:
         async with pg_manager.get_async_session_context() as session:
             await session.execute(delete(TaskRecord))
-
