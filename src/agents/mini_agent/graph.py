@@ -12,9 +12,6 @@ class MiniAgent(BaseAgent):
         super().__init__(**kwargs)
 
     async def get_graph(self, **kwargs):
-        if self.graph:
-            return self.graph
-
         context = self.context_schema.from_file(module_name=self.module_name)
 
         # 创建 MiniAgent
@@ -25,5 +22,4 @@ class MiniAgent(BaseAgent):
             checkpointer=await self._get_checkpointer(),
         )
 
-        self.graph = graph
         return graph

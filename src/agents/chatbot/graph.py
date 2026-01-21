@@ -18,9 +18,6 @@ class ChatbotAgent(BaseAgent):
 
     async def get_graph(self, **kwargs):
         """构建图"""
-        if self.graph:
-            return self.graph
-
         # 获取上下文配置
         context = self.context_schema.from_file(module_name=self.module_name)
 
@@ -36,7 +33,6 @@ class ChatbotAgent(BaseAgent):
             checkpointer=await self._get_checkpointer(),
         )
 
-        self.graph = graph
         return graph
 
 
