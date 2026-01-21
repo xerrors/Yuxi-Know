@@ -10,7 +10,9 @@ from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.storage.db.models import Department, User
+from src.storage.postgres.models_business import Department, User
+from src.repositories.department_repository import DepartmentRepository
+from src.repositories.user_repository import UserRepository
 from server.utils.auth_middleware import get_superadmin_user, get_admin_user, get_db
 from server.utils.auth_utils import AuthUtils
 from server.utils.common_utils import log_operation
@@ -65,26 +67,11 @@ class DepartmentResponse(BaseModel):
 # =============================================================================
 
 
-async def _get_departments_with_user_count(db: AsyncSession) -> list[dict]:
-    """获取所有部门列表，包含用户数量（内部辅助函数）"""
-    result = await db.execute(select(Department).order_by(Department.created_at.desc()))
-    departments = result.scalars().all()
-
-    department_list = []
-    for dep in departments:
-        user_count_result = await db.execute(
-            select(func.count(User.id)).filter(User.department_id == dep.id, User.is_deleted == 0)
-        )
-        user_count = user_count_result.scalar()
-        department_list.append({**dep.to_dict(), "user_count": user_count})
-
-    return department_list
-
-
 @department.get("", response_model=list[DepartmentResponse])
 async def get_departments(current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)):
     """获取所有部门列表（管理员可访问）"""
-    return await _get_departments_with_user_count(db)
+    dept_repo = DepartmentRepository()
+    return await dept_repo.list_with_user_count()
 
 
 @department.get("/{department_id}", response_model=DepartmentResponse)
@@ -115,10 +102,11 @@ async def create_department(
     db: AsyncSession = Depends(get_db),
 ):
     """创建新部门，同时创建该部门的管理员"""
+    dept_repo = DepartmentRepository()
+    user_repo = UserRepository()
+
     # 检查部门名称是否已存在
-    result = await db.execute(select(Department).filter(Department.name == department_data.name))
-    existing = result.scalar_one_or_none()
-    if existing:
+    if await dept_repo.exists_by_name(department_data.name):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="部门名称已存在")
 
     # 验证管理员 user_id 格式
@@ -136,9 +124,7 @@ async def create_department(
         )
 
     # 检查 user_id 是否已存在
-    result = await db.execute(select(User).filter(User.user_id == admin_user_id))
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
+    if await user_repo.exists_by_user_id(admin_user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户ID已存在",
@@ -149,33 +135,28 @@ async def create_department(
     if admin_phone:
         if not is_valid_phone_number(admin_phone):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="手机号格式不正确")
-        result = await db.execute(select(User).filter(User.phone_number == admin_phone))
-        existing_phone = result.scalar_one_or_none()
-        if existing_phone:
+        if await user_repo.exists_by_phone(admin_phone):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="手机号已存在",
             )
 
-    new_department = Department(name=department_data.name, description=department_data.description)
-
-    db.add(new_department)
-    await db.flush()  # 获取部门ID
+    # 创建部门
+    new_department = await dept_repo.create({
+        "name": department_data.name,
+        "description": department_data.description,
+    })
 
     # 创建管理员用户
     hashed_password = AuthUtils.hash_password(department_data.admin_password)
-    new_admin = User(
-        username=admin_user_id,  # username 和 user_id 设置为相同值
-        user_id=admin_user_id,
-        phone_number=admin_phone,
-        password_hash=hashed_password,
-        role="admin",
-        department_id=new_department.id,
-    )
-    db.add(new_admin)
-
-    await db.commit()
-    await db.refresh(new_department)
+    await user_repo.create({
+        "username": admin_user_id,
+        "user_id": admin_user_id,
+        "phone_number": admin_phone,
+        "password_hash": hashed_password,
+        "role": "admin",
+        "department_id": new_department.id,
+    })
 
     # 记录操作
     await log_operation(

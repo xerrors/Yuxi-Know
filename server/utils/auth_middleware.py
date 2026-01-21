@@ -5,8 +5,8 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.storage.db.manager import db_manager
-from src.storage.db.models import User
+from src.storage.postgres.manager import pg_manager
+from src.storage.postgres.models_business import User
 from server.utils.auth_utils import AuthUtils
 
 # 定义OAuth2密码承载器，指定token URL
@@ -25,7 +25,7 @@ PUBLIC_PATHS = [
 
 # 获取数据库会话（异步版本）
 async def get_db():
-    async with db_manager.get_async_session_context() as db:
+    async with pg_manager.get_async_session_context() as db:
         yield db
 
 
@@ -61,7 +61,7 @@ async def get_current_user(token: str | None = Depends(oauth2_scheme), db: Async
     # 查找用户（异步版本）
     from sqlalchemy import select
 
-    result = await db.execute(select(User).filter(User.id == user_id))
+    result = await db.execute(select(User).filter(User.id == int(user_id)))
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception

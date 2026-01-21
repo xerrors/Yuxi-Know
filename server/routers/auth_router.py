@@ -8,8 +8,10 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.storage.db.manager import db_manager
-from src.storage.db.models import User, Department
+from src.storage.postgres.manager import pg_manager
+from src.storage.postgres.models_business import User, Department
+from src.repositories.user_repository import UserRepository
+from src.repositories.department_repository import DepartmentRepository
 from server.utils.auth_middleware import (
     get_admin_user,
     get_superadmin_user,
@@ -21,7 +23,10 @@ from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
 from src.storage.minio import aupload_file_to_minio
-from src.utils.datetime_utils import utc_now
+from datetime import datetime as dt, timezone
+
+# 使用 naive datetime 以兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE 列
+_utc_now = lambda: dt.now(timezone.utc).replace(tzinfo=None)
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -175,7 +180,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
     # 登录成功，重置失败计数器
     user.reset_failed_login()
-    user.last_login = utc_now()
+    user.last_login = _utc_now()
     await db.commit()
 
     # 生成访问令牌
@@ -208,7 +213,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 # 路由：校验是否需要初始化管理员
 @auth.get("/check-first-run")
 async def check_first_run():
-    is_first_run = await db_manager.async_check_first_run()
+    is_first_run = await pg_manager.async_check_first_run()
     return {"first_run": is_first_run}
 
 
@@ -216,7 +221,7 @@ async def check_first_run():
 @auth.post("/initialize", response_model=Token)
 async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depends(get_db)):
     # 检查是否是首次运行
-    if not await db_manager.async_check_first_run():
+    if not await pg_manager.async_check_first_run():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="系统已经初始化，无法再次创建初始管理员",
@@ -246,24 +251,24 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
     user_id = admin_data.user_id
 
     # 创建默认部门
-    default_department = Department(name="默认部门", description="系统初始化时创建的默认部门")
-    db.add(default_department)
-    await db.flush()  # 获取部门ID
+    dept_repo = DepartmentRepository()
+    default_department = await dept_repo.create({
+        "name": "默认部门",
+        "description": "系统初始化时创建的默认部门",
+    })
 
-    new_admin = User(
-        username=admin_data.user_id,  # username和user_id设置为相同值
-        user_id=user_id,
-        phone_number=admin_data.phone_number,
-        avatar=None,  # 初始化时头像为空
-        password_hash=hashed_password,
-        role="superadmin",
-        department_id=default_department.id,
-        last_login=utc_now(),
-    )
-
-    db.add(new_admin)
-    await db.commit()
-    await db.refresh(new_admin)
+    # 创建管理员用户
+    user_repo = UserRepository()
+    new_admin = await user_repo.create({
+        "username": admin_data.user_id,
+        "user_id": user_id,
+        "phone_number": admin_data.phone_number,
+        "avatar": None,
+        "password_hash": hashed_password,
+        "role": "superadmin",
+        "department_id": default_department.id,
+        "last_login": _utc_now(),
+    })
 
     # 生成访问令牌
     token_data = {"sub": str(new_admin.id)}
@@ -378,6 +383,7 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
 ):
     """创建新用户（管理员权限）"""
+    user_repo = UserRepository()
 
     # 验证用户名
     is_valid, error_msg = validate_username(user_data.username)
@@ -388,9 +394,8 @@ async def create_user(
         )
 
     # 检查用户名是否已存在
-    result = await db.execute(select(User).filter(User.username == user_data.username))
-    existing_user = result.scalar_one_or_none()
-    if existing_user:
+    users = await user_repo.list_users()
+    if any(u.username == user_data.username for u in users):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="用户名已存在",
@@ -398,17 +403,14 @@ async def create_user(
 
     # 检查手机号是否已存在（如果提供了）
     if user_data.phone_number:
-        result = await db.execute(select(User).filter(User.phone_number == user_data.phone_number))
-        existing_phone = result.scalar_one_or_none()
-        if existing_phone:
+        if await user_repo.exists_by_phone(user_data.phone_number):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="手机号已存在",
             )
 
     # 生成唯一的user_id
-    result = await db.execute(select(User.user_id))
-    existing_user_ids = [user_id for (user_id,) in result.all()]
+    existing_user_ids = await user_repo.get_all_user_ids()
     user_id = generate_unique_user_id(user_data.username, existing_user_ids)
 
     # 创建新用户
@@ -434,7 +436,11 @@ async def create_user(
         # 超级管理员创建用户时，使用指定的部门或默认部门
         department_id = user_data.department_id
         if department_id is None:
-            department_id = await get_default_department_id(db)
+            # 获取默认部门
+            dept_repo = DepartmentRepository()
+            departments = await dept_repo.list_departments()
+            default_dept = next((d for d in departments if d.name == "默认部门"), None)
+            department_id = default_dept.id if default_dept else None
     else:
         # 普通管理员创建用户时，自动继承该管理员的部门
         department_id = current_user.department_id
@@ -445,18 +451,14 @@ async def create_user(
                 detail="普通管理员不能指定部门",
             )
 
-    new_user = User(
-        username=user_data.username,
-        user_id=user_id,
-        phone_number=user_data.phone_number,
-        password_hash=hashed_password,
-        role=user_data.role,
-        department_id=department_id,
-    )
-
-    db.add(new_user)
-    await db.commit()
-    await db.refresh(new_user)
+    new_user = await user_repo.create({
+        "username": user_data.username,
+        "user_id": user_id,
+        "phone_number": user_data.phone_number,
+        "password_hash": hashed_password,
+        "role": user_data.role,
+        "department_id": department_id,
+    })
 
     # 记录操作
     await log_operation(
@@ -471,28 +473,20 @@ async def create_user(
 async def read_users(
     skip: int = 0, limit: int = 100, current_user: User = Depends(get_admin_user), db: AsyncSession = Depends(get_db)
 ):
+    user_repo = UserRepository()
+
     # 部门隔离逻辑
     if current_user.role == "superadmin":
-        # 超级管理员可以看到所有用户，使用 JOIN 获取部门名称
-        result = await db.execute(
-            select(User, Department.name.label("department_name"))
-            .outerjoin(Department, User.department_id == Department.id)
-            .filter(User.is_deleted == 0)
-            .offset(skip)
-            .limit(limit)
-        )
+        # 超级管理员可以看到所有用户
+        users_with_dept = await user_repo.list_with_department(skip=skip, limit=limit)
     else:
         # 普通管理员只能看到本部门用户
-        result = await db.execute(
-            select(User, Department.name.label("department_name"))
-            .outerjoin(Department, User.department_id == Department.id)
-            .filter(User.is_deleted == 0, User.department_id == current_user.department_id)
-            .offset(skip)
-            .limit(limit)
+        users_with_dept = await user_repo.list_with_department(
+            skip=skip, limit=limit, department_id=current_user.department_id
         )
-    rows = result.all()
+
     users = []
-    for user, dept_name in rows:
+    for user, dept_name in users_with_dept:
         user_dict = user.to_dict()
         user_dict["department_name"] = dept_name
         users.append(user_dict)
@@ -679,7 +673,7 @@ async def delete_user(
     hash_suffix = hashlib.md5(user.user_id.encode()).hexdigest()[:4]
 
     user.is_deleted = 1
-    user.deleted_at = utc_now()
+    user.deleted_at = _utc_now()
     user.username = f"已注销用户-{hash_suffix}"
     user.phone_number = None  # 清空手机号，释放该手机号供其他用户使用
     user.password_hash = "DELETED"  # 禁止登录

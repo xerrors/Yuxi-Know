@@ -34,7 +34,7 @@ class GraphAdapterFactory:
         }
 
     @classmethod
-    def detect_graph_type(cls, db_id: str, knowledge_base_manager=None) -> str:
+    async def detect_graph_type(cls, db_id: str, knowledge_base_manager=None) -> str:
         """
         自动检测图谱类型
 
@@ -47,7 +47,7 @@ class GraphAdapterFactory:
         """
         # 1. 首先检查是否是 LightRAG 数据库 (通过知识库管理器)
         if knowledge_base_manager:
-            db_info = knowledge_base_manager.get_database_info(db_id)
+            db_info = await knowledge_base_manager.get_database_info(db_id)
             if db_info:  # 有信息表示是 LightRAG 数据库
                 return "lightrag"
 
@@ -59,7 +59,7 @@ class GraphAdapterFactory:
         return "upload"
 
     @classmethod
-    def create_adapter_by_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
+    async def create_adapter_by_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
         """
         根据数据库ID自动创建对应的适配器
 
@@ -71,7 +71,7 @@ class GraphAdapterFactory:
         Returns:
             对应的图谱适配器
         """
-        graph_type = cls.detect_graph_type(db_id, knowledge_base_manager)
+        graph_type = await cls.detect_graph_type(db_id, knowledge_base_manager)
 
         if graph_type == "lightrag":
             # LightRAG 类型，使用 kb_id 作为配置
@@ -81,8 +81,8 @@ class GraphAdapterFactory:
             return cls.create_adapter("upload", graph_db_instance=graph_db_instance, config={"kgdb_name": db_id})
 
     @classmethod
-    def create_adapter_for_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
+    async def create_adapter_for_db_id(cls, db_id: str, knowledge_base_manager=None, graph_db_instance=None) -> GraphAdapter:
         """
         兼容性方法，调用 create_adapter_by_db_id
         """
-        return cls.create_adapter_by_db_id(db_id, knowledge_base_manager, graph_db_instance)
+        return await cls.create_adapter_by_db_id(db_id, knowledge_base_manager, graph_db_instance)
