@@ -14,7 +14,7 @@ import textwrap
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from src.storage.db.models import User
+from src.storage.postgres.models_business import User
 from server.utils.auth_middleware import get_admin_user
 from src import knowledge_base
 from src.models import select_model

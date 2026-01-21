@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from src.storage.db.models import User
+from src.storage.postgres.models_business import User
 from server.utils.auth_middleware import get_admin_user
 from src import config
 from src.models.chat import test_chat_model_status, test_all_chat_models_status

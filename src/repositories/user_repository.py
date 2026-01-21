@@ -44,7 +44,7 @@ class UserRepository:
                 query = query.where(User.department_id == department_id)
             if role is not None:
                 query = query.where(User.role == role)
-            query = query.offset(skip).limit(limit)
+            query = query.order_by(User.id.asc()).offset(skip).limit(limit)
             result = await session.execute(query)
             return list(result.scalars().all())
 
@@ -64,7 +64,7 @@ class UserRepository:
                 query = query.where(User.department_id == department_id)
             if role is not None:
                 query = query.where(User.role == role)
-            query = query.offset(skip).limit(limit)
+            query = query.order_by(User.id.asc()).offset(skip).limit(limit)
             result = await session.execute(query)
             return list(result.all())
 

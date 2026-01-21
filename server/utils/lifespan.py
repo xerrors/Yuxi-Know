@@ -12,17 +12,17 @@ from src.utils import logger
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """FastAPI lifespan事件管理器"""
-    # 初始化 MCP 服务器配置
-    try:
-        await init_mcp_servers()
-    except Exception as e:
-        logger.error(f"Failed to initialize MCP servers during startup: {e}")
-
     # 初始化数据库连接
     try:
         pg_manager.initialize()
     except Exception as e:
         logger.error(f"Failed to initialize database during startup: {e}")
+
+    # 初始化 MCP 服务器配置
+    try:
+        await init_mcp_servers()
+    except Exception as e:
+        logger.error(f"Failed to initialize MCP servers during startup: {e}")
 
     # 初始化知识库管理器
     try:

@@ -6,7 +6,7 @@ from server.utils.auth_middleware import get_admin_user
 from src import graph_base, knowledge_base
 from src.knowledge.adapters.base import GraphAdapter
 from src.knowledge.adapters.factory import GraphAdapterFactory
-from src.storage.db.models import User
+from src.storage.postgres.models_business import User
 from src.storage.minio.client import StorageError
 from src.utils.logging_config import logger
 

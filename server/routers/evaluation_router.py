@@ -1,7 +1,7 @@
 import traceback
 
 from fastapi import APIRouter, HTTPException, Depends, File, Form, Body, UploadFile
-from src.storage.db.models import User
+from src.storage.postgres.models_business import User
 from server.utils.auth_middleware import get_admin_user
 from src.utils import logger
 

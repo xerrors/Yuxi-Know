@@ -15,7 +15,7 @@ from src.services.mcp_service import (
     toggle_tool_enabled,
     update_mcp_server,
 )
-from src.storage.db.models import User
+from src.storage.postgres.models_business import User
 from src.utils import logger
 from server.utils.auth_middleware import get_admin_user, get_db
 

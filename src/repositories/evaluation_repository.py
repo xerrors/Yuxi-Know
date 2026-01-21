@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import delete, select
 
-from src.storage.db.models_knowledge import EvaluationBenchmark, EvaluationResult, EvaluationResultDetail
+from src.storage.postgres.models_knowledge import EvaluationBenchmark, EvaluationResult, EvaluationResultDetail
 from src.storage.postgres.manager import pg_manager
 
 
