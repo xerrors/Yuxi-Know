@@ -1,4 +1,13 @@
-import { apiGet, apiPost, apiDelete, apiPut, apiAdminGet, apiAdminPost, apiRequest } from './base'
+import {
+  apiGet,
+  apiPost,
+  apiDelete,
+  apiPut,
+  apiAdminGet,
+  apiAdminPost,
+  apiAdminDelete,
+  apiRequest
+} from './base'
 import { useUserStore } from '@/stores/user'
 
 /**
@@ -135,6 +144,23 @@ export const agentApi = {
     const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '')
     return apiAdminPost(url, config)
   },
+
+  getAgentConfigs: (agentId) => apiGet(`/api/chat/agent/${agentId}/configs`),
+
+  getAgentConfigProfile: (agentId, configId) =>
+    apiGet(`/api/chat/agent/${agentId}/configs/${configId}`),
+
+  createAgentConfigProfile: (agentId, payload) =>
+    apiAdminPost(`/api/chat/agent/${agentId}/configs`, payload),
+
+  updateAgentConfigProfile: (agentId, configId, payload) =>
+    apiPut(`/api/chat/agent/${agentId}/configs/${configId}`, payload),
+
+  setAgentConfigDefault: (agentId, configId) =>
+    apiAdminPost(`/api/chat/agent/${agentId}/configs/${configId}/set_default`, {}),
+
+  deleteAgentConfigProfile: (agentId, configId) =>
+    apiAdminDelete(`/api/chat/agent/${agentId}/configs/${configId}`),
 
   /**
    * 设置默认智能体

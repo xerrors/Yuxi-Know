@@ -26,6 +26,7 @@ from src.services.conversation_service import (
 )
 from src.services.feedback_service import get_message_feedback_view, submit_message_feedback_view
 from src.services.history_query_service import get_agent_history_view
+from src.repositories.agent_config_repository import AgentConfigRepository
 from src.utils.logging_config import logger
 from src.utils.image_processor import process_uploaded_image
 
@@ -41,6 +42,25 @@ class ImageUploadResponse(BaseModel):
     mime_type: str | None = None
     size_bytes: int | None = None
     error: str | None = None
+
+
+class AgentConfigCreate(BaseModel):
+    name: str
+    description: str | None = None
+    icon: str | None = None
+    pics: list[str] | None = None
+    examples: list[str] | None = None
+    config_json: dict | None = None
+    set_default: bool = False
+
+
+class AgentConfigUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    icon: str | None = None
+    pics: list[str] | None = None
+    examples: list[str] | None = None
+    config_json: dict | None = None
 
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -169,6 +189,172 @@ async def get_single_agent(agent_id: str, current_user: User = Depends(get_requi
         raise HTTPException(status_code=500, detail=f"获取智能体信息出错: {str(e)}")
 
 
+@chat.get("/agent/{agent_id}/configs")
+async def list_agent_configs(
+    agent_id: str,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
+    if not items:
+        await repo.get_or_create_default(
+            department_id=current_user.department_id,
+            agent_id=agent_id,
+            created_by=str(current_user.id),
+        )
+        items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
+
+    configs = [
+        {
+            "id": item.id,
+            "name": item.name,
+            "description": item.description,
+            "icon": item.icon,
+            "pics": item.pics or [],
+            "examples": item.examples or [],
+            "is_default": bool(item.is_default),
+        }
+        for item in items
+    ]
+    return {"configs": configs}
+
+
+@chat.get("/agent/{agent_id}/configs/{config_id}")
+async def get_agent_config_profile(
+    agent_id: str,
+    config_id: int,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    item = await repo.get_by_id(config_id)
+    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    return {"config": item.to_dict()}
+
+
+@chat.post("/agent/{agent_id}/configs")
+async def create_agent_config_profile(
+    agent_id: str,
+    payload: AgentConfigCreate,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    item = await repo.create(
+        department_id=current_user.department_id,
+        agent_id=agent_id,
+        name=payload.name,
+        description=payload.description,
+        icon=payload.icon,
+        pics=payload.pics,
+        examples=payload.examples,
+        config_json=payload.config_json,
+        is_default=payload.set_default,
+        created_by=str(current_user.id),
+    )
+    if payload.set_default:
+        item = await repo.set_default(config=item, updated_by=str(current_user.id))
+
+    return {"config": item.to_dict()}
+
+
+@chat.put("/agent/{agent_id}/configs/{config_id}")
+async def update_agent_config_profile(
+    agent_id: str,
+    config_id: int,
+    payload: AgentConfigUpdate,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    item = await repo.get_by_id(config_id)
+    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    updated = await repo.update(
+        item,
+        name=payload.name,
+        description=payload.description,
+        icon=payload.icon,
+        pics=payload.pics,
+        examples=payload.examples,
+        config_json=payload.config_json,
+        updated_by=str(current_user.id),
+    )
+    return {"config": updated.to_dict()}
+
+
+@chat.post("/agent/{agent_id}/configs/{config_id}/set_default")
+async def set_agent_config_default(
+    agent_id: str,
+    config_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    item = await repo.get_by_id(config_id)
+    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    updated = await repo.set_default(config=item, updated_by=str(current_user.id))
+    return {"config": updated.to_dict()}
+
+
+@chat.delete("/agent/{agent_id}/configs/{config_id}")
+async def delete_agent_config_profile(
+    agent_id: str,
+    config_id: int,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not current_user.department_id:
+        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
+
+    if not agent_manager.get_agent(agent_id):
+        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
+
+    repo = AgentConfigRepository(db)
+    item = await repo.get_by_id(config_id)
+    if not item or item.agent_id != agent_id or item.department_id != current_user.department_id:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    await repo.delete(config=item, updated_by=str(current_user.id))
+    return {"success": True}
+
+
 @chat.post("/agent/{agent_id}")
 async def chat_agent(
     agent_id: str,
@@ -239,6 +425,7 @@ async def resume_agent_chat(
     agent_id: str,
     thread_id: str = Body(...),
     approved: bool = Body(...),
+    config: dict = Body({}),
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -259,6 +446,7 @@ async def resume_agent_chat(
             thread_id=thread_id,
             approved=approved,
             meta=meta,
+            config=config,
             current_user=current_user,
             db=db,
         ),

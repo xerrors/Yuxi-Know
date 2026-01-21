@@ -10,6 +10,7 @@ from langgraph.types import Command
 from src import config as conf
 from src.agents import agent_manager
 from src.plugins.guard import content_guard
+from src.repositories.agent_config_repository import AgentConfigRepository
 from src.repositories.conversation_repository import ConversationRepository
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
@@ -270,12 +271,42 @@ async def stream_agent_chat(
     messages = [human_message]
 
     user_id = str(current_user.id)
+    department_id = current_user.department_id
+    if not department_id:
+        yield make_chunk(status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta)
+        return
+
+    agent_config_id = config.get("agent_config_id")
+    config_repo = AgentConfigRepository(db)
+    config_item = None
+    if agent_config_id is not None:
+        try:
+            config_item = await config_repo.get_by_id(int(agent_config_id))
+        except Exception:
+            logger.warning(f"Failed to fetch agent config {agent_config_id}: {traceback.format_exc()}")
+            config_item = None
+        if config_item is not None and (config_item.department_id != department_id or config_item.agent_id != agent_id):
+            config_item = None
+
+    if config_item is None:
+        config_item = await config_repo.get_or_create_default(
+            department_id=department_id, agent_id=agent_id, created_by=user_id
+        )
+        agent_config_id = config_item.id
+
     thread_id = config.get("thread_id")
-    input_context = {"user_id": user_id, "thread_id": thread_id}
+    input_context = {
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "department_id": department_id,
+        "agent_config_id": agent_config_id,
+        "agent_config": (config_item.config_json or {}).get("context", config_item.config_json or {}),
+    }
 
     if not thread_id:
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
+        input_context["thread_id"] = thread_id
 
     try:
         conv_repo = ConversationRepository(db)
@@ -302,7 +333,7 @@ async def stream_agent_chat(
 
         full_msg = None
         accumulated_content = []
-        langgraph_config = {"configurable": input_context}
+        langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
         async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
             if isinstance(msg, AIMessageChunk):
                 accumulated_content.append(msg.content)
@@ -418,6 +449,7 @@ async def stream_agent_resume(
     thread_id: str,
     approved: bool,
     meta: dict,
+    config: dict,
     current_user,
     db,
 ) -> AsyncIterator[bytes]:
@@ -447,11 +479,50 @@ async def stream_agent_resume(
     resume_command = Command(resume=approved)
     graph = await agent.get_graph()
 
-    input_context = {"user_id": str(current_user.id), "thread_id": thread_id}
-    context = agent.context_schema.from_file(module_name=agent.module_name, input_context=input_context)
+    user_id = str(current_user.id)
+    department_id = current_user.department_id
+    if not department_id:
+        yield make_resume_chunk(
+            status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta
+        )
+        return
+
+    agent_config_id = (config or {}).get("agent_config_id")
+    config_repo = AgentConfigRepository(db)
+    config_item = None
+    if agent_config_id is not None:
+        try:
+            config_item = await config_repo.get_by_id(int(agent_config_id))
+        except Exception:
+            logger.warning(f"Failed to fetch agent config {agent_config_id}: {traceback.format_exc()}")
+            config_item = None
+        if config_item is not None and (config_item.department_id != department_id or config_item.agent_id != agent_id):
+            config_item = None
+
+    if config_item is None:
+        config_item = await config_repo.get_or_create_default(
+            department_id=department_id, agent_id=agent_id, created_by=user_id
+        )
+        agent_config_id = config_item.id
+
+    input_context = {
+        "user_id": user_id,
+        "thread_id": thread_id,
+        "department_id": department_id,
+        "agent_config_id": agent_config_id,
+        "agent_config": (config_item.config_json or {}).get("context", config_item.config_json or {}),
+    }
+    context = agent.context_schema()
+    agent_config = input_context.get("agent_config")
+    if isinstance(agent_config, dict):
+        context.update(agent_config)
+    context.update(input_context)
 
     stream_source = graph.astream(
-        resume_command, context=context, config={"configurable": input_context}, stream_mode="messages"
+        resume_command,
+        context=context,
+        config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
+        stream_mode="messages",
     )
 
     try:
@@ -464,7 +535,7 @@ async def stream_agent_resume(
                 content=getattr(msg, "content", ""), msg=msg_dict, metadata=metadata, status="loading"
             )
 
-        langgraph_config = {"configurable": input_context}
+        langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": str(current_user.id)}}
         async for chunk in check_and_handle_interrupts(agent, langgraph_config, make_resume_chunk, meta, thread_id):
             yield chunk
 

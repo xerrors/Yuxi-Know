@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useAgentStore } from './agent'
 
 export const useUserStore = defineStore('user', () => {
   // 状态
@@ -79,6 +80,10 @@ export const useUserStore = defineStore('user', () => {
     userRole.value = ''
     departmentId.value = null
     departmentName.value = ''
+
+    // 清除 agentStore 状态，确保重新登录时能正确加载数据
+    const agentStore = useAgentStore()
+    agentStore.reset()
 
     // 只清除 token
     localStorage.removeItem('user_token')
@@ -394,8 +399,5 @@ export const checkAdminPermission = () => {
 // 检查当前用户是否有超级管理员权限
 export const checkSuperAdminPermission = () => {
   const userStore = useUserStore()
-  if (!userStore.isSuperAdmin) {
-    throw new Error('需要超级管理员权限')
-  }
-  return true
+  return userStore.isSuperAdmin
 }
