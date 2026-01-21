@@ -1,29 +1,14 @@
 """PostgreSQL 业务数据模型 - 用户、部门、对话等相关表"""
 
-from datetime import datetime as dt, timezone
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
+from src.utils.datetime_utils import format_utc_datetime, utc_now_naive
+
 Base = declarative_base()
-
-
-def _utc_now_naive():
-    """返回 naive UTC datetime 以兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE 列"""
-    return dt.now(timezone.utc).replace(tzinfo=None)
-
-
-def _format_utc_datetime(dt_value) -> str | None:
-    """Helper to format datetime to UTC ISO string, assuming naive datetimes are UTC."""
-    if dt_value is None:
-        return None
-    if isinstance(dt_value, dt):
-        if dt_value.tzinfo is None:
-            dt_value = dt_value.replace(tzinfo=timezone.utc)
-        return dt_value.isoformat()
-    return str(dt_value)
 
 
 class Department(Base):
@@ -34,7 +19,7 @@ class Department(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(50), nullable=False, unique=True, index=True)
     description = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=_utc_now_naive)
+    created_at = Column(DateTime, default=utc_now_naive)
 
     # 关联关系
     users = relationship("User", back_populates="department", cascade="all, delete-orphan")
@@ -44,7 +29,7 @@ class Department(Base):
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -61,7 +46,7 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     role = Column(String, nullable=False, default="user")  # 角色: superadmin, admin, user
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)  # 部门ID
-    created_at = Column(DateTime, default=_utc_now_naive)
+    created_at = Column(DateTime, default=utc_now_naive)
     last_login = Column(DateTime, nullable=True)
 
     # 登录失败限制相关字段
@@ -88,13 +73,13 @@ class User(Base):
             "avatar": self.avatar,
             "role": self.role,
             "department_id": self.department_id,
-            "created_at": _format_utc_datetime(self.created_at),
-            "last_login": _format_utc_datetime(self.last_login),
+            "created_at": format_utc_datetime(self.created_at),
+            "last_login": format_utc_datetime(self.last_login),
             "login_failed_count": self.login_failed_count,
-            "last_failed_login": _format_utc_datetime(self.last_failed_login),
-            "login_locked_until": _format_utc_datetime(self.login_locked_until),
+            "last_failed_login": format_utc_datetime(self.last_failed_login),
+            "login_locked_until": format_utc_datetime(self.login_locked_until),
             "is_deleted": self.is_deleted,
-            "deleted_at": _format_utc_datetime(self.deleted_at),
+            "deleted_at": format_utc_datetime(self.deleted_at),
         }
         if include_password:
             result["password_hash"] = self.password_hash
@@ -104,13 +89,13 @@ class User(Base):
         """检查用户是否处于登录锁定状态"""
         if self.login_locked_until is None:
             return False
-        return _utc_now_naive() < self.login_locked_until
+        return utc_now_naive() < self.login_locked_until
 
     def get_remaining_lock_time(self) -> int:
         """获取剩余锁定时间（秒）"""
         if self.login_locked_until is None:
             return 0
-        remaining = int((self.login_locked_until - _utc_now_naive()).total_seconds())
+        remaining = int((self.login_locked_until - utc_now_naive()).total_seconds())
         return max(0, remaining)
 
     def reset_failed_login(self):
@@ -131,13 +116,15 @@ class Conversation(Base):
     agent_id = Column(String(64), index=True, nullable=False, comment="Agent ID")
     title = Column(String(255), nullable=True, comment="Conversation title")
     status = Column(String(20), default="active", comment="Status: active/archived/deleted")
-    created_at = Column(DateTime, default=_utc_now_naive, comment="Creation time")
-    updated_at = Column(DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, comment="Update time")
+    created_at = Column(DateTime, default=utc_now_naive, comment="Creation time")
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, comment="Update time")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata")
 
     # Relationships
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
-    stats = relationship("ConversationStats", back_populates="conversation", uselist=False, cascade="all, delete-orphan")
+    stats = relationship(
+        "ConversationStats", back_populates="conversation", uselist=False, cascade="all, delete-orphan"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -147,8 +134,8 @@ class Conversation(Base):
             "agent_id": self.agent_id,
             "title": self.title,
             "status": self.status,
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
             "metadata": self.extra_metadata or {},
         }
 
@@ -165,7 +152,7 @@ class Message(Base):
     role = Column(String(20), nullable=False, comment="Message role: user/assistant/system/tool")
     content = Column(Text, nullable=False, comment="Message content")
     message_type = Column(String(30), default="text", comment="Message type: text/tool_call/tool_result")
-    created_at = Column(DateTime, default=_utc_now_naive, comment="Creation time")
+    created_at = Column(DateTime, default=utc_now_naive, comment="Creation time")
     token_count = Column(Integer, nullable=True, comment="Token count (optional)")
     extra_metadata = Column(JSON, nullable=True, comment="Additional metadata (complete message dump)")
     image_content = Column(Text, nullable=True, comment="Base64 encoded image content for multimodal messages")
@@ -182,7 +169,7 @@ class Message(Base):
             "role": self.role,
             "content": self.content,
             "message_type": self.message_type,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
             "token_count": self.token_count,
             "metadata": self.extra_metadata or {},
             "image_content": self.image_content,
@@ -209,7 +196,7 @@ class ToolCall(Base):
     tool_output = Column(Text, nullable=True, comment="Tool execution result")
     status = Column(String(20), default="pending", comment="Status: pending/success/error")
     error_message = Column(Text, nullable=True, comment="Error message if failed")
-    created_at = Column(DateTime, default=_utc_now_naive, comment="Creation time")
+    created_at = Column(DateTime, default=utc_now_naive, comment="Creation time")
 
     # Relationships
     message = relationship("Message", back_populates="tool_calls")
@@ -224,7 +211,7 @@ class ToolCall(Base):
             "tool_output": self.tool_output,
             "status": self.status,
             "error_message": self.error_message,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -241,8 +228,8 @@ class ConversationStats(Base):
     total_tokens = Column(Integer, default=0, comment="Total tokens used")
     model_used = Column(String(100), nullable=True, comment="Model used")
     user_feedback = Column(JSON, nullable=True, comment="User feedback")
-    created_at = Column(DateTime, default=_utc_now_naive, comment="Creation time")
-    updated_at = Column(DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, comment="Update time")
+    created_at = Column(DateTime, default=utc_now_naive, comment="Creation time")
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, comment="Update time")
 
     # Relationships
     conversation = relationship("Conversation", back_populates="stats")
@@ -255,8 +242,8 @@ class ConversationStats(Base):
             "total_tokens": self.total_tokens,
             "model_used": self.model_used,
             "user_feedback": self.user_feedback or {},
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
         }
 
 
@@ -270,7 +257,7 @@ class OperationLog(Base):
     operation = Column(String, nullable=False)
     details = Column(Text, nullable=True)
     ip_address = Column(String, nullable=True)
-    timestamp = Column(DateTime, default=_utc_now_naive)
+    timestamp = Column(DateTime, default=utc_now_naive)
 
     # 关联用户
     user = relationship("User", back_populates="operation_logs")
@@ -282,7 +269,7 @@ class OperationLog(Base):
             "operation": self.operation,
             "details": self.details,
             "ip_address": self.ip_address,
-            "timestamp": _format_utc_datetime(self.timestamp),
+            "timestamp": format_utc_datetime(self.timestamp),
         }
 
 
@@ -292,11 +279,13 @@ class MessageFeedback(Base):
     __tablename__ = "message_feedbacks"
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="Primary key")
-    message_id = Column(Integer, ForeignKey("messages.id"), nullable=False, index=True, comment="Message ID being rated")
+    message_id = Column(
+        Integer, ForeignKey("messages.id"), nullable=False, index=True, comment="Message ID being rated"
+    )
     user_id = Column(String(64), nullable=False, index=True, comment="User ID who provided feedback")
     rating = Column(String(10), nullable=False, comment="Feedback rating: like or dislike")
     reason = Column(Text, nullable=True, comment="Optional reason for dislike feedback")
-    created_at = Column(DateTime, default=_utc_now_naive, comment="Feedback creation time")
+    created_at = Column(DateTime, default=utc_now_naive, comment="Feedback creation time")
 
     # Relationships
     message = relationship("Message", back_populates="feedbacks")
@@ -308,7 +297,7 @@ class MessageFeedback(Base):
             "user_id": self.user_id,
             "rating": self.rating,
             "reason": self.reason,
-            "created_at": _format_utc_datetime(self.created_at),
+            "created_at": format_utc_datetime(self.created_at),
         }
 
 
@@ -343,8 +332,8 @@ class MCPServer(Base):
     updated_by = Column(String(100), nullable=False, comment="修改人用户名")
 
     # 时间戳
-    created_at = Column(DateTime, default=_utc_now_naive, comment="创建时间")
-    updated_at = Column(DateTime, default=_utc_now_naive, onupdate=_utc_now_naive, comment="更新时间")
+    created_at = Column(DateTime, default=utc_now_naive, comment="创建时间")
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, comment="更新时间")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -363,8 +352,8 @@ class MCPServer(Base):
             "disabled_tools": self.disabled_tools or [],
             "created_by": self.created_by,
             "updated_by": self.updated_by,
-            "created_at": _format_utc_datetime(self.created_at),
-            "updated_at": _format_utc_datetime(self.updated_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
         }
 
     def to_mcp_config(self) -> dict[str, Any]:

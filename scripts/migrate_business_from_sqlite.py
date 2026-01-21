@@ -35,7 +35,6 @@ from sqlalchemy.orm import sessionmaker
 
 from src import config
 from src.storage.db.models import (
-    Base as SqliteBase,
     Department as SqliteDepartment,
     User as SqliteUser,
     Conversation as SqliteConversation,
@@ -151,9 +150,7 @@ async def migrate_departments(sqlite_reader: SQLiteReader, dry_run: bool, execut
         async with pg_manager.get_async_session_context() as session:
             for sqlite_dept in sqlite_depts:
                 # 检查是否已存在
-                existing = await session.execute(
-                    select(Department).where(Department.id == sqlite_dept.id)
-                )
+                existing = await session.execute(select(Department).where(Department.id == sqlite_dept.id))
                 if existing.scalar_one_or_none() is None:
                     dept = Department(
                         id=sqlite_dept.id,
@@ -179,9 +176,7 @@ async def migrate_users(sqlite_reader: SQLiteReader, dry_run: bool, execute: boo
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_user in sqlite_users:
-                existing = await session.execute(
-                    select(User).where(User.id == sqlite_user.id)
-                )
+                existing = await session.execute(select(User).where(User.id == sqlite_user.id))
                 if existing.scalar_one_or_none() is None:
                     user = User(
                         id=sqlite_user.id,
@@ -218,9 +213,7 @@ async def migrate_conversations(sqlite_reader: SQLiteReader, dry_run: bool, exec
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_conv in sqlite_convs:
-                existing = await session.execute(
-                    select(Conversation).where(Conversation.id == sqlite_conv.id)
-                )
+                existing = await session.execute(select(Conversation).where(Conversation.id == sqlite_conv.id))
                 if existing.scalar_one_or_none() is None:
                     # 截断过长的 title
                     title = sqlite_conv.title
@@ -256,9 +249,7 @@ async def migrate_messages(sqlite_reader: SQLiteReader, dry_run: bool, execute: 
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_msg in sqlite_messages:
-                existing = await session.execute(
-                    select(Message).where(Message.id == sqlite_msg.id)
-                )
+                existing = await session.execute(select(Message).where(Message.id == sqlite_msg.id))
                 if existing.scalar_one_or_none() is None:
                     msg = Message(
                         id=sqlite_msg.id,
@@ -289,9 +280,7 @@ async def migrate_tool_calls(sqlite_reader: SQLiteReader, dry_run: bool, execute
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_call in sqlite_calls:
-                existing = await session.execute(
-                    select(ToolCall).where(ToolCall.id == sqlite_call.id)
-                )
+                existing = await session.execute(select(ToolCall).where(ToolCall.id == sqlite_call.id))
                 if existing.scalar_one_or_none() is None:
                     call = ToolCall(
                         id=sqlite_call.id,
@@ -354,9 +343,7 @@ async def migrate_operation_logs(sqlite_reader: SQLiteReader, dry_run: bool, exe
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_log in sqlite_logs:
-                existing = await session.execute(
-                    select(OperationLog).where(OperationLog.id == sqlite_log.id)
-                )
+                existing = await session.execute(select(OperationLog).where(OperationLog.id == sqlite_log.id))
                 if existing.scalar_one_or_none() is None:
                     log = OperationLog(
                         id=sqlite_log.id,
@@ -384,9 +371,7 @@ async def migrate_message_feedbacks(sqlite_reader: SQLiteReader, dry_run: bool, 
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_fb in sqlite_feedbacks:
-                existing = await session.execute(
-                    select(MessageFeedback).where(MessageFeedback.id == sqlite_fb.id)
-                )
+                existing = await session.execute(select(MessageFeedback).where(MessageFeedback.id == sqlite_fb.id))
                 if existing.scalar_one_or_none() is None:
                     fb = MessageFeedback(
                         id=sqlite_fb.id,
@@ -414,9 +399,7 @@ async def migrate_mcp_servers(sqlite_reader: SQLiteReader, dry_run: bool, execut
     elif execute:
         async with pg_manager.get_async_session_context() as session:
             for sqlite_server in sqlite_servers:
-                existing = await session.execute(
-                    select(MCPServer).where(MCPServer.name == sqlite_server.name)
-                )
+                existing = await session.execute(select(MCPServer).where(MCPServer.name == sqlite_server.name))
                 if existing.scalar_one_or_none() is None:
                     server = MCPServer(
                         name=sqlite_server.name,
@@ -464,6 +447,7 @@ async def verify_migration(sqlite_reader: SQLiteReader) -> dict[str, dict]:
 
         async with pg_manager.get_async_session_context() as session:
             from sqlalchemy import func
+
             pk_attr = getattr(model, pk_column)
             result = await session.execute(select(func.count(pk_attr)))
             pg_count = result.scalar() or 0
@@ -557,9 +541,7 @@ async def main() -> None:
         all_match = True
         for table_name, counts in results.items():
             status = "✓" if counts["match"] else "✗"
-            logger.info(
-                f"{status} {table_name}: SQLite={counts['sqlite']}, PostgreSQL={counts['postgresql']}"
-            )
+            logger.info(f"{status} {table_name}: SQLite={counts['sqlite']}, PostgreSQL={counts['postgresql']}")
             if not counts["match"]:
                 all_match = False
         logger.info("=" * 60)

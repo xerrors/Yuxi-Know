@@ -142,21 +142,25 @@ async def create_department(
             )
 
     # 创建部门
-    new_department = await dept_repo.create({
-        "name": department_data.name,
-        "description": department_data.description,
-    })
+    new_department = await dept_repo.create(
+        {
+            "name": department_data.name,
+            "description": department_data.description,
+        }
+    )
 
     # 创建管理员用户
     hashed_password = AuthUtils.hash_password(department_data.admin_password)
-    await user_repo.create({
-        "username": admin_user_id,
-        "user_id": admin_user_id,
-        "phone_number": admin_phone,
-        "password_hash": hashed_password,
-        "role": "admin",
-        "department_id": new_department.id,
-    })
+    await user_repo.create(
+        {
+            "username": admin_user_id,
+            "user_id": admin_user_id,
+            "phone_number": admin_phone,
+            "password_hash": hashed_password,
+            "role": "admin",
+            "department_id": new_department.id,
+        }
+    )
 
     # 记录操作
     await log_operation(

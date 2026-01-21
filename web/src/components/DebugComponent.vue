@@ -135,7 +135,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, defineModel, onMounted, onActivated, onUnmounted, nextTick, toRaw, h } from 'vue'
+import {
+  ref,
+  reactive,
+  computed,
+  defineModel,
+  onMounted,
+  onActivated,
+  onUnmounted,
+  nextTick,
+  toRaw,
+  h
+} from 'vue'
 
 const showModal = defineModel('show')
 
@@ -145,7 +156,14 @@ import { useDatabaseStore } from '@/stores/database'
 import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThrottleFn } from '@vueuse/core'
-import { message, Modal, List as AList, ListItem as AListItem, ListItemMeta as AListItemMeta, Empty as AEmpty } from 'ant-design-vue'
+import {
+  message,
+  Modal,
+  List as AList,
+  ListItem as AListItem,
+  ListItemMeta as AListItemMeta,
+  Empty as AEmpty
+} from 'ant-design-vue'
 import {
   FullscreenOutlined,
   FullscreenExitOutlined,

@@ -108,10 +108,7 @@
 
       <!-- 共享配置 -->
       <h3>共享设置</h3>
-      <ShareConfigForm
-        v-model="shareConfig"
-        :auto-select-user-dept="true"
-      />
+      <ShareConfigForm v-model="shareConfig" :auto-select-user-dept="true" />
       <template #footer>
         <a-button key="back" @click="cancelCreateDatabase">取消</a-button>
         <a-button
@@ -371,7 +368,7 @@ const buildRequestData = () => {
   // 添加共享配置
   requestData.share_config = {
     is_shared: shareConfig.is_shared,
-    accessible_departments: shareConfig.is_shared ? [] : (shareConfig.accessible_department_ids || [])
+    accessible_departments: shareConfig.is_shared ? [] : shareConfig.accessible_department_ids || []
   }
 
   // 根据类型添加特定配置

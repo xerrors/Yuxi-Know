@@ -22,6 +22,11 @@ def utc_now() -> dt.datetime:
     return dt.datetime.now(UTC)
 
 
+def utc_now_naive() -> dt.datetime:
+    """Return the current UTC time as a naive datetime (for legacy DB fields)."""
+    return dt.datetime.now(UTC).replace(tzinfo=None)
+
+
 def shanghai_now() -> dt.datetime:
     """Return the current Asia/Shanghai time as an aware datetime."""
     return utc_now().astimezone(SHANGHAI_TZ)
@@ -110,10 +115,23 @@ def normalize_iterable_to_utc(values: Iterable[dt.datetime | None]) -> list[dt.d
     return [coerce_datetime(item) if isinstance(item, dt.datetime) else None for item in values]
 
 
+def format_utc_datetime(value: dt.datetime | None) -> str | None:
+    """
+    Format a datetime to UTC ISO 8601 string, handling naive datetimes.
+
+    Returns None for None input.
+    Naive datetimes are assumed to be in UTC (legacy behavior).
+    """
+    if value is None:
+        return None
+    return utc_isoformat(value)
+
+
 __all__ = [
     "UTC",
     "SHANGHAI_TZ",
     "utc_now",
+    "utc_now_naive",
     "shanghai_now",
     "ensure_utc",
     "ensure_shanghai",
@@ -122,4 +140,5 @@ __all__ = [
     "coerce_datetime",
     "coerce_any_to_utc_datetime",
     "normalize_iterable_to_utc",
+    "format_utc_datetime",
 ]

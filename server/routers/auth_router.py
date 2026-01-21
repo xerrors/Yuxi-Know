@@ -23,10 +23,10 @@ from server.utils.auth_utils import AuthUtils
 from server.utils.user_utils import generate_unique_user_id, validate_username, is_valid_phone_number
 from server.utils.common_utils import log_operation
 from src.storage.minio import aupload_file_to_minio
-from datetime import datetime as dt, timezone
+from datetime import datetime as dt, UTC
 
 # 使用 naive datetime 以兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE 列
-_utc_now = lambda: dt.now(timezone.utc).replace(tzinfo=None)
+_utc_now = dt.now(UTC).replace(tzinfo=None)
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -252,23 +252,27 @@ async def initialize_admin(admin_data: InitializeAdmin, db: AsyncSession = Depen
 
     # 创建默认部门
     dept_repo = DepartmentRepository()
-    default_department = await dept_repo.create({
-        "name": "默认部门",
-        "description": "系统初始化时创建的默认部门",
-    })
+    default_department = await dept_repo.create(
+        {
+            "name": "默认部门",
+            "description": "系统初始化时创建的默认部门",
+        }
+    )
 
     # 创建管理员用户
     user_repo = UserRepository()
-    new_admin = await user_repo.create({
-        "username": admin_data.user_id,
-        "user_id": user_id,
-        "phone_number": admin_data.phone_number,
-        "avatar": None,
-        "password_hash": hashed_password,
-        "role": "superadmin",
-        "department_id": default_department.id,
-        "last_login": _utc_now(),
-    })
+    new_admin = await user_repo.create(
+        {
+            "username": admin_data.user_id,
+            "user_id": user_id,
+            "phone_number": admin_data.phone_number,
+            "avatar": None,
+            "password_hash": hashed_password,
+            "role": "superadmin",
+            "department_id": default_department.id,
+            "last_login": _utc_now(),
+        }
+    )
 
     # 生成访问令牌
     token_data = {"sub": str(new_admin.id)}
@@ -451,14 +455,16 @@ async def create_user(
                 detail="普通管理员不能指定部门",
             )
 
-    new_user = await user_repo.create({
-        "username": user_data.username,
-        "user_id": user_id,
-        "phone_number": user_data.phone_number,
-        "password_hash": hashed_password,
-        "role": user_data.role,
-        "department_id": department_id,
-    })
+    new_user = await user_repo.create(
+        {
+            "username": user_data.username,
+            "user_id": user_id,
+            "phone_number": user_data.phone_number,
+            "password_hash": hashed_password,
+            "role": user_data.role,
+            "department_id": department_id,
+        }
+    )
 
     # 记录操作
     await log_operation(

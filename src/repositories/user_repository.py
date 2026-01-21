@@ -1,7 +1,8 @@
 """用户数据访问层 - Repository"""
 
-from datetime import datetime as dt, timezone
-from typing import Any, Annotated
+from datetime import UTC
+from datetime import datetime as dt
+from typing import Annotated, Any
 
 from sqlalchemy import func, select
 
@@ -9,7 +10,7 @@ from src.storage.postgres.manager import pg_manager
 from src.storage.postgres.models_business import User
 
 # 使用 naive datetime 以兼容 PostgreSQL TIMESTAMP WITHOUT TIME ZONE 列
-_utc_now = lambda: dt.now(timezone.utc).replace(tzinfo=None)
+_utc_now = dt.now(UTC).replace(tzinfo=None)
 
 
 class UserRepository:

@@ -272,7 +272,12 @@ const handleEditSubmit = () => {
         finalDeptIds = formConfig.accessible_department_ids || []
       }
 
-      console.log('[handleEditSubmit] 直接从组件获取 - is_shared:', finalIsShared, 'dept_ids:', JSON.stringify(finalDeptIds))
+      console.log(
+        '[handleEditSubmit] 直接从组件获取 - is_shared:',
+        finalIsShared,
+        'dept_ids:',
+        JSON.stringify(finalDeptIds)
+      )
 
       const updateData = {
         name: editForm.name,
@@ -286,7 +291,10 @@ const handleEditSubmit = () => {
         }
       }
 
-      console.log('[handleEditSubmit] updateData.share_config:', JSON.stringify(updateData.share_config))
+      console.log(
+        '[handleEditSubmit] updateData.share_config:',
+        JSON.stringify(updateData.share_config)
+      )
 
       // 如果是 LightRAG 类型，包含 llm_info
       if (database.value.kb_type === 'lightrag') {
