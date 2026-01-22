@@ -47,7 +47,7 @@ def hashstr(input_string, length=None, with_salt=False, salt=None):
             salt = f"{time.time()}_{uuid.uuid4().hex[:8]}"
         encoded_string = (encoded_string.decode("utf-8") + salt).encode("utf-8")
 
-    hash = hashlib.md5(encoded_string).hexdigest()
+    hash = hashlib.sha256(encoded_string).hexdigest()
     if length:
         return hash[:length]
     return hash

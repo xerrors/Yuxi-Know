@@ -673,7 +673,7 @@ async def delete_user(
     import hashlib
 
     # 生成4位哈希（基于user_id保证唯一性）
-    hash_suffix = hashlib.md5(user.user_id.encode()).hexdigest()[:4]
+    hash_suffix = hashlib.sha256(user.user_id.encode()).hexdigest()[:4]
 
     user.is_deleted = 1
     user.deleted_at = utc_now_naive()
