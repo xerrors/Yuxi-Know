@@ -146,20 +146,6 @@
             访问
           </a-button>
         </div>
-
-        <div class="service-link-card">
-          <div class="service-info">
-            <h4>SQLite WebUI</h4>
-            <p>SQLite 数据库管理界面</p>
-          </div>
-          <a-button
-            type="default"
-            @click="openLink('http://localhost:9092/')"
-            :icon="h(GlobalOutlined)"
-          >
-            访问
-          </a-button>
-        </div>
       </div>
     </div>
   </div>

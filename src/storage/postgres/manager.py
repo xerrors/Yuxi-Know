@@ -28,7 +28,7 @@ class PostgresManager(metaclass=SingletonMeta):
     """PostgreSQL 数据库管理器 - 支持知识库和业务数据"""
 
     # 知识库 PostgreSQL URL 环境变量名
-    KB_DATABASE_URL_ENV = "YUXI_KNOWLEDGE_DATABASE_URL"
+    KB_DATABASE_URL_ENV = "POSTGRES_URL"
 
     def __init__(self):
         self.async_engine = None
