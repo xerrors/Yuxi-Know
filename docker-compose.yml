@@ -28,9 +28,7 @@ services:
     # region api_envs
     environment:
       - HOST_IP=${HOST_IP:-}
-      # - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}
-      # 知识库元数据数据库连接（独立于用户数据库）
-      - YUXI_KNOWLEDGE_DATABASE_URL=${YUXI_KNOWLEDGE_DATABASE_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
+      - POSTGRES_URL=${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
       - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
       - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-0123456789}
@@ -45,7 +43,7 @@ services:
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
     # endregion api_envs
-    command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 # --reload
+    command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5050/api/system/health || exit 1"]
@@ -182,17 +180,6 @@ services:
       - "minio"
     networks:
       - app-network
-    restart: unless-stopped
-
-  sqlite-web:
-    image: coleifer/sqlite-web:latest
-    container_name: sqlite-web
-    volumes:
-      - ./saves/database:/data
-    ports:
-      - "9092:8080"
-    environment:
-      SQLITE_DATABASE: server.db
     restart: unless-stopped
 
   postgres:
