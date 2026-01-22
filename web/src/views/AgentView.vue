@@ -150,12 +150,10 @@
               <ShareAltOutlined class="menu-icon" />
               <span class="menu-text">分享对话</span>
             </div>
-            <div class="menu-divider"></div>
             <div class="menu-item" @click="handleFeedback">
               <MessageOutlined class="menu-icon" />
               <span class="menu-text">查看反馈</span>
             </div>
-            <div class="menu-divider"></div>
             <div class="menu-item" @click="handlePreview">
               <EyeOutlined class="menu-icon" />
               <span class="menu-text">预览页面</span>
@@ -976,21 +974,21 @@ const handlePreview = () => {
 // 自定义更多菜单样式
 .more-popup-menu {
   position: fixed;
-  min-width: 130px;
+  min-width: 100px;
   background: var(--gray-0);
   border-radius: 10px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.08),
     0 2px 8px rgba(0, 0, 0, 0.04);
   border: 1px solid var(--gray-100);
-  padding: 6px;
+  padding: 4px;
   z-index: 9999;
 
   .menu-item {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 6px 14px;
+    padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
