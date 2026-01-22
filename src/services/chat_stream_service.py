@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 
-from src import config as conf
+from src import config as conf, knowledge_base
 from src.agents import agent_manager
 from src.plugins.guard import content_guard
 from src.repositories.agent_config_repository import AgentConfigRepository
@@ -294,19 +294,19 @@ async def stream_agent_chat(
         )
         agent_config_id = config_item.id
 
-    thread_id = config.get("thread_id")
+    if not (thread_id := config.get("thread_id")):
+        thread_id = str(uuid.uuid4())
+        logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
+
+    agent_config = (config_item.config_json or {}).get("context", {})
     input_context = {
         "user_id": user_id,
         "thread_id": thread_id,
         "department_id": department_id,
         "agent_config_id": agent_config_id,
-        "agent_config": (config_item.config_json or {}).get("context", config_item.config_json or {}),
+        "agent_config": agent_config,
     }
 
-    if not thread_id:
-        thread_id = str(uuid.uuid4())
-        logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
-        input_context["thread_id"] = thread_id
 
     try:
         conv_repo = ConversationRepository(db)
@@ -332,7 +332,8 @@ async def stream_agent_chat(
             input_context["attachments"] = []
 
         # 根据用户权限过滤知识库
-        requested_knowledge_names = input_context.get("knowledges")
+        requested_knowledge_names = input_context["agent_config"].get("knowledges")
+        logger.info(f"Requesting knowledges: {requested_knowledge_names}")
         if requested_knowledge_names and isinstance(requested_knowledge_names, list) and requested_knowledge_names:
             user_info = {"role": "user", "department_id": department_id}
             accessible_databases = await knowledge_base.get_databases_by_user(user_info)
@@ -341,13 +342,15 @@ async def stream_agent_chat(
                 for db in accessible_databases.get("databases", [])
                 if isinstance(db, dict) and db.get("name")
             }
+            logger.info(f"Accessible knowledges: {accessible_kb_names}")
+
             filtered_knowledge_names = [kb for kb in requested_knowledge_names if kb in accessible_kb_names]
             blocked_knowledge_names = [kb for kb in requested_knowledge_names if kb not in accessible_kb_names]
             if blocked_knowledge_names:
                 logger.warning(
                     f"用户 {user_id} 无权访问知识库: {blocked_knowledge_names}, 已自动过滤"
                 )
-            input_context["knowledges"] = filtered_knowledge_names
+            input_context["agent_config"]["knowledges"] = filtered_knowledge_names
 
         full_msg = None
         accumulated_content = []

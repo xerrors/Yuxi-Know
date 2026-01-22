@@ -1373,7 +1373,7 @@ watch(
   height: 32px;
   justify-content: center;
   align-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--gray-900);
   cursor: pointer;
   width: auto;

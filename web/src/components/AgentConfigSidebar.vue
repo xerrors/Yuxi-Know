@@ -57,7 +57,7 @@
                 </div>
 
                 <!-- 系统提示词 -->
-                <div v-else-if="key === 'system_prompt'" class="system-prompt-container">
+                <div v-else-if="value.template_metadata.kind === 'prompt'" class="system-prompt-container">
                   <!-- 编辑模式 -->
                   <a-textarea
                     v-if="systemPromptEditMode"
@@ -82,7 +82,7 @@
                 </div>
 
                 <!-- 工具选择 -->
-                <div v-else-if="value.template_metadata.kind === 'tools'" class="tools-selector">
+                <!-- <div v-else-if="value.template_metadata.kind === 'tools'" class="tools-selector">
                   <div class="tools-summary">
                     <div class="tools-summary-info">
                       <span class="tools-count">已选择 {{ getSelectedCount(key) }} 个工具</span>
@@ -116,7 +116,7 @@
                       {{ getToolNameById(toolId) }}
                     </a-tag>
                   </div>
-                </div>
+                </div> -->
 
                 <!-- 布尔类型 -->
                 <a-switch
@@ -368,14 +368,12 @@ const isDeletingConfig = ref(false)
 const hasOtherConfigs = computed(() => {
   if (isEmptyConfig.value) return false
   return Object.entries(configurableItems.value).some(([key, value]) => {
-    // 检查是否属于 basic (System Prompt, LLM)
-    const isBasic = key === 'system_prompt' || value.template_metadata?.kind === 'llm'
-    // 检查是否属于 tools (mcps, knowledges, tools)
+    const isBasic = value.template_metadata?.kind === 'prompt' || value.template_metadata?.kind === 'llm'
     const isTools =
-      key === 'mcps' ||
-      key === 'knowledges' ||
-      value.template_metadata?.kind === 'tools' ||
-      key === 'tools'
+      value.template_metadata?.kind === 'mcps' ||
+      value.template_metadata?.kind === 'knowledges' ||
+      value.template_metadata?.kind === 'tools'
+
     return !isBasic && !isTools
   })
 })
@@ -408,25 +406,20 @@ const filteredTools = computed(() => {
 
 // 方法
 const shouldShowConfig = (key, value) => {
+  const isBasic = value.template_metadata?.kind === 'prompt' || value.template_metadata?.kind === 'llm'
+  const isTools =
+    value.template_metadata?.kind === 'mcps' ||
+    value.template_metadata?.kind === 'knowledges' ||
+    value.template_metadata?.kind === 'tools'
+
   if (activeTab.value === 'basic') {
     // 基础：System Prompt, LLM Model
-    return key === 'system_prompt' || value.template_metadata?.kind === 'llm'
+    return isBasic
   } else if (activeTab.value === 'tools') {
     // 工具：Tools, MCPs, Knowledges
-    return (
-      key === 'mcps' ||
-      key === 'knowledges' ||
-      value.template_metadata?.kind === 'tools' ||
-      key === 'tools'
-    )
+    return isTools
   } else {
     // 其他：剩余所有配置
-    const isBasic = key === 'system_prompt' || value.template_metadata?.kind === 'llm'
-    const isTools =
-      key === 'mcps' ||
-      key === 'knowledges' ||
-      value.template_metadata?.kind === 'tools' ||
-      key === 'tools'
     return !isBasic && !isTools
   }
 }
