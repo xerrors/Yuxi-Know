@@ -48,7 +48,7 @@ class BaseContext:
         metadata={"name": "部门ID", "configurable": False, "description": "用来唯一标识一个部门"},
     )
 
-    system_prompt: str = field(
+    system_prompt: Annotated[str, {"__template_metadata__": {"kind": "prompt"}}] = field(
         default="You are a helpful assistant.",
         metadata={"name": "系统提示词", "description": "用来描述智能体的角色和行为"},
     )
@@ -71,7 +71,7 @@ class BaseContext:
         },
     )
 
-    knowledges: list[str] = field(
+    knowledges: Annotated[list[str], {"__template_metadata__": {"kind": "knowledges"}}] = field(
         default_factory=list,
         metadata={
             "name": "知识库",
@@ -81,7 +81,7 @@ class BaseContext:
         },
     )
 
-    mcps: list[str] = field(
+    mcps: Annotated[list[str], {"__template_metadata__": {"kind": "mcps"}}] = field(
         default_factory=list,
         metadata={
             "name": "MCP服务器",
