@@ -365,16 +365,17 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { X, Trash2, Check, Plus, Search, Star } from 'lucide-vue-next'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
+import { useDatabaseStore } from '@/stores/database'
 import { storeToRefs } from 'pinia'
 
 // Props
-defineProps({
+const props = defineProps({
   isOpen: {
     type: Boolean,
     default: false
@@ -391,6 +392,17 @@ const emit = defineEmits(['close'])
 // Store 管理
 const agentStore = useAgentStore()
 const userStore = useUserStore()
+const databaseStore = useDatabaseStore()
+
+watch(
+  () => props.isOpen,
+  (val) => {
+    if (val) {
+      databaseStore.loadDatabases().catch(() => {})
+    }
+  }
+)
+
 const {
   availableTools,
   selectedAgent,
@@ -454,6 +466,9 @@ const segmentedOptions = computed(() => {
 const getConfigOptions = (value) => {
   if (value?.template_metadata?.kind === 'tools') {
     return availableTools.value ? Object.values(availableTools.value) : []
+  }
+  if (value?.template_metadata?.kind === 'knowledges') {
+    return databaseStore.databases || []
   }
   return value?.options || []
 }
@@ -601,6 +616,14 @@ const openSelectionModal = async (key) => {
       await agentStore.fetchAgentDetail(selectedAgentId.value, true)
     } catch (error) {
       console.error('刷新工具列表失败:', error)
+    }
+  }
+  // 如果是知识库，需要获取知识库列表
+  if (configurableItems.value[key]?.template_metadata?.kind === 'knowledges') {
+    try {
+      await databaseStore.loadDatabases()
+    } catch (error) {
+      console.error('加载知识库列表失败:', error)
     }
   }
   const currentValues = agentConfig.value[key] || []
@@ -832,6 +855,10 @@ const confirmDeleteConfig = async () => {
           border-radius: 8px;
           border: 1px solid var(--gray-100);
           // box-shadow: 0px 0px 2px var(--shadow-3);
+
+          :deep(.ant-form-item-label > label) {
+            font-weight: 600;
+          }
 
           :deep(label.form_item_model) {
             font-weight: 600;

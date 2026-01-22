@@ -56,7 +56,7 @@ export const useDatabaseStore = defineStore('database', () => {
     } catch (error) {
       console.error('加载数据库列表失败:', error)
       if (error.message.includes('权限')) {
-        message.error('需要管理员权限访问知识库')
+        message.error('没有权限访问知识库')
       }
       throw error
     } finally {

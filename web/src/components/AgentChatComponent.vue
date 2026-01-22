@@ -1368,7 +1368,7 @@ watch(
 <style lang="less">
 .agent-nav-btn {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   padding: 6px 8px;
   height: 32px;
   justify-content: center;
