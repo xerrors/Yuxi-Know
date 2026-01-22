@@ -102,7 +102,7 @@ class UserRepository:
             if username:
                 import hashlib
 
-                hash_suffix = hashlib.md5(user.user_id.encode()).hexdigest()[:4]
+                hash_suffix = hashlib.sha256(user.user_id.encode()).hexdigest()[:4]
                 user.username = f"已注销用户-{hash_suffix}"
             if phone_number:
                 user.phone_number = None
