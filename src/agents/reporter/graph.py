@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import Annotated
 
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, BaseContext, load_chat_model
 from src.agents.common.middlewares import (

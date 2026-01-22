@@ -20,7 +20,9 @@ class ChatbotAgent(BaseAgent):
     async def get_graph(self, **kwargs):
         """构建图"""
         context = self.context_schema()
-        all_mcp_tools = await get_tools_from_all_servers()  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
+        all_mcp_tools = (
+            await get_tools_from_all_servers()
+        )  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
 
         # 使用 create_agent 创建智能体
         # 注意：tools 参数由 RuntimeConfigMiddleware 在 wrap_model_call 中动态设置

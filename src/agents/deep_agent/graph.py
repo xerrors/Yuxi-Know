@@ -4,7 +4,12 @@ from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRequest, ModelRetryMiddleware, SummarizationMiddleware, TodoListMiddleware, dynamic_prompt
+from langchain.agents.middleware import (
+    ModelRequest,
+    SummarizationMiddleware,
+    TodoListMiddleware,
+    dynamic_prompt,
+)
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import RuntimeConfigMiddleware, inject_attachment_context

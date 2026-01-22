@@ -75,7 +75,9 @@ class BaseContext:
         default_factory=list,
         metadata={
             "name": "知识库",
-            "options": lambda: [k["name"] for k in knowledge_base.get_retrievers().values()],
+            "options": lambda: [
+                {"name": k["name"], "description": k["description"]} for k in knowledge_base.get_retrievers().values()
+            ],
             "description": "知识库列表，可以在左侧知识库页面中创建知识库。",
             "type": "list",  # Explicitly mark as list type for frontend if needed
         },

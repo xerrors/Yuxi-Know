@@ -7,7 +7,8 @@ from collections.abc import AsyncIterator
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 
-from src import config as conf, knowledge_base
+from src import config as conf
+from src import knowledge_base
 from src.agents import agent_manager
 from src.plugins.guard import content_guard
 from src.repositories.agent_config_repository import AgentConfigRepository
@@ -307,7 +308,6 @@ async def stream_agent_chat(
         "agent_config": agent_config,
     }
 
-
     try:
         conv_repo = ConversationRepository(db)
 
@@ -347,9 +347,7 @@ async def stream_agent_chat(
             filtered_knowledge_names = [kb for kb in requested_knowledge_names if kb in accessible_kb_names]
             blocked_knowledge_names = [kb for kb in requested_knowledge_names if kb not in accessible_kb_names]
             if blocked_knowledge_names:
-                logger.warning(
-                    f"用户 {user_id} 无权访问知识库: {blocked_knowledge_names}, 已自动过滤"
-                )
+                logger.warning(f"用户 {user_id} 无权访问知识库: {blocked_knowledge_names}, 已自动过滤")
             input_context["agent_config"]["knowledges"] = filtered_knowledge_names
 
         full_msg = None

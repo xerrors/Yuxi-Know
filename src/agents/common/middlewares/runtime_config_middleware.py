@@ -5,10 +5,10 @@ from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 
-from src.utils.logging_config import logger
 from src.agents.common import load_chat_model
-from src.agents.common.tools import get_kb_based_tools, get_buildin_tools
+from src.agents.common.tools import get_kb_based_tools
 from src.services.mcp_service import get_enabled_mcp_tools
+from src.utils.logging_config import logger
 
 
 def _is_system_message(msg: Any) -> bool:
@@ -81,7 +81,6 @@ class RuntimeConfigMiddleware(AgentMiddleware):
 
         request = request.override(model=model, tools=enabled_tools, messages=messages)
         return await handler(request)
-
 
     async def get_tools_from_context(self, context) -> list:
         """从上下文配置中获取工具列表"""
