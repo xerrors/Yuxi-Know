@@ -384,6 +384,8 @@ class MCPServer(Base):
 
     def to_mcp_config(self) -> dict:
         """转换为 MCP 配置格式（用于加载到 MCP_SERVERS 缓存）"""
+        import json
+
         config = {
             "transport": self.transport,
         }
@@ -391,10 +393,24 @@ class MCPServer(Base):
             config["url"] = self.url
         if self.command:
             config["command"] = self.command
-        if self.args:
-            config["args"] = self.args
-        if self.headers:
-            config["headers"] = self.headers
+        # args 只用于 stdio 传输类型，必须是列表
+        if self.transport == "stdio" and self.args:
+            if isinstance(self.args, list):
+                config["args"] = self.args
+            elif isinstance(self.args, str):
+                try:
+                    config["args"] = json.loads(self.args)
+                except json.JSONDecodeError:
+                    pass
+        # headers 只用于 sse/streamable_http 传输类型
+        if self.transport in ("sse", "streamable_http") and self.headers:
+            if isinstance(self.headers, dict):
+                config["headers"] = self.headers
+            elif isinstance(self.headers, str):
+                try:
+                    config["headers"] = json.loads(self.headers)
+                except json.JSONDecodeError:
+                    pass
         if self.timeout is not None:
             config["timeout"] = self.timeout
         if self.sse_read_timeout is not None:
