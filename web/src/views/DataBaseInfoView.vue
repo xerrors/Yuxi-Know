@@ -20,6 +20,17 @@
     <div class="unified-layout">
       <div class="left-panel" :style="{ width: leftPanelWidth + '%' }">
         <KnowledgeBaseCard />
+        <!-- 待处理文件提示条 -->
+        <div class="info-panel" v-if="pendingParseCount > 0 || pendingIndexCount > 0">
+          <div class="banner-item" v-if="pendingParseCount > 0" @click="confirmBatchParse">
+            <FileText :size="14" />
+            <span>{{ pendingParseCount }} 个文件待解析，点击解析</span>
+          </div>
+          <div class="banner-item" v-if="pendingIndexCount > 0" @click="confirmBatchIndex">
+            <Database :size="14" />
+            <span>{{ pendingIndexCount }} 个文件待入库，点击入库</span>
+          </div>
+        </div>
         <FileTable
           :right-panel-visible="state.rightPanelVisible"
           @show-add-files-modal="showAddFilesModal"
@@ -117,8 +128,9 @@ import { onMounted, reactive, ref, watch, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDatabaseStore } from '@/stores/database'
 import { useTaskerStore } from '@/stores/tasker'
-import { Info } from 'lucide-vue-next'
+import { Info, FileText, Database } from 'lucide-vue-next'
 import { SettingOutlined } from '@ant-design/icons-vue'
+import { Modal } from 'ant-design-vue'
 import KnowledgeBaseCard from '@/components/KnowledgeBaseCard.vue'
 import FileTable from '@/components/FileTable.vue'
 import FileDetailModal from '@/components/FileDetailModal.vue'
@@ -148,6 +160,75 @@ const isEvaluationSupported = computed(() => {
   const kbType = database.value.kb_type?.toLowerCase()
   return kbType === 'milvus'
 })
+
+// 计算待解析文件数量（status: 'uploaded'）
+const pendingParseCount = computed(() => {
+  const files = store.database.files || {}
+  return Object.values(files).filter(f => !f.is_folder && f.status === 'uploaded').length
+})
+
+// 计算待入库文件数量（status: 'parsed' 或 'error_indexing'）
+const pendingIndexCount = computed(() => {
+  const files = store.database.files || {}
+  const isLightRAG = database.value?.kb_type?.toLowerCase() === 'lightrag'
+  return Object.values(files).filter(f => {
+    if (f.is_folder) return false
+    if (isLightRAG) {
+      return f.status === 'parsed'
+    }
+    return f.status === 'parsed' || f.status === 'error_indexing'
+  }).length
+})
+
+// 确认批量解析
+const confirmBatchParse = () => {
+  const fileIds = Object.values(store.database.files || {})
+    .filter(f => f.status === 'uploaded')
+    .map(f => f.file_id)
+
+  if (fileIds.length === 0) {
+    return
+  }
+
+  Modal.confirm({
+    title: '批量解析',
+    content: `确定要解析 ${fileIds.length} 个文件吗？`,
+    onOk: () => store.parseFiles(fileIds)
+  })
+}
+
+// 确认批量入库
+const confirmBatchIndex = () => {
+  const isLightRAG = database.value?.kb_type?.toLowerCase() === 'lightrag'
+  const fileIds = Object.values(store.database.files || {})
+    .filter(f => {
+      if (f.is_folder) return false
+      if (isLightRAG) return f.status === 'parsed'
+      return f.status === 'parsed' || f.status === 'error_indexing'
+    })
+    .map(f => f.file_id)
+
+  if (fileIds.length === 0) {
+    return
+  }
+
+  if (isLightRAG) {
+    Modal.confirm({
+      title: '批量入库',
+      content: `确定要入库 ${fileIds.length} 个文件吗？`,
+      onOk: () => store.indexFiles(fileIds)
+    })
+    return
+  }
+
+  // 非 LightRAG：触发 FileTable 的入库流程
+  // 暂时简单处理，直接调用 store.indexFiles
+  Modal.confirm({
+    title: '批量入库',
+    content: `确定要入库 ${fileIds.length} 个文件吗？`,
+    onOk: () => store.indexFiles(fileIds)
+  })
+}
 
 // Tab 切换逻辑 - 智能默认
 const activeTab = ref('query')
@@ -487,7 +568,40 @@ const handleMouseUp = () => {
     flex-shrink: 0;
     flex-grow: 1;
     padding-right: 0;
+    flex-direction: column;
     // max-height: calc(100% - 16px);
+  }
+
+  .info-panel {
+    background: var(--gray-10);
+    border-radius: 12px;
+    border: 1px solid var(--gray-200);
+    display: flex;
+    gap: 12px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+
+    .banner-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: var(--color-warning-50);
+      border-radius: 4px;
+      font-size: 13px;
+      color: var(--color-warning-700);
+      cursor: pointer;
+      transition: all 0.2s;
+
+      &:hover {
+        background: var(--color-warning-100);
+      }
+
+      svg {
+        color: var(--color-warning-700);
+      }
+    }
   }
 
   .right-panel {
