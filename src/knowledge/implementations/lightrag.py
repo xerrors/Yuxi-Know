@@ -1,5 +1,6 @@
 import os
 import traceback
+from functools import partial
 
 from lightrag import LightRAG, QueryParam
 from lightrag.kg.shared_storage import initialize_pipeline_status
@@ -222,8 +223,9 @@ class LightRagKB(KnowledgeBase):
         return EmbeddingFunc(
             embedding_dim=config_dict["dimension"],
             max_token_size=8192,
-            func=lambda texts: openai_embed(
-                texts=texts,
+            model_name=model_name,
+            func=partial(
+                openai_embed.func,
                 model=model_name,
                 api_key=config_dict["api_key"],
                 base_url=config_dict["base_url"].replace("/embeddings", ""),
