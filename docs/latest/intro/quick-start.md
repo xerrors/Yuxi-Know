@@ -16,12 +16,13 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch v0.4.3 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.5.0-beta --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
-- `v0.4.3`: 稳定版本
+- `v0.4.4`: 稳定版本
+- `v0.5.0-beta`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用。
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
@@ -106,7 +107,7 @@ docker compose down
 ## 故障排除
 
 ::: tip 调试面板
-前端有个**调试面板**，长按侧边栏空白处触发，生产环境建议删除此特性，在 `AppLayout.vue` 中注释掉相关代码。
+前端有个**调试面板**，在头像选项里，生产环境建议删除此特性，在 `AppLayout.vue` 中注释掉相关代码。
 :::
 
 #### 查看服务状态
