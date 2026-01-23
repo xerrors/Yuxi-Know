@@ -75,6 +75,18 @@ export const useAgentStore = defineStore(
       return configurableItems.value.tools?.options || []
     })
 
+    // MCP相关状态
+    const availableMcps = computed(() => {
+      return configurableItems.value.mcps?.options || []
+    })
+    const selectedMcpToolsConfig = ref([])
+
+    // 知识库相关状态
+    const availableKnowledges = computed(() => {
+      return configurableItems.value.knowledges?.options || []
+    })
+    const selectedKnowledgeToolsConfig = ref([])
+
     const hasConfigChanges = computed(
       () => JSON.stringify(agentConfig.value) !== JSON.stringify(originalAgentConfig.value)
     )
@@ -295,6 +307,20 @@ export const useAgentStore = defineStore(
     }
 
     /**
+     * 更新mcp 工具配置（支持批量更新）
+     */
+    function updateMcpToolsConfig(newConfig) {
+      selectedMcpToolsConfig.value = newConfig;
+    }
+
+    /**
+     * 更新知识库配置（支持批量更新）
+     */
+    function updateKnowledgeToolsConfig(newConfig) {
+      selectedKnowledgeToolsConfig.value = newConfig;
+    }
+
+    /**
      * 清除错误状态
      */
     function clearError() {
@@ -317,6 +343,8 @@ export const useAgentStore = defineStore(
       error.value = null
       isInitialized.value = false
       isInitializing.value = false
+      selectedMcpToolsConfig.value = [] // 重置 MCP 工具配置
+      selectedKnowledgeToolsConfig.value = [] // 重置 知识库 配置
     }
 
     return {
@@ -342,6 +370,12 @@ export const useAgentStore = defineStore(
       availableTools,
       hasConfigChanges,
 
+      availableMcps,
+      availableKnowledges,
+
+      selectedMcpToolsConfig,
+      selectedKnowledgeToolsConfig,
+
       // 方法
       initialize,
       fetchAgents,
@@ -355,7 +389,9 @@ export const useAgentStore = defineStore(
       updateConfigItem,
       updateAgentConfig,
       clearError,
-      reset
+      reset,
+      updateMcpToolsConfig,
+      updateKnowledgeToolsConfig,
     }
   },
   {
@@ -363,7 +399,7 @@ export const useAgentStore = defineStore(
     persist: {
       key: 'agent-store',
       storage: localStorage,
-      pick: ['selectedAgentId']
+      pick: ['selectedAgentId', 'selectedMcpToolsConfig', 'selectedKnowledgeToolsConfig']
     }
   }
 )
