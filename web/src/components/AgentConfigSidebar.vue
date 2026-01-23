@@ -879,7 +879,8 @@ const confirmDeleteConfig = async () => {
             resize: vertical;
             background: var(--gray-50);
             border: 1px solid var(--gray-200);
-            padding: 8px 12px;
+            padding: 6px 10px;
+            font-size: 12px;
 
             &:focus {
               outline: none;
@@ -911,8 +912,9 @@ const confirmDeleteConfig = async () => {
               word-break: break-word;
               line-height: 1.5;
               color: var(--gray-900);
-              font-size: 14px;
-              //  min-height: 100px;
+              font-size: 12px;
+              max-height: 500px;
+              overflow: scroll;
 
               &.is-placeholder {
                 color: var(--gray-400);
