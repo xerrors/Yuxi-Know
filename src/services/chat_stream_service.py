@@ -40,6 +40,7 @@ def extract_agent_state(values: dict) -> dict:
         return [v]
 
     result = {}
+    print(f"values.keys(): {values.keys()}")
     result["todos"] = _norm_list(values.get("todos"))[:20]
     result["files"] = _norm_list(values.get("files"))[:50]
 
@@ -616,4 +617,13 @@ async def get_agent_state_view(
     langgraph_config = {"configurable": {"user_id": str(current_user_id), "thread_id": thread_id}}
     state = await graph.aget_state(langgraph_config)
     agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+
+    # 获取附件
+    try:
+        attachments = await conv_repo.get_attachments_by_thread_id(thread_id)
+        agent_state["attachments"] = attachments
+    except Exception as e:
+        logger.warning(f"Failed to fetch attachments for thread {thread_id}: {e}")
+        agent_state["attachments"] = []
+
     return {"agent_state": agent_state}

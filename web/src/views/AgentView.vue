@@ -59,11 +59,11 @@
           @open-agent-modal="openAgentModal"
           @close-config-sidebar="() => (chatUIStore.isConfigSidebarOpen = false)"
         >
-          <template #header-right="{ isMediumContainer }">
+          <template #header-right>
             <a-dropdown v-if="selectedAgentId" :trigger="['click']">
               <div type="button" class="agent-nav-btn">
                 <Settings2 size="18" class="nav-btn-icon" />
-                <span class="text" :class="{ 'hide-text': isMediumContainer }">
+                <span class="text hide-text">
                   {{ selectedConfigSummary?.name || '配置' }}
                 </span>
                 <ChevronDown size="16" class="nav-btn-icon" />
@@ -1127,7 +1127,9 @@ const handlePreview = () => {
   width: 100%;
 }
 
-.hide-text {
-  display: none;
+@media (max-width: 768px) {
+  .hide-text {
+    display: none;
+  }
 }
 </style>

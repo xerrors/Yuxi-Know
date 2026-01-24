@@ -804,11 +804,11 @@ const confirmDeleteConfig = async () => {
     justify-content: space-between;
     align-items: center;
     padding: 0 20px;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-150);
     background: var(--gray-0);
     flex-shrink: 0;
     min-width: 400px;
-    height: 56px;
+    height: var(--header-height);
 
     .header-center {
       flex: 1;

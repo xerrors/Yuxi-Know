@@ -11,9 +11,9 @@
           @change="handleFileChange"
           style="display: none"
         />
-        <a-tooltip title="支持 md/docx/html 格式 ≤ 5 MB" placement="right">
+        <a-tooltip title="支持 txt/md/docx/html 格式 ≤ 5 MB" placement="right">
           <div class="option-content">
-            <FileText :size="16" class="option-icon" />
+            <FileText :size="18" class="option-icon" />
             <span class="option-text">添加附件</span>
           </div>
         </a-tooltip>
@@ -23,7 +23,7 @@
     <div class="option-item" @click="handleImageUpload">
       <a-tooltip title="支持 jpg/jpeg/png/gif， ≤ 5 MB" placement="right">
         <div class="option-content">
-          <Image :size="16" class="option-icon" />
+          <Image :size="18" class="option-icon" />
           <span class="option-text">上传图片</span>
         </div>
       </a-tooltip>
@@ -170,10 +170,10 @@ const processImageUpload = async (file) => {
 .option-content {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 10px;
+  padding: 8px 12px;
   color: var(--gray-700);
-  font-size: 13px;
+  font-size: 14px;
   border-radius: 6px;
   transition: all 0.15s ease;
 

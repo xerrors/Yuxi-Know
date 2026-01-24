@@ -23,8 +23,8 @@
           class="new-chat-btn"
           :disabled="chatUIStore.creatingNewChat"
         >
-          <LoaderCircle v-if="chatUIStore.creatingNewChat" size="20" class="loading-icon" />
-          <MessageSquarePlus v-else size="20" />
+          <LoaderCircle v-if="chatUIStore.creatingNewChat" size="18" class="loading-icon" />
+          <MessageSquarePlus v-else size="18" />
           创建新对话
         </button>
       </div>
