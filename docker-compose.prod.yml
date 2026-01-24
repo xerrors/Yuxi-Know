@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:0.4.prod
+    image: yuxi-api:0.5.prod
     container_name: api-prod
     working_dir: /app
     networks:
@@ -49,7 +49,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: production
-    image: yuxi-web:0.4.prod
+    image: yuxi-web:0.5.prod
     container_name: web-prod
     ports:
       - "80:80"

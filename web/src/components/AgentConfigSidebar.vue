@@ -1176,6 +1176,8 @@ const confirmDeleteConfig = async () => {
       .option-indicator {
         flex-shrink: 0;
         font-size: 14px;
+        display: flex;
+        align-items: center;
       }
     }
   }
@@ -1280,6 +1282,8 @@ const confirmDeleteConfig = async () => {
               font-size: 16px;
               transition: all 0.2s ease;
               flex-shrink: 0;
+              display: flex;
+              align-items: center;
             }
           }
 

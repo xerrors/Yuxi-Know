@@ -16,15 +16,15 @@ branding:
 
 features:
   - label: "GitHub Stars"
-    value: "3800+"
+    value: "4100+"
     description: "开发者社区的认可与支持"
     icon: "stars"
   - label: "已解决 Issues"
-    value: "250+"
+    value: "300+"
     description: "持续改进和问题解决能力"
     icon: "issues"
   - label: "累计 Commits"
-    value: "1200+"
+    value: "1300+"
     description: "活跃的开发迭代和功能更新"
     icon: "commits"
   - label: "开源协议"
@@ -50,4 +50,4 @@ actions:
 
 # 页脚信息
 footer:
-  copyright: "© 江南语析 2025 v0.4.3"
+  copyright: "© 江南语析 2026 v0.5.0"

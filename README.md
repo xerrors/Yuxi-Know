@@ -4,7 +4,7 @@
 
 <h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
 
-[![Stable](https://img.shields.io/badge/stable-v0.4.3-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.3)
+[![Stable](https://img.shields.io/badge/stable-v0.4.4-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.4)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -92,7 +92,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.4.3 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.4.4 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 
 # Linux/macOS
@@ -116,12 +116,12 @@ docker compose up --build
 <img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
 <br>
 <img width="10116" height="5751" alt="11111" src="https://github.com/user-attachments/assets/d3e4fe09-fa48-4686-93ea-2c50300ade21" />
-<br>    
+<br>
 <img width="10116" height="5751" alt="22222" src="https://github.com/user-attachments/assets/734a7cce-8b38-48ae-8e21-ca88996e5dde" />
 
-<br>    
+<br>
 <img width="10116" height="5751" alt="1212" src="https://github.com/user-attachments/assets/06d56525-69bf-463a-8360-286b2cf8796f" />
-<br>    
+<br>
 <img width="10116" height="5751" alt="44444" src="https://github.com/user-attachments/assets/e390ec4b-8690-4aee-bbb2-3536f7f67dc9" />
 
 
