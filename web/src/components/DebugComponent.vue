@@ -145,10 +145,19 @@ import {
   onUnmounted,
   nextTick,
   toRaw,
-  h
+  h,
+  watch
 } from 'vue'
 
 const showModal = defineModel('show')
+
+// 监听 showModal 变化，当打开时获取日志
+watch(showModal, (isOpen) => {
+  if (isOpen) {
+    // 延迟一下确保 DOM 渲染完成
+    setTimeout(fetchLogs, 100)
+  }
+})
 
 import { useConfigStore } from '@/stores/config'
 import { useUserStore } from '@/stores/user'
@@ -377,20 +386,15 @@ const handleFullscreenChange = () => {
 }
 
 onMounted(() => {
-  if (checkSuperAdminPermission()) {
-    fetchLogs()
-  }
   document.addEventListener('fullscreenchange', handleFullscreenChange)
   document.addEventListener('webkitfullscreenchange', handleFullscreenChange)
   document.addEventListener('msfullscreenchange', handleFullscreenChange)
 })
 
 onActivated(() => {
-  if (!checkSuperAdminPermission()) return
-
   if (state.autoRefresh) {
     toggleAutoRefresh(true)
-  } else {
+  } else if (showModal.value) {
     fetchLogs()
   }
 })
