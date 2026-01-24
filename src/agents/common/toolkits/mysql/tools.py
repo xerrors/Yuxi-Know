@@ -309,6 +309,36 @@ def mysql_query(
         return error_msg
 
 
+def _get_db_description() -> str:
+    """获取数据库描述"""
+    import os
+    return os.getenv("MYSQL_DATABASE_DESCRIPTION") or ""
+
+
+# 用于跟踪是否已注入描述，避免重复
+_db_description_injected: bool = False
+
+
+def _inject_db_description(tools: list[Any]) -> None:
+    """将数据库描述注入到工具描述中"""
+    global _db_description_injected
+    if _db_description_injected:
+        return
+
+    db_desc = _get_db_description()
+    if not db_desc:
+        return
+
+    for tool in tools:
+        if hasattr(tool, 'description'):
+            # 在描述末尾添加数据库说明
+            tool.description = f"{tool.description}\n\n当前数据库说明: {db_desc}"
+
+    _db_description_injected = True
+
+
 def get_mysql_tools() -> list[Any]:
     """获取MySQL工具列表"""
-    return [mysql_list_tables, mysql_describe_table, mysql_query]
+    tools = [mysql_list_tables, mysql_describe_table, mysql_query]
+    _inject_db_description(tools)
+    return tools
