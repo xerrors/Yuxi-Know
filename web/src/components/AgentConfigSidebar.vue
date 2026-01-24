@@ -691,7 +691,11 @@ const validateAndFilterConfig = () => {
     }
 
     // 检查多选配置项 (type === 'list' 且有 options)
-    else if (configItem.type === 'list' && configItem.options.length > 0 && Array.isArray(currentValue)) {
+    else if (
+      configItem.type === 'list' &&
+      configItem.options.length > 0 &&
+      Array.isArray(currentValue)
+    ) {
       const validOptions = configItem.options
       validatedConfig[key] = currentValue.filter((value) => validOptions.includes(value))
 

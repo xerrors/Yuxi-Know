@@ -312,6 +312,7 @@ def mysql_query(
 def _get_db_description() -> str:
     """获取数据库描述"""
     import os
+
     return os.getenv("MYSQL_DATABASE_DESCRIPTION") or ""
 
 
@@ -329,10 +330,10 @@ def _inject_db_description(tools: list[Any]) -> None:
     if not db_desc:
         return
 
-    for tool in tools:
-        if hasattr(tool, 'description'):
+    for _tool in tools:
+        if hasattr(_tool, "description"):
             # 在描述末尾添加数据库说明
-            tool.description = f"{tool.description}\n\n当前数据库说明: {db_desc}"
+            _tool.description = f"{_tool.description}\n\n当前数据库说明: {db_desc}"
 
     _db_description_injected = True
 

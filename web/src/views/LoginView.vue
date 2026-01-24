@@ -21,7 +21,9 @@
           <h1 class="brand-text">{{ brandName }}</h1>
         </div>
         <div class="login-top-action">
-          <a-button type="text" size="small" class="back-home-btn" @click="goHome"> 返回首页 </a-button>
+          <a-button type="text" size="small" class="back-home-btn" @click="goHome">
+            返回首页
+          </a-button>
         </div>
       </div>
     </nav>

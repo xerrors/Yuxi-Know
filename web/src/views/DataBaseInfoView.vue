@@ -164,14 +164,14 @@ const isEvaluationSupported = computed(() => {
 // 计算待解析文件数量（status: 'uploaded'）
 const pendingParseCount = computed(() => {
   const files = store.database.files || {}
-  return Object.values(files).filter(f => !f.is_folder && f.status === 'uploaded').length
+  return Object.values(files).filter((f) => !f.is_folder && f.status === 'uploaded').length
 })
 
 // 计算待入库文件数量（status: 'parsed' 或 'error_indexing'）
 const pendingIndexCount = computed(() => {
   const files = store.database.files || {}
   const isLightRAG = database.value?.kb_type?.toLowerCase() === 'lightrag'
-  return Object.values(files).filter(f => {
+  return Object.values(files).filter((f) => {
     if (f.is_folder) return false
     if (isLightRAG) {
       return f.status === 'parsed'
@@ -183,8 +183,8 @@ const pendingIndexCount = computed(() => {
 // 确认批量解析
 const confirmBatchParse = () => {
   const fileIds = Object.values(store.database.files || {})
-    .filter(f => f.status === 'uploaded')
-    .map(f => f.file_id)
+    .filter((f) => f.status === 'uploaded')
+    .map((f) => f.file_id)
 
   if (fileIds.length === 0) {
     return
@@ -201,12 +201,12 @@ const confirmBatchParse = () => {
 const confirmBatchIndex = () => {
   const isLightRAG = database.value?.kb_type?.toLowerCase() === 'lightrag'
   const fileIds = Object.values(store.database.files || {})
-    .filter(f => {
+    .filter((f) => {
       if (f.is_folder) return false
       if (isLightRAG) return f.status === 'parsed'
       return f.status === 'parsed' || f.status === 'error_indexing'
     })
-    .map(f => f.file_id)
+    .map((f) => f.file_id)
 
   if (fileIds.length === 0) {
     return
