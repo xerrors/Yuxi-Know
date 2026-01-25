@@ -54,7 +54,8 @@ export default defineConfig({
           items: [
             { text: '路线图', link: '/latest/changelog/roadmap' },
             { text: '参与贡献', link: '/latest/changelog/contributing' },
-            { text: '常见问题', link: '/latest/changelog/faq' }
+            { text: '常见问题', link: '/latest/changelog/faq' },
+            { text: '迁移至 v0.5', link: '/latest/changelog/migrate_to_v0-5' }
           ]
         }
       ],

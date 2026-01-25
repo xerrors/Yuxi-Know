@@ -10,7 +10,7 @@
 
 ### 安装步骤
 
-项目采用微服务架构，核心服务无需 GPU 支持。GPU 仅用于可选的 OCR 服务和本地模型推理，可通过环境变量配置外部服务。
+项目采用微服务架构，默认服务无需 GPU 支持。GPU 仅用于可选的 OCR 服务，可通过环境变量配置外部服务。
 
 #### 1. 获取项目代码
 
@@ -22,7 +22,7 @@ cd Yuxi-Know
 
 ::: warning 版本说明
 - `v0.4.4`: 稳定版本
-- `v0.5.0-beta2`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用。
+- `v0.5.0-beta2`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用，迁移指南详见 [迁移指南](https://xerrors.github.io/Yuxi-Know/latest/changelog/migrate_to_v0-5)。
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
@@ -107,7 +107,7 @@ docker compose down
 ## 故障排除
 
 ::: tip 调试面板
-前端有个**调试面板**，在头像选项里，生产环境建议删除此特性，在 `AppLayout.vue` 中注释掉相关代码。
+前端有个**调试面板**，在头像选项里，生产环境建议删除此特性。
 :::
 
 #### 查看服务状态
@@ -141,7 +141,7 @@ powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1 python:3.12-slim
 **离线镜像拉取方案**：
 
 ```bash
-# 在有网络的环境保存镜像（镜像名称需要确认是否和实际一致）
+# 在有网络的环境保存镜像（镜像名称需要确认是否和实际一致，现有版本可能不是最新最全，需要检查）
 bash docker/save_docker_images.sh  # Linux/macOS
 powershell -ExecutionPolicy Bypass -File docker/save_docker_images.ps1  # Windows
 
