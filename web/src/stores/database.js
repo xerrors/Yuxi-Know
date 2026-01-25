@@ -325,7 +325,7 @@ export const useDatabaseStore = defineStore('database', () => {
             }
           })
         }
-        await getDatabaseInfo(undefined, true) // Skip query params when adding files
+        await delayedRefresh() // 延迟1秒后刷新
         return true // Indicate success
       } else {
         message.error(data.message || '处理失败')
@@ -357,7 +357,7 @@ export const useDatabaseStore = defineStore('database', () => {
             payload: { db_id: databaseId.value, count: fileIds.length }
           })
         }
-        await getDatabaseInfo(undefined, true)
+        await delayedRefresh() // 延迟1秒后刷新
         return true
       } else {
         message.error(data.message || '提交失败')
@@ -389,7 +389,7 @@ export const useDatabaseStore = defineStore('database', () => {
             payload: { db_id: databaseId.value, count: fileIds.length }
           })
         }
-        await getDatabaseInfo(undefined, true)
+        await delayedRefresh() // 延迟1秒后刷新
         return true
       } else {
         message.error(data.message || '提交失败')
@@ -480,6 +480,12 @@ export const useDatabaseStore = defineStore('database', () => {
       clearInterval(refreshInterval)
       refreshInterval = null
     }
+  }
+
+  // 延时刷新文件理解（延迟1秒后刷新）
+  async function delayedRefresh() {
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await getDatabaseInfo(undefined, true)
   }
 
   function toggleAutoRefresh() {

@@ -166,14 +166,16 @@
 
         <!-- Agent Panel Area -->
 
-        <div class="agent-panel-wrapper" v-if="isAgentPanelOpen && hasAgentStateContent">
-          <AgentPanel
-            :agent-state="currentAgentState"
-            :thread-id="currentChatId"
-            @refresh="handleAgentStateRefresh"
-            @close="toggleAgentPanel"
-          />
-        </div>
+        <transition name="panel-slide">
+          <div class="agent-panel-wrapper" v-if="isAgentPanelOpen && hasAgentStateContent">
+            <AgentPanel
+              :agent-state="currentAgentState"
+              :thread-id="currentChatId"
+              @refresh="handleAgentStateRefresh"
+              @close="toggleAgentPanel"
+            />
+          </div>
+        </transition>
       </div>
     </div>
   </div>
@@ -1146,6 +1148,7 @@ watch(
   flex-direction: column;
   overflow-y: auto; /* Scroll is here now */
   position: relative;
+  transition: flex 0.4s ease;
 }
 
 .agent-panel-wrapper {
@@ -1159,6 +1162,23 @@ watch(
   border-radius: 12px;
   box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-200);
+}
+
+/* Workbench transition animations */
+.panel-slide-enter-active,
+.panel-slide-leave-active {
+  transition:
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.3s ease,
+    flex 0.4s ease;
+}
+
+.panel-slide-enter-from,
+.panel-slide-leave-to {
+  transform: translateX(30px) scale(0.98);
+  opacity: 0;
+  flex: 0 0 0; /* Shrink to zero width during transition */
+  margin-left: -16px; /* Compensate for margin during close */
 }
 
 .chat-examples {

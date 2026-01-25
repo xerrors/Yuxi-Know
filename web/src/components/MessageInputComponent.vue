@@ -327,7 +327,6 @@ defineExpose({
     justify-self: start;
     display: flex;
     align-items: center;
-    margin-right: 8px;
     gap: 8px;
   }
 
