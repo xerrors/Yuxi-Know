@@ -40,6 +40,12 @@ class TaskRepository:
                 setattr(record, key, value)
             return record
 
+    async def delete(self, task_id: str) -> bool:
+        """Delete a task by id. Returns True if deleted, False if not found."""
+        async with pg_manager.get_async_session_context() as session:
+            result = await session.execute(delete(TaskRecord).where(TaskRecord.id == task_id))
+            return result.rowcount > 0
+
     async def delete_all(self) -> None:
         async with pg_manager.get_async_session_context() as session:
             await session.execute(delete(TaskRecord))

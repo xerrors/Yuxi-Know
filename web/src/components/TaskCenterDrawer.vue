@@ -84,6 +84,15 @@
               >
                 取消
               </a-button>
+              <a-button
+                type="text"
+                size="small"
+                danger
+                v-if="isTaskCompleted(task)"
+                @click.stop="handleDelete(task.id, task.name)"
+              >
+                删除
+              </a-button>
             </div>
           </div>
         </div>
@@ -256,6 +265,19 @@ function handleDetail(taskId) {
 
 function handleCancel(taskId) {
   taskerStore.cancelTask(taskId)
+}
+
+function handleDelete(taskId, taskName) {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除任务"${taskName}"吗？此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => {
+      taskerStore.deleteTask(taskId)
+    }
+  })
 }
 
 function formatTime(value, mode = 'full') {

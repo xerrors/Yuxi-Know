@@ -185,6 +185,16 @@ class Tasker:
         logger.info("Cancellation requested for task {}", task_id)
         return True
 
+    async def delete_task(self, task_id: str) -> bool:
+        """Delete a task by id. Returns True if deleted, False if not found."""
+        async with self._lock:
+            if task_id not in self._tasks:
+                return False
+            del self._tasks[task_id]
+        await self._repo.delete(task_id)
+        logger.info("Deleted task {}", task_id)
+        return True
+
     async def _worker_loop(self) -> None:
         while True:
             try:
