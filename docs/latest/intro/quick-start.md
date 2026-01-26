@@ -16,13 +16,13 @@
 
 ```bash
 # 克隆稳定版本
-git clone --branch v0.5.0-beta2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.5.0-beta3 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
 ::: warning 版本说明
 - `v0.4.4`: 稳定版本
-- `v0.5.0-beta2`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用，迁移指南详见 [迁移指南](https://xerrors.github.io/Yuxi-Know/latest/changelog/migrate_to_v0-5)。
+- `v0.5.0-beta3`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用，迁移指南详见 [迁移指南](https://xerrors.github.io/Yuxi-Know/latest/changelog/migrate_to_v0-5)。
 - `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
 :::
 
