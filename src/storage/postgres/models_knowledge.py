@@ -28,7 +28,7 @@ class KnowledgeBase(Base):
     __table_args__ = (UniqueConstraint("db_id", name="uq_knowledge_bases_db_id"),)
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    db_id = Column(String(64), unique=True, nullable=False, index=True)
+    db_id = Column(String(80), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text)
     kb_type = Column(String(32), nullable=False, index=True)
@@ -51,7 +51,7 @@ class KnowledgeFile(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     file_id = Column(String(64), unique=True, nullable=False, index=True)
-    db_id = Column(String(64), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
+    db_id = Column(String(80), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
     parent_id = Column(String(64), ForeignKey("knowledge_files.file_id", ondelete="SET NULL"), index=True)
     filename = Column(String(512), nullable=False)
     original_filename = Column(String(512))
@@ -80,7 +80,7 @@ class EvaluationBenchmark(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     benchmark_id = Column(String(64), unique=True, nullable=False, index=True)
-    db_id = Column(String(64), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
+    db_id = Column(String(80), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     question_count = Column(Integer, default=0)
@@ -100,7 +100,7 @@ class EvaluationResult(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     task_id = Column(String(64), unique=True, nullable=False, index=True)
-    db_id = Column(String(64), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
+    db_id = Column(String(80), ForeignKey("knowledge_bases.db_id", ondelete="CASCADE"), nullable=False, index=True)
     benchmark_id = Column(
         String(64),
         ForeignKey("evaluation_benchmarks.benchmark_id", ondelete="SET NULL"),

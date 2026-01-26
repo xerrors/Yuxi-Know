@@ -1130,9 +1130,9 @@ async def upload_file(
     timestamp = int(time.time() * 1000)
     minio_filename = f"{basename}_{timestamp}{ext}"
 
-    # 生成符合MinIO规范的存储桶名称（将下划线替换为连字符）
+    # 生成符合MinIO规范的存储桶名称（将下划线替换为连字符，截取长度以满足MinIO的63字符限制）
     if db_id:
-        bucket_name = f"ref-{db_id.replace('_', '-')}"
+        bucket_name = f"ref-{db_id[:32].replace('_', '-')}"
     else:
         bucket_name = "default-uploads"
 
