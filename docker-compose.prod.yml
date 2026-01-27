@@ -177,7 +177,7 @@ services:
       context: .
       dockerfile: docker/mineru.Dockerfile
     image: mineru-vllm:latest
-    container_name: mineru
+    container_name: mineru-vllm-server
     profiles:
       - all
     env_file:

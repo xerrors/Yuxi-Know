@@ -64,6 +64,7 @@ images=(
     "ghcr.io/astral-sh/uv:0.7.2"
     "nginx:alpine"
     "quay.io/coreos/etcd:v3.5.5"
+    "postgres:16"
 )
 
 # Pull each image
