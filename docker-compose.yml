@@ -3,9 +3,6 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-      args:
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
     image: yuxi-api:0.5.dev
     container_name: api-dev
     working_dir: /app
