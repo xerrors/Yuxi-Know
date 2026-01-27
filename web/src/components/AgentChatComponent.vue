@@ -1278,7 +1278,7 @@ watch(
   max-width: 800px;
   margin: 0 auto;
   flex-grow: 1;
-  padding: 1rem;
+  padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
 }

@@ -101,7 +101,7 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
       } else if (response.status === 403) {
         throw new Error('没有权限执行此操作')
       } else if (response.status === 500) {
-        throw new Error('Server 500 Error, please check the log use `docker logs api-dev`')
+        throw new Error('服务器内部错误，请使用 docker logs api-dev 查看详细日志')
       }
 
       throw new Error(errorMessage)

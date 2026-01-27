@@ -1,6 +1,27 @@
 <template>
   <div class="home-container">
-    <div class="hero-section">
+    <!-- 加载中状态 -->
+    <div v-if="isLoading" class="loading-container">
+      <a-spin size="large" />
+      <p class="loading-text">正在连接服务...</p>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="error" class="error-container">
+      <a-result
+        status="error"
+        :title="error.title"
+        :sub-title="error.message"
+      >
+        <template #extra>
+          <a-button type="primary" @click="retryLoad">重试</a-button>
+        </template>
+      </a-result>
+    </div>
+
+    <!-- 正常内容 -->
+    <template v-else>
+      <div class="hero-section">
       <div class="glass-header">
         <div class="logo">
           <img
@@ -106,16 +127,19 @@
         <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
       </div>
     </footer>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
 import { useAgentStore } from '@/stores/agent'
 import { useThemeStore } from '@/stores/theme'
+import { healthApi } from '@/apis/system_api'
+import { Result, Button } from 'ant-design-vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 import ProjectOverview from '@/components/ProjectOverview.vue'
 import {
@@ -130,11 +154,53 @@ import {
   ShieldCheck
 } from 'lucide-vue-next'
 
+const AResult = Result
+const AButton = Button
+
 const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
 const agentStore = useAgentStore()
 const themeStore = useThemeStore()
+
+// 加载状态
+const isLoading = ref(true)
+const error = ref(null)
+
+const checkHealth = async () => {
+  try {
+    const response = await healthApi.checkHealth()
+    if (response.status !== 'ok') {
+      throw new Error('服务不可用')
+    }
+  } catch (e) {
+    error.value = {
+      title: '服务连接失败',
+      message: '后端服务无法响应，请检查服务是否正常运行'
+    }
+    throw e
+  }
+}
+
+const loadData = async () => {
+  isLoading.value = true
+  error.value = null
+
+  try {
+    // 先检查健康状态
+    await checkHealth()
+    // 健康检查通过后加载配置
+    await infoStore.loadInfoConfig()
+  } catch (e) {
+    console.error('加载失败:', e)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const retryLoad = () => {
+  loadData()
+}
 
 const goToChat = async () => {
   // 检查用户是否登录
@@ -167,9 +233,9 @@ const goToChat = async () => {
   }
 }
 
-onMounted(async () => {
-  // 加载信息配置
-  await infoStore.loadInfoConfig()
+onMounted(() => {
+  // 加载数据
+  loadData()
 })
 
 const iconKey = (value) => (typeof value === 'string' ? value.toLowerCase() : '')
@@ -251,6 +317,30 @@ const actionLinks = computed(() => {
   background: radial-gradient(circle at top right, var(--main-50), transparent 60%), var(--main-5);
   position: relative;
   overflow-x: hidden;
+}
+
+// 加载中状态
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  gap: 1rem;
+
+  .loading-text {
+    color: var(--gray-600);
+    font-size: 0.95rem;
+  }
+}
+
+// 错误状态
+.error-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
 }
 .glass-header {
   display: flex;

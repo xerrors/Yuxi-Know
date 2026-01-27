@@ -18,7 +18,11 @@
     <nav class="login-navbar">
       <div class="navbar-content">
         <div class="brand-container">
-          <h1 class="brand-text">{{ brandName }}</h1>
+          <h1 class="brand-text">
+            <span v-if="brandOrgName" class="brand-org">{{ brandOrgName }}</span>
+            <span v-if="brandOrgName && brandName !== brandOrgName" class="brand-separator"></span>
+            <span class="brand-main">{{ brandName }}</span>
+          </h1>
         </div>
         <div class="login-top-action">
           <a-button type="text" size="small" class="back-home-btn" @click="goHome">
@@ -255,12 +259,15 @@ const agentStore = useAgentStore()
 const loginBgImage = computed(() => {
   return infoStore.organization?.login_bg || '/login-bg.jpg'
 })
+const brandOrgName = computed(() => {
+  return infoStore.organization?.name?.trim() || ''
+})
 const brandName = computed(() => {
-  const orgName = infoStore.organization?.name?.trim()
+  const orgName = brandOrgName.value
   const brandNameRaw = infoStore.branding?.name?.trim() || 'Yuxi-Know'
 
   if (orgName && brandNameRaw && orgName !== brandNameRaw) {
-    return `${orgName} | ${brandNameRaw}`
+    return brandNameRaw
   }
 
   return orgName || brandNameRaw
@@ -584,8 +591,28 @@ onUnmounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: var(--main-color);
   line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  .brand-org {
+    color: var(--gray-700);
+    font-weight: 600;
+  }
+
+  .brand-separator {
+    width: 4px;
+    height: 4px;
+    background-color: var(--gray-400);
+    border-radius: 50%;
+    font-weight: 600;
+  }
+
+  .brand-main {
+    color: var(--main-color);
+    font-weight: 600;
+  }
 }
 
 .back-home-btn {

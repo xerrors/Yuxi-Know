@@ -1,5 +1,6 @@
 <template>
   <a-drawer :open="isOpen" :width="620" title="任务中心" placement="right" @close="handleClose">
+    <p>提醒：任务执行成功，只代表任务已执行完成，但是任务内部可能有问题已捕获，请注意观察日志。</p>
     <div class="task-center">
       <div class="task-toolbar">
         <div class="task-filter-group">
