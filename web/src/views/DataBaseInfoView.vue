@@ -678,7 +678,8 @@ const handleMouseUp = () => {
   }
 
   .config-text {
-    font-size: 13px;
+    font-size: 14px;
+    margin-left: 4px;
   }
 }
 

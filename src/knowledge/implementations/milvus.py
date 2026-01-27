@@ -803,7 +803,7 @@ class MilvusKB(KnowledgeBase):
             },
             {
                 "key": "final_top_k",
-                "label": "最终返回数",
+                "label": "最终返回 Chunk 数",
                 "type": "number",
                 "default": 10,
                 "min": 1,
@@ -812,7 +812,7 @@ class MilvusKB(KnowledgeBase):
             },
             {
                 "key": "similarity_threshold",
-                "label": "相似度阈值",
+                "label": "相似度阈值（0-1）",
                 "type": "number",
                 "default": 0.0,
                 "min": 0.0,
@@ -822,7 +822,7 @@ class MilvusKB(KnowledgeBase):
             },
             {
                 "key": "keyword_top_k",
-                "label": "关键词召回数量",
+                "label": "使用关键词召回的最大 Chunk 数",
                 "type": "number",
                 "default": 50,
                 "min": 1,
@@ -856,6 +856,17 @@ class MilvusKB(KnowledgeBase):
                 "description": "是否使用精排模型对检索结果进行重排序",
             },
             {
+                "key": "reranker_model",
+                "label": "重排序模型",
+                "type": "select",
+                "default": "",
+                "options": [
+                    {"label": info.name, "value": model_id}
+                    for model_id, info in kwargs.get("reranker_names", {}).items()
+                ],
+                "description": "选择用于本次查询的重排序模型",
+            },
+            {
                 "key": "recall_top_k",
                 "label": "召回数量",
                 "type": "number",
@@ -865,20 +876,6 @@ class MilvusKB(KnowledgeBase):
                 "description": "向量检索时保留的候选数量（启用重排序时有效）",
             },
         ]
-
-        # 动态添加 reranker 模型选择
-        reranker_names = kwargs.get("reranker_names", {})
-        if reranker_names:
-            options.append(
-                {
-                    "key": "reranker_model",
-                    "label": "重排序模型",
-                    "type": "select",
-                    "default": "",
-                    "options": [{"label": info.name, "value": model_id} for model_id, info in reranker_names.items()],
-                    "description": "选择用于本次查询的重排序模型",
-                }
-            )
 
         return {"type": "milvus", "options": options}
 

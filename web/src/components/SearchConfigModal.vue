@@ -28,6 +28,9 @@
           <a-row :gutter="16">
             <a-col :span="12" v-for="param in queryParams" :key="param.key">
               <a-form-item :label="param.label">
+                <template #extra v-if="param.description">
+                  <div class="param-description">{{ param.description }}</div>
+                </template>
                 <a-select
                   v-if="param.type === 'select'"
                   v-model:value="meta[param.key]"
@@ -271,6 +274,13 @@ watch(
 
 .config-forms {
   max-width: 100%;
+}
+
+.param-description {
+  font-size: 12px;
+  color: var(--gray-500);
+  line-height: 1.5;
+  margin-top: 4px;
 }
 
 // 表单样式优化

@@ -62,7 +62,9 @@
           <a-col :span="12">
             <a-form-item
               :label="
-                selectedBenchmark.has_gold_answers ? '答案生成模型（可选）' : '答案生成模型（当前基准无需）'
+                selectedBenchmark.has_gold_answers
+                  ? '答案生成模型（可选）'
+                  : '答案生成模型（当前基准无需）'
               "
             >
               <ModelSelectorComponent
@@ -78,7 +80,9 @@
           <a-col :span="12">
             <a-form-item
               :label="
-                selectedBenchmark.has_gold_answers ? '答案评判模型（可选）' : '答案评判模型（当前基准无需）'
+                selectedBenchmark.has_gold_answers
+                  ? '答案评判模型（可选）'
+                  : '答案评判模型（当前基准无需）'
               "
             >
               <ModelSelectorComponent
