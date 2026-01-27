@@ -28,6 +28,7 @@ dependencies = [
     "llama-index>=0.14",
     "llama-index-readers-file>=0.4.7",
     "markdownify>=1.1.0",
+    "readability-lxml>=0.8.1",
     "mcp>=1.20",
     "neo4j>=5.28.1",
     "networkx>=3.5",

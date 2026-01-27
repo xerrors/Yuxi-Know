@@ -24,6 +24,13 @@
               >
                 上传文件夹
               </a-menu-item>
+              <a-menu-item
+                key="upload-url"
+                @click="showAddFilesModal({ mode: 'url' })"
+                :icon="h(Link, { size: 16 })"
+              >
+                解析 URL
+              </a-menu-item>
             </a-menu>
           </template>
         </a-dropdown>
@@ -342,6 +349,7 @@
                     @click="handleDownloadFile(record)"
                     :disabled="
                       lock ||
+                      record.file_type === 'url' ||
                       !['done', 'indexed', 'parsed', 'error_indexing'].includes(record.status)
                     "
                   >
@@ -441,7 +449,8 @@ import {
   Search,
   Filter,
   ArrowUpDown,
-  ChevronDown
+  ChevronDown,
+  Link
 } from 'lucide-vue-next'
 
 const store = useDatabaseStore()
@@ -831,7 +840,10 @@ const buildFileTree = (fileList) => {
     const normalizedName = file.filename.replace(/\\/g, '/')
     const parts = normalizedName.split('/')
 
-    if (parts.length === 1) {
+    // 检测是否是 URL（URL 不应该被解析为文件夹层级）
+    const isUrl = file.filename.startsWith('http://') || file.filename.startsWith('https://')
+
+    if (isUrl || parts.length === 1) {
       // Root item
       // Check if it's an explicit folder that should merge with an existing implicit one?
       if (item.is_folder) {
