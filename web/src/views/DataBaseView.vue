@@ -14,6 +14,7 @@
       @cancel="cancelCreateDatabase"
       class="new-database-modal"
       width="800px"
+      destroyOnClose
     >
       <!-- 知识库类型选择 -->
       <h3>知识库类型<span style="color: var(--color-error-500)">*</span></h3>
@@ -219,7 +220,7 @@ const state = reactive({
 })
 
 // 共享配置状态（用于提交数据）
-const shareConfig = reactive({
+const shareConfig = ref({
   is_shared: true,
   accessible_department_ids: []
 })
@@ -293,8 +294,10 @@ const loadSupportedKbTypes = async () => {
 const resetNewDatabase = () => {
   Object.assign(newDatabase, createEmptyDatabaseForm())
   // 重置共享配置
-  shareConfig.is_shared = true
-  shareConfig.accessible_department_ids = []
+  shareConfig.value = {
+    is_shared: true,
+    accessible_department_ids: []
+  }
 }
 
 const cancelCreateDatabase = () => {
@@ -367,8 +370,10 @@ const buildRequestData = () => {
 
   // 添加共享配置
   requestData.share_config = {
-    is_shared: shareConfig.is_shared,
-    accessible_departments: shareConfig.is_shared ? [] : shareConfig.accessible_department_ids || []
+    is_shared: shareConfig.value.is_shared,
+    accessible_departments: shareConfig.value.is_shared
+      ? []
+      : shareConfig.value.accessible_department_ids || []
   }
 
   // 根据类型添加特定配置
