@@ -19,6 +19,7 @@ from langchain_community.document_loaders import (
     UnstructuredWordDocumentLoader,
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from markdownify import markdownify as md_convert
 
 from src.knowledge.utils import calculate_content_hash
 from src.storage.minio import get_minio_client
@@ -712,4 +713,41 @@ def _replace_image_links(markdown_content: str, images: list[dict]) -> str:
 
 
 async def process_url_to_markdown(url: str, params: dict | None = None) -> str:
-    raise NotImplementedError("URL 解析功能已禁用")
+    """
+    Fetch a URL and convert its content to Markdown.
+
+    Args:
+        url: The URL to fetch.
+        params: Optional parameters (unused, kept for API compatibility).
+
+    Returns:
+        The Markdown content of the URL.
+    """
+    logger.info(f"Fetching URL: {url}")
+
+    try:
+        import httpx
+        # 使用异步 HTTP 客户端获取页面
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            response.raise_for_status()
+            html_content = response.text
+
+        # 使用 readability 提取正文 HTML
+        from readability import Document
+
+        doc = Document(html_content)
+        body_html = doc.summary()
+
+        # 转换为 Markdown
+        markdown_content = md_convert(body_html, heading_style="atx")
+
+        logger.info(f"Successfully converted URL to Markdown: {url}")
+        return markdown_content
+
+    except httpx.HTTPError as e:
+        logger.error(f"Failed to fetch URL {url}: {e}")
+        raise ValueError(f"Failed to fetch URL: {e}")
+    except Exception as e:
+        logger.error(f"Failed to process URL {url}: {e}")
+        raise ValueError(f"Failed to process URL: {e}")

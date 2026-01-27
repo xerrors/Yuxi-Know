@@ -188,6 +188,51 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         db_id: 数据库ID
         params: 处理参数，可选
     """
+    # 检查是否有预处理信息 (针对 URL 转 HTML 文件的情况)
+    if params and "_preprocessed_map" in params and item in params["_preprocessed_map"]:
+        pre_info = params["_preprocessed_map"][item]
+
+        # 使用预处理信息
+        filename = pre_info.get("filename", item)  # 通常是原始 URL
+        
+        # 截断文件名以适应数据库限制 (512 chars)，保留部分后缀信息如果可能
+        if len(filename) > 500:
+            filename_display = filename[:400] + "..." + filename[-90:]
+        else:
+            filename_display = filename
+            
+        file_type = "html"  # 强制转换为 html 类型，以便后续作为文件处理
+        item_path = pre_info["path"]  # MinIO path
+        content_hash = pre_info["content_hash"]
+
+        # 使用 item(url) 生成 ID，保证同一 URL 即使多次添加 ID 也不同（配合 time）
+        # 或者我们应该基于 hash？不，基于 time 更符合上传逻辑
+        file_id = f"file_{hashstr(item + str(time.time()), 6)}"
+
+        metadata = {
+            "database_id": db_id,
+            "filename": filename_display,
+            "path": item_path,
+            "file_type": file_type,
+            "status": "processing",
+            "created_at": utc_isoformat(),
+            "file_id": file_id,
+            "content_hash": content_hash,
+            "parent_id": params.get("parent_id"),
+        }
+
+        if params:
+            # 移除内部参数以免污染 metadata
+            safe_params = params.copy()
+            safe_params.pop("_preprocessed_map", None)
+            # 覆盖 content_type 为 file，确保后续解析走文件流程（MinIO 下载 -> HTML 解析）
+            # 而不是再次尝试作为 URL 抓取
+            safe_params["content_type"] = "file"
+            safe_params["original_source"] = item  # 保存完整 URL 到 JSON 字段，避免数据库字段长度限制
+            metadata["processing_params"] = safe_params
+
+        return metadata
+
     if content_type == "file":
         # 检测是否是MinIO URL还是本地文件路径
         if is_minio_url(item):
@@ -243,8 +288,17 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         # 生成文件ID
         file_id = f"file_{hashstr(str(item_path) + str(time.time()), 6)}"
 
+    elif content_type == "url":
+        # URL 处理
+        filename = item  # 使用完整 URL 作为文件名
+        filename_display = item
+        file_type = "url"
+        item_path = item
+        content_hash = None  # URL 没有 content_hash
+        file_id = f"url_{hashstr(item + str(time.time()), 6)}"
+
     else:
-        raise ValueError("URL 元数据生成已禁用")
+        raise ValueError(f"Unsupported content_type: {content_type}")
 
     metadata = {
         "database_id": db_id,

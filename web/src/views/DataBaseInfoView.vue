@@ -14,6 +14,7 @@
       :folder-tree="folderTree"
       :current-folder-id="currentFolderId"
       :is-folder-mode="isFolderUploadMode"
+      :mode="addFilesMode"
       @success="onFileUploadSuccess"
     />
 
@@ -314,14 +315,16 @@ const openSearchConfigModal = () => {
 const addFilesModalVisible = ref(false)
 const currentFolderId = ref(null)
 const isFolderUploadMode = ref(false)
+const addFilesMode = ref('file')
 
 // 标记是否是初次加载
 const isInitialLoad = ref(true)
 
 // 显示添加文件弹窗
 const showAddFilesModal = (options = {}) => {
-  const { isFolder = false } = options
+  const { isFolder = false, mode = 'file' } = options
   isFolderUploadMode.value = isFolder
+  addFilesMode.value = mode
   addFilesModalVisible.value = true
   currentFolderId.value = null // 重置
 }

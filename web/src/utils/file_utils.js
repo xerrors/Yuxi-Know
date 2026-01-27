@@ -7,13 +7,19 @@ import {
   FileExcelFilled,
   FileImageFilled,
   FileUnknownFilled,
-  FilePptFilled
+  FilePptFilled,
+  LinkOutlined
 } from '@ant-design/icons-vue'
 import { formatRelative, parseToShanghai } from '@/utils/time'
 
 // 根据文件扩展名获取文件图标
 export const getFileIcon = (filename) => {
   if (!filename) return FileUnknownFilled
+
+  // Check if it's a URL
+  if (filename.startsWith('http://') || filename.startsWith('https://')) {
+    return LinkOutlined
+  }
 
   const extension = filename.toLowerCase().split('.').pop()
 
@@ -63,6 +69,11 @@ export const getFileIcon = (filename) => {
 // 根据文件扩展名获取文件图标颜色
 export const getFileIconColor = (filename) => {
   if (!filename) return '#8c8c8c'
+
+  // Check if it's a URL
+  if (filename.startsWith('http://') || filename.startsWith('https://')) {
+    return '#1890ff' // Blue for links
+  }
 
   const extension = filename.toLowerCase().split('.').pop()
 

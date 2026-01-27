@@ -269,9 +269,9 @@ async def add_documents(
         "qa_separator": params.get("qa_separator", ""),
     }
 
-    # 禁止 URL 解析与入库
+    # URL 解析与入库（需白名单验证）
     if content_type == "url":
-        raise HTTPException(status_code=400, detail="URL 文档上传与解析已禁用")
+        raise HTTPException(status_code=400, detail="URL 处理方式已变更，请使用 fetch-url 接口先获取内容")
 
     # 安全检查：验证文件路径
     if content_type == "file":
@@ -640,9 +640,14 @@ async def download_document(db_id: str, doc_id: str, request: Request, current_u
         file_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
         file_meta = file_info.get("meta", {})
 
-        # 获取文件路径和文件名
+        # 获取文件类型、路径和文件名
+        file_type = file_meta.get("file_type", "file")
         file_path = file_meta.get("path", "")
         filename = file_meta.get("filename", "file")
+
+        # URL 类型文件没有原始文件可下载
+        if file_type == "url":
+            raise HTTPException(status_code=400, detail="URL 类型文件不支持下载原始文件")
         logger.debug(f"File path from database: {file_path}")
         logger.debug(f"Original filename from database: {filename}")
 
@@ -1086,6 +1091,82 @@ async def move_document(
     except Exception as e:
         logger.error(f"移动文件失败 {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@knowledge.post("/files/fetch-url")
+async def fetch_url(
+    url: str = Body(..., embed=True),
+    db_id: str | None = Body(None, embed=True),
+    current_user: User = Depends(get_admin_user),
+):
+    """
+    抓取 URL 内容并上传到 MinIO
+    """
+    logger.debug(f"Fetching URL: {url} for db_id: {db_id}")
+    try:
+        from src.knowledge.utils.url_fetcher import fetch_url_content
+        from src.storage.minio import get_minio_client
+        from src.knowledge.utils import calculate_content_hash
+
+        # 1. 下载内容 (包含白名单校验、大小限制、类型检查)
+        content_bytes, final_url = await fetch_url_content(url)
+
+        # 2. 计算 Hash
+        content_hash = await calculate_content_hash(content_bytes)
+
+        # 检查是否已存在相同内容的文件
+        if db_id:
+            file_exists = await knowledge_base.file_existed_in_db(db_id, content_hash)
+            if file_exists:
+                raise HTTPException(
+                    status_code=409,
+                    detail="数据库中已经存在了相同内容文件",
+                )
+
+        # 3. 上传到 MinIO
+        minio_client = get_minio_client()
+        # 确保存储 bucket 存在
+        bucket_name = "kb-html-archives"
+        await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
+
+        # 如果没有提供 db_id，使用 default
+        folder = db_id if db_id else "default"
+        object_name = f"{folder}/{content_hash}.html"
+
+        upload_result = await minio_client.aupload_file(
+            bucket_name=bucket_name,
+            object_name=object_name,
+            data=content_bytes,
+            content_type="text/html",
+        )
+
+        # 检测同名文件（URL即为文件名）
+        same_name_files = []
+        has_same_name = False
+        if db_id:
+            same_name_files = await knowledge_base.get_same_name_files(db_id, url)
+            has_same_name = len(same_name_files) > 0
+
+        return {
+            "status": "success",
+            "file_path": upload_result.url,
+            "minio_url": upload_result.url,
+            "content_hash": content_hash,
+            "filename": url,  # 原始 URL 作为文件名
+            "final_url": final_url,
+            "size": len(content_bytes),
+            "has_same_name": has_same_name,
+            "same_name_files": same_name_files,
+        }
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        logger.warning(f"URL fetch validation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to fetch URL {url}: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch URL: {str(e)}")
 
 
 @knowledge.post("/files/upload")
