@@ -23,7 +23,8 @@ services:
       - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
       - MILVUS_TOKEN=${MILVUS_TOKEN:-}
       - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
-      - MINERU_OCR_URI=${MINERU_OCR_URI:-http://mineru:30000}
+      - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
+      - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30000}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
@@ -215,6 +216,8 @@ services:
       - all
     env_file:
       - .env
+    ports:
+      - 30001:30001
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-api
@@ -225,14 +228,9 @@ services:
       memlock: -1
       stack: 67108864
     ipc: host
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: [ "0" ]
-              capabilities: [ gpu ]
     restart: unless-stopped
+    networks:
+      - app-network
 
   paddlex:
     build:
