@@ -102,7 +102,7 @@ class ContentGuard:
         text_lower = text.lower()
 
         prompt = PROMPT_TEMPLATE.format(content=text_lower)
-        response = self.llm_model.call(prompt)
+        response = await self.llm_model.call(prompt)
         logger.debug(f"LLM response: {response.content}")
         return True if "不合规" in response.content else False
 

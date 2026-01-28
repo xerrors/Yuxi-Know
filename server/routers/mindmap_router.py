@@ -7,7 +7,6 @@
 - 保存和加载思维导图配置
 """
 
-import asyncio
 import json
 import traceback
 import textwrap
@@ -214,10 +213,10 @@ async def generate_mindmap(
         # 调用AI生成
         logger.info(f"开始生成思维导图，知识库: {db_name}, 文件数量: {len(files_info)}")
 
-        # 选择模型并调用（使用异步包装）
+        # 选择模型并调用
         model = select_model()
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
-        response = await asyncio.to_thread(model.call, messages, stream=False)
+        response = await model.call(messages, stream=False)
 
         # 解析AI返回的JSON
         try:

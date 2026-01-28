@@ -1,4 +1,3 @@
-import asyncio
 import traceback
 import uuid
 
@@ -10,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.storage.postgres.models_business import User
 from server.routers.auth_router import get_admin_user
 from server.utils.auth_middleware import get_db, get_required_user
-from src import executor
 from src import config as conf
 from src.agents import agent_manager
 from src.models import select_model
@@ -130,11 +128,7 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
         model_spec=meta.get("model_spec") or meta.get("model"),
     )
 
-    async def call_async(query):
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(executor, model.call, query)
-
-    response = await call_async(query)
+    response = await model.call(query)
     logger.debug({"query": query, "response": response.content})
 
     return {"response": response.content, "request_id": meta["request_id"]}
@@ -409,7 +403,8 @@ async def chat_agent(
 async def get_chat_models(model_provider: str, current_user: User = Depends(get_admin_user)):
     """获取指定模型提供商的模型列表（需要登录）"""
     model = select_model(model_provider=model_provider)
-    return {"models": model.get_models()}
+    models = await model.get_models()
+    return {"models": models}
 
 
 @chat.post("/models/update")

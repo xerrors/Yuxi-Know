@@ -966,7 +966,7 @@ async def generate_sample_questions(
         # 选择模型并调用
         model = select_model()
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]
-        response = model.call(messages, stream=False)
+        response = await model.call(messages, stream=False)
 
         # 解析AI返回的JSON
         try:
@@ -1366,7 +1366,7 @@ async def generate_description(
 
     try:
         model = select_model()
-        response = await asyncio.to_thread(model.call, prompt)
+        response = await model.call(prompt)
         description = response.content.strip()
         logger.debug(f"Generated description: {description}")
         return {"description": description, "status": "success"}

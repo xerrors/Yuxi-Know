@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import re
@@ -390,7 +389,7 @@ class EvaluationService:
                 )
 
                 try:
-                    resp = await asyncio.to_thread(llm.call, prompt, False)
+                    resp = await llm.call(prompt, False)
                     content = resp.content if resp else ""
 
                     import json_repair
@@ -606,8 +605,8 @@ class EvaluationService:
                             "如果上下文中缺少相关信息，请回答“信息不足，无法回答”。\n\n"
                         )
 
-                        # 生成答案 - 使用 asyncio.to_thread 避免阻塞事件循环
-                        response = await asyncio.to_thread(llm.call, prompt, stream=False)
+                        # 生成答案
+                        response = await llm.call(prompt, stream=False)
                         generated_answer = response.content if response else ""
                         logger.debug(f"LLM 生成的答案长度: {len(generated_answer) if generated_answer else 0}")
 
@@ -629,9 +628,8 @@ class EvaluationService:
 
                 if benchmark_row.has_gold_answers and question_data.get("gold_answer"):
                     if judge_llm:
-                        # 评判过程包含 LLM 调用，使用 asyncio.to_thread 避免阻塞
-                        answer_scores = await asyncio.to_thread(
-                            EvaluationMetricsCalculator.calculate_answer_metrics,
+                        # 评判过程包含 LLM 调用
+                        answer_scores = await EvaluationMetricsCalculator.calculate_answer_metrics(
                             query=question_data["query"],
                             generated_answer=generated_answer,
                             gold_answer=question_data["gold_answer"],

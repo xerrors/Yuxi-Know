@@ -1,7 +1,7 @@
 import os
 import traceback
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from tenacity import before_sleep_log, retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from src import config
@@ -27,7 +27,7 @@ class OpenAIBase:
     def __init__(self, api_key, base_url, model_name, **kwargs):
         self.api_key = api_key
         self.base_url = base_url
-        self.client = OpenAI(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         self.model_name = model_name
         self.info = kwargs
 
@@ -38,7 +38,7 @@ class OpenAIBase:
         before_sleep=before_sleep_log(logger, log_level="WARNING"),
         reraise=True,
     )
-    def call(self, message, stream=False):
+    async def call(self, message, stream=False):
         if isinstance(message, str):
             messages = [{"role": "user", "content": message}]
         else:
@@ -48,7 +48,7 @@ class OpenAIBase:
             if stream:
                 response = self._stream_response(messages)
             else:
-                response = self._get_response(messages)
+                response = await self._get_response(messages)
 
         except Exception as e:
             err = (
@@ -60,27 +60,27 @@ class OpenAIBase:
 
         return response
 
-    def _stream_response(self, messages):
-        response = self.client.chat.completions.create(
+    async def _stream_response(self, messages):
+        response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
             stream=True,
         )
-        for chunk in response:
+        async for chunk in response:
             if len(chunk.choices) > 0:
                 yield chunk.choices[0].delta
 
-    def _get_response(self, messages):
-        response = self.client.chat.completions.create(
+    async def _get_response(self, messages):
+        response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
             stream=False,
         )
         return response.choices[0].message
 
-    def get_models(self):
+    async def get_models(self):
         try:
-            return self.client.models.list(extra_query={"type": "text"})
+            return await self.client.models.list(extra_query={"type": "text"})
         except Exception as e:
             logger.error(f"Error getting models: {e}")
             return []
@@ -160,7 +160,7 @@ async def test_chat_model_status(provider: str, model_name: str) -> dict:
         test_messages = [{"role": "user", "content": "Say 1"}]
 
         # 发送测试请求
-        response = model.call(test_messages, stream=False)
+        response = await model.call(test_messages, stream=False)
         logger.debug(f"Test chat model status response: {response}")
 
         # 检查响应是否有效
