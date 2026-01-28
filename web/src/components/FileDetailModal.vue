@@ -398,7 +398,6 @@ const handleDownloadMarkdown = () => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding-right: 8px;
 }
 
 /* 文件标题样式 */
