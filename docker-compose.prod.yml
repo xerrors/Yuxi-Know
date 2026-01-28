@@ -24,7 +24,7 @@ services:
       - MILVUS_TOKEN=${MILVUS_TOKEN:-}
       - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
       - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
-      - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30000}
+      - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30001}
       - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
       - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
       - MODEL_DIR_IN_DOCKER=/models
