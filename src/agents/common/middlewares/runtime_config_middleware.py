@@ -6,7 +6,7 @@ from typing import Any
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 
 from src.agents.common import load_chat_model
-from src.agents.common.tools import get_kb_based_tools
+from src.agents.common.tools import get_kb_based_tools, get_buildin_tools
 from src.services.mcp_service import get_enabled_mcp_tools
 from src.utils.logging_config import logger
 
@@ -43,7 +43,8 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         super().__init__()
         # 这里的工具只是提供给 langchain 调用，并不是真正的绑定在模型上
         self.kb_tools = get_kb_based_tools()
-        self.tools = self.kb_tools + (extra_tools or [])
+        self.buildin_tools = get_buildin_tools()
+        self.tools = self.kb_tools + self.buildin_tools + (extra_tools or [])
         logger.debug(f"Initialized tools: {len(self.tools)}")
 
     async def awrap_model_call(
@@ -54,6 +55,8 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         model = load_chat_model(getattr(runtime_context, "model", None))
         enabled_tools = await self.get_tools_from_context(runtime_context)
         system_prompt = getattr(runtime_context, "system_prompt", None)
+        logger.debug(f"RuntimeConfigMiddleware: model={model}, "
+                     f"tools={[t.name for t in enabled_tools]}. ")
 
         existing_systems: list[Any] = []
         remaining: list[Any] = []
@@ -93,6 +96,8 @@ class RuntimeConfigMiddleware(AgentMiddleware):
             for tool_name in context.tools:
                 if tool_name in tools_map:
                     selected_tools.append(tools_map[tool_name])
+                else:
+                    logger.warning(f"Tool '{tool_name}' not found in available tools. {tools_map.keys()=}")
 
         # 2. 知识库工具
         if context.knowledges:
