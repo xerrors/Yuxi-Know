@@ -5,10 +5,8 @@ from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
-    ModelRequest,
     SummarizationMiddleware,
     TodoListMiddleware,
-    dynamic_prompt,
 )
 
 from src.agents.common import BaseAgent, load_chat_model
@@ -17,7 +15,6 @@ from src.agents.common.tools import get_tavily_search
 from src.services.mcp_service import get_tools_from_all_servers
 
 from .context import DeepContext
-from .prompts import DEEP_PROMPT
 
 
 def _get_research_sub_agent(search_tools: list) -> dict:
@@ -55,12 +52,6 @@ critique_sub_agent = {
         "- 检查文章是否结构清晰、语言流畅、易于理解。"
     ),
 }
-
-
-@dynamic_prompt
-def context_aware_prompt(request: ModelRequest) -> str:
-    """从 runtime context 动态生成系统提示词"""
-    return DEEP_PROMPT + "\n\n\n" + request.runtime.context.system_prompt
 
 
 class DeepAgent(BaseAgent):
@@ -111,7 +102,6 @@ class DeepAgent(BaseAgent):
             model=model,
             system_prompt=context.system_prompt,
             middleware=[
-                context_aware_prompt,  # 动态系统提示词
                 inject_attachment_context,  # 附件上下文注入
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 TodoListMiddleware(),

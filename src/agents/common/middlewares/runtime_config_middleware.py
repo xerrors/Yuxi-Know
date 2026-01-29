@@ -4,27 +4,13 @@ from collections.abc import Callable
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
+from langchain_core.messages import SystemMessage
 
 from src.agents.common import load_chat_model
-from src.agents.common.tools import get_kb_based_tools, get_buildin_tools
+from src.agents.common.tools import get_buildin_tools, get_kb_based_tools
 from src.services.mcp_service import get_enabled_mcp_tools
+from src.utils.datetime_utils import shanghai_now
 from src.utils.logging_config import logger
-
-
-def _is_system_message(msg: Any) -> bool:
-    if isinstance(msg, dict):
-        role = msg.get("role") or msg.get("type")
-        return role == "system"
-    msg_type = getattr(msg, "type", None) or getattr(msg, "role", None)
-    return msg_type == "system"
-
-
-def _get_message_content(msg: Any) -> str | None:
-    if isinstance(msg, dict):
-        content = msg.get("content")
-        return str(content) if content is not None else None
-    content = getattr(msg, "content", None)
-    return str(content) if content is not None else None
 
 
 class RuntimeConfigMiddleware(AgentMiddleware):
@@ -41,7 +27,7 @@ class RuntimeConfigMiddleware(AgentMiddleware):
             extra_tools: 额外工具列表（从 create_agent 的 tools 参数传入）
         """
         super().__init__()
-        # 这里的工具只是提供给 langchain 调用，并不是真正的绑定在模型上
+        # 这里的工具只是提供给 langchain 调用，并不是真正的绑定在模型上（后续会过滤）
         self.kb_tools = get_kb_based_tools()
         self.buildin_tools = get_buildin_tools()
         self.tools = self.kb_tools + self.buildin_tools + (extra_tools or [])
@@ -54,35 +40,29 @@ class RuntimeConfigMiddleware(AgentMiddleware):
 
         model = load_chat_model(getattr(runtime_context, "model", None))
         enabled_tools = await self.get_tools_from_context(runtime_context)
-        system_prompt = getattr(runtime_context, "system_prompt", None)
-        logger.debug(f"RuntimeConfigMiddleware: model={model}, "
-                     f"tools={[t.name for t in enabled_tools]}. ")
+        existing_tools = list(request.tools or [])
 
-        existing_systems: list[Any] = []
-        remaining: list[Any] = []
-        in_prefix = True
-        for msg in request.messages:
-            if in_prefix and _is_system_message(msg):
-                existing_systems.append(msg)
-            else:
-                in_prefix = False
-                remaining.append(msg)
+        # 合并之前中间件设置的 tools，避免覆盖
+        merged_tools = []
+        for t_bind in existing_tools:
+            if t_bind in enabled_tools or t_bind not in self.tools:
+                merged_tools.append(t_bind)
 
-        existing_contents = [_get_message_content(m) for m in existing_systems]
+        # 动态生成 system message，添加当前时间
+        cur_datetime = f"当前时间：{shanghai_now().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        system_prompt = getattr(runtime_context, "system_prompt", "") or ""
+        new_content = list(request.system_message.content_blocks) + [
+            {"type": "text", "text": f"{cur_datetime}\n\n{system_prompt}"}
+        ]
+        new_system_message = SystemMessage(content=new_content)
 
-        new_systems: list[Any] = []
-        if system_prompt:
-            try:
-                idx = existing_contents.index(system_prompt)
-            except ValueError:
-                new_systems.append({"role": "system", "content": system_prompt})
-            else:
-                new_systems.append(existing_systems.pop(idx))
-                existing_contents.pop(idx)
+        logger.debug(f"RuntimeConfigMiddleware: model={model}, tools={[t.name for t in merged_tools]}. ")
 
-        messages = [*new_systems, *existing_systems, *remaining]
-
-        request = request.override(model=model, tools=enabled_tools, messages=messages)
+        request = request.override(
+            model=model,
+            tools=merged_tools,
+            system_message=new_system_message
+        )
         return await handler(request)
 
     async def get_tools_from_context(self, context) -> list:
