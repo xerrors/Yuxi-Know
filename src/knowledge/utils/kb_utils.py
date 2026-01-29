@@ -194,13 +194,13 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
 
         # 使用预处理信息
         filename = pre_info.get("filename", item)  # 通常是原始 URL
-        
+
         # 截断文件名以适应数据库限制 (512 chars)，保留部分后缀信息如果可能
         if len(filename) > 500:
             filename_display = filename[:400] + "..." + filename[-90:]
         else:
             filename_display = filename
-            
+
         file_type = "html"  # 强制转换为 html 类型，以便后续作为文件处理
         item_path = pre_info["path"]  # MinIO path
         content_hash = pre_info["content_hash"]

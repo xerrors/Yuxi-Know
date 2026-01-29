@@ -1,4 +1,5 @@
 """URL validation utilities for whitelist-based URL parsing."""
+
 import os
 from urllib.parse import urlparse
 

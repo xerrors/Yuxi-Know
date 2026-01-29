@@ -8,11 +8,7 @@
 
     <!-- 错误状态 -->
     <div v-else-if="error" class="error-container">
-      <a-result
-        status="error"
-        :title="error.title"
-        :sub-title="error.message"
-      >
+      <a-result status="error" :title="error.title" :sub-title="error.message">
         <template #extra>
           <a-button type="primary" @click="retryLoad">重试</a-button>
         </template>
@@ -22,111 +18,111 @@
     <!-- 正常内容 -->
     <template v-else>
       <div class="hero-section">
-      <div class="glass-header">
-        <div class="logo">
-          <img
-            :src="infoStore.organization.logo"
-            :alt="infoStore.organization.name"
-            class="logo-img"
-          />
-          <span class="logo-text">{{ infoStore.organization.name }}</span>
-        </div>
-        <nav class="nav-links">
-          <router-link
-            to="/agent"
-            class="nav-link"
-            v-if="userStore.isLoggedIn && userStore.isAdmin"
-          >
-            <span>智能体</span>
-          </router-link>
-          <router-link
-            to="/graph"
-            class="nav-link"
-            v-if="userStore.isLoggedIn && userStore.isAdmin"
-          >
-            <span>知识图谱</span>
-          </router-link>
-          <router-link
-            to="/database"
-            class="nav-link"
-            v-if="userStore.isLoggedIn && userStore.isAdmin"
-          >
-            <span>知识库</span>
-          </router-link>
-        </nav>
-        <div class="header-actions">
-          <div class="github-link">
-            <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
-              <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
-                <path
-                  fill-rule="evenodd"
-                  d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
-                ></path>
-              </svg>
-            </a>
+        <div class="glass-header">
+          <div class="logo">
+            <img
+              :src="infoStore.organization.logo"
+              :alt="infoStore.organization.name"
+              class="logo-img"
+            />
+            <span class="logo-text">{{ infoStore.organization.name }}</span>
           </div>
-          <UserInfoComponent :show-button="true" />
-        </div>
-      </div>
-
-      <div class="hero-layout">
-        <div class="hero-content">
-          <h1 class="title">{{ infoStore.branding.title }}</h1>
-          <p class="subtitle">{{ infoStore.branding.subtitle }}</p>
-          <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
-          <div class="hero-actions">
-            <button class="button-base primary" @click="goToChat">开始对话</button>
-            <a
-              class="button-base secondary"
-              href="https://xerrors.github.io/Yuxi-Know/"
-              target="_blank"
-              >查看文档</a
+          <nav class="nav-links">
+            <router-link
+              to="/agent"
+              class="nav-link"
+              v-if="userStore.isLoggedIn && userStore.isAdmin"
             >
-          </div>
-        </div>
-        <div class="insight-panel" v-if="featureCards.length">
-          <div class="stat-card" v-for="card in featureCards" :key="card.label">
-            <div class="stat-headline">
-              <span class="stat-icon" v-if="card.icon">
-                <component :is="card.icon" />
-              </span>
-              <p class="stat-value">{{ card.value }}</p>
+              <span>智能体</span>
+            </router-link>
+            <router-link
+              to="/graph"
+              class="nav-link"
+              v-if="userStore.isLoggedIn && userStore.isAdmin"
+            >
+              <span>知识图谱</span>
+            </router-link>
+            <router-link
+              to="/database"
+              class="nav-link"
+              v-if="userStore.isLoggedIn && userStore.isAdmin"
+            >
+              <span>知识库</span>
+            </router-link>
+          </nav>
+          <div class="header-actions">
+            <div class="github-link">
+              <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
+                <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
+                  <path
+                    fill-rule="evenodd"
+                    d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"
+                  ></path>
+                </svg>
+              </a>
             </div>
-            <p class="stat-label">{{ card.label }}</p>
-            <p class="stat-description">{{ card.description }}</p>
+            <UserInfoComponent :show-button="true" />
+          </div>
+        </div>
+
+        <div class="hero-layout">
+          <div class="hero-content">
+            <h1 class="title">{{ infoStore.branding.title }}</h1>
+            <p class="subtitle">{{ infoStore.branding.subtitle }}</p>
+            <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
+            <div class="hero-actions">
+              <button class="button-base primary" @click="goToChat">开始对话</button>
+              <a
+                class="button-base secondary"
+                href="https://xerrors.github.io/Yuxi-Know/"
+                target="_blank"
+                >查看文档</a
+              >
+            </div>
+          </div>
+          <div class="insight-panel" v-if="featureCards.length">
+            <div class="stat-card" v-for="card in featureCards" :key="card.label">
+              <div class="stat-headline">
+                <span class="stat-icon" v-if="card.icon">
+                  <component :is="card.icon" />
+                </span>
+                <p class="stat-value">{{ card.value }}</p>
+              </div>
+              <p class="stat-label">{{ card.label }}</p>
+              <p class="stat-description">{{ card.description }}</p>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="section action-section" v-if="actionLinks.length">
-      <div class="action-grid">
-        <a
-          v-for="action in actionLinks"
-          :key="action.name"
-          class="action-card"
-          :href="action.url"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <span class="action-icon" v-if="action.icon">
-            <component :is="action.icon" />
-          </span>
-          <div class="action-meta">
-            <p class="action-title">{{ action.name }}</p>
-            <p class="action-url">{{ action.url }}</p>
-          </div>
-        </a>
+      <div class="section action-section" v-if="actionLinks.length">
+        <div class="action-grid">
+          <a
+            v-for="action in actionLinks"
+            :key="action.name"
+            class="action-card"
+            :href="action.url"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="action-icon" v-if="action.icon">
+              <component :is="action.icon" />
+            </span>
+            <div class="action-meta">
+              <p class="action-title">{{ action.name }}</p>
+              <p class="action-url">{{ action.url }}</p>
+            </div>
+          </a>
+        </div>
       </div>
-    </div>
 
-    <ProjectOverview />
+      <ProjectOverview />
 
-    <footer class="footer">
-      <div class="footer-content">
-        <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
-      </div>
-    </footer>
+      <footer class="footer">
+        <div class="footer-content">
+          <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
+        </div>
+      </footer>
     </template>
   </div>
 </template>

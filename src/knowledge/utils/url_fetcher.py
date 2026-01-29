@@ -1,8 +1,10 @@
-import httpx
-from urllib.parse import urlparse
-import socket
 import ipaddress
-from src.knowledge.utils.url_validator import validate_url, is_url_parsing_enabled
+import socket
+from urllib.parse import urlparse
+
+import httpx
+
+from src.knowledge.utils.url_validator import is_url_parsing_enabled, validate_url
 from src.utils import logger
 
 # 最大允许下载大小 (例如 10MB)
@@ -10,9 +12,11 @@ MAX_DOWNLOAD_SIZE = 10 * 1024 * 1024
 # 允许的 Content-Type
 ALLOWED_CONTENT_TYPES = ["text/html", "application/xhtml+xml"]
 
+
 async def is_private_ip(hostname: str) -> bool:
     """Check if the hostname resolves to a private IP address."""
     import asyncio
+
     try:
         # Resolve hostname to IP in a separate thread to avoid blocking the event loop
         ip_list = await asyncio.to_thread(socket.getaddrinfo, hostname, None)
@@ -28,6 +32,7 @@ async def is_private_ip(hostname: str) -> bool:
         # but to be safe we can return True to block it if strict mode is preferred.
         # For now, we return False assuming standard DNS failure handling.
         return False
+
 
 async def fetch_url_content(url: str, max_size: int = MAX_DOWNLOAD_SIZE) -> tuple[bytes, str]:
     """
@@ -59,68 +64,74 @@ async def fetch_url_content(url: str, max_size: int = MAX_DOWNLOAD_SIZE) -> tupl
     current_url = url
     redirect_count = 0
     max_redirects = 5
-    
+
     # We handle redirects manually to check each target URL against whitelist/private IP
     try:
         async with httpx.AsyncClient(timeout=30.0, follow_redirects=False) as client:
             while True:
                 logger.info(f"Fetching URL: {current_url}")
-                
+
                 # Request headers
                 headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/91.0.4472.124 "
+                        "Safari/537.36"
+                    )
                 }
-                
+
                 # Stream the response to check headers before downloading body
                 async with client.stream("GET", current_url, headers=headers) as response:
                     # Handle Redirects
                     if response.status_code in (301, 302, 303, 307, 308):
                         if redirect_count >= max_redirects:
                             raise ValueError("Too many redirects")
-                        
+
                         redirect_count += 1
                         location = response.headers.get("Location")
                         if not location:
                             raise ValueError("Redirect response missing Location header")
-                        
+
                         # Handle relative redirects
                         if location.startswith("/"):
                             parsed_current = urlparse(current_url)
                             current_url = f"{parsed_current.scheme}://{parsed_current.netloc}{location}"
                         elif not location.startswith("http"):
                             # Handle relative path without /? or other weird cases, or assume absolute
-                             parsed_current = urlparse(current_url)
-                             # simple join
-                             from urllib.parse import urljoin
-                             current_url = urljoin(current_url, location)
+                            parsed_current = urlparse(current_url)
+                            # simple join
+                            from urllib.parse import urljoin
+
+                            current_url = urljoin(current_url, location)
                         else:
                             current_url = location
-                        
+
                         # Validate the new URL
                         is_valid, error_msg = validate_url(current_url)
                         if not is_valid:
                             raise ValueError(f"Redirected to invalid URL: {error_msg}")
-                            
+
                         parsed_new = urlparse(current_url)
                         if await is_private_ip(parsed_new.hostname):
                             raise ValueError("Redirected to private IP address")
-                            
-                        continue # Start new request
-                    
+
+                        continue  # Start new request
+
                     response.raise_for_status()
-                    
+
                     # Check Content-Type
                     content_type = response.headers.get("Content-Type", "").lower()
                     if not any(allowed in content_type for allowed in ALLOWED_CONTENT_TYPES):
                         raise ValueError(f"Unsupported Content-Type: {content_type}. Only HTML is supported.")
-                    
+
                     # Download content with size limit
                     content = bytearray()
                     async for chunk in response.aiter_bytes():
                         content.extend(chunk)
                         if len(content) > max_size:
                             raise ValueError(f"Content size exceeds limit of {max_size} bytes")
-                    
+
                     return bytes(content), current_url
 
     except httpx.HTTPError as e:
