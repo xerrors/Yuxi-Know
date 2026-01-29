@@ -114,6 +114,16 @@ class ReporterContext(BaseContext):
 
 中间件位于 `src/agents/common/middlewares`，包含上下文感知提示词、模型选择、动态工具加载以及附件注入等实现。如果需要编写新的中间件，请遵循 LangChain 官方文档中对 `AgentMiddleware`、`ModelRequest`、`ModelResponse` 等接口的定义，完成后在该目录的 `__init__.py` 暴露入口，主智能体即可在 `middleware` 列表中引用。
 
+#### RuntimeConfigMiddleware
+
+`RuntimeConfigMiddleware`（[runtime_config_middleware.py](https://github.com/xerrors/Yuxi-Know/blob/main/src/agents/common/middlewares/runtime_config_middleware.py)）是系统默认的核心中间件之一，负责在每次模型调用前自动注入运行时配置：
+
+1. **自动注入当前时间**：在 system prompt 开头追加当前时间，格式为 `当前时间：YYYY-MM-DD HH:MM:SS`，确保 LLM 能获取准确的时间上下文。
+2. **动态加载工具**：根据 `context.tools`、`context.knowledges`、`context.mcps` 自动组装可用工具列表。
+3. **模型选择**：根据 `context.model` 加载对应模型配置。
+
+如需自定义时间注入逻辑或禁用该行为，可继承该中间件并覆盖 `awrap_model_call` 方法。
+
 #### 文件上传中间件
 
 文件上传功能通过 `inject_attachment_context` 中间件实现（位于 `src/agents/common/middlewares/attachment_middleware.py`）。该中间件基于 LangChain 1.0 的 `AgentMiddleware` 标准实现，具有以下特点：
