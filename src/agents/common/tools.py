@@ -30,7 +30,7 @@ def get_tavily_search():
     return _tavily_search_instance
 
 
-@tool(name_or_callable="计算器", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
+@tool(name_or_callable="calculator", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
 def calculator(a: float, b: float, operation: str) -> float:
     try:
         if operation == "add":
@@ -87,7 +87,7 @@ async def text_to_img_demo(text: str) -> str:
     return image_url
 
 
-@tool(name_or_callable="人工审批工具(Debug)", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
+@tool(name_or_callable="human_in_the_loop_debug", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
 def get_approved_user_goal(
     operation_description: str,
 ) -> dict:

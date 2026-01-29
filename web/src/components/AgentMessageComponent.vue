@@ -401,7 +401,6 @@ const parsedData = computed(() => {
 
         .ant-collapse-header {
           padding: 8px 12px;
-          // background-color: var(--gray-100);
           font-size: 14px;
           font-weight: 500;
           color: var(--gray-700);
@@ -446,7 +445,6 @@ const parsedData = computed(() => {
     align-items: center;
     gap: 8px;
     background-color: var(--color-error-50);
-    // border: 1px solid #f87171;
     color: var(--color-error-500);
     span {
       line-height: 1.5;
@@ -475,123 +473,6 @@ const parsedData = computed(() => {
 
       &:last-child {
         margin-bottom: 0;
-      }
-    }
-  }
-
-  :deep(.tool-call-display) {
-    background-color: var(--gray-25);
-    outline: 1px solid var(--gray-150);
-    border-radius: 8px;
-    overflow: hidden;
-    transition: all 0.2s ease;
-
-    .tool-header {
-      padding: 8px 12px;
-      // background-color: var(--gray-100);
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--gray-800);
-      border-bottom: 1px solid var(--gray-100);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      user-select: none;
-      position: relative;
-      transition: color 0.2s ease;
-      align-items: center;
-
-      .anticon {
-        color: var(--main-color);
-        font-size: 16px;
-      }
-
-      .tool-name {
-        font-weight: 600;
-        color: var(--main-700);
-      }
-
-      span {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
-
-      .tool-loader {
-        margin-top: 2px;
-        color: var(--main-700);
-      }
-
-      .tool-loader.rotate {
-        animation: rotate 2s linear infinite;
-      }
-
-      .tool-loader.tool-success {
-        color: var(--color-success-500);
-      }
-
-      .tool-loader.tool-error {
-        color: var(--color-error-500);
-      }
-
-      .tool-loader.tool-loading {
-        color: var(--color-info-500);
-      }
-
-      .tool-expand-icon {
-        margin-left: auto;
-        color: var(--gray-400);
-        display: flex;
-        align-items: center;
-      }
-    }
-
-    .tool-content {
-      transition: all 0.3s ease;
-
-      .tool-params {
-        padding: 8px 12px;
-        background-color: var(--gray-25);
-        border-bottom: 1px solid var(--gray-150);
-
-        .tool-params-content {
-          margin: 0;
-          font-size: 12px;
-          overflow-x: auto;
-          color: var(--gray-700);
-          line-height: 1.5;
-
-          pre {
-            margin: 0;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-          }
-        }
-      }
-
-      .tool-result {
-        padding: 0;
-        background-color: transparent;
-
-        .tool-result-header {
-          padding: 12px 16px;
-          background-color: var(--gray-100);
-          font-size: 12px;
-          color: var(--gray-700);
-          font-weight: 500;
-          border-bottom: 1px solid var(--gray-200);
-        }
-
-        .tool-result-content {
-          padding: 0;
-          background-color: transparent;
-        }
-      }
-    }
-
-    &.is-collapsed {
-      .tool-header {
-        border-bottom: none;
       }
     }
   }
@@ -662,7 +543,7 @@ const parsedData = computed(() => {
   border-radius: 12px;
   overflow: hidden;
   margin-left: auto;
-  // max-height: 200px;
+  /* max-height: 200px; */
   border: 1px solid rgba(255, 255, 255, 0.2);
 
   img {
