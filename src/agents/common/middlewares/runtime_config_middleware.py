@@ -58,11 +58,7 @@ class RuntimeConfigMiddleware(AgentMiddleware):
 
         logger.debug(f"RuntimeConfigMiddleware: model={model}, tools={[t.name for t in merged_tools]}. ")
 
-        request = request.override(
-            model=model,
-            tools=merged_tools,
-            system_message=new_system_message
-        )
+        request = request.override(model=model, tools=merged_tools, system_message=new_system_message)
         return await handler(request)
 
     async def get_tools_from_context(self, context) -> list:
