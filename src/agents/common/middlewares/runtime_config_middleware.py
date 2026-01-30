@@ -31,6 +31,9 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         tools_context_name: str = "tools",
         knowledges_context_name: str = "knowledges",
         mcps_context_name: str = "mcps",
+        enable_model_override: bool = True,
+        enable_system_prompt_override: bool = True,
+        enable_tools_override: bool = True,
     ):
         """初始化中间件
 
@@ -41,6 +44,9 @@ class RuntimeConfigMiddleware(AgentMiddleware):
             tools_context_name: 上下文中的工具列表字段名称（默认 "tools"）
             knowledges_context_name: 上下文中的知识库列表字段名称（默认 "knowledges"）
             mcps_context_name: 上下文中的 MCP 服务器列表字段名称（默认 "mcps"）
+            enable_model_override: 是否允许覆盖模型配置（默认 True）
+            enable_system_prompt_override: 是否允许覆盖系统提示词（默认 True）
+            enable_tools_override: 是否允许覆盖工具列表（默认 True）
         """
         super().__init__()
         self.kb_tools = get_kb_based_tools()
@@ -52,6 +58,10 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         self.tools_context_name = tools_context_name
         self.knowledges_context_name = knowledges_context_name
         self.mcps_context_name = mcps_context_name
+        # 存储覆盖配置
+        self.enable_model_override = enable_model_override
+        self.enable_system_prompt_override = enable_system_prompt_override
+        self.enable_tools_override = enable_tools_override
         logger.debug(
             f"Initialized RuntimeConfigMiddleware with custom field names: model={model_context_name}, "
             f"system_prompt={system_prompt_context_name}, tools={tools_context_name}, "
@@ -62,28 +72,36 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
     ) -> ModelResponse:
         runtime_context = request.runtime.context
+        overrides: dict[str, Any] = {}
 
-        model = load_chat_model(getattr(runtime_context, self.model_context_name, None))
-        enabled_tools = await self.get_tools_from_context(runtime_context)
-        existing_tools = list(request.tools or [])
+        # 1. 模型覆盖（可选）
+        if self.enable_model_override:
+            model = load_chat_model(getattr(runtime_context, self.model_context_name, None))
+            overrides["model"] = model
 
-        # 合并之前中间件设置的 tools，避免覆盖
-        merged_tools = []
-        for t_bind in existing_tools:
-            if t_bind in enabled_tools or t_bind not in self.tools:
-                merged_tools.append(t_bind)
+        # 2. 工具覆盖（可选）
+        if self.enable_tools_override:
+            enabled_tools = await self.get_tools_from_context(runtime_context)
+            existing_tools = list(request.tools or [])
+            merged_tools = []
+            for t_bind in existing_tools:
+                if t_bind in enabled_tools or t_bind not in self.tools:
+                    merged_tools.append(t_bind)
+            overrides["tools"] = merged_tools
 
-        # 动态生成 system message，添加当前时间
-        cur_datetime = f"当前时间：{shanghai_now().strftime('%Y-%m-%d %H:%M:%S')} UTC"
-        system_prompt = getattr(runtime_context, self.system_prompt_context_name, "") or ""
-        new_content = list(request.system_message.content_blocks) + [
-            {"type": "text", "text": f"{cur_datetime}\n\n{system_prompt}"}
-        ]
-        new_system_message = SystemMessage(content=new_content)
+        # 3. 系统提示词覆盖（可选）
+        if self.enable_system_prompt_override:
+            cur_datetime = f"当前时间：{shanghai_now().strftime('%Y-%m-%d %H:%M:%S')} UTC"
+            system_prompt = getattr(runtime_context, self.system_prompt_context_name, "") or ""
+            new_content = list(request.system_message.content_blocks) + [
+                {"type": "text", "text": f"{cur_datetime}\n\n{system_prompt}"}
+            ]
+            new_system_message = SystemMessage(content=new_content)
+            overrides["system_message"] = new_system_message
 
-        logger.debug(f"RuntimeConfigMiddleware: model={model}, tools={[t.name for t in merged_tools]}. ")
+        if overrides:
+            request = request.override(**overrides)
 
-        request = request.override(model=model, tools=merged_tools, system_message=new_system_message)
         return await handler(request)
 
     async def get_tools_from_context(self, context) -> list:

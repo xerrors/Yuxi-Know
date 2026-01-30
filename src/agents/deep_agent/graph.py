@@ -112,11 +112,16 @@ class DeepAgent(BaseAgent):
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
                         TodoListMiddleware(),  # 子智能体也有 todo 列表
-                        FilesystemMiddleware(),  # 当前的两个文件系统是隔离的
+                        FilesystemMiddleware(),
+                        RuntimeConfigMiddleware(
+                            model_context_name="subagents_model",
+                            enable_model_override=True,
+                            enable_system_prompt_override=False,
+                            enable_tools_override=False,
+                        ),
                         SummarizationMiddleware(
                             model=sub_model,
                             trigger=("tokens", 110000),
-                            keep=("messages", 10),
                             trim_tokens_to_summarize=None,
                         ),
                         PatchToolCallsMiddleware(),
@@ -126,7 +131,6 @@ class DeepAgent(BaseAgent):
                 SummarizationMiddleware(
                     model=model,
                     trigger=("tokens", 110000),
-                    keep=("messages", 10),
                     trim_tokens_to_summarize=None,
                 ),
                 PatchToolCallsMiddleware(),
