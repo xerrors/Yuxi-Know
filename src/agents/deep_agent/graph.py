@@ -116,7 +116,7 @@ class DeepAgent(BaseAgent):
                         SummarizationMiddleware(
                             model=sub_model,
                             trigger=("tokens", 110000),
-                            keep=("messages", 10),
+                            keep=("messages", 300),
                             trim_tokens_to_summarize=None,
                         ),
                         PatchToolCallsMiddleware(),
@@ -126,7 +126,7 @@ class DeepAgent(BaseAgent):
                 SummarizationMiddleware(
                     model=model,
                     trigger=("tokens", 110000),
-                    keep=("messages", 10),
+                    keep=("messages", 300),
                     trim_tokens_to_summarize=None,
                 ),
                 PatchToolCallsMiddleware(),
