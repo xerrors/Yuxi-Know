@@ -1143,16 +1143,17 @@ watch(
 }
 
 .chat-main {
-  flex: 1;
+  flex: 4;
   display: flex;
   flex-direction: column;
   overflow-y: auto; /* Scroll is here now */
   position: relative;
   transition: flex 0.4s ease;
+  min-width: 0; /* Prevent flex item from overflowing */
 }
 
 .agent-panel-wrapper {
-  flex: 1; /* 1:1 ratio with chat-main */
+  flex: 3; /* 4:3 ratio with chat-main */
   height: calc(100% - 32px);
   overflow: hidden;
   z-index: 20;
@@ -1162,20 +1163,21 @@ watch(
   border-radius: 12px;
   box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-200);
+  min-width: 0; /* Prevent flex item from overflowing */
 }
 
 /* Workbench transition animations */
 .panel-slide-enter-active,
 .panel-slide-leave-active {
   transition:
-    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.3s ease,
-    flex 0.4s ease;
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.15s ease,
+    flex 0.2s ease;
 }
 
 .panel-slide-enter-from,
 .panel-slide-leave-to {
-  transform: translateX(30px) scale(0.98);
+  transform: translateX(20px) scale(0.98);
   opacity: 0;
   flex: 0 0 0; /* Shrink to zero width during transition */
   margin-left: -16px; /* Compensate for margin during close */

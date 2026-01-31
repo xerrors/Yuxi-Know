@@ -1,7 +1,10 @@
 <template>
   <div class="agent-panel">
     <div class="panel-header">
-      <div class="panel-title">状态工作台</div>
+      <div class="panel-title">
+        <FolderCode :size="16" class="header-icon" />
+        <span><strong>状态工作台</strong></span>
+      </div>
       <div class="header-actions">
         <a-button type="text" class="refresh-btn" @click="emitRefresh">
           <template #icon><RefreshCw :size="16" /></template>
@@ -18,15 +21,13 @@
         class="tab"
         :class="{ active: activeTab === 'todos' }"
         @click="activeTab = 'todos'"
-        v-if="hasTodos"
       >
-        任务 ({{ todoCount }})
+        任务 ({{ completedCount }}/{{ todos.length }})
       </button>
       <button
         class="tab"
         :class="{ active: activeTab === 'files' }"
         @click="activeTab = 'files'"
-        v-if="hasFiles"
       >
         文件 ({{ fileCount }})
       </button>
@@ -34,7 +35,6 @@
         class="tab"
         :class="{ active: activeTab === 'attachments' }"
         @click="activeTab = 'attachments'"
-        v-if="hasAttachments"
       >
         附件 ({{ attachmentCount }})
       </button>
@@ -211,15 +211,14 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { Download, X, Plus, Info } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Download, X, Plus, Info, FolderCode } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
-  QuestionCircleOutlined,
-  DownloadOutlined
+  QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
@@ -267,20 +266,8 @@ const attachments = computed(() => {
   return props.agentState?.attachments || []
 })
 
-const hasTodos = computed(() => {
-  return todos.value.length > 0
-})
-
-const hasFiles = computed(() => {
-  return files.value.length > 0
-})
-
-const hasAttachments = computed(() => {
-  return attachments.value.length > 0
-})
-
-const todoCount = computed(() => {
-  return todos.value.length
+const completedCount = computed(() => {
+  return todos.value.filter(t => t.status === 'completed').length
 })
 
 // 适配实际数据格式
@@ -320,23 +307,6 @@ const fileCount = computed(() => {
 const attachmentCount = computed(() => {
   return normalizedAttachments.value.length
 })
-
-// 监听 agentState 变化，自动选择有内容的标签
-watch(
-  () => props.agentState,
-  (newState) => {
-    if (newState) {
-      if (hasAttachments.value && !hasFiles.value && !hasTodos.value) {
-        activeTab.value = 'attachments'
-      } else if (hasFiles.value && !hasTodos.value) {
-        activeTab.value = 'files'
-      } else if (hasTodos.value) {
-        activeTab.value = 'todos'
-      }
-    }
-  },
-  { immediate: true }
-)
 
 // 方法
 const getFileName = (fileItem) => {
@@ -440,16 +410,23 @@ const emitRefresh = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  height: 48px;
+  padding: 0 12px;
+  height: 40px;
   border-bottom: 1px solid var(--gray-200);
   flex-shrink: 0;
 }
 
 .panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 13px;
   color: var(--gray-900);
+
+  .header-icon {
+    color: var(--gray-700);
+  }
 }
 
 .header-actions {
@@ -487,41 +464,33 @@ const emitRefresh = () => {
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid var(--gray-200);
+  border-bottom: 1px solid var(--gray-100);
   position: relative;
   align-items: center;
-  padding: 0 16px;
+  padding: 4px 6px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .tab {
-  padding: 12px 16px;
+  padding: 4px 12px;
   border: none;
   background: none;
   color: var(--gray-600);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   transition: all 0.15s ease;
-  position: relative;
+  border-radius: 999px;
 
   &:hover {
-    color: var(--main-700);
+    background: var(--gray-100);
+    color: var(--gray-900);
   }
 
   &.active {
-    color: var(--main-700);
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--main-500);
-      border-radius: 1px;
-    }
+    background: var(--gray-100);
+    color: var(--gray-900);
   }
 }
 

@@ -18,7 +18,7 @@
       </div>
 
       <!-- search 操作：原有的文件分组显示 -->
-      <div v-else class="knowledge-base-result">
+      <div v-else-if="isArrayResult(resultContent)" class="knowledge-base-result">
         <div class="result-summary">
           找到 {{ parsedData(resultContent).length }} 个相关文档片段，来自
           {{ fileGroups(parsedData(resultContent)).length }} 个文件
@@ -131,6 +131,13 @@
           </div>
         </a-modal>
       </div>
+
+      <!-- 纯文本结果显示 -->
+      <div v-else class="knowledge-base-result">
+        <div class="plain-text-result">
+          <pre class="plain-text-content">{{ resultContent }}</pre>
+        </div>
+      </div>
     </template>
   </BaseToolCall>
 </template>
@@ -199,6 +206,20 @@ const parseData = (content) => {
 }
 
 const parsedData = (content) => parseData(content)
+
+// 判断结果是否为数组（搜索结果）
+const isArrayResult = (content) => {
+  if (Array.isArray(content)) return true
+  if (typeof content === 'string') {
+    try {
+      const parsed = JSON.parse(content)
+      return Array.isArray(parsed)
+    } catch {
+      return false
+    }
+  }
+  return false
+}
 
 // 管理展开状态
 const expandedFiles = ref(new Set())
@@ -294,6 +315,21 @@ const formatMindmapResult = (content) => {
       white-space: pre-wrap;
       word-break: break-word;
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+  }
+
+  .plain-text-result {
+    padding: 12px 16px;
+    max-height: 300px;
+    overflow-y: auto;
+
+    .plain-text-content {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--gray-700);
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   }
 

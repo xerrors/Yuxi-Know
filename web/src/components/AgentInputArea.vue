@@ -38,7 +38,7 @@
           @click="$emit('toggle-panel')"
           title="查看工作状态"
         >
-          <FolderDot :size="16" />
+          <FolderCode :size="14" />
           <span>状态</span>
         </div>
       </div>
@@ -55,7 +55,7 @@ import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.
 import { threadApi } from '@/apis'
 import { AgentValidator } from '@/utils/agentValidator'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
-import { FolderDot } from 'lucide-vue-next'
+import { FolderCode } from 'lucide-vue-next'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
