@@ -105,13 +105,12 @@ class DeepAgent(BaseAgent):
                 inject_attachment_context,  # 附件上下文注入
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 TodoListMiddleware(),
-                FilesystemMiddleware(),
+                FilesystemMiddleware(tool_token_limit_before_evict=5000),
                 SubAgentMiddleware(
                     default_model=sub_model,
                     default_tools=search_tools,
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
-                        TodoListMiddleware(),  # 子智能体也有 todo 列表
                         FilesystemMiddleware(),
                         RuntimeConfigMiddleware(
                             model_context_name="subagents_model",
