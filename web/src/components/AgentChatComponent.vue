@@ -167,12 +167,18 @@
         <!-- Agent Panel Area -->
 
         <transition name="panel-slide">
-          <div class="agent-panel-wrapper" v-if="isAgentPanelOpen && hasAgentStateContent">
+          <div
+            class="agent-panel-wrapper"
+            v-if="isAgentPanelOpen && hasAgentStateContent"
+            :style="{ width: `${panelWidth}px` }"
+          >
             <AgentPanel
               :agent-state="currentAgentState"
               :thread-id="currentChatId"
+              :panel-width="panelWidth"
               @refresh="handleAgentStateRefresh"
               @close="toggleAgentPanel"
+              @resize="handlePanelResize"
             />
           </div>
         </transition>
@@ -257,6 +263,9 @@ const localUIState = reactive({
 
 // Agent Panel State
 const isAgentPanelOpen = ref(false)
+const panelWidth = ref(360)
+const minPanelWidth = 280
+const maxPanelWidth = 600
 
 // ==================== COMPUTED PROPERTIES ====================
 const currentAgentId = computed(() => {
@@ -973,6 +982,12 @@ const toggleAgentPanel = () => {
   isAgentPanelOpen.value = !isAgentPanelOpen.value
 }
 
+// 处理面板宽度调整
+// 反转 deltaX：向左拖动时让面板变宽（像拉出更多空间）
+const handlePanelResize = (deltaX) => {
+  panelWidth.value = Math.min(maxPanelWidth, Math.max(minPanelWidth, panelWidth.value - deltaX))
+}
+
 // ==================== HELPER FUNCTIONS ====================
 const getLastMessage = (conv) => {
   if (!conv?.messages?.length) return null
@@ -1153,7 +1168,7 @@ watch(
 }
 
 .agent-panel-wrapper {
-  flex: 3; /* 4:3 ratio with chat-main */
+  flex: 0 0 auto;
   height: calc(100% - 32px);
   overflow: hidden;
   z-index: 20;
@@ -1163,7 +1178,7 @@ watch(
   border-radius: 12px;
   box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-200);
-  min-width: 0; /* Prevent flex item from overflowing */
+  min-width: 0;
 }
 
 /* Workbench transition animations */

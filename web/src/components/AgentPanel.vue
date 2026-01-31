@@ -1,5 +1,7 @@
 <template>
-  <div class="agent-panel">
+  <div class="agent-panel" :class="{ resizing: isResizing }">
+    <!-- 拖拽手柄 -->
+    <div class="resize-handle" @mousedown="startResize"></div>
     <div class="panel-header">
       <div class="panel-title">
         <FolderCode :size="16" class="header-icon" />
@@ -238,7 +240,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['refresh', 'close'])
+const emit = defineEmits(['refresh', 'close', 'resize'])
 
 const activeTab = ref('todos')
 const modalVisible = ref(false)
@@ -396,14 +398,68 @@ const handleFileChange = async (event) => {
 const emitRefresh = () => {
   emit('refresh')
 }
+
+// 拖拽调整宽度相关
+const isResizing = ref(false)
+const startX = ref(0)
+
+const startResize = (e) => {
+  isResizing.value = true
+  startX.value = e.clientX
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  // 添加全局事件监听
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', stopResize)
+}
+
+const onMouseMove = (e) => {
+  if (!isResizing.value) return
+  const deltaX = e.clientX - startX.value
+  startX.value = e.clientX
+  emit('resize', deltaX)
+}
+
+const stopResize = () => {
+  if (isResizing.value) {
+    isResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', stopResize)
+  }
+}
 </script>
 
 <style scoped lang="less">
+.resize-handle {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 32px;
+  width: 4px;
+  cursor: col-resize;
+  background: var(--gray-300);
+  border-radius: 2px;
+  z-index: 10;
+  transition: background 0.2s;
+
+  &:hover {
+    background: var(--main-400);
+  }
+}
+
 .agent-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--gray-0);
+  transition: none;
+
+  &.resizing {
+    transition: none;
+  }
 }
 
 .panel-header {
@@ -412,7 +468,7 @@ const emitRefresh = () => {
   justify-content: space-between;
   padding: 0 12px;
   height: 40px;
-  border-bottom: 1px solid var(--gray-200);
+  background: var(--gray-25);
   flex-shrink: 0;
 }
 
@@ -464,10 +520,11 @@ const emitRefresh = () => {
 
 .tabs {
   display: flex;
-  border-bottom: 1px solid var(--gray-100);
+  background: var(--gray-25);
   position: relative;
   align-items: center;
-  padding: 4px 6px;
+  padding: 8px 6px;
+  padding-top: 0px;
   gap: 4px;
   flex-shrink: 0;
 }
@@ -484,12 +541,12 @@ const emitRefresh = () => {
   border-radius: 999px;
 
   &:hover {
-    background: var(--gray-100);
+    background: var(--gray-150);
     color: var(--gray-900);
   }
 
   &.active {
-    background: var(--gray-100);
+    background: var(--gray-150);
     color: var(--gray-900);
   }
 }
