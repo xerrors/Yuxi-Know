@@ -4,7 +4,7 @@
     <div class="resize-handle" @mousedown="startResize"></div>
     <div class="panel-header">
       <div class="panel-title">
-        <FolderCode :size="16" class="header-icon" />
+        <FolderCode :size="18" class="header-icon" />
         <span><strong>状态工作台</strong></span>
       </div>
       <div class="header-actions">
@@ -214,7 +214,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { Download, X, Plus, Info, FolderCode } from 'lucide-vue-next'
+import { Download, X, Plus, Info, FolderCode, RefreshCw } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -477,7 +477,7 @@ const stopResize = () => {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--gray-900);
 
   .header-icon {

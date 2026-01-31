@@ -8,7 +8,7 @@
 
         <div class="calc-display">
           <div class="result-container">
-            <div class="result-value">{{ formatNumber(parsedData(resultContent)) }}</div>
+            <div class="result-value">{{ formatNumber(parseData(resultContent)) }}</div>
           </div>
         </div>
       </div>
