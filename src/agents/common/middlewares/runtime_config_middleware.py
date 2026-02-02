@@ -49,9 +49,6 @@ class RuntimeConfigMiddleware(AgentMiddleware):
             enable_tools_override: 是否允许覆盖工具列表（默认 True）
         """
         super().__init__()
-        self.kb_tools = get_kb_based_tools()
-        self.buildin_tools = get_buildin_tools()
-        self.tools = self.kb_tools + self.buildin_tools + (extra_tools or [])
         # 存储自定义字段名称
         self.model_context_name = model_context_name
         self.system_prompt_context_name = system_prompt_context_name
@@ -62,6 +59,19 @@ class RuntimeConfigMiddleware(AgentMiddleware):
         self.enable_model_override = enable_model_override
         self.enable_system_prompt_override = enable_system_prompt_override
         self.enable_tools_override = enable_tools_override
+
+        self.tools: list[Any] = []
+        # 预加载工具列表（仅当启用工具覆盖时）
+        if self.enable_tools_override:
+            self.kb_tools = get_kb_based_tools()
+            self.buildin_tools = get_buildin_tools()
+            self.tools = self.kb_tools + self.buildin_tools + (extra_tools or [])
+        elif extra_tools:
+            logger.warning(
+                "RuntimeConfigMiddleware: extra_tools 参数已提供，但 enable_tools_override=False，"
+                "将忽略 extra_tools 并不会应用任何工具覆盖。"
+            )
+
         logger.debug(
             f"Initialized RuntimeConfigMiddleware with custom field names: model={model_context_name}, "
             f"system_prompt={system_prompt_context_name}, tools={tools_context_name}, "
