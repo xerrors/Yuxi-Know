@@ -1,10 +1,11 @@
+from deepagents.middleware.filesystem import FilesystemMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
 
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.middlewares import (
     RuntimeConfigMiddleware,
-    inject_attachment_context,
+    save_attachments_to_fs,
 )
 from src.services.mcp_service import get_tools_from_all_servers
 
@@ -30,7 +31,8 @@ class ChatbotAgent(BaseAgent):
             model=load_chat_model(context.model),
             system_prompt=context.system_prompt,
             middleware=[
-                inject_attachment_context,  # 附件上下文注入
+                save_attachments_to_fs,  # 附件保存到文件系统
+                FilesystemMiddleware(tool_token_limit_before_evict=5000),
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/知识库/MCP/提示词）
                 ModelRetryMiddleware(),  # 模型重试中间件
             ],

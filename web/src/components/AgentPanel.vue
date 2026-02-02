@@ -9,7 +9,7 @@
       </div>
       <div class="header-actions">
         <a-button type="text" class="refresh-btn" @click="emitRefresh">
-          <template #icon><RefreshCw :size="16" /></template>
+          <!-- <template #icon><RefreshCw :size="14" /></template> -->
           刷新
         </a-button>
         <button class="close-btn" @click="$emit('close')">
@@ -19,18 +19,10 @@
     </div>
 
     <div class="tabs">
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'todos' }"
-        @click="activeTab = 'todos'"
-      >
+      <button class="tab" :class="{ active: activeTab === 'todos' }" @click="activeTab = 'todos'">
         任务 ({{ completedCount }}/{{ todos.length }})
       </button>
-      <button
-        class="tab"
-        :class="{ active: activeTab === 'files' }"
-        @click="activeTab = 'files'"
-      >
+      <button class="tab" :class="{ active: activeTab === 'files' }" @click="activeTab = 'files'">
         文件 ({{ fileCount }})
       </button>
       <button
@@ -45,7 +37,7 @@
       <!-- Todo Display -->
       <div v-if="activeTab === 'todos'" class="todo-display">
         <div v-if="!todos.length" class="empty">暂无任务</div>
-        <div v-else class="todo-list">
+        <div v-else class="todo-list" ref="todoListRef">
           <div v-for="(todo, index) in todos" :key="index" class="todo-item">
             <div class="todo-status">
               <CheckCircleOutlined v-if="todo.status === 'completed'" class="icon completed" />
@@ -58,7 +50,10 @@
               <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" class="icon cancelled" />
               <QuestionCircleOutlined v-else class="icon unknown" />
             </div>
-            <span class="todo-text">{{ todo.content }}</span>
+            <a-tooltip v-if="overflowedIds.has(index)" placement="topLeft" :title="todo.content">
+              <span class="todo-text">{{ todo.content }}</span>
+            </a-tooltip>
+            <span v-else class="todo-text">{{ todo.content }}</span>
           </div>
         </div>
       </div>
@@ -66,36 +61,53 @@
       <!-- Files Display -->
       <div v-if="activeTab === 'files'" class="files-display">
         <div v-if="!fileCount" class="empty">暂无文件</div>
-        <div v-else class="file-list">
-          <div
-            v-for="(fileItem, index) in normalizedFiles"
-            :key="fileItem.path || index"
-            class="file-item"
-            @click="showFileContent(fileItem.path, fileItem)"
+        <div v-else class="file-tree-container">
+          <a-tree
+            v-model:expandedKeys="expandedKeys"
+            :tree-data="fileTreeData"
+            :show-icon="true"
+            block-node
+            :show-line="false"
+            @select="onFileSelect"
           >
-            <div class="file-info">
-              <div class="file-icon-wrapper">
+            <template #icon="{ data, expanded }">
+              <template v-if="data.isLeaf">
                 <component
-                  :is="getFileIcon(fileItem.path)"
-                  :style="{ color: getFileIconColor(fileItem.path), fontSize: '18px' }"
+                  :is="getFileIcon(data.key)"
+                  :style="{ color: getFileIconColor(data.key), fontSize: '16px' }"
                 />
-              </div>
-              <div class="file-content-wrapper">
-                <div class="file-name">{{ getFileName(fileItem) }}</div>
-                <div class="file-meta">
-                  <span class="file-time" v-if="fileItem.modified_at">
-                    {{ formatDate(fileItem.modified_at) }}
-                  </span>
-                  <span class="file-size" v-if="fileItem.size">{{
-                    formatFileSize(fileItem.size)
-                  }}</span>
+              </template>
+              <template v-else>
+                <FolderOpen
+                  v-if="expanded"
+                  :size="18"
+                  class="folder-icon open"
+                />
+                <Folder
+                  v-else
+                  :size="18"
+                  class="folder-icon"
+                />
+              </template>
+            </template>
+            <template #title="{ data }">
+              <div class="tree-node-wrapper">
+                <div class="tree-node-name" :title="data.title">
+                  <span class="name-start">{{ data.nameStart || data.title }}</span>
+                  <span class="name-end" v-if="data.nameEnd">{{ data.nameEnd }}</span>
+                </div>
+                <div v-if="data.isLeaf" class="node-actions" @click.stop>
+                  <button
+                    class="tree-download-btn"
+                    @click.stop="downloadFile(data.fileData)"
+                    title="下载文件"
+                  >
+                    <Download :size="14" />
+                  </button>
                 </div>
               </div>
-              <button class="download-btn" @click.stop="downloadFile(fileItem)" title="下载文件">
-                <Download :size="18" />
-              </button>
-            </div>
-          </div>
+            </template>
+          </a-tree>
         </div>
       </div>
 
@@ -117,36 +129,53 @@
           <p>暂无附件</p>
           <a-button type="primary" @click="triggerUpload" :loading="isUploading">上传附件</a-button>
         </div>
-        <div v-else class="file-list">
-          <div
-            v-for="(fileItem, index) in normalizedAttachments"
-            :key="fileItem.path || index"
-            class="file-item"
-            @click="showFileContent(fileItem.path, fileItem)"
+        <div v-else class="file-tree-container">
+          <a-tree
+            v-model:expandedKeys="expandedKeys"
+            :tree-data="attachmentTreeData"
+            :show-icon="true"
+            block-node
+            :show-line="false"
+            @select="onFileSelect"
           >
-            <div class="file-info">
-              <div class="file-icon-wrapper">
+            <template #icon="{ data, expanded }">
+              <template v-if="data.isLeaf">
                 <component
-                  :is="getFileIcon(fileItem.path)"
-                  :style="{ color: getFileIconColor(fileItem.path), fontSize: '18px' }"
+                  :is="getFileIcon(data.key)"
+                  :style="{ color: getFileIconColor(data.key), fontSize: '16px' }"
                 />
-              </div>
-              <div class="file-content-wrapper">
-                <div class="file-name">{{ getFileName(fileItem) }}</div>
-                <div class="file-meta">
-                  <span class="file-time" v-if="fileItem.modified_at">
-                    {{ formatDate(fileItem.modified_at) }}
-                  </span>
-                  <span class="file-size" v-if="fileItem.size">{{
-                    formatFileSize(fileItem.size)
-                  }}</span>
+              </template>
+              <template v-else>
+                <FolderOpen
+                  v-if="expanded"
+                  :size="18"
+                  class="folder-icon open"
+                />
+                <Folder
+                  v-else
+                  :size="18"
+                  class="folder-icon"
+                />
+              </template>
+            </template>
+            <template #title="{ data }">
+              <div class="tree-node-wrapper">
+                <div class="tree-node-name" :title="data.title">
+                  <span class="name-start">{{ data.nameStart || data.title }}</span>
+                  <span class="name-end" v-if="data.nameEnd">{{ data.nameEnd }}</span>
+                </div>
+                <div v-if="data.isLeaf" class="node-actions" @click.stop>
+                  <button
+                    class="tree-download-btn"
+                    @click.stop="downloadFile(data.fileData)"
+                    title="下载文件"
+                  >
+                    <Download :size="14" />
+                  </button>
                 </div>
               </div>
-              <button class="download-btn" @click.stop="downloadFile(fileItem)" title="下载附件">
-                <Download :size="18" />
-              </button>
-            </div>
-          </div>
+            </template>
+          </a-tree>
         </div>
       </div>
     </div>
@@ -213,8 +242,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { Download, X, Plus, Info, FolderCode, RefreshCw } from 'lucide-vue-next'
+import { computed, ref, onMounted, onUpdated, nextTick } from 'vue'
+import { Download, X, Plus, Info, FolderCode, RefreshCw, Folder, FolderOpen } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -237,10 +266,14 @@ const props = defineProps({
   threadId: {
     type: String,
     default: null
+  },
+  panelRatio: {
+    type: Number,
+    default: 0.35
   }
 })
 
-const emit = defineEmits(['refresh', 'close', 'resize'])
+const emit = defineEmits(['refresh', 'close', 'resize', 'resizing'])
 
 const activeTab = ref('todos')
 const modalVisible = ref(false)
@@ -269,7 +302,45 @@ const attachments = computed(() => {
 })
 
 const completedCount = computed(() => {
-  return todos.value.filter(t => t.status === 'completed').length
+  return todos.value.filter((t) => t.status === 'completed').length
+})
+
+// 溢出检测
+const overflowedIds = ref(new Set())
+const todoListRef = ref(null)
+
+const checkOverflow = () => {
+  if (!todoListRef.value) return
+
+  const newOverflowed = new Set()
+  const textElements = todoListRef.value.querySelectorAll('.todo-text')
+  textElements.forEach((el, index) => {
+    if (el.scrollWidth > el.clientWidth) {
+      newOverflowed.add(index)
+    }
+  })
+
+  // 简单的 Set 相等性检查，防止无限循环
+  if (overflowedIds.value.size === newOverflowed.size) {
+    let isSame = true
+    for (const val of newOverflowed) {
+      if (!overflowedIds.value.has(val)) {
+        isSame = false
+        break
+      }
+    }
+    if (isSame) return
+  }
+
+  overflowedIds.value = newOverflowed
+}
+
+onMounted(() => {
+  nextTick(checkOverflow)
+})
+
+onUpdated(() => {
+  nextTick(checkOverflow)
 })
 
 // 适配实际数据格式
@@ -301,6 +372,133 @@ const normalizedAttachments = computed(() => {
     size: item.file_size
   }))
 })
+
+const expandedKeys = ref([])
+
+const buildTreeData = (filesList) => {
+  if (!filesList.length) return []
+
+  const root = []
+
+  // Helper to find or create folder node
+  const findOrCreateFolder = (nodes, key, title) => {
+    let node = nodes.find((n) => n.key === key)
+    if (!node) {
+      node = {
+        key,
+        title,
+        isLeaf: false,
+        children: [],
+        class: 'folder-node'
+      }
+      nodes.push(node)
+    }
+    return node
+  }
+
+  filesList.forEach((file) => {
+    const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path
+    const parts = cleanPath.split('/')
+    let currentLevel = root
+    let currentPath = ''
+
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1
+      currentPath = currentPath ? `${currentPath}/${part}` : part
+
+      if (isLast) {
+        const nameParts = part.split('.')
+        let nameStart = part
+        let nameEnd = ''
+
+        if (nameParts.length > 1) {
+          // If extension exists
+          const ext = nameParts.pop()
+          // Keep last 5 chars if possible, or just the extension
+          // User asked for "last 5 chars".
+          // If we treat the whole thing as a string:
+          if (part.length > 5) {
+             nameEnd = part.slice(-5)
+             nameStart = part.slice(0, -5)
+          } else {
+             nameStart = part
+             nameEnd = ''
+          }
+        } else {
+           if (part.length > 5) {
+             nameEnd = part.slice(-5)
+             nameStart = part.slice(0, -5)
+          }
+        }
+
+        currentLevel.push({
+          key: currentPath,
+          title: part,
+          nameStart,
+          nameEnd,
+          isLeaf: true,
+          fileData: file,
+          class: 'file-node'
+        })
+      } else {
+        const folderNode = findOrCreateFolder(currentLevel, currentPath, part)
+        currentLevel = folderNode.children
+      }
+    })
+  })
+
+  const sortNodes = (nodes) => {
+    nodes.sort((a, b) => {
+      if (a.isLeaf === b.isLeaf) {
+        return a.title.localeCompare(b.title)
+      }
+      return a.isLeaf ? 1 : -1
+    })
+    nodes.forEach((node) => {
+      if (node.children) sortNodes(node.children)
+    })
+  }
+
+  sortNodes(root)
+  return root
+}
+
+// Helper to truncate filename with tail preservation
+const truncateFilename = (name) => {
+  if (!name) return ''
+  // This is a visual truncation helper; for true dynamic CSS truncation,
+  // we'd need a more complex setup. Here we rely on CSS text-overflow
+  // but if we want specifically "last 5 chars" visible, we might need
+  // to split the string if we were using a JS-only approach.
+  // However, the user asked for "show ellipsis, and last 5 chars".
+  // CSS `text-overflow: ellipsis` puts it at the end.
+  // To do middle truncation via CSS is hard.
+  // Let's try to do it via JS for the title attribute, but for visual
+  // we might use a CSS trick or just standard ellipsis if the JS one is too static.
+  // Let's stick to standard ellipsis for now but maybe try to implement the requested logic if possible.
+  // Actually, pure CSS start/end truncation is tricky.
+  // Let's provide a computed display name logic in the template or a method.
+  return name
+}
+
+const fileTreeData = computed(() => buildTreeData(normalizedFiles.value))
+const attachmentTreeData = computed(() => buildTreeData(normalizedAttachments.value))
+
+const onFileSelect = (selectedKeys, { node }) => {
+  if (node.isLeaf) {
+    if (node.fileData) {
+      showFileContent(node.key, node.fileData)
+    }
+  } else {
+    // 切换文件夹展开状态
+    const index = expandedKeys.value.indexOf(node.key)
+    if (index > -1) {
+      expandedKeys.value.splice(index, 1)
+    } else {
+      expandedKeys.value.push(node.key)
+    }
+  }
+}
 
 const fileCount = computed(() => {
   return normalizedFiles.value.length
@@ -405,10 +603,10 @@ const startX = ref(0)
 
 const startResize = (e) => {
   isResizing.value = true
+  emit('resizing', true)
   startX.value = e.clientX
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
-  // 添加全局事件监听
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', stopResize)
 }
@@ -423,6 +621,7 @@ const onMouseMove = (e) => {
 const stopResize = () => {
   if (isResizing.value) {
     isResizing.value = false
+    emit('resizing', false)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
     document.removeEventListener('mousemove', onMouseMove)
@@ -494,10 +693,11 @@ const stopResize = () => {
 .refresh-btn {
   color: var(--gray-700);
   font-size: 13px;
-  height: 32px;
+  height: 24px;
   display: flex;
   align-items: center;
   gap: 4px;
+  padding: 4px 8px;
 }
 
 .close-btn {
@@ -527,6 +727,7 @@ const stopResize = () => {
   padding-top: 0px;
   gap: 4px;
   flex-shrink: 0;
+  border-bottom: 1px solid var(--gray-150);
 }
 
 .tab {
@@ -644,85 +845,17 @@ const stopResize = () => {
 
 .todo-text {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--gray-1000);
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 
   .todo-item.completed & {
     color: var(--gray-500);
     text-decoration: line-through;
   }
-}
-
-.file-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.file-item {
-  padding: 10px 14px;
-  background: var(--gray-0);
-  border: 1px solid var(--gray-150);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  position: relative;
-
-  &:hover {
-    background: var(--main-10);
-    border-color: var(--main-300);
-  }
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-}
-
-.file-icon-wrapper {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.file-content-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.file-name {
-  font-size: 14px;
-  color: var(--gray-1000);
-  font-weight: 500;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--gray-500);
-  font-weight: 400;
-}
-
-.file-time {
-  white-space: nowrap;
-}
-
-.file-size {
-  color: var(--gray-400);
 }
 
 .list-header {
@@ -777,31 +910,6 @@ const stopResize = () => {
       opacity: 0.5;
       cursor: not-allowed;
     }
-  }
-}
-
-.download-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--gray-600);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  padding: 0;
-  flex-shrink: 0;
-
-  &:hover {
-    color: var(--main-600);
-    background: var(--main-20);
-  }
-
-  &:active {
-    color: var(--main-400);
   }
 }
 
@@ -931,5 +1039,156 @@ const stopResize = () => {
 
 :deep(.ant-modal-body) {
   padding: 0;
+}
+
+/* File Tree Styles - VS Code Style Refined */
+.file-tree-container {
+  padding: 0;
+  margin: 0 -12px; /* Slight negative margin */
+}
+
+.tree-node-wrapper {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 28px; /* Increased height for spacing */
+  padding-right: 8px;
+  position: relative;
+}
+
+.tree-node-name {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0; /* Important for flex child truncation */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  color: var(--gray-800);
+  line-height: 28px;
+}
+
+.name-start {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name-end {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.folder-icon {
+  color: #dcb67a;
+  fill: #dcb67a;
+  fill-opacity: 0.2;
+
+  &.open {
+    color: #dcb67a;
+  }
+}
+
+.node-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-left: 4px;
+}
+
+.tree-download-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent !important;
+  color: var(--gray-500);
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    color: var(--main-600);
+  }
+}
+
+/* Specific Ant Design Tree Overrides */
+.file-tree-container :deep(.ant-tree) {
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+
+  .ant-tree-treenode {
+    width: 100%;
+    padding: 0;
+  }
+
+  .ant-tree-node-content-wrapper {
+    display: flex;
+    align-items: center;
+    transition: none;
+    border-radius: 0;
+    padding: 0 8px 0 0;
+    min-height: 28px;
+    height: 28px;
+    line-height: 28px;
+    flex: 1;
+    position: relative;
+    padding: 4px;
+    border-radius: 6px;
+
+    &:hover {
+      background-color: var(--gray-50);
+
+      .tree-download-btn {
+        display: flex;
+      }
+    }
+
+    &.ant-tree-node-selected {
+      background-color: var(--gray-100); /* Gray selection background */
+    }
+  }
+
+  /* Icon Vertical Alignment */
+  .ant-tree-iconEle {
+    line-height: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+  }
+
+  /* Ensure Title Fills Space */
+  .ant-tree-title {
+    flex: 1;
+    overflow: hidden;
+    min-width: 0; /* Crucial for flex truncation */
+  }
+
+  /* Switcher (Arrow) */
+  .ant-tree-switcher {
+    width: 24px;
+    height: 28px;
+    line-height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .ant-tree-switcher-icon {
+      font-size: 10px;
+      color: var(--gray-500);
+    }
+  }
+
+  .ant-tree-indent-unit {
+    width: 18px; /* Slightly wider indent */
+  }
+
+  /* 隐藏文件夹展开/折叠箭头 */
+  .ant-tree-switcher {
+    display: none !important;
+  }
 }
 </style>

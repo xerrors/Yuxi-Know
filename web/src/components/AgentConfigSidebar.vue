@@ -1052,10 +1052,10 @@ const confirmDeleteConfig = async () => {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 12px;
-    background: var(--gray-20);
+    padding: 4px 10px;
+    background: var(--gray-0);
     border-radius: 8px;
-    border: 1px solid var(--gray-200);
+    border: 1px solid var(--gray-150);
     margin-bottom: 8px;
 
     .selection-summary-info {
@@ -1095,8 +1095,8 @@ const confirmDeleteConfig = async () => {
       margin: 0;
       padding: 4px 8px;
       border-radius: 8px;
-      background: var(--gray-50);
-      border: 1px solid var(--gray-200);
+      background: var(--gray-150);
+      border: none;
       color: var(--gray-900);
       font-size: 12px;
 

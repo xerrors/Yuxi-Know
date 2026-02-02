@@ -5,12 +5,15 @@ from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
-    SummarizationMiddleware,
     TodoListMiddleware,
 )
 
 from src.agents.common import BaseAgent, load_chat_model
-from src.agents.common.middlewares import RuntimeConfigMiddleware, inject_attachment_context
+from src.agents.common.middlewares import (
+    RuntimeConfigMiddleware,
+    SummaryOffloadMiddleware,
+    save_attachments_to_fs,
+)
 from src.agents.common.tools import get_tavily_search
 from src.services.mcp_service import get_tools_from_all_servers
 
@@ -102,7 +105,7 @@ class DeepAgent(BaseAgent):
             model=model,
             system_prompt=context.system_prompt,
             middleware=[
-                inject_attachment_context,  # 附件上下文注入
+                save_attachments_to_fs,  # 附件保存到文件系统
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 TodoListMiddleware(),
                 FilesystemMiddleware(tool_token_limit_before_evict=5000),
@@ -118,19 +121,25 @@ class DeepAgent(BaseAgent):
                             enable_system_prompt_override=False,
                             enable_tools_override=False,
                         ),
-                        SummarizationMiddleware(
+                        SummaryOffloadMiddleware(
                             model=sub_model,
-                            trigger=("tokens", 110000),
+                            trigger=("tokens", 120000),
                             trim_tokens_to_summarize=None,
+                            immediate_offload_threshold=4000,
+                            summary_offload_threshold=1000,
+                            max_retention_ratio=0.6,
                         ),
                         PatchToolCallsMiddleware(),
                     ],
                     general_purpose_agent=True,
                 ),
-                SummarizationMiddleware(
+                SummaryOffloadMiddleware(
                     model=model,
-                    trigger=("tokens", 110000),
+                    trigger=("tokens", 120000),
                     trim_tokens_to_summarize=None,
+                    immediate_offload_threshold=4000,
+                    summary_offload_threshold=1000,
+                    max_retention_ratio=0.6,
                 ),
                 PatchToolCallsMiddleware(),
             ],

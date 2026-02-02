@@ -8,17 +8,14 @@ from src.agents.common.middlewares import (
     RuntimeConfigMiddleware,
 )
 from src.agents.common.toolkits.mysql import get_mysql_tools
-from src.agents.common.tools import gen_tool_info, get_buildin_tools
-from src.services.mcp_service import get_tools_from_all_servers
-from src.services.mcp_service import get_mcp_server_names
-
+from src.services.mcp_service import get_mcp_server_names, get_tools_from_all_servers
 from src.utils import logger
 
 
 @dataclass(kw_only=True)
 class ReporterContext(BaseContext):
-
     """覆盖 BaseContext，定义数据库报表助手智能体的可配置参数"""
+
     mcps: Annotated[list[str], {"__template_metadata__": {"kind": "mcps"}}] = field(
         default_factory=lambda: ["mcp-server-chart"],
         metadata={
@@ -34,7 +31,10 @@ class ReporterContext(BaseContext):
 
 class SqlReporterAgent(BaseAgent):
     name = "数据库报表助手"
-    description = "一个能够生成 SQL 查询报告的智能体助手。同时调用 Charts MCP 生成图表。MySQL 工具默认启用，无法选择，mcp 默认启用 Charts MCPs。"
+    description = (
+        "一个能够生成 SQL 查询报告的智能体助手。同时调用 Charts MCP 生成图表。"
+        "MySQL 工具默认启用，无法选择，mcp 默认启用 Charts MCPs。"
+    )
     context_schema = ReporterContext
 
     def __init__(self, **kwargs):

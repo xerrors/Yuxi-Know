@@ -87,12 +87,10 @@ class RuntimeConfigMiddleware(AgentMiddleware):
             for t_bind in existing_tools:
                 # (1) 已启用的工具保留
                 # (2) 非本中间件管理的工具保留
-                if t_bind.name in [t.name for t in enabled_tools] or \
-                     t_bind.name not in [t.name for t in self.tools]:
+                if t_bind.name in [t.name for t in enabled_tools] or t_bind.name not in [t.name for t in self.tools]:
                     merged_tools.append(t_bind)
             overrides["tools"] = merged_tools
             logger.debug(f"RuntimeConfigMiddleware selected tools: {[t.name for t in merged_tools]}")
-
 
         # 3. 系统提示词覆盖（可选）
         if self.enable_system_prompt_override:

@@ -9,7 +9,10 @@
     </template>
     <template #result="{ resultContent }">
       <div class="web-search-result">
-        <div class="search-results">
+        <div
+          class="search-results"
+          v-if="parsedData(resultContent).results && parsedData(resultContent).results.length > 0"
+        >
           <div
             v-for="(result, index) in parsedData(resultContent).results"
             :key="index"
@@ -37,7 +40,11 @@
           </div>
         </div>
 
-        <div v-if="parsedData(resultContent).results.length === 0" class="no-results">
+        <div v-else-if="parsedData(resultContent).rawText" class="raw-content">
+          {{ parsedData(resultContent).rawText }}
+        </div>
+
+        <div v-else class="no-results">
           <p>未找到相关搜索结果</p>
         </div>
       </div>
@@ -62,7 +69,7 @@ const parseData = (content) => {
     try {
       return JSON.parse(content)
     } catch (error) {
-      return { query: '', results: [], response_time: 0 }
+      return { query: '', results: [], response_time: 0, rawText: content }
     }
   }
   return content || { query: '', results: [], response_time: 0 }
@@ -191,6 +198,15 @@ const formatDate = (dateString) => {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
     }
+  }
+
+  .raw-content {
+    padding: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--gray-700);
+    white-space: pre-wrap;
+    font-family: monospace;
   }
 
   .no-results {

@@ -13,14 +13,13 @@
     - 考虑修改附件的处理逻辑，考虑使用文件系统，将附件解析后放到文件系统中，智能体按需读取（当前是完全解析，放进上下文）
     - 【后续】用户可以使用 @ 来引用附件，例如 @file:reports.md 相较于现在的处理逻辑感觉会更加自然一点。
 - skills 如何实现还需要继续调研
-- 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持）
+- 增加 paddle-vl 以及 deepseek-ocr 的支持（deepseek-ocr 已支持），重构 OCR 的支持情况，并支持 Paddle 官方的解析 API https://aistudio.baidu.com/paddleocr/task
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 支持更多类型的文档源的导入功能（支持后端配置的白名单的 URL 导入）
 - 部分场景应该使用默认模型作为默认值而不是空值
 - 文件上传解析后，如何提示用户需要入库
 - 检索测试中，添加问答
 - 丰富当前智能体的 Prompt，最好支持从 markdown 解析
-- 模型的配置也传输到数据库（待定）
 
 
 ### Bugs

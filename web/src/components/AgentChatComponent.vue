@@ -65,16 +65,6 @@
       <div class="chat-content-container">
         <!-- Main Chat Area -->
         <div class="chat-main" ref="chatMainContainer">
-          <!-- 加载状态：加载消息 -->
-          <div v-if="isLoadingMessages" class="chat-loading">
-            <div class="loading-spinner"></div>
-            <span>正在加载消息...</span>
-          </div>
-
-          <div v-else-if="!conversations.length" class="chat-examples">
-            <div style="margin-bottom: 150px"></div>
-            <h1>您好，我是{{ currentAgentName }}！</h1>
-          </div>
           <div class="chat-box" ref="messagesContainer">
             <div class="conv-box" v-for="(conv, index) in conversations" :key="index">
               <AgentMessageComponent
@@ -122,6 +112,18 @@
             />
 
             <div class="message-input-wrapper">
+
+              <!-- 加载状态：加载消息 -->
+              <div v-if="isLoadingMessages" class="chat-loading">
+                <div class="loading-spinner"></div>
+                <span>正在加载消息...</span>
+              </div>
+
+              <!-- 打招呼区域 - 在输入框上方 -->
+              <div v-if="!conversations.length" class="chat-examples-input">
+                <h1>👋 您好，我是{{ currentAgentName }}！</h1>
+              </div>
+
               <AgentInputArea
                 ref="messageInputRef"
                 v-model="userInput"
@@ -166,22 +168,28 @@
 
         <!-- Agent Panel Area -->
 
-        <transition name="panel-slide">
-          <div
-            class="agent-panel-wrapper"
+        <div
+          class="agent-panel-wrapper"
+          ref="panelWrapperRef"
+          :class="{
+            'is-visible': isAgentPanelOpen && hasAgentStateContent,
+            'no-transition': isResizing
+          }"
+          :style="{
+            flexBasis: isAgentPanelOpen && hasAgentStateContent ? `${panelRatio * 100}%` : '0px'
+          }"
+        >
+          <AgentPanel
             v-if="isAgentPanelOpen && hasAgentStateContent"
-            :style="{ width: `${panelWidth}px` }"
-          >
-            <AgentPanel
-              :agent-state="currentAgentState"
-              :thread-id="currentChatId"
-              :panel-width="panelWidth"
-              @refresh="handleAgentStateRefresh"
-              @close="toggleAgentPanel"
-              @resize="handlePanelResize"
-            />
-          </div>
-        </transition>
+            :agent-state="currentAgentState"
+            :thread-id="currentChatId"
+            :panel-ratio="panelRatio"
+            @refresh="handleAgentStateRefresh"
+            @close="toggleAgentPanel"
+            @resize="handlePanelResize"
+            @resizing="handleResizingChange"
+          />
+        </div>
       </div>
     </div>
   </div>
@@ -263,9 +271,12 @@ const localUIState = reactive({
 
 // Agent Panel State
 const isAgentPanelOpen = ref(false)
-const panelWidth = ref(360)
-const minPanelWidth = 280
-const maxPanelWidth = 600
+const isResizing = ref(false)
+const panelRatio = ref(0.4) // 面板宽度比例 (0-1)
+const panelWrapperRef = ref(null) // 直接操作 DOM
+const minPanelRatio = 0.3 // 最小比例 30%
+const maxPanelRatio = 0.6 // 最大比例 60%
+let panelContainerWidth = 0
 
 // ==================== COMPUTED PROPERTIES ====================
 const currentAgentId = computed(() => {
@@ -982,10 +993,39 @@ const toggleAgentPanel = () => {
   isAgentPanelOpen.value = !isAgentPanelOpen.value
 }
 
-// 处理面板宽度调整
-// 反转 deltaX：向左拖动时让面板变宽（像拉出更多空间）
+// 处理面板宽度调整（使用比例）
+// 向右拖动(deltaX > 0)让面板变窄，向左拖动(deltaX < 0)让面板变宽
 const handlePanelResize = (deltaX) => {
-  panelWidth.value = Math.min(maxPanelWidth, Math.max(minPanelWidth, panelWidth.value - deltaX))
+  if (!panelWrapperRef.value) return
+
+  // 初始化容器宽度
+  if (!panelContainerWidth) {
+    const container = document.querySelector('.chat-content-container')
+    panelContainerWidth = container ? container.clientWidth : window.innerWidth
+  }
+
+  const currentWidth = panelWrapperRef.value.offsetWidth
+  // 反转 deltaX：向右拖(deltaX > 0)让面板变窄
+  const newWidth = currentWidth - deltaX
+  const newRatio = newWidth / panelContainerWidth
+
+  // 限制在合理范围内
+  if (newRatio >= minPanelRatio && newRatio <= maxPanelRatio) {
+    // 直接操作 DOM，不触发 Vue 响应式，使用 !important 确保不被覆盖
+    panelWrapperRef.value.style.setProperty('flex', `0 0 ${newWidth}px`, 'important')
+  }
+}
+
+// 拖拽状态变化时，同步最终状态到 Vue 响应式数据
+const handleResizingChange = (isResizingState) => {
+  isResizing.value = isResizingState
+
+  // 拖拽结束时，同步 DOM 宽度到响应式数据
+  if (!isResizingState && panelWrapperRef.value && panelContainerWidth) {
+    const finalWidth = panelWrapperRef.value.offsetWidth
+    panelRatio.value = finalWidth / panelContainerWidth
+    panelContainerWidth = 0 // 重置，供下次使用
+  }
 }
 
 // ==================== HELPER FUNCTIONS ====================
@@ -1155,71 +1195,62 @@ watch(
   overflow: hidden;
   position: relative;
   width: 100%;
+  contain: layout;
 }
 
 .chat-main {
-  flex: 4;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto; /* Scroll is here now */
   position: relative;
-  transition: flex 0.4s ease;
+  transition:
+    flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0; /* Prevent flex item from overflowing */
 }
 
 .agent-panel-wrapper {
   flex: 0 0 auto;
-  height: calc(100% - 32px);
+  height: calc(100% - 56px);
   overflow: hidden;
   z-index: 20;
-  margin: 16px;
+  margin: 28px 8px;
   margin-left: 0;
   background: var(--gray-0);
   border-radius: 12px;
   box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-200);
   min-width: 0;
+  will-change: flex-basis;
 }
 
 /* Workbench transition animations */
-.panel-slide-enter-active,
-.panel-slide-leave-active {
-  transition:
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.15s ease,
-    flex 0.2s ease;
-}
-
-.panel-slide-enter-from,
-.panel-slide-leave-to {
-  transform: translateX(20px) scale(0.98);
+.agent-panel-wrapper {
+  transition: flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0;
-  flex: 0 0 0; /* Shrink to zero width during transition */
-  margin-left: -16px; /* Compensate for margin during close */
+  transform: translateX(10px);
+  margin-left: -16px;
 }
 
-.chat-examples {
-  padding: 0 50px;
+.agent-panel-wrapper.is-visible {
+  opacity: 1;
+  transform: translateX(0);
+  margin-left: 0;
+}
+
+.agent-panel-wrapper.no-transition {
+  transition: none !important;
+}
+
+.chat-examples-input {
+  padding: 32px 0;
   text-align: center;
-  position: absolute;
-  bottom: 65%;
-  width: 100%;
-  z-index: 9;
-  animation: slideInUp 0.5s ease-out;
 
   h1 {
-    margin-bottom: 20px;
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     color: var(--gray-1000);
-  }
-
-  p {
-    font-size: 1.1rem;
-    color: var(--gray-700);
-  }
-
-  .agent-icons {
-    height: 180px;
+    margin: 0;
   }
 }
 
