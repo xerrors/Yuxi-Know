@@ -1208,6 +1208,8 @@ watch(
     flex-basis 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 0; /* Prevent flex item from overflowing */
+
+  scrollbar-width: none;
 }
 
 .agent-panel-wrapper {

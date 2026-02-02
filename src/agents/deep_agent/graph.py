@@ -1,5 +1,6 @@
 """Deep Agent - 基于create_deep_agent的深度分析智能体"""
 
+from deepagents.backends import CompositeBackend, FilesystemBackend, StateBackend
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
@@ -18,6 +19,23 @@ from src.agents.common.tools import get_tavily_search
 from src.services.mcp_service import get_tools_from_all_servers
 
 from .context import DeepContext
+
+
+def _create_filesystem_backend_factory() -> CompositeBackend:
+    """创建混合文件存储后端工厂函数。
+
+    /attachments/* 路由到真实文件系统（供附件中间件使用）
+    其他路径使用 StateBackend（内存存储，用于临时文件和大结果卸载）
+
+    返回 CompositeBackend 实例，供 FilesystemMiddleware 使用。
+    注意：StateBackend 会在 middleware 初始化时由 runtime 注入。
+    """
+    return CompositeBackend(
+        default=StateBackend,  # 使用类而非实例，FilesystemMiddleware 会自动注入 runtime
+        routes={
+            "/attachments/": FilesystemBackend(root_dir=".", virtual_mode=False),
+        },
+    )
 
 
 def _get_research_sub_agent(search_tools: list) -> dict:
@@ -101,6 +119,7 @@ class DeepAgent(BaseAgent):
         research_sub_agent = _get_research_sub_agent(search_tools)
 
         # 使用 create_deep_agent 创建深度智能体
+        fs_backend_factory = _create_filesystem_backend_factory()
         graph = create_agent(
             model=model,
             system_prompt=context.system_prompt,
@@ -108,13 +127,13 @@ class DeepAgent(BaseAgent):
                 save_attachments_to_fs,  # 附件保存到文件系统
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 TodoListMiddleware(),
-                FilesystemMiddleware(tool_token_limit_before_evict=5000),
+                FilesystemMiddleware(backend=fs_backend_factory, tool_token_limit_before_evict=5000),
                 SubAgentMiddleware(
                     default_model=sub_model,
                     default_tools=search_tools,
                     subagents=[critique_sub_agent, research_sub_agent],
                     default_middleware=[
-                        FilesystemMiddleware(),
+                        FilesystemMiddleware(backend=fs_backend_factory),
                         RuntimeConfigMiddleware(
                             model_context_name="subagents_model",
                             enable_model_override=True,

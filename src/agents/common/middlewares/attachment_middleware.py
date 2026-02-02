@@ -1,23 +1,20 @@
 """附件注入中间件 - 使用 LangChain 标准中间件实现
 
 支持两种模式：
-1. 文件系统模式（默认）：将附件保存到 /attachments/{thread_id}/，提示模型自主读取
-2. 内嵌模式（已废弃）：将附件内容直接拼接到消息中
+1. MinIO 模式（默认）：将附件保存到 MinIO 存储，提示模型自主读取
+2. 文件系统模式（已废弃）：将附件保存到本地文件系统
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from pathlib import Path
 from typing import NotRequired
 
 from langchain.agents import AgentState
 from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
 
+from src.agents.common.backends.minio_backend import MinIOBackend
 from src.utils import logger
-
-# 附件存储根目录
-ATTACHMENTS_ROOT = Path("attachments")
 
 
 class AttachmentState(AgentState):
@@ -77,12 +74,89 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
     ) -> ModelResponse:
         # Read from State: get uploaded files metadata
+        # 首先尝试从 state 获取，如果为空则从 input_context 获取
         attachments = request.state.get("attachments", [])
 
-        if attachments:
-            # Get thread_id from input_context
+        # 如果 state 中没有，尝试从 input_context 获取
+        if not attachments:
             input_context = request.state.get("input_context", {})
-            thread_id = input_context.get("thread_id")
+            attachments = input_context.get("attachments", [])
+
+        logger.info(f"AttachmentMiddleware: request.state keys = {list(request.state.keys())}")
+        logger.info(f"AttachmentMiddleware: found {len(attachments)} attachments in state")
+
+        # 尝试从输入中获取 attachments（LangGraph 会将输入 state 合并）
+        if not attachments:
+            # 检查是否有其他方式传递的附件
+            logger.info(f"AttachmentMiddleware: checking for attachments in other locations...")
+            # 输入可能直接在 state 中
+            logger.info(f"AttachmentMiddleware: state type = {type(request.state)}")
+
+        if attachments:
+            # Get thread_id - 尝试从多个来源获取
+            thread_id = None
+
+            # 0. 尝试从 request.runtime 获取（LangChain runtime）
+            if hasattr(request, 'runtime') and request.runtime:
+                runtime = request.runtime
+                logger.info(f"AttachmentMiddleware: runtime type = {type(runtime)}")
+                logger.info(f"AttachmentMiddleware: runtime attrs = {[a for a in dir(runtime) if not a.startswith('_')]}")
+
+                # 检查 runtime.context
+                if hasattr(runtime, 'context') and runtime.context:
+                    ctx = runtime.context
+                    logger.info(f"AttachmentMiddleware: runtime.context type = {type(ctx)}")
+                    # 如果是 Pydantic 模型，使用 model_dump()
+                    if hasattr(ctx, 'model_dump'):
+                        ctx_dict = ctx.model_dump()
+                        logger.info(f"AttachmentMiddleware: runtime.context keys = {list(ctx_dict.keys())}")
+                        thread_id = ctx_dict.get("thread_id")
+                    elif hasattr(ctx, '__dict__'):
+                        logger.info(f"AttachmentMiddleware: runtime.context __dict__ = {ctx.__dict__}")
+                        thread_id = ctx.__dict__.get("thread_id")
+                    elif isinstance(ctx, dict):
+                        logger.info(f"AttachmentMiddleware: runtime.context keys = {list(ctx.keys())}")
+                        thread_id = ctx.get("thread_id")
+
+                # 如果还没有 thread_id，检查 runtime 其他属性
+                if not thread_id:
+                    for attr in ['state', 'config', 'configurable']:
+                        if hasattr(runtime, attr):
+                            val = getattr(runtime, attr)
+                            logger.info(f"AttachmentMiddleware: runtime.{attr} = {type(val)}")
+                            if isinstance(val, dict):
+                                thread_id = val.get("thread_id")
+                            elif hasattr(val, 'get'):
+                                thread_id = val.get("thread_id")
+                            if thread_id:
+                                break
+
+            # 1. 尝试从 state 获取
+            if not thread_id:
+                thread_id = request.state.get("thread_id")
+
+            # 2. 尝试从 configurable 获取（LangGraph checkpointer 存储方式）
+            if not thread_id:
+                configurable = request.state.get("configurable", {})
+                if isinstance(configurable, dict):
+                    thread_id = configurable.get("thread_id")
+
+            # 3. 尝试从 input_context 获取（如果存在）
+            if not thread_id:
+                input_context = request.state.get("input_context")
+                if input_context is not None:
+                    if isinstance(input_context, dict):
+                        thread_id = input_context.get("thread_id")
+                    elif hasattr(input_context, 'thread_id'):
+                        thread_id = getattr(input_context, 'thread_id', None)
+
+            logger.info(f"AttachmentMiddleware: thread_id = {thread_id}")
+            logger.info(f"AttachmentMiddleware: has config = {hasattr(request, 'config')}")
+            logger.info(f"AttachmentMiddleware: state keys = {list(request.state.keys())}")
+
+            if not thread_id:
+                logger.error(f"AttachmentMiddleware: thread_id not found. input_context type = {type(input_context)}")
+                logger.error(f"AttachmentMiddleware: request.state = {dict(request.state)}")
 
             if not thread_id:
                 raise ValueError(
@@ -97,7 +171,7 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
             attachment_prompt = _build_attachment_prompt(attachments, thread_id)
 
             if attachment_prompt:
-                logger.debug(f"Saved {len(attachment_paths)} attachments to /attachments/{thread_id}/")
+                logger.info(f"Saved {len(attachment_paths)} attachments to /attachments/{thread_id}/")
 
                 messages = list(request.messages)
                 insert_idx = 0
@@ -120,16 +194,17 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
 
 
 async def _save_attachments_to_fs(attachments: Sequence[dict], thread_id: str) -> list[str]:
-    """Save attachment markdown content to filesystem.
+    """Save attachment markdown content to MinIO using MinIOBackend.
 
-    保存路径: /attachments/{thread_id}/{file_id}.md
+    保存路径: /attachments/{thread_id}/{original_file_name}.md (使用原始文件名)
+    实际存储: attachments/{thread_id}/{original_file_name}.md (MinIO key)
+
+    使用 MinIOBackend 确保 read_file 工具能够读取这些文件。
 
     Returns:
-        list of saved file paths
+        list of saved file paths (relative to /attachments/)
     """
-    # Ensure directory exists
-    thread_dir = ATTACHMENTS_ROOT / thread_id
-    thread_dir.mkdir(parents=True, exist_ok=True)
+    backend = MinIOBackend(bucket_name="chat-attachments")
 
     saved_paths: list[str] = []
 
@@ -138,15 +213,21 @@ async def _save_attachments_to_fs(attachments: Sequence[dict], thread_id: str) -
             continue
 
         file_id = attachment.get("file_id")
+        file_name = attachment.get("file_name")
         markdown = attachment.get("markdown")
 
-        if not file_id or not markdown:
+        if not file_id or not file_name or not markdown:
             continue
 
-        file_path = thread_dir / f"{file_id}.md"
-        file_path.write_text(markdown, encoding="utf-8")
-        saved_paths.append(str(file_path))
-        logger.debug(f"Saved attachment to {file_path}")
+        # 确保文件名安全：移除路径分隔符，保留原始扩展名
+        safe_file_name = file_name.replace("/", "_").replace("\\", "_")
+        file_path = f"/attachments/{thread_id}/{safe_file_name}"
+        result = backend.write(file_path, markdown)
+        if not result.error:
+            saved_paths.append(file_path)
+            logger.info(f"Saved attachment to MinIO: {file_path}")
+        else:
+            logger.error(f"Failed to save attachment: {result.error}")
 
     return saved_paths
 

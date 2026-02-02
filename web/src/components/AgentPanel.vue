@@ -91,7 +91,7 @@
               </template>
             </template>
             <template #title="{ data }">
-              <div class="tree-node-wrapper">
+              <div class="tree-node-wrapper" @click="toggleFolder(data)">
                 <div class="tree-node-name" :title="data.title">
                   <span class="name-start">{{ data.nameStart || data.title }}</span>
                   <span class="name-end" v-if="data.nameEnd">{{ data.nameEnd }}</span>
@@ -159,7 +159,7 @@
               </template>
             </template>
             <template #title="{ data }">
-              <div class="tree-node-wrapper">
+              <div class="tree-node-wrapper" @click="toggleFolder(data)">
                 <div class="tree-node-name" :title="data.title">
                   <span class="name-start">{{ data.nameStart || data.title }}</span>
                   <span class="name-end" v-if="data.nameEnd">{{ data.nameEnd }}</span>
@@ -484,18 +484,21 @@ const truncateFilename = (name) => {
 const fileTreeData = computed(() => buildTreeData(normalizedFiles.value))
 const attachmentTreeData = computed(() => buildTreeData(normalizedAttachments.value))
 
+const toggleFolder = (data) => {
+  if (data.isLeaf) return
+  const key = data.key
+  const index = expandedKeys.value.indexOf(key)
+  if (index > -1) {
+    expandedKeys.value = expandedKeys.value.filter((k) => k !== key)
+  } else {
+    expandedKeys.value = [...expandedKeys.value, key]
+  }
+}
+
 const onFileSelect = (selectedKeys, { node }) => {
   if (node.isLeaf) {
     if (node.fileData) {
       showFileContent(node.key, node.fileData)
-    }
-  } else {
-    // 切换文件夹展开状态
-    const index = expandedKeys.value.indexOf(node.key)
-    if (index > -1) {
-      expandedKeys.value.splice(index, 1)
-    } else {
-      expandedKeys.value.push(node.key)
     }
   }
 }
@@ -1044,7 +1047,7 @@ const stopResize = () => {
 /* File Tree Styles - VS Code Style Refined */
 .file-tree-container {
   padding: 0;
-  margin: 0 -12px; /* Slight negative margin */
+  margin: 0 -6px; /* Slight negative margin */
 }
 
 .tree-node-wrapper {
@@ -1062,7 +1065,7 @@ const stopResize = () => {
   flex: 1;
   min-width: 0; /* Important for flex child truncation */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--gray-800);
   line-height: 28px;
 }
@@ -1116,7 +1119,7 @@ const stopResize = () => {
 .file-tree-container :deep(.ant-tree) {
   background: transparent;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
 
   .ant-tree-treenode {
     width: 100%;
@@ -1129,13 +1132,12 @@ const stopResize = () => {
     transition: none;
     border-radius: 0;
     padding: 0 8px 0 0;
-    min-height: 28px;
-    height: 28px;
     line-height: 28px;
     flex: 1;
     position: relative;
-    padding: 4px;
+    padding: 0 6px;
     border-radius: 6px;
+    gap: 6px;
 
     &:hover {
       background-color: var(--gray-50);
@@ -1152,8 +1154,8 @@ const stopResize = () => {
 
   /* Icon Vertical Alignment */
   .ant-tree-iconEle {
-    line-height: 28px;
-    height: 28px;
+    line-height: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1170,8 +1172,8 @@ const stopResize = () => {
   /* Switcher (Arrow) */
   .ant-tree-switcher {
     width: 24px;
-    height: 28px;
-    line-height: 28px;
+    height: 30px;
+    line-height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
