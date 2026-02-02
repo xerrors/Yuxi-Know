@@ -210,7 +210,7 @@ class MinIOBackend(BackendProtocol):
             return f"Error reading {file_path}: {e}"
 
     def write(self, file_path: str, content: str) -> WriteResult:
-        """写入文件。
+        """写入文件（同步）。
 
         Args:
             file_path: 虚拟路径
@@ -239,6 +239,19 @@ class MinIOBackend(BackendProtocol):
         except Exception as e:
             logger.error(f"MinIOBackend.write failed for {file_path}: {e}")
             return WriteResult(error=str(e))
+
+    async def awrite(self, file_path: str, content: str) -> WriteResult:
+        """异步写入文件。
+
+        Args:
+            file_path: 虚拟路径
+            content: 文件内容
+
+        Returns:
+            WriteResult
+        """
+        # 委托给同步 write 方法
+        return self.write(file_path, content)
 
     def edit(
         self,
