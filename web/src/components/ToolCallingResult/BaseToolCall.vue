@@ -290,7 +290,6 @@ const formatResultData = (data) => {
         flex-shrink: 0;
       }
 
-
       :deep(span.code) {
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
       }
