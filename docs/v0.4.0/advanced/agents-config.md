@@ -4,7 +4,7 @@
 
 系统基于 [LangGraph](https://github.com/langchain-ai/langgraph) 并通过统一的 `AgentManager` 管理所有智能体。`src/agents/__init__.py` 会在启动时遍历 `src/agents` 目录，对每个包含 `__init__.py` 的子包执行自动发现：所有继承 `BaseAgent` 的类都会被注册并立即初始化，因此只要代码落位正确，就不需要再手动登记或修改管理器。
 
-仓库预置了若干可直接运行的智能体：`chatbot` 聚焦对话与动态工具调度，`mini_agent` 提供精简模板，`reporter` 演示报告类链路。这些目录展示了上下文类、Graph 构造方式、子智能体引用以及中间件组合的范例，新增功能时可以直接复用。
+仓库预置了若干可直接运行的智能体：`chatbot` 聚焦对话与动态工具调度，`reporter` 演示报告类链路。这些目录展示了上下文类、Graph 构造方式、子智能体引用以及中间件组合的范例，新增功能时可以直接复用。
 
 ### 智能体元数据配置
 
@@ -28,11 +28,7 @@
 
 需要额外上下文字段时，可继承 `BaseContext` 构建自己的配置表单，再把类绑定到 `context_schema`，平台会在 `saves/agents/<module>` 下生成默认配置。
 
-案例1 使用内置工具构建一个极简的智能体，可以动态选择 Prompt 和 LLM：
-
-<<< @/../src/agents/mini_agent/graph.py
-
-案例2 基于MySQL工具，以及自定义 MCP Server 的数据库报表助手。
+案例 基于MySQL工具，以及自定义 MCP Server 的数据库报表助手。
 
 <<< @/../src/agents/reporter/graph.py
 
