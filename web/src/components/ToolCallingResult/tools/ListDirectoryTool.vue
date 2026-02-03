@@ -4,7 +4,7 @@
       <div class="sep-header">
         <span class="note">{{ toolCallName }}</span>
         <span class="separator" v-if="dirPath">|</span>
-        <span class="description">{{ dirPath }}</span>
+        <span class="description code">{{ dirPath }}</span>
       </div>
     </template>
   </BaseToolCall>

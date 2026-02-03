@@ -6,7 +6,7 @@
         <span class="separator" v-if="pattern">|</span>
         <span class="keywords">{{ pattern }}</span>
         <span class="separator" v-if="dirPath">|</span>
-        <span class="description">{{ dirPath }}</span>
+        <span class="description code">{{ dirPath }}</span>
       </div>
     </template>
   </BaseToolCall>

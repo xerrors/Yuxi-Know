@@ -5,7 +5,7 @@
         <span class="note">{{ toolCallName }}</span>
         <span class="separator" v-if="filePath">|</span>
         <span class="description">
-          {{ filePath }}
+          <span class="code">{{ filePath }}</span>
           <span class="tag success" v-if="addedLines > 0">+{{ addedLines }}</span>
           <span class="tag error" v-if="removedLines > 0">-{{ removedLines }}</span>
         </span>

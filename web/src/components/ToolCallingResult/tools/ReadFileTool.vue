@@ -5,7 +5,7 @@
         <span class="note">read_file</span>
         <span class="separator" v-if="filePath">|</span>
         <span class="description">
-          {{ filePath }}
+          <span class="code">{{ filePath }}</span>
           <span class="tag" v-if="lineRange">{{ lineRange }}</span>
         </span>
       </div>
