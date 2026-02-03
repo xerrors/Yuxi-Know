@@ -98,7 +98,7 @@
                 </div>
                 <div v-if="data.isLeaf" class="node-actions" @click.stop>
                   <button
-                    class="tree-download-btn"
+                    class="tree-action-btn tree-download-btn"
                     @click.stop="downloadFile(data.fileData)"
                     title="下载文件"
                   >
@@ -129,7 +129,7 @@
           <p>暂无附件</p>
           <a-button type="primary" @click="triggerUpload" :loading="isUploading">上传附件</a-button>
         </div>
-        <div v-else class="file-tree-container">
+        <div v-else class="file-tree-container attachment-tree">
           <a-tree
             v-model:expandedKeys="expandedKeys"
             :tree-data="attachmentTreeData"
@@ -166,11 +166,18 @@
                 </div>
                 <div v-if="data.isLeaf" class="node-actions" @click.stop>
                   <button
-                    class="tree-download-btn"
+                    class="tree-action-btn tree-download-btn"
                     @click.stop="downloadFile(data.fileData)"
                     title="下载文件"
                   >
                     <Download :size="14" />
+                  </button>
+                  <button
+                    class="tree-action-btn tree-delete-btn"
+                    @click.stop="deleteAttachment(data.fileData)"
+                    title="删除附件"
+                  >
+                    <Trash2 :size="14" />
                   </button>
                 </div>
               </div>
@@ -243,7 +250,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick } from 'vue'
-import { Download, X, Plus, Info, FolderCode, RefreshCw, Folder, FolderOpen } from 'lucide-vue-next'
+import { Download, X, Plus, Info, FolderCode, RefreshCw, Folder, FolderOpen, Trash2 } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -598,6 +605,19 @@ const handleFileChange = async (event) => {
 
 const emitRefresh = () => {
   emit('refresh')
+}
+
+const deleteAttachment = async (fileItem) => {
+  if (!props.threadId || !fileItem?.file_id) return
+
+  try {
+    await threadApi.deleteThreadAttachment(props.threadId, fileItem.file_id)
+    message.success('附件已删除')
+    emitRefresh()
+  } catch (error) {
+    console.error('删除附件失败:', error)
+    message.error('删除附件失败')
+  }
 }
 
 // 拖拽调整宽度相关
@@ -1046,15 +1066,15 @@ const stopResize = () => {
 
 /* File Tree Styles - VS Code Style Refined */
 .file-tree-container {
-  padding: 0;
-  margin: 0 -6px; /* Slight negative margin */
+  padding: 4px;
+  margin: 0 -4px;
 }
 
 .tree-node-wrapper {
   display: flex;
   align-items: center;
   width: 100%;
-  height: 28px; /* Increased height for spacing */
+  height: 28px;
   padding-right: 8px;
   position: relative;
 }
@@ -1063,7 +1083,7 @@ const stopResize = () => {
   display: flex;
   align-items: center;
   flex: 1;
-  min-width: 0; /* Important for flex child truncation */
+  min-width: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
   color: var(--gray-800);
@@ -1096,23 +1116,28 @@ const stopResize = () => {
   align-items: center;
   justify-content: flex-end;
   padding-left: 4px;
+  gap: 2px;
 }
 
-.tree-download-btn {
+.tree-action-btn {
   display: none;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
   border: none;
-  background: transparent !important;
+  background: transparent;
   color: var(--gray-500);
   cursor: pointer;
   padding: 0;
+}
 
-  &:hover {
-    color: var(--main-600);
-  }
+.tree-download-btn:hover {
+  color: var(--main-600);
+}
+
+.tree-delete-btn:hover {
+  color: var(--color-error-500);
 }
 
 /* Specific Ant Design Tree Overrides */
@@ -1142,13 +1167,13 @@ const stopResize = () => {
     &:hover {
       background-color: var(--gray-50);
 
-      .tree-download-btn {
+      .tree-action-btn {
         display: flex;
       }
     }
 
     &.ant-tree-node-selected {
-      background-color: var(--gray-100); /* Gray selection background */
+      background-color: var(--gray-100);
     }
   }
 
@@ -1166,7 +1191,7 @@ const stopResize = () => {
   .ant-tree-title {
     flex: 1;
     overflow: hidden;
-    min-width: 0; /* Crucial for flex truncation */
+    min-width: 0;
   }
 
   /* Switcher (Arrow) */
@@ -1185,12 +1210,29 @@ const stopResize = () => {
   }
 
   .ant-tree-indent-unit {
-    width: 18px; /* Slightly wider indent */
+    width: 18px;
   }
 
   /* 隐藏文件夹展开/折叠箭头 */
   .ant-tree-switcher {
     display: none !important;
+  }
+}
+
+/* 附件列表专用样式 */
+.attachment-tree :deep(.ant-tree-node-content-wrapper) {
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  margin-bottom: 4px;
+
+  &:hover {
+    background-color: var(--gray-50);
+    border-color: var(--gray-300);
+  }
+
+  &.ant-tree-node-selected {
+    background-color: var(--gray-100);
+    border-color: var(--main-300);
   }
 }
 </style>
