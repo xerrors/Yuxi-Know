@@ -307,7 +307,7 @@ const formatResultData = (data) => {
         font-size: 12px;
         color: var(--gray-800);
         background-color: var(--gray-50);
-        padding: 4px 4px;
+        padding: 0px 4px;
         border-radius: 4px;
         margin-left: 8px;
 
