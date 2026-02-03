@@ -147,17 +147,17 @@ const todoListData = (content) => {
   .todo-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 2px;
   }
 
   .todo-item {
     display: flex;
     align-items: flex-start;
     gap: 10px;
-    padding: 10px 12px;
-    background: var(--gray-25);
+    padding: 4px 8px;
+    // background: var(--gray-10);
     border-radius: 6px;
-    border: 1px solid var(--gray-150);
+    // border: 1px solid var(--gray-150);
 
     .todo-status {
       flex-shrink: 0;

@@ -126,7 +126,7 @@
           </button>
         </div>
         <div v-if="!attachmentCount" class="empty">
-          <p>暂无附件</p>
+          <p>暂无附件，支持 txt/md/docx/html 格式 ≤ 5 MB</p>
           <a-button type="primary" @click="triggerUpload" :loading="isUploading">上传附件</a-button>
         </div>
         <div v-else class="file-tree-container attachment-tree">
@@ -827,7 +827,7 @@ const stopResize = () => {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px;
+  padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--gray-150);
   transition: all 0.15s ease;
