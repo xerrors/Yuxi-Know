@@ -107,7 +107,7 @@
 - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 </details>
 
-<img width="1848" height="430" alt="image" src="https://github.com/user-attachments/assets/96e781bf-5aaa-4fb9-90de-b1b0a1626817" />
+<img width="1846" height="434" alt="image" src="https://github.com/user-attachments/assets/ccbd2cbf-574a-4cd3-baac-167b3c619b6e" />
 
 
 
