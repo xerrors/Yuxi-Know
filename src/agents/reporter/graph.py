@@ -12,9 +12,24 @@ from src.services.mcp_service import get_mcp_server_names, get_tools_from_all_se
 from src.utils import logger
 
 
+PROMPT = """你的任务是根据用户的指令，使用数据库工具和图表绘制工具，构建 SQL 查询报告。
+你需要根据用户的指令，生成相应的 SQL 查询，并将查询结果以报表的形式返回给用户。
+在生成报表时，你可以调用工具生成图表，以更直观地展示数据。
+务必确保生成的 SQL 查询是正确且高效的，以避免对数据库造成不必要的负担。
+在生成报表时，请遵循以下原则：
+1. 理解用户的指令，明确报表的需求和目标。
+2. 图表生成工具的返回结果不会默认渲染，需要在最终的报表中以图片形式(markdown格式)嵌入。
+3. 必要时，使用网络检索相关工具补充信息。
+"""
+
 @dataclass(kw_only=True)
 class ReporterContext(BaseContext):
     """覆盖 BaseContext，定义数据库报表助手智能体的可配置参数"""
+    # 覆盖 system_prompt，提供更具体的默认值
+    system_prompt: Annotated[str, {"__template_metadata__": {"kind": "prompt"}}] = field(
+        default=PROMPT,
+        metadata={"name": "系统提示词", "description": "用来描述智能体的角色和行为"},
+    )
 
     mcps: Annotated[list[str], {"__template_metadata__": {"kind": "mcps"}}] = field(
         default_factory=lambda: ["mcp-server-chart"],
