@@ -78,16 +78,8 @@
                 />
               </template>
               <template v-else>
-                <FolderOpen
-                  v-if="expanded"
-                  :size="18"
-                  class="folder-icon open"
-                />
-                <Folder
-                  v-else
-                  :size="18"
-                  class="folder-icon"
-                />
+                <FolderOpen v-if="expanded" :size="18" class="folder-icon open" />
+                <Folder v-else :size="18" class="folder-icon" />
               </template>
             </template>
             <template #title="{ data }">
@@ -146,16 +138,8 @@
                 />
               </template>
               <template v-else>
-                <FolderOpen
-                  v-if="expanded"
-                  :size="18"
-                  class="folder-icon open"
-                />
-                <Folder
-                  v-else
-                  :size="18"
-                  class="folder-icon"
-                />
+                <FolderOpen v-if="expanded" :size="18" class="folder-icon open" />
+                <Folder v-else :size="18" class="folder-icon" />
               </template>
             </template>
             <template #title="{ data }">
@@ -250,7 +234,17 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick } from 'vue'
-import { Download, X, Plus, Info, FolderCode, RefreshCw, Folder, FolderOpen, Trash2 } from 'lucide-vue-next'
+import {
+  Download,
+  X,
+  Plus,
+  Info,
+  FolderCode,
+  RefreshCw,
+  Folder,
+  FolderOpen,
+  Trash2
+} from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -425,16 +419,16 @@ const buildTreeData = (filesList) => {
           // User asked for "last 5 chars".
           // If we treat the whole thing as a string:
           if (part.length > 5) {
-             nameEnd = part.slice(-5)
-             nameStart = part.slice(0, -5)
+            nameEnd = part.slice(-5)
+            nameStart = part.slice(0, -5)
           } else {
-             nameStart = part
-             nameEnd = ''
+            nameStart = part
+            nameEnd = ''
           }
         } else {
-           if (part.length > 5) {
-             nameEnd = part.slice(-5)
-             nameStart = part.slice(0, -5)
+          if (part.length > 5) {
+            nameEnd = part.slice(-5)
+            nameStart = part.slice(0, -5)
           }
         }
 
@@ -1084,7 +1078,8 @@ const stopResize = () => {
   align-items: center;
   flex: 1;
   min-width: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
   color: var(--gray-800);
   line-height: 28px;

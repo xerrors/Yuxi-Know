@@ -140,7 +140,7 @@ class DeepAgent(BaseAgent):
                 PatchToolCallsMiddleware(),
                 summary_middleware,
             ],
-            general_purpose_agent=True
+            general_purpose_agent=True,
         )
 
         # 使用 create_deep_agent 创建深度智能体

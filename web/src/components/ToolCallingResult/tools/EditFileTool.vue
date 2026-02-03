@@ -25,7 +25,9 @@ const props = defineProps({
   }
 })
 
-const toolCallName = computed(() => props.toolCall.name || props.toolCall.function?.name || 'edit_file')
+const toolCallName = computed(
+  () => props.toolCall.name || props.toolCall.function?.name || 'edit_file'
+)
 
 const parsedArgs = computed(() => {
   const args = props.toolCall.args || props.toolCall.function?.arguments

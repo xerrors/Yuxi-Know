@@ -35,8 +35,8 @@ class MySQLSecurityChecker:
             return False
 
         # 移除SQL注释（-- 和 /* */）后再验证
-        sql_clean = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
-        sql_clean = re.sub(r'/\*.*?\*/', '', sql_clean)
+        sql_clean = re.sub(r"--.*$", "", sql, flags=re.MULTILINE)
+        sql_clean = re.sub(r"/\*.*?\*/", "", sql_clean)
         sql_upper = sql_clean.strip().upper()
 
         # 检查是否是允许的操作

@@ -88,7 +88,7 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
         # 尝试从输入中获取 attachments（LangGraph 会将输入 state 合并）
         if not attachments:
             # 检查是否有其他方式传递的附件
-            logger.info(f"AttachmentMiddleware: checking for attachments in other locations...")
+            logger.info("AttachmentMiddleware: checking for attachments in other locations...")
             # 输入可能直接在 state 中
             logger.info(f"AttachmentMiddleware: state type = {type(request.state)}")
 
@@ -97,21 +97,23 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
             thread_id = None
 
             # 0. 尝试从 request.runtime 获取（LangChain runtime）
-            if hasattr(request, 'runtime') and request.runtime:
+            if hasattr(request, "runtime") and request.runtime:
                 runtime = request.runtime
                 logger.info(f"AttachmentMiddleware: runtime type = {type(runtime)}")
-                logger.info(f"AttachmentMiddleware: runtime attrs = {[a for a in dir(runtime) if not a.startswith('_')]}")
+                logger.info(
+                    f"AttachmentMiddleware: runtime attrs = {[a for a in dir(runtime) if not a.startswith('_')]}"
+                )
 
                 # 检查 runtime.context
-                if hasattr(runtime, 'context') and runtime.context:
+                if hasattr(runtime, "context") and runtime.context:
                     ctx = runtime.context
                     logger.info(f"AttachmentMiddleware: runtime.context type = {type(ctx)}")
                     # 如果是 Pydantic 模型，使用 model_dump()
-                    if hasattr(ctx, 'model_dump'):
+                    if hasattr(ctx, "model_dump"):
                         ctx_dict = ctx.model_dump()
                         logger.info(f"AttachmentMiddleware: runtime.context keys = {list(ctx_dict.keys())}")
                         thread_id = ctx_dict.get("thread_id")
-                    elif hasattr(ctx, '__dict__'):
+                    elif hasattr(ctx, "__dict__"):
                         logger.info(f"AttachmentMiddleware: runtime.context __dict__ = {ctx.__dict__}")
                         thread_id = ctx.__dict__.get("thread_id")
                     elif isinstance(ctx, dict):
@@ -120,13 +122,13 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
 
                 # 如果还没有 thread_id，检查 runtime 其他属性
                 if not thread_id:
-                    for attr in ['state', 'config', 'configurable']:
+                    for attr in ["state", "config", "configurable"]:
                         if hasattr(runtime, attr):
                             val = getattr(runtime, attr)
                             logger.info(f"AttachmentMiddleware: runtime.{attr} = {type(val)}")
                             if isinstance(val, dict):
                                 thread_id = val.get("thread_id")
-                            elif hasattr(val, 'get'):
+                            elif hasattr(val, "get"):
                                 thread_id = val.get("thread_id")
                             if thread_id:
                                 break
@@ -147,8 +149,8 @@ class AttachmentMiddleware(AgentMiddleware[AttachmentState]):
                 if input_context is not None:
                     if isinstance(input_context, dict):
                         thread_id = input_context.get("thread_id")
-                    elif hasattr(input_context, 'thread_id'):
-                        thread_id = getattr(input_context, 'thread_id', None)
+                    elif hasattr(input_context, "thread_id"):
+                        thread_id = getattr(input_context, "thread_id", None)
 
             logger.info(f"AttachmentMiddleware: thread_id = {thread_id}")
             logger.info(f"AttachmentMiddleware: has config = {hasattr(request, 'config')}")

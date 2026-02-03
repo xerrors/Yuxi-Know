@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from deepagents.backends.protocol import BackendProtocol, EditResult, WriteResult
 from deepagents.backends.utils import FileInfo, GrepMatch
@@ -29,7 +28,7 @@ class MinIOBackend(BackendProtocol):
     def __init__(
         self,
         bucket_name: str = "chat-attachments",
-        minio_client: Optional[MinIOClient] = None,
+        minio_client: MinIOClient | None = None,
     ):
         self.bucket_name = bucket_name
         self._client = minio_client
@@ -51,7 +50,7 @@ class MinIOBackend(BackendProtocol):
         """
         return path.lstrip("/")
 
-    def _parse_path(self, path: str) -> tuple[Optional[str], Optional[str]]:
+    def _parse_path(self, path: str) -> tuple[str | None, str | None]:
         """解析路径，提取 thread_id 和 filename。
 
         支持两种格式：
@@ -203,7 +202,7 @@ class MinIOBackend(BackendProtocol):
             # 添加行号
             start = max(0, offset)
             end = start + limit
-            numbered_lines = [f"{i+1}:{line}" for i, line in enumerate(lines[start:end], start + 1)]
+            numbered_lines = [f"{i + 1}:{line}" for i, line in enumerate(lines[start:end], start + 1)]
             return "\n".join(numbered_lines)
         except Exception as e:
             logger.error(f"MinIOBackend.read failed for {file_path}: {e}")
@@ -288,8 +287,8 @@ class MinIOBackend(BackendProtocol):
     def grep_raw(
         self,
         pattern: str,
-        path: Optional[str] = None,
-        glob: Optional[str] = None,
+        path: str | None = None,
+        glob: str | None = None,
     ) -> list[GrepMatch] | str:
         """搜索文件内容。
 

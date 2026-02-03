@@ -147,7 +147,7 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
 
     # 构建文件头部信息
     header_lines = [
-        f"=== Tool Invocation ===",
+        "=== Tool Invocation ===",
         f"Tool: {tool_name}",
         f"Tool Call ID: {tool_call_id}",
         "=" * 40,

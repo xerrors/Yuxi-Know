@@ -11,7 +11,6 @@ from src.agents.common.toolkits.mysql import get_mysql_tools
 from src.services.mcp_service import get_mcp_server_names, get_tools_from_all_servers
 from src.utils import logger
 
-
 PROMPT = """你的任务是根据用户的指令，使用数据库工具和图表绘制工具，构建 SQL 查询报告。
 你需要根据用户的指令，生成相应的 SQL 查询，并将查询结果以报表的形式返回给用户。
 在生成报表时，你可以调用工具生成图表，以更直观地展示数据。
@@ -22,9 +21,11 @@ PROMPT = """你的任务是根据用户的指令，使用数据库工具和图�
 3. 必要时，使用网络检索相关工具补充信息。
 """
 
+
 @dataclass(kw_only=True)
 class ReporterContext(BaseContext):
     """覆盖 BaseContext，定义数据库报表助手智能体的可配置参数"""
+
     # 覆盖 system_prompt，提供更具体的默认值
     system_prompt: Annotated[str, {"__template_metadata__": {"kind": "prompt"}}] = field(
         default=PROMPT,
