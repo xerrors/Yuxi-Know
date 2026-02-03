@@ -135,17 +135,32 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
     if token_counter([msg]) <= threshold:
         return None
 
-    # 生成文件路径
-    message_id = msg.id or str(uuid.uuid4())
-    file_path = f"{_OFFLOAD_DIR}/{message_id}"
+    # 获取工具名称和参数
+    tool_name = msg.name or "unknown"
+    tool_call_id = msg.tool_call_id or ""
 
-    # 保存到 files 格式
+    # 生成文件路径 (工具名称-xxx)
+    message_id = msg.id or str(uuid.uuid4())[:8]
+    safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tool_name)
+    file_path = f"{_OFFLOAD_DIR}/{safe_name}-{message_id}"
+
+    # 构建文件头部信息
+    header_lines = [
+        f"=== Tool Invocation ===",
+        f"Tool: {tool_name}",
+        f"Tool Call ID: {tool_call_id}",
+        "=" * 40,
+        "",
+    ]
+    header = "\n".join(header_lines)
+
+    # 保存到 files 格式（包含头部信息）
     from datetime import datetime
 
     timestamp = datetime.now().isoformat()
     files_update = {
         file_path: {
-            "content": content_str.splitlines(keepends=True),
+            "content": [header + content_str],
             "created_at": timestamp,
             "modified_at": timestamp,
         }
@@ -195,12 +210,11 @@ class SummaryOffloadMiddleware(AgentMiddleware):
     基于 LangChain SummarizationMiddleware，额外功能：
     - 保留原有的 summary 历史记录逻辑
     - 将 ToolMessage 的 results 卸载到虚拟文件系统
-      1. 立即卸载：超过 immediate_offload_threshold (默认 4k tokens)
-      2. Summary 时卸载：超过 summary_offload_threshold (默认 1k tokens)
-    - 智能保留策略：
-      1. 触发 Summary (达到 trigger) 时，首先进行 Summary 卸载
-      2. 只有当总 Token 数超过 max_retention_ratio * trigger 时，才进行消息清理(Summary)
-      3. 始终保留 System Message
+      1. 触发 Summary 时，卸载超过阈值的工具结果
+      2. 智能保留策略：
+        - 触发 Summary 时，首先进行卸载
+        - 只有当总 Token 数超过 max_retention_ratio * trigger 时，才进行消息清理(Summary)
+        - 始终保留 System Message
     """
 
     def __init__(
@@ -212,8 +226,7 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         token_counter: TokenCounter = count_tokens_approximately,
         summary_prompt: str = DEFAULT_SUMMARY_PROMPT,
         trim_tokens_to_summarize: int | None = _DEFAULT_TRIM_TOKEN_LIMIT,
-        # 新增/修改：工具结果卸载参数
-        immediate_offload_threshold: int = 4000,
+        # 工具结果卸载参数
         summary_offload_threshold: int = 1000,
         max_retention_ratio: float = 0.6,
         **deprecated_kwargs: Any,
@@ -227,7 +240,6 @@ class SummaryOffloadMiddleware(AgentMiddleware):
             token_counter: token 计数函数
             summary_prompt: 生成摘要的提示词模板
             trim_tokens_to_summarize: 准备摘要消息时的最大 token 数
-            immediate_offload_threshold: 立即卸载阈值（token 数），默认 4000
             summary_offload_threshold: Summary 时卸载阈值（token 数），默认 1000
             max_retention_ratio: 触发 Summary 后，如果不超过此比例（相对于 trigger），则不删除消息。默认 0.6
         """
@@ -265,7 +277,6 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         self.trim_tokens_to_summarize = trim_tokens_to_summarize
 
         # 工具结果卸载配置
-        self.immediate_offload_threshold = immediate_offload_threshold
         self.summary_offload_threshold = summary_offload_threshold
         self.max_retention_ratio = max_retention_ratio
 
@@ -305,53 +316,34 @@ class SummaryOffloadMiddleware(AgentMiddleware):
 
         self._ensure_message_ids(messages)
 
-        # 1. 立即卸载 (Scenario 1: > 4k)
-        files_update, modified_messages = _offload_tool_results(
-            messages, self.immediate_offload_threshold, self.token_counter
-        )
-
-        # 注意: modified_messages 指向 state['messages'] 中的对象 (in-place modification)
         total_tokens = self.token_counter(messages)
 
-        # 2. 检查是否触发 Summary
+        # 1. 检查是否触发 Summary
         if not self._should_summarize(messages, total_tokens):
-            if files_update:
-                return {"files": files_update, "messages": modified_messages}
             return None
 
-        # 3. 触发 Summary (Scenario 2)
-        # Phase A: Aggressive Offload (> 1k)
+        # 2. 触发 Summary：卸载超阈值的工具结果
+        files_update: dict[str, Any] = {}
+        modified_messages: list[AnyMessage] = []
+
         agg_files, agg_msgs = _offload_tool_results(messages, self.summary_offload_threshold, self.token_counter)
+        files_update = agg_files
+        modified_messages = agg_msgs
 
-        files_update.update(agg_files)
-
-        # 合并 modified messages 列表 (注意去重或直接使用最新的)
-        all_modified_ids = {m.id for m in modified_messages}
-
-        for m in agg_msgs:
-            if m.id not in all_modified_ids:
-                modified_messages.append(m)
-                all_modified_ids.add(m.id)
-
-        # Phase B: 检查 Retention Ratio
+        # 3. 检查 Retention Ratio
         current_tokens = self.token_counter(messages)
         trigger_value = self._get_token_trigger_value()
 
-        # 如果没有明确的 token trigger，或者当前 tokens 已经小于等于 (trigger * ratio)
-        # 则不进行删除/Summary，只返回 offload 的结果
         retention_limit = float("inf")
-
         if trigger_value:
             retention_limit = trigger_value * self.max_retention_ratio
 
         if current_tokens <= retention_limit:
-            # 不删除消息，只卸载文件
             if files_update:
                 return {"files": files_update, "messages": modified_messages}
             return None
 
-        # Phase C: 超过 limit，需要 Eviction (Summary)
-        # 保护 System Message
+        # 4. 超过 limit，需要 Eviction (Summary)
         system_msg_count = 0
         messages_to_process = messages
 
@@ -359,22 +351,15 @@ class SummaryOffloadMiddleware(AgentMiddleware):
             system_msg_count = 1
             messages_to_process = messages[1:]
 
-        # 找到 cutoff，使得保留的部分 <= retention_limit
-        # 注意: 这里简化处理，未扣除 system message 的 tokens，
-        # 实际保留的可能会略多于 limit (即 limit + system_msg_tokens)
         cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
-
         cutoff_index = system_msg_count + cutoff_relative
 
         if cutoff_index <= system_msg_count:
-            # 不需要截断或截断点无效
             if files_update:
                 return {"files": files_update, "messages": modified_messages}
             return None
 
         messages_to_summarize, preserved_messages = self._partition_messages(messages, cutoff_index)
-
-        # 再次确保 preserved_messages 里的 tool results 是卸载过的 (理论上 Phase A 已经做了)
         summary = self._create_summary(messages_to_summarize)
         new_messages = self._build_new_messages(summary)
 
@@ -402,50 +387,34 @@ class SummaryOffloadMiddleware(AgentMiddleware):
 
         self._ensure_message_ids(messages)
 
-        # 1. 立即卸载 (Scenario 1: > 4k)
-        files_update, modified_messages = _offload_tool_results(
-            messages, self.immediate_offload_threshold, self.token_counter
-        )
-
         total_tokens = self.token_counter(messages)
 
-        # 2. 检查是否触发 Summary
+        # 1. 检查是否触发 Summary
         if not self._should_summarize(messages, total_tokens):
-            if files_update:
-                return {"files": files_update, "messages": modified_messages}
             return None
 
-        # 3. 触发 Summary (Scenario 2)
-        # Phase A: Aggressive Offload (> 1k)
+        # 2. 触发 Summary：卸载超阈值的工具结果
+        files_update: dict[str, Any] = {}
+        modified_messages: list[AnyMessage] = []
+
         agg_files, agg_msgs = _offload_tool_results(messages, self.summary_offload_threshold, self.token_counter)
+        files_update = agg_files
+        modified_messages = agg_msgs
 
-        files_update.update(agg_files)
-
-        # 合并 modified messages
-        all_modified_ids = {m.id for m in modified_messages}
-
-        for m in agg_msgs:
-            if m.id not in all_modified_ids:
-                modified_messages.append(m)
-                all_modified_ids.add(m.id)
-
-        # Phase B: 检查 Retention Ratio
+        # 3. 检查 Retention Ratio
         current_tokens = self.token_counter(messages)
         trigger_value = self._get_token_trigger_value()
 
         retention_limit = float("inf")
-
         if trigger_value:
             retention_limit = trigger_value * self.max_retention_ratio
 
         if current_tokens <= retention_limit:
-            # 不删除消息，只卸载文件
             if files_update:
                 return {"files": files_update, "messages": modified_messages}
             return None
 
-        # Phase C: 超过 limit，需要 Eviction (Summary)
-        # 保护 System Message
+        # 4. 超过 limit，需要 Eviction (Summary)
         system_msg_count = 0
         messages_to_process = messages
 
@@ -454,7 +423,6 @@ class SummaryOffloadMiddleware(AgentMiddleware):
             messages_to_process = messages[1:]
 
         cutoff_relative = self._find_cutoff_by_token_limit(messages_to_process, int(retention_limit))
-
         cutoff_index = system_msg_count + cutoff_relative
 
         if cutoff_index <= system_msg_count:
@@ -762,7 +730,6 @@ def create_summary_offload_middleware(
     *,
     trigger: ContextSize | list[ContextSize] | None = None,
     keep: ContextSize = ("messages", _DEFAULT_MESSAGES_TO_KEEP),
-    immediate_offload_threshold: int = 4000,
     summary_offload_threshold: int = 1000,
     max_retention_ratio: float = 0.6,
 ) -> SummaryOffloadMiddleware:
@@ -771,7 +738,6 @@ def create_summary_offload_middleware(
         model=model,
         trigger=trigger,
         keep=keep,
-        immediate_offload_threshold=immediate_offload_threshold,
         summary_offload_threshold=summary_offload_threshold,
         max_retention_ratio=max_retention_ratio,
     )
