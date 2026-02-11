@@ -17,7 +17,7 @@
           <h1 class="welcome-greeting">{{ greeting }}</h1>
           <p class="welcome-intro">我是你的智能合规管控小助手,请问现在能帮您做什么?</p>
           
-          <!-- 建议操作按钮（随机两条） -->
+          <!-- 建议操作按钮（随机两条）
           <div class="suggested-actions">
             <div
               v-for="(question, index) in randomSuggestions"
@@ -28,7 +28,7 @@
               <span>{{ question }}</span>
               <span class="arrow-icon">→</span>
             </div>
-          </div>
+          </div> -->
         </div>
         
         <!-- 对话消息列表（有对话时显示） -->
