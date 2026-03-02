@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { agentApi } from '@/apis/agent_api'
+import { agentApi, databaseApi, mcpApi } from '@/apis'
 import { handleChatError } from '@/utils/errorHandler'
 import { useUserStore } from '@/stores/user'
 
@@ -13,6 +13,10 @@ export const useAgentStore = defineStore(
     const agents = ref([])
     const selectedAgentId = ref(null)
     const defaultAgentId = ref(null)
+
+    // 资源相关状态
+    const availableKnowledgeBases = ref([])
+    const availableMcps = ref([])
 
     // 智能体配置相关状态
     const agentConfig = ref({})
@@ -92,6 +96,22 @@ export const useAgentStore = defineStore(
 
     // ==================== 方法 ====================
     /**
+     * 获取可提及的资源（知识库、MCP等）
+     */
+    async function fetchMentionResources() {
+      try {
+        const [dbsRes, mcpsRes] = await Promise.all([
+          databaseApi.getAccessibleDatabases().catch(() => ({ databases: [] })),
+          mcpApi.getMcpServers().catch(() => ({ data: [] }))
+        ])
+        availableKnowledgeBases.value = dbsRes.databases || []
+        availableMcps.value = mcpsRes.data || []
+      } catch (e) {
+        console.warn('Failed to fetch mention resources:', e)
+      }
+    }
+
+    /**
      * 初始化 store
      */
     async function initialize() {
@@ -104,6 +124,7 @@ export const useAgentStore = defineStore(
       try {
         await fetchAgents()
         await fetchDefaultAgent()
+        await fetchMentionResources()
 
         if (!selectedAgent.value) {
           if (defaultAgent.value) {
@@ -449,6 +470,8 @@ export const useAgentStore = defineStore(
       agents.value = []
       selectedAgentId.value = null
       defaultAgentId.value = null
+      availableKnowledgeBases.value = []
+      availableMcps.value = []
       agentConfig.value = {}
       originalAgentConfig.value = {}
       agentConfigs.value = {}
@@ -468,6 +491,8 @@ export const useAgentStore = defineStore(
       agents,
       selectedAgentId,
       defaultAgentId,
+      availableKnowledgeBases,
+      availableMcps,
       agentConfig,
       originalAgentConfig,
       agentDetails,
@@ -495,6 +520,7 @@ export const useAgentStore = defineStore(
       fetchAgents,
       fetchAgentDetail,
       fetchDefaultAgent,
+      fetchMentionResources,
       setDefaultAgent,
       selectAgent,
       selectAgentConfig,

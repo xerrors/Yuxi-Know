@@ -91,6 +91,7 @@
           :message="message"
           :show-refs="showRefs"
           :is-latest-message="isLatestMessage"
+          :sources="messageSources"
           @retry="emit('retry')"
           @openRefs="emit('openRefs', $event)"
         />
@@ -115,6 +116,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useInfoStore } from '@/stores/info'
 import { useThemeStore } from '@/stores/theme'
 import { storeToRefs } from 'pinia'
+import { MessageProcessor } from '@/utils/messageProcessor'
 
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
@@ -223,8 +225,17 @@ const getErrorMessage = computed(() => {
 
 // 引入智能体 store
 const agentStore = useAgentStore()
+const { availableKnowledgeBases } = storeToRefs(agentStore)
 const infoStore = useInfoStore()
 const themeStore = useThemeStore()
+
+// 提取消息来源
+const messageSources = computed(() => {
+  if (props.message.type === 'ai') {
+    return MessageProcessor.extractSourcesFromMessage(props.message, availableKnowledgeBases.value)
+  }
+  return { knowledgeChunks: [], webSources: [] }
+})
 
 // 主题设置 - 根据系统主题动态切换
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))

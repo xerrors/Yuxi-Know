@@ -41,6 +41,31 @@
         title="重新生成"
         ><RotateCcw size="12" />
       </span>
+
+      <!-- 来源按钮 - 使用 flex-grow 占据剩余空间并右对齐 -->
+      <div v-if="hasSources && showKey('sources')" class="sources-spacer"></div>
+      <span
+        v-if="hasSources && showKey('sources')"
+        class="item btn sources-btn"
+        :class="{ expanded: isSourcesExpanded }"
+        @click="toggleSources"
+        :title="isSourcesExpanded ? '收起详情' : '查看来源详情'"
+      >
+        <BookOpen size="12" />
+        <span class="sources-label">
+          来源
+          <template v-if="sourceCount > 0">
+            {{ sourceCount }}
+          </template>
+        </span>
+        <ChevronDown :size="12" class="expand-icon" :class="{ rotated: isSourcesExpanded }" />
+      </span>
+    </div>
+
+    <!-- 来源详情面板 -->
+    <div v-if="isSourcesExpanded" class="sources-panel-body">
+      <KnowledgeSourceSection v-if="knowledgeChunks.length > 0" :chunks="knowledgeChunks" />
+      <WebSearchSourceSection v-if="webSources.length > 0" :sources="webSources" />
     </div>
   </div>
 
@@ -68,8 +93,10 @@
 import { ref, computed, reactive, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
-import { ThumbsUp, ThumbsDown, Bot, Copy, Check, RotateCcw } from 'lucide-vue-next'
+import { ThumbsUp, ThumbsDown, Bot, Copy, Check, RotateCcw, BookOpen, ChevronDown } from 'lucide-vue-next'
 import { agentApi } from '@/apis'
+import KnowledgeSourceSection from '@/components/KnowledgeSourceSection.vue'
+import WebSearchSourceSection from '@/components/WebSearchSourceSection.vue'
 
 const emit = defineEmits(['retry', 'openRefs'])
 const props = defineProps({
@@ -81,10 +108,38 @@ const props = defineProps({
   isLatestMessage: {
     type: Boolean,
     default: false
+  },
+  sources: {
+    type: Object,
+    default: () => ({})
   }
 })
 
 const msg = ref(props.message)
+
+// Sources state
+const isSourcesExpanded = ref(false)
+
+const knowledgeChunks = computed(() =>
+  Array.isArray(props.sources?.knowledgeChunks) ? props.sources.knowledgeChunks : []
+)
+const webSources = computed(() =>
+  Array.isArray(props.sources?.webSources) ? props.sources.webSources : []
+)
+
+const hasSources = computed(
+  () =>
+    knowledgeChunks.value.length > 0 ||
+    webSources.value.length > 0
+)
+
+const sourceCount = computed(
+  () => knowledgeChunks.value.length + webSources.value.length
+)
+
+const toggleSources = () => {
+  isSourcesExpanded.value = !isSourcesExpanded.value
+}
 
 // Feedback state
 const feedbackState = reactive({
@@ -272,11 +327,12 @@ const cancelDislike = () => {
 <style lang="less" scoped>
 .refs {
   display: flex;
+  flex-direction: column;
   margin-bottom: 20px;
   margin-top: 10px;
   color: var(--gray-500);
   font-size: 13px;
-  gap: 10px;
+  gap: 12px;
 
   .item {
     background: var(--gray-50);
@@ -313,7 +369,66 @@ const cancelDislike = () => {
   .tags {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 10px;
+    width: 100%;
+
+    .sources-spacer {
+      flex-grow: 1;
+    }
+
+    .sources-btn {
+      margin-left: auto;
+      background: var(--gray-50);
+      border: 1px solid transparent;
+      padding: 6px 10px;
+
+      &:hover {
+        background: var(--gray-100);
+      }
+
+      &.expanded {
+        background: var(--main-50);
+        color: var(--main-700);
+        border-color: var(--main-100);
+      }
+
+      .sources-label {
+        font-weight: 500;
+        margin-left: 2px;
+      }
+
+      .expand-icon {
+        margin-left: 4px;
+        transition: transform 0.2s ease;
+
+        &.rotated {
+          transform: rotate(180deg);
+        }
+      }
+    }
+  }
+
+  .sources-panel-body {
+    background: var(--gray-25);
+    border: 1px solid var(--gray-150);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: slideDown 0.2s ease-out;
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

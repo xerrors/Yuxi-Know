@@ -250,6 +250,23 @@ export class MessageProcessor {
   }
 
   /**
+   * 提取单个消息中的来源
+   * @param {Object} message - 消息对象
+   * @param {Array} databases - 知识库列表
+   * @returns {{knowledgeChunks: Array, webSources: Array}}
+   */
+  static extractSourcesFromMessage(message, databases = []) {
+    if (!message || message.type !== 'ai') return { knowledgeChunks: [], webSources: [] }
+
+    // 复用提取逻辑，通过构建临时对话对象
+    const mockConv = { messages: [message] }
+    return {
+      knowledgeChunks: MessageProcessor.extractKnowledgeChunksFromConversation(mockConv, databases),
+      webSources: MessageProcessor.extractWebSourcesFromConversation(mockConv),
+    }
+  }
+
+  /**
    * 提取一轮对话中的全部来源（知识库+网络搜索）
    * @param {Object} conv - 单轮对话
    * @param {Array} databases - 知识库列表

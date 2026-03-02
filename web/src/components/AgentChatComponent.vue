@@ -84,11 +84,8 @@
               <RefsComponent
                 v-if="shouldShowRefs(conv)"
                 :message="getLastMessage(conv)"
-                :show-refs="['model', 'copy']"
+                :show-refs="['model', 'copy', 'sources']"
                 :is-latest-message="false"
-              />
-              <ConversationSourcesPanel
-                v-if="shouldShowRefs(conv)"
                 :sources="getConversationSources(conv)"
               />
             </div>
@@ -219,7 +216,6 @@ import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import AgentPanel from '@/components/AgentPanel.vue'
-import ConversationSourcesPanel from '@/components/ConversationSourcesPanel.vue'
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
@@ -237,7 +233,9 @@ const {
   defaultAgentId,
   selectedAgentConfigId,
   agentConfig,
-  configurableItems
+  configurableItems,
+  availableKnowledgeBases,
+  availableMcps
 } = storeToRefs(agentStore)
 
 // ==================== LOCAL CHAT & UI STATE ====================
@@ -293,10 +291,6 @@ const threadMessages = ref({})
 const localUIState = reactive({
   isInitialRender: true
 })
-
-// Mention resources
-const availableKnowledgeBases = ref([])
-const availableMcps = ref([])
 
 // Agent Panel State
 const isAgentPanelOpen = ref(false)
@@ -1135,19 +1129,6 @@ const resumeActiveRunForThread = async (threadId) => {
   clearActiveRunSnapshot(threadId)
 }
 
-const fetchMentionResources = async () => {
-  try {
-    const [dbsRes, mcpsRes] = await Promise.all([
-      databaseApi.getAccessibleDatabases().catch(() => ({ databases: [] })),
-      mcpApi.getMcpServers().catch(() => ({ data: [] }))
-    ])
-    availableKnowledgeBases.value = dbsRes.databases || []
-    availableMcps.value = mcpsRes.data || []
-  } catch (e) {
-    console.warn('Failed to fetch mention resources', e)
-  }
-}
-
 const ensureActiveThread = async (title = '新的对话') => {
   if (currentChatId.value) return currentChatId.value
   try {
@@ -1648,7 +1629,7 @@ const showMsgRefs = (msg) => {
 
   // 只有真正完成的消息才显示 refs
   if (msg.isLast && msg.status === 'finished') {
-    return ['copy']
+    return ['copy', 'sources']
   }
   return false
 }
@@ -1693,7 +1674,6 @@ const initAll = async () => {
     if (!agentStore.isInitialized) {
       await agentStore.initialize()
     }
-    await fetchMentionResources()
   } catch (error) {
     handleChatError(error, 'load')
   }
