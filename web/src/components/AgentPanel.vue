@@ -114,7 +114,7 @@
           </div>
         </div>
       </template>
-      <div class="file-content">
+      <div class="file-content flat-md-preview">
         <template v-if="isMarkdown">
           <MdPreview
             :modelValue="formatContent(currentFile?.content)"
@@ -822,14 +822,6 @@ const stopResize = () => {
     word-wrap: break-word;
     color: var(--gray-1000);
     background: transparent;
-  }
-
-  :deep(.md-editor-preview-wrapper) {
-    padding: 0;
-  }
-
-  :deep(.md-editor-preview) {
-    font-size: 14px;
   }
 }
 

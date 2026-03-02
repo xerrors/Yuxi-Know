@@ -3,6 +3,7 @@
 @import './sigma.css';
 @import './shorts.css';
 @import './dashboard.css';
+@import './markdown-preview.less';
 
 :root {
   --header-height: 45px;

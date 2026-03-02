@@ -18,7 +18,7 @@
           :modelValue="String(resultContent)"
           :theme="theme"
           previewTheme="github"
-          class="md-preview-wrapper"
+          class="md-preview-wrapper flat-md-preview"
         />
       </div>
     </template>

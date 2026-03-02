@@ -20,7 +20,7 @@
       :modelValue="chunk.content"
       :theme="theme"
       previewTheme="github"
-      class="chunk-markdown-content"
+      class="chunk-markdown-content flat-md-preview"
     />
     <div v-else class="empty-text">暂无内容</div>
   </a-modal>
@@ -83,10 +83,6 @@ const modalTitle = computed(() => {
 
 .chunk-markdown-content :deep(.md-editor) {
   background: transparent;
-}
-
-.chunk-markdown-content :deep(.md-editor-preview-wrapper) {
-  padding: 0;
 }
 
 .empty-text {

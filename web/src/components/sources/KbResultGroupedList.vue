@@ -147,6 +147,7 @@ const openChunkDetail = (chunk, index) => {
 
 <style scoped lang="less">
 .kb-result-grouped-list {
+  padding: 4px;
   .result-summary {
     padding: 10px 12px;
     background: var(--gray-25);
@@ -231,7 +232,7 @@ const openChunkDetail = (chunk, index) => {
       }
 
       &.high-relevance {
-        background: var(--main-5);
+        background: var(--gray-5);
       }
 
       &:hover {
