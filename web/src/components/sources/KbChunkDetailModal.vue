@@ -6,7 +6,7 @@
     :footer="null"
     :destroyOnClose="true"
     wrap-class-name="chunk-detail-modal"
-    :bodyStyle="{ maxHeight: '72vh', overflowY: 'auto', padding: '12px 16px' }"
+    :bodyStyle="{ maxHeight: '72vh', overflowY: 'auto', padding: '0' }"
   >
     <div v-if="chunk" class="detail-meta">
       <span v-if="typeof chunk.score === 'number'" class="score"

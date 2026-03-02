@@ -40,7 +40,7 @@
           @click="$emit('toggle-panel')"
           title="查看工作状态"
         >
-          <FolderCode :size="14" />
+          <FolderCode :size="18" />
           <span>状态</span>
         </div>
       </div>
@@ -187,7 +187,7 @@ defineExpose({
   padding: 0 8px;
   height: 28px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--gray-600);
   cursor: pointer;
   transition: all 0.2s ease;
