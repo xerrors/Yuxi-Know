@@ -4,7 +4,7 @@ import uuid
 import requests
 from langgraph.types import interrupt
 
-from src.agents.common.toolkits import tool
+from src.agents.common.toolkits.registry import tool
 from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 

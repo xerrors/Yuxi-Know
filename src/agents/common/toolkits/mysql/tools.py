@@ -2,7 +2,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
 
-from src.agents.common.toolkits import tool
+from src.agents.common.toolkits.registry import tool
 from src.utils import logger
 
 from .connection import (
