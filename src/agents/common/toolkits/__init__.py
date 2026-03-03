@@ -1,4 +1,9 @@
 # toolkits 包
+# 触发各模块的 @tool 装饰器执行，自动注册工具
+from . import buildin, debug, mysql
+
+# 工具获取函数
+from .kbs import get_common_kb_tools
 from .registry import (
     ToolExtraMetadata,
     get_all_extra_metadata,
@@ -7,15 +12,6 @@ from .registry import (
     tool,
 )
 
-# 工具获取函数
-from .kbs import get_common_kb_tools
-
-# 触发各模块的 @tool 装饰器执行，自动注册工具
-from . import buildin
-from . import debug
-from . import mysql
-
-
 __all__ = [
     "get_extra_metadata",
     "get_all_extra_metadata",
@@ -23,4 +19,8 @@ __all__ = [
     "ToolExtraMetadata",
     "tool",
     "get_common_kb_tools",
+    # 触发各模块的 @tool 装饰器执行，自动注册工具
+    "buildin",
+    "debug",
+    "mysql",
 ]

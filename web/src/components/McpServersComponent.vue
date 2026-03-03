@@ -8,7 +8,12 @@
       <div class="sidebar-list">
         <!-- 搜索框 -->
         <div class="search-box">
-          <a-input v-model:value="searchQuery" placeholder="搜索服务器..." allow-clear class="search-input">
+          <a-input
+            v-model:value="searchQuery"
+            placeholder="搜索服务器..."
+            allow-clear
+            class="search-input"
+          >
             <template #prefix><Search :size="14" class="text-muted" /></template>
           </a-input>
         </div>
@@ -63,17 +68,28 @@
 
         <template v-else>
           <div class="panel-top-bar">
-            <h2 style="min-height: 32px;">
+            <h2 style="min-height: 32px">
               <span class="server-icon-lg">{{ currentServer.icon || '🔌' }}</span>
-              <span><strong>{{ currentServer.name }}</strong></span>
+              <span
+                ><strong>{{ currentServer.name }}</strong></span
+              >
             </h2>
             <div class="panel-actions">
               <a-space :size="8">
-                <a-button size="small" @click="handleTestServer(currentServer)" :loading="testLoading === currentServer.name" class="lucide-icon-btn">
+                <a-button
+                  size="small"
+                  @click="handleTestServer(currentServer)"
+                  :loading="testLoading === currentServer.name"
+                  class="lucide-icon-btn"
+                >
                   <Zap :size="14" v-if="testLoading !== currentServer.name" />
                   <span>测试</span>
                 </a-button>
-                <a-button size="small" @click="showEditModal(currentServer)" class="lucide-icon-btn">
+                <a-button
+                  size="small"
+                  @click="showEditModal(currentServer)"
+                  class="lucide-icon-btn"
+                >
                   <Pencil :size="14" />
                   <span>编辑</span>
                 </a-button>
@@ -112,7 +128,10 @@
                       </a-tag>
                     </span>
                   </div>
-                  <div class="info-item" v-if="Array.isArray(currentServer.tags) && currentServer.tags.length > 0">
+                  <div
+                    class="info-item"
+                    v-if="Array.isArray(currentServer.tags) && currentServer.tags.length > 0"
+                  >
                     <label>标签</label>
                     <span>
                       <a-tag v-for="tag in currentServer.tags" :key="tag">{{ tag }}</a-tag>
@@ -120,14 +139,24 @@
                   </div>
 
                   <!-- HTTP 类型显示 URL -->
-                  <template v-if="currentServer.transport === 'streamable_http' || currentServer.transport === 'sse'">
+                  <template
+                    v-if="
+                      currentServer.transport === 'streamable_http' ||
+                      currentServer.transport === 'sse'
+                    "
+                  >
                     <div class="info-item" v-if="currentServer.url">
                       <label>服务器 URL</label>
                       <span class="url-text">{{ currentServer.url }}</span>
                     </div>
-                    <div class="info-item" v-if="currentServer.headers && Object.keys(currentServer.headers).length > 0">
+                    <div
+                      class="info-item"
+                      v-if="currentServer.headers && Object.keys(currentServer.headers).length > 0"
+                    >
                       <label>请求头</label>
-                      <pre class="headers-pre">{{ JSON.stringify(currentServer.headers, null, 2) }}</pre>
+                      <pre class="headers-pre">{{
+                        JSON.stringify(currentServer.headers, null, 2)
+                      }}</pre>
                     </div>
                     <div class="info-item" v-if="currentServer.timeout">
                       <label>HTTP 超时</label>
@@ -145,7 +174,10 @@
                       <label>命令</label>
                       <span class="command-text">{{ currentServer.command }}</span>
                     </div>
-                    <div class="info-item" v-if="currentServer.args && currentServer.args.length > 0">
+                    <div
+                      class="info-item"
+                      v-if="currentServer.args && currentServer.args.length > 0"
+                    >
                       <label>参数</label>
                       <span>
                         <a-tag v-for="(arg, index) in currentServer.args" :key="index" size="small">
@@ -153,9 +185,14 @@
                         </a-tag>
                       </span>
                     </div>
-                    <div class="info-item" v-if="currentServer.env && Object.keys(currentServer.env).length > 0">
+                    <div
+                      class="info-item"
+                      v-if="currentServer.env && Object.keys(currentServer.env).length > 0"
+                    >
                       <label>环境变量</label>
-                      <pre class="headers-pre">{{ JSON.stringify(currentServer.env, null, 2) }}</pre>
+                      <pre class="headers-pre">{{
+                        JSON.stringify(currentServer.env, null, 2)
+                      }}</pre>
                     </div>
                   </template>
 
@@ -218,7 +255,12 @@
                             size="small"
                           />
                           <a-tooltip title="复制工具名称">
-                            <a-button type="text" size="small" @click="copyToolName(tool.name)" class="lucide-icon-btn">
+                            <a-button
+                              type="text"
+                              size="small"
+                              @click="copyToolName(tool.name)"
+                              class="lucide-icon-btn"
+                            >
                               <Copy :size="14" />
                             </a-button>
                           </a-tooltip>
@@ -240,7 +282,11 @@
                             >
                               <div class="param-header">
                                 <span class="param-name">{{ paramName }}</span>
-                                <span class="param-required" v-if="tool.required?.includes(paramName)">必填</span>
+                                <span
+                                  class="param-required"
+                                  v-if="tool.required?.includes(paramName)"
+                                  >必填</span
+                                >
                                 <span class="param-type">{{ param.type || 'any' }}</span>
                               </div>
                               <div class="param-desc" v-if="param.description">
@@ -426,7 +472,6 @@
         </div>
       </div>
     </a-modal>
-
   </div>
 </template>
 
@@ -489,7 +534,6 @@ const form = reactive({
   icon: ''
 })
 
-
 // 计算属性
 const filteredServers = computed(() => {
   if (!searchQuery.value) return servers.value
@@ -500,7 +544,10 @@ const filteredServers = computed(() => {
 })
 
 const isStdioTransport = computed(
-  () => String(form.transport || '').trim().toLowerCase() === 'stdio'
+  () =>
+    String(form.transport || '')
+      .trim()
+      .toLowerCase() === 'stdio'
 )
 
 // 工具相关计算属性
@@ -891,13 +938,20 @@ defineExpose({
 
 .stats-section {
   padding: 8px 12px;
-  .stats-text { font-size: 12px; color: var(--gray-500); }
+  .stats-text {
+    font-size: 12px;
+    color: var(--gray-500);
+  }
 }
 
 .list-item {
-  &.disabled { opacity: 0.6; }
+  &.disabled {
+    opacity: 0.6;
+  }
 
-  .server-icon { font-size: 18px; }
+  .server-icon {
+    font-size: 18px;
+  }
 
   .item-details {
     display: flex;
@@ -951,9 +1005,16 @@ defineExpose({
     flex-direction: column;
     gap: 4px;
 
-    label { font-size: 12px; color: var(--gray-500); font-weight: 500; }
+    label {
+      font-size: 12px;
+      color: var(--gray-500);
+      font-weight: 500;
+    }
 
-    span { font-size: 14px; color: var(--gray-900); }
+    span {
+      font-size: 14px;
+      color: var(--gray-900);
+    }
 
     .url-text {
       font-family: 'Monaco', 'Consolas', monospace;
@@ -993,7 +1054,9 @@ defineExpose({
     margin-bottom: 16px;
   }
 
-  .empty-tools { padding: 40px 0; }
+  .empty-tools {
+    padding: 40px 0;
+  }
 
   .tools-list {
     display: flex;
@@ -1007,9 +1070,13 @@ defineExpose({
       padding: 12px 16px;
       transition: all 0.2s ease;
 
-      &:hover { border-color: var(--gray-200); }
+      &:hover {
+        border-color: var(--gray-200);
+      }
 
-      &.disabled { opacity: 0.6; }
+      &.disabled {
+        opacity: 0.6;
+      }
 
       .tool-header {
         display: flex;
@@ -1022,26 +1089,47 @@ defineExpose({
           align-items: center;
           gap: 8px;
 
-          .tool-name { font-weight: 600; font-size: 14px; color: var(--gray-900); }
+          .tool-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--gray-900);
+          }
 
           .info-icon {
             color: var(--gray-400);
             cursor: pointer;
-            &:hover { color: var(--gray-600); }
+            &:hover {
+              color: var(--gray-600);
+            }
           }
         }
 
-        .tool-actions { display: flex; align-items: center; gap: 8px; }
+        .tool-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
       }
 
-      .tool-description { font-size: 13px; color: var(--gray-600); line-height: 1.4; margin-bottom: 8px; }
+      .tool-description {
+        font-size: 13px;
+        color: var(--gray-600);
+        line-height: 1.4;
+        margin-bottom: 8px;
+      }
 
       :deep(.ant-collapse) {
         background: transparent;
         border: none;
 
-        .ant-collapse-header { padding: 8px 0; font-size: 13px; color: var(--gray-600); }
-        .ant-collapse-content-box { padding: 0; }
+        .ant-collapse-header {
+          padding: 8px 0;
+          font-size: 13px;
+          color: var(--gray-600);
+        }
+        .ant-collapse-content-box {
+          padding: 0;
+        }
       }
 
       .params-list {
@@ -1060,12 +1148,34 @@ defineExpose({
             gap: 8px;
             margin-bottom: 4px;
 
-            .param-name { font-weight: 500; font-size: 13px; color: var(--gray-900); font-family: 'Monaco', 'Consolas', monospace; }
-            .param-required { font-size: 11px; color: var(--color-error-500); background: var(--color-error-50); padding: 1px 6px; border-radius: 3px; }
-            .param-type { font-size: 11px; color: var(--gray-500); background: var(--gray-100); padding: 1px 6px; border-radius: 3px; font-family: 'Monaco', 'Consolas', monospace; }
+            .param-name {
+              font-weight: 500;
+              font-size: 13px;
+              color: var(--gray-900);
+              font-family: 'Monaco', 'Consolas', monospace;
+            }
+            .param-required {
+              font-size: 11px;
+              color: var(--color-error-500);
+              background: var(--color-error-50);
+              padding: 1px 6px;
+              border-radius: 3px;
+            }
+            .param-type {
+              font-size: 11px;
+              color: var(--gray-500);
+              background: var(--gray-100);
+              padding: 1px 6px;
+              border-radius: 3px;
+              font-family: 'Monaco', 'Consolas', monospace;
+            }
           }
 
-          .param-desc { font-size: 12px; color: var(--gray-600); line-height: 1.4; }
+          .param-desc {
+            font-size: 12px;
+            color: var(--gray-600);
+            line-height: 1.4;
+          }
         }
       }
     }
@@ -1074,11 +1184,25 @@ defineExpose({
 
 /* 模态框样式 */
 .server-modal {
-  .mode-switch { margin-bottom: 16px; text-align: right; }
-  .server-form { .form-item { margin-bottom: 16px; } }
+  .mode-switch {
+    margin-bottom: 16px;
+    text-align: right;
+  }
+  .server-form {
+    .form-item {
+      margin-bottom: 16px;
+    }
+  }
   .json-mode {
-    .json-textarea { font-family: 'Monaco', 'Consolas', monospace; font-size: 13px; }
-    .json-actions { margin-top: 12px; display: flex; gap: 8px; }
+    .json-textarea {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 13px;
+    }
+    .json-actions {
+      margin-top: 12px;
+      display: flex;
+      gap: 8px;
+    }
   }
 }
 </style>

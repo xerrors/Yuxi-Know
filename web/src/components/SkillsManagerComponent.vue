@@ -7,7 +7,12 @@
       <!-- 左侧：技能列表 -->
       <div class="sidebar-list">
         <div class="search-box">
-          <a-input v-model:value="searchQuery" placeholder="搜索技能..." allow-clear class="search-input">
+          <a-input
+            v-model:value="searchQuery"
+            placeholder="搜索技能..."
+            allow-clear
+            class="search-input"
+          >
             <template #prefix><Search :size="14" class="text-muted" /></template>
           </a-input>
         </div>
@@ -29,8 +34,16 @@
               <div class="item-details">
                 <span class="item-slug">{{ skill.slug }}</span>
                 <div class="item-badges">
-                  <span v-if="skill.tool_dependencies?.length" class="dot-badge blue" title="工具依赖"></span>
-                  <span v-if="skill.mcp_dependencies?.length" class="dot-badge green" title="MCP依赖"></span>
+                  <span
+                    v-if="skill.tool_dependencies?.length"
+                    class="dot-badge blue"
+                    title="工具依赖"
+                  ></span>
+                  <span
+                    v-if="skill.mcp_dependencies?.length"
+                    class="dot-badge green"
+                    title="MCP依赖"
+                  ></span>
                 </div>
               </div>
             </div>
@@ -60,7 +73,13 @@
                   <Download :size="14" />
                   <span>导出</span>
                 </a-button>
-                <a-button size="small" danger ghost @click="confirmDeleteSkill" class="lucide-icon-btn">
+                <a-button
+                  size="small"
+                  danger
+                  ghost
+                  @click="confirmDeleteSkill"
+                  class="lucide-icon-btn"
+                >
                   <Trash2 :size="14" />
                   <span>删除</span>
                 </a-button>
@@ -78,9 +97,15 @@
                   <div class="tree-header">
                     <span class="label">项目结构</span>
                     <div class="tree-actions">
-                      <a-tooltip title="新建文件"><button @click="openCreateModal(false)"><FilePlus :size="14" /></button></a-tooltip>
-                      <a-tooltip title="新建目录"><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button></a-tooltip>
-                      <a-tooltip title="刷新"><button @click="reloadTree"><RotateCw :size="14" /></button></a-tooltip>
+                      <a-tooltip title="新建文件"
+                        ><button @click="openCreateModal(false)"><FilePlus :size="14" /></button
+                      ></a-tooltip>
+                      <a-tooltip title="新建目录"
+                        ><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button
+                      ></a-tooltip>
+                      <a-tooltip title="刷新"
+                        ><button @click="reloadTree"><RotateCw :size="14" /></button
+                      ></a-tooltip>
                     </div>
                   </div>
                   <div class="tree-content">
@@ -113,7 +138,11 @@
                     </a-button>
                   </div>
                   <div class="editor-main">
-                    <a-empty v-if="!selectedPath || selectedIsDir" description="选择文件以开始编辑" class="mt-40" />
+                    <a-empty
+                      v-if="!selectedPath || selectedIsDir"
+                      description="选择文件以开始编辑"
+                      class="mt-40"
+                    />
                     <a-textarea
                       v-else
                       v-model:value="fileContent"
@@ -135,7 +164,12 @@
                     <h3>依赖声明</h3>
                     <p>配置此 Skill 所需的工具、MCP 服务器及其他 Skill 依赖。</p>
                   </div>
-                  <a-button type="primary" :loading="savingDependencies" @click="saveDependencies" class="lucide-icon-btn">
+                  <a-button
+                    type="primary"
+                    :loading="savingDependencies"
+                    @click="saveDependencies"
+                    class="lucide-icon-btn"
+                  >
                     <Save :size="14" />
                     <span>更新依赖</span>
                   </a-button>
@@ -144,13 +178,34 @@
                 <div class="config-form">
                   <a-form layout="vertical">
                     <a-form-item label="工具依赖 (Tools)">
-                      <a-select v-model:value="dependencyForm.tool_dependencies" mode="multiple" :options="toolDependencyOptions" placeholder="选择工具..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.tool_dependencies"
+                        mode="multiple"
+                        :options="toolDependencyOptions"
+                        placeholder="选择工具..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                     <a-form-item label="MCP 依赖 (Model Context Protocol)">
-                      <a-select v-model:value="dependencyForm.mcp_dependencies" mode="multiple" :options="mcpDependencyOptions" placeholder="选择 MCP 服务..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.mcp_dependencies"
+                        mode="multiple"
+                        :options="mcpDependencyOptions"
+                        placeholder="选择 MCP 服务..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                     <a-form-item label="Skill 依赖">
-                      <a-select v-model:value="dependencyForm.skill_dependencies" mode="multiple" :options="skillDependencyOptions" placeholder="选择 Skill..." allow-clear show-search />
+                      <a-select
+                        v-model:value="dependencyForm.skill_dependencies"
+                        mode="multiple"
+                        :options="skillDependencyOptions"
+                        placeholder="选择 Skill..."
+                        allow-clear
+                        show-search
+                      />
                     </a-form-item>
                   </a-form>
                 </div>
@@ -188,8 +243,19 @@ import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
 import {
-  Upload, RotateCw, Download, Trash2, Save, FileText, Layers,
-  FilePlus, FolderPlus, File, Search, Box, FileCode
+  Upload,
+  RotateCw,
+  Download,
+  Trash2,
+  Save,
+  FileText,
+  Layers,
+  FilePlus,
+  FolderPlus,
+  File,
+  Search,
+  Box,
+  FileCode
 } from 'lucide-vue-next'
 import { skillApi } from '@/apis/skill_api'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
@@ -218,12 +284,18 @@ const originalFileContent = ref('')
 const createModalVisible = ref(false)
 const createForm = reactive({ path: '', isDir: false, content: '' })
 const dependencyOptions = reactive({ tools: [], mcps: [], skills: [] })
-const dependencyForm = reactive({ tool_dependencies: [], mcp_dependencies: [], skill_dependencies: [] })
+const dependencyForm = reactive({
+  tool_dependencies: [],
+  mcp_dependencies: [],
+  skill_dependencies: []
+})
 
 const filteredSkills = computed(() => {
   if (!searchQuery.value) return skills.value
   const q = searchQuery.value.toLowerCase()
-  return skills.value.filter(s => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q))
+  return skills.value.filter(
+    (s) => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
+  )
 })
 
 const canSave = computed(() => {
@@ -231,18 +303,31 @@ const canSave = computed(() => {
   return fileContent.value !== originalFileContent.value
 })
 
-const formatRelativeTime = (time) => time ? dayjs(time).fromNow() : '-'
+const formatRelativeTime = (time) => (time ? dayjs(time).fromNow() : '-')
 
-const toolDependencyOptions = computed(() => (dependencyOptions.tools || []).map(i =>
-  typeof i === 'object' ? { label: i.name, value: i.id } : { label: i, value: i }
-))
-const mcpDependencyOptions = computed(() => (dependencyOptions.mcps || []).map(i => ({ label: i, value: i })))
-const skillDependencyOptions = computed(() => (dependencyOptions.skills || []).filter(s => s !== currentSkill.value?.slug).map(i => ({ label: i, value: i })))
+const toolDependencyOptions = computed(() =>
+  (dependencyOptions.tools || []).map((i) =>
+    typeof i === 'object' ? { label: i.name, value: i.id } : { label: i, value: i }
+  )
+)
+const mcpDependencyOptions = computed(() =>
+  (dependencyOptions.mcps || []).map((i) => ({ label: i, value: i }))
+)
+const skillDependencyOptions = computed(() =>
+  (dependencyOptions.skills || [])
+    .filter((s) => s !== currentSkill.value?.slug)
+    .map((i) => ({ label: i, value: i }))
+)
 
-const normalizeTree = (nodes) => (nodes || []).map(node => ({
-  title: node.name, key: node.path, isLeaf: !node.is_dir, path: node.path, is_dir: node.is_dir,
-  children: node.is_dir ? normalizeTree(node.children || []) : undefined
-}))
+const normalizeTree = (nodes) =>
+  (nodes || []).map((node) => ({
+    title: node.name,
+    key: node.path,
+    isLeaf: !node.is_dir,
+    path: node.path,
+    is_dir: node.is_dir,
+    children: node.is_dir ? normalizeTree(node.children || []) : undefined
+  }))
 
 const resetFileState = () => {
   selectedPath.value = ''
@@ -253,9 +338,8 @@ const resetFileState = () => {
   originalFileContent.value = ''
 }
 
-const expandAllKeys = (nodes) => nodes.flatMap(node =>
-  node.is_dir ? [node.key, ...expandAllKeys(node.children || [])] : []
-)
+const expandAllKeys = (nodes) =>
+  nodes.flatMap((node) => (node.is_dir ? [node.key, ...expandAllKeys(node.children || [])] : []))
 
 const fetchSkills = async () => {
   loading.value = true
@@ -267,7 +351,7 @@ const fetchSkills = async () => {
     if (!currentSkill.value && skills.value.length > 0) {
       await selectSkill(skills.value[0])
     } else if (currentSkill.value) {
-      const latest = skills.value.find(i => i.slug === currentSkill.value.slug)
+      const latest = skills.value.find((i) => i.slug === currentSkill.value.slug)
       if (latest) {
         currentSkill.value = latest
         syncDependencyFormFromSkill(latest)
@@ -336,14 +420,14 @@ const selectSkill = async (record) => {
   resetFileState()
 
   // 并行执行：加载树结构和获取 SKILL.md
-  await Promise.all([
-    reloadTree(),
-    loadSkillFile(record.slug)
-  ])
+  await Promise.all([reloadTree(), loadSkillFile(record.slug)])
 }
 
 const handleTreeSelect = async (keys, info) => {
-  if (!keys?.length) { resetFileState(); return }
+  if (!keys?.length) {
+    resetFileState()
+    return
+  }
   const node = info?.node || {}
   const path = node.path || node.key
   const isDir = !!node.is_dir
@@ -351,7 +435,8 @@ const handleTreeSelect = async (keys, info) => {
   selectedPath.value = path
   selectedIsDir.value = isDir
   if (isDir) {
-    fileContent.value = ''; originalFileContent.value = ''
+    fileContent.value = ''
+    originalFileContent.value = ''
     return
   }
   try {
@@ -369,7 +454,8 @@ const saveCurrentFile = async () => {
   savingFile.value = true
   try {
     await skillApi.updateSkillFile(currentSkill.value.slug, {
-      path: selectedPath.value, content: fileContent.value
+      path: selectedPath.value,
+      content: fileContent.value
     })
     originalFileContent.value = fileContent.value
     message.success('已保存')
@@ -383,7 +469,9 @@ const saveCurrentFile = async () => {
 
 const openCreateModal = (isDir) => {
   if (!currentSkill.value) return
-  createForm.path = ''; createForm.content = ''; createForm.isDir = isDir
+  createForm.path = ''
+  createForm.content = ''
+  createForm.isDir = isDir
   createModalVisible.value = true
 }
 
@@ -392,7 +480,9 @@ const handleCreateNode = async () => {
   creatingNode.value = true
   try {
     await skillApi.createSkillFile(currentSkill.value.slug, {
-      path: createForm.path.trim(), is_dir: createForm.isDir, content: createForm.content
+      path: createForm.path.trim(),
+      is_dir: createForm.isDir,
+      content: createForm.content
     })
     createModalVisible.value = false
     await reloadTree()
@@ -409,12 +499,18 @@ const confirmDeleteNode = () => {
   Modal.confirm({
     title: '确认删除？',
     content: `将永久删除: ${selectedPath.value}`,
-    okText: '删除', okType: 'danger', cancelText: '取消',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
     onOk: async () => {
       try {
         await skillApi.deleteSkillFile(currentSkill.value.slug, selectedPath.value)
-        resetFileState(); await reloadTree(); message.success('已删除')
-      } catch { message.error('删除失败') }
+        resetFileState()
+        await reloadTree()
+        message.success('已删除')
+      } catch {
+        message.error('删除失败')
+      }
     }
   })
 }
@@ -424,13 +520,20 @@ const confirmDeleteSkill = () => {
   Modal.confirm({
     title: `彻底删除技能「${currentSkill.value.slug}」？`,
     content: '删除后无法恢复，所有文件和配置将永久消失。',
-    okText: '确认删除', okType: 'danger', cancelText: '取消',
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
     onOk: async () => {
       try {
         await skillApi.deleteSkill(currentSkill.value.slug)
-        message.success('已删除'); currentSkill.value = null; treeData.value = []
-        resetFileState(); await fetchSkills()
-      } catch { message.error('删除失败') }
+        message.success('已删除')
+        currentSkill.value = null
+        treeData.value = []
+        resetFileState()
+        await fetchSkills()
+      } catch {
+        message.error('删除失败')
+      }
     }
   })
 }
@@ -442,23 +545,33 @@ const handleExport = async () => {
     const blob = await response.blob()
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = url; link.download = `${currentSkill.value.slug}.zip`
-    link.click(); URL.revokeObjectURL(url)
-  } catch { message.error('导出失败') }
+    link.href = url
+    link.download = `${currentSkill.value.slug}.zip`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    message.error('导出失败')
+  }
 }
 
 const handleImportUpload = async ({ file, onSuccess, onError }) => {
   importing.value = true
   try {
     const result = await skillApi.importSkillZip(file)
-    message.success('导入完成'); await fetchSkills()
+    message.success('导入完成')
+    await fetchSkills()
     const imported = result?.data
     if (imported?.slug) {
-      const record = skills.value.find(i => i.slug === imported.slug)
+      const record = skills.value.find((i) => i.slug === imported.slug)
       if (record) await selectSkill(record)
     }
     onSuccess?.(result)
-  } catch (e) { message.error('导入失败'); onError?.(e) } finally { importing.value = false }
+  } catch (e) {
+    message.error('导入失败')
+    onError?.(e)
+  } finally {
+    importing.value = false
+  }
 }
 
 const saveDependencies = async () => {
@@ -471,9 +584,17 @@ const saveDependencies = async () => {
       skill_dependencies: dependencyForm.skill_dependencies
     })
     const updated = result?.data
-    if (updated) { currentSkill.value = updated; syncDependencyFormFromSkill(updated) }
-    await fetchSkills(); message.success('依赖已更新')
-  } catch { message.error('更新失败') } finally { savingDependencies.value = false }
+    if (updated) {
+      currentSkill.value = updated
+      syncDependencyFormFromSkill(updated)
+    }
+    await fetchSkills()
+    message.success('依赖已更新')
+  } catch {
+    message.error('更新失败')
+  } finally {
+    savingDependencies.value = false
+  }
 }
 
 onMounted(fetchSkills)
@@ -493,13 +614,24 @@ defineExpose({
     display: flex;
     justify-content: space-between;
     align-items: center;
-    .item-slug { font-size: 12px; color: var(--gray-400); font-family: monospace; }
+    .item-slug {
+      font-size: 12px;
+      color: var(--gray-400);
+      font-family: monospace;
+    }
     .item-badges {
-      display: flex; gap: 4px;
+      display: flex;
+      gap: 4px;
       .dot-badge {
-        width: 6px; height: 6px; border-radius: 50%;
-        &.blue { background-color: #3b82f6; }
-        &.green { background-color: #22c55e; }
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        &.blue {
+          background-color: #3b82f6;
+        }
+        &.green {
+          background-color: #22c55e;
+        }
       }
     }
   }
@@ -513,7 +645,15 @@ defineExpose({
       display: flex;
       flex-direction: column;
       justify-content: center;
-      code { font-size: 12px; color: var(--gray-500); background: @bg-secondary; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block; }
+      code {
+        font-size: 12px;
+        color: var(--gray-500);
+        background: @bg-secondary;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-top: 4px;
+        display: inline-block;
+      }
     }
   }
 }
@@ -542,19 +682,35 @@ defineExpose({
     align-items: center;
     border-bottom: 1px solid @border-color;
     background-color: var(--gray-50);
-    .label { font-size: 11px; font-weight: 600; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.5px; }
+    .label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray-500);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
     .tree-actions {
-      display: flex; gap: 4px;
+      display: flex;
+      gap: 4px;
       button {
-        background: none; border: none; padding: 2px; cursor: pointer; color: var(--gray-500);
-        display: flex; align-items: center;
-        &:hover { color: var(--gray-900); }
+        background: none;
+        border: none;
+        padding: 2px;
+        cursor: pointer;
+        color: var(--gray-500);
+        display: flex;
+        align-items: center;
+        &:hover {
+          color: var(--gray-900);
+        }
       }
     }
   }
 
   .tree-content {
-    flex: 1; overflow-y: auto; padding: 8px;
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
   }
 }
 
@@ -576,8 +732,17 @@ defineExpose({
     flex-shrink: 0;
 
     .current-path {
-      display: flex; align-items: center; gap: 8px; font-family: monospace; font-size: 12px; color: var(--gray-500);
-      .save-hint { color: #f59e0b; font-size: 10px; margin-left: 4px; }
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: monospace;
+      font-size: 12px;
+      color: var(--gray-500);
+      .save-hint {
+        color: #f59e0b;
+        font-size: 10px;
+        margin-left: 4px;
+      }
     }
   }
 
@@ -602,31 +767,66 @@ defineExpose({
   }
 
   .pure-editor {
-    width: 100%; height: 100%; border: none; resize: none; padding: 20px;
-    font-family: 'Fira Code', 'Monaco', monospace; font-size: 13px; line-height: 1.6;
-    &:focus { outline: none; }
+    width: 100%;
+    height: 100%;
+    border: none;
+    resize: none;
+    padding: 20px;
+    font-family: 'Fira Code', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    &:focus {
+      outline: none;
+    }
   }
 }
 
 /* 依赖配置 */
 .config-view {
-  padding: 16px; flex: 1; overflow-y: auto;
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
   .config-header {
-    display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
     flex-shrink: 0;
     .text {
-      h3 { margin: 0 0 4px 0; font-size: 16px; font-weight: 600; }
-      p { margin: 0; color: var(--gray-500); font-size: 13px; }
+      h3 {
+        margin: 0 0 4px 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+        color: var(--gray-500);
+        font-size: 13px;
+      }
     }
   }
-  .config-form { max-width: 600px; :deep(.ant-form-item-label label) { font-weight: 500; font-size: 13px; } }
+  .config-form {
+    max-width: 600px;
+    :deep(.ant-form-item-label label) {
+      font-weight: 500;
+      font-size: 13px;
+    }
+  }
 }
 
-.mt-40 { margin-top: 40px; }
-.pt-12 { padding-top: 12px; }
+.mt-40 {
+  margin-top: 40px;
+}
+.pt-12 {
+  padding-top: 12px;
+}
 
 @media (max-width: 1000px) {
-  .sidebar-list { width: 220px; }
-  .tree-container { width: 180px; }
+  .sidebar-list {
+    width: 220px;
+  }
+  .tree-container {
+    width: 180px;
+  }
 }
 </style>

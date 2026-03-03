@@ -1,9 +1,6 @@
 """知识库中间件 - 提供通用知识库工具"""
-from collections.abc import Callable
-from typing import Any
 
-from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResponse
-from langchain.tools.tool_node import ToolCallRequest
+from langchain.agents.middleware import AgentMiddleware
 
 from src.agents.common.toolkits.kbs import get_common_kb_tools
 from src.utils.logging_config import logger

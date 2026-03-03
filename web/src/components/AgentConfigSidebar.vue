@@ -517,7 +517,9 @@ const getConfigOptions = (value) => {
     // 优先使用从 API 获取的工具列表，否则回退到 configurableItems 中的选项
     return toolOptionsFromApi.value.length > 0
       ? toolOptionsFromApi.value
-      : (availableTools.value ? Object.values(availableTools.value) : [])
+      : availableTools.value
+        ? Object.values(availableTools.value)
+        : []
   }
   if (value?.template_metadata?.kind === 'knowledges') {
     return databaseStore.databases || []
@@ -734,7 +736,10 @@ const validateAndFilterConfig = () => {
     const configItem = configItems[key]
     const currentValue = validatedConfig[key]
 
-    if (Array.isArray(currentValue) && (configItem.template_metadata?.kind === 'tools' || configItem.type === 'list')) {
+    if (
+      Array.isArray(currentValue) &&
+      (configItem.template_metadata?.kind === 'tools' || configItem.type === 'list')
+    ) {
       const options = getConfigOptions(configItem)
       const validValues = new Set(options.map((opt) => String(getOptionValue(opt))))
       if (validValues.size === 0) return

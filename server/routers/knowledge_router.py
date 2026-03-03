@@ -80,6 +80,7 @@ async def _ensure_database_not_dify(db_id: str, operation: str) -> None:
     if (db_info.get("kb_type") or "").lower() == "dify":
         raise HTTPException(status_code=400, detail=f"Dify 知识库只支持检索，不支持{operation}")
 
+
 # =============================================================================
 # === 知识库管理分组 ===
 # =============================================================================
@@ -658,7 +659,9 @@ async def get_document_content(db_id: str, doc_id: str, current_user: User = Dep
 
 
 @knowledge.delete("/databases/{db_id}/documents/batch")
-async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), current_user: User = Depends(get_admin_user)):
+async def batch_delete_documents(
+    db_id: str, file_ids: list[str] = Body(...), current_user: User = Depends(get_admin_user)
+):
     """批量删除文档或文件夹"""
     logger.debug(f"BATCH DELETE documents {file_ids} in {db_id}")
     await _ensure_database_not_dify(db_id, "批量文档删除")
@@ -700,7 +703,7 @@ async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), cu
         return {
             "message": f"部分删除成功: 已删除 {deleted_count} 个文件，失败 {len(failed_items)} 个",
             "deleted_count": deleted_count,
-            "failed_items": failed_items
+            "failed_items": failed_items,
         }
 
     return {"message": f"批量删除成功: 已删除 {deleted_count} 个文件", "deleted_count": deleted_count}

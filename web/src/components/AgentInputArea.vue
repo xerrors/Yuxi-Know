@@ -125,7 +125,11 @@ const handleAttachmentUpload = async (files) => {
   }
 
   try {
-    const hide = message.loading({ content: '正在上传附件...', key: 'upload-attachment', duration: 0 })
+    const hide = message.loading({
+      content: '正在上传附件...',
+      key: 'upload-attachment',
+      duration: 0
+    })
     for (const file of files) {
       await threadApi.uploadThreadAttachment(threadId, file)
     }

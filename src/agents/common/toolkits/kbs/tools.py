@@ -1,4 +1,5 @@
 """知识库工具模块"""
+
 import inspect
 from typing import Any
 
@@ -9,12 +10,12 @@ from pydantic import BaseModel, Field
 from src import knowledge_base
 from src.utils import logger
 
-
 # ========== 通用知识库工具函数 ==========
 
 
 class ListKBsInput(BaseModel):
     """列出用户可访问的知识库输入模型"""
+
     # Langchain 的 runtime 注入机制要求必须有参数
     dummy: str = Field(default="", description="Dummy parameter - ignore")  # Add this
 
@@ -73,9 +74,7 @@ async def list_kbs(dummy: str, runtime: ToolRuntime) -> str:  # Now has 2 params
 class GetMindmapInput(BaseModel):
     """获取思维导图输入模型"""
 
-    kb_name: str = Field(
-        description="知识库名称，用于指定要获取思维导图的知识库"
-    )
+    kb_name: str = Field(description="知识库名称，用于指定要获取思维导图的知识库")
 
 
 @tool(args_schema=GetMindmapInput)
@@ -145,9 +144,7 @@ async def get_mindmap(kb_name: str, runtime: ToolRuntime) -> str:
 class QueryKBInput(BaseModel):
     """知识库检索输入模型"""
 
-    kb_name: str = Field(
-        description="知识库名称，用于指定要在哪个知识库中检索"
-    )
+    kb_name: str = Field(description="知识库名称，用于指定要在哪个知识库中检索")
     query_text: str = Field(
         description=(
             "查询的关键词，查询的时候，应该尽量以可能帮助回答这个问题的关键词进行查询，"
@@ -159,7 +156,7 @@ class QueryKBInput(BaseModel):
         description=(
             "（非必要不启用此参数，留空即可）当已经读取思维导图之后，可以指定文件关键词，支持模糊匹配。\n"
             "仅当检索结果过多且不相关，需要进一步缩小范围时使用。"
-        )
+        ),
     )
 
 

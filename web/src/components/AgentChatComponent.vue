@@ -356,7 +356,10 @@ const currentAgentState = computed(() => {
 const countFiles = (files) => {
   if (!files) return 0
   if (Array.isArray(files)) {
-    return files.reduce((c, item) => c + (item && typeof item === 'object' ? Object.keys(item).length : 0), 0)
+    return files.reduce(
+      (c, item) => c + (item && typeof item === 'object' ? Object.keys(item).length : 0),
+      0
+    )
   }
   return typeof files === 'object' ? Object.keys(files).length : 0
 }
@@ -1041,9 +1044,11 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
           ts.activeRunId = null
           ts.lastRetryableJobTry = null
           clearActiveRunSnapshot(threadId)
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(() => {
-            fetchAgentState(currentAgentId.value, threadId)
-          })
+          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(
+            () => {
+              fetchAgentState(currentAgentId.value, threadId)
+            }
+          )
         } else if (ts.activeRunId === runId) {
           window.setTimeout(() => {
             if (ts.activeRunId === runId && !ts.runStreamAbortController) {
@@ -1416,14 +1421,12 @@ const handleSendMessage = async ({ image } = {}) => {
   } finally {
     threadState.streamAbortController = null
     // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(
-      () => {
-        // 历史记录加载完成后，安全地清空当前进行中的对话
-        resetOnGoingConv(threadId)
-        fetchAgentState(currentAgentId.value, threadId)
-        scrollController.scrollToBottom()
-      }
-    )
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
+      // 历史记录加载完成后，安全地清空当前进行中的对话
+      resetOnGoingConv(threadId)
+      fetchAgentState(currentAgentId.value, threadId)
+      scrollController.scrollToBottom()
+    })
   }
 }
 
@@ -1462,7 +1465,6 @@ const handleSendOrStop = async (payload) => {
 
 // ==================== 人工审批处理 ====================
 const handleApprovalWithStream = async (approved) => {
-
   const threadId = approvalState.threadId
   if (!threadId) {
     message.error('无效的审批请求')
@@ -1500,12 +1502,10 @@ const handleApprovalWithStream = async (approved) => {
     }
 
     // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(
-      () => {
-        resetOnGoingConv(threadId)
-        scrollController.scrollToBottom()
-      }
-    )
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
+      resetOnGoingConv(threadId)
+      scrollController.scrollToBottom()
+    })
   }
 }
 

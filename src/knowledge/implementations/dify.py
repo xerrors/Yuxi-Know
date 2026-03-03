@@ -123,8 +123,7 @@ class DifyKB(KnowledgeBase):
                 logger.warning(f"Dify query fallback to query-only succeeded for db_id={db_id}")
             except Exception as fallback_error:  # noqa: BLE001
                 logger.error(
-                    f"Dify query fallback failed for db_id={db_id}: "
-                    f"{fallback_error}, {traceback.format_exc()}"
+                    f"Dify query fallback failed for db_id={db_id}: {fallback_error}, {traceback.format_exc()}"
                 )
                 return []
 

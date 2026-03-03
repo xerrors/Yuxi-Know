@@ -53,6 +53,7 @@ class RuntimeConfigMiddleware(AgentMiddleware):
 
     支持自定义上下文字段名称，以便在不同场景（如主智能体/子智能体）使用不同的配置字段
     """
+
     state_schema = RuntimeConfigState
 
     def __init__(

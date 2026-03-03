@@ -93,7 +93,16 @@
 import { ref, computed, reactive, watch } from 'vue'
 import { useClipboard } from '@vueuse/core'
 import { message } from 'ant-design-vue'
-import { ThumbsUp, ThumbsDown, Bot, Copy, Check, RotateCcw, BookOpen, ChevronDown } from 'lucide-vue-next'
+import {
+  ThumbsUp,
+  ThumbsDown,
+  Bot,
+  Copy,
+  Check,
+  RotateCcw,
+  BookOpen,
+  ChevronDown
+} from 'lucide-vue-next'
 import { agentApi } from '@/apis'
 import KnowledgeSourceSection from '@/components/KnowledgeSourceSection.vue'
 import WebSearchSourceSection from '@/components/WebSearchSourceSection.vue'
@@ -127,15 +136,9 @@ const webSources = computed(() =>
   Array.isArray(props.sources?.webSources) ? props.sources.webSources : []
 )
 
-const hasSources = computed(
-  () =>
-    knowledgeChunks.value.length > 0 ||
-    webSources.value.length > 0
-)
+const hasSources = computed(() => knowledgeChunks.value.length > 0 || webSources.value.length > 0)
 
-const sourceCount = computed(
-  () => knowledgeChunks.value.length + webSources.value.length
-)
+const sourceCount = computed(() => knowledgeChunks.value.length + webSources.value.length)
 
 const toggleSources = () => {
   isSourcesExpanded.value = !isSourcesExpanded.value

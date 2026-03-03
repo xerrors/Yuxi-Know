@@ -3,7 +3,7 @@ from typing import Annotated, Any
 
 from src import config, graph_base
 from src.agents.common.toolkits import tool
-from src.agents.common.toolkits.registry import _all_tool_instances, _extra_registry, ToolExtraMetadata
+from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry
 from src.utils import logger
 
 # Lazy initialization for TavilySearch (only when API key is available)

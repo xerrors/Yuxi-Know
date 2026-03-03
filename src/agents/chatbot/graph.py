@@ -1,11 +1,11 @@
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
-
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
-    TodoListMiddleware,
     ModelRetryMiddleware,
+    TodoListMiddleware,
 )
+
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.backends import create_agent_composite_backend
 from src.agents.common.middlewares import (

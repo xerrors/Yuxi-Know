@@ -53,7 +53,9 @@
   transition: all 0.2s;
   border: 1px solid transparent;
 
-  &:hover { background-color: var(--gray-100); }
+  &:hover {
+    background-color: var(--gray-100);
+  }
 
   &.active {
     background-color: var(--gray-0);
@@ -67,7 +69,8 @@
     gap: 10px;
     margin-bottom: 4px;
 
-    .item-icon, .server-icon {
+    .item-icon,
+    .server-icon {
       width: 16px;
       height: 16px;
       display: flex;
@@ -90,8 +93,13 @@
   }
 
   &.active {
-    .item-icon, .server-icon { color: var(--main-color); }
-    .item-name { color: var(--gray-900); }
+    .item-icon,
+    .server-icon {
+      color: var(--main-color);
+    }
+    .item-name {
+      color: var(--gray-900);
+    }
   }
 }
 
@@ -120,7 +128,10 @@
     background-color: @bg-secondary;
     .hint-box {
       text-align: center;
-      p { margin-top: 12px; color: var(--gray-400); }
+      p {
+        margin-top: 12px;
+        color: var(--gray-400);
+      }
     }
   }
 
@@ -143,7 +154,8 @@
 }
 
 /* Tabs inside main panel */
-.detail-tabs, .minimal-tabs {
+.detail-tabs,
+.minimal-tabs {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -155,7 +167,9 @@
     padding: 0 16px;
     flex-shrink: 0;
     border-bottom: 1px solid @border-color;
-    &::before { border-bottom: none; }
+    &::before {
+      border-bottom: none;
+    }
   }
 
   :deep(.ant-tabs-content) {
@@ -180,13 +194,21 @@
 }
 
 /* Common helpers */
-.text-muted { color: var(--gray-400); }
-.empty-text { padding: 40px 0; text-align: center; color: var(--gray-400); }
+.text-muted {
+  color: var(--gray-400);
+}
+.empty-text {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--gray-400);
+}
 
 // Spin wrapper for full height
 .full-height-spin {
   height: 100%;
-  :deep(.ant-spin-nested-loading) { height: 100%; }
+  :deep(.ant-spin-nested-loading) {
+    height: 100%;
+  }
   :deep(.ant-spin-container) {
     height: 100%;
     display: flex;
@@ -215,8 +237,12 @@
 }
 
 @keyframes loading-bar-anim {
-  0% { left: -30%; }
-  100% { left: 100%; }
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 100%;
+  }
 }
 
 .content-loading {

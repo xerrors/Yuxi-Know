@@ -114,7 +114,9 @@
                 :show-chunk-size-overlap="!isGraphBased"
                 :show-preset="true"
                 :allow-preset-follow-default="true"
-                :database-preset-id="store.database?.additional_params?.chunk_preset_id || 'general'"
+                :database-preset-id="
+                  store.database?.additional_params?.chunk_preset_id || 'general'
+                "
               />
               <p v-if="isGraphBased" class="param-description">
                 LightRAG 按分隔符预切分，超长片段仍会按 token 大小继续切分。

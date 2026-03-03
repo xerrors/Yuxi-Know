@@ -41,7 +41,9 @@ class AgentManager(metaclass=SingletonMeta):
 
     async def get_agents_info(self, include_configurable_items: bool = True):
         agents = self.get_agents()
-        return await asyncio.gather(*[a.get_info(include_configurable_items=include_configurable_items) for a in agents])
+        return await asyncio.gather(
+            *[a.get_info(include_configurable_items=include_configurable_items) for a in agents]
+        )
 
     def auto_discover_agents(self):
         """自动发现并注册 src/agents/ 下的所有智能体。

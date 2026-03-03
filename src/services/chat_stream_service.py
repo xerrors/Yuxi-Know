@@ -9,7 +9,6 @@ from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 
 from src import config as conf
-from src import knowledge_base
 from src.agents import agent_manager
 from src.plugins.guard import content_guard
 from src.repositories.agent_config_repository import AgentConfigRepository
@@ -344,9 +343,7 @@ async def stream_agent_chat(
         return
 
     agent_config_id = config.get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(
-        db, agent_id, department_id, user_id, agent_config_id
-    )
+    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
 
     if not (thread_id := config.get("thread_id")):
         thread_id = str(uuid.uuid4())
@@ -533,9 +530,7 @@ async def stream_agent_resume(
         return
 
     agent_config_id = (config or {}).get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(
-        db, agent_id, department_id, user_id, agent_config_id
-    )
+    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
 
     input_context = {
         "user_id": user_id,

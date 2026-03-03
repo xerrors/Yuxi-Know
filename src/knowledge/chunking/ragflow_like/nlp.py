@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import random
 import re
-from collections import Counter
 from dataclasses import dataclass, field
-
 
 BULLET_PATTERN = [
     [
@@ -488,15 +486,15 @@ class Node:
     level: int
     depth: int = -1
     texts: list[str] = field(default_factory=list)
-    children: list["Node"] = field(default_factory=list)
+    children: list[Node] = field(default_factory=list)
 
-    def add_child(self, child_node: "Node") -> None:
+    def add_child(self, child_node: Node) -> None:
         self.children.append(child_node)
 
     def add_text(self, text: str) -> None:
         self.texts.append(text)
 
-    def build_tree(self, lines: list[tuple[int, str]]) -> "Node":
+    def build_tree(self, lines: list[tuple[int, str]]) -> Node:
         stack: list[Node] = [self]
         for level, text in lines:
             if self.depth != -1 and level > self.depth:
@@ -517,7 +515,7 @@ class Node:
         self._dfs(self, tree_list, [])
         return tree_list
 
-    def _dfs(self, node: "Node", tree_list: list[str], titles: list[str]) -> None:
+    def _dfs(self, node: Node, tree_list: list[str], titles: list[str]) -> None:
         level = node.level
         texts = node.texts
         child = node.children

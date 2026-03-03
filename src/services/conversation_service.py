@@ -2,7 +2,6 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, UploadFile
-from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents import agent_manager
@@ -90,9 +89,7 @@ async def _sync_thread_attachment_state(
         # 仅对 /attachments 命名空间做增量更新，避免覆盖 agent 运行期生成的其它文件。
         next_attachment_files = _build_state_files(attachments)
         prev_attachment_paths = {
-            path
-            for path in existing_files.keys()
-            if isinstance(path, str) and path.startswith("/attachments/")
+            path for path in existing_files.keys() if isinstance(path, str) and path.startswith("/attachments/")
         }
         next_attachment_paths = set(next_attachment_files.keys())
 

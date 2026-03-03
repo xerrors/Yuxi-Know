@@ -50,6 +50,7 @@ TEXT_FILE_EXTENSIONS = {
     ".tsx",
 }
 
+
 def _normalize_string_list(values: list[str] | None) -> list[str]:
     if not values:
         return []
@@ -77,6 +78,7 @@ def validate_skill_slug(slug: str) -> str:
     if not is_valid_skill_slug(normalized):
         raise ValueError("无效 skill slug")
     return normalized
+
 
 def get_skills_root_dir() -> Path:
     root = Path(sys_config.save_dir) / "skills"

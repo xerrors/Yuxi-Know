@@ -256,7 +256,6 @@ class KnowledgeBaseManager:
             return {"databases": []}
         return await self.get_databases_by_user(user)
 
-
     async def get_databases_by_user_id(self, user_id: str) -> dict:
         """根据用户ID获取知识库列表（字符串ID版本）"""
         from src.repositories.user_repository import UserRepository

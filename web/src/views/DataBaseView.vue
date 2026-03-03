@@ -459,7 +459,11 @@ const buildRequestData = () => {
 // 创建按钮处理
 const handleCreateDatabase = async () => {
   if (newDatabase.kb_type === 'dify') {
-    if (!newDatabase.dify_api_url?.trim() || !newDatabase.dify_token?.trim() || !newDatabase.dify_dataset_id?.trim()) {
+    if (
+      !newDatabase.dify_api_url?.trim() ||
+      !newDatabase.dify_token?.trim() ||
+      !newDatabase.dify_dataset_id?.trim()
+    ) {
       message.error('请完整填写 Dify API URL、Token 和 Dataset ID')
       return
     }

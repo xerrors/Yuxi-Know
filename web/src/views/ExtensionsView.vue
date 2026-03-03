@@ -15,7 +15,7 @@
             :custom-request="handleImportUpload"
             :disabled="skillsLoading || skillsImporting"
           >
-            <a-button type="primary" :loading="skillsImporting"  class="lucide-icon-btn">
+            <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
               <Upload :size="14" />
               <span>导入 ZIP</span>
             </a-button>
@@ -38,7 +38,7 @@
             <Plus :size="14" />
             <span>添加服务器</span>
           </a-button>
-          <a-button @click="handleMcpRefresh" :disabled="mcpLoading"  class="lucide-icon-btn">
+          <a-button @click="handleMcpRefresh" :disabled="mcpLoading" class="lucide-icon-btn">
             <RotateCw :size="14" />
             <span>刷新</span>
           </a-button>
@@ -55,17 +55,10 @@
         />
       </div>
       <div v-show="activeTab === 'tools'" class="tab-panel">
-        <ToolsManagerComponent
-          ref="toolsRef"
-          @refresh="handleToolsRefresh"
-        />
+        <ToolsManagerComponent ref="toolsRef" @refresh="handleToolsRefresh" />
       </div>
       <div v-show="activeTab === 'mcp'" class="tab-panel">
-        <McpServersComponent
-          ref="mcpRef"
-          @add="handleMcpAdd"
-          @refresh="handleMcpRefresh"
-        />
+        <McpServersComponent ref="mcpRef" @add="handleMcpAdd" @refresh="handleMcpRefresh" />
       </div>
     </div>
   </div>

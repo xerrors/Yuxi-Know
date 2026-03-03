@@ -7,13 +7,23 @@
       <!-- 左侧：工具列表 -->
       <div class="sidebar-list">
         <div class="search-box">
-          <a-input v-model:value="searchQuery" placeholder="搜索工具..." allow-clear class="search-input">
+          <a-input
+            v-model:value="searchQuery"
+            placeholder="搜索工具..."
+            allow-clear
+            class="search-input"
+          >
             <template #prefix><Search :size="14" class="text-muted" /></template>
           </a-input>
         </div>
         <!-- 分类筛选 -->
         <div class="category-filter">
-          <a-select v-model:value="selectedCategory" placeholder="全部分类" allow-clear style="width: 100%">
+          <a-select
+            v-model:value="selectedCategory"
+            placeholder="全部分类"
+            allow-clear
+            style="width: 100%"
+          >
             <a-select-option value="">全部分类</a-select-option>
             <a-select-option v-for="cat in categories" :key="cat" :value="cat">
               {{ categoryLabels[cat] || cat }}
@@ -36,9 +46,13 @@
                 <span class="item-name">{{ tool.name }}</span>
               </div>
               <div class="item-details">
-                <span class="item-category">{{ categoryLabels[tool.category] || tool.category }}</span>
+                <span class="item-category">{{
+                  categoryLabels[tool.category] || tool.category
+                }}</span>
                 <div class="item-tags">
-                  <a-tag v-for="tag in tool.tags" :key="tag" size="small" class="tool-tag">{{ tag }}</a-tag>
+                  <a-tag v-for="tag in tool.tags" :key="tag" size="small" class="tool-tag">{{
+                    tag
+                  }}</a-tag>
                 </div>
               </div>
             </div>
@@ -124,9 +138,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import {
-  Search, Wrench, Tag, Tags, FileText, List
-} from 'lucide-vue-next'
+import { Search, Wrench, Tag, Tags, FileText, List } from 'lucide-vue-next'
 import { toolApi } from '@/apis/tool_api'
 
 const loading = ref(false)
@@ -157,14 +169,15 @@ const argColumns = [
 const filteredTools = computed(() => {
   let result = tools.value
   if (selectedCategory.value) {
-    result = result.filter(t => t.category === selectedCategory.value)
+    result = result.filter((t) => t.category === selectedCategory.value)
   }
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
-    result = result.filter(t =>
-      t.name.toLowerCase().includes(q) ||
-      t.id.toLowerCase().includes(q) ||
-      t.description?.toLowerCase().includes(q)
+    result = result.filter(
+      (t) =>
+        t.name.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q)
     )
   }
   return result

@@ -240,13 +240,16 @@ export const agentApi = {
    */
   streamAgentRunEvents: (runId, afterSeq = '0', options = {}) => {
     const { signal } = options
-    return fetch(`/api/chat/runs/${runId}/events?after_seq=${encodeURIComponent(String(afterSeq))}`, {
-      method: 'GET',
-      headers: {
-        ...useUserStore().getAuthHeaders()
-      },
-      signal
-    })
+    return fetch(
+      `/api/chat/runs/${runId}/events?after_seq=${encodeURIComponent(String(afterSeq))}`,
+      {
+        method: 'GET',
+        headers: {
+          ...useUserStore().getAuthHeaders()
+        },
+        signal
+      }
+    )
   }
 }
 

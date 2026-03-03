@@ -110,7 +110,9 @@ def _hard_split_by_token_limit(text: str, chunk_token_num: int) -> list[str]:
     return chunks
 
 
-def _ensure_chunk_token_limit(chunks: list[str], chunk_token_num: int, delimiter: str, overlapped_percent: int) -> list[str]:
+def _ensure_chunk_token_limit(
+    chunks: list[str], chunk_token_num: int, delimiter: str, overlapped_percent: int
+) -> list[str]:
     """
     对输出 chunk 做 token 上限保护：
     1) 先尝试按行用 naive_merge 再切一次；

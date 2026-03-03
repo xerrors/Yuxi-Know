@@ -75,7 +75,12 @@
           <a-tab-pane v-if="!isDify" key="mindmap" tab="知识导图">
             <MindMapSection v-if="databaseId" :database-id="databaseId" ref="mindmapSectionRef" />
           </a-tab-pane>
-          <a-tab-pane v-if="!isDify" key="evaluation" tab="RAG评估" :disabled="!isEvaluationSupported">
+          <a-tab-pane
+            v-if="!isDify"
+            key="evaluation"
+            tab="RAG评估"
+            :disabled="!isEvaluationSupported"
+          >
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 RAG评估
@@ -90,7 +95,12 @@
               @switch-to-benchmarks="activeTab = 'benchmarks'"
             />
           </a-tab-pane>
-          <a-tab-pane v-if="!isDify" key="benchmarks" tab="评估基准" :disabled="!isEvaluationSupported">
+          <a-tab-pane
+            v-if="!isDify"
+            key="benchmarks"
+            tab="评估基准"
+            :disabled="!isEvaluationSupported"
+          >
             <template #tab>
               <span :style="{ color: !isEvaluationSupported ? 'var(--gray-400)' : '' }">
                 评估基准

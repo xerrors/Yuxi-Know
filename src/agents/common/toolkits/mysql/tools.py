@@ -52,7 +52,13 @@ class TableListModel(BaseModel):
     pass
 
 
-@tool(category="mysql", tags=["数据库", "查询"], display_name="列出MySQL表", name_or_callable="mysql_list_tables", args_schema=TableListModel)
+@tool(
+    category="mysql",
+    tags=["数据库", "查询"],
+    display_name="列出MySQL表",
+    name_or_callable="mysql_list_tables",
+    args_schema=TableListModel,
+)
 def mysql_list_tables() -> str:
     """【查询表名及说明】获取数据库中的所有表名
 
@@ -107,7 +113,13 @@ class TableDescribeModel(BaseModel):
     table_name: str = Field(description="要查询的表名", example="users")
 
 
-@tool(category="mysql", tags=["数据库", "结构"], display_name="描述MySQL表结构", name_or_callable="mysql_describe_table", args_schema=TableDescribeModel)
+@tool(
+    category="mysql",
+    tags=["数据库", "结构"],
+    display_name="描述MySQL表结构",
+    name_or_callable="mysql_describe_table",
+    args_schema=TableDescribeModel,
+)
 def mysql_describe_table(table_name: Annotated[str, "要查询结构的表名"]) -> str:
     """【描述表】获取指定表的详细结构信息
 
@@ -203,7 +215,13 @@ class QueryModel(BaseModel):
     timeout: int | None = Field(default=60, description="查询超时时间（秒），默认60秒，最大600秒", ge=1, le=600)
 
 
-@tool(category="mysql", tags=["数据库", "SQL"], display_name="执行MySQL查询", name_or_callable="mysql_query", args_schema=QueryModel)
+@tool(
+    category="mysql",
+    tags=["数据库", "SQL"],
+    display_name="执行MySQL查询",
+    name_or_callable="mysql_query",
+    args_schema=QueryModel,
+)
 def mysql_query(
     sql: Annotated[str, "要执行的SQL查询语句（只能是SELECT语句）"],
     timeout: Annotated[int | None, "查询超时时间（秒），默认60秒，最大600秒"] = 60,

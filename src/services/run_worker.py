@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 
-from src.repositories.agent_run_repository import AgentRunRepository, TERMINAL_RUN_STATUSES
+from src.repositories.agent_run_repository import TERMINAL_RUN_STATUSES, AgentRunRepository
 from src.services.chat_stream_service import stream_agent_chat
 from src.services.run_queue_service import (
     append_run_stream_event,

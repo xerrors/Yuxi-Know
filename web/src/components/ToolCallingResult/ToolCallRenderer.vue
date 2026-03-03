@@ -33,7 +33,10 @@
   <ReadFileTool v-else-if="toolName === 'read_file'" :tool-call="toolCall" />
 
   <!-- 列目录 -->
-  <ListDirectoryTool v-else-if="toolName === 'list_directory' || toolName === 'ls'" :tool-call="toolCall" />
+  <ListDirectoryTool
+    v-else-if="toolName === 'list_directory' || toolName === 'ls'"
+    :tool-call="toolCall"
+  />
 
   <!-- 搜索文件内容 -->
   <SearchFileContentTool v-else-if="toolName === 'search_file_content'" :tool-call="toolCall" />
@@ -42,7 +45,10 @@
   <GlobTool v-else-if="toolName === 'glob'" :tool-call="toolCall" />
 
   <!-- 编辑文件 -->
-  <EditFileTool v-else-if="toolName === 'edit_file' || toolName === 'replace'" :tool-call="toolCall" />
+  <EditFileTool
+    v-else-if="toolName === 'edit_file' || toolName === 'replace'"
+    :tool-call="toolCall"
+  />
 
   <!-- MySQL 查询 -->
   <MysqlQueryTool v-else-if="toolName === 'mysql_query'" :tool-call="toolCall" />
