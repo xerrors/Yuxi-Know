@@ -43,6 +43,23 @@ class MinIOClient:
 
     PUBLIC_READ_BUCKETS = {"generated-images", "avatar", "kb-images"}
 
+    # 知识库相关的 bucket 名称
+    KB_BUCKETS = {
+        "documents": "kb-documents",
+        "parsed": "kb-parsed",
+        "images": "kb-images",
+    }
+
+    @staticmethod
+    def get_ref_bucket_name(db_id: str) -> str:
+        """获取 ref bucket 名称（截断32位）"""
+        return f"ref-{db_id[:32].replace('_', '-')}"
+
+    @staticmethod
+    def get_ref_bucket_name_full(db_id: str) -> str:
+        """获取 ref bucket 名称（不截断）"""
+        return f"ref-{db_id.replace('_', '-')}"
+
     def __init__(self):
         """初始化 MinIO 客户端"""
         self.endpoint = os.getenv("MINIO_URI") or "http://milvus-minio:9000"
@@ -236,6 +253,35 @@ class MinIOClient:
             object_name=object_name,
         )
         return result
+
+    async def adelete_objects_by_prefix(self, bucket_name: str, prefix: str) -> int:
+        """
+        按前缀删除对象
+
+        Args:
+            bucket_name: bucket 名称
+            prefix: 对象前缀
+
+        Returns:
+            删除的对象数量
+        """
+        deleted_count = 0
+
+        def _delete_objects():
+            nonlocal deleted_count
+            try:
+                objects = self.client.list_objects(bucket_name, prefix=prefix, recursive=True)
+                for obj in objects:
+                    try:
+                        self.client.remove_object(bucket_name, obj.object_name)
+                        deleted_count += 1
+                    except S3Error as e:
+                        logger.warning(f"Failed to delete {bucket_name}/{obj.object_name}: {e}")
+            except S3Error as e:
+                logger.warning(f"Failed to list objects in {bucket_name}/{prefix}: {e}")
+
+        await asyncio.to_thread(_delete_objects)
+        return deleted_count
 
     def file_exists(self, bucket_name: str, object_name: str) -> bool:
         """检查文件是否存在"""

@@ -478,15 +478,43 @@ class KnowledgeBase(ABC):
         """
         if db_id in self.databases_meta:
             from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
+            from src.storage.minio import get_minio_client
+            from src.knowledge.utils.kb_utils import parse_minio_url
 
-            # 删除相关文件记录
+            minio_client = get_minio_client()
+
+            # 1. 删除文件元数据中记录的 MinIO 文件
             files_to_delete = [fid for fid, finfo in self.files_meta.items() if finfo.get("database_id") == db_id]
             for file_id in files_to_delete:
+                file_path = self.files_meta[file_id].get("path")
+                if file_path and file_path.startswith(("http://", "https://")):
+                    try:
+                        bucket_name, object_name = parse_minio_url(file_path)
+                        await minio_client.adelete_file(bucket_name, object_name)
+                    except Exception as e:
+                        logger.warning(f"Failed to delete MinIO file {file_path}: {e}")
+
+                # 删除解析后的 markdown 文件 (kb-parsed/{db_id}/{file_id}/parsed.md)
+                parsed_object = f"{db_id}/{file_id}/parsed.md"
+                await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], parsed_object)
+
                 del self.files_meta[file_id]
 
-            # 删除数据库记录
+            # 2. 并行删除所有知识库 bucket 中该 db_id 下的文件
+            prefix = f"{db_id}/"
+            await asyncio.gather(
+                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["parsed"], prefix),
+                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["documents"], prefix),
+                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["images"], prefix),
+                # 删除 ref bucket 中的文件（两种命名格式）
+                minio_client.adelete_objects_by_prefix(minio_client.get_ref_bucket_name(db_id), prefix),
+                minio_client.adelete_objects_by_prefix(minio_client.get_ref_bucket_name_full(db_id), prefix),
+            )
+
+            # 3. 删除数据库记录
             del self.databases_meta[db_id]
-            await KnowledgeBaseRepository().delete(db_id)
+            kb_repo = KnowledgeBaseRepository()
+            await kb_repo.delete(db_id)
             await self._save_metadata()
 
         # 删除工作目录

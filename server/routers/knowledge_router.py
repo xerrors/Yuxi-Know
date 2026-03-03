@@ -18,7 +18,7 @@ from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_
 from src.knowledge.utils import calculate_content_hash
 from src.models.embed import test_all_embedding_models_status, test_embedding_model_status
 from src.storage.postgres.models_business import User
-from src.storage.minio.client import StorageError, aupload_file_to_minio, get_minio_client
+from src.storage.minio.client import MinIOClient, StorageError, aupload_file_to_minio, get_minio_client
 from src.utils import logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -685,7 +685,7 @@ async def batch_delete_documents(
             # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
             try:
                 minio_client = get_minio_client()
-                await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
+                await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
                 logger.debug(f"成功从MinIO删除文件: {file_name}")
             except Exception as minio_error:
                 logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")
@@ -728,7 +728,7 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
         # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
         try:
             minio_client = get_minio_client()
-            await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
+            await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
             logger.debug(f"成功从MinIO删除文件: {file_name}")
         except Exception as minio_error:
             logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")
