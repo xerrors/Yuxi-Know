@@ -80,7 +80,7 @@ def validate_skill_slug(slug: str) -> str:
 
 
 def _get_buildin_tool_names() -> list[str]:
-    from src.agents.common.tools import get_buildin_tools
+    from src.agents.common.toolkits.buildin import get_buildin_tools
 
     return [tool.name for tool in get_buildin_tools()]
 
@@ -91,11 +91,19 @@ def get_skills_root_dir() -> Path:
     return root
 
 
-async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str]]:
+async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str] | list[dict]]:
     repo = SkillRepository(db)
     items = await repo.list_all()
+
+    # 获取所有工具（不仅仅是 buildin 工具），返回 id 和 name
+    from src.services.tool_service import get_tool_metadata
+
+    all_tools = get_tool_metadata()
+    # 返回工具列表，每个包含 id 和 name
+    tool_list = [{"id": tool["id"], "name": tool.get("name", tool["id"])} for tool in all_tools]
+
     return {
-        "tools": _get_buildin_tool_names(),
+        "tools": tool_list,
         "mcps": get_mcp_server_names(),
         "skills": [item.slug for item in items],
     }
@@ -104,6 +112,14 @@ async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str]]
 async def list_skills(db: AsyncSession) -> list[Skill]:
     repo = SkillRepository(db)
     return await repo.list_all()
+
+
+def _get_all_tool_names() -> list[str]:
+    """获取所有工具名称（包括 buildin 和其他来源）"""
+    from src.services.tool_service import get_tool_metadata
+
+    all_tools = get_tool_metadata()
+    return [tool["id"] for tool in all_tools]
 
 
 def _validate_dependencies(
@@ -118,7 +134,8 @@ def _validate_dependencies(
     mcps = _normalize_string_list(mcp_dependencies)
     skills = _normalize_string_list(skill_dependencies)
 
-    available_tools = set(_get_buildin_tool_names())
+    # 验证所有工具（不仅仅是 buildin）
+    available_tools = set(_get_all_tool_names())
     invalid_tools = [name for name in tools if name not in available_tools]
     if invalid_tools:
         raise ValueError(f"存在无效工具依赖: {', '.join(invalid_tools)}")

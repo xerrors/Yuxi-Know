@@ -3,6 +3,7 @@
     <div class="extensions-header">
       <a-tabs v-model:activeKey="activeTab" class="extensions-tabs">
         <a-tab-pane key="skills" tab="Skills 管理" />
+        <a-tab-pane key="tools" tab="工具" />
         <a-tab-pane key="mcp" tab="MCP 服务器" />
       </a-tabs>
       <div class="header-actions">
@@ -20,6 +21,13 @@
             </a-button>
           </a-upload>
           <a-button @click="handleSkillsRefresh" :disabled="skillsLoading" class="lucide-icon-btn">
+            <RotateCw :size="14" />
+            <span>刷新</span>
+          </a-button>
+        </template>
+        <!-- Tools Tab 的按钮 -->
+        <template v-else-if="activeTab === 'tools'">
+          <a-button @click="handleToolsRefresh" :disabled="toolsLoading" class="lucide-icon-btn">
             <RotateCw :size="14" />
             <span>刷新</span>
           </a-button>
@@ -46,6 +54,12 @@
           @refresh="handleSkillsRefresh"
         />
       </div>
+      <div v-show="activeTab === 'tools'" class="tab-panel">
+        <ToolsManagerComponent
+          ref="toolsRef"
+          @refresh="handleToolsRefresh"
+        />
+      </div>
       <div v-show="activeTab === 'mcp'" class="tab-panel">
         <McpServersComponent
           ref="mcpRef"
@@ -61,21 +75,28 @@
 import { ref } from 'vue'
 import { Upload, RotateCw, Plus } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
+import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
 
 const activeTab = ref('skills')
 const skillsRef = ref(null)
+const toolsRef = ref(null)
 const mcpRef = ref(null)
 
 // Skills 相关状态（从子组件透传）
 const skillsLoading = ref(false)
 const skillsImporting = ref(false)
+const toolsLoading = ref(false)
 const mcpLoading = ref(false)
 
 // 暴露给子组件的状态更新
 const updateSkillsState = (loading, importing) => {
   skillsLoading.value = loading
   skillsImporting.value = importing
+}
+
+const updateToolsState = (loading) => {
+  toolsLoading.value = loading
 }
 
 const updateMcpState = (loading) => {
@@ -93,6 +114,16 @@ const handleSkillsRefresh = () => {
     updateSkillsState(true, skillsImporting.value)
     skillsRef.value.fetchSkills().finally(() => {
       updateSkillsState(false, skillsImporting.value)
+    })
+  }
+}
+
+// Tools 事件处理
+const handleToolsRefresh = () => {
+  if (toolsRef.value?.fetchTools) {
+    updateToolsState(true)
+    toolsRef.value.fetchTools().finally(() => {
+      updateToolsState(false)
     })
   }
 }

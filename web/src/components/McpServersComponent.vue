@@ -25,29 +25,30 @@
           <div v-if="filteredServers.length === 0" class="empty-text">
             <a-empty :image="false" :description="searchQuery ? '无匹配服务器' : '暂无服务器'" />
           </div>
-          <div
-            v-for="server in filteredServers"
-            :key="server.name"
-            class="list-item"
-            :class="{ active: currentServer?.name === server.name, disabled: !server.enabled }"
-            @click="selectServer(server)"
-          >
-            <div class="item-header">
-              <span class="server-icon">{{ server.icon || '🔌' }}</span>
-              <span class="item-name">{{ server.name }}</span>
-              <a-switch
-                size="small"
-                :checked="server.enabled"
-                @change="handleToggleServer(server)"
-                @click.stop
-                :loading="toggleLoading === server.name"
-              />
+          <template v-for="(server, index) in filteredServers" :key="server.name">
+            <div
+              class="list-item"
+              :class="{ active: currentServer?.name === server.name, disabled: !server.enabled }"
+              @click="selectServer(server)"
+            >
+              <div class="item-header">
+                <span class="server-icon">{{ server.icon || '🔌' }}</span>
+                <span class="item-name">{{ server.name }}</span>
+                <a-switch
+                  size="small"
+                  :checked="server.enabled"
+                  @change="handleToggleServer(server)"
+                  @click.stop
+                  :loading="toggleLoading === server.name"
+                />
+              </div>
+              <div class="item-details">
+                <a-tag size="small" class="transport-tag">{{ server.transport }}</a-tag>
+                <span class="item-desc">{{ server.description || '暂无描述' }}</span>
+              </div>
             </div>
-            <div class="item-details">
-              <a-tag size="small" class="transport-tag">{{ server.transport }}</a-tag>
-              <span class="item-desc">{{ server.description || '暂无描述' }}</span>
-            </div>
-          </div>
+            <div v-if="index < filteredServers.length - 1" class="list-separator"></div>
+          </template>
         </div>
       </div>
 

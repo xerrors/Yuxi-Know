@@ -4,12 +4,10 @@ import uuid
 from typing import Annotated, Any
 
 import requests
-from langchain.tools import tool
 from langgraph.types import interrupt
 
 from src import config, graph_base
-from src.agents.common.toolkits.kbs import get_kb_based_tools
-from src.services.mcp_service import get_enabled_mcp_tools
+from src.agents.common.toolkits import tool
 from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 
@@ -24,12 +22,15 @@ def get_tavily_search():
         from langchain_tavily import TavilySearch
 
         _tavily_search_instance = TavilySearch()
-        _tavily_search_instance.metadata = {"name": "Tavily 网页搜索"}
+        _tavily_search_instance.metadata = {"name": "Tavily 网页搜索", "category": "buildin", "tags": ["搜索"]}
+
+    # 即使没有配置 API_KEY 也返回实例，调用时会出错
     return _tavily_search_instance
 
 
-@tool(name_or_callable="calculator", description="可以对给定的2个数字选择进行 add, subtract, multiply, divide 运算")
+@tool(category="buildin", tags=["计算"], display_name="计算器")
 def calculator(a: float, b: float, operation: str) -> float:
+    """计算器：对给定的2个数字进行基本数学运算"""
     try:
         if operation == "add":
             return a + b
@@ -48,7 +49,7 @@ def calculator(a: float, b: float, operation: str) -> float:
         raise
 
 
-@tool
+@tool(category="buildin", tags=["图片", "测试"], display_name="文生图测试")
 async def text_to_img_demo(text: str) -> str:
     """【测试用】使用模型生成图片， 会返回图片的URL"""
 
@@ -85,7 +86,7 @@ async def text_to_img_demo(text: str) -> str:
     return image_url
 
 
-@tool(name_or_callable="human_in_the_loop_debug", description="请求人工审批工具，用于在执行重要操作前获得人类确认。")
+@tool(category="debug", tags=["内置", "审批"], display_name="人工审批")
 def get_approved_user_goal(
     operation_description: str,
 ) -> dict:
@@ -129,7 +130,7 @@ KG_QUERY_DESCRIPTION = """
 """
 
 
-@tool(name_or_callable="查询知识图谱", description=KG_QUERY_DESCRIPTION)
+@tool(category="buildin", tags=["图谱"], display_name="查询知识图谱", description=KG_QUERY_DESCRIPTION)
 def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge graph."]) -> Any:
     """使用这个工具可以查询知识图谱中包含的三元组信息。关键词（query），使用可能帮助回答这个问题的关键词进行查询，不要直接使用用户的原始输入去查询。"""
     try:
@@ -145,59 +146,8 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
         return f"知识图谱查询失败: {str(e)}"
 
 
-def gen_tool_info(tools) -> list[dict[str, Any]]:
-    """获取所有工具的信息（用于前端展示）"""
-    tools_info = []
-
-    try:
-        # 获取注册的工具信息
-        for tool_obj in tools:
-            try:
-                metadata = getattr(tool_obj, "metadata", {}) or {}
-                info = {
-                    "id": tool_obj.name,
-                    "name": metadata.get("name", tool_obj.name),
-                    "description": tool_obj.description,
-                    "metadata": metadata,
-                    "args": [],
-                    # "is_async": is_async  # Include async information
-                }
-
-                if hasattr(tool_obj, "args_schema") and tool_obj.args_schema:
-                    if isinstance(tool_obj.args_schema, dict):
-                        schema = tool_obj.args_schema
-                    else:
-                        schema = tool_obj.args_schema.schema()
-
-                    for arg_name, arg_info in schema.get("properties", {}).items():
-                        info["args"].append(
-                            {
-                                "name": arg_name,
-                                "type": arg_info.get("type", ""),
-                                "description": arg_info.get("description", ""),
-                            }
-                        )
-
-                tools_info.append(info)
-                # logger.debug(f"Successfully processed tool info for {tool_obj.name}")
-
-            except Exception as e:
-                logger.error(
-                    f"Failed to process tool {getattr(tool_obj, 'name', 'unknown')}: {e}\n{traceback.format_exc()}. "
-                    f"Details: {dict(tool_obj.__dict__)}"
-                )
-                continue
-
-    except Exception as e:
-        logger.error(f"Failed to get tools info: {e}\n{traceback.format_exc()}")
-        return []
-
-    logger.info(f"Successfully extracted info for {len(tools_info)} tools")
-    return tools_info
-
-
 def get_buildin_tools() -> list:
-    """注册静态工具"""
+    """获取内置工具列表"""
     static_tools = [
         query_knowledge_graph,
         get_approved_user_goal,
@@ -205,42 +155,7 @@ def get_buildin_tools() -> list:
         text_to_img_demo,
     ]
 
-    # subagents 工具
-    from .subagents import calc_agent_tool
-
-    static_tools.append(calc_agent_tool)
-
-    # 检查是否启用网页搜索（即是否配置了 API_KEY）
-    if config.enable_web_search:
-        tavily_search = get_tavily_search()
-        if tavily_search:
-            static_tools.append(tavily_search)
+    # 始终添加 tavily_search，无论是否配置 API_KEY（调用时会出错）
+    static_tools.append(get_tavily_search())
 
     return static_tools
-
-
-async def get_tools_from_context(context, extra_tools=None) -> list:
-    """从上下文配置中获取工具列表"""
-    # 1. 基础工具 (从 context.tools 中筛选)
-    all_basic_tools = get_buildin_tools() + (extra_tools or [])
-    selected_tools = []
-
-    if context.tools:
-        # 创建工具映射表
-        tools_map = {t.name: t for t in all_basic_tools}
-        for tool_name in context.tools:
-            if tool_name in tools_map:
-                selected_tools.append(tools_map[tool_name])
-
-    # 2. 知识库工具
-    if context.knowledges:
-        kb_tools = get_kb_based_tools(db_names=context.knowledges)
-        selected_tools.extend(kb_tools)
-
-    # 3. MCP 工具（使用统一入口，自动过滤 disabled_tools）
-    if context.mcps:
-        for server_name in context.mcps:
-            mcp_tools = await get_enabled_mcp_tools(server_name)
-            selected_tools.extend(mcp_tools)
-
-    return selected_tools

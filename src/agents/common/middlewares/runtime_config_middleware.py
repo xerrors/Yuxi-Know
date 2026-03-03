@@ -12,7 +12,8 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.types import Command
 
 from src.agents.common import load_chat_model
-from src.agents.common.tools import get_buildin_tools, get_kb_based_tools
+from src.agents.common.toolkits.buildin import get_buildin_tools
+from src.agents.common.toolkits.kbs import get_kb_based_tools
 from src.services.mcp_service import get_enabled_mcp_tools
 from src.services.skill_resolver import (
     SkillSessionSnapshot,

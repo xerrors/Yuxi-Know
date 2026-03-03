@@ -16,25 +16,26 @@
           <div v-if="filteredSkills.length === 0" class="empty-text">
             <a-empty :image="false" description="无匹配技能" />
           </div>
-          <div
-            v-for="skill in filteredSkills"
-            :key="skill.slug"
-            class="list-item"
-            :class="{ active: currentSkill?.slug === skill.slug }"
-            @click="selectSkill(skill)"
-          >
-            <div class="item-header">
-              <Box :size="16" class="item-icon" />
-              <span class="item-name">{{ skill.name }}</span>
-            </div>
-            <div class="item-details">
-              <span class="item-slug">{{ skill.slug }}</span>
-              <div class="item-badges">
-                <span v-if="skill.tool_dependencies?.length" class="dot-badge blue" title="工具依赖"></span>
-                <span v-if="skill.mcp_dependencies?.length" class="dot-badge green" title="MCP依赖"></span>
+          <template v-for="(skill, index) in filteredSkills" :key="skill.slug">
+            <div
+              class="list-item"
+              :class="{ active: currentSkill?.slug === skill.slug }"
+              @click="selectSkill(skill)"
+            >
+              <div class="item-header">
+                <Box :size="16" class="item-icon" />
+                <span class="item-name">{{ skill.name }}</span>
+              </div>
+              <div class="item-details">
+                <span class="item-slug">{{ skill.slug }}</span>
+                <div class="item-badges">
+                  <span v-if="skill.tool_dependencies?.length" class="dot-badge blue" title="工具依赖"></span>
+                  <span v-if="skill.mcp_dependencies?.length" class="dot-badge green" title="MCP依赖"></span>
+                </div>
               </div>
             </div>
-          </div>
+            <div v-if="index < filteredSkills.length - 1" class="list-separator"></div>
+          </template>
         </div>
       </div>
 
@@ -232,7 +233,9 @@ const canSave = computed(() => {
 
 const formatRelativeTime = (time) => time ? dayjs(time).fromNow() : '-'
 
-const toolDependencyOptions = computed(() => (dependencyOptions.tools || []).map(i => ({ label: i, value: i })))
+const toolDependencyOptions = computed(() => (dependencyOptions.tools || []).map(i =>
+  typeof i === 'object' ? { label: i.name, value: i.id } : { label: i, value: i }
+))
 const mcpDependencyOptions = computed(() => (dependencyOptions.mcps || []).map(i => ({ label: i, value: i })))
 const skillDependencyOptions = computed(() => (dependencyOptions.skills || []).filter(s => s !== currentSkill.value?.slug).map(i => ({ label: i, value: i })))
 
