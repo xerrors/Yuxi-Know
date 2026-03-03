@@ -607,7 +607,7 @@ defineExpose({
 
 /* 依赖配置 */
 .config-view {
-  padding: 32px; flex: 1; overflow-y: auto;
+  padding: 16px; flex: 1; overflow-y: auto;
   .config-header {
     display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px;
     flex-shrink: 0;

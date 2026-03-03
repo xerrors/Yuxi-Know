@@ -95,16 +95,26 @@
           <a-tabs v-model:activeKey="detailTab" class="detail-tabs">
             <a-tab-pane key="general">
               <template #tab>
-                <span class="tab-title"><Settings2 :size="14" />通用</span>
+                <span class="tab-title"><Settings2 :size="14" />信息</span>
               </template>
               <div class="tab-content">
                 <div class="info-grid">
+                  <div class="info-item" v-if="currentServer.description">
+                    <label>描述</label>
+                    <span>{{ currentServer.description }}</span>
+                  </div>
                   <div class="info-item">
                     <label>传输类型</label>
                     <span>
                       <a-tag :color="getTransportColor(currentServer.transport)">
                         {{ currentServer.transport }}
                       </a-tag>
+                    </span>
+                  </div>
+                  <div class="info-item" v-if="Array.isArray(currentServer.tags) && currentServer.tags.length > 0">
+                    <label>标签</label>
+                    <span>
+                      <a-tag v-for="tag in currentServer.tags" :key="tag">{{ tag }}</a-tag>
                     </span>
                   </div>
 
@@ -148,16 +158,6 @@
                     </div>
                   </template>
 
-                  <div class="info-item" v-if="currentServer.description">
-                    <label>描述</label>
-                    <span>{{ currentServer.description }}</span>
-                  </div>
-                  <div class="info-item" v-if="Array.isArray(currentServer.tags) && currentServer.tags.length > 0">
-                    <label>标签</label>
-                    <span>
-                      <a-tag v-for="tag in currentServer.tags" :key="tag">{{ tag }}</a-tag>
-                    </span>
-                  </div>
                   <div class="info-item">
                     <label>创建时间</label>
                     <span>{{ formatTime(currentServer.created_at) }}</span>

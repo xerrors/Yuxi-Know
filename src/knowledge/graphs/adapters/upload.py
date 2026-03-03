@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Any
 
-from src.knowledge.adapters.base import BaseNeo4jAdapter
+from src.knowledge.graphs.adapters.base import BaseNeo4jAdapter
 
 from .base import GraphAdapter, GraphMetadata
 
@@ -15,7 +15,7 @@ class UploadGraphAdapter(GraphAdapter):
         super().__init__(config)
 
         # 延迟导入以避免循环导入
-        from src.knowledge.services.upload_graph_service import UploadGraphService
+        from src.knowledge.graphs.upload_graph_service import UploadGraphService
 
         # 初始化业务逻辑服务
         if graph_db_instance and hasattr(graph_db_instance, "_service"):

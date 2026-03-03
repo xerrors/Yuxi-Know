@@ -4,8 +4,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from server.utils.auth_middleware import get_admin_user
 from src import graph_base, knowledge_base
-from src.knowledge.adapters.base import GraphAdapter
-from src.knowledge.adapters.factory import GraphAdapterFactory
+from src.knowledge.graphs.adapters.base import GraphAdapter
+from src.knowledge.graphs.adapters.factory import GraphAdapterFactory
 from src.storage.postgres.models_business import User
 from src.storage.minio.client import StorageError
 from src.utils.logging_config import logger
@@ -64,7 +64,7 @@ async def get_graphs(current_user: User = Depends(get_admin_user)):
         neo4j_info = graph_base.get_graph_info()
         if neo4j_info:
             # 直接使用 Upload 适配器的默认 metadata
-            from src.knowledge.adapters.upload import UploadGraphAdapter
+            from src.knowledge.graphs.adapters.upload import UploadGraphAdapter
 
             capabilities = _get_capabilities_from_metadata(UploadGraphAdapter._get_metadata(None))
 
@@ -85,7 +85,7 @@ async def get_graphs(current_user: User = Depends(get_admin_user)):
         # 2. 获取 LightRAG 数据库信息
         lightrag_dbs = await knowledge_base.get_lightrag_databases()
         # 直接使用 LightRAG 适配器的默认 metadata
-        from src.knowledge.adapters.lightrag import LightRAGGraphAdapter
+        from src.knowledge.graphs.adapters.lightrag import LightRAGGraphAdapter
 
         capabilities = _get_capabilities_from_metadata(LightRAGGraphAdapter._get_metadata(None))
 
