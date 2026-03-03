@@ -1,186 +1,163 @@
 <template>
-  <div class="skills-manager-container">
-    <HeaderComponent title="Skills 管理" description="技能包管理系统。支持文件系统编辑与数据库元数据同步。" :loading="loading" class="main-header">
-      <template #actions>
-        <a-space :size="12">
-          <a-upload
-            accept=".zip"
-            :show-upload-list="false"
-            :custom-request="handleImportUpload"
-            :disabled="loading || importing"
+  <div class="skills-manager-container extension-page-root">
+    <div v-if="loading" class="loading-bar-wrapper">
+      <div class="loading-bar"></div>
+    </div>
+    <div class="layout-wrapper" :class="{ 'content-loading': loading }">
+      <!-- 左侧：技能列表 -->
+      <div class="sidebar-list">
+        <div class="search-box">
+          <a-input v-model:value="searchQuery" placeholder="搜索技能..." allow-clear class="search-input">
+            <template #prefix><Search :size="14" class="text-muted" /></template>
+          </a-input>
+        </div>
+
+        <div class="list-container">
+          <div v-if="filteredSkills.length === 0" class="empty-text">
+            <a-empty :image="false" description="无匹配技能" />
+          </div>
+          <div
+            v-for="skill in filteredSkills"
+            :key="skill.slug"
+            class="list-item"
+            :class="{ active: currentSkill?.slug === skill.slug }"
+            @click="selectSkill(skill)"
           >
-            <a-button :loading="importing" class="lucide-icon-btn">
-              <Upload :size="14" />
-              <span>导入 ZIP</span>
-            </a-button>
-          </a-upload>
-          <a-button type="primary" @click="fetchSkills" :disabled="loading" class="lucide-icon-btn">
-            <RotateCw :size="14" />
-            <span>刷新</span>
-          </a-button>
-        </a-space>
-      </template>
-    </HeaderComponent>
-
-    <div class="content-body">
-        <div class="layout-wrapper">
-          <!-- 左侧：技能列表 -->
-          <div class="sidebar-list">
-            <div class="search-box">
-              <a-input v-model:value="searchQuery" placeholder="搜索技能..." allow-clear class="search-input">
-                <template #prefix><Search :size="14" class="text-muted" /></template>
-              </a-input>
+            <div class="item-header">
+              <Box :size="16" class="item-icon" />
+              <span class="item-name">{{ skill.name }}</span>
             </div>
-
-            <div class="list-container">
-              <div v-if="filteredSkills.length === 0" class="empty-text">
-                <a-empty :image="false" description="无匹配技能" />
+            <div class="item-details">
+              <span class="item-slug">{{ skill.slug }}</span>
+              <div class="item-badges">
+                <span v-if="skill.tool_dependencies?.length" class="dot-badge blue" title="工具依赖"></span>
+                <span v-if="skill.mcp_dependencies?.length" class="dot-badge green" title="MCP依赖"></span>
               </div>
-              <div
-                v-for="skill in filteredSkills"
-                :key="skill.slug"
-                class="list-item"
-                :class="{ active: currentSkill?.slug === skill.slug }"
-                @click="selectSkill(skill)"
-              >
-                <div class="item-header">
-                  <Box :size="16" class="item-icon" />
-                  <span class="item-name">{{ skill.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧：详情面板 -->
+      <div class="main-panel">
+        <div v-if="!currentSkill" class="unselected-state">
+          <div class="hint-box">
+            <FileCode :size="40" class="text-muted" />
+            <p>请在左侧选择技能包进行编辑</p>
+          </div>
+        </div>
+
+        <template v-else>
+          <div class="panel-top-bar">
+            <div class="skill-summary">
+              <h2>{{ currentSkill.name }}</h2>
+              <!-- <code>{{ currentSkill.slug }}</code> -->
+            </div>
+            <div class="panel-actions">
+              <a-space :size="8">
+                <a-button size="small" @click="handleExport" class="lucide-icon-btn">
+                  <Download :size="14" />
+                  <span>导出</span>
+                </a-button>
+                <a-button size="small" danger ghost @click="confirmDeleteSkill" class="lucide-icon-btn">
+                  <Trash2 :size="14" />
+                  <span>删除</span>
+                </a-button>
+              </a-space>
+            </div>
+          </div>
+
+          <a-tabs v-model:activeKey="activeTab" class="minimal-tabs">
+            <a-tab-pane key="editor">
+              <template #tab>
+                <span class="tab-title"><FileText :size="14" />代码管理</span>
+              </template>
+              <div class="workspace">
+                <div class="tree-container">
+                  <div class="tree-header">
+                    <span class="label">项目结构</span>
+                    <div class="tree-actions">
+                      <a-tooltip title="新建文件"><button @click="openCreateModal(false)"><FilePlus :size="14" /></button></a-tooltip>
+                      <a-tooltip title="新建目录"><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button></a-tooltip>
+                      <a-tooltip title="刷新"><button @click="reloadTree"><RotateCw :size="14" /></button></a-tooltip>
+                    </div>
+                  </div>
+                  <div class="tree-content">
+                    <FileTreeComponent
+                      v-model:selectedKeys="selectedTreeKeys"
+                      v-model:expandedKeys="expandedKeys"
+                      :tree-data="treeData"
+                      @select="handleTreeSelect"
+                    />
+                  </div>
                 </div>
-                <div class="item-details">
-                  <span class="item-slug">{{ skill.slug }}</span>
-                  <div class="item-badges">
-                    <span v-if="skill.tool_dependencies?.length" class="dot-badge blue" title="工具依赖"></span>
-                    <span v-if="skill.mcp_dependencies?.length" class="dot-badge green" title="MCP依赖"></span>
+
+                <div class="editor-container">
+                  <div class="editor-header">
+                    <div class="current-path">
+                      <File :size="14" />
+                      <span>{{ selectedPath || '未选择文件' }}</span>
+                      <span v-if="canSave" class="save-hint">●</span>
+                    </div>
+                    <a-button
+                      type="primary"
+                      size="small"
+                      @click="saveCurrentFile"
+                      :disabled="!canSave"
+                      :loading="savingFile"
+                      class="lucide-icon-btn"
+                    >
+                      <Save :size="14" />
+                      <span>保存</span>
+                    </a-button>
+                  </div>
+                  <div class="editor-main">
+                    <a-empty v-if="!selectedPath || selectedIsDir" description="选择文件以开始编辑" class="mt-40" />
+                    <a-textarea
+                      v-else
+                      v-model:value="fileContent"
+                      class="pure-editor"
+                      spellcheck="false"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </a-tab-pane>
 
-          <!-- 右侧：详情面板 -->
-          <div class="main-panel">
-            <div v-if="!currentSkill" class="unselected-state">
-              <div class="hint-box">
-                <FileCode :size="40" class="text-muted" />
-                <p>请在左侧选择技能包进行编辑</p>
-              </div>
-            </div>
-
-            <template v-else>
-              <div class="panel-top-bar">
-                <div class="skill-summary">
-                  <h2>{{ currentSkill.name }}</h2>
-                  <!-- <code>{{ currentSkill.slug }}</code> -->
+            <a-tab-pane key="dependencies">
+              <template #tab>
+                <span class="tab-title"><Layers :size="14" />依赖管理</span>
+              </template>
+              <div class="config-view">
+                <div class="config-header">
+                  <div class="text">
+                    <h3>依赖声明</h3>
+                    <p>配置此 Skill 所需的工具、MCP 服务器及其他 Skill 依赖。</p>
+                  </div>
+                  <a-button type="primary" :loading="savingDependencies" @click="saveDependencies" class="lucide-icon-btn">
+                    <Save :size="14" />
+                    <span>更新依赖</span>
+                  </a-button>
                 </div>
-                <div class="panel-actions">
-                  <a-space :size="8">
-                    <a-button size="small" @click="handleExport" class="lucide-icon-btn">
-                      <Download :size="14" />
-                      <span>导出</span>
-                    </a-button>
-                    <a-button size="small" danger ghost @click="confirmDeleteSkill" class="lucide-icon-btn">
-                      <Trash2 :size="14" />
-                      <span>删除</span>
-                    </a-button>
-                  </a-space>
+
+                <div class="config-form">
+                  <a-form layout="vertical">
+                    <a-form-item label="工具依赖 (Tools)">
+                      <a-select v-model:value="dependencyForm.tool_dependencies" mode="multiple" :options="toolDependencyOptions" placeholder="选择工具..." allow-clear show-search />
+                    </a-form-item>
+                    <a-form-item label="MCP 依赖 (Model Context Protocol)">
+                      <a-select v-model:value="dependencyForm.mcp_dependencies" mode="multiple" :options="mcpDependencyOptions" placeholder="选择 MCP 服务..." allow-clear show-search />
+                    </a-form-item>
+                    <a-form-item label="Skill 依赖">
+                      <a-select v-model:value="dependencyForm.skill_dependencies" mode="multiple" :options="skillDependencyOptions" placeholder="选择 Skill..." allow-clear show-search />
+                    </a-form-item>
+                  </a-form>
                 </div>
               </div>
-
-              <div class="tabs-area">
-                <a-tabs v-model:activeKey="activeTab" class="minimal-tabs">
-                  <a-tab-pane key="editor">
-                    <template #tab>
-                      <span class="tab-title"><FileText :size="14" />代码管理</span>
-                    </template>
-                    <div class="workspace">
-                      <div class="tree-container">
-                        <div class="tree-header">
-                          <span class="label">项目结构</span>
-                          <div class="tree-actions">
-                            <a-tooltip title="新建文件"><button @click="openCreateModal(false)"><FilePlus :size="14" /></button></a-tooltip>
-                            <a-tooltip title="新建目录"><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button></a-tooltip>
-                            <a-tooltip title="刷新"><button @click="reloadTree"><RotateCw :size="14" /></button></a-tooltip>
-                          </div>
-                        </div>
-                        <div class="tree-content">
-                          <FileTreeComponent
-                            v-model:selectedKeys="selectedTreeKeys"
-                            v-model:expandedKeys="expandedKeys"
-                            :tree-data="treeData"
-                            @select="handleTreeSelect"
-                          />
-                        </div>
-                      </div>
-
-                      <div class="editor-container">
-                        <div class="editor-header">
-                          <div class="current-path">
-                            <File :size="14" />
-                            <span>{{ selectedPath || '未选择文件' }}</span>
-                            <span v-if="canSave" class="save-hint">●</span>
-                          </div>
-                          <a-button
-                            type="primary"
-                            size="small"
-                            @click="saveCurrentFile"
-                            :disabled="!canSave"
-                            :loading="savingFile"
-                            class="lucide-icon-btn"
-                          >
-                            <Save :size="14" />
-                            <span>保存</span>
-                          </a-button>
-                        </div>
-                        <div class="editor-main">
-                          <a-empty v-if="!selectedPath || selectedIsDir" description="选择文件以开始编辑" class="mt-40" />
-                          <a-textarea
-                            v-else
-                            v-model:value="fileContent"
-                            class="pure-editor"
-                            spellcheck="false"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </a-tab-pane>
-
-                  <a-tab-pane key="dependencies">
-                    <template #tab>
-                      <span class="tab-title"><Layers :size="14" />依赖管理</span>
-                    </template>
-                    <div class="config-view">
-                      <div class="config-header">
-                        <div class="text">
-                          <h3>依赖声明</h3>
-                          <p>配置此 Skill 所需的工具、MCP 服务器及其他 Skill 依赖。</p>
-                        </div>
-                        <a-button type="primary" :loading="savingDependencies" @click="saveDependencies" class="lucide-icon-btn">
-                          <Save :size="14" />
-                          <span>更新依赖</span>
-                        </a-button>
-                      </div>
-
-                      <div class="config-form">
-                        <a-form layout="vertical">
-                          <a-form-item label="工具依赖 (Tools)">
-                            <a-select v-model:value="dependencyForm.tool_dependencies" mode="multiple" :options="toolDependencyOptions" placeholder="选择工具..." allow-clear show-search />
-                          </a-form-item>
-                          <a-form-item label="MCP 依赖 (Model Context Protocol)">
-                            <a-select v-model:value="dependencyForm.mcp_dependencies" mode="multiple" :options="mcpDependencyOptions" placeholder="选择 MCP 服务..." allow-clear show-search />
-                          </a-form-item>
-                          <a-form-item label="Skill 依赖">
-                            <a-select v-model:value="dependencyForm.skill_dependencies" mode="multiple" :options="skillDependencyOptions" placeholder="选择 Skill..." allow-clear show-search />
-                          </a-form-item>
-                        </a-form>
-                      </div>
-                    </div>
-                  </a-tab-pane>
-                </a-tabs>
-              </div>
-            </template>
-          </div>
-        </div>
+            </a-tab-pane>
+          </a-tabs>
+        </template>
+      </div>
     </div>
 
     <!-- 弹窗 -->
@@ -214,7 +191,6 @@ import {
   FilePlus, FolderPlus, File, Search, Box, FileCode
 } from 'lucide-vue-next'
 import { skillApi } from '@/apis/skill_api'
-import HeaderComponent from '@/components/HeaderComponent.vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 
 dayjs.extend(relativeTime)
@@ -274,18 +250,9 @@ const resetFileState = () => {
   originalFileContent.value = ''
 }
 
-const expandAllKeys = (nodes) => {
-  let keys = []
-  nodes.forEach(node => {
-    if (node.is_dir) {
-      keys.push(node.key)
-      if (node.children) {
-        keys = keys.concat(expandAllKeys(node.children))
-      }
-    }
-  })
-  return keys
-}
+const expandAllKeys = (nodes) => nodes.flatMap(node =>
+  node.is_dir ? [node.key, ...expandAllKeys(node.children || [])] : []
+)
 
 const fetchSkills = async () => {
   loading.value = true
@@ -366,7 +333,7 @@ const selectSkill = async (record) => {
   resetFileState()
 
   // 并行执行：加载树结构和获取 SKILL.md
-  const [treeResult] = await Promise.all([
+  await Promise.all([
     reloadTree(),
     loadSkillFile(record.slug)
   ])
@@ -507,121 +474,18 @@ const saveDependencies = async () => {
 }
 
 onMounted(fetchSkills)
+
+// 暴露方法给父组件
+defineExpose({
+  fetchSkills,
+  handleImportUpload
+})
 </script>
 
 <style scoped lang="less">
-/* 基础变量模拟 Shadcn/UI */
-@border-color: var(--gray-150);
-@bg-secondary: var(--gray-10); /* 调浅背景颜色 */
-@radius: 8px;
-
-.skills-manager-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background-color: var(--gray-0);
-  overflow: hidden;
-}
-
-.main-header {
-  height: 74px;
-  box-sizing: border-box;
-  border-bottom: 1px solid @border-color;
-  flex-shrink: 0;
-}
-
-.content-body {
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  overflow: hidden;
-  height: calc(100vh - 74px);
-}
-
-.full-spin {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
-  :deep(.ant-spin-container) {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    height: 100%;
-  }
-  :deep(.ant-spin-nested-loading) {
-    height: 100%;
-  }
-}
-
-.layout-wrapper {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-}
-
-/* 左侧列表 */
-.sidebar-list {
-  width: 280px;
-  border-right: 1px solid @border-color;
-  background-color: @bg-secondary;
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-
-  .search-box {
-    padding: 12px 12px;
-    padding-bottom: 0;
-    display: flex;
-    align-items: center;
-
-    .search-input {
-      :deep(.ant-input) {
-        height: 24px;
-      }
-    }
-  }
-
-  .list-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-}
+@import '@/assets/css/extensions.less';
 
 .list-item {
-  padding: 10px 12px;
-  border-radius: @radius;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-
-  &:hover { background-color: var(--gray-100); }
-
-  &.active {
-    background-color: var(--gray-0);
-    border-color: @border-color;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-    .item-icon { color: var(--main-color); }
-    .item-name { color: var(--gray-900); }
-  }
-
-  .item-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
-    .item-icon { color: var(--gray-400); }
-    .item-name { font-size: 14px; font-weight: 500; color: var(--gray-700); }
-  }
-
   .item-details {
     display: flex;
     justify-content: space-between;
@@ -640,77 +504,26 @@ onMounted(fetchSkills)
 
 /* 右侧面板 */
 .main-panel {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--gray-0);
-
-  .unselected-state {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: @bg-secondary;
-    .hint-box { text-align: center; p { margin-top: 12px; color: var(--gray-400); } }
-  }
-
   .panel-top-bar {
-    padding: 10px 16px 0 16px;
-    box-sizing: border-box;
-    // border-bottom: 1px solid @border-color;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
-
     .skill-summary {
       min-height: 32px;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; }
       code { font-size: 12px; color: var(--gray-500); background: @bg-secondary; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block; }
     }
   }
-}
-
-/* Tabs & 内部布局 */
-.tabs-area {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-
-  .minimal-tabs {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-
-    :deep(.ant-tabs-nav) {
-      margin: 0;
-      padding: 0 16px;
-      border-bottom: 1px solid @border-color;
-      flex-shrink: 0;
-      &::before { border-bottom: none; }
-    }
-    :deep(.ant-tabs-content) { flex: 1; min-height: 0; height: 100%; overflow: hidden; }
-    :deep(.ant-tabs-tabpane) { height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
-  }
-
-  .tab-title { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 }
 
 .workspace {
   display: flex;
   flex: 1;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
-/* 文件树 */
+/* 文件 tree */
 .tree-container {
   width: 240px;
   border-right: 1px solid @border-color;
@@ -806,8 +619,6 @@ onMounted(fetchSkills)
   .config-form { max-width: 600px; :deep(.ant-form-item-label label) { font-weight: 500; font-size: 13px; } }
 }
 
-/* 辅助类 */
-.text-muted { color: var(--gray-400); }
 .mt-40 { margin-top: 40px; }
 .pt-12 { padding-top: 12px; }
 
