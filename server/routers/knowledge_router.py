@@ -89,8 +89,7 @@ async def _ensure_database_not_dify(db_id: str, operation: str) -> None:
 async def get_databases(current_user: User = Depends(get_admin_user)):
     """获取所有知识库（根据用户权限过滤）"""
     try:
-        user_info = {"role": current_user.role, "department_id": current_user.department_id}
-        return await knowledge_base.get_databases_by_user(user_info)
+        return await knowledge_base.get_databases_by_user_id(current_user.user_id)
     except Exception as e:
         logger.error(f"获取数据库列表失败 {e}, {traceback.format_exc()}")
         return {"message": f"获取数据库列表失败 {e}", "databases": []}
@@ -180,8 +179,7 @@ async def create_database(
 async def get_accessible_databases(current_user: User = Depends(get_required_user)):
     """获取当前用户有权访问的知识库列表（用于智能体配置）"""
     try:
-        user_info = {"role": current_user.role, "department_id": current_user.department_id}
-        databases = await knowledge_base.get_databases_by_user(user_info)
+        databases = await knowledge_base.get_databases_by_user_id(current_user.user_id)
 
         accessible = [
             {
@@ -664,10 +662,10 @@ async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), cu
     """批量删除文档或文件夹"""
     logger.debug(f"BATCH DELETE documents {file_ids} in {db_id}")
     await _ensure_database_not_dify(db_id, "批量文档删除")
-    
+
     deleted_count = 0
     failed_items = []
-    
+
     for doc_id in file_ids:
         try:
             file_meta_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
@@ -700,7 +698,7 @@ async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), cu
         if deleted_count == 0:
             raise HTTPException(status_code=400, detail=f"批量删除失败: 所有 {len(failed_items)} 个文件均未删除。")
         return {
-            "message": f"部分删除成功: 已删除 {deleted_count} 个文件，失败 {len(failed_items)} 个", 
+            "message": f"部分删除成功: 已删除 {deleted_count} 个文件，失败 {len(failed_items)} 个",
             "deleted_count": deleted_count,
             "failed_items": failed_items
         }

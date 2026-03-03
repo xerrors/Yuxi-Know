@@ -12,8 +12,7 @@ from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.types import Command
 
 from src.agents.common import load_chat_model
-from src.agents.common.toolkits.buildin import get_buildin_tools
-from src.agents.common.toolkits.kbs import get_kb_based_tools
+from src.agents.common.toolkits import get_all_tool_instances
 from src.services.mcp_service import get_enabled_mcp_tools
 from src.services.skill_resolver import (
     SkillSessionSnapshot,
@@ -48,10 +47,9 @@ class RuntimeConfigState(AgentState):
 
 
 class RuntimeConfigMiddleware(AgentMiddleware):
-    """运行时配置中间件 - 应用模型/工具/知识库/MCP/提示词配置
+    """运行时配置中间件 - 应用模型/工具/MCP/提示词配置
 
-    注意：所有可能用到的知识库工具必须在初始化时预加载并注册到 self.tools
-    运行时根据配置从 self.tools 中筛选工具，不能动态添加新工具
+    知识库工具已移至独立的 KnowledgeBaseMiddleware
 
     支持自定义上下文字段名称，以便在不同场景（如主智能体/子智能体）使用不同的配置字段
     """
@@ -106,10 +104,10 @@ class RuntimeConfigMiddleware(AgentMiddleware):
 
         self.tools: list[Any] = []
         # 预加载工具列表（仅当启用工具覆盖时）
+        # 注意：知识库工具已移至独立的 KnowledgeBaseMiddleware
         if self.enable_tools_override:
-            self.kb_tools = get_kb_based_tools()
-            self.buildin_tools = get_buildin_tools()
-            self.tools = self.kb_tools + self.buildin_tools + (extra_tools or [])
+            self.base_tools = get_all_tool_instances()
+            self.tools = self.base_tools + (extra_tools or [])
         elif extra_tools:
             logger.warning(
                 "RuntimeConfigMiddleware: extra_tools 参数已提供，但 enable_tools_override=False，"
@@ -239,13 +237,7 @@ class RuntimeConfigMiddleware(AgentMiddleware):
                 continue
             logger.warning(f"RuntimeConfigMiddleware: tool dependency not found, skip: {tool_name}")
 
-        # 2. 知识库工具
-        knowledges = getattr(context, self.knowledges_context_name, None)
-        if knowledges:
-            kb_tools = get_kb_based_tools(db_names=knowledges)
-            selected_tools.extend(kb_tools)
-
-        # 3. MCP 工具（使用统一入口，自动过滤 disabled_tools）
+        # 2. MCP 工具（使用统一入口，自动过滤 disabled_tools）
         mcps = getattr(context, self.mcps_context_name, None) or []
         all_mcp_names: list[str] = []
         for server_name in mcps:

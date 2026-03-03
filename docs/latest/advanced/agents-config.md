@@ -77,7 +77,8 @@ class MyAgentContext(BaseContext):
 
 ```python
 from src.agents.common import BaseContext, gen_tool_info
-from src.agents.common.tools import get_buildin_tools
+from src.agents.common.toolkits.buildin import calculator, query_knowledge_graph
+from src.agents.common.toolkits.buildin.tools import _create_tavily_search
 from src.agents.common.toolkits.mysql import get_mysql_tools
 
 @dataclass(kw_only=True)
@@ -86,7 +87,9 @@ class ReporterContext(BaseContext):
         default_factory=lambda: [t.name for t in get_mysql_tools()],
         metadata={
             "name": "工具",
-            "options": lambda: gen_tool_info(get_buildin_tools() + get_mysql_tools()),
+            "options": lambda: gen_tool_info(
+                [calculator, query_knowledge_graph, _create_tavily_search()] + get_mysql_tools()
+            ),
             "description": "包含内置工具和 MySQL 工具包。",
         },
     )

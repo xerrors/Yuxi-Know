@@ -19,36 +19,6 @@ _extra_registry: dict[str, ToolExtraMetadata] = {}
 _all_tool_instances: list = []
 
 
-def register_tool(
-    category: str,
-    tags: list[str] = None,
-    display_name: str = "",
-    icon: str = "",
-):
-    """装饰器：注册工具附加元数据
-
-    使用方式:
-    @register_tool(category="buildin", tags=["内置"], display_name="计算器")
-    def calculator(...):
-        ...
-    """
-
-    def decorator(func_or_tool: Callable) -> Callable:
-        # 获取工具名称（优先用 metadata.name）
-        tool_name = getattr(func_or_tool, "name", None) or getattr(
-            func_or_tool, "__name__", ""
-        )
-        _extra_registry[tool_name] = ToolExtraMetadata(
-            category=category,
-            tags=tags or [],
-            display_name=display_name,
-            icon=icon,
-        )
-        return func_or_tool
-
-    return decorator
-
-
 def get_extra_metadata(tool_name: str) -> ToolExtraMetadata | None:
     """获取工具附加元数据"""
     return _extra_registry.get(tool_name)

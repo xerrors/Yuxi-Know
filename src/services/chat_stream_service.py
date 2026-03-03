@@ -379,28 +379,6 @@ async def stream_agent_chat(
         # 先构建 langgraph_config
         langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
 
-        # 注意：LangGraph 会自动从 checkpointer 恢复 state（包括 attachments 和 files）
-        # 无需手动加载或传递
-
-        # 根据用户权限过滤知识库
-        requested_knowledge_names = input_context["agent_config"].get("knowledges")
-        logger.info(f"Requesting knowledges: {requested_knowledge_names}")
-        if requested_knowledge_names and isinstance(requested_knowledge_names, list) and requested_knowledge_names:
-            user_info = {"role": "user", "department_id": department_id}
-            accessible_databases = await knowledge_base.get_databases_by_user(user_info)
-            accessible_kb_names = {
-                db.get("name")
-                for db in accessible_databases.get("databases", [])
-                if isinstance(db, dict) and db.get("name")
-            }
-            logger.info(f"Accessible knowledges: {accessible_kb_names}")
-
-            filtered_knowledge_names = [kb for kb in requested_knowledge_names if kb in accessible_kb_names]
-            blocked_knowledge_names = [kb for kb in requested_knowledge_names if kb not in accessible_kb_names]
-            if blocked_knowledge_names:
-                logger.warning(f"用户 {user_id} 无权访问知识库: {blocked_knowledge_names}, 已自动过滤")
-            input_context["agent_config"]["knowledges"] = filtered_knowledge_names
-
         full_msg = None
         accumulated_content = []
         async for msg, metadata in agent.stream_messages(messages, input_context=input_context):

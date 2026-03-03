@@ -4,7 +4,9 @@ export { default as ToolCallRenderer } from './ToolCallRenderer.vue'
 
 // 专用工具组件导出
 export { default as WebSearchTool } from './tools/WebSearchTool.vue'
-export { default as KnowledgeBaseTool } from './tools/KnowledgeBaseTool.vue'
+export { default as ListKbsTool } from './tools/ListKbsTool.vue'
+export { default as GetMindmapTool } from './tools/GetMindmapTool.vue'
+export { default as QueryKbTool } from './tools/QueryKbTool.vue'
 export { default as KnowledgeGraphTool } from './tools/KnowledgeGraphTool.vue'
 export { default as CalculatorTool } from './tools/CalculatorTool.vue'
 export { default as TodoListTool } from './tools/TodoListTool.vue'

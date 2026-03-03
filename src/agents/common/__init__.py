@@ -7,7 +7,6 @@ from src.agents.common.models import load_chat_model
 from src.agents.common.state import BaseState
 
 # Tools - 核心工具函数
-from src.agents.common.toolkits.buildin import get_buildin_tools
 from src.agents.common.toolkits.utils import gen_tool_info
 
 # MCP - Agent 层统一入口（自动过滤 disabled_tools）
@@ -21,7 +20,6 @@ __all__ = [
     # Model utilities
     "load_chat_model",
     # Core tools
-    "get_buildin_tools",
     "gen_tool_info",
     # Core MCP
     "get_enabled_mcp_tools",

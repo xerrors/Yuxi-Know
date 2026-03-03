@@ -78,13 +78,6 @@ def validate_skill_slug(slug: str) -> str:
         raise ValueError("无效 skill slug")
     return normalized
 
-
-def _get_buildin_tool_names() -> list[str]:
-    from src.agents.common.toolkits.buildin import get_buildin_tools
-
-    return [tool.name for tool in get_buildin_tools()]
-
-
 def get_skills_root_dir() -> Path:
     root = Path(sys_config.save_dir) / "skills"
     root.mkdir(parents=True, exist_ok=True)
