@@ -136,7 +136,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick } from 'vue'
-import { Download, X, FolderCode, RefreshCw, Folder, FolderOpen } from 'lucide-vue-next'
+import { Download, X, FolderCode } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -147,13 +147,18 @@ import {
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
-import { getFileIcon, getFileIconColor, formatFileSize } from '@/utils/file_utils'
+import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import { threadApi } from '@/apis'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 
 const props = defineProps({
   agentState: {
     type: Object,
     default: () => ({})
+  },
+  threadFiles: {
+    type: Array,
+    default: () => []
   },
   threadId: {
     type: String,
@@ -181,10 +186,6 @@ const isMarkdown = computed(() => {
 
 const todos = computed(() => {
   return props.agentState?.todos || []
-})
-
-const files = computed(() => {
-  return props.agentState?.files || []
 })
 
 const completedCount = computed(() => {
@@ -229,35 +230,11 @@ onUpdated(() => {
   nextTick(checkOverflow)
 })
 
-// 适配实际数据格式
 const normalizedFiles = computed(() => {
-  const rawFiles = files.value
-  const result = []
-
-  // 兼容字典格式 {"/path/file": {content: [...]}} 和旧数组格式
-  if (typeof rawFiles === 'object' && !Array.isArray(rawFiles) && rawFiles !== null) {
-    // 新格式：字典格式
-    Object.entries(rawFiles).forEach(([filePath, fileData]) => {
-      result.push({
-        path: filePath,
-        ...fileData
-      })
-    })
-  } else if (Array.isArray(rawFiles)) {
-    // 旧格式：数组格式
-    rawFiles.forEach((item) => {
-      if (typeof item === 'object' && item !== null) {
-        Object.entries(item).forEach(([filePath, fileData]) => {
-          result.push({
-            path: filePath,
-            ...fileData
-          })
-        })
-      }
-    })
-  }
-
-  return result
+  if (!Array.isArray(props.threadFiles)) return []
+  return props.threadFiles
+    .filter((item) => item && typeof item.path === 'string')
+    .map((item) => ({ ...item }))
 })
 
 const expandedKeys = ref([])
@@ -284,7 +261,12 @@ const buildTreeData = (filesList) => {
   }
 
   filesList.forEach((file) => {
-    const cleanPath = file.path.startsWith('/') ? file.path.slice(1) : file.path
+    const userDataPrefix = '/mnt/user-data/'
+    const cleanPath = file.path.startsWith(userDataPrefix)
+      ? file.path.slice(userDataPrefix.length)
+      : file.path.startsWith('/')
+        ? file.path.slice(1)
+        : file.path
     const parts = cleanPath.split('/')
     let currentLevel = root
     let currentPath = ''
@@ -294,6 +276,7 @@ const buildTreeData = (filesList) => {
       currentPath = currentPath ? `${currentPath}/${part}` : part
 
       if (isLast) {
+        const isLeaf = file.is_dir !== true
         const nameParts = part.split('.')
         let nameStart = part
         let nameEnd = ''
@@ -318,15 +301,19 @@ const buildTreeData = (filesList) => {
           }
         }
 
-        currentLevel.push({
-          key: currentPath,
-          title: part,
-          nameStart,
-          nameEnd,
-          isLeaf: true,
-          fileData: file,
-          class: 'file-node'
-        })
+        if (isLeaf) {
+          currentLevel.push({
+            key: currentPath,
+            title: part,
+            nameStart,
+            nameEnd,
+            isLeaf: true,
+            fileData: file,
+            class: 'file-node'
+          })
+        } else {
+          findOrCreateFolder(currentLevel, currentPath, part)
+        }
       } else {
         const folderNode = findOrCreateFolder(currentLevel, currentPath, part)
         currentLevel = folderNode.children
@@ -350,36 +337,18 @@ const buildTreeData = (filesList) => {
   return root
 }
 
-// Helper to truncate filename with tail preservation
-const truncateFilename = (name) => {
-  if (!name) return ''
-  // This is a visual truncation helper; for true dynamic CSS truncation,
-  // we'd need a more complex setup. Here we rely on CSS text-overflow
-  // but if we want specifically "last 5 chars" visible, we might need
-  // to split the string if we were using a JS-only approach.
-  // However, the user asked for "show ellipsis, and last 5 chars".
-  // CSS `text-overflow: ellipsis` puts it at the end.
-  // To do middle truncation via CSS is hard.
-  // Let's try to do it via JS for the title attribute, but for visual
-  // we might use a CSS trick or just standard ellipsis if the JS one is too static.
-  // Let's stick to standard ellipsis for now but maybe try to implement the requested logic if possible.
-  // Actually, pure CSS start/end truncation is tricky.
-  // Let's provide a computed display name logic in the template or a method.
-  return name
-}
-
 const fileTreeData = computed(() => buildTreeData(normalizedFiles.value))
 
 const onFileSelect = (selectedKeys, { node }) => {
-  if (node.isLeaf) {
+  if (node.isLeaf && props.threadId) {
     if (node.fileData) {
-      showFileContent(node.key, node.fileData)
+      showFileContent(node.fileData)
     }
   }
 }
 
 const fileCount = computed(() => {
-  return normalizedFiles.value.length
+  return normalizedFiles.value.filter((item) => item.is_dir !== true).length
 })
 
 // 方法
@@ -390,31 +359,25 @@ const getFileName = (fileItem) => {
   return '未知文件'
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  try {
-    const date = new Date(dateString)
-    return date.toLocaleString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch (error) {
-    return dateString
-  }
-}
-
 const formatContent = (contentArray) => {
   if (!Array.isArray(contentArray)) return String(contentArray)
   return contentArray.join('\n')
 }
 
-const showFileContent = (filePath, fileData) => {
-  currentFilePath.value = filePath
-  currentFile.value = fileData
-  modalVisible.value = true
+const showFileContent = async (fileData) => {
+  if (!props.threadId || !fileData?.path) return
+  currentFilePath.value = fileData.path
+  try {
+    const response = await threadApi.readThreadFile(props.threadId, fileData.path, 0, 2000)
+    currentFile.value = {
+      ...fileData,
+      content: Array.isArray(response?.content) ? response.content : [],
+      artifact_url: response?.artifact_url || fileData.artifact_url
+    }
+    modalVisible.value = true
+  } catch (error) {
+    console.error('读取文件内容失败:', error)
+  }
 }
 
 const closeModal = () => {
@@ -425,25 +388,9 @@ const closeModal = () => {
 
 const downloadFile = (fileItem) => {
   try {
-    // /attachments/ 下的文件直接从内容下载（已经是 Markdown）
-    if (fileItem.path?.startsWith('/attachments/') && fileItem.content) {
-      const content = formatContent(fileItem.content)
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
+    if (fileItem.artifact_url) {
       const link = document.createElement('a')
-      link.href = url
-      link.download = getFileName(fileItem)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-      return
-    }
-
-    // 其他文件：优先使用 minio_url 下载源文件
-    if (fileItem.minio_url) {
-      const link = document.createElement('a')
-      link.href = fileItem.minio_url
+      link.href = fileItem.artifact_url
       link.download = getFileName(fileItem)
       link.target = '_blank'
       document.body.appendChild(link)
@@ -451,18 +398,6 @@ const downloadFile = (fileItem) => {
       document.body.removeChild(link)
       return
     }
-
-    // 降级：从 content 创建下载
-    const content = formatContent(fileItem.content)
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = getFileName(fileItem)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
   } catch (error) {
     console.error('下载文件失败:', error)
   }

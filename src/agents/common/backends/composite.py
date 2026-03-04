@@ -1,5 +1,8 @@
-from deepagents.backends import CompositeBackend, StateBackend
+from __future__ import annotations
 
+from deepagents.backends import CompositeBackend
+
+from src.sandbox import ProvisionerSandboxBackend
 from src.services.skill_resolver import normalize_selected_skills
 from src.services.skill_service import is_valid_skill_slug
 
@@ -18,11 +21,28 @@ def _get_visible_skills_from_runtime(runtime) -> list[str]:
     return normalize_selected_skills(selected)
 
 
+def _extract_thread_id(runtime) -> str:
+    config = getattr(runtime, "config", None)
+    if isinstance(config, dict):
+        configurable = config.get("configurable", {})
+        if isinstance(configurable, dict):
+            thread_id = configurable.get("thread_id")
+            if isinstance(thread_id, str) and thread_id.strip():
+                return thread_id.strip()
+
+    context = getattr(runtime, "context", None)
+    thread_id = getattr(context, "thread_id", None)
+    if isinstance(thread_id, str) and thread_id.strip():
+        return thread_id.strip()
+
+    raise ValueError("thread_id is required in runtime configurable context")
+
+
 def create_agent_composite_backend(runtime) -> CompositeBackend:
-    """为 agent 构建 backend：默认 StateBackend + /skills 路由只读 backend。"""
     visible_skills = _get_visible_skills_from_runtime(runtime)
+    thread_id = _extract_thread_id(runtime)
     return CompositeBackend(
-        default=StateBackend(runtime),
+        default=ProvisionerSandboxBackend(thread_id=thread_id),
         routes={
             "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=visible_skills),
         },

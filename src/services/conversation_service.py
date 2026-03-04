@@ -1,23 +1,29 @@
+﻿import shlex
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
-from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents import agent_manager
 from src.repositories.conversation_repository import ConversationRepository
+from src.sandbox import (
+    ProvisionerSandboxBackend,
+    ensure_thread_dirs,
+    get_sandbox_provider,
+    sandbox_uploads_dir,
+)
 from src.services.doc_converter import (
     ATTACHMENT_ALLOWED_EXTENSIONS,
     MAX_ATTACHMENT_SIZE_BYTES,
     convert_upload_to_markdown,
 )
-from src.storage.minio.client import get_minio_client
 from src.utils.datetime_utils import utc_isoformat
 from src.utils.logging_config import logger
 
-# 附件存储桶名称
-ATTACHMENTS_BUCKET = "chat-attachments"
+UPLOADS_VIRTUAL_PREFIX = "/mnt/user-data/uploads"
+LEGACY_ATTACHMENTS_PREFIX = "/attachments/"
 
 
 async def require_user_conversation(conv_repo: ConversationRepository, thread_id: str, user_id: str):
@@ -27,21 +33,27 @@ async def require_user_conversation(conv_repo: ConversationRepository, thread_id
     return conversation
 
 
-def _make_attachment_path(file_name: str) -> str:
-    """生成附件在文件系统中的路径（无需 thread_id，state 已隔离）
-
-    统一使用 .md 扩展名，因为文件内容已经是 Markdown 格式
-    """
-    # 提取不带扩展名的部分
+def _sanitize_file_stem(file_name: str) -> str:
     base_name = file_name
     for ext in [".docx", ".txt", ".html", ".htm", ".pdf", ".md"]:
         if file_name.lower().endswith(ext):
             base_name = file_name[: -len(ext)]
             break
+    safe_name = base_name.replace("/", "_").replace("\\", "_").strip(" .")
+    return safe_name or "attachment"
 
-    # 替换路径分隔符
-    safe_name = base_name.replace("/", "_").replace("\\", "_")
-    return f"/attachments/{safe_name}.md"
+
+def _make_attachment_markdown_virtual_path(file_name: str) -> str:
+    return f"{UPLOADS_VIRTUAL_PREFIX}/{_sanitize_file_stem(file_name)}.md"
+
+
+def _make_attachment_original_virtual_path(file_name: str) -> str:
+    safe_name = file_name.replace("/", "_").replace("\\", "_").strip(" .")
+    return f"{UPLOADS_VIRTUAL_PREFIX}/{safe_name or 'attachment.bin'}"
+
+
+def _artifact_url(thread_id: str, virtual_path: str) -> str:
+    return f"/api/chat/thread/{thread_id}/artifacts/{virtual_path.lstrip('/')}"
 
 
 def _build_state_files(attachments: list[dict]) -> dict:
@@ -80,19 +92,18 @@ async def _sync_thread_attachment_state(
         graph = await agent.get_graph()
         config = {"configurable": {"thread_id": thread_id, "user_id": str(user_id)}}
 
-        # 先获取现有 state，保留非附件文件
         state = await graph.aget_state(config)
         state_values = getattr(state, "values", {}) if state else {}
         existing_files = state_values.get("files", {}) if isinstance(state_values, dict) else {}
         if not isinstance(existing_files, dict):
             existing_files = {}
 
-        # 仅对 /attachments 命名空间做增量更新，避免覆盖 agent 运行期生成的其它文件。
         next_attachment_files = _build_state_files(attachments)
         prev_attachment_paths = {
             path
             for path in existing_files.keys()
-            if isinstance(path, str) and path.startswith("/attachments/")
+            if isinstance(path, str)
+            and (path.startswith(LEGACY_ATTACHMENTS_PREFIX) or path.startswith(f"{UPLOADS_VIRTUAL_PREFIX}/"))
         }
         next_attachment_paths = set(next_attachment_files.keys())
 
@@ -100,7 +111,6 @@ async def _sync_thread_attachment_state(
         for removed_path in prev_attachment_paths - next_attachment_paths:
             file_updates[removed_path] = None
 
-        # 使用 Command 确保 reducer 被正确应用
         await graph.aupdate_state(
             config=config,
             values={
@@ -108,12 +118,11 @@ async def _sync_thread_attachment_state(
                 "files": file_updates,
             },
         )
-    except Exception as e:
-        logger.warning(f"Failed to sync attachment state for thread {thread_id}: {e}")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Failed to sync attachment state for thread {thread_id}: {exc}")
 
 
 def serialize_attachment(record: dict) -> dict:
-    """序列化附件记录，返回给前端"""
     return {
         "file_id": record.get("file_id"),
         "file_name": record.get("file_name"),
@@ -122,7 +131,11 @@ def serialize_attachment(record: dict) -> dict:
         "status": record.get("status", "parsed"),
         "uploaded_at": record.get("uploaded_at"),
         "truncated": record.get("truncated", False),
-        "minio_url": record.get("minio_url"),  # 仅用于前端下载
+        "virtual_path": record.get("virtual_path") or record.get("file_path"),
+        "artifact_url": record.get("artifact_url"),
+        "original_virtual_path": record.get("original_virtual_path"),
+        "original_artifact_url": record.get("original_artifact_url"),
+        "minio_url": record.get("minio_url"),
     }
 
 
@@ -237,27 +250,31 @@ async def upload_thread_attachment_view(
         logger.error(f"附件解析失败: {exc}")
         raise HTTPException(status_code=500, detail="附件解析失败，请稍后重试") from exc
 
-    # 生成文件路径
-    file_path = _make_attachment_path(conversion.file_name)
+    markdown_virtual_path = _make_attachment_markdown_virtual_path(conversion.file_name)
+    original_virtual_path = _make_attachment_original_virtual_path(conversion.file_name)
+    markdown_artifact_url = _artifact_url(thread_id, markdown_virtual_path)
+    original_artifact_url = _artifact_url(thread_id, original_virtual_path)
 
-    # 上传源文件到 MinIO（用于前端下载）
-    minio_url = None
-    try:
-        file_content = await file.read()
-        await file.seek(0)
-        client = get_minio_client()
-        object_name = f"attachments/{thread_id}/{conversion.file_name}"
-        result = client.upload_file(
-            bucket_name=ATTACHMENTS_BUCKET,
-            object_name=object_name,
-            data=file_content,
-            content_type=conversion.file_type or "application/octet-stream",
+    ensure_thread_dirs(thread_id)
+    uploads_dir = sandbox_uploads_dir(thread_id)
+    markdown_actual_path = uploads_dir / Path(markdown_virtual_path).name
+    original_actual_path = uploads_dir / Path(original_virtual_path).name
+
+    await file.seek(0)
+    file_content = await file.read()
+    markdown_actual_path.write_text(conversion.markdown, encoding="utf-8")
+    original_actual_path.write_bytes(file_content)
+
+    provider = get_sandbox_provider()
+    connection = provider.get(thread_id, create_if_missing=False)
+    if connection is not None:
+        backend = ProvisionerSandboxBackend(thread_id=thread_id)
+        backend.upload_files(
+            [
+                (markdown_virtual_path, conversion.markdown.encode("utf-8")),
+                (original_virtual_path, file_content),
+            ]
         )
-        minio_url = result.public_url
-        logger.info(f"Uploaded attachment to MinIO: {object_name}")
-    except Exception as e:
-        logger.error(f"Failed to upload attachment to MinIO: {e}")
-        # 继续处理，不因为上传失败而中断
 
     attachment_record = {
         "file_id": conversion.file_id,
@@ -268,8 +285,14 @@ async def upload_thread_attachment_view(
         "markdown": conversion.markdown,
         "uploaded_at": utc_isoformat(),
         "truncated": conversion.truncated,
-        "file_path": file_path,  # 用于 StateBackend，前端不返回此字段
-        "minio_url": minio_url,  # 暂未使用
+        "file_path": markdown_virtual_path,
+        "virtual_path": markdown_virtual_path,
+        "artifact_url": markdown_artifact_url,
+        "original_virtual_path": original_virtual_path,
+        "original_artifact_url": original_artifact_url,
+        "minio_url": None,
+        "storage_path": str(markdown_actual_path),
+        "original_storage_path": str(original_actual_path),
     }
     await conv_repo.add_attachment(conversation.id, attachment_record)
     all_attachments = await conv_repo.get_attachments(conversation.id)
@@ -310,9 +333,28 @@ async def delete_thread_attachment_view(
 ) -> dict:
     conv_repo = ConversationRepository(db)
     conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+
+    existing_attachments = await conv_repo.get_attachments(conversation.id)
+    target_attachment = next((item for item in existing_attachments if item.get("file_id") == file_id), None)
+
     removed = await conv_repo.remove_attachment(conversation.id, file_id)
     if not removed:
         raise HTTPException(status_code=404, detail="附件不存在或已被删除")
+
+    if target_attachment:
+        for candidate in [
+            target_attachment.get("storage_path"),
+            target_attachment.get("original_storage_path"),
+        ]:
+            if not candidate:
+                continue
+            try:
+                file_path = Path(candidate)
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Failed to remove attachment file {candidate}: {exc}")
+
     all_attachments = await conv_repo.get_attachments(conversation.id)
     await _sync_thread_attachment_state(
         thread_id=thread_id,
@@ -320,4 +362,20 @@ async def delete_thread_attachment_view(
         agent_id=conversation.agent_id,
         attachments=all_attachments,
     )
+
+    if target_attachment:
+        provider = get_sandbox_provider()
+        connection = provider.get(thread_id, create_if_missing=False)
+        if connection is not None:
+            backend = ProvisionerSandboxBackend(thread_id=thread_id)
+            delete_commands = []
+            for path in [
+                target_attachment.get("virtual_path") or target_attachment.get("file_path"),
+                target_attachment.get("original_virtual_path"),
+            ]:
+                if isinstance(path, str) and path.strip():
+                    delete_commands.append(f"rm -f {shlex.quote(path)}")
+            if delete_commands:
+                backend.execute(" && ".join(delete_commands))
+
     return {"message": "附件已删除"}
