@@ -1,19 +1,13 @@
 from deepagents.backends import CompositeBackend, StateBackend
 
-from src.services.skill_resolver import normalize_selected_skills
-from src.services.skill_service import is_valid_skill_slug
+from src.agents.common.middlewares.skills_middleware import normalize_selected_skills
 
 from .skills_backend import SelectedSkillsReadonlyBackend
 
 
 def _get_visible_skills_from_runtime(runtime) -> list[str]:
+    """获取运行时可见的 skills 列表"""
     context = getattr(runtime, "context", None)
-    snapshot = getattr(context, "skill_session_snapshot", None)
-    if isinstance(snapshot, dict):
-        visible = snapshot.get("visible_skills")
-        if isinstance(visible, list):
-            return [slug for slug in visible if isinstance(slug, str) and is_valid_skill_slug(slug)]
-
     selected = getattr(context, "skills", None) or []
     return normalize_selected_skills(selected)
 

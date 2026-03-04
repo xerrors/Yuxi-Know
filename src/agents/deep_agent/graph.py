@@ -13,6 +13,7 @@ from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.backends import create_agent_composite_backend
 from src.agents.common.middlewares import RuntimeConfigMiddleware, SummaryOffloadMiddleware, save_attachments_to_fs
 from src.agents.common.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
+from src.agents.common.middlewares.skills_middleware import SkillsMiddleware
 from src.agents.common.toolkits.buildin.tools import _create_tavily_search
 from src.services.mcp_service import get_tools_from_all_servers
 from src.utils import logger
@@ -153,6 +154,7 @@ class DeepAgent(BaseAgent):
             middleware=[
                 FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
+                SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
                 save_attachments_to_fs,  # 附件注入提示词
                 TodoListMiddleware(),
                 PatchToolCallsMiddleware(),

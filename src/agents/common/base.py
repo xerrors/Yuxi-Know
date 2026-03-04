@@ -12,7 +12,6 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src import config as sys_config
 from src.agents.common.context import BaseContext
-from src.services.skill_resolver import get_skill_options_from_db
 from src.utils import logger
 
 
@@ -50,9 +49,6 @@ class BaseAgent:
         configurable_items = {}
         if include_configurable_items:
             configurable_items = self.context_schema.get_configurable_items()
-            if "skills" in configurable_items:
-                configurable_items["skills"] = dict(configurable_items["skills"])
-                configurable_items["skills"]["options"] = await get_skill_options_from_db()
 
         # Merge metadata with class attributes, metadata takes precedence
         return {
