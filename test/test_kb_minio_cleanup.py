@@ -109,6 +109,7 @@ async def test_delete_knowledge_base_cleanup():
     except Exception as e:
         print(f"\n❌ 测试异常: {e}")
         import traceback
+
         traceback.print_exc()
         return False
 

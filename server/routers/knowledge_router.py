@@ -730,9 +730,7 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
             minio_client = get_minio_client()
             await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
             # 同时删除 parsed bucket 中的 parsed.md 文件
-            await minio_client.adelete_file(
-                minio_client.KB_BUCKETS["parsed"], f"{db_id}/{doc_id}/parsed.md"
-            )
+            await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], f"{db_id}/{doc_id}/parsed.md")
             logger.debug(f"成功从MinIO删除文件: {file_name}")
         except Exception as minio_error:
             logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")

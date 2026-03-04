@@ -1,9 +1,14 @@
+import os
 import traceback
+import uuid
 from typing import Annotated, Any
+
+import requests
 
 from src import config, graph_base
 from src.agents.common.toolkits.registry import tool
 from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry
+from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 
 # Lazy initialization for TavilySearch (only when API key is available)
@@ -84,3 +89,47 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
     except Exception as e:
         logger.error(f"Knowledge graph query error: {e}, {traceback.format_exc()}")
         return f"知识图谱查询失败: {str(e)}"
+
+
+@tool(category="buildin", tags=["图片", "生成"], display_name="Qwen-Image")
+async def text_to_img_qwen_image(
+    prompt: Annotated[str, "用于生成图片的文本描述"],
+    negative_prompt: Annotated[str, "负面提示词，用于指定不想出现在图片中的元素"] = "",
+    num_inference_steps: Annotated[int, "推理步数，范围1-100"] = 20,
+    guidance_scale: Annotated[float, "引导强度，控制图片与提示词的匹配程度"] = 7.5,
+) -> str:
+    """使用 Qwen-Image 模型生成图片，返回图片的URL，需要注意的是，生成结果不会默认展示，需要将返回的URL进行展示处理。"""
+    url = "https://api.siliconflow.cn/v1/images/generations"
+
+    payload = {
+        "model": "Qwen/Qwen-Image",
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "num_inference_steps": num_inference_steps,
+        "guidance_scale": guidance_scale,
+    }
+    headers = {"Authorization": f"Bearer {os.getenv('SILICONFLOW_API_KEY')}", "Content-Type": "application/json"}
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        response_json = response.json()
+    except Exception as e:
+        logger.error(f"Failed to generate image with: {e}")
+        raise ValueError(f"Image generation failed: {e}")
+
+    try:
+        image_url = response_json["images"][0]["url"]
+    except (KeyError, IndexError, TypeError) as e:
+        logger.error(f"Failed to parse image URL from response: {e}, {response_json=}")
+        raise ValueError(f"Image URL extraction failed: {e}")
+
+    # Upload to MinIO
+    response = requests.get(image_url)
+    file_data = response.content
+
+    file_name = f"{uuid.uuid4()}.jpg"
+    image_url = await aupload_file_to_minio(
+        bucket_name="generated-images", file_name=file_name, data=file_data, file_extension="jpg"
+    )
+    logger.info(f"Image uploaded. URL: {image_url}")
+    return image_url
