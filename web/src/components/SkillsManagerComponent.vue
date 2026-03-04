@@ -125,17 +125,30 @@
                       <span>{{ selectedPath || '未选择文件' }}</span>
                       <span v-if="canSave" class="save-hint">●</span>
                     </div>
-                    <a-button
-                      type="primary"
-                      size="small"
-                      @click="saveCurrentFile"
-                      :disabled="!canSave"
-                      :loading="savingFile"
-                      class="lucide-icon-btn"
-                    >
-                      <Save :size="14" />
-                      <span>保存</span>
-                    </a-button>
+                    <div class="header-actions">
+                      <a-button
+                        v-if="isMarkdownFile && selectedPath"
+                        size="small"
+                        @click="viewMode = viewMode === 'edit' ? 'preview' : 'edit'"
+                        class="lucide-icon-btn view-toggle-btn"
+                        :title="viewMode === 'edit' ? '预览' : '编辑'"
+                      >
+                        <Eye v-if="viewMode === 'edit'" :size="14" />
+                        <Edit3 v-else :size="14" />
+                        <span>{{ viewMode === 'edit' ? '预览' : '编辑' }}</span>
+                      </a-button>
+                      <a-button
+                        type="primary"
+                        size="small"
+                        @click="saveCurrentFile"
+                        :disabled="!canSave"
+                        :loading="savingFile"
+                        class="lucide-icon-btn"
+                      >
+                        <Save :size="14" />
+                        <span>保存</span>
+                      </a-button>
+                    </div>
                   </div>
                   <div class="editor-main">
                     <a-empty
@@ -143,12 +156,21 @@
                       description="选择文件以开始编辑"
                       class="mt-40"
                     />
-                    <a-textarea
-                      v-else
-                      v-model:value="fileContent"
-                      class="pure-editor"
-                      spellcheck="false"
-                    />
+                    <template v-else>
+                      <MdPreview
+                        v-if="viewMode === 'preview'"
+                        :modelValue="fileContent"
+                        :theme="theme"
+                        previewTheme="github"
+                        class="markdown-preview flat-md-preview"
+                      />
+                      <a-textarea
+                        v-else
+                        v-model:value="fileContent"
+                        class="pure-editor"
+                        spellcheck="false"
+                      />
+                    </template>
                   </div>
                 </div>
               </div>
@@ -237,11 +259,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import relativeTime from 'dayjs/plugin/relativeTime'
 import 'dayjs/locale/zh-cn'
+import { MdPreview } from 'md-editor-v3'
+import 'md-editor-v3/lib/preview.css'
+import { useThemeStore } from '@/stores/theme'
 import {
   Upload,
   RotateCw,
@@ -255,13 +280,18 @@ import {
   File,
   Search,
   Box,
-  FileCode
+  FileCode,
+  Eye,
+  Edit3
 } from 'lucide-vue-next'
 import { skillApi } from '@/apis/skill_api'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 
 dayjs.extend(relativeTime)
 dayjs.locale('zh-cn')
+
+const themeStore = useThemeStore()
+const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 const loading = ref(false)
 const importing = ref(false)
@@ -270,6 +300,7 @@ const creatingNode = ref(false)
 const savingDependencies = ref(false)
 const activeTab = ref('editor')
 const searchQuery = ref('')
+const viewMode = ref('edit') // 'edit' | 'preview'
 
 const skills = ref([])
 const currentSkill = ref(null)
@@ -301,6 +332,18 @@ const filteredSkills = computed(() => {
 const canSave = computed(() => {
   if (!selectedPath.value || selectedIsDir.value) return false
   return fileContent.value !== originalFileContent.value
+})
+
+const isMarkdownFile = computed(() => {
+  if (!selectedPath.value) return false
+  return selectedPath.value.toLowerCase().endsWith('.md')
+})
+
+// 切换到非markdown文件时重置为编辑模式
+watch(selectedPath, (newPath) => {
+  if (newPath && !newPath.toLowerCase().endsWith('.md')) {
+    viewMode.value = 'edit'
+  }
 })
 
 const formatRelativeTime = (time) => (time ? dayjs(time).fromNow() : '-')
@@ -336,6 +379,7 @@ const resetFileState = () => {
   expandedKeys.value = []
   fileContent.value = ''
   originalFileContent.value = ''
+  viewMode.value = 'edit'
 }
 
 const expandAllKeys = (nodes) =>
@@ -744,6 +788,21 @@ defineExpose({
         margin-left: 4px;
       }
     }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .view-toggle-btn {
+      background-color: var(--gray-100);
+      border-color: var(--gray-300);
+      &:hover {
+        background-color: var(--gray-200);
+        border-color: var(--gray-400);
+      }
+    }
   }
 
   .editor-main {
@@ -777,6 +836,19 @@ defineExpose({
     line-height: 1.6;
     &:focus {
       outline: none;
+    }
+  }
+
+  .markdown-preview {
+    flex: 1;
+    height: 100%;
+    overflow-y: auto;
+    :deep(.md-editor) {
+      height: 100%;
+      background: var(--gray-0);
+    }
+    :deep(.md-editor-preview-wrapper) {
+      padding: 16px 20px;
     }
   }
 }
