@@ -2,8 +2,8 @@
   <div class="extensions-view">
     <div class="extensions-header">
       <a-tabs v-model:activeKey="activeTab" class="extensions-tabs">
-        <a-tab-pane key="skills" tab="Skills 管理" />
         <a-tab-pane key="tools" tab="工具" />
+        <a-tab-pane key="skills" tab="Skills 管理" />
         <a-tab-pane key="mcp" tab="MCP 服务器" />
       </a-tabs>
       <div class="header-actions">
@@ -47,15 +47,15 @@
     </div>
 
     <div class="extensions-content">
+      <div v-show="activeTab === 'tools'" class="tab-panel">
+        <ToolsManagerComponent ref="toolsRef" @refresh="handleToolsRefresh" />
+      </div>
       <div v-show="activeTab === 'skills'" class="tab-panel">
         <SkillsManagerComponent
           ref="skillsRef"
           @import="handleSkillsImport"
           @refresh="handleSkillsRefresh"
         />
-      </div>
-      <div v-show="activeTab === 'tools'" class="tab-panel">
-        <ToolsManagerComponent ref="toolsRef" @refresh="handleToolsRefresh" />
       </div>
       <div v-show="activeTab === 'mcp'" class="tab-panel">
         <McpServersComponent ref="mcpRef" @add="handleMcpAdd" @refresh="handleMcpRefresh" />
@@ -71,7 +71,7 @@ import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
 
-const activeTab = ref('skills')
+const activeTab = ref('tools')
 const skillsRef = ref(null)
 const toolsRef = ref(null)
 const mcpRef = ref(null)

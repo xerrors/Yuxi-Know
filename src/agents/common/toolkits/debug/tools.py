@@ -1,7 +1,6 @@
 from langgraph.types import interrupt
 
 from src.agents.common.toolkits.registry import tool
-from src.utils import logger
 
 
 @tool(category="debug", tags=["内置", "审批"], display_name="人工审批")

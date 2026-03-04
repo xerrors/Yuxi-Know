@@ -20,7 +20,6 @@ async def test_delete_knowledge_base_cleanup():
     """测试删除知识库时 MinIO 文件清理"""
     from src.storage.minio import get_minio_client
     from src.knowledge import knowledge_base
-    from src.knowledge.utils.kb_utils import is_minio_url
 
     # 初始化
     minio_client = get_minio_client()

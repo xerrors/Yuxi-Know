@@ -1,11 +1,8 @@
 <template>
   <BaseToolCall :tool-call="toolCall">
     <template #result="{ resultContent }">
-      <div v-if="imageUrl" class="image-result">
-        <img :src="imageUrl" />
-      </div>
-      <div v-else class="text-result">
-        {{ parsedContent }}
+      <div class="chart-result">
+        <img :src="chartUrl" />
       </div>
     </template>
   </BaseToolCall>
@@ -37,18 +34,18 @@ const parsedContent = computed(() => {
   return parseData(props.toolCall.tool_call_result?.content)
 })
 
-const imageUrl = computed(() => {
+const chartUrl = computed(() => {
   const content = parsedContent.value
-  // text_to_img_qwen_image 返回 URL 字符串
-  if (content && typeof content === 'string' && content.startsWith('http')) {
-    return content
+  // chart 返回数组格式 [{ type: "text", text: "url", id: "..." }]
+  if (Array.isArray(content) && content.length > 0 && content[0].type === 'text') {
+    return content[0].text
   }
   return null
 })
 </script>
 
 <style lang="less" scoped>
-.image-result {
+.chart-result {
   width: 100%;
   display: flex;
   justify-content: center;
@@ -59,10 +56,5 @@ const imageUrl = computed(() => {
     max-width: 100%;
     border-radius: 4px;
   }
-}
-
-.text-result {
-  padding: 8px;
-  color: var(--color-text);
 }
 </style>

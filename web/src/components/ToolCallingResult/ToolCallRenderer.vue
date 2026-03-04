@@ -5,6 +5,9 @@
   <!-- 网页搜索 -->
   <WebSearchTool v-else-if="isWebSearchResult" :tool-call="toolCall" />
 
+  <!-- Chart -->
+  <ChartTool v-else-if="isChartResult" :tool-call="toolCall" />
+
   <!-- 知识库列表 -->
   <ListKbsTool v-else-if="toolName === 'list_kbs'" :tool-call="toolCall" />
 
@@ -72,6 +75,7 @@ import ListKbsTool from './tools/ListKbsTool.vue'
 import GetMindmapTool from './tools/GetMindmapTool.vue'
 import QueryKbTool from './tools/QueryKbTool.vue'
 import KnowledgeGraphTool from './tools/KnowledgeGraphTool.vue'
+import ChartTool from './tools/ChartTool.vue'
 import CalculatorTool from './tools/CalculatorTool.vue'
 import TodoListTool from './tools/TodoListTool.vue'
 import ImageTool from './tools/ImageTool.vue'
@@ -141,9 +145,17 @@ const isCalculatorResult = computed(() => {
   return name.includes('calculator') || name.includes('calc') || name.includes('math')
 })
 
-const isImageResult = computed(() => {
+const isChartResult = computed(() => {
   const name = toolName.value.toLowerCase()
   if (!name.includes('chart')) return false
+  const data = parseData(props.toolCall.tool_call_result?.content)
+  // chart 返回数组格式 [{ type: "text", text: "url", id: "..." }]
+  return Array.isArray(data) && data.length > 0 && data[0].type === 'text'
+})
+
+const isImageResult = computed(() => {
+  const name = toolName.value.toLowerCase()
+  if (!name.includes('text_to_img')) return false
   const data = parseData(props.toolCall.tool_call_result?.content)
   return data && typeof data === 'string' && data.startsWith('http')
 })
