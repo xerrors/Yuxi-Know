@@ -506,9 +506,9 @@ class KnowledgeBase(ABC):
                 minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["parsed"], prefix),
                 minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["documents"], prefix),
                 minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["images"], prefix),
-                # 删除 ref bucket 中的文件（两种命名格式）
-                minio_client.adelete_objects_by_prefix(minio_client.get_ref_bucket_name(db_id), prefix),
-                minio_client.adelete_objects_by_prefix(minio_client.get_ref_bucket_name_full(db_id), prefix),
+                # 直接删除 ref bucket（两种命名格式）
+                minio_client.adelete_bucket(minio_client.get_ref_bucket_name(db_id)),
+                minio_client.adelete_bucket(minio_client.get_ref_bucket_name_full(db_id)),
             )
 
             # 3. 删除数据库记录

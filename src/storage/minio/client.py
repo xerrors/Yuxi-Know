@@ -283,6 +283,29 @@ class MinIOClient:
         await asyncio.to_thread(_delete_objects)
         return deleted_count
 
+    async def adelete_bucket(self, bucket_name: str) -> bool:
+        """
+        删除 bucket（先删除所有对象，再删除 bucket）
+
+        Args:
+            bucket_name: bucket 名称
+
+        Returns:
+            是否成功
+        """
+        try:
+            # 先删除所有对象
+            await self.adelete_objects_by_prefix(bucket_name, "")
+            # 再删除 bucket
+            await asyncio.to_thread(self.client.remove_bucket, bucket_name)
+            logger.info(f"成功删除 bucket: {bucket_name}")
+            return True
+        except S3Error as e:
+            if "NoSuchBucket" in str(e):
+                logger.warning(f"bucket 不存在: {bucket_name}")
+                return False
+            raise StorageError(f"删除 bucket 失败: {e}")
+
     def file_exists(self, bucket_name: str, object_name: str) -> bool:
         """检查文件是否存在"""
         try:
