@@ -4,7 +4,6 @@ from deepagents.backends import CompositeBackend
 
 from src.sandbox import ProvisionerSandboxBackend
 from src.agents.common.middlewares.skills_middleware import normalize_selected_skills
-from src.services.skill_service import is_valid_skill_slug
 
 from .skills_backend import SelectedSkillsReadonlyBackend
 

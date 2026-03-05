@@ -1473,7 +1473,6 @@ const handleSendMessage = async ({ image } = {}) => {
   } finally {
     threadState.streamAbortController = null
     // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(
     fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
       // 历史记录加载完成后，安全地清空当前进行中的对话
       resetOnGoingConv(threadId)
