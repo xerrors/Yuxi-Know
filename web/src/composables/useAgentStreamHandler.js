@@ -126,13 +126,13 @@ export function useAgentStreamHandler({
           currentAgentId: unref(currentAgentId),
           hasAgentState: !!chunk.agent_state,
           todoCount: Array.isArray(chunk.agent_state?.todos) ? chunk.agent_state.todos.length : 0,
-          fileKeys: chunk.agent_state?.files ? Object.keys(chunk.agent_state.files) : []
+          uploadCount: Array.isArray(chunk.agent_state?.uploads) ? chunk.agent_state.uploads.length : 0
         })
         if (chunk.agent_state) {
           console.log(`${debugPrefix}[agent_state_apply]`, {
             threadId,
             todos: chunk.agent_state?.todos || [],
-            files: chunk.agent_state?.files || []
+            uploads: chunk.agent_state?.uploads || []
           })
           threadState.agentState = chunk.agent_state
         } else {
@@ -164,7 +164,7 @@ export function useAgentStreamHandler({
               {
                 threadId,
                 todos: threadState.agentState?.todos || [],
-                files: threadState.agentState?.files || []
+                uploads: threadState.agentState?.uploads || []
               }
             )
           }

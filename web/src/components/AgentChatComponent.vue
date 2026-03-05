@@ -386,10 +386,7 @@ const mentionConfig = computed(() => {
     })
 
   currentThreadAttachments.value.forEach((item) => {
-    const candidates = [
-      [item?.virtual_path, item?.artifact_url],
-      [item?.original_virtual_path, item?.original_artifact_url]
-    ]
+    const candidates = [[item?.path, item?.artifact_url]]
     candidates.forEach(([path, artifactUrl]) => {
       if (typeof path !== 'string' || !path) return
       if (!fileMap.has(path)) {

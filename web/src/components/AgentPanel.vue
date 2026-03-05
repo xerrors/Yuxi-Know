@@ -386,18 +386,19 @@ const closeModal = () => {
   currentFilePath.value = ''
 }
 
-const downloadFile = (fileItem) => {
+const downloadFile = async (fileItem) => {
+  if (!props.threadId || !fileItem?.path) return
   try {
-    if (fileItem.artifact_url) {
-      const link = document.createElement('a')
-      link.href = fileItem.artifact_url
-      link.download = getFileName(fileItem)
-      link.target = '_blank'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      return
-    }
+    const response = await threadApi.downloadThreadArtifact(props.threadId, fileItem.path)
+    const blob = await response.blob()
+    const objectUrl = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = objectUrl
+    link.download = getFileName(fileItem)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(objectUrl)
   } catch (error) {
     console.error('下载文件失败:', error)
   }

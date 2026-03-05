@@ -3,7 +3,6 @@ import json
 import traceback
 import uuid
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
@@ -18,39 +17,29 @@ from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
 
 
-def _build_state_files(attachments: list[dict]) -> dict:
-    """将附件列表转换为 StateBackend 格式的 files 字典
-
-    StateBackend 期望的格式:
-    {
-        "/attachments/file.md": {
-            "content": ["line1", "line2", ...],
-            "created_at": "...",
-            "modified_at": "...",
-        }
-    }
-    """
-    files = {}
+def _build_state_uploads(attachments: list[dict]) -> list[dict]:
+    """Convert persisted attachment metadata into state.uploads entries."""
+    uploads: list[dict] = []
     for attachment in attachments:
-        if attachment.get("status") != "parsed":
+        file_path = attachment.get("path")
+        if not isinstance(file_path, str) or not file_path.strip():
             continue
 
-        file_path = attachment.get("file_path")
-        markdown = attachment.get("markdown")
+        uploads.append(
+            {
+                "file_id": attachment.get("file_id"),
+                "file_name": attachment.get("file_name"),
+                "file_type": attachment.get("file_type"),
+                "file_size": attachment.get("file_size", 0),
+                "status": attachment.get("status", "uploaded"),
+                "uploaded_at": attachment.get("uploaded_at"),
+                "path": file_path,
+                "artifact_url": attachment.get("artifact_url"),
+            }
+        )
 
-        if not file_path or not markdown:
-            continue
+    return uploads
 
-        now = datetime.now(UTC).isoformat()
-        # 将 markdown 内容按行拆分
-        content_lines = markdown.split("\n")
-        files[file_path] = {
-            "content": content_lines,
-            "created_at": attachment.get("uploaded_at", now),
-            "modified_at": attachment.get("uploaded_at", now),
-        }
-
-    return files
 
 
 async def _get_langgraph_messages(agent_instance, config_dict):
@@ -65,18 +54,18 @@ async def _get_langgraph_messages(agent_instance, config_dict):
 
 
 def extract_agent_state(values: dict) -> dict:
-    """从 LangGraph state 中提取 agent 状态"""
+    """Extract agent state payload returned to frontend."""
     if not isinstance(values, dict):
         return {}
 
-    # 直接获取，信任 state 的数据结构
     todos = values.get("todos")
     result = {
         "todos": list(todos)[:20] if todos else [],
-        "files": values.get("files") or {},
+        "uploads": values.get("uploads") or [],
     }
 
     return result
+
 
 
 async def _get_existing_message_ids(conv_repo: ConversationRepository, thread_id: str) -> set[str]:
@@ -379,7 +368,7 @@ async def stream_agent_chat(
         # 先构建 langgraph_config
         langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
 
-        # 注意：LangGraph 会自动从 checkpointer 恢复 state（包括 attachments 和 files）
+        # LangGraph 会自动从 checkpointer 恢复 state（包括 uploads）
         # 无需手动加载或传递
 
         # 根据用户权限过滤知识库
@@ -654,22 +643,15 @@ async def get_agent_state_view(
     state = await graph.aget_state(langgraph_config)
     agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
 
-    # 如果 state 中没有 files，从附件构建
-    # 这确保了上传附件后立即可以在文件列表中看到文件
-    if not agent_state.get("files") or agent_state["files"] == {}:
+    # 如果 state 中暂时没有 uploads，则从持久化附件记录回填
+    if not isinstance(agent_state.get("uploads"), list) or not agent_state["uploads"]:
         try:
             attachments = await conv_repo.get_attachments_by_thread_id(thread_id)
             logger.info(f"[get_agent_state_view] found {len(attachments)} attachments in DB")
             if attachments:
-                first_status = attachments[0].get("status")
-                first_has_markdown = bool(attachments[0].get("markdown"))
-                logger.info(
-                    f"[get_agent_state_view] first attachment status: {first_status}, "
-                    f"has markdown: {first_has_markdown}"
-                )
-                files = _build_state_files(attachments)
-                agent_state["files"] = files
-                logger.info(f"[get_agent_state_view] Built files from attachments: {len(files)} files")
+                uploads = _build_state_uploads(attachments)
+                agent_state["uploads"] = uploads
+                logger.info(f"[get_agent_state_view] Built uploads from attachments: {len(uploads)} files")
         except Exception as e:
             logger.warning(f"Failed to fetch attachments for thread {thread_id}: {e}")
 

@@ -679,11 +679,8 @@ class AttachmentResponse(BaseModel):
     file_size: int
     status: str
     uploaded_at: str
-    truncated: bool | None = False
-    virtual_path: str | None = None
+    path: str
     artifact_url: str | None = None
-    original_virtual_path: str | None = None
-    original_artifact_url: str | None = None
     minio_url: str | None = None
 
 
@@ -787,7 +784,7 @@ async def upload_thread_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
-    """上传并解析附件为 Markdown，附加到指定对话线程。"""
+    """上传原始附件并关联到指定对话线程。"""
     return await upload_thread_attachment_view(
         thread_id=thread_id,
         file=file,

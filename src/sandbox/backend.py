@@ -130,6 +130,37 @@ class ProvisionerSandboxBackend(BaseSandbox):
         except Exception:  # noqa: BLE001
             return content.encode("utf-8")
 
+    def read(
+        self,
+        file_path: str,
+        offset: int = 0,
+        limit: int = 2000,
+    ) -> str:
+        """Read file content directly via file API to avoid shell-output false positives."""
+        normalized_path = _normalize_path(file_path)
+        start = max(0, int(offset))
+        size = max(0, int(limit))
+
+        try:
+            content = self._read_binary(normalized_path)
+        except Exception:  # noqa: BLE001
+            return f"Error: File '{file_path}' not found"
+
+        if not content:
+            return "System reminder: File exists but has empty contents"
+
+        text = content.decode("utf-8", errors="replace")
+        lines = text.splitlines()
+        selected_lines = lines[start : start + size]
+
+        if not selected_lines:
+            return ""
+
+        return "\n".join(
+            f"{start + idx + 1:6d}\t{line}"
+            for idx, line in enumerate(selected_lines)
+        )
+
     def execute(self, command: str) -> ExecuteResponse:
         try:
             result = self._shell_exec(command)

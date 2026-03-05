@@ -63,6 +63,17 @@ class ProvisionerClient:
             status=payload.get("status"),
         )
 
+    def touch(self, sandbox_id: str) -> bool:
+        response = self._request("POST", f"/api/sandboxes/{sandbox_id}/touch")
+        if response.status_code == 404:
+            return False
+        if response.status_code >= 400:
+            raise RuntimeError(
+                f"failed to touch sandbox {sandbox_id}: "
+                f"{response.status_code} {response.text}"
+            )
+        return True
+
     def delete(self, sandbox_id: str) -> None:
         response = self._request("DELETE", f"/api/sandboxes/{sandbox_id}")
         if response.status_code in {200, 404}:

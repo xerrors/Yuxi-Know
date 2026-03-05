@@ -371,6 +371,15 @@ export const threadApi = {
   },
 
   /**
+   * 下载线程文件（带鉴权）
+   * @param {string} threadId
+   * @param {string} path
+   * @returns {Promise<Response>}
+   */
+  downloadThreadArtifact: (threadId, path) =>
+    apiGet(threadApi.getThreadArtifactUrl(threadId, path, true), {}, true, 'blob'),
+
+  /**
    * 上传附件
    * @param {string} threadId
    * @param {File} file

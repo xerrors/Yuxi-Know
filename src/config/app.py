@@ -43,6 +43,7 @@ class Config(BaseModel):
     sandbox_virtual_path_prefix: str = Field(default="/mnt/user-data")
     sandbox_exec_timeout_seconds: int = Field(default=180)
     sandbox_max_output_bytes: int = Field(default=262144)
+    sandbox_keepalive_interval_seconds: int = Field(default=30)
 
     model_names: dict[str, ChatModelProvider] = Field(
         default_factory=lambda: DEFAULT_CHAT_MODEL_PROVIDERS.copy(),
@@ -165,6 +166,9 @@ class Config(BaseModel):
         )
         self.sandbox_max_output_bytes = int(
             os.getenv("SANDBOX_MAX_OUTPUT_BYTES") or self.sandbox_max_output_bytes or 262144
+        )
+        self.sandbox_keepalive_interval_seconds = int(
+            os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS") or self.sandbox_keepalive_interval_seconds or 30
         )
 
         if self.sandbox_provider.lower() != "provisioner":
