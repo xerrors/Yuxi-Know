@@ -162,9 +162,7 @@ class LightRagKB(KnowledgeBase):
         status_value = status.value if hasattr(status, "value") else status
         if status_value not in {"processed", "preprocessed"}:
             error_msg = status_doc.get("error_msg") or "unknown error"
-            raise ValueError(
-                f"LightRAG 实体关系抽取失败: file_id={file_id}, status={status_value}, error={error_msg}"
-            )
+            raise ValueError(f"LightRAG 实体关系抽取失败: file_id={file_id}, status={status_value}, error={error_msg}")
 
     async def _get_lightrag_instance(self, db_id: str) -> LightRAG | None:
         """获取或创建 LightRAG 实例"""

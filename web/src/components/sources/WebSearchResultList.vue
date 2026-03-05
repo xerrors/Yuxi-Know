@@ -1,7 +1,11 @@
 <template>
   <div class="web-search-result-list">
     <div v-if="results.length > 0" class="search-results">
-      <div v-for="(result, index) in results" :key="getItemKey(result, index)" class="search-result-item">
+      <div
+        v-for="(result, index) in results"
+        :key="getItemKey(result, index)"
+        class="search-result-item"
+      >
         <div class="result-header">
           <h5 class="result-title">
             <a :href="result.url" target="_blank" rel="noopener noreferrer">

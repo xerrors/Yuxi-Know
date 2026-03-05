@@ -27,7 +27,9 @@ export const getSkillTree = async (slug) => {
 }
 
 export const getSkillFile = async (slug, path) => {
-  return apiSuperAdminGet(`${BASE_URL}/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`)
+  return apiSuperAdminGet(
+    `${BASE_URL}/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`
+  )
 }
 
 export const createSkillFile = async (slug, payload) => {
@@ -43,7 +45,9 @@ export const updateSkillDependencies = async (slug, payload) => {
 }
 
 export const deleteSkillFile = async (slug, path) => {
-  return apiSuperAdminDelete(`${BASE_URL}/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`)
+  return apiSuperAdminDelete(
+    `${BASE_URL}/${encodeURIComponent(slug)}/file?path=${encodeURIComponent(path)}`
+  )
 }
 
 export const exportSkill = async (slug) => {

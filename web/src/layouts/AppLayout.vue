@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { GithubOutlined } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck, Folder } from 'lucide-vue-next'
+import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck, Blocks } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
@@ -112,10 +112,10 @@ const mainList = computed(() => {
 
   if (userStore.isSuperAdmin) {
     items.push({
-      name: 'Skills 管理',
-      path: '/skills',
-      icon: Folder,
-      activeIcon: Folder
+      name: '扩展管理',
+      path: '/extensions',
+      icon: Blocks,
+      activeIcon: Blocks
     })
   }
 

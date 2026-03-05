@@ -114,10 +114,7 @@ def test_chunk_preset_options_include_description() -> None:
 def test_laws_chunking_should_apply_overlength_protection() -> None:
     lines = ["#### 中华人民共和国企业所得税法实施条例", "##### 微信扫一扫：分享"]
     lines.extend(
-        [
-            f"第{i}条 企业所得税法实施细则说明，适用于测试场景，确保条文长度足够用于验证分块策略。"
-            for i in range(1, 260)
-        ]
+        [f"第{i}条 企业所得税法实施细则说明，适用于测试场景，确保条文长度足够用于验证分块策略。" for i in range(1, 260)]
     )
     content = "\n".join(lines)
 

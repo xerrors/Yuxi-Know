@@ -19,13 +19,7 @@ def _build_zip(files: dict[str, str]) -> bytes:
 
 
 def test_parse_skill_markdown_ok():
-    content = (
-        "---\n"
-        "name: demo-skill\n"
-        "description: demo description\n"
-        "---\n"
-        "# Demo\n"
-    )
+    content = "---\nname: demo-skill\ndescription: demo description\n---\n# Demo\n"
     name, desc, meta = svc._parse_skill_markdown(content)
     assert name == "demo-skill"
     assert desc == "demo description"
@@ -119,13 +113,7 @@ async def test_import_skill_zip_conflict_rewrite_name(tmp_path: Path, monkeypatc
 
     zip_bytes = _build_zip(
         {
-            "demo/SKILL.md": (
-                "---\n"
-                "name: demo\n"
-                "description: this is demo\n"
-                "---\n"
-                "# Demo\n"
-            ),
+            "demo/SKILL.md": ("---\nname: demo\ndescription: this is demo\n---\n# Demo\n"),
             "demo/prompts/system.md": "You are demo skill",
         }
     )
@@ -187,13 +175,7 @@ async def test_update_skill_md_syncs_metadata(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(svc, "get_skill_or_raise", fake_get_skill_or_raise)
     monkeypatch.setattr(svc, "SkillRepository", FakeRepo)
 
-    new_content = (
-        "---\n"
-        "name: demo\n"
-        "description: updated desc\n"
-        "---\n"
-        "# updated\n"
-    )
+    new_content = "---\nname: demo\ndescription: updated desc\n---\n# updated\n"
     await svc.update_skill_file(
         None,
         slug="demo",

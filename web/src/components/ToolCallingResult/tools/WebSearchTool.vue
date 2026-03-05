@@ -67,7 +67,6 @@ const query = computed(() => {
     return ''
   }
 })
-
 </script>
 
 <style lang="less" scoped>

@@ -12,10 +12,11 @@ from langchain.agents.middleware import (
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.backends import create_agent_composite_backend
 from src.agents.common.middlewares import RuntimeConfigMiddleware, SummaryOffloadMiddleware, save_attachments_to_fs
-from src.agents.common.tools import get_tavily_search
+from src.agents.common.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
+from src.agents.common.middlewares.skills_middleware import SkillsMiddleware
+from src.agents.common.toolkits.buildin.tools import _create_tavily_search
 from src.services.mcp_service import get_tools_from_all_servers
 from src.utils import logger
-
 
 from .context import DeepContext
 
@@ -79,19 +80,16 @@ class DeepAgent(BaseAgent):
 
     async def get_tools(self):
         """返回 Deep Agent 的专用工具"""
-        tools = []
-        tavily_search = get_tavily_search()
-        if tavily_search:
-            tools.append(tavily_search)
+        from src import config
 
-        # # Assert that search tool is available for DeepAgent
-        # assert tools, (
-        #     "DeepAgent requires at least one search tool. "
-        #     "Please configure TAVILY_API_KEY environment variable to enable web search."
-        # )
+        tools = []
+        if config.enable_web_search:
+            tavily = _create_tavily_search()
+            if tavily:
+                tools.append(tavily)
+
         if not tools:
             logger.warning("No search tools configured, DeepAgent will work without web search")
-            tools = []
         return tools
 
     async def get_graph(self, **kwargs):
@@ -156,9 +154,11 @@ class DeepAgent(BaseAgent):
             middleware=[
                 FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
+                SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
                 save_attachments_to_fs,  # 附件注入提示词
                 TodoListMiddleware(),
                 PatchToolCallsMiddleware(),
+                KnowledgeBaseMiddleware(),  # 知识库工具
                 subagents_middleware,
                 summary_middleware,
                 # 工具调用限制：tavily_search 总调用最多 20 次

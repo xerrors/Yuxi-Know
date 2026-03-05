@@ -1474,13 +1474,12 @@ const handleSendMessage = async ({ image } = {}) => {
     threadState.streamAbortController = null
     // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
     fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(
-      () => {
-        // 历史记录加载完成后，安全地清空当前进行中的对话
-        resetOnGoingConv(threadId)
-        handleAgentStateRefresh(threadId)
-        scrollController.scrollToBottom()
-      }
-    )
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
+      // 历史记录加载完成后，安全地清空当前进行中的对话
+      resetOnGoingConv(threadId)
+      handleAgentStateRefresh(threadId)
+      scrollController.scrollToBottom()
+    })
   }
 }
 
@@ -1519,7 +1518,6 @@ const handleSendOrStop = async (payload) => {
 
 // ==================== 人工审批处理 ====================
 const handleApprovalWithStream = async (approved) => {
-
   const threadId = approvalState.threadId
   if (!threadId) {
     message.error('无效的审批请求')
@@ -1557,12 +1555,10 @@ const handleApprovalWithStream = async (approved) => {
     }
 
     // 异步加载历史记录，保持当前消息显示直到历史记录加载完成
-    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(
-      () => {
-        resetOnGoingConv(threadId)
-        scrollController.scrollToBottom()
-      }
-    )
+    fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
+      resetOnGoingConv(threadId)
+      scrollController.scrollToBottom()
+    })
   }
 }
 

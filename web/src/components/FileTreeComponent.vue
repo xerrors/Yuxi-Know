@@ -87,7 +87,13 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:selectedKeys', 'update:expandedKeys', 'select', 'nodeClick', 'toggleFolder'])
+const emit = defineEmits([
+  'update:selectedKeys',
+  'update:expandedKeys',
+  'select',
+  'nodeClick',
+  'toggleFolder'
+])
 
 const handleSelectedUpdate = (keys) => {
   emit('update:selectedKeys', keys)
@@ -103,20 +109,20 @@ const handleSelect = (selectedKeys, info) => {
 
 const handleNodeClick = (data) => {
   emit('nodeClick', data)
-  
+
   const isFolder = data.isLeaf === false || (data.children && Array.isArray(data.children))
-  
+
   if (isFolder) {
     const key = data.key
     const newExpandedKeys = [...props.expandedKeys]
     const index = newExpandedKeys.indexOf(key)
-    
+
     if (index > -1) {
       newExpandedKeys.splice(index, 1)
     } else {
       newExpandedKeys.push(key)
     }
-    
+
     emit('update:expandedKeys', newExpandedKeys)
     emit('toggleFolder', data, newExpandedKeys.indexOf(key) > -1)
   }
@@ -134,7 +140,7 @@ const handleNodeClick = (data) => {
     width: 100%;
     padding: 0 4px;
     height: 32px;
-    
+
     /* 隐藏切换器 */
     .ant-tree-switcher {
       display: none;
@@ -171,7 +177,7 @@ const handleNodeClick = (data) => {
         height: 100%;
         margin-right: 4px;
         flex-shrink: 0;
-        
+
         .anticon {
           display: flex;
           align-items: center;

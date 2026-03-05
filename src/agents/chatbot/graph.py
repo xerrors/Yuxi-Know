@@ -1,17 +1,19 @@
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
-
 from langchain.agents import create_agent
 from langchain.agents.middleware import (
-    TodoListMiddleware,
     ModelRetryMiddleware,
+    TodoListMiddleware,
 )
+
 from src.agents.common import BaseAgent, load_chat_model
 from src.agents.common.backends import create_agent_composite_backend
 from src.agents.common.middlewares import (
     RuntimeConfigMiddleware,
     save_attachments_to_fs,
 )
+from src.agents.common.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
+from src.agents.common.middlewares.skills_middleware import SkillsMiddleware
 from src.services.mcp_service import get_tools_from_all_servers
 
 
@@ -43,7 +45,9 @@ class ChatbotAgent(BaseAgent):
             middleware=[
                 save_attachments_to_fs,  # 附件注入提示词
                 FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
-                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/知识库/MCP/提示词）
+                KnowledgeBaseMiddleware(),  # 知识库工具
+                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/MCP/提示词）
+                SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
                 ModelRetryMiddleware(),  # 模型重试中间件
                 TodoListMiddleware(),
                 PatchToolCallsMiddleware(),

@@ -76,9 +76,7 @@ async def get_redis_client():
             await redis.aclose()
         except Exception:
             pass
-        raise RuntimeError(
-            f"Redis connection failed ({_redacted_redis_url(REDIS_URL)}): {e}"
-        ) from e
+        raise RuntimeError(f"Redis connection failed ({_redacted_redis_url(REDIS_URL)}): {e}") from e
 
     _redis_client = redis
     return _redis_client

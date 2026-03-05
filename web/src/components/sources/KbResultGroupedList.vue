@@ -16,7 +16,11 @@
             <span class="file-name">{{ fileGroup.filename }}</span>
             <span class="chunk-count">{{ fileGroup.chunks.length }} chunks</span>
           </div>
-          <ChevronDown :size="14" class="expand-icon" :class="{ rotated: expandedFiles.has(fileGroup.filename) }" />
+          <ChevronDown
+            :size="14"
+            class="expand-icon"
+            :class="{ rotated: expandedFiles.has(fileGroup.filename) }"
+          />
         </div>
 
         <div v-if="expandedFiles.has(fileGroup.filename)" class="chunks-container">

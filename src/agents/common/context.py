@@ -12,8 +12,6 @@ from src import config as sys_config
 from src.services.mcp_service import get_mcp_server_names
 from src.utils import logger
 
-from .tools import gen_tool_info, get_buildin_tools
-
 
 @dataclass(kw_only=True)
 class BaseContext:
@@ -65,7 +63,6 @@ class BaseContext:
         default_factory=list,
         metadata={
             "name": "工具",
-            "options": lambda: gen_tool_info(get_buildin_tools()),
             "description": "内置的工具。",
         },
     )

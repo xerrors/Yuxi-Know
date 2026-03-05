@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import re
-from io import StringIO
 from typing import Any
 
 

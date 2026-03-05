@@ -242,11 +242,6 @@ async def test_awrap_tool_call_denies_invisible_skill():
 
 @pytest.mark.asyncio
 async def test_model_call_injects_dependency_tools_and_mcps_after_activation(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(
-        runtime_middleware,
-        "get_buildin_tools",
-        lambda: [_FakeTool(name="calculator"), _FakeTool(name="dep-tool")],
-    )
     monkeypatch.setattr(runtime_middleware, "get_kb_based_tools", lambda db_names=None: [])
 
     snapshot = _build_snapshot(

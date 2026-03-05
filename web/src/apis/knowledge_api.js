@@ -152,13 +152,18 @@ export const documentApi = {
    * @returns {Promise} - 批量删除结果
    */
   batchDeleteDocuments: async (dbId, fileIds) => {
-    return apiRequest(`/api/knowledge/databases/${dbId}/documents/batch`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json'
+    return apiRequest(
+      `/api/knowledge/databases/${dbId}/documents/batch`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fileIds)
       },
-      body: JSON.stringify(fileIds)
-    }, true, 'json')
+      true,
+      'json'
+    )
   },
 
   /**

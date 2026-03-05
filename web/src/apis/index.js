@@ -13,6 +13,7 @@ export * from './mindmap_api' // 思维导图API
 export * from './department_api' // 部门管理API
 export * from './mcp_api' // MCP API
 export * from './skill_api' // Skills API
+export * from './tool_api' // 工具 API
 
 // 导出基础工具函数
 export {

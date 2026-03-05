@@ -43,7 +43,12 @@ _PRESET_DEFAULTS: dict[str, dict[str, Any] | None] = {
         "topn_tags": 3,
         "raptor": {
             "use_raptor": True,
-            "prompt": "Please summarize the following paragraphs. Be careful with the numbers, do not make things up. Paragraphs as following:\n      {cluster_content}\nThe above is the content you need to summarize.",
+            "prompt": (
+                "Please summarize the following paragraphs. Be careful with the "
+                "numbers, do not make things up. Paragraphs as following:\n"
+                "      {cluster_content}\n"
+                "The above is the content you need to summarize."
+            ),
             "max_token": 256,
             "threshold": 0.1,
             "max_cluster": 64,
@@ -163,9 +168,7 @@ def resolve_chunk_processing_params(
     request = dict(request_params or {})
 
     preset_id = normalize_chunk_preset_id(
-        request.get("chunk_preset_id")
-        or file_params.get("chunk_preset_id")
-        or kb_additional.get("chunk_preset_id")
+        request.get("chunk_preset_id") or file_params.get("chunk_preset_id") or kb_additional.get("chunk_preset_id")
     )
 
     parser_config = get_default_chunk_parser_config(preset_id)

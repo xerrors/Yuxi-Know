@@ -6,13 +6,15 @@
     :footer="null"
     :destroyOnClose="true"
     wrap-class-name="chunk-detail-modal"
-    :bodyStyle="{ maxHeight: '72vh', overflowY: 'auto', padding: '12px 16px' }"
+    :bodyStyle="{ maxHeight: '72vh', overflowY: 'auto', padding: '0' }"
   >
     <div v-if="chunk" class="detail-meta">
       <span v-if="typeof chunk.score === 'number'" class="score"
         >相似度 {{ (chunk.score * 100).toFixed(1) }}%</span
       >
-      <span v-if="chunk.metadata?.chunk_id" class="meta-item">chunk_id: {{ chunk.metadata.chunk_id }}</span>
+      <span v-if="chunk.metadata?.chunk_id" class="meta-item"
+        >chunk_id: {{ chunk.metadata.chunk_id }}</span
+      >
     </div>
 
     <MdPreview

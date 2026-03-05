@@ -40,7 +40,7 @@
           @click="$emit('toggle-panel')"
           title="查看工作状态"
         >
-          <FolderCode :size="14" />
+          <FolderCode :size="18" />
           <span>状态</span>
         </div>
       </div>
@@ -125,7 +125,11 @@ const handleAttachmentUpload = async (files) => {
   }
 
   try {
-    const hide = message.loading({ content: '正在上传附件...', key: 'upload-attachment', duration: 0 })
+    const hide = message.loading({
+      content: '正在上传附件...',
+      key: 'upload-attachment',
+      duration: 0
+    })
     for (const file of files) {
       await threadApi.uploadThreadAttachment(threadId, file)
     }
@@ -187,7 +191,7 @@ defineExpose({
   padding: 0 8px;
   height: 28px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--gray-600);
   cursor: pointer;
   transition: all 0.2s ease;

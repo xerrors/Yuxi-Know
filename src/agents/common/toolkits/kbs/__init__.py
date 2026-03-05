@@ -1,3 +1,5 @@
-from .tools import get_kb_based_tools
+from .tools import (
+    get_common_kb_tools,
+)
 
-__all__ = ["get_kb_based_tools"]
+__all__ = ["get_common_kb_tools"]

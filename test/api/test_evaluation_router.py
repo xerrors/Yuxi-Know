@@ -59,4 +59,3 @@ async def test_download_benchmark_not_found(test_client, admin_headers):
         headers=admin_headers,
     )
     assert response.status_code == 404, response.text
-

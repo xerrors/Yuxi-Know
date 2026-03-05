@@ -73,7 +73,11 @@
         />
       </a-form-item>
 
-      <a-form-item v-if="database.kb_type !== 'dify'" label="自动生成问题" name="auto_generate_questions">
+      <a-form-item
+        v-if="database.kb_type !== 'dify'"
+        label="自动生成问题"
+        name="auto_generate_questions"
+      >
         <a-switch
           v-model:checked="editForm.auto_generate_questions"
           checked-children="开启"
@@ -98,10 +102,16 @@
 
       <template v-if="database.kb_type === 'dify'">
         <a-form-item label="Dify API URL" name="dify_api_url">
-          <a-input v-model:value="editForm.dify_api_url" placeholder="例如: https://api.dify.ai/v1" />
+          <a-input
+            v-model:value="editForm.dify_api_url"
+            placeholder="例如: https://api.dify.ai/v1"
+          />
         </a-form-item>
         <a-form-item label="Dify Token" name="dify_token">
-          <a-input-password v-model:value="editForm.dify_token" placeholder="请输入 Dify API Token" />
+          <a-input-password
+            v-model:value="editForm.dify_token"
+            placeholder="请输入 Dify API Token"
+          />
         </a-form-item>
         <a-form-item label="Dataset ID" name="dify_dataset_id">
           <a-input v-model:value="editForm.dify_dataset_id" placeholder="请输入 Dify dataset_id" />

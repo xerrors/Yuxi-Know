@@ -29,7 +29,9 @@ def _build_chunk_records(text_chunks: list[str], file_id: str, filename: str) ->
     return records
 
 
-def _dispatch_markdown_parser(preset_id: str, filename: str, markdown_content: str, parser_config: dict[str, Any]) -> list[str]:
+def _dispatch_markdown_parser(
+    preset_id: str, filename: str, markdown_content: str, parser_config: dict[str, Any]
+) -> list[str]:
     parser_id = map_to_internal_parser_id(preset_id)
 
     if parser_id == "naive":
@@ -44,7 +46,9 @@ def _dispatch_markdown_parser(preset_id: str, filename: str, markdown_content: s
     return general.chunk_markdown(markdown_content, parser_config)
 
 
-def chunk_markdown(markdown_content: str, file_id: str, filename: str, processing_params: dict[str, Any]) -> list[dict[str, Any]]:
+def chunk_markdown(
+    markdown_content: str, file_id: str, filename: str, processing_params: dict[str, Any]
+) -> list[dict[str, Any]]:
     params = dict(processing_params or {})
     preset_id = normalize_chunk_preset_id(params.get("chunk_preset_id"))
     parser_config = params.get("chunk_parser_config") if isinstance(params.get("chunk_parser_config"), dict) else {}
@@ -53,6 +57,8 @@ def chunk_markdown(markdown_content: str, file_id: str, filename: str, processin
     return _build_chunk_records(text_chunks, file_id, filename)
 
 
-def chunk_file(file_content: str, file_id: str, filename: str, processing_params: dict[str, Any]) -> list[dict[str, Any]]:
+def chunk_file(
+    file_content: str, file_id: str, filename: str, processing_params: dict[str, Any]
+) -> list[dict[str, Any]]:
     # 当前链路中入库前均已转换为 markdown，因此与 chunk_markdown 保持同实现。
     return chunk_markdown(file_content, file_id, filename, processing_params)

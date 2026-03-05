@@ -1,128 +1,335 @@
 <template>
-  <div class="mcp-servers">
-    <!-- 头部区域 -->
-    <div class="header-section">
-      <div class="header-content">
-        <h3 class="title">MCP 服务器管理</h3>
-        <p class="description">
-          管理 MCP（Model Context Protocol）服务器配置。添加、编辑或删除 MCP 服务器以扩展 AI
-          的能力。
-        </p>
-      </div>
-      <a-button type="primary" @click="showAddModal" class="add-btn">
-        <template #icon><PlusOutlined /></template>
-        添加服务器
-      </a-button>
+  <div class="mcp-servers extension-page-root">
+    <div v-if="loading" class="loading-bar-wrapper">
+      <div class="loading-bar"></div>
     </div>
-
-    <!-- 统计信息 -->
-    <div class="stats-section" v-if="servers.length > 0">
-      <span class="stats-text">
-        已配置 {{ servers.length }} 个 MCP 服务器： HTTP: {{ httpCount }} · SSE: {{ sseCount }} ·
-        StdIO: {{ stdioCount }}
-      </span>
-    </div>
-
-    <!-- 主内容区域 -->
-    <div class="content-section">
-      <a-spin :spinning="loading">
-        <div v-if="error" class="error-message">
-          <a-alert type="error" :message="error" show-icon />
+    <div class="layout-wrapper" :class="{ 'content-loading': loading }">
+      <!-- 左侧：服务器列表 -->
+      <div class="sidebar-list">
+        <!-- 搜索框 -->
+        <div class="search-box">
+          <a-input
+            v-model:value="searchQuery"
+            placeholder="搜索服务器..."
+            allow-clear
+            class="search-input"
+          >
+            <template #prefix><Search :size="14" class="text-muted" /></template>
+          </a-input>
         </div>
 
-        <div class="cards-container">
-          <div v-if="servers.length === 0" class="empty-state">
-            <a-empty description="暂无 MCP 服务器配置">
-              <a-button type="primary" @click="showAddModal">添加服务器</a-button>
-            </a-empty>
+        <!-- 统计信息 -->
+        <!-- <div class="stats-section" v-if="filteredServers.length > 0">
+          <span class="stats-text">
+            {{ filteredServers.length }} 个服务器： HTTP: {{ httpCount }} · SSE: {{ sseCount }} · StdIO: {{ stdioCount }}
+          </span>
+        </div> -->
+
+        <!-- 服务器列表 -->
+        <div class="list-container">
+          <div v-if="filteredServers.length === 0" class="empty-text">
+            <a-empty :image="false" :description="searchQuery ? '无匹配服务器' : '暂无服务器'" />
           </div>
-          <div v-else class="server-cards-grid">
+          <template v-for="(server, index) in filteredServers" :key="server.name">
             <div
-              v-for="server in servers"
-              :key="server.name"
-              class="server-card"
-              :class="{ disabled: !server.enabled }"
+              class="list-item"
+              :class="{ active: currentServer?.name === server.name, disabled: !server.enabled }"
+              @click="selectServer(server)"
             >
-              <div class="card-header">
-                <div class="server-info">
-                  <span class="server-icon">{{ server.icon || '🔌' }}</span>
-                  <div class="server-basic-info">
-                    <h4 class="server-name" @click="showDetailModal(server)">{{ server.name }}</h4>
-                    <div class="server-transport">
-                      <a-tag size="small" class="transport-tag">
-                        {{ server.transport }}
-                      </a-tag>
-                    </div>
-                  </div>
-                </div>
+              <div class="item-header">
+                <span class="server-icon">{{ server.icon || '🔌' }}</span>
+                <span class="item-name">{{ server.name }}</span>
                 <a-switch
+                  size="small"
                   :checked="server.enabled"
                   @change="handleToggleServer(server)"
+                  @click.stop
                   :loading="toggleLoading === server.name"
                 />
               </div>
-
-              <div class="card-content">
-                <div class="server-description">
-                  {{ server.description || '暂无描述' }}
-                </div>
-              </div>
-
-              <div class="card-actions">
-                <a-tooltip title="查看详情">
-                  <a-button
-                    type="text"
-                    size="small"
-                    @click="showDetailModal(server)"
-                    class="action-btn"
-                  >
-                    <EyeOutlined />
-                    <span>详情</span>
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="测试连接">
-                  <a-button
-                    type="text"
-                    size="small"
-                    @click="handleTestServer(server)"
-                    class="action-btn"
-                    :loading="testLoading === server.name"
-                  >
-                    <ApiOutlined v-if="testLoading !== server.name" />
-                    <span>测试</span>
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip title="编辑配置">
-                  <a-button
-                    type="text"
-                    size="small"
-                    @click="showEditModal(server)"
-                    class="action-btn"
-                  >
-                    <EditOutlined />
-                    <span>编辑</span>
-                  </a-button>
-                </a-tooltip>
-                <a-tooltip
-                  :title="server.created_by === 'system' ? '内置 MCP 无法删除' : '删除服务器'"
-                >
-                  <a-button
-                    type="text"
-                    size="small"
-                    danger
-                    :disabled="server.created_by === 'system'"
-                    @click="confirmDeleteServer(server)"
-                    class="action-btn"
-                  >
-                    <DeleteOutlined />
-                    <span>删除</span>
-                  </a-button>
-                </a-tooltip>
+              <div class="item-details">
+                <a-tag size="small" class="transport-tag">{{ server.transport }}</a-tag>
+                <span class="item-desc">{{ server.description || '暂无描述' }}</span>
               </div>
             </div>
+            <div v-if="index < filteredServers.length - 1" class="list-separator"></div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 右侧：详情面板 -->
+      <div class="main-panel">
+        <div v-if="!currentServer" class="unselected-state">
+          <div class="hint-box">
+            <Plug :size="40" class="text-muted" />
+            <p>请在左侧选择服务器进行操作</p>
           </div>
         </div>
-      </a-spin>
+
+        <template v-else>
+          <div class="panel-top-bar">
+            <h2 style="min-height: 32px">
+              <span class="server-icon-lg">{{ currentServer.icon || '🔌' }}</span>
+              <span
+                ><strong>{{ currentServer.name }}</strong></span
+              >
+            </h2>
+            <div class="panel-actions">
+              <a-space :size="8">
+                <a-button
+                  size="small"
+                  @click="handleTestServer(currentServer)"
+                  :loading="testLoading === currentServer.name"
+                  class="lucide-icon-btn"
+                >
+                  <Zap :size="14" v-if="testLoading !== currentServer.name" />
+                  <span>测试</span>
+                </a-button>
+                <a-button
+                  size="small"
+                  @click="showEditModal(currentServer)"
+                  class="lucide-icon-btn"
+                >
+                  <Pencil :size="14" />
+                  <span>编辑</span>
+                </a-button>
+                <a-button
+                  size="small"
+                  danger
+                  ghost
+                  :disabled="currentServer.created_by === 'system'"
+                  @click="confirmDeleteServer(currentServer)"
+                  class="lucide-icon-btn"
+                >
+                  <Trash2 :size="14" />
+                  <span>删除</span>
+                </a-button>
+              </a-space>
+            </div>
+          </div>
+
+          <!-- Tab 导航 -->
+          <a-tabs v-model:activeKey="detailTab" class="detail-tabs">
+            <a-tab-pane key="general">
+              <template #tab>
+                <span class="tab-title"><Settings2 :size="14" />信息</span>
+              </template>
+              <div class="tab-content">
+                <div class="info-grid">
+                  <div class="info-item" v-if="currentServer.description">
+                    <label>描述</label>
+                    <span>{{ currentServer.description }}</span>
+                  </div>
+                  <div class="info-item">
+                    <label>传输类型</label>
+                    <span>
+                      <a-tag :color="getTransportColor(currentServer.transport)">
+                        {{ currentServer.transport }}
+                      </a-tag>
+                    </span>
+                  </div>
+                  <div
+                    class="info-item"
+                    v-if="Array.isArray(currentServer.tags) && currentServer.tags.length > 0"
+                  >
+                    <label>标签</label>
+                    <span>
+                      <a-tag v-for="tag in currentServer.tags" :key="tag">{{ tag }}</a-tag>
+                    </span>
+                  </div>
+
+                  <!-- HTTP 类型显示 URL -->
+                  <template
+                    v-if="
+                      currentServer.transport === 'streamable_http' ||
+                      currentServer.transport === 'sse'
+                    "
+                  >
+                    <div class="info-item" v-if="currentServer.url">
+                      <label>服务器 URL</label>
+                      <span class="url-text">{{ currentServer.url }}</span>
+                    </div>
+                    <div
+                      class="info-item"
+                      v-if="currentServer.headers && Object.keys(currentServer.headers).length > 0"
+                    >
+                      <label>请求头</label>
+                      <pre class="headers-pre">{{
+                        JSON.stringify(currentServer.headers, null, 2)
+                      }}</pre>
+                    </div>
+                    <div class="info-item" v-if="currentServer.timeout">
+                      <label>HTTP 超时</label>
+                      <span>{{ currentServer.timeout }} 秒</span>
+                    </div>
+                    <div class="info-item" v-if="currentServer.sse_read_timeout">
+                      <label>SSE 读取超时</label>
+                      <span>{{ currentServer.sse_read_timeout }} 秒</span>
+                    </div>
+                  </template>
+
+                  <!-- StdIO 类型显示 command/args -->
+                  <template v-if="currentServer.transport === 'stdio'">
+                    <div class="info-item" v-if="currentServer.command">
+                      <label>命令</label>
+                      <span class="command-text">{{ currentServer.command }}</span>
+                    </div>
+                    <div
+                      class="info-item"
+                      v-if="currentServer.args && currentServer.args.length > 0"
+                    >
+                      <label>参数</label>
+                      <span>
+                        <a-tag v-for="(arg, index) in currentServer.args" :key="index" size="small">
+                          {{ arg }}
+                        </a-tag>
+                      </span>
+                    </div>
+                    <div
+                      class="info-item"
+                      v-if="currentServer.env && Object.keys(currentServer.env).length > 0"
+                    >
+                      <label>环境变量</label>
+                      <pre class="headers-pre">{{
+                        JSON.stringify(currentServer.env, null, 2)
+                      }}</pre>
+                    </div>
+                  </template>
+
+                  <div class="info-item">
+                    <label>创建时间</label>
+                    <span>{{ formatTime(currentServer.created_at) }}</span>
+                  </div>
+                  <div class="info-item">
+                    <label>更新时间</label>
+                    <span>{{ formatTime(currentServer.updated_at) }}</span>
+                  </div>
+                  <div class="info-item">
+                    <label>创建人</label>
+                    <span>{{ currentServer.created_by }}</span>
+                  </div>
+                </div>
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="tools">
+              <template #tab>
+                <span class="tab-title"><Wrench :size="14" />工具 ({{ tools.length }})</span>
+              </template>
+              <div class="tab-content tools-tab">
+                <div class="tools-toolbar">
+                  <a-input-search
+                    v-model:value="toolSearchText"
+                    placeholder="搜索工具..."
+                    style="width: 200px"
+                    allowClear
+                  />
+                  <a-button @click="fetchTools" :loading="toolsLoading" class="lucide-icon-btn">
+                    <RotateCw :size="14" />
+                    <span>刷新</span>
+                  </a-button>
+                </div>
+                <a-spin :spinning="toolsLoading">
+                  <div v-if="filteredTools.length === 0" class="empty-tools">
+                    <a-empty :description="toolsError || '暂无工具'" />
+                  </div>
+                  <div v-else class="tools-list">
+                    <div
+                      v-for="tool in filteredTools"
+                      :key="tool.name"
+                      class="tool-card"
+                      :class="{ disabled: !tool.enabled }"
+                    >
+                      <div class="tool-header">
+                        <div class="tool-info">
+                          <span class="tool-name">{{ tool.name }}</span>
+                          <a-tooltip :title="`ID: ${tool.id}`">
+                            <Info :size="14" class="info-icon" />
+                          </a-tooltip>
+                        </div>
+                        <div class="tool-actions">
+                          <a-switch
+                            :checked="tool.enabled"
+                            @change="handleToggleTool(tool)"
+                            :loading="toggleToolLoading === tool.name"
+                            size="small"
+                          />
+                          <a-tooltip title="复制工具名称">
+                            <a-button
+                              type="text"
+                              size="small"
+                              @click="copyToolName(tool.name)"
+                              class="lucide-icon-btn"
+                            >
+                              <Copy :size="14" />
+                            </a-button>
+                          </a-tooltip>
+                        </div>
+                      </div>
+                      <div class="tool-description" v-if="tool.description">
+                        {{ tool.description }}
+                      </div>
+                      <a-collapse
+                        v-if="tool.parameters && Object.keys(tool.parameters).length > 0"
+                        ghost
+                      >
+                        <a-collapse-panel key="params" header="参数">
+                          <div class="params-list">
+                            <div
+                              v-for="(param, paramName) in tool.parameters"
+                              :key="paramName"
+                              class="param-item"
+                            >
+                              <div class="param-header">
+                                <span class="param-name">{{ paramName }}</span>
+                                <span
+                                  class="param-required"
+                                  v-if="tool.required?.includes(paramName)"
+                                  >必填</span
+                                >
+                                <span class="param-type">{{ param.type || 'any' }}</span>
+                              </div>
+                              <div class="param-desc" v-if="param.description">
+                                {{ param.description }}
+                              </div>
+                            </div>
+                          </div>
+                        </a-collapse-panel>
+                      </a-collapse>
+                    </div>
+                  </div>
+                </a-spin>
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="prompts">
+              <template #tab>
+                <span class="tab-title"><MessageSquare :size="14" />提示</span>
+              </template>
+              <div class="tab-content empty-tab">
+                <a-empty description="提示功能即将推出">
+                  <template #image>
+                    <span style="font-size: 48px">📝</span>
+                  </template>
+                </a-empty>
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="resources">
+              <template #tab>
+                <span class="tab-title"><Box :size="14" />资源</span>
+              </template>
+              <div class="tab-content empty-tab">
+                <a-empty description="资源功能即将推出">
+                  <template #image>
+                    <span style="font-size: 48px">📦</span>
+                  </template>
+                </a-empty>
+              </div>
+            </a-tab-pane>
+          </a-tabs>
+        </template>
+      </div>
     </div>
 
     <!-- 添加/编辑服务器模态框 -->
@@ -265,13 +472,6 @@
         </div>
       </div>
     </a-modal>
-
-    <!-- 服务器详情模态框 -->
-    <McpServerDetailModal
-      v-model:visible="detailModalVisible"
-      :server="selectedServer"
-      @update="handleServerUpdate"
-    />
   </div>
 </template>
 
@@ -279,14 +479,21 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { notification, Modal } from 'ant-design-vue'
 import {
-  PlusOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  EyeOutlined,
-  ApiOutlined
-} from '@ant-design/icons-vue'
+  Search,
+  Plug,
+  Zap,
+  Pencil,
+  Trash2,
+  RotateCw,
+  Info,
+  Copy,
+  Settings2,
+  Wrench,
+  MessageSquare,
+  Box
+} from 'lucide-vue-next'
 import { mcpApi } from '@/apis/mcp_api'
-import McpServerDetailModal from './McpServerDetailModal.vue'
+import { formatFullDateTime } from '@/utils/time'
 import McpEnvEditor from './McpEnvEditor.vue'
 
 // 状态
@@ -295,6 +502,16 @@ const error = ref(null)
 const servers = ref([])
 const toggleLoading = ref(null)
 const testLoading = ref(null)
+const searchQuery = ref('')
+const currentServer = ref(null)
+const detailTab = ref('general')
+
+// 工具相关状态
+const tools = ref([])
+const toolsLoading = ref(false)
+const toolsError = ref(null)
+const toolSearchText = ref('')
+const toggleToolLoading = ref(null)
 
 // 表单相关
 const formModalVisible = ref(false)
@@ -317,20 +534,32 @@ const form = reactive({
   icon: ''
 })
 
-// 详情模态框
-const detailModalVisible = ref(false)
-const selectedServer = ref(null)
-
 // 计算属性
-const httpCount = computed(
-  () => servers.value.filter((s) => s.transport === 'streamable_http').length
-)
-const sseCount = computed(() => servers.value.filter((s) => s.transport === 'sse').length)
-const stdioCount = computed(() => servers.value.filter((s) => s.transport === 'stdio').length)
-const envEditorKey = computed(() => `${form.name}-${form.transport}`)
+const filteredServers = computed(() => {
+  if (!searchQuery.value) return servers.value
+  const q = searchQuery.value.toLowerCase()
+  return servers.value.filter(
+    (s) => s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q)
+  )
+})
+
 const isStdioTransport = computed(
-  () => String(form.transport || '').trim().toLowerCase() === 'stdio'
+  () =>
+    String(form.transport || '')
+      .trim()
+      .toLowerCase() === 'stdio'
 )
+
+// 工具相关计算属性
+const filteredTools = computed(() => {
+  if (!toolSearchText.value) return tools.value
+  const search = toolSearchText.value.toLowerCase()
+  return tools.value.filter(
+    (t) =>
+      t.name.toLowerCase().includes(search) ||
+      (t.description && t.description.toLowerCase().includes(search))
+  )
+})
 
 // 获取服务器列表
 const fetchServers = async () => {
@@ -340,6 +569,15 @@ const fetchServers = async () => {
     const result = await mcpApi.getMcpServers()
     if (result.success) {
       servers.value = result.data || []
+      // 默认选中第一个服务器
+      if (!currentServer.value && servers.value.length > 0) {
+        selectServer(servers.value[0])
+      } else if (currentServer.value) {
+        const latest = servers.value.find((s) => s.name === currentServer.value.name)
+        if (latest) {
+          currentServer.value = latest
+        }
+      }
     } else {
       error.value = result.message || '获取服务器列表失败'
     }
@@ -349,6 +587,83 @@ const fetchServers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 获取工具列表
+const fetchTools = async () => {
+  if (!currentServer.value) return
+
+  try {
+    toolsLoading.value = true
+    toolsError.value = null
+    const result = await mcpApi.getMcpServerTools(currentServer.value.name)
+    if (result.success) {
+      tools.value = result.data || []
+    } else {
+      toolsError.value = result.message || '获取工具列表失败'
+      tools.value = []
+    }
+  } catch (err) {
+    console.error('获取工具列表失败:', err)
+    toolsError.value = err.message || '获取工具列表失败'
+    tools.value = []
+  } finally {
+    toolsLoading.value = false
+  }
+}
+
+// 切换工具启用状态
+const handleToggleTool = async (tool) => {
+  if (!currentServer.value) return
+
+  try {
+    toggleToolLoading.value = tool.name
+    const result = await mcpApi.toggleMcpServerTool(currentServer.value.name, tool.name)
+    if (result.success) {
+      notification.success({ message: result.message })
+      const targetTool = tools.value.find((t) => t.name === tool.name)
+      if (targetTool) {
+        targetTool.enabled = result.enabled
+      }
+    } else {
+      notification.error({ message: result.message || '操作失败' })
+    }
+  } catch (err) {
+    console.error('切换工具状态失败:', err)
+    notification.error({ message: err.message || '操作失败' })
+  } finally {
+    toggleToolLoading.value = null
+  }
+}
+
+// 复制工具名称
+const copyToolName = async (name) => {
+  try {
+    await navigator.clipboard.writeText(name)
+    notification.success({ message: '已复制到剪贴板' })
+  } catch {
+    notification.error({ message: '复制失败' })
+  }
+}
+
+// 格式化时间
+const formatTime = (timeStr) => formatFullDateTime(timeStr)
+
+// 获取传输类型颜色
+const getTransportColor = (transport) => {
+  const colors = {
+    sse: 'orange',
+    stdio: 'green',
+    streamable_http: 'blue'
+  }
+  return colors[transport] || 'blue'
+}
+
+// 选择服务器
+const selectServer = (server) => {
+  currentServer.value = server
+  detailTab.value = 'general'
+  fetchTools()
 }
 
 // 显示添加模态框
@@ -405,12 +720,6 @@ const showEditModal = async (server) => {
     console.error('获取服务器详情失败，回退使用列表数据:', err)
   }
   applyServerToForm(server)
-}
-
-// 显示详情模态框
-const showDetailModal = (server) => {
-  selectedServer.value = server
-  detailModalVisible.value = true
 }
 
 // 处理表单提交
@@ -577,11 +886,6 @@ const confirmDeleteServer = (server) => {
   })
 }
 
-// 处理服务器更新（来自详情模态框）
-const handleServerUpdate = () => {
-  fetchServers()
-}
-
 // 格式化 JSON
 const formatJson = () => {
   try {
@@ -621,163 +925,256 @@ const parseJsonToForm = () => {
 onMounted(() => {
   fetchServers()
 })
+
+// 暴露方法给父组件
+defineExpose({
+  fetchServers,
+  showAddModal
+})
 </script>
 
 <style lang="less" scoped>
-.mcp-servers {
-  margin-top: 12px;
-  min-height: 50vh;
+@import '@/assets/css/extensions.less';
 
-  .header-section {
+.stats-section {
+  padding: 8px 12px;
+  .stats-text {
+    font-size: 12px;
+    color: var(--gray-500);
+  }
+}
+
+.list-item {
+  &.disabled {
+    opacity: 0.6;
+  }
+
+  .server-icon {
+    font-size: 18px;
+  }
+
+  .item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .transport-tag {
+      background: var(--gray-100);
+      border: none;
+      color: var(--gray-600);
+      border-radius: 4px;
+      font-size: 11px;
+      width: fit-content;
+    }
+
+    .item-desc {
+      font-size: 12px;
+      color: var(--gray-400);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+}
+
+/* 右侧面板 */
+.main-panel {
+  .detail-tabs {
+    .tab-content {
+      padding: 16px;
+      min-height: 300px;
+      height: 100%;
+      overflow: scroll;
+    }
+
+    .empty-tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+    }
+  }
+}
+
+.info-grid {
+  display: grid;
+  gap: 16px;
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    label {
+      font-size: 12px;
+      color: var(--gray-500);
+      font-weight: 500;
+    }
+
+    span {
+      font-size: 14px;
+      color: var(--gray-900);
+    }
+
+    .url-text {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 13px;
+      word-break: break-all;
+      background: var(--gray-50);
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+
+    .command-text {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 13px;
+      background: var(--gray-50);
+      padding: 8px 12px;
+      border-radius: 4px;
+    }
+
+    .headers-pre {
+      font-family: 'Monaco', 'Consolas', monospace;
+      font-size: 12px;
+      background: var(--gray-50);
+      padding: 12px;
+      border-radius: 4px;
+      margin: 0;
+      overflow-x: auto;
+    }
+  }
+}
+
+/* 工具列表样式 */
+.tools-tab {
+  .tools-toolbar {
     display: flex;
     justify-content: space-between;
-    align-items: flex-start;
-
-    .header-content {
-      flex: 1;
-
-      .description {
-        font-size: 14px;
-        color: var(--gray-600);
-        margin: 0;
-        line-height: 1.4;
-        margin-bottom: 16px;
-      }
-    }
-  }
-
-  .stats-section {
+    align-items: center;
     margin-bottom: 16px;
-
-    .stats-text {
-      font-size: 13px;
-      color: var(--gray-600);
-    }
   }
 
-  .content-section {
-    overflow: hidden;
+  .empty-tools {
+    padding: 40px 0;
+  }
 
-    .error-message {
-      padding: 16px 0;
-    }
+  .tools-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 
-    .cards-container {
-      .empty-state {
-        padding: 60px 20px;
-        text-align: center;
+    .tool-card {
+      background: var(--gray-0);
+      border: 1px solid var(--gray-150);
+      border-radius: 8px;
+      padding: 12px 16px;
+      transition: all 0.2s ease;
+
+      &:hover {
+        border-color: var(--gray-200);
       }
 
-      .server-cards-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 16px;
+      &.disabled {
+        opacity: 0.6;
+      }
 
-        .server-card {
-          background: var(--gray-0);
-          border: 1px solid var(--gray-150);
-          border-radius: 8px;
-          padding: 10px 16px;
-          padding-bottom: 8px;
-          transition: all 0.2s ease;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      .tool-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
 
-          &:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-            border-color: var(--gray-200);
+        .tool-info {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+
+          .tool-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--gray-900);
           }
 
-          &.disabled {
-            opacity: 0.6;
-          }
-
-          .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
-
-            .server-info {
-              display: flex;
-              align-items: center;
-              gap: 12px;
-
-              .server-icon {
-                font-size: 24px;
-              }
-
-              .server-basic-info {
-                .server-name {
-                  margin: 0 0 4px 0;
-                  font-size: 15px;
-                  font-weight: 600;
-                  color: var(--gray-900);
-                  cursor: pointer;
-                  transition: color 0.2s ease;
-
-                  &:hover {
-                    color: var(--color-primary);
-                  }
-                }
-
-                .server-transport {
-                  .transport-tag {
-                    background: var(--gray-100);
-                    border: none;
-                    color: var(--gray-600);
-                    border-radius: 4px;
-                  }
-                }
-              }
-            }
-          }
-
-          .card-content {
-            min-height: 44px;
-
-            .server-description {
-              font-size: 13px;
+          .info-icon {
+            color: var(--gray-400);
+            cursor: pointer;
+            &:hover {
               color: var(--gray-600);
-              line-height: 1.4;
-              display: -webkit-box;
-              -webkit-line-clamp: 2;
-              line-clamp: 2;
-              -webkit-box-orient: vertical;
-              overflow: hidden;
-              text-overflow: ellipsis;
+            }
+          }
+        }
+
+        .tool-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+
+      .tool-description {
+        font-size: 13px;
+        color: var(--gray-600);
+        line-height: 1.4;
+        margin-bottom: 8px;
+      }
+
+      :deep(.ant-collapse) {
+        background: transparent;
+        border: none;
+
+        .ant-collapse-header {
+          padding: 8px 0;
+          font-size: 13px;
+          color: var(--gray-600);
+        }
+        .ant-collapse-content-box {
+          padding: 0;
+        }
+      }
+
+      .params-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+
+        .param-item {
+          background: var(--gray-50);
+          padding: 8px 12px;
+          border-radius: 4px;
+
+          .param-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+
+            .param-name {
+              font-weight: 500;
+              font-size: 13px;
+              color: var(--gray-900);
+              font-family: 'Monaco', 'Consolas', monospace;
+            }
+            .param-required {
+              font-size: 11px;
+              color: var(--color-error-500);
+              background: var(--color-error-50);
+              padding: 1px 6px;
+              border-radius: 3px;
+            }
+            .param-type {
+              font-size: 11px;
+              color: var(--gray-500);
+              background: var(--gray-100);
+              padding: 1px 6px;
+              border-radius: 3px;
+              font-family: 'Monaco', 'Consolas', monospace;
             }
           }
 
-          .card-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 6px;
-            padding-top: 8px;
-            border-top: 1px solid var(--gray-25);
-
-            .action-btn {
-              display: flex;
-              align-items: center;
-              gap: 4px;
-              padding: 4px 8px;
-              border-radius: 6px;
-              transition: all 0.2s ease;
-              font-size: 12px;
-
-              span {
-                font-size: 12px;
-              }
-
-              &:hover {
-                background: var(--gray-25);
-              }
-
-              &.ant-btn-dangerous:hover {
-                background: var(--gray-25);
-                border-color: var(--color-error-500);
-                color: var(--color-error-500);
-              }
-            }
+          .param-desc {
+            font-size: 12px;
+            color: var(--gray-600);
+            line-height: 1.4;
           }
         }
       }
@@ -785,24 +1182,22 @@ onMounted(() => {
   }
 }
 
+/* 模态框样式 */
 .server-modal {
   .mode-switch {
     margin-bottom: 16px;
     text-align: right;
   }
-
   .server-form {
     .form-item {
       margin-bottom: 16px;
     }
   }
-
   .json-mode {
     .json-textarea {
       font-family: 'Monaco', 'Consolas', monospace;
       font-size: 13px;
     }
-
     .json-actions {
       margin-top: 12px;
       display: flex;

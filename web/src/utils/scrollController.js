@@ -69,11 +69,24 @@ export class ScrollController {
   }
 
   /**
+   * 等待 DOM 布局稳定
+   * @returns {Promise<void>}
+   */
+  async waitForLayoutStable() {
+    // 使用 requestAnimationFrame 确保 DOM 渲染完成
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    // 额外等待一小段时间确保 CSS 布局完成
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+
+  /**
    * 智能滚动到底部
    * @param {boolean} force - 是否强制滚动
    */
   async scrollToBottom(force = false) {
     await nextTick()
+    // 等待 DOM 布局稳定
+    await this.waitForLayoutStable()
 
     // 只有在应该自动滚动时才执行（除非强制）
     if (!force && !this.shouldAutoScroll) return
@@ -84,6 +97,9 @@ export class ScrollController {
     // 标记为程序性滚动
     this.isProgrammaticScroll = true
 
+    // 记录滚动前的容器高度
+    const initialHeight = container.scrollHeight
+
     const scrollOptions = {
       top: container.scrollHeight,
       behavior: 'smooth'
@@ -92,16 +108,28 @@ export class ScrollController {
     // 立即滚动
     container.scrollTo(scrollOptions)
 
-    // 多次重试确保滚动成功
-    this.options.retryDelays.forEach((delay, index) => {
+    // 多次重试确保滚动成功，包括等待输入框等动态元素布局完成
+    const retryDelays = [50, 100, 200, 400]
+    retryDelays.forEach((delay, index) => {
       setTimeout(() => {
         if (force || this.shouldAutoScroll) {
           this.isProgrammaticScroll = true
-          const behavior = index === this.options.retryDelays.length - 1 ? 'auto' : 'smooth'
-          container.scrollTo({
-            top: container.scrollHeight,
-            behavior
-          })
+          const behavior = index === retryDelays.length - 1 ? 'auto' : 'smooth'
+
+          // 如果高度变化了，说明可能有动态内容正在渲染，再次等待
+          if (container.scrollHeight !== initialHeight && index < retryDelays.length - 1) {
+            this.waitForLayoutStable().then(() => {
+              container.scrollTo({
+                top: container.scrollHeight,
+                behavior
+              })
+            })
+          } else {
+            container.scrollTo({
+              top: container.scrollHeight,
+              behavior
+            })
+          }
         }
       }, delay)
     })

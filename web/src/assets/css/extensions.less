@@ -1,0 +1,252 @@
+@border-color: var(--gray-150);
+@bg-secondary: var(--gray-10);
+@radius: 8px;
+
+// Root container for extension pages to ensure 100% height
+.extension-page-root {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background-color: var(--gray-0);
+  position: relative;
+}
+
+.layout-wrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+/* Sidebar List */
+.sidebar-list {
+  width: 280px;
+  border-right: 1px solid @border-color;
+  background-color: @bg-secondary;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+
+  .search-box {
+    padding: 12px 12px 0;
+    .search-input :deep(.ant-input) {
+      height: 28px;
+    }
+  }
+
+  .list-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+}
+
+.list-item {
+  padding: 10px 12px;
+  border-radius: @radius;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+
+  &:hover {
+    background-color: var(--gray-100);
+  }
+
+  &.active {
+    background-color: var(--gray-0);
+    border-color: @border-color;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  .item-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+
+    .item-icon,
+    .server-icon {
+      width: 16px;
+      height: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--gray-400);
+      font-size: 14px; // For emoji icons
+    }
+
+    .item-name {
+      flex: 1;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--gray-700);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  &.active {
+    .item-icon,
+    .server-icon {
+      color: var(--main-color);
+    }
+    .item-name {
+      color: var(--gray-900);
+    }
+  }
+}
+
+.list-separator {
+  height: 1px;
+  background-color: var(--gray-150);
+  margin: 2px 12px;
+  opacity: 0.8; // Deepened from 0.5 to 0.8
+  flex-shrink: 0;
+}
+
+/* Main Panel */
+.main-panel {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--gray-0);
+
+  .unselected-state {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: @bg-secondary;
+    .hint-box {
+      text-align: center;
+      p {
+        margin-top: 12px;
+        color: var(--gray-400);
+      }
+    }
+  }
+
+  .panel-top-bar {
+    padding: 10px 16px 0 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  }
+}
+
+/* Tabs inside main panel */
+.detail-tabs,
+.minimal-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  :deep(.ant-tabs-nav) {
+    margin: 0;
+    padding: 0 16px;
+    flex-shrink: 0;
+    border-bottom: 1px solid @border-color;
+    &::before {
+      border-bottom: none;
+    }
+  }
+
+  :deep(.ant-tabs-content) {
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  :deep(.ant-tabs-tabpane) {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
+
+.tab-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Common helpers */
+.text-muted {
+  color: var(--gray-400);
+}
+.empty-text {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--gray-400);
+}
+
+// Spin wrapper for full height
+.full-height-spin {
+  height: 100%;
+  :deep(.ant-spin-nested-loading) {
+    height: 100%;
+  }
+  :deep(.ant-spin-container) {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* Loading States */
+.loading-bar-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 100;
+  overflow: hidden;
+  background: transparent;
+
+  .loading-bar {
+    height: 100%;
+    background: var(--main-color);
+    width: 30%;
+    position: absolute;
+    animation: loading-bar-anim 1.5s infinite linear;
+  }
+}
+
+@keyframes loading-bar-anim {
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.content-loading {
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}

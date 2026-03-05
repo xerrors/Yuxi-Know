@@ -145,8 +145,7 @@ async def test_process_agent_run_retryable_error_retries_then_completes(monkeypa
 
     assert terminal_statuses == []
     assert any(
-        item["event_type"] == "error"
-        and item["payload"]["chunk"].get("error_type") == "retryable_worker_error"
+        item["event_type"] == "error" and item["payload"]["chunk"].get("error_type") == "retryable_worker_error"
         for item in events
     )
 

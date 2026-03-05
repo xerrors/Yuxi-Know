@@ -18,7 +18,7 @@ from src.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_
 from src.knowledge.utils import calculate_content_hash
 from src.models.embed import test_all_embedding_models_status, test_embedding_model_status
 from src.storage.postgres.models_business import User
-from src.storage.minio.client import StorageError, aupload_file_to_minio, get_minio_client
+from src.storage.minio.client import MinIOClient, StorageError, aupload_file_to_minio, get_minio_client
 from src.utils import logger
 
 knowledge = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -80,6 +80,7 @@ async def _ensure_database_not_dify(db_id: str, operation: str) -> None:
     if (db_info.get("kb_type") or "").lower() == "dify":
         raise HTTPException(status_code=400, detail=f"Dify 知识库只支持检索，不支持{operation}")
 
+
 # =============================================================================
 # === 知识库管理分组 ===
 # =============================================================================
@@ -89,8 +90,7 @@ async def _ensure_database_not_dify(db_id: str, operation: str) -> None:
 async def get_databases(current_user: User = Depends(get_admin_user)):
     """获取所有知识库（根据用户权限过滤）"""
     try:
-        user_info = {"role": current_user.role, "department_id": current_user.department_id}
-        return await knowledge_base.get_databases_by_user(user_info)
+        return await knowledge_base.get_databases_by_user_id(current_user.user_id)
     except Exception as e:
         logger.error(f"获取数据库列表失败 {e}, {traceback.format_exc()}")
         return {"message": f"获取数据库列表失败 {e}", "databases": []}
@@ -180,8 +180,7 @@ async def create_database(
 async def get_accessible_databases(current_user: User = Depends(get_required_user)):
     """获取当前用户有权访问的知识库列表（用于智能体配置）"""
     try:
-        user_info = {"role": current_user.role, "department_id": current_user.department_id}
-        databases = await knowledge_base.get_databases_by_user(user_info)
+        databases = await knowledge_base.get_databases_by_user_id(current_user.user_id)
 
         accessible = [
             {
@@ -660,14 +659,16 @@ async def get_document_content(db_id: str, doc_id: str, current_user: User = Dep
 
 
 @knowledge.delete("/databases/{db_id}/documents/batch")
-async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), current_user: User = Depends(get_admin_user)):
+async def batch_delete_documents(
+    db_id: str, file_ids: list[str] = Body(...), current_user: User = Depends(get_admin_user)
+):
     """批量删除文档或文件夹"""
     logger.debug(f"BATCH DELETE documents {file_ids} in {db_id}")
     await _ensure_database_not_dify(db_id, "批量文档删除")
-    
+
     deleted_count = 0
     failed_items = []
-    
+
     for doc_id in file_ids:
         try:
             file_meta_info = await knowledge_base.get_file_basic_info(db_id, doc_id)
@@ -684,7 +685,7 @@ async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), cu
             # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
             try:
                 minio_client = get_minio_client()
-                await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
+                await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
                 logger.debug(f"成功从MinIO删除文件: {file_name}")
             except Exception as minio_error:
                 logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")
@@ -700,9 +701,9 @@ async def batch_delete_documents(db_id: str, file_ids: list[str] = Body(...), cu
         if deleted_count == 0:
             raise HTTPException(status_code=400, detail=f"批量删除失败: 所有 {len(failed_items)} 个文件均未删除。")
         return {
-            "message": f"部分删除成功: 已删除 {deleted_count} 个文件，失败 {len(failed_items)} 个", 
+            "message": f"部分删除成功: 已删除 {deleted_count} 个文件，失败 {len(failed_items)} 个",
             "deleted_count": deleted_count,
-            "failed_items": failed_items
+            "failed_items": failed_items,
         }
 
     return {"message": f"批量删除成功: 已删除 {deleted_count} 个文件", "deleted_count": deleted_count}
@@ -722,12 +723,14 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
             await knowledge_base.delete_folder(db_id, doc_id)
             return {"message": "文件夹删除成功"}
 
-        file_name = file_meta_info.get("meta", {}).get("filename")
+        file_name = file_meta_info.get("meta", {}).get("path", "").split("/")[-1]
 
         # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
         try:
             minio_client = get_minio_client()
-            await minio_client.adelete_file("ref-" + db_id.replace("_", "-"), file_name)
+            await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
+            # 同时删除 parsed bucket 中的 parsed.md 文件
+            await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], f"{db_id}/{doc_id}/parsed.md")
             logger.debug(f"成功从MinIO删除文件: {file_name}")
         except Exception as minio_error:
             logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")

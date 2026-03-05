@@ -103,7 +103,9 @@ export class MessageProcessor {
     if (!conv || !Array.isArray(conv.messages) || conv.messages.length === 0) return []
 
     const databaseNames = new Set(
-      (databases || []).map((db) => db?.name).filter((name) => typeof name === 'string' && name.trim())
+      (databases || [])
+        .map((db) => db?.name)
+        .filter((name) => typeof name === 'string' && name.trim())
     )
     if (databaseNames.size === 0) return []
 
@@ -132,8 +134,8 @@ export class MessageProcessor {
           source: metadata.source || '',
           file_id: metadata.file_id || '',
           chunk_id: metadata.chunk_id || '',
-          chunk_index: metadata.chunk_index,
-        },
+          chunk_index: metadata.chunk_index
+        }
       })
     }
 
@@ -233,8 +235,7 @@ export class MessageProcessor {
             url,
             score: typeof item?.score === 'number' ? item.score : null,
             content: typeof item?.content === 'string' ? item.content : '',
-            published_date:
-              typeof item?.published_date === 'string' ? item.published_date : '',
+            published_date: typeof item?.published_date === 'string' ? item.published_date : ''
           })
         }
       }
@@ -262,7 +263,7 @@ export class MessageProcessor {
     const mockConv = { messages: [message] }
     return {
       knowledgeChunks: MessageProcessor.extractKnowledgeChunksFromConversation(mockConv, databases),
-      webSources: MessageProcessor.extractWebSourcesFromConversation(mockConv),
+      webSources: MessageProcessor.extractWebSourcesFromConversation(mockConv)
     }
   }
 
@@ -275,7 +276,7 @@ export class MessageProcessor {
   static extractSourcesFromConversation(conv, databases = []) {
     return {
       knowledgeChunks: MessageProcessor.extractKnowledgeChunksFromConversation(conv, databases),
-      webSources: MessageProcessor.extractWebSourcesFromConversation(conv),
+      webSources: MessageProcessor.extractWebSourcesFromConversation(conv)
     }
   }
 

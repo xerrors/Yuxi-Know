@@ -286,8 +286,7 @@ async def get_databases_overview(current_user: User = Depends(get_admin_user)):
         知识库列表
     """
     try:
-        user_info = {"role": current_user.role, "department_id": current_user.department_id}
-        databases = await knowledge_base.get_databases_by_user(user_info)
+        databases = await knowledge_base.get_databases_by_user_id(current_user.user_id)
 
         # databases["databases"] 是一个列表，每个元素已经包含了基本信息
         db_list_raw = databases.get("databases", [])

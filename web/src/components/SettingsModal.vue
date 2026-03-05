@@ -49,15 +49,6 @@
           <TeamOutlined class="icon" />
           <span>部门管理</span>
         </div>
-        <div
-          class="sider-item"
-          :class="{ activesec: activeTab === 'mcp' }"
-          @click="activeTab = 'mcp'"
-          v-if="userStore.isSuperAdmin"
-        >
-          <ApiOutlined class="icon" />
-          <span>MCP 管理</span>
-        </div>
       </div>
 
       <!-- 顶部导航 (Mobile) -->
@@ -88,14 +79,6 @@
         </div>
         <div
           class="nav-item"
-          :class="{ active: activeTab === 'mcp' }"
-          @click="activeTab = 'mcp'"
-          v-if="userStore.isSuperAdmin"
-        >
-          MCP 管理
-        </div>
-        <div
-          class="nav-item"
           :class="{ active: activeTab === 'department' }"
           @click="activeTab = 'department'"
           v-if="userStore.isSuperAdmin"
@@ -119,10 +102,6 @@
             <UserManagementComponent />
           </div>
 
-          <div v-show="activeTab === 'mcp'" v-if="userStore.isSuperAdmin">
-            <McpServersComponent />
-          </div>
-
           <div v-show="activeTab === 'department'" v-if="userStore.isSuperAdmin">
             <DepartmentManagementComponent />
           </div>
@@ -135,17 +114,10 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import {
-  SettingOutlined,
-  CodeOutlined,
-  UserOutlined,
-  ApiOutlined,
-  TeamOutlined
-} from '@ant-design/icons-vue'
+import { SettingOutlined, CodeOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import BasicSettingsSection from '@/components/BasicSettingsSection.vue'
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue'
 import UserManagementComponent from '@/components/UserManagementComponent.vue'
-import McpServersComponent from '@/components/McpServersComponent.vue'
 import DepartmentManagementComponent from '@/components/DepartmentManagementComponent.vue'
 
 const props = defineProps({

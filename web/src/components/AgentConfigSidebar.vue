@@ -373,6 +373,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
 import { skillApi } from '@/apis/skill_api'
+import { toolApi } from '@/apis/tool_api'
 import { storeToRefs } from 'pinia'
 
 // Props
@@ -401,6 +402,7 @@ watch(
     if (val) {
       databaseStore.loadDatabases().catch(() => {})
       loadLiveSkillOptions().catch(() => {})
+      loadToolOptions().catch(() => {})
       if (selectedAgentId.value) {
         try {
           await agentStore.fetchAgentDetail(selectedAgentId.value, true)
@@ -433,6 +435,7 @@ const selectionSearchText = ref('')
 const systemPromptEditMode = ref(false)
 const activeTab = ref('basic')
 const liveSkillOptions = ref([])
+const toolOptionsFromApi = ref([])
 
 const isEmptyConfig = computed(() => {
   return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0
@@ -491,10 +494,32 @@ const loadLiveSkillOptions = async () => {
   }
 }
 
+const loadToolOptions = async () => {
+  if (!userStore.isAdmin) {
+    toolOptionsFromApi.value = []
+    return
+  }
+  try {
+    const result = await toolApi.getTools()
+    toolOptionsFromApi.value = (result?.data || []).map((item) => ({
+      id: item.id,
+      name: item.name || item.id,
+      description: item.description || ''
+    }))
+  } catch (error) {
+    console.warn('加载工具列表失败:', error)
+  }
+}
+
 // 通用选项获取与处理
 const getConfigOptions = (value) => {
   if (value?.template_metadata?.kind === 'tools') {
-    return availableTools.value ? Object.values(availableTools.value) : []
+    // 优先使用从 API 获取的工具列表，否则回退到 configurableItems 中的选项
+    return toolOptionsFromApi.value.length > 0
+      ? toolOptionsFromApi.value
+      : availableTools.value
+        ? Object.values(availableTools.value)
+        : []
   }
   if (value?.template_metadata?.kind === 'knowledges') {
     return databaseStore.databases || []
@@ -644,13 +669,9 @@ const getOptionLabelFromValue = (key, val) => {
 
 const openSelectionModal = async (key) => {
   currentConfigKey.value = key
-  // 如果是工具，可能需要刷新
-  if (configurableItems.value[key]?.template_metadata?.kind === 'tools' && selectedAgentId.value) {
-    try {
-      await agentStore.fetchAgentDetail(selectedAgentId.value, true)
-    } catch (error) {
-      console.error('刷新工具列表失败:', error)
-    }
+  // 如果是工具，从 API 刷新工具列表
+  if (configurableItems.value[key]?.template_metadata?.kind === 'tools') {
+    await loadToolOptions()
   }
   // 如果是知识库，需要获取知识库列表
   if (configurableItems.value[key]?.template_metadata?.kind === 'knowledges') {
@@ -715,7 +736,10 @@ const validateAndFilterConfig = () => {
     const configItem = configItems[key]
     const currentValue = validatedConfig[key]
 
-    if (Array.isArray(currentValue) && (configItem.template_metadata?.kind === 'tools' || configItem.type === 'list')) {
+    if (
+      Array.isArray(currentValue) &&
+      (configItem.template_metadata?.kind === 'tools' || configItem.type === 'list')
+    ) {
       const options = getConfigOptions(configItem)
       const validValues = new Set(options.map((opt) => String(getOptionValue(opt))))
       if (validValues.size === 0) return

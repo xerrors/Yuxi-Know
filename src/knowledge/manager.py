@@ -7,6 +7,7 @@ from src.knowledge.chunking.ragflow_like.presets import (
     ensure_chunk_defaults_in_additional_params,
 )
 from src.knowledge.factory import KnowledgeBaseFactory
+from src.storage.postgres.models_business import User
 from src.utils import logger
 from src.utils.datetime_utils import utc_isoformat
 
@@ -243,19 +244,45 @@ class KnowledgeBaseManager:
 
         return user_department_id in accessible_departments
 
-    async def get_databases_by_user(self, user: dict) -> dict:
-        """根据用户权限获取知识库列表
+    async def get_databases_by_raw_id(self, user_id: int) -> dict:
+        """根据用户ID获取知识库列表（原始ID版本，兼容旧接口）"""
+        from src.repositories.user_repository import UserRepository
 
-        Args:
-            user: 用户信息字典，包含 role 和 department_id
+        # 通过数据库获取用户信息
+        user_repo = UserRepository()
+        user: User | None = await user_repo.get_by_id(id=int(user_id))
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            return {"databases": []}
+        return await self.get_databases_by_user(user)
 
-        Returns:
-            过滤后的知识库列表
-        """
+    async def get_databases_by_user_id(self, user_id: str) -> dict:
+        """根据用户ID获取知识库列表（字符串ID版本）"""
+        from src.repositories.user_repository import UserRepository
+
+        # 通过数据库获取用户信息
+        user_repo = UserRepository()
+        user: User | None = await user_repo.get_by_user_id(user_id)
+        if not user:
+            logger.warning(f"User not found: {user_id}")
+            return {"databases": []}
+        return await self.get_databases_by_user(user)
+
+    async def get_databases_by_user(self, user: User) -> dict:
+        """根据用户权限获取知识库列表"""
+
+        # 构建用户信息字典
+        user_info = {
+            "role": user.role,
+            "department_id": user.department_id,
+        }
+
+        logger.info(f"Getting databases for user {user.id} with role {user.role} and department {user.department_id}")
+
         all_databases = (await self.get_databases()).get("databases", [])
 
         # 超级管理员可以看到所有知识库
-        if user.get("role") == "superadmin":
+        if user_info.get("role") == "superadmin":
             return {"databases": all_databases}
 
         filtered_databases = []
@@ -265,7 +292,7 @@ class KnowledgeBaseManager:
             if not db_id:
                 continue
 
-            if await self.check_accessible(user, db_id):
+            if await self.check_accessible(user_info, db_id):
                 filtered_databases.append(db)
 
         return {"databases": filtered_databases}

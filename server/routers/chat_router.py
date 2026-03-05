@@ -557,8 +557,7 @@ async def save_agent_config(
         if "knowledges" in config and config["knowledges"]:
             # 获取用户有权访问的知识库名称
             try:
-                user_info = {"role": current_user.role, "department_id": current_user.department_id}
-                accessible_databases = await knowledge_base.get_databases_by_user(user_info)
+                accessible_databases = await knowledge_base.get_databases_by_user_id(current_user.user_id)
                 accessible_kb_names = {
                     db.get("name") for db in accessible_databases.get("databases", []) if db.get("name")
                 }

@@ -6,7 +6,7 @@ import warnings
 from urllib.parse import urlparse
 
 from src import config
-from src.knowledge.adapters.base import Neo4jConnectionManager
+from src.knowledge.graphs.adapters.base import Neo4jConnectionManager
 from src.models import select_embedding_model
 from src.storage.minio.client import get_minio_client
 from src.utils import logger

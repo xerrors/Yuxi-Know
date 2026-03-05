@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import shutil
 import tempfile
@@ -50,6 +51,7 @@ TEXT_FILE_EXTENSIONS = {
     ".tsx",
 }
 
+
 def _normalize_string_list(values: list[str] | None) -> list[str]:
     if not values:
         return []
@@ -72,31 +74,33 @@ def is_valid_skill_slug(slug: str) -> bool:
     return bool(SKILL_SLUG_PATTERN.match(slug.strip()))
 
 
-def validate_skill_slug(slug: str) -> str:
-    normalized = slug.strip() if isinstance(slug, str) else ""
-    if not is_valid_skill_slug(normalized):
-        raise ValueError("无效 skill slug")
-    return normalized
-
-
-def _get_buildin_tool_names() -> list[str]:
-    from src.agents.common.tools import get_buildin_tools
-
-    return [tool.name for tool in get_buildin_tools()]
-
-
 def get_skills_root_dir() -> Path:
     root = Path(sys_config.save_dir) / "skills"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
-async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str]]:
-    repo = SkillRepository(db)
-    items = await repo.list_all()
+async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str] | list[dict]]:
+    # 并行执行三个独立操作
+    from src.services.tool_service import get_tool_metadata
+
+    async def get_skills():
+        repo = SkillRepository(db)
+        return await repo.list_all()
+
+    def get_tools():
+        all_tools = get_tool_metadata()
+        return [{"id": tool["id"], "name": tool.get("name", tool["id"])} for tool in all_tools]
+
+    items, tool_list, mcp_names = await asyncio.gather(
+        get_skills(),
+        asyncio.to_thread(get_tools),
+        asyncio.to_thread(get_mcp_server_names),
+    )
+
     return {
-        "tools": _get_buildin_tool_names(),
-        "mcps": get_mcp_server_names(),
+        "tools": tool_list,
+        "mcps": mcp_names,
         "skills": [item.slug for item in items],
     }
 
@@ -104,6 +108,14 @@ async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str]]
 async def list_skills(db: AsyncSession) -> list[Skill]:
     repo = SkillRepository(db)
     return await repo.list_all()
+
+
+def _get_all_tool_names() -> list[str]:
+    """获取所有工具名称（包括 buildin 和其他来源）"""
+    from src.services.tool_service import get_tool_metadata
+
+    all_tools = get_tool_metadata()
+    return [tool["id"] for tool in all_tools]
 
 
 def _validate_dependencies(
@@ -118,7 +130,8 @@ def _validate_dependencies(
     mcps = _normalize_string_list(mcp_dependencies)
     skills = _normalize_string_list(skill_dependencies)
 
-    available_tools = set(_get_buildin_tool_names())
+    # 验证所有工具（不仅仅是 buildin）
+    available_tools = set(_get_all_tool_names())
     invalid_tools = [name for name in tools if name not in available_tools]
     if invalid_tools:
         raise ValueError(f"存在无效工具依赖: {', '.join(invalid_tools)}")
@@ -368,7 +381,10 @@ async def import_skill_zip(
 
 
 async def get_skill_or_raise(db: AsyncSession, slug: str) -> Skill:
-    slug = validate_skill_slug(slug)
+    slug = slug.strip() if isinstance(slug, str) else ""
+    if not is_valid_skill_slug(slug):
+        raise ValueError("无效 skill slug")
+
     repo = SkillRepository(db)
     item = await repo.get_by_slug(slug)
     if not item:
@@ -422,19 +438,12 @@ async def create_skill_node(
     if not _is_text_path(target):
         raise ValueError("仅支持创建文本文件")
 
-    parsed_name: str | None = None
-    parsed_desc: str | None = None
-    if target.name == "SKILL.md" and target.parent == skill_dir:
-        parsed_name, parsed_desc, _ = _parse_skill_markdown(content or "")
-        if parsed_name != item.slug:
-            raise ValueError("SKILL.md frontmatter.name 必须与 skill slug 一致")
-
     target.parent.mkdir(parents=True, exist_ok=True)
+
+    # 先写入文件，再更新元数据
     target.write_text(content or "", encoding="utf-8")
 
-    if parsed_name is not None and parsed_desc is not None:
-        repo = SkillRepository(db)
-        await repo.update_metadata(item, name=parsed_name, description=parsed_desc, updated_by=updated_by)
+    await _update_skill_metadata_if_skills_md(db, item, content or "", skill_dir, target, updated_by)
 
 
 async def update_skill_file(
@@ -453,16 +462,24 @@ async def update_skill_file(
     if not _is_text_path(target):
         raise ValueError("仅支持编辑文本文件")
 
-    parsed_name = None
-    parsed_desc = None
+    await _update_skill_metadata_if_skills_md(db, item, content, skill_dir, target, updated_by)
+
+    target.write_text(content, encoding="utf-8")
+
+
+async def _update_skill_metadata_if_skills_md(
+    db: AsyncSession,
+    item: Skill,
+    content: str,
+    skill_dir: Path,
+    target: Path,
+    updated_by: str | None,
+) -> None:
+    """如果目标文件是 SKILL.md，则解析并更新元数据"""
     if target.name == "SKILL.md" and target.parent == skill_dir:
         parsed_name, parsed_desc, _ = _parse_skill_markdown(content)
         if parsed_name != item.slug:
             raise ValueError("SKILL.md frontmatter.name 必须与 skill slug 一致")
-
-    target.write_text(content, encoding="utf-8")
-
-    if parsed_name is not None and parsed_desc is not None:
         repo = SkillRepository(db)
         await repo.update_metadata(item, name=parsed_name, description=parsed_desc, updated_by=updated_by)
 
