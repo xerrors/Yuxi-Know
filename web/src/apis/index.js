@@ -8,6 +8,7 @@ export * from './system_api' // 系统管理API
 export * from './knowledge_api' // 知识库管理API
 export * from './graph_api' // 图谱API
 export * from './agent_api' // 智能体API
+export * from './crawler_api' // 爬虫监控API
 export * from './tasker' // 任务管理API
 export * from './mindmap_api' // 思维导图API
 export * from './department_api' // 部门管理API

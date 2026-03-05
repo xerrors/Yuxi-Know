@@ -646,7 +646,7 @@ const handleMouseUp = () => {
   }
 
   :deep(.ant-tabs-tabpane) {
-    height: 100%;
+    // height: 100%;
     overflow: hidden;
   }
 

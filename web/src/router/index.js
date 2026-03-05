@@ -111,19 +111,19 @@ const router = createRouter({
         {
           path: 'monitoring-config',
           name: 'MonitoringConfig',
-          component: () => import('../views/DataCollectionView.vue'),
+          component: () => import('../views/DataCollection/MonitoringConfigView.vue'),
           meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
         },
         {
           path: 'data-extraction',
           name: 'DataExtraction',
-          component: () => import('../views/DataCollectionView.vue'),
+          component: () => import('../views/DataCollection/DataExtractionView.vue'),
           meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
         },
         {
           path: 'log-management',
           name: 'LogManagement',
-          component: () => import('../views/DataCollectionView.vue'),
+          component: () => import('../views/DataCollection/LogManagementView.vue'),
           meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
         }
       ]

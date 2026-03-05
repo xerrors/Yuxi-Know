@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>爬虫联调测试页</title>
+  <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.5.13/vue.global.prod.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.9.11/dist/index.css" />
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.9.11/dist/index.full.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+  <script src="https://cdn.bootcdn.net/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" />
+  <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    body {
+      background: #f7f8fa;
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    [v-cloak] {
+      display: none;
+    }
+
+    .side-item {
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      color: #64748b;
+    }
+
+    .side-item.active {
+      background: #eff6ff;
+      color: #2563eb;
+      font-weight: 600;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #eef2f7;
+      border-radius: 14px;
+    }
+
+    .el-select-dropdown__item {
+      color: #334155 !important;
+      line-height: 34px !important;
+      height: 34px !important;
+      white-space: nowrap !important;
+    }
+
+    .el-select-dropdown__item.hover,
+    .el-select-dropdown__item:hover {
+      background-color: #eff6ff !important;
+    }
+
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3 {
+      margin: 14px 0 8px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .markdown-body p {
+      margin: 8px 0;
+      line-height: 1.7;
+      color: #374151;
+    }
+
+    .markdown-body ul {
+      padding-left: 18px;
+      list-style: disc;
+    }
+
+    .markdown-body a {
+      color: #2563eb;
+      text-decoration: underline;
+    }
+
+    .markdown-body img {
+      max-width: 100%;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+
+    .markdown-body pre {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" v-cloak class="h-screen flex">
+    <aside class="w-64 bg-white border-r border-slate-200 p-4 flex flex-col gap-3">
+      <div class="px-2 py-3">
+        <div class="text-lg font-bold text-slate-800">爬虫联调页</div>
+        <div class="text-xs text-slate-400">Crawler API Integration Demo</div>
+      </div>
+      <div :class="['side-item', currentView==='dashboard' ? 'active' : '']" @click="switchView('dashboard')">
+        <i class="fa-solid fa-chart-line mr-2"></i>运行概览
+      </div>
+      <div :class="['side-item', currentView==='tasks' ? 'active' : '']" @click="switchView('tasks')">
+        <i class="fa-solid fa-list-check mr-2"></i>网站监控配置
+      </div>
+      <div class="mt-auto text-xs text-slate-500 px-2">
+        API: <span class="font-mono">{{ apiBase }}</span>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-auto p-6">
+      <div class="mb-5">
+        <h2 class="text-xl font-bold text-slate-800">{{ viewTitle }}</h2>
+        <p class="text-xs text-slate-400">{{ viewSubtitle }}</p>
+      </div>
+
+      <div v-if="currentView==='dashboard'" class="space-y-4">
+        <div class="grid grid-cols-3 gap-4">
+          <div class="card p-5">
+            <div class="text-xs text-slate-500">今日 Token 消耗</div>
+            <div class="text-2xl font-bold mt-2">{{ dashboardStats.today_tokens }}</div>
+          </div>
+          <div class="card p-5">
+            <div class="text-xs text-slate-500">累计采集条目</div>
+            <div class="text-2xl font-bold mt-2">{{ dashboardStats.total_items }}</div>
+          </div>
+          <div class="card p-5">
+            <div class="text-xs text-slate-500">异常次数</div>
+            <div class="text-2xl font-bold mt-2 text-red-500">{{ dashboardStats.error_count }}</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <div class="card p-5 col-span-2">
+            <div class="flex justify-between items-center mb-3">
+              <div class="font-semibold">成功率趋势</div>
+              <el-radio-group v-model="chartPeriod" size="small" @change="loadDashboard">
+                <el-radio-button label="7d">近7天</el-radio-button>
+                <el-radio-button label="30d">近30天</el-radio-button>
+              </el-radio-group>
+            </div>
+            <div id="rateChart" class="h-72"></div>
+          </div>
+          <div class="card p-5">
+            <div class="font-semibold mb-3">异常预警排行</div>
+            <div class="space-y-2">
+              <div v-for="(item, idx) in dashboardAlerts" :key="idx" class="p-2 bg-slate-50 rounded text-xs">
+                <div class="font-medium text-slate-700">{{ idx + 1 }}. {{ item.error_message || '未知异常' }}</div>
+                <div class="text-slate-500 mt-1">出现 {{ item.count }} 次</div>
+              </div>
+              <div v-if="dashboardAlerts.length===0" class="text-xs text-slate-400">暂无异常记录</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="currentView==='tasks'" class="space-y-4">
+        <div class="card p-4">
+          <el-tabs v-model="taskManageTab">
+            <el-tab-pane label="任务中心" name="center">
+              <div class="grid grid-cols-12 gap-4">
+                <div class="col-span-4 border border-slate-200 rounded-lg p-3">
+                  <div class="flex justify-between items-center mb-3">
+                    <div class="font-semibold">监控目标</div>
+                    <el-button type="primary" size="small" @click="openCreate">新增</el-button>
+                  </div>
+                  <div class="space-y-2 max-h-[560px] overflow-auto">
+                    <div
+                      v-for="item in taskList"
+                      :key="item.id"
+                      class="border rounded-lg p-3 cursor-pointer"
+                      :class="selectedTaskId === item.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200'"
+                      @click="selectTask(item)"
+                    >
+                      <div class="flex justify-between items-center">
+                        <div class="font-medium text-sm">{{ item.name }}</div>
+                        <el-tag size="small" :type="item.status==='active' ? 'success' : 'info'">{{ item.status==='active' ? '启用' : '暂停' }}</el-tag>
+                      </div>
+                      <div class="text-xs text-slate-500 mt-1">{{ item.url }}</div>
+                      <div class="text-xs text-slate-400 mt-1">模式：{{ modeText(item.mode) }} ｜ 频率：{{ frequencyText(item.frequency) }}</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-span-8 border border-slate-200 rounded-lg p-3">
+                  <div v-if="selectedTask" class="mb-3">
+                    <div class="flex justify-between items-center">
+                      <div>
+                        <div class="font-semibold">{{ selectedTask.name }}</div>
+                        <div class="text-xs text-slate-500 mt-1">{{ selectedTask.url }}</div>
+                      </div>
+                      <div class="flex gap-2">
+                        <el-button size="small" @click="runTask(selectedTask)">立即运行</el-button>
+                        <el-button size="small" @click="editTask(selectedTask)">编辑</el-button>
+                        <el-button size="small" @click="viewResults(selectedTask)">历史数据</el-button>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="text-sm text-slate-400">请先在左侧选择一个监控目标</div>
+
+                  <el-table v-if="selectedTask" :data="centerJobList" row-key="job_id" style="width:100%" max-height="360">
+                    <el-table-column prop="job_id" label="job_id" min-width="200"></el-table-column>
+                    <el-table-column label="状态" width="90">
+                      <template #default="scope">
+                        <el-tag
+                          :type="scope.row.status === 'success' ? 'success' : (scope.row.status === 'failed' ? 'danger' : 'warning')"
+                          size="small"
+                        >
+                          {{ scope.row.status }}
+                        </el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="进度" min-width="220">
+                      <template #default="scope">
+                        <el-progress :percentage="jobProgress(scope.row)" :stroke-width="12" />
+                        <div class="text-xs text-slate-500 mt-1">总 {{ scope.row.total_pages || 0 }} / 成功 {{ scope.row.success_pages || 0 }} / 失败 {{ scope.row.failed_pages || 0 }} / 跳过 {{ scope.row.skipped_pages || 0 }}</div>
+                        <div class="text-xs text-slate-400 mt-1">列表页 {{ scope.row.list_page_count || 0 }} / 发现链接 {{ scope.row.discovered_links || 0 }} / 有效链接 {{ scope.row.effective_links || 0 }}</div>
+                      </template>
+                    </el-table-column>
+                    <el-table-column label="更新时间" width="170">
+                      <template #default="scope">{{ formatTime(scope.row.updated_at) }}</template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="180">
+                      <template #default="scope">
+                        <el-button type="primary" link @click="openJobPages(scope.row)">页面日志</el-button>
+                        <el-button type="info" link @click="openJobLogs(scope.row)">执行日志</el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </div>
+              </div>
+            </el-tab-pane>
+            <el-tab-pane label="页面库" name="pages">
+              <div class="flex gap-2 mb-4">
+                <el-input v-model="resultQuery" clearable placeholder="搜索标题或URL" style="width: 280px" />
+                <el-select v-model="resultTaskId" clearable placeholder="全部任务" style="width: 220px">
+                  <el-option v-for="item in taskList" :key="item.id" :label="item.name" :value="item.id"></el-option>
+                </el-select>
+                <el-button @click="loadAllResults">查询</el-button>
+              </div>
+              <el-table :data="allResultList" row-key="id" style="width: 100%">
+                <el-table-column prop="task_name" label="所属任务" min-width="160"></el-table-column>
+                <el-table-column prop="source_url" label="source_url" min-width="320"></el-table-column>
+                <el-table-column prop="title" label="title" min-width="220"></el-table-column>
+                <el-table-column prop="publish_date" label="publish_date" width="170"></el-table-column>
+                <el-table-column prop="created_at" label="created_at" width="180"></el-table-column>
+                <el-table-column label="正文详情" width="110" fixed="right">
+                  <template #default="scope">
+                    <el-button type="primary" link @click="openResultDetail(scope.row)">查看详情</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+            <el-tab-pane label="监控任务" name="tasks">
+              <div class="flex justify-between gap-3 mb-4">
+                <div class="flex gap-2">
+                  <el-input v-model="taskQuery" clearable placeholder="搜索任务名或URL" style="width: 280px" />
+                  <el-select v-model="taskStatus" style="width: 140px" @change="loadTasks">
+                    <el-option label="全部" value="all" ></el-option>
+                    <el-option label="启用" value="active" ></el-option>
+                    <el-option label="暂停" value="paused" ></el-option>
+                  </el-select>
+                  <el-button @click="loadTasks">刷新</el-button>
+                </div>
+                <el-button type="primary" @click="openCreate">新增监控网站</el-button>
+              </div>
+
+              <el-table :data="taskList" style="width: 100%">
+                <el-table-column label="监控目标" min-width="260">
+                  <template #default="scope">
+                    <div class="font-semibold">{{ scope.row.name }}</div>
+                    <div class="text-xs text-slate-500">{{ scope.row.url }}</div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="模式" width="90">
+                  <template #default="scope">
+                    <el-tag size="small">{{ modeText(scope.row.mode) }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="频率" width="120">
+                  <template #default="scope">
+                    <span>{{ frequencyText(scope.row.frequency) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="110">
+                  <template #default="scope">
+                    <el-switch
+                      :model-value="scope.row.status==='active'"
+                      @change="toggleTask(scope.row, $event)"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="上次执行" width="170">
+                  <template #default="scope">
+                    <span class="text-xs">{{ formatTime(scope.row.last_run_time) || '从未执行' }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="上次条数" width="90" prop="last_items_count" />
+                <el-table-column label="操作" width="260" fixed="right">
+                  <template #default="scope">
+                    <el-button size="small" @click="runTask(scope.row)">立即运行</el-button>
+                    <el-button size="small" @click="viewResults(scope.row)">历史数据</el-button>
+                    <el-button size="small" @click="editTask(scope.row)">编辑</el-button>
+                    <el-button size="small" type="danger" @click="deleteTask(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <el-tab-pane label="执行任务" name="jobs">
+              <div class="flex gap-2 mb-4">
+                <el-select v-model="jobStatus" style="width: 150px">
+                  <el-option label="全部状态" value="all" ></el-option>
+                  <el-option label="待执行" value="pending" ></el-option>
+                  <el-option label="执行中" value="running" ></el-option>
+                  <el-option label="执行成功" value="success" ></el-option>
+                  <el-option label="执行失败" value="failed" ></el-option>
+                </el-select>
+                <el-select v-model="jobSource" style="width: 150px">
+                  <el-option label="全部来源" value="all" ></el-option>
+                  <el-option label="手动触发" value="manual" ></el-option>
+                  <el-option label="定时触发" value="schedule" ></el-option>
+                  <el-option label="临时抽取" value="adhoc" ></el-option>
+                </el-select>
+                <el-button @click="loadJobs">刷新</el-button>
+              </div>
+
+              <el-table :data="filteredJobList" row-key="job_id" style="width:100%">
+                <el-table-column prop="job_id" label="job_id" min-width="220"></el-table-column>
+                <el-table-column prop="task_name" label="任务名" min-width="160"></el-table-column>
+                <el-table-column label="触发来源" width="100">
+                  <template #default="scope">
+                    <span>{{ triggerSourceText(scope.row.trigger_source) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="状态" width="100">
+                  <template #default="scope">
+                    <el-tag
+                      :type="scope.row.status === 'success' ? 'success' : (scope.row.status === 'failed' ? 'danger' : 'warning')"
+                      size="small"
+                    >
+                      {{ scope.row.status }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="执行进度" min-width="220">
+                  <template #default="scope">
+                    <el-progress
+                      :percentage="jobProgress(scope.row)"
+                      :status="scope.row.status === 'failed' ? 'exception' : (scope.row.status === 'success' ? 'success' : '')"
+                      :stroke-width="14"
+                    />
+                    <div class="text-xs text-slate-500 mt-1">
+                      总 {{ scope.row.total_pages || 0 }} / 成功 {{ scope.row.success_pages || 0 }} / 失败 {{ scope.row.failed_pages || 0 }} / 跳过 {{ scope.row.skipped_pages || 0 }}
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1">
+                      列表页 {{ scope.row.list_page_count || 0 }} / 发现链接 {{ scope.row.discovered_links || 0 }} / 有效链接 {{ scope.row.effective_links || 0 }}
+                    </div>
+                  </template>
+                </el-table-column>
+                <el-table-column label="创建时间" width="180">
+                  <template #default="scope">{{ formatTime(scope.row.created_at) }}</template>
+                </el-table-column>
+                <el-table-column label="更新时间" width="180">
+                  <template #default="scope">{{ formatTime(scope.row.updated_at) }}</template>
+                </el-table-column>
+                <el-table-column label="详情" width="120" fixed="right">
+                  <template #default="scope">
+                    <div class="flex gap-2">
+                      <el-button type="primary" link @click="openJobPages(scope.row)">页面日志</el-button>
+                      <el-button type="info" link @click="openJobLogs(scope.row)">执行日志</el-button>
+                      <el-button
+                        v-if="scope.row.status==='failed'"
+                        type="danger"
+                        link
+                        @click="openJobDetail(scope.row)"
+                      >
+                        失败详情
+                      </el-button>
+                    </div>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+
+            <el-tab-pane label="采集日志" name="logs">
+              <div class="flex justify-between gap-3 mb-4">
+                <div class="flex gap-2">
+                  <el-date-picker
+                    v-model="logDateRange"
+                    type="daterange"
+                    range-separator="至"
+                    start-placeholder="开始日期"
+                    end-placeholder="结束日期"
+                    value-format="YYYY-MM-DD"
+                  />
+                  <el-select v-model="logStatus" style="width: 140px">
+                    <el-option label="全部状态" value="all" ></el-option>
+                    <el-option label="success" value="success" ></el-option>
+                    <el-option label="failed" value="failed" ></el-option>
+                  </el-select>
+                  <el-input v-model="logJobId" clearable placeholder="按 job_id 过滤" style="width: 220px" />
+                  <el-button @click="loadLogs">查询</el-button>
+                </div>
+                <el-button @click="exportLogs">导出CSV</el-button>
+              </div>
+
+              <el-table :data="logList" row-key="id" style="width:100%">
+            <el-table-column label="执行时间" width="180">
+              <template #default="scope">
+                <span class="text-xs">{{ formatTime(scope.row.execution_time) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="所属任务" width="180">
+              <template #default="scope">
+                <span>{{ scope.row.task_name || '-' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="90">
+              <template #default="scope">
+                <el-tag :type="scope.row.status === 'success' ? 'success' : 'danger'" size="small">
+                  {{ scope.row.status || '-' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="系统日志详情" width="120">
+              <template #default="scope">
+                <span>{{ scope.row.status === 'failed' ? '执行失败' : '执行成功' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="日志详情" min-width="260">
+              <template #default="scope">
+                <div class="text-xs text-slate-600 truncate">{{ scope.row.detail_log || scope.row.error_message || '-' }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="数据量" width="80">
+              <template #default="scope">
+                <span>{{ scope.row.items_count ?? 0 }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="Token" width="90">
+              <template #default="scope">
+                <span>{{ scope.row.token_usage ?? 0 }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="失败详情" width="120" fixed="right">
+              <template #default="scope">
+                <el-button
+                  v-if="scope.row.detail_log || scope.row.status === 'failed'"
+                  :type="scope.row.status === 'failed' ? 'danger' : 'primary'"
+                  link
+                  @click="openLogDetail(scope.row)"
+                >
+                  查看日志
+                </el-button>
+                <span v-else>-</span>
+              </template>
+            </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+        </div>
+      </div>
+    </main>
+
+    <el-dialog v-model="taskDialogVisible" :title="isEdit ? '编辑任务' : '新增任务'" width="700px">
+      <el-form label-position="top">
+        <div class="grid grid-cols-2 gap-4">
+          <el-form-item label="任务名称">
+            <el-input v-model="taskForm.name" />
+          </el-form-item>
+          <el-form-item label="执行方式">
+            <el-select v-model="taskForm.schedule_type">
+              <el-option label="单次（手动触发）" value="manual"></el-option>
+              <el-option label="定时自动执行" value="scheduled"></el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <el-form-item label="目标 URL">
+          <el-input v-model="taskForm.url" />
+        </el-form-item>
+        <div class="grid grid-cols-2 gap-4">
+          <el-form-item label="采集模式">
+            <el-select v-model="taskForm.mode">
+              <el-option label="智能判断（推荐）" value="auto" ></el-option>
+              <el-option label="单页抓取" value="scrape" ></el-option>
+              <el-option label="列表监控" value="list" ></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item label="详情链接过滤(detail_url_pattern)">
+            <el-input v-model="taskForm.detail_url_pattern" placeholder=".*gongshi.*\.htm" />
+          </el-form-item>
+        </div>
+        <div v-if="taskForm.schedule_type==='scheduled'" class="grid grid-cols-3 gap-4">
+          <el-form-item label="周期类型">
+            <el-select v-model="taskForm.schedule_cycle">
+              <el-option label="每小时" value="hourly"></el-option>
+              <el-option label="每天" value="daily"></el-option>
+              <el-option label="每周" value="weekly"></el-option>
+              <el-option label="自定义 Cron" value="cron"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="taskForm.schedule_cycle==='hourly'" label="间隔（小时）">
+            <el-input-number v-model="taskForm.schedule_interval" :min="1" :max="24" />
+          </el-form-item>
+          <el-form-item v-if="taskForm.schedule_cycle==='daily' || taskForm.schedule_cycle==='weekly'" label="执行时间">
+            <el-time-picker v-model="taskForm.schedule_time" format="HH:mm" value-format="HH:mm" placeholder="09:00" />
+          </el-form-item>
+          <el-form-item v-if="taskForm.schedule_cycle==='weekly'" label="星期几">
+            <el-select v-model="taskForm.schedule_weekday">
+              <el-option label="周一" :value="1"></el-option>
+              <el-option label="周二" :value="2"></el-option>
+              <el-option label="周三" :value="3"></el-option>
+              <el-option label="周四" :value="4"></el-option>
+              <el-option label="周五" :value="5"></el-option>
+              <el-option label="周六" :value="6"></el-option>
+              <el-option label="周日" :value="0"></el-option>
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="taskForm.schedule_cycle==='cron'" label="Cron 表达式">
+            <el-input v-model="taskForm.custom_cron" placeholder="例如：0 9 * * 1-5" />
+          </el-form-item>
+        </div>
+        <div class="grid grid-cols-3 gap-4">
+          <el-form-item label="最大爬取深度">
+            <el-input-number v-model="taskForm.max_depth" :min="1" :max="10" />
+          </el-form-item>
+          <el-form-item label="并发数">
+            <el-input-number v-model="taskForm.concurrency" :min="1" :max="20" />
+          </el-form-item>
+          <el-form-item label="任务状态">
+            <el-select v-model="taskForm.status">
+              <el-option label="启用" value="active" ></el-option>
+              <el-option label="暂停" value="paused" ></el-option>
+            </el-select>
+          </el-form-item>
+        </div>
+        <el-collapse>
+          <el-collapse-item title="高级配置（可选）" name="advanced">
+            <div class="grid grid-cols-3 gap-4">
+              <el-form-item label="缓存策略">
+                <el-select v-model="taskForm.options.cache_mode">
+                  <el-option label="绕过缓存" value="bypass" ></el-option>
+                  <el-option label="启用读写缓存" value="enabled" ></el-option>
+                  <el-option label="只读缓存" value="read_only" ></el-option>
+                  <el-option label="只写缓存" value="write_only" ></el-option>
+                  <el-option label="禁用缓存" value="disabled" ></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="页面等待策略">
+                <el-select v-model="taskForm.options.wait_until">
+                  <el-option label="DOM 加载完成" value="domcontentloaded" ></el-option>
+                  <el-option label="页面 load 完成" value="load" ></el-option>
+                  <el-option label="网络空闲" value="networkidle" ></el-option>
+                  <el-option label="请求提交完成" value="commit" ></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item label="页面超时(毫秒)">
+                <el-input-number v-model="taskForm.options.page_timeout" :min="1000" :max="300000" :step="1000" />
+              </el-form-item>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <el-form-item label="等待元素(CSS选择器，可选)">
+                <el-input v-model="taskForm.options.wait_for" placeholder=".article-content" />
+              </el-form-item>
+              <el-form-item label="自定义 User-Agent(可选)">
+                <el-input v-model="taskForm.options.user_agent" placeholder="Mozilla/5.0 ..." />
+              </el-form-item>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <el-form-item label="仅提取文本">
+                <el-switch v-model="taskForm.options.only_text" />
+              </el-form-item>
+              <el-form-item label="移除表单区域">
+                <el-switch v-model="taskForm.options.remove_forms" />
+              </el-form-item>
+              <el-form-item label="排除外部链接">
+                <el-switch v-model="taskForm.options.exclude_external_links" />
+              </el-form-item>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <el-form-item label="模拟用户行为">
+                <el-switch v-model="taskForm.options.simulate_user" />
+              </el-form-item>
+              <el-form-item label="智能模式(magic)">
+                <el-switch v-model="taskForm.options.magic" />
+              </el-form-item>
+              <el-form-item label="保留图片内容">
+                <el-switch v-model="taskForm.options.include_images" />
+              </el-form-item>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+        <el-form-item label="提取结构定义(Schema JSON)">
+          <el-input v-model="taskForm.schemaText" type="textarea" :rows="10" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="taskDialogVisible=false">取消</el-button>
+        <el-button type="primary" @click="saveTask">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="resultDialogVisible" title="任务历史数据" width="800px">
+      <el-table :data="resultList" row-key="id" style="width: 100%">
+        <el-table-column prop="source_url" label="source_url" min-width="280"></el-table-column>
+        <el-table-column prop="title" label="title" min-width="220"></el-table-column>
+        <el-table-column prop="publish_date" label="publish_date" width="160"></el-table-column>
+        <el-table-column prop="created_at" label="created_at" width="180"></el-table-column>
+        <el-table-column label="正文详情" width="110" fixed="right">
+          <template #default="scope">
+            <el-button type="primary" link @click="openResultDetail(scope.row)">查看详情</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="resultDetailVisible" title="爬虫正文详情" width="980px">
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-1 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs">
+          <div class="mb-2"><span class="text-slate-500">source_url:</span><br />{{ selectedResult.source_url }}</div>
+          <div class="mb-2"><span class="text-slate-500">title:</span><br />{{ selectedResult.title }}</div>
+          <div class="mb-2"><span class="text-slate-500">publish_date:</span><br />{{ selectedResult.publish_date }}</div>
+          <div><span class="text-slate-500">created_at:</span><br />{{ selectedResult.created_at }}</div>
+        </div>
+        <div class="col-span-2">
+          <div class="mb-2 text-xs text-slate-500">正文（Markdown 渲染）</div>
+          <div class="markdown-body border border-slate-200 rounded-lg p-4 h-[420px] overflow-auto" v-html="selectedResult.renderedContent"></div>
+        </div>
+      </div>
+      <div class="mt-4">
+        <div class="mb-2 text-xs text-slate-500">原始抽取结果（JSON）</div>
+        <pre class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 h-48 overflow-auto">{{ selectedResult.rawJson }}</pre>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="logDetailVisible" title="执行日志详情" width="900px">
+      <pre class="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 h-80 overflow-auto">{{ selectedLogError }}</pre>
+    </el-dialog>
+
+    <el-dialog v-model="jobPagesVisible" title="任务页面执行日志" width="1100px">
+      <el-table :data="jobPageList" row-key="id" style="width: 100%">
+        <el-table-column prop="page_url" label="页面 URL" min-width="360"></el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="scope">
+            <el-tag
+              :type="scope.row.status==='success' ? 'success' : (scope.row.status==='failed' ? 'danger' : (scope.row.status==='skipped' ? 'info' : 'warning'))"
+              size="small"
+            >
+              {{ pageStatusText(scope.row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="message" label="说明" min-width="180"></el-table-column>
+        <el-table-column prop="token_usage" label="Token" width="90"></el-table-column>
+        <el-table-column label="开始时间" width="170">
+          <template #default="scope">{{ formatTime(scope.row.started_at) }}</template>
+        </el-table-column>
+        <el-table-column label="结束时间" width="170">
+          <template #default="scope">{{ formatTime(scope.row.finished_at) }}</template>
+        </el-table-column>
+        <el-table-column label="正文" width="120">
+          <template #default="scope">
+            <el-button
+              v-if="scope.row.content_markdown"
+              type="primary"
+              link
+              @click="openPageContent(scope.row)"
+            >
+              查看正文
+            </el-button>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-dialog>
+
+    <el-dialog v-model="pageContentVisible" title="页面正文（Markdown）" width="980px">
+      <div class="text-xs text-slate-500 mb-2">{{ pageContentTitle }}</div>
+      <div class="markdown-body border border-slate-200 rounded-lg p-4 h-[520px] overflow-auto" v-html="pageContentHtml"></div>
+    </el-dialog>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, watch, nextTick } = Vue;
+
+    createApp({
+      setup() {
+        const apiBase = (() => {
+          const fromQuery = new URLSearchParams(window.location.search).get('apiBase');
+          if (fromQuery) return fromQuery.replace(/\/$/, '');
+          const host = window.location.hostname || '127.0.0.1';
+          if (window.location.protocol === 'file:') {
+            return 'http://127.0.0.1:18060/api/v1';
+          }
+          return `${window.location.protocol}//${host}:18060/api/v1`;
+        })();
+        const testUrl = 'https://www.nea.gov.cn/hudong/gongshi/index.htm';
+        const currentView = ref('tasks');
+        const taskManageTab = ref('center');
+        const chartPeriod = ref('7d');
+        const taskQuery = ref('');
+        const taskStatus = ref('all');
+        const jobStatus = ref('all');
+        const jobSource = ref('all');
+        const logDateRange = ref([]);
+        const logStatus = ref('all');
+        const logJobId = ref('');
+        const resultQuery = ref('');
+        const resultTaskId = ref();
+        const selectedTaskId = ref(null);
+
+        const dashboardStats = reactive({ today_tokens: 0, total_items: 0, error_count: 0 });
+        const dashboardAlerts = ref([]);
+        const dashboardChart = ref([]);
+        const taskList = ref([]);
+        const jobList = ref([]);
+        const centerJobs = ref([]);
+        const logList = ref([]);
+        const resultList = ref([]);
+        const allResultList = ref([]);
+
+        const taskDialogVisible = ref(false);
+        const resultDialogVisible = ref(false);
+        const resultDetailVisible = ref(false);
+        const logDetailVisible = ref(false);
+        const jobPagesVisible = ref(false);
+        const pageContentVisible = ref(false);
+        const isEdit = ref(false);
+        const editingTaskId = ref(null);
+        const selectedLogError = ref('');
+        const jobPageList = ref([]);
+        const pageContentTitle = ref('');
+        const pageContentHtml = ref('');
+        const currentJobPagesId = ref('');
+        const jobPagesTimer = ref(null);
+        const selectedResult = reactive({
+          source_url: '',
+          title: '',
+          publish_date: '',
+          created_at: '',
+          renderedContent: '',
+          rawJson: ''
+        });
+
+        const taskForm = reactive({
+          name: '能源局公示监控',
+          url: testUrl,
+          frequency: 'hourly',
+          schedule_type: 'scheduled',
+          schedule_cycle: 'hourly',
+          schedule_interval: 1,
+          schedule_time: '09:00',
+          schedule_weekday: 1,
+          custom_cron: '',
+          mode: 'auto',
+          detail_url_pattern: '.*gongshi.*\\.htm',
+          max_depth: 1,
+          concurrency: 2,
+          use_proxy: false,
+          status: 'active',
+          options: {
+            html_to_markdown: true,
+            remove_scripts_styles: true,
+            include_images: true,
+            cache_mode: 'bypass',
+            wait_until: 'domcontentloaded',
+            page_timeout: 60000,
+            wait_for: '',
+            only_text: false,
+            remove_forms: false,
+            exclude_external_links: false,
+            simulate_user: false,
+            magic: false,
+            user_agent: ''
+          },
+          schemaText: JSON.stringify({
+            title: 'string',
+            publish_date: 'string',
+            content: 'markdown',
+            source: 'string'
+          }, null, 2)
+        });
+
+        const viewTitle = computed(() => ({
+          dashboard: '运行概览',
+          tasks: '网站监控配置'
+        }[currentView.value]));
+
+        const viewSubtitle = computed(() => ({
+          dashboard: '查看 token、成功率趋势和异常排行',
+          tasks: '创建/执行/管理监控任务，含执行面板与采集日志'
+        }[currentView.value]));
+
+        const filteredJobList = computed(() => {
+          return jobList.value.filter(item => {
+            if (jobStatus.value !== 'all' && item.status !== jobStatus.value) return false;
+            if (jobSource.value !== 'all' && item.trigger_source !== jobSource.value) return false;
+            return true;
+          });
+        });
+
+        const selectedTask = computed(() => {
+          if (!selectedTaskId.value) return null;
+          return taskList.value.find(item => item.id === selectedTaskId.value) || null;
+        });
+
+        const centerJobList = computed(() => {
+          return centerJobs.value;
+        });
+
+        const formatTime = (val) => {
+          if (!val) return '';
+          const d = new Date(val);
+          if (Number.isNaN(d.getTime())) return val;
+          return d.toLocaleString('zh-CN', { hour12: false });
+        };
+
+        const frequencyText = (value) => {
+          const map = { hourly: '每小时', daily: '每天', weekly: '每周', manual: '手动' };
+          if (map[value]) return map[value];
+          if (typeof value === 'string' && value.includes('*')) return `Cron: ${value}`;
+          return value || '-';
+        };
+
+        const modeText = (value) => {
+          const map = { auto: '智能判断', scrape: '单页抓取', crawl: '深度爬取', list: '列表监控' };
+          return map[value] || value || '-';
+        };
+
+        const triggerSourceText = (value) => {
+          const map = { manual: '手动触发', schedule: '定时触发', adhoc: '临时抽取', unknown: '未知' };
+          return map[value] || value || '-';
+        };
+
+        const pageStatusText = (value) => {
+          const map = { pending: '排队中', running: '执行中', success: '执行成功', failed: '执行失败', skipped: '已爬取跳过' };
+          return map[value] || value || '-';
+        };
+
+        const jobProgress = (row) => {
+          const total = Number(row?.total_pages || 0);
+          if (total <= 0) {
+            if (row?.status === 'success') return 100;
+            if (row?.status === 'failed') return 100;
+            return 0;
+          }
+          const done = Number(row?.success_pages || 0) + Number(row?.failed_pages || 0) + Number(row?.skipped_pages || 0);
+          return Math.min(100, Math.round((done / total) * 100));
+        };
+
+        const parseFrequencyToSchedule = (frequency) => {
+          if (frequency === 'manual') {
+            taskForm.schedule_type = 'manual';
+            taskForm.schedule_cycle = 'hourly';
+            taskForm.schedule_interval = 1;
+            return;
+          }
+          taskForm.schedule_type = 'scheduled';
+          if (frequency === 'hourly') {
+            taskForm.schedule_cycle = 'hourly';
+            taskForm.schedule_interval = 1;
+            return;
+          }
+          if (frequency === 'daily') {
+            taskForm.schedule_cycle = 'daily';
+            taskForm.schedule_time = '09:00';
+            return;
+          }
+          if (frequency === 'weekly') {
+            taskForm.schedule_cycle = 'weekly';
+            taskForm.schedule_time = '09:00';
+            taskForm.schedule_weekday = 1;
+            return;
+          }
+          const weeklyMatch = /^(\d+)\s+(\d+)\s+\*\s+\*\s+([0-6])$/.exec(frequency || '');
+          if (weeklyMatch) {
+            taskForm.schedule_cycle = 'weekly';
+            taskForm.schedule_time = `${String(weeklyMatch[2]).padStart(2, '0')}:${String(weeklyMatch[1]).padStart(2, '0')}`;
+            taskForm.schedule_weekday = Number(weeklyMatch[3]);
+            return;
+          }
+          const dailyMatch = /^(\d+)\s+(\d+)\s+\*\s+\*\s+\*$/.exec(frequency || '');
+          if (dailyMatch) {
+            taskForm.schedule_cycle = 'daily';
+            taskForm.schedule_time = `${String(dailyMatch[2]).padStart(2, '0')}:${String(dailyMatch[1]).padStart(2, '0')}`;
+            return;
+          }
+          const hourlyMatch = /^0\s+\*\/(\d+)\s+\*\s+\*\s+\*$/.exec(frequency || '');
+          if (hourlyMatch) {
+            taskForm.schedule_cycle = 'hourly';
+            taskForm.schedule_interval = Number(hourlyMatch[1]);
+            return;
+          }
+          taskForm.schedule_cycle = 'cron';
+          taskForm.custom_cron = frequency || '';
+        };
+
+        const buildFrequency = () => {
+          if (taskForm.schedule_type === 'manual') return 'manual';
+          if (taskForm.schedule_cycle === 'hourly') {
+            return taskForm.schedule_interval > 1 ? `0 */${taskForm.schedule_interval} * * *` : 'hourly';
+          }
+          const [hourText, minuteText] = (taskForm.schedule_time || '09:00').split(':');
+          const hour = Number(hourText || 9);
+          const minute = Number(minuteText || 0);
+          if (taskForm.schedule_cycle === 'daily') return `${minute} ${hour} * * *`;
+          if (taskForm.schedule_cycle === 'weekly') return `${minute} ${hour} * * ${taskForm.schedule_weekday}`;
+          return (taskForm.custom_cron || '').trim() || 'hourly';
+        };
+
+        const apiGet = async (path, params = {}) => {
+          const usp = new URLSearchParams(params);
+          const res = await fetch(`${apiBase}${path}${usp.toString() ? `?${usp}` : ''}`);
+          if (!res.ok) throw new Error(await res.text());
+          return res.json();
+        };
+
+        const apiPost = async (path, payload = {}) => {
+          const res = await fetch(`${apiBase}${path}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await res.text());
+          return res.json();
+        };
+
+        const apiPut = async (path, payload = {}) => {
+          const res = await fetch(`${apiBase}${path}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error(await res.text());
+          return res.json();
+        };
+
+        const apiDelete = async (path) => {
+          const res = await fetch(`${apiBase}${path}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error(await res.text());
+          return res.json();
+        };
+
+        const escapeHtml = (text) =>
+          String(text)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+
+        const renderMarkdown = (markdown) => {
+          const source = markdown || '';
+          if (window.marked && typeof window.marked.parse === 'function') {
+            return window.marked.parse(source);
+          }
+          return `<pre>${escapeHtml(source)}</pre>`;
+        };
+
+        const normalizeResultRows = (payload) => {
+          const source = Array.isArray(payload) ? payload : [];
+          return source
+            .filter(item => item && typeof item === 'object')
+            .map(item => {
+              const firstData = Array.isArray(item.data) && item.data.length > 0 && item.data[0] && typeof item.data[0] === 'object'
+                ? item.data[0]
+                : null;
+              return {
+                id: item.id ?? `${item.source_url || ''}-${item.created_at || ''}`,
+                task_name: item.task_name || '-',
+                source_url: item.source_url || '-',
+                title: item.title || firstData?.title || '-',
+                publish_date: item.publish_date || firstData?.publish_date || '-',
+                created_at: item.created_at || '-',
+                rawItem: item
+              };
+            });
+        };
+
+        const openResultDetail = (row) => {
+          const raw = row?.rawItem || {};
+          const data = raw?.data;
+          let content = '';
+          let bestItem = null;
+
+          if (Array.isArray(data)) {
+            bestItem = data.find(item => item && typeof item === 'object' && item.content) || data[0] || null;
+          } else if (data && typeof data === 'object') {
+            bestItem = data;
+          }
+
+          if (bestItem && typeof bestItem.content === 'string') {
+            content = bestItem.content;
+          }
+
+          selectedResult.source_url = row.source_url || '-';
+          selectedResult.title = row.title || '-';
+          selectedResult.publish_date = row.publish_date || '-';
+          selectedResult.created_at = row.created_at || '-';
+          selectedResult.renderedContent = renderMarkdown(content || '（该记录无正文内容）');
+          selectedResult.rawJson = JSON.stringify(raw, null, 2);
+          resultDetailVisible.value = true;
+        };
+
+        const openLogDetail = (row) => {
+          selectedLogError.value = row?.detail_log || row?.error_message || '无执行详情';
+          logDetailVisible.value = true;
+        };
+
+        const openJobDetail = (row) => {
+          selectedLogError.value = row?.error_message || '无失败详情';
+          logDetailVisible.value = true;
+        };
+
+        const loadJobPages = async (jobId) => {
+          const data = await apiGet(`/jobs/${jobId}/pages`, { page: 1, size: 200 });
+          jobPageList.value = data.items || [];
+        };
+
+        const openJobPages = async (row) => {
+          try {
+            currentJobPagesId.value = row.job_id;
+            await loadJobPages(row.job_id);
+            jobPagesVisible.value = true;
+            if (jobPagesTimer.value) {
+              clearInterval(jobPagesTimer.value);
+              jobPagesTimer.value = null;
+            }
+            jobPagesTimer.value = setInterval(async () => {
+              if (!jobPagesVisible.value || !currentJobPagesId.value) return;
+              await loadJobPages(currentJobPagesId.value);
+            }, 2000);
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载页面日志失败: ${e.message}`);
+          }
+        };
+
+        const openPageContent = (row) => {
+          pageContentTitle.value = row.page_url || '';
+          pageContentHtml.value = renderMarkdown(row.content_markdown || '（暂无正文）');
+          pageContentVisible.value = true;
+        };
+
+        const openJobLogs = async (row) => {
+          taskManageTab.value = 'logs';
+          logJobId.value = row?.job_id || '';
+          await loadLogs();
+        };
+
+        const selectTask = async (row) => {
+          selectedTaskId.value = row?.id || null;
+          if (!selectedTaskId.value) {
+            centerJobs.value = [];
+            return;
+          }
+          try {
+            const data = await apiGet('/jobs', { page: 1, size: 100, task_id: selectedTaskId.value });
+            centerJobs.value = data.items || [];
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载任务执行记录失败: ${e.message}`);
+          }
+        };
+
+        let chartIns = null;
+        const renderChart = () => {
+          const el = document.getElementById('rateChart');
+          if (!el) return;
+          if (!chartIns) chartIns = echarts.init(el);
+          chartIns.setOption({
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: 'category', data: dashboardChart.value.map(i => i.date) },
+            yAxis: { type: 'value' },
+            series: [{ type: 'line', smooth: true, data: dashboardChart.value.map(i => i.success_rate) }]
+          });
+        };
+
+        const loadDashboard = async () => {
+          try {
+            const [stats, chart, alerts] = await Promise.all([
+              apiGet('/dashboard/stats'),
+              apiGet('/dashboard/chart', { period: chartPeriod.value }),
+              apiGet('/dashboard/alerts')
+            ]);
+            Object.assign(dashboardStats, stats);
+            dashboardChart.value = chart.points || [];
+            dashboardAlerts.value = alerts.alerts || [];
+            nextTick(renderChart);
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载概览失败: ${e.message}`);
+          }
+        };
+
+        const loadTasks = async () => {
+          try {
+            const params = { page: 1, size: 50 };
+            if (taskQuery.value) params.q = taskQuery.value;
+            if (taskStatus.value !== 'all') params.status = taskStatus.value;
+            const data = await apiGet('/tasks', params);
+            taskList.value = data.items || [];
+            if (taskList.value.length === 0) {
+              selectedTaskId.value = null;
+              centerJobs.value = [];
+              return;
+            }
+            const exists = taskList.value.some(item => item.id === selectedTaskId.value);
+            if (!exists) {
+              await selectTask(taskList.value[0]);
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载任务失败: ${e.message}`);
+          }
+        };
+
+        const loadLogs = async () => {
+          try {
+            const params = { page: 1, size: 50 };
+            if (logStatus.value !== 'all') params.status = logStatus.value;
+            if (logJobId.value) params.job_id = logJobId.value.trim();
+            if (Array.isArray(logDateRange.value) && logDateRange.value.length === 2) {
+              params.start_date = logDateRange.value[0];
+              params.end_date = logDateRange.value[1];
+            }
+            const data = await apiGet('/logs', params);
+            logList.value = data.items || [];
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载日志失败: ${e.message}`);
+          }
+        };
+
+        const loadJobs = async () => {
+          try {
+            const params = { page: 1, size: 100 };
+            if (jobStatus.value !== 'all') params.status = jobStatus.value;
+            const data = await apiGet('/jobs', params);
+            jobList.value = data.items || [];
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载执行任务失败: ${e.message}`);
+          }
+        };
+
+        const loadAllResults = async () => {
+          try {
+            const params = { page: 1, size: 100 };
+            if (resultTaskId.value) params.task_id = resultTaskId.value;
+            if (resultQuery.value) params.q = resultQuery.value;
+            const data = await apiGet('/results', params);
+            allResultList.value = normalizeResultRows(data.items || []);
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载页面库失败: ${e.message}`);
+          }
+        };
+
+        const openCreate = () => {
+          isEdit.value = false;
+          editingTaskId.value = null;
+          taskForm.name = '能源局公示监控';
+          taskForm.url = testUrl;
+          taskForm.frequency = 'hourly';
+          parseFrequencyToSchedule(taskForm.frequency);
+          taskForm.mode = 'auto';
+          taskForm.detail_url_pattern = '.*gongshi.*\\.htm';
+          taskForm.max_depth = 1;
+          taskForm.concurrency = 2;
+          taskForm.use_proxy = false;
+          taskForm.status = 'active';
+          Object.assign(taskForm.options, {
+            html_to_markdown: true,
+            remove_scripts_styles: true,
+            include_images: true,
+            cache_mode: 'bypass',
+            wait_until: 'domcontentloaded',
+            page_timeout: 60000,
+            wait_for: '',
+            only_text: false,
+            remove_forms: false,
+            exclude_external_links: false,
+            simulate_user: false,
+            magic: false,
+            user_agent: ''
+          });
+          taskDialogVisible.value = true;
+        };
+
+        const editTask = (row) => {
+          isEdit.value = true;
+          editingTaskId.value = row.id;
+          taskForm.name = row.name;
+          taskForm.url = row.url;
+          taskForm.frequency = row.frequency || 'hourly';
+          parseFrequencyToSchedule(taskForm.frequency);
+          taskForm.mode = row.mode || 'auto';
+          taskForm.detail_url_pattern = row.detail_url_pattern || '';
+          taskForm.max_depth = row.max_depth || 1;
+          taskForm.concurrency = row.concurrency || 1;
+          taskForm.use_proxy = !!row.use_proxy;
+          taskForm.status = row.status || 'active';
+          Object.assign(taskForm.options, {
+            html_to_markdown: row.options?.html_to_markdown ?? true,
+            remove_scripts_styles: row.options?.remove_scripts_styles ?? true,
+            include_images: row.options?.include_images ?? true,
+            cache_mode: row.options?.cache_mode || 'bypass',
+            wait_until: row.options?.wait_until || 'domcontentloaded',
+            page_timeout: row.options?.page_timeout || 60000,
+            wait_for: row.options?.wait_for || '',
+            only_text: row.options?.only_text ?? false,
+            remove_forms: row.options?.remove_forms ?? false,
+            exclude_external_links: row.options?.exclude_external_links ?? false,
+            simulate_user: row.options?.simulate_user ?? false,
+            magic: row.options?.magic ?? false,
+            user_agent: row.options?.user_agent || ''
+          });
+          taskForm.schemaText = JSON.stringify(row.schema || {
+            title: 'string',
+            publish_date: 'string',
+            content: 'markdown'
+          }, null, 2);
+          taskDialogVisible.value = true;
+        };
+
+        const saveTask = async () => {
+          try {
+            const schema = JSON.parse(taskForm.schemaText);
+            const frequency = buildFrequency();
+            const payload = {
+              name: taskForm.name,
+              url: taskForm.url,
+              frequency,
+              mode: taskForm.mode,
+              detail_url_pattern: taskForm.detail_url_pattern,
+              max_depth: taskForm.max_depth,
+              concurrency: taskForm.concurrency,
+              use_proxy: taskForm.use_proxy,
+              status: taskForm.status,
+              schema,
+              options: {
+                ...taskForm.options,
+                wait_for: taskForm.options.wait_for || null,
+                user_agent: taskForm.options.user_agent || null
+              }
+            };
+            if (isEdit.value) {
+              await apiPut(`/tasks/${editingTaskId.value}`, payload);
+              ElementPlus.ElMessage.success('任务已更新');
+            } else {
+              await apiPost('/tasks', payload);
+              ElementPlus.ElMessage.success('任务已创建');
+            }
+            taskDialogVisible.value = false;
+            await loadTasks();
+          } catch (e) {
+            ElementPlus.ElMessage.error(`保存任务失败: ${e.message}`);
+          }
+        };
+
+        const runTask = async (row) => {
+          try {
+            const resp = await apiPost(`/tasks/${row.id}/run`, {});
+            ElementPlus.ElNotification({ title: '任务已触发', message: `job_id: ${resp.job_id}`, type: 'success' });
+            setTimeout(async () => {
+              await loadTasks();
+              await loadJobs();
+              await loadLogs();
+              await loadDashboard();
+              if (selectedTaskId.value) await selectTask({ id: selectedTaskId.value });
+            }, 3000);
+          } catch (e) {
+            ElementPlus.ElMessage.error(`运行失败: ${e.message}`);
+          }
+        };
+
+        const toggleTask = async (row, active) => {
+          try {
+            await apiPost(`/tasks/${row.id}/toggle`, { active: !!active });
+            await loadTasks();
+          } catch (e) {
+            ElementPlus.ElMessage.error(`切换状态失败: ${e.message}`);
+          }
+        };
+
+        const deleteTask = async (row) => {
+          try {
+            await apiDelete(`/tasks/${row.id}`);
+            ElementPlus.ElMessage.success('任务已删除');
+            await loadTasks();
+            if (selectedTaskId.value === row.id) {
+              if (taskList.value.length > 0) {
+                await selectTask(taskList.value[0]);
+              } else {
+                selectedTaskId.value = null;
+                centerJobs.value = [];
+              }
+            }
+          } catch (e) {
+            ElementPlus.ElMessage.error(`删除失败: ${e.message}`);
+          }
+        };
+
+        const viewResults = async (row) => {
+          try {
+            const data = await apiGet(`/tasks/${row.id}/results`, { page: 1, size: 50 });
+            resultList.value = normalizeResultRows(data.items);
+            resultDialogVisible.value = true;
+          } catch (e) {
+            ElementPlus.ElMessage.error(`加载历史数据失败: ${e.message}`);
+          }
+        };
+
+        const exportLogs = () => {
+          const params = new URLSearchParams();
+          if (logStatus.value !== 'all') params.set('status', logStatus.value);
+          if (logJobId.value) params.set('job_id', logJobId.value.trim());
+          if (Array.isArray(logDateRange.value) && logDateRange.value.length === 2) {
+            params.set('start_date', logDateRange.value[0]);
+            params.set('end_date', logDateRange.value[1]);
+          }
+          window.open(`${apiBase}/logs/export?${params.toString()}`, '_blank');
+        };
+
+        const switchView = async (view) => {
+          currentView.value = view;
+          if (view === 'dashboard') await loadDashboard();
+          if (view === 'tasks') {
+            await loadTasks();
+            await loadJobs();
+            await loadLogs();
+            await loadAllResults();
+          }
+        };
+
+        onMounted(async () => {
+          await loadTasks();
+          await loadJobs();
+          await loadLogs();
+          await loadAllResults();
+          await loadDashboard();
+          window.addEventListener('resize', () => chartIns && chartIns.resize());
+        });
+
+        watch(jobPagesVisible, (visible) => {
+          if (!visible && jobPagesTimer.value) {
+            clearInterval(jobPagesTimer.value);
+            jobPagesTimer.value = null;
+          }
+        });
+
+        onBeforeUnmount(() => {
+          if (jobPagesTimer.value) {
+            clearInterval(jobPagesTimer.value);
+            jobPagesTimer.value = null;
+          }
+        });
+
+        return {
+          apiBase,
+          currentView,
+          taskManageTab,
+          viewTitle,
+          viewSubtitle,
+          chartPeriod,
+          dashboardStats,
+          dashboardAlerts,
+          taskQuery,
+          taskStatus,
+          jobStatus,
+          jobSource,
+          selectedTaskId,
+          selectedTask,
+          taskList,
+          jobList,
+          centerJobList,
+          filteredJobList,
+          logDateRange,
+          logStatus,
+          logJobId,
+          resultQuery,
+          resultTaskId,
+          logList,
+          taskDialogVisible,
+          resultDialogVisible,
+          resultDetailVisible,
+          logDetailVisible,
+          jobPagesVisible,
+          pageContentVisible,
+          resultList,
+          allResultList,
+          jobPageList,
+          selectedResult,
+          selectedLogError,
+          pageContentTitle,
+          pageContentHtml,
+          isEdit,
+          taskForm,
+          formatTime,
+          frequencyText,
+          modeText,
+          pageStatusText,
+          jobProgress,
+          triggerSourceText,
+          switchView,
+          loadTasks,
+          loadJobs,
+          loadLogs,
+          loadAllResults,
+          openCreate,
+          selectTask,
+          editTask,
+          saveTask,
+          runTask,
+          toggleTask,
+          deleteTask,
+          viewResults,
+          openResultDetail,
+          openLogDetail,
+          openJobDetail,
+          openJobPages,
+          openPageContent,
+          openJobLogs,
+          exportLogs,
+          loadDashboard
+        };
+      }
+    }).use(ElementPlus).mount('#app');
+  </script>
+</body>
+
+</html>

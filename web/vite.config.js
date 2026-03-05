@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '^/api': {
           // 生产环境
-          target: env.VITE_API_URL || 'http://8.148.22.98:5173/',
+          target: env.VITE_API_URL || 'http://8.148.22.98/',
           // 颖哥本地环境，用于测试
           // target: env.VITE_API_URL || 'https://r4x8gzlef8.fy.takin.cc/',
           changeOrigin: true
@@ -23,9 +23,9 @@ export default defineConfig(({ mode }) => {
       },
       watch: {
         usePolling: true,
-        ignored: ['**/node_modules/**', '**/dist/**'],
+        ignored: ['**/node_modules/**', '**/dist/**']
       },
-      host: '0.0.0.0',
+      host: '0.0.0.0'
     }
   }
 })
