@@ -20,7 +20,6 @@ from src.services.skill_service import _normalize_string_list, is_valid_skill_sl
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
 
-
 # =============================================================================
 # 类型定义
 # =============================================================================

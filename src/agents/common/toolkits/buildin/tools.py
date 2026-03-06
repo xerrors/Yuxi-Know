@@ -6,8 +6,7 @@ from typing import Annotated, Any
 import requests
 
 from src import config, graph_base
-from src.agents.common.toolkits.registry import tool
-from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry
+from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
 from src.storage.minio import aupload_file_to_minio
 from src.utils import logger
 

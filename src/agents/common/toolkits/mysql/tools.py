@@ -46,7 +46,6 @@ def get_connection_manager() -> MySQLConnectionManager:
     return _connection_manager
 
 
-
 @tool(
     category="mysql",
     tags=["数据库", "查询"],

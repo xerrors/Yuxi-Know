@@ -477,9 +477,9 @@ class KnowledgeBase(ABC):
             操作结果
         """
         if db_id in self.databases_meta:
+            from src.knowledge.utils.kb_utils import parse_minio_url
             from src.repositories.knowledge_base_repository import KnowledgeBaseRepository
             from src.storage.minio import get_minio_client
-            from src.knowledge.utils.kb_utils import parse_minio_url
 
             minio_client = get_minio_client()
 
