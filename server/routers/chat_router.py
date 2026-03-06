@@ -661,6 +661,7 @@ class ThreadResponse(BaseModel):
     user_id: str
     agent_id: str
     title: str | None = None
+    is_pinned: bool = False
     created_at: str
     updated_at: str
 
@@ -728,6 +729,7 @@ async def delete_thread(
 
 class ThreadUpdate(BaseModel):
     title: str | None = None
+    is_pinned: bool | None = None
 
 
 @chat.put("/thread/{thread_id}", response_model=ThreadResponse)
@@ -741,6 +743,7 @@ async def update_thread(
     return await update_thread_view(
         thread_id=thread_id,
         title=thread_update.title,
+        is_pinned=thread_update.is_pinned,
         db=db,
         current_user_id=str(current_user.id),
     )

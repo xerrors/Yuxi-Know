@@ -15,6 +15,7 @@
       @select-chat="selectChat"
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
+      @toggle-pin="togglePinChat"
       @toggle-sidebar="toggleSidebar"
       @open-agent-modal="openAgentModal"
       @load-more-chats="loadMoreChats"
@@ -618,8 +619,12 @@ const loadMoreChats = async () => {
     const offset = threads.value.length
     const fetchedThreads = await threadApi.getThreads(targetAgentId, 100, offset)
     if (fetchedThreads && fetchedThreads.length > 0) {
-      threads.value = [...threads.value, ...fetchedThreads]
-      hasMoreChats.value = fetchedThreads.length >= 100
+      // 去除重复的置顶对话（后端每次都返回所有置顶对话）
+      const existingIds = new Set(threads.value.map((t) => t.id))
+      const newThreads = fetchedThreads.filter((t) => !existingIds.has(t.id))
+
+      threads.value = [...threads.value, ...newThreads]
+      hasMoreChats.value = newThreads.length >= 100
     } else {
       hasMoreChats.value = false
     }
@@ -675,25 +680,43 @@ const deleteThread = async (threadId) => {
 }
 
 // 更新线程标题
-const updateThread = async (threadId, title) => {
-  if (!threadId || !title) return
+const updateThread = async (threadId, title, is_pinned) => {
+  if (!threadId) return
 
-  const normalizedTitle = String(title).replace(/\s+/g, ' ').trim().slice(0, 255)
-  if (!normalizedTitle) return
+  if (title) {
+    const normalizedTitle = String(title).replace(/\s+/g, ' ').trim().slice(0, 255)
+    if (!normalizedTitle) return
 
-  chatState.isRenamingThread = true
-  try {
-    await threadApi.updateThread(threadId, normalizedTitle)
-    const thread = threads.value.find((t) => t.id === threadId)
-    if (thread) {
-      thread.title = normalizedTitle
+    chatState.isRenamingThread = true
+    try {
+      await threadApi.updateThread(threadId, normalizedTitle, is_pinned)
+      const thread = threads.value.find((t) => t.id === threadId)
+      if (thread) {
+        thread.title = normalizedTitle
+        if (is_pinned !== undefined) {
+          thread.is_pinned = is_pinned
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update thread:', error)
+      handleChatError(error, 'update')
+      throw error
+    } finally {
+      chatState.isRenamingThread = false
     }
-  } catch (error) {
-    console.error('Failed to update thread:', error)
-    handleChatError(error, 'update')
-    throw error
-  } finally {
-    chatState.isRenamingThread = false
+  } else if (is_pinned !== undefined) {
+    // 只更新置顶状态
+    try {
+      await threadApi.updateThread(threadId, null, is_pinned)
+      const thread = threads.value.find((t) => t.id === threadId)
+      if (thread) {
+        thread.is_pinned = is_pinned
+      }
+    } catch (error) {
+      console.error('Failed to update thread pin status:', error)
+      handleChatError(error, 'update')
+      throw error
+    }
   }
 }
 
@@ -1369,6 +1392,27 @@ const renameChat = async (data) => {
     await updateThread(chatId, title)
   } catch (error) {
     handleChatError(error, 'rename')
+  }
+}
+
+const togglePinChat = async (chatId) => {
+  const chat = chatsList.value.find((c) => c.id === chatId)
+  if (!chat) return
+  try {
+    // 保存当前选中的对话ID
+    const prevChatId = currentChatId.value
+
+    await updateThread(chatId, null, !chat.is_pinned)
+
+    // 刷新对话列表
+    await loadChatsList()
+
+    // 恢复当前选中的对话
+    if (prevChatId) {
+      chatState.currentThreadId = prevChatId
+    }
+  } catch (error) {
+    handleChatError(error, 'pin')
   }
 }
 

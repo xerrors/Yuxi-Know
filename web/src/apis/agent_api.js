@@ -313,13 +313,13 @@ export const threadApi = {
    * 更新对话线程
    * @param {string} threadId - 对话线程ID
    * @param {string} title - 对话标题
-   * @param {string} description - 对话描述
+   * @param {boolean} is_pinned - 是否置顶
    * @returns {Promise} - 更新结果
    */
-  updateThread: (threadId, title, description) =>
+  updateThread: (threadId, title, is_pinned) =>
     apiPut(`/api/chat/thread/${threadId}`, {
       title,
-      description
+      is_pinned
     }),
 
   /**

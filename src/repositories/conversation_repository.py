@@ -203,20 +203,56 @@ class ConversationRepository:
         limit: int | None = None,
         offset: int = 0,
     ) -> list[Conversation]:
-        query = select(Conversation).where(Conversation.status == status)
+        """List conversations with pinned conversations always included first.
 
+        The limit applies only to non-pinned conversations to ensure pinned
+        conversations are always visible in the list.
+        """
+        from sqlalchemy import or_
+
+        base_conditions = [Conversation.status == status]
         if user_id:
-            query = query.where(Conversation.user_id == str(user_id))
+            base_conditions.append(Conversation.user_id == str(user_id))
         if agent_id:
-            query = query.where(Conversation.agent_id == agent_id)
+            base_conditions.append(Conversation.agent_id == agent_id)
 
-        query = query.order_by(Conversation.updated_at.desc())
+        # First, get all pinned conversations (no limit)
+        pinned_query = (
+            select(Conversation)
+            .where(*base_conditions)
+            .where(Conversation.is_pinned == True)
+            .order_by(Conversation.updated_at.desc())
+        )
+        result = await self.db.execute(pinned_query)
+        pinned_conversations = list(result.scalars().all())
 
-        if limit:
-            query = query.limit(limit).offset(offset)
+        # Then, get non-pinned conversations with limit/offset
+        remaining_limit = None
+        remaining_offset = offset
 
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
+        if limit is not None:
+            # Calculate how many slots are taken by pinned conversations
+            pinned_count = len(pinned_conversations)
+            if pinned_count >= limit:
+                # All slots taken by pinned conversations
+                return pinned_conversations[:limit]
+            remaining_limit = limit - pinned_count
+
+        if remaining_limit is not None and remaining_limit > 0:
+            non_pinned_query = (
+                select(Conversation)
+                .where(*base_conditions)
+                .where(Conversation.is_pinned == False)
+                .order_by(Conversation.updated_at.desc())
+                .limit(remaining_limit)
+                .offset(remaining_offset)
+            )
+            result = await self.db.execute(non_pinned_query)
+            non_pinned_conversations = list(result.scalars().all())
+        else:
+            non_pinned_conversations = []
+
+        return pinned_conversations + non_pinned_conversations
 
     async def update_conversation(
         self,
@@ -224,6 +260,7 @@ class ConversationRepository:
         title: str | None = None,
         status: str | None = None,
         metadata: dict | None = None,
+        is_pinned: bool | None = None,
     ) -> Conversation | None:
         conversation = await self.get_conversation_by_thread_id(thread_id)
         if not conversation:
@@ -234,6 +271,8 @@ class ConversationRepository:
             conversation.title = normalized_title
         if status is not None:
             conversation.status = status
+        if is_pinned is not None:
+            conversation.is_pinned = is_pinned
 
         if metadata is not None:
             current_metadata = conversation.extra_metadata or {}

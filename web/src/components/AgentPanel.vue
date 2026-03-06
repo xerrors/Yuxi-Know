@@ -85,7 +85,9 @@
     <!-- 文件内容 Modal -->
     <a-modal
       v-model:open="modalVisible"
-      width="80%"
+      width="800px"
+      :style="{ maxWidth: '90vw', top: '5vh' }"
+      :bodyStyle="{ maxHeight: '90vh', overflow: 'auto' }"
       :footer="null"
       :closable="false"
       @cancel="closeModal"
