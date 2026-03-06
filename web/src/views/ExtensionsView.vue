@@ -65,14 +65,27 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Upload, RotateCw, Plus } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
 
+const route = useRoute()
 const activeTab = ref('tools')
 const skillsRef = ref(null)
+
+// 监听路由 query 参数变化
+watch(
+  () => route.query,
+  (query) => {
+    if (query.tab && ['tools', 'skills', 'mcp'].includes(query.tab)) {
+      activeTab.value = query.tab
+    }
+  },
+  { immediate: true }
+)
 const toolsRef = ref(null)
 const mcpRef = ref(null)
 
