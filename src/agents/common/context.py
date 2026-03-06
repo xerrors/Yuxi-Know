@@ -93,7 +93,7 @@ class BaseContext:
         metadata={
             "name": "Skills",
             "options": [],
-            "description": "可选技能列表（由超级管理员维护）。运行时仅挂载并只读暴露选中的 skills。",
+            "description": "可选技能列表（由超级管理员维护）。运行时仅挂载并只读暴露选中的 skills。技能依赖的工具和 MCP 服务器也会被自动挂载。",
             "type": "list",
         },
     )
