@@ -9,12 +9,15 @@
       :agents="agents"
       :selected-agent-id="currentAgentId"
       :is-creating-new-chat="chatUIStore.creatingNewChat"
+      :has-more-chats="hasMoreChats"
+      :is-loading-more="isLoadingMoreChats"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
       @toggle-sidebar="toggleSidebar"
       @open-agent-modal="openAgentModal"
+      @load-more-chats="loadMoreChats"
       :class="{
         'sidebar-open': chatUIStore.isSidebarOpen,
         'no-transition': localUIState.isInitialRender
@@ -286,6 +289,8 @@ const chatState = reactive({
 // 组件级别的线程和消息状态
 const threads = ref([])
 const threadMessages = ref({})
+const hasMoreChats = ref(true) // 是否还有更多对话可加载
+const isLoadingMoreChats = ref(false) // 加载更多对话中
 
 // 本地 UI 状态（仅在本组件使用）
 const localUIState = reactive({
@@ -588,14 +593,41 @@ const fetchThreads = async (agentId = null) => {
 
   chatUIStore.isLoadingThreads = true
   try {
-    const fetchedThreads = await threadApi.getThreads(targetAgentId)
+    const fetchedThreads = await threadApi.getThreads(targetAgentId, 100, 0)
     threads.value = fetchedThreads || []
+    // 如果返回的数量小于limit，说明没有更多了
+    hasMoreChats.value = fetchedThreads && fetchedThreads.length >= 100
   } catch (error) {
     console.error('Failed to fetch threads:', error)
     handleChatError(error, 'fetch')
     throw error
   } finally {
     chatUIStore.isLoadingThreads = false
+  }
+}
+
+// 加载更多对话
+const loadMoreChats = async () => {
+  if (isLoadingMoreChats.value || !hasMoreChats.value) return
+
+  const targetAgentId = currentAgentId.value
+  if (!targetAgentId) return
+
+  isLoadingMoreChats.value = true
+  try {
+    const offset = threads.value.length
+    const fetchedThreads = await threadApi.getThreads(targetAgentId, 100, offset)
+    if (fetchedThreads && fetchedThreads.length > 0) {
+      threads.value = [...threads.value, ...fetchedThreads]
+      hasMoreChats.value = fetchedThreads.length >= 100
+    } else {
+      hasMoreChats.value = false
+    }
+  } catch (error) {
+    console.error('Failed to load more chats:', error)
+    handleChatError(error, 'fetch')
+  } finally {
+    isLoadingMoreChats.value = false
   }
 }
 
@@ -1233,10 +1265,6 @@ const createNewChat = async () => {
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
   if (await switchToFirstChatIfEmpty()) return
-
-  // 只有当当前对话是第一个对话且为空时，才阻止创建新对话
-  const currentThreadIndex = threads.value.findIndex((thread) => thread.id === currentChatId.value)
-  if (currentChatId.value && conversations.value.length === 0 && currentThreadIndex === 0) return
 
   chatUIStore.creatingNewChat = true
   try {

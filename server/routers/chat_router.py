@@ -706,10 +706,16 @@ async def create_thread(
 
 @chat.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(
-    agent_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_required_user)
+    agent_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
 ):
     """获取用户的所有对话线程 (使用新存储系统)"""
-    return await list_threads_view(agent_id=agent_id, db=db, current_user_id=str(current_user.id))
+    return await list_threads_view(
+        agent_id=agent_id, db=db, current_user_id=str(current_user.id), limit=limit, offset=offset
+    )
 
 
 @chat.delete("/thread/{thread_id}")

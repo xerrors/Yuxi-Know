@@ -196,7 +196,12 @@ class ConversationRepository:
         return await self.get_messages(conversation.id, limit, offset)
 
     async def list_conversations(
-        self, user_id: str | None = None, agent_id: str | None = None, status: str = "active"
+        self,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+        status: str = "active",
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[Conversation]:
         query = select(Conversation).where(Conversation.status == status)
 
@@ -206,6 +211,10 @@ class ConversationRepository:
             query = query.where(Conversation.agent_id == agent_id)
 
         query = query.order_by(Conversation.updated_at.desc())
+
+        if limit:
+            query = query.limit(limit).offset(offset)
+
         result = await self.db.execute(query)
         return list(result.scalars().all())
 

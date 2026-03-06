@@ -156,6 +156,8 @@ async def list_threads_view(
     agent_id: str,
     db: AsyncSession,
     current_user_id: str,
+    limit: int | None = None,
+    offset: int = 0,
 ) -> list[dict]:
     if not agent_id:
         raise HTTPException(status_code=422, detail="agent_id 不能为空")
@@ -165,6 +167,8 @@ async def list_threads_view(
         user_id=str(current_user_id),
         agent_id=agent_id,
         status="active",
+        limit=limit,
+        offset=offset,
     )
 
     return [

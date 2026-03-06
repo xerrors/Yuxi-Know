@@ -29,54 +29,61 @@
         </button>
       </div>
       <div class="conversation-list">
-        <template v-if="Object.keys(groupedChats).length > 0">
-          <div v-for="(group, groupName) in groupedChats" :key="groupName" class="chat-group">
-            <div class="chat-group-title">{{ groupName }}</div>
-            <div
-              v-for="chat in group"
-              :key="chat.id"
-              class="conversation-item"
-              :class="{ active: currentChatId === chat.id }"
-              @click="selectChat(chat)"
-            >
-              <div class="conversation-title">{{ chat.title || '新的对话' }}</div>
-              <div class="actions-mask"></div>
-              <div class="conversation-actions">
-                <a-dropdown :trigger="['click']" @click.stop>
-                  <template #overlay>
-                    <a-menu>
-                      <a-menu-item
-                        key="rename"
-                        @click.stop="renameChat(chat.id)"
-                        :icon="h(EditOutlined)"
-                      >
-                        重命名
-                      </a-menu-item>
-                      <a-menu-item
-                        key="delete"
-                        @click.stop="deleteChat(chat.id)"
-                        :icon="h(DeleteOutlined)"
-                      >
-                        删除
-                      </a-menu-item>
-                    </a-menu>
-                  </template>
-                  <a-button type="text" class="more-btn" @click.stop>
-                    <MoreOutlined />
-                  </a-button>
-                </a-dropdown>
-              </div>
+        <template v-if="sortedChats.length > 0">
+          <div
+            v-for="chat in sortedChats"
+            :key="chat.id"
+            class="conversation-item"
+            :class="{ active: currentChatId === chat.id }"
+            @click="selectChat(chat)"
+          >
+            <div class="conversation-title">{{ chat.title || '新的对话' }}</div>
+            <div class="actions-mask"></div>
+            <div class="conversation-actions">
+              <a-dropdown :trigger="['click']" @click.stop>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item
+                      key="rename"
+                      @click.stop="renameChat(chat.id)"
+                      :icon="h(EditOutlined)"
+                    >
+                      重命名
+                    </a-menu-item>
+                    <a-menu-item
+                      key="delete"
+                      @click.stop="deleteChat(chat.id)"
+                      :icon="h(DeleteOutlined)"
+                    >
+                      删除
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+                <a-button type="text" class="more-btn" @click.stop>
+                  <MoreOutlined />
+                </a-button>
+              </a-dropdown>
             </div>
           </div>
         </template>
         <div v-else class="empty-list">暂无对话历史</div>
+        <div v-if="hasMoreChats" class="load-more-wrapper">
+          <a-button
+            type="text"
+            class="load-more-btn"
+            :loading="isLoadingMore"
+            @click="handleLoadMore"
+          >
+            {{ isLoadingMore ? '加载中...' : '加载更多' }}
+          </a-button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, h } from 'vue'
+import { computed, h, ref } from 'vue'
 import { DeleteOutlined, EditOutlined, MoreOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { PanelLeftClose, MessageSquarePlus, LoaderCircle } from 'lucide-vue-next'
@@ -119,6 +126,14 @@ const props = defineProps({
   selectedAgentId: {
     type: String,
     default: null
+  },
+  hasMoreChats: {
+    type: Boolean,
+    default: false
+  },
+  isLoadingMore: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -128,59 +143,18 @@ const emit = defineEmits([
   'delete-chat',
   'rename-chat',
   'toggle-sidebar',
-  'open-agent-modal'
+  'open-agent-modal',
+  'load-more-chats'
 ])
 
-const groupedChats = computed(() => {
-  const groups = {
-    今天: [],
-    七天内: [],
-    三十天内: []
-  }
-
-  // 确保使用北京时间进行比较
-  const now = dayjs().tz('Asia/Shanghai')
-  const today = now.startOf('day')
-  const sevenDaysAgo = now.subtract(7, 'day').startOf('day')
-  const thirtyDaysAgo = now.subtract(30, 'day').startOf('day')
-
-  // Sort chats by creation date, newest first
-  const sortedChats = [...props.chatsList].sort((a, b) => {
+// 按时间倒序排列的对话列表
+const sortedChats = computed(() => {
+  return [...props.chatsList].sort((a, b) => {
     const dateA = parseToShanghai(b.created_at)
     const dateB = parseToShanghai(a.created_at)
     if (!dateA || !dateB) return 0
     return dateA.diff(dateB)
   })
-
-  sortedChats.forEach((chat) => {
-    // 将后端时间当作UTC时间处理，然后转换为北京时间
-    const chatDate = parseToShanghai(chat.created_at)
-    if (!chatDate) {
-      return
-    }
-    if (chatDate.isAfter(today)) {
-      groups['今天'].push(chat)
-    } else if (chatDate.isAfter(sevenDaysAgo)) {
-      groups['七天内'].push(chat)
-    } else if (chatDate.isAfter(thirtyDaysAgo)) {
-      groups['三十天内'].push(chat)
-    } else {
-      const monthKey = chatDate.format('YYYY-MM')
-      if (!groups[monthKey]) {
-        groups[monthKey] = []
-      }
-      groups[monthKey].push(chat)
-    }
-  })
-
-  // Remove empty groups
-  for (const key in groups) {
-    if (groups[key].length === 0) {
-      delete groups[key]
-    }
-  }
-
-  return groups
 })
 
 const createNewChat = () => {
@@ -236,6 +210,10 @@ const renameChat = async (chatId) => {
 
 const toggleCollapse = () => {
   emit('toggle-sidebar')
+}
+
+const handleLoadMore = () => {
+  emit('load-more-chats')
 }
 </script>
 
@@ -452,6 +430,19 @@ const toggleCollapse = () => {
       margin-top: 20px;
       color: var(--gray-500);
       font-size: 14px;
+    }
+
+    .load-more-wrapper {
+      text-align: center;
+      padding: 12px 8px;
+
+      .load-more-btn {
+        color: var(--main-color);
+        font-size: 13px;
+        &:hover {
+          color: var(--main-600);
+        }
+      }
     }
   }
 }
