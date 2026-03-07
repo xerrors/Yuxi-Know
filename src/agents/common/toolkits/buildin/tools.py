@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated, Any
 
 import requests
+from langgraph.types import interrupt
 
 from src import config, graph_base
 from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
