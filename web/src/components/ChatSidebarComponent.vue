@@ -96,7 +96,16 @@
 <script setup>
 import { computed, h, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PanelLeftClose, MessageSquarePlus, LoaderCircle, Pin, PinOff, Pencil, Trash2, MoreVertical } from 'lucide-vue-next'
+import {
+  PanelLeftClose,
+  MessageSquarePlus,
+  LoaderCircle,
+  Pin,
+  PinOff,
+  Pencil,
+  Trash2,
+  MoreVertical
+} from 'lucide-vue-next'
 import dayjs, { parseToShanghai } from '@/utils/time'
 import { useChatUIStore } from '@/stores/chatUI'
 import { useInfoStore } from '@/stores/info'

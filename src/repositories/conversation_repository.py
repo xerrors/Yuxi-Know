@@ -208,7 +208,6 @@ class ConversationRepository:
         The limit applies only to non-pinned conversations to ensure pinned
         conversations are always visible in the list.
         """
-        from sqlalchemy import or_
 
         base_conditions = [Conversation.status == status]
         if user_id:
@@ -220,7 +219,7 @@ class ConversationRepository:
         pinned_query = (
             select(Conversation)
             .where(*base_conditions)
-            .where(Conversation.is_pinned == True)
+            .where(Conversation.is_pinned)
             .order_by(Conversation.updated_at.desc())
         )
         result = await self.db.execute(pinned_query)
@@ -242,7 +241,7 @@ class ConversationRepository:
             non_pinned_query = (
                 select(Conversation)
                 .where(*base_conditions)
-                .where(Conversation.is_pinned == False)
+                .where(~Conversation.is_pinned)
                 .order_by(Conversation.updated_at.desc())
                 .limit(remaining_limit)
                 .offset(remaining_offset)
