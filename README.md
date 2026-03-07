@@ -26,7 +26,7 @@
 
 ## 核心特性
 
-- **智能体开发**：基于 LangGraph v1 的多智能体架构，支持子智能体、工具调用与中间件机制
+- **智能体开发**：基于 LangGraph，支持子智能体、Skills、MCPs、Tools 与中间件机制
 - **知识库（RAG）**：多格式文档上传，支持 Embedding / Rerank 配置及知识库评估
 - **知识图谱**：基于 LightRAG 的图谱构建与可视化，支持属性图谱并参与智能体推理
 - **平台与工程化**：Vue + FastAPI 架构，支持暗黑模式、Docker 与生产级部署
@@ -112,7 +112,7 @@
 - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 </details>
 
-<img width="4224" height="1006" alt="image" src="https://github.com/user-attachments/assets/66a85b70-5a40-4c5e-aeaa-18b3c85aa76f" />
+<img width="1760" height="410" alt="image" src="https://github.com/user-attachments/assets/7f668fdc-9472-4153-8e76-7fe3e665d060" />
 
 
 ## 快速开始
@@ -120,7 +120,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.4.4 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.5.1 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 
 # Linux/macOS
@@ -140,18 +140,18 @@ docker compose up --build
 
 ## 示例与演示
 
-
 <img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
 <br>
 <img width="10116" height="5751" alt="11111" src="https://github.com/user-attachments/assets/d3e4fe09-fa48-4686-93ea-2c50300ade21" />
 <br>
-<img width="10116" height="5751" alt="22222" src="https://github.com/user-attachments/assets/734a7cce-8b38-48ae-8e21-ca88996e5dde" />
-
+<img width="10116" height="5751" alt="0307" src="https://github.com/user-attachments/assets/a2059193-bc25-492f-9260-105a1fa1d567" />
 <br>
 <img width="10116" height="5751" alt="1212" src="https://github.com/user-attachments/assets/06d56525-69bf-463a-8360-286b2cf8796f" />
 <br>
-<img width="10116" height="5751" alt="44444" src="https://github.com/user-attachments/assets/e390ec4b-8690-4aee-bbb2-3536f7f67dc9" />
-
+<img width="10116" height="5751" alt="030702" src="https://github.com/user-attachments/assets/b0d9dd2b-df3b-47b4-9899-3d8dd0928409" />
+<br>
+<img width="10116" height="5751" alt="030703" src="https://github.com/user-attachments/assets/9305d7a4-663b-4e5d-a252-211d6caa019b" />
+<br>
 
 ## 参与贡献
 
