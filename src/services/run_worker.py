@@ -275,6 +275,14 @@ async def process_agent_run(ctx, run_id: str):
                             error_message=chunk.get("message"),
                         )
                         terminal_set = True
+                    elif status == "ask_user_question_required":
+                        await mark_run_terminal(
+                            run_id,
+                            "interrupted",
+                            error_type="ask_user_question_required",
+                            error_message=chunk.get("question") or "需要用户回答问题",
+                        )
+                        terminal_set = True
 
                     if await run_ctx.is_cancelled():
                         raise asyncio.CancelledError(f"run {run_id} cancelled")
