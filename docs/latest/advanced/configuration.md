@@ -37,7 +37,7 @@ class Config(BaseModel):
     enable_content_guard: bool = Field(default=False, description="是否启用内容审查")
 
     # 模型配置
-    default_model: str = Field(default="siliconflow/deepseek-ai/DeepSeek-V3.2")
+    default_model: str = Field(default="default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2")
     embed_model: str = Field(default="siliconflow/BAAI/bge-m3")
 
     # 运行时状态 (不持久化)

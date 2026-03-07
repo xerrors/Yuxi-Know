@@ -32,7 +32,7 @@
 系统的默认对话模型可以在设置页面配置，也可以通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
 
 ```yaml
-default_model: siliconflow/deepseek-ai/DeepSeek-V3.2
+default_model: default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2
 ```
 
 ## 自定义模型供应商
