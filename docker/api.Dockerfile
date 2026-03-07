@@ -29,6 +29,7 @@ RUN set -ex \
     && apt-get install -y --no-install-recommends --fix-missing \
         curl \
         ffmpeg \
+        libpq5 \
         libsm6 \
         libxext6 \
     # (D) 清理垃圾，减小体积
