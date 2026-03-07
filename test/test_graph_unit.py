@@ -6,7 +6,7 @@ import sys
 # Add project root to path
 sys.path.append(os.getcwd())
 
-from src.knowledge.services.upload_graph_service import UploadGraphService
+from src.knowledge.graphs.upload_graph_service import UploadGraphService
 
 # For backward compatibility with the existing test
 GraphDatabase = UploadGraphService
@@ -40,64 +40,68 @@ async def test_txt_add_vector_entity_parsing():
         mock_embed_model = MagicMock()
         mock_select_model.return_value = mock_embed_model
 
-        # Instantiate GraphDatabase with mocked driver
-        # We also need to patch Neo4jConnectionManager in the init
-        with patch("src.knowledge.services.upload_graph_service.Neo4jConnectionManager") as mock_connection_manager:
-            # Mock the connection manager to return our mocked driver
-            mock_connection_manager.return_value.driver = mock_driver
-            mock_connection_manager.return_value.status = "open"
+        # Create a mock connection object with driver and status as attributes
+        # (not a ConnectionManager class, just a simple mock object)
+        mock_connection = MagicMock()
+        mock_connection.driver = mock_driver
+        mock_connection.status = "open"
 
-            gd = GraphDatabase(mock_connection_manager.return_value)
-            # Manually set properties just in case init didn't work as expected due to other mocks
-            gd.driver = mock_driver
-            gd.status = "open"
-            gd.embed_model_name = "test_model"  # avoid config check issues if possible
+        # Instantiate GraphDatabase with mocked connection
+        gd = GraphDatabase(mock_connection)
+        # Set embed_model_name directly (this is a settable attribute)
+        gd.embed_model_name = "test_model"
 
-            # Mock config to match
-            with patch("src.config.embed_model", "test_model"):
-                with patch("src.config.embed_model_names", {"test_model": MagicMock(dimension=1024)}):
-                    # Test data: Mixed format
-                    triples = [
-                        # Legacy format
-                        {"h": "A", "r": "KNOWS", "t": "B"},
-                        # Extended format
-                        {
-                            "h": {"name": "C", "age": 30},
-                            "r": {"type": "LIKES", "weight": 0.8},
-                            "t": {"name": "D", "role": "User"},
-                        },
-                    ]
+        # Mock config where it's imported in upload_graph_service.py
+        # The import is `from src import config`, so patch at the usage location
+        mock_config = MagicMock()
+        mock_config.embed_model = "test_model"
+        mock_embed_info = MagicMock()
+        mock_embed_info.dimension = 1024
+        mock_config.embed_model_names = {"test_model": mock_embed_info}
 
-                # Run the method
-                await gd.txt_add_vector_entity(triples)
+        with patch("src.knowledge.graphs.upload_graph_service.config", mock_config):
+            # Test data: Mixed format
+            triples = [
+                # Legacy format
+                {"h": "A", "r": "KNOWS", "t": "B"},
+                # Extended format
+                {
+                    "h": {"name": "C", "age": 30},
+                    "r": {"type": "LIKES", "weight": 0.8},
+                    "t": {"name": "D", "role": "User"},
+                },
+            ]
 
-                # Verify calls to mock_tx.run
-                merge_calls = []
-                for call in mock_tx.run.call_args_list:
-                    args, kwargs = call
-                    query = args[0] if args else kwargs.get("query", "")
-                    if "MERGE (h:Entity:Upload" in query:
-                        # The args are passed as kwargs to run: h_name=..., etc.
-                        merge_calls.append(kwargs)
+            # Run the method
+            await gd.txt_add_vector_entity(triples)
 
-                assert len(merge_calls) == 2, f"Expected 2 merge calls, got {len(merge_calls)}"
+            # Verify calls to mock_tx.run
+            merge_calls = []
+            for call in mock_tx.run.call_args_list:
+                args, kwargs = call
+                query = args[0] if args else kwargs.get("query", "")
+                if "MERGE (h:Entity:Upload" in query:
+                    # The args are passed as kwargs to run: h_name=..., etc.
+                    merge_calls.append(kwargs)
 
-                # Call 1 (Legacy)
-                call1 = merge_calls[0]
-                assert call1["h_name"] == "A"
-                assert call1["h_props"] == {}
-                assert call1["t_name"] == "B"
-                assert call1["t_props"] == {}
-                assert call1["r_type"] == "KNOWS"
-                assert call1["r_props"] == {}
+            assert len(merge_calls) == 2, f"Expected 2 merge calls, got {len(merge_calls)}"
 
-                # Call 2 (Extended)
-                call2 = merge_calls[1]
-                assert call2["h_name"] == "C"
-                assert call2["h_props"] == {"age": 30}
-                assert call2["t_name"] == "D"
-                assert call2["t_props"] == {"role": "User"}
-                assert call2["r_type"] == "LIKES"
-                assert call2["r_props"] == {"weight": 0.8}
+            # Call 1 (Legacy)
+            call1 = merge_calls[0]
+            assert call1["h_name"] == "A"
+            assert call1["h_props"] == {}
+            assert call1["t_name"] == "B"
+            assert call1["t_props"] == {}
+            assert call1["r_type"] == "KNOWS"
+            assert call1["r_props"] == {}
 
-                print("Verification passed!")
+            # Call 2 (Extended)
+            call2 = merge_calls[1]
+            assert call2["h_name"] == "C"
+            assert call2["h_props"] == {"age": 30}
+            assert call2["t_name"] == "D"
+            assert call2["t_props"] == {"role": "User"}
+            assert call2["r_type"] == "LIKES"
+            assert call2["r_props"] == {"weight": 0.8}
+
+            print("Verification passed!")

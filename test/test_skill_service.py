@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.services import skill_service as svc
+from src.services import tool_service
 from src.storage.postgres.models_business import Skill
 
 
@@ -31,15 +32,26 @@ def test_parse_skill_markdown_requires_frontmatter():
         svc._parse_skill_markdown("# missing")
 
 
-def test_validate_skill_slug():
-    assert svc.validate_skill_slug("demo-skill") == "demo-skill"
-    with pytest.raises(ValueError, match="无效 skill slug"):
-        svc.validate_skill_slug("../bad")
+def test_is_valid_skill_slug():
+    # Test valid slugs
+    assert svc.is_valid_skill_slug("demo-skill") is True
+    assert svc.is_valid_skill_slug("valid-name-123") is True
+    # Test invalid slugs
+    assert svc.is_valid_skill_slug("../bad") is False
+    assert svc.is_valid_skill_slug("Invalid") is False  # uppercase not allowed
+    assert svc.is_valid_skill_slug("") is False
 
 
 @pytest.mark.asyncio
 async def test_get_skill_dependency_options(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(svc, "_get_buildin_tool_names", lambda: ["calculator", "search"])
+    # Mock get_tool_metadata to return tool list
+    def fake_get_tool_metadata(category=None):
+        return [
+            {"id": "calculator", "name": "Calculator"},
+            {"id": "search", "name": "Search"},
+        ]
+
+    monkeypatch.setattr(tool_service, "get_tool_metadata", fake_get_tool_metadata)
     monkeypatch.setattr(svc, "get_mcp_server_names", lambda: ["mcp-a", "mcp-b"])
 
     class FakeRepo:
@@ -55,7 +67,7 @@ async def test_get_skill_dependency_options(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(svc, "SkillRepository", FakeRepo)
 
     result = await svc.get_skill_dependency_options(None)
-    assert result["tools"] == ["calculator", "search"]
+    assert result["tools"] == [{"id": "calculator", "name": "Calculator"}, {"id": "search", "name": "Search"}]
     assert result["mcps"] == ["mcp-a", "mcp-b"]
     assert result["skills"] == ["alpha", "beta"]
 
@@ -202,7 +214,12 @@ async def test_update_skill_dependencies(monkeypatch: pytest.MonkeyPatch):
         mcp_dependencies=[],
         skill_dependencies=[],
     )
-    monkeypatch.setattr(svc, "_get_buildin_tool_names", lambda: ["calculator"])
+
+    # Mock get_tool_metadata to return tool list
+    def fake_get_tool_metadata(category=None):
+        return [{"id": "calculator", "name": "Calculator"}]
+
+    monkeypatch.setattr(tool_service, "get_tool_metadata", fake_get_tool_metadata)
     monkeypatch.setattr(svc, "get_mcp_server_names", lambda: ["mcp-a"])
 
     async def fake_get_skill_or_raise(_db, slug: str):
