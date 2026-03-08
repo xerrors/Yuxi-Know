@@ -4,6 +4,7 @@ import uuid
 from typing import Annotated, Any
 
 import requests
+from langgraph.types import interrupt
 
 from src import config, graph_base
 from src.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
@@ -66,6 +67,73 @@ def calculator(a: float, b: float, operation: str) -> float:
     except Exception as e:
         logger.error(f"Calculator error: {e}")
         raise
+
+
+ASK_USER_QUESTION_DESCRIPTION = """
+在执行过程中，当你需要用户做决定或补充需求时，使用这个工具向用户提问。
+
+适用场景：
+1. 收集用户偏好或需求（例如风格、范围、优先级）
+2. 澄清模糊指令（存在多种合理解释时）
+3. 在实现过程中让用户选择方案方向
+4. 在有明显权衡时让用户做取舍
+
+使用规范：
+1. 问题应当简短、具体、可回答，避免开放式长问句
+2. options 提供 2-5 个有区分度的选项，每项包含 label 和 value
+3. 若有推荐选项：把推荐项放在第一位，并在 label 末尾加 "(Recommended)"
+4. 若需要多选：将 multi_select 设为 true
+5. allow_other 通常保持 true，用户可通过 Other 输入自定义答案
+
+注意事项：
+1. 不要用这个工具询问“是否继续执行”“计划是否准备好”这类流程控制问题
+2. 不要在信息已充分、无需用户决策时滥用该工具
+3. 先基于现有上下文自行决策，只有关键不确定性时才提问
+
+返回结果：
+answer 可能是 string（单选）、list（多选）或 object（Other 文本）。
+"""
+
+
+@tool(
+    category="buildin",
+    tags=["交互"],
+    display_name="向用户提问",
+    description=ASK_USER_QUESTION_DESCRIPTION,
+)
+def ask_user_question(
+    question: Annotated[str, "向用户展示的问题"],
+    options: Annotated[list[dict], "候选项列表，格式 [{label, value}]，推荐项请在 label 后追加 (Recommended)"],
+    multi_select: Annotated[bool, "是否允许多选"] = False,
+    allow_other: Annotated[bool, "是否允许用户输入 Other 自定义答案"] = True,
+) -> dict:
+    """向用户发起问题并等待回答。"""
+    normalized_options: list[dict[str, str]] = []
+    for item in options or []:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or item.get("value") or "").strip()
+        value = str(item.get("value") or item.get("label") or "").strip()
+        if label and value:
+            normalized_options.append({"label": label, "value": value})
+
+    interrupt_payload = {
+        "question": question,
+        "question_id": str(uuid.uuid4()),
+        "options": normalized_options,
+        "multi_select": multi_select,
+        "allow_other": allow_other,
+        "source": "ask_user_question",
+    }
+    answer = interrupt(interrupt_payload)
+
+    return {
+        "question": question,
+        "question_id": interrupt_payload["question_id"],
+        "answer": answer,
+        "multi_select": multi_select,
+        "allow_other": allow_other,
+    }
 
 
 KG_QUERY_DESCRIPTION = """

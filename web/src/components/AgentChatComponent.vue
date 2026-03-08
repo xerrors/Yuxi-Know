@@ -112,8 +112,11 @@
               :visible="approvalState.showModal"
               :question="approvalState.question"
               :operation="approvalState.operation"
-              @approve="handleApprove"
-              @reject="handleReject"
+              :options="approvalState.options"
+              :multi-select="approvalState.multiSelect"
+              :allow-other="approvalState.allowOther"
+              @submit="handleQuestionSubmit"
+              @cancel="handleQuestionCancel"
             />
 
             <div class="message-input-wrapper">
@@ -1113,7 +1116,12 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         }
       }
 
-      if (event === 'finished' || event === 'error' || event === 'interrupted') {
+      if (
+        event === 'finished' ||
+        event === 'error' ||
+        event === 'interrupted' ||
+        event === 'ask_user_question_required'
+      ) {
         flushTypingQueueForThread(threadId)
         ts.isStreaming = false
         ts.activeRunId = null
@@ -1541,10 +1549,10 @@ const handleSendOrStop = async (payload) => {
 }
 
 // ==================== 人工审批处理 ====================
-const handleApprovalWithStream = async (approved) => {
+const handleApprovalWithStream = async (answer) => {
   const threadId = approvalState.threadId
   if (!threadId) {
-    message.error('无效的审批请求')
+    message.error('无效的提问请求')
     approvalState.showModal = false
     return
   }
@@ -1558,11 +1566,7 @@ const handleApprovalWithStream = async (approved) => {
 
   try {
     // 使用审批 composable 处理审批
-    const response = await handleApproval(
-      approved,
-      currentAgentId.value,
-      selectedAgentConfigId.value
-    )
+    const response = await handleApproval(answer, currentAgentId.value, selectedAgentConfigId.value)
 
     if (!response) return // 如果 handleApproval 抛出错误，这里不会执行
 
@@ -1586,12 +1590,12 @@ const handleApprovalWithStream = async (approved) => {
   }
 }
 
-const handleApprove = () => {
-  handleApprovalWithStream(true)
+const handleQuestionSubmit = (answer) => {
+  handleApprovalWithStream(answer)
 }
 
-const handleReject = () => {
-  handleApprovalWithStream(false)
+const handleQuestionCancel = () => {
+  handleApprovalWithStream('reject')
 }
 
 // 处理示例问题点击

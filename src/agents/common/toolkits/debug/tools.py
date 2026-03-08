@@ -22,7 +22,25 @@ def get_approved_user_goal(
     }
 
     # 触发人工审批
-    is_approved = interrupt(interrupt_info)
+    interrupt_result = interrupt(interrupt_info)
+
+    if isinstance(interrupt_result, bool):
+        is_approved = interrupt_result
+    elif isinstance(interrupt_result, str):
+        is_approved = interrupt_result.strip().lower() in {"approve", "approved", "true", "yes", "1"}
+    elif isinstance(interrupt_result, list):
+        lowered = {str(item).strip().lower() for item in interrupt_result}
+        is_approved = "approve" in lowered or "approved" in lowered
+    elif isinstance(interrupt_result, dict):
+        selected = interrupt_result.get("selected")
+        if isinstance(selected, list):
+            lowered = {str(item).strip().lower() for item in selected}
+            is_approved = "approve" in lowered or "approved" in lowered
+        else:
+            text = str(interrupt_result.get("text") or "").strip().lower()
+            is_approved = text in {"approve", "approved", "true", "yes", "1"}
+    else:
+        is_approved = bool(interrupt_result)
 
     # 返回审批结果
     if is_approved:
