@@ -1,10 +1,8 @@
 
 <div align="center">
-<img width="140" height="140" alt="image" src="https://github.com/user-attachments/assets/299137b7-08d8-45b0-9feb-7b4ab35d7b48" />
-
 <h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
 
-[![Stable](https://img.shields.io/badge/stable-v0.4.4-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.4.4)
+[![Stable](https://img.shields.io/badge/stable-v0.5.1-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.5.1)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -23,6 +21,9 @@
 
 </div>
 
+<img width="2752" height="1536" alt="wps_pic_0" src="https://github.com/user-attachments/assets/96742b56-eda7-4aae-a4df-6fe9d3c30fd1" />
+
+**图由 Nano Banana 2 生成*
 
 ## 核心特性
 
@@ -68,7 +69,6 @@
 - 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)
 - 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi-Know/issues/453) [#475](https://github.com/xerrors/Yuxi-Know/pull/475)
 - 修复消息加载逻辑导致的前端消息渲染延迟问题
-- 
 
 </details>
 
@@ -140,18 +140,80 @@ docker compose up --build
 
 ## 示例与演示
 
-<img width="4420" height="2510" alt="image" src="https://github.com/user-attachments/assets/76d58c8f-e4ef-4373-8ab6-7c80da568910" />
-<br>
-<img width="10116" height="5751" alt="11111" src="https://github.com/user-attachments/assets/d3e4fe09-fa48-4686-93ea-2c50300ade21" />
-<br>
-<img width="10116" height="5751" alt="0307" src="https://github.com/user-attachments/assets/a2059193-bc25-492f-9260-105a1fa1d567" />
-<br>
-<img width="10116" height="5751" alt="1212" src="https://github.com/user-attachments/assets/06d56525-69bf-463a-8360-286b2cf8796f" />
-<br>
-<img width="10116" height="5751" alt="030702" src="https://github.com/user-attachments/assets/b0d9dd2b-df3b-47b4-9899-3d8dd0928409" />
-<br>
-<img width="10116" height="5751" alt="030703" src="https://github.com/user-attachments/assets/9305d7a4-663b-4e5d-a252-211d6caa019b" />
-<br>
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/1f7af2b8-10f1-4bf3-aa75-bd975928fadc" width="100%" alt="首页"/>
+      <br/>
+      <strong>首页</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/d3e4fe09-fa48-4686-93ea-2c50300ade21" width="100%" alt="Dashboard 统计"/>
+      <br/>
+      <strong>Dashboard 统计</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/a2059193-bc25-492f-9260-105a1fa1d567" width="100%" alt="智能体配置"/>
+      <br/>
+      <strong>智能体配置</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/06d56525-69bf-463a-8360-286b2cf8796f" width="100%" alt="知识库调用"/>
+      <br/>
+      <strong>知识库调用</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/0548d89c-15a3-47cf-ba87-1b544f7dd749" width="100%" alt="新建知识库"/>
+      <br/>
+      <strong>新建知识库</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/21396d04-376b-4e9a-8139-eec8c3cc915a" width="100%" alt="知识库管理"/>
+      <br/>
+      <strong>知识库管理</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/fc46a14b-16fb-47ea-84a0-148a451f3012" width="100%" alt="知识图谱"/>
+      <br/>
+      <strong>知识图谱可视化</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/d8b3de51-2854-455b-956f-2ae2d8d5f677" width="100%" alt="项目文档"/>
+      <br/>
+      <strong>项目使用文档</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/b0d9dd2b-df3b-47b4-9899-3d8dd0928409" width="100%" alt="拓展管理（Skills）"/>
+      <br/>
+      <strong>拓展管理（Skills）</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/9305d7a4-663b-4e5d-a252-211d6caa019b" width="100%" alt="拓展管理（MCPs）"/>
+      <br/>
+      <strong>拓展管理（MCPs）</strong>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/13bd22ea-ddde-4262-8c29-69fb948bce44" width="100%" alt="拓展管理（Skills）"/>
+      <br/>
+      <strong>用户/部门权限管理</strong>
+    </td>
+    <td align="center">
+      <img src="https://github.com/user-attachments/assets/cc886b04-719e-4abd-807d-e9955080003d" width="100%" alt="拓展管理（MCPs）"/>
+      <br/>
+      <strong>模型供应商配置</strong>
+    </td>
+  </tr>
+</table>
 
 ## 参与贡献
 
