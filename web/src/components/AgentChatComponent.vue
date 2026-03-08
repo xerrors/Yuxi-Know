@@ -1270,10 +1270,15 @@ const isFirstChatEmpty = () => {
   return firstThreadMessages.length === 0
 }
 
-// 如果第一个对话为空，直接切换到第一个对话
+// 获取第一个非置顶的对话
+const getFirstNonPinnedChat = (chatList) => {
+  return chatList.find((chat) => !chat.is_pinned) || chatList[0]
+}
+
+// 如果第一个对话为空，直接切换到第一个非置顶对话
 const switchToFirstChatIfEmpty = async () => {
   if (threads.value.length > 0 && isFirstChatEmpty()) {
-    await selectChat(threads.value[0].id)
+    await selectChat(getFirstNonPinnedChat(threads.value).id)
     return true
   }
   return false
@@ -1368,8 +1373,8 @@ const deleteChat = async (chatId) => {
       // 如果删除的是当前对话，自动创建新对话
       await createNewChat()
     } else if (chatsList.value.length > 0) {
-      // 如果删除的不是当前对话，选择第一个可用对话
-      await selectChat(chatsList.value[0].id)
+      // 如果删除的不是当前对话，选择第一个非置顶可用对话
+      await selectChat(getFirstNonPinnedChat(chatsList.value).id)
     }
   } catch (error) {
     handleChatError(error, 'delete')
@@ -1732,9 +1737,9 @@ const loadChatsList = async () => {
       chatState.currentThreadId = null
     }
 
-    // 如果有线程但没有选中任何线程，自动选择第一个
+    // 如果有线程但没有选中任何线程，自动选择第一个非置顶对话
     if (threads.value.length > 0 && !chatState.currentThreadId) {
-      await selectChat(threads.value[0].id)
+      await selectChat(getFirstNonPinnedChat(threads.value).id)
     }
   } catch (error) {
     handleChatError(error, 'load')
