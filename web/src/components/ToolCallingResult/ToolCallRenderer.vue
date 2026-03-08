@@ -62,6 +62,9 @@
   <!-- MySQL 列出表 -->
   <MysqlListTablesTool v-else-if="toolName === 'mysql_list_tables'" :tool-call="toolCall" />
 
+  <!-- 向用户提问 -->
+  <AskUserQuestionTool v-else-if="toolName === 'ask_user_question'" :tool-call="toolCall" />
+
   <!-- 默认展示 -->
   <BaseToolCall v-else :tool-call="toolCall" />
 </template>
@@ -89,6 +92,7 @@ import EditFileTool from './tools/EditFileTool.vue'
 import MysqlQueryTool from './tools/MysqlQueryTool.vue'
 import MysqlDescribeTableTool from './tools/MysqlDescribeTableTool.vue'
 import MysqlListTablesTool from './tools/MysqlListTablesTool.vue'
+import AskUserQuestionTool from './tools/AskUserQuestionTool.vue'
 
 const props = defineProps({
   toolCall: {

@@ -381,6 +381,14 @@ const hasAgentStateContent = computed(() => {
   return todoCount > 0 || fileCount > 0
 })
 
+// 监听 hasAgentStateContent 从 false → true 时，自动展开面板
+watch(hasAgentStateContent, (newVal, oldVal) => {
+  if (newVal && !oldVal) {
+    // 从无状态变为有状态时，自动展开面板
+    isAgentPanelOpen.value = true
+  }
+})
+
 const mentionConfig = computed(() => {
   const rawFiles = currentAgentState.value?.files || {}
   const files = []
@@ -1273,20 +1281,25 @@ const sendMessage = async ({
 // 检查第一个对话是否为空
 const isFirstChatEmpty = () => {
   if (threads.value.length === 0) return false
-  const firstThread = threads.value[0]
-  const firstThreadMessages = threadMessages.value[firstThread.id] || []
-  return firstThreadMessages.length === 0
+  const chatToReuse = getFirstNonPinnedChat(threads.value)
+  const messages = threadMessages.value[chatToReuse.id]
+  // 只有当消息已加载且为空时才返回 true
+  return messages !== undefined && messages.length === 0
 }
 
 // 获取第一个非置顶的对话
 const getFirstNonPinnedChat = (chatList) => {
+  if (!chatList || chatList.length === 0) return null
   return chatList.find((chat) => !chat.is_pinned) || chatList[0]
 }
 
 // 如果第一个对话为空，直接切换到第一个非置顶对话
 const switchToFirstChatIfEmpty = async () => {
   if (threads.value.length > 0 && isFirstChatEmpty()) {
-    await selectChat(getFirstNonPinnedChat(threads.value).id)
+    const chatToReuse = getFirstNonPinnedChat(threads.value)
+    if (chatState.currentThreadId !== chatToReuse.id) {
+      await selectChat(chatToReuse.id)
+    }
     return true
   }
   return false

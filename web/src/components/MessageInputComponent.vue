@@ -769,7 +769,7 @@ defineExpose({
 
   &:active {
     color: var(--main-color);
-    transform: scale(0.95);
+    // 移除点击缩小效果
   }
 
   .anticon {
@@ -840,8 +840,8 @@ defineExpose({
   }
 
   &:active {
-    transform: translateY(0);
     box-shadow: 0 2px 4px var(--shadow-2);
+    // 移除点击动画效果
   }
 
   &:disabled {

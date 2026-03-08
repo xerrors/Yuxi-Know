@@ -39,7 +39,6 @@
             @click.middle="handleMiddleClickDelete(chat.id)"
           >
             <div class="conversation-title">
-              <Pin v-if="chat.is_pinned" :size="14" class="pin-icon" />
               <span>{{ chat.title || '新的对话' }}</span>
             </div>
             <div class="actions-mask"></div>
@@ -70,9 +69,12 @@
                     </a-menu-item>
                   </a-menu>
                 </template>
-                <a-button type="text" class="more-btn" @click.stop>
-                  <MoreVertical :size="16" />
-                </a-button>
+                <div class="action-btn-wrapper">
+                  <a-button type="text" class="more-btn" @click.stop>
+                    <MoreVertical :size="16" />
+                  </a-button>
+                  <Pin v-if="chat.is_pinned" :size="14" class="pinned-indicator" />
+                </div>
               </a-dropdown>
             </div>
           </div>
@@ -399,11 +401,6 @@ const togglePin = (chatId) => {
         display: flex;
         align-items: center;
         gap: 4px;
-
-        .pin-icon {
-          flex-shrink: 0;
-          color: var(--main-color);
-        }
       }
 
       .actions-mask {
@@ -428,17 +425,49 @@ const togglePin = (chatId) => {
         opacity: 0;
         transition: opacity 0.3s ease;
 
+        .action-btn-wrapper {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 24px;
+          height: 24px;
+          position: relative;
+        }
+
+        .pinned-indicator {
+          color: var(--main-color);
+          opacity: 0.8;
+          pointer-events: none;
+        }
+
         .more-btn {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
           color: var(--gray-600);
           background-color: transparent !important;
-          display: flex;
+          display: none;
           justify-content: center;
           align-items: center;
           padding: 0;
+          z-index: 1;
+
           &:hover {
             color: var(--main-500);
-            background-color: transparent !important;
           }
+        }
+      }
+
+      // 默认显示置顶图标
+      &:has(.pinned-indicator) {
+        .conversation-actions,
+        .actions-mask {
+          opacity: 1;
+        }
+        .actions-mask {
+          background: linear-gradient(to right, transparent, var(--bg-sider) 30px);
         }
       }
 
@@ -447,11 +476,19 @@ const togglePin = (chatId) => {
 
         .actions-mask {
           background: linear-gradient(to right, transparent, var(--gray-25) 20px);
+          opacity: 1;
         }
 
-        .actions-mask,
         .conversation-actions {
           opacity: 1;
+
+          .more-btn {
+            display: flex;
+          }
+
+          .pinned-indicator {
+            display: none;
+          }
         }
       }
 
@@ -462,8 +499,16 @@ const togglePin = (chatId) => {
           color: var(--main-600);
           font-weight: 500;
         }
+
         .actions-mask {
           background: linear-gradient(to right, transparent, var(--gray-50) 20px);
+          opacity: 1;
+        }
+
+        &:has(.pinned-indicator) {
+          .actions-mask {
+            background: linear-gradient(to right, transparent, var(--gray-50) 30px);
+          }
         }
       }
     }

@@ -210,9 +210,6 @@ defineExpose({
     font-weight: 500;
   }
 
-  &:active {
-    transform: scale(0.95);
-  }
 
   &.disabled {
     opacity: 0.5;
