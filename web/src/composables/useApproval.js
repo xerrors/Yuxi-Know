@@ -18,27 +18,17 @@ const normalizeOptions = (rawOptions) => {
     .filter(Boolean)
 }
 
-const toLegacyApprovalOptions = () => [
-  { label: '批准 (Recommended)', value: 'approve' },
-  { label: '拒绝', value: 'reject' }
-]
-
 const extractQuestionPayload = (chunk) => {
   const interruptInfo = chunk?.interrupt_info || {}
-  const rawOptions =
-    chunk?.options || interruptInfo?.options || (interruptInfo?.operation ? toLegacyApprovalOptions() : [])
+  const rawOptions = chunk?.options || interruptInfo?.options || []
   const options = normalizeOptions(rawOptions)
   const operation = chunk?.operation || interruptInfo?.operation || ''
 
-  const source = chunk?.source || interruptInfo?.source || (operation ? 'get_approved_user_goal' : 'interrupt')
+  const source = chunk?.source || interruptInfo?.source || 'interrupt'
   const multiSelect = Boolean(chunk?.multi_select ?? interruptInfo?.multi_select ?? false)
-  let allowOther = Boolean(chunk?.allow_other ?? interruptInfo?.allow_other ?? true)
+  const allowOther = Boolean(chunk?.allow_other ?? interruptInfo?.allow_other ?? true)
   const questionId = chunk?.question_id || interruptInfo?.question_id || ''
   const question = chunk?.question || interruptInfo?.question || '请选择一个选项'
-  const legacyMode = source === 'get_approved_user_goal' && options.length === 2
-  if (source === 'get_approved_user_goal') {
-    allowOther = false
-  }
 
   return {
     questionId,
@@ -47,15 +37,8 @@ const extractQuestionPayload = (chunk) => {
     multiSelect,
     allowOther,
     source,
-    operation,
-    legacyMode
+    operation
   }
-}
-
-const inferApprovedFromAnswer = (answer) => {
-  if (answer === 'approve') return true
-  if (answer === 'reject') return false
-  return null
 }
 
 export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessages }) {
@@ -68,7 +51,6 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     multiSelect: false,
     allowOther: true,
     source: '',
-    legacyMode: false,
     threadId: null
   })
 
@@ -98,14 +80,10 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     resetOnGoingConv(threadId)
     threadState.streamAbortController = new AbortController()
 
-    const approved = inferApprovedFromAnswer(answer)
     const requestBody = {
       thread_id: threadId,
       answer,
       config: agentConfigId ? { agent_config_id: agentConfigId } : {}
-    }
-    if (approved !== null) {
-      requestBody.approved = approved
     }
 
     try {
@@ -139,11 +117,6 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     if (!threadState) return false
 
     const payload = extractQuestionPayload(chunk)
-    if (!payload.options.length) {
-      payload.options = toLegacyApprovalOptions()
-      payload.legacyMode = true
-      payload.allowOther = false
-    }
 
     threadState.isStreaming = false
 
@@ -155,7 +128,6 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     approvalState.multiSelect = payload.multiSelect
     approvalState.allowOther = payload.allowOther
     approvalState.source = payload.source
-    approvalState.legacyMode = payload.legacyMode
     approvalState.threadId = chunk.thread_id || threadId
 
     fetchThreadMessages({ agentId: currentAgentId, threadId })
@@ -172,7 +144,6 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     approvalState.multiSelect = false
     approvalState.allowOther = true
     approvalState.source = ''
-    approvalState.legacyMode = false
     approvalState.threadId = null
   }
 

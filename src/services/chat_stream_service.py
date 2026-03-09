@@ -256,14 +256,6 @@ def _build_ask_user_question_payload(info: Any, thread_id: str) -> dict[str, Any
     operation = payload.get("operation")
 
     options = _normalize_interrupt_options(payload.get("options"))
-    if not options and isinstance(operation, str) and operation.strip():
-        # 兼容旧版 get_approved_user_goal 的 interrupt 结构
-        options = [
-            {"label": "批准 (Recommended)", "value": "approve"},
-            {"label": "拒绝", "value": "reject"},
-        ]
-        source = "get_approved_user_goal"
-        allow_other = False
 
     return {
         "question_id": question_id,
