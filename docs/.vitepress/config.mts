@@ -8,6 +8,10 @@ export default defineConfig({
   title: "Yuxi-Know",
   description: "语析",
   base: '/Yuxi-Know/',
+  srcDir: './',
+  ignoreDeadLinks: [
+    /localhost/
+  ],
   markdown: {
     config: (md) => {
       md.use(markdownItTaskCheckbox)
