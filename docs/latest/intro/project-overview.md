@@ -1,24 +1,77 @@
 # 项目简介
 
-Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知识库系统，融合了 RAG（检索增强生成）技术与知识图谱技术，为用户提供智能问答和知识管理服务。
+Yuxi-Know（语析）是一个基于大模型的智能知识库与知识图谱智能体开发平台。它融合了 RAG（检索增强生成）技术与知识图谱技术，为用户提供智能问答和知识管理服务。
 
-**特点**：技术栈简单，易于上手，使用 MIT 开源协议，非常适合二次开发使用。
+## 设计理念
 
-### 技术栈选择
+项目的设计目标是为开发者提供一个易于上手、功能强大的 AI 应用开发框架。我们坚持以下原则：
 
-- **后端服务**: [FastAPI](https://github.com/tiangolo/fastapi) + Python 3.12+
-- **前端界面**: [Vue.js 3](https://github.com/vuejs/vue) + [Ant Design Vue](https://github.com/vueComponent/ant-design-vue)
-- **数据库存储**: [PostgreSQL](https://github.com/postgres/postgres) + [MinIO](https://github.com/minio/minio)
-- **知识存储**: [Milvus](https://github.com/milvus-io/milvus)（向量数据库）+ [Neo4j](https://github.com/neo4j/neo4j)（图数据库）
-- **智能体框架**: [LangGraph](https://github.com/langchain-ai/langgraph)
-- **文档解析**: [LightRAG](https://github.com/HKUDS/LightRAG) + [MinerU](https://github.com/HKUDS/MinerU) + [PP-Structure-V3](https://github.com/PaddlePaddle/PaddleOCR)
-- **容器编排**: [Docker Compose](https://github.com/docker/compose)
+- **技术栈简洁**：选择主流且成熟的技术，降低学习和维护成本
+- **MIT 开源协议**：完全开源，允许自由使用和二次开发
+- **容器化部署**：通过 Docker Compose 管理，简化部署流程
 
-### 核心功能
+## 技术架构
 
-- **智能问答**: 支持多种大语言模型，提供智能对话和问答服务
-- **知识库管理**: 支持多种存储形式（Milvus、LightRAG）
-- **知识图谱**: 自动构建和可视化知识图谱，支持图查询
-- **文档解析**: 支持 PDF、Word、图片等多种格式的智能解析
-- **权限管理**: 基于部门的知识库访问控制
-- **内容安全**: 内置内容审查机制，保障服务合规性
+### 后端服务
+
+- **FastAPI**：现代高性能 Python Web 框架
+- **LangGraph**：基于 LangChain 的智能体编排框架
+- **PostgreSQL**：业务数据存储
+- **Milvus**：向量数据库，支持大规模语义检索
+- **Neo4j**：图数据库，存储知识图谱
+- **MinIO**：对象存储，用于文件托管
+
+### 前端界面
+
+- **Vue.js 3**：渐进式前端框架
+- **Ant Design Vue**：企业级 UI 组件库
+
+### 文档处理
+
+- **LightRAG**：文档理解与知识图谱构建
+- **MinerU**：文档智能解析
+- **PP-Structure-V3**：PDF 结构化提取
+
+## 核心能力
+
+### 智能问答
+
+系统支持接入多种大语言模型，通过对话方式提供智能问答服务。模型可配置、工具可组合、提示词可定制，满足不同业务场景需求。
+
+### 知识库管理
+
+支持 Milvus 向量数据库和 LightRAG 知识图谱两种存储形式：
+- Milvus 适合大规模文档检索场景
+- LightRAG 适合需要理解实体关系的复杂查询
+
+### 知识图谱
+
+自动从文档中提取实体和关系，构建结构化知识图谱。支持可视化查看和图查询，帮助理解知识之间的联系。
+
+### 文档解析
+
+支持 PDF、Word、图片等多种格式的智能解析，自动提取文本、表格、公式等内容。
+
+### 权限管理
+
+基于部门的知识库访问控制，确保数据安全。
+
+### 内容安全
+
+内置内容审查机制，保障服务合规性。
+
+## 适用场景
+
+Yuxi-Know 适用于以下场景：
+
+- **企业知识库**：构建私有知识问答系统
+- **智能客服**：基于文档的自动问答
+- **知识管理**：文档自动解析、分类、构建图谱
+- **AI 应用开发**：快速构建基于大模型的应用原型
+
+## 下一步
+
+- 快速开始：阅读 [快速开始指南](./quick-start.md)
+- 模型配置：阅读 [模型配置](./model-config.md)
+- 知识库使用：阅读 [知识库与知识图谱](./knowledge-base.md)
+- 智能体开发：阅读 [智能体开发](../agents/agents-config.md)
