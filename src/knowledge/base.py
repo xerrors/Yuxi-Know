@@ -228,6 +228,46 @@ class KnowledgeBase(ABC):
         await self._persist_file(file_id)
 
         return metadata
+    
+    async def update_file_record(
+            self, db_id: str, item: str, params: dict | None = None, operator_id: str | None = None
+        ) -> dict:
+            if params and "_preprocessed_map" in params and item in params["_preprocessed_map"]:
+                pre_info = params["_preprocessed_map"][item]
+                file_id = pre_info.get("overwrite_file_id")
+
+            if file_id not in self.files_meta:
+                raise ValueError(f"File {file_id} not found")
+
+            # Get existing metadata
+            existing_metadata = self.files_meta[file_id]
+
+            from src.knowledge.utils.kb_utils import prepare_update_item_metadata
+
+            updating_params = prepare_update_item_metadata(existing_metadata, item, params=params)
+
+            # Only update properties that exist in both params and existing metadata
+            if updating_params:
+                for key, value in updating_params.items():
+                    if key in existing_metadata and key != "processing_params":
+                        existing_metadata[key] = value
+                    elif key == "processing_params":
+                        updating_processing_params = updating_params[key]
+                        for k, v in updating_processing_params.items():
+                            if k in existing_metadata["processing_params"]:
+                                existing_metadata["processing_params"][k] = v
+
+            # Update timestamp and operator
+            existing_metadata["status"] = FileStatus.UPLOADED
+            existing_metadata["updated_at"] = utc_isoformat()
+            if operator_id:
+                existing_metadata["updated_by"] = operator_id
+
+            # Save updated metadata
+            self.files_meta[file_id] = existing_metadata
+            await self._persist_file(file_id)
+
+            return existing_metadata
 
     async def parse_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
         """
