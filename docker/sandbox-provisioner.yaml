@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: yuxi-sandbox
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sandbox-provisioner
+  namespace: yuxi-sandbox
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sandbox-provisioner
+  namespace: yuxi-sandbox
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sandbox-provisioner
+  namespace: yuxi-sandbox
+subjects:
+  - kind: ServiceAccount
+    name: sandbox-provisioner
+    namespace: yuxi-sandbox
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: sandbox-provisioner
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sandbox-provisioner
+  namespace: yuxi-sandbox
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sandbox-provisioner
+  template:
+    metadata:
+      labels:
+        app: sandbox-provisioner
+    spec:
+      serviceAccountName: sandbox-provisioner
+      containers:
+        - name: sandbox-provisioner
+          image: yuxi-api:0.5.dev
+          imagePullPolicy: IfNotPresent
+          command:
+            - uv
+            - run
+            - --no-dev
+            - uvicorn
+            - server.sandbox_provisioner:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8002"
+          ports:
+            - containerPort: 8002
+              name: http
+          env:
+            - name: SANDBOX_K8S_NAMESPACE
+              value: yuxi-sandbox
+            - name: SANDBOX_RUNTIME_IMAGE
+              value: yuxi-sandbox-runtime:latest
+            - name: SANDBOX_RUNTIME_PORT
+              value: "8080"
+            - name: SANDBOX_K8S_SERVICE_TYPE
+              value: ClusterIP
+            - name: SANDBOX_K8S_READY_TIMEOUT_SECONDS
+              value: "60"
+            - name: SANDBOX_K8S_CPU_REQUEST
+              value: "100m"
+            - name: SANDBOX_K8S_CPU_LIMIT
+              value: "1000m"
+            - name: SANDBOX_K8S_MEMORY_REQUEST
+              value: "256Mi"
+            - name: SANDBOX_K8S_MEMORY_LIMIT
+              value: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8002
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sandbox-provisioner
+  namespace: yuxi-sandbox
+spec:
+  selector:
+    app: sandbox-provisioner
+  ports:
+    - name: http
+      port: 8002
+      targetPort: 8002
+  type: ClusterIP

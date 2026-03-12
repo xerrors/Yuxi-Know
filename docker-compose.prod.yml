@@ -10,6 +10,7 @@ services:
       - app-network
     volumes:
       - ./saves:/app/saves
+      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
@@ -63,6 +64,7 @@ services:
       - app-network
     volumes:
       - ./saves:/app/saves
+      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:

@@ -14,6 +14,7 @@ services:
       - ./scripts:/app/scripts
       - ./.env:/app/.env
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "5050:5050"
     networks:
@@ -79,6 +80,7 @@ services:
       - ./pyproject.toml:/app/pyproject.toml
       - ./uv.lock:/app/uv.lock
       - ${MODEL_DIR:-./models}:/models
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - app-network
     extra_hosts:
@@ -116,6 +118,40 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  sandbox-provisioner:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: yuxi-api:0.5.dev
+    container_name: sandbox-provisioner-dev
+    volumes:
+      - ./server:/app/server
+      - ./src:/app/src
+      - ./saves:/app/saves
+      - ./test:/app/test
+      - ./scripts:/app/scripts
+      - ./.env:/app/.env
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./uv.lock:/app/uv.lock
+      - ${MODEL_DIR:-./models}:/models
+      - ${KUBECONFIG:-~/.kube/config}:/root/.kube/config:ro
+    ports:
+      - "8002:8002"
+    networks:
+      - app-network
+    env_file:
+      - .env
+    environment:
+      - SANDBOX_K8S_NAMESPACE=${SANDBOX_K8S_NAMESPACE:-yuxi-sandbox}
+      - SANDBOX_RUNTIME_IMAGE=${SANDBOX_RUNTIME_IMAGE:-yuxi-sandbox-runtime:latest}
+      - SANDBOX_RUNTIME_PORT=${SANDBOX_RUNTIME_PORT:-8080}
+      - SANDBOX_K8S_SERVICE_TYPE=${SANDBOX_K8S_SERVICE_TYPE:-ClusterIP}
+      - SANDBOX_K8S_READY_TIMEOUT_SECONDS=${SANDBOX_K8S_READY_TIMEOUT_SECONDS:-60}
+      - NO_PROXY=localhost,127.0.0.1,kubernetes.default.svc
+      - no_proxy=localhost,127.0.0.1,kubernetes.default.svc
+    command: uv run --no-dev uvicorn server.sandbox_provisioner:app --host 0.0.0.0 --port 8002 --reload --reload-exclude "saves/*" --reload-exclude "saves/**/*"
+    restart: unless-stopped
 
   web:
     build:
@@ -265,6 +301,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    ports:
+      - "6379:6379"
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
