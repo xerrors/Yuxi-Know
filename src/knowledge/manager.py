@@ -405,6 +405,13 @@ class KnowledgeBaseManager:
         kb_instance = await self._get_kb_for_database(db_id)
         return await kb_instance.add_file_record(db_id, item, params, operator_id)
 
+    async def update_file_record(
+        self, db_id: str, item: str, params: dict | None = None, operator_id: str | None = None
+    ) -> dict:
+        """Add file record to metadata"""
+        kb_instance = await self._get_kb_for_database(db_id)
+        return await kb_instance.update_file_record(db_id, item, params, operator_id)
+
     async def parse_file(self, db_id: str, file_id: str, operator_id: str | None = None) -> dict:
         """Parse file to Markdown"""
         kb_instance = await self._get_kb_for_database(db_id)
@@ -476,6 +483,11 @@ class KnowledgeBaseManager:
         """删除文件"""
         kb_instance = await self._get_kb_for_database(db_id)
         await kb_instance.delete_file(db_id, file_id)
+
+    async def delete_file_chunks_only(self, db_id: str, file_id: str) -> None:
+        """仅删除文件chunks"""
+        kb_instance = await self._get_kb_for_database(db_id)
+        await kb_instance.delete_file_chunks_only(db_id, file_id)
 
     async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
         """更新内容（重新分块）"""
@@ -578,6 +590,59 @@ class KnowledgeBaseManager:
         # 按上传时间降序排序
         same_name_files.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return same_name_files
+
+    async def get_same_url_files(self, db_id: str, final_url: str) -> list[dict]:
+        """获取同一知识库中相同final_url的文件列表
+        基于processing_params.final_url字段比较
+        返回基础信息：文件名、大小、上传时间、final_url
+
+        Args:
+            db_id: 数据库ID
+            final_url: 要检测的final_url
+
+        Returns:
+            相同URL文件列表，每项包含：
+            - file_id: 文件ID（用于下载）
+            - filename: 文件名
+            - size: 文件大小
+            - created_at: 上传时间
+            - content_hash: 内容哈希
+            - final_url: 原始final_url
+        """
+        if not db_id or not final_url:
+            return []
+        try:
+            kb_instance = await self._get_kb_for_database(db_id)
+        except KBNotFoundError:
+            return []
+
+        same_url_files = []
+        for file_id, file_info in kb_instance.files_meta.items():
+            if file_info.get("database_id") != db_id:
+                continue
+            if file_info.get("status") == "failed":
+                continue
+
+            # 获取processing_params中的final_url字段
+            processing_params = file_info.get("processing_params", {}) or {}
+            current_final_url = processing_params.get("final_url")
+
+            # 如果final_url相同，则认为是重复URL
+            if current_final_url and current_final_url == final_url:
+                same_url_files.append(
+                    {
+                        "file_id": file_id,
+                        "filename": file_info.get("filename", ""),
+                        "size": file_info.get("size", 0),
+                        "created_at": file_info.get("created_at", ""),
+                        "content_hash": file_info.get("content_hash", ""),
+                        "final_url": current_final_url,
+                    }
+                )
+
+        # 按上传时间降序排序
+        same_url_files.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return same_url_files
 
     async def file_existed_in_db(self, db_id: str | None, content_hash: str | None) -> bool:
         """检查指定数据库中是否存在相同内容哈希的文件"""

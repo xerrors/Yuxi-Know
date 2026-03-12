@@ -334,6 +334,54 @@ async def add_documents(
                 validate_file_path(item, db_id)
             except ValueError as e:
                 raise HTTPException(status_code=403, detail=str(e))
+    
+    async def _handle_file_record(
+        db_id: str,
+        item: str,
+        params: dict,
+        current_user
+    ) -> dict | None:
+        """处理文件记录的添加/覆盖
+
+        Returns:
+            file_meta，如果返回 None 表示跳过该文件
+        """
+        if params and "_preprocessed_map" in params and item in params["_preprocessed_map"]:
+            pre_info = params["_preprocessed_map"][item]
+
+            # 使用预处理信息
+            action = pre_info.get("action", item)  # 通常是原始 URL
+
+            from src.knowledge.utils.kb_utils import parse_minio_url
+            from src.storage.minio import get_minio_client
+
+            minio_client = get_minio_client()
+
+            if action == 'skip':
+                try:
+                    bucket_name, object_name = parse_minio_url(item)
+                    await minio_client.adelete_file(bucket_name, object_name)
+                except Exception as e:
+                    logger.warning(f"Failed to delete MinIO file {item}: {e}")
+                return None
+            elif action == 'overwrite':
+                overwrite_file_id = pre_info.get("overwrite_file_id", item)
+                file_meta_info = await knowledge_base.get_file_basic_info(db_id, overwrite_file_id)
+                overwrite_file_path = file_meta_info.get("meta", {}).get("path")
+                try:
+                    bucket_name, object_name = parse_minio_url(overwrite_file_path)
+                    await minio_client.adelete_file(bucket_name, object_name)
+                    # 删除解析后的 markdown 文件 (kb-parsed/{db_id}/{file_id}/parsed.md)
+                    parsed_object = f"{db_id}/{overwrite_file_id}/parsed.md"
+                    await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], parsed_object)
+
+                    await knowledge_base.delete_file_chunks_only(db_id, overwrite_file_id)
+                except Exception as e:
+                    logger.warning(f"Failed to delete MinIO file {item}: {e}")
+
+                return await knowledge_base.update_file_record(db_id, item, params=params, operator_id=current_user.user_id)
+
+        return await knowledge_base.add_file_record(db_id, item, params=params, operator_id=current_user.user_id)
 
     async def run_ingest(context: TaskContext):
         await context.set_message("任务初始化")
@@ -357,9 +405,9 @@ async def add_documents(
 
                 try:
                     # 1. Add file record (UPLOADED)
-                    file_meta = await knowledge_base.add_file_record(
-                        db_id, item, params=params, operator_id=current_user.user_id
-                    )
+                    file_meta = await _handle_file_record(db_id, item, params, current_user)
+                    if file_meta is None:
+                        continue
                     file_id = file_meta["file_id"]
                     added_files[item] = (file_id, file_meta)
                 except Exception as add_error:
@@ -1262,6 +1310,13 @@ async def fetch_url(
             same_name_files = await knowledge_base.get_same_name_files(db_id, url)
             has_same_name = len(same_name_files) > 0
 
+        # 检测相同URL文件
+        same_url_files = []
+        has_same_url = False
+        if db_id:
+            same_url_files = await knowledge_base.get_same_url_files(db_id, final_url)
+            has_same_url = len(same_url_files) > 0
+
         return {
             "status": "success",
             "file_path": upload_result.url,
@@ -1272,6 +1327,8 @@ async def fetch_url(
             "size": len(content_bytes),
             "has_same_name": has_same_name,
             "same_name_files": same_name_files,
+            "has_same_url": has_same_url,
+            "same_url_files": same_url_files,
         }
 
     except HTTPException:

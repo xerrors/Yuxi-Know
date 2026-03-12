@@ -177,6 +177,30 @@ async def calculate_content_hash(data: bytes | bytearray | str | os.PathLike[str
     # 理论上不会执行到这里，但保留作为防御性编程
     raise TypeError(f"Unsupported data type for hashing: {type(data)!r}")  # type: ignore[unreachable]
 
+def prepare_update_item_metadata(existing_metadata: dict, item: str, params: dict | None = None) -> dict:
+
+    if params and "_preprocessed_map" in params and item in params["_preprocessed_map"]:
+        pre_info = params["_preprocessed_map"][item]
+        filename = pre_info.get("filename", item)  # 通常是原始 URL
+        # 截断文件名以适应数据库限制 (512 chars)，保留部分后缀信息如果可能
+        if len(filename) > 500:
+            filename_display = filename[:400] + "..." + filename[-90:]
+        else:
+            filename_display = filename
+        content_hash = pre_info["content_hash"]
+        # 仅存储需要更新的元数据字段
+        update_metadata = {
+            "filename": filename_display,  # 使用显示用的文件名
+            "path": item,
+            "content_hash": content_hash,
+            "markdown_file": None,
+            "processing_params": {
+                "original_source": item,
+            }
+        }
+        return update_metadata
+
+    return {}
 
 async def prepare_item_metadata(item: str, content_type: str, db_id: str, params: dict | None = None) -> dict:
     """
@@ -204,6 +228,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         file_type = "html"  # 强制转换为 html 类型，以便后续作为文件处理
         item_path = pre_info["path"]  # MinIO path
         content_hash = pre_info["content_hash"]
+        final_url = pre_info["final_url"]
 
         # 使用 item(url) 生成 ID，保证同一 URL 即使多次添加 ID 也不同（配合 time）
         # 或者我们应该基于 hash？不，基于 time 更符合上传逻辑
@@ -229,6 +254,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
             # 而不是再次尝试作为 URL 抓取
             safe_params["content_type"] = "file"
             safe_params["original_source"] = item  # 保存完整 URL 到 JSON 字段，避免数据库字段长度限制
+            safe_params["final_url"] = final_url # 保存原始的 URL 网址，便于后续判断
             metadata["processing_params"] = safe_params
 
         return metadata

@@ -12,11 +12,7 @@
             type="primary"
             @click="chunkData"
             :loading="chunkLoading"
-            :disabled="
-              uploadMode === 'url'
-                ? !urlList.some((i) => i.status === 'success')
-                : fileList.length === 0
-            "
+            :disabled="isSubmitDisabled()"
           >
             添加到知识库
           </a-button>
@@ -196,6 +192,27 @@
             <div class="url-content">
               <span class="url-text" :title="item.url">{{ item.url }}</span>
               <span v-if="item.status === 'error'" class="url-error-msg">{{ item.error }}</span>
+
+              <div v-if="item.status === 'success' && item.data?.has_same_url" class="same-url-update-action">
+                <span class="same-url-update-tip">
+                  <Info :size="12" />
+                  <span>知识库中存在相同URL的文件，请选择处理方式：</span>
+                </span>
+                <a-radio-group v-model:value="item.data.action" class="action-radio-group">
+                  <a-radio value="skip">保留原文件</a-radio>
+                  <a-radio value="overwrite">
+                    <span>覆盖原文件</span>
+                    <a-button
+                      type="text"
+                      size="small"
+                      class="action-btn download"
+                      @click="downloadSameNameFile(item.data?.same_url_files?.[0])"
+                    >
+                    <Download :size="14" />
+                    </a-button>
+                  </a-radio>
+                </a-radio-group>
+              </div>
             </div>
             <a-button type="text" size="small" class="remove-url-btn" @click="removeUrl(index)">
               <X :size="14" />
@@ -510,7 +527,7 @@ const handleFetchUrls = async () => {
       item.data = res
 
       // 处理同名文件冲突提示
-      if (res.has_same_name && res.same_name_files && res.same_name_files.length > 0) {
+      if (!res.has_same_url && res.has_same_name && res.same_name_files && res.same_name_files.length > 0) {
         // 合并到现有的同名文件列表中，去重
         const existingIds = new Set(sameNameFiles.value.map((f) => f.file_id))
         const newConflicts = res.same_name_files.filter((f) => !existingIds.has(f.file_id))
@@ -1027,7 +1044,10 @@ const chunkData = async () => {
           path: minioUrl,
           content_hash: item.data.content_hash,
           filename: item.data.filename,
-          file_size: item.data.size
+          file_size: item.data.size,
+          final_url: item.data.final_url,
+          action: item.data.action,
+          overwrite_file_id: item.data.same_url_files?.[0]?.file_id
         }
       }
       params._preprocessed_map = preprocessedMap
@@ -1110,6 +1130,24 @@ const chunkData = async () => {
     store.state.chunkLoading = false
   }
 }
+
+const isSubmitDisabled = () => {
+  // 文件/文件夹模式
+  if (uploadMode.value !== 'url') {
+    return fileList.value.length === 0;
+  }
+
+  const successItems = urlList.value.filter(item => item.status === 'success');
+  if (successItems.length === 0) return true;
+
+  // 检查所有成功项中的冲突项是否已处理
+  const allConflictsHandled = successItems.every(item => {
+    if (!item.data?.has_same_url) return true;
+    return item.data.action; // 要求 action 有值（非空字符串）
+  });
+
+  return !allConflictsHandled;
+};
 </script>
 
 <style lang="less" scoped>
@@ -1505,6 +1543,50 @@ const chunkData = async () => {
   font-size: 11px;
   color: var(--color-error-500);
   margin-top: 2px;
+}
+
+.same-url-update-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.same-url-update-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-warning-700);
+  border-radius: 16px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.same-url-update-tip .info-icon {
+  color: var(--gray-500);
+}
+
+.action-radio-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 200px; 
+}
+
+.action-radio-group .action-btn.download {
+  color: var(--gray-500);
+  margin-left: 4px;
+  padding: 2px 4px;
+  height: auto;
+  line-height: 1;
+}
+
+.same-files-text {
+  color: var(--gray-500);
+  font-size: 12px;
 }
 
 .remove-url-btn {
