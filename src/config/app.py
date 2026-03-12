@@ -73,6 +73,22 @@ class Config(BaseModel):
     default_agent_id: str = Field(default="ChatbotAgent", description="默认智能体ID")
 
     # ============================================================
+    # 沙盒配置
+    # ============================================================
+    sandbox_mode: str = Field(
+        default="docker",
+        description="沙盒执行模式: 'local', 'docker', 'k8s'",
+    )
+    sandbox_k8s_provisioner_url: str = Field(
+        default="",
+        description="K8s 沙盒 provisioner 服务地址",
+    )
+    sandbox_k8s_request_timeout_seconds: float = Field(
+        default=30.0,
+        description="K8s 沙盒 HTTP 请求超时时间（秒）",
+    )
+
+    # ============================================================
     # 模型信息（只读，不持久化）
     # ============================================================
     model_names: dict[str, ChatModelProvider] = Field(
@@ -204,6 +220,16 @@ class Config(BaseModel):
 
     def _handle_environment(self):
         """处理环境变量和运行时状态"""
+        # 沙盒配置环境变量覆盖
+        if os.environ.get("SANDBOX_MODE"):
+            self.sandbox_mode = os.environ.get("SANDBOX_MODE").lower()
+        if os.environ.get("SANDBOX_K8S_PROVISIONER_URL"):
+            self.sandbox_k8s_provisioner_url = os.environ.get("SANDBOX_K8S_PROVISIONER_URL")
+        if os.environ.get("SANDBOX_K8S_REQUEST_TIMEOUT_SECONDS"):
+            self.sandbox_k8s_request_timeout_seconds = float(
+                os.environ.get("SANDBOX_K8S_REQUEST_TIMEOUT_SECONDS")
+            )
+
         # 处理模型目录
         self.model_dir = os.environ.get("MODEL_DIR") or self.model_dir
         if self.model_dir:

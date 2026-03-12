@@ -69,6 +69,8 @@ dependencies = [
     "docling>=2.68.0",
     "loguru>=0.7.3",
     "redis>=5.2.0",
+    "docker>=7.1.0",
+    "kubernetes>=33.1.0",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽
