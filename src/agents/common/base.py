@@ -12,6 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src import config as sys_config
 from src.agents.common.context import BaseContext
+from src.storage.postgres.manager import pg_manager
 from src.utils import logger
 
 
@@ -199,19 +200,9 @@ class BaseAgent:
             logger.warning(f"langgraph postgres checkpointer 不可用，回退 sqlite: {e}")
             return None
 
-        conn_str = postgres_url.replace("+asyncpg", "")
         try:
-            saver_factory = getattr(AsyncPostgresSaver, "from_conn_string", None)
-            if callable(saver_factory):
-                saver = saver_factory(conn_str)
-            else:
-                saver = AsyncPostgresSaver(conn_str)  # type: ignore[call-arg]
+            saver = AsyncPostgresSaver(pg_manager.langgraph_pool)
 
-            setup_fn = getattr(saver, "setup", None)
-            if callable(setup_fn):
-                result = setup_fn()
-                if hasattr(result, "__await__"):
-                    await result
             logger.info(f"{self.name} 使用 postgres checkpointer")
             return saver
         except Exception as e:

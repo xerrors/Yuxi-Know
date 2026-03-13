@@ -1,5 +1,16 @@
 import asyncio
-import time
+import os
+import sys
+
+# ==============================================================================
+# 解决 Windows 下 psycopg 异步模式不支持 ProactorEventLoop 的问题
+# 注意：这段代码必须放在应用的极早期，最好在导入 FastAPI 或初始化数据库之前
+# ==============================================================================
+if sys.platform == "win32":
+    # 把当前文件 (main.py) 的上一级的上一级 (即根目录 Yuxi-Know) 加入到 sys.path
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from collections import defaultdict, deque
 
 import uvicorn
@@ -124,4 +135,12 @@ app.add_middleware(LoginRateLimitMiddleware)
 app.add_middleware(AuthMiddleware)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5050, threads=10, workers=10, reload=True)
+    # uvicorn.run(app, host="0.0.0.0", port=5050, threads=10, workers=10, reload=True)
+
+    uvicorn.run(
+        "server.main:app",
+        host="0.0.0.0",
+        port=5050,
+        reload=True,
+        reload_dirs=["server", "src"],
+    )
