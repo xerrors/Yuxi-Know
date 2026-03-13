@@ -890,6 +890,54 @@ async def get_message_feedback(
 
 
 # =============================================================================
+# > === 猜你想问分组 ===
+# =============================================================================
+
+
+@chat.get("/thread/{thread_id}/suggested_questions")
+async def get_suggested_questions(
+    thread_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """获取建议问题（需要登录）"""
+    from src.repositories.conversation_repository import ConversationRepository
+    from src.services.suggested_questions_service import get_suggested_questions_by_thread_id
+
+    # 验证会话所有权
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
+    if not conversation or conversation.user_id != str(current_user.id):
+        raise HTTPException(status_code=404, detail="对话线程不存在")
+
+    result = await get_suggested_questions_by_thread_id(thread_id)
+    return result
+
+
+@chat.post("/thread/{thread_id}/suggested_questions/refresh")
+async def refresh_suggested_questions(
+    thread_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """重新生成建议问题（需要登录）- 异步执行"""
+    from src.repositories.conversation_repository import ConversationRepository
+    from src.services.suggested_questions_service import generate_suggested_questions_safe
+
+    # 验证会话所有权
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
+    if not conversation or conversation.user_id != str(current_user.id):
+        raise HTTPException(status_code=404, detail="对话线程不存在")
+
+    # 异步生成（内部会检查是否已在生成）
+    import asyncio
+    asyncio.create_task(generate_suggested_questions_safe(thread_id))
+
+    return {"questions": [], "is_generating": True}
+
+
+# =============================================================================
 # > === 多模态图片支持分组 ===
 # =============================================================================
 

@@ -358,5 +358,19 @@ export const threadApi = {
    * @returns {Promise}
    */
   deleteThreadAttachment: (threadId, fileId) =>
-    apiDelete(`/api/chat/thread/${threadId}/attachments/${fileId}`)
+    apiDelete(`/api/chat/thread/${threadId}/attachments/${fileId}`),
+
+  /**
+   * 获取建议问题（猜你想问）
+   * @param {string} threadId
+   * @returns {Promise}
+   */
+  getSuggestedQuestions: (threadId) => apiGet(`/api/chat/thread/${threadId}/suggested_questions`),
+
+  /**
+   * 重新生成建议问题（猜你想问）
+   * @param {string} threadId
+   * @returns {Promise}
+   */
+  refreshSuggestedQuestions: (threadId) => apiPost(`/api/chat/thread/${threadId}/suggested_questions/refresh`)
 }

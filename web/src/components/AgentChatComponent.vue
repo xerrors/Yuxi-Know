@@ -92,6 +92,13 @@
                 :is-latest-message="false"
                 :sources="getConversationSources(conv)"
               />
+              <!-- 猜你想问 - 只在最后一个对话完成后显示 -->
+              <SuggestedQuestionsComponent
+                v-if="shouldShowSuggestedQuestions(conv, index)"
+                :thread-id="currentChatId"
+                :show="!isProcessing && conversations.length > 0"
+                @question-click="handleSuggestedQuestionClick"
+              />
             </div>
 
             <!-- 生成中的加载状态 - 增强条件支持主聊天和resume流程 -->
@@ -210,6 +217,7 @@ import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
+import SuggestedQuestionsComponent from '@/components/SuggestedQuestionsComponent.vue'
 import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, ChevronDown, Bot } from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
@@ -464,6 +472,23 @@ const shouldShowRefs = computed(() => {
     )
   }
 })
+
+// 计算是否显示猜你想问组件 - 只在最后一个对话完成后显示
+const shouldShowSuggestedQuestions = (conv, index) => {
+  return (
+    index === conversations.value.length - 1 &&
+    conv.status !== 'streaming' &&
+    !isProcessing.value &&
+    !approvalState.showModal &&
+    currentChatId.value
+  )
+}
+
+// 处理猜你想问点击
+const handleSuggestedQuestionClick = (question) => {
+  userInput.value = question
+  handleSendMessage()
+}
 
 // 当前线程状态的computed属性
 const currentThreadState = computed(() => {
