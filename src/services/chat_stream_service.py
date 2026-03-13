@@ -487,6 +487,11 @@ async def stream_agent_chat(
             config_dict=langgraph_config,
         )
 
+        # 异步生成猜你想问（不阻塞响应）
+        from src.services.suggested_questions_service import generate_suggested_questions_safe
+
+        asyncio.create_task(generate_suggested_questions_safe(thread_id))
+
         yield make_chunk(status="finished", meta=meta)
 
     except (asyncio.CancelledError, ConnectionError) as e:
@@ -628,6 +633,11 @@ async def stream_agent_resume(
             conv_repo=conv_repo,
             config_dict=langgraph_config,
         )
+
+        # 异步生成猜你想问（不阻塞响应）
+        from src.services.suggested_questions_service import generate_suggested_questions_safe
+
+        asyncio.create_task(generate_suggested_questions_safe(thread_id))
 
         yield make_resume_chunk(status="finished", meta=meta)
 

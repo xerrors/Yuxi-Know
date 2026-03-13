@@ -227,6 +227,9 @@ class Conversation(Base):
     stats = relationship(
         "ConversationStats", back_populates="conversation", uselist=False, cascade="all, delete-orphan"
     )
+    suggested_questions = relationship(
+        "SuggestedQuestion", back_populates="conversation", uselist=False, cascade="all, delete-orphan"
+    )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -586,6 +589,36 @@ class AgentRun(Base):
             "error_message": self.error_message,
             "started_at": format_utc_datetime(self.started_at),
             "finished_at": format_utc_datetime(self.finished_at),
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+        }
+
+
+class SuggestedQuestion(Base):
+    """猜你想问的问题表"""
+
+    __tablename__ = "suggested_questions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="主键ID")
+    conversation_id = Column(
+        Integer,
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        comment="对话ID",
+    )
+    questions = Column(JSON, nullable=False, default=list, comment="问题列表（JSON数组）")
+    created_at = Column(DateTime, default=utc_now_naive, comment="创建时间")
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive, comment="更新时间")
+
+    # Relationships
+    conversation = relationship("Conversation", back_populates="suggested_questions")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "questions": self.questions or [],
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
         }
