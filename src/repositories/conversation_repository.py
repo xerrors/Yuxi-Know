@@ -151,6 +151,15 @@ class ConversationRepository:
         error_message: str | None = None,
         langgraph_tool_call_id: str | None = None,
     ) -> ToolCall:
+        if langgraph_tool_call_id:
+            existing = await self.get_tool_call_by_langgraph_id(langgraph_tool_call_id)
+            if existing:
+                logger.debug(
+                    "Tool call already exists for langgraph_tool_call_id=%s, skip insert",
+                    langgraph_tool_call_id,
+                )
+                return existing
+
         tool_call = ToolCall(
             message_id=message_id,
             tool_name=tool_name,
@@ -333,7 +342,10 @@ class ConversationRepository:
 
     async def get_tool_call_by_langgraph_id(self, langgraph_tool_call_id: str) -> ToolCall | None:
         result = await self.db.execute(
-            select(ToolCall).where(ToolCall.langgraph_tool_call_id == langgraph_tool_call_id)
+            select(ToolCall)
+            .where(ToolCall.langgraph_tool_call_id == langgraph_tool_call_id)
+            .order_by(ToolCall.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 

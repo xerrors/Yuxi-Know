@@ -23,6 +23,7 @@ dependencies = [
     "langgraph>=1.0.1",
     "langgraph-checkpoint-sqlite>=3.0",
     "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary]>=3.2.0",
     "langgraph-cli[inmem]>=0.4",
     "langsmith>=0.4",
     "lightrag-hku>=1.4.6",
