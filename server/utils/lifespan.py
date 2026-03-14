@@ -7,6 +7,7 @@ from src.services.mcp_service import init_mcp_servers
 from src.services.run_queue_service import close_queue_clients, get_redis_client
 from src.storage.postgres.manager import pg_manager
 from src.knowledge import knowledge_base
+from src.sandbox import init_sandbox_provider, shutdown_sandbox_provider
 from src.utils import logger
 
 
@@ -41,8 +42,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Run queue redis unavailable on startup: {e}")
 
+    try:
+        init_sandbox_provider()
+    except Exception as e:
+        logger.error(f"Failed to initialize sandbox provider during startup: {e}")
+
     await tasker.start()
     yield
     await tasker.shutdown()
+    shutdown_sandbox_provider()
     await close_queue_clients()
     await pg_manager.close()

@@ -1,9 +1,10 @@
 import traceback
 import uuid
 from typing import Any
+from mimetypes import guess_type
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile, File
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +30,11 @@ from src.services.conversation_service import (
     list_threads_view,
     update_thread_view,
     upload_thread_attachment_view,
+)
+from src.services.thread_files_service import (
+    list_thread_files_view,
+    read_thread_file_content_view,
+    resolve_thread_artifact_view,
 )
 from src.services.feedback_service import get_message_feedback_view, submit_message_feedback_view
 from src.services.history_query_service import get_agent_history_view
@@ -712,7 +718,9 @@ class AttachmentResponse(BaseModel):
     file_size: int
     status: str
     uploaded_at: str
-    truncated: bool | None = False
+    path: str
+    artifact_url: str | None = None
+    minio_url: str | None = None
 
 
 class AttachmentLimits(BaseModel):
@@ -723,6 +731,29 @@ class AttachmentLimits(BaseModel):
 class AttachmentListResponse(BaseModel):
     attachments: list[AttachmentResponse]
     limits: AttachmentLimits
+
+
+class ThreadFileEntry(BaseModel):
+    path: str
+    name: str
+    is_dir: bool
+    size: int
+    modified_at: str | None = None
+    artifact_url: str | None = None
+
+
+class ThreadFileListResponse(BaseModel):
+    path: str
+    files: list[ThreadFileEntry]
+
+
+class ThreadFileContentResponse(BaseModel):
+    path: str
+    content: list[str]
+    offset: int
+    limit: int
+    total_lines: int
+    artifact_url: str
 
 
 # =============================================================================
@@ -800,7 +831,7 @@ async def upload_thread_attachment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
-    """上传并解析附件为 Markdown，附加到指定对话线程。"""
+    """上传原始附件并关联到指定对话线程。"""
     return await upload_thread_attachment_view(
         thread_id=thread_id,
         file=file,
@@ -837,6 +868,67 @@ async def delete_thread_attachment(
         db=db,
         current_user_id=str(current_user.id),
     )
+
+
+@chat.get("/thread/{thread_id}/files", response_model=ThreadFileListResponse)
+async def list_thread_files(
+    thread_id: str,
+    path: str = Query("/mnt/user-data"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """列出线程文件目录。"""
+    return await list_thread_files_view(
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+        db=db,
+        path=path,
+    )
+
+
+@chat.get("/thread/{thread_id}/files/content", response_model=ThreadFileContentResponse)
+async def read_thread_file_content(
+    thread_id: str,
+    path: str = Query(...),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(2000, ge=1, le=5000),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """读取线程文本文件（按行分页）。"""
+    return await read_thread_file_content_view(
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+        db=db,
+        path=path,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@chat.get("/thread/{thread_id}/artifacts/{path:path}")
+async def get_thread_artifact(
+    thread_id: str,
+    path: str,
+    download: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """下载或预览线程文件。"""
+    file_path = await resolve_thread_artifact_view(
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+        db=db,
+        path=path,
+    )
+
+    media_type = guess_type(file_path.name)[0] or "application/octet-stream"
+    headers = (
+        {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
+        if download
+        else None
+    )
+    return FileResponse(path=file_path, media_type=media_type, headers=headers)
 
 
 # =============================================================================

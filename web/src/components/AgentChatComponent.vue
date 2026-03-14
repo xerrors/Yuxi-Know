@@ -190,6 +190,7 @@
           <AgentPanel
             v-if="isAgentPanelOpen && hasAgentStateContent"
             :agent-state="currentAgentState"
+            :thread-files="currentThreadFiles"
             :thread-id="currentChatId"
             :panel-ratio="panelRatio"
             @refresh="handleAgentStateRefresh"
@@ -295,6 +296,8 @@ const threads = ref([])
 const threadMessages = ref({})
 const hasMoreChats = ref(true) // 是否还有更多对话可加载
 const isLoadingMoreChats = ref(false) // 加载更多对话中
+const threadFilesMap = ref({})
+const threadAttachmentsMap = ref({})
 
 // 本地 UI 状态（仅在本组件使用）
 const localUIState = reactive({
@@ -361,23 +364,20 @@ const currentCapabilities = computed(() => {
 const currentAgentState = computed(() => {
   return currentChatId.value ? getThreadState(currentChatId.value)?.agentState || null : null
 })
-
-const countFiles = (files) => {
-  if (!files) return 0
-  if (Array.isArray(files)) {
-    return files.reduce(
-      (c, item) => c + (item && typeof item === 'object' ? Object.keys(item).length : 0),
-      0
-    )
-  }
-  return typeof files === 'object' ? Object.keys(files).length : 0
-}
+const currentThreadFiles = computed(() => {
+  if (!currentChatId.value) return []
+  return threadFilesMap.value[currentChatId.value] || []
+})
+const currentThreadAttachments = computed(() => {
+  if (!currentChatId.value) return []
+  return threadAttachmentsMap.value[currentChatId.value] || []
+})
 
 const hasAgentStateContent = computed(() => {
   const s = currentAgentState.value
-  if (!s) return false
-  const todoCount = Array.isArray(s.todos) ? s.todos.length : 0
-  const fileCount = countFiles(s.files)
+  if (!s && currentThreadFiles.value.length === 0) return false
+  const todoCount = Array.isArray(s?.todos) ? s.todos.length : 0
+  const fileCount = currentThreadFiles.value.filter((item) => item?.is_dir !== true).length
   return todoCount > 0 || fileCount > 0
 })
 
@@ -390,31 +390,32 @@ watch(hasAgentStateContent, (newVal, oldVal) => {
 })
 
 const mentionConfig = computed(() => {
-  const rawFiles = currentAgentState.value?.files || {}
-  const files = []
-
-  // 处理 files - 兼容字典格式 {"/path/file": {content: [...]}} 和旧数组格式
-  if (typeof rawFiles === 'object' && !Array.isArray(rawFiles) && rawFiles !== null) {
-    // 新格式：字典格式 {"/attachments/xxx/file.md": {...}}
-    Object.entries(rawFiles).forEach(([filePath, fileData]) => {
-      files.push({
-        path: filePath,
-        ...fileData
+  const fileMap = new Map()
+  currentThreadFiles.value
+    .filter((item) => item && item.is_dir !== true && typeof item.path === 'string')
+    .forEach((item) => {
+      fileMap.set(item.path, {
+        path: item.path,
+        size: item.size,
+        modified_at: item.modified_at,
+        artifact_url: item.artifact_url
       })
     })
-  } else if (Array.isArray(rawFiles)) {
-    // 旧格式：数组格式
-    rawFiles.forEach((item) => {
-      if (typeof item === 'object' && item !== null) {
-        Object.entries(item).forEach(([filePath, fileData]) => {
-          files.push({
-            path: filePath,
-            ...fileData
-          })
+
+  currentThreadAttachments.value.forEach((item) => {
+    const candidates = [[item?.path, item?.artifact_url]]
+    candidates.forEach(([path, artifactUrl]) => {
+      if (typeof path !== 'string' || !path) return
+      if (!fileMap.has(path)) {
+        fileMap.set(path, {
+          path,
+          artifact_url: artifactUrl || null
         })
       }
     })
-  }
+  })
+
+  const files = Array.from(fileMap.values())
 
   // Filter KBs and MCPs based on agent config
   const configItems = configurableItems.value || {}
@@ -566,6 +567,8 @@ const cleanupThreadState = (threadId) => {
     }
     delete chatState.threadStates[threadId]
   }
+  delete threadFilesMap.value[threadId]
+  delete threadAttachmentsMap.value[threadId]
 }
 
 // ==================== STREAM HANDLING LOGIC ====================
@@ -657,6 +660,8 @@ const createThread = async (agentId, title = '新的对话') => {
     if (thread) {
       threads.value.unshift(thread)
       threadMessages.value[thread.id] = []
+      threadFilesMap.value[thread.id] = []
+      threadAttachmentsMap.value[thread.id] = []
     }
     return thread
   } catch (error) {
@@ -677,6 +682,8 @@ const deleteThread = async (threadId) => {
     await threadApi.deleteThread(threadId)
     threads.value = threads.value.filter((thread) => thread.id !== threadId)
     delete threadMessages.value[threadId]
+    delete threadFilesMap.value[threadId]
+    delete threadAttachmentsMap.value[threadId]
 
     if (chatState.currentThreadId === threadId) {
       chatState.currentThreadId = null
@@ -747,6 +754,53 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
     handleChatError(error, 'load')
     throw error
   }
+}
+
+const fetchThreadFiles = async (threadId) => {
+  if (!threadId) return
+  const queue = ['/mnt/user-data']
+  const visited = new Set()
+  const entries = []
+
+  try {
+    while (queue.length > 0) {
+      const currentPath = queue.shift()
+      if (!currentPath || visited.has(currentPath)) continue
+      visited.add(currentPath)
+
+      const response = await threadApi.listThreadFiles(threadId, currentPath)
+      const files = Array.isArray(response?.files) ? response.files : []
+      files.forEach((item) => {
+        if (!item || typeof item.path !== 'string') return
+        entries.push(item)
+        if (item.is_dir === true) {
+          queue.push(item.path)
+        }
+      })
+    }
+    threadFilesMap.value[threadId] = entries
+  } catch (error) {
+    console.warn('Failed to fetch thread files:', error)
+    threadFilesMap.value[threadId] = []
+  }
+}
+
+const fetchThreadAttachments = async (threadId) => {
+  if (!threadId) return
+  try {
+    const response = await threadApi.getThreadAttachments(threadId)
+    threadAttachmentsMap.value[threadId] = Array.isArray(response?.attachments)
+      ? response.attachments
+      : []
+  } catch (error) {
+    console.warn('Failed to fetch thread attachments:', error)
+    threadAttachmentsMap.value[threadId] = []
+  }
+}
+
+const refreshThreadFilesAndAttachments = async (threadId) => {
+  if (!threadId) return
+  await Promise.all([fetchThreadFiles(threadId), fetchThreadAttachments(threadId)])
 }
 
 const fetchAgentState = async (agentId, threadId) => {
@@ -1110,11 +1164,9 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
           ts.activeRunId = null
           ts.lastRetryableJobTry = null
           clearActiveRunSnapshot(threadId)
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(
-            () => {
-              fetchAgentState(currentAgentId.value, threadId)
-            }
-          )
+          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(() => {
+            handleAgentStateRefresh(threadId)
+          })
         } else if (ts.activeRunId === runId) {
           window.setTimeout(() => {
             if (ts.activeRunId === runId && !ts.runStreamAbortController) {
@@ -1137,7 +1189,7 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         clearActiveRunSnapshot(threadId)
         fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 300 }).finally(() => {
           resetOnGoingConv(threadId)
-          fetchAgentState(currentAgentId.value, threadId)
+          handleAgentStateRefresh(threadId)
           scrollController.scrollToBottom()
         })
       }
@@ -1374,7 +1426,7 @@ const selectChat = async (chatId) => {
 
   await nextTick()
   scrollController.scrollToBottomStaticForce()
-  await fetchAgentState(currentAgentId.value, chatId)
+  await handleAgentStateRefresh(chatId)
   await resumeActiveRunForThread(chatId)
 }
 
@@ -1522,7 +1574,7 @@ const handleSendMessage = async ({ image } = {}) => {
     fetchThreadMessages({ agentId: currentAgentId.value, threadId: threadId }).finally(() => {
       // 历史记录加载完成后，安全地清空当前进行中的对话
       resetOnGoingConv(threadId)
-      fetchAgentState(currentAgentId.value, threadId)
+      handleAgentStateRefresh(threadId)
       scrollController.scrollToBottom()
     })
   }
@@ -1653,7 +1705,10 @@ const handleAgentStateRefresh = async (threadId = null) => {
   if (!currentAgentId.value) return
   const chatId = threadId || currentChatId.value
   if (!chatId) return
-  await fetchAgentState(currentAgentId.value, chatId)
+  await Promise.all([
+    fetchAgentState(currentAgentId.value, chatId),
+    refreshThreadFilesAndAttachments(chatId)
+  ])
 }
 
 const toggleAgentPanel = () => {
@@ -1739,6 +1794,8 @@ const loadChatsList = async () => {
     console.warn('No agent selected, cannot load chats list')
     threads.value = []
     chatState.currentThreadId = null
+    threadFilesMap.value = {}
+    threadAttachmentsMap.value = {}
     return
   }
 
@@ -1785,6 +1842,8 @@ watch(
       // 清理当前线程状态
       chatState.currentThreadId = null
       threadMessages.value = {}
+      threadFilesMap.value = {}
+      threadAttachmentsMap.value = {}
       // 清理所有线程状态
       resetOnGoingConv()
 

@@ -7,13 +7,15 @@
 - 默认配置定义在代码中
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 from typing import Any
 
 import tomli
 import tomli_w
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from src.config.static.models import (
     DEFAULT_CHAT_MODEL_PROVIDERS,
@@ -73,6 +75,18 @@ class Config(BaseModel):
     default_agent_id: str = Field(default="ChatbotAgent", description="默认智能体ID")
 
     # ============================================================
+    # Sandbox 配置
+    # ============================================================
+    sandbox_provider: str = Field(default="provisioner", description="沙箱提供者")
+    sandbox_provisioner_url: str = Field(
+        default="http://sandbox-provisioner:8002", description="沙箱服务地址"
+    )
+    sandbox_virtual_path_prefix: str = Field(default="/mnt/user-data", description="沙箱虚拟路径前缀")
+    sandbox_exec_timeout_seconds: int = Field(default=180, description="沙箱执行超时时间（秒）")
+    sandbox_max_output_bytes: int = Field(default=262144, description="沙箱最大输出字节数")
+    sandbox_keepalive_interval_seconds: int = Field(default=30, description="沙箱保活间隔（秒）")
+
+    # ============================================================
     # 模型信息（只读，不持久化）
     # ============================================================
     model_names: dict[str, ChatModelProvider] = Field(
@@ -106,9 +120,9 @@ class Config(BaseModel):
     )
 
     # 内部状态
-    _config_file: Path | None = None
-    _user_modified_fields: set[str] = set()
-    _modified_providers: set[str] = set()  # 记录具体修改的模型提供商
+    _config_file: Path | None = PrivateAttr(default=None)
+    _user_modified_fields: set[str] = PrivateAttr(default_factory=set)
+    _modified_providers: set[str] = PrivateAttr(default_factory=set)  # 记录具体修改的模型提供商
 
     model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
 
@@ -119,13 +133,13 @@ class Config(BaseModel):
         self._load_custom_providers()
         self._handle_environment()
 
-    def _setup_paths(self):
+    def _setup_paths(self) -> None:
         """设置配置文件路径"""
         self.save_dir = os.getenv("SAVE_DIR") or self.save_dir
         self._config_file = Path(self.save_dir) / "config" / "base.toml"
         self._config_file.parent.mkdir(parents=True, exist_ok=True)
 
-    def _load_user_config(self):
+    def _load_user_config(self) -> None:
         """从 TOML 文件加载用户配置"""
         if not self._config_file or not self._config_file.exists():
             logger.info(f"Config file not found, using defaults: {self._config_file}")
@@ -157,22 +171,21 @@ class Config(BaseModel):
         except Exception as e:
             logger.error(f"Failed to load config from {self._config_file}: {e}")
 
-    def _load_model_names(self, model_names_data):
+    def _load_model_names(self, model_names_data: dict[str, Any]) -> None:
         """加载用户自定义的模型配置"""
-        try:
-            for provider, provider_data in model_names_data.items():
+        for provider, provider_data in (model_names_data or {}).items():
+            try:
                 if provider in self.model_names:
-                    # 更新现有提供商的模型列表
-                    if "models" in provider_data:
-                        self.model_names[provider].models = provider_data["models"]
+                    # 合并现有提供商的配置
+                    merged = self.model_names[provider].model_dump() | dict(provider_data or {})
+                    self.model_names[provider] = ChatModelProvider(**merged)
                 else:
                     # 添加新的提供商
                     self.model_names[provider] = ChatModelProvider(**provider_data)
-            logger.info(f"Loaded custom model configurations for {len(model_names_data)} providers")
-        except Exception as e:
-            logger.error(f"Failed to load model names: {e}")
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Skip invalid model provider config {provider}: {e}")
 
-    def _load_custom_providers(self):
+    def _load_custom_providers(self) -> None:
         """从独立的TOML文件加载自定义供应商配置"""
         custom_config_file = self._config_file.parent / "custom_providers.toml"
 
@@ -192,17 +205,17 @@ class Config(BaseModel):
         except Exception as e:
             logger.error(f"Failed to load custom providers from {custom_config_file}: {e}")
 
-    def _load_custom_model_providers(self, providers_data):
+    def _load_custom_model_providers(self, providers_data: dict[str, Any]) -> None:
         """加载自定义模型供应商"""
-        try:
-            for provider, provider_data in providers_data.items():
-                provider_data["custom"] = True
-                self.model_names[provider] = ChatModelProvider(**provider_data)
-            logger.info(f"Loaded {len(providers_data)} custom model providers")
-        except Exception as e:
-            logger.error(f"Failed to load custom model providers: {e}")
+        for provider, provider_data in (providers_data or {}).items():
+            try:
+                payload = dict(provider_data or {})
+                payload["custom"] = True
+                self.model_names[provider] = ChatModelProvider(**payload)
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Skip invalid custom provider {provider}: {e}")
 
-    def _handle_environment(self):
+    def _handle_environment(self) -> None:
         """处理环境变量和运行时状态"""
         # 处理模型目录
         self.model_dir = os.environ.get("MODEL_DIR") or self.model_dir
@@ -233,10 +246,44 @@ class Config(BaseModel):
         # 获取可用的模型提供商
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
 
+        # 处理 Sandbox 配置
+        self.sandbox_provider = (
+            os.getenv("SANDBOX_PROVIDER") or self.sandbox_provider or "provisioner"
+        ).strip()
+        self.sandbox_provisioner_url = (
+            os.getenv("SANDBOX_PROVISIONER_URL")
+            or self.sandbox_provisioner_url
+            or "http://sandbox-provisioner:8002"
+        ).strip()
+        self.sandbox_virtual_path_prefix = (
+            os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX")
+            or self.sandbox_virtual_path_prefix
+            or "/mnt/user-data"
+        ).strip()
+        self.sandbox_exec_timeout_seconds = int(
+            os.getenv("SANDBOX_EXEC_TIMEOUT_SECONDS") or self.sandbox_exec_timeout_seconds or 180
+        )
+        self.sandbox_max_output_bytes = int(
+            os.getenv("SANDBOX_MAX_OUTPUT_BYTES") or self.sandbox_max_output_bytes or 262144
+        )
+        self.sandbox_keepalive_interval_seconds = int(
+            os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS")
+            or self.sandbox_keepalive_interval_seconds
+            or 30
+        )
+
+        # 验证 Sandbox 配置
+        if self.sandbox_provider.lower() != "provisioner":
+            raise ValueError("Only sandbox_provider=provisioner is supported.")
+        if not self.sandbox_provisioner_url:
+            raise ValueError("SANDBOX_PROVISIONER_URL is required when sandbox provider is provisioner.")
+        if not self.sandbox_virtual_path_prefix.startswith("/"):
+            self.sandbox_virtual_path_prefix = f"/{self.sandbox_virtual_path_prefix}"
+
         if not self.valuable_model_provider:
             raise ValueError("No model provider available, please check your `.env` file.")
 
-    def save(self):
+    def save(self) -> None:
         """保存配置到 TOML 文件（仅保存用户修改的字段）"""
         if not self._config_file:
             logger.warning("Config file path not set")
@@ -339,7 +386,7 @@ class Config(BaseModel):
         logger.warning("Using deprecated dict-style assignment for Config. Please use attribute access instead.")
         setattr(self, key, value)
 
-    def update(self, other: dict):
+    def update(self, other: dict[str, Any]) -> None:
         """批量更新配置（兼容旧代码）"""
         for key, value in other.items():
             if hasattr(self, key):
@@ -347,7 +394,7 @@ class Config(BaseModel):
             else:
                 logger.warning(f"Unknown config key: {key}")
 
-    def _save_models_to_file(self, provider_name: str = None):
+    def _save_models_to_file(self, provider_name: str | None = None) -> None:
         """保存模型配置到主配置文件
 
         Args:
@@ -397,7 +444,7 @@ class Config(BaseModel):
     # 自定义供应商管理方法
     # ============================================================
 
-    def add_custom_provider(self, provider_id: str, provider_data: dict) -> bool:
+    def add_custom_provider(self, provider_id: str, provider_data: dict[str, Any]) -> bool:
         """添加自定义供应商
 
         Args:
@@ -526,7 +573,7 @@ class Config(BaseModel):
         """
         return {k: v for k, v in self.model_names.items() if v.custom}
 
-    def _save_custom_providers(self):
+    def _save_custom_providers(self) -> None:
         """保存自定义供应商到独立配置文件"""
         if not self._config_file:
             logger.warning("Config file path not set")
