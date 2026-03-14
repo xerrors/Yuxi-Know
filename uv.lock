@@ -3402,6 +3402,9 @@ wheels = [
 binary = [
     { name = "psycopg-binary", marker = "implementation_name != 'pypy'" },
 ]
+pool = [
+    { name = "psycopg-pool" },
+]
 
 [[package]]
 name = "psycopg-binary"
@@ -5653,7 +5656,7 @@ wheels = [
 
 [[package]]
 name = "yuxi-know"
-version = "0.5.1"
+version = "0.5.2"
 source = { virtual = "." }
 dependencies = [
     { name = "agent-sandbox" },
@@ -5697,7 +5700,7 @@ dependencies = [
     { name = "openai" },
     { name = "opencv-python-headless" },
     { name = "pillow" },
-    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg", extra = ["binary", "pool"] },
     { name = "pyjwt" },
     { name = "pymilvus" },
     { name = "pymupdf" },
@@ -5782,7 +5785,7 @@ requires-dist = [
     { name = "openai", specifier = ">=1.109" },
     { name = "opencv-python-headless", specifier = ">=4.11.0.86" },
     { name = "pillow", specifier = ">=10.5.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.0" },
+    { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.3.3" },
     { name = "pyjwt", specifier = ">=2.8.0" },
     { name = "pymilvus", specifier = ">=2.5.8" },
     { name = "pymupdf", specifier = ">=1.25.5" },

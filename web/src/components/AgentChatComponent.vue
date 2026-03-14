@@ -758,26 +758,9 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
 
 const fetchThreadFiles = async (threadId) => {
   if (!threadId) return
-  const queue = ['/mnt/user-data']
-  const visited = new Set()
-  const entries = []
-
   try {
-    while (queue.length > 0) {
-      const currentPath = queue.shift()
-      if (!currentPath || visited.has(currentPath)) continue
-      visited.add(currentPath)
-
-      const response = await threadApi.listThreadFiles(threadId, currentPath)
-      const files = Array.isArray(response?.files) ? response.files : []
-      files.forEach((item) => {
-        if (!item || typeof item.path !== 'string') return
-        entries.push(item)
-        if (item.is_dir === true) {
-          queue.push(item.path)
-        }
-      })
-    }
+    const response = await threadApi.listThreadFiles(threadId, '/mnt/user-data', true)
+    const entries = Array.isArray(response?.files) ? response.files : []
     threadFilesMap.value[threadId] = entries
   } catch (error) {
     console.warn('Failed to fetch thread files:', error)

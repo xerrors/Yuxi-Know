@@ -34,6 +34,7 @@ async def list_thread_files_view(
     current_user_id: str,
     db,
     path: str | None = None,
+    recursive: bool = False,
 ) -> dict:
     conv_repo = ConversationRepository(db)
     await require_user_conversation(conv_repo, thread_id, str(current_user_id))
@@ -49,6 +50,9 @@ async def list_thread_files_view(
         return {"path": virtual_path, "files": []}
     if not actual_path.is_dir():
         raise HTTPException(status_code=400, detail="path must be a directory")
+
+    if recursive:
+        return _list_files_recursive(thread_id, actual_path, virtual_path)
 
     entries: list[dict[str, Any]] = []
     for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
@@ -67,6 +71,35 @@ async def list_thread_files_view(
             }
         )
 
+    return {"path": virtual_path, "files": entries}
+
+
+def _list_files_recursive(thread_id: str, actual_path: Path, virtual_path: str) -> dict:
+    entries: list[dict[str, Any]] = []
+
+    def _scan_dir(base_actual_path: Path, base_virtual_path: str):
+        try:
+            for child in sorted(base_actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+                stat = child.stat()
+                child_virtual_path = virtual_path_for_thread_file(thread_id, child)
+                entries.append(
+                    {
+                        "path": child_virtual_path,
+                        "name": child.name,
+                        "is_dir": child.is_dir(),
+                        "size": stat.st_size if child.is_file() else 0,
+                        "modified_at": _to_iso8601(stat.st_mtime),
+                        "artifact_url": None
+                        if child.is_dir()
+                        else f"/api/chat/thread/{thread_id}/artifacts/{child_virtual_path.lstrip('/')}",
+                    }
+                )
+                if child.is_dir():
+                    _scan_dir(child, child_virtual_path)
+        except PermissionError:
+            pass
+
+    _scan_dir(actual_path, virtual_path)
     return {"path": virtual_path, "files": entries}
 
 

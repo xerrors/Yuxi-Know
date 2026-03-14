@@ -340,10 +340,11 @@ export const threadApi = {
    * 列出线程文件（目录）
    * @param {string} threadId
    * @param {string} path
+   * @param {boolean} recursive
    * @returns {Promise}
    */
-  listThreadFiles: (threadId, path = '/mnt/user-data') =>
-    apiGet(`/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}`),
+  listThreadFiles: (threadId, path = '/mnt/user-data', recursive = false) =>
+    apiGet(`/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}&recursive=${recursive}`),
 
   /**
    * 读取线程文本文件内容（分页）

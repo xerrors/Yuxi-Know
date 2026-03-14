@@ -141,6 +141,8 @@ services:
       - ./saves:/app/saves
       - ./docker/sandbox_provisioner/app.py:/app/app.py:ro
       - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8002:8002"
     networks:
       - app-network
     extra_hosts:

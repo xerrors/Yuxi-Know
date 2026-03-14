@@ -516,6 +516,7 @@ async def resume_agent_chat(
     db: AsyncSession = Depends(get_db),
 ):
     """恢复被人工审批中断的对话（需要登录）"""
+
     def normalize_resume_input(raw_answer: Any, raw_approved: bool | None) -> Any:
         if raw_answer is not None:
             if isinstance(raw_answer, str):
@@ -874,6 +875,7 @@ async def delete_thread_attachment(
 async def list_thread_files(
     thread_id: str,
     path: str = Query("/mnt/user-data"),
+    recursive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
 ):
@@ -883,6 +885,7 @@ async def list_thread_files(
         current_user_id=str(current_user.id),
         db=db,
         path=path,
+        recursive=recursive,
     )
 
 
@@ -923,11 +926,7 @@ async def get_thread_artifact(
     )
 
     media_type = guess_type(file_path.name)[0] or "application/octet-stream"
-    headers = (
-        {"Content-Disposition": f'attachment; filename="{file_path.name}"'}
-        if download
-        else None
-    )
+    headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'} if download else None
     return FileResponse(path=file_path, media_type=media_type, headers=headers)
 
 
