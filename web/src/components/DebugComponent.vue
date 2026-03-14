@@ -139,7 +139,6 @@ import {
   ref,
   reactive,
   computed,
-  defineModel,
   onMounted,
   onActivated,
   onUnmounted,

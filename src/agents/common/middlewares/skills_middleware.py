@@ -13,12 +13,12 @@ from langchain.tools.tool_node import ToolCallRequest
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.agents.common.toolkits import get_all_tool_instances
 from src.repositories.skill_repository import SkillRepository
 from src.services.mcp_service import get_enabled_mcp_tools
 from src.services.skill_service import _normalize_string_list, is_valid_skill_slug
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
-
 
 # =============================================================================
 # 类型定义
@@ -171,6 +171,21 @@ class SkillsMiddleware(AgentMiddleware):
         self.skills_context_name = skills_context_name
         self.enable_skills_prompt = enable_skills_prompt
         self.skills_sources_for_prompt = skills_sources_for_prompt or ["/skills/"]
+        # 实例级缓存：避免每次模型调用都查数据库
+        self._dependency_map_cache: dict[str, SkillDependencyNode] | None = None
+        self._prompt_metadata_cache: dict[str, SkillPromptMetadata] | None = None
+
+    async def _get_dependency_map_cached(self) -> dict[str, SkillDependencyNode]:
+        """获取依赖映射（带缓存）"""
+        if self._dependency_map_cache is None:
+            self._dependency_map_cache = await get_dependency_map()
+        return self._dependency_map_cache
+
+    async def _get_prompt_metadata_cached(self) -> dict[str, SkillPromptMetadata]:
+        """获取提示词元数据（带缓存）"""
+        if self._prompt_metadata_cache is None:
+            self._prompt_metadata_cache = await get_prompt_metadata()
+        return self._prompt_metadata_cache
 
     async def abefore_agent(self, state: SkillsState, runtime) -> dict[str, Any] | None:
         """在 agent 执行前注入 skills 提示词"""
@@ -182,8 +197,8 @@ class SkillsMiddleware(AgentMiddleware):
         if getattr(runtime_context, "_skills_prompt_injected", False):
             return None
 
-        # 从数据库加载 skills 数据
-        dependency_map = await get_dependency_map()
+        # 从数据库加载 skills 数据（使用缓存）
+        dependency_map = await self._get_dependency_map_cached()
 
         # 获取配置的 skills
         configured_skills = getattr(runtime_context, self.skills_context_name, None) or []
@@ -219,8 +234,8 @@ class SkillsMiddleware(AgentMiddleware):
         """包装模型调用，处理动态激活和依赖展开"""
         runtime_context = request.runtime.context
 
-        # 从数据库加载 skills 数据
-        dependency_map = await get_dependency_map()
+        # 从缓存加载 skills 数据
+        dependency_map = await self._get_dependency_map_cached()
 
         # 1. 获取配置的 skills
         configured_skills = getattr(runtime_context, self.skills_context_name, None) or []
@@ -239,40 +254,47 @@ class SkillsMiddleware(AgentMiddleware):
         # 4. 更新 runtime_context 中的 visible_skills
         setattr(runtime_context, "_visible_skills", visible_skills)
 
-        # 5. 构建依赖包
-        deps_bundle = await self._build_dependency_bundle(visible_skills)
+        # 5. 构建依赖包（只从直接激活的 skills 获取依赖，不包含闭包展开的依赖）
+        deps_bundle = await self._build_dependency_bundle(activated)
 
-        # 6. 加载依赖的工具
-        if deps_bundle["tools"] or deps_bundle["mcps"]:
-            enabled_tools = await self._get_tools_from_context(
+        # 6. 加载依赖的工具（普通工具 + MCP 工具）
+        enabled_tools = []
+
+        # 6.1 从 toolkits 获取普通工具
+        if deps_bundle["tools"]:
+            all_tools = get_all_tool_instances()
+            required_tool_names = set(deps_bundle["tools"])
+            enabled_tools = [t for t in all_tools if t.name in required_tool_names]
+
+        # 6.2 获取 MCP 工具
+        if deps_bundle["mcps"]:
+            mcp_tools = await self._get_mcp_tools_from_context(
                 runtime_context,
-                extra_tool_names=deps_bundle["tools"],
                 extra_mcps=deps_bundle["mcps"],
             )
+            enabled_tools.extend(mcp_tools)
 
-            # 合并工具
-            if enabled_tools:
-                existing_tools = list(request.tools or [])
-                enabled_tool_names = {t.name for t in enabled_tools}
-                merged_tools = []
-                for t_bind in existing_tools:
-                    if t_bind.name in enabled_tool_names:
-                        merged_tools.append(t_bind)
-                if merged_tools:
-                    request = request.override(tools=merged_tools)
+        # 合并工具：保留原有工具 + 追加依赖的新工具
+        if enabled_tools:
+            existing_tool_names = {t.name for t in request.tools or []}
+            merged_tools = list(request.tools or [])
+            for t in enabled_tools:
+                if t.name not in existing_tool_names:
+                    merged_tools.append(t)
+            request = request.override(tools=merged_tools)
 
         return await handler(request)
 
-    async def _build_dependency_bundle(self, visible_skills: list[str]) -> dict[str, list[str]]:
-        """根据 visible_skills 构建依赖包"""
-        dependency_map = await get_dependency_map()
+    async def _build_dependency_bundle(self, activated_skills: list[str]) -> dict[str, list[str]]:
+        """根据直接激活的 skills 构建依赖包（不包含闭包展开的依赖）"""
+        dependency_map = await self._get_dependency_map_cached()
 
         tools: list[str] = []
         mcps: list[str] = []
         seen_tools: set[str] = set()
         seen_mcps: set[str] = set()
 
-        for slug in visible_skills:
+        for slug in activated_skills:
             dep = dependency_map.get(slug, {})
             for tool_name in dep.get("tools", []):
                 if tool_name in seen_tools:
@@ -285,11 +307,11 @@ class SkillsMiddleware(AgentMiddleware):
                 seen_mcps.add(mcp_name)
                 mcps.append(mcp_name)
 
-        return {"tools": tools, "mcps": mcps, "skills": visible_skills}
+        return {"tools": tools, "mcps": mcps, "skills": activated_skills}
 
     async def _collect_prompt_metadata(self, slugs: list[str]) -> list[SkillPromptMetadata]:
         """收集指定 slugs 的提示词元数据"""
-        prompt_metadata = await get_prompt_metadata()
+        prompt_metadata = await self._get_prompt_metadata_cached()
 
         result: list[SkillPromptMetadata] = []
         seen: set[str] = set()
@@ -310,28 +332,16 @@ class SkillsMiddleware(AgentMiddleware):
 
         return result
 
-    async def _get_tools_from_context(
+    async def _get_mcp_tools_from_context(
         self,
         context,
         *,
-        extra_tool_names: list[str] | None = None,
         extra_mcps: list[str] | None = None,
     ) -> list:
-        """从上下文配置中获取工具列表"""
+        """从上下文配置中获取 MCP 工具列表"""
         import asyncio
 
-        selected_tools = []
-
-        # 1. 工具（从 extra_tool_names 获取）
-        all_tool_names: list[str] = []
-        for tool_name in extra_tool_names or []:
-            if isinstance(tool_name, str):
-                all_tool_names.append(tool_name)
-
-        # 这里简化处理：假设工具已经在其他 middleware 中加载
-        # SkillsMiddleware 主要负责 MCP 工具的加载
-
-        # 2. MCP 工具（并行加载）
+        # MCP 工具（并行加载）
         mcps = getattr(context, "mcps", None) or []
         all_mcp_names: list[str] = []
         for server_name in mcps:
@@ -357,6 +367,7 @@ class SkillsMiddleware(AgentMiddleware):
 
         # 并行加载所有 MCP 工具
         results = await asyncio.gather(*[load_mcp_tools(name) for name in unique_mcp_names])
+        selected_tools = []
         for tools in results:
             selected_tools.extend(tools)
 

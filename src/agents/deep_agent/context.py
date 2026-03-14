@@ -101,7 +101,7 @@ class DeepContext(BaseContext):
     )
 
     subagents_model: Annotated[str, {"__template_metadata__": {"kind": "llm"}}] = field(
-        default="siliconflow/deepseek-ai/DeepSeek-V3.2",
+        default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2",
         metadata={
             "name": "Sub-agent Model",
             "description": "The model used by sub-agents (e.g., critique-agent, research-agent).",

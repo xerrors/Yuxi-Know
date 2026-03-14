@@ -536,9 +536,12 @@ const form = reactive({
 
 // 计算属性
 const filteredServers = computed(() => {
-  if (!searchQuery.value) return servers.value
+  const sorted = [...servers.value].sort((a, b) => {
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  })
+  if (!searchQuery.value) return sorted
   const q = searchQuery.value.toLowerCase()
-  return servers.value.filter(
+  return sorted.filter(
     (s) => s.name.toLowerCase().includes(q) || (s.description || '').toLowerCase().includes(q)
   )
 })
@@ -945,10 +948,6 @@ defineExpose({
 }
 
 .list-item {
-  &.disabled {
-    opacity: 0.6;
-  }
-
   .server-icon {
     font-size: 18px;
   }

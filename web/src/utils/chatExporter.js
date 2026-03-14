@@ -95,7 +95,6 @@ export class ChatExporter {
           }
         : null
     })
-
     ;(messages || []).forEach((item) => {
       if (!item) return
 

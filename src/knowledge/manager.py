@@ -268,16 +268,21 @@ class KnowledgeBaseManager:
             return {"databases": []}
         return await self.get_databases_by_user(user)
 
-    async def get_databases_by_user(self, user: User) -> dict:
+    async def get_databases_by_user(self, user: User | dict) -> dict:
         """根据用户权限获取知识库列表"""
 
-        # 构建用户信息字典
-        user_info = {
-            "role": user.role,
-            "department_id": user.department_id,
-        }
+        # 构建用户信息字典（支持 User 对象或 dict）
+        if isinstance(user, dict):
+            user_info = user
+        else:
+            user_info = {
+                "role": user.role,
+                "department_id": user.department_id,
+            }
 
-        logger.info(f"Getting databases for user {user.id} with role {user.role} and department {user.department_id}")
+        user_role = user_info.get("role")
+        user_dept = user_info.get("department_id")
+        logger.info(f"Getting databases for user with role {user_role} and department {user_dept}")
 
         all_databases = (await self.get_databases()).get("databases", [])
 

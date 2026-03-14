@@ -1,36 +1,37 @@
 # 快速开始指南
 
+Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知识库系统。通过本文档，你可以在几分钟内完成环境搭建并开始使用。
+
 ::: tip 提示
-除了此文档网站外，用户还可以在 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 平台查看自动生成的详细项目文档。
+除了此文档网站外，你还可以访问 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 查看自动生成的详细项目文档。
 :::
 
+## 环境要求
 
-## 快速开始
+项目采用微服务架构设计，默认服务无需 GPU 支持。如果需要使用 OCR 功能，可以通过环境变量配置外部服务。
 
+## 快速安装
 
-### 安装步骤
-
-项目采用微服务架构，默认服务无需 GPU 支持。GPU 仅用于可选的 OCR 服务，可通过环境变量配置外部服务。
-
-#### 1. 获取项目代码
+### 步骤一：获取项目代码
 
 ```bash
-# 克隆稳定版本
-git clone --branch v0.5.0-beta4 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+# 克隆稳定版本（推荐新用户使用 v0.5.1）
+git clone --branch v0.5.1 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
-::: warning 版本说明
-- `v0.4.4`: 稳定版本
-- `v0.5.0-beta4`: 由于数据库重构使用 postgres，可能会存在数据库迁移问题，建议新用户使用，迁移指南详见 [迁移指南](https://xerrors.github.io/Yuxi-Know/latest/changelog/migrate_to_v0-5)。
-- `main`: 最新开发版本（不稳定，新特性可能会导致新 bug）
-:::
+版本选择建议：
 
-#### 2. 项目启动
+| 版本 | 适用场景 |
+|------|----------|
+| v0.5.x | 稳定版本，适合生产环境使用 |
+| main | 开发版本，包含最新特性（可能不稳定） |
 
-**方法 1**：使用 init 脚本（推荐）
+### 步骤二：配置环境变量
 
-我们提供了自动化的初始化脚本，可以帮您完成环境配置和 Docker 镜像拉取：
+**方式一：使用初始化脚本（推荐）**
+
+我们提供了自动化脚本，帮你完成环境配置和 Docker 镜像拉取：
 
 ```bash
 # Linux/macOS
@@ -40,127 +41,108 @@ cd Yuxi-Know
 .\scripts\init.ps1
 ```
 
-脚本会：
-- 检查并创建 `.env` 文件
-- 提示您输入 `SILICONFLOW_API_KEY`（必需）
-- 提示您输入 `TAVILY_API_KEY`（可选，用于搜索服务）
-- 自动拉取所有必需的 Docker 镜像
+脚本会引导你完成以下配置：
+- 创建 `.env` 配置文件
+- 设置 `SILICONFLOW_API_KEY`（必需，用于调用大模型）
+- 设置 `TAVILY_API_KEY`（可选，用于搜索服务）
+- 自动拉取必需的 Docker 镜像
 
 ::: tip API Key 获取
-- [硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度
-- [Tavily](https://app.tavily.com/) 获取搜索服务 API Key（可选）
+- **硅基流动**：访问 [cloud.siliconflow.cn](https://cloud.siliconflow.cn/i/Eo5yTHGJ)，注册即送 14 元额度
+- **Tavily**：访问 [app.tavily.com](https://app.tavily.com/) 获取搜索 API Key（可选）
 :::
 
-**方法 2**：手动配置环境变量
+**方式二：手动配置**
 
-复制环境变量模板并编辑：
+如果偏好手动配置：
 
 ```bash
+# 复制环境变量模板
 cp .env.template .env
+
+# 编辑 .env 文件，填入你的 API Key
 ```
 
-编辑 `.env` 文件，配置必需的 API 密钥，这里强烈建议先使用硅基流动的 API 和模型（DeepSeek）验证平台的功能无误后，再尝试切换到自己的模型：
-
-
-<<< @/../.env.template#model_provider{bash 5}
-
-
-::: tip 免费获取 API Key
-[硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。
-:::
-
-#### 3. 启动服务
+### 步骤三：启动服务
 
 ```bash
 # 构建并启动所有服务
-docker compose up --build
-
-# 后台运行（推荐）
 docker compose up --build -d
 ```
 
-**注意**：启动后，可能还需要一些时间，尤其是后端服务需要一段时间，请耐心等待 2-3 分钟。
+服务首次启动需要等待镜像拉取和编译，请耐心等待 2-3 分钟。
 
-#### 4. 访问系统
+### 步骤四：访问系统
 
-服务启动完成后，访问以下地址：
+服务启动后，访问以下地址：
 
-- **Web 界面**: `http://localhost:5173`
-- **API 文档**: `http://localhost:5050/docs`
+| 服务 | 地址 |
+|------|------|
+| Web 界面 | http://localhost:5173 |
+| API 文档 | http://localhost:5050/docs |
 
-#### 5. 停止服务
+首次访问时，系统会要求你设置超级管理员账号和密码，请妥善保存。
 
-```bash
-docker compose down
-```
+## 开始使用
 
-## 对话
+完成上述配置后，你就可以开始使用了：
 
-项目第一次启动后，会要求填写超级管理员账号和密码，请确保填写正确。
+1. 登录系统（使用刚才设置的超级管理员账号）
+2. 进入「智能体」页面
+3. 选择或创建一个智能体
+4. 在右侧面板配置提示词、选择模型和工具
+5. 开始对话
 
-然后在智能体页面可以进行对话，在右侧可以配置提示词、模型、工具等参数。
-
-![agent.png](/images/agent.png)
-
-
+![智能体配置界面](/images/agent.png)
 
 ## 故障排除
 
-::: tip 调试面板
-前端有个**调试面板**，在头像选项里，生产环境建议删除此特性。
-:::
-
-#### 查看服务状态
+### 查看服务状态
 
 ```bash
 # 查看所有容器状态
 docker ps
 
-# 查看后端服务日志
+# 实时查看后端日志
 docker logs api-dev -f
 
-# 查看前端服务日志
+# 实时查看前端日志
 docker logs web-dev -f
 ```
 
-#### 常见问题
+### 常见问题
 
 <details>
 <summary><strong>Docker 镜像拉取失败</strong></summary>
 
-如果拉取镜像失败，可以尝试手动拉取：
+如果网络原因导致镜像拉取失败，可以尝试：
 
 ```bash
-# Linux/macOS
+# 手动拉取基础镜像
 bash docker/pull_image.sh python:3.12-slim
-
-# Windows PowerShell
-powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1 python:3.12-slim
 ```
 
-**离线镜像拉取方案**：
+**离线环境部署方案**：
 
 ```bash
-# 在有网络的环境保存镜像（镜像名称需要确认是否和实际一致，现有版本可能不是最新最全，需要检查）
-bash docker/save_docker_images.sh  # Linux/macOS
-powershell -ExecutionPolicy Bypass -File docker/save_docker_images.ps1  # Windows
+# 在有网络的环境导出镜像
+bash docker/save_docker_images.sh
 
-# 传输到目标设备
-scp docker_images_xxx.tar <user>@<dev_host>:<path_to_save>
+# 传输到目标机器
+scp docker_images_xxx.tar user@host:/path/
 
-# 在目标设备加载镜像
+# 导入镜像
 docker load -i docker_images_xxx.tar
 ```
-
 </details>
 
 <details>
 <summary><strong>构建失败</strong></summary>
 
-如果构建失败，通常是网络问题，可以配置代理：
+多数构建失败是由于网络问题。尝试配置代理：
 
 ```bash
-# Linux / macOS
+# Linux/macOS
 export HTTP_PROXY=http://IP:PORT
 export HTTPS_PROXY=http://IP:PORT
 
@@ -169,21 +151,25 @@ $env:HTTP_PROXY="http://IP:PORT"
 $env:HTTPS_PROXY="http://IP:PORT"
 ```
 
-如果已配置代理但构建失败，尝试移除代理后重试。
-
-如果出现，FetchError: request to https://registry.npmjs.org/npm failed, reason: connect ECONNREFUSED 127.0.0.1:7890
-
-新建一个终端重新执行，并确保没有代理干扰。
-
+如果配置代理后反而失败，尝试移除代理后重试。
 </details>
 
 <details>
-<summary><strong>Milvus 启动失败</strong></summary>
+<summary><strong>Milvus 服务启动失败</strong></summary>
 
 ```bash
 # 重启 Milvus 服务
 docker compose up milvus -d
 docker restart api-dev
 ```
-
 </details>
+
+::: tip 调试面板
+前端提供了调试面板（在头像菜单中可找到），可以查看详细的请求和响应信息。生产环境建议关闭此特性。
+:::
+
+## 下一步
+
+- 了解如何配置模型：阅读 [模型配置](./model-config.md)
+- 探索知识库功能：阅读 [知识库与知识图谱](./knowledge-base.md)
+- 学习智能体开发：阅读 [智能体开发](../agents/agents-config.md)

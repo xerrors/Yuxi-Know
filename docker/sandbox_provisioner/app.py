@@ -236,16 +236,31 @@ class LocalContainerProvisionerBackend:
                     raise RuntimeError(f"sandbox {sandbox_id} is not ready at {record.sandbox_url}")
                 return record
 
-            threads_root = Path(self._threads_host_path).resolve()
-            thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
-            try:
-                thread_user_data.relative_to(threads_root)
-            except ValueError as exc:
-                raise ValueError("thread_id resolved outside threads host root") from exc
-            thread_user_data.mkdir(parents=True, exist_ok=True)
+            # 检测是否是 Windows 绝对路径 (如 D:/ 或 D:\)
+            threads_root_str = self._threads_host_path
+            is_windows_path = len(threads_root_str) >= 2 and threads_root_str[1] == ':'
 
-            skills_path = Path(self._skills_host_path)
-            skills_path.mkdir(parents=True, exist_ok=True)
+            if is_windows_path:
+                # Windows 路径，直接使用，不调用 resolve()
+                threads_root = Path(threads_root_str)
+                thread_user_data = threads_root / safe_thread_id / "user-data"
+                # Windows 路径下无法在 Linux 容器内创建目录，跳过 mkdir
+            else:
+                threads_root = Path(threads_root_str).resolve()
+                thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
+                try:
+                    thread_user_data.relative_to(threads_root)
+                except ValueError as exc:
+                    raise ValueError("thread_id resolved outside threads host root") from exc
+                thread_user_data.mkdir(parents=True, exist_ok=True)
+
+            skills_path_str = self._skills_host_path
+            is_skills_windows = len(skills_path_str) >= 2 and skills_path_str[1] == ':'
+            if is_skills_windows:
+                skills_path = Path(skills_path_str)
+            else:
+                skills_path = Path(skills_path_str)
+                skills_path.mkdir(parents=True, exist_ok=True)
 
             container_name = self._container_name(sandbox_id)
             run_kwargs = {

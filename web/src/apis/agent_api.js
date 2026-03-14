@@ -286,10 +286,12 @@ export const threadApi = {
   /**
    * 获取对话线程列表
    * @param {string} agentId - 智能体ID
+   * @param {number} limit - 返回数量限制，默认100
+   * @param {number} offset - 偏移量，默认0
    * @returns {Promise} - 对话线程列表
    */
-  getThreads: (agentId) => {
-    const url = `/api/chat/threads?agent_id=${agentId}`
+  getThreads: (agentId, limit = 100, offset = 0) => {
+    const url = `/api/chat/threads?agent_id=${agentId}&limit=${limit}&offset=${offset}`
     return apiGet(url)
   },
 
@@ -311,13 +313,13 @@ export const threadApi = {
    * 更新对话线程
    * @param {string} threadId - 对话线程ID
    * @param {string} title - 对话标题
-   * @param {string} description - 对话描述
+   * @param {boolean} is_pinned - 是否置顶
    * @returns {Promise} - 更新结果
    */
-  updateThread: (threadId, title, description) =>
+  updateThread: (threadId, title, is_pinned) =>
     apiPut(`/api/chat/thread/${threadId}`, {
       title,
-      description
+      is_pinned
     }),
 
   /**

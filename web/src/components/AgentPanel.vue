@@ -85,7 +85,9 @@
     <!-- 文件内容 Modal -->
     <a-modal
       v-model:open="modalVisible"
-      width="80%"
+      width="800px"
+      :style="{ maxWidth: '90vw', top: '5vh' }"
+      :bodyStyle="{ maxHeight: '90vh', overflow: 'auto' }"
       :footer="null"
       :closable="false"
       @cancel="closeModal"
@@ -135,7 +137,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUpdated, nextTick } from 'vue'
+import { computed, ref, onMounted, onUpdated, nextTick, watch } from 'vue'
 import { Download, X, FolderCode } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
@@ -224,6 +226,7 @@ const checkOverflow = () => {
 
 onMounted(() => {
   nextTick(checkOverflow)
+  updateActiveTab()
 })
 
 onUpdated(() => {
@@ -236,6 +239,22 @@ const normalizedFiles = computed(() => {
     .filter((item) => item && typeof item.path === 'string')
     .map((item) => ({ ...item }))
 })
+
+// 自动切换 tab 逻辑：如果 files 为空且有 todos，自动切换到 todos tab
+const updateActiveTab = () => {
+  const fileList = normalizedFiles.value
+  const todoList = todos.value
+
+  // 如果当前是 files tab，但文件为空且有 todos，切换到 todos
+  if (activeTab.value === 'files' && fileList.length === 0 && todoList.length > 0) {
+    activeTab.value = 'todos'
+  }
+}
+
+// 监听 files 和 todos 变化，自动切换 tab
+watch([() => props.agentState?.files, () => props.agentState?.todos], () => {
+  updateActiveTab()
+}, { deep: true })
 
 const expandedKeys = ref([])
 

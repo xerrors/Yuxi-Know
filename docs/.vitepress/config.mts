@@ -8,6 +8,10 @@ export default defineConfig({
   title: "Yuxi-Know",
   description: "语析",
   base: '/Yuxi-Know/',
+  srcDir: './',
+  ignoreDeadLinks: [
+    /localhost/
+  ],
   markdown: {
     config: (md) => {
       md.use(markdownItTaskCheckbox)
@@ -39,12 +43,21 @@ export default defineConfig({
           ]
         },
         {
+          text: '智能体开发',
+          items: [
+            { text: '智能体配置', link: '/latest/agents/agents-config' },
+            { text: '上下文配置', link: '/latest/agents/context-config' },
+            { text: '工具系统', link: '/latest/agents/tools-system' },
+            { text: '中间件', link: '/latest/agents/middleware' },
+            { text: 'MCP 集成', link: '/latest/agents/mcp-integration' },
+            { text: 'Skills 管理', link: '/latest/agents/skills-management' }
+          ]
+        },
+        {
           text: '高级配置',
           items: [
             { text: '配置系统详解', link: '/latest/advanced/configuration' },
             { text: '文档解析', link: '/latest/advanced/document-processing' },
-            { text: '智能体', link: '/latest/advanced/agents-config' },
-            { text: 'Skills 管理', link: '/latest/advanced/skills-management' },
             { text: '品牌自定义', link: '/latest/advanced/branding' },
             { text: '其他配置', link: '/latest/advanced/misc' },
             { text: '生产部署', link: '/latest/advanced/deployment' }

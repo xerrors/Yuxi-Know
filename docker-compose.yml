@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:0.5.dev
+    image: yuxi-api:0.5.2.dev
     container_name: api-dev
     working_dir: /app
     volumes:
@@ -73,7 +73,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:0.5.dev
+    image: yuxi-api:0.5.2.dev
     container_name: worker-dev
     working_dir: /app
     volumes:
@@ -135,6 +135,7 @@ services:
     build:
       context: ./docker/sandbox_provisioner
       dockerfile: Dockerfile
+    image: yuxi-sandbox-provisioner:0.5.2.dev
     container_name: sandbox-provisioner
     volumes:
       - ./saves:/app/saves
@@ -181,7 +182,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: development
-    image: yuxi-web:0.5.dev
+    image: yuxi-web:0.5.2.dev
     container_name: web-dev
     volumes:
       - ./web/src:/app/src
@@ -324,6 +325,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    ports:
+      - "6379:6379"
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]

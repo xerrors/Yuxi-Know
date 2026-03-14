@@ -1,70 +1,98 @@
 # 常见问题
 
-以下为最常见的安装与使用问题，更多细节请参阅相应章节链接。
+以下是 Yuxi-Know 在安装和使用过程中最常见的问题及其解决方案。
 
-## Docker与启动相关问题
+## Docker 与启动问题
 
-### 镜像拉取/构建失败？
-镜像拉取：可使用以下脚本辅助拉取
-- **Linux/macOS**: `docker/pull_image.sh`
-- **Windows PowerShell**: `docker/pull_image.ps1`
-构建失败：若配置了代理仍失败，可尝试以下步骤：
-1. 注释 `api.Dockerfile` 中的代理环境变量设置：
-   ```dockerfile
-   # 注释掉以下代理配置
-   # ENV HTTP_PROXY=$HTTP_PROXY \
-   #     HTTPS_PROXY=$HTTPS_PROXY \
-   #     http_proxy=$HTTP_PROXY \
-   #     https_proxy=$HTTPS_PROXY
+### 镜像拉取或构建失败
+
+**镜像拉取问题**：
+
+```bash
+# Linux/macOS
+bash docker/pull_image.sh
+
+# Windows PowerShell
+powershell -ExecutionPolicy Bypass -File docker/pull_image.ps1
+```
+
+**构建失败问题**：
+
+如果配置了代理仍然失败，尝试以下步骤：
+
+1. 注释 `api.Dockerfile` 中的代理配置
+2. 注释 `docker-compose.yml` 中的代理构建参数
+3. 添加国内镜像源加速：
+
+```dockerfile
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+### 服务启动失败
+
+1. 检查端口占用：`lsof -i :5050` 或 `netstat -tuln | grep 5050`
+2. 确认 Docker 服务状态
+3. 查看日志定位问题：
+   ```bash
+   docker logs --tail=100 api-dev
+   docker logs --tail=100 web-dev
    ```
-2. 注释 `docker-compose.yml` 中的代理构建参数：
-   ```yaml
-   services:
-     api:
-       build:
-         context: .
-         dockerfile: docker/api.Dockerfile
-         # 注释掉代理构建参数
-         # args:
-         #   HTTP_PROXY: ${HTTP_PROXY:-}
-         #   HTTPS_PROXY: ${HTTPS_PROXY:-}
-   ```
-3. 在 `api.Dockerfile` 中添加国内镜像源加速依赖安装：
-   ```dockerfile
-   RUN --mount=type=cache,target=/root/.cache/uv \
-       uv sync --no-dev --index-url https://pypi.tuna.tsinghua.edu.cn/simple
-   ```
 
+### 数据库服务问题
 
-### 服务启动失败？
-- 检查端口占用情况：使用 `lsof -i :5050` 或 `netstat -tuln | grep 5050` 查看端口使用
-- 确认 Docker 服务状态：`systemctl status docker`（Linux）或 `Docker Desktop` 应用状态（Windows/macOS）
-- 参考日志定位问题：`docker logs --tail=100 api-dev`、`docker logs --tail=100 web-dev`
+**Milvus / Neo4j 启动失败**：
 
-### 服务端口与访问地址？
-- Web: `http://localhost:5173`；API 文档: `http://localhost:5050/docs`
+```bash
+# 重启服务
+docker compose up milvus -d && docker restart api-dev
+```
 
-### Milvus/Neo4j 启动或连接失败？
-- 重启：`docker compose up milvus -d && docker restart api-dev`
-- Neo4j 默认：用户名 `neo4j`、密码 `0123456789`、管理界面 `http://localhost:7474`
-- Milvus 检查：`docker logs milvus -f` 查看启动状态
+**Neo4j 连接信息**：
+- 用户名：neo4j
+- 密码：0123456789
+- 管理界面：http://localhost:7474
 
-### 首次运行如何创建管理员？
-- Web 首次启动会引导初始化；也可调用 API：
-  - `GET /api/auth/check-first-run` → `first_run=true` 时
-  - `POST /api/auth/initialize` 提交 `user_id` 与 `password`
-- 无默认账号，初始化后使用创建的超级管理员登录
+### 账号相关问题
 
-### 如何查看日志和状态？
-- `docker ps` 查看整体服务状态
-- `docker logs api-dev -f`、`docker logs web-dev -f` 查看实时服务日志
-- `docker compose logs --tail=100` 查看所有服务日志
+**首次运行创建管理员**：
 
-## 其他常见问题
+Web 首次启动会引导初始化。也可以通过 API 创建：
 
-### OCR 模型或服务不可用？
-  - RapidOCR 本地模型：确保 `MODEL_DIR/SWHL/RapidOCR` 下存在 `PP-OCRv4` 模型
-  - MinerU/PP-StructureV3：检查健康检查接口与 GPU/CUDA 版本
+```bash
+# 检查是否首次运行
+GET /api/auth/check-first-run
 
-### 登录失败被锁定？
-  - 多次失败会临时锁定账户，请根据提示等待后重试
+# 初始化管理员账号
+POST /api/auth/initialize
+# Body: {"user_id": "your_username", "password": "your_password"}
+```
+
+### 日志查看
+
+```bash
+# 查看所有容器状态
+docker ps
+
+# 查看实时日志
+docker logs api-dev -f
+docker logs web-dev -f
+
+# 查看所有服务日志
+docker compose logs --tail=100
+```
+
+## 功能使用问题
+
+### OCR 服务不可用
+
+- **RapidOCR**：确保 `MODEL_DIR/SWHL/RapidOCR` 下存在 `PP-OCRv4` 模型
+- **MinerU / PP-StructureV3**：检查 GPU 和 CUDA 版本是否兼容
+
+### 登录失败被锁定
+
+多次登录失败会临时锁定账户，请根据页面提示等待后重试。
+
+---
+
+如果以上问题无法解决你的问题，欢迎在 GitHub Issues 中提问。

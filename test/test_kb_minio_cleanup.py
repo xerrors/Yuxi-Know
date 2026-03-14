@@ -49,20 +49,19 @@ async def test_delete_knowledge_base_cleanup():
 
         # 上传到 kb-documents (原始文件)
         test_object_name = f"{db_id}/test_file_{db_id[:8]}.txt"
-        upload_result = minio_client.upload_file(
+        minio_client.upload_file(
             bucket_name="kb-documents",
             object_name=test_object_name,
             data=test_file_content,
             content_type="text/plain",
         )
-        test_file_url = upload_result.url
         print(f"   文件上传到 kb-documents: {test_object_name}")
 
         # 上传到 kb-parsed (解析后的 markdown)
         test_file_id = f"file_test_{db_id[:8]}"
         parsed_object_name = f"{db_id}/{test_file_id}/parsed.md"
         parsed_content = b"# Test Parsed Content\n\nThis is parsed markdown."
-        upload_result_parsed = minio_client.upload_file(
+        minio_client.upload_file(
             bucket_name="kb-parsed",
             object_name=parsed_object_name,
             data=parsed_content,

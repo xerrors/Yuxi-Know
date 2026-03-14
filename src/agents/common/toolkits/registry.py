@@ -43,7 +43,7 @@ def tool(
     name_or_callable: str | Callable | None = None,
     description: str | None = None,
     args_schema: type | None = None,
-    return_direct: bool = True,
+    return_direct: bool = False,
 ):
     """基于 langchain.tool 的拓展装饰器，同时注册元数据
 

@@ -9,12 +9,16 @@
       :agents="agents"
       :selected-agent-id="currentAgentId"
       :is-creating-new-chat="chatUIStore.creatingNewChat"
+      :has-more-chats="hasMoreChats"
+      :is-loading-more="isLoadingMoreChats"
       @create-chat="createNewChat"
       @select-chat="selectChat"
       @delete-chat="deleteChat"
       @rename-chat="renameChat"
+      @toggle-pin="togglePinChat"
       @toggle-sidebar="toggleSidebar"
       @open-agent-modal="openAgentModal"
+      @load-more-chats="loadMoreChats"
       :class="{
         'sidebar-open': chatUIStore.isSidebarOpen,
         'no-transition': localUIState.isInitialRender
@@ -108,8 +112,11 @@
               :visible="approvalState.showModal"
               :question="approvalState.question"
               :operation="approvalState.operation"
-              @approve="handleApprove"
-              @reject="handleReject"
+              :options="approvalState.options"
+              :multi-select="approvalState.multiSelect"
+              :allow-other="approvalState.allowOther"
+              @submit="handleQuestionSubmit"
+              @cancel="handleQuestionCancel"
             />
 
             <div class="message-input-wrapper">
@@ -287,6 +294,8 @@ const chatState = reactive({
 // 组件级别的线程和消息状态
 const threads = ref([])
 const threadMessages = ref({})
+const hasMoreChats = ref(true) // 是否还有更多对话可加载
+const isLoadingMoreChats = ref(false) // 加载更多对话中
 const threadFilesMap = ref({})
 const threadAttachmentsMap = ref({})
 
@@ -370,6 +379,14 @@ const hasAgentStateContent = computed(() => {
   const todoCount = Array.isArray(s?.todos) ? s.todos.length : 0
   const fileCount = currentThreadFiles.value.filter((item) => item?.is_dir !== true).length
   return todoCount > 0 || fileCount > 0
+})
+
+// 监听 hasAgentStateContent 从 false → true 时，自动展开面板
+watch(hasAgentStateContent, (newVal, oldVal) => {
+  if (newVal && !oldVal) {
+    // 从无状态变为有状态时，自动展开面板
+    isAgentPanelOpen.value = true
+  }
 })
 
 const mentionConfig = computed(() => {
@@ -591,14 +608,45 @@ const fetchThreads = async (agentId = null) => {
 
   chatUIStore.isLoadingThreads = true
   try {
-    const fetchedThreads = await threadApi.getThreads(targetAgentId)
+    const fetchedThreads = await threadApi.getThreads(targetAgentId, 100, 0)
     threads.value = fetchedThreads || []
+    // 如果返回的数量小于limit，说明没有更多了
+    hasMoreChats.value = fetchedThreads && fetchedThreads.length >= 100
   } catch (error) {
     console.error('Failed to fetch threads:', error)
     handleChatError(error, 'fetch')
     throw error
   } finally {
     chatUIStore.isLoadingThreads = false
+  }
+}
+
+// 加载更多对话
+const loadMoreChats = async () => {
+  if (isLoadingMoreChats.value || !hasMoreChats.value) return
+
+  const targetAgentId = currentAgentId.value
+  if (!targetAgentId) return
+
+  isLoadingMoreChats.value = true
+  try {
+    const offset = threads.value.length
+    const fetchedThreads = await threadApi.getThreads(targetAgentId, 100, offset)
+    if (fetchedThreads && fetchedThreads.length > 0) {
+      // 去除重复的置顶对话（后端每次都返回所有置顶对话）
+      const existingIds = new Set(threads.value.map((t) => t.id))
+      const newThreads = fetchedThreads.filter((t) => !existingIds.has(t.id))
+
+      threads.value = [...threads.value, ...newThreads]
+      hasMoreChats.value = newThreads.length >= 100
+    } else {
+      hasMoreChats.value = false
+    }
+  } catch (error) {
+    console.error('Failed to load more chats:', error)
+    handleChatError(error, 'fetch')
+  } finally {
+    isLoadingMoreChats.value = false
   }
 }
 
@@ -650,25 +698,43 @@ const deleteThread = async (threadId) => {
 }
 
 // 更新线程标题
-const updateThread = async (threadId, title) => {
-  if (!threadId || !title) return
+const updateThread = async (threadId, title, is_pinned) => {
+  if (!threadId) return
 
-  const normalizedTitle = String(title).replace(/\s+/g, ' ').trim().slice(0, 255)
-  if (!normalizedTitle) return
+  if (title) {
+    const normalizedTitle = String(title).replace(/\s+/g, ' ').trim().slice(0, 255)
+    if (!normalizedTitle) return
 
-  chatState.isRenamingThread = true
-  try {
-    await threadApi.updateThread(threadId, normalizedTitle)
-    const thread = threads.value.find((t) => t.id === threadId)
-    if (thread) {
-      thread.title = normalizedTitle
+    chatState.isRenamingThread = true
+    try {
+      await threadApi.updateThread(threadId, normalizedTitle, is_pinned)
+      const thread = threads.value.find((t) => t.id === threadId)
+      if (thread) {
+        thread.title = normalizedTitle
+        if (is_pinned !== undefined) {
+          thread.is_pinned = is_pinned
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update thread:', error)
+      handleChatError(error, 'update')
+      throw error
+    } finally {
+      chatState.isRenamingThread = false
     }
-  } catch (error) {
-    console.error('Failed to update thread:', error)
-    handleChatError(error, 'update')
-    throw error
-  } finally {
-    chatState.isRenamingThread = false
+  } else if (is_pinned !== undefined) {
+    // 只更新置顶状态
+    try {
+      await threadApi.updateThread(threadId, null, is_pinned)
+      const thread = threads.value.find((t) => t.id === threadId)
+      if (thread) {
+        thread.is_pinned = is_pinned
+      }
+    } catch (error) {
+      console.error('Failed to update thread pin status:', error)
+      handleChatError(error, 'update')
+      throw error
+    }
   }
 }
 
@@ -1110,7 +1176,12 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         }
       }
 
-      if (event === 'finished' || event === 'error' || event === 'interrupted') {
+      if (
+        event === 'finished' ||
+        event === 'error' ||
+        event === 'interrupted' ||
+        event === 'ask_user_question_required'
+      ) {
         flushTypingQueueForThread(threadId)
         ts.isStreaming = false
         ts.activeRunId = null
@@ -1262,15 +1333,25 @@ const sendMessage = async ({
 // 检查第一个对话是否为空
 const isFirstChatEmpty = () => {
   if (threads.value.length === 0) return false
-  const firstThread = threads.value[0]
-  const firstThreadMessages = threadMessages.value[firstThread.id] || []
-  return firstThreadMessages.length === 0
+  const chatToReuse = getFirstNonPinnedChat(threads.value)
+  const messages = threadMessages.value[chatToReuse.id]
+  // 只有当消息已加载且为空时才返回 true
+  return messages !== undefined && messages.length === 0
 }
 
-// 如果第一个对话为空，直接切换到第一个对话
+// 获取第一个非置顶的对话
+const getFirstNonPinnedChat = (chatList) => {
+  if (!chatList || chatList.length === 0) return null
+  return chatList.find((chat) => !chat.is_pinned) || chatList[0]
+}
+
+// 如果第一个对话为空，直接切换到第一个非置顶对话
 const switchToFirstChatIfEmpty = async () => {
   if (threads.value.length > 0 && isFirstChatEmpty()) {
-    await selectChat(threads.value[0].id)
+    const chatToReuse = getFirstNonPinnedChat(threads.value)
+    if (chatState.currentThreadId !== chatToReuse.id) {
+      await selectChat(chatToReuse.id)
+    }
     return true
   }
   return false
@@ -1285,10 +1366,6 @@ const createNewChat = async () => {
 
   // 如果第一个对话为空，直接切换到第一个对话而不是创建新对话
   if (await switchToFirstChatIfEmpty()) return
-
-  // 只有当当前对话是第一个对话且为空时，才阻止创建新对话
-  const currentThreadIndex = threads.value.findIndex((thread) => thread.id === currentChatId.value)
-  if (currentChatId.value && conversations.value.length === 0 && currentThreadIndex === 0) return
 
   chatUIStore.creatingNewChat = true
   try {
@@ -1369,8 +1446,8 @@ const deleteChat = async (chatId) => {
       // 如果删除的是当前对话，自动创建新对话
       await createNewChat()
     } else if (chatsList.value.length > 0) {
-      // 如果删除的不是当前对话，选择第一个可用对话
-      await selectChat(chatsList.value[0].id)
+      // 如果删除的不是当前对话，选择第一个非置顶可用对话
+      await selectChat(getFirstNonPinnedChat(chatsList.value).id)
     }
   } catch (error) {
     handleChatError(error, 'delete')
@@ -1393,6 +1470,27 @@ const renameChat = async (data) => {
     await updateThread(chatId, title)
   } catch (error) {
     handleChatError(error, 'rename')
+  }
+}
+
+const togglePinChat = async (chatId) => {
+  const chat = chatsList.value.find((c) => c.id === chatId)
+  if (!chat) return
+  try {
+    // 保存当前选中的对话ID
+    const prevChatId = currentChatId.value
+
+    await updateThread(chatId, null, !chat.is_pinned)
+
+    // 刷新对话列表
+    await loadChatsList()
+
+    // 恢复当前选中的对话
+    if (prevChatId) {
+      chatState.currentThreadId = prevChatId
+    }
+  } catch (error) {
+    handleChatError(error, 'pin')
   }
 }
 
@@ -1516,10 +1614,10 @@ const handleSendOrStop = async (payload) => {
 }
 
 // ==================== 人工审批处理 ====================
-const handleApprovalWithStream = async (approved) => {
+const handleApprovalWithStream = async (answer) => {
   const threadId = approvalState.threadId
   if (!threadId) {
-    message.error('无效的审批请求')
+    message.error('无效的提问请求')
     approvalState.showModal = false
     return
   }
@@ -1533,11 +1631,7 @@ const handleApprovalWithStream = async (approved) => {
 
   try {
     // 使用审批 composable 处理审批
-    const response = await handleApproval(
-      approved,
-      currentAgentId.value,
-      selectedAgentConfigId.value
-    )
+    const response = await handleApproval(answer, currentAgentId.value, selectedAgentConfigId.value)
 
     if (!response) return // 如果 handleApproval 抛出错误，这里不会执行
 
@@ -1561,12 +1655,12 @@ const handleApprovalWithStream = async (approved) => {
   }
 }
 
-const handleApprove = () => {
-  handleApprovalWithStream(true)
+const handleQuestionSubmit = (answer) => {
+  handleApprovalWithStream(answer)
 }
 
-const handleReject = () => {
-  handleApprovalWithStream(false)
+const handleQuestionCancel = () => {
+  handleApprovalWithStream('reject')
 }
 
 // 处理示例问题点击
@@ -1717,9 +1811,9 @@ const loadChatsList = async () => {
       chatState.currentThreadId = null
     }
 
-    // 如果有线程但没有选中任何线程，自动选择第一个
+    // 如果有线程但没有选中任何线程，自动选择第一个非置顶对话
     if (threads.value.length > 0 && !chatState.currentThreadId) {
-      await selectChat(threads.value[0].id)
+      await selectChat(getFirstNonPinnedChat(threads.value).id)
     }
   } catch (error) {
     handleChatError(error, 'load')
