@@ -203,12 +203,16 @@ class LocalContainerProvisionerBackend:
     def _ensure_user_data_writable(container) -> None:
         cmd = (
             "sh -lc "
-            "\"mkdir -p /mnt/user-data/workspace /mnt/user-data/uploads /mnt/user-data/outputs "
-            "&& chmod -R a+rwX /mnt/user-data\""
+            '"mkdir -p /mnt/user-data/workspace /mnt/user-data/uploads /mnt/user-data/outputs '
+            '&& chmod -R a+rwX /mnt/user-data"'
         )
         result = container.exec_run(cmd, user="0:0")
         if result.exit_code != 0:
-            output = result.output.decode("utf-8", errors="ignore") if isinstance(result.output, bytes) else str(result.output)
+            output = (
+                result.output.decode("utf-8", errors="ignore")
+                if isinstance(result.output, bytes)
+                else str(result.output)
+            )
             raise RuntimeError(f"failed to ensure writable thread user-data mount: {output}")
 
     def _get_container(self, sandbox_id: str):
@@ -238,7 +242,7 @@ class LocalContainerProvisionerBackend:
 
             # 检测是否是 Windows 绝对路径 (如 D:/ 或 D:\)
             threads_root_str = self._threads_host_path
-            is_windows_path = len(threads_root_str) >= 2 and threads_root_str[1] == ':'
+            is_windows_path = len(threads_root_str) >= 2 and threads_root_str[1] == ":"
 
             if is_windows_path:
                 # Windows 路径，直接使用，不调用 resolve()
@@ -255,7 +259,7 @@ class LocalContainerProvisionerBackend:
                 thread_user_data.mkdir(parents=True, exist_ok=True)
 
             skills_path_str = self._skills_host_path
-            is_skills_windows = len(skills_path_str) >= 2 and skills_path_str[1] == ':'
+            is_skills_windows = len(skills_path_str) >= 2 and skills_path_str[1] == ":"
             if is_skills_windows:
                 skills_path = Path(skills_path_str)
             else:
@@ -275,6 +279,11 @@ class LocalContainerProvisionerBackend:
                 "volumes": {
                     str(thread_user_data): {"bind": "/mnt/user-data", "mode": "rw"},
                     str(skills_path): {"bind": "/mnt/skills", "mode": "ro"},
+                },
+                "tmpfs": "/tmp:size=256m,mode=1777",
+                "environment": {
+                    "HOME": "/mnt/user-data",
+                    "TMPDIR": "/tmp",
                 },
                 "ports": {f"{self._container_port}/tcp": None},
                 "security_opt": ["seccomp=unconfined"],

@@ -60,7 +60,8 @@ export default defineConfig({
             { text: '文档解析', link: '/latest/advanced/document-processing' },
             { text: '品牌自定义', link: '/latest/advanced/branding' },
             { text: '其他配置', link: '/latest/advanced/misc' },
-            { text: '生产部署', link: '/latest/advanced/deployment' }
+            { text: '生产部署', link: '/latest/advanced/deployment' },
+            { text: 'Kubernetes 部署', link: '/latest/advanced/kubernetes-deployment' }
           ]
         },
         {
