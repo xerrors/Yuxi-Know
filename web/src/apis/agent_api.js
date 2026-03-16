@@ -285,13 +285,20 @@ export const multimodalApi = {
 export const threadApi = {
   /**
    * 获取对话线程列表
-   * @param {string} agentId - 智能体ID
+   * @param {string | null | undefined} agentId - 智能体ID，可选；不传时返回全部智能体对话
    * @param {number} limit - 返回数量限制，默认100
    * @param {number} offset - 偏移量，默认0
    * @returns {Promise} - 对话线程列表
    */
-  getThreads: (agentId, limit = 100, offset = 0) => {
-    const url = `/api/chat/threads?agent_id=${agentId}&limit=${limit}&offset=${offset}`
+  getThreads: (agentId = null, limit = 100, offset = 0) => {
+    const params = new URLSearchParams({
+      limit: String(limit),
+      offset: String(offset)
+    })
+    if (agentId) {
+      params.set('agent_id', agentId)
+    }
+    const url = `/api/chat/threads?${params.toString()}`
     return apiGet(url)
   },
 

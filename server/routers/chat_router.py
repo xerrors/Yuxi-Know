@@ -746,7 +746,7 @@ async def create_thread(
 
 @chat.get("/threads", response_model=list[ThreadResponse])
 async def list_threads(
-    agent_id: str,
+    agent_id: str | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),

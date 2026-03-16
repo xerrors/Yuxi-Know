@@ -17,7 +17,6 @@
       @rename-chat="renameChat"
       @toggle-pin="togglePinChat"
       @toggle-sidebar="toggleSidebar"
-      @open-agent-modal="openAgentModal"
       @load-more-chats="loadMoreChats"
       :class="{
         'sidebar-open': chatUIStore.isSidebarOpen,
@@ -50,14 +49,6 @@
             />
             <MessageCirclePlus v-else class="nav-btn-icon" size="16" />
             <span class="text">新对话</span>
-          </div>
-          <div v-if="!props.singleMode" class="agent-nav-btn" @click="openAgentModal">
-            <LoaderCircle v-if="!currentAgent" class="nav-btn-icon loading-icon" size="18" />
-            <Bot v-else :size="18" class="nav-btn-icon" />
-            <span class="text hide-text">
-              {{ currentAgentName || '选择智能体' }}
-            </span>
-            <ChevronDown size="16" class="switch-icon" />
           </div>
         </div>
         <div class="header__right">
@@ -131,6 +122,14 @@
                 <h1>👋 您好，我是{{ currentAgentName }}！</h1>
               </div>
 
+              <div v-if="showStartAgentSegment" class="agent-segment-wrapper">
+                <a-segmented
+                  :value="currentAgentId"
+                  :options="agentSegmentOptions"
+                  @change="handleStartAgentChange"
+                />
+              </div>
+
               <AgentInputArea
                 ref="messageInputRef"
                 v-model="userInput"
@@ -148,7 +147,11 @@
                 @send="handleSendOrStop"
                 @attachment-changed="handleAgentStateRefresh"
                 @toggle-panel="toggleAgentPanel"
-              />
+              >
+                <template #actions-left-extra>
+                  <slot name="input-actions-left"></slot>
+                </template>
+              </AgentInputArea>
 
               <!-- 示例问题 -->
               <div
@@ -167,8 +170,8 @@
                 </div>
               </div>
 
-              <div class="bottom-actions" v-else>
-                <p class="note">请注意辨别内容的可靠性</p>
+              <div class="bottom-actions" v-if="conversations.length > 0">
+                <p class="note">当前智能体：{{ currentThreadAgentName }}；请注意辨别内容的可靠性</p>
               </div>
             </div>
           </div>
@@ -210,7 +213,7 @@ import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, ChevronDown, Bot } from 'lucide-vue-next'
+import { PanelLeftOpen, MessageCirclePlus, LoaderCircle } from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
 import { AgentValidator } from '@/utils/agentValidator'
@@ -229,7 +232,6 @@ const props = defineProps({
   agentId: { type: String, default: '' },
   singleMode: { type: Boolean, default: true }
 })
-const emit = defineEmits(['open-config', 'open-agent-modal'])
 
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore()
@@ -334,6 +336,17 @@ const currentChatId = computed(() => chatState.currentThreadId)
 const currentThread = computed(() => {
   if (!currentChatId.value) return null
   return threads.value.find((thread) => thread.id === currentChatId.value) || null
+})
+
+const currentThreadAgentName = computed(() => {
+  const threadAgentId = currentThread.value?.agent_id
+  if (threadAgentId && agents.value?.length) {
+    const threadAgent = agents.value.find((agent) => agent.id === threadAgentId)
+    if (threadAgent?.name) {
+      return threadAgent.name
+    }
+  }
+  return currentAgentName.value
 })
 
 // 检查当前智能体是否支持文件上传
@@ -510,6 +523,27 @@ const conversations = computed(() => {
   return historyConvs
 })
 
+const agentSegmentOptions = computed(() => {
+  return (agents.value || []).map((agent) => ({
+    label: agent.name || 'Unknown',
+    value: agent.id
+  }))
+})
+
+const showStartAgentSegment = computed(() => {
+  return !props.singleMode && !conversations.value.length && agentSegmentOptions.value.length > 1
+})
+
+const handleStartAgentChange = async (agentId) => {
+  if (!agentId || agentId === currentAgentId.value) return
+  if (conversations.value.length > 0) return
+  try {
+    await agentStore.selectAgent(agentId)
+  } catch (error) {
+    handleChatError(error, 'load')
+  }
+}
+
 const isLoadingMessages = computed(() => chatUIStore.isLoadingMessages)
 const isStreaming = computed(() => {
   const threadState = currentThreadState.value
@@ -610,8 +644,8 @@ const resetOnGoingConv = (threadId = null) => {
 // ==================== 线程管理方法 ====================
 // 获取当前智能体的线程列表
 const fetchThreads = async (agentId = null) => {
-  const targetAgentId = agentId || currentAgentId.value
-  if (!targetAgentId) return
+  const targetAgentId = props.singleMode ? agentId || currentAgentId.value : agentId
+  if (props.singleMode && !targetAgentId) return
 
   chatUIStore.isLoadingThreads = true
   try {
@@ -632,8 +666,8 @@ const fetchThreads = async (agentId = null) => {
 const loadMoreChats = async () => {
   if (isLoadingMoreChats.value || !hasMoreChats.value) return
 
-  const targetAgentId = currentAgentId.value
-  if (!targetAgentId) return
+  const targetAgentId = props.singleMode ? currentAgentId.value : null
+  if (props.singleMode && !targetAgentId) return
 
   isLoadingMoreChats.value = true
   try {
@@ -1350,17 +1384,19 @@ const createNewChat = async () => {
 }
 
 const selectChat = async (chatId) => {
-  if (
-    !AgentValidator.validateAgentIdWithError(
-      currentAgentId.value,
-      '选择对话',
-      handleValidationError
-    )
-  )
+  const targetChat = threads.value.find((chat) => chat.id === chatId) || null
+  const targetAgentId = targetChat?.agent_id || currentAgentId.value
+  const previousThreadId = chatState.currentThreadId
+
+  if (!targetAgentId) {
+    handleValidationError('选择对话失败：缺少智能体信息')
+    return
+  }
+
+  if (!AgentValidator.validateAgentIdWithError(targetAgentId, '选择对话', handleValidationError))
     return
 
   // 中断之前线程的流式输出（如果存在）
-  const previousThreadId = chatState.currentThreadId
   if (previousThreadId && previousThreadId !== chatId) {
     const previousThreadState = getThreadState(previousThreadId)
     if (previousThreadState?.isStreaming && previousThreadState.streamAbortController) {
@@ -1372,10 +1408,22 @@ const selectChat = async (chatId) => {
     stopRunStreamSubscription(previousThreadId)
   }
 
+  // 先更新当前线程，确保底部智能体名称与选中项即时同步
   chatState.currentThreadId = chatId
+
+  if (!props.singleMode && targetChat?.agent_id && targetChat.agent_id !== currentAgentId.value) {
+    try {
+      await agentStore.selectAgent(targetChat.agent_id)
+    } catch (error) {
+      chatState.currentThreadId = previousThreadId
+      handleChatError(error, 'load')
+      return
+    }
+  }
+
   chatUIStore.isLoadingMessages = true
   try {
-    await fetchThreadMessages({ agentId: currentAgentId.value, threadId: chatId })
+    await fetchThreadMessages({ agentId: targetAgentId, threadId: chatId })
   } catch (error) {
     handleChatError(error, 'load')
   } finally {
@@ -1384,7 +1432,7 @@ const selectChat = async (chatId) => {
 
   await nextTick()
   scrollController.scrollToBottomStaticForce()
-  await fetchAgentState(currentAgentId.value, chatId)
+  await fetchAgentState(targetAgentId, chatId)
   await resumeActiveRunForThread(chatId)
 }
 
@@ -1657,7 +1705,6 @@ defineExpose({
 const toggleSidebar = () => {
   chatUIStore.toggleSidebar()
 }
-const openAgentModal = () => emit('open-agent-modal')
 
 const handleAgentStateRefresh = async (threadId = null) => {
   if (!currentAgentId.value) return
@@ -1744,8 +1791,8 @@ const getConversationSources = (conv) => {
 
 // ==================== LIFECYCLE & WATCHERS ====================
 const loadChatsList = async () => {
-  const agentId = currentAgentId.value
-  if (!agentId) {
+  const agentId = props.singleMode ? currentAgentId.value : null
+  if (props.singleMode && !agentId) {
     console.warn('No agent selected, cannot load chats list')
     threads.value = []
     chatState.currentThreadId = null
@@ -1754,7 +1801,7 @@ const loadChatsList = async () => {
 
   try {
     await fetchThreads(agentId)
-    if (currentAgentId.value !== agentId) return
+    if (props.singleMode && currentAgentId.value !== agentId) return
 
     // 如果当前线程不在线程列表中，清空当前线程
     if (
@@ -1791,6 +1838,13 @@ onMounted(async () => {
 watch(
   currentAgentId,
   async (newAgentId, oldAgentId) => {
+    if (!props.singleMode) {
+      if (oldAgentId === undefined) {
+        await loadChatsList()
+      }
+      return
+    }
+
     if (newAgentId !== oldAgentId) {
       // 清理当前线程状态
       chatState.currentThreadId = null
@@ -1895,17 +1949,24 @@ watch(
 
 .agent-panel-wrapper {
   flex: 0 0 auto;
-  height: calc(100% - 56px);
+  align-self: flex-end;
+  height: 70vh;
   overflow: hidden;
   z-index: 20;
   margin: 28px 8px;
   margin-left: 0;
   background: var(--gray-0);
-  border-radius: 12px;
+  border-radius: 16px;
   box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-150);
   min-width: 0;
   will-change: flex-basis;
+}
+
+@media (max-height: 700px) {
+  .agent-panel-wrapper {
+    height: calc(100% - 56px);
+  }
 }
 
 /* Workbench transition animations */
@@ -1934,6 +1995,43 @@ watch(
     font-size: 1.2rem;
     color: var(--gray-1000);
     margin: 0;
+  }
+}
+
+.agent-segment-wrapper {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  :deep(.ant-segmented) {
+    width: auto;
+    max-width: 100%;
+    white-space: nowrap;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-150);
+    border-radius: 10px;
+  }
+
+  :deep(.ant-segmented-group) {
+    width: auto;
+    display: inline-flex;
+  }
+
+  :deep(.ant-segmented-item) {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  :deep(.ant-segmented-item-label) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2144,6 +2242,14 @@ watch(
 }
 
 @media (max-width: 768px) {
+  .agent-segment-wrapper {
+    margin-bottom: 8px;
+
+    :deep(.ant-segmented-item-label) {
+      font-size: 12px;
+    }
+  }
+
   .chat-header {
     .header__left {
       .text {

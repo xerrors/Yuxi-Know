@@ -4,7 +4,7 @@
     <div class="resize-handle" @mousedown="startResize"></div>
     <div class="panel-header">
       <div class="panel-title">
-        <FolderCode :size="18" class="header-icon" />
+        <FolderCode :size="20" class="header-icon" />
         <span><strong>状态工作台</strong></span>
       </div>
       <div class="header-actions">
@@ -275,9 +275,13 @@ const updateActiveTab = () => {
 }
 
 // 监听 files 和 todos 变化，自动切换 tab
-watch([() => props.agentState?.files, () => props.agentState?.todos], () => {
-  updateActiveTab()
-}, { deep: true })
+watch(
+  [() => props.agentState?.files, () => props.agentState?.todos],
+  () => {
+    updateActiveTab()
+  },
+  { deep: true }
+)
 
 const expandedKeys = ref([])
 
@@ -560,7 +564,7 @@ const stopResize = () => {
   align-items: center;
   justify-content: space-between;
   padding: 4px 16px;
-  height: 48px;
+  height: 56px;
   background: var(--gray-25);
   flex-shrink: 0;
 }
@@ -568,7 +572,7 @@ const stopResize = () => {
 .panel-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   font-weight: 600;
   font-size: 14px;
   color: var(--gray-900);

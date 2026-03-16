@@ -8,7 +8,6 @@
     :disabled="disabled"
     :send-button-disabled="sendButtonDisabled"
     :placeholder="placeholder"
-    :force-multi-line="hasStateContent"
     :mention="mention"
     @send="handleSend"
     @keydown="handleKeyDown"
@@ -32,6 +31,7 @@
     </template>
     <template #actions-left>
       <div class="input-actions-left">
+        <slot name="actions-left-extra"></slot>
         <!-- State Toggle Button -->
         <div
           v-if="hasStateContent"
@@ -209,7 +209,6 @@ defineExpose({
     background: var(--main-50);
     font-weight: 500;
   }
-
 
   &.disabled {
     opacity: 0.5;

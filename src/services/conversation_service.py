@@ -153,15 +153,12 @@ async def create_thread_view(
 
 async def list_threads_view(
     *,
-    agent_id: str,
+    agent_id: str | None,
     db: AsyncSession,
     current_user_id: str,
     limit: int | None = None,
     offset: int = 0,
 ) -> list[dict]:
-    if not agent_id:
-        raise HTTPException(status_code=422, detail="agent_id 不能为空")
-
     conv_repo = ConversationRepository(db)
     conversations = await conv_repo.list_conversations(
         user_id=str(current_user_id),

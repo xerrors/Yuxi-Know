@@ -1,9 +1,5 @@
 <template>
-  <div
-    class="input-box"
-    :class="[customClasses, { 'single-line': isSingleLine }]"
-    @click="focusInput"
-  >
+  <div class="input-box" :class="customClasses" @click="focusInput">
     <div class="top-slot">
       <slot name="top"></slot>
     </div>
@@ -129,16 +125,7 @@
 </template>
 
 <script setup>
-import {
-  ref,
-  computed,
-  onMounted,
-  nextTick,
-  watch,
-  onBeforeUnmount,
-  useSlots,
-  onUnmounted
-} from 'vue'
+import { ref, computed, onMounted, nextTick, watch, onBeforeUnmount, useSlots } from 'vue'
 import {
   SendOutlined,
   ArrowUpOutlined,
@@ -158,7 +145,6 @@ const closeMentionPopup = (e) => {
 
 const inputRef = ref(null)
 const optionsExpanded = ref(false)
-const singleLineHeight = ref(0) // Add this
 // 用于防抖的定时器
 const debounceTimer = ref(null)
 const props = defineProps({
@@ -193,10 +179,6 @@ const props = defineProps({
   customClasses: {
     type: Object,
     default: () => ({})
-  },
-  forceMultiLine: {
-    type: Boolean,
-    default: false
   },
   mention: {
     type: Object,
@@ -281,7 +263,11 @@ const updateMentionItems = (query = '') => {
         item.type,
         mentionTypePrefixMap[item.type]
       ]
-      return searchTexts.some((text) => String(text || '').toLowerCase().includes(lowerQuery))
+      return searchTexts.some((text) =>
+        String(text || '')
+          .toLowerCase()
+          .includes(lowerQuery)
+      )
     })
 
   const fileItems = files.map((f) => {
@@ -470,13 +456,6 @@ const handleMentionNavigation = (e) => {
   }
 }
 
-// Update isSingleLine logic to respect forceMultiLine
-const isSingleLineMode = ref(true)
-const isSingleLine = computed(() => {
-  if (props.forceMultiLine) return false
-  return isSingleLineMode.value
-})
-
 const hasOptionsLeft = computed(() => {
   const slot = slots['options-left']
   if (!slot) {
@@ -572,62 +551,20 @@ const handleSendOrStop = () => {
   emit('send')
 }
 
-// 用于存储固定的单行宽度基准
-const singleLineWidth = ref(0)
-
 // @ 提及功能状态
 const mentionPopupVisible = ref(false)
 const mentionQuery = ref('')
 const mentionItems = ref({ files: [], knowledgeBases: [], mcps: [], skills: [] })
 const mentionSelectedIndex = ref(0)
 
-// 检查行数
-const checkLineCount = () => {
-  if (!inputRef.value || singleLineHeight.value === 0) {
+const adjustTextareaHeight = () => {
+  if (!inputRef.value) {
     return
   }
+
   const textarea = inputRef.value
-  const content = inputValue.value
-
-  // 主要判断依据：内容是否包含换行符
-  const hasNewlines = content.includes('\n')
-
-  // 辅助判断：内容是否超出单行宽度（使用固定的单行宽度基准）
-  let contentExceedsWidth = false
-  if (!hasNewlines && content.trim() && singleLineWidth.value > 0) {
-    // 使用固定的单行宽度作为测量基准，避免因模式切换导致的宽度变化
-    const measureDiv = document.createElement('div')
-    measureDiv.style.cssText = `
-      position: absolute;
-      visibility: hidden;
-      white-space: nowrap;
-      font-family: ${getComputedStyle(textarea).fontFamily};
-      font-size: ${getComputedStyle(textarea).fontSize};
-      line-height: ${getComputedStyle(textarea).lineHeight};
-      padding: 0;
-      border: none;
-      width: ${singleLineWidth.value}px;
-    `
-    measureDiv.textContent = content
-    document.body.appendChild(measureDiv)
-
-    // 检查内容是否会换行（基于固定的单行宽度）
-    contentExceedsWidth = measureDiv.scrollWidth > measureDiv.clientWidth
-    document.body.removeChild(measureDiv)
-  }
-
-  const shouldBeMultiLine = hasNewlines || contentExceedsWidth
-  isSingleLineMode.value = !shouldBeMultiLine
-
-  // 根据模式调整高度
-  if (shouldBeMultiLine || props.forceMultiLine) {
-    // 多行模式：让textarea自适应内容高度
-    textarea.style.height = 'auto'
-    textarea.style.height = `${Math.max(textarea.scrollHeight, singleLineHeight.value)}px`
-  } else {
-    // 单行模式：清除内联样式，让CSS控制高度
-    textarea.style.height = ''
-  }
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
 }
 
 // 聚焦输入框
@@ -639,44 +576,24 @@ const focusInput = () => {
 
 // 监听输入值变化
 watch(inputValue, () => {
-  nextTick(() => {
-    checkLineCount()
-  })
+  if (debounceTimer.value) {
+    clearTimeout(debounceTimer.value)
+  }
+  debounceTimer.value = setTimeout(() => {
+    nextTick(() => {
+      adjustTextareaHeight()
+    })
+  }, 100)
 })
 
-// 监听输入框尺寸变化
-/* const observeTextareaResize = () => {
-  if (inputRef.value) {
-    const textarea = inputRef.value;
-    if (textarea) {
-      // 创建 ResizeObserver 来监听文本域尺寸变化
-      const resizeObserver = new ResizeObserver(() => {
-        checkLineCount();
-      });
-      resizeObserver.observe(textarea);
-
-      // 在组件卸载时断开观察器
-      onBeforeUnmount(() => {
-        resizeObserver.disconnect();
-      });
-    }
-  }
-}; */
-
-// Wait for component to mount before setting up onStartTyping
 onMounted(() => {
-  // console.log('Component mounted');
   document.addEventListener('click', closeMentionPopup)
   nextTick(() => {
     if (inputRef.value) {
-      // 记录单行模式下的高度和宽度基准
-      singleLineHeight.value = inputRef.value.clientHeight
-      singleLineWidth.value = inputRef.value.clientWidth
-      checkLineCount()
+      adjustTextareaHeight()
       inputRef.value.focus()
     }
   })
-  // observeTextareaResize();
 })
 
 // 组件卸载时清除定时器和事件监听器
@@ -748,46 +665,6 @@ defineExpose({
   //   background: var(--gray-0);
   //   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   // }
-
-  &.single-line {
-    padding: 0.75rem 0.75rem;
-    grid-template-columns: auto 1fr auto;
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas:
-      'top top top'
-      'options input send'
-      'bottom bottom bottom';
-    align-items: center;
-    gap: 0px;
-
-    .user-input {
-      min-height: 24px;
-      height: 24px; /* Fix height for single line */
-      align-self: center;
-      white-space: nowrap;
-      overflow: hidden;
-      margin-bottom: 0rem;
-    }
-
-    .expand-options,
-    .send-button-container {
-      align-self: center;
-    }
-
-    .expand-options {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .top-slot {
-      grid-area: top;
-    }
-
-    .bottom-slot {
-      grid-area: bottom;
-    }
-  }
 }
 
 .expand-options {
