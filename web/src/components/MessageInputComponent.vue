@@ -88,6 +88,19 @@
           </div>
         </div>
 
+        <!-- Skills 列表 -->
+        <div v-if="mentionItems.skills.length > 0" class="mention-group">
+          <div class="mention-group-title">Skills</div>
+          <div
+            v-for="(item, index) in mentionItems.skills"
+            :key="'skill-' + item.value"
+            :class="['mention-item', { active: isItemSelected('skill', index) }]"
+            @click="insertMention(item)"
+          >
+            {{ item.label }}
+          </div>
+        </div>
+
         <!-- 无结果 -->
         <div v-if="!hasAnyItems" class="mention-empty">暂无可引用的项</div>
       </div>
@@ -197,13 +210,26 @@ const slots = useSlots()
 // @ 提及功能是否启用
 const mentionEnabled = computed(() => {
   if (!props.mention) return false
-  const { files, knowledgeBases, mcps } = props.mention
+  const { files, knowledgeBases, mcps, skills } = props.mention
   return (
     (Array.isArray(files) && files.length > 0) ||
     (Array.isArray(knowledgeBases) && knowledgeBases.length > 0) ||
-    (Array.isArray(mcps) && mcps.length > 0)
+    (Array.isArray(mcps) && mcps.length > 0) ||
+    (Array.isArray(skills) && skills.length > 0)
   )
 })
+
+const mentionTypePrefixMap = {
+  file: 'file',
+  knowledge: 'knowledge',
+  mcp: 'mcp',
+  skill: 'skill'
+}
+
+const formatMentionToken = (type, value) => {
+  const prefix = mentionTypePrefixMap[type] || type
+  return `@${prefix}:${value}`
+}
 
 // 检测是否在 @ 触发位置
 const checkMentionTrigger = (textarea) => {
@@ -238,38 +264,80 @@ const checkMentionTrigger = (textarea) => {
 // 更新提及候选项
 const updateMentionItems = (query = '') => {
   if (!props.mention) {
-    mentionItems.value = { files: [], knowledgeBases: [], mcps: [] }
+    mentionItems.value = { files: [], knowledgeBases: [], mcps: [], skills: [] }
     return
   }
 
   const lowerQuery = query.toLowerCase()
-  const { files = [], knowledgeBases = [], mcps = [] } = props.mention
+  const { files = [], knowledgeBases = [], mcps = [], skills = [] } = props.mention
 
-  const filter = (list) =>
+  const filterItems = (list) =>
     list.filter((item) => {
-      const label = item.path || item.name || ''
-      return label.toLowerCase().includes(lowerQuery)
+      const searchTexts = [
+        item.label,
+        item.value,
+        item.description,
+        item.tokenLabel,
+        item.type,
+        mentionTypePrefixMap[item.type]
+      ]
+      return searchTexts.some((text) => String(text || '').toLowerCase().includes(lowerQuery))
     })
 
-  mentionItems.value = {
-    files: filter(files).map((f) => ({
-      value: f.path,
-      label: f.path.split('/').pop() || f.path,
+  const fileItems = files.map((f) => {
+    const path = f.path || ''
+    const fileName = path.split('/').pop() || path
+    return {
+      value: path,
+      label: fileName,
       type: 'file',
-      description: f.path
-    })),
-    knowledgeBases: filter(knowledgeBases).map((kb) => ({
-      value: kb.name,
-      label: kb.name,
+      insertValue: path || fileName,
+      tokenLabel: formatMentionToken('file', fileName),
+      description: path
+    }
+  })
+
+  const knowledgeItems = knowledgeBases.map((kb) => {
+    const kbName = kb.name || ''
+    return {
+      value: kbName,
+      label: kbName,
       type: 'knowledge',
+      insertValue: kbName,
+      tokenLabel: formatMentionToken('knowledge', kbName),
       description: kb.db_id
-    })),
-    mcps: filter(mcps).map((m) => ({
-      value: m.name,
-      label: m.name,
+    }
+  })
+
+  const mcpItems = mcps.map((m) => {
+    const mcpName = m.name || ''
+    return {
+      value: mcpName,
+      label: mcpName,
       type: 'mcp',
+      insertValue: mcpName,
+      tokenLabel: formatMentionToken('mcp', mcpName),
       description: m.description || ''
-    }))
+    }
+  })
+
+  const skillItems = skills.map((skill) => {
+    const skillValue = skill.slug || skill.name || skill.id || ''
+    return {
+      value: skillValue,
+      label: skillValue,
+      type: 'skill',
+      insertValue: skillValue,
+      tokenLabel: formatMentionToken('skill', skillValue),
+      description: skill.description || ''
+    }
+  })
+
+  mentionItems.value = {
+    files: filterItems(fileItems),
+    knowledgeBases: filterItems(knowledgeItems),
+    mcps: filterItems(mcpItems),
+    skills: filterItems(skillItems)
   }
 }
 
@@ -279,20 +347,28 @@ const isItemSelected = (type, index) => {
 
   const filesLen = mentionItems.value.files.length
   const kbLen = mentionItems.value.knowledgeBases.length
+  const mcpLen = mentionItems.value.mcps.length
 
   if (type === 'file') {
     return mentionSelectedIndex.value === index
   } else if (type === 'knowledge') {
     return mentionSelectedIndex.value === filesLen + index
-  } else {
+  } else if (type === 'mcp') {
     return mentionSelectedIndex.value === filesLen + kbLen + index
+  } else {
+    return mentionSelectedIndex.value === filesLen + kbLen + mcpLen + index
   }
 }
 
 // 是否有任何候选项
 const hasAnyItems = computed(() => {
   const items = mentionItems.value
-  return items.files.length > 0 || items.knowledgeBases.length > 0 || items.mcps.length > 0
+  return (
+    items.files.length > 0 ||
+    items.knowledgeBases.length > 0 ||
+    items.mcps.length > 0 ||
+    items.skills.length > 0
+  )
 })
 
 // 获取弹出框位置
@@ -316,9 +392,11 @@ const insertMention = (item) => {
   const textarea = inputRef.value
   const cursorPos = textarea.selectionStart
   const textBeforeCursor = inputValue.value.slice(0, cursorPos)
+  const mentionValue = item.insertValue || item.value
+  const mentionText = formatMentionToken(item.type, mentionValue)
 
   // 移除 @ 及后面的查询内容，插入完整的提及项
-  const newTextBefore = textBeforeCursor.replace(/@(\S*)$/, `@${item.value} `)
+  const newTextBefore = textBeforeCursor.replace(/@(\S*)$/, `${mentionText} `)
   const textAfterCursor = inputValue.value.slice(cursorPos)
 
   const newValue = newTextBefore + textAfterCursor
@@ -366,7 +444,8 @@ const handleMentionNavigation = (e) => {
   const allItems = [
     ...mentionItems.value.files,
     ...mentionItems.value.knowledgeBases,
-    ...mentionItems.value.mcps
+    ...mentionItems.value.mcps,
+    ...mentionItems.value.skills
   ]
 
   const total = allItems.length
@@ -499,7 +578,7 @@ const singleLineWidth = ref(0)
 // @ 提及功能状态
 const mentionPopupVisible = ref(false)
 const mentionQuery = ref('')
-const mentionItems = ref({ files: [], knowledgeBases: [], mcps: [] })
+const mentionItems = ref({ files: [], knowledgeBases: [], mcps: [], skills: [] })
 const mentionSelectedIndex = ref(0)
 
 // 检查行数

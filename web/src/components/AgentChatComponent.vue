@@ -218,7 +218,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useChatUIStore } from '@/stores/chatUI'
 import { storeToRefs } from 'pinia'
 import { MessageProcessor } from '@/utils/messageProcessor'
-import { agentApi, threadApi, databaseApi, mcpApi } from '@/apis'
+import { agentApi, threadApi } from '@/apis'
 import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
@@ -242,7 +242,8 @@ const {
   agentConfig,
   configurableItems,
   availableKnowledgeBases,
-  availableMcps
+  availableMcps,
+  availableSkills
 } = storeToRefs(agentStore)
 
 // ==================== LOCAL CHAT & UI STATE ====================
@@ -421,6 +422,7 @@ const mentionConfig = computed(() => {
   const currentConfig = agentConfig.value || {}
   const allowedKbNames = new Set()
   const allowedMcpNames = new Set()
+  const allowedSkillNames = new Set()
 
   Object.entries(configItems).forEach(([key, item]) => {
     const kind = item?.template_metadata?.kind
@@ -431,19 +433,27 @@ const mentionConfig = computed(() => {
         val.forEach((v) => allowedKbNames.add(v))
       } else if (kind === 'mcps') {
         val.forEach((v) => allowedMcpNames.add(v))
+      } else if (kind === 'skills' || key === 'skills') {
+        val.forEach((v) => allowedSkillNames.add(v))
       }
     }
   })
 
   const knowledgeBases = availableKnowledgeBases.value.filter((kb) => allowedKbNames.has(kb.name))
   const mcps = availableMcps.value.filter((mcp) => allowedMcpNames.has(mcp.name))
+  const skills = availableSkills.value.filter((skill) => {
+    const skillName = skill.name || ''
+    const skillSlug = skill.slug || ''
+    return allowedSkillNames.has(skillName) || allowedSkillNames.has(skillSlug)
+  })
 
-  if (!files.length && !knowledgeBases.length && !mcps.length) return null
+  if (!files.length && !knowledgeBases.length && !mcps.length && !skills.length) return null
 
   return {
     files,
     knowledgeBases,
-    mcps
+    mcps,
+    skills
   }
 })
 
