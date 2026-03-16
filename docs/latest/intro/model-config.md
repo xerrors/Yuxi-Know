@@ -37,13 +37,9 @@ default_model: default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2
 
 ## 自定义模型供应商
 
-::: tip 配置系统升级 (v0.3.x)
-从 `v0.3.x` 版本开始，模型配置系统已升级为基于 Pydantic BaseModel 的类型安全配置，支持 TOML 格式的用户配置文件。
-
-- **默认配置**: `src/config/static/models.py` (Python 代码)
-- **用户配置**: `saves/config/base.toml` (TOML 格式，仅保存用户修改)
-- **自定义供应商**: `saves/config/custom_providers.toml` (独立配置文件)
-  :::
+::: tip 自定义模型供应商仅支持对话模型
+自定义模型供应商仅支持对话模型，嵌入模型和重排模型请修改配置文件
+:::
 
 系统提供了完整的自定义供应商管理功能，支持通过 Web 界面直接添加、编辑、测试和删除自定义模型供应商。
 
