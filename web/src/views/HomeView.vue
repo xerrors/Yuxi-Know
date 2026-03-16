@@ -210,6 +210,7 @@ const goToChat = async () => {
   // 根据用户角色进行跳转
   if (userStore.isAdmin) {
     // 管理员用户跳转到聊天页面
+    await agentStore.initialize()
     router.push('/agent')
     return
   }
