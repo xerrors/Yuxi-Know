@@ -42,8 +42,8 @@
               <span>{{ chat.title || '新的对话' }}</span>
             </div>
             <div class="actions-mask"></div>
-            <div class="conversation-actions">
-              <a-dropdown :trigger="['click']" @click.stop>
+            <div class="conversation-actions" @click.stop>
+              <a-dropdown :trigger="['click']">
                 <template #overlay>
                   <a-menu>
                     <a-menu-item
@@ -70,7 +70,7 @@
                   </a-menu>
                 </template>
                 <div class="action-btn-wrapper">
-                  <a-button type="text" class="more-btn" @click.stop>
+                  <a-button type="text" class="more-btn">
                     <MoreVertical :size="16" />
                   </a-button>
                   <Pin v-if="chat.is_pinned" :size="14" class="pinned-indicator" />
