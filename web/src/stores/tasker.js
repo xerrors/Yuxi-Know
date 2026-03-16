@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { taskerApi } from '@/apis/tasker'
+import { useUserStore } from '@/stores/user'
 import { parseToShanghai } from '@/utils/time'
 
 const ACTIVE_STATUSES = new Set(['pending', 'running', 'queued'])
@@ -32,6 +33,7 @@ const toTask = (raw = {}) => ({
 })
 
 export const useTaskerStore = defineStore('tasker', () => {
+  const userStore = useUserStore()
   const tasks = ref([])
   const loading = ref(false)
   const lastError = ref(null)
@@ -80,6 +82,13 @@ export const useTaskerStore = defineStore('tasker', () => {
   }
 
   async function loadTasks(params = {}) {
+    if (!userStore.isAdmin) {
+      tasks.value = []
+      summary.value = createDefaultSummary()
+      lastError.value = null
+      return
+    }
+
     loading.value = true
     lastError.value = null
     try {

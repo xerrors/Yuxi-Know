@@ -82,7 +82,7 @@
             </a-dropdown>
           </template>
 
-          <template #header-right>
+          <template #header-right v-if="userStore.isAdmin">
             <div
               v-if="selectedAgentId"
               ref="moreButtonRef"
@@ -103,13 +103,13 @@
       />
 
       <!-- 反馈模态框 -->
-      <FeedbackModalComponent ref="feedbackModal" :agent-id="selectedAgentId" />
+      <FeedbackModalComponent v-if="userStore.isAdmin" ref="feedbackModal" :agent-id="selectedAgentId" />
 
       <!-- 自定义更多菜单 -->
       <Teleport to="body">
         <Transition name="menu-fade">
           <div
-            v-if="chatUIStore.moreMenuOpen"
+            v-if="userStore.isAdmin && chatUIStore.moreMenuOpen"
             ref="moreMenuRef"
             class="more-popup-menu"
             :style="{
@@ -125,10 +125,6 @@
               <MessageOutlined class="menu-icon" />
               <span class="menu-text">查看反馈</span>
             </div>
-            <div class="menu-item" @click="handlePreview">
-              <EyeOutlined class="menu-icon" />
-              <span class="menu-text">预览页面</span>
-            </div>
           </div>
         </Transition>
       </Teleport>
@@ -137,10 +133,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { MessageOutlined, ShareAltOutlined, EyeOutlined } from '@ant-design/icons-vue'
+import { ref, watch } from 'vue'
+import { MessageOutlined, ShareAltOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { Settings2, Ellipsis, ChevronDown, Star, CirclePlus, SquarePen } from 'lucide-vue-next'
+import { useRoute, useRouter } from 'vue-router'
 import AgentChatComponent from '@/components/AgentChatComponent.vue'
 import AgentConfigSidebar from '@/components/AgentConfigSidebar.vue'
 import FeedbackModalComponent from '@/components/dashboard/FeedbackModalComponent.vue'
@@ -162,12 +159,65 @@ const configDropdownOpen = ref(false)
 const userStore = useUserStore()
 const agentStore = useAgentStore()
 const chatUIStore = useChatUIStore()
+const route = useRoute()
+const router = useRouter()
 
 // 从 agentStore 中获取响应式状态
-const { selectedAgentId, agentConfigs, selectedAgentConfigId, selectedConfigSummary } =
+const { agents, selectedAgentId, agentConfigs, selectedAgentConfigId, selectedConfigSummary } =
   storeToRefs(agentStore)
 
+const syncingRouteAgent = ref(false)
+
+const getRouteAgentId = () => {
+  const value = route.params.agent_id
+  return typeof value === 'string' ? value : ''
+}
+
+const syncSelectedAgentFromRoute = async () => {
+  const routeAgentId = getRouteAgentId()
+  if (!routeAgentId) return
+
+  syncingRouteAgent.value = true
+  try {
+    if (!agentStore.isInitialized) {
+      await agentStore.initialize()
+    }
+
+    const routeAgentExists = (agents.value || []).some((agent) => agent.id === routeAgentId)
+    if (!routeAgentExists) {
+      if (selectedAgentId.value) {
+        await router.replace({ name: 'AgentCompWithId', params: { agent_id: selectedAgentId.value } })
+      }
+      return
+    }
+
+    if (selectedAgentId.value !== routeAgentId) {
+      await agentStore.selectAgent(routeAgentId)
+    }
+  } catch (error) {
+    handleChatError(error, 'load')
+  } finally {
+    syncingRouteAgent.value = false
+  }
+}
+
+watch(
+  () => route.params.agent_id,
+  () => {
+    syncSelectedAgentFromRoute()
+  },
+  { immediate: true }
+)
+
+watch(selectedAgentId, (newAgentId) => {
+  if (!newAgentId || syncingRouteAgent.value) return
+  const routeAgentId = getRouteAgentId()
+  if (routeAgentId === newAgentId) return
+  router.replace({ name: 'AgentCompWithId', params: { agent_id: newAgentId } })
+})
+
 const openConfigSidebar = () => {
+  configDropdownOpen.value = false
   chatUIStore.isConfigSidebarOpen = true
 }
 
@@ -176,6 +226,7 @@ const createConfigLoading = ref(false)
 const createConfigName = ref('')
 
 const openCreateConfigModal = () => {
+  configDropdownOpen.value = false
   createConfigName.value = ''
   createConfigModalOpen.value = true
 }
@@ -287,13 +338,6 @@ const handleShareChat = async () => {
 const handleFeedback = () => {
   closeMoreMenu()
   feedbackModal.value?.show()
-}
-
-const handlePreview = () => {
-  closeMoreMenu()
-  if (selectedAgentId.value) {
-    window.open(`/agent/${selectedAgentId.value}`, '_blank')
-  }
 }
 </script>
 

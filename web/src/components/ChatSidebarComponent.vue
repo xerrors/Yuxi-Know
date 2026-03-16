@@ -5,7 +5,15 @@
   >
     <div class="sidebar-content">
       <div class="sidebar-header">
-        <div class="header-title">{{ branding.name }}</div>
+        <div class="header-brand">
+          <img
+            v-if="!userStore.isAdmin && (organization.logo || organization.avatar)"
+            :src="organization.logo || organization.avatar"
+            alt="logo"
+            class="brand-logo"
+          />
+          <div class="header-title">{{ branding.name || organization.name || 'Yuxi-Know' }}</div>
+        </div>
         <div class="header-actions">
           <div
             class="toggle-sidebar nav-btn"
@@ -96,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed, h, ref } from 'vue'
+import { computed, h } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   PanelLeftClose,
@@ -111,13 +119,15 @@ import {
 import dayjs, { parseToShanghai } from '@/utils/time'
 import { useChatUIStore } from '@/stores/chatUI'
 import { useInfoStore } from '@/stores/info'
+import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 
 // 使用 chatUI store
 const chatUIStore = useChatUIStore()
 const infoStore = useInfoStore()
+const userStore = useUserStore()
 
-const { branding } = storeToRefs(infoStore)
+const { branding, organization } = storeToRefs(infoStore)
 
 const props = defineProps({
   currentAgentId: {
@@ -299,6 +309,24 @@ const togglePin = (chatId) => {
     padding: 0 16px;
     border-bottom: 1px solid var(--gray-50);
     flex-shrink: 0;
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .brand-logo {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 1px solid var(--gray-100);
+      background: var(--gray-0);
+    }
 
     .header-title {
       font-weight: 600;

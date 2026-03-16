@@ -28,9 +28,21 @@
         <div class="header__left">
           <slot name="header-left" class="nav-btn"></slot>
           <div
+            v-if="!chatUIStore.isSidebarOpen && !userStore.isAdmin"
+            type="button"
+            class="sidebar-logo-toggle"
+            @click="toggleSidebar"
+          >
+            <img v-if="sidebarLogo" :src="sidebarLogo" alt="logo" class="sidebar-logo-image" />
+            <PanelLeftOpen v-else class="sidebar-logo-fallback" size="18" />
+            <div class="sidebar-expand-overlay">
+              <PanelLeftOpen class="nav-btn-icon" size="18" />
+            </div>
+          </div>
+          <div
             type="button"
             class="agent-nav-btn"
-            v-if="!chatUIStore.isSidebarOpen"
+            v-if="!chatUIStore.isSidebarOpen && userStore.isAdmin"
             @click="toggleSidebar"
           >
             <PanelLeftOpen class="nav-btn-icon" size="18" />
@@ -52,6 +64,7 @@
           </div>
         </div>
         <div class="header__right">
+          <UserInfoComponent v-if="!userStore.isAdmin" />
           <!-- AgentState 显示按钮已移动到输入框底部 -->
           <slot name="header-right"></slot>
         </div>
@@ -219,6 +232,8 @@ import { ScrollController } from '@/utils/scrollController'
 import { AgentValidator } from '@/utils/agentValidator'
 import { useAgentStore } from '@/stores/agent'
 import { useChatUIStore } from '@/stores/chatUI'
+import { useInfoStore } from '@/stores/info'
+import { useUserStore } from '@/stores/user'
 import { storeToRefs } from 'pinia'
 import { MessageProcessor } from '@/utils/messageProcessor'
 import { agentApi, threadApi } from '@/apis'
@@ -226,6 +241,7 @@ import HumanApprovalModal from '@/components/HumanApprovalModal.vue'
 import { useApproval } from '@/composables/useApproval'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import AgentPanel from '@/components/AgentPanel.vue'
+import UserInfoComponent from '@/components/UserInfoComponent.vue'
 
 // ==================== PROPS & EMITS ====================
 const props = defineProps({
@@ -236,6 +252,8 @@ const props = defineProps({
 // ==================== STORE MANAGEMENT ====================
 const agentStore = useAgentStore()
 const chatUIStore = useChatUIStore()
+const infoStore = useInfoStore()
+const userStore = useUserStore()
 const {
   agents,
   selectedAgentId,
@@ -247,9 +265,11 @@ const {
   availableMcps,
   availableSkills
 } = storeToRefs(agentStore)
+const { organization } = storeToRefs(infoStore)
 
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('')
+const sidebarLogo = computed(() => organization.value?.logo || organization.value?.avatar || '')
 const useRunsApi =
   import.meta.env.VITE_USE_RUNS_API === 'true' &&
   localStorage.getItem('force_legacy_stream') !== 'true'
@@ -1910,6 +1930,7 @@ watch(
     .header__right {
       display: flex;
       align-items: center;
+      gap: 8px;
     }
 
     .switch-icon {
@@ -1919,6 +1940,48 @@ watch(
 
     .agent-nav-btn:hover .switch-icon {
       color: var(--main-500);
+    }
+
+    .sidebar-logo-toggle {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--gray-150);
+      background: var(--gray-0);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .sidebar-logo-image {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+
+    .sidebar-logo-fallback {
+      color: var(--gray-700);
+    }
+
+    .sidebar-expand-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--gray-100);
+      color: var(--gray-900);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .sidebar-logo-toggle:hover .sidebar-expand-overlay {
+      opacity: 1;
     }
   }
 }

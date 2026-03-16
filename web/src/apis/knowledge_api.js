@@ -1,4 +1,4 @@
-import { apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete, apiRequest } from './base'
+import { apiGet, apiAdminGet, apiAdminPost, apiAdminPut, apiAdminDelete, apiRequest } from './base'
 
 /**
  * 知识库管理API模块
@@ -75,7 +75,7 @@ export const databaseApi = {
    * @returns {Promise} - 可访问的知识库列表
    */
   getAccessibleDatabases: async () => {
-    return apiAdminGet('/api/knowledge/databases/accessible')
+    return apiGet('/api/knowledge/databases/accessible')
   }
 }
 
