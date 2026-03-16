@@ -114,11 +114,7 @@
             <!-- 人工审批弹窗 - 放在输入框上方 -->
             <HumanApprovalModal
               :visible="approvalState.showModal"
-              :question="approvalState.question"
-              :operation="approvalState.operation"
-              :options="approvalState.options"
-              :multi-select="approvalState.multiSelect"
-              :allow-other="approvalState.allowOther"
+              :questions="approvalState.questions"
               @submit="handleQuestionSubmit"
               @cancel="handleQuestionCancel"
             />
@@ -1167,6 +1163,15 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         enqueueLoadingChunkForTyping(threadId, payload.chunk)
       }
 
+      const approvalStatuses = ['ask_user_question_required', 'human_approval_required']
+      const isApprovalEvent = approvalStatuses.includes(event) ||
+        approvalStatuses.includes(payload?.chunk?.status)
+
+      if (isApprovalEvent) {
+        const approvalChunk = payload?.chunk || { status: event, thread_id: threadId }
+        processApprovalInStream(approvalChunk, threadId, currentAgentId.value)
+      }
+
       if (event === 'close') {
         flushTypingQueueForThread(threadId)
         ts.isStreaming = false
@@ -1188,11 +1193,13 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
         }
       }
 
+      const chunkStatus = payload?.chunk?.status
       if (
         event === 'finished' ||
         event === 'error' ||
         event === 'interrupted' ||
-        event === 'ask_user_question_required'
+        approvalStatuses.includes(event) ||
+        approvalStatuses.includes(chunkStatus)
       ) {
         flushTypingQueueForThread(threadId)
         ts.isStreaming = false

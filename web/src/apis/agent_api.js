@@ -174,7 +174,7 @@ export const agentApi = {
   /**
    * 恢复被人工审批中断的对话（流式响应）
    * @param {string} agentId - 智能体ID
-   * @param {Object} data - 恢复数据 { thread_id, approved }
+    * @param {Object} data - 恢复数据 { thread_id, answer: { question_id: answer }, approved }
    * @param {Object} options - 可选参数（signal, headers等）
    * @returns {Promise} - 恢复响应流
    */

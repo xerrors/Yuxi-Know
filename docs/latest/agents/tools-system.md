@@ -45,7 +45,7 @@ def calculator(a: float, b: float, operation: str) -> float:
 
 ## 内置工具
 
-系统内置了几类常用工具。计算类包括 calculator，可进行加减乘除运算。搜索类包括 tavily_search，需要在环境变量中配置 `TAVILY_API_KEY` 才能启用。知识图谱类包括 query_knowledge_graph，用于查询通过三元组导入的全局知识图谱。交互类包括 ask_user_question，用于在智能体执行过程中向用户发起交互式提问。数据库类包括 mysql_list_tables、mysql_describe_table 和 mysql_query，用于连接和查询 MySQL 数据库。
+系统内置了几类常用工具。计算类包括 calculator，可进行加减乘除运算。搜索类包括 tavily_search，需要在环境变量中配置 `TAVILY_API_KEY` 才能启用。知识图谱类包括 query_knowledge_graph，用于查询通过三元组导入的全局知识图谱。交互类包括 ask_user_question，用于在智能体执行过程中向用户发起交互式提问，当前协议支持一次提交 `questions` 数组并返回 `{question_id: answer}` 的批量答案映射。数据库类包括 mysql_list_tables、mysql_describe_table 和 mysql_query，用于连接和查询 MySQL 数据库。
 
 这些工具都通过上述注册机制自动加载，开发者无需手动引入。
 

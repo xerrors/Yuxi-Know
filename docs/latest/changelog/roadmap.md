@@ -13,7 +13,7 @@
 - 检索测试中，添加问答
 - 探索 subagents 的体系
 - 集成 Memory，基于 deepagents 的文件后端实现
-- 探索智能体切换逻辑
+- 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)

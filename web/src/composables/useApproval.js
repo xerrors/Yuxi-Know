@@ -2,55 +2,56 @@ import { reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import { handleChatError } from '@/utils/errorHandler'
 import { agentApi } from '@/apis'
-
-const normalizeOptions = (rawOptions) => {
-  if (!Array.isArray(rawOptions)) return []
-  return rawOptions
-    .map((item) => {
-      if (item && typeof item === 'object') {
-        const label = String(item.label || item.value || '').trim()
-        const value = String(item.value || item.label || '').trim()
-        return label && value ? { label, value } : null
-      }
-      const text = String(item || '').trim()
-      return text ? { label: text, value: text } : null
-    })
-    .filter(Boolean)
-}
+import { normalizeQuestions, buildLegacyQuestion } from '@/utils/questionUtils'
 
 const extractQuestionPayload = (chunk) => {
   const interruptInfo = chunk?.interrupt_info || {}
-  const rawOptions = chunk?.options || interruptInfo?.options || []
-  const options = normalizeOptions(rawOptions)
-  const operation = chunk?.operation || interruptInfo?.operation || ''
-
+  const rawQuestions = chunk?.questions || interruptInfo?.questions || []
   const source = chunk?.source || interruptInfo?.source || 'interrupt'
-  const multiSelect = Boolean(chunk?.multi_select ?? interruptInfo?.multi_select ?? false)
-  const allowOther = Boolean(chunk?.allow_other ?? interruptInfo?.allow_other ?? true)
-  const questionId = chunk?.question_id || interruptInfo?.question_id || ''
-  const question = chunk?.question || interruptInfo?.question || '请选择一个选项'
+  let questions = normalizeQuestions(rawQuestions)
+
+  if (!questions.length) {
+    const legacyQuestion = buildLegacyQuestion(chunk, interruptInfo)
+    if (legacyQuestion) {
+      questions = [legacyQuestion]
+    }
+  }
 
   return {
-    questionId,
-    question,
-    options,
-    multiSelect,
-    allowOther,
-    source,
-    operation
+    questions,
+    source
   }
+}
+
+const parseApprovedDecision = (answer) => {
+  const parseFromValue = (value) => {
+    if (typeof value === 'boolean') return value
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase()
+      if (normalized === 'approve' || normalized === 'approved' || normalized === 'true') return true
+      if (normalized === 'reject' || normalized === 'rejected' || normalized === 'false') return false
+    }
+    return null
+  }
+
+  const direct = parseFromValue(answer)
+  if (direct !== null) return direct
+
+  if (answer && typeof answer === 'object' && !Array.isArray(answer)) {
+    const values = Object.values(answer)
+    if (values.length === 1) {
+      return parseFromValue(values[0])
+    }
+  }
+
+  return null
 }
 
 export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessages }) {
   const approvalState = reactive({
     showModal: false,
-    questionId: '',
-    question: '',
-    operation: '',
-    options: [],
-    multiSelect: false,
-    allowOther: true,
-    source: '',
+    questions: [],
+    status: '',
     threadId: null
   })
 
@@ -82,8 +83,18 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
 
     const requestBody = {
       thread_id: threadId,
-      answer,
       config: agentConfigId ? { agent_config_id: agentConfigId } : {}
+    }
+
+    if (approvalState.status === 'human_approval_required') {
+      const approved = parseApprovedDecision(answer)
+      if (approved !== null) {
+        requestBody.approved = approved
+      } else {
+        requestBody.answer = answer
+      }
+    } else {
+      requestBody.answer = answer
     }
 
     try {
@@ -120,17 +131,13 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     if (!threadState) return false
 
     const payload = extractQuestionPayload(chunk)
+    if (!payload.questions.length) return false
 
     threadState.isStreaming = false
 
     approvalState.showModal = true
-    approvalState.questionId = payload.questionId
-    approvalState.question = payload.question
-    approvalState.operation = payload.operation
-    approvalState.options = payload.options
-    approvalState.multiSelect = payload.multiSelect
-    approvalState.allowOther = payload.allowOther
-    approvalState.source = payload.source
+    approvalState.questions = payload.questions
+    approvalState.status = chunk.status || ''
     approvalState.threadId = chunk.thread_id || threadId
 
     fetchThreadMessages({ agentId: currentAgentId, threadId })
@@ -140,13 +147,8 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
 
   const resetApprovalState = () => {
     approvalState.showModal = false
-    approvalState.questionId = ''
-    approvalState.question = ''
-    approvalState.operation = ''
-    approvalState.options = []
-    approvalState.multiSelect = false
-    approvalState.allowOther = true
-    approvalState.source = ''
+    approvalState.questions = []
+    approvalState.status = ''
     approvalState.threadId = null
   }
 

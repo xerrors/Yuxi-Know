@@ -504,7 +504,7 @@ async def resume_agent_chat(
     agent_id: str,
     thread_id: str = Body(...),
     approved: bool | None = Body(None),
-    answer: dict | list | str | None = Body(None),
+    answer: dict | None = Body(None),
     config: dict = Body({}),
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
@@ -512,26 +512,47 @@ async def resume_agent_chat(
     """恢复被人工审批中断的对话（需要登录）"""
 
     def normalize_resume_input(raw_answer: Any, raw_approved: bool | None) -> Any:
-        if raw_answer is not None:
-            if isinstance(raw_answer, str):
-                normalized = raw_answer.strip()
+        def normalize_single_answer(value: Any) -> Any:
+            if isinstance(value, str):
+                normalized = value.strip()
                 if not normalized:
                     raise HTTPException(status_code=422, detail="answer 不能为空")
                 return normalized
 
-            if isinstance(raw_answer, list):
-                if len(raw_answer) == 0:
+            if isinstance(value, list):
+                if len(value) == 0:
                     raise HTTPException(status_code=422, detail="answer 不能为空")
-                return raw_answer
 
-            if isinstance(raw_answer, dict):
-                if raw_answer.get("type") == "other":
-                    text = raw_answer.get("text")
+                normalized_list: list[str] = []
+                for item in value:
+                    if not isinstance(item, str) or not item.strip():
+                        raise HTTPException(status_code=422, detail="answer 列表必须是非空字符串")
+                    normalized_list.append(item.strip())
+                return normalized_list
+
+            if isinstance(value, dict):
+                if value.get("type") == "other":
+                    text = value.get("text")
                     if not isinstance(text, str) or not text.strip():
                         raise HTTPException(status_code=422, detail="other 文本不能为空")
-                return raw_answer
+                return value
 
-            raise HTTPException(status_code=422, detail="answer 类型不支持")
+            raise HTTPException(status_code=422, detail="answer 值类型不支持")
+
+        if raw_answer is not None:
+            if isinstance(raw_answer, dict):
+                if len(raw_answer) == 0:
+                    raise HTTPException(status_code=422, detail="answer 不能为空")
+
+                normalized_answers: dict[str, Any] = {}
+                for question_id, value in raw_answer.items():
+                    normalized_question_id = str(question_id).strip()
+                    if not normalized_question_id:
+                        raise HTTPException(status_code=422, detail="question_id 不能为空")
+                    normalized_answers[normalized_question_id] = normalize_single_answer(value)
+                return normalized_answers
+
+            raise HTTPException(status_code=422, detail="answer 必须是对象映射 {question_id: answer}")
 
         if raw_approved is not None:
             return "approve" if raw_approved else "reject"
