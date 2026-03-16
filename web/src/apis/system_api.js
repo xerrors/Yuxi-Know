@@ -86,12 +86,6 @@ export const brandApi = {
 
 export const ocrApi = {
   /**
-   * 获取OCR服务统计信息
-   * @returns {Promise} - OCR统计信息
-   */
-  getStats: async () => apiAdminGet('/api/system/ocr/stats'),
-
-  /**
    * 获取OCR服务健康状态
    * @returns {Promise} - OCR健康状态
    */
