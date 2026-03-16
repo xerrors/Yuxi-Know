@@ -17,9 +17,10 @@ from src.repositories.conversation_repository import ConversationRepository
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
 from src.utils.question_utils import (
-    normalize_questions as _normalize_interrupt_questions,
     normalize_options as _normalize_interrupt_options,
-    normalize_legacy_question,
+)
+from src.utils.question_utils import (
+    normalize_questions as _normalize_interrupt_questions,
 )
 
 
