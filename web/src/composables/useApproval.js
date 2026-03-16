@@ -109,7 +109,10 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
   }
 
   const processApprovalInStream = (chunk, threadId, currentAgentId) => {
-    if (chunk.status !== 'ask_user_question_required' && chunk.status !== 'human_approval_required') {
+    if (
+      chunk.status !== 'ask_user_question_required' &&
+      chunk.status !== 'human_approval_required'
+    ) {
       return false
     }
 

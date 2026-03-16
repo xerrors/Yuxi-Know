@@ -510,6 +510,7 @@ async def resume_agent_chat(
     db: AsyncSession = Depends(get_db),
 ):
     """恢复被人工审批中断的对话（需要登录）"""
+
     def normalize_resume_input(raw_answer: Any, raw_approved: bool | None) -> Any:
         if raw_answer is not None:
             if isinstance(raw_answer, str):

@@ -12,7 +12,11 @@
         </div>
 
         <div class="question-options">
-          <label v-for="(item, index) in options" :key="`${item.value}-${index}`" class="option-item">
+          <label
+            v-for="(item, index) in options"
+            :key="`${item.value}-${index}`"
+            class="option-item"
+          >
             <input
               v-if="multiSelect"
               type="checkbox"
@@ -30,7 +34,9 @@
               :disabled="isProcessing"
               @change="setSingle(item.value)"
             />
-            <span :class="{ recommended: index === 0 && String(item.label).includes('(Recommended)') }">
+            <span
+              :class="{ recommended: index === 0 && String(item.label).includes('(Recommended)') }"
+            >
               {{ item.label }}
             </span>
           </label>
@@ -48,7 +54,9 @@
 
       <div class="approval-actions">
         <button class="btn btn-reject" @click="handleCancel" :disabled="isProcessing">取消</button>
-        <button class="btn btn-approve" @click="handleSubmit" :disabled="isSubmitDisabled">提交</button>
+        <button class="btn btn-approve" @click="handleSubmit" :disabled="isSubmitDisabled">
+          提交
+        </button>
       </div>
 
       <div v-if="isProcessing" class="approval-processing">

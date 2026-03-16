@@ -3,7 +3,7 @@
     <!-- 服务状态提示 -->
     <div v-if="serverStatus === 'error'" class="server-status-alert">
       <div class="alert-content">
-        <exclamation-circle-icon class="alert-icon" size="20"  />
+        <exclamation-circle-icon class="alert-icon" size="20" />
         <div class="alert-text">
           <div class="alert-title">服务端连接失败</div>
           <div class="alert-message">{{ serverError }}</div>
@@ -160,7 +160,7 @@
                   >
                     <a-input v-model:value="loginForm.loginId" placeholder="用户ID或手机号">
                       <template #prefix>
-                        <user-icon size="18"/>
+                        <user-icon size="18" />
                       </template>
                     </a-input>
                   </a-form-item>

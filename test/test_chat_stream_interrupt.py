@@ -1,4 +1,5 @@
 """测试 chat_stream_service 中的 interrupt 相关函数"""
+
 import pytest
 import sys
 import os

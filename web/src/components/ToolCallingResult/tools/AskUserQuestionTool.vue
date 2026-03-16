@@ -5,9 +5,7 @@
         <span class="note">提问</span>
         <span class="separator">|</span>
         <span class="description">{{ shortQuestion }}</span>
-        <span v-if="userAnswer" class="tag tag-answered">
-          已回答: {{ displayAnswer }}
-        </span>
+        <span v-if="userAnswer" class="tag tag-answered"> 已回答: {{ displayAnswer }} </span>
       </div>
     </template>
   </BaseToolCall>
