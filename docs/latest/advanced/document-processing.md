@@ -49,14 +49,14 @@ Yuxi 支持多种文档格式的智能解析，从简单的文本文件到复杂
 | RapidOCR | 基础文字识别 | CPU | 免费开源，速度快 |
 | MinerU | 复杂 PDF、表格 | GPU | 精度高，版面分析好 |
 | MinerU Official | 复杂文档 | 无 | 官方云服务，开箱即用 |
-| PP-StructureV3 | 表格、票据 | GPU | 专业版面解析 |
+| PP-Structure-V3 | 表格、票据 | GPU | 专业版面解析 |
 | DeepSeek OCR | 智能理解 | 无 | 云端服务，Markdown 输出 |
 
 ### 选择建议
 
 - **个人使用或 CPU 环境**：选择 RapidOCR，免费且资源占用低
 - **高精度需求**：选择 MinerU（需要 GPU）或 MinerU Official
-- **表格密集型文档**：选择 PP-StructureV3
+- **表格密集型文档**：选择 PP-Structure-V3
 - **简单云服务**：选择 DeepSeek OCR
 
 ## 快速配置
@@ -94,7 +94,7 @@ MINERU_API_KEY=your-api-key-here
 
 从 [MinerU 官网](https://mineru.net) 获取 API 密钥。
 
-### PP-StructureV3（结构化）
+### PP-Structure-V3（结构化）
 
 ```bash
 # 启动服务（需要 GPU）
@@ -121,6 +121,6 @@ HOST_IP=your_server_ip
 ## 注意事项
 
 1. **图片文件必须启用 OCR**：否则无法提取内容
-2. **GPU 要求**：MinerU 和 PP-StructureV3 需要 GPU 支持
+2. **GPU 要求**：MinerU 和 PP-Structure-V3 需要 GPU 支持
 3. **API 密钥**：部分服务需要额外的 API 密钥配置
 4. **超时处理**：复杂文档解析可能耗时较长，可通过 `MINERU_TIMEOUT` 环境变量调整超时时间

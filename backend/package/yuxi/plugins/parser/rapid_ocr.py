@@ -1,5 +1,5 @@
 """
-RapidOCR 处理器 - 纯OCR文字识别
+RapidOCR 解析器 - 纯OCR文字识别
 
 使用 RapidOCR (PP-OCRv4) 进行文字识别
 """
@@ -14,12 +14,12 @@ import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 
-from yuxi.plugins.document_processor_base import BaseDocumentProcessor, OCRException
+from yuxi.plugins.parser.base import BaseDocumentProcessor, OCRException
 from yuxi.utils import logger
 
 
-class RapidOCRProcessor(BaseDocumentProcessor):
-    """RapidOCR 处理器 - 使用 ONNX 模型进行文字识别"""
+class RapidOCRParser(BaseDocumentProcessor):
+    """RapidOCR 解析器 - 使用 ONNX 模型进行文字识别"""
 
     def __init__(self, det_box_thresh: float = 0.3):
         self.ocr = None

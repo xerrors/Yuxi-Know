@@ -87,7 +87,7 @@ docker compose logs --tail=100
 ### OCR 服务不可用
 
 - **RapidOCR**：确保 `MODEL_DIR/SWHL/RapidOCR` 下存在 `PP-OCRv4` 模型
-- **MinerU / PP-StructureV3**：检查 GPU 和 CUDA 版本是否兼容
+- **MinerU / PP-Structure-V3**：检查 GPU 和 CUDA 版本是否兼容
 
 ### 登录失败被锁定
 
