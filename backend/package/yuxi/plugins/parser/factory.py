@@ -4,14 +4,11 @@
 提供统一的文档处理器创建和管理接口
 """
 
+import asyncio
+from importlib import import_module
 from typing import Any
 
-from yuxi.plugins.deepseek_ocr_parser import DeepSeekOCRParser
-from yuxi.plugins.document_processor_base import BaseDocumentProcessor
-from yuxi.plugins.mineru_official_parser import MinerUOfficialParser
-from yuxi.plugins.mineru_parser import MinerUParser
-from yuxi.plugins.paddlex_parser import PaddleXDocumentParser
-from yuxi.plugins.rapid_ocr_processor import RapidOCRProcessor
+from yuxi.plugins.parser.base import BaseDocumentProcessor
 from yuxi.utils import logger
 
 # 处理器实例缓存
@@ -21,14 +18,29 @@ _PROCESSOR_CACHE: dict[str, BaseDocumentProcessor] = {}
 class DocumentProcessorFactory:
     """文档处理器工厂"""
 
-    # 处理器类型映射
+    # 处理器类型映射: processor_type -> (module_path, class_name)
     PROCESSOR_TYPES = {
-        "onnx_rapid_ocr": RapidOCRProcessor,
-        "mineru_ocr": MinerUParser,
-        "mineru_official": MinerUOfficialParser,
-        "paddlex_ocr": PaddleXDocumentParser,
-        "deepseek_ocr": DeepSeekOCRParser,
+        "rapid_ocr": ("yuxi.plugins.parser.rapid_ocr", "RapidOCRParser"),
+        "mineru_ocr": ("yuxi.plugins.parser.mineru", "MinerUParser"),
+        "mineru_official": ("yuxi.plugins.parser.mineru_official", "MinerUOfficialParser"),
+        "pp_structure_v3_ocr": ("yuxi.plugins.parser.pp_structure_v3", "PPStructureV3Parser"),
+        "deepseek_ocr": ("yuxi.plugins.parser.deepseek_ocr", "DeepSeekOCRParser"),
     }
+
+    @classmethod
+    def _build_cache_key(cls, processor_type: str, kwargs: dict[str, Any]) -> str:
+        if not kwargs:
+            return processor_type
+
+        kwargs_repr = "|".join(f"{key}={kwargs[key]!r}" for key in sorted(kwargs))
+        return f"{processor_type}|{kwargs_repr}"
+
+    @classmethod
+    def _load_processor_class(cls, processor_type: str) -> type[BaseDocumentProcessor]:
+        module_path, class_name = cls.PROCESSOR_TYPES[processor_type]
+        module = import_module(module_path)
+        processor_class = getattr(module, class_name)
+        return processor_class
 
     @classmethod
     def get_processor(cls, processor_type: str, **kwargs) -> BaseDocumentProcessor:
@@ -37,10 +49,10 @@ class DocumentProcessorFactory:
 
         Args:
             processor_type: 处理器类型
-                - "onnx_rapid_ocr": RapidOCR 本地 OCR
+                - "rapid_ocr": RapidOCR 本地 OCR
                 - "mineru_ocr": MinerU HTTP API 文档解析
                 - "mineru_official": MinerU 官方云服务 API 文档解析
-                - "paddlex_ocr": PP-StructureV3 版面解析
+                - "pp_structure_v3_ocr": PP-Structure-V3 版面解析
                 - "deepseek_ocr": DeepSeek-OCR SiliconFlow API
             **kwargs: 处理器初始化参数
 
@@ -54,9 +66,9 @@ class DocumentProcessorFactory:
             raise ValueError(f"不支持的处理器类型: {processor_type}. 支持的类型: {list(cls.PROCESSOR_TYPES.keys())}")
 
         # 使用缓存避免重复创建
-        cache_key = f"{processor_type}_{hash(frozenset(kwargs.items()))}"
+        cache_key = cls._build_cache_key(processor_type, kwargs)
         if cache_key not in _PROCESSOR_CACHE:
-            processor_class = cls.PROCESSOR_TYPES[processor_type]
+            processor_class = cls._load_processor_class(processor_type)
             _PROCESSOR_CACHE[cache_key] = processor_class(**kwargs)
             logger.debug(f"创建文档处理器: {processor_type}")
 
@@ -114,6 +126,14 @@ class DocumentProcessorFactory:
         for processor_type in cls.PROCESSOR_TYPES:
             health_status[processor_type] = cls.check_health(processor_type)
         return health_status
+
+    @classmethod
+    async def check_all_health_async(cls) -> dict[str, dict[str, Any]]:
+        async def run_check(processor_type: str) -> tuple[str, dict[str, Any]]:
+            return processor_type, await asyncio.to_thread(cls.check_health, processor_type)
+
+        results = await asyncio.gather(*(run_check(processor_type) for processor_type in cls.PROCESSOR_TYPES))
+        return {processor_type: health for processor_type, health in results}
 
     @classmethod
     def get_available_processors(cls) -> list[str]:

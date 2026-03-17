@@ -13,7 +13,8 @@ from typing import Any
 
 import requests
 
-from yuxi.plugins.document_processor_base import BaseDocumentProcessor, DocumentParserException
+from yuxi.plugins.parser.base import BaseDocumentProcessor, DocumentParserException
+from yuxi.plugins.parser.zip_utils import process_zip_file_sync
 from yuxi.utils import hashstr, logger
 
 
@@ -154,12 +155,8 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 )
                 return text
 
-            import asyncio
-
-            from yuxi.knowledge.indexing import _process_zip_file
-
             try:
-                processed = asyncio.run(_process_zip_file(zip_path, params.get("db_id") or "ocr-test"))
+                processed = process_zip_file_sync(zip_path, params.get("db_id") or "ocr-test")
                 text = processed["markdown_content"]
             except Exception:
                 import zipfile

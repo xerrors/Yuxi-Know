@@ -11,8 +11,8 @@ from pathlib import Path
 
 import requests
 
-from yuxi.knowledge.indexing import _process_zip_file
-from yuxi.plugins.document_processor_base import BaseDocumentProcessor, DocumentParserException
+from yuxi.plugins.parser.base import BaseDocumentProcessor, DocumentParserException
+from yuxi.plugins.parser.zip_utils import process_zip_file_sync
 from yuxi.utils import logger
 
 
@@ -189,9 +189,7 @@ class MinerUParser(BaseDocumentProcessor):
                     tmp_zip.flush()
 
                     try:
-                        import asyncio
-
-                        processed = asyncio.run(_process_zip_file(tmp_zip.name, params.get("db_id")))
+                        processed = process_zip_file_sync(tmp_zip.name, params.get("db_id") or "ocr-temp")
                         text = processed["markdown_content"]
                     finally:
                         os.unlink(tmp_zip.name)

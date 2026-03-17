@@ -14,7 +14,7 @@ from typing import Any
 import fitz  # PyMuPDF
 import requests
 
-from yuxi.plugins.document_processor_base import BaseDocumentProcessor, DocumentParserException
+from yuxi.plugins.parser.base import BaseDocumentProcessor, DocumentParserException
 from yuxi.utils import logger
 
 

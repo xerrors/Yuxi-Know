@@ -1,4 +1,3 @@
-# 新的统一文档处理器接口
 from yuxi.plugins.parser.base import (
     BaseDocumentProcessor,
     DocumentParserException,
@@ -12,5 +11,5 @@ __all__ = [
     "DocumentProcessorException",
     "DocumentParserException",
     "OCRException",
-    "DocumentProcessorFactory",  # 推荐使用
+    "DocumentProcessorFactory",
 ]

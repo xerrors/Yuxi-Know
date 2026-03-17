@@ -551,10 +551,10 @@ const handleUrlKeydown = (e) => {
 
 // OCR服务健康状态
 const ocrHealthStatus = ref({
-  onnx_rapid_ocr: { status: 'unknown', message: '' },
+  rapid_ocr: { status: 'unknown', message: '' },
   mineru_ocr: { status: 'unknown', message: '' },
   mineru_official: { status: 'unknown', message: '' },
-  paddlex_ocr: { status: 'unknown', message: '' },
+  pp_structure_v3_ocr: { status: 'unknown', message: '' },
   deepseek_ocr: { status: 'unknown', message: '' }
 })
 
@@ -665,12 +665,12 @@ const enableOcrOptions = computed(() => [
     title: '不启用'
   },
   {
-    value: 'onnx_rapid_ocr',
+    value: 'rapid_ocr',
     label: getRapidOcrLabel(),
     title: 'ONNX with RapidOCR',
     disabled:
-      ocrHealthStatus.value?.onnx_rapid_ocr?.status === 'unavailable' ||
-      ocrHealthStatus.value?.onnx_rapid_ocr?.status === 'error'
+      ocrHealthStatus.value?.rapid_ocr?.status === 'unavailable' ||
+      ocrHealthStatus.value?.rapid_ocr?.status === 'error'
   },
   {
     value: 'mineru_ocr',
@@ -689,12 +689,12 @@ const enableOcrOptions = computed(() => [
       ocrHealthStatus.value?.mineru_official?.status === 'error'
   },
   {
-    value: 'paddlex_ocr',
-    label: getPaddleXLabel(),
-    title: 'PP-StructureV3',
+    value: 'pp_structure_v3_ocr',
+    label: getPPStructureV3Label(),
+    title: 'PP-Structure-V3',
     disabled:
-      ocrHealthStatus.value?.paddlex_ocr?.status === 'unavailable' ||
-      ocrHealthStatus.value?.paddlex_ocr?.status === 'error'
+      ocrHealthStatus.value?.pp_structure_v3_ocr?.status === 'unavailable' ||
+      ocrHealthStatus.value?.pp_structure_v3_ocr?.status === 'error'
   },
   {
     value: 'deepseek_ocr',
@@ -709,14 +709,14 @@ const enableOcrOptions = computed(() => [
 // 获取当前选中OCR服务的状态
 const selectedOcrStatus = computed(() => {
   switch (chunkParams.value.enable_ocr) {
-    case 'onnx_rapid_ocr':
-      return ocrHealthStatus.value?.onnx_rapid_ocr?.status || 'unknown'
+    case 'rapid_ocr':
+      return ocrHealthStatus.value?.rapid_ocr?.status || 'unknown'
     case 'mineru_ocr':
       return ocrHealthStatus.value?.mineru_ocr?.status || 'unknown'
     case 'mineru_official':
       return ocrHealthStatus.value?.mineru_official?.status || 'unknown'
-    case 'paddlex_ocr':
-      return ocrHealthStatus.value?.paddlex_ocr?.status || 'unknown'
+    case 'pp_structure_v3_ocr':
+      return ocrHealthStatus.value?.pp_structure_v3_ocr?.status || 'unknown'
     case 'deepseek_ocr':
       return ocrHealthStatus.value?.deepseek_ocr?.status || 'unknown'
     default:
@@ -727,14 +727,14 @@ const selectedOcrStatus = computed(() => {
 // 获取当前选中OCR服务的状态消息
 const selectedOcrMessage = computed(() => {
   switch (chunkParams.value.enable_ocr) {
-    case 'onnx_rapid_ocr':
-      return ocrHealthStatus.value?.onnx_rapid_ocr?.message || ''
+    case 'rapid_ocr':
+      return ocrHealthStatus.value?.rapid_ocr?.message || ''
     case 'mineru_ocr':
       return ocrHealthStatus.value?.mineru_ocr?.message || ''
     case 'mineru_official':
       return ocrHealthStatus.value?.mineru_official?.message || ''
-    case 'paddlex_ocr':
-      return ocrHealthStatus.value?.paddlex_ocr?.message || ''
+    case 'pp_structure_v3_ocr':
+      return ocrHealthStatus.value?.pp_structure_v3_ocr?.message || ''
     case 'deepseek_ocr':
       return ocrHealthStatus.value?.deepseek_ocr?.message || ''
     default:
@@ -759,10 +759,10 @@ const getOcrLabel = (serviceKey, displayName) => {
 }
 
 // 兼容性包装器
-const getRapidOcrLabel = () => getOcrLabel('onnx_rapid_ocr', 'RapidOCR (ONNX)')
+const getRapidOcrLabel = () => getOcrLabel('rapid_ocr', 'RapidOCR (ONNX)')
 const getMinerULabel = () => getOcrLabel('mineru_ocr', 'MinerU OCR')
 const getMinerUOfficialLabel = () => getOcrLabel('mineru_official', 'MinerU Official API')
-const getPaddleXLabel = () => getOcrLabel('paddlex_ocr', 'PP-StructureV3')
+const getPPStructureV3Label = () => getOcrLabel('pp_structure_v3_ocr', 'PP-Structure-V3')
 const getDeepSeekOcrLabel = () => getOcrLabel('deepseek_ocr', 'DeepSeek OCR')
 
 // 验证OCR服务可用性
