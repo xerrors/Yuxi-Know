@@ -7,11 +7,11 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import declarative_base
-
-from server.utils.singleton import SingletonMeta
 from yuxi.storage.postgres.models_business import Base as BusinessBase
 from yuxi.storage.postgres.models_knowledge import Base as KnowledgeBase
 from yuxi.utils import logger
+
+from server.utils.singleton import SingletonMeta
 
 # 合并两个 Base
 CombinedBase = declarative_base()

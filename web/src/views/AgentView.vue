@@ -103,7 +103,11 @@
       />
 
       <!-- 反馈模态框 -->
-      <FeedbackModalComponent v-if="userStore.isAdmin" ref="feedbackModal" :agent-id="selectedAgentId" />
+      <FeedbackModalComponent
+        v-if="userStore.isAdmin"
+        ref="feedbackModal"
+        :agent-id="selectedAgentId"
+      />
 
       <!-- 自定义更多菜单 -->
       <Teleport to="body">
@@ -186,7 +190,10 @@ const syncSelectedAgentFromRoute = async () => {
     const routeAgentExists = (agents.value || []).some((agent) => agent.id === routeAgentId)
     if (!routeAgentExists) {
       if (selectedAgentId.value) {
-        await router.replace({ name: 'AgentCompWithId', params: { agent_id: selectedAgentId.value } })
+        await router.replace({
+          name: 'AgentCompWithId',
+          params: { agent_id: selectedAgentId.value }
+        })
       }
       return
     }

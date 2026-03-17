@@ -8,7 +8,6 @@ from pathlib import Path
 
 import aiofiles
 from fastapi import UploadFile
-
 from yuxi.config import config as app_config
 from yuxi.knowledge.indexing import process_file_to_markdown
 from yuxi.utils import logger

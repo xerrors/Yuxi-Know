@@ -11,10 +11,10 @@ from datetime import timedelta
 from io import BytesIO
 
 from urllib3 import BaseHTTPResponse
+from yuxi.utils import logger
 
 from minio import Minio
 from minio.error import S3Error
-from yuxi.utils import logger
 
 
 class StorageError(Exception):

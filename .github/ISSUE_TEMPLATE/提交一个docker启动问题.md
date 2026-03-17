@@ -35,7 +35,7 @@ assignees: ''
 # 例如
 docker compose up -d
 # 或
-make start
+make up
 ```
 
 

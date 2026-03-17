@@ -8,7 +8,6 @@ from typing import Any
 
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
-
 from yuxi import config as conf
 from yuxi.agents import agent_manager
 from yuxi.plugins.guard import content_guard
@@ -17,9 +16,10 @@ from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.storage.postgres.manager import pg_manager
 from yuxi.utils.logging_config import logger
 from yuxi.utils.question_utils import (
-    normalize_questions as _normalize_interrupt_questions,
     normalize_options as _normalize_interrupt_options,
-    normalize_legacy_question,
+)
+from yuxi.utils.question_utils import (
+    normalize_questions as _normalize_interrupt_questions,
 )
 
 
