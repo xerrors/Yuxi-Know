@@ -22,7 +22,7 @@ from markdownify import markdownify as md_convert
 
 from yuxi.plugins.parser.zip_utils import process_zip_file as _process_zip_file
 from yuxi.storage.minio import get_minio_client
-from yuxi.utils import hashstr, logger
+from yuxi.utils import logger
 
 SUPPORTED_FILE_EXTENSIONS: tuple[str, ...] = (
     ".txt",
@@ -69,14 +69,32 @@ def _get_docling_converter() -> DocumentConverter:
     return _docling_converter
 
 
-def _upload_image_to_minio(image_data: bytes, filename: str, db_id: str) -> str:
+def _resolve_image_storage_params(params: dict | None) -> tuple[str, str]:
+    params = params or {}
+
+    image_bucket = params.get("image_bucket") or "public"
+    image_prefix = params.get("image_prefix")
+    if image_prefix:
+        normalized_prefix = str(image_prefix).strip("/")
+        if normalized_prefix:
+            return image_bucket, normalized_prefix
+
+    db_id = params.get("db_id")
+    if db_id:
+        return image_bucket, f"{db_id}/kb-images"
+
+    return image_bucket, "unknown/kb-images"
+
+
+def _upload_image_to_minio(image_data: bytes, filename: str, bucket_name: str, object_prefix: str) -> str:
     """上传图片到 MinIO，返回 URL"""
     minio_client = get_minio_client()
-    minio_client.ensure_bucket_exists("kb-images")
-    file_id = hashstr(filename, length=16)
+    minio_client.ensure_bucket_exists(bucket_name)
+
+    normalized_prefix = object_prefix.strip("/") or "unknown/kb-images"
     timestamp = int(time.time() * 1000000)
     suffix = Path(filename).suffix.lower()
-    object_name = f"{db_id}/{file_id}/images/{timestamp}_{Path(filename).name}"
+    object_name = f"{normalized_prefix}/{timestamp}_{Path(filename).name}"
     content_type_map = {
         ".jpg": "image/jpeg",
         ".jpeg": "image/jpeg",
@@ -90,7 +108,7 @@ def _upload_image_to_minio(image_data: bytes, filename: str, db_id: str) -> str:
     content_type = content_type_map.get(suffix, "image/jpeg")
 
     result = minio_client.upload_file(
-        bucket_name="kb-images",
+        bucket_name=bucket_name,
         object_name=object_name,
         data=image_data,
         content_type=content_type,
@@ -112,13 +130,13 @@ def _convert_with_docling(file_path: Path, params: dict | None = None) -> str:
 
     Args:
         file_path: 文件路径
-        params: 参数，包含 db_id 用于图片上传
+        params: 参数，可包含 image_bucket/image_prefix
 
     Returns:
         Markdown 字符串
     """
     params = params or {}
-    db_id = params.get("db_id") or "docling-docs"
+    image_bucket, image_prefix = _resolve_image_storage_params(params)
 
     converter = _get_docling_converter()
     result = converter.convert(file_path)
@@ -145,7 +163,7 @@ def _convert_with_docling(file_path: Path, params: dict | None = None) -> str:
         image_urls: list[str] = []
         for filename, image_data in image_refs:
             try:
-                url = _upload_image_to_minio(image_data, filename, db_id)
+                url = _upload_image_to_minio(image_data, filename, image_bucket, image_prefix)
                 image_urls.append(f"![{filename}]({url})")
             except Exception as e:
                 logger.error(f"上传图片失败 {filename}: {e}")
@@ -334,6 +352,10 @@ def parse_pdf(file, params=None):
     if opt_ocr == "disable":
         return pdfreader(file, params=params)
 
+    image_bucket, image_prefix = _resolve_image_storage_params(params)
+    params.setdefault("image_bucket", image_bucket)
+    params.setdefault("image_prefix", image_prefix)
+
     try:
         return DocumentProcessorFactory.process_file(opt_ocr, file, params)
 
@@ -372,6 +394,10 @@ def parse_image(file, params=None):
             "图像文件必须启用OCR才能提取文本内容。"
             "请选择OCR方式 (rapid_ocr/mineru_ocr/mineru_official/pp_structure_v3_ocr) 或移除该文件。"
         )
+
+    image_bucket, image_prefix = _resolve_image_storage_params(params)
+    params.setdefault("image_bucket", image_bucket)
+    params.setdefault("image_prefix", image_prefix)
 
     try:
         return DocumentProcessorFactory.process_file(opt_ocr, file, params)
@@ -543,14 +569,19 @@ async def process_file_to_markdown(file_path: str, params: dict | None = None) -
             result = f"```json\n{json_str}\n```"
 
         elif file_ext == ".zip":
-            if not params or "db_id" not in params:
-                raise ValueError("ZIP文件处理需要在params中提供db_id参数")
-
-            zip_result = await _process_zip_file(str(file_path_obj), params["db_id"])
+            image_bucket, image_prefix = _resolve_image_storage_params(params)
+            zip_result = await _process_zip_file(
+                str(file_path_obj),
+                image_bucket=image_bucket,
+                image_prefix=image_prefix,
+            )
 
             # 将处理结果保存到params中供调用方使用
-            params["_zip_images_info"] = zip_result["images_info"]
-            params["_zip_content_hash"] = zip_result["content_hash"]
+            if params is not None:
+                params["_zip_images_info"] = zip_result["images_info"]
+                params["_zip_content_hash"] = zip_result["content_hash"]
+                params["_zip_image_bucket"] = image_bucket
+                params["_zip_image_prefix"] = image_prefix
 
             result = zip_result["markdown_content"]
 

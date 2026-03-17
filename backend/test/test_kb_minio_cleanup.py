@@ -24,6 +24,8 @@ async def test_delete_knowledge_base_cleanup():
     # 初始化
     minio_client = get_minio_client()
     kb_manager = knowledge_base
+    doc_bucket = minio_client.KB_BUCKETS["documents"]
+    parsed_bucket = minio_client.KB_BUCKETS["parsed"]
 
     # 测试参数
     test_db_name = "test_cleanup_db"
@@ -44,35 +46,35 @@ async def test_delete_knowledge_base_cleanup():
         print("2. 上传测试文件到 MinIO...")
 
         # 确保 bucket 存在
-        minio_client.ensure_bucket_exists("kb-documents")
-        minio_client.ensure_bucket_exists("kb-parsed")
+        minio_client.ensure_bucket_exists(doc_bucket)
+        minio_client.ensure_bucket_exists(parsed_bucket)
 
-        # 上传到 kb-documents (原始文件)
-        test_object_name = f"{db_id}/test_file_{db_id[:8]}.txt"
+        # 上传到知识库文档路径 (knowledgebases/{db_id}/upload/...)
+        test_object_name = f"{db_id}/upload/test_file_{db_id[:8]}.txt"
         minio_client.upload_file(
-            bucket_name="kb-documents",
+            bucket_name=doc_bucket,
             object_name=test_object_name,
             data=test_file_content,
             content_type="text/plain",
         )
-        print(f"   文件上传到 kb-documents: {test_object_name}")
+        print(f"   文件上传到 {doc_bucket}: {test_object_name}")
 
-        # 上传到 kb-parsed (解析后的 markdown)
+        # 上传到知识库解析路径 (knowledgebases/{db_id}/parsed/...)
         test_file_id = f"file_test_{db_id[:8]}"
-        parsed_object_name = f"{db_id}/{test_file_id}/parsed.md"
+        parsed_object_name = f"{db_id}/parsed/{test_file_id}.md"
         parsed_content = b"# Test Parsed Content\n\nThis is parsed markdown."
         minio_client.upload_file(
-            bucket_name="kb-parsed",
+            bucket_name=parsed_bucket,
             object_name=parsed_object_name,
             data=parsed_content,
             content_type="text/markdown",
         )
-        print(f"   文件上传到 kb-parsed: {parsed_object_name}")
+        print(f"   文件上传到 {parsed_bucket}: {parsed_object_name}")
 
         # 3. 验证文件存在
         print("3. 验证文件存在...")
-        assert minio_client.file_exists("kb-documents", test_object_name), "原始文件应该存在"
-        assert minio_client.file_exists("kb-parsed", parsed_object_name), "解析后文件应该存在"
+        assert minio_client.file_exists(doc_bucket, test_object_name), "原始文件应该存在"
+        assert minio_client.file_exists(parsed_bucket, parsed_object_name), "解析后文件应该存在"
         print("   文件存在验证通过")
 
         # 4. 删除知识库
@@ -83,13 +85,13 @@ async def test_delete_knowledge_base_cleanup():
         # 5. 验证 MinIO 文件已清理
         print("5. 验证 MinIO 文件已清理...")
 
-        # 检查 kb-documents 中的文件
-        doc_exists = minio_client.file_exists("kb-documents", test_object_name)
-        print(f"   kb-documents/{test_object_name} 存在: {doc_exists}")
+        # 检查文档对象
+        doc_exists = minio_client.file_exists(doc_bucket, test_object_name)
+        print(f"   {doc_bucket}/{test_object_name} 存在: {doc_exists}")
 
-        # 检查 kb-parsed 中的文件
-        parsed_exists = minio_client.file_exists("kb-parsed", parsed_object_name)
-        print(f"   kb-parsed/{parsed_object_name} 存在: {parsed_exists}")
+        # 检查解析对象
+        parsed_exists = minio_client.file_exists(parsed_bucket, parsed_object_name)
+        print(f"   {parsed_bucket}/{parsed_object_name} 存在: {parsed_exists}")
 
         # 6. 输出测试结果
         print("\n" + "=" * 50)
@@ -99,9 +101,9 @@ async def test_delete_knowledge_base_cleanup():
         else:
             print("❌ 测试失败！以下文件未被清理:")
             if doc_exists:
-                print(f"   - kb-documents/{test_object_name}")
+                print(f"   - {doc_bucket}/{test_object_name}")
             if parsed_exists:
-                print(f"   - kb-parsed/{parsed_object_name}")
+                print(f"   - {parsed_bucket}/{parsed_object_name}")
             return False
 
     except Exception as e:
@@ -116,9 +118,8 @@ async def test_delete_knowledge_base_cleanup():
         print("\n清理测试数据...")
         try:
             # 尝试删除可能残留的文件（忽略错误）
-            for obj in [test_object_name, parsed_object_name]:
+            for bucket, obj in [(doc_bucket, test_object_name), (parsed_bucket, parsed_object_name)]:
                 try:
-                    bucket = "kb-documents" if "kb-documents" in str(obj) else "kb-parsed"
                     await minio_client.adelete_file(bucket, obj)
                 except Exception:
                     pass

@@ -172,6 +172,7 @@ async def text_to_img_qwen_image(
     negative_prompt: Annotated[str, "负面提示词，用于指定不想出现在图片中的元素"] = "",
     num_inference_steps: Annotated[int, "推理步数，范围1-100"] = 20,
     guidance_scale: Annotated[float, "引导强度，控制图片与提示词的匹配程度"] = 7.5,
+    user_id: Annotated[str, "用户ID，用于图片归档路径"] = "unknown",
 ) -> str:
     """使用 Qwen-Image 模型生成图片，返回图片的URL，需要注意的是，生成结果不会默认展示，需要将返回的URL进行展示处理。"""
     url = "https://api.siliconflow.cn/v1/images/generations"
@@ -202,9 +203,10 @@ async def text_to_img_qwen_image(
     response = requests.get(image_url)
     file_data = response.content
 
-    file_name = f"{uuid.uuid4()}.jpg"
+    safe_user_id = str(user_id or "unknown").replace("/", "_").replace("\\", "_")
+    file_name = f"user/{safe_user_id}/generated-images/{uuid.uuid4()}.jpg"
     image_url = await aupload_file_to_minio(
-        bucket_name="generated-images", file_name=file_name, data=file_data, file_extension="jpg"
+        bucket_name="public", file_name=file_name, data=file_data, file_extension="jpg"
     )
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url

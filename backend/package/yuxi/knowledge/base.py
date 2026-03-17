@@ -365,14 +365,10 @@ class KnowledgeBase(ABC):
         from yuxi.storage.minio import get_minio_client
 
         minio_client = get_minio_client()
-        bucket_name = "kb-documents"  # Or reuse existing bucket strategy?
-        # Maybe store in 'kb-files' or 'kb-markdowns'
-        # Current uploads go to 'kb-files' usually?
-        # Let's use 'kb-parsed'
-        bucket_name = "kb-parsed"
+        bucket_name = minio_client.KB_BUCKETS["parsed"]
         await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
 
-        object_name = f"{db_id}/{file_id}/parsed.md"
+        object_name = f"{db_id}/parsed/{file_id}.md"
         data = content.encode("utf-8")
 
         # Return standard HTTP URL from UploadResult
@@ -494,22 +490,23 @@ class KnowledgeBase(ABC):
                     except Exception as e:
                         logger.warning(f"Failed to delete MinIO file {file_path}: {e}")
 
-                # 删除解析后的 markdown 文件 (kb-parsed/{db_id}/{file_id}/parsed.md)
-                parsed_object = f"{db_id}/{file_id}/parsed.md"
+                # 删除解析后的 markdown 文件
+                parsed_object = f"{db_id}/parsed/{file_id}.md"
                 await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], parsed_object)
 
                 del self.files_meta[file_id]
 
             # 2. 并行删除所有知识库 bucket 中该 db_id 下的文件
             prefix = f"{db_id}/"
-            await asyncio.gather(
-                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["parsed"], prefix),
-                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["documents"], prefix),
-                minio_client.adelete_objects_by_prefix(minio_client.KB_BUCKETS["images"], prefix),
-                # 直接删除 ref bucket（两种命名格式）
-                minio_client.adelete_bucket(minio_client.get_ref_bucket_name(db_id)),
-                minio_client.adelete_bucket(minio_client.get_ref_bucket_name_full(db_id)),
-            )
+            cleanup_buckets = {
+                minio_client.KB_BUCKETS["parsed"],
+                minio_client.KB_BUCKETS["documents"],
+                minio_client.KB_BUCKETS["images"],
+            }
+            cleanup_tasks = [
+                minio_client.adelete_objects_by_prefix(bucket_name, prefix) for bucket_name in cleanup_buckets
+            ]
+            await asyncio.gather(*cleanup_tasks)
 
             # 3. 删除数据库记录
             del self.databases_meta[db_id]
