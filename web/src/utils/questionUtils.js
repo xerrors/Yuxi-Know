@@ -9,8 +9,12 @@ const DEFAULT_OTHER_OPTION_VALUE = '__other__'
  */
 export const isOtherOption = (option) => {
   if (!option || typeof option !== 'object') return false
-  const label = String(option.label || '').trim().toLowerCase()
-  const value = String(option.value || '').trim().toLowerCase()
+  const label = String(option.label || '')
+    .trim()
+    .toLowerCase()
+  const value = String(option.value || '')
+    .trim()
+    .toLowerCase()
 
   return (
     value === DEFAULT_OTHER_OPTION_VALUE ||
@@ -53,14 +57,16 @@ export const normalizeQuestions = (rawQuestions) => {
       const question = String(item.question || '').trim()
       if (!question) return null
 
-      const questionId = String(item.questionId || item.question_id || '').trim() || `q-${index + 1}`
+      const questionId =
+        String(item.questionId || item.question_id || '').trim() || `q-${index + 1}`
       const operation = String(item.operation || '').trim()
       const allowOther = Boolean(item.allowOther ?? item.allow_other ?? true)
       const baseOptions = normalizeOptions(item.options || [])
       const hasOtherOption = baseOptions.some((option) => isOtherOption(option))
-      const options = allowOther && !hasOtherOption
-        ? [...baseOptions, { label: '其他', value: DEFAULT_OTHER_OPTION_VALUE }]
-        : baseOptions
+      const options =
+        allowOther && !hasOtherOption
+          ? [...baseOptions, { label: '其他', value: DEFAULT_OTHER_OPTION_VALUE }]
+          : baseOptions
 
       return {
         questionId,

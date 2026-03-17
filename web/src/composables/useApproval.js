@@ -28,8 +28,10 @@ const parseApprovedDecision = (answer) => {
     if (typeof value === 'boolean') return value
     if (typeof value === 'string') {
       const normalized = value.trim().toLowerCase()
-      if (normalized === 'approve' || normalized === 'approved' || normalized === 'true') return true
-      if (normalized === 'reject' || normalized === 'rejected' || normalized === 'false') return false
+      if (normalized === 'approve' || normalized === 'approved' || normalized === 'true')
+        return true
+      if (normalized === 'reject' || normalized === 'rejected' || normalized === 'false')
+        return false
     }
     return null
   }

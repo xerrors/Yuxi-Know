@@ -10,7 +10,7 @@ from yuxi import config, graph_base
 from yuxi.agents.common.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
 from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils import logger
-from yuxi.utils.question_utils import normalize_questions, normalize_options
+from yuxi.utils.question_utils import normalize_questions
 
 # Lazy initialization for TavilySearch (only when API key is available)
 _tavily_search_instance = None

@@ -1,4 +1,5 @@
 """问题和选项规范化工具"""
+
 import uuid
 from typing import Any
 
@@ -21,9 +22,7 @@ def normalize_options(raw_options: Any) -> list[dict[str, str]]:
     return options
 
 
-def normalize_questions(
-    raw_questions: Any, default_question_id_prefix: str = "q"
-) -> list[dict[str, Any]]:
+def normalize_questions(raw_questions: Any, default_question_id_prefix: str = "q") -> list[dict[str, Any]]:
     """规范化问题列表"""
     if not isinstance(raw_questions, list):
         return []
@@ -37,9 +36,7 @@ def normalize_questions(
         if not question:
             continue
 
-        question_id = str(
-            item.get("question_id") or f"{default_question_id_prefix}-{idx + 1}"
-        ).strip()
+        question_id = str(item.get("question_id") or f"{default_question_id_prefix}-{idx + 1}").strip()
         if not question_id:
             question_id = str(uuid.uuid4())
 

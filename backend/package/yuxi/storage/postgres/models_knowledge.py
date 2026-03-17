@@ -14,7 +14,6 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-
 from yuxi.storage.postgres.models_business import Base
 from yuxi.utils.datetime_utils import utc_now_naive
 

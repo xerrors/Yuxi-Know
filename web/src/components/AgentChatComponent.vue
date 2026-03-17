@@ -1164,8 +1164,8 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
       }
 
       const approvalStatuses = ['ask_user_question_required', 'human_approval_required']
-      const isApprovalEvent = approvalStatuses.includes(event) ||
-        approvalStatuses.includes(payload?.chunk?.status)
+      const isApprovalEvent =
+        approvalStatuses.includes(event) || approvalStatuses.includes(payload?.chunk?.status)
 
       if (isApprovalEvent) {
         const approvalChunk = payload?.chunk || { status: event, thread_id: threadId }

@@ -11,7 +11,6 @@ from typing import Any
 
 import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi import config as sys_config
 from yuxi.repositories.skill_repository import SkillRepository
 from yuxi.services.mcp_service import get_mcp_server_names

@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
-
 from yuxi.repositories.agent_run_repository import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.services.chat_stream_service import stream_agent_chat
 from yuxi.services.run_queue_service import (

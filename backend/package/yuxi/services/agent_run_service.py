@@ -11,7 +11,6 @@ from collections.abc import AsyncIterator
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.agents import agent_manager
 from yuxi.repositories.agent_run_repository import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
@@ -230,7 +229,6 @@ async def stream_agent_run_events(
 
 async def get_active_run_by_thread(*, thread_id: str, current_user_id: str, db: AsyncSession) -> dict:
     from sqlalchemy import select
-
     from yuxi.storage.postgres.models_business import AgentRun
 
     result = await db.execute(
