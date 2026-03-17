@@ -7,11 +7,11 @@ services:
     container_name: api-dev
     working_dir: /app
     volumes:
-      - ./server:/app/server
-      - ./src:/app/src
+      - ./backend/server:/app/server
+      - ./backend/package/yuxi:/app/package/yuxi
       - ./saves:/app/saves
-      - ./test:/app/test
-      - ./scripts:/app/scripts
+      - ./backend/test:/app/test
+      - ./backend/scripts:/app/scripts
       - ./.env:/app/.env
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
     ports:
@@ -43,6 +43,7 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - PYTHONPATH=/app/package
     # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050 --reload
     restart: unless-stopped
@@ -70,14 +71,14 @@ services:
     container_name: worker-dev
     working_dir: /app
     volumes:
-      - ./server:/app/server
-      - ./src:/app/src
+      - ./backend/server:/app/server
+      - ./backend/package/yuxi:/app/package/yuxi
       - ./saves:/app/saves
-      - ./test:/app/test
-      - ./scripts:/app/scripts
+      - ./backend/test:/app/test
+      - ./backend/scripts:/app/scripts
       - ./.env:/app/.env
-      - ./pyproject.toml:/app/pyproject.toml
-      - ./uv.lock:/app/uv.lock
+      - ./backend/pyproject.toml:/app/pyproject.toml
+      - ./backend/uv.lock:/app/uv.lock
       - ${MODEL_DIR:-./models}:/models
     networks:
       - app-network
@@ -105,6 +106,7 @@ services:
       - RUNNING_IN_DOCKER=true
       - NO_PROXY=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
       - no_proxy=localhost,127.0.0.1,milvus,graph,milvus-minio,milvus-etcd-dev,etcd,minio,mineru,paddlex,api.siliconflow.cn
+      - PYTHONPATH=/app/package
     command: uv run --no-dev arq server.worker_main.WorkerSettings
     restart: unless-stopped
     depends_on:
@@ -153,7 +155,7 @@ services:
       - ./docker/volumes/neo4j/data:/data
       - ./docker/volumes/neo4j/logs:/var/lib/neo4j/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u ${NEO4J_USERNAME:-neo4j} -p ${NEO4J_PASSWORD:-0123456789} 'RETURN 1;' >/dev/null || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5

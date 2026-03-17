@@ -38,9 +38,9 @@ RUN set -ex \
 
 
 # 复制项目配置文件
-COPY ../pyproject.toml /app/pyproject.toml
-COPY ../.python-version /app/.python-version
-COPY ../uv.lock /app/uv.lock
+COPY ../backend/pyproject.toml /app/pyproject.toml
+COPY ../backend/.python-version /app/.python-version
+COPY ../backend/uv.lock /app/uv.lock
 
 # 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -48,7 +48,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # 激活虚拟环境并添加到PATH
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/package:$PYTHONPATH"
 
 # 复制代码到容器中
-COPY ../src /app/src
-COPY ../server /app/server
+COPY ../backend/package/yuxi /app/package/yuxi
+COPY ../backend/server /app/server
