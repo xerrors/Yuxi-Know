@@ -1,0 +1,127 @@
+[project]
+name = "yuxi-workspace"
+version = "0.5.3"
+description = "基于大模型的智能知识库与知识图谱智能体开发平台，融合了 RAG 技术与知识图谱技术，基于 LangGraph v1 + Vue.js + FastAPI + LightRAG 架构构建"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.20.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "langchain>=1.2.0",
+    "langchain-core >= 1.2.5",
+    "colorlog>=6.9.0",
+    "dashscope>=1.23.2",
+    "docx2txt>=0.9",
+    "fastapi>=0.121",
+    "langchain-community>=0.4",
+    "langchain-deepseek>=1.0",
+    "langchain-mcp-adapters>=0.1.9",
+    "langchain-openai>=1.0.2",
+    "langchain-tavily>=0.2.13",
+    "langchain-text-splitters>=1.0",
+    "langgraph>=1.0.1",
+    "langgraph-checkpoint-sqlite>=3.0",
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "langgraph-cli[inmem]>=0.4",
+    "langsmith>=0.4",
+    "lightrag-hku>=1.4.6",
+    "llama-index>=0.14",
+    "llama-index-readers-file>=0.4.7",
+    "markdownify>=1.1.0",
+    "readability-lxml>=0.8.1",
+    "mcp>=1.20",
+    "neo4j>=5.28.1",
+    "networkx>=3.5",
+    "openai>=1.109",
+    "opencv-python-headless>=4.11.0.86",
+    "pyjwt>=2.8.0",
+    "pymilvus>=2.5.8",
+    "pymupdf>=1.25.5",
+    "python-dotenv>=1.1.0",
+    "python-jose[cryptography]>=3.4.0",
+    "python-multipart>=0.0.20",
+    "pyyaml>=6.0.2",
+    "rapidocr-onnxruntime>=1.4.4",
+    "tavily-python>=0.7.0",
+    "unstructured>=0.17.2",
+    "uvicorn[standard]>=0.34.2",
+    "httpx>=0.27.0",
+    "tqdm>=4.66.4",
+    "rich>=13.7.1",
+    "typer>=0.16.0",
+    "tabulate>=0.9.0",
+    "minio>=7.2.7",
+    "Pillow>=10.5.0",
+    "pymysql>=1.1.0",
+    "tenacity>=8.0.0",
+    "pypinyin>=0.55.0",
+    "tomli",
+    "tomli-w",
+    "aiofiles>=24.1.0",
+    "aiohttp>=3.9.0",
+    "arq>=0.26.3",
+    "chardet>=5.0.0",
+    "deepagents>=0.2.5",
+    "json-repair>=0.54.0",
+    "torch>=2.8.0",
+    "torchvision==0.23",
+    "docling>=2.68.0",
+    "loguru>=0.7.3",
+    "redis>=5.2.0",
+]
+[tool.ruff]
+line-length = 120  # 代码最大行宽
+lint.select = [         # 选择的规则
+    "F",
+    "E",
+    "W",
+    "UP",
+]
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[tool.uv.workspace]
+exclude = ["."]
+members = [
+    "package/yuxi",
+]
+
+
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+testpaths = ["test"]
+markers = [
+    "auth: marks tests that require authentication",
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests"
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.1",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-httpx>=0.32.0",
+    "pytest-cov>=6.0.0",
+]
