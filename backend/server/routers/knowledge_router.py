@@ -16,6 +16,7 @@ from yuxi import config, knowledge_base
 from yuxi.knowledge.chunking.ragflow_like.presets import ensure_chunk_defaults_in_additional_params
 from yuxi.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
 from yuxi.knowledge.utils import calculate_content_hash
+from yuxi.knowledge.utils.kb_utils import parse_minio_url
 from yuxi.models.embed import test_all_embedding_models_status, test_embedding_model_status
 from yuxi.storage.postgres.models_business import User
 from yuxi.storage.minio.client import MinIOClient, StorageError, aupload_file_to_minio, get_minio_client
@@ -680,15 +681,18 @@ async def batch_delete_documents(
                 deleted_count += 1
                 continue
 
-            file_name = file_meta_info.get("meta", {}).get("filename")
+            file_path = file_meta_info.get("meta", {}).get("path", "")
 
-            # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
+            # 尝试从 MinIO 删除文件对象与解析结果
             try:
                 minio_client = get_minio_client()
-                await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
-                logger.debug(f"成功从MinIO删除文件: {file_name}")
+                if file_path.startswith(("http://", "https://")):
+                    bucket_name, object_name = parse_minio_url(file_path)
+                    await minio_client.adelete_file(bucket_name, object_name)
+                await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], f"{db_id}/parsed/{doc_id}.md")
+                logger.debug(f"成功从MinIO删除文件: {file_path}")
             except Exception as minio_error:
-                logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")
+                logger.warning(f"从MinIO删除文件失败: {minio_error}")
 
             # 无论MinIO删除是否成功，都继续从知识库删除
             await knowledge_base.delete_file(db_id, doc_id)
@@ -723,17 +727,18 @@ async def delete_document(db_id: str, doc_id: str, current_user: User = Depends(
             await knowledge_base.delete_folder(db_id, doc_id)
             return {"message": "文件夹删除成功"}
 
-        file_name = file_meta_info.get("meta", {}).get("path", "").split("/")[-1]
+        file_path = file_meta_info.get("meta", {}).get("path", "")
 
-        # 尝试从MinIO删除文件，如果失败（例如旧知识库没有MinIO实例），则忽略
+        # 尝试从 MinIO 删除文件对象与解析结果
         try:
             minio_client = get_minio_client()
-            await minio_client.adelete_file(MinIOClient.get_ref_bucket_name(db_id), file_name)
-            # 同时删除 parsed bucket 中的 parsed.md 文件
-            await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], f"{db_id}/{doc_id}/parsed.md")
-            logger.debug(f"成功从MinIO删除文件: {file_name}")
+            if file_path.startswith(("http://", "https://")):
+                bucket_name, object_name = parse_minio_url(file_path)
+                await minio_client.adelete_file(bucket_name, object_name)
+            await minio_client.adelete_file(minio_client.KB_BUCKETS["parsed"], f"{db_id}/parsed/{doc_id}.md")
+            logger.debug(f"成功从MinIO删除文件: {file_path}")
         except Exception as minio_error:
-            logger.warning(f"从MinIO删除文件失败（可能是旧知识库）: {minio_error}")
+            logger.warning(f"从MinIO删除文件失败: {minio_error}")
 
         # 无论MinIO删除是否成功，都继续从知识库删除
         await knowledge_base.delete_file(db_id, doc_id)
@@ -1240,13 +1245,11 @@ async def fetch_url(
 
         # 3. 上传到 MinIO
         minio_client = get_minio_client()
-        # 确保存储 bucket 存在
-        bucket_name = "kb-html-archives"
+        bucket_name = MinIOClient.KB_BUCKETS["documents"]
         await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
 
-        # 如果没有提供 db_id，使用 default
-        folder = db_id if db_id else "default"
-        object_name = f"{folder}/{content_hash}.html"
+        folder = db_id if db_id else "unknown"
+        object_name = f"{folder}/upload/{content_hash}.html"
 
         upload_result = await minio_client.aupload_file(
             bucket_name=bucket_name,
@@ -1326,14 +1329,12 @@ async def upload_file(
     timestamp = int(time.time() * 1000)
     minio_filename = f"{basename}_{timestamp}{ext}"
 
-    # 生成符合MinIO规范的存储桶名称（将下划线替换为连字符，截取长度以满足MinIO的63字符限制）
-    if db_id:
-        bucket_name = f"ref-{db_id[:32].replace('_', '-')}"
-    else:
-        bucket_name = "default-uploads"
+    bucket_name = MinIOClient.KB_BUCKETS["documents"]
+    folder = db_id if db_id else "unknown"
+    object_name = f"{folder}/upload/{minio_filename}"
 
     # 上传到MinIO
-    minio_url = await aupload_file_to_minio(bucket_name, minio_filename, file_bytes, ext.lstrip("."))
+    minio_url = await aupload_file_to_minio(bucket_name, object_name, file_bytes, ext.lstrip("."))
 
     # 检测同名文件（基于原始文件名）
     same_name_files = await knowledge_base.get_same_name_files(db_id, filename)
@@ -1348,6 +1349,7 @@ async def upload_file(
         "filename": filename,  # 原始文件名（小写）
         "original_filename": basename,  # 原始文件名（去掉后缀）
         "minio_filename": minio_filename,  # MinIO中的文件名（带时间戳）
+        "object_name": object_name,
         "bucket_name": bucket_name,  # MinIO存储桶名称
         "same_name_files": same_name_files,  # 同名文件列表
         "has_same_name": has_same_name,  # 是否包含同名文件标志

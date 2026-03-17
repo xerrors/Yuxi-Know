@@ -156,7 +156,14 @@ class MinerUOfficialParser(BaseDocumentProcessor):
                 return text
 
             try:
-                processed = process_zip_file_sync(zip_path, params.get("db_id") or "ocr-test")
+                image_bucket = params.get("image_bucket") or "public"
+                image_prefix = params.get("image_prefix") or "unknown/kb-images"
+
+                processed = process_zip_file_sync(
+                    zip_path,
+                    image_bucket=image_bucket,
+                    image_prefix=image_prefix,
+                )
                 text = processed["markdown_content"]
             except Exception:
                 import zipfile

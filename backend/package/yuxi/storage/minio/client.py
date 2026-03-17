@@ -41,24 +41,14 @@ class MinIOClient:
     简化的 MinIO 客户端类
     """
 
-    PUBLIC_READ_BUCKETS = {"generated-images", "avatar", "kb-images"}
+    PUBLIC_READ_BUCKETS = {"public"}
 
     # 知识库相关的 bucket 名称
     KB_BUCKETS = {
-        "documents": "kb-documents",
-        "parsed": "kb-parsed",
-        "images": "kb-images",
+        "documents": "knowledgebases",
+        "parsed": "knowledgebases",
+        "images": "public",
     }
-
-    @staticmethod
-    def get_ref_bucket_name(db_id: str) -> str:
-        """获取 ref bucket 名称（截断32位）"""
-        return f"ref-{db_id[:32].replace('_', '-')}"
-
-    @staticmethod
-    def get_ref_bucket_name_full(db_id: str) -> str:
-        """获取 ref bucket 名称（不截断）"""
-        return f"ref-{db_id.replace('_', '-')}"
 
     def __init__(self):
         """初始化 MinIO 客户端"""

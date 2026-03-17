@@ -15,7 +15,7 @@ from yuxi.utils.datetime_utils import utc_isoformat
 from yuxi.utils.logging_config import logger
 
 # 附件存储桶名称
-ATTACHMENTS_BUCKET = "chat-attachments"
+ATTACHMENTS_BUCKET = "user"
 
 
 async def require_user_conversation(conv_repo: ConversationRepository, thread_id: str, user_id: str):
@@ -246,14 +246,15 @@ async def upload_thread_attachment_view(
         file_content = await file.read()
         await file.seek(0)
         client = get_minio_client()
-        object_name = f"attachments/{thread_id}/{conversion.file_name}"
+        safe_filename = conversion.file_name.replace("/", "_").replace("\\", "_")
+        object_name = f"user/{current_user_id}/chat_attachments/{thread_id}/{safe_filename}"
         result = client.upload_file(
             bucket_name=ATTACHMENTS_BUCKET,
             object_name=object_name,
             data=file_content,
             content_type=conversion.file_type or "application/octet-stream",
         )
-        minio_url = result.public_url
+        minio_url = result.url
         logger.info(f"Uploaded attachment to MinIO: {object_name}")
     except Exception as e:
         logger.error(f"Failed to upload attachment to MinIO: {e}")

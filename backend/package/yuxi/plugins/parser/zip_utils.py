@@ -7,16 +7,29 @@ import zipfile
 from pathlib import Path
 
 from yuxi.storage.minio import get_minio_client
-from yuxi.utils import hashstr, logger
+from yuxi.utils import logger
+
+DEFAULT_IMAGE_BUCKET = "public"
+DEFAULT_IMAGE_PREFIX = "unknown/kb-images"
 
 
-async def process_zip_file(zip_path: str, db_id: str) -> dict:
+def _normalize_object_prefix(prefix: str | None) -> str:
+    normalized = (prefix or DEFAULT_IMAGE_PREFIX).strip("/")
+    return normalized or DEFAULT_IMAGE_PREFIX
+
+
+async def process_zip_file(
+    zip_path: str,
+    image_bucket: str = DEFAULT_IMAGE_BUCKET,
+    image_prefix: str = DEFAULT_IMAGE_PREFIX,
+) -> dict:
     """
     处理ZIP文件，提取markdown内容和图片
 
     Args:
         zip_path: ZIP文件路径
-        db_id: 数据库ID
+        image_bucket: 图片上传的目标 bucket
+        image_prefix: 图片上传对象前缀
 
     Returns:
         dict: {
@@ -43,9 +56,15 @@ async def process_zip_file(zip_path: str, db_id: str) -> dict:
 
         images_info = []
         images_dir = find_images_directory(zf, md_file)
+        normalized_prefix = _normalize_object_prefix(image_prefix)
 
         if images_dir:
-            images_info = await process_images(zf, images_dir, db_id, md_file)
+            images_info = await process_images(
+                zf,
+                images_dir,
+                image_bucket=image_bucket,
+                image_prefix=normalized_prefix,
+            )
             markdown_content = replace_image_links(markdown_content, images_info)
 
     content_hash = hashlib.sha256(markdown_content.encode("utf-8")).hexdigest()
@@ -57,12 +76,16 @@ async def process_zip_file(zip_path: str, db_id: str) -> dict:
     }
 
 
-def process_zip_file_sync(zip_path: str, db_id: str) -> dict:
+def process_zip_file_sync(
+    zip_path: str,
+    image_bucket: str = DEFAULT_IMAGE_BUCKET,
+    image_prefix: str = DEFAULT_IMAGE_PREFIX,
+) -> dict:
     """同步调用 ZIP 处理，供同步解析器使用。"""
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(process_zip_file(zip_path, db_id))
+        return asyncio.run(process_zip_file(zip_path, image_bucket=image_bucket, image_prefix=image_prefix))
 
     result: dict | None = None
     error: Exception | None = None
@@ -70,7 +93,7 @@ def process_zip_file_sync(zip_path: str, db_id: str) -> dict:
     def runner() -> None:
         nonlocal result, error
         try:
-            result = asyncio.run(process_zip_file(zip_path, db_id))
+            result = asyncio.run(process_zip_file(zip_path, image_bucket=image_bucket, image_prefix=image_prefix))
         except Exception as exc:  # pragma: no cover - pass through outer raise
             error = exc
 
@@ -106,7 +129,12 @@ def find_images_directory(zip_file: zipfile.ZipFile, md_file_path: str) -> str |
     return None
 
 
-async def process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str, md_file_path: str) -> list[dict]:
+async def process_images(
+    zip_file: zipfile.ZipFile,
+    images_dir: str,
+    image_bucket: str,
+    image_prefix: str,
+) -> list[dict]:
     """处理图片：上传到MinIO并返回信息"""
     supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
     content_type_map = {
@@ -120,12 +148,10 @@ async def process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str,
 
     images = []
     image_names = [n for n in zip_file.namelist() if n.startswith(images_dir + "/")]
+    normalized_prefix = _normalize_object_prefix(image_prefix)
 
     minio_client = get_minio_client()
-    bucket_name = "kb-images"
-    await asyncio.to_thread(minio_client.ensure_bucket_exists, bucket_name)
-
-    file_id = hashstr(Path(md_file_path).name, length=16)
+    await asyncio.to_thread(minio_client.ensure_bucket_exists, image_bucket)
 
     for img_name in image_names:
         suffix = Path(img_name).suffix.lower()
@@ -137,11 +163,11 @@ async def process_images(zip_file: zipfile.ZipFile, images_dir: str, db_id: str,
                 data = f.read()
 
             timestamp = int(time.time() * 1000000)
-            object_name = f"{db_id}/{file_id}/images/{timestamp}_{Path(img_name).name}"
+            object_name = f"{normalized_prefix}/{timestamp}_{Path(img_name).name}"
             content_type = content_type_map.get(suffix, "image/jpeg")
 
             result = await minio_client.aupload_file(
-                bucket_name=bucket_name,
+                bucket_name=image_bucket,
                 object_name=object_name,
                 data=data,
                 content_type=content_type,

@@ -757,8 +757,8 @@ async def upload_user_avatar(
         file_extension = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "jpg"
 
         # 上传到MinIO
-        file_name = f"{uuid.uuid4()}.{file_extension}"
-        avatar_url = await aupload_file_to_minio("avatar", file_name, file_content, file_extension)
+        file_name = f"avatar/{current_user.id}/{uuid.uuid4()}.{file_extension}"
+        avatar_url = await aupload_file_to_minio("public", file_name, file_content, file_extension)
 
         # 更新用户头像
         current_user.avatar = avatar_url

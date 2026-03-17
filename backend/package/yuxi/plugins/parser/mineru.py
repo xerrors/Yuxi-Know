@@ -189,7 +189,14 @@ class MinerUParser(BaseDocumentProcessor):
                     tmp_zip.flush()
 
                     try:
-                        processed = process_zip_file_sync(tmp_zip.name, params.get("db_id") or "ocr-temp")
+                        image_bucket = params.get("image_bucket") or "public"
+                        image_prefix = params.get("image_prefix") or "unknown/kb-images"
+
+                        processed = process_zip_file_sync(
+                            tmp_zip.name,
+                            image_bucket=image_bucket,
+                            image_prefix=image_prefix,
+                        )
                         text = processed["markdown_content"]
                     finally:
                         os.unlink(tmp_zip.name)
