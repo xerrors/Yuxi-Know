@@ -17,5 +17,5 @@ executor = ThreadPoolExecutor()  # noqa: E402
 
 
 def get_version():
-    """Return the Yuxi-Know version."""
+    """Return the Yuxi version."""
     return __version__

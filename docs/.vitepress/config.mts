@@ -5,7 +5,7 @@ import markdownItTaskCheckbox from 'markdown-it-task-checkbox'
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
   lang: 'zh-CN',
-  title: "Yuxi-Know",
+  title: "Yuxi",
   description: "语析",
   base: '/Yuxi-Know/',
   srcDir: './',
@@ -35,7 +35,7 @@ export default defineConfig({
         {
           text: '简介',
           items: [
-            { text: '什么是 Yuxi-Know？', link: '/latest/intro/project-overview' },
+            { text: '什么是 Yuxi？', link: '/latest/intro/project-overview' },
             { text: '快速开始', link: '/latest/intro/quick-start' },
             { text: '模型配置', link: '/latest/intro/model-config' },
             { text: '知识库与知识图谱', link: '/latest/intro/knowledge-base' },
@@ -77,7 +77,7 @@ export default defineConfig({
         {
           text: '简介',
           items: [
-            { text: '什么是 Yuxi-Know？', link: '/v0.4.0/intro/project-overview' },
+            { text: '什么是 Yuxi？', link: '/v0.4.0/intro/project-overview' },
             { text: '快速开始', link: '/v0.4.0/intro/quick-start' },
             { text: '模型配置', link: '/v0.4.0/intro/model-config' },
             { text: '知识库与知识图谱', link: '/v0.4.0/intro/knowledge-base' },

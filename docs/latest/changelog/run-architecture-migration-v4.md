@@ -148,14 +148,14 @@ sequenceDiagram
 
 ### 后端
 
-1. `/Yuxi-Know/src/services/run_queue_service.py`
-2. `/Yuxi-Know/src/services/run_worker.py`
-3. `/Yuxi-Know/src/services/agent_run_service.py`
-4. `/Yuxi-Know/src/repositories/agent_run_repository.py`
+1. `/Yuxi-Know/backend/package/yuxi/services/run_queue_service.py`
+2. `/Yuxi-Know/backend/package/yuxi/services/run_worker.py`
+3. `/Yuxi-Know/backend/package/yuxi/services/agent_run_service.py`
+4. `/Yuxi-Know/backend/package/yuxi/repositories/agent_run_repository.py`
 5. `/Yuxi-Know/server/routers/chat_router.py`
 6. `/Yuxi-Know/server/worker_main.py`
-7. `/Yuxi-Know/src/storage/postgres/manager.py`
-8. `/Yuxi-Know/src/storage/postgres/models_business.py`
+7. `/Yuxi-Know/backend/package/yuxi/storage/postgres/manager.py`
+8. `/Yuxi-Know/backend/package/yuxi/storage/postgres/models_business.py`
 
 ### 前端
 

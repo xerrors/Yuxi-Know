@@ -9,17 +9,17 @@ from typing import Any
 from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 
-from src import config as conf
-from src.agents import agent_manager
-from src.plugins.guard import content_guard
-from src.repositories.agent_config_repository import AgentConfigRepository
-from src.repositories.conversation_repository import ConversationRepository
-from src.storage.postgres.manager import pg_manager
-from src.utils.logging_config import logger
-from src.utils.question_utils import (
+from yuxi import config as conf
+from yuxi.agents import agent_manager
+from yuxi.plugins.guard import content_guard
+from yuxi.repositories.agent_config_repository import AgentConfigRepository
+from yuxi.repositories.conversation_repository import ConversationRepository
+from yuxi.storage.postgres.manager import pg_manager
+from yuxi.utils.logging_config import logger
+from yuxi.utils.question_utils import (
     normalize_options as _normalize_interrupt_options,
 )
-from src.utils.question_utils import (
+from yuxi.utils.question_utils import (
     normalize_questions as _normalize_interrupt_questions,
 )
 

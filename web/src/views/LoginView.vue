@@ -271,7 +271,7 @@ const brandOrgName = computed(() => {
 })
 const brandName = computed(() => {
   const orgName = brandOrgName.value
-  const brandNameRaw = infoStore.branding?.name?.trim() || 'Yuxi-Know'
+  const brandNameRaw = infoStore.branding?.name?.trim() || 'Yuxi'
 
   if (orgName && brandNameRaw && orgName !== brandNameRaw) {
     return brandNameRaw

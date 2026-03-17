@@ -1,6 +1,6 @@
 # 快速开始指南
 
-Yuxi-Know（语析）是一个基于知识图谱和向量数据库的智能知识库系统。通过本文档，你可以在几分钟内完成环境搭建并开始使用。
+Yuxi（语析）是一个基于知识图谱和向量数据库的智能知识库系统。通过本文档，你可以在几分钟内完成环境搭建并开始使用。
 
 ::: tip 提示
 除了此文档网站外，你还可以访问 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 查看自动生成的详细项目文档。

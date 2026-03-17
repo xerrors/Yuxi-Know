@@ -10,8 +10,8 @@ organization:
 
 # 项目信息
 branding:
-  name: "Yuxi-Know"
-  title: "Yuxi-Know: 更智能的知识库智能体平台"     # 系统标题
+  name: "Yuxi"
+  title: "Yuxi: 更智能的知识库智能体平台"     # 系统标题
   subtitle: "大模型驱动的知识库智能体平台"          # 副标题
 
 features:

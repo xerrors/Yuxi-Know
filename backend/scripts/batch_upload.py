@@ -337,7 +337,7 @@ def upload(
     poll_interval: int = typer.Option(5, help="Polling interval in seconds for checking task status."),
 ):
     """
-    Batch upload and process files into a Yuxi-Know knowledge base.
+    Batch upload and process files into a Yuxi knowledge base.
     """
     console.print(f"[bold green]Starting batch upload for knowledge base: {db_id}[/bold green]")
 

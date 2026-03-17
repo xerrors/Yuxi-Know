@@ -36,7 +36,7 @@ async def test_txt_add_vector_entity_parsing():
     mock_session.execute_write.side_effect = side_effect_execute_write
 
     # Mock embedding model
-    with patch("src.models.select_embedding_model") as mock_select_model:
+    with patch("yuxi.models.select_embedding_model") as mock_select_model:
         mock_embed_model = MagicMock()
         mock_select_model.return_value = mock_embed_model
 
@@ -52,14 +52,14 @@ async def test_txt_add_vector_entity_parsing():
         gd.embed_model_name = "test_model"
 
         # Mock config where it's imported in upload_graph_service.py
-        # The import is `from src import config`, so patch at the usage location
+        # The import is `from yuxi import config`, so patch at the usage location
         mock_config = MagicMock()
         mock_config.embed_model = "test_model"
         mock_embed_info = MagicMock()
         mock_embed_info.dimension = 1024
         mock_config.embed_model_names = {"test_model": mock_embed_info}
 
-        with patch("src.knowledge.graphs.upload_graph_service.config", mock_config):
+        with patch("yuxi.knowledge.graphs.upload_graph_service.config", mock_config):
             # Test data: Mixed format
             triples = [
                 # Legacy format

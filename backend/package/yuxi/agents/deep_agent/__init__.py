@@ -18,5 +18,5 @@ __all__ = [
 
 # 模块元数据
 __version__ = "1.0.0"
-__author__ = "Yuxi-Know Team"
+__author__ = "Yuxi Team"
 __description__ = "基于 create_deep_agent 的深度分析智能体"

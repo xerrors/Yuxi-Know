@@ -40,7 +40,7 @@ default_model: siliconflow/deepseek-ai/DeepSeek-V3.2
 ::: tip 配置系统升级 (v0.3.x)
 从 `v0.3.x` 版本开始，模型配置系统已升级为基于 Pydantic BaseModel 的类型安全配置，支持 TOML 格式的用户配置文件。
 
-- **默认配置**: `src/config/static/models.py` (Python 代码)
+- **默认配置**: `backend/package/yuxi/config/static/models.py` (Python 代码)
 - **用户配置**: `saves/config/base.toml` (TOML 格式，仅保存用户修改)
 - **自定义供应商**: `saves/config/custom_providers.toml` (独立配置文件)
   :::
@@ -156,7 +156,7 @@ models = [
 
 #### 1. 配置模型信息
 
-在 `src/config/static/models.py` 中的默认配置部分添加：
+在 `backend/package/yuxi/config/static/models.py` 中的默认配置部分添加：
 
 ```python
 # 默认嵌入模型配置
@@ -188,8 +188,8 @@ DEFAULT_RERANKERS: dict[str, RerankerInfo] = {
 你也可以通过代码动态添加本地模型：
 
 ```python
-from src.config import config
-from src.config.static.models import EmbedModelInfo, RerankerInfo
+from yuxi.config import config
+from yuxi.config.static.models import EmbedModelInfo, RerankerInfo
 
 # 添加本地嵌入模型
 config.embed_model_names["local/embed-model"] = EmbedModelInfo(

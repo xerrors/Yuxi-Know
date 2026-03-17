@@ -1362,7 +1362,7 @@ async def get_supported_file_types(current_user: User = Depends(get_admin_user))
 
 @knowledge.post("/files/markdown")
 async def mark_it_down(file: UploadFile = File(...), current_user: User = Depends(get_admin_user)):
-    """调用 src.knowledge.indexing 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
+    """调用 yuxi.knowledge.indexing 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
     try:
         content = await file.read()
         markdown_content = await process_file_to_markdown(content)
