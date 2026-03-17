@@ -7,11 +7,11 @@
 检测流程为，接收到用户输入之后，就对用户的输入进行检测是否合规，同时在流式传输的过程中进行实时检测（仅关键词）。当流式输出结束之后，则开始检测整个内容。
 **注意**，使用 LLM 检测虽然可以大大缓解提示词注入带来的问题，但也会在用户交互上带来延迟影响，需要考虑是否启用。
 
-对于关键词检测，敏感词词库位于 `src/config/static/bad_keywords.txt` 文件，每行一个关键词，实时生效，无需重启服务。
+对于关键词检测，敏感词词库位于 `backend/package/yuxi/config/static/bad_keywords.txt` 文件，每行一个关键词，实时生效，无需重启服务。
 
-对于 LLM 检测，Prompt 可以看到 `src/plugins/guard.py`：
+对于 LLM 检测，Prompt 可以看到 `backend/package/yuxi/plugins/guard.py`：
 
-<<< @/../src/plugins/guard.py#guard_prompt
+<<< @/../backend/package/yuxi/plugins/guard.py#guard_prompt
 
 ## 网页搜索
 

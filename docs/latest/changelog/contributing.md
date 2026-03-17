@@ -1,6 +1,6 @@
 # 参与贡献
 
-感谢你对 Yuxi-Know 项目的兴趣！我们欢迎任何形式的贡献，包括但不限于代码提交、功能建议、问题反馈和文档改进。
+感谢你对 Yuxi 项目的兴趣！我们欢迎任何形式的贡献，包括但不限于代码提交、功能建议、问题反馈和文档改进。
 
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
     <img src="https://contributors.nn.ci/api?repo=xerrors/Yuxi-Know" alt="贡献者名单">

@@ -12,7 +12,7 @@
             alt="logo"
             class="brand-logo"
           />
-          <div class="header-title">{{ branding.name || organization.name || 'Yuxi-Know' }}</div>
+          <div class="header-title">{{ branding.name || organization.name || 'Yuxi' }}</div>
         </div>
         <div class="header-actions">
           <div

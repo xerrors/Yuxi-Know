@@ -3,7 +3,7 @@
 layout: home
 
 hero:
-  name: "Yuxi-Know"
+  name: "Yuxi"
   text: "智能知识库与知识图谱问答系统"
   tagline: 基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建的智能问答平台
   image:

@@ -1,8 +1,8 @@
-# Yuxi-Know Initialization Script for PowerShell
-# This script helps set up the environment for the Yuxi-Know project
+# Yuxi Initialization Script for PowerShell
+# This script helps set up the environment for the Yuxi project
 # Note: API keys will be visible during input - use with care
 
-Write-Host "🚀 Initializing Yuxi-Know project..." -ForegroundColor Cyan
+Write-Host "🚀 Initializing Yuxi project..." -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 
 # Check if .env file exists

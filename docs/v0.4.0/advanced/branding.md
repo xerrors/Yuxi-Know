@@ -7,14 +7,14 @@
 ### 1. 复制模板文件
 
 ```bash
-cp src/config/static/info.template.yaml src/config/static/info.local.yaml
+cp backend/package/yuxi/config/static/info.template.yaml backend/package/yuxi/config/static/info.local.yaml
 ```
 
 ### 2. 编辑品牌信息
 
-在 `src/config/static/info.local.yaml` 中配置：
+在 `backend/package/yuxi/config/static/info.local.yaml` 中配置：
 
-<<< @/../src/config/static/info.template.yaml
+<<< @/../backend/package/yuxi/config/static/info.template.yaml
 
 上述中提到的 ICON 预设了下面这些，如果需要更多的 ICONS，可以手动从 `lucide-vue-next` 中引入。
 
@@ -25,7 +25,7 @@ cp src/config/static/info.template.yaml src/config/static/info.local.yaml
 在 `.env` 文件中指定配置文件路径：
 
 ```bash
-YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
+YUXI_BRAND_FILE_PATH=backend/package/yuxi/config/static/info.local.yaml
 ```
 
 ::: tip 配置优先级

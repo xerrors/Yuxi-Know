@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Yuxi-Know Initialization Script for Bash/Linux/macOS
-# This script helps set up the environment for the Yuxi-Know project
+# Yuxi Initialization Script for Bash/Linux/macOS
+# This script helps set up the environment for the Yuxi project
 
 set -e
 
-echo "🚀 Initializing Yuxi-Know project..."
+echo "🚀 Initializing Yuxi project..."
 echo "=================================="
 
 # Check if .env file exists

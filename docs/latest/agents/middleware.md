@@ -17,7 +17,7 @@
 支持文件上传功能的中间件。如果智能体需要处理用户上传的文档，可以启用此中间件：
 
 ```python
-from src.agents.common.middlewares import inject_attachment_context
+from yuxi.agents.common.middlewares import inject_attachment_context
 
 async def get_graph(self):
     graph = create_agent(
@@ -41,4 +41,4 @@ async def get_graph(self):
 
 ## 自定义中间件
 
-新增中间件时，将其放入 `src/agents/common/middlewares` 目录，然后在智能体的 `middleware` 列表中引用即可。
+新增中间件时，将其放入 `backend/package/yuxi/agents/common/middlewares` 目录，然后在智能体的 `middleware` 列表中引用即可。

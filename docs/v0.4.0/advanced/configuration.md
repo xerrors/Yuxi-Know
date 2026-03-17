@@ -11,8 +11,8 @@ Yuxi-Know 从 v0.3.x 版本开始采用了全新的配置系统，基于 Pydanti
 ```
 配置系统架构
 ├── 默认配置 (代码定义)
-│   ├── src/config/static/models.py (模型配置)
-│   └── src/config/app.py (应用配置)
+│   ├── backend/package/yuxi/config/static/models.py (模型配置)
+│   └── backend/package/yuxi/config/app.py (应用配置)
 ├── 用户配置 (TOML 文件)
 │   └── saves/config/base.toml (仅保存用户修改)
 └── 环境变量 (运行时覆盖)
@@ -21,7 +21,7 @@ Yuxi-Know 从 v0.3.x 版本开始采用了全新的配置系统，基于 Pydanti
 
 ### 核心组件
 
-#### 1. Config 类 (`src/config/app.py`)
+#### 1. Config 类 (`backend/package/yuxi/config/app.py`)
 
 主配置类，继承自 Pydantic BaseModel，提供：
 
@@ -44,7 +44,7 @@ class Config(BaseModel):
     model_provider_status: dict[str, bool] = Field(exclude=True)
 ```
 
-#### 2. 模型配置类 (`src/config/static/models.py`)
+#### 2. 模型配置类 (`backend/package/yuxi/config/static/models.py`)
 
 定义了三种类型的模型配置：
 
@@ -95,7 +95,7 @@ config.save()  # 只保存 enable_reranker 到 TOML 文件
 # enable_reranker = true
 ```
 
-### 默认模型配置 (`src/config/static/models.py`)
+### 默认模型配置 (`backend/package/yuxi/config/static/models.py`)
 
 包含所有支持的模型提供商的默认配置，开发者可以直接修改此文件添加新的模型：
 
@@ -140,7 +140,7 @@ models = [
 ### 动态配置更新
 
 ```python
-from src.config import config
+from yuxi.config import config
 
 # 更新配置
 config.enable_reranker = True
@@ -160,7 +160,7 @@ config._save_models_to_file("siliconflow")
 
 ```python
 # 验证配置
-from src.config import config
+from yuxi.config import config
 
 # 检查模型提供商可用性
 for provider, status in config.model_provider_status.items():

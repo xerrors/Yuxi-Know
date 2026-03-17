@@ -1,6 +1,6 @@
 # 其他配置
 
-本文档介绍 Yuxi-Know 的其他配置选项，包括内容安全、网页搜索和服务端口等。
+本文档介绍 Yuxi 的其他配置选项，包括内容安全、网页搜索和服务端口等。
 
 ## 内容安全
 
@@ -22,7 +22,7 @@
 
 **关键词检测**
 
-敏感词库位于 `src/config/static/bad_keywords.txt`，每行一个关键词。修改后实时生效，无需重启服务。
+敏感词库位于 `backend/package/yuxi/config/static/bad_keywords.txt`，每行一个关键词。修改后实时生效，无需重启服务。
 
 **LLM 检测**
 

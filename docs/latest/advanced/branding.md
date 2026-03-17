@@ -1,18 +1,18 @@
 # 品牌自定义
 
-Yuxi-Know 支持完整的品牌自定义，包括 Logo、组织名称、版权信息、登录协议等，方便企业用户进行品牌定制。
+Yuxi 支持完整的品牌自定义，包括 Logo、组织名称、版权信息、登录协议等，方便企业用户进行品牌定制。
 
 ## 品牌信息配置
 
 ### 步骤 1：复制模板文件
 
 ```bash
-cp src/config/static/info.template.yaml src/config/static/info.local.yaml
+cp backend/package/yuxi/config/static/info.template.yaml backend/package/yuxi/config/static/info.local.yaml
 ```
 
 ### 步骤 2：编辑品牌信息
 
-在 `src/config/static/info.local.yaml` 中配置你的品牌信息：
+在 `backend/package/yuxi/config/static/info.local.yaml` 中配置你的品牌信息：
 
 - 应用名称
 - 组织名称
@@ -25,7 +25,7 @@ cp src/config/static/info.template.yaml src/config/static/info.local.yaml
 在 `.env` 中指定配置文件路径：
 
 ```env
-YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
+YUXI_BRAND_FILE_PATH=backend/package/yuxi/config/static/info.local.yaml
 ```
 
 ::: tip 配置优先级
@@ -38,7 +38,7 @@ YUXI_BRAND_FILE_PATH=src/config/static/info.local.yaml
 
 ### 配置项
 
-在 `src/config/static/info.local.yaml` 的 `footer` 下新增以下字段：
+在 `backend/package/yuxi/config/static/info.local.yaml` 的 `footer` 下新增以下字段：
 
 ```yaml
 footer:

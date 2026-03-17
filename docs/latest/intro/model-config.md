@@ -181,7 +181,7 @@ models = [
 
 #### 1. 配置模型信息
 
-在 `src/config/static/models.py` 中的默认配置部分添加：
+在 `backend/package/yuxi/config/static/models.py` 中的默认配置部分添加：
 
 ```python
 # 默认嵌入模型配置
@@ -213,8 +213,8 @@ DEFAULT_RERANKERS: dict[str, RerankerInfo] = {
 你也可以通过代码动态添加本地模型：
 
 ```python
-from src.config import config
-from src.config.static.models import EmbedModelInfo, RerankerInfo
+from yuxi.config import config
+from yuxi.config.static.models import EmbedModelInfo, RerankerInfo
 
 # 添加本地嵌入模型
 config.embed_model_names["local/embed-model"] = EmbedModelInfo(
