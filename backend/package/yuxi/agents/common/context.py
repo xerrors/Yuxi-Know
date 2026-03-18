@@ -1,16 +1,11 @@
 """Define the configurable parameters for the agent."""
 
-import os
 import uuid
 from dataclasses import MISSING, dataclass, field, fields
-from pathlib import Path
 from typing import Annotated, get_args, get_origin
-
-import yaml
 
 from yuxi import config as sys_config
 from yuxi.services.mcp_service import get_mcp_server_names
-from yuxi.utils import logger
 
 
 @dataclass(kw_only=True)
@@ -20,8 +15,7 @@ class BaseContext:
 
     配置优先级:
     1. 运行时配置(RunnableConfig)：最高优先级，直接从函数参数传入
-    2. 文件配置(config.private.yaml)：中等优先级，从文件加载
-    3. 类默认配置：最低优先级，类中定义的默认值
+    2. 类默认配置：最低优先级，类中定义的默认值
     """
 
     def update(self, data: dict):
@@ -40,10 +34,11 @@ class BaseContext:
         metadata={"name": "用户ID", "configurable": False, "description": "用来唯一标识一个用户"},
     )
 
-    department_id: int | None = field(
-        default=None,
-        metadata={"name": "部门ID", "configurable": False, "description": "用来唯一标识一个部门"},
-    )
+    # 不需要了，使用 user_id 判断
+    # department_id: int | None = field(
+    #     default=None,
+    #     metadata={"name": "部门ID", "configurable": False, "description": "用来唯一标识一个部门"},
+    # )
 
     system_prompt: Annotated[str, {"__template_metadata__": {"kind": "prompt"}}] = field(
         default="You are a helpful assistant.",
@@ -98,50 +93,6 @@ class BaseContext:
             "type": "list",
         },
     )
-
-    @classmethod
-    def from_file(cls, module_name: str, input_context: dict = None) -> "BaseContext":
-        """Load configuration from a YAML file. 用于持久化配置"""
-
-        # 从文件加载配置
-        context = cls()
-        config_file_path = Path(sys_config.save_dir) / "agents" / module_name / "config.yaml"
-        if module_name is not None and os.path.exists(config_file_path):
-            file_config = {}
-            try:
-                with open(config_file_path, encoding="utf-8") as f:
-                    file_config = yaml.safe_load(f) or {}
-            except Exception as e:
-                logger.error(f"加载智能体配置文件出错: {e}")
-
-            context.update(file_config)
-
-        if input_context:
-            context.update(input_context)
-
-        return context
-
-    @classmethod
-    def save_to_file(cls, config: dict, module_name: str) -> bool:
-        """Save configuration to a YAML file 用于持久化配置"""
-
-        configurable_items = cls.get_configurable_items()
-        configurable_config = {}
-        for k, v in config.items():
-            if k in configurable_items:
-                configurable_config[k] = v
-
-        try:
-            config_file_path = Path(sys_config.save_dir) / "agents" / module_name / "config.yaml"
-            # 确保目录存在
-            os.makedirs(os.path.dirname(config_file_path), exist_ok=True)
-            with open(config_file_path, "w", encoding="utf-8") as f:
-                yaml.dump(configurable_config, f, indent=2, allow_unicode=True)
-
-            return True
-        except Exception as e:
-            logger.error(f"保存智能体配置文件出错: {e}")
-            return False
 
     @classmethod
     def get_configurable_items(cls):
@@ -210,3 +161,9 @@ class BaseContext:
                         if isinstance(metadata, dict) and "__template_metadata__" in metadata:
                             return metadata["__template_metadata__"]
         return {}
+
+    def update_from_dict(self, data: dict):
+        """从字典更新配置字段"""
+        for key, value in data.items():
+            if hasattr(self, key):
+                setattr(self, key, value)

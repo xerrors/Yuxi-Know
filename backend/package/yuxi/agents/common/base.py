@@ -65,26 +65,20 @@ class BaseAgent:
         }
 
     async def get_config(self):
-        return self.context_schema.from_file(module_name=self.module_name)
+        return self.context_schema()
 
     async def stream_values(self, messages: list[str], input_context=None, **kwargs):
-        graph = await self.get_graph()
         context = self.context_schema()
-        agent_config = (input_context or {}).get("agent_config")
-        if isinstance(agent_config, dict):
-            context.update(agent_config)
-        context.update(input_context or {})
+        context.update_from_dict(input_context or {})
+        graph = await self.get_graph(context=context)
         for event in graph.astream({"messages": messages}, stream_mode="values", context=context):
             yield event["messages"]
 
     async def stream_messages(self, messages: list[str], input_context=None, **kwargs):
-        graph = await self.get_graph()
         context = self.context_schema()
-        agent_config = (input_context or {}).get("agent_config")
-        if isinstance(agent_config, dict):
-            context.update(agent_config)
-        context.update(input_context or {})
-        logger.debug(f"stream_messages: {context}")
+        context.update_from_dict(input_context or {})
+        graph = await self.get_graph(context=context)
+        logger.debug(f"stream_messages: {context=}")
 
         # 构建配置：LangGraph 会自动从 checkpointer 恢复 state
         input_config = {
@@ -101,12 +95,9 @@ class BaseAgent:
             yield msg, metadata
 
     async def invoke_messages(self, messages: list[str], input_context=None, **kwargs):
-        graph = await self.get_graph()
         context = self.context_schema()
-        agent_config = (input_context or {}).get("agent_config")
-        if isinstance(agent_config, dict):
-            context.update(agent_config)
-        context.update(input_context or {})
+        context.update_from_dict(input_context or {})
+        graph = await self.get_graph(context=context)
         logger.debug(f"invoke_messages: {context}")
 
         # 构建配置
