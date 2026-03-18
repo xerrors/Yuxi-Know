@@ -205,8 +205,6 @@ async def text_to_img_qwen_image(
 
     safe_user_id = str(user_id or "unknown").replace("/", "_").replace("\\", "_")
     file_name = f"user/{safe_user_id}/generated-images/{uuid.uuid4()}.jpg"
-    image_url = await aupload_file_to_minio(
-        bucket_name="public", file_name=file_name, data=file_data, file_extension="jpg"
-    )
+    image_url = await aupload_file_to_minio(bucket_name="public", file_name=file_name, data=file_data)
     logger.info(f"Image uploaded. URL: {image_url}")
     return image_url

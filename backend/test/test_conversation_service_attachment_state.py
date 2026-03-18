@@ -1,10 +1,24 @@
 from __future__ import annotations
 
+import io
 from types import SimpleNamespace
 
 import pytest
 
 from yuxi.services import conversation_service as svc
+
+
+class _DummyUpload:
+    def __init__(self, *, filename: str, content_type: str | None, data: bytes):
+        self.filename = filename
+        self.content_type = content_type
+        self._buffer = io.BytesIO(data)
+
+    async def read(self, size: int = -1) -> bytes:
+        return self._buffer.read(size)
+
+    async def seek(self, offset: int) -> int:
+        return self._buffer.seek(offset)
 
 
 def test_build_state_files_only_parsed_and_with_content():
@@ -102,3 +116,55 @@ async def test_sync_thread_attachment_state_skips_when_agent_missing(monkeypatch
     )
 
     assert any("agent not found" in msg for msg in warnings)
+
+
+@pytest.mark.asyncio
+async def test_convert_upload_to_markdown_returns_conversion_result(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def _fake_aparse(source: str, params=None, source_type: str = "file") -> str:
+        assert source_type == "file"
+        return "converted markdown"
+
+    monkeypatch.setattr(svc, "_ensure_workdir", lambda: tmp_path)
+    monkeypatch.setattr(svc.Parser, "aparse", _fake_aparse)
+
+    payload = b"hello attachment"
+    upload = _DummyUpload(filename="note.txt", content_type="text/plain", data=payload)
+
+    result = await svc._convert_upload_to_markdown(upload)
+
+    assert result.file_name == "note.txt"
+    assert result.file_type == "text/plain"
+    assert result.file_size == len(payload)
+    assert result.markdown == "converted markdown"
+    assert result.truncated is False
+
+
+@pytest.mark.asyncio
+async def test_convert_upload_to_markdown_truncates_content(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def _fake_aparse(source: str, params=None, source_type: str = "file") -> str:
+        assert source_type == "file"
+        return "x" * (svc.MAX_ATTACHMENT_MARKDOWN_CHARS + 200)
+
+    monkeypatch.setattr(svc, "_ensure_workdir", lambda: tmp_path)
+    monkeypatch.setattr(svc.Parser, "aparse", _fake_aparse)
+
+    upload = _DummyUpload(filename="note.md", content_type="text/markdown", data=b"hello")
+
+    result = await svc._convert_upload_to_markdown(upload)
+
+    assert result.truncated is True
+    assert f"超出 {svc.MAX_ATTACHMENT_MARKDOWN_CHARS} 字符限制" in result.markdown
+
+
+@pytest.mark.asyncio
+async def test_convert_upload_to_markdown_rejects_unsupported_extension():
+    upload = _DummyUpload(filename="note.pdf", content_type="application/pdf", data=b"pdf")
+
+    with pytest.raises(ValueError, match="不支持的文件类型"):
+        await svc._convert_upload_to_markdown(upload)

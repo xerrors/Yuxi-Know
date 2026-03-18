@@ -12,9 +12,9 @@ from yuxi import config
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.presets import resolve_chunk_processing_params
-from yuxi.knowledge.indexing import process_file_to_markdown
 from yuxi.knowledge.utils.kb_utils import get_embedding_config
 from yuxi.models.embed import OtherEmbedding
+from yuxi.plugins.parser.unified import Parser
 from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
 
@@ -372,7 +372,6 @@ class MilvusKB(KnowledgeBase):
         # 处理默认参数
         if params is None:
             params = {}
-        content_type = params.get("content_type", "file")
         processed_items_info = []
 
         for file_id in file_ids:
@@ -406,9 +405,9 @@ class MilvusKB(KnowledgeBase):
                     await self._persist_file(file_id)
 
                 # 重新解析文件为 markdown
-                if content_type != "file":
-                    raise ValueError("URL 内容解析已禁用")
-                markdown_content = await process_file_to_markdown(file_path, params=params)
+                params["image_bucket"] = "public"
+                params["image_prefix"] = f"{db_id}/kb-images"
+                markdown_content = await Parser.aparse(source=file_path, params=params)
 
                 # 先删除现有的 Milvus 数据（仅删除chunks，保留元数据）
                 await self.delete_file_chunks_only(db_id, file_id)
@@ -436,7 +435,7 @@ class MilvusKB(KnowledgeBase):
 
                     await asyncio.to_thread(_insert_records)
 
-                logger.info(f"Updated {content_type} {file_path} in Milvus. Done.")
+                logger.info(f"Updated file {file_path} in Milvus. Done.")
 
                 # 更新元数据状态
                 async with self._metadata_lock:
@@ -453,7 +452,7 @@ class MilvusKB(KnowledgeBase):
                 processed_items_info.append(updated_file_meta)
 
             except Exception as e:
-                logger.error(f"更新{content_type} {file_path} 失败: {e}, {traceback.format_exc()}")
+                logger.error(f"更新file {file_path} 失败: {e}, {traceback.format_exc()}")
                 async with self._metadata_lock:
                     self.files_meta[file_id]["status"] = "failed"
                     await self._persist_file(file_id)

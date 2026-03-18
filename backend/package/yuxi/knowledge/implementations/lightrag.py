@@ -13,8 +13,8 @@ from yuxi import config
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
 from yuxi.knowledge.chunking.ragflow_like.dispatcher import chunk_markdown
 from yuxi.knowledge.chunking.ragflow_like.presets import resolve_chunk_processing_params
-from yuxi.knowledge.indexing import process_file_to_markdown
 from yuxi.knowledge.utils.kb_utils import get_embedding_config
+from yuxi.plugins.parser.unified import Parser
 from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
 
@@ -386,7 +386,6 @@ class LightRagKB(KnowledgeBase):
         # 处理默认参数
         if params is None:
             params = {}
-        content_type = params.get("content_type", "file")
         processed_items_info = []
 
         for file_id in file_ids:
@@ -417,9 +416,9 @@ class LightRagKB(KnowledgeBase):
                 await self._persist_file(file_id)
 
                 # 重新解析文件为 markdown
-                if content_type != "file":
-                    raise ValueError("URL 内容解析已禁用")
-                markdown_content = await process_file_to_markdown(file_path, params=params)
+                params["image_bucket"] = "public"
+                params["image_prefix"] = f"{db_id}/kb-images"
+                markdown_content = await Parser.aparse(source=file_path, params=params)
                 markdown_content_lines = markdown_content[:100].replace("\n", " ")
                 logger.info(f"Markdown content: {markdown_content_lines}...")
                 filename = file_meta.get("filename") or file_id
@@ -441,7 +440,7 @@ class LightRagKB(KnowledgeBase):
                 )
                 await self._ensure_doc_processed(rag, file_id)
 
-                logger.info(f"Updated {content_type} {file_path} in LightRAG. Done.")
+                logger.info(f"Updated file {file_path} in LightRAG. Done.")
 
                 # 更新元数据状态
                 self.files_meta[file_id]["status"] = "done"
@@ -458,7 +457,7 @@ class LightRagKB(KnowledgeBase):
 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"更新{content_type} {file_path} 失败: {error_msg}, {traceback.format_exc()}")
+                logger.error(f"更新file {file_path} 失败: {error_msg}, {traceback.format_exc()}")
                 self.files_meta[file_id]["status"] = "failed"
                 self.files_meta[file_id]["error"] = error_msg
                 await self._persist_file(file_id)

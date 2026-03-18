@@ -137,14 +137,6 @@ async def process_images(
 ) -> list[dict]:
     """处理图片：上传到MinIO并返回信息"""
     supported_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
-    content_type_map = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".gif": "image/gif",
-        ".webp": "image/webp",
-        ".bmp": "image/bmp",
-    }
 
     images = []
     image_names = [n for n in zip_file.namelist() if n.startswith(images_dir + "/")]
@@ -164,13 +156,11 @@ async def process_images(
 
             timestamp = int(time.time() * 1000000)
             object_name = f"{normalized_prefix}/{timestamp}_{Path(img_name).name}"
-            content_type = content_type_map.get(suffix, "image/jpeg")
 
             result = await minio_client.aupload_file(
                 bucket_name=image_bucket,
                 object_name=object_name,
                 data=data,
-                content_type=content_type,
             )
 
             img_info = {
@@ -218,4 +208,3 @@ def replace_image_links(markdown_content: str, images: list[dict]) -> str:
 
     pattern = r"!\[([^\]]*)\]\(([^)]+)\)"
     return re.sub(pattern, replace_link, markdown_content)
-
