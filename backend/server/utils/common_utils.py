@@ -32,13 +32,17 @@ def setup_logging():
 
 async def log_operation(db: Session, user_id: int, operation: str, details: str = None, request: Request = None):
     """记录用户操作日志"""
-    ip_address = None
-    if request:
-        ip_address = request.client.host if request.client else None
+    try:
+        ip_address = None
+        if request:
+            ip_address = request.client.host if request.client else None
 
-    log = OperationLog(user_id=user_id, operation=operation, details=details, ip_address=ip_address)
-    db.add(log)
-    await db.commit()
+        log = OperationLog(user_id=user_id, operation=operation, details=details, ip_address=ip_address)
+        db.add(log)
+        await db.commit()
+    except Exception:
+        # 日志写入失败不影响主业务
+        pass
 
 
 def get_user_dict(user: User, include_password: bool = False) -> dict:
