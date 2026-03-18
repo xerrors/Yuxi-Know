@@ -5,6 +5,7 @@ Integration tests for knowledge router and mindmap router endpoints.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 import pytest
 
@@ -417,6 +418,27 @@ async def test_get_supported_file_types(test_client, admin_headers):
     assert payload["message"] == "success"
     assert "file_types" in payload
     assert isinstance(payload["file_types"], list)
+
+
+async def test_markdown_endpoint_parses_uploaded_text_file(test_client, admin_headers):
+    """测试 /files/markdown 能解析上传文件并返回 markdown。"""
+    data_dir = Path(__file__).resolve().parents[1] / "data"
+    test_file = data_dir / "A_Dream_of_Red_Mansions_10hui.txt"
+
+    assert test_file.exists(), f"测试文件不存在: {test_file}"
+
+    with test_file.open("rb") as f:
+        response = await test_client.post(
+            "/api/knowledge/files/markdown",
+            headers=admin_headers,
+            files={"file": (test_file.name, f, "text/plain")},
+        )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["message"] == "success"
+    assert isinstance(payload.get("markdown_content"), str)
+    assert payload["markdown_content"].strip()
 
 
 async def test_duplicate_database_name(test_client, admin_headers, knowledge_database):

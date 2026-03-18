@@ -279,27 +279,17 @@ class KnowledgeBase(ABC):
         self._add_to_processing_queue(file_id)
 
         try:
-            # Determine processing function based on content type
-            content_type = file_meta.get("processing_params", {}).get("content_type", "file")
+            from yuxi.plugins.parser.unified import Parser
 
-            if content_type == "url":
-                from yuxi.knowledge.indexing import process_url_to_markdown
+            # Prepare params
+            params = file_meta.get("processing_params", {}) or {}
+            params["image_bucket"] = "public"
+            params["image_prefix"] = f"{db_id}/kb-images"
 
-                # Prepare params
-                params = file_meta.get("processing_params", {}) or {}
-                params["db_id"] = db_id
-
-                # Process URL to Markdown
-                markdown_content = await process_url_to_markdown(file_path, params=params)
-            else:
-                from yuxi.knowledge.indexing import process_file_to_markdown
-
-                # Prepare params
-                params = file_meta.get("processing_params", {}) or {}
-                params["db_id"] = db_id
-
-                # Process file to Markdown
-                markdown_content = await process_file_to_markdown(file_path, params=params)
+            markdown_content = await Parser.aparse(
+                source=file_path,
+                params=params,
+            )
 
             # Save Markdown to MinIO
             markdown_file_path = await self._save_markdown_to_minio(db_id, file_id, markdown_content)
@@ -373,7 +363,9 @@ class KnowledgeBase(ABC):
 
         # Return standard HTTP URL from UploadResult
         upload_result = await minio_client.aupload_file(
-            bucket_name=bucket_name, object_name=object_name, data=data, content_type="text/markdown"
+            bucket_name=bucket_name,
+            object_name=object_name,
+            data=data,
         )
 
         return upload_result.url

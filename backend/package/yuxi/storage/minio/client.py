@@ -5,6 +5,7 @@ MinIO 存储客户端
 
 import asyncio
 import json
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from datetime import timedelta
@@ -106,19 +107,20 @@ class MinIOClient:
             raise
 
     def upload_file(
-        self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream"
+        self, bucket_name: str, object_name: str, data: bytes, content_type: str | None = None
     ) -> UploadResult:
         """上传文件到 MinIO"""
         try:
             self.ensure_bucket_exists(bucket_name=bucket_name)
 
+            resolved_content_type = content_type or self._guess_content_type(object_name)
             data_stream = BytesIO(data)
             result = self.client.put_object(
                 bucket_name=bucket_name,
                 object_name=object_name,
                 data=data_stream,
                 length=len(data),
-                content_type=content_type,
+                content_type=resolved_content_type,
             )
 
             assert result is not None
@@ -132,7 +134,11 @@ class MinIOClient:
             raise StorageError(error_msg)
 
     async def aupload_file(
-        self, bucket_name: str, object_name: str, data: bytes, content_type: str = "application/octet-stream"
+        self,
+        bucket_name: str,
+        object_name: str,
+        data: bytes,
+        content_type: str | None = None,
     ) -> UploadResult:
         result = await asyncio.to_thread(
             self.upload_file, bucket_name=bucket_name, object_name=object_name, data=data, content_type=content_type
@@ -145,10 +151,7 @@ class MinIOClient:
             with open(file_path, "rb") as file_data:
                 data = file_data.read()
 
-            # 猜测内容类型
-            content_type = self._guess_content_type(object_name)
-
-            return self.upload_file(bucket_name, object_name, data, content_type)
+            return self.upload_file(bucket_name, object_name, data)
 
         except FileNotFoundError:
             raise StorageError(f"文件 '{file_path}' 不存在")
@@ -157,18 +160,22 @@ class MinIOClient:
 
     def _guess_content_type(self, object_name: str) -> str:
         """根据文件名猜测 MIME 类型"""
+        guessed_type, _ = mimetypes.guess_type(object_name)
+        if guessed_type:
+            return guessed_type
+
         ext = object_name.split(".")[-1].lower()
         content_types = {
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "png": "image/png",
-            "gif": "image/gif",
-            "pdf": "application/pdf",
-            "txt": "text/plain",
-            "json": "application/json",
-            "html": "text/html",
-            "css": "text/css",
-            "js": "application/javascript",
+            "md": "text/markdown",
+            "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "xls": "application/vnd.ms-excel",
+            "zip": "application/zip",
+            "webp": "image/webp",
+            "bmp": "image/bmp",
+            "tif": "image/tiff",
+            "tiff": "image/tiff",
         }
         return content_types.get(ext, "application/octet-stream")
 
@@ -430,21 +437,18 @@ def get_minio_client() -> MinIOClient:
     return _default_client
 
 
-async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes, file_extension: str) -> str:
+async def aupload_file_to_minio(bucket_name: str, file_name: str, data: bytes) -> str:
     """
-    通过字节上传文件到 MinIO的异步接口，根据输入的file_extension确定文件格式，并返回资源url
+    通过字节上传文件到 MinIO 的异步接口，并返回资源 URL。
+    MIME 类型由 MinIO 客户端内部根据 object_name 自动推断。
 
     Args:
         bucket_name: bucket_name
         file_name : filename
         data: 文件字节流
-        file_extension: 输入的拓展名
     Returns:
         str: 文件访问 URL
     """
     client = get_minio_client()
-    # 根据扩展名猜测 content_type
-    content_type = client._guess_content_type(file_extension)
-    # 上传文件
-    upload_result = await client.aupload_file(bucket_name, file_name, data, content_type)
+    upload_result = await client.aupload_file(bucket_name, file_name, data)
     return upload_result.url
