@@ -258,7 +258,7 @@ async def toggle_mcp_server_route(
         return {
             "success": True,
             "enabled": is_enabled,
-            "message": f"服务器 '{name}' 已{'启用' if is_enabled else '禁用'}",
+            "message": f"MCP '{name}' 已{'启用' if is_enabled else '禁用'}",
         }
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
