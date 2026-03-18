@@ -593,64 +593,6 @@ async def resume_agent_chat(
     )
 
 
-@chat.post("/agent/{agent_id}/config")
-async def save_agent_config(
-    agent_id: str,
-    config: dict = Body(...),
-    reload_graph: bool = Query(True),
-    current_user: User = Depends(get_required_user),
-):
-    """保存智能体配置到YAML文件（需要登录）"""
-    try:
-        # 获取Agent实例和配置类
-        if not (agent := agent_manager.get_agent(agent_id)):
-            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
-
-        # === 校验知识库权限 ===
-        from yuxi import knowledge_base
-
-        if "knowledges" in config and config["knowledges"]:
-            # 获取用户有权访问的知识库名称
-            try:
-                accessible_databases = await knowledge_base.get_databases_by_user_id(current_user.user_id)
-                accessible_kb_names = {
-                    db.get("name") for db in accessible_databases.get("databases", []) if db.get("name")
-                }
-            except Exception as db_error:
-                logger.warning(f"获取知识库列表失败: {db_error}")
-                # 如果获取失败，superadmin 可以访问所有，非 superadmin 无法访问任何
-                if current_user.role != "superadmin":
-                    raise HTTPException(status_code=500, detail="无法获取知识库列表")
-                # 回退：获取所有数据库名称
-                from yuxi.repositories.knowledge_base_repository import KnowledgeBaseRepository
-
-                kb_repo = KnowledgeBaseRepository()
-                rows = await kb_repo.get_all()
-                accessible_kb_names = {row.name for row in rows if row.name}
-
-            # 检查配置中的知识库是否都可用
-            invalid_kbs = [kb for kb in config["knowledges"] if kb not in accessible_kb_names]
-            if invalid_kbs:
-                raise HTTPException(status_code=403, detail=f"无权访问以下知识库: {', '.join(invalid_kbs)}")
-        # === 校验结束 ===
-
-        # 使用配置类的save_to_file方法保存配置
-        result = agent.context_schema.save_to_file(config, agent.module_name)
-
-        if result:
-            if reload_graph:
-                agent_manager.get_agent(agent_id, reload_graph=True)
-            return {"success": True, "message": f"智能体 {agent.name} 配置已保存"}
-        else:
-            raise HTTPException(status_code=500, detail="保存智能体配置失败")
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"保存智能体配置出错: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"保存智能体配置出错: {str(e)}")
-
-
 @chat.get("/agent/{agent_id}/history")
 async def get_agent_history(
     agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)
@@ -689,23 +631,6 @@ async def get_agent_state(
     except Exception as e:
         logger.error(f"获取AgentState出错: {e}, {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"获取AgentState出错: {str(e)}")
-
-
-@chat.get("/agent/{agent_id}/config")
-async def get_agent_config(agent_id: str, current_user: User = Depends(get_required_user)):
-    """从YAML文件加载智能体配置（需要登录）"""
-    try:
-        # 检查智能体是否存在
-        if not (agent := agent_manager.get_agent(agent_id)):
-            raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
-
-        config = await agent.get_config()
-        logger.debug(f"config: {config}, ContextClass: {agent.context_schema=}")
-        return {"success": True, "config": config}
-
-    except Exception as e:
-        logger.error(f"加载智能体配置出错: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"加载智能体配置出错: {str(e)}")
 
 
 # ==================== 线程管理 API ====================

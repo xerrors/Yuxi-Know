@@ -3,7 +3,6 @@ import {
   apiPost,
   apiDelete,
   apiPut,
-  apiAdminGet,
   apiAdminPost,
   apiAdminDelete,
   apiRequest
@@ -122,28 +121,6 @@ export const agentApi = {
    */
   updateProviderModels: (provider, models) =>
     apiPost(`/api/chat/models/update?model_provider=${provider}`, models),
-
-  /**
-   * 获取智能体配置
-   * @param {string} agentName - 智能体名称
-   * @returns {Promise} - 智能体配置
-   */
-  getAgentConfig: async (agentName) => {
-    return apiAdminGet(`/api/chat/agent/${agentName}/config`)
-  },
-
-  /**
-   * 保存智能体配置
-   * @param {string} agentName - 智能体名称
-   * @param {Object} config - 配置对象
-   * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
-   * @returns {Promise} - 保存结果
-   */
-  saveAgentConfig: async (agentName, config, options = {}) => {
-    const queryParams = new URLSearchParams(options).toString()
-    const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '')
-    return apiAdminPost(url, config)
-  },
 
   getAgentConfigs: (agentId) => apiGet(`/api/chat/agent/${agentId}/configs`),
 

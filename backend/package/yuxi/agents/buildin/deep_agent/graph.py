@@ -92,10 +92,9 @@ class DeepAgent(BaseAgent):
             logger.warning("No search tools configured, DeepAgent will work without web search")
         return tools
 
-    async def get_graph(self, **kwargs):
-        """构建 Deep Agent 的图"""
-        # 获取上下文配置
-        context = self.context_schema.from_file(module_name=self.module_name)
+    async def get_graph(self, context=None, **kwargs):
+
+        context = context or self.context_schema()  # 获取上下文配置
 
         model = load_chat_model(context.model)
         sub_model = load_chat_model(context.subagents_model)

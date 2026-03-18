@@ -14,6 +14,7 @@ from yuxi.plugins.guard import content_guard
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.storage.postgres.manager import pg_manager
+from yuxi.storage.postgres.models_business import User
 from yuxi.utils.logging_config import logger
 from yuxi.utils.question_utils import (
     normalize_options as _normalize_interrupt_options,
@@ -297,28 +298,23 @@ def _ensure_full_msg(full_msg: AIMessage | None, accumulated_content: list[str])
     return full_msg
 
 
-async def _resolve_agent_config(
-    db, agent_id: str, department_id, user_id: str, agent_config_id: int | str | None
-) -> tuple:
-    """解析 agent_config，返回 (config_item, agent_config_id)"""
-    config_repo = AgentConfigRepository(db)
+async def _resolve_agent_config(db, agent_id: str, user: User, agent_config_id):
+    """解析 agent_config，返回 agent_config"""
+    department_id = user.department_id
+
+    agent_config_repo = AgentConfigRepository(db)
     config_item = None
     if agent_config_id is not None:
-        try:
-            config_item = await config_repo.get_by_id(int(agent_config_id))
-        except Exception:
-            logger.warning(f"Failed to fetch agent config {agent_config_id}: {traceback.format_exc()}")
-            config_item = None
+        config_item = await agent_config_repo.get_by_id(config_id=int(agent_config_id))
         if config_item is not None and (config_item.department_id != department_id or config_item.agent_id != agent_id):
             config_item = None
 
     if config_item is None:
-        config_item = await config_repo.get_or_create_default(
-            department_id=department_id, agent_id=agent_id, created_by=user_id
+        config_item = await agent_config_repo.get_or_create_default(
+            department_id=department_id, agent_id=agent_id, created_by=str(user.id)
         )
-        agent_config_id = config_item.id
 
-    return config_item, agent_config_id
+    return (config_item.config_json or {}).get("context", {})
 
 
 async def check_and_handle_interrupts(
@@ -408,26 +404,14 @@ async def stream_agent_chat(
     messages = [human_message]
 
     user_id = str(current_user.id)
-    department_id = current_user.department_id
-    if not department_id:
-        yield make_chunk(status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta)
-        return
-
     agent_config_id = config.get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
+    agent_config = await _resolve_agent_config(db, agent_id, current_user, agent_config_id)
 
     if not (thread_id := config.get("thread_id")):
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
-    agent_config = (config_item.config_json or {}).get("context", {})
-    input_context = {
-        "user_id": user_id,
-        "thread_id": thread_id,
-        "department_id": department_id,
-        "agent_config_id": agent_config_id,
-        "agent_config": agent_config,
-    }
+    input_context = agent_config | {"user_id": user_id, "thread_id": thread_id}
     full_msg = None
     accumulated_content: list[str] = []
 
@@ -595,28 +579,12 @@ async def stream_agent_resume(
     graph = await agent.get_graph()
 
     user_id = str(current_user.id)
-    department_id = current_user.department_id
-    if not department_id:
-        yield make_resume_chunk(
-            status="error", error_type="no_department", error_message="当前用户未绑定部门", meta=meta
-        )
-        return
-
     agent_config_id = (config or {}).get("agent_config_id")
-    config_item, agent_config_id = await _resolve_agent_config(db, agent_id, department_id, user_id, agent_config_id)
+    agent_config = await _resolve_agent_config(db, agent_id, current_user, agent_config_id)
 
-    input_context = {
-        "user_id": user_id,
-        "thread_id": thread_id,
-        "department_id": department_id,
-        "agent_config_id": agent_config_id,
-        "agent_config": (config_item.config_json or {}).get("context", config_item.config_json or {}),
-    }
     context = agent.context_schema()
-    agent_config = input_context.get("agent_config")
-    if isinstance(agent_config, dict):
-        context.update(agent_config)
-    context.update(input_context)
+    context.update(agent_config or {})
+    context.update({"user_id": user_id, "thread_id": thread_id})
 
     stream_source = graph.astream(
         resume_command,
