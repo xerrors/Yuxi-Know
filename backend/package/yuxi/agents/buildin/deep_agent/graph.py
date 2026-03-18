@@ -16,6 +16,7 @@ from yuxi.agents.common.middlewares.knowledge_base_middleware import KnowledgeBa
 from yuxi.agents.common.middlewares.skills_middleware import SkillsMiddleware
 from yuxi.agents.common.toolkits.buildin.tools import _create_tavily_search
 from yuxi.services.mcp_service import get_tools_from_all_servers
+from yuxi.services.subagent_service import get_subagent_specs, resolve_subagent_tools
 from yuxi.utils import logger
 
 from .context import DeepContext
@@ -24,43 +25,6 @@ from .context import DeepContext
 def _create_fs_backend(rt):
     """创建文件存储后端"""
     return create_agent_composite_backend(rt)
-
-
-def _get_research_sub_agent(search_tools: list) -> dict:
-    """Get research sub-agent config with search tools."""
-    return {
-        "name": "research-agent",
-        "description": ("利用搜索工具，用于研究更深入的问题。将调研结果写入到主题研究文件中。"),
-        "system_prompt": (
-            "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
-            "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
-            "除了你的最终信息，他们不会知道任何其他事情，所以你的最终报告应该就是你的最终信息！"
-            "将调研结果保存到主题研究文件中 /sub_research/xxx.md 中。"
-        ),
-        "tools": search_tools,
-    }
-
-
-critique_sub_agent = {
-    "name": "critique-agent",
-    "description": "用于评论最终报告。给这个代理一些关于你希望它如何评论报告的信息。",
-    "system_prompt": (
-        "你是一位专注的编辑。你的任务是评论一份报告。\n\n"
-        "你可以在 `final_report.md` 找到这份报告。\n\n"
-        "你可以在 `question.txt` 找到这份报告的问题/主题。\n\n"
-        "用户可能会要求评论报告的特定方面。请用详细的评论回复用户，指出报告中可以改进的地方。\n\n"
-        "如果有助于你评论报告，你可以使用搜索工具来搜索信息\n\n"
-        "不要自己写入 `final_report.md`。\n\n"
-        "需要检查的事项：\n"
-        "- 检查每个部分的标题是否恰当\n"
-        "- 检查报告的写法是否像论文或教科书——它应该是以文本为主，不要只是一个项目符号列表！\n"
-        "- 检查报告是否全面。如果任何段落或部分过短，或缺少重要细节，请指出来。\n"
-        "- 检查文章是否涵盖了行业的关键领域，确保了整体理解，并且没有遗漏重要部分。\n"
-        "- 检查文章是否深入分析了原因、影响和趋势，提供了有价值的见解\n"
-        "- 检查文章是否紧扣研究主题并直接回答问题\n"
-        "- 检查文章是否结构清晰、语言流畅、易于理解。"
-    ),
-}
 
 
 class DeepAgent(BaseAgent):
@@ -103,8 +67,10 @@ class DeepAgent(BaseAgent):
         all_mcp_tools = await get_tools_from_all_servers()
         # 合并搜索工具和 MCP 工具
 
-        # Build subagents with search tools
-        research_sub_agent = _get_research_sub_agent(search_tools)
+        # 从数据库加载 subagent specs（工具名称未解析）
+        user_subagents = await get_subagent_specs()
+        # 解析工具名称为实际工具实例
+        user_subagents = resolve_subagent_tools(user_subagents, search_tools + all_mcp_tools)
 
         # 主 Agent 上下文优化：90k tokens 触发压缩（128k context window 的 70%）
         summary_middleware = SummaryOffloadMiddleware(
@@ -127,7 +93,7 @@ class DeepAgent(BaseAgent):
         subagents_middleware = SubAgentMiddleware(
             default_model=sub_model,
             default_tools=search_tools,
-            subagents=[critique_sub_agent, research_sub_agent],
+            subagents=user_subagents,
             default_middleware=[
                 RuntimeConfigMiddleware(
                     model_context_name="subagents_model",

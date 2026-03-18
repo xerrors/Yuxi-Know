@@ -104,6 +104,6 @@ class DeepContext(BaseContext):
         default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2",
         metadata={
             "name": "Sub-agent Model",
-            "description": "The model used by sub-agents (e.g., critique-agent, research-agent).",
+            "description": "子智能体的默认模型，会被子智能体的配置覆盖。",
         },
     )
