@@ -50,7 +50,8 @@ export default defineConfig({
             { text: '工具系统', link: '/latest/agents/tools-system' },
             { text: '中间件', link: '/latest/agents/middleware' },
             { text: 'MCP 集成', link: '/latest/agents/mcp-integration' },
-            { text: 'Skills 管理', link: '/latest/agents/skills-management' }
+            { text: 'Skills 管理', link: '/latest/agents/skills-management' },
+            { text: 'SubAgents 管理', link: '/latest/agents/subagents-management' }
           ]
         },
         {

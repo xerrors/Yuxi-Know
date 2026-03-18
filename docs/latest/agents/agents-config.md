@@ -118,6 +118,7 @@ examples = [
 - [工具系统](./tools-system.md) - 工具获取机制和 Skills 集成
 - [中间件系统](./middleware.md) - 中间件开发与使用
 - [MCP 集成](./mcp-integration.md) - MCP 服务器配置
+- [SubAgents 管理](./subagents-management.md) - 子智能体配置、调用链和开发注意事项
 
 ## 开发建议
 
