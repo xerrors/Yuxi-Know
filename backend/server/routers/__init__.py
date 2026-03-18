@@ -10,6 +10,7 @@ from server.routers.evaluation_router import evaluation
 from server.routers.mcp_router import mcp
 from server.routers.mindmap_router import mindmap
 from server.routers.skill_router import skills
+from server.routers.subagent_router import subagents_router
 from server.routers.system_router import system
 from server.routers.task_router import tasks
 from server.routers.tool_router import tools
@@ -29,4 +30,5 @@ router.include_router(graph)  # /api/graph/*
 router.include_router(tasks)  # /api/tasks/*
 router.include_router(mcp)  # /api/system/mcp-servers/*
 router.include_router(skills)  # /api/system/skills/*
+router.include_router(subagents_router)  # /api/system/subagents/*
 router.include_router(tools)  # /api/system/tools/*

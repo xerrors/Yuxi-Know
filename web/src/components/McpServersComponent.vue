@@ -48,7 +48,6 @@
                 />
               </div>
               <div class="item-details">
-                <a-tag size="small" class="transport-tag">{{ server.transport }}</a-tag>
                 <span class="item-desc">{{ server.description || '暂无描述' }}</span>
               </div>
             </div>

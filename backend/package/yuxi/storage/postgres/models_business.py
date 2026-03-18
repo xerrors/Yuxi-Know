@@ -547,6 +547,51 @@ class TaskRecord(Base):
         return data
 
 
+class SubAgent(Base):
+    """SubAgent 模型 - 用于动态配置子智能体"""
+
+    __tablename__ = "subagents"
+
+    name = Column(String(128), primary_key=True, comment="唯一标识")
+    description = Column(Text, nullable=False, comment="描述")
+    system_prompt = Column(Text, nullable=False, comment="系统提示词")
+    tools = Column(JSON, nullable=False, default=list, comment="工具名称列表")
+    model = Column(String(128), nullable=True, comment="可选的模型覆盖")
+
+    is_builtin = Column(Boolean, nullable=False, default=False, comment="是否内置")
+
+    created_by = Column(String(100), nullable=True)
+    updated_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=utc_now_naive)
+    updated_at = Column(DateTime, default=utc_now_naive, onupdate=utc_now_naive)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "system_prompt": self.system_prompt,
+            "tools": self.tools or [],
+            "model": self.model,
+            "is_builtin": bool(self.is_builtin),
+            "created_by": self.created_by,
+            "updated_by": self.updated_by,
+            "created_at": format_utc_datetime(self.created_at),
+            "updated_at": format_utc_datetime(self.updated_at),
+        }
+
+    def to_subagent_spec(self) -> dict[str, Any]:
+        """转换为 SubAgentMiddleware 需要的 spec 格式"""
+        spec = {
+            "name": self.name,
+            "description": self.description,
+            "system_prompt": self.system_prompt,
+            "tools": self.tools or [],
+        }
+        if self.model:
+            spec["model"] = self.model
+        return spec
+
+
 class AgentRun(Base):
     """AgentRun table - 运行任务表"""
 

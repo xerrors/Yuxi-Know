@@ -5,6 +5,7 @@
         <a-tab-pane key="tools" tab="工具" />
         <a-tab-pane key="skills" tab="Skills 管理" />
         <a-tab-pane key="mcp" tab="MCP 服务器" />
+        <a-tab-pane key="subagents" tab="Subagents 管理" />
       </a-tabs>
       <div class="header-actions">
         <!-- Skills Tab 的按钮 -->
@@ -43,6 +44,17 @@
             <span>刷新</span>
           </a-button>
         </template>
+        <!-- Subagents Tab 的按钮 -->
+        <template v-else-if="activeTab === 'subagents'">
+          <a-button type="primary" @click="handleSubagentAdd" class="lucide-icon-btn">
+            <Plus :size="14" />
+            <span>添加</span>
+          </a-button>
+          <a-button @click="handleSubagentRefresh" :disabled="subagentsLoading" class="lucide-icon-btn">
+            <RotateCw :size="14" />
+            <span>刷新</span>
+          </a-button>
+        </template>
       </div>
     </div>
 
@@ -60,6 +72,9 @@
       <div v-show="activeTab === 'mcp'" class="tab-panel">
         <McpServersComponent ref="mcpRef" @add="handleMcpAdd" @refresh="handleMcpRefresh" />
       </div>
+      <div v-show="activeTab === 'subagents'" class="tab-panel">
+        <SubAgentsComponent ref="subagentsRef" @add="handleSubagentAdd" @refresh="handleSubagentRefresh" />
+      </div>
     </div>
   </div>
 </template>
@@ -71,6 +86,7 @@ import { Upload, RotateCw, Plus } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
+import SubAgentsComponent from '@/components/SubAgentsComponent.vue'
 
 const route = useRoute()
 const activeTab = ref('tools')
@@ -80,7 +96,7 @@ const skillsRef = ref(null)
 watch(
   () => route.query,
   (query) => {
-    if (query.tab && ['tools', 'skills', 'mcp'].includes(query.tab)) {
+    if (query.tab && ['tools', 'skills', 'mcp', 'subagents'].includes(query.tab)) {
       activeTab.value = query.tab
     }
   },
@@ -88,12 +104,14 @@ watch(
 )
 const toolsRef = ref(null)
 const mcpRef = ref(null)
+const subagentsRef = ref(null)
 
 // Skills 相关状态（从子组件透传）
 const skillsLoading = ref(false)
 const skillsImporting = ref(false)
 const toolsLoading = ref(false)
 const mcpLoading = ref(false)
+const subagentsLoading = ref(false)
 
 // 暴露给子组件的状态更新
 const updateSkillsState = (loading, importing) => {
@@ -107,6 +125,10 @@ const updateToolsState = (loading) => {
 
 const updateMcpState = (loading) => {
   mcpLoading.value = loading
+}
+
+const updateSubagentsState = (loading) => {
+  subagentsLoading.value = loading
 }
 
 // Skills 事件处理
@@ -146,6 +168,22 @@ const handleMcpRefresh = () => {
     updateMcpState(true)
     mcpRef.value.fetchServers().finally(() => {
       updateMcpState(false)
+    })
+  }
+}
+
+// Subagents 事件处理
+const handleSubagentAdd = () => {
+  if (subagentsRef.value?.showAddModal) {
+    subagentsRef.value.showAddModal()
+  }
+}
+
+const handleSubagentRefresh = () => {
+  if (subagentsRef.value?.fetchSubAgents) {
+    updateSubagentsState(true)
+    subagentsRef.value.fetchSubAgents().finally(() => {
+      updateSubagentsState(false)
     })
   }
 }
