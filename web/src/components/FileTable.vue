@@ -2,12 +2,7 @@
   <div class="file-table-container">
     <div class="panel-header">
       <div class="upload-btn-group">
-        <a-button
-          type="primary"
-          size="small"
-          class="upload-btn"
-          @click="showAddFilesModal()"
-        >
+        <a-button type="primary" size="small" class="upload-btn" @click="showAddFilesModal()">
           <FileUp size="14" />
           上传
         </a-button>

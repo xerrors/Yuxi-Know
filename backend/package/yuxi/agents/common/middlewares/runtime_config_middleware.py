@@ -72,17 +72,6 @@ class RuntimeConfigMiddleware(AgentMiddleware):
                 "将忽略 extra_tools 并不会应用任何工具覆盖。"
             )
 
-        logger.debug(
-            f"Initialized RuntimeConfigMiddleware with custom field names: model={model_context_name}, "
-            f"system_prompt={system_prompt_context_name}, tools={tools_context_name}, "
-            f"knowledges={knowledges_context_name}, mcps={mcps_context_name}"
-        )
-
-    async def abefore_agent(self, state, runtime) -> dict[str, Any] | None:
-        # abefore_agent 在 RuntimeConfigMiddleware 中暂无额外逻辑
-        # Skills 相关逻辑已移至 SkillsMiddleware
-        return None
-
     async def awrap_model_call(
         self, request: ModelRequest, handler: Callable[[ModelRequest], ModelResponse]
     ) -> ModelResponse:

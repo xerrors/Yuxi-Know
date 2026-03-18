@@ -476,7 +476,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { notification, Modal } from 'ant-design-vue'
+import { message, notification, Modal } from 'ant-design-vue'
 import {
   Search,
   Plug,
@@ -536,7 +536,10 @@ const form = reactive({
 // 计算属性
 const filteredServers = computed(() => {
   const sorted = [...servers.value].sort((a, b) => {
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN', {
+      sensitivity: 'base',
+      numeric: true
+    })
   })
   if (!searchQuery.value) return sorted
   const q = searchQuery.value.toLowerCase()
@@ -823,7 +826,7 @@ const handleToggleServer = async (server) => {
     toggleLoading.value = server.name
     const result = await mcpApi.toggleMcpServer(server.name)
     if (result.success) {
-      notification.success({ message: result.message })
+      message.success(result.message)
       await fetchServers()
     } else {
       notification.error({ message: result.message || '操作失败' })

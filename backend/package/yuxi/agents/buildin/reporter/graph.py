@@ -69,9 +69,10 @@ class SqlReporterAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    async def get_graph(self, **kwargs):
-        """构建图"""
-        context = self.context_schema.from_file(module_name=self.module_name)
+    async def get_graph(self, context=None, **kwargs):
+
+        context = context or self.context_schema()  # 获取上下文配置
+
         all_mcp_tools = await get_tools_from_all_servers()
 
         graph = create_agent(

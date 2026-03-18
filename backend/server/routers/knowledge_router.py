@@ -14,7 +14,7 @@ from yuxi.services.task_service import TaskContext, tasker
 from server.utils.auth_middleware import get_admin_user, get_required_user
 from yuxi import config, knowledge_base
 from yuxi.knowledge.chunking.ragflow_like.presets import ensure_chunk_defaults_in_additional_params
-from yuxi.knowledge.indexing import SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension, process_file_to_markdown
+from yuxi.plugins.parser import Parser, SUPPORTED_FILE_EXTENSIONS, is_supported_file_extension
 from yuxi.knowledge.utils import calculate_content_hash
 from yuxi.knowledge.utils.kb_utils import parse_minio_url
 from yuxi.models.embed import test_all_embedding_models_status, test_embedding_model_status
@@ -1364,14 +1364,35 @@ async def get_supported_file_types(current_user: User = Depends(get_admin_user))
 
 @knowledge.post("/files/markdown")
 async def mark_it_down(file: UploadFile = File(...), current_user: User = Depends(get_admin_user)):
-    """调用 yuxi.knowledge.indexing 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
+    """调用 yuxi.plugins.parser 下面的 process_file_to_markdown 解析为 markdown，参数是文件，需要管理员权限"""
+    import tempfile
+
+    if not file.filename:
+        return {"message": "文件解析失败: 无法识别文件名", "markdown_content": ""}
+
+    suffix = os.path.splitext(file.filename)[1].lower()
+    temp_path = None
+
     try:
         content = await file.read()
-        markdown_content = await process_file_to_markdown(content)
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_path = temp_file.name
+
+        async with aiofiles.open(temp_path, "wb") as temp_buffer:
+            await temp_buffer.write(content)
+
+        markdown_content = await Parser.aparse(temp_path)
         return {"markdown_content": markdown_content, "message": "success"}
     except Exception as e:
         logger.error(f"文件解析失败 {e}, {traceback.format_exc()}")
         return {"message": f"文件解析失败 {e}", "markdown_content": ""}
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except Exception as cleanup_error:
+                logger.warning(f"临时文件清理失败 {temp_path}: {cleanup_error}")
 
 
 # =============================================================================

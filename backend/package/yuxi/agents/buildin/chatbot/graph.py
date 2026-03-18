@@ -30,28 +30,35 @@ class ChatbotAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    async def get_graph(self, **kwargs):
-        """构建图"""
-        context = self.context_schema()
+    async def _build_middlewares(self, context):
+        """构建中间件列表"""
         all_mcp_tools = (
             await get_tools_from_all_servers()
         )  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
+
+        middlewares = [
+            save_attachments_to_fs,  # 附件注入提示词
+            FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
+            KnowledgeBaseMiddleware(),  # 知识库工具
+            RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/MCP/提示词）
+            SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
+            ModelRetryMiddleware(),  # 模型重试中间件
+            TodoListMiddleware(),
+            PatchToolCallsMiddleware(),
+        ]
+
+        return middlewares
+
+    async def get_graph(self, context=None, **kwargs):
+
+        context = context or self.context_schema()  # 获取上下文配置
 
         # 使用 create_agent 创建智能体
         # 注意：tools 参数由 RuntimeConfigMiddleware 在 wrap_model_call 中动态设置
         graph = create_agent(
             model=load_chat_model(fully_specified_name=context.model),
             system_prompt=context.system_prompt,
-            middleware=[
-                save_attachments_to_fs,  # 附件注入提示词
-                FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
-                KnowledgeBaseMiddleware(),  # 知识库工具
-                RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/MCP/提示词）
-                SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
-                ModelRetryMiddleware(),  # 模型重试中间件
-                TodoListMiddleware(),
-                PatchToolCallsMiddleware(),
-            ],
+            middleware=await self._build_middlewares(context),
             checkpointer=await self._get_checkpointer(),
         )
 

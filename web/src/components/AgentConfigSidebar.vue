@@ -61,26 +61,14 @@
                   v-else-if="value.template_metadata.kind === 'prompt'"
                   class="system-prompt-container"
                 >
-                  <!-- 编辑模式 -->
-                  <a-textarea
-                    v-if="systemPromptEditMode"
-                    :value="agentConfig[key]"
-                    @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
-                    :rows="10"
-                    :placeholder="getPlaceholder(key, value)"
-                    class="system-prompt-input"
-                    @blur="systemPromptEditMode = false"
-                    ref="systemPromptTextarea"
-                  />
-                  <!-- 显示模式 -->
-                  <div v-else class="system-prompt-display" @click="enterEditMode">
+                  <div class="system-prompt-display" @click="openSystemPromptModal(key)">
                     <div
                       class="system-prompt-content"
                       :class="{ 'is-placeholder': !agentConfig[key] }"
                     >
                       {{ agentConfig[key] || getPlaceholder(key, value) }}
                     </div>
-                    <div class="edit-hint">点击编辑</div>
+                    <div class="edit-hint">点击查看并编辑</div>
                   </div>
                 </div>
 
@@ -407,11 +395,34 @@
         </div>
       </div>
     </a-modal>
+
+    <a-modal
+      v-model:open="systemPromptModalOpen"
+      :title="systemPromptModalTitle"
+      :width="620"
+      :maskClosable="false"
+      @cancel="closeSystemPromptModal"
+      class="system-prompt-modal"
+    >
+      <div class="system-prompt-modal-content">
+        <a-textarea
+          v-model:value="systemPromptDraft"
+          :rows="14"
+          :placeholder="systemPromptModalPlaceholder"
+          class="system-prompt-modal-input"
+        />
+      </div>
+
+      <template #footer>
+        <a-button @click="closeSystemPromptModal">取消</a-button>
+        <a-button type="primary" @click="saveSystemPrompt">保存</a-button>
+      </template>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { X, Trash2, Check, Plus, Search, Star, RotateCw, Settings } from 'lucide-vue-next'
@@ -480,7 +491,9 @@ const selectionModalOpen = ref(false)
 const currentConfigKey = ref(null)
 const tempSelectedValues = ref([])
 const selectionSearchText = ref('')
-const systemPromptEditMode = ref(false)
+const systemPromptModalOpen = ref(false)
+const currentSystemPromptKey = ref(null)
+const systemPromptDraft = ref('')
 const activeTab = ref('basic')
 const liveSkillOptions = ref([])
 const toolOptionsFromApi = ref([])
@@ -673,6 +686,18 @@ const currentConfigKind = computed(() => {
   return configurableItems.value[currentConfigKey.value]?.template_metadata?.kind
 })
 
+const systemPromptModalTitle = computed(() => {
+  if (!currentSystemPromptKey.value) return 'System Prompt'
+  return configurableItems.value[currentSystemPromptKey.value]?.name || currentSystemPromptKey.value
+})
+
+const systemPromptModalPlaceholder = computed(() => {
+  if (!currentSystemPromptKey.value) return '请输入系统提示词'
+  const currentItem = configurableItems.value[currentSystemPromptKey.value]
+  if (!currentItem) return '请输入系统提示词'
+  return getPlaceholder(currentSystemPromptKey.value, currentItem)
+})
+
 const filteredOptions = computed(() => {
   if (!currentConfigKey.value) return []
   const key = currentConfigKey.value
@@ -830,16 +855,25 @@ const closeSelectionModal = () => {
   selectionSearchText.value = ''
 }
 
-// 系统提示词编辑相关方法
-const enterEditMode = () => {
-  systemPromptEditMode.value = true
-  // 使用 nextTick 确保 DOM 更新后再聚焦
-  nextTick(() => {
-    const textarea = document.querySelector('.system-prompt-input')
-    if (textarea) {
-      textarea.focus()
-    }
+// 系统提示词弹窗编辑相关方法
+const openSystemPromptModal = (key) => {
+  currentSystemPromptKey.value = key
+  systemPromptDraft.value = agentConfig.value[key] || ''
+  systemPromptModalOpen.value = true
+}
+
+const closeSystemPromptModal = () => {
+  systemPromptModalOpen.value = false
+  currentSystemPromptKey.value = null
+  systemPromptDraft.value = ''
+}
+
+const saveSystemPrompt = () => {
+  if (!currentSystemPromptKey.value) return
+  agentStore.updateAgentConfig({
+    [currentSystemPromptKey.value]: systemPromptDraft.value
   })
+  closeSystemPromptModal()
 }
 
 // 验证和过滤配置项
@@ -1041,24 +1075,14 @@ const confirmDeleteConfig = async () => {
             width: 100%;
           }
 
-          .system-prompt-input {
-            resize: vertical;
-            background: var(--gray-50);
-            border: 1px solid var(--gray-200);
-            padding: 6px 10px;
-            font-size: 12px;
-
-            &:focus {
-              outline: none;
-            }
-          }
-
           .system-prompt-container {
             width: 100%;
           }
 
           .system-prompt-display {
             min-height: 60px;
+            border: 1px solid var(--gray-200);
+            padding: 10px 12px;
             border-radius: 6px;
             cursor: pointer;
             position: relative;
@@ -1074,13 +1098,16 @@ const confirmDeleteConfig = async () => {
             }
 
             .system-prompt-content {
-              white-space: pre-wrap;
+              white-space: pre-line;
               word-break: break-word;
               line-height: 1.5;
               color: var(--gray-900);
-              font-size: 12px;
-              max-height: 500px;
-              overflow: scroll;
+              font-size: 13px;
+              display: -webkit-box;
+              line-clamp: 4;
+              -webkit-line-clamp: 4;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
 
               &.is-placeholder {
                 color: var(--gray-400);
@@ -1497,6 +1524,7 @@ const confirmDeleteConfig = async () => {
             line-height: 1.4;
             margin-top: 6px;
             display: -webkit-box;
+            line-clamp: 2;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
@@ -1575,6 +1603,17 @@ const confirmDeleteConfig = async () => {
           }
         }
       }
+    }
+  }
+}
+
+.system-prompt-modal {
+  .system-prompt-modal-content {
+    .system-prompt-modal-input {
+      resize: vertical;
+      font-size: 13px;
+      line-height: 1.6;
+      border-radius: 8px;
     }
   }
 }
