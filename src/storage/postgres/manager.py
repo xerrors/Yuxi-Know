@@ -56,6 +56,9 @@ class PostgresManager(metaclass=SingletonMeta):
                 json_deserializer=json.loads,
                 pool_pre_ping=True,
                 pool_recycle=1800,
+                pool_size=20,
+                max_overflow=40,
+                pool_timeout=30,
             )
 
             # 创建异步会话工厂
