@@ -4,18 +4,18 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     image: yuxi-api:0.5.dev
-    container_name: api-dev
+    container_name: yuxi-api-dev
     working_dir: /app
     volumes:
       - ./server:/app/server
       - ./src:/app/src
-      - ./saves:/app/saves
+      - /data/yuxi-know/volumes/saves:/app/saves
       - ./test:/app/test
       - ./scripts:/app/scripts
       - ./.env:/app/.env
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
     ports:
-      - "5050:5050"
+      - "${API_PORT:-5050}:5050"
     networks:
       - app-network
     extra_hosts:
@@ -67,12 +67,12 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     image: yuxi-api:0.5.dev
-    container_name: worker-dev
+    container_name: yuxi-worker-dev
     working_dir: /app
     volumes:
       - ./server:/app/server
       - ./src:/app/src
-      - ./saves:/app/saves
+      - /data/yuxi-know/volumes/saves:/app/saves
       - ./test:/app/test
       - ./scripts:/app/scripts
       - ./.env:/app/.env
@@ -123,14 +123,14 @@ services:
       dockerfile: docker/web.Dockerfile
       target: development
     image: yuxi-web:0.5.dev
-    container_name: web-dev
+    container_name: yuxi-web-dev
     volumes:
       - ./web/src:/app/src
       - ./web/public:/app/public
       - ./web/index.html:/app/index.html
       - ./web/vite.config.js:/app/vite.config.js
     ports:
-      - "5173:5173"
+      - "${WEB_PORT:-5173}:5173"
     depends_on:
       - api
     networks:
@@ -145,15 +145,15 @@ services:
   # region neo4j
   graph:
     image: neo4j:5.26
-    container_name: graph
+    container_name: yuxi-graph
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
     volumes:
-      - ./docker/volumes/neo4j/data:/data
-      - ./docker/volumes/neo4j/logs:/var/lib/neo4j/logs
+      - /data/yuxi-know/volumes/neo4j/data:/data
+      - /data/yuxi-know/volumes/neo4j/logs:/var/lib/neo4j/logs
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:7474 || exit 1"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -169,15 +169,15 @@ services:
   # endregion neo4j
 
   etcd:
-    container_name: milvus-etcd-dev
-    image: quay.io/coreos/etcd:v3.5.5
+    container_name: yuxi-etcd
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/coreos/etcd:v3.5.5
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000
       - ETCD_QUOTA_BACKEND_BYTES=4294967296
       - ETCD_SNAPSHOT_COUNT=50000
     volumes:
-      - ./docker/volumes/milvus/etcd:/etcd
+      - /data/yuxi-know/volumes/milvus/etcd:/etcd
     command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
     healthcheck:
       test: ["CMD", "etcdctl", "endpoint", "health"]
@@ -190,14 +190,14 @@ services:
     restart: unless-stopped
 
   minio:
-    container_name: milvus-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: yuxi-minio
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
-      - ./docker/volumes/milvus/minio:/minio_data
-      - ./docker/volumes/milvus/minio_config:/root/.minio
+      - /data/yuxi-know/volumes/milvus/minio:/minio_data
+      - /data/yuxi-know/volumes/milvus/minio_config:/root/.minio
     command: minio server /minio_data --address 0.0.0.0:9000 --console-address 0.0.0.0:9001
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -206,15 +206,15 @@ services:
       retries: 5
       start_period: 30s
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     networks:
       - app-network
     restart: unless-stopped
 
   milvus:
-    image: milvusdb/milvus:v2.5.6
-    container_name: milvus
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/milvusdb/milvus:v2.5.6
+    container_name: yuxi-milvus
     command: ["milvus", "run", "standalone"]
     security_opt:
       - seccomp:unconfined
@@ -223,8 +223,8 @@ services:
       MINIO_ADDRESS: minio:9000
       MILVUS_LOG_LEVEL: error
     volumes:
-      - ./docker/volumes/milvus/milvus:/var/lib/milvus
-      - ./docker/volumes/milvus/logs:/var/lib/milvus/logs
+      - /data/yuxi-know/volumes/milvus/milvus:/var/lib/milvus
+      - /data/yuxi-know/volumes/milvus/logs:/var/lib/milvus/logs
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
       interval: 60s
@@ -232,8 +232,8 @@ services:
       timeout: 30s
       retries: 5
     ports:
-      - "19530:19530"
-      - "9091:9091"
+      - "${MILVUS_PORT:-19530}:19530"
+      - "${MILVUS_HEALTH_PORT:-9091}:9091"
     depends_on:
       - "etcd"
       - "minio"
@@ -242,17 +242,17 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16
-    container_name: postgres
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16
+    container_name: yuxi-postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-yuxi_know}
       - TZ=${TZ:-Asia/Shanghai}
     volumes:
-      - ./docker/volumes/postgresql:/var/lib/postgresql/data
+      - /data/yuxi-know/volumes/postgresql:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-yuxi_know} || exit 1"]
       interval: 5s
@@ -263,16 +263,18 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
-    container_name: redis
-    command: redis-server --appendonly yes
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.0-alpine
+    container_name: yuxi-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
     volumes:
-      - ./docker/volumes/redis:/data
+      - /data/yuxi-know/volumes/redis:/data
     networks:
       - app-network
     restart: unless-stopped
@@ -283,13 +285,13 @@ services:
       context: .
       dockerfile: docker/mineru.Dockerfile
     image: mineru-vllm:latest
-    container_name: mineru-vllm-server
+    container_name: yuxi-mineru-vllm-server
     profiles:
       - all
     env_file:
       - .env
     ports:
-      - 30000:30000
+      - "${MINERU_VLLM_PORT:-30000}:30000"
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-vllm-server
@@ -321,13 +323,13 @@ services:
       context: .
       dockerfile: docker/mineru.Dockerfile
     image: mineru-vllm:latest
-    container_name: mineru-api
+    container_name: yuxi-mineru-api
     profiles:
       - all
     env_file:
       - .env
     ports:
-      - 30001:30001
+      - "${MINERU_API_PORT:-30001}:30001"
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-api
@@ -347,13 +349,13 @@ services:
       context: .
       dockerfile: docker/paddlex.Dockerfile
     image: paddlex:latest
-    container_name: paddlex-ocr
+    container_name: yuxi-paddlex
     profiles:
       - all
     volumes:
-      - ./docker/volumes/paddlex:/paddlex
+      - /data/yuxi-know/volumes/paddlex:/paddlex
     ports:
-      - "8080:8080"
+      - "${PADDLEX_PORT:-8080}:8080"
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 20s

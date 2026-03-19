@@ -1,10 +1,12 @@
 # 开发阶段
 FROM node:20-alpine AS development
 WORKDIR /app
-ENV TZ=Asia/Shanghai
+ENV TZ=Asia/Shanghai \
+    NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 
 # 安装 pnpm
-RUN npm install -g pnpm@latest
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g pnpm@latest
 
 # 复制 package.json 和 pnpm-lock.yaml
 COPY ./web/package*.json ./

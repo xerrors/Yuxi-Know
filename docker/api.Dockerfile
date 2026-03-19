@@ -13,9 +13,12 @@ WORKDIR /app
 ENV TZ=Asia/Shanghai \
     UV_PROJECT_ENVIRONMENT="/usr/local" \
     UV_COMPILE_BYTECODE=1 \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
 
-RUN npm install -g npm@latest && npm cache clean --force
+RUN npm config set registry https://registry.npmmirror.com && \
+    npm install -g npm@latest && \
+    npm cache clean --force
 
 # 设置代理和时区，更换镜像源，安装系统依赖 - 合并为一个RUN减少层数
 RUN set -ex \
@@ -38,17 +41,16 @@ RUN set -ex \
 
 
 # 复制项目配置文件
-COPY ../pyproject.toml /app/pyproject.toml
-COPY ../.python-version /app/.python-version
-COPY ../uv.lock /app/uv.lock
+COPY pyproject.toml /app/pyproject.toml
+COPY .python-version /app/.python-version
+COPY uv.lock /app/uv.lock
 
 # 如果网络还是不好，可以在后面添加 --index-url https://pypi.tuna.tsinghua.edu.cn/simple
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen
+RUN uv sync --no-dev --frozen
 
 # 激活虚拟环境并添加到PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
 # 复制代码到容器中
-COPY ../src /app/src
-COPY ../server /app/server
+COPY src /app/src
+COPY server /app/server

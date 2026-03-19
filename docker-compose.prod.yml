@@ -107,7 +107,7 @@ services:
     image: yuxi-web:0.5.prod
     container_name: web-prod
     ports:
-      - "80:80"
+      - "${WEB_PORT:-11181}:80"
     depends_on:
       - api
     networks:
@@ -122,6 +122,9 @@ services:
   graph:
     image: neo4j:5.26
     container_name: graph
+    ports:
+      - "${NEO4J_HTTP_PORT:-17474}:7474"
+      - "${NEO4J_BOLT_PORT:-17687}:7687"
     volumes:
       - ./docker/volumes/neo4j/data:/data
       - ./docker/volumes/neo4j/logs:/var/lib/neo4j/logs
@@ -142,7 +145,8 @@ services:
 
   etcd:
     container_name: milvus-etcd
-    image: quay.io/coreos/etcd:v3.5.5
+    # image: quay.io/coreos/etcd:v3.5.5
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/coreos/etcd:v3.5.5
     environment:
       - ETCD_AUTO_COMPACTION_MODE=revision
       - ETCD_AUTO_COMPACTION_RETENTION=1000
@@ -163,7 +167,11 @@ services:
 
   minio:
     container_name: milvus-minio
-    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    # image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2023-03-20T20-16-18Z
+    ports:
+      - "${MINIO_PORT:-19000}:9000"
+      - "${MINIO_CONSOLE_PORT:-19001}:9001"
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
@@ -182,7 +190,8 @@ services:
     restart: unless-stopped
 
   milvus:
-    image: milvusdb/milvus:v2.5.6
+    # image: milvusdb/milvus:v2.5.6
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/milvusdb/milvus:v2.5.6
     container_name: milvus
     command: ["milvus", "run", "standalone"]
     security_opt:
@@ -208,10 +217,11 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16
+    # image: postgres:16
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16
     container_name: postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-15432}:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
@@ -229,9 +239,12 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    # image: redis:7-alpine
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.0-alpine
     container_name: redis
-    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-26379}:6379"
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -252,7 +265,7 @@ services:
     profiles:
       - all
     env_file:
-      - .env
+      - .env.prod
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-vllm-server
@@ -285,9 +298,9 @@ services:
     profiles:
       - all
     env_file:
-      - .env
+      - .env.prod
     ports:
-      - 30001:30001
+      - "${MINERU_API_PORT:-30001}:30001"
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-api
@@ -310,6 +323,8 @@ services:
     container_name: paddlex-ocr
     profiles:
       - all
+    ports:
+      - "${PADDLEX_PORT:-18080}:8080"
     volumes:
       - ./docker/volumes/paddlex:/paddlex
     healthcheck:

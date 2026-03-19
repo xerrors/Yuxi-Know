@@ -1,3 +1,29 @@
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-slim
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-slim  docker.io/node:20-slim
+
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slimim
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.12-slim  docker.io/python:3.12-slim
+
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:20-alpine  docker.io/node:20-alpine
+
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/astral-sh/uv:0.7.2
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/ghcr.io/astral-sh/uv:0.7.2  ghcr.io/astral-sh/uv:0.7.2
+
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:alpine
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:alpine  docker.io/nginx:alpine
+
+#docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/neo4j:5.26
+#docker tag  swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/neo4j:5.26  docker.io/neo4j:5.26
+
+# docker.m.daocloud.io/vllm/vllm-openai:v0.10.1.1
+
+# docker pull swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2023-03-20T20-16-18Z
+# swr.cn-north-4.myhuaweicloud.com/ddn-k8s/quay.io/coreos/etcd:v3.5.5
+# swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/milvusdb/milvus:v2.5.6
+# swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/postgres:16
+# swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/redis:7.0-alpine
+# paddlex:latest
 #!/bin/bash
 
 # Yuxi-Know Initialization Script for Bash/Linux/macOS
