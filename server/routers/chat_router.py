@@ -151,7 +151,14 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 @chat.get("/agent")
 async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体的基本信息（需要登录）"""
+    import time
+    logger.warning(f"[GET /agent] 开始处理请求，用户：{current_user.username}")
+    start = time.time()
+    
+    logger.warning(f"[GET /agent] 开始调用 get_agents_info()")
     agents_info = await agent_manager.get_agents_info(include_configurable_items=False)
+    elapsed = time.time() - start
+    logger.warning(f"[GET /agent] get_agents_info() 完成，耗时 {elapsed:.2f}秒，共 {len(agents_info)} 个智能体")
 
     # Return agents with basic information (without configurable_items for performance)
     agents = [
@@ -165,7 +172,8 @@ async def get_agent(current_user: User = Depends(get_required_user)):
         }
         for agent_info in agents_info
     ]
-
+    
+    logger.warning(f"[GET /agent] 返回结果")
     return {"agents": agents}
 
 

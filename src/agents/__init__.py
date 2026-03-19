@@ -40,10 +40,19 @@ class AgentManager(metaclass=SingletonMeta):
             self.get_agent(agent_id, reload=True)
 
     async def get_agents_info(self, include_configurable_items: bool = True):
+        """获取所有智能体信息 - 性能瓶颈所在"""
         agents = self.get_agents()
-        return await asyncio.gather(
+        logger.warning(f"[get_agents_info] 开始获取 {len(agents)} 个智能体的信息")
+        import time
+        start = time.time()
+        
+        result = await asyncio.gather(
             *[a.get_info(include_configurable_items=include_configurable_items) for a in agents]
         )
+        
+        elapsed = time.time() - start
+        logger.warning(f"[get_agents_info] 完成，总耗时 {elapsed:.2f}秒")
+        return result
 
     def auto_discover_agents(self):
         """自动发现并注册 src/agents/ 下的所有智能体。

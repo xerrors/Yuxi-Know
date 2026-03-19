@@ -47,22 +47,35 @@ class BaseAgent:
         return self.__class__.__name__
 
     async def get_info(self, include_configurable_items: bool = True):
+        """获取智能体信息 - 用于 /api/chat/agent 接口"""
+        logger.info(f"[get_info] {self.name}: 开始获取信息")
+        
         # Load metadata from file
         metadata = self.load_metadata()
+        logger.info(f"[get_info] {self.name}: metadata 加载完成")
+        
         configurable_items = {}
         if include_configurable_items:
             configurable_items = self.context_schema.get_configurable_items()
+            logger.info(f"[get_info] {self.name}: configurable_items 获取完成")
+
+        # 检查 checkpointer - 这是性能瓶颈！
+        logger.info(f"[get_info] {self.name}: 开始检查 checkpointer")
+        has_checkpointer = await self.check_checkpointer()
+        logger.info(f"[get_info] {self.name}: checkpointer 检查完成 = {has_checkpointer}")
 
         # Merge metadata with class attributes, metadata takes precedence
-        return {
+        result = {
             "id": self.id,
             "name": metadata.get("name", getattr(self, "name", "Unknown")),
             "description": metadata.get("description", getattr(self, "description", "Unknown")),
             "examples": metadata.get("examples", []),
             "configurable_items": configurable_items,
-            "has_checkpointer": await self.check_checkpointer(),
-            "capabilities": getattr(self, "capabilities", []),  # 智能体能力列表
+            "has_checkpointer": has_checkpointer,
+            "capabilities": getattr(self, "capabilities", []),
         }
+        logger.info(f"[get_info] {self.name}: 完成")
+        return result
 
     async def get_config(self):
         return self.context_schema.from_file(module_name=self.module_name)
@@ -123,7 +136,15 @@ class BaseAgent:
         return msg
 
     async def check_checkpointer(self):
+        """检查是否有 checkpointer - 会触发 get_graph() 构建"""
+        logger.warning(f"[check_checkpointer] {self.name}: 开始检查，这将触发 get_graph() 构建")
+        import time
+        start = time.time()
+        
         app = await self.get_graph()
+        elapsed = time.time() - start
+        logger.warning(f"[check_checkpointer] {self.name}: get_graph() 耗时 {elapsed:.2f}秒")
+        
         if not hasattr(app, "checkpointer") or app.checkpointer is None:
             logger.warning(f"智能体 {self.name} 的 Graph 未配置 checkpointer，无法获取历史记录")
             return False

@@ -309,10 +309,19 @@ async def get_mcp_tools(
 
 async def get_tools_from_all_servers() -> list[Callable[..., Any]]:
     """Get all tools from all configured MCP servers."""
+    import time
+    start = time.time()
+    logger.warning(f"[get_tools_from_all_servers] 开始获取所有 MCP 工具")
+    
     all_tools = []
     for server_name in MCP_SERVERS.keys():
+        logger.warning(f"[get_tools_from_all_servers] 获取服务器 {server_name} 的工具")
         tools = await get_mcp_tools(server_name)
+        logger.warning(f"[get_tools_from_all_servers] 服务器 {server_name} 返回 {len(tools)} 个工具")
         all_tools.extend(tools)
+    
+    elapsed = time.time() - start
+    logger.warning(f"[get_tools_from_all_servers] 完成，总耗时 {elapsed:.2f}秒，共 {len(all_tools)} 个工具")
     return all_tools
 
 
