@@ -36,10 +36,7 @@ class ProvisionerClient:
             json={"sandbox_id": sandbox_id, "thread_id": thread_id},
         )
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"failed to create sandbox {sandbox_id}: "
-                f"{response.status_code} {response.text}"
-            )
+            raise RuntimeError(f"failed to create sandbox {sandbox_id}: {response.status_code} {response.text}")
         payload = response.json()
         return SandboxRecord(
             sandbox_id=payload["sandbox_id"],
@@ -52,10 +49,7 @@ class ProvisionerClient:
         if response.status_code == 404:
             return None
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"failed to discover sandbox {sandbox_id}: "
-                f"{response.status_code} {response.text}"
-            )
+            raise RuntimeError(f"failed to discover sandbox {sandbox_id}: {response.status_code} {response.text}")
         payload = response.json()
         return SandboxRecord(
             sandbox_id=payload["sandbox_id"],
@@ -68,17 +62,11 @@ class ProvisionerClient:
         if response.status_code == 404:
             return False
         if response.status_code >= 400:
-            raise RuntimeError(
-                f"failed to touch sandbox {sandbox_id}: "
-                f"{response.status_code} {response.text}"
-            )
+            raise RuntimeError(f"failed to touch sandbox {sandbox_id}: {response.status_code} {response.text}")
         return True
 
     def delete(self, sandbox_id: str) -> None:
         response = self._request("DELETE", f"/api/sandboxes/{sandbox_id}")
         if response.status_code in {200, 404}:
             return
-        raise RuntimeError(
-            f"failed to delete sandbox {sandbox_id}: "
-            f"{response.status_code} {response.text}"
-        )
+        raise RuntimeError(f"failed to delete sandbox {sandbox_id}: {response.status_code} {response.text}")

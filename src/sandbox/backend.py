@@ -4,8 +4,8 @@ import base64
 from pathlib import PurePosixPath
 from typing import Any
 
-from deepagents.backends.sandbox import BaseSandbox
 from deepagents.backends.protocol import ExecuteResponse, FileDownloadResponse, FileUploadResponse
+from deepagents.backends.sandbox import BaseSandbox
 
 from src import config as conf
 from src.utils.logging_config import logger
@@ -156,10 +156,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
         if not selected_lines:
             return ""
 
-        return "\n".join(
-            f"{start + idx + 1:6d}\t{line}"
-            for idx, line in enumerate(selected_lines)
-        )
+        return "\n".join(f"{start + idx + 1:6d}\t{line}" for idx, line in enumerate(selected_lines))
 
     def execute(self, command: str) -> ExecuteResponse:
         try:

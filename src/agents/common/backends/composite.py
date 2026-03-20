@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from deepagents.backends import CompositeBackend
 
-from src.sandbox import ProvisionerSandboxBackend
 from src.agents.common.middlewares.skills_middleware import normalize_selected_skills
+from src.sandbox import ProvisionerSandboxBackend
 
 from .skills_backend import SelectedSkillsReadonlyBackend
 

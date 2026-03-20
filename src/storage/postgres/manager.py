@@ -78,8 +78,8 @@ class PostgresManager(metaclass=SingletonMeta):
             # 创建 LangGraph 专属连接池
             self.langgraph_pool = AsyncConnectionPool(
                 conninfo=langgraph_db_url,
-                max_size=10, # 根据你的 Agent 并发情况设置，通常 5-10 足够了
-                kwargs={"autocommit": True} # LangGraph Checkpoint 强依赖 autocommit
+                max_size=10,  # 根据你的 Agent 并发情况设置，通常 5-10 足够了
+                kwargs={"autocommit": True},  # LangGraph Checkpoint 强依赖 autocommit
             )
 
             self._initialized = True

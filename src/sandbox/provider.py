@@ -136,8 +136,7 @@ class ProvisionerSandboxProvider:
                 self._client.delete(connection.sandbox_id)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    f"Failed to release sandbox {connection.sandbox_id} "
-                    f"for thread {connection.thread_id}: {exc}"
+                    f"Failed to release sandbox {connection.sandbox_id} for thread {connection.thread_id}: {exc}"
                 )
 
 

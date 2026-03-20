@@ -78,9 +78,7 @@ class Config(BaseModel):
     # Sandbox 配置
     # ============================================================
     sandbox_provider: str = Field(default="provisioner", description="沙箱提供者")
-    sandbox_provisioner_url: str = Field(
-        default="http://sandbox-provisioner:8002", description="沙箱服务地址"
-    )
+    sandbox_provisioner_url: str = Field(default="http://sandbox-provisioner:8002", description="沙箱服务地址")
     sandbox_virtual_path_prefix: str = Field(default="/mnt/user-data", description="沙箱虚拟路径前缀")
     sandbox_exec_timeout_seconds: int = Field(default=180, description="沙箱执行超时时间（秒）")
     sandbox_max_output_bytes: int = Field(default=262144, description="沙箱最大输出字节数")
@@ -247,18 +245,12 @@ class Config(BaseModel):
         self.valuable_model_provider = [k for k, v in self.model_provider_status.items() if v]
 
         # 处理 Sandbox 配置
-        self.sandbox_provider = (
-            os.getenv("SANDBOX_PROVIDER") or self.sandbox_provider or "provisioner"
-        ).strip()
+        self.sandbox_provider = (os.getenv("SANDBOX_PROVIDER") or self.sandbox_provider or "provisioner").strip()
         self.sandbox_provisioner_url = (
-            os.getenv("SANDBOX_PROVISIONER_URL")
-            or self.sandbox_provisioner_url
-            or "http://sandbox-provisioner:8002"
+            os.getenv("SANDBOX_PROVISIONER_URL") or self.sandbox_provisioner_url or "http://sandbox-provisioner:8002"
         ).strip()
         self.sandbox_virtual_path_prefix = (
-            os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX")
-            or self.sandbox_virtual_path_prefix
-            or "/mnt/user-data"
+            os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX") or self.sandbox_virtual_path_prefix or "/mnt/user-data"
         ).strip()
         self.sandbox_exec_timeout_seconds = int(
             os.getenv("SANDBOX_EXEC_TIMEOUT_SECONDS") or self.sandbox_exec_timeout_seconds or 180
@@ -267,9 +259,7 @@ class Config(BaseModel):
             os.getenv("SANDBOX_MAX_OUTPUT_BYTES") or self.sandbox_max_output_bytes or 262144
         )
         self.sandbox_keepalive_interval_seconds = int(
-            os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS")
-            or self.sandbox_keepalive_interval_seconds
-            or 30
+            os.getenv("SANDBOX_KEEPALIVE_INTERVAL_SECONDS") or self.sandbox_keepalive_interval_seconds or 30
         )
 
         # 验证 Sandbox 配置

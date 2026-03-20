@@ -1,4 +1,4 @@
-﻿import shlex
+import shlex
 import uuid
 from pathlib import Path
 

@@ -174,7 +174,7 @@ export const agentApi = {
   /**
    * 恢复被人工审批中断的对话（流式响应）
    * @param {string} agentId - 智能体ID
-    * @param {Object} data - 恢复数据 { thread_id, answer: { question_id: answer }, approved }
+   * @param {Object} data - 恢复数据 { thread_id, answer: { question_id: answer }, approved }
    * @param {Object} options - 可选参数（signal, headers等）
    * @returns {Promise} - 恢复响应流
    */
@@ -351,7 +351,9 @@ export const threadApi = {
    * @returns {Promise}
    */
   listThreadFiles: (threadId, path = '/mnt/user-data', recursive = false) =>
-    apiGet(`/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}&recursive=${recursive}`),
+    apiGet(
+      `/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}&recursive=${recursive}`
+    ),
 
   /**
    * 读取线程文本文件内容（分页）

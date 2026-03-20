@@ -1201,8 +1201,8 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
       }
 
       const approvalStatuses = ['ask_user_question_required', 'human_approval_required']
-      const isApprovalEvent = approvalStatuses.includes(event) ||
-        approvalStatuses.includes(payload?.chunk?.status)
+      const isApprovalEvent =
+        approvalStatuses.includes(event) || approvalStatuses.includes(payload?.chunk?.status)
 
       if (isApprovalEvent) {
         const approvalChunk = payload?.chunk || { status: event, thread_id: threadId }
@@ -1216,9 +1216,11 @@ const startRunStream = async (threadId, runId, afterSeq = '0') => {
           ts.activeRunId = null
           ts.lastRetryableJobTry = null
           clearActiveRunSnapshot(threadId)
-          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(() => {
-            handleAgentStateRefresh(threadId)
-          })
+          fetchThreadMessages({ agentId: currentAgentId.value, threadId, delay: 200 }).finally(
+            () => {
+              handleAgentStateRefresh(threadId)
+            }
+          )
         } else if (ts.activeRunId === runId) {
           window.setTimeout(() => {
             if (ts.activeRunId === runId && !ts.runStreamAbortController) {

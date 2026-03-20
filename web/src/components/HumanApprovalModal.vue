@@ -20,9 +20,7 @@
 
         <div v-if="activeQuestion" class="question-block">
           <div class="approval-header">
-            <h4>
-              {{ activeQuestionIndex + 1 }}. {{ activeQuestion.question }}
-            </h4>
+            <h4>{{ activeQuestionIndex + 1 }}. {{ activeQuestion.question }}</h4>
           </div>
 
           <div v-if="activeQuestion.operation" class="approval-operation">
@@ -77,7 +75,11 @@
 
       <div class="approval-actions">
         <button class="btn btn-reject" @click="handleCancel" :disabled="isProcessing">取消</button>
-        <button class="btn btn-approve" @click="handlePrimaryAction" :disabled="isPrimaryButtonDisabled">
+        <button
+          class="btn btn-approve"
+          @click="handlePrimaryAction"
+          :disabled="isPrimaryButtonDisabled"
+        >
           {{ primaryButtonText }}
         </button>
       </div>
@@ -92,7 +94,11 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { isOtherOption, normalizeQuestions, DEFAULT_OTHER_OPTION_VALUE } from '@/utils/questionUtils'
+import {
+  isOtherOption,
+  normalizeQuestions,
+  DEFAULT_OTHER_OPTION_VALUE
+} from '@/utils/questionUtils'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },

@@ -434,9 +434,6 @@ class KubernetesProvisionerBackend:
             if discovered is not None:
                 return discovered
 
-            pod_name = self._pod_name(sandbox_id)
-            service_name = self._service_name(sandbox_id)
-
             try:
                 self._core_api.create_namespaced_pod(
                     namespace=self._namespace,

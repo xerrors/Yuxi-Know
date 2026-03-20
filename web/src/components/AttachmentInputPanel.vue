@@ -1,12 +1,7 @@
 <template>
   <div class="attachment-panel">
     <label class="attachment-upload" :class="{ disabled: disabled || isUploading }">
-      <input
-        type="file"
-        multiple
-        :disabled="disabled || isUploading"
-        @change="handleFileChange"
-      />
+      <input type="file" multiple :disabled="disabled || isUploading" @change="handleFileChange" />
       <Paperclip size="14" />
       <span>{{ isUploading ? '上传中…' : '添加附件' }}</span>
     </label>

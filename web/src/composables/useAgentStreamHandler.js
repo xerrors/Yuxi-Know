@@ -127,7 +127,9 @@ export function useAgentStreamHandler({
           currentAgentId: unref(currentAgentId),
           hasAgentState: !!chunk.agent_state,
           todoCount: Array.isArray(chunk.agent_state?.todos) ? chunk.agent_state.todos.length : 0,
-          uploadCount: Array.isArray(chunk.agent_state?.uploads) ? chunk.agent_state.uploads.length : 0
+          uploadCount: Array.isArray(chunk.agent_state?.uploads)
+            ? chunk.agent_state.uploads.length
+            : 0
         })
         if (chunk.agent_state) {
           console.log(`${debugPrefix}[agent_state_apply]`, {
