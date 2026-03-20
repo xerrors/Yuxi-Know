@@ -11,19 +11,17 @@
 - 系统层面添加 apikey，在智能体、知识库调用中支持 apikey 以支持外部调用
 - 部分场景应该使用默认模型作为默认值而不是空值
 - 检索测试中，添加问答
-- 丰富当前智能体的 Prompt，最好支持从 markdown 解析
 - 探索 subagents 的体系
-
+- 集成 Memory，基于 deepagents 的文件后端实现
+- 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
-- 部分 local 的 mcp server 无法正常加载，但是建议在项目外部启动 mcp 服务器，然后通过 sse 的方式使用。
+- 部分 local 的 mcp server 无法正常加载，但是建议在项目外部启动 mcp 服务器，然后通过 sse 的方式使用。【未复现】
 - DeepSeek 官方接口适配会出现问题
 - 部分推理后端与 langchain 的适配有问题：
 - 目前的知识库的图片存在公开访问风险
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini，deepseek 官方接口）
-- 当前的 upload 图谱查询为同步操作，可能会导致页面卡顿
-- FileTable 的自动刷新失效
 - 生成基准测试会把所有的向量都计算一遍不合理
 
 ## v0.6

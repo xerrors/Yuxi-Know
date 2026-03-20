@@ -4,10 +4,8 @@
       <div class="sep-header">
         <span class="note">提问</span>
         <span class="separator">|</span>
-        <span class="description">{{ shortQuestion }}</span>
-        <span v-if="userAnswer" class="tag tag-answered">
-          已回答: {{ displayAnswer }}
-        </span>
+        <span class="description">{{ shortQuestionSummary }}</span>
+        <span v-if="userAnswer" class="tag tag-answered"> 已回答: {{ displayAnswer }} </span>
       </div>
     </template>
   </BaseToolCall>
@@ -48,10 +46,30 @@ const parsedResult = computed(() => {
   }
 })
 
-const question = computed(() => parsedArgs.value.question || '')
-const shortQuestion = computed(() => {
-  const q = question.value
-  return q.length > 50 ? q.slice(0, 50) + '...' : q
+const questions = computed(() => {
+  const rawQuestions = parsedArgs.value.questions
+  if (!Array.isArray(rawQuestions)) return []
+
+  return rawQuestions
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null
+      const question = String(item.question || '').trim()
+      if (!question) return null
+      const questionId = String(item.question_id || item.questionId || '').trim()
+      return { questionId, question }
+    })
+    .filter(Boolean)
+})
+
+const shortQuestionSummary = computed(() => {
+  if (!questions.value.length) return '无问题'
+
+  const firstQuestion = questions.value[0].question
+  const shortFirstQuestion =
+    firstQuestion.length > 36 ? firstQuestion.slice(0, 36) + '...' : firstQuestion
+
+  if (questions.value.length === 1) return shortFirstQuestion
+  return `${shortFirstQuestion} 等 ${questions.value.length} 题`
 })
 
 // 用户答案
@@ -61,13 +79,46 @@ const userAnswer = computed(() => {
   return result.user_answer || result.answer || null
 })
 
+const formatSingleAnswer = (answer) => {
+  if (Array.isArray(answer)) {
+    return answer.join(', ')
+  }
+  if (answer && typeof answer === 'object') {
+    if (answer.type === 'other') {
+      return `Other: ${String(answer.text || '').trim()}`
+    }
+    return JSON.stringify(answer)
+  }
+  return String(answer)
+}
+
 // 显示答案
 const displayAnswer = computed(() => {
   const answer = userAnswer.value
   if (!answer) return ''
+
   if (Array.isArray(answer)) {
     return answer.join(', ')
   }
+
+  if (answer && typeof answer === 'object') {
+    if (answer.type === 'other') {
+      return `Other: ${String(answer.text || '').trim()}`
+    }
+
+    const entries = Object.entries(answer)
+    if (!entries.length) return ''
+
+    const summary = entries
+      .map(([questionId, value]) => {
+        const title = String(questionId || '').trim()
+        return `${title}: ${formatSingleAnswer(value)}`
+      })
+      .join(' | ')
+
+    return summary.length > 120 ? summary.slice(0, 120) + '...' : summary
+  }
+
   return String(answer)
 })
 </script>

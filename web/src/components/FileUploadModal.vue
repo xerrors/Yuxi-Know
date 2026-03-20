@@ -453,6 +453,7 @@ const fileList = ref([])
 const urlList = ref([])
 const newUrl = ref('')
 const fetchingUrls = ref(false)
+const CONTENT_EXISTS_ERROR_TEXT = '内容已存在于知识库中'
 
 // 同名文件列表（用于显示提示）
 const sameNameFiles = ref([])
@@ -464,6 +465,38 @@ const isValidUrl = (string) => {
     return url.protocol === 'http:' || url.protocol === 'https:'
   } catch (_) {
     return false
+  }
+}
+
+const mergeSameNameFiles = (sameNameList = []) => {
+  if (!Array.isArray(sameNameList) || sameNameList.length === 0) {
+    return
+  }
+  const existingIds = new Set(sameNameFiles.value.map((f) => f.file_id))
+  const newConflicts = sameNameList.filter((f) => !existingIds.has(f.file_id))
+  sameNameFiles.value.push(...newConflicts)
+}
+
+const fetchSingleUrlItem = async (item) => {
+  item.status = 'fetching'
+  try {
+    const res = await fileApi.fetchUrl(item.url, databaseId.value)
+    item.status = 'success'
+    item.data = res
+    mergeSameNameFiles(res.same_name_files)
+  } catch (error) {
+    console.error('Failed to fetch URL:', error)
+    item.status = 'error'
+
+    const detailData = error.response?.data?.detail
+    const detailMessage =
+      (typeof detailData === 'string' ? detailData : detailData?.message) || error.message || ''
+    if (detailMessage.includes('same content') || detailMessage.includes('相同内容')) {
+      item.error = CONTENT_EXISTS_ERROR_TEXT
+      mergeSameNameFiles(detailData?.same_name_files)
+    } else {
+      item.error = detailMessage || '加载失败'
+    }
   }
 }
 
@@ -500,37 +533,7 @@ const handleFetchUrls = async () => {
   newUrl.value = '' // 清空输入框
   fetchingUrls.value = true
 
-  // 2. 并发处理
-  // 为避免过多并发请求，可以考虑使用 p-limit 或简单的分批，但此处直接并发
-  const processItem = async (item) => {
-    item.status = 'fetching'
-    try {
-      const res = await fileApi.fetchUrl(item.url, databaseId.value)
-      item.status = 'success'
-      item.data = res
-
-      // 处理同名文件冲突提示
-      if (res.has_same_name && res.same_name_files && res.same_name_files.length > 0) {
-        // 合并到现有的同名文件列表中，去重
-        const existingIds = new Set(sameNameFiles.value.map((f) => f.file_id))
-        const newConflicts = res.same_name_files.filter((f) => !existingIds.has(f.file_id))
-        sameNameFiles.value.push(...newConflicts)
-      }
-    } catch (error) {
-      console.error('Failed to fetch URL:', error)
-      item.status = 'error'
-
-      // 特别处理内容重复 (409)
-      const detail = error.response?.data?.detail || error.message || ''
-      if (detail.includes('same content') || detail.includes('相同内容')) {
-        item.error = '内容已存在于知识库中'
-      } else {
-        item.error = detail || '加载失败'
-      }
-    }
-  }
-
-  await Promise.all(newItems.map(processItem))
+  await Promise.all(newItems.map(fetchSingleUrlItem))
   fetchingUrls.value = false
 }
 
@@ -1006,6 +1009,29 @@ const chunkData = async () => {
       return
     }
 
+    // 批内按内容哈希去重，避免同一批次重复入库
+    const deduplicatedItems = []
+    const seenKeys = new Set()
+    let skippedDuplicates = 0
+    for (const item of successfulItems) {
+      const dedupKey = item.data?.content_hash || item.data?.file_path || item.url
+      if (seenKeys.has(dedupKey)) {
+        skippedDuplicates += 1
+        continue
+      }
+      seenKeys.add(dedupKey)
+      deduplicatedItems.push(item)
+    }
+
+    if (deduplicatedItems.length === 0) {
+      message.error('URL 内容均为重复项，请更换后重试')
+      return
+    }
+
+    if (skippedDuplicates > 0) {
+      message.warning(`检测到 ${skippedDuplicates} 个重复 URL 内容，已保留首个并跳过其余项`)
+    }
+
     try {
       store.state.chunkLoading = true
       const params = { ...chunkParams.value }
@@ -1017,7 +1043,7 @@ const chunkData = async () => {
       // 构造 _preprocessed_map 和 items (minio urls)
       const items = []
       const preprocessedMap = {}
-      for (const item of successfulItems) {
+      for (const item of deduplicatedItems) {
         // item.data = { file_path: "http://minio...", content_hash: "...", filename: "...", ... }
         // 注意：fetch-url 返回的 file_path 其实是 MinIO URL
         // 我们需要传递 MinIO URL 给 addDocuments

@@ -3,7 +3,7 @@
     <!-- 服务状态提示 -->
     <div v-if="serverStatus === 'error'" class="server-status-alert">
       <div class="alert-content">
-        <exclamation-circle-outlined class="alert-icon" />
+        <exclamation-circle-icon class="alert-icon" size="20" />
         <div class="alert-text">
           <div class="alert-title">服务端连接失败</div>
           <div class="alert-message">{{ serverError }}</div>
@@ -17,17 +17,13 @@
     <!-- 顶部导航：品牌名称 & 操作按钮 -->
     <nav class="login-navbar">
       <div class="navbar-content">
-        <div class="brand-container">
+        <div class="brand-container" @click="goHome" style="cursor: pointer">
+          <img v-if="brandLogo" :src="brandLogo" alt="logo" class="brand-logo" />
           <h1 class="brand-text">
             <span v-if="brandOrgName" class="brand-org">{{ brandOrgName }}</span>
             <span v-if="brandOrgName && brandName !== brandOrgName" class="brand-separator"></span>
             <span class="brand-main">{{ brandName }}</span>
           </h1>
-        </div>
-        <div class="login-top-action">
-          <a-button type="text" size="small" class="back-home-btn" @click="goHome">
-            返回首页
-          </a-button>
         </div>
       </div>
     </nav>
@@ -122,6 +118,30 @@
                     />
                   </a-form-item>
 
+                  <a-form-item v-if="showAgreementConsent" class="agreement-form-item">
+                    <div class="agreement-row">
+                      <a-checkbox v-model:checked="agreementAccepted">
+                        登录即代表同意
+                        <a
+                          class="agreement-link"
+                          :href="userAgreementUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          >《用户协议》</a
+                        >
+                        <a
+                          class="agreement-link"
+                          :href="privacyPolicyUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          >《隐私协议》</a
+                        >
+                      </a-checkbox>
+                    </div>
+                  </a-form-item>
+
                   <a-form-item>
                     <a-button type="primary" html-type="submit" :loading="loading" block
                       >创建管理员账户</a-button
@@ -140,7 +160,7 @@
                   >
                     <a-input v-model:value="loginForm.loginId" placeholder="用户ID或手机号">
                       <template #prefix>
-                        <user-outlined />
+                        <user-icon size="18" />
                       </template>
                     </a-input>
                   </a-form-item>
@@ -152,17 +172,32 @@
                   >
                     <a-input-password v-model:value="loginForm.password">
                       <template #prefix>
-                        <lock-outlined />
+                        <lock-icon size="18" />
                       </template>
                     </a-input-password>
                   </a-form-item>
 
-                  <a-form-item>
-                    <div class="login-options">
-                      <a-checkbox v-model:checked="rememberMe" @click="showDevMessage"
-                        >记住我</a-checkbox
-                      >
-                      <a class="forgot-password" @click="showDevMessage">忘记密码?</a>
+                  <a-form-item v-if="showAgreementConsent" class="agreement-form-item">
+                    <div class="agreement-row">
+                      <a-checkbox v-model:checked="agreementAccepted">
+                        登录即代表同意
+                        <a
+                          class="agreement-link"
+                          :href="userAgreementUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          >《用户协议》</a
+                        >
+                        <a
+                          class="agreement-link"
+                          :href="privacyPolicyUrl"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          @click.stop
+                          >《隐私协议》</a
+                        >
+                      </a-checkbox>
                     </div>
                   </a-form-item>
 
@@ -179,30 +214,6 @@
                       <span v-else>登录</span>
                     </a-button>
                   </a-form-item>
-
-                  <!-- 第三方登录选项 -->
-                  <div class="third-party-login">
-                    <div class="divider">
-                      <span>其他登录方式</span>
-                    </div>
-                    <div class="login-icons">
-                      <a-tooltip title="微信登录">
-                        <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                          <template #icon><wechat-outlined /></template>
-                        </a-button>
-                      </a-tooltip>
-                      <a-tooltip title="企业微信登录">
-                        <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                          <template #icon><qrcode-outlined /></template>
-                        </a-button>
-                      </a-tooltip>
-                      <a-tooltip title="飞书登录">
-                        <a-button shape="circle" class="login-icon" @click="showDevMessage">
-                          <template #icon><thunderbolt-outlined /></template>
-                        </a-button>
-                      </a-tooltip>
-                    </div>
-                  </div>
                 </a-form>
               </div>
 
@@ -222,10 +233,6 @@
         <a href="https://github.com/xerrors" target="_blank">联系我们</a>
         <span class="divider">|</span>
         <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">使用帮助</a>
-        <span class="divider">|</span>
-        <a href="https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE" target="_blank"
-          >隐私政策</a
-        >
       </div>
       <div class="copyright">
         &copy; {{ new Date().getFullYear() }} {{ brandName }}. All Rights Reserved.
@@ -243,13 +250,10 @@ import { useAgentStore } from '@/stores/agent'
 import { message } from 'ant-design-vue'
 import { healthApi } from '@/apis/system_api'
 import {
-  UserOutlined,
-  LockOutlined,
-  WechatOutlined,
-  QrcodeOutlined,
-  ThunderboltOutlined,
-  ExclamationCircleOutlined
-} from '@ant-design/icons-vue'
+  User as UserIcon,
+  Lock as LockIcon,
+  AlertCircle as ExclamationCircleIcon
+} from 'lucide-vue-next'
 const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
@@ -258,6 +262,9 @@ const agentStore = useAgentStore()
 // 品牌展示数据
 const loginBgImage = computed(() => {
   return infoStore.organization?.login_bg || '/login-bg.jpg'
+})
+const brandLogo = computed(() => {
+  return infoStore.organization?.logo || ''
 })
 const brandOrgName = computed(() => {
   return infoStore.organization?.name?.trim() || ''
@@ -272,22 +279,21 @@ const brandName = computed(() => {
 
   return orgName || brandNameRaw
 })
-const brandSubtitle = computed(() => {
-  const rawSubtitle = infoStore.branding?.subtitle ?? ''
-  const trimmed = rawSubtitle.trim()
-  return trimmed || '大模型驱动的知识库管理工具'
+const userAgreementUrl = computed(() => {
+  return infoStore.footer?.user_agreement_url?.trim() || ''
 })
-const brandDescription = computed(() => {
-  const rawDescription = infoStore.branding?.description ?? ''
-  const trimmed = rawDescription.trim()
-  return trimmed || '结合知识库与知识图谱，提供更准确、更全面的回答'
+const privacyPolicyUrl = computed(() => {
+  return infoStore.footer?.privacy_policy_url?.trim() || ''
+})
+const showAgreementConsent = computed(() => {
+  return Boolean(userAgreementUrl.value && privacyPolicyUrl.value)
 })
 
 // 状态
 const isFirstRun = ref(false)
 const loading = ref(false)
 const errorMessage = ref('')
-const rememberMe = ref(false)
+const agreementAccepted = ref(false)
 const serverStatus = ref('loading')
 const serverError = ref('')
 const healthChecking = ref(false)
@@ -310,11 +316,6 @@ const adminForm = reactive({
   confirmPassword: '',
   phone_number: '' // 手机号字段（可选）
 })
-
-// 开发中功能提示
-const showDevMessage = () => {
-  message.info('该功能正在开发中，敬请期待！')
-}
 
 const goHome = () => {
   router.push('/')
@@ -373,11 +374,25 @@ const validateConfirmPassword = async (rule, value) => {
   }
 }
 
+const ensureAgreementAccepted = () => {
+  if (!showAgreementConsent.value || agreementAccepted.value) {
+    return true
+  }
+
+  const warningMessage = '请先阅读并同意《用户协议》《隐私协议》'
+  message.warning(warningMessage)
+  return false
+}
+
 // 处理登录
 const handleLogin = async () => {
   // 如果当前被锁定，不允许登录
   if (isLocked.value) {
     message.warning(`账户被锁定，请等待 ${formatTime(lockRemainingTime.value)}`)
+    return
+  }
+
+  if (!ensureAgreementAccepted()) {
     return
   }
 
@@ -399,36 +414,13 @@ const handleLogin = async () => {
 
     // 根据用户角色决定重定向目标
     if (redirectPath === '/') {
-      // 如果是管理员，直接跳转到/chat页面
-      if (userStore.isAdmin) {
-        router.push('/agent')
-        return
-      }
-
-      // 普通用户跳转到默认智能体
+      // 统一跳转到聊天页面（管理员与普通用户共享同一聊天界面）
       try {
-        // 初始化agentStore并获取智能体信息
         await agentStore.initialize()
-
-        // 尝试获取默认智能体
-        if (agentStore.defaultAgentId) {
-          // 如果存在默认智能体，直接跳转
-          router.push(`/agent/${agentStore.defaultAgentId}`)
-          return
-        }
-
-        // 没有默认智能体，获取第一个可用智能体
-        const agentIds = Object.keys(agentStore.agents)
-        if (agentIds.length > 0) {
-          router.push(`/agent/${agentIds[0]}`)
-          return
-        }
-
-        // 没有可用智能体，回退到首页
-        router.push('/')
+        router.push('/agent')
       } catch (error) {
         console.error('获取智能体信息失败:', error)
-        router.push('/')
+        router.push('/agent')
       }
     } else {
       // 跳转到其他预设的路径
@@ -472,6 +464,10 @@ const handleLogin = async () => {
 
 // 处理初始化管理员
 const handleInitialize = async () => {
+  if (!ensureAgreementAccepted()) {
+    return
+  }
+
   try {
     loading.value = true
     errorMessage.value = ''
@@ -584,6 +580,11 @@ onUnmounted(() => {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    .brand-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
   }
 }
 
@@ -613,6 +614,18 @@ onUnmounted(() => {
     color: var(--main-color);
     font-weight: 600;
   }
+}
+
+.brand-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+
+.top-logo {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
 }
 
 .back-home-btn {
@@ -710,6 +723,10 @@ onUnmounted(() => {
     font-size: 16px;
     border-radius: 8px;
   }
+  :deep(.ant-input-prefix) {
+    margin-right: 8px;
+    color: var(--gray-500);
+  }
 }
 
 .third-party-login {
@@ -766,15 +783,28 @@ onUnmounted(() => {
   }
 }
 
-.login-options {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 14px;
+.agreement-form-item {
+  margin-bottom: 12px;
 }
 
-.forgot-password {
+.agreement-row {
+  font-size: 13px;
+  color: var(--gray-600);
+  line-height: 1.6;
+
+  :deep(.ant-checkbox-wrapper) {
+    display: inline-flex;
+    align-items: flex-start;
+  }
+
+  :deep(.ant-checkbox + span) {
+    padding-inline-start: 8px;
+  }
+}
+
+.agreement-link {
   color: var(--main-color);
+
   &:hover {
     text-decoration: underline;
   }

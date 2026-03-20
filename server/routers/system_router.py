@@ -149,23 +149,6 @@ async def reload_info_config(current_user: User = Depends(get_admin_user)):
 # =============================================================================
 
 
-@system.get("/ocr/stats")
-async def get_ocr_stats(current_user: User = Depends(get_admin_user)):
-    """
-    获取OCR服务使用统计信息
-    返回各个OCR服务的处理统计和性能指标
-    """
-    try:
-        from src.plugins._ocr import get_ocr_stats
-
-        stats = get_ocr_stats()
-
-        return {"status": "success", "stats": stats, "message": "OCR统计信息获取成功"}
-    except Exception as e:
-        logger.error(f"获取OCR统计信息失败: {str(e)}")
-        return {"status": "error", "stats": {}, "message": f"获取OCR统计信息失败: {str(e)}"}
-
-
 @system.get("/ocr/health")
 async def check_ocr_services_health(current_user: User = Depends(get_admin_user)):
     """

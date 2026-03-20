@@ -35,15 +35,15 @@ const router = createRouter({
           path: '',
           name: 'AgentComp',
           component: () => import('../views/AgentView.vue'),
-          meta: { keepAlive: true, requiresAuth: true, requiresAdmin: true }
+          meta: { keepAlive: true, requiresAuth: true }
+        },
+        {
+          path: ':agent_id',
+          name: 'AgentCompWithId',
+          component: () => import('../views/AgentView.vue'),
+          meta: { keepAlive: true, requiresAuth: true }
         }
       ]
-    },
-    {
-      path: '/agent/:agent_id',
-      name: 'AgentSinglePage',
-      component: () => import('../views/AgentSingleView.vue'),
-      meta: { requiresAuth: true }
     },
     {
       path: '/graph',
@@ -173,13 +173,13 @@ router.beforeEach(async (to, from, next) => {
         if (agentIds.length > 0) {
           next(`/agent/${agentIds[0]}`)
         } else {
-          // 没有可用的智能体，跳转到首页
-          next('/')
+          // 没有可用的智能体，跳转到聊天页
+          next('/agent')
         }
       }
     } catch (error) {
       console.error('获取智能体信息失败:', error)
-      next('/')
+      next('/agent')
     }
     return
   }
@@ -195,11 +195,11 @@ router.beforeEach(async (to, from, next) => {
       if (defaultAgent && defaultAgent.id) {
         next(`/agent/${defaultAgent.id}`)
       } else {
-        next('/')
+        next('/agent')
       }
     } catch (error) {
       console.error('获取智能体信息失败:', error)
-      next('/')
+      next('/agent')
     }
     return
   }

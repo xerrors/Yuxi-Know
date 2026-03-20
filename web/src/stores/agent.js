@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { agentApi, databaseApi, mcpApi } from '@/apis'
+import { agentApi, databaseApi, mcpApi, skillApi } from '@/apis'
 import { handleChatError } from '@/utils/errorHandler'
 import { useUserStore } from '@/stores/user'
 
@@ -17,6 +17,7 @@ export const useAgentStore = defineStore(
     // 资源相关状态
     const availableKnowledgeBases = ref([])
     const availableMcps = ref([])
+    const availableSkills = ref([])
 
     // 智能体配置相关状态
     const agentConfig = ref({})
@@ -96,16 +97,18 @@ export const useAgentStore = defineStore(
 
     // ==================== 方法 ====================
     /**
-     * 获取可提及的资源（知识库、MCP等）
+     * 获取可提及的资源（知识库、MCP、Skills）
      */
     async function fetchMentionResources() {
       try {
-        const [dbsRes, mcpsRes] = await Promise.all([
+        const [dbsRes, mcpsRes, skillsRes] = await Promise.all([
           databaseApi.getAccessibleDatabases().catch(() => ({ databases: [] })),
-          mcpApi.getMcpServers().catch(() => ({ data: [] }))
+          mcpApi.getMcpServers().catch(() => ({ data: [] })),
+          skillApi.listSkills().catch(() => ({ data: [] }))
         ])
         availableKnowledgeBases.value = dbsRes.databases || []
         availableMcps.value = mcpsRes.data || []
+        availableSkills.value = skillsRes.data || []
       } catch (e) {
         console.warn('Failed to fetch mention resources:', e)
       }
@@ -472,6 +475,7 @@ export const useAgentStore = defineStore(
       defaultAgentId.value = null
       availableKnowledgeBases.value = []
       availableMcps.value = []
+      availableSkills.value = []
       agentConfig.value = {}
       originalAgentConfig.value = {}
       agentConfigs.value = {}
@@ -493,6 +497,7 @@ export const useAgentStore = defineStore(
       defaultAgentId,
       availableKnowledgeBases,
       availableMcps,
+      availableSkills,
       agentConfig,
       originalAgentConfig,
       agentDetails,

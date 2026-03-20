@@ -16,6 +16,12 @@ from src.repositories.agent_config_repository import AgentConfigRepository
 from src.repositories.conversation_repository import ConversationRepository
 from src.storage.postgres.manager import pg_manager
 from src.utils.logging_config import logger
+from src.utils.question_utils import (
+    normalize_options as _normalize_interrupt_options,
+)
+from src.utils.question_utils import (
+    normalize_questions as _normalize_interrupt_questions,
+)
 
 
 def _build_state_files(attachments: list[dict]) -> dict:
@@ -217,54 +223,70 @@ def _coerce_interrupt_payload(info: Any) -> dict:
     if isinstance(payload, dict):
         return payload
 
+    questions = getattr(info, "questions", None)
     question = getattr(info, "question", None)
+    question_id = getattr(info, "question_id", None)
+    options = getattr(info, "options", None)
+    multi_select = getattr(info, "multi_select", None)
+    allow_other = getattr(info, "allow_other", None)
     operation = getattr(info, "operation", None)
+    source = getattr(info, "source", None)
     result: dict[str, Any] = {}
+    if isinstance(questions, list):
+        result["questions"] = questions
     if isinstance(question, str) and question.strip():
         result["question"] = question
+    if isinstance(question_id, str) and question_id.strip():
+        result["question_id"] = question_id
+    if isinstance(options, list):
+        result["options"] = options
+    if isinstance(multi_select, bool):
+        result["multi_select"] = multi_select
+    if isinstance(allow_other, bool):
+        result["allow_other"] = allow_other
     if isinstance(operation, str) and operation.strip():
         result["operation"] = operation
+    if isinstance(source, str) and source.strip():
+        result["source"] = source
     return result
-
-
-def _normalize_interrupt_options(raw_options: Any) -> list[dict[str, str]]:
-    if not isinstance(raw_options, list):
-        return []
-
-    options: list[dict[str, str]] = []
-    for item in raw_options:
-        if isinstance(item, dict):
-            label = str(item.get("label") or item.get("value") or "").strip()
-            value = str(item.get("value") or item.get("label") or "").strip()
-        else:
-            label = str(item).strip()
-            value = label
-        if label and value:
-            options.append({"label": label, "value": value})
-    return options
 
 
 def _build_ask_user_question_payload(info: Any, thread_id: str) -> dict[str, Any]:
     """将 interrupt 信息标准化为 ask_user_question_required 载荷。"""
     payload = _coerce_interrupt_payload(info)
 
-    question = str(payload.get("question") or "请选择一个选项").strip()
-    question_id = str(payload.get("question_id") or uuid.uuid4())
-    source = str(payload.get("source") or payload.get("tool_name") or "interrupt")
-    multi_select = bool(payload.get("multi_select", False))
-    allow_other = bool(payload.get("allow_other", True))
-    operation = payload.get("operation")
+    questions = _normalize_interrupt_questions(payload.get("questions"))
+    if not questions:
+        legacy_question = str(payload.get("question") or "").strip()
+        if legacy_question:
+            legacy_item: dict[str, Any] = {
+                "question_id": str(payload.get("question_id") or uuid.uuid4()),
+                "question": legacy_question,
+                "options": _normalize_interrupt_options(payload.get("options")),
+                "multi_select": bool(payload.get("multi_select", False)),
+                "allow_other": bool(payload.get("allow_other", True)),
+            }
+            legacy_operation = payload.get("operation")
+            if isinstance(legacy_operation, str) and legacy_operation.strip():
+                legacy_item["operation"] = legacy_operation.strip()
+            questions = [legacy_item]
 
-    options = _normalize_interrupt_options(payload.get("options"))
+    if not questions:
+        questions = [
+            {
+                "question_id": str(uuid.uuid4()),
+                "question": "请选择一个选项",
+                "options": [],
+                "multi_select": False,
+                "allow_other": True,
+            }
+        ]
+
+    source = str(payload.get("source") or payload.get("tool_name") or "interrupt")
 
     return {
-        "question_id": question_id,
-        "question": question,
-        "options": options,
-        "multi_select": multi_select,
-        "allow_other": allow_other,
+        "questions": questions,
         "source": source,
-        "operation": operation if isinstance(operation, str) else "",
         "thread_id": thread_id,
     }
 

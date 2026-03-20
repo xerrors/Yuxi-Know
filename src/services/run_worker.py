@@ -276,11 +276,18 @@ async def process_agent_run(ctx, run_id: str):
                         )
                         terminal_set = True
                     elif status == "ask_user_question_required":
+                        questions = chunk.get("questions") if isinstance(chunk, dict) else None
+                        first_question = ""
+                        if isinstance(questions, list) and questions:
+                            first = questions[0]
+                            if isinstance(first, dict):
+                                first_question = str(first.get("question") or "").strip()
+
                         await mark_run_terminal(
                             run_id,
                             "interrupted",
                             error_type="ask_user_question_required",
-                            error_message=chunk.get("question") or "需要用户回答问题",
+                            error_message=first_question or "需要用户回答问题",
                         )
                         terminal_set = True
 

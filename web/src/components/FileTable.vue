@@ -2,38 +2,15 @@
   <div class="file-table-container">
     <div class="panel-header">
       <div class="upload-btn-group">
-        <a-dropdown trigger="click">
-          <a-button type="primary" size="small" class="upload-btn">
-            <FileUp size="14" style="margin-left: 4px" />
-            上传
-            <ChevronDown size="14" style="margin-left: 4px" />
-          </a-button>
-          <template #overlay>
-            <a-menu>
-              <a-menu-item
-                key="upload-file"
-                @click="showAddFilesModal({ isFolder: false })"
-                :icon="h(FileUp, { size: 16 })"
-              >
-                上传文件
-              </a-menu-item>
-              <a-menu-item
-                key="upload-folder"
-                @click="showAddFilesModal({ isFolder: true })"
-                :icon="h(FolderUp, { size: 16 })"
-              >
-                上传文件夹
-              </a-menu-item>
-              <a-menu-item
-                key="upload-url"
-                @click="showAddFilesModal({ mode: 'url' })"
-                :icon="h(Link, { size: 16 })"
-              >
-                解析 URL
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
+        <a-button
+          type="primary"
+          size="small"
+          class="upload-btn"
+          @click="showAddFilesModal()"
+        >
+          <FileUp size="14" />
+          上传
+        </a-button>
 
         <a-button
           class="panel-action-btn"
@@ -452,12 +429,9 @@ import {
   Plus,
   Database,
   FileUp,
-  FolderUp,
   Search,
   Filter,
-  ArrowUpDown,
-  ChevronDown,
-  Link
+  ArrowUpDown
 } from 'lucide-vue-next'
 
 const store = useDatabaseStore()
@@ -1544,6 +1518,7 @@ import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
     height: 28px;
     font-size: 13px;
     display: flex;
+    padding: 0 12px;
     align-items: center;
     justify-content: center;
     gap: 4px;

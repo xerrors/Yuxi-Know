@@ -36,12 +36,12 @@ export const useInfoStore = defineStore('info', () => {
   const actions = computed(() => infoConfig.value.actions || [])
 
   // 计算属性 - 页脚信息
-  const footer = computed(
-    () =>
-      infoConfig.value.footer || {
-        copyright: ''
-      }
-  )
+  const footer = computed(() => ({
+    copyright: '',
+    user_agreement_url: '',
+    privacy_policy_url: '',
+    ...(infoConfig.value.footer || {})
+  }))
 
   // 动作方法
   function setInfoConfig(newConfig) {
