@@ -125,9 +125,23 @@ class LightRagKB(KnowledgeBase):
         # 默认语言从环境变量读取，默认 English
         addon_params.setdefault("language", os.getenv("SUMMARY_LANGUAGE") or "English")
 
+       # 超时配置 - 从环境变量或 addon_params 读取，默认为 600 秒（10分钟）
+        # LightRAG worker 超时 = default_llm_timeout * 2
+        default_llm_timeout = int(
+            os.getenv("LLM_TIMEOUT", addon_params.pop("llm_timeout", 600))
+        )
+        default_embedding_timeout = int(
+            os.getenv("EMBEDDING_TIMEOUT", addon_params.pop("embedding_timeout", 120))
+        )
+
         # 创建工作目录
         working_dir = os.path.join(self.work_dir, db_id)
         os.makedirs(working_dir, exist_ok=True)
+
+        logger.info(
+            f"LightRAG timeout config - LLM: {default_llm_timeout}s, "
+            f"Embedding: {default_embedding_timeout}s"
+        )
 
         # 创建 LightRAG 实例
         rag = LightRAG(
@@ -141,6 +155,8 @@ class LightRagKB(KnowledgeBase):
             doc_status_storage="JsonDocStatusStorage",
             log_file_path=os.path.join(working_dir, "lightrag.log"),
             addon_params=addon_params,
+            default_llm_timeout=default_llm_timeout,
+            default_embedding_timeout=default_embedding_timeout,
         )
 
         return rag
