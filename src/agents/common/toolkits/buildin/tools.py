@@ -118,6 +118,7 @@ def ask_user_question(
     if isinstance(options, str):
         try:
             import json
+
             options = json.loads(options)
             logger.debug(f"Parsed string options to list: {options}")
         except Exception as e:
@@ -128,6 +129,7 @@ def ask_user_question(
     if isinstance(questions, str):
         try:
             import json
+
             questions = json.loads(questions)
             logger.debug(f"Parsed string questions to list: {questions}")
         except Exception as e:

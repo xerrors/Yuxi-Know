@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 from pathlib import Path
 from unittest.mock import patch
 
@@ -114,7 +113,6 @@ class TestMiniMaxModelSelection:
 
     def _build_select_model(self, providers_dict):
         """Build a standalone select_model function mirroring src/models/chat.py."""
-        from openai import AsyncOpenAI
 
         class _Model:
             def __init__(self, api_key, base_url, model_name):
