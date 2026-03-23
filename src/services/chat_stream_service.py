@@ -452,6 +452,8 @@ async def stream_agent_chat(
 
         full_msg = None
         accumulated_content = []
+        # 前端仅在 msg.id 存在时合并流式片段；部分模型/提供商的 AIMessageChunk 无 id，会导致正文被丢弃
+        ai_chunk_group_id: str | None = None
         async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
             if isinstance(msg, AIMessageChunk):
                 accumulated_content.append(msg.content)
@@ -464,9 +466,20 @@ async def stream_agent_chat(
                     yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
                     return
 
-                yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
-            else:
                 msg_dict = msg.model_dump()
+                mid = msg_dict.get("id")
+                if mid:
+                    ai_chunk_group_id = str(mid)
+                else:
+                    if ai_chunk_group_id is None:
+                        ai_chunk_group_id = str(uuid.uuid4())
+                    msg_dict["id"] = ai_chunk_group_id
+                yield make_chunk(content=msg.content, msg=msg_dict, metadata=metadata, status="loading")
+            else:
+                ai_chunk_group_id = None
+                msg_dict = msg.model_dump()
+                if not msg_dict.get("id"):
+                    msg_dict["id"] = str(uuid.uuid4())
                 yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
 
                 try:
