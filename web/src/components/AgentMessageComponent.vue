@@ -258,10 +258,48 @@ const validToolCalls = computed(() => {
   })
 })
 
+const inferToolIntent = (toolCall) => {
+  const toolName = String(toolCall?.name || toolCall?.function?.name || '').trim()
+  if (!toolName) return '我正在调用工具来补充信息。'
+
+  const lowerName = toolName.toLowerCase()
+  if (lowerName.includes('query_kb') || lowerName.includes('knowledge') || lowerName.includes('kb')) {
+    return `我正在使用「${toolName}」工具检索知识库，定位与你问题最相关的内容。`
+  }
+  if (lowerName.includes('search') || lowerName.includes('web')) {
+    return `我正在使用「${toolName}」工具进行搜索，获取最新或更完整的参考信息。`
+  }
+  if (lowerName.includes('read') || lowerName.includes('fetch')) {
+    return `我正在使用「${toolName}」工具读取资料内容，以便基于原文回答你。`
+  }
+  if (lowerName.includes('python') || lowerName.includes('code') || lowerName.includes('execute')) {
+    return `我正在使用「${toolName}」工具执行计算或代码步骤，确保结果更准确。`
+  }
+  return `我正在使用「${toolName}」工具收集补充信息，随后会基于结果给出结论。`
+}
+
+const buildToolNarration = (toolCalls) => {
+  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return ''
+  const uniqueNames = new Set()
+  const lines = []
+  for (const toolCall of toolCalls) {
+    const name = String(toolCall?.name || toolCall?.function?.name || '').trim() || '__unknown__'
+    if (uniqueNames.has(name)) continue
+    uniqueNames.add(name)
+    lines.push(inferToolIntent(toolCall))
+  }
+  return lines.join('\n')
+}
+
 const parsedData = computed(() => {
   // Start with default values from the prop to avoid mutation.
   let content = props.message.content.trim() || ''
   let reasoning_content = props.message.additional_kwargs?.reasoning_content || ''
+
+  // 当模型只返回工具调用、尚未返回正文时，补充第一人称解释，避免“只有工具没有说明”的体验
+  if (!content && validToolCalls.value.length > 0) {
+    content = buildToolNarration(validToolCalls.value)
+  }
 
   if (reasoning_content) {
     return {
