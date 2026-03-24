@@ -1,13 +1,7 @@
 <template>
   <div class="attachment-panel">
     <label class="attachment-upload" :class="{ disabled: disabled || isUploading }">
-      <input
-        type="file"
-        multiple
-        accept=".txt,.md,.docx,.html,.htm"
-        :disabled="disabled || isUploading"
-        @change="handleFileChange"
-      />
+      <input type="file" multiple :disabled="disabled || isUploading" @change="handleFileChange" />
       <Paperclip size="14" />
       <span>{{ isUploading ? '上传中…' : '添加附件' }}</span>
     </label>
@@ -53,7 +47,7 @@ const props = defineProps({
 const emit = defineEmits(['upload', 'remove'])
 
 const extensionsText = computed(() => {
-  if (!props.limits?.allowed_extensions?.length) return 'txt/md/docx/html'
+  if (!props.limits?.allowed_extensions?.length) return '任意文件'
   return props.limits.allowed_extensions.map((item) => item.replace('.', '')).join(' / ')
 })
 
@@ -64,10 +58,8 @@ const sizeHint = computed(() => {
 })
 
 const statusLabel = (item) => {
-  if (item.status === 'parsed') {
-    return item.truncated ? '已解析（截断）' : '已解析'
-  }
-  if (item.status === 'failed') return '解析失败'
+  if (item.status === 'uploaded') return '已上传'
+  if (item.status === 'failed') return '上传失败'
   return '处理中'
 }
 

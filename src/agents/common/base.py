@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 import os
 import tomllib as tomli
 from abc import abstractmethod
-from inspect import isawaitable
 from pathlib import Path
 
 from langgraph.checkpoint.memory import InMemorySaver
@@ -14,6 +12,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src import config as sys_config
 from src.agents.common.context import BaseContext
+from src.storage.postgres.manager import pg_manager
 from src.utils import logger
 
 
@@ -30,7 +29,6 @@ class BaseAgent:
     def __init__(self, **kwargs):
         self.graph = None  # will be covered by get_graph
         self.checkpointer = None
-        self._checkpointer_cm = None
         self._async_conn = None
         self.workdir = Path(sys_config.save_dir) / "agents" / self.module_name
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -159,15 +157,6 @@ class BaseAgent:
     def reload_graph(self):
         """重置 graph 缓存，强制下次调用 get_graph 时重新构建"""
         self.graph = None
-        self.checkpointer = None
-        if self._checkpointer_cm is not None:
-            try:
-                loop = asyncio.get_running_loop()
-            except RuntimeError:
-                loop = None
-
-            if loop is not None:
-                loop.create_task(self._close_checkpointer_context())
         logger.info(f"{self.name} graph 缓存已清空，将在下次调用时重新构建")
 
     @abstractmethod
@@ -211,39 +200,14 @@ class BaseAgent:
             logger.warning(f"langgraph postgres checkpointer 不可用，回退 sqlite: {e}")
             return None
 
-        conn_str = postgres_url.replace("+asyncpg", "")
         try:
-            saver_factory = getattr(AsyncPostgresSaver, "from_conn_string", None)
-            if callable(saver_factory):
-                saver = saver_factory(conn_str)
-            else:
-                saver = AsyncPostgresSaver(conn_str)  # type: ignore[call-arg]
+            saver = AsyncPostgresSaver(pg_manager.langgraph_pool)
 
-            if hasattr(saver, "__aenter__") and hasattr(saver, "__aexit__"):
-                self._checkpointer_cm = saver
-                saver = await saver.__aenter__()
-
-            setup_fn = getattr(saver, "setup", None)
-            if callable(setup_fn):
-                result = setup_fn()
-                if isawaitable(result):
-                    await result
             logger.info(f"{self.name} 使用 postgres checkpointer")
             return saver
         except Exception as e:
             logger.warning(f"初始化 postgres checkpointer 失败，回退 sqlite: {e}")
             return None
-
-    async def _close_checkpointer_context(self):
-        if self._checkpointer_cm is None:
-            return
-
-        cm = self._checkpointer_cm
-        self._checkpointer_cm = None
-        try:
-            await cm.__aexit__(None, None, None)
-        except Exception as e:
-            logger.warning(f"关闭 postgres checkpointer 失败: {e}")
 
     async def get_async_conn(self) -> aiosqlite.Connection:
         """获取异步数据库连接"""

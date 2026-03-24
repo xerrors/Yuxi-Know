@@ -37,7 +37,7 @@ make format        # 格式化代码
 # 直接在容器内执行命令
 docker compose exec api uv run python test/your_script.py  # 放在 test 文件夹
 ```
-
+安装依赖太慢时可以使用代理端口 7897
 注意：
 - Python 代码要符合 Python 的规范，符合 pythonic 风格
 - 尽量使用较新的语法，避免使用旧版本的语法（版本兼容到 3.12+）

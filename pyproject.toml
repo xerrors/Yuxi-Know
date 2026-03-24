@@ -63,12 +63,16 @@ dependencies = [
     "arq>=0.26.3",
     "chardet>=5.0.0",
     "deepagents>=0.2.5",
+    "agent-sandbox>=0.0.26",
     "json-repair>=0.54.0",
     "torch>=2.8.0",
     "torchvision==0.23",
     "docling>=2.68.0",
     "loguru>=0.7.3",
     "redis>=5.2.0",
+    "aioboto3>=13.0.0",
+    "wcmatch>=8.0.0",
+    "psycopg[binary,pool]>=3.3.3",
 ]
 [tool.ruff]
 line-length = 120  # 代码最大行宽

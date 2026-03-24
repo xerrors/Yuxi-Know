@@ -174,7 +174,7 @@ export const agentApi = {
   /**
    * 恢复被人工审批中断的对话（流式响应）
    * @param {string} agentId - 智能体ID
-    * @param {Object} data - 恢复数据 { thread_id, answer: { question_id: answer }, approved }
+   * @param {Object} data - 恢复数据 { thread_id, answer: { question_id: answer }, approved }
    * @param {Object} options - 可选参数（signal, headers等）
    * @returns {Promise} - 恢复响应流
    */
@@ -342,6 +342,57 @@ export const threadApi = {
    * @returns {Promise}
    */
   getThreadAttachments: (threadId) => apiGet(`/api/chat/thread/${threadId}/attachments`),
+
+  /**
+   * 列出线程文件（目录）
+   * @param {string} threadId
+   * @param {string} path
+   * @param {boolean} recursive
+   * @returns {Promise}
+   */
+  listThreadFiles: (threadId, path = '/mnt/user-data', recursive = false) =>
+    apiGet(
+      `/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}&recursive=${recursive}`
+    ),
+
+  /**
+   * 读取线程文本文件内容（分页）
+   * @param {string} threadId
+   * @param {string} path
+   * @param {number} offset
+   * @param {number} limit
+   * @returns {Promise}
+   */
+  readThreadFile: (threadId, path, offset = 0, limit = 2000) =>
+    apiGet(
+      `/api/chat/thread/${threadId}/files/content?path=${encodeURIComponent(path)}&offset=${offset}&limit=${limit}`
+    ),
+
+  /**
+   * 获取线程文件下载/预览 URL
+   * @param {string} threadId
+   * @param {string} path
+   * @param {boolean} download
+   * @returns {string}
+   */
+  getThreadArtifactUrl: (threadId, path, download = false) => {
+    const encodedPath = path
+      .split('/')
+      .filter(Boolean)
+      .map((segment) => encodeURIComponent(segment))
+      .join('/')
+    const query = download ? '?download=true' : ''
+    return `/api/chat/thread/${threadId}/artifacts/${encodedPath}${query}`
+  },
+
+  /**
+   * 下载线程文件（带鉴权）
+   * @param {string} threadId
+   * @param {string} path
+   * @returns {Promise<Response>}
+   */
+  downloadThreadArtifact: (threadId, path) =>
+    apiGet(threadApi.getThreadArtifactUrl(threadId, path, true), {}, true, 'blob'),
 
   /**
    * 上传附件
