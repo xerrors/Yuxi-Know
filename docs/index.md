@@ -3,41 +3,53 @@
 layout: home
 
 hero:
-  name: "Yuxi-Know"
-  text: "智能知识库与知识图谱问答系统"
-  tagline: 基于 LangGraph + Vue.js + FastAPI + LightRAG 架构构建的智能问答平台
+  name: "Yuxi"
+  text: "智能知识库与知识图谱智能体开发平台"
+  tagline: 基于 LangGraph v1 + Vue.js + FastAPI + LightRAG，统一构建 RAG、知识图谱与多智能体应用
   image:
     src: /bb.png
-    alt: VitePress
+    alt: Yuxi
   actions:
     - theme: brand
-      text: Latest 文档
-      link: /latest/intro/quick-start
+      text: 快速开始
+      link: /intro/quick-start
     - theme: alt
-      text: v0.4.0 文档
-      link: /v0.4.0/intro/quick-start
+      text: 智能体开发
+      link: /agents/agents-config
+    - theme: alt
+      text: GitHub
+      link: https://github.com/xerrors/Yuxi-Know
 
 features:
-  - title: 🤖 智能体与模型
-    details: 支持主流大模型及 vLLM、Ollama 等，支持自定义智能体开发，兼容 LangGraph 部署
-  - title: 📚 灵活知识库
-    details: 支持 LightRAG、Milvus、Chroma 等存储形式，配置 MinerU、PP-Structure-V3 文档解析引擎
+  - title: 🤖 智能体开发
+    details: 基于 LangGraph v1，支持 Agents、SubAgents、Tools、MCP、Skills 与中间件配置，适合搭建真实业务智能体
+  - title: 📚 知识库与 RAG
+    details: 支持多格式文档上传、解析、分块、向量检索与评估，兼容结构化与非结构化知识管理场景
   - title: 🕸️ 知识图谱
-    details: 支持 LightRAG 自动图谱构建，以及自定义图谱问答，可接入现有知识图谱
-  - title: 👥 权限安全
-    details: 支持超级管理员、管理员、普通用户三级权限体系，并配置内容审查以及守卫模型
-  - title: 🔧 易于部署
-    details: 基于 Docker Compose 一键部署，支持热重载开发，无需显卡即可运行
-  - title: 🎯 生产就绪
-    details: 完整的测试套件、API 文档、监控日志，适合企业级部署和使用
+    details: 基于 LightRAG 构建图谱问答与图谱检索，支持自动图谱生成、属性图谱导入与可视化分析
 ---
 
-## 快速开始
+## 项目定位
 
-```sh
-docker compose up --build -d
-```
+Yuxi（语析）不是单一的问答页面，而是一个面向开发者与团队的 AI 应用平台。它把知识库、知识图谱和智能体开发放在同一套系统里，适合从原型验证一路走到团队内部落地。
 
-## 在线演示
+你可以用它完成这些事情：
 
-观看视频演示：[Bilibili](https://www.bilibili.com/video/BV1DF14BTETq)
+- 构建面向业务场景的 RAG + 知识图谱智能体
+- 将 PDF、Word、Markdown、图片等资料转为可检索、可推理的知识资产
+- 基于 LangGraph v1 搭建多智能体、子智能体和工具调用流程
+- 为内部系统提供可管理、可扩展的 AI 能力底座
+
+## 文档入口
+
+- [快速开始](/intro/quick-start)：完成环境初始化、容器启动与首次登录
+- [项目简介](/intro/project-overview)：了解整体定位、技术栈与核心能力
+- [知识库与知识图谱](/intro/knowledge-base)：查看知识导入、检索与图谱能力
+- [智能体开发](/agents/agents-config)：配置 Agent、Tools、MCP、Skills 与中间件
+- [生产部署](/advanced/deployment)：了解部署方式与上线建议
+
+
+自动生成文档镜像：
+
+- [Zread](https://zread.ai/xerrors/Yuxi-Know)
+- [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know)

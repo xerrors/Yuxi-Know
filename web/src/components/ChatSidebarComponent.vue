@@ -1,7 +1,11 @@
 <template>
   <div
     class="chat-sidebar"
-    :class="{ 'sidebar-open': chatUIStore.isSidebarOpen, 'no-transition': isInitialRender }"
+    :class="{
+      'sidebar-open': chatUIStore.isSidebarOpen,
+      'no-transition': isInitialRender,
+      'is-floating': isFloating
+    }"
   >
     <div class="sidebar-content">
       <div class="sidebar-header">
@@ -12,7 +16,7 @@
             alt="logo"
             class="brand-logo"
           />
-          <div class="header-title">{{ branding.name || organization.name || 'Yuxi-Know' }}</div>
+          <div class="header-title">{{ branding.name || organization.name || 'Yuxi' }}</div>
         </div>
         <div class="header-actions">
           <div
@@ -143,6 +147,10 @@ const props = defineProps({
     default: () => []
   },
   isInitialRender: {
+    type: Boolean,
+    default: false
+  },
+  isFloating: {
     type: Boolean,
     default: false
   },
@@ -293,6 +301,20 @@ const togglePin = (chatId) => {
 
   &.no-transition {
     transition: none !important;
+  }
+
+  &.is-floating {
+    position: absolute;
+    z-index: 100;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    height: 100%;
+
+    &.sidebar-open {
+      box-shadow: 4px 0 16px rgba(0, 0, 0, 0.08);
+      border-right: none;
+    }
   }
 
   &.sidebar-open {

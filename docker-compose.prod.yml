@@ -1,9 +1,37 @@
+x-api-worker-env: &api-worker-env
+  HOST_IP: ${HOST_IP:-}
+  LITE_MODE: ${LITE_MODE:-}
+  RUNNING_IN_DOCKER: "true"
+  MODEL_DIR_IN_DOCKER: /models
+  PYTHONPATH: /app/package
+  POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  RUN_CANCEL_KEY_TTL_SECONDS: ${RUN_CANCEL_KEY_TTL_SECONDS:-1800}
+  RUN_EVENTS_STREAM_TTL_SECONDS: ${RUN_EVENTS_STREAM_TTL_SECONDS:-7200}
+  NEO4J_URI: ${NEO4J_URI:-bolt://graph:7687}
+  NEO4J_USERNAME: ${NEO4J_USERNAME:-neo4j}
+  NEO4J_PASSWORD: ${NEO4J_PASSWORD:-0123456789}
+  MILVUS_URI: ${MILVUS_URI:-http://milvus:19530}
+  MILVUS_DB_NAME: ${MILVUS_DB_NAME:-default}
+  MILVUS_TOKEN: ${MILVUS_TOKEN:-}
+  MINERU_VL_SERVER: ${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
+  MINERU_API_URI: ${MINERU_API_URI:-http://mineru-api:30001}
+  PADDLEX_URI: ${PADDLEX_URI:-http://paddlex:8080}
+  MINIO_URI: ${MINIO_URI:-http://minio:9000}
+  SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-provisioner}
+  SANDBOX_PROVISIONER_URL: ${SANDBOX_PROVISIONER_URL:-http://sandbox-provisioner:8002}
+  SANDBOX_VIRTUAL_PATH_PREFIX: ${SANDBOX_VIRTUAL_PATH_PREFIX:-/mnt/user-data}
+  SANDBOX_EXEC_TIMEOUT_SECONDS: ${SANDBOX_EXEC_TIMEOUT_SECONDS:-180}
+  SANDBOX_MAX_OUTPUT_BYTES: ${SANDBOX_MAX_OUTPUT_BYTES:-262144}
+  NO_PROXY: localhost,127.0.0.1,milvus,graph,minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
+  no_proxy: localhost,127.0.0.1,milvus,graph,minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
+
 services:
   api:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:0.5.prod
+    image: yuxi-api:0.6.prod
     container_name: api-prod
     working_dir: /app
     networks:
@@ -14,31 +42,10 @@ services:
       - "host.docker.internal:host-gateway"
     env_file:
       - .env.prod
+    # region api_envs
     environment:
-      - HOST_IP=${HOST_IP:-}
-      - POSTGRES_URL=${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - RUN_EVENTS_STREAM_TTL_SECONDS=${RUN_EVENTS_STREAM_TTL_SECONDS:-7200}
-      - RUN_CANCEL_KEY_TTL_SECONDS=${RUN_CANCEL_KEY_TTL_SECONDS:-1800}
-      - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
-      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-0123456789}
-      - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
-      - MILVUS_TOKEN=${MILVUS_TOKEN:-}
-      - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
-      - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
-      - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30001}
-      - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
-      - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
-      - MODEL_DIR_IN_DOCKER=/models
-      - RUNNING_IN_DOCKER=true
-      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-provisioner}
-      - SANDBOX_PROVISIONER_URL=${SANDBOX_PROVISIONER_URL:-http://sandbox-provisioner:8002}
-      - SANDBOX_VIRTUAL_PATH_PREFIX=${SANDBOX_VIRTUAL_PATH_PREFIX:-/mnt/user-data}
-      - SANDBOX_EXEC_TIMEOUT_SECONDS=${SANDBOX_EXEC_TIMEOUT_SECONDS:-180}
-      - SANDBOX_MAX_OUTPUT_BYTES=${SANDBOX_MAX_OUTPUT_BYTES:-262144}
-      - NO_PROXY=localhost,127.0.0.1,host.docker.internal,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
-      - no_proxy=localhost,127.0.0.1,host.docker.internal,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
+      <<: *api-worker-env
+    # endregion api_envs
     command: uv run --no-dev uvicorn server.main:app --host 0.0.0.0 --port 5050
     restart: unless-stopped
     healthcheck:
@@ -52,8 +59,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      milvus:
-        condition: service_healthy
       minio:
         condition: service_healthy
       sandbox-provisioner:
@@ -63,7 +68,7 @@ services:
     build:
       context: .
       dockerfile: docker/api.Dockerfile
-    image: yuxi-api:0.5.prod
+    image: yuxi-api:0.6.prod
     container_name: worker-prod
     working_dir: /app
     networks:
@@ -75,38 +80,13 @@ services:
     env_file:
       - .env.prod
     environment:
-      - HOST_IP=${HOST_IP:-}
-      - POSTGRES_URL=${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - RUN_EVENTS_STREAM_TTL_SECONDS=${RUN_EVENTS_STREAM_TTL_SECONDS:-7200}
-      - RUN_CANCEL_KEY_TTL_SECONDS=${RUN_CANCEL_KEY_TTL_SECONDS:-1800}
-      - NEO4J_URI=${NEO4J_URI:-bolt://graph:7687}
-      - NEO4J_USERNAME=${NEO4J_USERNAME:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-0123456789}
-      - MILVUS_URI=${MILVUS_URI:-http://milvus:19530}
-      - MILVUS_TOKEN=${MILVUS_TOKEN:-}
-      - MILVUS_DB_NAME=${MILVUS_DB_NAME:-default}
-      - MINERU_VL_SERVER=${MINERU_VL_SERVER:-http://mineru-vllm-server:30000}
-      - MINERU_API_URI=${MINERU_API_URI:-http://mineru-api:30001}
-      - PADDLEX_URI=${PADDLEX_URI:-http://paddlex:8080}
-      - MINIO_URI=${MINIO_URI:-http://milvus-minio:9000}
-      - MODEL_DIR_IN_DOCKER=/models
-      - RUNNING_IN_DOCKER=true
-      - SANDBOX_PROVIDER=${SANDBOX_PROVIDER:-provisioner}
-      - SANDBOX_PROVISIONER_URL=${SANDBOX_PROVISIONER_URL:-http://sandbox-provisioner:8002}
-      - SANDBOX_VIRTUAL_PATH_PREFIX=${SANDBOX_VIRTUAL_PATH_PREFIX:-/mnt/user-data}
-      - SANDBOX_EXEC_TIMEOUT_SECONDS=${SANDBOX_EXEC_TIMEOUT_SECONDS:-180}
-      - SANDBOX_MAX_OUTPUT_BYTES=${SANDBOX_MAX_OUTPUT_BYTES:-262144}
-      - NO_PROXY=localhost,127.0.0.1,host.docker.internal,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
-      - no_proxy=localhost,127.0.0.1,host.docker.internal,milvus,graph,milvus-minio,milvus-etcd,etcd,minio,mineru,paddlex,sandbox-provisioner,api.siliconflow.cn
+      <<: *api-worker-env
     command: uv run --no-dev arq server.worker_main.WorkerSettings
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      milvus:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -156,7 +136,7 @@ services:
       context: .
       dockerfile: docker/web.Dockerfile
       target: production
-    image: yuxi-web:0.5.prod
+    image: yuxi-web:0.6.prod
     container_name: web-prod
     ports:
       - "80:80"
@@ -166,8 +146,7 @@ services:
       - app-network
     environment:
       - NODE_ENV=production
-      - VITE_API_URL=http://api:5050
-      - VITE_USE_RUNS_API=${VITE_USE_RUNS_API:-false}
+      - VITE_LITE_MODE=${LITE_MODE:-}
     command: nginx -g "daemon off;"
     restart: unless-stopped
 
@@ -214,7 +193,7 @@ services:
     restart: unless-stopped
 
   minio:
-    container_name: milvus-minio
+    container_name: minio
     image: minio/minio:RELEASE.2023-03-20T20-16-18Z
     environment:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
@@ -304,7 +283,7 @@ services:
     profiles:
       - all
     env_file:
-      - .env
+      - .env.prod
     environment:
       MINERU_MODEL_SOURCE: local
     entrypoint: mineru-vllm-server
@@ -337,7 +316,7 @@ services:
     profiles:
       - all
     env_file:
-      - .env
+      - .env.prod
     ports:
       - 30001:30001
     environment:

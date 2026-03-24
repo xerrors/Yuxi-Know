@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -129,6 +130,26 @@ class LocalContainerProvisionerBackend:
             raise RuntimeError(f"docker backend unavailable: {exc}") from exc
 
         self._resolve_host_paths()
+        self._threads_host_path = self._normalize_host_bind_path(self._threads_host_path)
+        self._skills_host_path = self._normalize_host_bind_path(self._skills_host_path)
+
+    @staticmethod
+    def _normalize_host_bind_path(path_value: str | None) -> str:
+        value = str(path_value or "").strip()
+        if not value:
+            raise RuntimeError("docker host bind path is required")
+
+        # Docker Desktop on Windows can report bind sources as D:\\... while
+        # this provisioner runs in a Linux container. Convert it to the daemon-
+        # visible Linux path to avoid "too many colons" bind parsing failures.
+        normalized = value.replace("\\", "/")
+        match = re.match(r"^([A-Za-z]):/(.+)$", normalized)
+        if os.name != "nt" and match:
+            drive = match.group(1).lower()
+            rest = match.group(2).lstrip("/")
+            return f"/run/desktop/mnt/host/{drive}/{rest}"
+
+        return value
 
     @staticmethod
     def _validate_thread_id(thread_id: str) -> str:
@@ -170,7 +191,7 @@ class LocalContainerProvisionerBackend:
         if not saves_source:
             raise RuntimeError("cannot infer host path for /app/saves mount")
 
-        base = Path(saves_source)
+        base = Path(self._normalize_host_bind_path(saves_source))
         if not self._threads_host_path:
             self._threads_host_path = str(base / "threads")
         if not self._skills_host_path:
@@ -204,7 +225,8 @@ class LocalContainerProvisionerBackend:
         cmd = (
             "sh -lc "
             '"mkdir -p /home/gem/user-data/workspace /home/gem/user-data/uploads /home/gem/user-data/outputs '
-            '&& chmod -R a+rwX /home/gem/user-data"'
+            '&& chmod a+rwx /home/gem/user-data /home/gem/user-data/workspace '
+            '/home/gem/user-data/uploads /home/gem/user-data/outputs"'
         )
         result = container.exec_run(cmd, user="0:0")
         if result.exit_code != 0:

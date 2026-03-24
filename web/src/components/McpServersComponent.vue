@@ -48,7 +48,6 @@
                 />
               </div>
               <div class="item-details">
-                <a-tag size="small" class="transport-tag">{{ server.transport }}</a-tag>
                 <span class="item-desc">{{ server.description || '暂无描述' }}</span>
               </div>
             </div>
@@ -68,7 +67,7 @@
 
         <template v-else>
           <div class="panel-top-bar">
-            <h2 style="min-height: 32px">
+            <h2 class="panel-title-row">
               <span class="server-icon-lg">{{ currentServer.icon || '🔌' }}</span>
               <span
                 ><strong>{{ currentServer.name }}</strong></span
@@ -147,14 +146,14 @@
                   >
                     <div class="info-item" v-if="currentServer.url">
                       <label>服务器 URL</label>
-                      <span class="url-text">{{ currentServer.url }}</span>
+                      <span class="code-inline text-break-all">{{ currentServer.url }}</span>
                     </div>
                     <div
                       class="info-item"
                       v-if="currentServer.headers && Object.keys(currentServer.headers).length > 0"
                     >
                       <label>请求头</label>
-                      <pre class="headers-pre">{{
+                      <pre class="code-pre">{{
                         JSON.stringify(currentServer.headers, null, 2)
                       }}</pre>
                     </div>
@@ -172,7 +171,7 @@
                   <template v-if="currentServer.transport === 'stdio'">
                     <div class="info-item" v-if="currentServer.command">
                       <label>命令</label>
-                      <span class="command-text">{{ currentServer.command }}</span>
+                      <span class="code-inline">{{ currentServer.command }}</span>
                     </div>
                     <div
                       class="info-item"
@@ -190,9 +189,7 @@
                       v-if="currentServer.env && Object.keys(currentServer.env).length > 0"
                     >
                       <label>环境变量</label>
-                      <pre class="headers-pre">{{
-                        JSON.stringify(currentServer.env, null, 2)
-                      }}</pre>
+                      <pre class="code-pre">{{ JSON.stringify(currentServer.env, null, 2) }}</pre>
                     </div>
                   </template>
 
@@ -301,32 +298,6 @@
                 </a-spin>
               </div>
             </a-tab-pane>
-
-            <a-tab-pane key="prompts">
-              <template #tab>
-                <span class="tab-title"><MessageSquare :size="14" />提示</span>
-              </template>
-              <div class="tab-content empty-tab">
-                <a-empty description="提示功能即将推出">
-                  <template #image>
-                    <span style="font-size: 48px">📝</span>
-                  </template>
-                </a-empty>
-              </div>
-            </a-tab-pane>
-
-            <a-tab-pane key="resources">
-              <template #tab>
-                <span class="tab-title"><Box :size="14" />资源</span>
-              </template>
-              <div class="tab-content empty-tab">
-                <a-empty description="资源功能即将推出">
-                  <template #image>
-                    <span style="font-size: 48px">📦</span>
-                  </template>
-                </a-empty>
-              </div>
-            </a-tab-pane>
           </a-tabs>
         </template>
       </div>
@@ -352,7 +323,7 @@
       </div>
 
       <!-- 表单模式 -->
-      <a-form v-if="formMode === 'form'" layout="vertical" class="server-form">
+      <a-form v-if="formMode === 'form'" layout="vertical" class="extension-form">
         <a-form-item label="服务器名称" required class="form-item">
           <a-input
             v-model:value="form.name"
@@ -477,7 +448,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { notification, Modal } from 'ant-design-vue'
+import { message, notification, Modal } from 'ant-design-vue'
 import {
   Search,
   Plug,
@@ -488,9 +459,7 @@ import {
   Info,
   Copy,
   Settings2,
-  Wrench,
-  MessageSquare,
-  Box
+  Wrench
 } from 'lucide-vue-next'
 import { mcpApi } from '@/apis/mcp_api'
 import { formatFullDateTime } from '@/utils/time'
@@ -537,7 +506,10 @@ const form = reactive({
 // 计算属性
 const filteredServers = computed(() => {
   const sorted = [...servers.value].sort((a, b) => {
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hans-CN', {
+      sensitivity: 'base',
+      numeric: true
+    })
   })
   if (!searchQuery.value) return sorted
   const q = searchQuery.value.toLowerCase()
@@ -572,9 +544,9 @@ const fetchServers = async () => {
     const result = await mcpApi.getMcpServers()
     if (result.success) {
       servers.value = result.data || []
-      // 默认选中第一个服务器
+      // 默认选中排序后的第一个服务器
       if (!currentServer.value && servers.value.length > 0) {
-        selectServer(servers.value[0])
+        selectServer(filteredServers.value[0])
       } else if (currentServer.value) {
         const latest = servers.value.find((s) => s.name === currentServer.value.name)
         if (latest) {
@@ -824,7 +796,7 @@ const handleToggleServer = async (server) => {
     toggleLoading.value = server.name
     const result = await mcpApi.toggleMcpServer(server.name)
     if (result.success) {
-      notification.success({ message: result.message })
+      message.success(result.message)
       await fetchServers()
     } else {
       notification.error({ message: result.message || '操作失败' })
@@ -951,97 +923,6 @@ defineExpose({
   .server-icon {
     font-size: 18px;
   }
-
-  .item-details {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-
-    .transport-tag {
-      background: var(--gray-100);
-      border: none;
-      color: var(--gray-600);
-      border-radius: 4px;
-      font-size: 11px;
-      width: fit-content;
-    }
-
-    .item-desc {
-      font-size: 12px;
-      color: var(--gray-400);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-}
-
-/* 右侧面板 */
-.main-panel {
-  .detail-tabs {
-    .tab-content {
-      padding: 16px;
-      min-height: 300px;
-      height: 100%;
-      overflow: scroll;
-    }
-
-    .empty-tab {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 200px;
-    }
-  }
-}
-
-.info-grid {
-  display: grid;
-  gap: 16px;
-
-  .info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-
-    label {
-      font-size: 12px;
-      color: var(--gray-500);
-      font-weight: 500;
-    }
-
-    span {
-      font-size: 14px;
-      color: var(--gray-900);
-    }
-
-    .url-text {
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 13px;
-      word-break: break-all;
-      background: var(--gray-50);
-      padding: 8px 12px;
-      border-radius: 4px;
-    }
-
-    .command-text {
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 13px;
-      background: var(--gray-50);
-      padding: 8px 12px;
-      border-radius: 4px;
-    }
-
-    .headers-pre {
-      font-family: 'Monaco', 'Consolas', monospace;
-      font-size: 12px;
-      background: var(--gray-50);
-      padding: 12px;
-      border-radius: 4px;
-      margin: 0;
-      overflow-x: auto;
-    }
-  }
 }
 
 /* 工具列表样式 */
@@ -1151,7 +1032,7 @@ defineExpose({
               font-weight: 500;
               font-size: 13px;
               color: var(--gray-900);
-              font-family: 'Monaco', 'Consolas', monospace;
+              font-family: @mono-font;
             }
             .param-required {
               font-size: 11px;
@@ -1166,7 +1047,7 @@ defineExpose({
               background: var(--gray-100);
               padding: 1px 6px;
               border-radius: 3px;
-              font-family: 'Monaco', 'Consolas', monospace;
+              font-family: @mono-font;
             }
           }
 
@@ -1187,14 +1068,9 @@ defineExpose({
     margin-bottom: 16px;
     text-align: right;
   }
-  .server-form {
-    .form-item {
-      margin-bottom: 16px;
-    }
-  }
   .json-mode {
     .json-textarea {
-      font-family: 'Monaco', 'Consolas', monospace;
+      font-family: @mono-font;
       font-size: 13px;
     }
     .json-actions {

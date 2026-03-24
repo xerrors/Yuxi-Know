@@ -2,24 +2,70 @@
   <div class="agent-config-sidebar" :class="{ open: isOpen }">
     <!-- 侧边栏头部 -->
     <div class="sidebar-header">
-      <div class="header-center">
-        <a-segmented v-model:value="activeTab" :options="segmentedOptions" />
+      <div class="header-top-row">
+        <div v-if="selectedAgentId" class="config-manage-row">
+          <a-select
+            :value="selectedAgentConfigId"
+            :options="configSwitchOptions"
+            class="config-switch-select"
+            placeholder="选择配置"
+            @update:value="handleConfigSwitch"
+          />
+        </div>
+        <div class="header-actions">
+          <a-tooltip
+            v-if="!isEmptyConfig && userStore.isAdmin"
+            :title="isCurrentDefault ? '当前已是默认配置' : '设为默认配置'"
+          >
+            <a-button
+              type="text"
+              shape="circle"
+              class="icon-btn lucide-icon-btn"
+              :class="{ 'is-default': isCurrentDefault }"
+              @click="setAsDefault"
+            >
+              <Star :size="18" :fill="isCurrentDefault ? 'currentColor' : 'none'" />
+            </a-button>
+          </a-tooltip>
+
+          <a-tooltip v-if="!isEmptyConfig && userStore.isAdmin" title="删除配置">
+            <a-button
+              type="text"
+              shape="circle"
+              danger
+              class="icon-btn lucide-icon-btn"
+              @click="confirmDeleteConfig"
+              :disabled="isDeletingConfig"
+            >
+              <Trash2 :size="18" />
+            </a-button>
+          </a-tooltip>
+
+          <a-button type="text" size="small" @click="closeSidebar" class="icon-btn lucide-icon-btn">
+            <X :size="16" />
+          </a-button>
+        </div>
       </div>
-      <a-button type="text" size="small" @click="closeSidebar" class="close-btn">
-        <X :size="16" />
-      </a-button>
     </div>
 
     <!-- 侧边栏内容 -->
     <div class="sidebar-content">
       <div class="agent-info" v-if="selectedAgent">
-        <div class="agent-basic-info">
+        <!-- <div class="agent-basic-info">
           <p class="agent-description">{{ selectedAgent.description }}</p>
-        </div>
+        </div> -->
 
         <!-- <a-divider /> -->
 
-        <div v-if="selectedAgentId && configurableItems" class="config-form-content">
+        <div class="config-segment" v-if="!isEmptyConfig">
+          <a-segmented v-model:value="currentSegment" :options="segmentOptions" block />
+        </div>
+
+        <div
+          v-if="selectedAgentId && configurableItems"
+          class="config-form-content"
+          :class="{ 'is-readonly': isReadOnlyConfig }"
+        >
           <!-- 配置表单 -->
           <a-form :model="agentConfig" layout="vertical" class="config-form">
             <a-alert
@@ -29,16 +75,8 @@
               show-icon
               class="config-alert"
             />
-            <a-alert
-              v-if="!selectedAgent.has_checkpointer"
-              type="error"
-              message="该智能体没有配置 Checkpointer，功能无法正常使用"
-              show-icon
-              class="config-alert"
-            />
-
             <!-- 统一显示所有配置项 -->
-            <template v-for="(value, key) in configurableItems" :key="key">
+            <template v-for="(value, key) in filteredConfigurableItems" :key="key">
               <a-form-item
                 v-if="shouldShowConfig(key, value)"
                 :label="getConfigLabel(key, value)"
@@ -49,7 +87,11 @@
 
                 <!-- <div>{{ value }}</div> -->
                 <!-- 模型选择 -->
-                <div v-if="value.template_metadata.kind === 'llm'" class="model-selector">
+                <div
+                  v-if="value.template_metadata.kind === 'llm'"
+                  class="model-selector"
+                  :class="{ 'is-readonly': isReadOnlyConfig }"
+                >
                   <ModelSelectorComponent
                     @select-model="(spec) => handleModelChange(key, spec)"
                     :model_spec="agentConfig[key] || ''"
@@ -61,71 +103,25 @@
                   v-else-if="value.template_metadata.kind === 'prompt'"
                   class="system-prompt-container"
                 >
-                  <!-- 编辑模式 -->
-                  <a-textarea
-                    v-if="systemPromptEditMode"
-                    :value="agentConfig[key]"
-                    @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
-                    :rows="10"
-                    :placeholder="getPlaceholder(key, value)"
-                    class="system-prompt-input"
-                    @blur="systemPromptEditMode = false"
-                    ref="systemPromptTextarea"
-                  />
-                  <!-- 显示模式 -->
-                  <div v-else class="system-prompt-display" @click="enterEditMode">
+                  <div class="system-prompt-display" @click="openSystemPromptModal(key)">
                     <div
                       class="system-prompt-content"
                       :class="{ 'is-placeholder': !agentConfig[key] }"
                     >
                       {{ agentConfig[key] || getPlaceholder(key, value) }}
                     </div>
-                    <div class="edit-hint">点击编辑</div>
+                    <div class="edit-hint">
+                      {{ isReadOnlyConfig ? '查看' : '点击查看并编辑' }}
+                    </div>
                   </div>
                 </div>
-
-                <!-- 工具选择 -->
-                <!-- <div v-else-if="value.template_metadata.kind === 'tools'" class="tools-selector">
-                  <div class="tools-summary">
-                    <div class="tools-summary-info">
-                      <span class="tools-count">已选择 {{ getSelectedCount(key) }} 个工具</span>
-                      <a-button
-                        type="link"
-                        size="small"
-                        @click="clearSelection(key)"
-                        v-if="getSelectedCount(key) > 0"
-                        class="clear-btn"
-                      >
-                        清空
-                      </a-button>
-                    </div>
-                    <a-button
-                      type="primary"
-                      @click="openToolsModal"
-                      class="select-tools-btn"
-                      size="small"
-                    >
-                      选择工具
-                    </a-button>
-                  </div>
-                  <div v-if="getSelectedCount(key) > 0" class="selected-tools-preview">
-                    <a-tag
-                      v-for="toolId in agentConfig[key]"
-                      :key="toolId"
-                      closable
-                      @close="removeSelectedTool(toolId)"
-                      class="tool-tag"
-                    >
-                      {{ getToolNameById(toolId) }}
-                    </a-tag>
-                  </div>
-                </div> -->
 
                 <!-- 布尔类型 -->
                 <a-switch
                   v-else-if="typeof agentConfig[key] === 'boolean'"
                   :checked="agentConfig[key]"
-                  @update:checked="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                  :disabled="isReadOnlyConfig"
+                  @update:checked="(val) => updateConfigValue(key, val)"
                 />
 
                 <!-- 单选 -->
@@ -134,7 +130,8 @@
                     value?.options.length > 0 && (value?.type === 'str' || value?.type === 'select')
                   "
                   :value="agentConfig[key]"
-                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                  :disabled="isReadOnlyConfig"
+                  @update:value="(val) => updateConfigValue(key, val)"
                   class="config-select"
                 >
                   <a-select-option v-for="option in value.options" :key="option" :value="option">
@@ -147,8 +144,11 @@
                   <!-- Case 1: <= 5 options, inline list -->
                   <div v-if="getConfigOptions(value).length <= 5" class="multi-select-cards">
                     <div class="multi-select-label">
-                      <span>已选择 {{ getSelectedCount(key) }} 项</span>
-                      <div class="label-actions">
+                      <span
+                        >已选择 {{ getSelectedCount(key) }} 项 | 共
+                        {{ getConfigOptions(value).length }} 项</span
+                      >
+                      <div v-if="!isReadOnlyConfig" class="label-actions">
                         <a-button
                           type="link"
                           size="small"
@@ -164,7 +164,7 @@
                             type="link"
                             size="small"
                             @click="refreshConfigOptions(key, value.template_metadata.kind)"
-                            class="action-btn"
+                            class="inline-action-btn lucide-icon-btn"
                           >
                             <RotateCw :size="12" />
                             刷新
@@ -173,7 +173,7 @@
                             type="link"
                             size="small"
                             @click="navigateToConfigPage(value.template_metadata.kind)"
-                            class="action-btn"
+                            class="inline-action-btn lucide-icon-btn"
                           >
                             <Settings :size="12" />
                             配置
@@ -184,14 +184,19 @@
 
                     <div class="options-grid">
                       <div
-                        v-for="option in getConfigOptions(value)"
+                        v-for="option in isReadOnlyConfig
+                          ? getConfigOptions(value).filter((opt) =>
+                              isOptionSelected(key, getOptionValue(opt))
+                            )
+                          : getConfigOptions(value)"
                         :key="getOptionValue(option)"
                         class="option-card"
                         :class="{
                           selected: isOptionSelected(key, getOptionValue(option)),
-                          unselected: !isOptionSelected(key, getOptionValue(option))
+                          unselected: !isOptionSelected(key, getOptionValue(option)),
+                          readonly: isReadOnlyConfig
                         }"
-                        @click="toggleOption(key, getOptionValue(option))"
+                        @click="!isReadOnlyConfig && toggleOption(key, getOptionValue(option))"
                       >
                         <div class="option-content">
                           <span class="option-text">{{ getOptionLabel(option) }}</span>
@@ -212,20 +217,24 @@
                   <div v-else class="selection-container">
                     <div class="selection-summary">
                       <div class="selection-summary-info">
-                        <span class="selection-count">已选择 {{ getSelectedCount(key) }} 项</span>
+                        <span class="selection-count"
+                          >已选择 {{ getSelectedCount(key) }} 项 | 共
+                          {{ getConfigOptions(value).length }} 项</span
+                        >
 
                         <a-button
+                          v-if="!isReadOnlyConfig && getSelectedCount(key) > 0"
                           type="link"
                           size="small"
                           class="clear-btn"
                           @click="clearSelection(key)"
-                          v-if="getSelectedCount(key) > 0"
                         >
                           清空
                         </a-button>
                       </div>
 
                       <a-button
+                        v-if="!isReadOnlyConfig"
                         type="primary"
                         size="small"
                         class="selection-trigger-btn"
@@ -241,7 +250,7 @@
                       <a-tag
                         v-for="val in agentConfig[key]"
                         :key="val"
-                        closable
+                        :closable="!isReadOnlyConfig"
                         @close="toggleOption(key, val)"
                         class="selection-tag"
                       >
@@ -253,9 +262,12 @@
 
                 <!-- 数字 -->
                 <a-input-number
-                  v-else-if="value?.type === 'number'"
+                  v-else-if="
+                    value?.type === 'number' || value?.type === 'int' || value?.type === 'float'
+                  "
                   :value="agentConfig[key]"
-                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                  :disabled="isReadOnlyConfig"
+                  @update:value="(val) => updateConfigValue(key, val)"
                   :placeholder="getPlaceholder(key, value)"
                   class="config-input-number"
                 />
@@ -264,7 +276,8 @@
                 <a-slider
                   v-else-if="value?.type === 'slider'"
                   :value="agentConfig[key]"
-                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                  :disabled="isReadOnlyConfig"
+                  @update:value="(val) => updateConfigValue(key, val)"
                   :min="value.min"
                   :max="value.max"
                   :step="value.step"
@@ -275,7 +288,8 @@
                 <a-input
                   v-else
                   :value="agentConfig[key]"
-                  @update:value="(val) => agentStore.updateAgentConfig({ [key]: val })"
+                  :disabled="isReadOnlyConfig"
+                  @update:value="(val) => updateConfigValue(key, val)"
                   :placeholder="getPlaceholder(key, value)"
                   class="config-input"
                 />
@@ -287,44 +301,32 @@
     </div>
 
     <!-- 固定在底部的操作按钮 -->
-    <div class="sidebar-footer" v-if="!isEmptyConfig && userStore.isAdmin">
+    <div class="sidebar-footer" v-if="userStore.isAdmin && selectedAgentId">
       <div class="form-actions">
         <a-button
           type="primary"
           @click="saveConfig"
-          class="save-btn"
+          class="footer-main-btn save-btn"
           :class="{ changed: agentStore.hasConfigChanges }"
-          :disabled="isSavingConfig"
+          :disabled="isSavingConfig || isEmptyConfig"
         >
           保存
         </a-button>
-
-        <a-tooltip :title="isCurrentDefault ? '当前已是默认配置' : '设为默认配置'">
-          <a-button type="text" shape="circle" class="icon-btn" @click="setAsDefault">
-            <Star
-              :size="18"
-              :fill="isCurrentDefault ? 'currentColor' : 'none'"
-              :class="{ 'is-default': isCurrentDefault }"
-            />
-          </a-button>
-        </a-tooltip>
-
-        <a-tooltip title="删除配置">
-          <a-button
-            type="text"
-            shape="circle"
-            danger
-            class="icon-btn"
-            @click="confirmDeleteConfig"
-            :disabled="isDeletingConfig"
-          >
-            <Trash2 :size="18" />
-          </a-button>
-        </a-tooltip>
       </div>
     </div>
 
     <!-- 通用选择弹窗 -->
+
+    <a-modal
+      v-model:open="createConfigModalOpen"
+      title="新建配置"
+      :width="360"
+      :confirmLoading="createConfigLoading"
+      @ok="handleCreateConfig"
+      @cancel="closeCreateConfigModal"
+    >
+      <a-input v-model:value="createConfigName" placeholder="请输入配置名称" allow-clear />
+    </a-modal>
 
     <a-modal
       v-model:open="selectionModalOpen"
@@ -346,12 +348,12 @@
               <Search :size="16" class="search-icon" />
             </template>
           </a-input>
-          <template v-if="isToolsKind(currentConfigKind)">
+          <template v-if="!isReadOnlyConfig && isToolsKind(currentConfigKind)">
             <a-button
               type="text"
               size="small"
               @click="refreshConfigOptions(currentConfigKey, currentConfigKind)"
-              class="modal-action-btn"
+              class="inline-action-btn lucide-icon-btn"
               title="刷新列表"
             >
               <RotateCw :size="14" />
@@ -361,7 +363,7 @@
               type="text"
               size="small"
               @click="navigateToConfigPage(currentConfigKind)"
-              class="modal-action-btn"
+              class="inline-action-btn lucide-icon-btn"
               title="跳转配置"
             >
               <Settings :size="14" />
@@ -376,7 +378,7 @@
             :key="getOptionValue(option)"
             class="selection-item"
             :class="{ selected: tempSelectedValues.includes(getOptionValue(option)) }"
-            @click="toggleModalSelection(getOptionValue(option))"
+            @click="!isReadOnlyConfig && toggleModalSelection(getOptionValue(option))"
           >
             <div class="selection-item-content">
               <div class="selection-item-header">
@@ -402,16 +404,46 @@
           <div class="modal-actions">
             <a-button @click="closeSelectionModal">取消</a-button>
 
-            <a-button type="primary" @click="confirmSelection">确认</a-button>
+            <a-button v-if="!isReadOnlyConfig" type="primary" @click="confirmSelection">
+              确认
+            </a-button>
           </div>
         </div>
       </div>
+    </a-modal>
+
+    <a-modal
+      v-model:open="systemPromptModalOpen"
+      :title="systemPromptModalTitle"
+      :width="620"
+      :maskClosable="false"
+      @cancel="closeSystemPromptModal"
+      class="system-prompt-modal"
+    >
+      <div class="system-prompt-modal-content">
+        <a-textarea
+          v-model:value="systemPromptDraft"
+          :rows="14"
+          :disabled="isReadOnlyConfig"
+          :placeholder="systemPromptModalPlaceholder"
+          class="system-prompt-modal-input"
+        />
+      </div>
+
+      <template #footer>
+        <a-button @click="closeSystemPromptModal">{{
+          isReadOnlyConfig ? '关闭' : '取消'
+        }}</a-button>
+        <a-button v-if="!isReadOnlyConfig" type="primary" @click="saveSystemPrompt">
+          保存
+        </a-button>
+      </template>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { X, Trash2, Check, Plus, Search, Star, RotateCw, Settings } from 'lucide-vue-next'
@@ -420,6 +452,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
 import { skillApi } from '@/apis/skill_api'
+import { subagentApi } from '@/apis/subagent_api'
 import { toolApi } from '@/apis/tool_api'
 import { storeToRefs } from 'pinia'
 
@@ -448,10 +481,15 @@ watch(
   () => props.isOpen,
   async (val) => {
     if (val) {
-      databaseStore.loadDatabases().catch(() => {})
-      loadLiveSkillOptions().catch(() => {})
-      loadToolOptions().catch(() => {})
+      // 强制刷新以获取最新数据
+      databaseStore.loadDatabases(true).catch(() => {})
+      loadLiveSkillOptions(true).catch(() => {})
+      loadSubagentOptions(true).catch(() => {})
+      loadToolOptions(true).catch(() => {})
       if (selectedAgentId.value) {
+        agentStore.fetchAgentConfigs(selectedAgentId.value).catch((error) => {
+          console.error('刷新智能体配置列表失败:', error)
+        })
         try {
           await agentStore.fetchAgentDetail(selectedAgentId.value, true)
         } catch (error) {
@@ -480,10 +518,22 @@ const selectionModalOpen = ref(false)
 const currentConfigKey = ref(null)
 const tempSelectedValues = ref([])
 const selectionSearchText = ref('')
-const systemPromptEditMode = ref(false)
-const activeTab = ref('basic')
+const systemPromptModalOpen = ref(false)
+const currentSystemPromptKey = ref(null)
+const systemPromptDraft = ref('')
 const liveSkillOptions = ref([])
+const liveSubagentOptions = ref([])
 const toolOptionsFromApi = ref([])
+const createConfigModalOpen = ref(false)
+const createConfigLoading = ref(false)
+const createConfigName = ref('')
+const CREATE_CONFIG_OPTION_VALUE = '__create_config__'
+const currentSegment = ref('model')
+const segmentOptions = [
+  { label: '模型', value: 'model' },
+  { label: '工具', value: 'tools' },
+  { label: '其他', value: 'other' }
+]
 
 const isEmptyConfig = computed(() => {
   return !selectedAgentId.value || Object.keys(configurableItems.value).length === 0
@@ -492,6 +542,8 @@ const isEmptyConfig = computed(() => {
 const isCurrentDefault = computed(() => {
   return !!selectedConfigSummary.value?.is_default
 })
+
+const isReadOnlyConfig = computed(() => !userStore.isAdmin)
 
 const isSavingConfig = ref(false)
 const isDeletingConfig = ref(false)
@@ -505,20 +557,54 @@ const hasOtherConfigs = computed(() => {
       value.template_metadata?.kind === 'mcps' ||
       value.template_metadata?.kind === 'knowledges' ||
       value.template_metadata?.kind === 'tools' ||
-      value.template_metadata?.kind === 'skills'
+      value.template_metadata?.kind === 'skills' ||
+      value.template_metadata?.kind === 'subagents'
 
     return !isBasic && !isTools
   })
 })
 
-const segmentedOptions = computed(() => {
-  const options = [
-    { label: '基础', value: 'basic' },
-    { label: '工具', value: 'tools' }
-  ]
+const segmentConfigKeys = computed(() => {
+  const keys = Object.keys(configurableItems.value)
+  return {
+    model: keys.filter((key) => {
+      const meta = configurableItems.value[key]?.template_metadata?.kind
+      return meta === 'llm' || meta === 'prompt'
+    }),
+    tools: keys.filter((key) => {
+      const meta = configurableItems.value[key]?.template_metadata?.kind
+      return ['tools', 'knowledges', 'mcps', 'skills', 'subagents'].includes(meta)
+    }),
+    other: keys.filter((key) => {
+      const meta = configurableItems.value[key]?.template_metadata?.kind
+      return !['llm', 'prompt', 'tools', 'knowledges', 'mcps', 'skills', 'subagents'].includes(meta)
+    })
+  }
+})
 
-  if (hasOtherConfigs.value) {
-    options.push({ label: '其他', value: 'other' })
+const filteredConfigurableItems = computed(() => {
+  if (isEmptyConfig.value) return {}
+  const keys = segmentConfigKeys.value[currentSegment.value] || []
+  const filtered = {}
+  keys.forEach((key) => {
+    filtered[key] = configurableItems.value[key]
+  })
+  return filtered
+})
+
+const configSwitchOptions = computed(() => {
+  if (!selectedAgentId.value) return []
+  const list = agentConfigs.value[selectedAgentId.value] || []
+  const options = list.map((cfg) => ({
+    label: cfg.is_default ? `${cfg.name}（默认）` : cfg.name,
+    value: cfg.id
+  }))
+
+  if (userStore.isAdmin) {
+    options.push({
+      label: '新建配置',
+      value: CREATE_CONFIG_OPTION_VALUE
+    })
   }
 
   return options
@@ -567,13 +653,35 @@ const loadToolOptions = async (force = false) => {
   }
 }
 
+const loadSubagentOptions = async (force = false) => {
+  if (!userStore.isAdmin) {
+    liveSubagentOptions.value = []
+    return
+  }
+  if (!force && liveSubagentOptions.value.length > 0) {
+    return
+  }
+  try {
+    const result = await subagentApi.getSubAgents()
+    const rows = result?.data || []
+    liveSubagentOptions.value = rows.map((item) => ({
+      id: item.name,
+      name: item.name,
+      description: item.description || ''
+    }))
+  } catch (error) {
+    console.warn('加载 Subagents 列表失败:', error)
+  }
+}
+
 // 判断是否为需要跳转的配置类型
 const isToolsKind = (kind) => {
-  return ['knowledges', 'tools', 'mcps', 'skills'].includes(kind)
+  return ['knowledges', 'tools', 'mcps', 'skills', 'subagents'].includes(kind)
 }
 
 // 强制刷新对应配置项的选项列表
-const refreshConfigOptions = async (key, kind) => {
+const refreshConfigOptions = async (_key, kind) => {
+  if (isReadOnlyConfig.value) return
   try {
     switch (kind) {
       case 'knowledges':
@@ -588,6 +696,10 @@ const refreshConfigOptions = async (key, kind) => {
         await loadLiveSkillOptions(true)
         message.success('Skills 列表已刷新')
         break
+      case 'subagents':
+        await loadSubagentOptions(true)
+        message.success('Subagents 列表已刷新')
+        break
       case 'mcps':
         // MCP 没有前端 store，提示用户刷新页面
         message.info('请在 MCP 管理页面刷新')
@@ -601,6 +713,7 @@ const refreshConfigOptions = async (key, kind) => {
 
 // 跳转到对应管理页面
 const navigateToConfigPage = (kind) => {
+  if (isReadOnlyConfig.value) return
   // 先关闭选择弹窗
   closeSelectionModal()
   // 延迟跳转，确保弹窗先关闭
@@ -617,6 +730,9 @@ const navigateToConfigPage = (kind) => {
         break
       case 'skills':
         router.push({ path: '/extensions', query: { tab: 'skills' } })
+        break
+      case 'subagents':
+        router.push({ path: '/extensions', query: { tab: 'subagents' } })
         break
     }
   }, 100)
@@ -638,13 +754,16 @@ const getConfigOptions = (value) => {
   if (value?.template_metadata?.kind === 'skills') {
     return liveSkillOptions.value.length > 0 ? liveSkillOptions.value : value?.options || []
   }
+  if (value?.template_metadata?.kind === 'subagents') {
+    return liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
+  }
   return value?.options || []
 }
 
 const isListConfig = (key, value) => {
   const isTools = value?.template_metadata?.kind === 'tools'
   const isList = value?.type === 'list'
-  return isTools || isList || key === 'skills'
+  return isTools || isList || key === 'skills' || key === 'subagents'
 }
 
 const getOptionValue = (option) => {
@@ -673,6 +792,18 @@ const currentConfigKind = computed(() => {
   return configurableItems.value[currentConfigKey.value]?.template_metadata?.kind
 })
 
+const systemPromptModalTitle = computed(() => {
+  if (!currentSystemPromptKey.value) return 'System Prompt'
+  return configurableItems.value[currentSystemPromptKey.value]?.name || currentSystemPromptKey.value
+})
+
+const systemPromptModalPlaceholder = computed(() => {
+  if (!currentSystemPromptKey.value) return '请输入系统提示词'
+  const currentItem = configurableItems.value[currentSystemPromptKey.value]
+  if (!currentItem) return '请输入系统提示词'
+  return getPlaceholder(currentSystemPromptKey.value, currentItem)
+})
+
 const filteredOptions = computed(() => {
   if (!currentConfigKey.value) return []
   const key = currentConfigKey.value
@@ -690,26 +821,67 @@ const filteredOptions = computed(() => {
 })
 
 // 方法
-const shouldShowConfig = (key, value) => {
-  const isBasic =
-    value.template_metadata?.kind === 'prompt' || value.template_metadata?.kind === 'llm'
-  const isTools =
-    value.template_metadata?.kind === 'mcps' ||
-    value.template_metadata?.kind === 'knowledges' ||
-    value.template_metadata?.kind === 'tools' ||
-    value.template_metadata?.kind === 'skills' ||
-    key === 'skills'
-
-  if (activeTab.value === 'basic') {
-    // 基础：System Prompt, LLM Model
-    return isBasic
-  } else if (activeTab.value === 'tools') {
-    // 工具：Tools, MCPs, Knowledges
-    return isTools
-  } else {
-    // 其他：剩余所有配置
-    return !isBasic && !isTools
+const handleConfigSwitch = async (configId) => {
+  if (configId === CREATE_CONFIG_OPTION_VALUE) {
+    openCreateConfigModal()
+    return
   }
+
+  if (!configId || configId === selectedAgentConfigId.value) return
+  try {
+    await agentStore.selectAgentConfig(configId)
+  } catch (error) {
+    console.error('切换配置出错:', error)
+    message.error('切换配置失败')
+  }
+}
+
+const updateConfigValue = (key, value) => {
+  if (isReadOnlyConfig.value) return
+  agentStore.updateAgentConfig({
+    [key]: value
+  })
+}
+
+const openCreateConfigModal = () => {
+  if (!userStore.isAdmin) return
+  createConfigName.value = ''
+  createConfigModalOpen.value = true
+}
+
+const closeCreateConfigModal = () => {
+  createConfigModalOpen.value = false
+  createConfigName.value = ''
+}
+
+const handleCreateConfig = async () => {
+  if (!userStore.isAdmin) return
+  if (!selectedAgentId.value) return
+  const name = createConfigName.value.trim()
+  if (!name) {
+    message.error('请输入配置名称')
+    return
+  }
+
+  createConfigLoading.value = true
+  try {
+    await agentStore.createAgentConfigProfile({
+      name,
+      setDefault: false,
+      fromCurrent: false
+    })
+    closeCreateConfigModal()
+    message.success('配置已创建')
+  } catch (error) {
+    console.error('创建配置出错:', error)
+    message.error(error.message || '创建配置失败')
+  } finally {
+    createConfigLoading.value = false
+  }
+}
+
+const shouldShowConfig = () => {
+  return true
 }
 
 const closeSidebar = () => {
@@ -725,11 +897,12 @@ const getConfigLabel = (key, value) => {
   return key
 }
 
-const getPlaceholder = (key, value) => {
+const getPlaceholder = (_key, value) => {
   return `（默认: ${value.default}）`
 }
 
 const handleModelChange = (key, spec) => {
+  if (isReadOnlyConfig.value) return
   if (typeof spec !== 'string' || !spec) return
   agentStore.updateAgentConfig({
     [key]: spec
@@ -756,6 +929,7 @@ const getSelectedCount = (key) => {
 }
 
 const toggleOption = (key, option) => {
+  if (isReadOnlyConfig.value) return
   const currentOptions = [...ensureArray(key)]
   const index = currentOptions.indexOf(option)
 
@@ -771,6 +945,7 @@ const toggleOption = (key, option) => {
 }
 
 const clearSelection = (key) => {
+  if (isReadOnlyConfig.value) return
   agentStore.updateAgentConfig({
     [key]: []
   })
@@ -784,6 +959,7 @@ const getOptionLabelFromValue = (key, val) => {
 }
 
 const openSelectionModal = async (key) => {
+  if (isReadOnlyConfig.value) return
   currentConfigKey.value = key
   // 如果是工具，从 API 刷新工具列表
   if (configurableItems.value[key]?.template_metadata?.kind === 'tools') {
@@ -800,12 +976,16 @@ const openSelectionModal = async (key) => {
   if (configurableItems.value[key]?.template_metadata?.kind === 'skills') {
     await loadLiveSkillOptions()
   }
+  if (configurableItems.value[key]?.template_metadata?.kind === 'subagents') {
+    await loadSubagentOptions()
+  }
   const currentValues = agentConfig.value[key] || []
   tempSelectedValues.value = [...currentValues]
   selectionModalOpen.value = true
 }
 
 const toggleModalSelection = (optionValue) => {
+  if (isReadOnlyConfig.value) return
   const index = tempSelectedValues.value.indexOf(optionValue)
   if (index > -1) {
     tempSelectedValues.value.splice(index, 1)
@@ -815,6 +995,10 @@ const toggleModalSelection = (optionValue) => {
 }
 
 const confirmSelection = () => {
+  if (isReadOnlyConfig.value) {
+    closeSelectionModal()
+    return
+  }
   if (currentConfigKey.value) {
     agentStore.updateAgentConfig({
       [currentConfigKey.value]: [...tempSelectedValues.value]
@@ -830,16 +1014,26 @@ const closeSelectionModal = () => {
   selectionSearchText.value = ''
 }
 
-// 系统提示词编辑相关方法
-const enterEditMode = () => {
-  systemPromptEditMode.value = true
-  // 使用 nextTick 确保 DOM 更新后再聚焦
-  nextTick(() => {
-    const textarea = document.querySelector('.system-prompt-input')
-    if (textarea) {
-      textarea.focus()
-    }
+// 系统提示词弹窗编辑相关方法
+const openSystemPromptModal = (key) => {
+  currentSystemPromptKey.value = key
+  systemPromptDraft.value = agentConfig.value[key] || ''
+  systemPromptModalOpen.value = true
+}
+
+const closeSystemPromptModal = () => {
+  systemPromptModalOpen.value = false
+  currentSystemPromptKey.value = null
+  systemPromptDraft.value = ''
+}
+
+const saveSystemPrompt = () => {
+  if (isReadOnlyConfig.value) return
+  if (!currentSystemPromptKey.value) return
+  agentStore.updateAgentConfig({
+    [currentSystemPromptKey.value]: systemPromptDraft.value
   })
+  closeSystemPromptModal()
 }
 
 // 验证和过滤配置项
@@ -944,7 +1138,6 @@ const confirmDeleteConfig = async () => {
 </script>
 
 <style lang="less" scoped>
-@padding-bottom: 0px;
 .agent-config-sidebar {
   position: relative;
   width: 0;
@@ -963,29 +1156,100 @@ const confirmDeleteConfig = async () => {
 
   .sidebar-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 0 20px;
+    padding: 0 12px;
+    height: var(--header-height);
     border-bottom: 1px solid var(--gray-150);
     background: var(--gray-0);
     flex-shrink: 0;
     min-width: 400px;
-    height: var(--header-height);
+    z-index: 10;
 
-    .header-center {
-      flex: 1;
+    .header-top-row {
       display: flex;
-      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
     }
 
-    .close-btn {
-      color: var(--gray-600);
-      border: none;
-      padding: 4px;
+    .config-manage-row {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
 
-      &:hover {
-        color: var(--gray-900);
-        background: var(--gray-100);
+      .config-switch-select {
+        flex: 1;
+        min-width: 0;
+
+        :deep(.ant-select-selector) {
+          height: 32px;
+          border-radius: 8px;
+          border-color: var(--gray-200);
+          padding: 0 10px;
+          transition: border-color 0.2s ease;
+        }
+
+        :deep(.ant-select-selection-search-input),
+        :deep(.ant-select-selection-item),
+        :deep(.ant-select-selection-placeholder) {
+          line-height: 30px;
+          font-size: 13px;
+        }
+
+        :deep(.ant-select.ant-select-focused .ant-select-selector),
+        :deep(.ant-select-selector:hover) {
+          border-color: var(--main-color);
+          box-shadow: none;
+        }
+      }
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: auto;
+    }
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--gray-600);
+    border: 1px solid var(--gray-200);
+    background: var(--gray-0);
+    padding: 0;
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background-color 0.2s ease;
+
+    &:hover:not(:disabled) {
+      color: var(--main-600);
+      border-color: var(--main-200);
+      background: var(--main-10);
+    }
+
+    &.is-default {
+      color: var(--color-warning-500);
+    }
+
+    &.ant-btn-dangerous:hover:not(:disabled) {
+      color: var(--color-error-700);
+      border-color: var(--color-error-100);
+      background: var(--color-error-50);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+      background: transparent;
+      color: var(--gray-400);
+      border-color: var(--gray-200);
+
+      &.is-default {
+        opacity: 1;
       }
     }
   }
@@ -993,9 +1257,8 @@ const confirmDeleteConfig = async () => {
   .sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 8px 12px;
+    padding: 10px 12px 8px;
     min-width: 400px;
-    padding-bottom: @padding-bottom;
 
     .agent-info {
       .agent-basic-info {
@@ -1008,8 +1271,59 @@ const confirmDeleteConfig = async () => {
       }
     }
 
+    .config-segment {
+      margin: 0 auto;
+      margin-bottom: 6px;
+      padding: 4px 0;
+      width: 80%;
+    }
+
     .config-form-content {
       margin-bottom: 20px;
+
+      &.is-readonly {
+        .config-item {
+          background: var(--gray-20);
+
+          .model-selector.is-readonly {
+            opacity: 0.78;
+            pointer-events: none;
+          }
+
+          .system-prompt-display {
+            cursor: default;
+
+            &:hover {
+              border-color: var(--gray-200);
+              background: transparent;
+
+              .edit-hint {
+                opacity: 1;
+              }
+            }
+
+            .edit-hint {
+              color: var(--gray-500);
+              opacity: 1;
+            }
+          }
+
+          .option-card.readonly {
+            cursor: default;
+
+            &:hover {
+              border-color: var(--gray-300);
+              background: var(--gray-0);
+            }
+
+            &.selected:hover {
+              border-color: var(--main-color);
+              background: var(--main-10);
+            }
+          }
+        }
+      }
+
       .config-form {
         .config-alert {
           margin-bottom: 16px;
@@ -1041,24 +1355,14 @@ const confirmDeleteConfig = async () => {
             width: 100%;
           }
 
-          .system-prompt-input {
-            resize: vertical;
-            background: var(--gray-50);
-            border: 1px solid var(--gray-200);
-            padding: 6px 10px;
-            font-size: 12px;
-
-            &:focus {
-              outline: none;
-            }
-          }
-
           .system-prompt-container {
             width: 100%;
           }
 
           .system-prompt-display {
             min-height: 60px;
+            border: 1px solid var(--gray-200);
+            padding: 10px 12px;
             border-radius: 6px;
             cursor: pointer;
             position: relative;
@@ -1074,22 +1378,20 @@ const confirmDeleteConfig = async () => {
             }
 
             .system-prompt-content {
-              white-space: pre-wrap;
+              white-space: pre-line;
               word-break: break-word;
               line-height: 1.5;
               color: var(--gray-900);
-              font-size: 12px;
-              max-height: 500px;
-              overflow: scroll;
+              font-size: 13px;
+              display: -webkit-box;
+              line-clamp: 4;
+              -webkit-line-clamp: 4;
+              -webkit-box-orient: vertical;
+              overflow: hidden;
 
               &.is-placeholder {
                 color: var(--gray-400);
                 font-style: italic;
-              }
-
-              &:empty::before {
-                content: attr(data-placeholder);
-                color: var(--gray-400);
               }
             }
 
@@ -1131,61 +1433,26 @@ const confirmDeleteConfig = async () => {
 
     .form-actions {
       display: flex;
-      flex-direction: row;
-      gap: 12px;
-      justify-content: space-between;
+      gap: 10px;
       align-items: center;
 
-      .icon-btn {
-        width: 36px;
+      .footer-main-btn {
+        width: 100%;
         height: 36px;
-        border-radius: 6px;
-        color: var(--gray-600);
-        border: 1px solid var(--gray-200);
-        background: var(--gray-0);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-
-        &:hover:not(:disabled) {
-          color: var(--main-600);
-          border-color: var(--main-200);
-          background: var(--main-10);
-        }
-
-        &.is-default {
-          // color: var(--main-500);
-          color: var(--color-warning-500);
-        }
-
-        &[danger]:hover:not(:disabled) {
-          color: var(--error-600);
-          border-color: var(--error-200);
-          background: var(--error-10);
-        }
-
-        &:disabled {
-          cursor: not-allowed;
-          background: transparent;
-          color: var(--gray-400);
-          border-color: var(--gray-200);
-
-          &.is-default {
-            opacity: 1;
-          }
-        }
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        transition:
+          opacity 0.2s ease,
+          border-color 0.2s ease,
+          background-color 0.2s ease,
+          color 0.2s ease;
       }
 
       .save-btn {
-        flex: 1;
-        height: 36px;
-        border-radius: 6px;
-        font-weight: 500;
-        font-size: 14px;
         background-color: var(--gray-100);
         border: 1px solid var(--gray-200);
         color: var(--gray-600);
-        transition: all 0.2s ease;
 
         &.changed {
           background-color: var(--main-color);
@@ -1234,17 +1501,10 @@ const confirmDeleteConfig = async () => {
     }
 
     .selection-trigger-btn {
-      background: var(--main-color);
-      border: none;
       border-radius: 4px;
       height: 28px;
       font-size: 12px;
       font-weight: 500;
-
-      &:hover {
-        background: var(--main-color);
-        opacity: 0.9;
-      }
     }
   }
 
@@ -1288,21 +1548,6 @@ const confirmDeleteConfig = async () => {
       display: flex;
       align-items: center;
       gap: 4px;
-
-      .action-btn {
-        font-size: 12px;
-        color: var(--gray-600);
-        display: flex;
-        align-items: center;
-        gap: 2px;
-        padding: 2px 6px;
-        height: auto;
-        line-height: 1;
-
-        &:hover {
-          color: var(--main-color);
-        }
-      }
     }
   }
 
@@ -1395,7 +1640,7 @@ const confirmDeleteConfig = async () => {
 
         &:focus-within {
           border-color: var(--main-color);
-          box-shadow: 0 0 0 2px rgba(var(--main-color-rgb), 0.1);
+          box-shadow: 0 0 0 2px rgba(1, 97, 121, 0.1);
 
           .search-icon {
             color: var(--main-color);
@@ -1406,26 +1651,13 @@ const confirmDeleteConfig = async () => {
           border-color: var(--gray-400);
         }
       }
-
-      .modal-action-btn {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 13px;
-        color: var(--gray-600);
-        white-space: nowrap;
-
-        &:hover {
-          color: var(--main-color);
-        }
-      }
     }
 
     .selection-list {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 12px;
-      max-height: max(60vh, 800px);
+      max-height: 60vh;
       overflow-y: auto;
       border-radius: 8px;
       margin-bottom: 16px;
@@ -1435,31 +1667,11 @@ const confirmDeleteConfig = async () => {
         grid-template-columns: 1fr;
       }
 
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      &::-webkit-scrollbar-track {
-        background: var(--gray-100);
-        border-radius: 3px;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: var(--gray-400);
-        border-radius: 3px;
-      }
-
-      &::-webkit-scrollbar-thumb:hover {
-        background: var(--gray-500);
-      }
-
       .selection-item {
         padding: 12px 16px;
-        border-bottom: none;
         cursor: pointer;
         transition: all 0.2s ease;
         border-radius: 8px;
-        margin-bottom: 4px;
         background: var(--gray-0);
         border: 1px solid var(--gray-200);
 
@@ -1497,6 +1709,7 @@ const confirmDeleteConfig = async () => {
             line-height: 1.4;
             margin-top: 6px;
             display: -webkit-box;
+            line-clamp: 2;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
@@ -1579,6 +1792,17 @@ const confirmDeleteConfig = async () => {
   }
 }
 
+.system-prompt-modal {
+  .system-prompt-modal-content {
+    .system-prompt-modal-input {
+      resize: vertical;
+      font-size: 13px;
+      line-height: 1.6;
+      border-radius: 8px;
+    }
+  }
+}
+
 .clear-btn {
   padding: 0;
   height: auto;
@@ -1589,6 +1813,23 @@ const confirmDeleteConfig = async () => {
   &:hover {
     color: var(--main-800);
   }
+}
+
+.inline-action-btn {
+  padding: 2px 6px;
+  height: auto;
+  line-height: 1;
+  font-size: 12px;
+  color: var(--gray-600);
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--main-color);
+  }
+}
+
+.selection-search .inline-action-btn {
+  font-size: 13px;
 }
 
 // 响应式适配

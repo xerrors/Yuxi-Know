@@ -3,7 +3,6 @@ import {
   apiPost,
   apiDelete,
   apiPut,
-  apiAdminGet,
   apiAdminPost,
   apiAdminDelete,
   apiRequest
@@ -52,6 +51,20 @@ export const agentApi = {
    * @returns {Promise} - 聊天响应
    */
   simpleCall: (query) => apiPost('/api/chat/call', { query }),
+
+  /**
+   * 生成对话标题
+   * @param {string} query - 查询内容
+   * @param {Object} modelSpec - 模型配置
+   * @returns {Promise<string>} - 生成的标题
+   */
+  generateTitle: async (query, modelSpec) => {
+    const response = await apiPost('/api/chat/call', {
+      query: `根据以下对话内容生成一个简短的标题（最多30个字符，中英文均可），不要包含 markdown 标记：\n\n${query.slice(0, 2000)}`,
+      meta: { model_spec: modelSpec }
+    })
+    return response.response
+  },
 
   /**
    * 获取默认智能体
@@ -122,28 +135,6 @@ export const agentApi = {
    */
   updateProviderModels: (provider, models) =>
     apiPost(`/api/chat/models/update?model_provider=${provider}`, models),
-
-  /**
-   * 获取智能体配置
-   * @param {string} agentName - 智能体名称
-   * @returns {Promise} - 智能体配置
-   */
-  getAgentConfig: async (agentName) => {
-    return apiAdminGet(`/api/chat/agent/${agentName}/config`)
-  },
-
-  /**
-   * 保存智能体配置
-   * @param {string} agentName - 智能体名称
-   * @param {Object} config - 配置对象
-   * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
-   * @returns {Promise} - 保存结果
-   */
-  saveAgentConfig: async (agentName, config, options = {}) => {
-    const queryParams = new URLSearchParams(options).toString()
-    const url = `/api/chat/agent/${agentName}/config` + (queryParams ? `?${queryParams}` : '')
-    return apiAdminPost(url, config)
-  },
 
   getAgentConfigs: (agentId) => apiGet(`/api/chat/agent/${agentId}/configs`),
 

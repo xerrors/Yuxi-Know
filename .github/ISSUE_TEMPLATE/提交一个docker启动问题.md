@@ -16,8 +16,6 @@ assignees: ''
 
 例如："执行 `docker compose up -d` 后，api-dev 服务一直重启，查看日志显示无法连接到 Milvus"
 
-您可以先看一下常见问题与解决方案：https://xerrors.github.io/Yuxi-Know/latest/changelog/faq.html
-
 
 ## 2️⃣ 环境信息
 
@@ -35,7 +33,7 @@ assignees: ''
 # 例如
 docker compose up -d
 # 或
-make start
+make up
 ```
 
 

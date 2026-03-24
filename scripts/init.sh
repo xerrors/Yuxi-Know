@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Yuxi-Know Initialization Script for Bash/Linux/macOS
-# This script helps set up the environment for the Yuxi-Know project
+# Yuxi Initialization Script for Bash/Linux/macOS
+# This script helps set up the environment for the Yuxi project
 
 set -e
 
-echo "🚀 Initializing Yuxi-Know project..."
+echo "🚀 Initializing Yuxi project..."
 echo "=================================="
 
 # Check if .env file exists
@@ -65,12 +65,13 @@ images=(
     "nginx:alpine"
     "quay.io/coreos/etcd:v3.5.5"
     "postgres:16"
+    "redis:7-alpine"
 )
 
 # Pull each image
 for image in "${images[@]}"; do
     echo "🔄 Pulling ${image}..."
-    if bash docker/pull_image.sh "$image"; then
+    if bash scripts/pull_image.sh "$image"; then
         echo "✅ Successfully pulled ${image}"
     else
         echo "❌ Failed to pull ${image}"

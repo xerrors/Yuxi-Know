@@ -1,28 +1,24 @@
 
-.PHONY: start stop logs lint format format_diff router-tests
+.PHONY: up up-lite down logs lint format
 
 PYTEST_ARGS ?=
 
-pull:
-	bash docker/pull_image.sh python:3.12-slim
-	bash docker/pull_image.sh node:20-slim
-	bash docker/pull_image.sh node:20-alpine
-	bash docker/pull_image.sh milvusdb/milvus:v2.5.6
-	bash docker/pull_image.sh neo4j:5.26
-	bash docker/pull_image.sh minio/minio:RELEASE.2023-03-20T20-16-18Z
-	bash docker/pull_image.sh ghcr.io/astral-sh/uv:0.7.2
-	bash docker/pull_image.sh nginx:alpine
-	bash docker/pull_image.sh quay.io/coreos/etcd:v3.5.5
-
-start:
+up:
 	@if [ ! -f .env ]; then \
 		echo "Error: .env file not found. Please create it from .env.template"; \
 		exit 1; \
 	fi
 	docker compose up -d
 
-stop:
+down:
 	docker compose down
+
+up-lite:
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found. Please create it from .env.template"; \
+		exit 1; \
+	fi
+	LITE_MODE=true docker compose up -d postgres redis minio api worker web
 
 logs:
 	@docker logs --tail=50 api-dev
@@ -35,15 +31,12 @@ logs:
 ######################
 
 lint:
-	uv run python -m ruff check .
-	uv run python -m ruff format --check src
-	uv run python -m ruff check --select I src
+	cd backend && uv run ruff check package
+	cd backend && uv run ruff format --check package
+	cd backend && uv run ruff check --select I package
 
 format:
-	uv run python -m ruff format .
-	uv run python -m ruff check . --fix
-	uv run python -m ruff check --select I src --fix
-	cd web && npm run format
-
-router-tests:
-	docker compose exec -T api uv run --group test pytest test/api $(PYTEST_ARGS)
+	cd backend && uv run ruff format package
+	cd backend && uv run ruff check package --fix
+	cd backend && uv run ruff check --select I package --fix
+	docker compose exec -T web pnpm run format

@@ -2,7 +2,7 @@
 <div align="center">
 <h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
 
-[![Stable](https://img.shields.io/badge/stable-v0.5.3-blue.svg)](https://github.com/xerrors/Yuxi-Know/tree/v0.5.3)
+[![Dev](https://img.shields.io/badge/dev-v0.6.0--dev-blue.svg)](https://github.com/xerrors/Yuxi-Know)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -120,7 +120,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.5.3 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.6.0-dev --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 
 # Linux/macOS
@@ -215,12 +215,23 @@ docker compose up --build
   </tr>
 </table>
 
+## 致谢
+
+本项目参考并引用了以下优秀开源项目，在此致以诚挚的感谢：
+
+- [LightRAG](https://github.com/HKUDS/LightRAG) - 直接引入作为图谱构建与检索的基础包
+- [DeepAgents](https://github.com/IDEA-CCNL/DeepAgents) - 直接引入作为深度智能体框架
+- [DeerFlow](https://github.com/bytedance/deer-flow) - 参考了其 Sandbox 智能体架构的实现思路
+- [RAGflow](https://github.com/infiniflow/ragflow) - 参考了其文档 Text Chunking 的分块策略
+- [LangGraph](https://github.com/langchain-ai/langgraph) - 多智能体编排框架，本项目的核心架构基础
+- 项目 Logo 由 Nano Banana 2 生成
+
 ## 参与贡献
 
 感谢所有贡献者的支持！
 
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
-  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi-Know&max=100&columns=15" />
+  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi-Know&max=100&columns=10" />
 </a>
 
 

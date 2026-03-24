@@ -1,8 +1,8 @@
-# Yuxi-Know Initialization Script for PowerShell
-# This script helps set up the environment for the Yuxi-Know project
+# Yuxi Initialization Script for PowerShell
+# This script helps set up the environment for the Yuxi project
 # Note: API keys will be visible during input - use with care
 
-Write-Host "🚀 Initializing Yuxi-Know project..." -ForegroundColor Cyan
+Write-Host "🚀 Initializing Yuxi project..." -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 
 # Check if .env file exists
@@ -67,14 +67,15 @@ $images = @(
     "ghcr.io/astral-sh/uv:0.7.2",
     "nginx:alpine",
     "quay.io/coreos/etcd:v3.5.5",
-    "postgres:16"
+    "postgres:16",
+    "redis:7-alpine"
 )
 
 # Pull each image
 foreach ($image in $images) {
     Write-Host "🔄 Pulling ${image}..." -ForegroundColor Yellow
     try {
-        & docker/pull_image.ps1 $image
+        & scripts/pull_image.ps1 $image
         if ($LASTEXITCODE -eq 0) {
             Write-Host "✅ Successfully pulled ${image}" -ForegroundColor Green
         } else {
