@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from yuxi.services import chat_stream_service as chat_svc
 from yuxi.services import conversation_service as svc
 
 
@@ -41,7 +42,7 @@ def test_build_state_files_only_parsed_and_with_content():
         },
     ]
 
-    files = svc._build_state_files(attachments)
+    files = chat_svc._build_state_files(attachments)
 
     assert list(files.keys()) == ["/attachments/a.md"]
     assert files["/attachments/a.md"]["content"] == ["line1", "line2"]
@@ -51,20 +52,8 @@ def test_build_state_files_only_parsed_and_with_content():
 @pytest.mark.asyncio
 async def test_sync_thread_attachment_state_updates_graph(monkeypatch: pytest.MonkeyPatch):
     captured: dict = {}
-    fake_state = SimpleNamespace(
-        values={
-            "files": {
-                "/attachments/old.md": {"content": ["old"]},
-                "/work/result.md": {"content": ["keep"]},
-            }
-        }
-    )
 
     class FakeGraph:
-        async def aget_state(self, config):
-            captured["read_config"] = config
-            return fake_state
-
         async def aupdate_state(self, *, config, values):
             captured["write_config"] = config
             captured["write_values"] = values
@@ -78,24 +67,20 @@ async def test_sync_thread_attachment_state_updates_graph(monkeypatch: pytest.Mo
     attachments = [
         {
             "status": "parsed",
-            "file_path": "/attachments/resume.md",
-            "markdown": "hello\nworld",
+            "path": "/home/yuxi/user-data/uploads/attachments/resume.md",
+            "file_name": "resume.md",
             "uploaded_at": "2026-02-20T00:00:00+00:00",
         }
     ]
-    await svc._sync_thread_attachment_state(
+    await svc._sync_thread_upload_state(
         thread_id="thread-1",
         user_id="u1",
         agent_id="ChatbotAgent",
         attachments=attachments,
     )
 
-    assert captured["read_config"] == {"configurable": {"thread_id": "thread-1", "user_id": "u1"}}
     assert captured["write_config"] == {"configurable": {"thread_id": "thread-1", "user_id": "u1"}}
-    assert captured["write_values"]["attachments"] == attachments
-    assert "/attachments/resume.md" in captured["write_values"]["files"]
-    assert captured["write_values"]["files"]["/attachments/old.md"] is None
-    assert "/work/result.md" not in captured["write_values"]["files"]
+    assert captured["write_values"] == {"uploads": svc._build_state_uploads(attachments)}
 
 
 @pytest.mark.asyncio
@@ -108,7 +93,7 @@ async def test_sync_thread_attachment_state_skips_when_agent_missing(monkeypatch
     monkeypatch.setattr(svc, "logger", fake_logger)
     monkeypatch.setattr(svc.agent_manager, "get_agent", lambda _agent_id: None)
 
-    await svc._sync_thread_attachment_state(
+    await svc._sync_thread_upload_state(
         thread_id="thread-1",
         user_id="u1",
         agent_id="MissingAgent",
