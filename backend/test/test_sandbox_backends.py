@@ -19,6 +19,7 @@ from yuxi.agents.backends.sandbox import (
     get_sandbox_security_opts,
     normalize_virtual_path,
 )
+from yuxi.agents.backends.sandbox.backend import ProvisionerSandboxBackend
 from yuxi.agents.backends.sandbox import sandbox_remote as remote_sandbox_backend
 from yuxi.agents.backends.composite import (
     create_agent_composite_backend,
@@ -124,29 +125,31 @@ def test_remote_sandbox_backend_destroy_logs_request_errors(monkeypatch):
 
 
 def test_normalize_virtual_path_supports_legacy_skills_alias() -> None:
-    assert normalize_virtual_path("/skills", "t-1") == "/mnt/skills"
-    assert normalize_virtual_path("/skills/demo/SKILL.md", "t-1") == "/mnt/skills/demo/SKILL.md"
+    assert normalize_virtual_path("/skills", "t-1") == "/home/yuxi/skills"
+    assert normalize_virtual_path("/skills/demo/SKILL.md", "t-1") == "/home/yuxi/skills/demo/SKILL.md"
 
 
 def test_normalize_virtual_path_supports_attachments_alias() -> None:
-    assert normalize_virtual_path("/attachments", "thread-1") == "/mnt/user-data/uploads/attachments"
-    assert normalize_virtual_path("/attachments/a.md", "thread-1") == "/mnt/user-data/uploads/attachments/a.md"
+    assert normalize_virtual_path("/attachments", "thread-1") == "/home/yuxi/user-data/uploads/attachments"
+    assert normalize_virtual_path("/attachments/a.md", "thread-1") == "/home/yuxi/user-data/uploads/attachments/a.md"
 
 
 def test_normalize_virtual_path_supports_thread_scoped_aliases() -> None:
-    assert normalize_virtual_path("/outputs/thread-1/result.txt", "thread-1") == "/mnt/user-data/outputs/result.txt"
-    assert normalize_virtual_path("/uploads/thread-1/demo.txt", "thread-1") == "/mnt/user-data/uploads/demo.txt"
+    assert (
+        normalize_virtual_path("/outputs/thread-1/result.txt", "thread-1")
+        == "/home/yuxi/user-data/outputs/result.txt"
+    )
+    assert normalize_virtual_path("/uploads/thread-1/demo.txt", "thread-1") == "/home/yuxi/user-data/uploads/demo.txt"
     assert (
         normalize_virtual_path("/large_tool_results/thread-1/result.json", "thread-1")
-        == "/mnt/user-data/large_tool_results/result.json"
+        == "/home/yuxi/user-data/large_tool_results/result.json"
     )
 
 
 def test_skills_middleware_extracts_slug_for_new_and_legacy_paths() -> None:
     middleware = SkillsMiddleware()
-    assert middleware.skills_sources_for_prompt == ["/mnt/skills/"]
-    assert middleware._extract_skill_slug_from_skill_md_path("/mnt/skills/demo-skill/SKILL.md") == "demo-skill"
-    assert middleware._extract_skill_slug_from_skill_md_path("/skills/demo-skill/SKILL.md") == "demo-skill"
+    assert middleware.skills_sources_for_prompt == ["/home/yuxi/skills/"]
+    assert middleware._extract_skill_slug_from_skill_md_path("/home/yuxi/skills/demo-skill/SKILL.md") == "demo-skill"
     assert not hasattr(middleware, "_dependency_map_cache")
     assert not hasattr(middleware, "_prompt_metadata_cache")
 
@@ -173,7 +176,7 @@ def test_sandbox_glob_info_rebuilds_missing_path(monkeypatch) -> None:
         return []
 
     backend._scan_dir_info = MethodType(_fake_scan_dir_info, backend)
-    infos = backend.glob_info("*.txt", "/mnt/user-data/outputs")
+    infos = backend.glob_info("*.txt", "/home/yuxi/user-data/outputs")
     assert infos
     assert "path" in infos[0]
     assert infos[0]["path"].endswith("/result.txt")
@@ -191,7 +194,7 @@ def test_sandbox_ls_info_ignores_malformed_json_lines() -> None:
         return ExecuteResponse(
             output="\n".join(
                 [
-                    '{"path": "/mnt/user-data/workspace/demo.txt", "is_dir": false, "size": 3, "modified_at": ""}',
+                    '{"path": "/home/yuxi/user-data/workspace/demo.txt", "is_dir": false, "size": 3, "modified_at": ""}',
                     '{"is_dir": true}',
                     'not-json',
                 ]
@@ -201,9 +204,9 @@ def test_sandbox_ls_info_ignores_malformed_json_lines() -> None:
         )
 
     backend.execute = MethodType(_fake_execute, backend)
-    infos = backend.ls_info("/mnt/user-data/workspace")
+    infos = backend.ls_info("/home/yuxi/user-data/workspace")
     assert len(infos) == 1
-    assert infos[0]["path"] == "/mnt/user-data/workspace/demo.txt"
+    assert infos[0]["path"] == "/home/yuxi/user-data/workspace/demo.txt"
 
 
 def test_sandbox_user_data_root_lists_extra_files() -> None:
@@ -215,19 +218,59 @@ def test_sandbox_user_data_root_lists_extra_files() -> None:
     )
 
     def _fake_scan_dir_info(self, path: str):
-        if path == "/mnt/user-data":
+        if path == "/home/yuxi/user-data":
             return [
-                FileInfo(path="/mnt/user-data/workspace", is_dir=True, size=0, modified_at=""),
-                FileInfo(path="/mnt/user-data/uploads", is_dir=True, size=0, modified_at=""),
-                FileInfo(path="/mnt/user-data/outputs", is_dir=True, size=0, modified_at=""),
-                FileInfo(path="/mnt/user-data/bubble_sort.py", is_dir=False, size=24, modified_at=""),
+                FileInfo(path="/home/yuxi/user-data/workspace", is_dir=True, size=0, modified_at=""),
+                FileInfo(path="/home/yuxi/user-data/uploads", is_dir=True, size=0, modified_at=""),
+                FileInfo(path="/home/yuxi/user-data/outputs", is_dir=True, size=0, modified_at=""),
+                FileInfo(path="/home/yuxi/user-data/bubble_sort.py", is_dir=False, size=24, modified_at=""),
             ]
         return []
 
     backend._scan_dir_info = MethodType(_fake_scan_dir_info, backend)
-    infos = backend.ls_info("/mnt/user-data")
+    infos = backend.ls_info("/home/yuxi/user-data")
     paths = {item["path"] for item in infos}
-    assert "/mnt/user-data/workspace" in paths
-    assert "/mnt/user-data/uploads" in paths
-    assert "/mnt/user-data/outputs" in paths
-    assert "/mnt/user-data/bubble_sort.py" in paths
+    assert "/home/yuxi/user-data/workspace" in paths
+    assert "/home/yuxi/user-data/uploads" in paths
+    assert "/home/yuxi/user-data/outputs" in paths
+    assert "/home/yuxi/user-data/bubble_sort.py" in paths
+
+
+def test_provisioner_read_reports_binary_files(monkeypatch) -> None:
+    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    monkeypatch.setattr(backend, "_read_binary", lambda path, offset=0, limit=None: b"\x89PNG\r\n\x1a\n")
+
+    result = backend.read("/home/yuxi/user-data/image.png")
+
+    assert result == "Error: File '/home/yuxi/user-data/image.png' is binary and cannot be rendered as text"
+
+
+def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:
+    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+
+    def _raise_invalid_path(path, offset=0, limit=None):
+        raise ValueError("path traversal is not allowed")
+
+    monkeypatch.setattr(backend, "_read_binary", _raise_invalid_path)
+
+    result = backend.read("../secret.txt")
+
+    assert result == "Error: Invalid path '../secret.txt': path traversal is not allowed"
+
+
+def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure(monkeypatch) -> None:
+    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    calls: list[str] = []
+
+    def _fake_read_binary(path, offset=0, limit=None):
+        calls.append(path)
+        if path == "/bad-path":
+            raise ValueError("path is required")
+        raise RuntimeError("sandbox read timeout")
+
+    monkeypatch.setattr(backend, "_read_binary", _fake_read_binary)
+
+    responses = backend.download_files(["/bad-path", "/read-failed"])
+
+    assert responses[0].error == "invalid_path"
+    assert responses[1].error == "read_failed"

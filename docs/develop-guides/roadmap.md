@@ -29,6 +29,9 @@
 ## v0.6
 
 <!-- 添加到这里 -->
+- 统一沙盒虚拟路径前缀默认值为 `/home/yuxi/user-data`，修正生产环境仍使用旧版 `/mnt/user-data` 的不一致配置；同时收紧 sandbox provisioner 对 Docker host bind 路径的归一化逻辑，保留 Docker Desktop for Windows 兼容
+- 修复沙盒文件读取错误提示不准确的问题：`read_file` 不再把所有读取异常都显示为 `file not found`，改为区分无效路径、目录路径、权限不足、实际读取失败；同时对图片、PDF 等二进制文件返回明确提示，避免误报与乱码文本
+- 新增 Agent runs 沙盒文件生成 E2E 脚本：通过管理员账号登录、创建 thread、调用 Agent 生成并执行冒泡排序脚本，然后仅通过线程文件 API 校验脚本文件与输出结果文件是否成功落盘
 - 新增根目录 `CONTRIBUTING.md`，补充面向仓库入口的贡献说明，统一说明 Docker Compose 开发流程、PR 提交流程与前后端贡献要求，并链接到 `docs/develop-guides/contributing.md`
 - 优化 `docs/intro/project-overview.md` 的“核心能力”章节，按智能体开发、知识库与 RAG、知识图谱、平台落地能力重写内容，突出项目主线与差异化重点
 - 调整文档归类：将沙盒文档迁移到 `docs/agents/sandbox-architecture.md` 并归入“智能体开发”；将“上下文配置”并入 `docs/agents/agents-config.md`，重点补充 Context 与 `AgentConfigSidebar` 的联动关系，以及 Context 在 Agent 运行周期中的传递链路
@@ -65,7 +68,8 @@
 - 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)
 - 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi-Know/issues/453) [#475](https://github.com/xerrors/Yuxi-Know/pull/475)
 - 修复沙盒后端接入回归：补齐 composite backend 的 `sandbox_backend` 参数、限制 `/api/sandbox/prepare` 仅允许访问当前用户线程、确保 `release()` 之后的 `destroy()` 会真正停止热池容器，并恢复 docker-compose 的完整模式默认值
-- 重构沙盒为 deer-flow 风格的 AIO provider：切换为 thread-local sandbox、统一 `/mnt/user-data/{workspace,uploads,outputs}` 固定虚拟路径、移除公开 `/api/sandbox/*` 生命周期接口，并补充 lite 模式下的 provider 生命周期、filesystem API 与 sandbox 复用/隔离 E2E 验证
+- 重构沙盒为 deer-flow 风格的 AIO provider：切换为 thread-local sandbox、统一 `/home/yuxi/user-data/{workspace,uploads,outputs}` 固定路径、移除公开 `/api/sandbox/*` 生命周期接口，并补充 lite 模式下的 provider 生命周期、filesystem API 与 sandbox 复用/隔离 E2E 验证
+- 调整聊天附件存储链路：线程附件改为直接落盘到 `saves/threads/<thread_id>/user-data/uploads`，解析成功后额外生成 `uploads/attachments/*.md`，不再依赖 MinIO 或显式上传到 sandbox
 
 ## v0.4
 

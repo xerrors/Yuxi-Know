@@ -33,6 +33,33 @@ def _normalize_path(path: str) -> str:
     return str(pure)
 
 
+def _describe_read_error(file_path: str, exc: Exception) -> str:
+    if isinstance(exc, FileNotFoundError):
+        return f"Error: File '{file_path}' not found"
+    if isinstance(exc, IsADirectoryError):
+        return f"Error: Path '{file_path}' is a directory"
+    if isinstance(exc, PermissionError):
+        return f"Error: Access denied for '{file_path}'"
+    if isinstance(exc, ValueError):
+        return f"Error: Invalid path '{file_path}': {exc}"
+    detail = str(exc).strip()
+    if detail:
+        return f"Error: Failed to read '{file_path}': {detail}"
+    return f"Error: Failed to read '{file_path}'"
+
+
+def _looks_like_binary(content: bytes) -> bool:
+    if not content:
+        return False
+    if b"\x00" in content:
+        return True
+    try:
+        content.decode("utf-8")
+        return False
+    except UnicodeDecodeError:
+        return True
+
+
 class ProvisionerSandboxBackend(BaseSandbox):
     def __init__(self, thread_id: str):
         self._thread_id = str(thread_id or "").strip()
@@ -111,18 +138,24 @@ class ProvisionerSandboxBackend(BaseSandbox):
         This stays on top of _read_binary() so the backend has one consistent
         read path for base64 transport, raw bytes, and text-like responses.
         """
-        normalized_path = _normalize_path(file_path)
+        try:
+            normalized_path = _normalize_path(file_path)
+        except Exception as exc:  # noqa: BLE001
+            return _describe_read_error(file_path, exc)
         start = max(0, int(offset))
 
         try:
             content = self._read_binary(normalized_path, offset=offset, limit=limit)
-        except Exception:  # noqa: BLE001
-            return f"Error: File '{file_path}' not found"
+        except Exception as exc:  # noqa: BLE001
+            return _describe_read_error(file_path, exc)
 
         if not content:
             return "System reminder: File exists but has empty contents"
 
-        text = content.decode("utf-8", errors="replace")
+        if _looks_like_binary(content):
+            return f"Error: File '{file_path}' is binary and cannot be rendered as text"
+
+        text = content.decode("utf-8")
         if not text:
             return ""
 
@@ -352,8 +385,11 @@ class ProvisionerSandboxBackend(BaseSandbox):
             except FileNotFoundError:
                 normalized_path = str(path)
                 responses.append(FileDownloadResponse(path=normalized_path, content=None, error="file_not_found"))
+            except ValueError:
+                normalized_path = str(path)
+                responses.append(FileDownloadResponse(path=normalized_path, content=None, error="invalid_path"))
             except Exception as exc:  # noqa: BLE001
                 normalized_path = str(path)
                 logger.warning(f"Download from sandbox failed for {normalized_path}: {exc}")
-                responses.append(FileDownloadResponse(path=normalized_path, content=None, error="invalid_path"))
+                responses.append(FileDownloadResponse(path=normalized_path, content=None, error=f"read_failed: {exc}"))
         return responses

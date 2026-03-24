@@ -18,7 +18,7 @@ from yuxi.services.conversation_service import require_user_conversation
 
 
 def _get_virtual_root() -> str:
-    prefix = str(getattr(conf, "sandbox_virtual_path_prefix", "/mnt/user-data") or "/mnt/user-data")
+    prefix = str(getattr(conf, "sandbox_virtual_path_prefix", "/home/yuxi/user-data") or "/home/yuxi/user-data")
     return "/" + prefix.strip("/")
 
 

@@ -8,6 +8,7 @@ from yuxi.agents.backends import (
     ProvisionerSandboxBackend,
     create_agent_composite_backend,
 )
+from yuxi.agents.backends.sandbox.backend import _looks_like_binary
 from yuxi.agents.context import BaseContext
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
@@ -144,10 +145,14 @@ async def read_file_content_view(
         raise HTTPException(status_code=404, detail="文件不存在")
     if response.error == "is_directory":
         raise HTTPException(status_code=400, detail="当前路径是目录")
+    if response.error == "read_failed":
+        raise HTTPException(status_code=400, detail="文件读取失败")
     if response.error:
         raise HTTPException(status_code=400, detail=response.error)
 
     raw_content = response.content or b""
+    if _looks_like_binary(raw_content):
+        raise HTTPException(status_code=400, detail="当前文件是二进制文件，不能按文本读取")
     try:
         content = raw_content.decode("utf-8")
     except UnicodeDecodeError:

@@ -134,10 +134,10 @@ class SandboxE2ETester:
         sandbox = await asyncio.to_thread(provider.acquire, self.thread_id)
 
         commands = [
-            "mkdir -p /mnt/user-data/workspace /mnt/user-data/outputs",
-            "printf 'print([1, 2, 3])\\n' > /mnt/user-data/workspace/bubble_sort.py",
-            "python /mnt/user-data/workspace/bubble_sort.py > /mnt/user-data/outputs/bubble_sort_result.txt",
-            "printf 'sandbox-ok\\n' > /mnt/user-data/workspace/marker.txt",
+            "mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/outputs",
+            "printf 'print([1, 2, 3])\\n' > /home/yuxi/user-data/workspace/bubble_sort.py",
+            "python /home/yuxi/user-data/workspace/bubble_sort.py > /home/yuxi/user-data/outputs/bubble_sort_result.txt",
+            "printf 'sandbox-ok\\n' > /home/yuxi/user-data/workspace/marker.txt",
         ]
         for command in commands:
             result = await asyncio.to_thread(sandbox.execute, command)
@@ -145,21 +145,21 @@ class SandboxE2ETester:
                 raise RuntimeError(f"command failed: {command}\n{result.output}")
 
         root_paths = sorted(str(e.get("path", "")) for e in await self.ls("/"))
-        if root_paths != ["/mnt/skills/", "/mnt/user-data/"]:
+        if root_paths != ["/home/yuxi/skills/", "/home/yuxi/user-data/"]:
             raise RuntimeError("unexpected root entries: " + json.dumps(root_paths, ensure_ascii=False))
 
-        workspace_paths = {str(e.get("path", "")) for e in await self.ls("/mnt/user-data/workspace")}
-        if "/mnt/user-data/workspace/bubble_sort.py" not in workspace_paths:
+        workspace_paths = {str(e.get("path", "")) for e in await self.ls("/home/yuxi/user-data/workspace")}
+        if "/home/yuxi/user-data/workspace/bubble_sort.py" not in workspace_paths:
             raise RuntimeError("workspace file missing: " + json.dumps(sorted(workspace_paths), ensure_ascii=False))
 
-        outputs_paths = {str(e.get("path", "")) for e in await self.ls("/mnt/user-data/outputs")}
-        result_file = "/mnt/user-data/outputs/bubble_sort_result.txt"
+        outputs_paths = {str(e.get("path", "")) for e in await self.ls("/home/yuxi/user-data/outputs")}
+        result_file = "/home/yuxi/user-data/outputs/bubble_sort_result.txt"
         if result_file not in outputs_paths:
             raise RuntimeError("output file missing: " + json.dumps(sorted(outputs_paths), ensure_ascii=False))
 
         attachment_base = attachment_name.rsplit(".", 1)[0].replace("/", "_").replace("\\", "_")
-        uploads_paths = {str(e.get("path", "")) for e in await self.ls("/mnt/user-data/uploads/attachments")}
-        expected_attachment_path = f"/mnt/user-data/uploads/attachments/{attachment_base}.md"
+        uploads_paths = {str(e.get("path", "")) for e in await self.ls("/home/yuxi/user-data/uploads/attachments")}
+        expected_attachment_path = f"/home/yuxi/user-data/uploads/attachments/{attachment_base}.md"
         if expected_attachment_path not in uploads_paths:
             raise RuntimeError("attachment markdown missing: " + json.dumps(sorted(uploads_paths), ensure_ascii=False))
 

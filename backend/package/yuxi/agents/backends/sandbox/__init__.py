@@ -26,9 +26,9 @@ RemoteSandboxBackend = ProvisionerSandboxBackend
 YuxiSandboxProvider = ProvisionerSandboxProvider
 SandboxInfo = SandboxConnection
 
-# Virtual namespace paths for viewer/filesystem services.
+# Sandbox-visible paths for viewer/filesystem services.
 USER_DATA_PATH = VIRTUAL_PATH_PREFIX
-SKILLS_PATH = "/mnt/skills"
+SKILLS_PATH = "/home/yuxi/skills"
 
 # Relative host-side directory names under thread user-data.
 WORKSPACE_DIR = "workspace"

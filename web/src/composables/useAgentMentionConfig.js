@@ -2,6 +2,7 @@ import { computed } from 'vue'
 
 export function useAgentMentionConfig({
   currentAgentState,
+  currentThreadAttachments,
   configurableItems,
   agentConfig,
   availableKnowledgeBases,
@@ -11,12 +12,20 @@ export function useAgentMentionConfig({
   const mentionConfig = computed(() => {
     const rawFiles = currentAgentState.value?.files || {}
     const files = []
+    const seenPaths = new Set()
+
+    const pushFile = (entry) => {
+      const path = entry?.path || ''
+      if (!path || seenPaths.has(path)) return
+      seenPaths.add(path)
+      files.push(entry)
+    }
 
     // 处理 files - 兼容字典格式 {"/path/file": {content: [...]}} 和旧数组格式
     if (typeof rawFiles === 'object' && !Array.isArray(rawFiles) && rawFiles !== null) {
       // 新格式：字典格式 {"/attachments/xxx/file.md": {...}}
       Object.entries(rawFiles).forEach(([filePath, fileData]) => {
-        files.push({
+        pushFile({
           path: filePath,
           ...fileData
         })
@@ -26,7 +35,7 @@ export function useAgentMentionConfig({
       rawFiles.forEach((item) => {
         if (typeof item === 'object' && item !== null) {
           Object.entries(item).forEach(([filePath, fileData]) => {
-            files.push({
+            pushFile({
               path: filePath,
               ...fileData
             })
@@ -34,6 +43,22 @@ export function useAgentMentionConfig({
         }
       })
     }
+
+    const attachments = Array.isArray(currentThreadAttachments?.value)
+      ? currentThreadAttachments.value
+      : []
+    attachments.forEach((attachment) => {
+      const path = attachment?.path || ''
+      if (!path) return
+      pushFile({
+        path,
+        size: attachment.file_size,
+        modified_at: attachment.uploaded_at,
+        artifact_url: attachment.artifact_url,
+        file_name: attachment.file_name,
+        status: attachment.status
+      })
+    })
 
     const configItems = configurableItems.value || {}
     const currentConfig = agentConfig.value || {}

@@ -42,7 +42,7 @@ Yuxi 的沙盒主要服务于以下场景：
 
 - **线程级隔离**：资源归属以 `thread_id` 为核心，采用 `thread_id -> sandbox_id` 的映射
 - **容器级执行**：默认使用独立 Docker 容器承载执行环境
-- **固定命名空间**：Agent 与工作台通过 `/mnt/user-data`、`/mnt/skills` 访问文件系统
+- **固定命名空间**：Agent 与工作台通过 `/home/yuxi/user-data`、`/home/yuxi/skills` 访问文件系统
 - **惰性获取**：不再依赖公开的 `/api/sandbox/*` 生命周期接口，首次使用时自动获取沙盒
 - **双视图接入**：Agent 与工作台共享底层沙盒，但使用不同的文件系统语义与接口
 
@@ -90,7 +90,7 @@ Agent / Frontend
     |       +-- create_agent_composite_backend(...)
     |               |
     |               +-- default: sandbox backend
-    |               +-- route /mnt/skills/: readonly skills backend
+    |               +-- route /home/yuxi/skills/: readonly skills backend
     |
     +-- Viewer filesystem panel
             |
@@ -290,13 +290,13 @@ provider 内部有空闲检查线程，按固定周期清理：
 
 当前沙盒对外暴露两个核心命名空间：
 
-- `/mnt/user-data`
-- `/mnt/skills`
+- `/home/yuxi/user-data`
+- `/home/yuxi/skills`
 
 其中：
 
-- `/mnt/user-data` 是线程私有工作区
-- `/mnt/skills` 是可见 Skills 的只读视图
+- `/home/yuxi/user-data` 是线程私有工作区
+- `/home/yuxi/skills` 是可见 Skills 的只读视图
 
 ### 7.2 `user-data` 目录结构
 
@@ -308,27 +308,27 @@ provider 内部有空闲检查线程，按固定周期清理：
 - `large_tool_results`
 - `uploads/attachments`
 
-这套目录最终映射到容器内的 `/mnt/user-data/*`。
+这套目录最终映射到容器内的 `/home/yuxi/user-data/*`。
 
 ### 7.3 路径别名
 
-为了兼容 Agent 使用习惯，当前实现保留了若干路径别名，会被统一映射到 `/mnt` 命名空间，例如：
+为了兼容 Agent 使用习惯，当前实现保留了若干路径别名，会被统一映射到 `/home/yuxi` 命名空间，例如：
 
-- `/workspace` -> `/mnt/user-data/workspace`
-- `/outputs` -> `/mnt/user-data/outputs`
-- `/uploads` -> `/mnt/user-data/uploads`
-- `/attachments` -> `/mnt/user-data/uploads/attachments`
-- `/skills` -> `/mnt/skills`
+- `/workspace` -> `/home/yuxi/user-data/workspace`
+- `/outputs` -> `/home/yuxi/user-data/outputs`
+- `/uploads` -> `/home/yuxi/user-data/uploads`
+- `/attachments` -> `/home/yuxi/user-data/uploads/attachments`
+- `/skills` -> `/home/yuxi/skills`
 
-这些别名是兼容层，不是推荐的长期抽象。新的系统语义应以 `/mnt/*` 为准。
+这些别名是兼容层，不是推荐的长期抽象。新的系统语义应以 `/home/yuxi/*` 为准。
 
 ### 7.4 路径安全约束
 
 路径校验主要由 `path_security.py` 负责。核心规则如下：
 
-- 仅允许访问 `/mnt/user-data` 与 `/mnt/skills`
+- 仅允许访问 `/home/yuxi/user-data` 与 `/home/yuxi/skills`
 - 禁止路径穿越
-- 命令中的绝对路径只允许 `/mnt/*` 与少量系统运行时前缀
+- 命令中的绝对路径只允许 `/home/yuxi/*` 与少量系统运行时前缀
 
 允许的系统前缀主要包括：
 
@@ -364,7 +364,7 @@ provider 内部有空闲检查线程，按固定周期清理：
 Agent 侧通过 `create_agent_composite_backend(...)` 构建 composite backend：
 
 - 默认 backend 为 sandbox backend
-- `/mnt/skills/` 路由到只读的 `SelectedSkillsReadonlyBackend`
+- `/home/yuxi/skills/` 路由到只读的 `SelectedSkillsReadonlyBackend`
 
 这保证了：
 
@@ -554,7 +554,7 @@ Viewer request
    将沙盒元数据、生命周期和回收策略从单进程状态进一步抽离。
 
 2. **收敛路径模型**
-   逐步减少历史别名，统一到 `/mnt/user-data` 与 `/mnt/skills`。
+   逐步减少历史别名，统一到 `/home/yuxi/user-data` 与 `/home/yuxi/skills`。
 
 3. **强化安全边界**
    在容器运行时、权限模型、配额控制和审计能力上继续补强。

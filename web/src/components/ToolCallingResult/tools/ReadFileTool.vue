@@ -35,10 +35,7 @@ const parsedArgs = computed(() => {
   }
 })
 
-const filePath = computed(() => {
-  const path = parsedArgs.value.file_path || ''
-  return path.startsWith('/') ? path.slice(1) : path
-})
+const filePath = computed(() => parsedArgs.value.file_path || '')
 
 const lineRange = computed(() => {
   const offset = parsedArgs.value.offset

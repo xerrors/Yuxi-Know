@@ -121,7 +121,7 @@ class LocalContainerProvisionerBackend:
         self._skills_host_path = os.getenv("DOCKER_SKILLS_HOST_PATH")
         self._container_prefix = os.getenv("DOCKER_SANDBOX_PREFIX", "yuxi-sandbox")
         self._sandbox_host = os.getenv("DOCKER_SANDBOX_HOST", "host.docker.internal")
-        self._health_timeout_seconds = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "30"))
+        self._health_timeout_seconds = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "300"))
 
         try:
             self._client = docker.from_env()
@@ -140,16 +140,16 @@ class LocalContainerProvisionerBackend:
             raise RuntimeError("docker host bind path is required")
 
         # Docker Desktop on Windows can report bind sources as D:\\... while
-        # this provisioner runs in a Linux container. Convert it to the daemon-
-        # visible Linux path to avoid "too many colons" bind parsing failures.
+        # this provisioner runs in a Linux container. Convert that daemon-
+        # reported path into the Linux path exposed inside Docker Desktop.
         normalized = value.replace("\\", "/")
         match = re.match(r"^([A-Za-z]):/(.+)$", normalized)
-        if os.name != "nt" and match:
+        if match:
             drive = match.group(1).lower()
             rest = match.group(2).lstrip("/")
             return f"/run/desktop/mnt/host/{drive}/{rest}"
 
-        return value
+        return normalized
 
     @staticmethod
     def _validate_thread_id(thread_id: str) -> str:
@@ -224,9 +224,9 @@ class LocalContainerProvisionerBackend:
     def _ensure_user_data_writable(container) -> None:
         cmd = (
             "sh -lc "
-            '"mkdir -p /home/gem/user-data/workspace /home/gem/user-data/uploads /home/gem/user-data/outputs '
-            '&& chmod a+rwx /home/gem/user-data /home/gem/user-data/workspace '
-            '/home/gem/user-data/uploads /home/gem/user-data/outputs"'
+            '"mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/uploads /home/yuxi/user-data/outputs '
+            '&& chmod a+rwx /home/yuxi/user-data /home/yuxi/user-data/workspace '
+            '/home/yuxi/user-data/uploads /home/yuxi/user-data/outputs"'
         )
         result = container.exec_run(cmd, user="0:0")
         if result.exit_code != 0:
@@ -251,16 +251,23 @@ class LocalContainerProvisionerBackend:
             safe_thread_id = self._validate_thread_id(thread_id)
             existing = self._get_container(sandbox_id)
             if existing is not None:
-                if existing.status != "running":
-                    existing.start()
-                    existing.reload()
-                self._ensure_user_data_writable(existing)
-                record = self._to_record(existing, sandbox_id)
-                if not record.sandbox_url:
-                    raise RuntimeError(f"sandbox {sandbox_id} has no mapped host port")
-                if not wait_for_sandbox_ready(record.sandbox_url, timeout_seconds=self._health_timeout_seconds):
-                    raise RuntimeError(f"sandbox {sandbox_id} is not ready at {record.sandbox_url}")
-                return record
+                existing.reload()
+                if existing.status == "running":
+                    try:
+                        self._ensure_user_data_writable(existing)
+                        record = self._to_record(existing, sandbox_id)
+                        if not record.sandbox_url:
+                            raise RuntimeError(f"sandbox {sandbox_id} has no mapped host port")
+                        if not wait_for_sandbox_ready(record.sandbox_url, timeout_seconds=self._health_timeout_seconds):
+                            raise RuntimeError(f"sandbox {sandbox_id} is not ready at {record.sandbox_url}")
+                        return record
+                    except Exception as exc:
+                        logger.warning("Recreating unhealthy sandbox %s: %s", sandbox_id, exc)
+
+                try:
+                    self.delete(sandbox_id)
+                except Exception as exc:
+                    logger.warning("Failed to delete stale sandbox %s before recreate: %s", sandbox_id, exc)
 
             threads_root = Path(self._threads_host_path).resolve()
             thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
@@ -284,11 +291,14 @@ class LocalContainerProvisionerBackend:
                     "managed-by": "yuxi-sandbox-provisioner",
                 },
                 "volumes": {
-                    str(thread_user_data): {"bind": "/home/gem/user-data", "mode": "rw"},
-                    str(skills_path): {"bind": "/skills", "mode": "ro"},
+                    str(thread_user_data): {"bind": "/home/yuxi/user-data", "mode": "rw"},
+                    str(skills_path): {"bind": "/home/yuxi/skills", "mode": "ro"},
                 },
                 "ports": {f"{self._container_port}/tcp": None},
                 "security_opt": ["seccomp=unconfined"],
+                # The sandbox image expects /home/yuxi to be writable during boot.
+                # Keep it ephemeral and mount persistent user-data underneath it.
+                "tmpfs": {"/home/yuxi": "rw,exec,mode=777"},
             }
             if self._network:
                 run_kwargs["network"] = self._network
@@ -392,15 +402,15 @@ class KubernetesProvisionerBackend:
                         image=self._sandbox_image,
                         command=["sh", "-c"],
                         args=[
-                            "chmod 777 /home/gem "
-                            "&& mkdir -p /home/gem/user-data/workspace /home/gem/user-data/uploads /home/gem/user-data/outputs "
-                            "&& chmod -R 777 /home/gem/user-data ",
+                            "chmod 777 /home/yuxi "
+                            "&& mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/uploads /home/yuxi/user-data/outputs "
+                            "&& chmod -R 777 /home/yuxi/user-data ",
                         ],
                         volume_mounts=[
-                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/yuxi"),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/home/gem/user-data",
+                                mount_path="/home/yuxi/user-data",
                                 sub_path=f"threads/{thread_id}/user-data",
                             ),
                         ],
@@ -412,15 +422,15 @@ class KubernetesProvisionerBackend:
                         image=self._sandbox_image,
                         ports=[self._client.V1ContainerPort(container_port=self._container_port)],
                         volume_mounts=[
-                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/yuxi"),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/home/gem/user-data",
+                                mount_path="/home/yuxi/user-data",
                                 sub_path=f"threads/{thread_id}/user-data",
                             ),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/skills",
+                                mount_path="/home/yuxi/skills",
                                 sub_path="skills",
                                 read_only=False,
                             ),

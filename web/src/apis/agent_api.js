@@ -341,7 +341,7 @@ export const threadApi = {
    * @param {boolean} recursive
    * @returns {Promise}
    */
-  listThreadFiles: (threadId, path = '/mnt/user-data', recursive = false) =>
+  listThreadFiles: (threadId, path = '/home/yuxi/user-data', recursive = false) =>
     apiGet(
       `/api/chat/thread/${threadId}/files?path=${encodeURIComponent(path)}&recursive=${recursive}`
     ),

@@ -1,4 +1,3 @@
-import shlex
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -9,24 +8,19 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from yuxi.agents.backends.sandbox import (
-    ProvisionerSandboxBackend,
     ensure_thread_dirs,
-    get_sandbox_provider,
     sandbox_uploads_dir,
 )
 from yuxi.services.doc_converter import ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_SIZE_BYTES
 
-UPLOADS_VIRTUAL_PREFIX = "/mnt/user-data/uploads"
+UPLOADS_VIRTUAL_PREFIX = "/home/yuxi/user-data/uploads"
 from yuxi.agents.buildin import agent_manager
 from yuxi.config import config as app_config
 from yuxi.plugins.parser import Parser
 from yuxi.repositories.conversation_repository import ConversationRepository
-from yuxi.storage.minio.client import get_minio_client
 from yuxi.utils.datetime_utils import utc_isoformat
 from yuxi.utils.logging_config import logger
 
-# 附件存储桶名称
-ATTACHMENTS_BUCKET = "user"
 ATTACHMENT_ALLOWED_EXTENSIONS: tuple[str, ...] = (".txt", ".md", ".docx", ".html", ".htm")
 MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 MAX_ATTACHMENT_MARKDOWN_CHARS = 32_000
@@ -120,8 +114,9 @@ def _make_upload_virtual_path(file_name: str) -> str:
     safe_name = file_name.replace("/", "_").replace("\\", "_").strip(" .")
     return f"{UPLOADS_VIRTUAL_PREFIX}/{safe_name or 'attachment.bin'}"
 
+
 def _make_attachment_path(file_name: str) -> str:
-    """生成附件在 /mnt 命名空间中的统一路径。"""
+    """生成附件在沙盒用户目录中的统一路径。"""
     # 提取不带扩展名的部分
     base_name = file_name
     for ext in [".docx", ".txt", ".html", ".htm", ".pdf", ".md"]:
@@ -137,7 +132,7 @@ def _make_attachment_path(file_name: str) -> str:
 def _build_attachment_storage_path(*, user_id: str, thread_id: str, file_name: str) -> tuple[str, Path]:
     """返回附件虚拟路径和宿主机落盘路径。"""
     relative_name = _make_attachment_path(file_name)
-    virtual_path = f"/mnt/user-data/uploads/attachments/{relative_name}"
+    virtual_path = f"/home/yuxi/user-data/uploads/attachments/{relative_name}"
 
     host_dir = Path(app_config.save_dir) / "threads" / thread_id / "user-data" / "uploads" / "attachments"
     host_dir.mkdir(parents=True, exist_ok=True)
@@ -209,8 +204,67 @@ def serialize_attachment(record: dict) -> dict:
         "uploaded_at": record.get("uploaded_at"),
         "path": path,
         "artifact_url": record.get("artifact_url"),
+        "original_path": record.get("original_path"),
+        "original_artifact_url": record.get("original_artifact_url"),
         "minio_url": record.get("minio_url"),
     }
+
+
+async def _materialize_attachment_files(
+    *,
+    thread_id: str,
+    upload: UploadFile,
+    file_name: str,
+    file_content: bytes,
+) -> dict:
+    """将原始附件与可选 markdown 副本落盘到线程 user-data。"""
+    ensure_thread_dirs(thread_id)
+
+    upload_virtual_path = _make_upload_virtual_path(file_name)
+    uploads_dir = sandbox_uploads_dir(thread_id)
+    upload_actual_path = uploads_dir / Path(upload_virtual_path).name
+    upload_actual_path.write_bytes(file_content)
+
+    record = {
+        "status": "uploaded",
+        "path": upload_virtual_path,
+        "artifact_url": _artifact_url(thread_id, upload_virtual_path),
+        "storage_path": str(upload_actual_path),
+        "original_path": upload_virtual_path,
+        "original_artifact_url": _artifact_url(thread_id, upload_virtual_path),
+        "original_storage_path": str(upload_actual_path),
+        "minio_url": None,
+    }
+
+    try:
+        await upload.seek(0)
+        conversion = await _convert_upload_to_markdown(upload)
+    except ValueError:
+        return record
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Attachment markdown materialization failed for {file_name}: {exc}")
+        return record
+
+    markdown_virtual_path, markdown_host_path = _build_attachment_storage_path(
+        user_id="",
+        thread_id=thread_id,
+        file_name=file_name,
+    )
+    markdown_host_path.write_text(conversion.markdown, encoding="utf-8")
+
+    record.update(
+        {
+            "status": "parsed",
+            "path": markdown_virtual_path,
+            "artifact_url": _artifact_url(thread_id, markdown_virtual_path),
+            "storage_path": str(markdown_host_path),
+            "file_path": markdown_virtual_path,
+            "markdown": conversion.markdown,
+            "truncated": conversion.truncated,
+            "markdown_storage_path": str(markdown_host_path),
+        }
+    )
+    return record
 
 
 async def create_thread_view(
@@ -329,37 +383,31 @@ async def upload_thread_attachment_view(
     if file_size > MAX_ATTACHMENT_SIZE_BYTES:
         max_size_mb = MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)
         raise HTTPException(status_code=400, detail=f"附件过大，当前仅支持 {max_size_mb} MB 以内的文件")
-
-    upload_virtual_path = _make_upload_virtual_path(file_name)
-    artifact_url = _artifact_url(thread_id, upload_virtual_path)
-
-    ensure_thread_dirs(thread_id)
-    uploads_dir = sandbox_uploads_dir(thread_id)
-    upload_actual_path = uploads_dir / Path(upload_virtual_path).name
-    upload_actual_path.write_bytes(file_content)
-
-    provider = get_sandbox_provider()
-    connection = provider.get(thread_id, create_if_missing=False)
-    if connection is not None:
-        backend = ProvisionerSandboxBackend(thread_id=thread_id)
-        backend.upload_files(
-            [
-                (upload_virtual_path, file_content),
-            ]
-        )
+    materialized = await _materialize_attachment_files(
+        thread_id=thread_id,
+        upload=file,
+        file_name=file_name,
+        file_content=file_content,
+    )
 
     attachment_record = {
         "file_id": uuid.uuid4().hex,
         "file_name": file_name,
         "file_type": file.content_type,
         "file_size": file_size,
-        "status": "uploaded",
+        "status": materialized["status"],
         "uploaded_at": utc_isoformat(),
-        "path": upload_virtual_path,
-        "artifact_url": artifact_url,
-        "minio_url": None,
-        "storage_path": str(upload_actual_path),
+        "path": materialized["path"],
+        "artifact_url": materialized["artifact_url"],
+        "storage_path": materialized["storage_path"],
+        "original_path": materialized["original_path"],
+        "original_artifact_url": materialized["original_artifact_url"],
+        "original_storage_path": materialized["original_storage_path"],
+        "minio_url": materialized["minio_url"],
     }
+    for optional_key in ("file_path", "markdown", "truncated", "markdown_storage_path"):
+        if optional_key in materialized:
+            attachment_record[optional_key] = materialized[optional_key]
 
     await conv_repo.add_attachment(conversation.id, attachment_record)
     all_attachments = await conv_repo.get_attachments(conversation.id)
@@ -409,8 +457,16 @@ async def delete_thread_attachment_view(
         raise HTTPException(status_code=404, detail="附件不存在或已被删除")
 
     if target_attachment:
-        candidate = target_attachment.get("storage_path")
-        if candidate:
+        delete_candidates = {
+            str(value).strip()
+            for value in (
+                target_attachment.get("storage_path"),
+                target_attachment.get("original_storage_path"),
+                target_attachment.get("markdown_storage_path"),
+            )
+            if isinstance(value, str) and value.strip()
+        }
+        for candidate in delete_candidates:
             try:
                 file_path = Path(candidate)
                 if file_path.exists():
@@ -425,17 +481,5 @@ async def delete_thread_attachment_view(
         agent_id=conversation.agent_id,
         attachments=all_attachments,
     )
-
-    if target_attachment:
-        provider = get_sandbox_provider()
-        connection = provider.get(thread_id, create_if_missing=False)
-        if connection is not None:
-            backend = ProvisionerSandboxBackend(thread_id=thread_id)
-            delete_commands = []
-            path = target_attachment.get("path")
-            if isinstance(path, str) and path.strip():
-                delete_commands.append(f"rm -f {shlex.quote(path)}")
-            if delete_commands:
-                backend.execute(" && ".join(delete_commands))
 
     return {"message": "附件已删除"}

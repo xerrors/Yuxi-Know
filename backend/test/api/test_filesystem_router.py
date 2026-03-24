@@ -54,8 +54,8 @@ async def test_filesystem_ls_root_lists_mount_namespaces(test_client, standard_u
 
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
-    assert "/mnt/skills/" in paths
-    assert "/mnt/user-data/" in paths
+    assert "/home/yuxi/skills/" in paths
+    assert "/home/yuxi/user-data/" in paths
 
 
 async def test_filesystem_ls_rejects_outside_mnt_paths(test_client, standard_user):

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from yuxi import config as conf
 
-DEFAULT_VIRTUAL_PATH_PREFIX = "/mnt/user-data"
+DEFAULT_VIRTUAL_PATH_PREFIX = "/home/yuxi/user-data"
 VIRTUAL_PATH_PREFIX = DEFAULT_VIRTUAL_PATH_PREFIX
 
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")

@@ -76,13 +76,13 @@ async def test_viewer_tree_root_lists_user_data_namespace(test_client, standard_
 
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
-    assert "/mnt/user-data/" in paths
+    assert "/home/yuxi/user-data/" in paths
 
 
 async def test_viewer_file_returns_raw_content_without_line_numbers(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
-    file_path = "/mnt/user-data/workspace/viewer_demo.txt"
+    file_path = "/home/yuxi/user-data/workspace/viewer_demo.txt"
     await _write_workspace_file(thread_id, file_path, "alpha\\nbeta\\n")
 
     response = await test_client.get(
@@ -97,7 +97,7 @@ async def test_viewer_file_returns_raw_content_without_line_numbers(test_client,
 async def test_viewer_download_returns_attachment_response(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
-    file_path = "/mnt/user-data/workspace/download_demo.txt"
+    file_path = "/home/yuxi/user-data/workspace/download_demo.txt"
     await _write_workspace_file(thread_id, file_path, "download-me\\n")
 
     response = await test_client.get(

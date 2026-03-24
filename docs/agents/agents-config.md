@@ -225,7 +225,7 @@ config_json.context + runtime ids -> context_schema instance
   - 在运行期回写 `_visible_skills`
 - 文件系统与沙盒接入
   - 通过 `thread_id` 获取对应沙盒
-  - 通过 `skills` 决定 `/mnt/skills` 的可见范围
+  - 通过 `skills` 决定 `/home/yuxi/skills` 的可见范围
 
 所以 Context 既是输入配置，也是中间件共享的运行时状态载体。
 

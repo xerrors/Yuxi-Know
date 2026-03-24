@@ -2,7 +2,7 @@
   <BaseToolCall :tool-call="toolCall">
     <template #header>
       <div class="sep-header">
-        <span class="note">执行命令</span>
+        <span class="note">Exec</span>
         <span class="separator" v-if="command">|</span>
         <span class="description" v-if="command">
           <span class="code">{{ command }}</span>

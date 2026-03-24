@@ -665,6 +665,8 @@ class AttachmentResponse(BaseModel):
     uploaded_at: str
     path: str
     artifact_url: str | None = None
+    original_path: str | None = None
+    original_artifact_url: str | None = None
     minio_url: str | None = None
 
 
@@ -818,7 +820,7 @@ async def delete_thread_attachment(
 @chat.get("/thread/{thread_id}/files", response_model=ThreadFileListResponse)
 async def list_thread_files(
     thread_id: str,
-    path: str = Query("/mnt/user-data"),
+    path: str = Query("/home/yuxi/user-data"),
     recursive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),

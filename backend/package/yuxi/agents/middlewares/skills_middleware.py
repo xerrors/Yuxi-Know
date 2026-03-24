@@ -60,7 +60,7 @@ async def get_prompt_metadata(db: AsyncSession | None = None) -> dict[str, Skill
         item.slug: {
             "name": item.name,
             "description": item.description,
-            "path": f"/mnt/skills/{item.slug}/SKILL.md",
+            "path": f"/home/yuxi/skills/{item.slug}/SKILL.md",
         }
         for item in skills
     }
@@ -165,12 +165,12 @@ class SkillsMiddleware(AgentMiddleware):
         Args:
             skills_context_name: 上下文中的 skills 列表字段名称（默认 "skills"）
             enable_skills_prompt: 是否启用 skills 提示段注入（默认 True）
-            skills_sources_for_prompt: skills 来源路径（用于提示词展示，默认 ["/mnt/skills/"]）
+            skills_sources_for_prompt: skills 来源路径（用于提示词展示，默认 ["/home/yuxi/skills/"]）
         """
         super().__init__()
         self.skills_context_name = skills_context_name
         self.enable_skills_prompt = enable_skills_prompt
-        self.skills_sources_for_prompt = skills_sources_for_prompt or ["/mnt/skills/"]
+        self.skills_sources_for_prompt = skills_sources_for_prompt or ["/home/yuxi/skills/"]
 
     async def abefore_agent(self, state: SkillsState, runtime) -> dict[str, Any] | None:
         """在 agent 执行前注入 skills 提示词"""
@@ -404,11 +404,10 @@ class SkillsMiddleware(AgentMiddleware):
             return None
         pure = PurePosixPath(raw if raw.startswith("/") else f"/{raw}")
         parts = [p for p in pure.parts if p not in ("/", "")]
-        # 只支持 /mnt/skills/{slug}/SKILL.md 格式
-        if len(parts) == 4 and parts[0] == "mnt" and parts[1] == "skills" and parts[3] == "SKILL.md":
-            slug = parts[2]
-        else:
-            return None
+        slug: str | None = None
+        if len(parts) == 5 and parts[0] == "home" and parts[1] == "yuxi" and parts[2] == "skills" and parts[4] == "SKILL.md":
+            slug = parts[3]
+
         if not is_valid_skill_slug(slug):
             return None
         return slug

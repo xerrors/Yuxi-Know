@@ -415,6 +415,7 @@ watch(hasAgentStateContent, (newVal, oldVal) => {
 })
 const { mentionConfig } = useAgentMentionConfig({
   currentAgentState,
+  currentThreadAttachments,
   configurableItems,
   agentConfig,
   availableKnowledgeBases,
@@ -750,7 +751,7 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
 const fetchThreadFiles = async (threadId) => {
   if (!threadId) return
   try {
-    const response = await threadApi.listThreadFiles(threadId, '/mnt/user-data', true)
+    const response = await threadApi.listThreadFiles(threadId, '/home/yuxi/user-data', true)
     const entries = Array.isArray(response?.files) ? response.files : []
     threadFilesMap.value[threadId] = entries
   } catch (error) {
@@ -929,6 +930,7 @@ const createNewChat = async () => {
     // run 模式下仅断开 SSE 订阅，不取消后台运行任务
     stopRunStreamSubscription(previousThreadId)
   }
+  isAgentPanelOpen.value = false
   // 进入未选中对话空态，路由由 thread-change 统一同步到 /agent
   chatState.currentThreadId = null
 }
