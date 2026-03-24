@@ -26,7 +26,7 @@ def _create_fs_backend(rt):
 
 
 class ChatbotAgent(BaseAgent):
-    name = "智能体助手"
+    name = "智能助手"
     description = "基础的对话机器人，可以回答问题，可在配置中启用需要的工具。"
     capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能
     metadata = {

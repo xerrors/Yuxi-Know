@@ -28,7 +28,7 @@ def _create_fs_backend(rt):
 
 
 class DeepAgent(BaseAgent):
-    name = "深度分析智能体"
+    name = "深度分析"
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
     context_schema = DeepContext
     capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能

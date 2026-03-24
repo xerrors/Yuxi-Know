@@ -219,13 +219,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick, computed, onUnmounted, h } from 'vue'
 import { message } from 'ant-design-vue'
 import AgentInputArea from '@/components/AgentInputArea.vue'
 import AgentMessageComponent from '@/components/AgentMessageComponent.vue'
 import ChatSidebarComponent from '@/components/ChatSidebarComponent.vue'
 import RefsComponent from '@/components/RefsComponent.vue'
-import { PanelLeftOpen, MessageCirclePlus, LoaderCircle } from 'lucide-vue-next'
+import { PanelLeftOpen, MessageCirclePlus, LoaderCircle, Bot, Telescope } from 'lucide-vue-next'
 import { handleChatError, handleValidationError } from '@/utils/errorHandler'
 import { ScrollController } from '@/utils/scrollController'
 import { AgentValidator } from '@/utils/agentValidator'
@@ -473,11 +473,28 @@ const conversations = computed(() => {
   return historyConvs
 })
 
+// 智能体图标映射
+const agentIconMap = {
+  ChatbotAgent: Bot,
+  DeepAgent: Telescope
+}
+
+const getAgentIconComponent = (agentId) => {
+  return agentIconMap[agentId] || Bot
+}
+
 const agentSegmentOptions = computed(() => {
-  return (agents.value || []).map((agent) => ({
-    label: agent.name || 'Unknown',
-    value: agent.id
-  }))
+  return (agents.value || []).map((agent) => {
+    const IconComponent = getAgentIconComponent(agent.id)
+    return {
+      label: () =>
+        h('div', { class: 'agent-option-label' }, [
+          h(IconComponent, { size: 16, class: 'agent-option-icon' }),
+          h('span', null, agent.name || 'Unknown')
+        ]),
+      value: agent.id
+    }
+  })
 })
 
 const showStartAgentSegment = computed(() => {
@@ -1599,11 +1616,11 @@ watch(currentChatId, (threadId, oldThreadId) => {
 }
 
 .chat-examples-input {
-  padding: 32px 0;
+  padding: 24px 0;
   text-align: center;
 
   h1 {
-    font-size: 1.2rem;
+    font-size: 1.4rem;
     color: var(--gray-1000);
     margin: 0;
   }
@@ -1612,7 +1629,7 @@ watch(currentChatId, (threadId, oldThreadId) => {
 .agent-segment-wrapper {
   width: fit-content;
   max-width: 100%;
-  margin: 0 auto 10px;
+  margin: 0 auto 18px;
   overflow-x: auto;
   scrollbar-width: none;
 
@@ -1867,6 +1884,26 @@ watch(currentChatId, (threadId, oldThreadId) => {
         display: none;
       }
     }
+  }
+}
+
+// 智能体选择器的图标对齐
+.agent-segment-wrapper {
+  :deep(.ant-segmented-item-label) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  :deep(.agent-option-label) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  :deep(.agent-option-icon) {
+    flex-shrink: 0;
+    color: var(--gray-600);
   }
 }
 </style>
