@@ -150,7 +150,7 @@
                 v-model="userInput"
                 :is-loading="isProcessing"
                 :disabled="!currentAgent"
-                :send-button-disabled="(!userInput || !currentAgent) && !isProcessing"
+                :send-button-disabled="isSendButtonDisabled"
                 placeholder="输入问题..."
                 :mention="mentionConfig"
                 :supports-file-upload="supportsFileUpload"
@@ -274,6 +274,8 @@ const { organization } = storeToRefs(infoStore)
 
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('')
+const sendCooldownActive = ref(false)
+let sendCooldownTimer = null
 const sidebarLogo = computed(() => organization.value?.logo || organization.value?.avatar || '')
 const useRunsApi =
   import.meta.env.VITE_USE_RUNS_API === 'true' &&
@@ -498,6 +500,20 @@ const isStreaming = computed(() => {
   return threadState ? threadState.isStreaming : false
 })
 const isProcessing = computed(() => isStreaming.value)
+const isSendButtonDisabled = computed(() => {
+  return sendCooldownActive.value || (((!userInput.value || !currentAgent.value) && !isProcessing.value))
+})
+
+const startSendCooldown = () => {
+  sendCooldownActive.value = true
+  if (sendCooldownTimer) {
+    clearTimeout(sendCooldownTimer)
+  }
+  sendCooldownTimer = setTimeout(() => {
+    sendCooldownActive.value = false
+    sendCooldownTimer = null
+  }, 2000)
+}
 
 // ==================== SCROLL & RESIZE HANDLING ====================
 const scrollController = new ScrollController('.chat-main')
@@ -545,6 +561,10 @@ onUnmounted(() => {
   scrollController.cleanup()
   if (chatMainResizeObserver) {
     chatMainResizeObserver.disconnect()
+  }
+  if (sendCooldownTimer) {
+    clearTimeout(sendCooldownTimer)
+    sendCooldownTimer = null
   }
   // 清理所有线程状态
   resetOnGoingConv()
@@ -1010,7 +1030,11 @@ const togglePinChat = async (chatId) => {
 
 const handleSendMessage = async ({ image } = {}) => {
   const text = userInput.value.trim()
-  if ((!text && !image) || !currentAgent.value || isProcessing.value) return
+  if ((!text && !image) || !currentAgent.value || isProcessing.value || sendCooldownActive.value)
+    return
+
+  // 发送后进入短暂冷却，防止连续触发停止
+  startSendCooldown()
 
   let threadId = currentChatId.value
   if (!threadId) {
@@ -1109,6 +1133,10 @@ const handleSendMessage = async ({ image } = {}) => {
 
 // 发送或中断
 const handleSendOrStop = async (payload) => {
+  if (sendCooldownActive.value) {
+    return
+  }
+
   const threadId = currentChatId.value
   const threadState = getThreadState(threadId)
   if (isProcessing.value && threadState) {

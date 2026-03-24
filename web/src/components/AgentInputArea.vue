@@ -58,7 +58,7 @@ import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
 import { FolderCode } from 'lucide-vue-next'
 
-defineProps({
+const props = defineProps({
   modelValue: { type: String, default: '' },
   isLoading: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
@@ -112,6 +112,10 @@ const handleSend = () => {
 }
 
 const handleKeyDown = (e) => {
+  if (props.sendButtonDisabled) {
+    return
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     handleSend()
