@@ -99,18 +99,24 @@ def _is_builtin_managed(item: Skill, slug: str) -> bool:
     return (item.created_by or "") in {"system", BUILTIN_SKILL_OPERATOR}
 
 
-def _ensure_symlink_target(target_dir: Path, source_dir: Path) -> None:
+def _dirs_equal(dir1: Path, dir2: Path) -> bool:
+    """检查两个目录内容是否相同（通过文件列表比较）"""
+    if not dir1.exists() or not dir2.exists():
+        return False
+    list1 = sorted([f.relative_to(dir1) for f in dir1.rglob("*") if f.is_file()])
+    list2 = sorted([f.relative_to(dir2) for f in dir2.rglob("*") if f.is_file()])
+    return list1 == list2
+
+
+def _copy_skill_target(target_dir: Path, source_dir: Path) -> None:
     if target_dir.is_symlink():
-        if target_dir.resolve() == source_dir.resolve():
-            return
         target_dir.unlink()
     elif target_dir.exists():
+        if _dirs_equal(target_dir, source_dir):
+            return
         raise ValueError(f"技能目录已存在且非内置链接，无法托管: {target_dir}")
 
-    try:
-        target_dir.symlink_to(source_dir, target_is_directory=True)
-    except OSError as e:
-        raise ValueError(f"创建内置技能链接失败: {target_dir} -> {source_dir} ({e})") from e
+    shutil.copytree(source_dir, target_dir, symlinks=False, dirs_exist_ok=True)
 
 
 async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str] | list[dict]]:
@@ -615,7 +621,7 @@ async def init_builtin_skills(db: AsyncSession, *, created_by: str = "system") -
         skill_dependencies = configured_skills or _normalize_string_list(meta.get("skill_dependencies"))
 
         target_dir = skills_root / slug
-        _ensure_symlink_target(target_dir, source_dir)
+        _copy_skill_target(target_dir, source_dir)
 
         item = await repo.get_by_slug(slug)
         if item and not _is_builtin_managed(item, slug):

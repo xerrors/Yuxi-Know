@@ -118,7 +118,7 @@ DEFAULT_CHAT_MODEL_PROVIDERS: dict[str, ChatModelProvider] = {
     "minimax": ChatModelProvider(
         name="MiniMax",
         url="https://platform.minimaxi.com/document/introduction",
-        base_url="https://api.minimax.io/v1",
+        base_url="https://api.minimaxi.com/v1",
         default="MiniMax-M2.7",
         env="MINIMAX_API_KEY",
         models=[

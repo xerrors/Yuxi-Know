@@ -21,6 +21,10 @@
 - 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini，deepseek 官方接口）
 - 生成基准测试会把所有的向量都计算一遍不合理
 
+- RUNs API 导致的问题
+- 双击导致的暂停问题
+- 自定义embedding和rerank模型的配置问题
+
 ## v0.6
 
 <!-- 添加到这里 -->
@@ -28,6 +32,7 @@
 - 新增 API Key 管理功能，支持外部系统通过 API Key 调用 Agent 对话接口（`POST /api/chat/agent/{agent_id}`）。统一使用 `Authorization: Bearer <api_key>` 认证，API Key 以 `yxkey_` 开头。获取 API Key 即代表拥有绑定用户的所有接口访问权限。
 - 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
 - 添加 subagents
+- 将内置 skills 的初始化从符号链接改为复制，以兼容沙盒绑定场景
 
 ## v0.5
 
