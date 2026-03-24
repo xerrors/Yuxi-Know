@@ -18,12 +18,6 @@
 - 颜色、字体、间距等遵循 [base.css](web/src/assets/css/base.css) 中的设计变量
 - 相似功能的组件使用相同的设计模式
 
-### 稳定性
-
-- 禁止悬停位移：交互元素在悬停时应保持位置稳定，避免视觉跳动
-- 避免过度阴影：阴影仅用于层级区分，不得用于装饰目的
-- 避免过度渐变：渐变色应谨慎使用，优先使用纯色或微弱渐变
-
 ## 禁止项
 
 以下 UI 做法在本项目中明确禁止：
@@ -42,29 +36,10 @@
 ### 技术栈
 
 - 包管理器：pnpm
-- 图标库：lucide-vue-next（注意尺寸控制）
+- 图标库：lucide-vue-next（注意尺寸控制），作为 button 需要添加 lucide-icon-btn class 来保证居中
 - 样式语言：LESS
-- 样式变量：必须使用 [base.css](web/src/assets/css/base.css) 中定义的颜色变量
+- 样式变量：必须使用 [base.css](web/src/assets/css/base.css) 中定义的颜色变量，且适配暗色模式
 
-### 开发规范
-
-1. **API 接口**：所有接口定义在 `web/src/apis` 目录下
-2. **样式复用**：优先复用现有组件和样式，避免重复定义
-3. **响应式设计**：适配不同屏幕宽度，保持布局稳定
-4. **无障碍设计**：保证基本的无障碍支持，如适当的对比度、键盘可操作等
-
-### 颜色变量
-
-必须从 `web/src/assets/css/base.css` 中获取以下变量：
-
-```less
-// 典型变量示例（实际以 base.css 为准）
-@primary-color: // 主色调
-@text-color: // 文本颜色
-@background-color: // 背景颜色
-@border-color: // 边框颜色
-// ... 其他变量
-```
 
 ### 组件示例
 
@@ -77,7 +52,6 @@
 </template>
 
 <style lang="less" scoped>
-@import '@/assets/css/base.css';
 
 .my-component {
   display: flex;
@@ -92,4 +66,3 @@
 ## 参考资料
 
 - [base.css](web/src/assets/css/base.css) - 全局样式变量
-- [前端开发规范](AGENTS.md#前端开发规范) - AGENTS.md 中的前端开发规范

@@ -20,21 +20,11 @@
 
 在 `.env` 文件中添加对应的环境变量：
 
-
-
 ::: tip 免费获取 API Key
-[硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 14 元额度，支持多种开源模型。
+[硅基流动](https://cloud.siliconflow.cn/i/Eo5yTHGJ) 注册即送 16 元额度，支持多种开源模型。
 :::
 
 <<< @/../.env.template#model_provider{bash 5}
-
-### 默认对话模型格式
-
-系统的默认对话模型可以在设置页面配置，也可以通过配置项 `default_model` 指定，格式统一为 `模型提供商/模型名称`，例如：
-
-```yaml
-default_model: default="siliconflow/Pro/deepseek-ai/DeepSeek-V3.2
-```
 
 ## 自定义模型供应商
 

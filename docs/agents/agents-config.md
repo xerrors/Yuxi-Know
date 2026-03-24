@@ -1,147 +1,309 @@
-# 智能体开发指南
+# 智能体配置
 
-Yuxi 的智能体系统基于 LangGraph 构建，提供了灵活而强大的 Agent 开发能力。通过统一的 `AgentManager`，系统能够自动发现和管理所有智能体，让开发者能够专注于业务逻辑的实现。
+Yuxi 的智能体系统基于 LangGraph 构建。对开发者来说，最重要的不是单独理解某个页面或某个字段，而是理解三件事：
 
-## 智能体架构
+- Agent 如何被定义和发现
+- Context 如何驱动配置界面
+- Context 如何贯穿一次 Agent 运行周期
 
-### 核心概念
+本文聚焦这三部分。
 
-系统的智能体架构围绕几个核心组件展开：
+## 1. 整体结构
 
-- **BaseAgent**：所有智能体的基类，定义了统一的接口规范
-- **AgentContext**：智能体的配置上下文，包含模型、提示词、工具等配置
-- **Graph**：LangGraph 图结构，定义智能体的执行流程
-- **Middleware**：中间件系统，用于扩展和定制智能体行为
+智能体开发围绕四个核心对象展开：
 
-### 自动发现机制
+- **`BaseAgent`**：统一的 Agent 抽象，定义 `get_graph()`、`context_schema`、`capabilities`
+- **`BaseContext`**：配置 Schema，也是前端配置项的来源
+- **Graph / Middleware**：LangGraph 图与中间件链，决定运行时行为
+- **AgentConfig**：数据库中的配置实例，前端侧边栏编辑的就是它
 
-智能体采用自动发现模式。在 `backend/package/yuxi/agents/__init__.py` 中，系统会遍历 `backend/package/yuxi/agents` 目录，自动注册所有继承自 `BaseAgent` 的类。这意味着开发者只需要按照规范编写代码，智能体就会自动被系统识别，无需手动配置。
+仓库中已经内置了可直接参考的智能体：
 
-仓库预置了几个可以直接使用的智能体示例：
+- `chatbot`：通用对话智能体
+- `deep_agent`：深度分析智能体
 
-- **chatbot**：通用对话智能体，支持动态工具调度
-- **reporter**：报表生成智能体，演示多工具协作
-- **deep_agent**：深度分析智能体，支持复杂推理任务
+## 2. Agent 的代码组织
 
-这些示例展示了如何组织代码结构、如何定义上下文、如何组合中间件，新增智能体时可以作为参考。
+建议在 `backend/package/yuxi/agents` 下按包组织一个智能体：
 
-## 创建自定义智能体
-
-### 目录结构
-
-在 `backend/package/yuxi/agents` 目录下创建新的智能体包，建议保持以下结构：
-
-```
+```text
 backend/package/yuxi/agents/
 └── my_agent/
-    ├── __init__.py          # 暴露主类
-    ├── graph.py              # Graph 构造逻辑
-    └── metadata.toml         # 元数据配置（可选）
+    ├── __init__.py
+    ├── context.py
+    └── graph.py
 ```
 
-### 基本实现
+最小实现通常包含：
 
-智能体类需要继承 `BaseAgent` 并实现异步的 `get_graph` 方法：
+- 一个继承 `BaseAgent` 的主类
+- 一个 `context_schema`
+- 一个 `get_graph()` 实现
+
+示例：
 
 ```python
-from yuxi.agents import BaseAgent
-from langgraph.prebuilt import create_agent
+from yuxi.agents import BaseAgent, BaseContext, load_chat_model
+from langchain.agents import create_agent
+
 
 class MyAgent(BaseAgent):
-    async def get_graph(self, **kwargs):
-        # 获取配置上下文
-        context = self.get_context()
+    name = "我的智能体"
+    description = "示例智能体"
+    context_schema = BaseContext
 
-        # 获取工具列表
-        tools = await get_tools_from_context(context)
-
-        # 构建 LangGraph 图
+    async def get_graph(self, context=None, **kwargs):
+        context = context or self.context_schema()
         graph = create_agent(
             model=load_chat_model(context.model),
-            tools=tools,
+            system_prompt=context.system_prompt,
             checkpointer=await self._get_checkpointer(),
         )
-
         return graph
 ```
 
-### 能力配置
+## 3. Context 是配置模型，不只是运行时参数
 
-`capabilities` 属性用于声明智能体的前端能力，控制 UI 组件的显示：
+### 3.1 `BaseContext` 的角色
+
+`BaseContext` 定义在 `backend/package/yuxi/agents/context.py`，它不是一个普通的数据类，而是整个智能体配置链路的核心：
+
+- 它定义了 Agent 可以配置哪些字段
+- 它定义了这些字段在前端如何展示
+- 它也是运行期传入 Graph 和中间件的上下文对象
+
+当前基础字段包括：
+
+| 字段 | 作用 |
+| --- | --- |
+| `system_prompt` | 系统提示词 |
+| `model` | 主模型 |
+| `tools` | 启用的内置工具 |
+| `knowledges` | 关联知识库 |
+| `mcps` | 启用的 MCP 服务器 |
+| `skills` | 关联 Skills |
+| `subagents_model` | 子智能体默认模型 |
+| `subagents` | 启用的子智能体 |
+| `summary_threshold` | 摘要触发阈值 |
+| `thread_id` / `user_id` | 运行期标识，不作为页面配置项暴露 |
+
+### 3.2 前端配置项如何从 Context 生成
+
+`BaseContext.get_configurable_items()` 会遍历字段定义，把字段类型、默认值、描述、模板元数据整理成 `configurable_items`。
+
+随后：
+
+1. `BaseAgent.get_info()` 暴露 `configurable_items`
+2. 前端读取 Agent 详情
+3. `AgentConfigSidebar` 按 `template_metadata.kind` 渲染不同控件
+
+也就是说，`AgentConfigSidebar` 不是手写每个字段，而是直接消费 `context_schema` 生成的配置描述。
+
+这也是为什么：
+
+- 新增一个 Context 字段，往往会直接影响侧边栏
+- 字段的 `metadata`、`Annotated` 类型信息，会直接影响展示方式
+
+### 3.3 `AgentConfigSidebar` 与 AgentConfig 的联动关系
+
+这部分是最关键的。
+
+在前端：
+
+- `AgentConfigSidebar.vue` 负责渲染配置表单
+- `agentStore` 加载配置时，读取 `config_json.context`
+- 如果某些字段未配置，会用 `configurable_items` 中的默认值补全
+- 保存时，前端将当前表单写回 `config_json: { context: agentConfig }`
+
+因此真实关系是：
+
+```text
+context_schema
+  -> get_configurable_items()
+  -> Agent detail API 返回 configurable_items
+  -> AgentConfigSidebar 渲染表单
+  -> 用户编辑后保存到 config_json.context
+```
+
+这里需要特别注意两点：
+
+- **侧边栏展示结构来自 `context_schema`**
+- **配置实例值来自数据库中的 `config_json.context`**
+
+前者决定“能配什么、怎么展示”，后者决定“当前配置实际选了什么”。
+
+### 3.4 自定义 Context 的推荐方式
+
+如果某个智能体有额外配置，不要在前端单独加一套表单，而是直接扩展 Context：
+
+```python
+from dataclasses import dataclass, field
+from yuxi.agents import BaseContext
+
+
+@dataclass(kw_only=True)
+class MyAgentContext(BaseContext):
+    custom_mode: str = field(
+        default="default",
+        metadata={
+            "name": "运行模式",
+            "description": "控制智能体的自定义行为",
+            "options": ["default", "strict"],
+        },
+    )
+```
+
+然后在 Agent 中声明：
 
 ```python
 class MyAgent(BaseAgent):
-    capabilities = ["file_upload", "files", "todo"]  # 支持文件上传、文件管理、待办事项
+    context_schema = MyAgentContext
 ```
 
-**可用能力：**
+这会同时影响：
 
-| capability | 说明 | 前端效果 |
-|------------|------|----------|
-| `file_upload` | 文件上传 | 显示上传按钮 |
-| `files` | 文件管理 | 显示文件管理面板 |
-| `todo` | 待办事项 | 显示待办组件 |
+- 后端可接收的配置结构
+- 前端配置侧边栏的展示内容
+- 运行期 `context` 可访问的字段
 
-**示例：**
+## 4. Context 如何贯穿 Agent 的运行周期
+
+Context 的价值不只在“配置页面”。它贯穿了从配置加载到实际执行的整条链路。
+
+### 4.1 配置加载阶段
+
+在聊天请求进入后端时，服务会先解析 `agent_config_id`，再加载对应配置。
+
+当前主流程在 `chat_stream_service.py` 中：
+
+1. 通过 `agent_config_id` 查找配置
+2. 若未指定，则获取该部门下该 Agent 的默认配置
+3. 取出 `config_json.context`
+4. 与 `user_id`、`thread_id` 合并成运行时输入
+
+也就是说，运行期 Context 的基础来源并不是前端临时状态，而是数据库中保存的 AgentConfig。
+
+### 4.2 Context 实例化阶段
+
+`BaseAgent` 在运行前会创建 `context_schema()` 实例，并通过 `update_from_dict()` 注入配置值。
+
+这一步完成后，Context 才真正成为运行期对象。
+
+可以把它理解为：
+
+```text
+config_json.context + runtime ids -> context_schema instance
+```
+
+### 4.3 Graph 构建阶段
+
+`get_graph(context=context)` 会收到这份 Context。
+
+以内置 `chatbot` 为例，Context 会直接参与：
+
+- 主模型选择：`context.model`
+- 系统提示词拼接：`context.system_prompt`
+- 子智能体默认模型：`context.subagents_model`
+- 子智能体列表：`context.subagents`
+- 摘要阈值：`context.summary_threshold`
+
+因此 Graph 不是和 Context 解耦的。相反，Graph 的构造本身就依赖 Context。
+
+### 4.4 中间件运行阶段
+
+中间件通过 `request.runtime.context` 或 `runtime.context` 继续读取和修改 Context。
+
+例如：
+
+- `RuntimeConfigMiddleware`
+  - 读取 `model`、`system_prompt`、`tools`、`mcps`
+  - 动态覆盖模型、系统提示词和工具列表
+- `SkillsMiddleware`
+  - 读取 `skills`
+  - 计算可见技能闭包
+  - 将 skills 提示段注入 `system_prompt`
+  - 在运行期回写 `_visible_skills`
+- 文件系统与沙盒接入
+  - 通过 `thread_id` 获取对应沙盒
+  - 通过 `skills` 决定 `/mnt/skills` 的可见范围
+
+所以 Context 既是输入配置，也是中间件共享的运行时状态载体。
+
+### 4.5 文件系统与 Viewer 阶段
+
+文件系统服务不会重新发明一套配置结构，而是再次从 `config_json.context` 还原出 runtime context，用于：
+
+- 判断当前线程下 Agent 可见的 Skills
+- 构造 Agent 视图的 composite backend
+- 构造 Viewer 视图的文件系统展示
+
+这也是为什么 Context 不只是聊天链路的一部分，它还影响：
+
+- Agent 文件工具
+- Viewer 文件浏览器
+- Skills 可见性
+- 沙盒挂载语义
+
+### 4.6 恢复运行阶段
+
+在 `resume` 流程中，系统同样会重新加载 AgentConfig，并重新构造 Context，再继续执行 Graph。
+
+也就是说，无论是：
+
+- 首次对话
+- 中断恢复
+- 文件系统查看
+
+它们都依赖同一份 Context 配置来源。
+
+## 5. `capabilities` 的作用
+
+`capabilities` 用于声明前端能力开关，控制 UI 组件显示，不等同于 Context。
+
+示例：
 
 ```python
-# 只需要文件上传能力
-capabilities = ["file_upload"]
-
-# 需要文件上传和待办事项
-capabilities = ["file_upload", "todo"]
-
-# 全部能力
-capabilities = ["file_upload", "files", "todo"]
+class MyAgent(BaseAgent):
+    capabilities = ["file_upload", "files", "todo"]
 ```
 
-注意：即使启用了能力，也需要在中间件中正确配置对应的处理逻辑，功能才能正常工作。例如启用 `file_upload` 需要配合 `inject_attachment_context` 中间件。
+当前常见能力包括：
 
-### 配置文件
+| capability | 说明 |
+| --- | --- |
+| `file_upload` | 启用上传入口 |
+| `files` | 启用文件面板 |
+| `todo` | 启用待办能力 |
 
-可以通过 `metadata.toml` 定义智能体的元数据：
+它解决的是“页面上显示什么”，而不是“运行时如何配置模型和工具”。
 
-```toml
-name = "我的智能体"
-description = "这是一个示例智能体"
-examples = [
-    "帮我写一首诗",
-    "解释一下量子计算",
-]
-```
+## 6. 开发建议
 
-这些信息会在前端界面展示，帮助用户了解每个智能体的用途。
+### 6.1 新增配置时优先改 Context
 
-## 相关主题
+如果一个配置项会影响 Agent 行为，优先考虑把它做成 `context_schema` 字段，而不是前端单独维护状态。
 
-- [上下文配置](./context-config.md) - BaseContext 和自定义配置
-- [工具系统](./tools-system.md) - 工具获取机制和 Skills 集成
-- [中间件系统](./middleware.md) - 中间件开发与使用
-- [MCP 集成](./mcp-integration.md) - MCP 服务器配置
-- [SubAgents 管理](./subagents-management.md) - 子智能体配置、调用链和开发注意事项
+### 6.2 把 Graph 逻辑和配置逻辑分开
 
-## 开发建议
+推荐做法：
 
-### 代码组织
+- `context.py` 定义配置模型
+- `graph.py` 使用这些配置构建 Graph
 
-- 将智能体的核心逻辑放在 `graph.py` 中
-- 复杂的工具逻辑单独放在 `toolkits` 目录下
-- 共享的组件放在 `common` 目录下
+这样前后端联动关系会清晰很多。
 
-### 热重载
+### 6.3 把“配置来源”和“运行时状态”区分开
 
-在容器环境中，修改代码后会自动触发热重载。如果需要强制刷新，可以调用：
+建议始终区分两层语义：
 
-```python
-agent_manager.get_agent(<agent_id>, reload=True)
-```
+- `config_json.context`：持久化配置来源
+- `runtime.context`：实际运行对象，可能被中间件继续补充或修改
 
-### 调试技巧
+## 7. 相关主题
 
-1. 使用前端的「调试面板」查看详细的请求和响应
-2. 查看后端日志：`docker logs api-dev -f`
-3. 利用 LangGraph 的可视化能力理解图结构
-
----
-
-智能体系统的设计目标是让开发者能够快速构建和迭代 AI 应用。通过本文档介绍的概念和示例，你应该能够掌握创建自定义智能体的核心方法。遇到问题时，建议先参考预置智能体的实现，它们涵盖了大多数常见场景。
+- [工具系统](./tools-system.md)
+- [中间件](./middleware.md)
+- [沙盒架构与设计](./sandbox-architecture.md)
+- [MCP 集成](./mcp-integration.md)
+- [Skills 管理](./skills-management.md)
+- [SubAgents 管理](./subagents-management.md)

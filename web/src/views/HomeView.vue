@@ -152,7 +152,7 @@ const userStore = useUserStore()
 const infoStore = useInfoStore()
 const agentStore = useAgentStore()
 const repoUrl = 'https://github.com/xerrors/Yuxi-Know'
-const faqUrl = 'https://xerrors.github.io/Yuxi-Know/latest/changelog/faq.html'
+const faqUrl = 'https://xerrors.github.io/Yuxi-Know/'
 
 // 加载状态
 const isLoading = ref(true)

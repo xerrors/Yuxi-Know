@@ -39,9 +39,9 @@ export default defineConfig({
         text: '智能体开发',
         items: [
           { text: '智能体配置', link: '/agents/agents-config' },
-          { text: '上下文配置', link: '/agents/context-config' },
           { text: '工具系统', link: '/agents/tools-system' },
           { text: '中间件', link: '/agents/middleware' },
+          { text: '沙盒架构与设计', link: '/agents/sandbox-architecture' },
           { text: 'MCP 集成', link: '/agents/mcp-integration' },
           { text: 'Skills 管理', link: '/agents/skills-management' },
           { text: 'SubAgents 管理', link: '/agents/subagents-management' }
@@ -51,7 +51,6 @@ export default defineConfig({
         text: '高级配置',
         items: [
           { text: '配置系统详解', link: '/advanced/configuration' },
-          { text: '沙盒改造与验收', link: '/advanced/sandbox-validation' },
           { text: '文档解析', link: '/advanced/document-processing' },
           { text: '品牌自定义', link: '/advanced/branding' },
           { text: '其他配置', link: '/advanced/misc' },
@@ -62,16 +61,9 @@ export default defineConfig({
       {
         text: '开发指南',
         items: [
+          { text: '参与贡献', link: '/develop-guides/contributing' },
+          { text: '开发路线图', link: '/develop-guides/roadmap' },
           { text: '界面设计规范', link: '/develop-guides/design' },
-          { text: '路线图', link: '/develop-guides/roadmap' }
-        ]
-      },
-      {
-        text: '更新日志',
-        items: [
-          { text: '参与贡献', link: '/changelog/contributing' },
-          { text: '常见问题', link: '/changelog/faq' },
-          { text: '迁移至 v0.5', link: '/changelog/migrate_to_v0-5' }
         ]
       }
     ],

@@ -50,7 +50,7 @@ actions:
     url: "https://github.com/xerrors/Yuxi-Know/issues/new/choose"
   - name: "开发路线图"
     icon: "roadmap"
-    url: "https://xerrors.github.io/Yuxi-Know/latest/changelog/roadmap.html"
+    url: "https://xerrors.github.io/Yuxi-Know/latest/roadmap.html"
 
 
 

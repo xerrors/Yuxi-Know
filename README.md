@@ -231,7 +231,7 @@ docker compose up --build
 感谢所有贡献者的支持！
 
 <a href="https://github.com/xerrors/Yuxi-Know/contributors">
-  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi-Know&max=100&columns=15" />
+  <img src="https://contrib.rocks/image?repo=xerrors/Yuxi-Know&max=100&columns=10" />
 </a>
 
 

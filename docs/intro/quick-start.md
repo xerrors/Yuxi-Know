@@ -1,6 +1,10 @@
 # 快速开始指南
 
-Yuxi（语析）是一个基于知识图谱和向量数据库的智能知识库系统。通过本文档，你可以在几分钟内完成环境搭建并开始使用。
+欢迎使用 Yuxi（语析），这是一个智能知识库和知识图谱 Agent 开发平台。
+本指南将帮助你在几分钟内启动并运行系统，使你能够利用 LangGraph、RAG 技术和知识图谱构建 AI 驱动的知识应用。
+
+![系统架构图](https://private-user-images.githubusercontent.com/35524243/559928805-96742b56-eda7-4aae-a4df-6fe9d3c30fd1.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzQzNjgxODMsIm5iZiI6MTc3NDM2Nzg4MywicGF0aCI6Ii8zNTUyNDI0My81NTk5Mjg4MDUtOTY3NDJiNTYtZWRhNy00YWFlLWE0ZGYtNmZlOWQzYzMwZmQxLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjAzMjQlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwMzI0VDE1NTgwM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTQwODFlNzI0YjMwMTI4YWMzOWU2YjAxMjUyM2E4NTUzOWRiNzY5OWMzY2Y0OGE0MzJjZmZjNWI3ODMzZjYyMWMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.uw8QmYsqyXDoEP8wLPHvUYdhS2qbCo2engwiaprs-VM)
+
 
 ::: tip 提示
 除了此文档网站外，你还可以访问 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 查看自动生成的详细项目文档。
@@ -20,7 +24,7 @@ git clone --branch v0.6.0-dev --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 ```
 
-版本选择建议：
+`--depth 1` 标志会创建一个浅克隆，仅包含最新的提交，从而显著减少下载时间和磁盘使用量。下表提供了版本选择的指导。
 
 | 版本 | 适用场景 |
 |------|----------|
@@ -48,7 +52,7 @@ cd Yuxi-Know
 - 自动拉取必需的 Docker 镜像
 
 ::: tip API Key 获取
-- **硅基流动**：访问 [cloud.siliconflow.cn](https://cloud.siliconflow.cn/i/Eo5yTHGJ)，注册即送 14 元额度
+- **硅基流动**：访问 [cloud.siliconflow.cn](https://cloud.siliconflow.cn/i/Eo5yTHGJ)，注册认证即送 16 元额度
 - **Tavily**：访问 [app.tavily.com](https://app.tavily.com/) 获取搜索 API Key（可选）
 :::
 
@@ -76,7 +80,7 @@ docker compose up --build -d
 如果你不需要知识库和知识图谱功能，可以使用轻量模式启动，跳过 Milvus、Neo4j、etcd 等服务，节省系统资源：
 
 ```bash
-make up-lite
+make up-lite  # macOS or Linux
 ```
 
 轻量模式仅启动核心服务（前端、后端、PostgreSQL、Redis、MinIO），前端侧边栏会自动隐藏知识库和图谱入口。切换回完整模式只需运行 `make up`。
@@ -92,18 +96,6 @@ make up-lite
 | API 文档 | http://localhost:5050/docs |
 
 首次访问时，系统会要求你设置超级管理员账号和密码，请妥善保存。
-
-## 开始使用
-
-完成上述配置后，你就可以开始使用了：
-
-1. 登录系统（使用刚才设置的超级管理员账号）
-2. 进入「智能体」页面
-3. 选择或创建一个智能体
-4. 在右侧面板配置提示词、选择模型和工具
-5. 开始对话
-
-![智能体配置界面](/images/agent.png)
 
 ## 故障排除
 

@@ -29,10 +29,14 @@
 ## v0.6
 
 <!-- 添加到这里 -->
+- 新增根目录 `CONTRIBUTING.md`，补充面向仓库入口的贡献说明，统一说明 Docker Compose 开发流程、PR 提交流程与前后端贡献要求，并链接到 `docs/develop-guides/contributing.md`
+- 优化 `docs/intro/project-overview.md` 的“核心能力”章节，按智能体开发、知识库与 RAG、知识图谱、平台落地能力重写内容，突出项目主线与差异化重点
+- 调整文档归类：将沙盒文档迁移到 `docs/agents/sandbox-architecture.md` 并归入“智能体开发”；将“上下文配置”并入 `docs/agents/agents-config.md`，重点补充 Context 与 `AgentConfigSidebar` 的联动关系，以及 Context 在 Agent 运行周期中的传递链路
+- 重构沙盒文档结构，重写 `docs/agents/sandbox-architecture.md`，按目标边界、架构分层、生命周期、文件系统模型、双视图接入、配置与限制重新组织内容
 - 调整 Agent 路由为 `/agent/{thread_id}`：`/agent` 进入未选中对话空态，不再在 URL 中展示 `agent_id`；发送首条消息时基于当前 `selectedAgentId` 与配置创建新对话，并自动跳转到对应线程路由。
 - 新增 API Key 管理功能，支持外部系统通过 API Key 调用 Agent 对话接口（`POST /api/chat/agent/{agent_id}`）。统一使用 `Authorization: Bearer <api_key>` 认证，API Key 以 `yxkey_` 开头。获取 API Key 即代表拥有绑定用户的所有接口访问权限。
 - 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
-- 添加 subagents
+- 添加 subagents 的支持，支持在 web 中添加 subagents
 - 将内置 skills 的初始化从符号链接改为复制，以兼容沙盒绑定场景
 
 ## v0.5
