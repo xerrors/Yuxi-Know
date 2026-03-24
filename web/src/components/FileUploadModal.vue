@@ -12,11 +12,7 @@
             type="primary"
             @click="chunkData"
             :loading="chunkLoading"
-            :disabled="
-              uploadMode === 'url'
-                ? !urlList.some((i) => i.status === 'success')
-                : fileList.length === 0
-            "
+            :disabled="!canSubmit"
           >
             添加到知识库
           </a-button>
@@ -141,6 +137,7 @@
           :multiple="true"
           :directory="isFolderUpload"
           :disabled="chunkLoading"
+          :show-upload-list="!showAggregateProgress"
           :accept="acceptedFileTypes"
           :before-upload="beforeUpload"
           :customRequest="customRequest"
@@ -153,6 +150,53 @@
           <p class="ant-upload-hint">支持类型: {{ uploadHint }}</p>
           <div class="zip-tip" v-if="hasZipFiles">📦 ZIP包将自动解压提取 Markdown 与图片</div>
         </a-upload-dragger>
+
+        <div v-if="showAggregateProgress" class="upload-progress-card">
+          <div class="progress-header">
+            <div class="progress-header-left">
+              <div class="progress-title">上传进度</div>
+              <div class="progress-stats inline-in-header">
+                <div class="stat-pill">总计 {{ totalUploadCount }}</div>
+                <div class="stat-pill uploading" v-if="uploadingUploadCount > 0">
+                  上传中 {{ uploadingUploadCount }}
+                </div>
+                <div class="stat-pill queued" v-if="queuedUploadCount > 0">排队 {{ queuedUploadCount }}</div>
+                <div class="stat-pill error" v-if="failedUploadCount > 0">失败 {{ failedUploadCount }}</div>
+              </div>
+            </div>
+            <div class="progress-header-right">
+              <div class="progress-percent">{{ overallUploadProgress }}%</div>
+              <a-button
+                type="text"
+                size="small"
+                class="toggle-progress-btn"
+                @click="progressExpanded = !progressExpanded"
+              >
+                <span>{{ progressExpanded ? '收起' : '展开' }}</span>
+                <ChevronUp v-if="progressExpanded" :size="14" />
+                <ChevronDown v-else :size="14" />
+              </a-button>
+            </div>
+          </div>
+
+          <div v-if="progressExpanded" class="progress-details">
+            <div class="details-list" v-if="failedDetailItems.length > 0">
+              <div v-for="item in failedDetailItems" :key="item.uid" class="detail-row">
+                <span class="detail-name" :title="item.name">{{ item.name }}</span>
+                <span class="detail-error" :title="item.errorText">{{ item.errorText }}</span>
+              </div>
+            </div>
+
+            <div class="progress-tip" v-else>当前无失败文件。</div>
+
+            <div class="progress-tip" v-if="hasPendingUploads">
+              文件夹上传采用队列模式，最多同时上传 {{ MAX_UPLOAD_CONCURRENCY }} 个文件。
+            </div>
+            <div class="progress-tip" v-else>
+              上传队列已完成，可点击“添加到知识库”继续下一步。
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- URL 输入区域 -->
@@ -263,7 +307,9 @@ import {
   Download,
   Trash2,
   Link,
-  X
+  X,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-vue-next'
 import { h } from 'vue'
 import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
@@ -411,6 +457,69 @@ const chunkLoading = computed(() => store.state.chunkLoading)
 // 上传模式
 const uploadMode = ref('file')
 const previousOcrSelection = ref('disable')
+const MAX_UPLOAD_CONCURRENCY = 10
+
+// 文件列表
+const fileList = ref([])
+
+const uploadQueue = ref([])
+const activeUploadCount = ref(0)
+const uploadTaskStatus = ref({})
+const uploadTaskProgress = ref({})
+const progressExpanded = ref(false)
+
+const totalUploadCount = computed(() => fileList.value.length)
+const queuedUploadCount = computed(
+  () => Object.values(uploadTaskStatus.value).filter((status) => status === 'queued').length
+)
+const uploadingUploadCount = computed(
+  () => Object.values(uploadTaskStatus.value).filter((status) => status === 'uploading').length
+)
+const successUploadCount = computed(
+  () => Object.values(uploadTaskStatus.value).filter((status) => status === 'done').length
+)
+const failedUploadCount = computed(
+  () => Object.values(uploadTaskStatus.value).filter((status) => status === 'error').length
+)
+const hasPendingUploads = computed(() => queuedUploadCount.value + uploadingUploadCount.value > 0)
+
+const overallUploadProgress = computed(() => {
+  const total = totalUploadCount.value
+  if (!total) {
+    return 0
+  }
+  const validUidSet = new Set(fileList.value.map((file) => file.uid).filter(Boolean))
+  let sum = 0
+  for (const uid of validUidSet) {
+    sum += uploadTaskProgress.value[uid] || 0
+  }
+  return Math.round(sum / total)
+})
+
+const showAggregateProgress = computed(() => totalUploadCount.value >= MAX_UPLOAD_CONCURRENCY)
+
+const failedDetailItems = computed(() => {
+  return fileList.value
+    .map((file) => {
+      const uid = file.uid
+      const rawStatus = uploadTaskStatus.value[uid] || file.status || 'unknown'
+      const detail = file?.response?.detail || file?.error?.message || ''
+      return {
+        uid,
+        name: file.name || '未命名文件',
+        status: rawStatus,
+        errorText: detail || '上传失败'
+      }
+    })
+    .filter((item) => item.status === 'error')
+})
+
+const canSubmit = computed(() => {
+  if (uploadMode.value === 'url') {
+    return urlList.value.some((item) => item.status === 'success')
+  }
+  return successUploadCount.value > 0 && !hasPendingUploads.value
+})
 
 const uploadModeOptions = computed(() => [
   {
@@ -443,10 +552,34 @@ watch(uploadMode, (val) => {
   sameNameFiles.value = []
   urlList.value = []
   newUrl.value = ''
+  for (const task of uploadQueue.value) {
+    task.canceled = true
+  }
+  uploadQueue.value = []
+  uploadTaskStatus.value = {}
+  uploadTaskProgress.value = {}
+  progressExpanded.value = false
 })
 
-// 文件列表
-const fileList = ref([])
+watch(fileList, (newFileList) => {
+  const validUidSet = new Set(newFileList.map((file) => file.uid).filter(Boolean))
+  const nextStatus = {}
+  const nextProgress = {}
+
+  for (const [uid, status] of Object.entries(uploadTaskStatus.value)) {
+    if (validUidSet.has(uid)) {
+      nextStatus[uid] = status
+    }
+  }
+  for (const [uid, progress] of Object.entries(uploadTaskProgress.value)) {
+    if (validUidSet.has(uid)) {
+      nextProgress[uid] = progress
+    }
+  }
+
+  uploadTaskStatus.value = nextStatus
+  uploadTaskProgress.value = nextProgress
+})
 
 // URL 列表
 // Item structure: { url: string, status: 'fetching'|'success'|'error', data: object|null, error: string }
@@ -882,56 +1015,161 @@ const deleteSameNameFile = (file) => {
 }
 
 const customRequest = async (options) => {
-  const { file, onProgress, onSuccess, onError } = options
-
-  const formData = new FormData()
-  // 如果是文件夹上传，使用相对路径作为文件名
-  const filename =
-    isFolderUpload.value && file.webkitRelativePath ? file.webkitRelativePath : file.name
-  formData.append('file', file, filename)
-
-  const dbId = databaseId.value
-  if (!dbId) {
-    onError(new Error('Database ID is missing'))
-    return
+  const fileUid = options.file?.uid
+  if (fileUid) {
+    uploadTaskStatus.value[fileUid] = 'queued'
+    uploadTaskProgress.value[fileUid] = 0
   }
 
-  const xhr = new XMLHttpRequest()
-  xhr.open('POST', `/api/knowledge/files/upload?db_id=${dbId}`)
-
-  const headers = getAuthHeaders()
-  for (const [key, value] of Object.entries(headers)) {
-    xhr.setRequestHeader(key, value)
+  const task = {
+    options,
+    xhr: null,
+    canceled: false
   }
 
-  xhr.upload.onprogress = (e) => {
-    if (e.lengthComputable) {
-      onProgress({ percent: (e.loaded / e.total) * 100 })
+  uploadQueue.value.push(task)
+  processUploadQueue()
+
+  return {
+    abort: () => {
+      task.canceled = true
+      if (task.xhr) {
+        task.xhr.abort()
+      }
+      const queueIndex = uploadQueue.value.indexOf(task)
+      if (queueIndex !== -1) {
+        uploadQueue.value.splice(queueIndex, 1)
+      }
+      if (fileUid) {
+        uploadTaskStatus.value[fileUid] = 'error'
+      }
     }
   }
+}
 
-  xhr.onload = () => {
-    if (xhr.status >= 200 && xhr.status < 300) {
-      try {
-        const response = JSON.parse(xhr.responseText)
-        onSuccess(response, xhr)
-      } catch (e) {
-        onError(e)
+const processUploadQueue = () => {
+  while (activeUploadCount.value < MAX_UPLOAD_CONCURRENCY && uploadQueue.value.length > 0) {
+    const task = uploadQueue.value.shift()
+    if (!task || task.canceled) {
+      continue
+    }
+
+    activeUploadCount.value += 1
+    runUploadTask(task)
+      .catch(() => {
+        // 错误已经在 runUploadTask 内处理，这里只保证队列继续消费
+      })
+      .finally(() => {
+        activeUploadCount.value -= 1
+        processUploadQueue()
+      })
+  }
+}
+
+const runUploadTask = (task) => {
+  const { file, onProgress, onSuccess, onError } = task.options
+  const fileUid = file?.uid
+
+  if (fileUid) {
+    uploadTaskStatus.value[fileUid] = 'uploading'
+  }
+
+  return new Promise((resolve, reject) => {
+    const formData = new FormData()
+    const filename =
+      isFolderUpload.value && file.webkitRelativePath ? file.webkitRelativePath : file.name
+    formData.append('file', file, filename)
+
+    const dbId = databaseId.value
+    if (!dbId) {
+      const error = new Error('Database ID is missing')
+      if (fileUid) {
+        uploadTaskStatus.value[fileUid] = 'error'
       }
-    } else {
-      const errorResp = JSON.parse(xhr.responseText)
-      // 设置 file.response 让 handleFileUpload 能读取到错误信息
+      onError(error)
+      reject(error)
+      return
+    }
+
+    const xhr = new XMLHttpRequest()
+    task.xhr = xhr
+    xhr.open('POST', `/api/knowledge/files/upload?db_id=${dbId}`)
+
+    const headers = getAuthHeaders()
+    for (const [key, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(key, value)
+    }
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        return
+      }
+      const percent = Math.min(100, (event.loaded / event.total) * 100)
+      if (fileUid) {
+        uploadTaskProgress.value[fileUid] = percent
+      }
+      onProgress({ percent })
+    }
+
+    xhr.onload = () => {
+      if (task.canceled) {
+        resolve()
+        return
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const response = JSON.parse(xhr.responseText)
+          if (fileUid) {
+            uploadTaskStatus.value[fileUid] = 'done'
+            uploadTaskProgress.value[fileUid] = 100
+          }
+          onSuccess(response, xhr)
+          resolve()
+        } catch (error) {
+          if (fileUid) {
+            uploadTaskStatus.value[fileUid] = 'error'
+          }
+          onError(error)
+          reject(error)
+        }
+        return
+      }
+
+      let errorResp = {}
+      try {
+        errorResp = JSON.parse(xhr.responseText || '{}')
+      } catch {
+        errorResp = {}
+      }
       file.response = errorResp
       const error = new Error(errorResp.detail || 'Upload failed')
+      if (fileUid) {
+        uploadTaskStatus.value[fileUid] = 'error'
+      }
       onError(error, file)
+      reject(error)
     }
-  }
 
-  xhr.onerror = (e) => {
-    onError(e)
-  }
+    xhr.onerror = (errorEvent) => {
+      if (fileUid) {
+        uploadTaskStatus.value[fileUid] = 'error'
+      }
+      onError(errorEvent)
+      reject(errorEvent)
+    }
 
-  xhr.send(formData)
+    xhr.onabort = () => {
+      if (fileUid) {
+        uploadTaskStatus.value[fileUid] = 'error'
+      }
+      const abortError = new Error('Upload aborted')
+      onError(abortError)
+      reject(abortError)
+    }
+
+    xhr.send(formData)
+  })
 }
 
 const handleFileUpload = (info) => {
@@ -1425,6 +1663,152 @@ const chunkData = async () => {
   border-radius: 4px;
 }
 
+.upload-progress-card {
+  margin-top: 8px;
+  border: 1px solid var(--gray-200);
+  border-radius: 8px;
+  background: var(--gray-50);
+  padding: 8px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-header-left {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.progress-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.progress-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gray-700);
+  white-space: nowrap;
+}
+
+.progress-percent {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--main-600);
+}
+
+.progress-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  &.inline-in-header {
+    gap: 6px;
+  }
+}
+
+.stat-pill {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  border: 1px solid var(--gray-300);
+  background: var(--gray-100);
+  color: var(--gray-600);
+
+  &.uploading {
+    background: var(--main-50);
+    border-color: var(--main-200);
+    color: var(--main-600);
+  }
+
+  &.queued {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+    color: var(--gray-600);
+  }
+
+  &.success {
+    background: var(--color-success-50);
+    border-color: var(--color-success-200);
+    color: var(--color-success-600);
+  }
+
+  &.error {
+    background: var(--color-error-50);
+    border-color: var(--color-error-200);
+    color: var(--color-error-600);
+  }
+}
+
+.progress-tip {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--gray-500);
+}
+
+.progress-details {
+  border-top: 1px dashed var(--gray-200);
+  padding-top: 6px;
+}
+
+.details-list {
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--gray-200);
+  border-radius: 6px;
+  background: var(--gray-0);
+}
+
+.detail-row {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--gray-100);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.detail-name {
+  font-size: 11px;
+  color: var(--gray-700);
+  font-weight: 500;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-error {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-error-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toggle-progress-btn {
+  color: var(--gray-500);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-inline: 4px;
+
+  &:hover {
+    color: var(--main-600);
+    background: var(--gray-100);
+  }
+}
+
 /* URL Area */
 .url-area {
   flex: 1;
@@ -1653,5 +2037,27 @@ const chunkData = async () => {
 
 .setting-label .ant-checkbox {
   margin-right: 8px;
+}
+
+@media (max-width: 768px) {
+  .top-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .auto-index-toggle {
+    padding-right: 0;
+  }
+
+  .progress-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .progress-header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>
