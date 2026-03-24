@@ -203,10 +203,16 @@ const sortedChats = computed(() => {
 
 const createNewChat = () => {
   emit('create-chat')
+  if (props.isFloating) {
+    emit('toggle-sidebar')
+  }
 }
 
 const selectChat = (chat) => {
   emit('select-chat', chat.id)
+  if (props.isFloating) {
+    emit('toggle-sidebar')
+  }
 }
 
 const deleteChat = (chatId) => {
