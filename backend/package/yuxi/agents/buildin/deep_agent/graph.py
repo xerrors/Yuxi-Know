@@ -10,8 +10,12 @@ from langchain.agents.middleware import (
 )
 
 from yuxi.agents import BaseAgent, load_chat_model
-from yuxi.agents.backends import create_agent_composite_backend
-from yuxi.agents.middlewares import RuntimeConfigMiddleware, SummaryOffloadMiddleware, save_attachments_to_fs
+from yuxi.agents.backends import create_agent_composite_backend, resolve_sandbox_backend
+from yuxi.agents.middlewares import (
+    RuntimeConfigMiddleware,
+    SummaryOffloadMiddleware,
+    save_attachments_to_fs,
+)
 from yuxi.agents.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
 from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 from yuxi.agents.toolkits.buildin.tools import _create_tavily_search
@@ -24,7 +28,10 @@ from .context import DeepContext
 
 def _create_fs_backend(rt):
     """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+    context = getattr(rt, "context", None)
+    thread_id = getattr(context, "thread_id", None) or ""
+    sandbox_backend = resolve_sandbox_backend(thread_id)
+    return create_agent_composite_backend(rt, sandbox_backend=sandbox_backend)
 
 
 class DeepAgent(BaseAgent):
@@ -32,11 +39,7 @@ class DeepAgent(BaseAgent):
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
     context_schema = DeepContext
     capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能
-    metadata = {
-        "examples": [
-            "调研一下多模态 GraphRAG 的相关论文"
-        ]
-    }
+    metadata = {"examples": ["调研一下多模态 GraphRAG 的相关论文"]}
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

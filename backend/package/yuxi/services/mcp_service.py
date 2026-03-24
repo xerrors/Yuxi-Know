@@ -209,7 +209,6 @@ async def get_mcp_tools(
     disabled_tools: list[str] = None,
     cache: bool = True,
     force_refresh: bool = False,
-    raise_on_error: bool = False,
 ) -> list[Callable[..., Any]]:
     """Get MCP tools for a specific server.
 
@@ -288,15 +287,11 @@ async def get_mcp_tools(
 
         except AssertionError as e:
             logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
-            if raise_on_error:
-                raise
             return []
         except Exception as e:
             logger.error(
                 f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}"
             )
-            if raise_on_error:
-                raise
             return []
 
     # 3. Filtering (Apply to Return Value Only)
@@ -606,7 +601,7 @@ async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
     return {name: MCP_SERVERS[name] for name in names if name in MCP_SERVERS}
 
 
-async def get_all_mcp_tools(server_name: str, raise_on_error: bool = False) -> list:
+async def get_all_mcp_tools(server_name: str) -> list:
     """Get all tools of an MCP server (no filtering).
 
     For management UI to display tool list, supports viewing all tools and their enabled status.
@@ -614,7 +609,6 @@ async def get_all_mcp_tools(server_name: str, raise_on_error: bool = False) -> l
 
     Args:
         server_name: Server name
-        raise_on_error: Whether to raise an exception on error instead of returning empty list
 
     Returns:
         List of all tools (unfiltered)
@@ -622,15 +616,7 @@ async def get_all_mcp_tools(server_name: str, raise_on_error: bool = False) -> l
     config = MCP_SERVERS.get(server_name)
     if not config:
         logger.warning(f"MCP server '{server_name}' not found in cache")
-        if raise_on_error:
-            raise ValueError(f"MCP server '{server_name}' not found in cache")
         return []
 
     # Get all tools (no filtering, force refresh, no cache update)
-    return await get_mcp_tools(
-        server_name,
-        disabled_tools=[],
-        cache=False,
-        force_refresh=True,
-        raise_on_error=raise_on_error,
-    )
+    return await get_mcp_tools(server_name, disabled_tools=[], cache=False, force_refresh=True)

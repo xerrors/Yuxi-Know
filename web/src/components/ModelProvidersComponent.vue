@@ -1,16 +1,13 @@
 <template>
   <div class="model-providers-section">
-
     <div class="header-section">
       <div class="header-content">
         <div class="section-title">自定义供应商</div>
-        <p class="section-description">
-          添加自定义的LLM供应商，支持OpenAI兼容的API格式。
-        </p>
+        <p class="section-description">添加自定义的LLM供应商，支持OpenAI兼容的API格式。</p>
       </div>
       <a-button type="primary" @click="openAddCustomProviderModal" class="add-btn lucide-icon-btn">
         <template #icon>
-            <Plus :size="16" />
+          <Plus :size="16" />
         </template>
         添加自定义供应商
       </a-button>
@@ -103,7 +100,9 @@
           <span class="stats-item unavailable"> {{ notModelKeys.length }} 未配置 </span>
         </div>
       </div>
-      <p class="section-description">请在 <code>.env</code> 文件中配置对应的 APIKEY，并重新启动服务</p>
+      <p class="section-description">
+        请在 <code>.env</code> 文件中配置对应的 APIKEY，并重新启动服务
+      </p>
 
       <!-- 已配置的供应商 -->
       <div
@@ -174,9 +173,7 @@
       :width="800"
     >
       <div v-if="providerConfig.loading" class="modal-loading-container">
-        <a-spin
-          :indicator="h(LoaderCircle, { size: 32, color: 'var(--main-color)' })"
-        />
+        <a-spin :indicator="h(LoaderCircle, { size: 32, color: 'var(--main-color)' })" />
         <div class="loading-text">正在获取模型列表...</div>
       </div>
       <div v-else class="modal-config-content">
@@ -357,7 +354,9 @@
             v-model:value="customProviderModal.data.env"
             placeholder="请输入API密钥或环境变量名（如：MY_API_KEY）"
           />
-          <div class="form-help-text">支持直接输入API密钥，或使用环境变量名（如：MY_API_KEY），如无密钥填写"无"。</div>
+          <div class="form-help-text">
+            支持直接输入API密钥，或使用环境变量名（如：MY_API_KEY），如无密钥填写"无"。
+          </div>
         </a-form-item>
 
         <a-form-item label="支持的模型" name="models">
@@ -820,7 +819,6 @@ const testCustomProvider = async (providerId, modelName) => {
 </script>
 
 <style lang="less" scoped>
-
 .custom-providers-section {
   margin-bottom: 24px;
   .custom-provider-card {
@@ -916,7 +914,6 @@ const testCustomProvider = async (providerId, modelName) => {
 }
 
 .builtin-providers-section {
-
   .section-header {
     .providers-stats {
       display: flex;

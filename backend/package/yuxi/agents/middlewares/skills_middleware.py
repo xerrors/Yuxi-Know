@@ -60,7 +60,7 @@ async def get_prompt_metadata(db: AsyncSession | None = None) -> dict[str, Skill
         item.slug: {
             "name": item.name,
             "description": item.description,
-            "path": f"/skills/{item.slug}/SKILL.md",
+            "path": f"/mnt/skills/{item.slug}/SKILL.md",
         }
         for item in skills
     }
@@ -165,27 +165,12 @@ class SkillsMiddleware(AgentMiddleware):
         Args:
             skills_context_name: 上下文中的 skills 列表字段名称（默认 "skills"）
             enable_skills_prompt: 是否启用 skills 提示段注入（默认 True）
-            skills_sources_for_prompt: skills 来源路径（用于提示词展示，默认 ["/skills/"]）
+            skills_sources_for_prompt: skills 来源路径（用于提示词展示，默认 ["/mnt/skills/"]）
         """
         super().__init__()
         self.skills_context_name = skills_context_name
         self.enable_skills_prompt = enable_skills_prompt
-        self.skills_sources_for_prompt = skills_sources_for_prompt or ["/skills/"]
-        # 实例级缓存：避免每次模型调用都查数据库
-        self._dependency_map_cache: dict[str, SkillDependencyNode] | None = None
-        self._prompt_metadata_cache: dict[str, SkillPromptMetadata] | None = None
-
-    async def _get_dependency_map_cached(self) -> dict[str, SkillDependencyNode]:
-        """获取依赖映射（带缓存）"""
-        if self._dependency_map_cache is None:
-            self._dependency_map_cache = await get_dependency_map()
-        return self._dependency_map_cache
-
-    async def _get_prompt_metadata_cached(self) -> dict[str, SkillPromptMetadata]:
-        """获取提示词元数据（带缓存）"""
-        if self._prompt_metadata_cache is None:
-            self._prompt_metadata_cache = await get_prompt_metadata()
-        return self._prompt_metadata_cache
+        self.skills_sources_for_prompt = skills_sources_for_prompt or ["/mnt/skills/"]
 
     async def abefore_agent(self, state: SkillsState, runtime) -> dict[str, Any] | None:
         """在 agent 执行前注入 skills 提示词"""
@@ -198,7 +183,7 @@ class SkillsMiddleware(AgentMiddleware):
             return None
 
         # 从数据库加载 skills 数据（使用缓存）
-        dependency_map = await self._get_dependency_map_cached()
+        dependency_map = await get_dependency_map()
 
         # 获取配置的 skills
         configured_skills = getattr(runtime_context, self.skills_context_name, None) or []
@@ -235,7 +220,7 @@ class SkillsMiddleware(AgentMiddleware):
         runtime_context = request.runtime.context
 
         # 从缓存加载 skills 数据
-        dependency_map = await self._get_dependency_map_cached()
+        dependency_map = await get_dependency_map()
 
         # 1. 获取配置的 skills
         configured_skills = getattr(runtime_context, self.skills_context_name, None) or []
@@ -287,7 +272,7 @@ class SkillsMiddleware(AgentMiddleware):
 
     async def _build_dependency_bundle(self, activated_skills: list[str]) -> dict[str, list[str]]:
         """根据直接激活的 skills 构建依赖包（不包含闭包展开的依赖）"""
-        dependency_map = await self._get_dependency_map_cached()
+        dependency_map = await get_dependency_map()
 
         tools: list[str] = []
         mcps: list[str] = []
@@ -311,7 +296,7 @@ class SkillsMiddleware(AgentMiddleware):
 
     async def _collect_prompt_metadata(self, slugs: list[str]) -> list[SkillPromptMetadata]:
         """收集指定 slugs 的提示词元数据"""
-        prompt_metadata = await self._get_prompt_metadata_cached()
+        prompt_metadata = await get_prompt_metadata()
 
         result: list[SkillPromptMetadata] = []
         seen: set[str] = set()
@@ -419,11 +404,11 @@ class SkillsMiddleware(AgentMiddleware):
             return None
         pure = PurePosixPath(raw if raw.startswith("/") else f"/{raw}")
         parts = [p for p in pure.parts if p not in ("/", "")]
-        if len(parts) != 3:
+        # 只支持 /mnt/skills/{slug}/SKILL.md 格式
+        if len(parts) == 4 and parts[0] == "mnt" and parts[1] == "skills" and parts[3] == "SKILL.md":
+            slug = parts[2]
+        else:
             return None
-        if parts[0] != "skills" or parts[2] != "SKILL.md":
-            return None
-        slug = parts[1]
         if not is_valid_skill_slug(slug):
             return None
         return slug

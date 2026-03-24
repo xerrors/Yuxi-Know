@@ -4,7 +4,9 @@
     <div class="header-section">
       <div class="header-content">
         <div class="section-title">用户管理</div>
-        <p class="section-description">管理系统用户，请谨慎操作。删除用户后该用户将无法登录系统。</p>
+        <p class="section-description">
+          管理系统用户，请谨慎操作。删除用户后该用户将无法登录系统。
+        </p>
       </div>
       <a-button type="primary" @click="showAddUserModal" class="add-btn lucide-icon-btn">
         <template #icon><Plus :size="16" /></template>

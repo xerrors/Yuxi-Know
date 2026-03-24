@@ -154,8 +154,8 @@
                 placeholder="输入问题..."
                 :mention="mentionConfig"
                 :supports-file-upload="supportsFileUpload"
-                :has-state-content="hasAgentStateContent"
                 :is-panel-open="isAgentPanelOpen"
+                :has-active-thread="!!currentChatId"
                 @send="handleSendOrStop"
                 @upload-attachment="handleAttachmentUpload"
                 @toggle-panel="toggleAgentPanel"
@@ -195,17 +195,19 @@
           class="agent-panel-wrapper"
           ref="panelWrapperRef"
           :class="{
-            'is-visible': isAgentPanelOpen && hasAgentStateContent,
+            'is-visible': isAgentPanelOpen,
             'no-transition': isResizing
           }"
           :style="{
-            flexBasis: isAgentPanelOpen && hasAgentStateContent ? `${panelRatio * 100}%` : '0px'
+            flexBasis: isAgentPanelOpen ? `${panelRatio * 100}%` : '0px'
           }"
         >
           <AgentPanel
-            v-if="isAgentPanelOpen && hasAgentStateContent"
+            v-if="isAgentPanelOpen"
             :agent-state="currentAgentState"
             :thread-id="currentChatId"
+            :agent-id="currentThread?.agent_id || currentAgentId"
+            :agent-config-id="selectedAgentConfigId"
             :panel-ratio="panelRatio"
             @refresh="handleAgentStateRefresh"
             @close="toggleAgentPanel"
@@ -320,9 +322,9 @@ const localUIState = reactive({
 // Agent Panel State
 const isAgentPanelOpen = ref(false)
 const isResizing = ref(false)
-const panelRatio = ref(0.4) // 面板宽度比例 (0-1)
+const panelRatio = ref(0.3) // 面板宽度比例 (0-1)
 const panelWrapperRef = ref(null) // 直接操作 DOM
-const minPanelRatio = 0.3 // 最小比例 30%
+const minPanelRatio = 0.2 // 最小比例 20%
 const maxPanelRatio = 0.6 // 最大比例 60%
 let panelContainerWidth = 0
 
@@ -391,33 +393,6 @@ const { mentionConfig } = useAgentMentionConfig({
   availableKnowledgeBases,
   availableMcps,
   availableSkills
-})
-
-const countFiles = (files) => {
-  if (!files) return 0
-  if (Array.isArray(files)) {
-    return files.reduce(
-      (c, item) => c + (item && typeof item === 'object' ? Object.keys(item).length : 0),
-      0
-    )
-  }
-  return typeof files === 'object' ? Object.keys(files).length : 0
-}
-
-const hasAgentStateContent = computed(() => {
-  const s = currentAgentState.value
-  if (!s) return false
-  const todoCount = Array.isArray(s.todos) ? s.todos.length : 0
-  const fileCount = countFiles(s.files)
-  return todoCount > 0 || fileCount > 0
-})
-
-// 监听 hasAgentStateContent 从 false → true 时，自动展开面板
-watch(hasAgentStateContent, (newVal, oldVal) => {
-  if (newVal && !oldVal) {
-    // 从无状态变为有状态时，自动展开面板
-    isAgentPanelOpen.value = true
-  }
 })
 
 const currentThreadMessages = computed(() => threadMessages.value[currentChatId.value] || [])
@@ -518,7 +493,9 @@ const isStreaming = computed(() => {
 })
 const isProcessing = computed(() => isStreaming.value)
 const isSendButtonDisabled = computed(() => {
-  return sendCooldownActive.value || (((!userInput.value || !currentAgent.value) && !isProcessing.value))
+  return (
+    sendCooldownActive.value || ((!userInput.value || !currentAgent.value) && !isProcessing.value)
+  )
 })
 
 const startSendCooldown = () => {
@@ -772,7 +749,13 @@ const ensureActiveThread = async (title = '新的对话') => {
 
 const handleAttachmentUpload = async (files) => {
   if (!files?.length) return
-  if (!AgentValidator.validateAgentIdWithError(currentAgentId.value, '上传附件', handleValidationError))
+  if (
+    !AgentValidator.validateAgentIdWithError(
+      currentAgentId.value,
+      '上传附件',
+      handleValidationError
+    )
+  )
     return
 
   const preferredTitle = files[0]?.name || '新的对话'
@@ -844,27 +827,6 @@ const sendMessage = async ({
     return Promise.reject(error)
   }
 
-  // 如果是新对话，用 fast-model 异步生成标题（不阻塞消息发送）
-  if ((threadMessages.value[threadId] || []).length === 0) {
-    const autoTitle = text.replace(/\s+/g, ' ').trim().slice(0, 2000)
-    if (autoTitle) {
-      void (async () => {
-        try {
-          const generatedTitle = await agentApi.generateTitle(autoTitle, configStore.config?.fast_model)
-          if (generatedTitle) {
-            const finalTitle = generatedTitle.slice(0, 30).replace(/\s+/g, ' ').trim()
-            if (finalTitle) {
-              void updateThread(threadId, finalTitle).catch(() => {})
-            }
-          }
-        } catch (e) {
-          // 失败时使用原始文本作为标题
-          void updateThread(threadId, autoTitle.slice(0, 30)).catch(() => {})
-        }
-      })()
-    }
-  }
-
   const requestData = {
     query: text,
     config: {
@@ -922,6 +884,10 @@ const selectChat = async (chatId) => {
     stopThreadStream(previousThreadId)
     // run 模式下仅断开 SSE 订阅，不取消后台运行任务
     stopRunStreamSubscription(previousThreadId)
+  }
+
+  if (previousThreadId !== chatId) {
+    isAgentPanelOpen.value = false
   }
 
   // 先更新当前线程，确保底部智能体名称与选中项即时同步
@@ -1076,7 +1042,10 @@ const handleSendMessage = async ({ image } = {}) => {
       if (autoTitle) {
         void (async () => {
           try {
-            const generatedTitle = await agentApi.generateTitle(autoTitle, configStore.config?.fast_model)
+            const generatedTitle = await agentApi.generateTitle(
+              autoTitle,
+              configStore.config?.fast_model
+            )
             if (generatedTitle) {
               const finalTitle = generatedTitle.slice(0, 30).replace(/\s+/g, ' ').trim()
               if (finalTitle) {
@@ -1084,6 +1053,7 @@ const handleSendMessage = async ({ image } = {}) => {
               }
             }
           } catch (e) {
+            console.error('Title generation failed:', e)
             // 失败时使用原始文本作为标题
             void updateThread(threadId, autoTitle.slice(0, 30)).catch(() => {})
           }
@@ -1112,6 +1082,31 @@ const handleSendMessage = async ({ image } = {}) => {
       handleChatError(error, 'send')
     }
     return
+  }
+
+  // 如果是新对话，用 fast-model 异步生成标题（不阻塞消息发送）
+  if ((threadMessages.value[threadId] || []).length === 0) {
+    const autoTitle = text.replace(/\s+/g, ' ').trim().slice(0, 2000)
+    if (autoTitle) {
+      void (async () => {
+        try {
+          const generatedTitle = await agentApi.generateTitle(
+            autoTitle,
+            configStore.config?.fast_model
+          )
+          if (generatedTitle) {
+            const finalTitle = generatedTitle.slice(0, 30).replace(/\s+/g, ' ').trim()
+            if (finalTitle) {
+              void updateThread(threadId, finalTitle).catch(() => {})
+            }
+          }
+        } catch (e) {
+          console.error('Title generation failed:', e)
+          // 失败时使用原始文本作为标题
+          void updateThread(threadId, autoTitle.slice(0, 30)).catch(() => {})
+        }
+      })()
+    }
   }
 
   threadState.isStreaming = true
@@ -1282,8 +1277,13 @@ const handleAgentStateRefresh = async (threadId = null) => {
   await fetchAgentState(currentAgentId.value, chatId)
 }
 
-const toggleAgentPanel = () => {
-  isAgentPanelOpen.value = !isAgentPanelOpen.value
+const toggleAgentPanel = async () => {
+  const nextOpen = !isAgentPanelOpen.value
+  isAgentPanelOpen.value = nextOpen
+
+  if (nextOpen) {
+    await handleAgentStateRefresh()
+  }
 }
 
 // 处理面板宽度调整（使用比例）
@@ -1735,7 +1735,7 @@ watch(currentChatId, (threadId, oldThreadId) => {
   max-width: 800px;
   margin: 0 auto;
   flex-grow: 1;
-  padding: 1rem 1.25rem;
+  padding: 1rem 1.5rem;
   display: flex;
   flex-direction: column;
 }
