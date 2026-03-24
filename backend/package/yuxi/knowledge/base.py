@@ -629,12 +629,13 @@ class KnowledgeBase(ABC):
             return query_params_meta.get("options", {})
         return {}
 
-    def get_database_info(self, db_id: str) -> dict | None:
+    def get_database_info(self, db_id: str, include_files: bool = True) -> dict | None:
         """
         获取数据库详细信息
 
         Args:
             db_id: 数据库ID
+            include_files: 是否包含文件信息，默认为True（保持向后兼容）
 
         Returns:
             数据库信息或None
@@ -648,41 +649,49 @@ class KnowledgeBase(ABC):
         # 检查并修复异常的processing状态
         self._check_and_fix_processing_status(db_id)
 
-        # 获取文件信息
-        db_files = {}
-        for file_id, file_info in self.files_meta.items():
-            if file_info.get("database_id") == db_id:
-                created_at = self._normalize_timestamp(file_info.get("created_at"))
-                db_files[file_id] = {
-                    "file_id": file_id,
-                    "filename": file_info.get("filename", ""),
-                    "path": file_info.get("path", ""),
-                    "markdown_file": file_info.get("markdown_file", ""),
-                    "type": file_info.get("file_type", ""),
-                    "status": file_info.get("status", "done"),
-                    "created_at": created_at,
-                    "processing_params": file_info.get("processing_params", None),
-                    "is_folder": file_info.get("is_folder", False),
-                    "parent_id": file_info.get("parent_id", None),
-                }
+        # 统计文件数量（始终计算，即使不加载文件详情）
+        db_file_count = sum(1 for file_info in self.files_meta.values() if file_info.get("database_id") == db_id)
+        meta["row_count"] = db_file_count
 
-        # 按创建时间倒序排序文件列表
-        sorted_files = dict(
-            sorted(
-                db_files.items(),
-                key=lambda item: item[1].get("created_at") or "",
-                reverse=True,
+        # 仅在需要时加载文件详情
+        if include_files:
+            db_files = {}
+            for file_id, file_info in self.files_meta.items():
+                if file_info.get("database_id") == db_id:
+                    created_at = self._normalize_timestamp(file_info.get("created_at"))
+                    db_files[file_id] = {
+                        "file_id": file_id,
+                        "filename": file_info.get("filename", ""),
+                        "path": file_info.get("path", ""),
+                        "markdown_file": file_info.get("markdown_file", ""),
+                        "type": file_info.get("file_type", ""),
+                        "status": file_info.get("status", "done"),
+                        "created_at": created_at,
+                        "processing_params": file_info.get("processing_params", None),
+                        "is_folder": file_info.get("is_folder", False),
+                        "parent_id": file_info.get("parent_id", None),
+                    }
+
+            # 按创建时间倒序排序文件列表
+            sorted_files = dict(
+                sorted(
+                    db_files.items(),
+                    key=lambda item: item[1].get("created_at") or "",
+                    reverse=True,
+                )
             )
-        )
 
-        meta["files"] = sorted_files
-        meta["row_count"] = len(sorted_files)
+            meta["files"] = sorted_files
+
         meta["status"] = "已连接"
         return meta
 
-    def get_databases(self) -> dict:
+    def get_databases(self, include_files: bool = False) -> dict:
         """
         获取所有数据库信息
+
+        Args:
+            include_files: 是否包含文件信息，默认False以减少响应大小
 
         Returns:
             数据库列表
@@ -698,34 +707,39 @@ class KnowledgeBase(ABC):
             db_dict = meta.copy()
             db_dict["db_id"] = db_id
 
-            # 获取文件信息
-            db_files = {}
-            for file_id, file_info in self.files_meta.items():
-                if file_info.get("database_id") == db_id:
-                    created_at = self._normalize_timestamp(file_info.get("created_at"))
-                    db_files[file_id] = {
-                        "file_id": file_id,
-                        "filename": file_info.get("filename", ""),
-                        "path": file_info.get("path", ""),
-                        "markdown_file": file_info.get("markdown_file", ""),
-                        "type": file_info.get("file_type", ""),
-                        "status": file_info.get("status", "done"),
-                        "created_at": created_at,
-                        "is_folder": file_info.get("is_folder", False),
-                        "parent_id": file_info.get("parent_id", None),
-                    }
+            # 统计文件数量（始终计算，即使不加载文件详情）
+            db_file_count = sum(1 for file_info in self.files_meta.values() if file_info.get("database_id") == db_id)
+            db_dict["row_count"] = db_file_count
 
-            # 按创建时间倒序排序文件列表
-            sorted_files = dict(
-                sorted(
-                    db_files.items(),
-                    key=lambda item: item[1].get("created_at") or "",
-                    reverse=True,
+            # 仅在需要时加载文件详情
+            if include_files:
+                db_files = {}
+                for file_id, file_info in self.files_meta.items():
+                    if file_info.get("database_id") == db_id:
+                        created_at = self._normalize_timestamp(file_info.get("created_at"))
+                        db_files[file_id] = {
+                            "file_id": file_id,
+                            "filename": file_info.get("filename", ""),
+                            "path": file_info.get("path", ""),
+                            "markdown_file": file_info.get("markdown_file", ""),
+                            "type": file_info.get("file_type", ""),
+                            "status": file_info.get("status", "done"),
+                            "created_at": created_at,
+                            "is_folder": file_info.get("is_folder", False),
+                            "parent_id": file_info.get("parent_id", None),
+                        }
+
+                # 按创建时间倒序排序文件列表
+                sorted_files = dict(
+                    sorted(
+                        db_files.items(),
+                        key=lambda item: item[1].get("created_at") or "",
+                        reverse=True,
+                    )
                 )
-            )
 
-            db_dict["files"] = sorted_files
-            db_dict["row_count"] = len(sorted_files)
+                db_dict["files"] = sorted_files
+
             db_dict["status"] = "已连接"
             databases.append(db_dict)
 

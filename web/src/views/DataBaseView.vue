@@ -200,7 +200,7 @@
           <div class="info">
             <h3>{{ database.name }}</h3>
             <p>
-              <span>{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span>
+              <span>{{ database.row_count || 0 }} 文件</span>
               <span class="created-time-inline" v-if="database.created_at">
                 {{ formatCreatedTime(database.created_at) }}
               </span>

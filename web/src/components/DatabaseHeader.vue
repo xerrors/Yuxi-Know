@@ -23,9 +23,7 @@
           >ID:
           <span style="user-select: all">{{ database.db_id || 'N/A' }}</span>
         </span>
-        <span class="file-count"
-          >{{ database.files ? Object.keys(database.files).length : 0 }} 文件</span
-        >
+        <span class="file-count">{{ database.row_count || 0 }} 文件</span>
         <a-tag color="blue">{{ database.embed_info?.name }}</a-tag>
         <a-tag
           :color="getKbTypeColor(database.kb_type || 'lightrag')"

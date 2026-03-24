@@ -181,14 +181,14 @@ class KnowledgeBaseManager:
         for row in rows:
             kb_type = row.kb_type or "lightrag"
             kb_instance = self._get_or_create_kb_instance(kb_type)
-            db_info = kb_instance.get_database_info(row.db_id)
+            db_info = kb_instance.get_database_info(row.db_id, include_files=False)
             if not db_info and kb_type not in metadata_reloaded_types:
                 try:
                     await kb_instance._load_metadata()
                     metadata_reloaded_types.add(kb_type)
                 except Exception as e:
                     logger.warning(f"Failed to reload metadata for kb_type={kb_type}: {e}")
-                db_info = kb_instance.get_database_info(row.db_id)
+                db_info = kb_instance.get_database_info(row.db_id, include_files=False)
 
             if not db_info:
                 logger.warning(f"Skip database due to missing metadata: db_id={row.db_id}, kb_type={kb_type}")
