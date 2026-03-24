@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from deepagents.backends import FilesystemBackend
+import pytest
 
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 
@@ -12,8 +13,8 @@ def test_skills_backend_read_outside_root_returns_error_message(monkeypatch) -> 
     monkeypatch.setattr(FilesystemBackend, "read", _fake_read)
 
     backend = SelectedSkillsReadonlyBackend(selected_slugs=["reporter"])
-    result = backend.read("/reporter/SKILL.md")
-    assert result.startswith("Error: Path:/app/package/yuxi/agents/skills/buildin/reporter outside root directory")
+    with pytest.raises(ValueError, match="outside root directory"):
+        backend.read("/reporter/SKILL.md")
 
 
 def test_skills_backend_ls_info_outside_root_returns_empty(monkeypatch) -> None:
@@ -23,4 +24,5 @@ def test_skills_backend_ls_info_outside_root_returns_empty(monkeypatch) -> None:
     monkeypatch.setattr(FilesystemBackend, "ls_info", _fake_ls_info)
 
     backend = SelectedSkillsReadonlyBackend(selected_slugs=["reporter"])
-    assert backend.ls_info("/reporter") == []
+    with pytest.raises(ValueError, match="outside root directory"):
+        backend.ls_info("/reporter")

@@ -41,6 +41,7 @@
 - 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
 - 添加 subagents 的支持，支持在 web 中添加 subagents
 - 将内置 skills 的初始化从符号链接改为复制，以兼容沙盒绑定场景
+- 修复并统一 lite 模式下的测试脚本：更新 sandbox/provider 接口适配、viewer 文件系统测试数据构造方式、conversation/upload 状态断言与路由存在性断言，确保“非数据库场景”下核心 pytest 与 E2E 脚本可稳定执行
 
 ## v0.5
 

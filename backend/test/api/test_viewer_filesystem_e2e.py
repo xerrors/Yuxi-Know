@@ -15,10 +15,10 @@ if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
 
-def _get_provider():
-    from yuxi.agents.backends import get_sandbox_provider
+def _make_sandbox_backend(thread_id: str):
+    from yuxi.agents.backends.sandbox.backend import ProvisionerSandboxBackend
 
-    return get_sandbox_provider()
+    return ProvisionerSandboxBackend(thread_id=thread_id)
 
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5050").rstrip("/")
@@ -108,46 +108,42 @@ class ViewerFilesystemE2ETester:
         await self.create_thread()
 
         assert self.thread_id
-        provider = _get_provider()
-        sandbox = await asyncio.to_thread(provider.acquire, self.thread_id)
-        try:
-            commands = [
-                "mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/outputs",
-                "printf 'print(42)\\n' > /home/yuxi/user-data/workspace/demo.py",
-                "printf 'root-file\\n' > /home/yuxi/user-data/root_file.txt",
-                "printf 'viewer-output\\n' > /home/yuxi/user-data/outputs/result.txt",
-            ]
-            for command in commands:
-                result = await asyncio.to_thread(sandbox.execute, command)
-                if result.exit_code != 0:
-                    raise RuntimeError(f"command failed: {command}\n{result.output}")
+        sandbox = _make_sandbox_backend(self.thread_id)
+        commands = [
+            "mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/outputs",
+            "printf 'print(42)\\n' > /home/yuxi/user-data/workspace/demo.py",
+            "printf 'root-file\\n' > /home/yuxi/user-data/root_file.txt",
+            "printf 'viewer-output\\n' > /home/yuxi/user-data/outputs/result.txt",
+        ]
+        for command in commands:
+            result = await asyncio.to_thread(sandbox.execute, command)
+            if result.exit_code != 0:
+                raise RuntimeError(f"command failed: {command}\n{result.output}")
 
-            root_paths = {str(e.get("path", "")) for e in await self.tree("/")}
-            if "/home/yuxi/user-data/" not in root_paths:
-                raise RuntimeError(f"viewer root missing user-data: {sorted(root_paths)}")
+        root_paths = {str(e.get("path", "")) for e in await self.tree("/")}
+        if "/home/yuxi/user-data/" not in root_paths:
+            raise RuntimeError(f"viewer root missing user-data: {sorted(root_paths)}")
 
-            user_data_paths = {str(e.get("path", "")) for e in await self.tree("/home/yuxi/user-data")}
-            if "/home/yuxi/user-data/root_file.txt" not in user_data_paths:
-                raise RuntimeError(f"viewer user-data missing root_file.txt: {sorted(user_data_paths)}")
+        user_data_paths = {str(e.get("path", "")) for e in await self.tree("/home/yuxi/user-data")}
+        if "/home/yuxi/user-data/root_file.txt" not in user_data_paths:
+            raise RuntimeError(f"viewer user-data missing root_file.txt: {sorted(user_data_paths)}")
 
-            workspace_paths = {str(e.get("path", "")) for e in await self.tree("/home/yuxi/user-data/workspace")}
-            if "/home/yuxi/user-data/workspace/demo.py" not in workspace_paths:
-                raise RuntimeError(f"viewer workspace missing demo.py: {sorted(workspace_paths)}")
+        workspace_paths = {str(e.get("path", "")) for e in await self.tree("/home/yuxi/user-data/workspace")}
+        if "/home/yuxi/user-data/workspace/demo.py" not in workspace_paths:
+            raise RuntimeError(f"viewer workspace missing demo.py: {sorted(workspace_paths)}")
 
-            content = await self.file("/home/yuxi/user-data/workspace/demo.py")
-            if content != "print(42)\n":
-                raise RuntimeError(f"unexpected viewer file content: {content!r}")
+        content = await self.file("/home/yuxi/user-data/workspace/demo.py")
+        if content != "print(42)\n":
+            raise RuntimeError(f"unexpected viewer file content: {content!r}")
 
-            content_disposition, payload = await self.download("/home/yuxi/user-data/outputs/result.txt")
-            if "result.txt" not in content_disposition:
-                raise RuntimeError(f"unexpected content-disposition: {content_disposition}")
-            if payload != b"viewer-output\n":
-                raise RuntimeError(f"unexpected download payload: {payload!r}")
+        content_disposition, payload = await self.download("/home/yuxi/user-data/outputs/result.txt")
+        if "result.txt" not in content_disposition:
+            raise RuntimeError(f"unexpected content-disposition: {content_disposition}")
+        if payload != b"viewer-output\n":
+            raise RuntimeError(f"unexpected download payload: {payload!r}")
 
-            print("[PASS] Viewer filesystem E2E completed")
-            print(f"thread_id={self.thread_id}")
-        finally:
-            await asyncio.to_thread(provider.destroy, self.thread_id)
+        print("[PASS] Viewer filesystem E2E completed")
+        print(f"thread_id={self.thread_id}")
 
 
 async def main() -> None:

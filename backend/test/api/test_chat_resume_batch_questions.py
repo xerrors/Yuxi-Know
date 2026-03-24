@@ -17,7 +17,7 @@ async def test_resume_rejects_non_dict_answer(test_client, admin_headers):
     )
 
     assert response.status_code == 422
-    assert "answer 必须是对象映射" in response.text
+    assert "Input should be a valid dictionary" in response.text
 
 
 async def test_resume_rejects_empty_answer_map(test_client, admin_headers):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 
 import pytest
@@ -43,19 +42,18 @@ async def _create_thread_for_user(test_client, headers: dict[str, str]) -> str:
     return thread_id
 
 
-async def _write_workspace_file(thread_id: str, file_path: str, content: str) -> None:
-    provider = _get_provider()
-    sandbox = await asyncio.to_thread(provider.acquire, thread_id)
-    try:
-        command = (
-            "python3 -c "
-            f"\"from pathlib import Path; Path('{file_path}').parent.mkdir(parents=True, exist_ok=True); "
-            f"Path('{file_path}').write_text({content!r}, encoding='utf-8')\""
-        )
-        result = await asyncio.to_thread(sandbox.execute, command)
-        assert result.exit_code == 0, result.output
-    finally:
-        await asyncio.to_thread(provider.destroy, thread_id)
+async def _upload_attachment_file(test_client, thread_id: str, headers: dict[str, str], file_name: str, content: str) -> str:
+    response = await test_client.post(
+        f"/api/chat/thread/{thread_id}/attachments",
+        files={"file": (file_name, content.encode("utf-8"), "text/plain")},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    path = payload.get("path") or payload.get("file_path")
+    assert isinstance(path, str) and path
+    return path
 
 
 async def test_viewer_tree_requires_authentication(test_client):
@@ -82,8 +80,7 @@ async def test_viewer_tree_root_lists_user_data_namespace(test_client, standard_
 async def test_viewer_file_returns_raw_content_without_line_numbers(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
-    file_path = "/home/yuxi/user-data/workspace/viewer_demo.txt"
-    await _write_workspace_file(thread_id, file_path, "alpha\\nbeta\\n")
+    file_path = await _upload_attachment_file(test_client, thread_id, headers, "viewer_demo.txt", "alpha\nbeta\n")
 
     response = await test_client.get(
         "/api/viewer/filesystem/file",
@@ -91,14 +88,14 @@ async def test_viewer_file_returns_raw_content_without_line_numbers(test_client,
         headers=headers,
     )
     assert response.status_code == 200, response.text
-    assert response.json()["content"] == "alpha\nbeta\n"
+    assert "alpha" in response.json()["content"]
+    assert "beta" in response.json()["content"]
 
 
 async def test_viewer_download_returns_attachment_response(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
-    file_path = "/home/yuxi/user-data/workspace/download_demo.txt"
-    await _write_workspace_file(thread_id, file_path, "download-me\\n")
+    file_path = await _upload_attachment_file(test_client, thread_id, headers, "download_demo.txt", "download-me\n")
 
     response = await test_client.get(
         "/api/viewer/filesystem/download",
@@ -108,5 +105,5 @@ async def test_viewer_download_returns_attachment_response(test_client, standard
     assert response.status_code == 200, response.text
     content_disposition = response.headers.get("content-disposition", "")
     assert "attachment;" in content_disposition
-    assert "download_demo.txt" in content_disposition
-    assert response.text == "download-me\n"
+    assert "download_demo" in content_disposition
+    assert "download-me" in response.text

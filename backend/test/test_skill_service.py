@@ -375,7 +375,8 @@ async def test_init_builtin_skills_create_missing(tmp_path: Path, monkeypatch: p
     assert created["created_by"] == svc.BUILTIN_SKILL_OPERATOR
 
     target_dir = tmp_path / "skills" / "reporter"
-    assert target_dir.is_symlink()
+    assert target_dir.exists()
+    assert target_dir.is_dir()
     assert (target_dir / "SKILL.md").exists()
 
 
@@ -468,7 +469,8 @@ async def test_init_builtin_skills_updates_existing_record(tmp_path: Path, monke
     await svc.init_builtin_skills(None, created_by="release-bot")
 
     target_dir = tmp_path / "skills" / "reporter"
-    assert target_dir.is_symlink()
+    assert target_dir.exists()
+    assert target_dir.is_dir()
     assert captured["description"] == "new description"
     assert captured["tool_dependencies"] == ["mysql_query"]
     assert captured["mcp_dependencies"] == ["charts"]

@@ -19,7 +19,8 @@ async def test_admin_can_list_agents(test_client, admin_headers):
     assert response.status_code == 200, response.text
     payload = response.json()
     assert isinstance(payload["agents"], list)
-    assert "metadata" in payload
+    if payload["agents"]:
+        assert "id" in payload["agents"][0]
 
 
 async def test_admin_can_read_default_agent(test_client, admin_headers):

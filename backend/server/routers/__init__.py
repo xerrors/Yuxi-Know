@@ -6,7 +6,6 @@ from server.routers.auth_router import auth
 from server.routers.chat_router import chat
 from server.routers.dashboard_router import dashboard
 from server.routers.department_router import department
-from server.routers.filesystem_router import filesystem_router, viewer_filesystem_router
 from server.routers.mcp_router import mcp
 from server.routers.skill_router import skills
 from server.routers.subagent_router import subagents_router
@@ -14,6 +13,7 @@ from server.routers.system_router import system
 from server.routers.task_router import tasks
 from server.routers.tool_router import tools
 from server.routers.apikey_router import apikey_router
+from server.routers.filesystem_router import filesystem_router
 
 _LITE_MODE = os.environ.get("LITE_MODE", "").lower() in ("true", "1")
 
@@ -31,8 +31,7 @@ router.include_router(skills)  # /api/system/skills/*
 router.include_router(subagents_router)  # /api/system/subagents/*
 router.include_router(tools)  # /api/system/tools/*
 router.include_router(apikey_router)  # /api/apikey/*
-router.include_router(filesystem_router)  # /api/filesystem/*
-router.include_router(viewer_filesystem_router)  # /api/viewer/filesystem/*
+router.include_router(filesystem_router)  # /api/viewer/filesystem/*
 
 if not _LITE_MODE:
     from server.routers.graph_router import graph
