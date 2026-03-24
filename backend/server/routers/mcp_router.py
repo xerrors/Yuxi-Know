@@ -231,14 +231,13 @@ async def test_mcp_server(
         await get_server_or_404(db, name)
 
         try:
-            tools = await get_all_mcp_tools(name, raise_on_error=True)
+            tools = await get_all_mcp_tools(name)
             return {
                 "success": True,
                 "message": f"连接成功，共发现 {len(tools)} 个工具",
                 "tool_count": len(tools),
             }
         except Exception as test_error:
-            logger.warning(f"MCP server test failed for '{name}': {test_error}")
             raise HTTPException(status_code=500, detail=f"连接失败: {str(test_error)}")
     except HTTPException:
         raise

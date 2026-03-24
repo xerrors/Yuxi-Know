@@ -11,6 +11,7 @@
 - 集成 Memory，基于 deepagents 的文件后端实现
 - 添加自定义向量模型和 rerank 模型的配置，在网页上面
 - 调研轻便的文件展示与编辑器
+- 移除 TODO 的模块与设计，移除这个中间件。
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
@@ -59,6 +60,8 @@
 - 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi-Know/pull/470)
 - 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)
 - 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi-Know/issues/453) [#475](https://github.com/xerrors/Yuxi-Know/pull/475)
+- 修复沙盒后端接入回归：补齐 composite backend 的 `sandbox_backend` 参数、限制 `/api/sandbox/prepare` 仅允许访问当前用户线程、确保 `release()` 之后的 `destroy()` 会真正停止热池容器，并恢复 docker-compose 的完整模式默认值
+- 重构沙盒为 deer-flow 风格的 AIO provider：切换为 thread-local sandbox、统一 `/mnt/user-data/{workspace,uploads,outputs}` 固定虚拟路径、移除公开 `/api/sandbox/*` 生命周期接口，并补充 lite 模式下的 provider 生命周期、filesystem API 与 sandbox 复用/隔离 E2E 验证
 
 ## v0.4
 
@@ -84,6 +87,11 @@
 - 修复消息中断后消息消失的问题，并改善异常效果
 - 修复当前版本如果调用结果为空的时候，工具调用状态会一直处于调用状态，尽管调用是成功的
 - 修复检索配置实际未生效的问题
+- 修复 sandbox 文件系统 `ls` 在异常输出下触发 `KeyError: 'path'` 的问题，并将工具调用异常降级为错误消息，避免直接中断聊天 stream
+- 修复智能体状态面板中文件树仍依赖 `agent_state.files` 的问题，改为通过真实 `/api/filesystem/*` 接口按层懒加载后端可见文件系统，并让输入框下方状态按钮常态化打开工作区视图
+- 为工作台新增 viewer-oriented filesystem service 与 `/api/viewer/filesystem/*` 接口，解耦 agent backend 语义，支持真实目录浏览、原始文件读取与下载
+- 重写沙盒技术文档，明确 thread-local sandbox、viewer-oriented filesystem service、`/mnt` 命名空间、skills 可见性与当前实现边界，替换过时的 `/api/sandbox/*` 与 user-level 设计描述
+- 收紧沙盒遗留代码：修复未注册 `sandbox_router` 中残留的 user/thread 参数错位，改进宿主机挂载路径映射逻辑，并为 remote sandbox provisioner 增加基础 URL 校验与销毁失败日志
 
 ### 破坏性更新
 

@@ -8,7 +8,7 @@ from langchain.agents.middleware import (
 )
 
 from yuxi.agents import BaseAgent, load_chat_model
-from yuxi.agents.backends import create_agent_composite_backend
+from yuxi.agents.backends import create_agent_composite_backend, resolve_sandbox_backend
 from yuxi.agents.middlewares import (
     RuntimeConfigMiddleware,
     SummaryOffloadMiddleware,
@@ -19,10 +19,18 @@ from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 from yuxi.services.mcp_service import get_tools_from_all_servers
 from yuxi.services.subagent_service import get_subagents_from_names
 
+from .prompt import PROMPT
 
 def _create_fs_backend(rt):
-    """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+    """创建文件存储后端（支持沙盒执行）
+
+    从 runtime context 获取 user_id 和 thread_id，
+    如果有则创建沙盒后端作为默认后端。
+    """
+    context = getattr(rt, "context", None)
+    thread_id = getattr(context, "thread_id", None) or ""
+    sandbox_backend = resolve_sandbox_backend(thread_id)
+    return create_agent_composite_backend(rt, sandbox_backend=sandbox_backend)
 
 
 class ChatbotAgent(BaseAgent):
@@ -35,7 +43,7 @@ class ChatbotAgent(BaseAgent):
             "帮我写一封商务邮件",
             "解释一下什么是机器学习",
             "推荐几本好书",
-            "如何提高工作效率？"
+            "如何提高工作效率？",
         ]
     }
 
@@ -90,11 +98,13 @@ class ChatbotAgent(BaseAgent):
 
         context = context or self.context_schema()  # 获取上下文配置
 
+        system_prompt = PROMPT.strip() + "\n\n" + (context.system_prompt or "")
+
         # 使用 create_agent 创建智能体
         # 注意：tools 参数由 RuntimeConfigMiddleware 在 wrap_model_call 中动态设置
         graph = create_agent(
             model=load_chat_model(fully_specified_name=context.model),
-            system_prompt=context.system_prompt,
+            system_prompt=system_prompt.strip(),
             middleware=await self._build_middlewares(context),
             checkpointer=await self._get_checkpointer(),
         )

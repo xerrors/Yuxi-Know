@@ -10,8 +10,12 @@ from langchain.agents.middleware import (
 )
 
 from yuxi.agents import BaseAgent, load_chat_model
-from yuxi.agents.backends import create_agent_composite_backend
-from yuxi.agents.middlewares import RuntimeConfigMiddleware, SummaryOffloadMiddleware, save_attachments_to_fs
+from yuxi.agents.backends import create_agent_composite_backend, resolve_sandbox_backend
+from yuxi.agents.middlewares import (
+    RuntimeConfigMiddleware,
+    SummaryOffloadMiddleware,
+    save_attachments_to_fs,
+)
 from yuxi.agents.middlewares.knowledge_base_middleware import KnowledgeBaseMiddleware
 from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 from yuxi.agents.toolkits.buildin.tools import _create_tavily_search
@@ -24,7 +28,10 @@ from .context import DeepContext
 
 def _create_fs_backend(rt):
     """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+    context = getattr(rt, "context", None)
+    thread_id = getattr(context, "thread_id", None) or ""
+    sandbox_backend = resolve_sandbox_backend(thread_id)
+    return create_agent_composite_backend(rt, sandbox_backend=sandbox_backend)
 
 
 class DeepAgent(BaseAgent):

@@ -1,6 +1,36 @@
 from deepagents.backends import CompositeBackend, StateBackend
 
-from .composite import create_agent_composite_backend
+from .composite import (
+    create_agent_composite_backend,
+    resolve_sandbox_backend,
+    resolve_sandbox_backend_async,
+)
+from .sandbox import (
+    IDLE_CHECK_INTERVAL,
+    LARGE_TOOL_RESULTS_DIR,
+    OUTPUTS_DIR,
+    SKILLS_PATH,
+    THREADS_DIR,
+    UPLOADS_DIR,
+    USER_DATA_PATH,
+    VIRTUAL_PATH_PREFIX,
+    WORKSPACE_DIR,
+    LocalContainerBackend,
+    RemoteSandboxBackend,
+    SandboxBackend,
+    SandboxInfo,
+    YuxiSandboxBackend,
+    YuxiSandboxProvider,
+    get_container_prefix,
+    get_idle_timeout,
+    get_max_replicas,
+    get_sandbox_base_port,
+    get_sandbox_host,
+    get_sandbox_image,
+    get_sandbox_provisioner_url,
+    get_sandbox_security_opts,
+    get_sandbox_provider,
+)
 from .skills_backend import SelectedSkillsReadonlyBackend
 
 __all__ = [
@@ -8,4 +38,31 @@ __all__ = [
     "StateBackend",
     "SelectedSkillsReadonlyBackend",
     "create_agent_composite_backend",
+    "resolve_sandbox_backend",
+    "resolve_sandbox_backend_async",
+    "SandboxBackend",
+    "SandboxInfo",
+    "LocalContainerBackend",
+    "RemoteSandboxBackend",
+    "YuxiSandboxBackend",
+    "YuxiSandboxProvider",
+    "get_sandbox_provider",
+    # Config constants
+    "VIRTUAL_PATH_PREFIX",
+    "USER_DATA_PATH",
+    "SKILLS_PATH",
+    "WORKSPACE_DIR",
+    "OUTPUTS_DIR",
+    "UPLOADS_DIR",
+    "LARGE_TOOL_RESULTS_DIR",
+    "THREADS_DIR",
+    "IDLE_CHECK_INTERVAL",
+    "get_sandbox_image",
+    "get_sandbox_base_port",
+    "get_container_prefix",
+    "get_idle_timeout",
+    "get_max_replicas",
+    "get_sandbox_host",
+    "get_sandbox_provisioner_url",
+    "get_sandbox_security_opts",
 ]
