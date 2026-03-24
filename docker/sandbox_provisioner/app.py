@@ -62,7 +62,7 @@ class MemoryProvisionerBackend:
         return template
 
     def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
-        del thread_id
+        _ = thread_id  # unused in memory backend
         with self._lock:
             existing = self._records.get(sandbox_id)
             if existing is not None:
@@ -240,31 +240,16 @@ class LocalContainerProvisionerBackend:
                     raise RuntimeError(f"sandbox {sandbox_id} is not ready at {record.sandbox_url}")
                 return record
 
-            # 检测是否是 Windows 绝对路径 (如 D:/ 或 D:\)
-            threads_root_str = self._threads_host_path
-            is_windows_path = len(threads_root_str) >= 2 and threads_root_str[1] == ":"
+            threads_root = Path(self._threads_host_path).resolve()
+            thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
+            try:
+                thread_user_data.relative_to(threads_root)
+            except ValueError as exc:
+                raise ValueError("thread_id resolved outside threads host root") from exc
+            thread_user_data.mkdir(parents=True, exist_ok=True)
 
-            if is_windows_path:
-                # Windows 路径，直接使用，不调用 resolve()
-                threads_root = Path(threads_root_str)
-                thread_user_data = threads_root / safe_thread_id / "user-data"
-                # Windows 路径下无法在 Linux 容器内创建目录，跳过 mkdir
-            else:
-                threads_root = Path(threads_root_str).resolve()
-                thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
-                try:
-                    thread_user_data.relative_to(threads_root)
-                except ValueError as exc:
-                    raise ValueError("thread_id resolved outside threads host root") from exc
-                thread_user_data.mkdir(parents=True, exist_ok=True)
-
-            skills_path_str = self._skills_host_path
-            is_skills_windows = len(skills_path_str) >= 2 and skills_path_str[1] == ":"
-            if is_skills_windows:
-                skills_path = Path(skills_path_str)
-            else:
-                skills_path = Path(skills_path_str)
-                skills_path.mkdir(parents=True, exist_ok=True)
+            skills_path = Path(self._skills_host_path)
+            skills_path.mkdir(parents=True, exist_ok=True)
 
             container_name = self._container_name(sandbox_id)
             run_kwargs = {
@@ -279,11 +264,6 @@ class LocalContainerProvisionerBackend:
                 "volumes": {
                     str(thread_user_data): {"bind": "/home/gem/user-data", "mode": "rw"},
                     str(skills_path): {"bind": "/skills", "mode": "ro"},
-                },
-                "tmpfs": "/tmp:size=256m,mode=1777",
-                "environment": {
-                    "HOME": "/home/gem/user-data",
-                    "TMPDIR": "/tmp",
                 },
                 "ports": {f"{self._container_port}/tcp": None},
                 "security_opt": ["seccomp=unconfined"],
@@ -345,12 +325,10 @@ class KubernetesProvisionerBackend:
             "SANDBOX_IMAGE",
             "enterprise-public-cn-beijing.cr.volces.com/vefaas-public/all-in-one-sandbox:latest",
         )
+        self._skill_pvc = os.getenv("SKILLS_PVC", "yuxi-skills")
+        self._thread_pvc = os.getenv("THREAD_PVC", "yuxi-thread")
+        self._node_host = os.getenv("NODE_HOST", "host.docker.internal")
         self._container_port = int(os.getenv("SANDBOX_CONTAINER_PORT", "8080"))
-        self._shared_userdata_pvc = os.getenv("K8S_SHARED_USERDATA_PVC", "shared-userdata-pvc")
-        self._shared_skills_pvc = os.getenv("K8S_SHARED_SKILLS_PVC", "shared-skills-pvc")
-        self._allow_shared_pvc_reuse = os.getenv("K8S_ALLOW_SHARED_PVC_REUSE", "false").strip().lower() == "true"
-        self._ready_timeout_seconds = int(os.getenv("SANDBOX_READY_TIMEOUT_SECONDS", "60"))
-        self._ready_poll_interval_seconds = max(1, int(os.getenv("SANDBOX_READY_POLL_INTERVAL_SECONDS", "2")))
 
         kubeconfig_path = os.getenv("KUBECONFIG_PATH")
         if kubeconfig_path:
@@ -365,284 +343,81 @@ class KubernetesProvisionerBackend:
         self._client = client
 
     @staticmethod
-    def _validate_thread_id(thread_id: str) -> str:
-        candidate = str(thread_id or "").strip()
-        if not candidate:
-            raise ValueError("thread_id is required")
-        if any(ch in candidate for ch in ("/", "\\", "\x00")):
-            raise ValueError("thread_id must be a single safe path segment")
-        if candidate in {".", ".."} or ".." in candidate:
-            raise ValueError("thread_id contains invalid path traversal sequence")
-        return candidate
-
-    @staticmethod
-    def _sanitize_k8s_name(value: str) -> str:
-        sanitized = "".join(ch if ch.isalnum() else "-" for ch in value.strip().lower())
-        while "--" in sanitized:
-            sanitized = sanitized.replace("--", "-")
-        sanitized = sanitized.strip("-")
-        return sanitized[:40] or "sandbox"
-
-    def _thread_subpath(self, thread_id: str) -> str:
-        safe_thread_id = self._validate_thread_id(thread_id)
-        return f"threads/{safe_thread_id}/user-data"
-
-    @staticmethod
     def _pod_name(sandbox_id: str) -> str:
-        safe_id = KubernetesProvisionerBackend._sanitize_k8s_name(sandbox_id)
-        return f"sandbox-{safe_id}"
+        return f"sandbox-{sandbox_id}"
 
     @staticmethod
     def _service_name(sandbox_id: str) -> str:
-        safe_id = KubernetesProvisionerBackend._sanitize_k8s_name(sandbox_id)
-        return f"sandbox-{safe_id}"
-
-    def _sandbox_url(self, sandbox_id: str) -> str:
-        service_name = self._service_name(sandbox_id)
-        return f"http://{service_name}.{self._namespace}.svc.cluster.local:{self._container_port}"
-
-    def _read_pvc(self, pvc_name: str):
-        from kubernetes.client.rest import ApiException
-
-        try:
-            return self._core_api.read_namespaced_persistent_volume_claim(
-                name=pvc_name,
-                namespace=self._namespace,
-            )
-        except ApiException as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def _read_pod(self, sandbox_id: str):
-        from kubernetes.client.rest import ApiException
-
-        pod_name = self._pod_name(sandbox_id)
-        try:
-            return self._core_api.read_namespaced_pod(name=pod_name, namespace=self._namespace)
-        except ApiException as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def _read_service(self, sandbox_id: str):
-        from kubernetes.client.rest import ApiException
-
-        service_name = self._service_name(sandbox_id)
-        try:
-            return self._core_api.read_namespaced_service(name=service_name, namespace=self._namespace)
-        except ApiException as exc:
-            if exc.status == 404:
-                return None
-            raise
-
-    def _ensure_shared_pvcs_ready(self) -> None:
-        for pvc_name in {self._shared_userdata_pvc, self._shared_skills_pvc}:
-            pvc = self._read_pvc(pvc_name)
-            if pvc is None:
-                raise RuntimeError(f"required pvc not found: {pvc_name}")
-            phase = pvc.status.phase if pvc and pvc.status else None
-            if phase != "Bound":
-                raise RuntimeError(f"required pvc is not Bound: {pvc_name} phase={phase}")
-
-    def _validate_pvc_configuration(self) -> None:
-        same_pvc = self._shared_userdata_pvc == self._shared_skills_pvc
-        if same_pvc and not self._allow_shared_pvc_reuse:
-            raise RuntimeError(
-                "K8S_SHARED_USERDATA_PVC and K8S_SHARED_SKILLS_PVC point to the same PVC; "
-                "set K8S_ALLOW_SHARED_PVC_REUSE=true only if your storage supports this reliably"
-            )
-
-    def _assert_existing_sandbox_matches(self, sandbox_id: str, thread_id: str) -> None:
-        pod = self._read_pod(sandbox_id)
-        if pod is None:
-            return
-
-        annotations = (pod.metadata.annotations if pod.metadata else None) or {}
-        existing_thread_id = annotations.get("thread-id")
-        if existing_thread_id and existing_thread_id != thread_id:
-            raise RuntimeError(
-                f"sandbox {sandbox_id} already exists for thread_id={existing_thread_id}, not {thread_id}"
-            )
-
-    def _pod_ready(self, pod) -> bool:
-        if not pod or not pod.status or pod.status.phase != "Running":
-            return False
-        conditions = pod.status.conditions or []
-        ready_condition = next((c for c in conditions if c.type == "Ready"), None)
-        if not ready_condition or ready_condition.status != "True":
-            return False
-        container_statuses = pod.status.container_statuses or []
-        sandbox_container = next((c for c in container_statuses if c.name == "sandbox"), None)
-        return bool(sandbox_container and sandbox_container.ready is True)
-
-    def _extract_pod_failure(self, pod) -> str | None:
-        if not pod or not pod.status:
-            return None
-        if pod.status.phase == "Failed":
-            reason = pod.status.reason or "Unknown"
-            message = pod.status.message or ""
-            return f"pod failed: {reason} {message}".strip()
-        for cond in pod.status.conditions or []:
-            if cond.type == "PodScheduled" and cond.status == "False":
-                return f"pod scheduling failed: {(cond.reason or '').strip()} {(cond.message or '').strip()}".strip()
-        for container_status in pod.status.container_statuses or []:
-            state = container_status.state
-            if state and state.waiting:
-                reason = state.waiting.reason or "Waiting"
-                message = state.waiting.message or ""
-                if reason in {
-                    "ImagePullBackOff",
-                    "ErrImagePull",
-                    "CrashLoopBackOff",
-                    "CreateContainerConfigError",
-                    "CreateContainerError",
-                }:
-                    return f"container {container_status.name} waiting: {reason} {message}".strip()
-            if state and state.terminated:
-                reason = state.terminated.reason or "Terminated"
-                exit_code = state.terminated.exit_code
-                message = state.terminated.message or ""
-                return f"container {container_status.name} terminated: {reason} exit={exit_code} {message}".strip()
-        return None
+        return f"sandbox-{sandbox_id}"
 
     def _build_pod_spec(self, sandbox_id: str, thread_id: str):
         pod_name = self._pod_name(sandbox_id)
-        safe_thread_id = self._validate_thread_id(thread_id)
-        user_data_subpath = self._thread_subpath(safe_thread_id)
-        same_pvc = self._shared_userdata_pvc == self._shared_skills_pvc
-
-        if same_pvc:
-            volumes = [
-                self._client.V1Volume(
-                    name="shared-storage",
-                    persistent_volume_claim=self._client.V1PersistentVolumeClaimVolumeSource(
-                        claim_name=self._shared_userdata_pvc,
-                    ),
-                )
-            ]
-            volume_mounts = [
-                self._client.V1VolumeMount(
-                    name="shared-storage",
-                    mount_path="/home/gem/user-data",
-                    sub_path=user_data_subpath,
-                ),
-                self._client.V1VolumeMount(
-                    name="shared-storage",
-                    mount_path="/skills",
-                    sub_path="skills",
-                    read_only=True,
-                ),
-            ]
-        else:
-            volumes = [
-                self._client.V1Volume(
-                    name="user-data",
-                    persistent_volume_claim=self._client.V1PersistentVolumeClaimVolumeSource(
-                        claim_name=self._shared_userdata_pvc,
-                    ),
-                ),
-                self._client.V1Volume(
-                    name="skills",
-                    persistent_volume_claim=self._client.V1PersistentVolumeClaimVolumeSource(
-                        claim_name=self._shared_skills_pvc,
-                        read_only=True,
-                    ),
-                ),
-            ]
-            volume_mounts = [
-                self._client.V1VolumeMount(
-                    name="user-data",
-                    mount_path="/home/gem/user-data",
-                    sub_path=user_data_subpath,
-                ),
-                self._client.V1VolumeMount(
-                    name="skills",
-                    mount_path="/skills",
-                    sub_path="skills",
-                    read_only=True,
-                ),
-            ]
-
-        volume_mounts.append(self._client.V1VolumeMount(name="tmp", mount_path="/tmp"))
-        volumes.append(
-            self._client.V1Volume(
-                name="tmp",
-                empty_dir=self._client.V1EmptyDirVolumeSource(medium="Memory"),
-            )
-        )
-
-        init_script = f'set -eu; mkdir -p "/home/gem/user-data/threads/{safe_thread_id}/user-data"; test -d "/skills"'
-        init_volume_mounts = [
-            self._client.V1VolumeMount(name="tmp", mount_path="/tmp"),
-        ]
-        if same_pvc:
-            init_volume_mounts.extend(
-                [
-                    self._client.V1VolumeMount(name="shared-storage", mount_path="/home/gem/user-data"),
-                    self._client.V1VolumeMount(name="shared-storage", mount_path="/skills", sub_path="skills"),
-                ]
-            )
-        else:
-            init_volume_mounts.extend(
-                [
-                    self._client.V1VolumeMount(name="user-data", mount_path="/home/gem/user-data"),
-                    self._client.V1VolumeMount(name="skills", mount_path="/skills", sub_path="skills", read_only=True),
-                ]
-            )
-
         return self._client.V1Pod(
             metadata=self._client.V1ObjectMeta(
                 name=pod_name,
-                labels={
-                    "app": "yuxi-sandbox",
-                    "sandbox-id": sandbox_id,
-                    "managed-by": "yuxi-sandbox-provisioner",
-                },
-                annotations={"thread-id": safe_thread_id},
+                labels={"app": "yuxi-sandbox", "sandbox-id": sandbox_id},
+                annotations={"thread-id": thread_id},
             ),
             spec=self._client.V1PodSpec(
                 restart_policy="Never",
-                security_context=self._client.V1PodSecurityContext(fs_group=1000),
+                security_context=self._client.V1PodSecurityContext(
+                    fs_group=0,
+                    run_as_user=0,
+                ),
                 init_containers=[
                     self._client.V1Container(
-                        name="prepare-user-data",
+                        name="init-user-data",
                         image=self._sandbox_image,
-                        command=["sh", "-lc", init_script],
-                        volume_mounts=init_volume_mounts,
-                    )
+                        command=["sh", "-c"],
+                        args=[
+                            "chmod 777 /home/gem "
+                            "&& mkdir -p /home/gem/user-data/workspace /home/gem/user-data/uploads /home/gem/user-data/outputs "
+                            "&& chmod -R 777 /home/gem/user-data ",
+                        ],
+                        volume_mounts=[
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
+                            self._client.V1VolumeMount(
+                                name="shared-data",
+                                mount_path="/home/gem/user-data",
+                                sub_path=f"threads/{thread_id}/user-data",
+                            ),
+                        ],
+                    ),
                 ],
                 containers=[
                     self._client.V1Container(
                         name="sandbox",
                         image=self._sandbox_image,
                         ports=[self._client.V1ContainerPort(container_port=self._container_port)],
-                        env=[
-                            self._client.V1EnvVar(name="HOME", value="/home/gem/user-data"),
-                            self._client.V1EnvVar(name="TMPDIR", value="/tmp"),
+                        volume_mounts=[
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
+                            self._client.V1VolumeMount(
+                                name="shared-data",
+                                mount_path="/home/gem/user-data",
+                                sub_path=f"threads/{thread_id}/user-data",
+                            ),
+                            self._client.V1VolumeMount(
+                                name="shared-data",
+                                mount_path="/skills",
+                                sub_path="skills",
+                                read_only=False,
+                            ),
                         ],
-                        volume_mounts=volume_mounts,
-                        readiness_probe=self._client.V1Probe(
-                            http_get=self._client.V1HTTPGetAction(
-                                path="/v1/sandbox",
-                                port=self._container_port,
-                            ),
-                            period_seconds=2,
-                            timeout_seconds=2,
-                            failure_threshold=15,
-                        ),
-                        startup_probe=self._client.V1Probe(
-                            http_get=self._client.V1HTTPGetAction(
-                                path="/v1/sandbox",
-                                port=self._container_port,
-                            ),
-                            period_seconds=2,
-                            timeout_seconds=2,
-                            failure_threshold=30,
-                        ),
                     )
                 ],
-                volumes=volumes,
+                volumes=[
+                    self._client.V1Volume(
+                        name="shared-data",
+                        persistent_volume_claim=self._client.V1PersistentVolumeClaimVolumeSource(
+                            claim_name=self._thread_pvc,
+                            read_only=False,
+                        ),
+                    ),
+                    self._client.V1Volume(
+                        name="home-dir",
+                        empty_dir=self._client.V1EmptyDirVolumeSource(),
+                    ),
+                ],
             ),
         )
 
@@ -651,14 +426,10 @@ class KubernetesProvisionerBackend:
         return self._client.V1Service(
             metadata=self._client.V1ObjectMeta(
                 name=service_name,
-                labels={
-                    "app": "yuxi-sandbox",
-                    "sandbox-id": sandbox_id,
-                    "managed-by": "yuxi-sandbox-provisioner",
-                },
+                labels={"app": "yuxi-sandbox", "sandbox-id": sandbox_id},
             ),
             spec=self._client.V1ServiceSpec(
-                type="ClusterIP",
+                type="NodePort",
                 selector={"sandbox-id": sandbox_id},
                 ports=[
                     self._client.V1ServicePort(
@@ -671,55 +442,21 @@ class KubernetesProvisionerBackend:
             ),
         )
 
-    def wait_ready(self, sandbox_id: str) -> SandboxRecord:
-        deadline = time.monotonic() + self._ready_timeout_seconds
-        sandbox_url = self._sandbox_url(sandbox_id)
-        last_failure = None
-
-        while time.monotonic() < deadline:
-            pod = self._read_pod(sandbox_id)
-            service = self._read_service(sandbox_id)
-
-            if pod is None or service is None:
-                time.sleep(self._ready_poll_interval_seconds)
-                continue
-
-            failure = self._extract_pod_failure(pod)
-            if failure:
-                raise RuntimeError(f"sandbox {sandbox_id} failed before ready: {failure}")
-
-            if self._pod_ready(pod):
-                if wait_for_sandbox_ready(sandbox_url, timeout_seconds=3):
-                    return SandboxRecord(
-                        sandbox_id=sandbox_id,
-                        sandbox_url=sandbox_url,
-                        status="Running",
-                    )
-                last_failure = f"http health check not ready at {sandbox_url}"
-
-            time.sleep(self._ready_poll_interval_seconds)
-
-        raise RuntimeError(f"sandbox {sandbox_id} timed out waiting ready: {last_failure or 'unknown'}")
-
     def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
         from kubernetes.client.rest import ApiException
 
         with self._lock:
-            safe_thread_id = self._validate_thread_id(thread_id)
-            self._validate_pvc_configuration()
-            self._ensure_shared_pvcs_ready()
+            discovered = self.discover(sandbox_id)
+            if discovered is not None:
+                return discovered
 
-            existing_pod = self._read_pod(sandbox_id)
-            existing_service = self._read_service(sandbox_id)
-            if existing_pod is not None:
-                self._assert_existing_sandbox_matches(sandbox_id, safe_thread_id)
-            if existing_pod is not None and existing_service is not None:
-                return self.wait_ready(sandbox_id)
+            self._pod_name(sandbox_id)
+            self._service_name(sandbox_id)
 
             try:
                 self._core_api.create_namespaced_pod(
                     namespace=self._namespace,
-                    body=self._build_pod_spec(sandbox_id, safe_thread_id),
+                    body=self._build_pod_spec(sandbox_id, thread_id),
                 )
             except ApiException as exc:
                 if exc.status != 409:
@@ -734,27 +471,43 @@ class KubernetesProvisionerBackend:
                 if exc.status != 409:
                     raise
 
-            return self.wait_ready(sandbox_id)
+            health_timeout = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "60"))
+            record = self.discover(sandbox_id)
+            if record is None:
+                raise RuntimeError(f"failed to discover sandbox after create: {sandbox_id}")
+            if not wait_for_sandbox_ready(record.sandbox_url, timeout_seconds=health_timeout):
+                try:
+                    self.delete(sandbox_id)
+                except Exception:
+                    pass
+                raise RuntimeError(f"sandbox {sandbox_id} is not ready at {record.sandbox_url}")
+            return record
 
     def discover(self, sandbox_id: str) -> SandboxRecord | None:
-        pod = self._read_pod(sandbox_id)
-        service = self._read_service(sandbox_id)
-        if pod is None or service is None:
-            return None
+        from kubernetes.client.rest import ApiException
 
-        failure = self._extract_pod_failure(pod)
-        if failure:
-            status = f"Failed:{failure}"
-        elif self._pod_ready(pod):
-            status = "Running"
+        pod_name = self._pod_name(sandbox_id)
+        service_name = self._service_name(sandbox_id)
+        try:
+            pod = self._core_api.read_namespaced_pod(name=pod_name, namespace=self._namespace)
+            service = self._core_api.read_namespaced_service(name=service_name, namespace=self._namespace)
+        except ApiException as exc:
+            if exc.status == 404:
+                return None
+            raise
+
+        node_port = None
+        if service.spec and service.spec.ports:
+            node_port = service.spec.ports[0].node_port
+        if not node_port:
+            sandbox_url = ""
         else:
-            phase = pod.status.phase if pod and pod.status else "Unknown"
-            status = f"NotReady:{phase}"
+            sandbox_url = f"http://{self._node_host}:{node_port}"
 
         return SandboxRecord(
             sandbox_id=sandbox_id,
-            sandbox_url=self._sandbox_url(sandbox_id),
-            status=status,
+            sandbox_url=sandbox_url,
+            status=(pod.status.phase if pod and pod.status else "Unknown"),
         )
 
     def list(self) -> list[SandboxRecord]:
@@ -803,7 +556,7 @@ class SandboxIdleReaper:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._exec_timeout_seconds = int(os.getenv("SANDBOX_EXEC_TIMEOUT_SECONDS", "180"))
-        configured_idle_timeout = int(os.getenv("SANDBOX_IDLE_TIMEOUT_SECONDS", "120"))
+        configured_idle_timeout = int(os.getenv("SANDBOX_IDLE_TIMEOUT_SECONDS", "600"))
         if 0 < configured_idle_timeout <= self._exec_timeout_seconds:
             logger.warning(
                 "SANDBOX_IDLE_TIMEOUT_SECONDS=%s is <= SANDBOX_EXEC_TIMEOUT_SECONDS=%s; "
@@ -913,6 +666,7 @@ def health():
 @app.post("/api/sandboxes", response_model=SandboxResponse)
 def create_sandbox(payload: CreateSandboxRequest):
     try:
+        # Backend.create() already handles container reuse (discovers existing container first)
         record = backend_impl.create(payload.sandbox_id, payload.thread_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

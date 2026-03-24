@@ -71,16 +71,23 @@ class ProvisionerSandboxBackend(BaseSandbox):
 
         return self._client
 
-    def _read_binary(self, path: str) -> bytes:
+    def _read_binary(self, path: str, offset: int = 0, limit: int | None = None) -> bytes:
         """Read file content from the sandbox file API and normalize it to bytes.
 
         The underlying API may return base64 text, raw bytes, or plain strings.
         This helper is the single normalization point used by read(), edit(), and
         download_files() so all read paths share the same transport semantics.
         """
-        result = self._get_client().file.read_file(file=path, encoding="base64")
+        start_line = max(0, int(offset)) if offset else None
+        end_line = (start_line + int(limit)) if limit and start_line is not None else None
 
-        content = result.content
+        result = self._get_client().file.read_file(
+            file=path,
+            start_line=start_line,
+            end_line=end_line,
+        )
+
+        content = result.data.content
         if content is None:
             return b""
         if isinstance(content, bytes):
@@ -106,10 +113,9 @@ class ProvisionerSandboxBackend(BaseSandbox):
         """
         normalized_path = _normalize_path(file_path)
         start = max(0, int(offset))
-        size = max(0, int(limit))
 
         try:
-            content = self._read_binary(normalized_path)
+            content = self._read_binary(normalized_path, offset=offset, limit=limit)
         except Exception:  # noqa: BLE001
             return f"Error: File '{file_path}' not found"
 
@@ -117,13 +123,11 @@ class ProvisionerSandboxBackend(BaseSandbox):
             return "System reminder: File exists but has empty contents"
 
         text = content.decode("utf-8", errors="replace")
-        lines = text.splitlines()
-        selected_lines = lines[start : start + size]
-
-        if not selected_lines:
+        if not text:
             return ""
 
-        return "\n".join(f"{start + idx + 1:6d}\t{line}" for idx, line in enumerate(selected_lines))
+        lines = text.splitlines()
+        return "\n".join(f"{start + idx + 1:6d}\t{line}" for idx, line in enumerate(lines))
 
     def execute(self, command: str, *, timeout: int | None = None) -> ExecuteResponse:
         """Execute a shell command in the sandbox.
@@ -137,19 +141,8 @@ class ProvisionerSandboxBackend(BaseSandbox):
                 kwargs["timeout"] = timeout
             result = self._get_client().shell.exec_command(**kwargs)
 
-            output = getattr(result, "output", None)
-            if output is None and isinstance(result, dict):
-                output = result.get("output")
-            if output is None:
-                output = str(result) if result is not None else ""
-            if not isinstance(output, str):
-                output = str(output)
-
-            exit_code = getattr(result, "exit_code", None)
-            if exit_code is None and isinstance(result, dict):
-                exit_code = result.get("exit_code")
-            if isinstance(exit_code, str) and exit_code.isdigit():
-                exit_code = int(exit_code)
+            output = result.data.output or ""
+            exit_code = result.data.exit_code
 
             truncated = False
             encoded = output.encode("utf-8", errors="ignore")
@@ -174,7 +167,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
         except Exception:  # noqa: BLE001
             return []
 
-        entries = result.files or []
+        entries = result.data.files or []
         infos: list[FileInfo] = []
         for entry in entries:
             info: FileInfo = {"path": entry.path, "is_dir": entry.is_directory}
@@ -182,11 +175,16 @@ class ProvisionerSandboxBackend(BaseSandbox):
             if isinstance(size, int):
                 info["size"] = size
             modified_time = entry.modified_time
-            if isinstance(modified_time, str) and modified_time:
-                try:
-                    info["modified_at"] = datetime.fromisoformat(modified_time).isoformat()
-                except ValueError:
-                    info["modified_at"] = modified_time
+            if modified_time:
+                if isinstance(modified_time, str) and modified_time.isdigit():
+                    info["modified_at"] = datetime.fromtimestamp(int(modified_time)).isoformat()
+                elif isinstance(modified_time, str):
+                    try:
+                        info["modified_at"] = datetime.fromisoformat(modified_time).isoformat()
+                    except ValueError:
+                        info["modified_at"] = modified_time
+                elif isinstance(modified_time, (int, float)):
+                    info["modified_at"] = datetime.fromtimestamp(modified_time).isoformat()
             infos.append(info)
         return infos
 
@@ -207,7 +205,9 @@ class ProvisionerSandboxBackend(BaseSandbox):
             return WriteResult(error=f"Error: File '{file_path}' already exists")
 
         try:
-            self._get_client().file.write_file(file=normalized_path, content=content)
+            result = self._get_client().file.write_file(file=normalized_path, content=content)
+            if not result.success:
+                return WriteResult(error=result.message or f"Failed to write file '{file_path}'")
         except Exception as exc:  # noqa: BLE001
             return WriteResult(error=str(exc) or f"Failed to write file '{file_path}'")
 
@@ -226,6 +226,8 @@ class ProvisionerSandboxBackend(BaseSandbox):
         are not supported here and should be handled via download/upload flows.
         """
         normalized_path = _normalize_path(file_path)
+
+        # Check if old_string exists
         try:
             text = self._read_binary(normalized_path).decode("utf-8", errors="replace")
         except Exception:  # noqa: BLE001
@@ -242,12 +244,20 @@ class ProvisionerSandboxBackend(BaseSandbox):
                 )
             )
 
-        updated = text.replace(old_string, new_string) if replace_all else text.replace(old_string, new_string, 1)
-
+        # Use str_replace_editor API
+        replace_mode = "ALL" if replace_all else "FIRST"
         try:
-            self._get_client().file.write_file(file=normalized_path, content=updated)
+            result = self._get_client().file.str_replace_editor(
+                command="str_replace",
+                path=normalized_path,
+                old_str=old_string,
+                new_str=new_string,
+                replace_mode=replace_mode,
+            )
+            if not result.data.success:
+                return EditResult(error=result.data.message or f"Error editing file '{file_path}'")
         except Exception as exc:  # noqa: BLE001
-            return EditResult(error=f"Error editing file (exit code 1): {exc or 'Unknown error'}")
+            return EditResult(error=f"Error editing file: {exc}")
 
         return EditResult(path=normalized_path, files_update=None, occurrences=count if replace_all else 1)
 
@@ -263,56 +273,29 @@ class ProvisionerSandboxBackend(BaseSandbox):
         optional include glob.
         """
         search_path = _normalize_path(path or "/")
-        include = [glob] if glob else None
 
         try:
-            result = self._get_client().file.grep_files(
-                path=search_path,
-                pattern=pattern,
-                include=include,
-                fixed_strings=True,
-                recursive=True,
-            )
+            return super().grep_raw(pattern=pattern, path=search_path, glob=glob)
+
         except Exception as exc:  # noqa: BLE001
             return str(exc)
-
-        matches_out: list[GrepMatch] = []
-        for match in result.matches or []:
-            matches_out.append(
-                {
-                    "path": match.file,
-                    "line": match.line_number,
-                    "text": match.line_content,
-                }
-            )
-        return matches_out
 
     def glob_info(self, pattern: str, path: str = "/") -> list[FileInfo]:
         """Return files matching a glob pattern with optional metadata."""
         normalized_path = _normalize_path(path)
 
         try:
-            result = self._get_client().file.glob_files(
+            # return super().glob_info(pattern=pattern, path=path)
+            result = self._get_client().file.find_files(
                 path=normalized_path,
-                pattern=pattern,
-                include_metadata=True,
+                glob=pattern,
             )
         except Exception:  # noqa: BLE001
             return []
 
         infos: list[FileInfo] = []
-        for entry in result.files or []:
-            info: FileInfo = {"path": entry.path}
-            if isinstance(entry.is_directory, bool):
-                info["is_dir"] = entry.is_directory
-            if isinstance(entry.size, int):
-                info["size"] = entry.size
-            if isinstance(entry.modified_time, str) and entry.modified_time:
-                try:
-                    info["modified_at"] = datetime.fromisoformat(entry.modified_time).isoformat()
-                except ValueError:
-                    info["modified_at"] = entry.modified_time
-            infos.append(info)
+        for file_path in result.data.files or []:
+            infos.append({"path": file_path})
         return infos
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[FileUploadResponse]:
@@ -325,11 +308,13 @@ class ProvisionerSandboxBackend(BaseSandbox):
         for path, content in files:
             try:
                 normalized_path = _normalize_path(path)
-                self._get_client().file.write_file(
+                result = self._get_client().file.write_file(
                     file=normalized_path,
                     content=base64.b64encode(content).decode("ascii"),
                     encoding="base64",
                 )
+                if not result.success:
+                    raise Exception(result.message or "Upload failed")
                 responses.append(FileUploadResponse(path=normalized_path, error=None))
             except PermissionError:
                 normalized_path = str(path)
