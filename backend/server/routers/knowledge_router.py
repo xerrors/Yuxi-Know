@@ -1334,7 +1334,7 @@ async def upload_file(
     object_name = f"{folder}/upload/{minio_filename}"
 
     # 上传到MinIO
-    minio_url = await aupload_file_to_minio(bucket_name, object_name, file_bytes, ext.lstrip("."))
+    minio_url = await aupload_file_to_minio(bucket_name, object_name, file_bytes)
 
     # 检测同名文件（基于原始文件名）
     same_name_files = await knowledge_base.get_same_name_files(db_id, filename)

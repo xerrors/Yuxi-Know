@@ -758,7 +758,7 @@ async def upload_user_avatar(
 
         # 上传到MinIO
         file_name = f"avatar/{current_user.id}/{uuid.uuid4()}.{file_extension}"
-        avatar_url = await aupload_file_to_minio("public", file_name, file_content, file_extension)
+        avatar_url = await aupload_file_to_minio("public", file_name, file_content)
 
         # 更新用户头像
         current_user.avatar = avatar_url
