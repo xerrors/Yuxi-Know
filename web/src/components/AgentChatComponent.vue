@@ -476,7 +476,9 @@ const isStreaming = computed(() => {
 })
 const isProcessing = computed(() => isStreaming.value)
 const isSendButtonDisabled = computed(() => {
-  return sendCooldownActive.value || (((!userInput.value || !currentAgent.value) && !isProcessing.value))
+  return (
+    sendCooldownActive.value || ((!userInput.value || !currentAgent.value) && !isProcessing.value)
+  )
 })
 
 const startSendCooldown = () => {

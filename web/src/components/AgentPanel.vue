@@ -136,7 +136,9 @@
           <pre v-if="Array.isArray(currentFile?.content)">{{
             formatContent(currentFile.content)
           }}</pre>
-          <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{ currentFile.content }}</pre>
+          <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{
+            currentFile.content
+          }}</pre>
           <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
         </template>
       </div>
@@ -392,7 +394,12 @@ const refreshFileSystem = async () => {
   loadingFiles.value = true
   filesystemError.value = ''
   try {
-    const res = await getViewerFileSystemTree(props.threadId, '/', props.agentId, props.agentConfigId)
+    const res = await getViewerFileSystemTree(
+      props.threadId,
+      '/',
+      props.agentId,
+      props.agentConfigId
+    )
     if (res && res.entries) {
       dynamicTreeData.value = sortEntries(res.entries).map((entry) => createTreeNode(entry))
       expandedKeys.value = []
@@ -413,19 +420,16 @@ onMounted(() => {
   refreshFileSystem()
 })
 
-watch(
-  [() => props.threadId, () => props.agentId, () => props.agentConfigId],
-  ([threadId]) => {
-    if (threadId) {
-      refreshFileSystem()
-    } else {
-      dynamicTreeData.value = []
-      expandedKeys.value = []
-      selectedKeys.value = []
-      filesystemError.value = ''
-    }
+watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([threadId]) => {
+  if (threadId) {
+    refreshFileSystem()
+  } else {
+    dynamicTreeData.value = []
+    expandedKeys.value = []
+    selectedKeys.value = []
+    filesystemError.value = ''
   }
-)
+})
 
 const fileTreeData = computed(() => dynamicTreeData.value)
 

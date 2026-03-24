@@ -62,7 +62,9 @@
             </p>
             <h1 class="title reveal-up delay-1">{{ infoStore.branding.title }}</h1>
             <Transition name="subtitle-switch" mode="out-in">
-              <p v-if="currentSubtitle" class="subtitle" :key="currentSubtitle">{{ currentSubtitle }}</p>
+              <p v-if="currentSubtitle" class="subtitle" :key="currentSubtitle">
+                {{ currentSubtitle }}
+              </p>
             </Transition>
             <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
             <div class="hero-actions">
@@ -281,9 +283,7 @@ const getHeroBadgeText = (starsCount = null) => {
   }
 
   const starValue =
-    typeof starFeature === 'string'
-      ? ''
-      : (starFeature?.value || '').toString().trim()
+    typeof starFeature === 'string' ? '' : (starFeature?.value || '').toString().trim()
 
   return starValue ? `已获得 ${starValue} GitHub Stars` : '已获得 GitHub Stars'
 }

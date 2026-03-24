@@ -58,11 +58,7 @@
         <!-- <a-divider /> -->
 
         <div class="config-segment" v-if="!isEmptyConfig">
-          <a-segmented
-            v-model:value="currentSegment"
-            :options="segmentOptions"
-            block
-          />
+          <a-segmented v-model:value="currentSegment" :options="segmentOptions" block />
         </div>
 
         <div
@@ -571,15 +567,15 @@ const hasOtherConfigs = computed(() => {
 const segmentConfigKeys = computed(() => {
   const keys = Object.keys(configurableItems.value)
   return {
-    model: keys.filter(key => {
+    model: keys.filter((key) => {
       const meta = configurableItems.value[key]?.template_metadata?.kind
       return meta === 'llm' || meta === 'prompt'
     }),
-    tools: keys.filter(key => {
+    tools: keys.filter((key) => {
       const meta = configurableItems.value[key]?.template_metadata?.kind
       return ['tools', 'knowledges', 'mcps', 'skills', 'subagents'].includes(meta)
     }),
-    other: keys.filter(key => {
+    other: keys.filter((key) => {
       const meta = configurableItems.value[key]?.template_metadata?.kind
       return !['llm', 'prompt', 'tools', 'knowledges', 'mcps', 'skills', 'subagents'].includes(meta)
     })
@@ -590,7 +586,7 @@ const filteredConfigurableItems = computed(() => {
   if (isEmptyConfig.value) return {}
   const keys = segmentConfigKeys.value[currentSegment.value] || []
   const filtered = {}
-  keys.forEach(key => {
+  keys.forEach((key) => {
     filtered[key] = configurableItems.value[key]
   })
   return filtered

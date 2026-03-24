@@ -92,7 +92,7 @@ class BaseContext:
         default=sys_config.default_model,
         metadata={
             "name": "子智能体的默认模型",
-            "description": "子智能体的默认模型，会被子智能体的配置覆盖。",
+            "description": "为所有子智能体设置默认模型，可在各子智能体配置中单独覆盖。",
         },
     )
 

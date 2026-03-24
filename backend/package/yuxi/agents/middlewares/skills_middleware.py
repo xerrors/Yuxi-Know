@@ -404,9 +404,8 @@ class SkillsMiddleware(AgentMiddleware):
             return None
         pure = PurePosixPath(raw if raw.startswith("/") else f"/{raw}")
         parts = [p for p in pure.parts if p not in ("/", "")]
-        if len(parts) == 3 and parts[0] == "skills" and parts[2] == "SKILL.md":
-            slug = parts[1]
-        elif len(parts) == 4 and parts[0] == "mnt" and parts[1] == "skills" and parts[3] == "SKILL.md":
+        # 只支持 /mnt/skills/{slug}/SKILL.md 格式
+        if len(parts) == 4 and parts[0] == "mnt" and parts[1] == "skills" and parts[3] == "SKILL.md":
             slug = parts[2]
         else:
             return None

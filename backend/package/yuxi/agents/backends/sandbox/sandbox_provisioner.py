@@ -14,10 +14,6 @@ from yuxi import config as sys_config
 from yuxi.services.skill_service import get_skills_root_dir
 from yuxi.utils.logging_config import logger
 
-from .sandbox_local_container import LocalContainerBackend
-from .sandbox_remote import RemoteSandboxBackend
-from .sandbox_executor import YuxiSandboxBackend
-from .sandbox_provisioner_base import SandboxBackend
 from .sandbox_config import (
     IDLE_CHECK_INTERVAL,
     LARGE_TOOL_RESULTS_DIR,
@@ -34,7 +30,11 @@ from .sandbox_config import (
     get_sandbox_image,
     get_sandbox_provisioner_url,
 )
+from .sandbox_executor import YuxiSandboxBackend
 from .sandbox_info import SandboxInfo
+from .sandbox_local_container import LocalContainerBackend
+from .sandbox_provisioner_base import SandboxBackend
+from .sandbox_remote import RemoteSandboxBackend
 
 
 class YuxiSandboxProvider:
@@ -259,9 +259,7 @@ class YuxiSandboxProvider:
             self._last_activity.pop(sandbox_id, None)
             self._warm_pool.pop(sandbox_id, None)
             thread_ids = [
-                thread_id
-                for thread_id, mapped_id in self._thread_sandboxes.items()
-                if mapped_id == sandbox_id
+                thread_id for thread_id, mapped_id in self._thread_sandboxes.items() if mapped_id == sandbox_id
             ]
             for thread_id in thread_ids:
                 del self._thread_sandboxes[thread_id]

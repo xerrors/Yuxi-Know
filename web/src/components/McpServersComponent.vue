@@ -298,7 +298,6 @@
                 </a-spin>
               </div>
             </a-tab-pane>
-
           </a-tabs>
         </template>
       </div>

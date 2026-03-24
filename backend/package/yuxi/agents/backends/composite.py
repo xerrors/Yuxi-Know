@@ -4,8 +4,8 @@ from deepagents.backends import CompositeBackend, StateBackend
 
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 
-from .skills_backend import SelectedSkillsReadonlyBackend
 from .sandbox import get_sandbox_provider
+from .skills_backend import SelectedSkillsReadonlyBackend
 
 
 def _get_visible_skills_from_runtime(runtime) -> list[str]:

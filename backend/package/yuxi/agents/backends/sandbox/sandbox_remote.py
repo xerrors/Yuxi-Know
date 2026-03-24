@@ -6,8 +6,8 @@ import requests
 
 from yuxi.utils.logging_config import logger
 
-from .sandbox_provisioner_base import SandboxBackend
 from .sandbox_info import SandboxInfo
+from .sandbox_provisioner_base import SandboxBackend
 
 
 class RemoteSandboxBackend(SandboxBackend):

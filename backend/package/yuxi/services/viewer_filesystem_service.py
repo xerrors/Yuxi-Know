@@ -9,12 +9,11 @@ from urllib.parse import quote
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
-from yuxi.storage.postgres.models_business import User
 from yuxi.services.filesystem_service import _resolve_filesystem_state
+from yuxi.storage.postgres.models_business import User
 
 
 def _normalize_path(path: str | None) -> str:
@@ -117,9 +116,7 @@ async def list_viewer_filesystem_tree(
     )
 
     if normalized_path == "/":
-        entries = [
-            {"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}
-        ]
+        entries = [{"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}]
         if selected_skills:
             entries.append({"path": f"{SKILLS_PATH}/", "name": "skills", "is_dir": True, "size": 0, "modified_at": ""})
         return {"entries": entries}

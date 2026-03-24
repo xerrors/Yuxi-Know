@@ -64,12 +64,7 @@
     <a-button v-else-if="showButton" type="primary" @click="goToLogin"> 登录 </a-button>
 
     <!-- 个人资料弹窗 -->
-    <a-modal
-      v-model:open="profileModalVisible"
-      :footer="null"
-      width="420px"
-      class="profile-modal"
-    >
+    <a-modal v-model:open="profileModalVisible" :footer="null" width="420px" class="profile-modal">
       <div class="profile-content">
         <!-- 头像区域 -->
         <div class="avatar-section">
@@ -92,7 +87,12 @@
                 @change="handleAvatarChange"
                 accept="image/*"
               >
-                <a-button type="primary" class="lucide-icon-btn" size="small" :loading="avatarUploading">
+                <a-button
+                  type="primary"
+                  class="lucide-icon-btn"
+                  size="small"
+                  :loading="avatarUploading"
+                >
                   <template #icon><Upload size="14" /></template>
                   {{ userStore.avatar ? '更换头像' : '上传头像' }}
                 </a-button>
@@ -143,7 +143,7 @@
           </div>
           <div class="info-item">
             <div class="info-label">角色</div>
-            <div class="info-value" :style="{'color': getRoleColor(userStore.userRole) }">
+            <div class="info-value" :style="{ color: getRoleColor(userStore.userRole) }">
               {{ userRoleText }}
             </div>
           </div>
