@@ -118,7 +118,6 @@ class LocalContainerProvisionerBackend:
         )
         self._network = os.getenv("DOCKER_NETWORK")
         self._threads_host_path = os.getenv("DOCKER_THREADS_HOST_PATH")
-        self._skills_host_path = os.getenv("DOCKER_SKILLS_HOST_PATH")
         self._container_prefix = os.getenv("DOCKER_SANDBOX_PREFIX", "yuxi-sandbox")
         self._sandbox_host = os.getenv("DOCKER_SANDBOX_HOST", "host.docker.internal")
         self._health_timeout_seconds = int(os.getenv("SANDBOX_HEALTH_TIMEOUT_SECONDS", "300"))
@@ -131,7 +130,6 @@ class LocalContainerProvisionerBackend:
 
         self._resolve_host_paths()
         self._threads_host_path = self._normalize_host_bind_path(self._threads_host_path)
-        self._skills_host_path = self._normalize_host_bind_path(self._skills_host_path)
 
     @staticmethod
     def _normalize_host_bind_path(path_value: str | None) -> str:
@@ -170,8 +168,27 @@ class LocalContainerProvisionerBackend:
     def _container_name(self, sandbox_id: str) -> str:
         return f"{self._container_prefix}-{self._sanitize_id(sandbox_id)}"
 
+    def _thread_skills_host_path(self, thread_id: str) -> Path:
+        threads_root = Path(self._threads_host_path).resolve()
+        thread_skills = (threads_root / thread_id / "skills").resolve()
+        try:
+            thread_skills.relative_to(threads_root)
+        except ValueError as exc:
+            raise ValueError("thread skills path resolved outside threads host root") from exc
+        return thread_skills
+
+    def _is_expected_skills_mount(self, container, thread_id: str) -> bool:
+        expected_source = str(self._thread_skills_host_path(thread_id))
+        for mount in container.attrs.get("Mounts") or []:
+            destination = (mount.get("Destination") or "").rstrip("/")
+            if destination != "/home/yuxi/skills":
+                continue
+            source = str(mount.get("Source") or "").rstrip("/")
+            return source == expected_source
+        return False
+
     def _resolve_host_paths(self) -> None:
-        if self._threads_host_path and self._skills_host_path:
+        if self._threads_host_path:
             return
 
         container_id = os.getenv("HOSTNAME", "").strip()
@@ -194,9 +211,6 @@ class LocalContainerProvisionerBackend:
         base = Path(self._normalize_host_bind_path(saves_source))
         if not self._threads_host_path:
             self._threads_host_path = str(base / "threads")
-        if not self._skills_host_path:
-            self._skills_host_path = str(base / "skills")
-
     def _host_port_for(self, container) -> int | None:
         ports = (container.attrs.get("NetworkSettings") or {}).get("Ports") or {}
         bindings = ports.get(f"{self._container_port}/tcp")
@@ -252,6 +266,11 @@ class LocalContainerProvisionerBackend:
             existing = self._get_container(sandbox_id)
             if existing is not None:
                 existing.reload()
+                if not self._is_expected_skills_mount(existing, safe_thread_id):
+                    logger.info("Recreating sandbox %s because skills mount is stale", sandbox_id)
+                    self.delete(sandbox_id)
+                    existing = None
+            if existing is not None:
                 if existing.status == "running":
                     try:
                         self._ensure_user_data_writable(existing)
@@ -277,8 +296,8 @@ class LocalContainerProvisionerBackend:
                 raise ValueError("thread_id resolved outside threads host root") from exc
             thread_user_data.mkdir(parents=True, exist_ok=True)
 
-            skills_path = Path(self._skills_host_path)
-            skills_path.mkdir(parents=True, exist_ok=True)
+            thread_skills = self._thread_skills_host_path(safe_thread_id)
+            thread_skills.mkdir(parents=True, exist_ok=True)
 
             container_name = self._container_name(sandbox_id)
             run_kwargs = {
@@ -292,7 +311,7 @@ class LocalContainerProvisionerBackend:
                 },
                 "volumes": {
                     str(thread_user_data): {"bind": "/home/yuxi/user-data", "mode": "rw"},
-                    str(skills_path): {"bind": "/home/yuxi/skills", "mode": "ro"},
+                    str(thread_skills): {"bind": "/home/yuxi/skills", "mode": "ro"},
                 },
                 "ports": {f"{self._container_port}/tcp": None},
                 "security_opt": ["seccomp=unconfined"],
@@ -318,6 +337,17 @@ class LocalContainerProvisionerBackend:
         if container is None:
             return None
         container.reload()
+        thread_id = str((container.labels or {}).get("thread-id") or "").strip()
+        if not thread_id:
+            return None
+        safe_thread_id = self._validate_thread_id(thread_id)
+        if not self._is_expected_skills_mount(container, safe_thread_id):
+            logger.info("Discarding stale sandbox %s with legacy skills mount", sandbox_id)
+            try:
+                self.delete(sandbox_id)
+            except Exception as exc:
+                logger.warning("Failed to delete stale sandbox %s during discover: %s", sandbox_id, exc)
+            return None
         record = self._to_record(container, sandbox_id)
         if not record.sandbox_url:
             return None
@@ -403,16 +433,15 @@ class KubernetesProvisionerBackend:
                         command=["sh", "-c"],
                         args=[
                             "chmod 777 /home/yuxi "
-                            "&& mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/uploads /home/yuxi/user-data/outputs "
-                            "&& chmod -R 777 /home/yuxi/user-data ",
+                            f"&& mkdir -p /mnt/shared-data/threads/{thread_id}/user-data/workspace "
+                            f"/mnt/shared-data/threads/{thread_id}/user-data/uploads "
+                            f"/mnt/shared-data/threads/{thread_id}/user-data/outputs "
+                            f"/mnt/shared-data/threads/{thread_id}/skills "
+                            f"&& chmod -R 777 /mnt/shared-data/threads/{thread_id}/user-data ",
                         ],
                         volume_mounts=[
                             self._client.V1VolumeMount(name="home-dir", mount_path="/home/yuxi"),
-                            self._client.V1VolumeMount(
-                                name="shared-data",
-                                mount_path="/home/yuxi/user-data",
-                                sub_path=f"threads/{thread_id}/user-data",
-                            ),
+                            self._client.V1VolumeMount(name="shared-data", mount_path="/mnt/shared-data"),
                         ],
                     ),
                 ],
@@ -431,8 +460,8 @@ class KubernetesProvisionerBackend:
                             self._client.V1VolumeMount(
                                 name="shared-data",
                                 mount_path="/home/yuxi/skills",
-                                sub_path="skills",
-                                read_only=False,
+                                sub_path=f"threads/{thread_id}/skills",
+                                read_only=True,
                             ),
                         ],
                     )

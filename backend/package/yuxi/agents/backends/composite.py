@@ -69,7 +69,9 @@ class CustomCompositeBackend(CompositeBackend):
 def _get_visible_skills_from_runtime(runtime) -> list[str]:
     """获取运行时可见的 skills 列表"""
     context = getattr(runtime, "context", None)
-    selected = getattr(context, "skills", None) or []
+    selected = getattr(context, "_visible_skills", None)
+    if not isinstance(selected, list):
+        selected = getattr(context, "skills", None) or []
     return normalize_selected_skills(selected)
 
 
@@ -94,7 +96,7 @@ def create_agent_composite_backend(runtime) -> CompositeBackend:
     visible_skills = _get_visible_skills_from_runtime(runtime)
     thread_id = _extract_thread_id(runtime)
     return CustomCompositeBackend(
-        default=ProvisionerSandboxBackend(thread_id=thread_id),
+        default=ProvisionerSandboxBackend(thread_id=thread_id, visible_skills=visible_skills),
         routes={
             "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=visible_skills),
         },

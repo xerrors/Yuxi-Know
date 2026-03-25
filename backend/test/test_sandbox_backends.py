@@ -26,6 +26,7 @@ def test_create_agent_composite_backend_uses_provisioner_default(monkeypatch):
     backend = create_agent_composite_backend(_runtime(skills=["reporter"]))
 
     assert isinstance(backend.default, ProvisionerSandboxBackend)
+    assert backend.default._visible_skills == ["reporter"]
     assert "/skills/" in backend.routes
 
 

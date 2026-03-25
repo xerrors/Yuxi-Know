@@ -212,17 +212,19 @@
         </a-tooltip> -->
         <p class="description">{{ database.description || '暂无描述' }}</p>
         <div class="tags">
-          <a-tag color="blue" v-if="database.embed_info?.name">{{
-            database.embed_info.name
-          }}</a-tag>
-          <!-- <a-tag color="green" v-if="database.embed_info?.dimension">{{ database.embed_info.dimension }}</a-tag> -->
           <a-tag
+            :bordered="false"
             :color="getKbTypeColor(database.kb_type || 'lightrag')"
             class="kb-type-tag"
             size="small"
           >
             {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
           </a-tag>
+          <!-- 保留最后一个，使用 / 切分 -->
+          <a-tag color="blue" v-if="database.embed_info?.name"
+            :bordered="false">{{
+            database.embed_info.name.split('/').slice(-1)[0]
+          }}</a-tag>
         </div>
         <!-- <button @click="deleteDatabase(database.collection_name)">删除</button> -->
       </div>
@@ -675,11 +677,16 @@ onMounted(() => {
 
 .database,
 .graphbase {
-  background: linear-gradient(145deg, var(--gray-0) 0%, var(--gray-10) 100%);
+  background: linear-gradient(45deg, var(--gray-0) 0%, var(--gray-25) 100%);
   box-shadow: 0px 1px 2px 0px var(--shadow-2);
-  border: 1px solid var(--gray-100);
-  transition: none;
+  border: 1px solid var(--gray-50);
+  transition: all 0.3s;
   position: relative;
+
+  &:hover {
+    background: linear-gradient(45deg, var(--gray-0) 0%, var(--main-30) 100%);
+    box-shadow: 0px 1px 5px var(--shadow-3);
+  }
 }
 
 .dbcard,
@@ -783,6 +790,10 @@ onMounted(() => {
     font-size: 13px;
     font-weight: 400;
     flex: 1;
+  }
+
+  .tags {
+    opacity: 0.8;
   }
 }
 

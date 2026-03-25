@@ -43,6 +43,27 @@ def test_is_valid_skill_slug():
     assert svc.is_valid_skill_slug("") is False
 
 
+def test_sync_thread_visible_skills_only_keeps_selected(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
+    skills_root = tmp_path / "skills"
+    (skills_root / "alpha").mkdir(parents=True, exist_ok=True)
+    (skills_root / "alpha" / "SKILL.md").write_text("alpha", encoding="utf-8")
+    (skills_root / "beta").mkdir(parents=True, exist_ok=True)
+    (skills_root / "beta" / "SKILL.md").write_text("beta", encoding="utf-8")
+
+    thread_root = svc.sync_thread_visible_skills("thread_1", ["alpha", "missing", "alpha"])
+
+    assert thread_root == tmp_path / "threads" / "thread_1" / "skills"
+    assert sorted(path.name for path in thread_root.iterdir()) == ["alpha"]
+    assert (thread_root / "alpha").is_dir()
+    assert not (thread_root / "alpha").is_symlink()
+    assert (thread_root / "alpha" / "SKILL.md").read_text(encoding="utf-8") == "alpha"
+
+    svc.sync_thread_visible_skills("thread_1", ["beta"])
+    assert sorted(path.name for path in thread_root.iterdir()) == ["beta"]
+    assert (thread_root / "beta" / "SKILL.md").read_text(encoding="utf-8") == "beta"
+
+
 @pytest.mark.asyncio
 async def test_get_skill_dependency_options(monkeypatch: pytest.MonkeyPatch):
     # Mock get_tool_metadata to return tool list
@@ -290,11 +311,7 @@ async def test_init_builtin_skills_create_missing(tmp_path: Path, monkeypatch: p
     source_dir = tmp_path / "builtin-skills" / "reporter"
     source_dir.mkdir(parents=True, exist_ok=True)
     (source_dir / "SKILL.md").write_text(
-        "---\n"
-        "name: reporter\n"
-        "description: SQL report\n"
-        "---\n"
-        "# SQL Reporter\n",
+        "---\nname: reporter\ndescription: SQL report\n---\n# SQL Reporter\n",
         encoding="utf-8",
     )
     (source_dir / "prompts").mkdir(parents=True, exist_ok=True)
@@ -387,11 +404,7 @@ async def test_init_builtin_skills_updates_existing_record(tmp_path: Path, monke
     source_dir = tmp_path / "builtin-skills" / "reporter"
     source_dir.mkdir(parents=True, exist_ok=True)
     (source_dir / "SKILL.md").write_text(
-        "---\n"
-        "name: reporter\n"
-        "description: old\n"
-        "---\n"
-        "# SQL Reporter\n",
+        "---\nname: reporter\ndescription: old\n---\n# SQL Reporter\n",
         encoding="utf-8",
     )
 

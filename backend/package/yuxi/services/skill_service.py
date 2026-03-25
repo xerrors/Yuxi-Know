@@ -4,6 +4,7 @@ import asyncio
 import re
 import shutil
 import tempfile
+import threading
 import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -52,6 +53,17 @@ TEXT_FILE_EXTENSIONS = {
 }
 
 BUILTIN_SKILL_OPERATOR = "builtin-system"
+_THREAD_SKILLS_LOCK = threading.Lock()
+_THREAD_SKILLS_LOCKS: dict[str, threading.Lock] = {}
+
+
+def _get_thread_skills_lock(thread_id: str) -> threading.Lock:
+    with _THREAD_SKILLS_LOCK:
+        lock = _THREAD_SKILLS_LOCKS.get(thread_id)
+        if lock is None:
+            lock = threading.Lock()
+            _THREAD_SKILLS_LOCKS[thread_id] = lock
+        return lock
 
 
 def _normalize_string_list(values: list[str] | None) -> list[str]:
@@ -80,6 +92,69 @@ def get_skills_root_dir() -> Path:
     root = Path(sys_config.save_dir) / "skills"
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def get_thread_skills_root_dir(thread_id: str) -> Path:
+    safe_thread_id = str(thread_id or "").strip()
+    if not safe_thread_id:
+        raise ValueError("thread_id is required")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", safe_thread_id):
+        raise ValueError("thread_id contains invalid characters")
+
+    root = Path(sys_config.save_dir) / "threads" / safe_thread_id / "skills"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def sync_thread_visible_skills(thread_id: str, selected_slugs: list[str] | None) -> Path:
+    skills_root = get_skills_root_dir().resolve()
+    thread_skills_root = get_thread_skills_root_dir(thread_id)
+    normalized_slugs = [slug for slug in _normalize_string_list(selected_slugs) if is_valid_skill_slug(slug)]
+    visible_slugs = set(normalized_slugs)
+    with _get_thread_skills_lock(thread_id):
+        for entry in thread_skills_root.iterdir():
+            if entry.name in visible_slugs:
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink()
+
+        for slug in normalized_slugs:
+            source_dir = (skills_root / slug).resolve()
+            target_dir = thread_skills_root / slug
+
+            try:
+                source_dir.relative_to(skills_root)
+            except ValueError:
+                continue
+            if not source_dir.is_dir():
+                if target_dir.exists() or target_dir.is_symlink():
+                    if target_dir.is_dir() and not target_dir.is_symlink():
+                        shutil.rmtree(target_dir)
+                    else:
+                        target_dir.unlink()
+                continue
+
+            if target_dir.exists():
+                if target_dir.is_symlink():
+                    target_dir.unlink()
+                elif target_dir.is_dir():
+                    if _dirs_equal(target_dir, source_dir):
+                        continue
+                    shutil.rmtree(target_dir)
+                else:
+                    target_dir.unlink()
+
+            temp_target = thread_skills_root / f".{slug}.tmp-{uuid.uuid4().hex[:8]}"
+            try:
+                shutil.copytree(source_dir, temp_target, symlinks=False)
+                temp_target.rename(target_dir)
+            finally:
+                if temp_target.exists():
+                    shutil.rmtree(temp_target, ignore_errors=True)
+
+    return thread_skills_root
 
 
 def get_builtin_skill_specs() -> list[Any]:
