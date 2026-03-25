@@ -38,6 +38,7 @@ _login_attempts: defaultdict[str, deque[float]] = defaultdict(deque)
 _attempt_lock = asyncio.Lock()
 
 app = FastAPI(lifespan=lifespan)
+# 所有业务接口统一挂载到 /api，具体分组在 server.routers 中集中注册。
 app.include_router(router, prefix="/api")
 
 # CORS 设置
@@ -143,5 +144,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=5050,
         reload=True,
-        reload_dirs=["server", "src"],
+        # 与 docker-compose 开发环境保持一致，避免 package 下代码变更不触发热重载。
+        reload_dirs=["server", "package"],
     )
