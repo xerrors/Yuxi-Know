@@ -89,61 +89,80 @@
             </div>
           </div>
 
-          <!-- Tab 导航 -->
-          <a-tabs v-model:activeKey="detailTab" class="detail-tabs">
-            <a-tab-pane key="general">
-              <template #tab>
-                <span class="tab-title"><Info :size="14" />信息</span>
-              </template>
-              <div class="tab-content">
-                <div class="info-grid">
-                  <div class="info-item" v-if="currentAgent.description">
-                    <label>描述</label>
-                    <span>{{ currentAgent.description }}</span>
-                  </div>
-                  <div class="info-item" v-if="currentAgent.model">
-                    <label>模型覆盖</label>
-                    <span>{{ currentAgent.model }}</span>
-                  </div>
-                  <div class="info-item" v-if="currentAgent.tools && currentAgent.tools.length > 0">
-                    <label>工具</label>
-                    <span>
-                      <a-tag v-for="tool in currentAgent.tools" :key="tool" size="small">
-                        {{ tool }}
-                      </a-tag>
-                    </span>
-                  </div>
-                  <div class="info-item" v-if="currentAgent.is_builtin">
-                    <label>类型</label>
-                    <span><a-tag color="blue">内置</a-tag></span>
-                  </div>
-                  <div class="info-item">
-                    <label>创建时间</label>
-                    <span>{{ formatTime(currentAgent.created_at) }}</span>
-                  </div>
-                  <div class="info-item">
-                    <label>更新时间</label>
-                    <span>{{ formatTime(currentAgent.updated_at) }}</span>
-                  </div>
-                  <div class="info-item" v-if="currentAgent.created_by">
-                    <label>创建人</label>
-                    <span>{{ currentAgent.created_by }}</span>
-                  </div>
-                </div>
+          <div class="detail-section-container">
+            <div class="detail-section">
+              <div class="section-header">
+                <MessageSquare :size="14" />
+                <span>系统提示词</span>
               </div>
-            </a-tab-pane>
-
-            <a-tab-pane key="prompt">
-              <template #tab>
-                <span class="tab-title"><MessageSquare :size="14" />系统提示词</span>
-              </template>
-              <div class="tab-content">
+              <div class="section-content">
                 <div class="code-panel">
                   <pre class="code-panel-pre">{{ currentAgent.system_prompt }}</pre>
                 </div>
               </div>
-            </a-tab-pane>
-          </a-tabs>
+            </div>
+
+            <div class="detail-section" v-if="currentAgent.description">
+              <div class="section-header">
+                <FileText :size="14" />
+                <span>描述</span>
+              </div>
+              <div class="section-content description">
+                {{ currentAgent.description }}
+              </div>
+            </div>
+
+            <div class="detail-section" v-if="currentAgent.model">
+              <div class="section-header">
+                <Cpu :size="14" />
+                <span>模型覆盖</span>
+              </div>
+              <div class="section-content">
+                {{ currentAgent.model }}
+              </div>
+            </div>
+
+            <div class="detail-section" v-if="currentAgent.tools && currentAgent.tools.length > 0">
+              <div class="section-header">
+                <Wrench :size="14" />
+                <span>工具</span>
+              </div>
+              <div class="section-content">
+                <a-tag v-for="tool in currentAgent.tools" :key="tool">{{ tool }}</a-tag>
+              </div>
+            </div>
+
+            <div class="detail-section" v-if="currentAgent.is_builtin">
+              <div class="section-header">
+                <Info :size="14" />
+                <span>类型</span>
+              </div>
+              <div class="section-content">
+                <a-tag color="blue">内置</a-tag>
+              </div>
+            </div>
+
+            <div class="detail-section">
+              <div class="section-header">
+                <Clock :size="14" />
+                <span>元信息</span>
+              </div>
+              <div class="section-content meta-info">
+                <div class="meta-item">
+                  <span class="meta-label">创建时间</span>
+                  <span class="meta-value">{{ formatTime(currentAgent.created_at) }}</span>
+                </div>
+                <div class="meta-item">
+                  <span class="meta-label">更新时间</span>
+                  <span class="meta-value">{{ formatTime(currentAgent.updated_at) }}</span>
+                </div>
+                <div class="meta-item" v-if="currentAgent.created_by">
+                  <span class="meta-label">创建人</span>
+                  <span class="meta-value">{{ currentAgent.created_by }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </template>
       </div>
     </div>
@@ -207,7 +226,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { Search, Bot, Pencil, Trash2, Info, MessageSquare } from 'lucide-vue-next'
+import { Search, Bot, Pencil, Trash2, Info, MessageSquare, FileText, Cpu, Wrench, Clock } from 'lucide-vue-next'
 import { subagentApi } from '@/apis/subagent_api'
 import { toolApi } from '@/apis/tool_api'
 import { formatFullDateTime } from '@/utils/time'
@@ -219,7 +238,6 @@ const error = ref(null)
 const subagents = ref([])
 const searchQuery = ref('')
 const currentAgent = ref(null)
-const detailTab = ref('general')
 const availableTools = ref([])
 
 // 表单相关
@@ -271,10 +289,9 @@ const fetchSubAgents = async () => {
           currentAgent.value = null
         }
       }
-      // 默认选中第一项（切换到 tab 且当前未选中时）
+      // 默认选中第一项
       if (!currentAgent.value && subagents.value.length > 0) {
         currentAgent.value = getSortedSubAgents(subagents.value)[0]
-        detailTab.value = 'general'
       }
     } else {
       error.value = result.message || '获取列表失败'
@@ -310,7 +327,6 @@ const handleModelSelect = (spec) => {
 // 选择 SubAgent
 const selectAgent = (agent) => {
   currentAgent.value = agent
-  detailTab.value = 'general'
 }
 
 // 显示添加模态框

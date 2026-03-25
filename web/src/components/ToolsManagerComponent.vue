@@ -78,7 +78,7 @@
             </div>
           </div>
 
-          <div class="tool-detail">
+          <div class="detail-section-container">
             <div class="detail-section">
               <div class="section-header">
                 <FileText :size="14" />
@@ -233,40 +233,6 @@ defineExpose({
         padding: 0 4px;
         margin: 0;
         border: none;
-      }
-    }
-  }
-}
-
-.tool-detail {
-  padding: 16px;
-  flex: 1;
-  overflow-y: auto;
-
-  .detail-section {
-    margin-bottom: 20px;
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--gray-700);
-      margin-bottom: 8px;
-
-      svg {
-        color: var(--gray-500);
-      }
-    }
-
-    .section-content {
-      &.description {
-        font-size: 13px;
-        color: var(--gray-600);
-        line-height: 1.6;
-        white-space: pre-wrap;
-        word-break: break-word;
       }
     }
   }

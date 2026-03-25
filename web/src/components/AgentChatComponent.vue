@@ -63,6 +63,10 @@
             <MessageCirclePlus v-else class="nav-btn-icon" size="16" />
             <span class="text">新对话</span>
           </div>
+          <a-divider
+            v-if="currentThread?.title && currentThread.title !== '新的对话'"
+            type="vertical"
+          />
           <div
             v-if="currentThread?.title && currentThread.title !== '新的对话'"
             class="conversation-title"
@@ -135,7 +139,7 @@
 
               <!-- 打招呼区域 - 在输入框上方 -->
               <div v-if="!conversations.length" class="chat-examples-input">
-                <h1>👋 您好，我是{{ currentAgentName }}！</h1>
+                <h1>{{ randomGreeting }}</h1>
               </div>
 
               <div v-if="showStartAgentSegment" class="agent-segment-wrapper">
@@ -276,6 +280,7 @@ const {
 } = storeToRefs(agentStore)
 const { organization } = storeToRefs(infoStore)
 
+
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('')
 const sendCooldownActive = ref(false)
@@ -284,6 +289,18 @@ const sidebarLogo = computed(() => organization.value?.logo || organization.valu
 const useRunsApi =
   import.meta.env.VITE_USE_RUNS_API === 'true' &&
   localStorage.getItem('force_legacy_stream') !== 'true'
+
+// 预设的打招呼文本
+const greetingMessages = [
+  '👋 您好，有什么可以帮您？',
+  '👋 你好！有什么想聊的吗？',
+  '👋 嘿，有什么我可以帮助你的？',
+  '👋 欢迎！今天想讨论什么话题？',
+  '👋 你好呀，随时为你服务！'
+]
+
+// 随机选择一个打招呼文本
+const randomGreeting = greetingMessages[Math.floor(Math.random() * greetingMessages.length)]
 
 // 从智能体元数据获取示例问题
 const exampleQuestions = computed(() => {
@@ -1630,8 +1647,8 @@ watch(currentChatId, (threadId, oldThreadId) => {
     }
 
     .conversation-title {
-      font-size: 14px;
-      font-weight: 500;
+      font-size: 15px;
+      font-weight: 400;
       color: var(--text-primary);
       max-width: 200px;
       overflow: hidden;

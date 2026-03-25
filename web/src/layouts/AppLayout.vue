@@ -321,7 +321,7 @@ div.header,
     border: 1px solid transparent;
     border-radius: 12px;
     background-color: transparent;
-    color: var(--gray-1000);
+    color: var(--gray-700);
     font-size: 20px;
     transition:
       background-color 0.2s ease-in-out,
