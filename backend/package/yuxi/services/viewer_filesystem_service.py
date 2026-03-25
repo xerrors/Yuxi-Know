@@ -20,11 +20,118 @@ from yuxi.storage.postgres.models_business import User
 SANDBOX_HOME = "/home/gem"
 
 # 根目录排除的文件/目录名
-_HIDDEN_EXCLUDE = frozenset({
-    ".cache", ".config", ".jupyter", ".local", ".npm-global", ".pki",
-    ".ipython", ".npm",
-    ".bashrc", ".Xauthority",
-})
+_HIDDEN_EXCLUDE = frozenset(
+    {
+        ".cache",
+        ".config",
+        ".jupyter",
+        ".local",
+        ".npm-global",
+        ".pki",
+        ".ipython",
+        ".npm",
+        ".bashrc",
+        ".Xauthority",
+    }
+)
+
+_MARKDOWN_EXTENSIONS = frozenset({".md", ".markdown", ".mdx"})
+_PDF_EXTENSIONS = frozenset({".pdf"})
+_TEXT_EXTENSIONS = frozenset(
+    {
+        ".txt",
+        ".text",
+        ".log",
+        ".json",
+        ".jsonl",
+        ".yaml",
+        ".yml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".conf",
+        ".csv",
+        ".tsv",
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".vue",
+        ".html",
+        ".htm",
+        ".css",
+        ".less",
+        ".scss",
+        ".xml",
+        ".sql",
+        ".sh",
+        ".bash",
+        ".zsh",
+        ".fish",
+        ".env",
+        ".dockerfile",
+        ".gitignore",
+        ".weather",
+    }
+)
+_IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg"})
+_BINARY_SIGNATURES = (
+    b"\x7fELF",
+    b"MZ",
+    b"%PDF-",
+    b"PK\x03\x04",
+    b"PK\x05\x06",
+    b"PK\x07\x08",
+    b"\x89PNG\r\n\x1a\n",
+    b"\xff\xd8\xff",
+    b"GIF87a",
+    b"GIF89a",
+    b"RIFF",
+)
+
+
+def _detect_preview_type(path: str, raw_content: bytes) -> tuple[str, bool, str | None]:
+    suffix = PurePosixPath(path).suffix.lower()
+    mime_type, _encoding = mimetypes.guess_type(path)
+    head = raw_content[:1024]
+
+    if suffix in _IMAGE_EXTENSIONS or (mime_type and mime_type.startswith("image/")):
+        return "image", True, None
+
+    if suffix in _PDF_EXTENSIONS or mime_type == "application/pdf" or head.startswith(b"%PDF-"):
+        return "pdf", True, None
+
+    if suffix in _MARKDOWN_EXTENSIONS:
+        return "markdown", True, None
+
+    if suffix in _TEXT_EXTENSIONS:
+        return "text", True, None
+
+    if b"\x00" in head:
+        return "unsupported", False, "当前文件是二进制文件，暂不支持预览"
+
+    if any(head.startswith(signature) for signature in _BINARY_SIGNATURES):
+        if head.startswith(b"RIFF") and b"WEBP" in head[:16]:
+            return "image", True, None
+        return "unsupported", False, "当前文件格式暂不支持预览"
+
+    if mime_type:
+        if mime_type.startswith("text/"):
+            return "text", True, None
+        if mime_type in {"application/json", "application/xml", "application/javascript"}:
+            return "text", True, None
+        if mime_type.startswith("application/"):
+            return "unsupported", False, "当前文件格式暂不支持预览"
+
+    if not raw_content:
+        return "text", True, None
+
+    try:
+        raw_content.decode("utf-8")
+        return "text", True, None
+    except UnicodeDecodeError:
+        return "unsupported", False, "当前文件不是可读文本，暂不支持预览"
 
 
 def _normalize_path(path: str | None) -> str:
@@ -170,7 +277,9 @@ async def list_viewer_filesystem_tree(
         added_names = set()
 
         # 添加虚拟挂载点
-        entries.append({"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""})
+        entries.append(
+            {"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}
+        )
         added_names.add("user-data")
         if selected_skills:
             entries.append({"path": f"{SKILLS_PATH}/", "name": "skills", "is_dir": True, "size": 0, "modified_at": ""})
@@ -237,7 +346,26 @@ async def read_viewer_file_content(
 
     try:
         if _is_user_data_path(normalized_path):
-            responses = await asyncio.to_thread(sandbox_backend.download_files, [normalized_path])
+            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            if not actual_path.exists():
+                raise HTTPException(status_code=404, detail="文件不存在")
+            if not actual_path.is_file():
+                raise HTTPException(status_code=400, detail="当前路径是目录")
+            raw_content = await asyncio.to_thread(actual_path.read_bytes)
+            preview_type, supported, message = _detect_preview_type(normalized_path, raw_content)
+            if preview_type in {"image", "pdf"} or not supported:
+                return {
+                    "content": None,
+                    "preview_type": preview_type,
+                    "supported": supported,
+                    "message": message,
+                }
+            return {
+                "content": raw_content.decode("utf-8"),
+                "preview_type": preview_type,
+                "supported": supported,
+                "message": message,
+            }
         elif _is_skills_path(normalized_path):
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
         elif _is_kbs_path(normalized_path):
@@ -264,11 +392,31 @@ async def read_viewer_file_content(
         raise HTTPException(status_code=400, detail=str(response.error))
 
     raw_content = response.content or b""
-    try:
-        content = raw_content.decode("utf-8")
-    except UnicodeDecodeError:
-        content = raw_content.decode("utf-8", errors="replace")
-    return {"content": content}
+    preview_type, supported, message = _detect_preview_type(normalized_path, raw_content)
+
+    if preview_type in {"image", "pdf"}:
+        return {
+            "content": None,
+            "preview_type": preview_type,
+            "supported": supported,
+            "message": message,
+        }
+
+    if not supported:
+        return {
+            "content": None,
+            "preview_type": preview_type,
+            "supported": supported,
+            "message": message,
+        }
+
+    content = raw_content.decode("utf-8")
+    return {
+        "content": content,
+        "preview_type": preview_type,
+        "supported": supported,
+        "message": message,
+    }
 
 
 async def download_viewer_file(

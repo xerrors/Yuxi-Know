@@ -98,6 +98,76 @@ async def test_viewer_file_returns_raw_content_without_line_numbers(test_client,
     assert response.status_code == 200, response.text
     assert "alpha" in response.json()["content"]
     assert "beta" in response.json()["content"]
+    assert response.json()["preview_type"] == "text"
+    assert response.json()["supported"] is True
+
+
+async def test_viewer_file_returns_unsupported_for_binary_payload(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "binary.bin"
+    actual_path.write_bytes(b"\x00\x01\x02\x03binary")
+    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/file",
+        params={"thread_id": thread_id, "path": file_path},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["content"] is None
+    assert payload["preview_type"] == "unsupported"
+    assert payload["supported"] is False
+
+
+async def test_viewer_file_returns_image_preview_metadata(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "demo.png"
+    actual_path.write_bytes(
+        b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
+    )
+    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/file",
+        params={"thread_id": thread_id, "path": file_path},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["content"] is None
+    assert payload["preview_type"] == "image"
+    assert payload["supported"] is True
+
+
+async def test_viewer_file_returns_pdf_preview_metadata(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "demo.pdf"
+    actual_path.write_bytes(b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF")
+    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/file",
+        params={"thread_id": thread_id, "path": file_path},
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["content"] is None
+    assert payload["preview_type"] == "pdf"
+    assert payload["supported"] is True
 
 
 async def test_viewer_download_returns_attachment_response(test_client, standard_user):

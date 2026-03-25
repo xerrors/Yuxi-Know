@@ -8,10 +8,6 @@
         <span><strong>状态工作台</strong></span>
       </div>
       <div class="header-actions">
-        <a-button type="text" class="refresh-btn" @click="emitRefresh">
-          <!-- <template #icon><RefreshCw :size="14" /></template> -->
-          刷新
-        </a-button>
         <button class="close-btn" @click="$emit('close')">
           <X :size="18" />
         </button>
@@ -22,9 +18,26 @@
       <button class="tab" :class="{ active: activeTab === 'files' }" @click="activeTab = 'files'">
         文件系统
       </button>
-      <button v-if="supportsTodo" class="tab" :class="{ active: activeTab === 'todos' }" @click="activeTab = 'todos'">
+      <button
+        v-if="supportsTodo"
+        class="tab"
+        :class="{ active: activeTab === 'todos' }"
+        @click="activeTab = 'todos'"
+      >
         任务 ({{ completedCount }}/{{ todos.length }})
       </button>
+      <div class="tab-actions">
+        <button
+          class="tab-action-btn"
+          :title="isExpanded ? '恢复高度' : '向上展开'"
+          @click="emit('toggle-expand')"
+        >
+          <component :is="isExpanded ? ChevronsDownUp : ChevronsUpDown" :size="15" />
+        </button>
+        <button class="tab-action-btn" title="刷新" @click="emitRefresh">
+          <RefreshCw :size="15" />
+        </button>
+      </div>
     </div>
     <div class="tab-content">
       <!-- Todo Display -->
@@ -125,12 +138,25 @@
         </div>
       </template>
       <div class="file-content flat-md-preview">
-        <template v-if="isMarkdown">
+        <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
+          <div class="image-preview-wrapper">
+            <img :src="currentFile.previewUrl" :alt="currentFilePath" class="image-preview" />
+          </div>
+        </template>
+        <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
+          <iframe :src="currentFile.previewUrl" class="pdf-preview" :title="currentFilePath" />
+        </template>
+        <template v-else-if="isMarkdown">
           <MdPreview
             :modelValue="formatContent(currentFile?.content)"
             :theme="theme"
             previewTheme="github"
           />
+        </template>
+        <template v-else-if="currentFile?.supported === false">
+          <div class="unsupported-preview">
+            {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
+          </div>
         </template>
         <template v-else>
           <pre v-if="Array.isArray(currentFile?.content)">{{
@@ -148,7 +174,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick, watch } from 'vue'
-import { Download, X, FolderCode } from 'lucide-vue-next'
+import { ChevronsDownUp, ChevronsUpDown, Download, FolderCode, RefreshCw, X } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -160,6 +186,7 @@ import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import { isMarkdownPreview } from '@/utils/file_preview'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import {
   downloadViewerFile,
@@ -195,10 +222,14 @@ const props = defineProps({
   supportsTodo: {
     type: Boolean,
     default: false
+  },
+  isExpanded: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['refresh', 'close', 'resize', 'resizing'])
+const emit = defineEmits(['refresh', 'close', 'resize', 'resizing', 'toggle-expand'])
 
 const activeTab = ref('files')
 const modalVisible = ref(false)
@@ -214,12 +245,12 @@ const expandedKeys = ref([])
 const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
-const isMarkdown = computed(() => currentFilePath.value?.toLowerCase().endsWith('.md'))
+const isMarkdown = computed(() =>
+  isMarkdownPreview(currentFilePath.value, currentFile.value?.previewType)
+)
 
 const todos = computed(() => props.agentState?.todos || [])
-const completedCount = computed(() =>
-  todos.value.filter((t) => t.status === 'completed').length
-)
+const completedCount = computed(() => todos.value.filter((t) => t.status === 'completed').length)
 
 const overflowedIds = ref(new Set())
 const todoListRef = ref(null)
@@ -254,7 +285,12 @@ onUpdated(() => {
 })
 
 const updateActiveTab = () => {
-  if (activeTab.value === 'files' && dynamicTreeData.value.length === 0 && props.supportsTodo && todos.value.length > 0) {
+  if (
+    activeTab.value === 'files' &&
+    dynamicTreeData.value.length === 0 &&
+    props.supportsTodo &&
+    todos.value.length > 0
+  ) {
     activeTab.value = 'todos'
   }
 }
@@ -377,7 +413,12 @@ const refreshFileSystem = async () => {
   filesystemError.value = ''
 
   try {
-    const res = await getViewerFileSystemTree(props.threadId, '/', props.agentId, props.agentConfigId)
+    const res = await getViewerFileSystemTree(
+      props.threadId,
+      '/',
+      props.agentId,
+      props.agentConfigId
+    )
     if (res?.entries) {
       dynamicTreeData.value = sortEntries(res.entries).map((entry) => createTreeNode(entry))
       expandedKeys.value = []
@@ -418,29 +459,72 @@ const loadData = (treeNode) => {
 
 const fileTreeData = computed(() => dynamicTreeData.value)
 
+const revokeCurrentPreviewUrl = () => {
+  const previewUrl = currentFile.value?.previewUrl
+  if (previewUrl) {
+    window.URL.revokeObjectURL(previewUrl)
+  }
+}
+
 const onFileSelect = async (nextSelectedKeys, { node }) => {
   selectedKeys.value = nextSelectedKeys
   if (!node?.isLeaf || !props.threadId) return
 
+  revokeCurrentPreviewUrl()
   currentFilePath.value = node.key
-  currentFile.value = { ...node.fileData, content: 'Loading...' }
+  currentFile.value = {
+    ...node.fileData,
+    content: 'Loading...',
+    supported: true,
+    previewType: 'text',
+    message: '',
+    previewUrl: ''
+  }
   modalVisible.value = true
 
   try {
-    const res = await getViewerFileContent(props.threadId, node.key, props.agentId, props.agentConfigId)
+    const res = await getViewerFileContent(
+      props.threadId,
+      node.key,
+      props.agentId,
+      props.agentConfigId
+    )
+    const previewType = res?.preview_type || 'text'
+    let previewUrl = ''
+
+    if ((previewType === 'image' || previewType === 'pdf') && res?.supported) {
+      const response = await downloadViewerFile(
+        props.threadId,
+        node.key,
+        props.agentId,
+        props.agentConfigId
+      )
+      const blob = await response.blob()
+      previewUrl = window.URL.createObjectURL(blob)
+    }
+
     currentFile.value = {
       ...node.fileData,
-      content: res?.content
+      content: res?.content ?? '',
+      supported: res?.supported !== false,
+      previewType,
+      message: res?.message || '',
+      previewUrl
     }
   } catch (error) {
     currentFile.value = {
       ...node.fileData,
-      content: `Error loading file: ${error?.message || 'unknown error'}`
+      content: `Error loading file: ${error?.message || 'unknown error'}`,
+      supported: false,
+      previewType: 'unsupported',
+      message: error?.message || '文件预览失败',
+      previewUrl: ''
     }
   }
 }
 
 const closeModal = () => {
+  revokeCurrentPreviewUrl()
   modalVisible.value = false
   currentFile.value = null
   currentFilePath.value = ''
@@ -586,16 +670,6 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   gap: 4px;
 }
 
-.refresh-btn {
-  color: var(--gray-700);
-  font-size: 13px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-}
-
 .close-btn {
   border: none;
   background: transparent;
@@ -626,6 +700,13 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   border-bottom: 1px solid var(--gray-150);
 }
 
+.tab-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .tab {
   padding: 4px 12px;
   border: none;
@@ -643,6 +724,26 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   }
 
   &.active {
+    background: var(--gray-150);
+    color: var(--gray-900);
+  }
+}
+
+.tab-action-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--gray-600);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+
+  &:hover {
     background: var(--gray-150);
     color: var(--gray-900);
   }
@@ -817,7 +918,7 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
 
 .file-content {
   min-height: 300px;
-  max-height: 60vh;
+  max-height: 80vh;
   overflow-y: auto;
   border-radius: 6px;
 
@@ -849,6 +950,40 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
     color: var(--gray-1000);
     background: transparent;
   }
+}
+
+.image-preview-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.image-preview {
+  display: block;
+  max-width: 100%;
+  max-height: calc(80vh - 32px);
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.pdf-preview {
+  width: 100%;
+  min-height: calc(80vh - 40px);
+  border: none;
+  border-radius: 6px;
+  background: var(--gray-25);
+}
+
+.unsupported-preview {
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--gray-600);
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
 }
 
 .modal-header-title {

@@ -80,7 +80,7 @@ class ViewerFilesystemE2ETester:
             raise RuntimeError(f"viewer tree failed on {path}: {resp.status_code} {resp.text}")
         return list(resp.json().get("entries") or [])
 
-    async def file(self, path: str) -> str:
+    async def file(self, path: str) -> dict:
         assert self.headers and self.thread_id and self.agent_id
         resp = await self.client.get(
             "/api/viewer/filesystem/file",
@@ -89,7 +89,7 @@ class ViewerFilesystemE2ETester:
         )
         if resp.status_code != 200:
             raise RuntimeError(f"viewer file failed on {path}: {resp.status_code} {resp.text}")
-        return str(resp.json().get("content") or "")
+        return dict(resp.json())
 
     async def download(self, path: str) -> tuple[str, bytes]:
         assert self.headers and self.thread_id and self.agent_id
@@ -132,9 +132,11 @@ class ViewerFilesystemE2ETester:
         if "/home/gem/user-data/workspace/demo.py" not in workspace_paths:
             raise RuntimeError(f"viewer workspace missing demo.py: {sorted(workspace_paths)}")
 
-        content = await self.file("/home/gem/user-data/workspace/demo.py")
-        if content != "print(42)\n":
-            raise RuntimeError(f"unexpected viewer file content: {content!r}")
+        file_payload = await self.file("/home/gem/user-data/workspace/demo.py")
+        if file_payload.get("content") != "print(42)\n":
+            raise RuntimeError(f"unexpected viewer file content: {file_payload!r}")
+        if file_payload.get("preview_type") != "text" or file_payload.get("supported") is not True:
+            raise RuntimeError(f"unexpected viewer file preview metadata: {file_payload!r}")
 
         content_disposition, payload = await self.download("/home/gem/user-data/outputs/result.txt")
         if "result.txt" not in content_disposition:

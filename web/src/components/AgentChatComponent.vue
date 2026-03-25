@@ -200,7 +200,8 @@
           ref="panelWrapperRef"
           :class="{
             'is-visible': isAgentPanelOpen,
-            'no-transition': isResizing
+            'no-transition': isResizing,
+            'is-expanded': isAgentPanelExpanded
           }"
           :style="{
             flexBasis: isAgentPanelOpen ? `${panelRatio * 100}%` : '0px'
@@ -215,8 +216,10 @@
             :agent-config-id="selectedAgentConfigId"
             :panel-ratio="panelRatio"
             :supports-todo="supportsTodo"
+            :is-expanded="isAgentPanelExpanded"
             @refresh="handleAgentStateRefresh"
             @close="toggleAgentPanel"
+            @toggle-expand="togglePanelExpanded"
             @resize="handlePanelResize"
             @resizing="handleResizingChange"
           />
@@ -280,7 +283,6 @@ const {
   availableSkills
 } = storeToRefs(agentStore)
 const { organization } = storeToRefs(infoStore)
-
 
 // ==================== LOCAL CHAT & UI STATE ====================
 const userInput = ref('')
@@ -349,6 +351,7 @@ const localUIState = reactive({
 
 // Agent Panel State
 const isAgentPanelOpen = ref(false)
+const isAgentPanelExpanded = ref(false)
 const isResizing = ref(false)
 const panelRatio = ref(0.3) // 面板宽度比例 (0-1)
 const panelWrapperRef = ref(null) // 直接操作 DOM
@@ -1386,9 +1389,18 @@ const toggleAgentPanel = async () => {
   const nextOpen = !isAgentPanelOpen.value
   isAgentPanelOpen.value = nextOpen
 
+  if (!nextOpen) {
+    isAgentPanelExpanded.value = false
+  }
+
   if (nextOpen) {
     await handleAgentStateRefresh()
   }
+}
+
+const togglePanelExpanded = () => {
+  if (!isAgentPanelOpen.value) return
+  isAgentPanelExpanded.value = !isAgentPanelExpanded.value
 }
 
 // 处理面板宽度调整（使用比例）
@@ -1700,9 +1712,20 @@ watch(currentChatId, (threadId, oldThreadId) => {
   will-change: flex-basis;
 }
 
+.agent-panel-wrapper.is-expanded {
+  align-self: stretch;
+  height: calc(100% - 16px);
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
 @media (max-height: 700px) {
   .agent-panel-wrapper {
     height: calc(100% - 56px);
+  }
+
+  .agent-panel-wrapper.is-expanded {
+    height: calc(100% - 16px);
   }
 }
 
