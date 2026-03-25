@@ -4,6 +4,7 @@
 @import './shorts.css';
 @import './dashboard.css';
 @import './markdown-preview.less';
+@import './code-highlight.less';
 
 :root {
   --header-height: 45px;

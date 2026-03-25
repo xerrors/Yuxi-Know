@@ -123,6 +123,24 @@
             <span class="file-path-title">{{ currentFilePath }}</span>
           </div>
           <div class="modal-actions">
+            <div v-if="isHtmlFile" class="preview-mode-switch">
+              <button
+                class="preview-mode-btn"
+                :class="{ active: htmlPreviewMode === 'render' }"
+                @click="htmlPreviewMode = 'render'"
+                title="预览"
+              >
+                <Globe :size="16" />
+              </button>
+              <button
+                class="preview-mode-btn"
+                :class="{ active: htmlPreviewMode === 'source' }"
+                @click="htmlPreviewMode = 'source'"
+                title="源码"
+              >
+                <Code2 :size="16" />
+              </button>
+            </div>
             <button
               class="modal-action-btn"
               @click="downloadFile(currentFile)"
@@ -146,6 +164,14 @@
         <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
           <iframe :src="currentFile.previewUrl" class="pdf-preview" :title="currentFilePath" />
         </template>
+        <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
+          <iframe
+            class="html-preview"
+            :srcdoc="formatContent(currentFile?.content)"
+            :title="currentFilePath"
+            sandbox=""
+          />
+        </template>
         <template v-else-if="isMarkdown">
           <MdPreview
             :modelValue="formatContent(currentFile?.content)"
@@ -162,6 +188,10 @@
           <pre v-if="Array.isArray(currentFile?.content)">{{
             formatContent(currentFile.content)
           }}</pre>
+          <pre
+            v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
+            :class="['file-content-pre', 'code-highlight', codeThemeClass]"
+          ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
           <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{
             currentFile.content
           }}</pre>
@@ -174,7 +204,16 @@
 
 <script setup>
 import { computed, ref, onMounted, onUpdated, nextTick, watch } from 'vue'
-import { ChevronsDownUp, ChevronsUpDown, Download, FolderCode, RefreshCw, X } from 'lucide-vue-next'
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Code2,
+  Download,
+  FolderCode,
+  Globe,
+  RefreshCw,
+  X
+} from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -183,10 +222,11 @@ import {
   QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import { MdPreview } from 'md-editor-v3'
+import hljs from 'highlight.js/lib/common'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
-import { isMarkdownPreview } from '@/utils/file_preview'
+import { getCodeLanguageByPath, isHtmlPreview, isMarkdownPreview } from '@/utils/file_preview'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import {
   downloadViewerFile,
@@ -235,6 +275,7 @@ const activeTab = ref('files')
 const modalVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
+const htmlPreviewMode = ref('render')
 const loadingFiles = ref(false)
 const filesystemError = ref('')
 
@@ -248,6 +289,46 @@ const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 const isMarkdown = computed(() =>
   isMarkdownPreview(currentFilePath.value, currentFile.value?.previewType)
 )
+const isHtmlFile = computed(
+  () =>
+    currentFile.value?.previewType === 'text' &&
+    typeof currentFile.value?.content === 'string' &&
+    isHtmlPreview(currentFilePath.value)
+)
+const codeThemeClass = computed(() => (themeStore.isDark ? 'hljs-theme-dark' : 'hljs-theme-light'))
+const codeLanguage = computed(() => getCodeLanguageByPath(currentFilePath.value))
+const isCodePreview = computed(
+  () =>
+    currentFile.value?.previewType === 'text' &&
+    typeof currentFile.value?.content === 'string' &&
+    !isHtmlFile.value &&
+    Boolean(codeLanguage.value)
+)
+
+const escapeHtml = (content) =>
+  String(content)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+
+const highlightedCodeContent = computed(() => {
+  const content = currentFile.value?.content
+  if (!isCodePreview.value || typeof content !== 'string') {
+    return ''
+  }
+
+  try {
+    if (codeLanguage.value) {
+      return hljs.highlight(content, { language: codeLanguage.value }).value
+    }
+    return hljs.highlightAuto(content).value
+  } catch (error) {
+    console.warn('代码高亮失败:', error)
+    return escapeHtml(content)
+  }
+})
 
 const todos = computed(() => props.agentState?.todos || [])
 const completedCount = computed(() => todos.value.filter((t) => t.status === 'completed').length)
@@ -472,6 +553,7 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
 
   revokeCurrentPreviewUrl()
   currentFilePath.value = node.key
+  htmlPreviewMode.value = 'render'
   currentFile.value = {
     ...node.fileData,
     content: 'Loading...',
@@ -528,6 +610,7 @@ const closeModal = () => {
   modalVisible.value = false
   currentFile.value = null
   currentFilePath.value = ''
+  htmlPreviewMode.value = 'render'
 }
 
 const downloadFile = async (fileItem) => {
@@ -952,6 +1035,22 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   }
 }
 
+.file-content-pre.code-highlight {
+  border-radius: 8px;
+  background: var(--gray-25);
+  border: 1px solid var(--gray-150);
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.file-content-pre.code-highlight code {
+  padding: 14px 16px;
+  display: block;
+  white-space: pre;
+  color: inherit;
+  min-height: calc(80vh - 40px);
+}
+
 .image-preview-wrapper {
   display: flex;
   justify-content: center;
@@ -972,6 +1071,14 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   border: none;
   border-radius: 6px;
   background: var(--gray-25);
+}
+
+.html-preview {
+  width: 100%;
+  min-height: calc(80vh - 40px);
+  border: 1px solid var(--gray-150);
+  border-radius: 6px;
+  background: #fff;
 }
 
 .unsupported-preview {
@@ -1004,6 +1111,34 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.preview-mode-switch {
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--gray-100);
+}
+
+.preview-mode-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &.active {
+    background: var(--gray-0);
+    color: var(--gray-900);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
 }
 
 .modal-action-btn {
