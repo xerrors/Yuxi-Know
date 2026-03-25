@@ -221,7 +221,7 @@ class Config(BaseModel):
             if os.path.exists(self.model_dir):
                 logger.debug(f"Model directory ({self.model_dir}) contains: {os.listdir(self.model_dir)}")
             else:
-                logger.warning(
+                logger.debug(
                     f"Model directory ({self.model_dir}) does not exist. If not configured, please ignore it."
                 )
 
