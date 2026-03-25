@@ -105,6 +105,30 @@ class LightRagKB(KnowledgeBase):
         # Delete local files and metadata
         return super().delete_database(db_id)
 
+    def update_database(self, db_id: str, name: str, description: str, llm_info: dict = None) -> dict:
+        """
+        更新数据库配置
+
+        当 llm_info 改变时，清除缓存的 LightRAG 实例，确保下次使用时使用新模型创建实例
+        """
+        if db_id not in self.databases_meta:
+            raise ValueError(f"数据库 {db_id} 不存在")
+
+        # 检查 llm_info 是否发生变化
+        old_llm_info = self.databases_meta[db_id].get("llm_info", {})
+        llm_info_changed = llm_info is not None and llm_info != old_llm_info
+        logger.warning(f"old_llm_info: {old_llm_info}, new_llm_info: {llm_info}, llm_info_changed: {llm_info_changed}")
+
+        # 调用父类方法更新基本信息
+        result = super().update_database(db_id, name, description, llm_info)
+
+        # 如果 llm_info 发生变化，清除缓存的实例，确保下次使用新模型
+        if llm_info_changed and db_id in self.instances:
+            logger.info(f"LLM model changed, invalidating cached LightRAG instance for {db_id}")
+            del self.instances[db_id]
+
+        return result
+
     async def _create_kb_instance(self, db_id: str, kb_config: dict) -> LightRAG:
         """创建 LightRAG 实例"""
         logger.info(f"Creating LightRAG instance for {db_id}")
@@ -167,6 +191,7 @@ class LightRagKB(KnowledgeBase):
     async def _get_lightrag_instance(self, db_id: str) -> LightRAG | None:
         """获取或创建 LightRAG 实例"""
         if db_id in self.instances:
+            logger.info(f"Using cached LightRAG instance for {db_id}")
             return self.instances[db_id]
 
         if db_id not in self.databases_meta:
