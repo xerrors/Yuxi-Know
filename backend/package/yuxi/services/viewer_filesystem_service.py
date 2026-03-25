@@ -9,6 +9,7 @@ from urllib.parse import quote
 from fastapi import HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from yuxi.agents.backends import KBS_PATH, KnowledgeBaseReadonlyBackend, resolve_visible_knowledge_bases_for_context
 from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH, resolve_virtual_path
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
@@ -20,7 +21,7 @@ def _normalize_path(path: str | None) -> str:
     normalized = (path or "/").strip() or "/"
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
-    return normalized.rstrip("/") if normalized not in {"/", SKILLS_PATH, USER_DATA_PATH} else normalized
+    return normalized.rstrip("/") if normalized not in {"/", KBS_PATH, SKILLS_PATH, USER_DATA_PATH} else normalized
 
 
 def _is_user_data_path(path: str) -> bool:
@@ -31,16 +32,26 @@ def _is_skills_path(path: str) -> bool:
     return path == SKILLS_PATH or path.startswith(f"{SKILLS_PATH}/")
 
 
+def _is_kbs_path(path: str) -> bool:
+    return path == KBS_PATH or path.startswith(f"{KBS_PATH}/")
+
+
 def _strip_skills_prefix(path: str) -> str:
     if path == SKILLS_PATH:
         return "/"
     return path[len(SKILLS_PATH) :] or "/"
 
 
-def _remap_skills_entry(entry: dict) -> dict:
+def _strip_kbs_prefix(path: str) -> str:
+    if path == KBS_PATH:
+        return "/"
+    return path[len(KBS_PATH) :] or "/"
+
+
+def _remap_prefixed_entry(entry: dict, prefix: str) -> dict:
     raw_path = str(entry.get("path") or "")
     is_dir = bool(entry.get("is_dir", False))
-    remapped = f"{SKILLS_PATH}{raw_path}" if raw_path != "/" else f"{SKILLS_PATH}/"
+    remapped = f"{prefix}{raw_path}" if raw_path != "/" else f"{prefix}/"
     if is_dir and not remapped.endswith("/"):
         remapped = f"{remapped}/"
     return {
@@ -89,9 +100,11 @@ async def _resolve_viewer_state(
         agent_id=agent_id,
         agent_config_id=agent_config_id,
     )
+    visible_kbs = await resolve_visible_knowledge_bases_for_context(runtime_context)
     selected_skills = normalize_selected_skills(getattr(runtime_context, "skills", None) or [])
     skills_backend = SelectedSkillsReadonlyBackend(selected_slugs=selected_skills)
-    return sandbox_backend, skills_backend, selected_skills
+    kb_backend = KnowledgeBaseReadonlyBackend(visible_kbs=visible_kbs)
+    return sandbox_backend, skills_backend, kb_backend, selected_skills
 
 
 async def list_viewer_filesystem_tree(
@@ -107,7 +120,7 @@ async def list_viewer_filesystem_tree(
         raise HTTPException(status_code=422, detail="thread_id 不能为空")
 
     normalized_path = _normalize_path(path)
-    sandbox_backend, skills_backend, selected_skills = await _resolve_viewer_state(
+    sandbox_backend, skills_backend, kb_backend, selected_skills = await _resolve_viewer_state(
         thread_id=thread_id,
         agent_id=agent_id,
         agent_config_id=agent_config_id,
@@ -119,6 +132,8 @@ async def list_viewer_filesystem_tree(
         entries = [{"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}]
         if selected_skills:
             entries.append({"path": f"{SKILLS_PATH}/", "name": "skills", "is_dir": True, "size": 0, "modified_at": ""})
+        if kb_backend.has_entries():
+            entries.append({"path": f"{KBS_PATH}/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""})
         return {"entries": entries}
 
     try:
@@ -128,7 +143,10 @@ async def list_viewer_filesystem_tree(
 
         if _is_skills_path(normalized_path):
             entries = await asyncio.to_thread(skills_backend.ls_info, _strip_skills_prefix(normalized_path))
-            return {"entries": [_remap_skills_entry(entry) for entry in entries]}
+            return {"entries": [_remap_prefixed_entry(entry, SKILLS_PATH) for entry in entries]}
+        if _is_kbs_path(normalized_path):
+            entries = await asyncio.to_thread(kb_backend.ls_info, _strip_kbs_prefix(normalized_path))
+            return {"entries": [_remap_prefixed_entry(entry, KBS_PATH) for entry in entries]}
     except PermissionError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
@@ -150,7 +168,7 @@ async def read_viewer_file_content(
         raise HTTPException(status_code=422, detail="thread_id 不能为空")
     normalized_path = _normalize_path(path)
 
-    sandbox_backend, skills_backend, _selected_skills = await _resolve_viewer_state(
+    sandbox_backend, skills_backend, kb_backend, _selected_skills = await _resolve_viewer_state(
         thread_id=thread_id,
         agent_id=agent_id,
         agent_config_id=agent_config_id,
@@ -163,6 +181,8 @@ async def read_viewer_file_content(
             responses = await asyncio.to_thread(sandbox_backend.download_files, [normalized_path])
         elif _is_skills_path(normalized_path):
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
+        elif _is_kbs_path(normalized_path):
+            responses = await asyncio.to_thread(kb_backend.download_files, [_strip_kbs_prefix(normalized_path)])
         else:
             raise HTTPException(
                 status_code=400,
@@ -199,7 +219,7 @@ async def download_viewer_file(
     db: AsyncSession,
 ) -> StreamingResponse:
     normalized_path = _normalize_path(path)
-    _sandbox_backend, skills_backend, _selected_skills = await _resolve_viewer_state(
+    _sandbox_backend, skills_backend, kb_backend, _selected_skills = await _resolve_viewer_state(
         thread_id=thread_id,
         agent_id=agent_id,
         agent_config_id=agent_config_id,
@@ -224,6 +244,8 @@ async def download_viewer_file(
 
         if _is_skills_path(normalized_path):
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
+        elif _is_kbs_path(normalized_path):
+            responses = await asyncio.to_thread(kb_backend.download_files, [_strip_kbs_prefix(normalized_path)])
         else:
             raise HTTPException(
                 status_code=400,

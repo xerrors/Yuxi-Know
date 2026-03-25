@@ -1,6 +1,7 @@
 from deepagents.backends import CompositeBackend, StateBackend
 
 from .composite import create_agent_composite_backend
+from .knowledge_base_backend import KBS_PATH, KnowledgeBaseReadonlyBackend, resolve_visible_knowledge_bases_for_context
 from .sandbox import (
     IDLE_CHECK_INTERVAL,
     LARGE_TOOL_RESULTS_DIR,
@@ -33,6 +34,8 @@ from .skills_backend import SelectedSkillsReadonlyBackend
 
 __all__ = [
     "CompositeBackend",
+    "KBS_PATH",
+    "KnowledgeBaseReadonlyBackend",
     "StateBackend",
     "SelectedSkillsReadonlyBackend",
     "create_agent_composite_backend",
@@ -47,6 +50,7 @@ __all__ = [
     "init_sandbox_provider",
     "shutdown_sandbox_provider",
     "resolve_virtual_path",
+    "resolve_visible_knowledge_bases_for_context",
     "virtual_path_for_thread_file",
     "sandbox_id_for_thread",
     "sandbox_user_data_dir",

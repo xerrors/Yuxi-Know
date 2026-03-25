@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.agents.backends import (
     ProvisionerSandboxBackend,
     create_agent_composite_backend,
+    resolve_visible_knowledge_bases_for_context,
 )
 from yuxi.agents.backends.sandbox.backend import _looks_like_binary
 from yuxi.agents.context import BaseContext
@@ -64,6 +65,7 @@ async def _resolve_filesystem_state(
     )
     runtime_context.thread_id = thread_id
     runtime_context.user_id = str(user.id)
+    await resolve_visible_knowledge_bases_for_context(runtime_context)
 
     sandbox_backend = ProvisionerSandboxBackend(thread_id=thread_id)
     return conversation, runtime_context, sandbox_backend

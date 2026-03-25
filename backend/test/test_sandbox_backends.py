@@ -5,29 +5,36 @@ from __future__ import annotations
 from types import MethodType, SimpleNamespace
 
 import pytest
-
 from yuxi.agents.backends.composite import create_agent_composite_backend
 from yuxi.agents.backends.sandbox import resolve_virtual_path, sandbox_id_for_thread
 from yuxi.agents.backends.sandbox.backend import ProvisionerSandboxBackend
 from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 
 
-def _runtime(*, thread_id: str | None = "thread-1", skills: list[str] | None = None):
+def _runtime(
+    *,
+    thread_id: str | None = "thread-1",
+    skills: list[str] | None = None,
+    visible_kbs: list[dict] | None = None,
+):
     configurable = {"thread_id": thread_id} if thread_id else {}
     return SimpleNamespace(
         config={"configurable": configurable},
-        context=SimpleNamespace(skills=skills or []),
+        context=SimpleNamespace(skills=skills or [], _visible_knowledge_bases=visible_kbs or []),
     )
 
 
 def test_create_agent_composite_backend_uses_provisioner_default(monkeypatch):
     monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
 
-    backend = create_agent_composite_backend(_runtime(skills=["reporter"]))
+    backend = create_agent_composite_backend(
+        _runtime(skills=["reporter"], visible_kbs=[{"db_id": "db-1", "name": "Docs"}])
+    )
 
     assert isinstance(backend.default, ProvisionerSandboxBackend)
     assert backend.default._visible_skills == ["reporter"]
     assert "/skills/" in backend.routes
+    assert "/home/yuxi/kbs/" in backend.routes
 
 
 def test_create_agent_composite_backend_requires_thread_id():

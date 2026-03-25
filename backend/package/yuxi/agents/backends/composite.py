@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from deepagents.backends.composite import (
     CompositeBackend,
-    _route_for_path,
     _remap_file_info_path,
+    _route_for_path,
     _strip_route_from_pattern,
 )
 from deepagents.backends.protocol import FileInfo
 
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
+
+from .knowledge_base_backend import KnowledgeBaseReadonlyBackend
 from .sandbox import ProvisionerSandboxBackend
 from .skills_backend import SelectedSkillsReadonlyBackend
 
@@ -92,12 +94,22 @@ def _extract_thread_id(runtime) -> str:
     raise ValueError("thread_id is required in runtime configurable context")
 
 
+def _get_visible_knowledge_bases_from_runtime(runtime) -> list[dict]:
+    context = getattr(runtime, "context", None)
+    selected = getattr(context, "_visible_knowledge_bases", None)
+    if isinstance(selected, list):
+        return selected
+    return []
+
+
 def create_agent_composite_backend(runtime) -> CompositeBackend:
     visible_skills = _get_visible_skills_from_runtime(runtime)
     thread_id = _extract_thread_id(runtime)
+    visible_kbs = _get_visible_knowledge_bases_from_runtime(runtime)
     return CustomCompositeBackend(
         default=ProvisionerSandboxBackend(thread_id=thread_id, visible_skills=visible_skills),
         routes={
             "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=visible_skills),
+            "/home/yuxi/kbs/": KnowledgeBaseReadonlyBackend(visible_kbs=visible_kbs),
         },
     )
