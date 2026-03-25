@@ -63,9 +63,30 @@
     <div v-if="loading" class="loading-container">
       <a-spin tip="正在加载文档内容..." />
     </div>
-    <div v-else-if="file && hasContent" class="file-detail-content">
+    <div v-else-if="file && (hasContent || hasSourcePreview)" class="file-detail-content">
+      <div v-if="viewMode === 'source'" class="content-panel source-panel">
+        <div v-if="sourcePreviewLoading" class="loading-container">
+          <a-spin tip="正在加载源文件预览..." />
+        </div>
+        <div
+          v-else-if="sourcePreviewUrl && sourcePreviewType === 'image'"
+          class="source-preview-wrapper"
+        >
+          <img :src="sourcePreviewUrl" :alt="file?.filename || '源文件预览'" class="source-image" />
+        </div>
+        <iframe
+          v-else-if="sourcePreviewUrl && sourcePreviewType === 'pdf'"
+          :src="sourcePreviewUrl"
+          class="source-pdf"
+          :title="file?.filename || 'PDF 预览'"
+        />
+        <div v-else class="empty-content">
+          <p>暂无源文件预览</p>
+        </div>
+      </div>
+
       <!-- Markdown 模式 -->
-      <div v-if="viewMode === 'markdown'" class="content-panel flat-md-preview">
+      <div v-else-if="viewMode === 'markdown'" class="content-panel flat-md-preview">
         <MdPreview
           v-if="mergedContent"
           :modelValue="mergedContent"
@@ -110,6 +131,7 @@ import { message } from 'ant-design-vue'
 import { documentApi } from '@/apis/knowledge_api'
 import { mergeChunks } from '@/utils/chunkUtils'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
+import { getPreviewTypeByPath } from '@/utils/file_preview'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { Download, ChevronDown, FileText, X } from 'lucide-vue-next'
@@ -131,21 +153,28 @@ const fileIconColor = computed(() => getFileIconColor(file.value?.filename))
 
 const downloadingOriginal = ref(false)
 const downloadingMarkdown = ref(false)
+const sourcePreviewLoading = ref(false)
+const sourcePreviewUrl = ref('')
 
 // 主题设置
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 // 视图模式
 const viewMode = ref('markdown')
-const hasIndexed = computed(() => ['done', 'indexed'].includes(file.value?.status))
 const hasContent = computed(
   () => (file.value?.lines && file.value?.lines.length > 0) || file.value?.content
 )
+const sourcePreviewType = computed(() => getPreviewTypeByPath(file.value?.filename || ''))
+const hasSourcePreview = computed(() => ['image', 'pdf'].includes(sourcePreviewType.value))
 // 是否有实际的分块数据
 const hasChunks = computed(() => mappedChunks.value && mappedChunks.value.length > 0)
 
 const viewModeOptions = computed(() => {
-  const options = [{ label: 'Markdown', value: 'markdown' }]
+  const options = []
+  if (hasSourcePreview.value) {
+    options.push({ label: '源文件', value: 'source' })
+  }
+  options.push({ label: 'Markdown', value: 'markdown' })
   // 只有当有实际的分块数据时才显示 Chunks 选项
   if (hasChunks.value) {
     options.push({ label: 'Chunks', value: 'chunks' })
@@ -154,11 +183,35 @@ const viewModeOptions = computed(() => {
 })
 
 // 监听文件变化，如果没有 chunks 则重置为 markdown
-watch(file, (newFile) => {
-  if (newFile && !hasChunks.value) {
-    viewMode.value = 'markdown'
+watch(file, (newFile, oldFile) => {
+  if (newFile?.file_id !== oldFile?.file_id) {
+    revokeSourcePreviewUrl()
+  }
+
+  if (!newFile) {
+    revokeSourcePreviewUrl()
+    return
+  }
+
+  if (!hasChunks.value) {
+    viewMode.value = hasSourcePreview.value ? 'source' : 'markdown'
   }
 })
+
+watch(
+  [visible, file],
+  async ([open, currentFile]) => {
+    if (!open || !currentFile || !hasSourcePreview.value) {
+      if (!open || !hasSourcePreview.value) {
+        revokeSourcePreviewUrl()
+      }
+      return
+    }
+
+    await loadSourcePreview()
+  },
+  { immediate: true }
+)
 
 // 统计信息
 const mergeResult = computed(() => mergeChunks(file.value?.lines || []))
@@ -180,8 +233,34 @@ function formatTextLength(length) {
 
 const afterOpenChange = (open) => {
   if (!open) {
+    revokeSourcePreviewUrl()
     store.selectedFile = null
     viewMode.value = 'markdown'
+  }
+}
+
+const revokeSourcePreviewUrl = () => {
+  if (sourcePreviewUrl.value) {
+    window.URL.revokeObjectURL(sourcePreviewUrl.value)
+    sourcePreviewUrl.value = ''
+  }
+}
+
+const loadSourcePreview = async () => {
+  if (!file.value?.file_id || !store.databaseId || !hasSourcePreview.value) return
+  if (sourcePreviewUrl.value) return
+
+  sourcePreviewLoading.value = true
+  try {
+    const response = await documentApi.downloadDocument(store.databaseId, file.value.file_id)
+    const blob = await response.blob()
+    revokeSourcePreviewUrl()
+    sourcePreviewUrl.value = window.URL.createObjectURL(blob)
+  } catch (error) {
+    console.error('加载源文件预览失败:', error)
+    message.error(error.message || '加载源文件预览失败')
+  } finally {
+    sourcePreviewLoading.value = false
   }
 }
 
@@ -314,12 +393,36 @@ const handleDownloadMarkdown = () => {
 .chunks-panel {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 0;
+  padding: 0;
   min-height: 0;
 }
 
 .markdown-content {
   min-height: 100%;
+}
+
+.source-preview-wrapper {
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.source-image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.source-pdf {
+  width: 100%;
+  max-height: 100%;
+  height: calc(100% - 6px);
+  border: none;
+  border-radius: 8px;
+  background: var(--gray-25);
 }
 
 .loading-container {
