@@ -67,7 +67,8 @@ export function useAgentStreamHandler({
   processApprovalInStream,
   currentAgentId,
   supportsTodo,
-  supportsFiles
+  supportsFiles,
+  streamSmoother
 }) {
   const debugPrefix = '[AgentStateDebug]'
   /**
@@ -89,14 +90,19 @@ export function useAgentStreamHandler({
 
       case 'loading':
         if (msg.id) {
-          if (!threadState.onGoingConv.msgChunks[msg.id]) {
-            threadState.onGoingConv.msgChunks[msg.id] = []
+          if (streamSmoother) {
+            streamSmoother.pushChunk(msg, threadId)
+          } else {
+            if (!threadState.onGoingConv.msgChunks[msg.id]) {
+              threadState.onGoingConv.msgChunks[msg.id] = []
+            }
+            threadState.onGoingConv.msgChunks[msg.id].push(msg)
           }
-          threadState.onGoingConv.msgChunks[msg.id].push(msg)
         }
         return false
 
       case 'error':
+        streamSmoother?.flushThread(threadId)
         handleChatError({ message: chunkMessage }, 'stream')
         // Stop the loading indicator
         if (threadState) {
@@ -112,6 +118,7 @@ export function useAgentStreamHandler({
 
       case 'ask_user_question_required':
       case 'human_approval_required':
+        streamSmoother?.flushThread(threadId)
         console.log(`${debugPrefix}[approval_required]`, {
           threadId,
           currentAgentId: unref(currentAgentId)
@@ -151,6 +158,7 @@ export function useAgentStreamHandler({
         return false
 
       case 'finished':
+        streamSmoother?.flushThread(threadId)
         // 先标记流式结束，但保持消息显示直到历史记录加载完成
         if (threadState) {
           threadState.isStreaming = false
@@ -175,6 +183,7 @@ export function useAgentStreamHandler({
         return true
 
       case 'interrupted':
+        streamSmoother?.flushThread(threadId)
         // 中断状态，刷新消息历史
         console.warn(`${debugPrefix}[interrupted]`, {
           threadId,

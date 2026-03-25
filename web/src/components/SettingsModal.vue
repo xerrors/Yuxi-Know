@@ -294,7 +294,7 @@ watch(
   }
 
   .settings-content {
-    padding: 12px 16px 16px; /* Keep inner readability without outer panel padding */
+    padding: 16px 16px; /* Keep inner readability without outer panel padding */
     // margin-bottom: 40px; /* Matches SettingView .setting margin-bottom */
     overflow-y: scroll;
     height: auto;
@@ -326,7 +326,7 @@ watch(
       font-weight: 500;
       color: var(--gray-900);
       line-height: 1.4;
-      margin: 12px 0 4px;
+      margin: 12px 0 12px;
     }
 
     .section-description {

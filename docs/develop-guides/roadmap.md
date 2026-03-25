@@ -30,6 +30,8 @@
 ## v0.6
 
 <!-- 添加到这里 -->
+- 修复 AgentPanel 文件下载截断问题：viewer 下载接口对线程 `user-data` 文件改为直接返回实际文件，避免复用 sandbox 预览读取链路导致下载内容不完整
+- 优化前端流式消息体验：新增通用 `useStreamSmoother` 调度层，统一平滑 Agent runs SSE、普通聊天流与审批恢复流中的 `loading` chunk，按帧释放文本增量，改善消息输出“一顿一顿”的观感
 - 统一沙盒虚拟路径前缀默认值为 `/home/yuxi/user-data`，修正生产环境仍使用旧版 `/mnt/user-data` 的不一致配置；同时收紧 sandbox provisioner 对 Docker host bind 路径的归一化逻辑，保留 Docker Desktop for Windows 兼容
 - 修复沙盒文件读取错误提示不准确的问题：`read_file` 不再把所有读取异常都显示为 `file not found`，改为区分无效路径、目录路径、权限不足、实际读取失败；同时对图片、PDF 等二进制文件返回明确提示，避免误报与乱码文本
 - 新增 Agent runs 沙盒文件生成 E2E 脚本：通过管理员账号登录、创建 thread、调用 Agent 生成并执行冒泡排序脚本，然后仅通过线程文件 API 校验脚本文件与输出结果文件是否成功落盘

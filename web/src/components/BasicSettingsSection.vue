@@ -1,114 +1,115 @@
 <template>
   <div class="basic-settings-section">
-    <template v-if="userStore.isSuperAdmin">
-      <div class="section-title">检索配置</div>
+    <template v-if="userStore.isAdmin">
+      <div class="section-title">默认项配置</div>
       <div class="settings-panel">
-        <div class="setting-row two-cols">
-          <div class="col-item">
-            <div class="setting-label">{{ items?.default_model?.des || '默认对话模型' }}</div>
-            <div class="setting-content">
-              <ModelSelectorComponent
-                @select-model="handleChatModelSelect"
-                :model_spec="configStore.config?.default_model"
-                placeholder="请选择默认模型"
-              />
+        <template v-if="userStore.isSuperAdmin">
+          <div class="setting-row two-cols">
+            <div class="col-item">
+              <div class="setting-label">{{ items?.default_model?.des || '默认对话模型' }}</div>
+              <div class="setting-content">
+                <ModelSelectorComponent
+                  @select-model="handleChatModelSelect"
+                  :model_spec="configStore.config?.default_model"
+                  placeholder="请选择默认模型"
+                />
+              </div>
+            </div>
+            <div class="col-item">
+              <div class="setting-label">{{ items?.fast_model?.des }}</div>
+              <div class="setting-content">
+                <ModelSelectorComponent
+                  @select-model="handleFastModelSelect"
+                  :model_spec="configStore.config?.fast_model"
+                  placeholder="请选择模型"
+                />
+              </div>
             </div>
           </div>
-          <div class="col-item">
-            <div class="setting-label">{{ items?.fast_model?.des }}</div>
-            <div class="setting-content">
-              <ModelSelectorComponent
-                @select-model="handleFastModelSelect"
-                :model_spec="configStore.config?.fast_model"
-                placeholder="请选择模型"
-              />
+          <div class="setting-row two-cols">
+            <div class="col-item">
+              <div class="setting-label">{{ items?.embed_model?.des }}</div>
+              <div class="setting-content">
+                <EmbeddingModelSelector
+                  :value="configStore.config?.embed_model"
+                  @change="handleChange('embed_model', $event)"
+                  style="width: 100%"
+                />
+              </div>
+            </div>
+            <div class="col-item">
+              <div class="setting-label">{{ items?.reranker?.des }}</div>
+              <div class="setting-content">
+                <a-select
+                  class="full-width"
+                  :value="configStore.config?.reranker"
+                  @change="handleChange('reranker', $event)"
+                  placeholder="请选择重排序模型"
+                >
+                  <a-select-option v-for="(name, idx) in rerankerChoices" :key="idx" :value="name"
+                    >{{ name }}
+                  </a-select-option>
+                </a-select>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="setting-row two-cols">
+        </template>
+        <div class="setting-row">
           <div class="col-item">
-            <div class="setting-label">{{ items?.embed_model?.des }}</div>
-            <div class="setting-content">
-              <EmbeddingModelSelector
-                :value="configStore.config?.embed_model"
-                @change="handleChange('embed_model', $event)"
-                style="width: 100%"
-              />
-            </div>
-          </div>
-          <div class="col-item">
-            <div class="setting-label">{{ items?.reranker?.des }}</div>
+            <div class="setting-label">默认智能体</div>
             <div class="setting-content">
               <a-select
-                class="full-width"
-                :value="configStore.config?.reranker"
-                @change="handleChange('reranker', $event)"
-                placeholder="请选择重排序模型"
-              >
-                <a-select-option v-for="(name, idx) in rerankerChoices" :key="idx" :value="name"
-                  >{{ name }}
-                </a-select-option>
-              </a-select>
+                class="agent-select"
+                :value="agentStore.defaultAgentId"
+                :options="agentOptions"
+                :loading="isSettingDefaultAgent"
+                :disabled="isSettingDefaultAgent || !agentOptions.length"
+                placeholder="请选择默认智能体"
+                @change="handleDefaultAgentChange"
+              />
             </div>
           </div>
         </div>
       </div>
 
-      <div class="section-title">内容审查配置</div>
-      <div class="section">
-        <div class="card">
-          <span class="label">{{ items?.enable_content_guard?.des }}</span>
-          <a-switch
-            :checked="configStore.config?.enable_content_guard"
-            @change="handleChange('enable_content_guard', $event)"
-          />
+      <template v-if="userStore.isSuperAdmin">
+        <div class="section-title">内容审查配置</div>
+        <div class="section">
+          <div class="card">
+            <span class="label">{{ items?.enable_content_guard?.des }}</span>
+            <a-switch
+              :checked="configStore.config?.enable_content_guard"
+              @change="handleChange('enable_content_guard', $event)"
+            />
+          </div>
+          <div class="card" v-if="configStore.config?.enable_content_guard">
+            <span class="label">{{ items?.enable_content_guard_llm?.des }}</span>
+            <a-switch
+              :checked="configStore.config?.enable_content_guard_llm"
+              @change="handleChange('enable_content_guard_llm', $event)"
+            />
+          </div>
+          <div
+            class="card card-select"
+            v-if="
+              configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm
+            "
+          >
+            <span class="label">{{ items?.content_guard_llm_model?.des }}</span>
+            <ModelSelectorComponent
+              @select-model="handleContentGuardModelSelect"
+              :model_spec="configStore.config?.content_guard_llm_model"
+              placeholder="请选择模型"
+            />
+          </div>
         </div>
-        <div class="card" v-if="configStore.config?.enable_content_guard">
-          <span class="label">{{ items?.enable_content_guard_llm?.des }}</span>
-          <a-switch
-            :checked="configStore.config?.enable_content_guard_llm"
-            @change="handleChange('enable_content_guard_llm', $event)"
-          />
-        </div>
-        <div
-          class="card card-select"
-          v-if="
-            configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm
-          "
-        >
-          <span class="label">{{ items?.content_guard_llm_model?.des }}</span>
-          <ModelSelectorComponent
-            @select-model="handleContentGuardModelSelect"
-            :model_spec="configStore.config?.content_guard_llm_model"
-            placeholder="请选择模型"
-          />
-        </div>
-      </div>
+      </template>
     </template>
-
-    <div v-if="userStore.isAdmin" class="section-title">智能体配置</div>
-    <div v-if="userStore.isAdmin" class="section">
-      <div class="card card-select agent-card">
-        <div class="label-group">
-          <span class="label">默认智能体</span>
-          <span class="helper-text">用于默认进入的智能体，也作为新会话的默认选择。</span>
-        </div>
-        <a-select
-          class="agent-select"
-          :value="agentStore.defaultAgentId"
-          :options="agentOptions"
-          :loading="isSettingDefaultAgent"
-          :disabled="isSettingDefaultAgent || !agentOptions.length"
-          placeholder="请选择默认智能体"
-          @change="handleDefaultAgentChange"
-        />
-      </div>
-    </div>
 
     <!-- 服务链接部分 -->
     <div v-if="userStore.isAdmin" class="section-title">服务链接</div>
     <div v-if="userStore.isAdmin">
-      <p class="service-description">
+      <p class="section-description">
         快速访问系统相关的外部服务，需要将 localhost 替换为实际的 IP 地址。
       </p>
       <div class="services-grid">
@@ -253,28 +254,6 @@ onMounted(async () => {
 
 <style lang="less" scoped>
 .basic-settings-section {
-  .settings-content {
-    max-width: 100%;
-  }
-
-  .section-title {
-    color: var(--gray-900);
-    font-size: 16px;
-    font-weight: 600;
-    margin: 24px 0 0 0;
-    padding-bottom: 8px;
-
-    &:first-child {
-      margin-top: 12px;
-    }
-  }
-
-  .service-description {
-    color: var(--gray-600);
-    font-size: 14px;
-    margin: 0 0 16px 0;
-    line-height: 1.5;
-  }
 
   .section {
     background-color: var(--gray-0);
@@ -353,23 +332,6 @@ onMounted(async () => {
     }
   }
 
-  .agent-card {
-    align-items: center;
-  }
-
-  .label-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .helper-text {
-    color: var(--gray-500);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
   .agent-select {
     width: 320px;
     max-width: 100%;
@@ -419,11 +381,6 @@ onMounted(async () => {
   }
 
   @media (max-width: 768px) {
-    .agent-card {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
     .agent-select {
       width: 100%;
     }

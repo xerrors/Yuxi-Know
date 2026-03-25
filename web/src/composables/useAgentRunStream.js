@@ -124,7 +124,8 @@ export function useAgentRunStream({
   fetchThreadMessages,
   fetchAgentState,
   resetOnGoingConv,
-  onScrollToBottom
+  onScrollToBottom,
+  streamSmoother
 }) {
   const saveActiveRunSnapshot = (threadId, runId, lastSeq = '0') => {
     if (!threadId || !runId) return
@@ -157,6 +158,7 @@ export function useAgentRunStream({
   const stopRunStreamSubscription = (threadId) => {
     const ts = getThreadState(threadId)
     if (!ts) return
+    streamSmoother?.flushThread(threadId)
     if (ts.runStreamAbortController) {
       ts.runStreamAbortController.abort()
       ts.runStreamAbortController = null
@@ -233,6 +235,7 @@ export function useAgentRunStream({
         }
 
         if (event === 'close') {
+          streamSmoother?.flushThread(threadId)
           ts.isStreaming = false
           if (RUN_TERMINAL_STATUSES.has(data.status)) {
             ts.activeRunId = null
@@ -275,6 +278,7 @@ export function useAgentRunStream({
       })
     } catch (error) {
       if (error?.name !== 'AbortError') {
+        streamSmoother?.flushThread(threadId)
         console.error('Run SSE stream error:', error)
         handleChatError(error, 'stream')
         if (ts.activeRunId === runId) {

@@ -245,6 +245,7 @@ import { useApproval } from '@/composables/useApproval'
 import { useAgentThreadState } from '@/composables/useAgentThreadState'
 import { useAgentRunStream } from '@/composables/useAgentRunStream'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
+import { useStreamSmoother } from '@/composables/useStreamSmoother'
 import { useAgentMentionConfig } from '@/composables/useAgentMentionConfig'
 import AgentPanel from '@/components/AgentPanel.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
@@ -304,9 +305,15 @@ const chatState = reactive({
   // 以threadId为键的线程状态
   threadStates: {}
 })
+const streamSmoother = useStreamSmoother({
+  getThreadState: (threadId) => chatState.threadStates[threadId] || null
+})
 const { getThreadState, resetOnGoingConv, stopThreadStream } = useAgentThreadState({
   chatState,
-  getCurrentThreadId: () => chatState.currentThreadId
+  getCurrentThreadId: () => chatState.currentThreadId,
+  onStopThread: (threadId) => streamSmoother.flushThread(threadId),
+  onBeforeResetThread: (threadId) => streamSmoother.resetThread(threadId),
+  onBeforeCleanupThread: (threadId) => streamSmoother.resetThread(threadId)
 })
 
 // 组件级别的线程和消息状态
@@ -861,7 +868,8 @@ const { handleAgentResponse, handleStreamChunk } = useAgentStreamHandler({
   processApprovalInStream,
   currentAgentId,
   supportsTodo,
-  supportsFiles
+  supportsFiles,
+  streamSmoother
 })
 const { startRunStream, resumeActiveRunForThread, stopRunStreamSubscription } = useAgentRunStream({
   getThreadState,
@@ -872,7 +880,8 @@ const { startRunStream, resumeActiveRunForThread, stopRunStreamSubscription } = 
   fetchThreadMessages,
   fetchAgentState,
   resetOnGoingConv,
-  onScrollToBottom: () => scrollController.scrollToBottom()
+  onScrollToBottom: () => scrollController.scrollToBottom(),
+  streamSmoother
 })
 
 // 发送消息并处理流式响应

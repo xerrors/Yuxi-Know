@@ -5,7 +5,13 @@ const createOnGoingConvState = () => ({
   toolCallBuffers: {}
 })
 
-export function useAgentThreadState({ chatState, getCurrentThreadId }) {
+export function useAgentThreadState({
+  chatState,
+  getCurrentThreadId,
+  onStopThread = null,
+  onBeforeResetThread = null,
+  onBeforeCleanupThread = null
+}) {
   const getThreadState = (threadId) => {
     if (!threadId) return null
     if (!chatState.threadStates[threadId]) {
@@ -26,6 +32,10 @@ export function useAgentThreadState({ chatState, getCurrentThreadId }) {
   const stopThreadStream = (threadId) => {
     if (!threadId) return
     const threadState = chatState.threadStates[threadId]
+    if (typeof onStopThread === 'function') {
+      onStopThread(threadId)
+    }
+
     if (!threadState?.streamAbortController) return
 
     threadState.streamAbortController.abort()
@@ -37,6 +47,10 @@ export function useAgentThreadState({ chatState, getCurrentThreadId }) {
     if (!threadId) return
     const threadState = chatState.threadStates[threadId]
     if (!threadState) return
+
+    if (typeof onBeforeCleanupThread === 'function') {
+      onBeforeCleanupThread(threadId)
+    }
 
     if (threadState.streamAbortController) {
       threadState.streamAbortController.abort()
@@ -54,6 +68,10 @@ export function useAgentThreadState({ chatState, getCurrentThreadId }) {
     if (targetThreadId) {
       const threadState = getThreadState(targetThreadId)
       if (!threadState) return
+
+      if (typeof onBeforeResetThread === 'function') {
+        onBeforeResetThread(targetThreadId)
+      }
 
       if (threadState.streamAbortController) {
         threadState.streamAbortController.abort()
