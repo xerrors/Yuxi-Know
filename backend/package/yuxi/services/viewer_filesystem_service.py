@@ -16,6 +16,16 @@ from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 from yuxi.services.filesystem_service import _resolve_filesystem_state
 from yuxi.storage.postgres.models_business import User
 
+# Sandbox 的 /home/gem 路径（虚拟根）
+SANDBOX_HOME = "/home/gem"
+
+# 根目录排除的文件/目录名
+_HIDDEN_EXCLUDE = frozenset({
+    ".cache", ".config", ".jupyter", ".local", ".npm-global", ".pki",
+    ".ipython", ".npm",
+    ".bashrc", ".Xauthority",
+})
+
 
 def _normalize_path(path: str | None) -> str:
     normalized = (path or "/").strip() or "/"
@@ -34,6 +44,20 @@ def _is_skills_path(path: str) -> bool:
 
 def _is_kbs_path(path: str) -> bool:
     return path == KBS_PATH or path.startswith(f"{KBS_PATH}/")
+
+
+def _is_in_home_gem(path: str) -> bool:
+    """检查路径是否在 /home/gem/ 下但不在虚拟挂载点内"""
+    if not path.startswith("/home/gem/"):
+        return False
+    # 排除虚拟挂载点
+    if path.startswith(f"{USER_DATA_PATH}/") or path == USER_DATA_PATH:
+        return False
+    if path.startswith(f"{SKILLS_PATH}/") or path == SKILLS_PATH:
+        return False
+    if path.startswith(f"{KBS_PATH}/") or path == KBS_PATH:
+        return False
+    return True
 
 
 def _strip_skills_prefix(path: str) -> str:
@@ -85,6 +109,17 @@ def _normalize_entries(entries: list[dict]) -> list[dict]:
     return normalized
 
 
+def _sort_entries(entries: list[dict]) -> list[dict]:
+    """Sort entries: folders first, then files alphabetically."""
+    return sorted(
+        entries,
+        key=lambda e: (
+            not bool(e.get("is_dir")),
+            PurePosixPath(str(e.get("path") or "").rstrip("/")).name.lower(),
+        ),
+    )
+
+
 async def _resolve_viewer_state(
     *,
     thread_id: str,
@@ -129,24 +164,48 @@ async def list_viewer_filesystem_tree(
     )
 
     if normalized_path == "/":
-        entries = [{"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}]
+        # 根目录显示 /home/gem/ 下的所有内容
+        entries = []
+        # 收集已添加的虚拟挂载点名称，用于去重
+        added_names = set()
+
+        # 添加虚拟挂载点
+        entries.append({"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""})
+        added_names.add("user-data")
         if selected_skills:
             entries.append({"path": f"{SKILLS_PATH}/", "name": "skills", "is_dir": True, "size": 0, "modified_at": ""})
+            added_names.add("skills")
         if kb_backend.has_entries():
             entries.append({"path": f"{KBS_PATH}/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""})
-        return {"entries": entries}
+            added_names.add("kbs")
+
+        # 添加 sandbox 根目录 /home/gem/ 的实际文件（排除已添加的虚拟挂载点和隐藏文件）
+        sandbox_root_entries = await asyncio.to_thread(sandbox_backend.ls_info, SANDBOX_HOME)
+        if sandbox_root_entries:
+            sandbox_entries = _normalize_entries(sandbox_root_entries)
+            for entry in sandbox_entries:
+                name = PurePosixPath(entry["path"].rstrip("/")).name
+                if name in _HIDDEN_EXCLUDE:
+                    continue
+                if name not in added_names:
+                    entries.append(entry)
+                    added_names.add(name)  # 防止其他同名文件/文件夹重复
+
+        return {"entries": _sort_entries(entries)}
 
     try:
         if _is_user_data_path(normalized_path):
             entries = await asyncio.to_thread(sandbox_backend.ls_info, normalized_path)
-            return {"entries": _normalize_entries(entries)}
+            return {"entries": _sort_entries(_normalize_entries(entries))}
 
         if _is_skills_path(normalized_path):
             entries = await asyncio.to_thread(skills_backend.ls_info, _strip_skills_prefix(normalized_path))
-            return {"entries": [_remap_prefixed_entry(entry, SKILLS_PATH) for entry in entries]}
+            remapped = [_remap_prefixed_entry(entry, SKILLS_PATH) for entry in entries]
+            return {"entries": _sort_entries(remapped)}
         if _is_kbs_path(normalized_path):
             entries = await asyncio.to_thread(kb_backend.ls_info, _strip_kbs_prefix(normalized_path))
-            return {"entries": [_remap_prefixed_entry(entry, KBS_PATH) for entry in entries]}
+            remapped = [_remap_prefixed_entry(entry, KBS_PATH) for entry in entries]
+            return {"entries": _sort_entries(remapped)}
     except PermissionError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:
@@ -183,6 +242,9 @@ async def read_viewer_file_content(
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
         elif _is_kbs_path(normalized_path):
             responses = await asyncio.to_thread(kb_backend.download_files, [_strip_kbs_prefix(normalized_path)])
+        elif _is_in_home_gem(normalized_path):
+            # /home/gem/ 下的其他文件（如 workspace 目录）
+            responses = await asyncio.to_thread(sandbox_backend.download_files, [normalized_path])
         else:
             raise HTTPException(
                 status_code=400,
@@ -219,7 +281,7 @@ async def download_viewer_file(
     db: AsyncSession,
 ) -> StreamingResponse:
     normalized_path = _normalize_path(path)
-    _sandbox_backend, skills_backend, kb_backend, _selected_skills = await _resolve_viewer_state(
+    sandbox_backend, skills_backend, kb_backend, _selected_skills = await _resolve_viewer_state(
         thread_id=thread_id,
         agent_id=agent_id,
         agent_config_id=agent_config_id,
@@ -246,6 +308,9 @@ async def download_viewer_file(
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
         elif _is_kbs_path(normalized_path):
             responses = await asyncio.to_thread(kb_backend.download_files, [_strip_kbs_prefix(normalized_path)])
+        elif _is_in_home_gem(normalized_path):
+            # /home/gem/ 下的其他文件（如 workspace 目录）
+            responses = await asyncio.to_thread(sandbox_backend.download_files, [normalized_path])
         else:
             raise HTTPException(
                 status_code=400,
