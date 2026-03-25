@@ -82,7 +82,7 @@ async def test_viewer_tree_root_lists_user_data_namespace(test_client, standard_
 
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
-    assert "/home/yuxi/user-data/" in paths
+    assert "/home/gem/user-data/" in paths
 
 
 async def test_viewer_file_returns_raw_content_without_line_numbers(test_client, standard_user):
@@ -143,8 +143,8 @@ async def test_viewer_tree_root_lists_kbs_namespace_when_visible(test_client, st
     async def _fake_list_viewer_filesystem_tree(**kwargs):
         return {
             "entries": [
-                {"path": "/home/yuxi/user-data/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""},
-                {"path": "/home/yuxi/kbs/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""},
+                {"path": "/home/gem/user-data/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""},
+                {"path": "/home/gem/kbs/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""},
             ]
         }
 
@@ -164,7 +164,7 @@ async def test_viewer_tree_root_lists_kbs_namespace_when_visible(test_client, st
 
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
-    assert "/home/yuxi/kbs/" in paths
+    assert "/home/gem/kbs/" in paths
 
 
 async def test_viewer_can_list_and_read_kbs_namespace(test_client, standard_user):
@@ -173,9 +173,9 @@ async def test_viewer_can_list_and_read_kbs_namespace(test_client, standard_user
 
     tree_response = await test_client.get(
         "/api/viewer/filesystem/tree",
-        params={"thread_id": thread_id, "path": "/home/yuxi/kbs"},
+        params={"thread_id": thread_id, "path": "/home/gem/kbs"},
         headers=headers,
     )
     assert tree_response.status_code == 200, tree_response.text
     entries = tree_response.json().get("entries", [])
-    assert any(str(entry.get("path", "")).startswith("/home/yuxi/kbs/") for entry in entries)
+    assert any(str(entry.get("path", "")).startswith("/home/gem/kbs/") for entry in entries)

@@ -775,7 +775,7 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
 const fetchThreadFiles = async (threadId) => {
   if (!threadId) return
   try {
-    const response = await threadApi.listThreadFiles(threadId, '/home/yuxi/user-data', true)
+    const response = await threadApi.listThreadFiles(threadId, '/home/gem/user-data', true)
     const entries = Array.isArray(response?.files) ? response.files : []
     threadFilesMap.value[threadId] = entries
   } catch (error) {

@@ -28,7 +28,7 @@ SandboxInfo = SandboxConnection
 
 # Sandbox-visible paths for viewer/filesystem services.
 USER_DATA_PATH = VIRTUAL_PATH_PREFIX
-SKILLS_PATH = "/home/yuxi/skills"
+SKILLS_PATH = "/home/gem/skills"
 
 # Relative host-side directory names under thread user-data.
 WORKSPACE_DIR = "workspace"

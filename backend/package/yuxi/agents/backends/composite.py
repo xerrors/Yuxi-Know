@@ -110,6 +110,6 @@ def create_agent_composite_backend(runtime) -> CompositeBackend:
         default=ProvisionerSandboxBackend(thread_id=thread_id, visible_skills=visible_skills),
         routes={
             "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=visible_skills),
-            "/home/yuxi/kbs/": KnowledgeBaseReadonlyBackend(visible_kbs=visible_kbs),
+            "/home/gem/kbs/": KnowledgeBaseReadonlyBackend(visible_kbs=visible_kbs),
         },
     )

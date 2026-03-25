@@ -30,7 +30,7 @@ def test_build_attachment_storage_path_uses_thread_local_uploads_dir(tmp_path: P
         file_name="demo.txt",
     )
 
-    assert virtual_path == "/home/yuxi/user-data/uploads/attachments/demo.md"
+    assert virtual_path == "/home/gem/user-data/uploads/attachments/demo.md"
     assert host_path == tmp_path / "threads" / "t-1" / "user-data" / "uploads" / "attachments" / "demo.md"
 
 
@@ -43,17 +43,17 @@ def test_serialize_attachment_includes_original_file_fields() -> None:
             "file_size": 5,
             "status": "parsed",
             "uploaded_at": "2026-03-25T00:00:00+00:00",
-            "path": "/home/yuxi/user-data/uploads/attachments/demo.md",
-            "artifact_url": "/api/chat/thread/t-1/artifacts/home/yuxi/user-data/uploads/attachments/demo.md",
-            "original_path": "/home/yuxi/user-data/uploads/demo.txt",
-            "original_artifact_url": "/api/chat/thread/t-1/artifacts/home/yuxi/user-data/uploads/demo.txt",
+            "path": "/home/gem/user-data/uploads/attachments/demo.md",
+            "artifact_url": "/api/chat/thread/t-1/artifacts/home/gem/user-data/uploads/attachments/demo.md",
+            "original_path": "/home/gem/user-data/uploads/demo.txt",
+            "original_artifact_url": "/api/chat/thread/t-1/artifacts/home/gem/user-data/uploads/demo.txt",
             "minio_url": None,
         }
     )
 
-    assert serialized["path"] == "/home/yuxi/user-data/uploads/attachments/demo.md"
-    assert serialized["original_path"] == "/home/yuxi/user-data/uploads/demo.txt"
-    assert serialized["original_artifact_url"] == "/api/chat/thread/t-1/artifacts/home/yuxi/user-data/uploads/demo.txt"
+    assert serialized["path"] == "/home/gem/user-data/uploads/attachments/demo.md"
+    assert serialized["original_path"] == "/home/gem/user-data/uploads/demo.txt"
+    assert serialized["original_artifact_url"] == "/api/chat/thread/t-1/artifacts/home/gem/user-data/uploads/demo.txt"
 
 
 @pytest.mark.asyncio
@@ -73,8 +73,8 @@ async def test_materialize_attachment_files_keeps_original_file_when_markdown_co
     )
 
     assert result["status"] == "uploaded"
-    assert result["path"] == "/home/yuxi/user-data/uploads/demo.pdf"
-    assert result["original_path"] == "/home/yuxi/user-data/uploads/demo.pdf"
+    assert result["path"] == "/home/gem/user-data/uploads/demo.pdf"
+    assert result["original_path"] == "/home/gem/user-data/uploads/demo.pdf"
     assert (
         tmp_path / "threads" / "t-1" / "user-data" / "uploads" / "demo.pdf"
     ).read_bytes() == b"%PDF-test"
@@ -109,9 +109,9 @@ async def test_materialize_attachment_files_writes_markdown_copy_when_conversion
     )
 
     assert result["status"] == "parsed"
-    assert result["path"] == "/home/yuxi/user-data/uploads/attachments/demo.md"
-    assert result["original_path"] == "/home/yuxi/user-data/uploads/demo.txt"
-    assert result["file_path"] == "/home/yuxi/user-data/uploads/attachments/demo.md"
+    assert result["path"] == "/home/gem/user-data/uploads/attachments/demo.md"
+    assert result["original_path"] == "/home/gem/user-data/uploads/demo.txt"
+    assert result["file_path"] == "/home/gem/user-data/uploads/attachments/demo.md"
     assert result["markdown"] == "hello\nworld"
     assert (tmp_path / "threads" / "t-1" / "user-data" / "uploads" / "demo.txt").read_bytes() == b"hello"
     assert (

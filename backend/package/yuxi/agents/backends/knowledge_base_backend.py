@@ -15,7 +15,7 @@ from yuxi import knowledge_base
 from yuxi.knowledge.utils.kb_utils import is_minio_url, parse_minio_url
 from yuxi.storage.minio import get_minio_client
 
-KBS_PATH = "/home/yuxi/kbs"
+KBS_PATH = "/home/gem/kbs"
 _INVALID_SEGMENT_RE = re.compile(r"[\\/\x00-\x1f\x7f]+")
 _WHITESPACE_RE = re.compile(r"\s+")
 

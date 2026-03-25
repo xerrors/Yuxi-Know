@@ -13,7 +13,7 @@ from yuxi.agents.backends.sandbox import (
 )
 from yuxi.services.doc_converter import ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_SIZE_BYTES
 
-UPLOADS_VIRTUAL_PREFIX = "/home/yuxi/user-data/uploads"
+UPLOADS_VIRTUAL_PREFIX = "/home/gem/user-data/uploads"
 from yuxi.agents.buildin import agent_manager
 from yuxi.config import config as app_config
 from yuxi.plugins.parser import Parser
@@ -132,7 +132,7 @@ def _make_attachment_path(file_name: str) -> str:
 def _build_attachment_storage_path(*, user_id: str, thread_id: str, file_name: str) -> tuple[str, Path]:
     """返回附件虚拟路径和宿主机落盘路径。"""
     relative_name = _make_attachment_path(file_name)
-    virtual_path = f"/home/yuxi/user-data/uploads/attachments/{relative_name}"
+    virtual_path = f"/home/gem/user-data/uploads/attachments/{relative_name}"
 
     host_dir = Path(app_config.save_dir) / "threads" / thread_id / "user-data" / "uploads" / "attachments"
     host_dir.mkdir(parents=True, exist_ok=True)

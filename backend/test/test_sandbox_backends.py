@@ -34,7 +34,7 @@ def test_create_agent_composite_backend_uses_provisioner_default(monkeypatch):
     assert isinstance(backend.default, ProvisionerSandboxBackend)
     assert backend.default._visible_skills == ["reporter"]
     assert "/skills/" in backend.routes
-    assert "/home/yuxi/kbs/" in backend.routes
+    assert "/home/gem/kbs/" in backend.routes
 
 
 def test_create_agent_composite_backend_requires_thread_id():
@@ -44,8 +44,8 @@ def test_create_agent_composite_backend_requires_thread_id():
 
 def test_skills_middleware_extracts_slug_for_new_paths() -> None:
     middleware = SkillsMiddleware()
-    assert middleware.skills_sources_for_prompt == ["/home/yuxi/skills/"]
-    assert middleware._extract_skill_slug_from_skill_md_path("/home/yuxi/skills/demo-skill/SKILL.md") == "demo-skill"
+    assert middleware.skills_sources_for_prompt == ["/home/gem/skills/"]
+    assert middleware._extract_skill_slug_from_skill_md_path("/home/gem/skills/demo-skill/SKILL.md") == "demo-skill"
 
 
 def test_resolve_virtual_path_rejects_outside_prefix():
@@ -55,7 +55,7 @@ def test_resolve_virtual_path_rejects_outside_prefix():
 
 def test_resolve_virtual_path_rejects_path_traversal():
     with pytest.raises(ValueError, match="path traversal"):
-        resolve_virtual_path("thread-1", "/home/yuxi/user-data/../secrets")
+        resolve_virtual_path("thread-1", "/home/gem/user-data/../secrets")
 
 
 def test_sandbox_id_for_thread_is_stable():
@@ -72,9 +72,9 @@ def test_provisioner_read_reports_binary_files(monkeypatch) -> None:
     backend = ProvisionerSandboxBackend(thread_id="thread-1")
     monkeypatch.setattr(backend, "_read_binary", lambda path, offset=0, limit=None: b"\x89PNG\r\n\x1a\n")
 
-    result = backend.read("/home/yuxi/user-data/image.png")
+    result = backend.read("/home/gem/user-data/image.png")
 
-    assert result == "Error: File '/home/yuxi/user-data/image.png' is binary and cannot be rendered as text"
+    assert result == "Error: File '/home/gem/user-data/image.png' is binary and cannot be rendered as text"
 
 
 def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:

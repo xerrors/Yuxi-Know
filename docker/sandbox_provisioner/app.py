@@ -181,7 +181,7 @@ class LocalContainerProvisionerBackend:
         expected_source = str(self._thread_skills_host_path(thread_id))
         for mount in container.attrs.get("Mounts") or []:
             destination = (mount.get("Destination") or "").rstrip("/")
-            if destination != "/home/yuxi/skills":
+            if destination != "/home/gem/skills":
                 continue
             source = str(mount.get("Source") or "").rstrip("/")
             return source == expected_source
@@ -238,9 +238,9 @@ class LocalContainerProvisionerBackend:
     def _ensure_user_data_writable(container) -> None:
         cmd = (
             "sh -lc "
-            '"mkdir -p /home/yuxi/user-data/workspace /home/yuxi/user-data/uploads /home/yuxi/user-data/outputs '
-            '&& chmod a+rwx /home/yuxi/user-data /home/yuxi/user-data/workspace '
-            '/home/yuxi/user-data/uploads /home/yuxi/user-data/outputs"'
+            '"mkdir -p /home/gem/user-data/workspace /home/gem/user-data/uploads /home/gem/user-data/outputs '
+            '&& chmod a+rwx /home/gem/user-data /home/gem/user-data/workspace '
+            '/home/gem/user-data/uploads /home/gem/user-data/outputs"'
         )
         result = container.exec_run(cmd, user="0:0")
         if result.exit_code != 0:
@@ -310,14 +310,14 @@ class LocalContainerProvisionerBackend:
                     "managed-by": "yuxi-sandbox-provisioner",
                 },
                 "volumes": {
-                    str(thread_user_data): {"bind": "/home/yuxi/user-data", "mode": "rw"},
-                    str(thread_skills): {"bind": "/home/yuxi/skills", "mode": "ro"},
+                    str(thread_user_data): {"bind": "/home/gem/user-data", "mode": "rw"},
+                    str(thread_skills): {"bind": "/home/gem/skills", "mode": "ro"},
                 },
                 "ports": {f"{self._container_port}/tcp": None},
                 "security_opt": ["seccomp=unconfined"],
-                # The sandbox image expects /home/yuxi to be writable during boot.
+                # The sandbox image expects /home/gem to be writable during boot.
                 # Keep it ephemeral and mount persistent user-data underneath it.
-                "tmpfs": {"/home/yuxi": "rw,exec,mode=777"},
+                "tmpfs": {"/home/gem": "rw,exec,mode=777"},
             }
             if self._network:
                 run_kwargs["network"] = self._network
@@ -432,7 +432,7 @@ class KubernetesProvisionerBackend:
                         image=self._sandbox_image,
                         command=["sh", "-c"],
                         args=[
-                            "chmod 777 /home/yuxi "
+                            "chmod 777 /home/gem "
                             f"&& mkdir -p /mnt/shared-data/threads/{thread_id}/user-data/workspace "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/uploads "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/outputs "
@@ -440,7 +440,7 @@ class KubernetesProvisionerBackend:
                             f"&& chmod -R 777 /mnt/shared-data/threads/{thread_id}/user-data ",
                         ],
                         volume_mounts=[
-                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/yuxi"),
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
                             self._client.V1VolumeMount(name="shared-data", mount_path="/mnt/shared-data"),
                         ],
                     ),
@@ -451,15 +451,15 @@ class KubernetesProvisionerBackend:
                         image=self._sandbox_image,
                         ports=[self._client.V1ContainerPort(container_port=self._container_port)],
                         volume_mounts=[
-                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/yuxi"),
+                            self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/home/yuxi/user-data",
+                                mount_path="/home/gem/user-data",
                                 sub_path=f"threads/{thread_id}/user-data",
                             ),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/home/yuxi/skills",
+                                mount_path="/home/gem/skills",
                                 sub_path=f"threads/{thread_id}/skills",
                                 read_only=True,
                             ),

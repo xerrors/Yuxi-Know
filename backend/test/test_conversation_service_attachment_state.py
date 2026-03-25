@@ -67,7 +67,7 @@ async def test_sync_thread_attachment_state_updates_graph(monkeypatch: pytest.Mo
     attachments = [
         {
             "status": "parsed",
-            "path": "/home/yuxi/user-data/uploads/attachments/resume.md",
+            "path": "/home/gem/user-data/uploads/attachments/resume.md",
             "file_name": "resume.md",
             "uploaded_at": "2026-02-20T00:00:00+00:00",
         }

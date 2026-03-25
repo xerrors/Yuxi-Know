@@ -79,7 +79,7 @@ class Config(BaseModel):
     # ============================================================
     sandbox_provider: str = Field(default="provisioner", description="沙箱提供者")
     sandbox_provisioner_url: str = Field(default="http://sandbox-provisioner:8002", description="沙箱服务地址")
-    sandbox_virtual_path_prefix: str = Field(default="/home/yuxi/user-data", description="沙箱用户目录前缀")
+    sandbox_virtual_path_prefix: str = Field(default="/home/gem/user-data", description="沙箱用户目录前缀")
     sandbox_exec_timeout_seconds: int = Field(default=180, description="沙箱执行超时时间（秒）")
     sandbox_max_output_bytes: int = Field(default=262144, description="沙箱最大输出字节数")
     sandbox_keepalive_interval_seconds: int = Field(default=30, description="沙箱保活间隔（秒）")
@@ -250,7 +250,7 @@ class Config(BaseModel):
             os.getenv("SANDBOX_PROVISIONER_URL") or self.sandbox_provisioner_url or "http://sandbox-provisioner:8002"
         ).strip()
         self.sandbox_virtual_path_prefix = (
-            os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX") or self.sandbox_virtual_path_prefix or "/home/yuxi/user-data"
+            os.getenv("SANDBOX_VIRTUAL_PATH_PREFIX") or self.sandbox_virtual_path_prefix or "/home/gem/user-data"
         ).strip()
         self.sandbox_exec_timeout_seconds = int(
             os.getenv("SANDBOX_EXEC_TIMEOUT_SECONDS") or self.sandbox_exec_timeout_seconds or 180

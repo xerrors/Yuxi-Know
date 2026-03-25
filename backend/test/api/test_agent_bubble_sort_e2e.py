@@ -36,8 +36,8 @@ TIMEOUT = httpx.Timeout(300.0, connect=10.0)
 POLL_INTERVAL_SECONDS = float(os.getenv("E2E_RUN_POLL_INTERVAL_SECONDS", "2"))
 RUN_TIMEOUT_SECONDS = int(os.getenv("E2E_RUN_TIMEOUT_SECONDS", "240"))
 
-SCRIPT_PATH = "/home/yuxi/user-data/workspace/bubble_sort.py"
-RESULT_PATH = "/home/yuxi/user-data/outputs/bubble_sort_result.txt"
+SCRIPT_PATH = "/home/gem/user-data/workspace/bubble_sort.py"
+RESULT_PATH = "/home/gem/user-data/outputs/bubble_sort_result.txt"
 EXPECTED_OUTPUT = "[1, 2, 4, 5, 8]"
 
 
@@ -182,7 +182,7 @@ class AgentBubbleSortE2ETester:
         if run.get("status") != "completed":
             raise RuntimeError("run did not complete successfully: " + json.dumps(run, ensure_ascii=False))
 
-        file_entries = await self.list_thread_files("/home/yuxi/user-data")
+        file_entries = await self.list_thread_files("/home/gem/user-data")
         file_paths = {str(entry.get("path") or "") for entry in file_entries}
 
         if SCRIPT_PATH not in file_paths:
