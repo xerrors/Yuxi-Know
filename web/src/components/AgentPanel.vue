@@ -1,7 +1,7 @@
 <template>
-  <div class="agent-panel" :class="{ resizing: isResizing }">
+  <div ref="panelRef" class="agent-panel" :class="{ resizing: isResizing }">
     <!-- 拖拽手柄 -->
-    <div class="resize-handle" @mousedown="startResize"></div>
+    <div class="resize-handle" @pointerdown="startResize"></div>
     <div class="panel-header">
       <div class="panel-title">
         <FolderCode :size="20" class="header-icon" />
@@ -73,32 +73,135 @@
           <a-button type="link" size="small" @click="refreshFileSystem">重试</a-button>
         </div>
         <div v-else-if="!fileTreeData.length" class="empty">当前工作区为空</div>
-        <div v-else class="file-tree-container">
-          <FileTreeComponent
-            v-model:selectedKeys="selectedKeys"
-            v-model:expandedKeys="expandedKeys"
-            :tree-data="fileTreeData"
-            :load-data="loadData"
-            @select="onFileSelect"
-          >
-            <template #title="{ node }">
-              <div class="tree-node-name" :title="node.title">
-                <span class="name-start">{{ node.nameStart || node.title }}</span>
-                <span class="name-end" v-if="node.nameEnd">{{ node.nameEnd }}</span>
+        <div v-else class="files-workspace" :class="{ 'is-inline-preview': useInlinePreview }">
+          <div class="file-tree-pane">
+            <div class="file-tree-container">
+              <FileTreeComponent
+                v-model:selectedKeys="selectedKeys"
+                v-model:expandedKeys="expandedKeys"
+                :tree-data="fileTreeData"
+                :load-data="loadData"
+                @select="onFileSelect"
+              >
+                <template #title="{ node }">
+                  <div class="tree-node-name" :title="node.title">
+                    <span class="name-start">{{ node.nameStart || node.title }}</span>
+                    <span class="name-end" v-if="node.nameEnd">{{ node.nameEnd }}</span>
+                  </div>
+                </template>
+                <template #actions="{ node }">
+                  <div v-if="node.isLeaf" class="node-actions-container">
+                    <button
+                      class="tree-action-btn tree-download-btn"
+                      @click.stop="downloadFile(node.fileData)"
+                      title="下载文件"
+                    >
+                      <Download :size="14" />
+                    </button>
+                  </div>
+                </template>
+              </FileTreeComponent>
+            </div>
+          </div>
+
+          <div v-if="useInlinePreview" class="inline-preview-pane">
+            <div v-if="currentFile" class="inline-preview-shell">
+              <div class="inline-preview-header">
+                <div class="file-title">
+                  <component
+                    :is="getFileIcon(currentFilePath)"
+                    :style="{ color: getFileIconColor(currentFilePath), fontSize: '18px' }"
+                  />
+                  <span class="file-path-title">{{ currentFilePath }}</span>
+                </div>
+                <div class="modal-actions">
+                  <div v-if="isHtmlFile" class="preview-mode-switch">
+                    <button
+                      class="preview-mode-btn"
+                      :class="{ active: htmlPreviewMode === 'render' }"
+                      @click="htmlPreviewMode = 'render'"
+                      title="预览"
+                    >
+                      <Globe :size="16" />
+                    </button>
+                    <button
+                      class="preview-mode-btn"
+                      :class="{ active: htmlPreviewMode === 'source' }"
+                      @click="htmlPreviewMode = 'source'"
+                      title="源码"
+                    >
+                      <Code2 :size="16" />
+                    </button>
+                  </div>
+                  <button class="modal-action-btn" @click="downloadFile(currentFile)" title="下载">
+                    <Download :size="18" />
+                  </button>
+                  <button class="modal-action-btn" @click="closePreview" title="关闭预览">
+                    <X :size="18" />
+                  </button>
+                </div>
               </div>
-            </template>
-            <template #actions="{ node }">
-              <div v-if="node.isLeaf" class="node-actions-container">
-                <button
-                  class="tree-action-btn tree-download-btn"
-                  @click.stop="downloadFile(node.fileData)"
-                  title="下载文件"
-                >
-                  <Download :size="14" />
-                </button>
+              <div class="file-content flat-md-preview inline-file-content">
+                <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
+                  <div class="image-preview-wrapper">
+                    <img
+                      :src="currentFile.previewUrl"
+                      :alt="currentFilePath"
+                      class="image-preview"
+                    />
+                  </div>
+                </template>
+                <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
+                  <iframe
+                    :src="currentFile.previewUrl"
+                    class="pdf-preview"
+                    :title="currentFilePath"
+                  />
+                </template>
+                <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
+                  <iframe
+                    class="html-preview"
+                    :srcdoc="formatContent(currentFile?.content)"
+                    :title="currentFilePath"
+                    sandbox=""
+                  />
+                </template>
+                <template v-else-if="isMarkdown">
+                  <MdPreview
+                    :modelValue="formatContent(currentFile?.content)"
+                    :theme="theme"
+                    previewTheme="github"
+                  />
+                </template>
+                <template v-else-if="currentFile?.supported === false">
+                  <div class="unsupported-preview">
+                    {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
+                  </div>
+                </template>
+                <template v-else>
+                  <pre v-if="Array.isArray(currentFile?.content)">{{
+                    formatContent(currentFile.content)
+                  }}</pre>
+                  <pre
+                    v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
+                    :class="['file-content-pre', 'code-highlight', codeThemeClass]"
+                  ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
+                  <pre
+                    v-else-if="typeof currentFile?.content === 'string'"
+                    class="file-content-pre"
+                    >{{ currentFile.content }}</pre
+                  >
+                  <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
+                </template>
               </div>
-            </template>
-          </FileTreeComponent>
+            </div>
+            <div v-else class="inline-preview-empty">
+              <div class="inline-preview-empty-title">选择文件后可在此预览</div>
+              <div class="inline-preview-empty-desc">
+                当前宽度足够，预览会直接显示在工作台右侧。
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -111,7 +214,7 @@
       :bodyStyle="{ maxHeight: '90vh', overflow: 'auto' }"
       :footer="null"
       :closable="false"
-      @cancel="closeModal"
+      @cancel="closePreview"
     >
       <template #title>
         <div class="modal-header-title">
@@ -149,7 +252,7 @@
             >
               <Download :size="18" />
             </button>
-            <button class="modal-action-btn" @click="closeModal" title="关闭">
+            <button class="modal-action-btn" @click="closePreview" title="关闭">
               <X :size="18" />
             </button>
           </div>
@@ -203,7 +306,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUpdated, nextTick, watch } from 'vue'
+import { computed, onMounted, onUnmounted, onUpdated, nextTick, ref, watch } from 'vue'
 import {
   ChevronsDownUp,
   ChevronsUpDown,
@@ -270,7 +373,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['refresh', 'close', 'resize', 'resizing', 'toggle-expand'])
+const INLINE_PREVIEW_MIN_WIDTH = 920
 
+const panelRef = ref(null)
 const activeTab = ref('files')
 const modalVisible = ref(false)
 const currentFile = ref(null)
@@ -278,6 +383,7 @@ const currentFilePath = ref('')
 const htmlPreviewMode = ref('render')
 const loadingFiles = ref(false)
 const filesystemError = ref('')
+const panelWidth = ref(0)
 
 const dynamicTreeData = ref([])
 const selectedKeys = ref([])
@@ -285,6 +391,7 @@ const expandedKeys = ref([])
 
 const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
+const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
 
 const isMarkdown = computed(() =>
   isMarkdownPreview(currentFilePath.value, currentFile.value?.previewType)
@@ -540,6 +647,8 @@ const loadData = (treeNode) => {
 
 const fileTreeData = computed(() => dynamicTreeData.value)
 
+let panelResizeObserver = null
+
 const revokeCurrentPreviewUrl = () => {
   const previewUrl = currentFile.value?.previewUrl
   if (previewUrl) {
@@ -562,7 +671,7 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
     message: '',
     previewUrl: ''
   }
-  modalVisible.value = true
+  modalVisible.value = !useInlinePreview.value
 
   try {
     const res = await getViewerFileContent(
@@ -605,12 +714,13 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
   }
 }
 
-const closeModal = () => {
+const closePreview = () => {
   revokeCurrentPreviewUrl()
   modalVisible.value = false
   currentFile.value = null
   currentFilePath.value = ''
   htmlPreviewMode.value = 'render'
+  selectedKeys.value = []
 }
 
 const downloadFile = async (fileItem) => {
@@ -646,39 +756,96 @@ const emitRefresh = () => {
 }
 
 const isResizing = ref(false)
-const startX = ref(0)
+
+let resizePointerId = null
+let pendingClientX = 0
+let resizeFrameId = 0
+
+const flushResize = () => {
+  resizeFrameId = 0
+  if (!isResizing.value) return
+  emit('resize', pendingClientX)
+}
+
+const queueResize = (clientX) => {
+  pendingClientX = clientX
+  if (resizeFrameId) return
+  resizeFrameId = window.requestAnimationFrame(flushResize)
+}
 
 const startResize = (e) => {
+  if (e.button !== 0) return
+
   isResizing.value = true
-  emit('resizing', true)
-  startX.value = e.clientX
+  resizePointerId = e.pointerId
+  pendingClientX = e.clientX
+  emit('resizing', true, e.clientX)
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', stopResize)
+
+  e.currentTarget?.setPointerCapture?.(e.pointerId)
+  window.addEventListener('pointermove', onPointerMove)
+  window.addEventListener('pointerup', stopResize)
+  window.addEventListener('pointercancel', stopResize)
 }
 
-const onMouseMove = (e) => {
-  if (!isResizing.value) return
-  const deltaX = e.clientX - startX.value
-  startX.value = e.clientX
-  emit('resize', deltaX)
+const onPointerMove = (e) => {
+  if (!isResizing.value || e.pointerId !== resizePointerId) return
+  queueResize(e.clientX)
 }
 
-const stopResize = () => {
-  if (!isResizing.value) return
+const stopResize = (e) => {
+  if (!isResizing.value || (e && e.pointerId !== resizePointerId)) return
+
+  if (resizeFrameId) {
+    window.cancelAnimationFrame(resizeFrameId)
+    resizeFrameId = 0
+  }
+
+  if (e) {
+    pendingClientX = e.clientX
+    emit('resize', pendingClientX)
+  }
+
   isResizing.value = false
+  resizePointerId = null
   emit('resizing', false)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
-  document.removeEventListener('mousemove', onMouseMove)
-  document.removeEventListener('mouseup', stopResize)
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', stopResize)
+  window.removeEventListener('pointercancel', stopResize)
 }
 
 onMounted(() => {
   nextTick(checkOverflow)
   updateActiveTab()
   refreshFileSystem()
+
+  if (panelRef.value && typeof ResizeObserver !== 'undefined') {
+    panelWidth.value = panelRef.value.clientWidth || 0
+    panelResizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0]
+      if (!entry) return
+      panelWidth.value = entry.contentRect.width
+    })
+    panelResizeObserver.observe(panelRef.value)
+  }
+})
+
+onUnmounted(() => {
+  panelResizeObserver?.disconnect()
+  panelResizeObserver = null
+  if (resizeFrameId) {
+    window.cancelAnimationFrame(resizeFrameId)
+    resizeFrameId = 0
+  }
+  window.removeEventListener('pointermove', onPointerMove)
+  window.removeEventListener('pointerup', stopResize)
+  window.removeEventListener('pointercancel', stopResize)
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  revokeCurrentPreviewUrl()
 })
 
 watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([threadId]) => {
@@ -690,6 +857,15 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
     selectedKeys.value = []
     filesystemError.value = ''
   }
+})
+
+watch(useInlinePreview, (isInline) => {
+  if (!currentFile.value) {
+    modalVisible.value = false
+    return
+  }
+
+  modalVisible.value = !isInline
 })
 </script>
 
@@ -706,6 +882,7 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   border-radius: 2px;
   z-index: 10;
   transition: background 0.2s;
+  touch-action: none;
 
   &:hover {
     background: var(--main-400);
@@ -861,6 +1038,93 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.files-display {
+  height: 100%;
+  min-height: 0;
+}
+
+.files-workspace {
+  height: 100%;
+  min-height: 0;
+}
+
+.files-workspace.is-inline-preview {
+  display: flex;
+  gap: 12px;
+}
+
+.file-tree-pane {
+  min-width: 0;
+  min-height: 0;
+}
+
+.files-workspace.is-inline-preview .file-tree-pane {
+  flex: 0 0 27%;
+}
+
+.inline-preview-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.inline-preview-shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--gray-150);
+  border-radius: 12px;
+  background: var(--gray-0);
+  overflow: hidden;
+}
+
+.inline-preview-header {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--gray-150);
+  background: var(--gray-25);
+}
+
+.inline-file-content {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.inline-preview-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1px dashed var(--gray-200);
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--gray-25) 0%, var(--gray-0) 100%);
+  color: var(--gray-500);
+  padding: 24px;
+}
+
+.inline-preview-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.inline-preview-empty-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .empty {
@@ -1166,9 +1430,8 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
 }
 
 .file-path-title {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-weight: 600;
-  color: var(--gray-1000);
+  font-weight: 400;
+  color: var(--gray-700);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1206,6 +1469,12 @@ watch([() => props.threadId, () => props.agentId, () => props.agentConfigId], ([
 .file-tree-container {
   padding: 4px;
   margin: 0 -4px;
+  min-height: 0;
+}
+
+.files-workspace.is-inline-preview .file-tree-container {
+  height: 100%;
+  overflow-y: auto;
 }
 
 .tree-node-name {

@@ -356,7 +356,9 @@ const isResizing = ref(false)
 const panelRatio = ref(0.3) // 面板宽度比例 (0-1)
 const panelWrapperRef = ref(null) // 直接操作 DOM
 const minPanelRatio = 0.2 // 最小比例 20%
-const maxPanelRatio = 0.6 // 最大比例 60%
+const maxPanelRatio = 0.8 // 最大比例 80%
+let resizeStartX = 0
+let resizeStartWidth = 0
 let panelContainerWidth = 0
 
 // ==================== COMPUTED PROPERTIES ====================
@@ -1405,35 +1407,43 @@ const togglePanelExpanded = () => {
 
 // 处理面板宽度调整（使用比例）
 // 向右拖动(deltaX > 0)让面板变窄，向左拖动(deltaX < 0)让面板变宽
-const handlePanelResize = (deltaX) => {
+const handlePanelResize = (clientX) => {
   if (!panelWrapperRef.value) return
 
-  // 初始化容器宽度
   if (!panelContainerWidth) {
     const container = document.querySelector('.chat-content-container')
     panelContainerWidth = container ? container.clientWidth : window.innerWidth
   }
 
-  const currentWidth = panelWrapperRef.value.offsetWidth
-  // 反转 deltaX：向右拖(deltaX > 0)让面板变窄
-  const newWidth = currentWidth - deltaX
+  const deltaX = clientX - resizeStartX
+  const newWidth = resizeStartWidth - deltaX
   const newRatio = newWidth / panelContainerWidth
 
-  // 限制在合理范围内
   if (newRatio >= minPanelRatio && newRatio <= maxPanelRatio) {
-    // 直接操作 DOM，不触发 Vue 响应式，使用 !important 确保不被覆盖
     panelWrapperRef.value.style.setProperty('flex', `0 0 ${newWidth}px`, 'important')
   }
 }
 
 // 拖拽状态变化时，同步最终状态到 Vue 响应式数据
-const handleResizingChange = (isResizingState) => {
+const handleResizingChange = (isResizingState, clientX = 0) => {
   isResizing.value = isResizingState
 
-  // 拖拽结束时，同步 DOM 宽度到响应式数据
+  if (isResizingState && panelWrapperRef.value) {
+    resizeStartX = clientX
+    resizeStartWidth = panelWrapperRef.value.offsetWidth
+    if (!panelContainerWidth) {
+      const container = document.querySelector('.chat-content-container')
+      panelContainerWidth = container ? container.clientWidth : window.innerWidth
+    }
+    return
+  }
+
   if (!isResizingState && panelWrapperRef.value && panelContainerWidth) {
     const finalWidth = panelWrapperRef.value.offsetWidth
     panelRatio.value = finalWidth / panelContainerWidth
+    panelWrapperRef.value.style.removeProperty('flex')
+    resizeStartX = 0
+    resizeStartWidth = 0
     panelContainerWidth = 0 // 重置，供下次使用
   }
 }
@@ -1706,7 +1716,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
   margin-left: 0;
   background: var(--gray-0);
   border-radius: 16px;
-  box-shadow: 0 4px 20px var(--shadow-1);
   border: 1px solid var(--gray-150);
   min-width: 0;
   will-change: flex-basis;
