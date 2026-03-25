@@ -14,7 +14,7 @@ from server.utils.auth_middleware import get_db, get_required_user
 from yuxi import config as conf
 from yuxi.agents.buildin import agent_manager
 from yuxi.models import select_model
-from yuxi.services.chat_stream_service import get_agent_state_view, stream_agent_chat, stream_agent_resume
+from yuxi.services.chat_service import get_agent_state_view, stream_agent_chat, stream_agent_resume, agent_chat
 from yuxi.services.agent_run_service import (
     cancel_agent_run_view,
     create_agent_run_view,
@@ -409,6 +409,48 @@ async def chat_agent(
             db=db,
         ),
         media_type="application/json",
+    )
+
+
+@chat.post("/agent/{agent_id}/sync")
+async def chat_agent_sync(
+    agent_id: str,
+    query: str = Body(...),
+    config: dict = Body({}),
+    meta: dict = Body({}),
+    image_content: str | None = Body(None),
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """使用特定智能体进行非流式对话（需要登录）"""
+    logger.info(f"[sync] agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
+    logger.info(f"[sync] image_content present: {image_content is not None}")
+    if image_content:
+        logger.info(f"[sync] image_content length: {len(image_content)}")
+
+    # 确保 request_id 存在
+    if "request_id" not in meta or not meta.get("request_id"):
+        meta["request_id"] = str(uuid.uuid4())
+
+    meta.update(
+        {
+            "query": query,
+            "agent_id": agent_id,
+            "server_model_name": config.get("model", agent_id),
+            "thread_id": config.get("thread_id"),
+            "user_id": current_user.id,
+            "has_image": bool(image_content),
+        }
+    )
+
+    return await agent_chat(
+        agent_id=agent_id,
+        query=query,
+        config=config,
+        meta=meta,
+        image_content=image_content,
+        current_user=current_user,
+        db=db,
     )
 
 

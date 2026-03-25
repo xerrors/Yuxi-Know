@@ -1,4 +1,4 @@
-"""测试 chat_stream_service 中的 interrupt 相关函数"""
+"""测试 chat_service 中的 interrupt 相关函数"""
 
 import pytest
 import sys
@@ -6,7 +6,7 @@ import os
 
 sys.path.insert(0, os.getcwd())
 
-from yuxi.services.chat_stream_service import (
+from yuxi.services.chat_service import (
     _normalize_interrupt_options,
     _normalize_interrupt_questions,
     _build_ask_user_question_payload,

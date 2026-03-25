@@ -342,6 +342,150 @@ async def check_and_handle_interrupts(
         logger.error(traceback.format_exc())
 
 
+async def agent_chat(
+    *,
+    agent_id: str,
+    query: str,
+    config: dict,
+    meta: dict,
+    image_content: str | None,
+    current_user,
+    db,
+) -> dict:
+    """非流式对话，返回完整响应"""
+    start_time = asyncio.get_event_loop().time()
+
+    if image_content:
+        human_message = HumanMessage(
+            content=[
+                {"type": "text", "text": query},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_content}"}},
+            ]
+        )
+        message_type = "multimodal_image"
+    else:
+        human_message = HumanMessage(content=query)
+        message_type = "text"
+
+    init_msg = {"role": "user", "content": query, "type": "human"}
+    if image_content:
+        init_msg["message_type"] = "multimodal_image"
+        init_msg["image_content"] = image_content
+    else:
+        init_msg["message_type"] = "text"
+
+    if conf.enable_content_guard and await content_guard.check(query):
+        return {
+            "status": "error",
+            "error_type": "content_guard_blocked",
+            "error_message": "输入内容包含敏感词",
+            "request_id": meta.get("request_id"),
+        }
+
+    try:
+        agent = agent_manager.get_agent(agent_id)
+    except Exception as e:
+        logger.error(f"Error getting agent {agent_id}: {e}, {traceback.format_exc()}")
+        return {
+            "status": "error",
+            "error_type": "agent_error",
+            "error_message": f"智能体 {agent_id} 获取失败: {str(e)}",
+            "request_id": meta.get("request_id"),
+        }
+
+    messages = [human_message]
+
+    user_id = str(current_user.id)
+    agent_config_id = config.get("agent_config_id")
+    try:
+        agent_config = await _resolve_agent_config(db, agent_id, current_user, agent_config_id)
+    except ValueError as e:
+        return {
+            "status": "error",
+            "error_type": "invalid_config",
+            "error_message": str(e),
+            "request_id": meta.get("request_id"),
+        }
+
+    if not (thread_id := config.get("thread_id")):
+        thread_id = str(uuid.uuid4())
+        logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
+
+    input_context = agent_config | {"user_id": user_id, "thread_id": thread_id}
+
+    try:
+        conv_repo = ConversationRepository(db)
+
+        try:
+            await conv_repo.add_message_by_thread_id(
+                thread_id=thread_id,
+                role="user",
+                content=query,
+                message_type=message_type,
+                image_content=image_content,
+                extra_metadata={"raw_message": human_message.model_dump()},
+            )
+        except Exception as e:
+            logger.error(f"Error saving user message: {e}")
+
+        langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+
+        full_msg = None
+        accumulated_content: list[str] = []
+
+        async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
+            if isinstance(msg, AIMessageChunk):
+                accumulated_content.append(msg.content)
+            else:
+                msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
+                if msg_dict.get("type") == "ai":
+                    full_msg = msg
+
+        full_msg = _ensure_full_msg(full_msg, accumulated_content)
+        full_content = "".join(accumulated_content) if accumulated_content else (full_msg.content if full_msg else "")
+
+        if conf.enable_content_guard and await content_guard.check(full_content):
+            await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
+            return {
+                "status": "interrupted",
+                "message": "检测到敏感内容，已中断输出",
+                "request_id": meta.get("request_id"),
+                "time_cost": asyncio.get_event_loop().time() - start_time,
+            }
+
+        try:
+            graph = await agent.get_graph()
+            state = await graph.aget_state(langgraph_config)
+            agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+        except Exception:
+            agent_state = {}
+
+        await save_messages_from_langgraph_state(
+            agent_instance=agent,
+            thread_id=thread_id,
+            conv_repo=conv_repo,
+            config_dict=langgraph_config,
+        )
+
+        return {
+            "status": "finished",
+            "response": full_content,
+            "request_id": meta.get("request_id"),
+            "thread_id": thread_id,
+            "agent_state": agent_state,
+            "time_cost": asyncio.get_event_loop().time() - start_time,
+        }
+
+    except Exception as e:
+        logger.error(f"Error in agent_chat: {e}, {traceback.format_exc()}")
+        return {
+            "status": "error",
+            "error_type": "unexpected_error",
+            "error_message": str(e),
+            "request_id": meta.get("request_id"),
+        }
+
+
 async def stream_agent_chat(
     *,
     agent_id: str,

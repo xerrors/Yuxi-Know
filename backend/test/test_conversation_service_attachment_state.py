@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from yuxi.services import chat_stream_service as chat_svc
+from yuxi.services import chat_service as chat_svc
 from yuxi.services import conversation_service as svc
 
 
