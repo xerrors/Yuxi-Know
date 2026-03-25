@@ -2,6 +2,10 @@
 
 路线图可能会经常变更，如果有强烈的建议，可以在 [issue](https://github.com/xerrors/Yuxi-Know/issues) 中提。
 
+日志添加规范（For Agent）:
+
+- 同一版本的多次功能更新时，应以功能为单位进行更新，比如之前添加了 A 功能的分不分续保，在后续的更新中修复了因 A 功能引入的 bug，那么这个修复说明应该和 A 功能描述放在一起，而不是新增一条修复记录，功能更新同理。
+
 
 ### 看板
 
@@ -17,34 +21,35 @@
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi-Know/issues/279)
 - 部分 local 的 mcp server 无法正常加载，但是建议在项目外部启动 mcp 服务器，然后通过 sse 的方式使用。【未复现】
-- DeepSeek 官方接口适配会出现问题
-- 部分推理后端与 langchain 的适配有问题：
 - 目前的知识库的图片存在公开访问风险
-- 工具传递给模型的时候，使用英文，但部分模型不支持中文函数名（如gpt-4o-mini，deepseek 官方接口）
 - 生成基准测试会把所有的向量都计算一遍不合理
-
-- RUNs API 导致的问题
-- 双击导致的暂停问题
-- 自定义embedding和rerank模型的配置问题
 
 ## v0.6
 
+
+### 新增
+- 重构后端代码 src -> backend/package/yuxi
+- 重构文档解析，统一文档解析体验，并新增 Parser 类
+- 新增 LITE 模式启动，启动时不加载知识库、知识图谱相关模块，可以使用 make up-lite 快捷启动
+- 新增沙盒环境，详见后续文档更新，统一沙盒虚拟路径前缀默认值为 `/home/yuxi/user-data`
+- 新增基于沙盒的文件系统，前端工作台可以查看文件系统，支持预览、下载文件
+- 重构附件系统，直接集成在了沙盒文件系统中，附件上传后直接落盘到沙盒挂载目录
+- 优化前端流式消息体验：新增通用 `useStreamSmoother` 调度层，统一平滑 Agent runs SSE、普通聊天流与审批恢复流中的 `loading` chunk
+- 优化项目文档说明，并添加贡献指南
+- 重构前端 Agent 路由结构，体验更加顺畅，切换更加自然（类 chatgpt 体验）
+- 新增 API Key 认证功能，支持外部系统通过 API Key 调用系统服务
+- 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
+- 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
+
 <!-- 添加到这里 -->
-- 修复 AgentPanel 文件下载截断问题：viewer 下载接口对线程 `user-data` 文件改为直接返回实际文件，避免复用 sandbox 预览读取链路导致下载内容不完整
-- 优化前端流式消息体验：新增通用 `useStreamSmoother` 调度层，统一平滑 Agent runs SSE、普通聊天流与审批恢复流中的 `loading` chunk，按帧释放文本增量，改善消息输出“一顿一顿”的观感
-- 统一沙盒虚拟路径前缀默认值为 `/home/yuxi/user-data`，修正生产环境仍使用旧版 `/mnt/user-data` 的不一致配置；同时收紧 sandbox provisioner 对 Docker host bind 路径的归一化逻辑，保留 Docker Desktop for Windows 兼容
-- 修复沙盒文件读取错误提示不准确的问题：`read_file` 不再把所有读取异常都显示为 `file not found`，改为区分无效路径、目录路径、权限不足、实际读取失败；同时对图片、PDF 等二进制文件返回明确提示，避免误报与乱码文本
-- 新增 Agent runs 沙盒文件生成 E2E 脚本：通过管理员账号登录、创建 thread、调用 Agent 生成并执行冒泡排序脚本，然后仅通过线程文件 API 校验脚本文件与输出结果文件是否成功落盘
-- 新增根目录 `CONTRIBUTING.md`，补充面向仓库入口的贡献说明，统一说明 Docker Compose 开发流程、PR 提交流程与前后端贡献要求，并链接到 `docs/develop-guides/contributing.md`
-- 优化 `docs/intro/project-overview.md` 的“核心能力”章节，按智能体开发、知识库与 RAG、知识图谱、平台落地能力重写内容，突出项目主线与差异化重点
-- 调整文档归类：将沙盒文档迁移到 `docs/agents/sandbox-architecture.md` 并归入“智能体开发”；将“上下文配置”并入 `docs/agents/agents-config.md`，重点补充 Context 与 `AgentConfigSidebar` 的联动关系，以及 Context 在 Agent 运行周期中的传递链路
-- 重构沙盒文档结构，重写 `docs/agents/sandbox-architecture.md`，按目标边界、架构分层、生命周期、文件系统模型、双视图接入、配置与限制重新组织内容
-- 调整 Agent 路由为 `/agent/{thread_id}`：`/agent` 进入未选中对话空态，不再在 URL 中展示 `agent_id`；发送首条消息时基于当前 `selectedAgentId` 与配置创建新对话，并自动跳转到对应线程路由。
-- 新增 API Key 管理功能，支持外部系统通过 API Key 调用 Agent 对话接口（`POST /api/chat/agent/{agent_id}`）。统一使用 `Authorization: Bearer <api_key>` 认证，API Key 以 `yxkey_` 开头。获取 API Key 即代表拥有绑定用户的所有接口访问权限。
-- 将 后端代码 和 agents 解耦，agents 作为单独的 package 使用
-- 添加 subagents 的支持，支持在 web 中添加 subagents
-- 将内置 skills 的初始化从符号链接改为复制，以兼容沙盒绑定场景
-- 修复并统一 lite 模式下的测试脚本：更新 sandbox/provider 接口适配、viewer 文件系统测试数据构造方式、conversation/upload 状态断言与路由存在性断言，确保“非数据库场景”下核心 pytest 与 E2E 脚本可稳定执行
+
+### 修复
+
+<!-- 添加到这里 -->
+
+
+---
+
 
 ## v0.5
 
@@ -67,6 +72,7 @@
 
 ### 修复
 
+- 修复文件上传弹窗中 OCR 下拉选项展开时不会自动检查服务状态的问题
 - 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
 - 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi-Know/pull/470)
 - 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi-Know/pull/478)

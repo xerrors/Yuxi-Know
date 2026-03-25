@@ -80,8 +80,8 @@
                 v-model:value="chunkParams.enable_ocr"
                 :options="enableOcrOptions"
                 style="width: 100%"
-                :disabled="ocrHealthChecking"
                 class="ocr-select"
+                @dropdownVisibleChange="handleOcrDropdownVisibleChange"
               />
               <p class="param-description">
                 <template v-if="!isOcrEnabled"> 不启用 OCR，仅处理文本文件 </template>
@@ -1212,6 +1212,13 @@ const checkOcrHealth = async () => {
   } finally {
     ocrHealthChecking.value = false
   }
+}
+
+const handleOcrDropdownVisibleChange = (open) => {
+  if (!open) {
+    return
+  }
+  checkOcrHealth()
 }
 
 const getAuthHeaders = () => {
