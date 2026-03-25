@@ -6,6 +6,8 @@ import uuid
 
 import pytest
 
+from yuxi.agents.backends.sandbox import ensure_thread_dirs, sandbox_workspace_dir, virtual_path_for_thread_file
+
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
@@ -107,3 +109,22 @@ async def test_viewer_download_returns_attachment_response(test_client, standard
     assert "attachment;" in content_disposition
     assert "download_demo" in content_disposition
     assert "download-me" in response.text
+
+async def test_viewer_download_returns_full_file_for_large_user_data_content(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+    large_content = "0123456789abcdef" * 4096
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "large_download.txt"
+    actual_path.write_text(large_content, encoding="utf-8")
+    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/download",
+        params={"thread_id": thread_id, "path": file_path},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    assert response.content == large_content.encode("utf-8")
+

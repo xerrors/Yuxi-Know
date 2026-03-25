@@ -7,9 +7,9 @@ from pathlib import PurePosixPath
 from urllib.parse import quote
 
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH
+from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH, resolve_virtual_path
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 from yuxi.services.filesystem_service import _resolve_filesystem_state
@@ -199,7 +199,7 @@ async def download_viewer_file(
     db: AsyncSession,
 ) -> StreamingResponse:
     normalized_path = _normalize_path(path)
-    sandbox_backend, skills_backend, _selected_skills = await _resolve_viewer_state(
+    _sandbox_backend, skills_backend, _selected_skills = await _resolve_viewer_state(
         thread_id=thread_id,
         agent_id=agent_id,
         agent_config_id=agent_config_id,
@@ -209,8 +209,20 @@ async def download_viewer_file(
 
     try:
         if _is_user_data_path(normalized_path):
-            responses = await asyncio.to_thread(sandbox_backend.download_files, [normalized_path])
-        elif _is_skills_path(normalized_path):
+            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            if not actual_path.exists():
+                raise HTTPException(status_code=404, detail="文件不存在")
+            if not actual_path.is_file():
+                raise HTTPException(status_code=400, detail="当前路径是目录")
+
+            file_name = actual_path.name or "download"
+            media_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+            headers = {
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}",
+            }
+            return FileResponse(path=actual_path, media_type=media_type, headers=headers)
+
+        if _is_skills_path(normalized_path):
             responses = await asyncio.to_thread(skills_backend.download_files, [_strip_skills_prefix(normalized_path)])
         else:
             raise HTTPException(
