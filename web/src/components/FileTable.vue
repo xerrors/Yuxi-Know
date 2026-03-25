@@ -1157,23 +1157,32 @@ const handleParseFile = async (record) => {
   await store.parseFiles([record.file_id])
 }
 
+const defaultIndexParams = {
+  chunk_size: 1000,
+  chunk_overlap: 200,
+  qa_separator: '',
+  chunk_preset_id: ''
+}
+
+const loadRecordProcessingParams = async (record) => {
+  if (record?.processing_params) {
+    return record.processing_params
+  }
+
+  const detail = await documentApi.getDocumentInfo(store.databaseId, record.file_id)
+  return detail?.processing_params || null
+}
+
 const handleIndexFile = async (record) => {
   closePopover(record.file_id)
-  // 打开参数配置弹窗
   currentIndexFileIds.value = [record.file_id]
   isBatchIndexOperation.value = false
   indexConfigModalTitle.value = '入库参数配置'
 
-  if (record?.processing_params) {
-    Object.assign(indexParams.value, record.processing_params)
-  } else {
-    // Reset to defaults if no existing params
-    Object.assign(indexParams.value, {
-      chunk_size: 1000,
-      chunk_overlap: 200,
-      qa_separator: '',
-      chunk_preset_id: ''
-    })
+  Object.assign(indexParams.value, defaultIndexParams)
+  const processingParams = await loadRecordProcessingParams(record)
+  if (processingParams) {
+    Object.assign(indexParams.value, processingParams)
   }
 
   indexConfigModalVisible.value = true
@@ -1185,11 +1194,12 @@ const handleReindexFile = async (record) => {
   isBatchIndexOperation.value = false
   indexConfigModalTitle.value = '重新入库参数配置'
 
-  if (record?.processing_params) {
-    Object.assign(indexParams.value, record.processing_params)
+  Object.assign(indexParams.value, defaultIndexParams)
+  const processingParams = await loadRecordProcessingParams(record)
+  if (processingParams) {
+    Object.assign(indexParams.value, processingParams)
   }
 
-  // 显示参数配置模态框
   indexConfigModalVisible.value = true
 }
 
@@ -1230,12 +1240,7 @@ const handleIndexConfigCancel = () => {
   currentIndexFileIds.value = []
   isBatchIndexOperation.value = false
   // 重置参数为默认值
-  Object.assign(indexParams.value, {
-    chunk_size: 1000,
-    chunk_overlap: 200,
-    qa_separator: '',
-    chunk_preset_id: ''
-  })
+  Object.assign(indexParams.value, defaultIndexParams)
 }
 
 // 导入工具函数

@@ -7,6 +7,7 @@ from yuxi.knowledge.chunking.ragflow_like.presets import (
     ensure_chunk_defaults_in_additional_params,
     resolve_chunk_processing_params,
 )
+from yuxi.knowledge.utils import sanitize_processing_params
 from yuxi.utils import logger
 from yuxi.utils.datetime_utils import coerce_any_to_utc_datetime, utc_isoformat
 
@@ -667,7 +668,6 @@ class KnowledgeBase(ABC):
                         "type": file_info.get("file_type", ""),
                         "status": file_info.get("status", "done"),
                         "created_at": created_at,
-                        "processing_params": file_info.get("processing_params", None),
                         "is_folder": file_info.get("is_folder", False),
                         "parent_id": file_info.get("parent_id", None),
                     }
@@ -1057,9 +1057,11 @@ class KnowledgeBase(ABC):
                     "content_hash": record.content_hash,
                     "size": record.file_size,
                     "content_type": record.content_type,
-                    "processing_params": resolve_chunk_processing_params(
-                        kb_additional_params=kb_additional_params,
-                        file_processing_params=record.processing_params,
+                    "processing_params": sanitize_processing_params(
+                        resolve_chunk_processing_params(
+                            kb_additional_params=kb_additional_params,
+                            file_processing_params=record.processing_params,
+                        )
                     ),
                     "is_folder": record.is_folder,
                     "error": record.error_message,
@@ -1153,7 +1155,7 @@ class KnowledgeBase(ABC):
                     "content_hash": meta.get("content_hash"),
                     "file_size": meta.get("size"),
                     "content_type": meta.get("content_type"),
-                    "processing_params": meta.get("processing_params"),
+                    "processing_params": sanitize_processing_params(meta.get("processing_params")),
                     "is_folder": meta.get("is_folder", False),
                     "error_message": meta.get("error"),
                     "created_by": str(meta.get("created_by")) if meta.get("created_by") else None,
@@ -1207,7 +1209,7 @@ class KnowledgeBase(ABC):
                 "content_hash": meta.get("content_hash"),
                 "file_size": meta.get("size"),
                 "content_type": meta.get("content_type"),
-                "processing_params": meta.get("processing_params"),
+                "processing_params": sanitize_processing_params(meta.get("processing_params")),
                 "is_folder": meta.get("is_folder", False),
                 "error_message": meta.get("error"),
                 "created_by": str(meta.get("created_by")) if meta.get("created_by") else None,

@@ -10,6 +10,7 @@ from .kb_utils import (
     get_embedding_config,
     merge_processing_params,
     prepare_item_metadata,
+    sanitize_processing_params,
     split_text_into_chunks,
     validate_file_path,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "calculate_content_hash",
     "get_embedding_config",
     "prepare_item_metadata",
+    "sanitize_processing_params",
     "split_text_into_chunks",
     "merge_processing_params",
     "validate_file_path",

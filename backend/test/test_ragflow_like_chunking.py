@@ -13,6 +13,7 @@ from yuxi.knowledge.chunking.ragflow_like.presets import (
     map_to_internal_parser_id,
     resolve_chunk_processing_params,
 )
+from yuxi.knowledge.utils.kb_utils import sanitize_processing_params
 
 
 def test_general_maps_to_naive() -> None:
@@ -218,3 +219,15 @@ def test_laws_markdown_articles_should_not_collapse_into_chapter_chunk() -> None
     # 条级切分时，第一条与第二条不应被合并到同一块。
     assert all("第二条" not in chunk for chunk in first_article_chunks)
     assert max(count_tokens(ck["content"]) for ck in chunks) <= 120
+
+
+def test_sanitize_processing_params_should_drop_batch_only_fields() -> None:
+    sanitized = sanitize_processing_params(
+        {
+            "chunk_preset_id": "general",
+            "content_hashes": {"a.md": "hash-a"},
+            "_preprocessed_map": {"a.md": {"path": "/tmp/a.md"}},
+        }
+    )
+
+    assert sanitized == {"chunk_preset_id": "general"}

@@ -91,6 +91,17 @@ def _unescape_separator(separator: str | None) -> str | None:
     return separator
 
 
+def sanitize_processing_params(params: dict | None) -> dict | None:
+    """移除批次级临时字段，避免写入单文件元数据。"""
+    if not params:
+        return None
+
+    sanitized = params.copy()
+    sanitized.pop("_preprocessed_map", None)
+    sanitized.pop("content_hashes", None)
+    return sanitized
+
+
 def split_text_into_chunks(text: str, file_id: str, filename: str, params: dict = {}) -> list[dict]:
     """
     将文本分割成块，使用 LangChain 的 MarkdownTextSplitter 进行智能分割
@@ -222,9 +233,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
         }
 
         if params:
-            # 移除内部参数以免污染 metadata
-            safe_params = params.copy()
-            safe_params.pop("_preprocessed_map", None)
+            safe_params = sanitize_processing_params(params) or {}
             # 覆盖 content_type 为 file，确保后续解析走文件流程（MinIO 下载 -> HTML 解析）
             # 而不是再次尝试作为 URL 抓取
             safe_params["content_type"] = "file"
@@ -314,7 +323,7 @@ async def prepare_item_metadata(item: str, content_type: str, db_id: str, params
 
     # 保存处理参数到元数据
     if params:
-        metadata["processing_params"] = params.copy()
+        metadata["processing_params"] = sanitize_processing_params(params)
 
     return metadata
 
