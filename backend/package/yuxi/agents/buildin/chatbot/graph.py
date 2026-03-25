@@ -2,10 +2,7 @@ from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import (
-    ModelRetryMiddleware,
-    TodoListMiddleware,
-)
+from langchain.agents.middleware import ModelRetryMiddleware
 
 from yuxi.agents import BaseAgent, load_chat_model
 from yuxi.agents.backends import create_agent_composite_backend
@@ -33,7 +30,7 @@ def _create_fs_backend(rt):
 class ChatbotAgent(BaseAgent):
     name = "智能助手"
     description = "基础的对话机器人，可以回答问题，可在配置中启用需要的工具。"
-    capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能
+    capabilities = ["file_upload", "files"]  # 支持文件上传功能
     metadata = {
         "examples": [
             "你好，请介绍一下你自己",
@@ -84,7 +81,6 @@ class ChatbotAgent(BaseAgent):
             subagents_middleware,
             summary_middleware,
             ModelRetryMiddleware(),  # 模型重试中间件
-            TodoListMiddleware(),
             PatchToolCallsMiddleware(),
         ]
 

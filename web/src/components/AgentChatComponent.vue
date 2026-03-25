@@ -214,6 +214,7 @@
             :agent-id="currentThread?.agent_id || currentAgentId"
             :agent-config-id="selectedAgentConfigId"
             :panel-ratio="panelRatio"
+            :supports-todo="supportsTodo"
             @refresh="handleAgentStateRefresh"
             @close="toggleAgentPanel"
             @resize="handlePanelResize"

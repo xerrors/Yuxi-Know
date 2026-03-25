@@ -120,7 +120,7 @@ class DeepAgent(BaseAgent):
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
                 save_attachments_to_fs,  # 附件注入提示词
-                TodoListMiddleware(),
+                TodoListMiddleware(system_prompt="任务结束前，应该检查维护的待办事项列表是否结束。"),
                 PatchToolCallsMiddleware(),
                 KnowledgeBaseMiddleware(),  # 知识库工具
                 subagents_middleware,

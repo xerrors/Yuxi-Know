@@ -22,7 +22,7 @@
       <button class="tab" :class="{ active: activeTab === 'files' }" @click="activeTab = 'files'">
         文件系统
       </button>
-      <button class="tab" :class="{ active: activeTab === 'todos' }" @click="activeTab = 'todos'">
+      <button v-if="supportsTodo" class="tab" :class="{ active: activeTab === 'todos' }" @click="activeTab = 'todos'">
         任务 ({{ completedCount }}/{{ todos.length }})
       </button>
     </div>
@@ -191,6 +191,10 @@ const props = defineProps({
   panelRatio: {
     type: Number,
     default: 0.35
+  },
+  supportsTodo: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -250,7 +254,7 @@ onUpdated(() => {
 })
 
 const updateActiveTab = () => {
-  if (activeTab.value === 'files' && dynamicTreeData.value.length === 0 && todos.value.length > 0) {
+  if (activeTab.value === 'files' && dynamicTreeData.value.length === 0 && props.supportsTodo && todos.value.length > 0) {
     activeTab.value = 'todos'
   }
 }
