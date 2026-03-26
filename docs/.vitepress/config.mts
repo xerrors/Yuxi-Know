@@ -9,7 +9,9 @@ export default defineConfig({
   description: "语析",
   base: '/Yuxi-Know/',
   ignoreDeadLinks: [
-    /localhost/
+    /localhost/,
+    /CONTRIBUTING$/,
+    /docker-compose\.yml$/
   ],
   markdown: {
     config: (md) => {
