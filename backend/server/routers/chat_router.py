@@ -22,10 +22,12 @@ from yuxi.services.agent_run_service import (
     get_agent_run_view,
     stream_agent_run_events,
 )
+from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.services.conversation_service import (
     create_thread_view,
     delete_thread_attachment_view,
     delete_thread_view,
+    get_thread_history_view,
     list_thread_attachments_view,
     list_threads_view,
     update_thread_view,
@@ -37,7 +39,6 @@ from yuxi.services.thread_files_service import (
     resolve_thread_artifact_view,
 )
 from yuxi.services.feedback_service import get_message_feedback_view, submit_message_feedback_view
-from yuxi.services.history_query_service import get_agent_history_view
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.utils.logging_config import logger
 from yuxi.utils.image_processor import process_uploaded_image
@@ -170,20 +171,7 @@ async def call(query: str = Body(...), meta: dict = Body(None), current_user: Us
 async def get_agent(current_user: User = Depends(get_required_user)):
     """获取所有可用智能体的基本信息（需要登录）"""
     agents_info = await agent_manager.get_agents_info(include_configurable_items=False)
-
-    # Return agents with basic information (without configurable_items for performance)
-    agents = [
-        {
-            "id": agent_info["id"],
-            "name": agent_info.get("name", "Unknown"),
-            "description": agent_info.get("description", ""),
-            "metadata": agent_info.get("metadata", {}),
-            "capabilities": agent_info.get("capabilities", []),  # 智能体能力列表
-        }
-        for agent_info in agents_info
-    ]
-
-    return {"agents": agents}
+    return {"agents": agents_info}
 
 
 @chat.get("/agent/{agent_id}")
@@ -197,14 +185,7 @@ async def get_single_agent(agent_id: str, current_user: User = Depends(get_requi
         # 获取智能体的完整信息（包含 configurable_items）
         agent_info = await agent.get_info()
 
-        return {
-            "id": agent_info["id"],
-            "name": agent_info.get("name", "Unknown"),
-            "description": agent_info.get("description", ""),
-            "metadata": agent_info.get("metadata", {}),
-            "configurable_items": agent_info.get("configurable_items", []),
-            "capabilities": agent_info.get("capabilities", []),
-        }
+        return agent_info
 
     except HTTPException:
         raise
@@ -219,9 +200,6 @@ async def list_agent_configs(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -256,9 +234,6 @@ async def get_agent_config_profile(
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -277,9 +252,6 @@ async def create_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -309,9 +281,6 @@ async def update_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -340,9 +309,6 @@ async def set_agent_config_default(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -362,9 +328,6 @@ async def delete_agent_config_profile(
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not current_user.department_id:
-        raise HTTPException(status_code=400, detail="当前用户未绑定部门")
-
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
 
@@ -488,17 +451,6 @@ async def stream_run_events(
         },
     )
 
-
-@chat.get("/thread/{thread_id}/active_run")
-async def get_thread_active_run(
-    thread_id: str,
-    current_user: User = Depends(get_required_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """获取当前会话活跃 run（需要登录）"""
-    return await get_active_run_by_thread(thread_id=thread_id, current_user_id=str(current_user.id), db=db)
-
-
 # =============================================================================
 # > === 模型管理分组 ===
 # =============================================================================
@@ -520,10 +472,9 @@ async def update_chat_models(model_provider: str, model_names: list[str], curren
     return {"models": conf.model_names[model_provider].models}
 
 
-@chat.post("/agent/{agent_id}/resume")
-async def resume_agent_chat(
-    agent_id: str,
-    thread_id: str = Body(...),
+@chat.post("/thread/{thread_id}/resume")
+async def resume_thread_chat(
+    thread_id: str,
     approved: bool | None = Body(None),
     answer: dict | None = Body(None),
     config: dict = Body({}),
@@ -531,6 +482,13 @@ async def resume_agent_chat(
     db: AsyncSession = Depends(get_db),
 ):
     """恢复被人工审批中断的对话（需要登录）"""
+
+    # 验证 thread 存在且属于当前用户
+    conv_repo = ConversationRepository(db)
+    conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
+    if not conversation or conversation.user_id != str(current_user.id) or conversation.status == "deleted":
+        raise HTTPException(status_code=404, detail="对话线程不存在")
+    agent_id = conversation.agent_id
 
     def normalize_resume_input(raw_answer: Any, raw_approved: bool | None) -> Any:
         def normalize_single_answer(value: Any) -> Any:
@@ -602,6 +560,7 @@ async def resume_agent_chat(
         meta["request_id"] = str(uuid.uuid4())
     return StreamingResponse(
         stream_agent_resume(
+            agent_id=agent_id,
             thread_id=thread_id,
             resume_input=resume_input,
             meta=meta,
@@ -613,35 +572,42 @@ async def resume_agent_chat(
     )
 
 
-@chat.get("/agent/{agent_id}/history")
-async def get_agent_history(
-    agent_id: str, thread_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)
+@chat.get("/thread/{thread_id}/active_run")
+async def get_thread_active_run(
+    thread_id: str,
+    current_user: User = Depends(get_required_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """获取智能体历史消息（需要登录）- 包含用户反馈状态"""
+    """获取当前会话活跃 run（需要登录）"""
+    return await get_active_run_by_thread(thread_id=thread_id, current_user_id=str(current_user.id), db=db)
+
+
+@chat.get("/thread/{thread_id}/history")
+async def get_thread_history(
+    thread_id: str, current_user: User = Depends(get_required_user), db: AsyncSession = Depends(get_db)
+):
+    """获取对话历史消息（需要登录）- 包含用户反馈状态"""
     try:
-        return await get_agent_history_view(
-            agent_id=agent_id,
+        return await get_thread_history_view(
             thread_id=thread_id,
             current_user_id=str(current_user.id),
             db=db,
         )
 
     except Exception as e:
-        logger.error(f"获取智能体历史消息出错: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取智能体历史消息出错: {str(e)}")
+        logger.error(f"获取对话历史消息出错: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取对话历史消息出错: {str(e)}")
 
 
-@chat.get("/agent/{agent_id}/state")
-async def get_agent_state(
-    agent_id: str,
+@chat.get("/thread/{thread_id}/state")
+async def get_thread_state(
     thread_id: str,
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取智能体当前状态（需要登录）"""
+    """获取对话当前状态（需要登录）"""
     try:
         return await get_agent_state_view(
-            agent_id=agent_id,
             thread_id=thread_id,
             current_user_id=str(current_user.id),
             db=db,
@@ -649,8 +615,8 @@ async def get_agent_state(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取AgentState出错: {e}, {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"获取AgentState出错: {str(e)}")
+        logger.error(f"获取对话状态出错: {e}, {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"获取对话状态出错: {str(e)}")
 
 
 # ==================== 线程管理 API ====================

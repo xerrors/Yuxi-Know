@@ -769,7 +769,7 @@ const fetchThreadMessages = async ({ agentId, threadId, delay = 0 }) => {
   }
 
   try {
-    const response = await agentApi.getAgentHistory(agentId, threadId)
+    const response = await agentApi.getAgentHistory(threadId)
     threadMessages.value[threadId] = response.history || []
   } catch (error) {
     handleChatError(error, 'load')
@@ -808,9 +808,9 @@ const refreshThreadFilesAndAttachments = async (threadId) => {
 }
 
 const fetchAgentState = async (agentId, threadId) => {
-  if (!agentId || !threadId) return
+  if (!threadId) return
   try {
-    const res = await agentApi.getAgentState(agentId, threadId)
+    const res = await agentApi.getAgentState(threadId)
     const targetChatId = currentChatId.value || threadId
     const ts = getThreadState(targetChatId)
     if (ts) {

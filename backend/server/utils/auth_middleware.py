@@ -131,6 +131,11 @@ async def get_required_user(user: User | None = Depends(get_current_user)):
             detail="请登录后再访问",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if not user.department_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前用户未绑定部门",
+        )
     return user
 
 

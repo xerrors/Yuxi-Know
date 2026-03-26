@@ -90,8 +90,8 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - 历史消息
    */
-  getAgentHistory: (agentId, threadId) =>
-    apiGet(`/api/chat/agent/${agentId}/history?thread_id=${threadId}`),
+  getAgentHistory: (threadId) =>
+    apiGet(`/api/chat/thread/${threadId}/history`),
 
   /**
    * 获取指定会话的 AgentState
@@ -99,8 +99,8 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - AgentState
    */
-  getAgentState: (agentId, threadId) =>
-    apiGet(`/api/chat/agent/${agentId}/state?thread_id=${threadId}`),
+  getAgentState: (threadId) =>
+    apiGet(`/api/chat/thread/${threadId}/state`),
 
   /**
    * Submit feedback for a message
@@ -168,14 +168,14 @@ export const agentApi = {
    * @param {Object} options - 可选参数（signal, headers等）
    * @returns {Promise} - 恢复响应流
    */
-  resumeAgentChat: (agentId, data, options = {}) => {
+  resumeAgentChat: (threadId, data, options = {}) => {
     const { signal, headers: extraHeaders, ...restOptions } = options || {}
     const baseHeaders = {
       'Content-Type': 'application/json',
       ...useUserStore().getAuthHeaders()
     }
 
-    return fetch(`/api/chat/agent/${agentId}/resume`, {
+    return fetch(`/api/chat/thread/${threadId}/resume`, {
       method: 'POST',
       body: JSON.stringify(data),
       signal,

@@ -866,16 +866,10 @@ async def stream_agent_resume(
 
 async def get_agent_state_view(
     *,
-    agent_id: str,
     thread_id: str,
     current_user_id: str,
     db,
 ) -> dict:
-    if not agent_manager.get_agent(agent_id):
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
-
     conv_repo = ConversationRepository(db)
     conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
     if not conversation or conversation.user_id != str(current_user_id) or conversation.status == "deleted":
@@ -883,29 +877,10 @@ async def get_agent_state_view(
 
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
-    agent = agent_manager.get_agent(agent_id)
+    agent = agent_manager.get_agent(conversation.agent_id)
     graph = await agent.get_graph()
     langgraph_config = {"configurable": {"user_id": str(current_user_id), "thread_id": thread_id}}
     state = await graph.aget_state(langgraph_config)
     agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
-
-    # 如果 state 中没有 files，从附件构建
-    # 这确保了上传附件后立即可以在文件列表中看到文件
-    if not agent_state.get("files") or agent_state["files"] == {}:
-        try:
-            attachments = await conv_repo.get_attachments_by_thread_id(thread_id)
-            logger.info(f"[get_agent_state_view] found {len(attachments)} attachments in DB")
-            if attachments:
-                first_status = attachments[0].get("status")
-                first_has_markdown = bool(attachments[0].get("markdown"))
-                logger.info(
-                    f"[get_agent_state_view] first attachment status: {first_status}, "
-                    f"has markdown: {first_has_markdown}"
-                )
-                files = _build_state_files(attachments)
-                agent_state["files"] = files
-                logger.info(f"[get_agent_state_view] Built files from attachments: {len(files)} files")
-        except Exception as e:
-            logger.warning(f"Failed to fetch attachments for thread {thread_id}: {e}")
 
     return {"agent_state": agent_state}

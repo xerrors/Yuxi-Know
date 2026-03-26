@@ -54,7 +54,6 @@ class BaseAgent:
             "name": getattr(self, "name", "Unknown"),
             "description": getattr(self, "description", "Unknown"),
             "metadata": metadata,
-            # "examples": metadata.get("examples", []),
             "configurable_items": configurable_items,
             "capabilities": getattr(self, "capabilities", []),  # 智能体能力列表
         }

@@ -106,7 +106,7 @@ export function useApproval({ getThreadState, resetOnGoingConv, fetchThreadMessa
     }
 
     try {
-      const response = await agentApi.resumeAgentChat(currentAgentId, requestBody, {
+      const response = await agentApi.resumeAgentChat(threadId, requestBody, {
         signal: threadState.streamAbortController?.signal
       })
 
