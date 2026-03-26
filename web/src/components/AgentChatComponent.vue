@@ -928,10 +928,8 @@ const sendMessage = async ({
 
   const requestData = {
     query: text,
-    config: {
-      thread_id: threadId,
-      agent_config_id: selectedAgentConfigId.value
-    }
+    thread_id: threadId,
+    agent_config_id: selectedAgentConfigId.value
   }
 
   // 如果有图片，添加到请求中
@@ -940,7 +938,7 @@ const sendMessage = async ({
   }
 
   try {
-    return await agentApi.sendAgentMessage(agentId, requestData, signal ? { signal } : undefined)
+    return await agentApi.sendAgentMessage(requestData, signal ? { signal } : undefined)
   } catch (error) {
     handleChatError(error, 'send')
     throw error
@@ -1170,12 +1168,10 @@ const handleSendMessage = async ({ image } = {}) => {
     resetOnGoingConv(threadId)
     threadState.isStreaming = true
     try {
-      const runResp = await agentApi.createAgentRun(currentAgentId.value, {
+      const runResp = await agentApi.createAgentRun({
         query: text,
-        config: {
-          thread_id: threadId,
-          agent_config_id: selectedAgentConfigId.value
-        },
+        agent_config_id: selectedAgentConfigId.value,
+        thread_id: threadId,
         image_content: image?.imageContent
       })
       const runId = runResp?.run_id

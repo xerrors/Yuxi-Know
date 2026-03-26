@@ -14,7 +14,7 @@ API Key 是一种用于身份验证的密钥字符串，外部系统可以通过
 
 ## 接口调用方式
 
-外部系统通过 HTTP 请求调用 Yuxi 的对话接口，需要在请求头中携带 API Key。接口地址为 `POST /api/chat/agent/{agent_id}`，其中 `{agent_id}` 是目标智能体的标识符。请求头需要包含 `Authorization` 字段，值格式为 `Bearer <api_key>`，其中 `<api_key>` 是创建 API Key 时获取的完整密钥。请求体为 JSON 格式，包含 `query` 字段表示用户问题，以及可选的 `config` 和 `meta` 字段用于配置对话参数。
+外部系统通过 HTTP 请求调用 Yuxi 的对话接口，需要在请求头中携带 API Key。流式接口地址为 `POST /api/chat/agent`，非流式接口地址为 `POST /api/chat/agent/sync`（不支持 HITL）。请求头需要包含 `Authorization` 字段，值格式为 `Bearer <api_key>`，其中 `<api_key>` 是创建 API Key 时获取的完整密钥。请求体为 JSON 格式，必填字段为 `query` 和 `agent_config_id`，可选字段为 `thread_id`、`image_content` 和 `meta`。
 
 以下是一个典型的 Python 调用示例：
 
@@ -22,14 +22,14 @@ API Key 是一种用于身份验证的密钥字符串，外部系统可以通过
 import requests
 import json
 
-url = "http://your-yuxi-server/api/chat/agent/agent_id"
+url = "http://your-yuxi-server/api/chat/agent"
 headers = {
     "Authorization": "Bearer yxkey_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     "Content-Type": "application/json"
 }
 payload = {
     "query": "你好，请介绍一下你自己",
-    "config": {},
+    "agent_config_id": 1,
     "meta": {}
 }
 
@@ -47,7 +47,7 @@ for line in response.iter_lines():
 
 `event: data` 表示数据事件，携带实际的对话内容。`event: error` 表示错误事件，当对话过程中发生错误时会收到此类事件。`event: done` 表示完成事件，标志对话结束。
 
-每次调用都会在响应中包含 `request_id`，这是本次对话的唯一标识符，可用于日志追踪和问题排查。如果需要在多轮对话中使用同一个会话，可以通过 `config.thread_id` 参数指定线程 ID，系统会将同一线程的消息串联起来形成连贯的对话上下文。
+每次调用都会在响应中包含 `request_id`，这是本次对话的唯一标识符，可用于日志追踪和问题排查。如果需要在多轮对话中使用同一个会话，可以通过 `thread_id` 参数指定线程 ID，系统会将同一线程的消息串联起来形成连贯的对话上下文。
 
 ## 认证方式
 

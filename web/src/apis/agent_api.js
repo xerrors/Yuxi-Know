@@ -22,18 +22,17 @@ import { useUserStore } from '@/stores/user'
 export const agentApi = {
   /**
    * 发送聊天消息到指定智能体（流式响应）
-   * @param {string} agentId - 智能体ID
    * @param {Object} data - 聊天数据
    * @returns {Promise} - 聊天响应流
    */
-  sendAgentMessage: (agentId, data, options = {}) => {
+  sendAgentMessage: (data, options = {}) => {
     const { signal, headers: extraHeaders, ...restOptions } = options || {}
     const baseHeaders = {
       'Content-Type': 'application/json',
       ...useUserStore().getAuthHeaders()
     }
 
-    return fetch(`/api/chat/agent/${agentId}`, {
+    return fetch('/api/chat/agent', {
       method: 'POST',
       body: JSON.stringify(data),
       signal,
@@ -190,14 +189,15 @@ export const agentApi = {
 
   /**
    * 创建异步运行任务（Run）
-   * @param {string} agentId - 智能体ID
    * @param {Object} data - run 请求体
    * @returns {Promise<Object>}
    */
-  createAgentRun: (agentId, data) =>
-    apiPost(`/api/chat/agent/${agentId}/runs`, {
+  createAgentRun: (data) =>
+    apiPost('/api/chat/runs', {
       query: data.query,
-      config: data.config || {},
+      agent_config_id: data.agent_config_id,
+      thread_id: data.thread_id,
+      meta: data.meta || {},
       image_content: data.image_content || null
     }),
 

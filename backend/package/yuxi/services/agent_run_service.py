@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.agents.buildin import agent_manager
+from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.repositories.agent_run_repository import TERMINAL_RUN_STATUSES, AgentRunRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.services.run_queue_service import (
@@ -51,9 +52,10 @@ def _format_sse(data: dict, event: str | None = None) -> str:
 
 async def create_agent_run_view(
     *,
-    agent_id: str,
     query: str,
-    config: dict,
+    agent_config_id: int,
+    thread_id: str,
+    meta: dict,
     image_content: str | None,
     current_user_id: str,
     db: AsyncSession,
@@ -61,19 +63,28 @@ async def create_agent_run_view(
     if not query:
         raise HTTPException(status_code=422, detail="query 不能为空")
 
+    if not thread_id:
+        raise HTTPException(status_code=422, detail="thread_id 不能为空")
+
+    config_repo = AgentConfigRepository(db)
+    config_item = await config_repo.get_by_id(config_id=int(agent_config_id))
+    if config_item is None:
+        raise HTTPException(status_code=404, detail="配置不存在")
+
+    agent_id = config_item.agent_id
     if not agent_manager.get_agent(agent_id):
         raise HTTPException(status_code=404, detail=f"智能体 {agent_id} 不存在")
-
-    thread_id = (config or {}).get("thread_id")
-    if not thread_id:
-        raise HTTPException(status_code=422, detail="config.thread_id 不能为空")
 
     conv_repo = ConversationRepository(db)
     conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
     if not conversation or conversation.user_id != str(current_user_id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
 
-    request_id = str((config or {}).get("request_id") or uuid.uuid4())
+    request_id = str((meta or {}).get("request_id") or uuid.uuid4())
+    config = {
+        "thread_id": thread_id,
+        "agent_config_id": int(agent_config_id),
+    }
     run_repo = AgentRunRepository(db)
     existing = await run_repo.get_run_by_request_id(request_id)
     if existing and existing.user_id == str(current_user_id):

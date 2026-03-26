@@ -9,6 +9,14 @@ from sqlalchemy.exc import IntegrityError
 import yuxi.services.agent_run_service as agent_run_service
 
 
+class FakeConfigRepo:
+    def __init__(self, db_session):
+        self.db = db_session
+
+    async def get_by_id(self, config_id: int):
+        return SimpleNamespace(id=config_id, agent_id="ChatbotAgent", department_id=1)
+
+
 @pytest.mark.asyncio
 async def test_stream_agent_run_events_emits_error_and_close_on_db_error(monkeypatch: pytest.MonkeyPatch):
     @asynccontextmanager
@@ -134,7 +142,7 @@ async def test_create_agent_run_commits_before_enqueue(monkeypatch: pytest.Monke
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active")
+            return SimpleNamespace(user_id="1", status="active", department_id=1)
 
     class Queue:
         async def enqueue_job(self, job_name: str, run_id: str, _job_id: str):
@@ -148,14 +156,16 @@ async def test_create_agent_run_commits_before_enqueue(monkeypatch: pytest.Monke
         return Queue()
 
     monkeypatch.setattr(agent_run_service.agent_manager, "get_agent", lambda agent_id: object())
+    monkeypatch.setattr(agent_run_service, "AgentConfigRepository", FakeConfigRepo)
     monkeypatch.setattr(agent_run_service, "ConversationRepository", ConvRepo)
     monkeypatch.setattr(agent_run_service, "AgentRunRepository", Repo)
     monkeypatch.setattr(agent_run_service, "get_arq_pool", fake_get_arq_pool)
 
     result = await agent_run_service.create_agent_run_view(
-        agent_id="ChatbotAgent",
         query="hello",
-        config={"thread_id": "thread-1", "request_id": "req-1"},
+        agent_config_id=1,
+        thread_id="thread-1",
+        meta={"request_id": "req-1"},
         image_content=None,
         current_user_id="1",
         db=db,
@@ -217,20 +227,22 @@ async def test_create_agent_run_handles_integrity_error_with_same_user_existing(
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active")
+            return SimpleNamespace(user_id="1", status="active", department_id=1)
 
     async def fake_get_arq_pool():
         raise AssertionError("should not enqueue on integrity fallback")
 
     monkeypatch.setattr(agent_run_service.agent_manager, "get_agent", lambda agent_id: object())
+    monkeypatch.setattr(agent_run_service, "AgentConfigRepository", FakeConfigRepo)
     monkeypatch.setattr(agent_run_service, "ConversationRepository", ConvRepo)
     monkeypatch.setattr(agent_run_service, "AgentRunRepository", Repo)
     monkeypatch.setattr(agent_run_service, "get_arq_pool", fake_get_arq_pool)
 
     result = await agent_run_service.create_agent_run_view(
-        agent_id="ChatbotAgent",
         query="hello",
-        config={"thread_id": "thread-1", "request_id": "req-1"},
+        agent_config_id=1,
+        thread_id="thread-1",
+        meta={"request_id": "req-1"},
         image_content=None,
         current_user_id="1",
         db=db,
@@ -288,17 +300,19 @@ async def test_create_agent_run_integrity_error_returns_409_for_other_user(monke
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active")
+            return SimpleNamespace(user_id="1", status="active", department_id=1)
 
     monkeypatch.setattr(agent_run_service.agent_manager, "get_agent", lambda agent_id: object())
+    monkeypatch.setattr(agent_run_service, "AgentConfigRepository", FakeConfigRepo)
     monkeypatch.setattr(agent_run_service, "ConversationRepository", ConvRepo)
     monkeypatch.setattr(agent_run_service, "AgentRunRepository", Repo)
 
     with pytest.raises(agent_run_service.HTTPException) as exc:
         await agent_run_service.create_agent_run_view(
-            agent_id="ChatbotAgent",
             query="hello",
-            config={"thread_id": "thread-1", "request_id": "req-1"},
+            agent_config_id=1,
+            thread_id="thread-1",
+            meta={"request_id": "req-1"},
             image_content=None,
             current_user_id="1",
             db=db,

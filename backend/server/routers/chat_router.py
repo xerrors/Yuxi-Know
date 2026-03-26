@@ -14,7 +14,7 @@ from server.utils.auth_middleware import get_db, get_required_user
 from yuxi import config as conf
 from yuxi.agents.buildin import agent_manager
 from yuxi.models import select_model
-from yuxi.services.chat_service import get_agent_state_view, stream_agent_chat, stream_agent_resume, agent_chat
+from yuxi.services.chat_service import agent_chat, get_agent_state_view, stream_agent_chat, stream_agent_resume
 from yuxi.services.agent_run_service import (
     cancel_agent_run_view,
     create_agent_run_view,
@@ -42,6 +42,8 @@ from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.utils.logging_config import logger
 from yuxi.utils.image_processor import process_uploaded_image
 
+
+# TODO：当前文件的功能过于庞杂，路由标签混乱
 
 # 图片上传响应模型
 class ImageUploadResponse(BaseModel):
@@ -76,9 +78,19 @@ class AgentConfigUpdate(BaseModel):
 
 
 class AgentRunCreate(BaseModel):
-    query: str
-    config: dict = Field(default_factory=dict)
-    image_content: str | None = None
+    query: str = Field(..., description="用户输入的问题")
+    agent_config_id: int = Field(..., description="智能体配置 ID，后端将据此解析 agent_id 和运行时 context")
+    thread_id: str = Field(..., description="会话线程 ID")
+    meta: dict = Field(default_factory=dict, description="可选，请求追踪信息，例如 request_id")
+    image_content: str | None = Field(None, description="可选，base64 图片内容")
+
+
+class AgentChatRequest(BaseModel):
+    query: str = Field(..., description="用户输入的问题")
+    agent_config_id: int = Field(..., description="智能体配置 ID，后端将据此解析 agent_id 和运行时 context")
+    thread_id: str | None = Field(None, description="可选，会话线程 ID；不传则自动创建")
+    meta: dict = Field(default_factory=dict, description="可选，请求追踪信息，例如 request_id")
+    image_content: str | None = Field(None, description="可选，base64 图片内容")
 
 
 chat = APIRouter(prefix="/chat", tags=["chat"])
@@ -218,7 +230,6 @@ async def list_agent_configs(
     if not items:
         await repo.get_or_create_default(
             department_id=current_user.department_id,
-            agent_id=agent_id,
             created_by=str(current_user.id),
         )
         items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
@@ -275,7 +286,6 @@ async def create_agent_config_profile(
     repo = AgentConfigRepository(db)
     item = await repo.create(
         department_id=current_user.department_id,
-        agent_id=agent_id,
         name=payload.name,
         description=payload.description,
         icon=payload.icon,
@@ -367,44 +377,28 @@ async def delete_agent_config_profile(
     return {"success": True}
 
 
-@chat.post("/agent/{agent_id}")
+@chat.post("/agent")
 async def chat_agent(
-    agent_id: str,
-    query: str = Body(...),
-    config: dict = Body({}),
-    meta: dict = Body({}),
-    image_content: str | None = Body(None),
+    payload: AgentChatRequest,
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
     """使用特定智能体进行对话（需要登录）"""
-    logger.info(f"agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
-    logger.info(f"image_content present: {image_content is not None}")
-    if image_content:
-        logger.info(f"image_content length: {len(image_content)}")
-        logger.info(f"image_content preview: {image_content[:50]}...")
+    logger.info(f"query: {payload.query}, agent_config_id: {payload.agent_config_id}, meta: {payload.meta}")
 
-    # 确保 request_id 存在
-    if "request_id" not in meta or not meta.get("request_id"):
-        meta["request_id"] = str(uuid.uuid4())
+    # 查看图片内容
+    logger.info(f"image_content present: {payload.image_content is not None}")
+    if payload.image_content:
+        logger.info(f"image_content length: {len(payload.image_content)}")
+        logger.info(f"image_content preview: {payload.image_content[:50]}...")
 
-    meta.update(
-        {
-            "query": query,
-            "agent_id": agent_id,
-            "server_model_name": config.get("model", agent_id),
-            "thread_id": config.get("thread_id"),
-            "user_id": current_user.id,
-            "has_image": bool(image_content),
-        }
-    )
     return StreamingResponse(
         stream_agent_chat(
-            agent_id=agent_id,
-            query=query,
-            config=config,
-            meta=meta,
-            image_content=image_content,
+            query=payload.query,
+            agent_config_id=payload.agent_config_id,
+            thread_id=payload.thread_id,
+            meta=dict(payload.meta or {}),
+            image_content=payload.image_content,
             current_user=current_user,
             db=db,
         ),
@@ -412,60 +406,41 @@ async def chat_agent(
     )
 
 
-@chat.post("/agent/{agent_id}/sync")
+@chat.post("/agent/sync")
 async def chat_agent_sync(
-    agent_id: str,
-    query: str = Body(...),
-    config: dict = Body({}),
-    meta: dict = Body({}),
-    image_content: str | None = Body(None),
+    payload: AgentChatRequest,
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
     """使用特定智能体进行非流式对话（需要登录）"""
-    logger.info(f"[sync] agent_id: {agent_id}, query: {query}, config: {config}, meta: {meta}")
-    logger.info(f"[sync] image_content present: {image_content is not None}")
-    if image_content:
-        logger.info(f"[sync] image_content length: {len(image_content)}")
-
-    # 确保 request_id 存在
-    if "request_id" not in meta or not meta.get("request_id"):
-        meta["request_id"] = str(uuid.uuid4())
-
-    meta.update(
-        {
-            "query": query,
-            "agent_id": agent_id,
-            "server_model_name": config.get("model", agent_id),
-            "thread_id": config.get("thread_id"),
-            "user_id": current_user.id,
-            "has_image": bool(image_content),
-        }
-    )
+    logger.info(f"[sync] query: {payload.query}, agent_config_id: {payload.agent_config_id}, meta: {payload.meta}")
+    logger.info(f"[sync] image_content present: {payload.image_content is not None}")
+    if payload.image_content:
+        logger.info(f"[sync] image_content length: {len(payload.image_content)}")
 
     return await agent_chat(
-        agent_id=agent_id,
-        query=query,
-        config=config,
-        meta=meta,
-        image_content=image_content,
+        query=payload.query,
+        agent_config_id=payload.agent_config_id,
+        thread_id=payload.thread_id,
+        meta=dict(payload.meta or {}),
+        image_content=payload.image_content,
         current_user=current_user,
         db=db,
     )
 
 
-@chat.post("/agent/{agent_id}/runs")
+@chat.post("/runs")
 async def create_agent_run(
-    agent_id: str,
     payload: AgentRunCreate,
     current_user: User = Depends(get_required_user),
     db: AsyncSession = Depends(get_db),
 ):
     """创建异步 run 任务并入队（需要登录）"""
     return await create_agent_run_view(
-        agent_id=agent_id,
         query=payload.query,
-        config=payload.config or {},
+        agent_config_id=payload.agent_config_id,
+        thread_id=payload.thread_id,
+        meta=dict(payload.meta or {}),
         image_content=payload.image_content,
         current_user_id=str(current_user.id),
         db=db,
@@ -627,7 +602,6 @@ async def resume_agent_chat(
         meta["request_id"] = str(uuid.uuid4())
     return StreamingResponse(
         stream_agent_resume(
-            agent_id=agent_id,
             thread_id=thread_id,
             resume_input=resume_input,
             meta=meta,

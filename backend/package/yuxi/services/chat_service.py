@@ -298,6 +298,35 @@ def _ensure_full_msg(full_msg: AIMessage | None, accumulated_content: list[str])
     return full_msg
 
 
+def _extract_ai_message(messages: list[Any] | None) -> AIMessage | None:
+    """从消息列表中提取最后一条 AIMessage。"""
+    if not isinstance(messages, list):
+        return None
+
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            return msg
+
+        msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
+        if msg_dict.get("type") == "ai":
+            content = msg_dict.get("content", "")
+            return msg if hasattr(msg, "content") else AIMessage(content=content)
+
+    return None
+
+
+async def get_agent_config_by_id(db, user: User, agent_config_id: int):
+    """按配置 ID 解析 AgentConfig 记录。"""
+    department_id = user.department_id
+
+    agent_config_repo = AgentConfigRepository(db)
+    config_item = await agent_config_repo.get_by_id(config_id=int(agent_config_id))
+    if config_item is None or config_item.department_id != department_id:
+        raise ValueError("配置不存在")
+
+    return config_item
+
+
 async def _resolve_agent_config(db, agent_id: str, user: User, agent_config_id):
     """解析 agent_config，返回 agent_config"""
     department_id = user.department_id
@@ -305,8 +334,8 @@ async def _resolve_agent_config(db, agent_id: str, user: User, agent_config_id):
     agent_config_repo = AgentConfigRepository(db)
     config_item = None
     if agent_config_id is not None:
-        config_item = await agent_config_repo.get_by_id(config_id=int(agent_config_id))
-        if config_item is not None and (config_item.department_id != department_id or config_item.agent_id != agent_id):
+        config_item = await get_agent_config_by_id(db, user, int(agent_config_id))
+        if config_item.agent_id != agent_id:
             config_item = None
 
     if config_item is None:
@@ -344,9 +373,9 @@ async def check_and_handle_interrupts(
 
 async def agent_chat(
     *,
-    agent_id: str,
     query: str,
-    config: dict,
+    agent_config_id: int,
+    thread_id: str | None,
     meta: dict,
     image_content: str | None,
     current_user,
@@ -367,13 +396,6 @@ async def agent_chat(
         human_message = HumanMessage(content=query)
         message_type = "text"
 
-    init_msg = {"role": "user", "content": query, "type": "human"}
-    if image_content:
-        init_msg["message_type"] = "multimodal_image"
-        init_msg["image_content"] = image_content
-    else:
-        init_msg["message_type"] = "text"
-
     if conf.enable_content_guard and await content_guard.check(query):
         return {
             "status": "error",
@@ -381,6 +403,42 @@ async def agent_chat(
             "error_message": "输入内容包含敏感词",
             "request_id": meta.get("request_id"),
         }
+
+    if not current_user.department_id:
+        return {
+            "status": "error",
+            "error_type": "invalid_config",
+            "error_message": "当前用户未绑定部门",
+            "request_id": meta.get("request_id"),
+        }
+
+    user_id = str(current_user.id)
+    meta = dict(meta or {})
+    if "request_id" not in meta or not meta.get("request_id"):
+        logger.warning("请求缺少 request_id，已自动生成一个新的 request_id")
+        meta["request_id"] = str(uuid.uuid4())
+
+    try:
+        config_item = await get_agent_config_by_id(db, current_user, agent_config_id)
+    except ValueError as e:
+        return {
+            "status": "error",
+            "error_type": "invalid_config",
+            "error_message": str(e),
+            "request_id": meta.get("request_id"),
+        }
+
+    agent_id = config_item.agent_id
+    meta.update(
+        {
+            "query": query,
+            "agent_id": agent_id,
+            "server_model_name": agent_id,
+            "thread_id": thread_id,
+            "user_id": current_user.id,
+            "has_image": bool(image_content),
+        }
+    )
 
     try:
         agent = agent_manager.get_agent(agent_id)
@@ -394,20 +452,9 @@ async def agent_chat(
         }
 
     messages = [human_message]
+    agent_config = (config_item.config_json or {}).get("context", {})
 
-    user_id = str(current_user.id)
-    agent_config_id = config.get("agent_config_id")
-    try:
-        agent_config = await _resolve_agent_config(db, agent_id, current_user, agent_config_id)
-    except ValueError as e:
-        return {
-            "status": "error",
-            "error_type": "invalid_config",
-            "error_message": str(e),
-            "request_id": meta.get("request_id"),
-        }
-
-    if not (thread_id := config.get("thread_id")):
+    if not thread_id:
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
@@ -429,20 +476,18 @@ async def agent_chat(
             logger.error(f"Error saving user message: {e}")
 
         langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
+        invoke_result = await agent.invoke_messages(messages, input_context=input_context)
+        full_msg = _extract_ai_message(invoke_result.get("messages") if isinstance(invoke_result, dict) else None)
 
-        full_msg = None
-        accumulated_content: list[str] = []
+        if full_msg is None:
+            try:
+                graph = await agent.get_graph()
+                state = await graph.aget_state(langgraph_config)
+                full_msg = _extract_ai_message(getattr(state, "values", {}).get("messages", [])) if state else None
+            except Exception:
+                full_msg = None
 
-        async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
-            if isinstance(msg, AIMessageChunk):
-                accumulated_content.append(msg.content)
-            else:
-                msg_dict = msg.model_dump() if hasattr(msg, "model_dump") else {}
-                if msg_dict.get("type") == "ai":
-                    full_msg = msg
-
-        full_msg = _ensure_full_msg(full_msg, accumulated_content)
-        full_content = "".join(accumulated_content) if accumulated_content else (full_msg.content if full_msg else "")
+        full_content = full_msg.content if full_msg else ""
 
         if conf.enable_content_guard and await content_guard.check(full_content):
             await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
@@ -488,9 +533,9 @@ async def agent_chat(
 
 async def stream_agent_chat(
     *,
-    agent_id: str,
     query: str,
-    config: dict,
+    agent_config_id: int,
+    thread_id: str | None,
     meta: dict,
     image_content: str | None,
     current_user,
@@ -533,6 +578,34 @@ async def stream_agent_chat(
         )
         return
 
+    if not current_user.department_id:
+        yield make_chunk(status="error", error_type="invalid_config", error_message="当前用户未绑定部门", meta=meta)
+        return
+
+    meta = dict(meta or {})
+    if "request_id" not in meta or not meta.get("request_id"):
+        logger.warning("请求缺少 request_id，已自动生成一个新的 request_id")
+        meta["request_id"] = str(uuid.uuid4())
+
+    user_id = str(current_user.id)
+    try:
+        config_item = await get_agent_config_by_id(db, current_user, agent_config_id)
+    except ValueError as e:
+        yield make_chunk(status="error", error_type="invalid_config", error_message=str(e), meta=meta)
+        return
+
+    agent_id = config_item.agent_id
+    meta.update(
+        {
+            "query": query,
+            "agent_id": agent_id,
+            "server_model_name": agent_id,
+            "thread_id": thread_id,
+            "user_id": current_user.id,
+            "has_image": bool(image_content),
+        }
+    )
+
     try:
         agent = agent_manager.get_agent(agent_id)
     except Exception as e:
@@ -546,16 +619,9 @@ async def stream_agent_chat(
         return
 
     messages = [human_message]
+    agent_config = (config_item.config_json or {}).get("context", {})
 
-    user_id = str(current_user.id)
-    agent_config_id = config.get("agent_config_id")
-    try:
-        agent_config = await _resolve_agent_config(db, agent_id, current_user, agent_config_id)
-    except ValueError as e:
-        yield make_chunk(status="error", error_type="invalid_config", error_message=str(e), meta=meta)
-        return
-
-    if not (thread_id := config.get("thread_id")):
+    if not thread_id:
         thread_id = str(uuid.uuid4())
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 

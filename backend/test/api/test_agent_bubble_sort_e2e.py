@@ -49,6 +49,7 @@ class AgentBubbleSortE2ETester:
         self.client = httpx.AsyncClient(base_url=API_BASE_URL, timeout=TIMEOUT, follow_redirects=True)
         self.headers: dict[str, str] | None = None
         self.agent_id: str | None = None
+        self.agent_config_id: int | None = None
         self.thread_id: str | None = None
 
     async def close(self):
@@ -98,14 +99,29 @@ class AgentBubbleSortE2ETester:
         if not self.thread_id:
             raise RuntimeError(f"thread id missing: {payload}")
 
+    async def pick_agent_config(self) -> None:
+        assert self.headers and self.agent_id
+        response = await self.client.get(f"/api/chat/agent/{self.agent_id}/configs", headers=self.headers)
+        if response.status_code != 200:
+            raise RuntimeError(f"list configs failed: {response.status_code} {response.text}")
+        configs = response.json().get("configs") or []
+        if not configs:
+            raise RuntimeError("no available agent configs")
+        config_id = configs[0].get("id")
+        if not config_id:
+            raise RuntimeError(f"config id missing: {response.text}")
+        self.agent_config_id = int(config_id)
+
     async def create_run(self, query: str) -> str:
-        assert self.headers and self.agent_id and self.thread_id
+        assert self.headers and self.agent_config_id and self.thread_id
         request_id = f"agent-bubble-sort-{uuid.uuid4()}"
         response = await self.client.post(
-            f"/api/chat/agent/{self.agent_id}/runs",
+            "/api/chat/runs",
             json={
                 "query": query,
-                "config": {"thread_id": self.thread_id, "request_id": request_id},
+                "agent_config_id": self.agent_config_id,
+                "thread_id": self.thread_id,
+                "meta": {"request_id": request_id},
             },
             headers=self.headers,
         )
@@ -166,6 +182,7 @@ class AgentBubbleSortE2ETester:
     async def run_case(self) -> None:
         await self.login()
         await self.pick_agent()
+        await self.pick_agent_config()
         await self.create_thread()
 
         query = (

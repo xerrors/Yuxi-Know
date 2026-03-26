@@ -183,6 +183,25 @@ class APITester:
             print(f"   ✗ 获取失败: {response.status_code} - {response.text}")
             return None
 
+    async def get_agent_config_id(self, agent_id: str) -> int | None:
+        """获取指定 Agent 的一个配置 ID"""
+        async with self._client() as client:
+            response = await client.get(
+                f"{self.base_url}/api/chat/agent/{agent_id}/configs",
+                headers=self.headers,
+            )
+
+        if response.status_code != 200:
+            print(f"   ✗ 获取 Agent 配置失败: {response.status_code} - {response.text}")
+            return None
+
+        configs = response.json().get("configs", [])
+        if not configs:
+            print("   ✗ 当前 Agent 没有可用配置")
+            return None
+
+        return configs[0].get("id")
+
     async def send_chat_message(self, agent_id: str, thread_id: str, query: str) -> bool:
         """发送聊天消息（流式）"""
         print(f"\n{'=' * 60}")
@@ -191,11 +210,19 @@ class APITester:
         print(f"   Query: {query}")
         print(f"   Thread ID: {thread_id}")
 
+        agent_config_id = await self.get_agent_config_id(agent_id)
+        if not agent_config_id:
+            return False
+
         async with self._client(timeout=120.0) as client:
             async with client.stream(
                 "POST",
-                f"{self.base_url}/api/chat/agent/{agent_id}",
-                json={"query": query, "config": {"thread_id": thread_id}},
+                f"{self.base_url}/api/chat/agent",
+                json={
+                    "query": query,
+                    "agent_config_id": agent_config_id,
+                    "thread_id": thread_id,
+                },
                 headers=self.headers,
             ) as response:
                 print(f"\n   响应状态: {response.status_code}")

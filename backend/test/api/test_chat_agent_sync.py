@@ -9,16 +9,8 @@ import pytest
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
 
-async def test_chat_agent_sync_requires_authentication(test_client):
-    """非流式端点需要认证"""
-    response = await test_client.post("/api/chat/agent/test_agent/sync", json={"query": "hello"})
-    assert response.status_code == 401
-
-
-async def test_chat_agent_sync_basic_conversation(test_client, admin_headers):
-    """测试非流式对话基本功能"""
-    # 先获取可用智能体
-    agents_response = await test_client.get("/api/chat/agent", headers=admin_headers)
+async def _get_agent_and_config_id(test_client, headers):
+    agents_response = await test_client.get("/api/chat/agent", headers=headers)
     assert agents_response.status_code == 200, agents_response.text
     agents = agents_response.json().get("agents", [])
 
@@ -29,10 +21,33 @@ async def test_chat_agent_sync_basic_conversation(test_client, admin_headers):
     if not agent_id:
         pytest.skip("Agent payload missing id field.")
 
+    configs_response = await test_client.get(f"/api/chat/agent/{agent_id}/configs", headers=headers)
+    assert configs_response.status_code == 200, configs_response.text
+    configs = configs_response.json().get("configs", [])
+    if not configs:
+        pytest.skip("No agent configs are available in the system.")
+
+    config_id = configs[0].get("id")
+    if not config_id:
+        pytest.skip("Agent config payload missing id field.")
+
+    return agent_id, config_id
+
+
+async def test_chat_agent_sync_requires_authentication(test_client):
+    """非流式端点需要认证"""
+    response = await test_client.post("/api/chat/agent/sync", json={"query": "hello", "agent_config_id": 1})
+    assert response.status_code == 401
+
+
+async def test_chat_agent_sync_basic_conversation(test_client, admin_headers):
+    """测试非流式对话基本功能"""
+    _, agent_config_id = await _get_agent_and_config_id(test_client, admin_headers)
+
     # 调用非流式端点
     response = await test_client.post(
-        f"/api/chat/agent/{agent_id}/sync",
-        json={"query": "Hello, say 'Hi' back to me"},
+        "/api/chat/agent/sync",
+        json={"query": "Hello, say 'Hi' back to me", "agent_config_id": agent_config_id},
         headers=admin_headers,
     )
 
@@ -58,26 +73,18 @@ async def test_chat_agent_sync_basic_conversation(test_client, admin_headers):
 
 async def test_chat_agent_sync_with_thread_id(test_client, admin_headers):
     """测试非流式对话指定 thread_id"""
-    # 获取可用智能体
-    agents_response = await test_client.get("/api/chat/agent", headers=admin_headers)
-    assert agents_response.status_code == 200, agents_response.text
-    agents = agents_response.json().get("agents", [])
-
-    if not agents:
-        pytest.skip("No agents are registered in the system.")
-
-    agent_id = agents[0].get("id")
-    if not agent_id:
-        pytest.skip("Agent payload missing id field.")
+    _, agent_config_id = await _get_agent_and_config_id(test_client, admin_headers)
 
     import uuid
+
     thread_id = str(uuid.uuid4())
 
     response = await test_client.post(
-        f"/api/chat/agent/{agent_id}/sync",
+        "/api/chat/agent/sync",
         json={
             "query": "Hello",
-            "config": {"thread_id": thread_id},
+            "agent_config_id": agent_config_id,
+            "thread_id": thread_id,
         },
         headers=admin_headers,
     )
@@ -87,29 +94,24 @@ async def test_chat_agent_sync_with_thread_id(test_client, admin_headers):
 
     # 验证 thread_id 是否保持一致
     if payload["status"] == "finished":
-        assert payload.get("thread_id") == thread_id, f"thread_id mismatch: expected {thread_id}, got {payload.get('thread_id')}"
+        assert payload.get("thread_id") == thread_id, (
+            f"thread_id mismatch: expected {thread_id}, got {payload.get('thread_id')}"
+        )
 
 
 async def test_chat_agent_sync_with_meta(test_client, admin_headers):
     """测试非流式对话传递 meta 参数"""
-    agents_response = await test_client.get("/api/chat/agent", headers=admin_headers)
-    assert agents_response.status_code == 200, agents_response.text
-    agents = agents_response.json().get("agents", [])
-
-    if not agents:
-        pytest.skip("No agents are registered in the system.")
-
-    agent_id = agents[0].get("id")
-    if not agent_id:
-        pytest.skip("Agent payload missing id field.")
+    _, agent_config_id = await _get_agent_and_config_id(test_client, admin_headers)
 
     import uuid
+
     request_id = str(uuid.uuid4())
 
     response = await test_client.post(
-        f"/api/chat/agent/{agent_id}/sync",
+        "/api/chat/agent/sync",
         json={
             "query": "Hello",
+            "agent_config_id": agent_config_id,
             "meta": {"request_id": request_id},
         },
         headers=admin_headers,
@@ -119,35 +121,29 @@ async def test_chat_agent_sync_with_meta(test_client, admin_headers):
     payload = response.json()
 
     # 验证 request_id 是否保持一致
-    assert payload.get("request_id") == request_id, f"request_id mismatch: expected {request_id}, got {payload.get('request_id')}"
+    assert payload.get("request_id") == request_id, (
+        f"request_id mismatch: expected {request_id}, got {payload.get('request_id')}"
+    )
 
 
 async def test_chat_agent_sync_vs_streaming_consistency(test_client, admin_headers):
     """对比测试：非流式与流式端点行为一致性"""
-    # 获取可用智能体
-    agents_response = await test_client.get("/api/chat/agent", headers=admin_headers)
-    assert agents_response.status_code == 200, agents_response.text
-    agents = agents_response.json().get("agents", [])
-
-    if not agents:
-        pytest.skip("No agents are registered in the system.")
-
-    agent_id = agents[0].get("id")
-    if not agent_id:
-        pytest.skip("Agent payload missing id field.")
+    _, agent_config_id = await _get_agent_and_config_id(test_client, admin_headers)
 
     query = "What is 1+1?"
 
     # 调用流式端点
     import uuid
+
     thread_id = str(uuid.uuid4())
     request_id = str(uuid.uuid4())
 
     streaming_response = await test_client.post(
-        f"/api/chat/agent/{agent_id}",
+        "/api/chat/agent",
         json={
             "query": query,
-            "config": {"thread_id": thread_id},
+            "agent_config_id": agent_config_id,
+            "thread_id": thread_id,
             "meta": {"request_id": request_id},
         },
         headers=admin_headers,
@@ -160,11 +156,12 @@ async def test_chat_agent_sync_vs_streaming_consistency(test_client, admin_heade
     async for line in streaming_response.aiter_lines():
         if line:
             import json as json_lib
+
             try:
                 data = json_lib.loads(line)
                 if data.get("response"):
                     streaming_content.append(data["response"])
-            except:
+            except Exception:
                 pass
 
     # 调用非流式端点
@@ -172,10 +169,11 @@ async def test_chat_agent_sync_vs_streaming_consistency(test_client, admin_heade
     request_id2 = str(uuid.uuid4())
 
     sync_response = await test_client.post(
-        f"/api/chat/agent/{agent_id}/sync",
+        "/api/chat/agent/sync",
         json={
             "query": query,
-            "config": {"thread_id": thread_id2},
+            "agent_config_id": agent_config_id,
+            "thread_id": thread_id2,
             "meta": {"request_id": request_id2},
         },
         headers=admin_headers,

@@ -177,7 +177,7 @@ Context 的价值不只在“配置页面”。它贯穿了从配置加载到实
 当前主流程在 `chat_service.py` 中：
 
 1. 通过 `agent_config_id` 查找配置
-2. 若未指定，则获取该部门下该 Agent 的默认配置
+2. 读取该配置绑定的 `agent_id`
 3. 取出 `config_json.context`
 4. 与 `user_id`、`thread_id` 合并成运行时输入
 
