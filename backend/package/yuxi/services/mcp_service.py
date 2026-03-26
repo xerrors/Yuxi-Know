@@ -136,7 +136,7 @@ async def init_mcp_servers() -> None:
                         sse_read_timeout=config.get("sse_read_timeout"),
                         tags=config.get("tags"),
                         icon=config.get("icon"),
-                        enabled=1,
+                        enabled=0,
                         created_by="system",
                         updated_by="system",
                     )
@@ -162,7 +162,7 @@ async def init_mcp_servers() -> None:
                             sse_read_timeout=config.get("sse_read_timeout"),
                             tags=config.get("tags"),
                             icon=config.get("icon"),
-                            enabled=1,
+                            enabled=0,
                             created_by="system",
                             updated_by="system",
                         )
