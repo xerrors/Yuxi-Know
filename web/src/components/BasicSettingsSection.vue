@@ -92,7 +92,8 @@
           <div
             class="card card-select"
             v-if="
-              configStore.config?.enable_content_guard && configStore.config?.enable_content_guard_llm
+              configStore.config?.enable_content_guard &&
+              configStore.config?.enable_content_guard_llm
             "
           >
             <span class="label">{{ items?.content_guard_llm_model?.des }}</span>
@@ -254,7 +255,6 @@ onMounted(async () => {
 
 <style lang="less" scoped>
 .basic-settings-section {
-
   .section {
     background-color: var(--gray-0);
     padding: 10px 16px;

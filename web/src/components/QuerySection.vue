@@ -347,7 +347,7 @@ import { Braces, Tags, Network, Link, FileText, ArrowRight } from 'lucide-vue-ne
 
 const store = useDatabaseStore()
 
-const props = defineProps({
+defineProps({
   visible: {
     type: Boolean,
     default: true
@@ -359,14 +359,11 @@ const props = defineProps({
 })
 
 // 声明事件
-const emit = defineEmits(['toggleVisible'])
+defineEmits(['toggleVisible'])
 
 const searchLoading = computed(() => store.state.searchLoading)
 const queryResult = ref('')
 const showRawData = ref(false)
-
-// 判断是否为 LightRAG 类型知识库
-const isLightRAG = computed(() => store.database?.kb_type?.toLowerCase() === 'lightrag')
 
 // 判断是否是 LightRAG 格式的查询结果
 const isLightRAGResult = computed(() => {
@@ -386,7 +383,6 @@ const queryExamples = ref([])
 const currentExampleIndex = ref(0)
 const loadingQuestions = ref(false)
 const generatingQuestions = ref(false)
-const searchConfigModalVisible = ref(false)
 
 // 示例轮播相关
 let exampleCarouselInterval = null
@@ -415,17 +411,6 @@ const extractFileName = (filePath) => {
   } catch {
     return filePath
   }
-}
-
-// 打开检索配置弹窗
-const openSearchConfigModal = () => {
-  searchConfigModalVisible.value = true
-}
-
-// 处理检索配置保存
-const handleSearchConfigSave = (config) => {
-  console.log('查询测试中的检索配置已更新:', config)
-  // 可以在这里添加配置更新后的处理逻辑，比如重新查询
 }
 
 // 加载示例问题

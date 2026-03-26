@@ -138,7 +138,7 @@ export const getStatusText = (status) => {
     processing: '处理中',
     waiting: '等待处理'
   }
-  return map[status] || status
+  return statusMap[status] || status
 }
 
 // 格式化文件大小

@@ -1,28 +1,23 @@
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 
 import aiofiles
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from yuxi.agents.backends.sandbox import (
     ensure_thread_dirs,
     sandbox_uploads_dir,
 )
-from yuxi.services.doc_converter import ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_SIZE_BYTES
-
-UPLOADS_VIRTUAL_PREFIX = "/home/gem/user-data/uploads"
 from yuxi.agents.buildin import agent_manager
 from yuxi.config import config as app_config
 from yuxi.plugins.parser import Parser
 from yuxi.repositories.conversation_repository import ConversationRepository
+from yuxi.services.doc_converter import ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_SIZE_BYTES
 from yuxi.utils.datetime_utils import utc_isoformat
 from yuxi.utils.logging_config import logger
 
-ATTACHMENT_ALLOWED_EXTENSIONS: tuple[str, ...] = (".txt", ".md", ".docx", ".html", ".htm")
-MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+UPLOADS_VIRTUAL_PREFIX = "/home/gem/user-data/uploads"
 MAX_ATTACHMENT_MARKDOWN_CHARS = 32_000
 
 

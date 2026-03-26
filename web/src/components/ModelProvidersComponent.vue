@@ -406,9 +406,7 @@ const modelStatus = computed(() => configStore.config?.model_provider_status)
 // 自定义供应商计算属性
 const customProviders = computed(() => {
   const providers = configStore.config?.model_names || {}
-  return Object.fromEntries(
-    Object.entries(providers).filter(([key, value]) => value.custom === true)
-  )
+  return Object.fromEntries(Object.entries(providers).filter(([, value]) => value.custom === true))
 })
 
 // 提供商配置相关状态
@@ -652,22 +650,6 @@ const customProviderRules = {
   env: [{ required: true, message: '请输入API密钥或环境变量', trigger: 'blur' }]
 }
 
-// API密钥掩码显示
-const maskApiKey = (apiKey) => {
-  if (!apiKey) return '未配置'
-
-  // 如果是环境变量格式，直接显示
-  if (apiKey.startsWith('${') && apiKey.endsWith('}')) {
-    return apiKey
-  }
-
-  // 如果是直接的API密钥，进行掩码处理
-  if (apiKey.length > 8) {
-    return apiKey.substring(0, 4) + '***' + apiKey.substring(apiKey.length - 4)
-  }
-  return '***'
-}
-
 // 打开添加自定义供应商弹窗
 const openAddCustomProviderModal = () => {
   customProviderModal.visible = true
@@ -735,18 +717,14 @@ const saveCustomProvider = async () => {
       custom: true
     }
 
-    let result
     if (customProviderModal.isEdit) {
-      result = await customProviderApi.updateCustomProvider(
+      await customProviderApi.updateCustomProvider(
         customProviderModal.data.providerId,
         providerData
       )
       message.success('自定义供应商更新成功')
     } else {
-      result = await customProviderApi.addCustomProvider(
-        customProviderModal.data.providerId,
-        providerData
-      )
+      await customProviderApi.addCustomProvider(customProviderModal.data.providerId, providerData)
       message.success(`自定义供应商 ${customProviderModal.data.providerId} 添加成功`)
     }
 
@@ -784,7 +762,7 @@ const cancelCustomProvider = () => {
 // 删除自定义供应商
 const deleteCustomProvider = async (providerId) => {
   try {
-    const result = await customProviderApi.deleteCustomProvider(providerId)
+    await customProviderApi.deleteCustomProvider(providerId)
     message.success('自定义供应商删除成功')
     await configStore.refreshConfig()
   } catch (error) {

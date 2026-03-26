@@ -334,18 +334,6 @@ function statusLabel(status) {
   return map[status] || status
 }
 
-function statusColor(status) {
-  const map = {
-    pending: 'blue',
-    queued: 'blue',
-    running: 'processing',
-    success: 'green',
-    failed: 'red',
-    cancelled: 'gray'
-  }
-  return map[status] || 'default'
-}
-
 function progressStatus(status) {
   if (status === 'failed') return 'exception'
   if (status === 'cancelled') return 'normal'

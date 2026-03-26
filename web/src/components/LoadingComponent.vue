@@ -10,7 +10,7 @@
 <script setup>
 import { defineProps } from 'vue'
 
-const props = defineProps({
+defineProps({
   visible: {
     type: Boolean,
     default: false

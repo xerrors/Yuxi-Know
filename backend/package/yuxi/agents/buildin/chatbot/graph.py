@@ -21,10 +21,7 @@ from .prompt import PROMPT
 
 async def _build_middlewares(context):
     """构建中间件列表"""
-    all_mcp_tools = (
-        await get_tools_from_all_servers()
-    )  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
-
+    all_mcp_tools = await get_tools_from_all_servers()  # 因为异步加载，无法放在 RuntimeConfigMiddleware 的 __init__ 中
 
     # summary middleware
     # 主 Agent 上下文优化：90k tokens 触发压缩（128k context window 的 70%）
@@ -79,7 +76,6 @@ class ChatbotAgent(BaseAgent):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
 
     async def get_graph(self, context=None, **kwargs):
 

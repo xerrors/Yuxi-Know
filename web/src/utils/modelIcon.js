@@ -18,7 +18,6 @@ export const modelIcons = {
   zhipu: zhipuIcon,
   siliconflow: siliconflowIcon,
   ark: arkIcon,
-  together: togetherIcon,
   openrouter: openrouterIcon,
   modelscope: modelscopeIcon,
   minimax: minimaxIcon,

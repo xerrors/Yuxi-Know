@@ -1,6 +1,6 @@
 <template>
   <BaseToolCall :tool-call="toolCall">
-    <template #result="{ resultContent }">
+    <template #result="{}">
       <div v-if="imageUrl" class="image-result">
         <img :src="imageUrl" />
       </div>
@@ -26,7 +26,7 @@ const parseData = (content) => {
   if (typeof content === 'string') {
     try {
       return JSON.parse(content)
-    } catch (error) {
+    } catch {
       return content
     }
   }

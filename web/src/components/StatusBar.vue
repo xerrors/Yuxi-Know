@@ -53,7 +53,6 @@ const { activeCount: activeCountRef } = storeToRefs(taskerStore)
 const currentTime = ref('')
 
 // 计算属性
-const organization = computed(() => infoStore.organization)
 const branding = computed(() => infoStore.branding)
 
 // 用户名计算属性

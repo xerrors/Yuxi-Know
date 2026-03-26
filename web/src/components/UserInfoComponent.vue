@@ -184,11 +184,9 @@ import DebugComponent from '@/components/DebugComponent.vue'
 import { message } from 'ant-design-vue'
 import {
   CircleUser,
-  UserRoundCheck,
   BookOpen,
   Sun,
   Moon,
-  User,
   LogOut,
   Upload,
   Settings,
@@ -223,7 +221,7 @@ const editedProfile = ref({
   phone_number: ''
 })
 
-const props = defineProps({
+defineProps({
   showRole: {
     type: Boolean,
     default: false
@@ -232,12 +230,6 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
-})
-
-// 用户名首字母（用于显示在头像中）
-const userInitial = computed(() => {
-  if (!userStore.username) return '?'
-  return userStore.username.charAt(0).toUpperCase()
 })
 
 // 用户角色显示文本
@@ -251,15 +243,6 @@ const userRoleText = computed(() => {
       return '普通用户'
     default:
       return '未知角色'
-  }
-})
-
-// 用户角色徽章样式类
-const userRoleClass = computed(() => {
-  return {
-    superadmin: userStore.userRole === 'superadmin',
-    admin: userStore.userRole === 'admin',
-    user: userStore.userRole === 'user'
   }
 })
 
@@ -413,7 +396,7 @@ const handleAvatarChange = async (info) => {
   // 手动处理文件上传
   try {
     avatarUploading.value = true
-    const result = await userStore.uploadAvatar(info.file.originFileObj || info.file)
+    await userStore.uploadAvatar(info.file.originFileObj || info.file)
     message.success('头像上传成功！')
   } catch (error) {
     console.error('头像上传失败:', error)

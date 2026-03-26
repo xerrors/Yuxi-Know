@@ -10,8 +10,8 @@ from .paths import (
     virtual_path_for_thread_file,
 )
 from .provider import (
-    SandboxConnection,
     ProvisionerSandboxProvider,
+    SandboxConnection,
     get_sandbox_provider,
     init_sandbox_provider,
     sandbox_id_for_thread,

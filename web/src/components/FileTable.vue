@@ -397,10 +397,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, h } from 'vue'
+import { ref, computed, h } from 'vue'
 import { useDatabaseStore } from '@/stores/database'
 import { message, Modal } from 'ant-design-vue'
-import { useUserStore } from '@/stores/user'
 import { documentApi } from '@/apis/knowledge_api'
 import {
   CheckCircleFilled,
@@ -420,8 +419,6 @@ import {
   FolderPlus,
   CheckSquare,
   FileText,
-  FileCheck,
-  Plus,
   Database,
   FileUp,
   Search,
@@ -430,7 +427,6 @@ import {
 } from 'lucide-vue-next'
 
 const store = useDatabaseStore()
-const userStore = useUserStore()
 
 const sortField = ref('filename')
 const sortOptions = [
@@ -485,7 +481,6 @@ const lock = computed(() => store.state.lock)
 const batchDeleting = computed(() => store.state.batchDeleting)
 const batchParsing = computed(() => store.state.chunkLoading)
 const batchIndexing = computed(() => store.state.chunkLoading)
-const autoRefresh = computed(() => store.state.autoRefresh)
 const selectedRowKeys = computed({
   get: () => store.selectedRowKeys,
   set: (keys) => (store.selectedRowKeys = keys)
@@ -660,7 +655,7 @@ const customRow = (record) => {
           onOk: async () => {
             try {
               await store.moveFile(file_id, record.file_id)
-            } catch (error) {
+            } catch {
               // error handled in store
             }
           }
@@ -996,10 +991,6 @@ const handleRefresh = () => {
   store.getDatabaseInfo(undefined, true) // Skip query params for manual refresh
 }
 
-const toggleAutoRefresh = () => {
-  store.toggleAutoRefresh()
-}
-
 const toggleRightPanel = () => {
   console.log(props.rightPanelVisible)
   emit('toggleRightPanel')
@@ -1039,7 +1030,7 @@ const handleDeleteFolder = (record) => {
       try {
         await store.deleteFile(record.file_id)
         message.success('删除成功')
-      } catch (error) {
+      } catch {
         // Error handled in store but we can add extra handling if needed
       }
     }
@@ -1245,7 +1236,6 @@ const handleIndexConfigCancel = () => {
 
 // 导入工具函数
 import { getFileIcon, getFileIconColor, formatRelativeTime } from '@/utils/file_utils'
-import { parseToShanghai } from '@/utils/time'
 import ChunkParamsConfig from '@/components/ChunkParamsConfig.vue'
 </script>
 

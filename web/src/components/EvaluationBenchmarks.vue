@@ -206,8 +206,6 @@ import {
   EyeOutlined,
   DownloadOutlined,
   DeleteOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   ReloadOutlined
 } from '@ant-design/icons-vue'
 import { evaluationApi } from '@/apis/knowledge_api'
@@ -429,7 +427,7 @@ const parseDownloadFilename = (contentDisposition) => {
     }
   }
 
-  const asciiMatch = contentDisposition.match(/filename=\"?([^\";]+)\"?/i)
+  const asciiMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
   if (asciiMatch && asciiMatch[1]) {
     return asciiMatch[1]
   }

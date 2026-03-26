@@ -85,7 +85,10 @@ const targetPath = computed(() => parsedArgs.value.path || parsedArgs.value.dir_
 const outputMode = computed(() => parsedArgs.value.output_mode || '')
 
 const isFileListResult = computed(() => {
-  return Array.isArray(parsedResult.value) && parsedResult.value.every((item) => typeof item === 'string')
+  return (
+    Array.isArray(parsedResult.value) &&
+    parsedResult.value.every((item) => typeof item === 'string')
+  )
 })
 
 const fileMatches = computed(() => {

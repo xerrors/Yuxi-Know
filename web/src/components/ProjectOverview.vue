@@ -1,1 +1,3 @@
-<template></template>
+<template>
+  <div class="project-overview"></div>
+</template>

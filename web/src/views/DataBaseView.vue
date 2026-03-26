@@ -221,8 +221,7 @@
             {{ getKbTypeLabel(database.kb_type || 'lightrag') }}
           </a-tag>
           <!-- 保留最后一个，使用 / 切分 -->
-          <a-tag color="blue" v-if="database.embed_info?.name"
-            :bordered="false">{{
+          <a-tag color="blue" v-if="database.embed_info?.name" :bordered="false">{{
             database.embed_info.name.split('/').slice(-1)[0]
           }}</a-tag>
         </div>

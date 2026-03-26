@@ -3,7 +3,7 @@
     <div class="params-info">
       <p>调整分块参数可以控制文本的切分方式，影响检索质量和文档加载效率。</p>
     </div>
-    <a-form :model="tempChunkParams" name="chunkConfig" autocomplete="off" layout="vertical">
+    <a-form :model="localParams" name="chunkConfig" autocomplete="off" layout="vertical">
       <a-form-item v-if="showPreset" name="chunk_preset_id">
         <template #label>
           <span class="chunk-preset-label">
@@ -14,7 +14,7 @@
           </span>
         </template>
         <a-select
-          v-model:value="tempChunkParams.chunk_preset_id"
+          v-model:value="localParams.chunk_preset_id"
           :options="presetOptions"
           style="width: 100%"
         />
@@ -27,7 +27,7 @@
       <div class="chunk-row" v-if="showChunkSizeOverlap">
         <a-form-item label="Chunk Size" name="chunk_size">
           <a-input-number
-            v-model:value="tempChunkParams.chunk_size"
+            v-model:value="localParams.chunk_size"
             :min="100"
             :max="10000"
             style="width: 100%"
@@ -36,7 +36,7 @@
         </a-form-item>
         <a-form-item label="Chunk Overlap" name="chunk_overlap">
           <a-input-number
-            v-model:value="tempChunkParams.chunk_overlap"
+            v-model:value="localParams.chunk_overlap"
             :min="0"
             :max="1000"
             style="width: 100%"
@@ -51,7 +51,7 @@
         name="qa_separator"
       >
         <a-input
-          v-model:value="tempChunkParams.qa_separator"
+          v-model:value="localParams.qa_separator"
           placeholder="输入分隔符，例如 \n\n\n 或 ---"
           style="width: 100%"
         />
@@ -96,6 +96,10 @@ const props = defineProps({
     default: 'general'
   }
 })
+
+// 使用 computed 包装，直接返回原始对象供表单修改
+// 表单修改会直接作用于 tempChunkParams（父组件的ref），实现双向绑定
+const localParams = computed(() => props.tempChunkParams)
 
 const presetOptions = computed(() => {
   const options = []

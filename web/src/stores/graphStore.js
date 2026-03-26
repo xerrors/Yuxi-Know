@@ -64,7 +64,7 @@ export const useGraphStore = defineStore('graph', {
       const dynamicIdPattern = /^(.+)-(.+)-(\d+)$/
       const match = state.selectedEdge.match(dynamicIdPattern)
       if (match) {
-        const [, source, target, index] = match
+        const [, source, target] = match
         foundEdge = state.rawGraph.edges.find(
           (edge) => edge.source === source && edge.target === target
         )

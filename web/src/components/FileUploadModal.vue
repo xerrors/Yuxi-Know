@@ -160,8 +160,12 @@
                 <div class="stat-pill uploading" v-if="uploadingUploadCount > 0">
                   上传中 {{ uploadingUploadCount }}
                 </div>
-                <div class="stat-pill queued" v-if="queuedUploadCount > 0">排队 {{ queuedUploadCount }}</div>
-                <div class="stat-pill error" v-if="failedUploadCount > 0">失败 {{ failedUploadCount }}</div>
+                <div class="stat-pill queued" v-if="queuedUploadCount > 0">
+                  排队 {{ queuedUploadCount }}
+                </div>
+                <div class="stat-pill error" v-if="failedUploadCount > 0">
+                  失败 {{ failedUploadCount }}
+                </div>
               </div>
             </div>
             <div class="progress-header-right">
@@ -192,9 +196,7 @@
             <div class="progress-tip" v-if="hasPendingUploads">
               文件夹上传采用队列模式，最多同时上传 {{ MAX_UPLOAD_CONCURRENCY }} 个文件。
             </div>
-            <div class="progress-tip" v-else>
-              上传队列已完成，可点击“添加到知识库”继续下一步。
-            </div>
+            <div class="progress-tip" v-else>上传队列已完成，可点击“添加到知识库”继续下一步。</div>
           </div>
         </div>
       </div>
@@ -292,12 +294,12 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { message, Upload, Tooltip, Modal } from 'ant-design-vue'
+import { message, Upload, Modal } from 'ant-design-vue'
 import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
 import { ocrApi } from '@/apis/system_api'
 import { fileApi, documentApi } from '@/apis/knowledge_api'
-import { CheckCircleFilled, ReloadOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined } from '@ant-design-icons-vue'
 import {
   FileUp,
   FolderUp,
@@ -456,7 +458,6 @@ const chunkLoading = computed(() => store.state.chunkLoading)
 
 // 上传模式
 const uploadMode = ref('file')
-const previousOcrSelection = ref('disable')
 const MAX_UPLOAD_CONCURRENCY = 10
 
 // 文件列表
@@ -596,7 +597,7 @@ const isValidUrl = (string) => {
   try {
     const url = new URL(string)
     return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch (_) {
+  } catch {
     return false
   }
 }
@@ -674,14 +675,6 @@ const removeUrl = (index) => {
   urlList.value.splice(index, 1)
 }
 
-const handleUrlKeydown = (e) => {
-  // Ctrl + Enter 提交
-  if (e.key === 'Enter' && e.ctrlKey) {
-    e.preventDefault()
-    handleFetchUrls()
-  }
-}
-
 // OCR服务健康状态
 const ocrHealthStatus = ref({
   rapid_ocr: { status: 'unknown', message: '' },
@@ -723,12 +716,6 @@ const buildAutoIndexParams = () => {
     ...payload
   }
 }
-
-// 计算属性：是否支持QA分割
-const isQaSplitSupported = computed(() => {
-  const type = kbType.value?.toLowerCase()
-  return type === 'milvus'
-})
 
 const isGraphBased = computed(() => {
   const type = kbType.value?.toLowerCase()
@@ -926,20 +913,12 @@ const beforeUpload = (file) => {
   return true
 }
 
-const formatFileSize = (bytes) => {
-  if (bytes === 0 || !bytes) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
-}
-
 const formatFileTime = (timestamp) => {
   if (!timestamp) return ''
   try {
     const date = new Date(timestamp)
     return date.toLocaleString()
-  } catch (e) {
+  } catch {
     return timestamp
   }
 }

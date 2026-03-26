@@ -221,9 +221,7 @@ class Config(BaseModel):
             if os.path.exists(self.model_dir):
                 logger.debug(f"Model directory ({self.model_dir}) contains: {os.listdir(self.model_dir)}")
             else:
-                logger.debug(
-                    f"Model directory ({self.model_dir}) does not exist. If not configured, please ignore it."
-                )
+                logger.debug(f"Model directory ({self.model_dir}) does not exist. If not configured, please ignore it.")
 
         # 检查模型提供商的环境变量
         self.model_provider_status = {}

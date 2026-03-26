@@ -5,7 +5,7 @@
         <span class="note">{{ operationLabel }}</span>
       </div>
     </template>
-    <template #result="{ resultContent }">
+    <template #result="{}">
       <div class="list-kbs-result">
         <div class="kb-count">共 {{ kbList.length }} 个知识库</div>
         <div class="kb-list">

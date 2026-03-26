@@ -8,7 +8,6 @@ export const useInfoStore = defineStore('info', () => {
   const isLoading = ref(false)
   const isLoaded = ref(false)
   const debugMode = ref(false)
-  const error = ref(null) // 错误信息
 
   // 计算属性 - 组织信息
   const organization = computed(

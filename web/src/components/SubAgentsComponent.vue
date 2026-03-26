@@ -226,7 +226,18 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { Search, Bot, Pencil, Trash2, Info, MessageSquare, FileText, Cpu, Wrench, Clock } from 'lucide-vue-next'
+import {
+  Search,
+  Bot,
+  Pencil,
+  Trash2,
+  Info,
+  MessageSquare,
+  FileText,
+  Cpu,
+  Wrench,
+  Clock
+} from 'lucide-vue-next'
 import { subagentApi } from '@/apis/subagent_api'
 import { toolApi } from '@/apis/tool_api'
 import { formatFullDateTime } from '@/utils/time'

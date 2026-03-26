@@ -78,7 +78,7 @@ const query = computed(() => {
   if (typeof args === 'string') {
     try {
       parsedArgs = JSON.parse(args)
-    } catch (e) {
+    } catch {
       return ''
     }
   }
@@ -92,7 +92,7 @@ const parseData = (content) => {
   if (typeof content === 'string') {
     try {
       return JSON.parse(content)
-    } catch (error) {
+    } catch {
       return content
     }
   }

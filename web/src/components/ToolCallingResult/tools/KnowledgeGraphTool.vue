@@ -7,7 +7,7 @@
         <span class="description">{{ query }}</span>
       </div>
     </template>
-    <template #result="{ resultContent }">
+    <template #result="{}">
       <div class="knowledge-graph-result">
         <div class="result-summary">找到 {{ totalNodes }} 个节点, {{ totalRelations }} 个关系</div>
 
@@ -40,7 +40,7 @@
 <script setup>
 import { computed, ref, watch, nextTick, onMounted, onUpdated } from 'vue'
 import BaseToolCall from '../BaseToolCall.vue'
-import { DeploymentUnitOutlined, ReloadOutlined } from '@ant-design/icons-vue'
+import { ReloadOutlined } from '@ant-design/icons-vue'
 import GraphCanvas from '@/components/GraphCanvas.vue'
 
 const props = defineProps({
@@ -54,7 +54,7 @@ const parseData = (content) => {
   if (typeof content === 'string') {
     try {
       return JSON.parse(content)
-    } catch (error) {
+    } catch {
       return { triples: [] }
     }
   }
@@ -73,7 +73,7 @@ const query = computed(() => {
   if (typeof args === 'string') {
     try {
       parsedArgs = JSON.parse(args)
-    } catch (e) {
+    } catch {
       return ''
     }
   }

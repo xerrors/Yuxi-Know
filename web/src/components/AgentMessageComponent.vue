@@ -108,7 +108,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { CaretRightOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons-vue'
+import { CaretRightOutlined } from '@ant-design/icons-vue'
 import RefsComponent from '@/components/RefsComponent.vue'
 import { Copy, Check } from 'lucide-vue-next'
 import { ToolCallRenderer } from '@/components/ToolCallingResult'

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import os
 from abc import abstractmethod
 from pathlib import Path
@@ -11,8 +10,9 @@ from langgraph.graph.state import CompiledStateGraph
 
 from yuxi import config as sys_config
 from yuxi.agents.context import BaseContext
-from yuxi.utils import logger
 from yuxi.storage.postgres.manager import pg_manager
+from yuxi.utils import logger
+
 
 class BaseAgent:
     """

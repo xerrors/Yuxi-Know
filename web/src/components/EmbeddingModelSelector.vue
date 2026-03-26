@@ -46,7 +46,7 @@ import { message } from 'ant-design-vue'
 
 const configStore = useConfigStore()
 
-const props = defineProps({
+defineProps({
   value: {
     type: String,
     default: ''

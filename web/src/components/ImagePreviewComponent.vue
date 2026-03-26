@@ -16,7 +16,7 @@
 <script setup>
 import { X } from 'lucide-vue-next'
 
-const props = defineProps({
+defineProps({
   imageData: {
     type: Object,
     default: null

@@ -73,7 +73,6 @@ const DEFAULT_OPTIONS = {
   reserveDecayWindowMs: 2200
 }
 
-
 const getIncomingSize = (chunk) => {
   let total = 0
   total += (chunk?.content || '').length
@@ -274,7 +273,10 @@ export function useStreamSmoother({ getThreadState, options = {} }) {
     remaining -= reasoningPart.emitted.length
 
     const additionalReasoningPart = takeFromBuffer(controller.additionalReasoningBuffer, remaining)
-    if (additionalReasoningPart.emitted || delta.additional_kwargs?.reasoning_content !== undefined) {
+    if (
+      additionalReasoningPart.emitted ||
+      delta.additional_kwargs?.reasoning_content !== undefined
+    ) {
       delta.additional_kwargs = {
         ...(delta.additional_kwargs || {}),
         reasoning_content: additionalReasoningPart.emitted

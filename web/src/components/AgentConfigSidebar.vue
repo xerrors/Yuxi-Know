@@ -548,22 +548,6 @@ const isReadOnlyConfig = computed(() => !userStore.isAdmin)
 const isSavingConfig = ref(false)
 const isDeletingConfig = ref(false)
 
-const hasOtherConfigs = computed(() => {
-  if (isEmptyConfig.value) return false
-  return Object.entries(configurableItems.value).some(([, value]) => {
-    const isBasic =
-      value.template_metadata?.kind === 'prompt' || value.template_metadata?.kind === 'llm'
-    const isTools =
-      value.template_metadata?.kind === 'mcps' ||
-      value.template_metadata?.kind === 'knowledges' ||
-      value.template_metadata?.kind === 'tools' ||
-      value.template_metadata?.kind === 'skills' ||
-      value.template_metadata?.kind === 'subagents'
-
-    return !isBasic && !isTools
-  })
-})
-
 const segmentConfigKeys = computed(() => {
   const keys = Object.keys(configurableItems.value)
   return {

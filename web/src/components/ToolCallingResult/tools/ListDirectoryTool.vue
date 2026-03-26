@@ -31,7 +31,7 @@ const parsedArgs = computed(() => {
   if (typeof args === 'object') return args
   try {
     return JSON.parse(args)
-  } catch (e) {
+  } catch {
     return {}
   }
 })

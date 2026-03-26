@@ -536,34 +536,6 @@ const confirmDeleteUser = (user) => {
   })
 }
 
-// 角色显示辅助函数
-const getRoleLabel = (role) => {
-  switch (role) {
-    case 'superadmin':
-      return '超级管理员'
-    case 'admin':
-      return '管理员'
-    case 'user':
-      return '普通用户'
-    default:
-      return role
-  }
-}
-
-// 角色标签颜色
-const getRoleColor = (role) => {
-  switch (role) {
-    case 'superadmin':
-      return 'red'
-    case 'admin':
-      return 'blue'
-    case 'user':
-      return 'green'
-    default:
-      return 'default'
-  }
-}
-
 const getRoleClass = (role) => {
   switch (role) {
     case 'superadmin':

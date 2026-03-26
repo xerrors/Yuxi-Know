@@ -253,7 +253,7 @@ const fetchGithubStars = async () => {
     const data = await response.json()
     const stars = Number(data?.stargazers_count)
     return Number.isFinite(stars) && stars > 0 ? stars : null
-  } catch (e) {
+  } catch {
     return null
   } finally {
     clearTimeout(timer)

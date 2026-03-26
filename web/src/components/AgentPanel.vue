@@ -168,7 +168,7 @@
                 </template>
                 <template v-else-if="isMarkdown">
                   <MdPreview
-                    class="flat-md-preview "
+                    class="flat-md-preview"
                     :modelValue="formatContent(currentFile?.content)"
                     :theme="theme"
                     previewTheme="github"

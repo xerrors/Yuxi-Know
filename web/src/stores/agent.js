@@ -380,6 +380,7 @@ export const useAgentStore = defineStore(
      * 保存智能体配置
      * @param {Object} options - 额外参数 (e.g., { reload_graph: true })
      */
+    // eslint-disable-next-line no-unused-vars
     async function saveAgentConfig(options = {}) {
       const targetAgentId = selectedAgentId.value
       const targetConfigId = selectedAgentConfigId.value

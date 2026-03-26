@@ -405,7 +405,13 @@ class SkillsMiddleware(AgentMiddleware):
         pure = PurePosixPath(raw if raw.startswith("/") else f"/{raw}")
         parts = [p for p in pure.parts if p not in ("/", "")]
         slug: str | None = None
-        if len(parts) == 5 and parts[0] == "home" and parts[1] == "gem" and parts[2] == "skills" and parts[4] == "SKILL.md":
+        if (
+            len(parts) == 5
+            and parts[0] == "home"
+            and parts[1] == "gem"
+            and parts[2] == "skills"
+            and parts[4] == "SKILL.md"
+        ):
             slug = parts[3]
 
         if not is_valid_skill_slug(slug):

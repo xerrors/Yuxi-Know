@@ -30,13 +30,9 @@ logs:
 # LINTING AND FORMATTING
 ######################
 
-lint:
-	cd backend && uv run ruff check package
-	cd backend && uv run ruff format --check package
-	cd backend && uv run ruff check --select I package
-
 format:
 	cd backend && uv run ruff format package
 	cd backend && uv run ruff check package --fix
 	cd backend && uv run ruff check --select I package --fix
-	docker compose exec -T web pnpm run format
+	cd web && pnpm run format
+	cd web && pnpm run lint

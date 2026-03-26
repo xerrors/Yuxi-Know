@@ -37,7 +37,6 @@ import { message } from 'ant-design-vue'
 import { multimodalApi } from '@/apis/agent_api'
 
 const fileInputRef = ref(null)
-const imageInputRef = ref(null)
 
 const props = defineProps({
   disabled: {

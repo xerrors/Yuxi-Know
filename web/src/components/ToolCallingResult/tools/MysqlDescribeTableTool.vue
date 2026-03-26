@@ -20,7 +20,7 @@
 <script setup>
 import BaseToolCall from '../BaseToolCall.vue'
 
-const props = defineProps({
+defineProps({
   toolCall: {
     type: Object,
     required: true

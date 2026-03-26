@@ -120,7 +120,7 @@ import {
   Trash2,
   MoreVertical
 } from 'lucide-vue-next'
-import dayjs, { parseToShanghai } from '@/utils/time'
+import { parseToShanghai } from '@/utils/time'
 import { useChatUIStore } from '@/stores/chatUI'
 import { useInfoStore } from '@/stores/info'
 import { useUserStore } from '@/stores/user'

@@ -5,15 +5,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException
-
 from yuxi import config as conf
-from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.agents.backends.sandbox import (
     ensure_thread_dirs,
     resolve_virtual_path,
     sandbox_user_data_dir,
     virtual_path_for_thread_file,
 )
+from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.services.conversation_service import require_user_conversation
 
 

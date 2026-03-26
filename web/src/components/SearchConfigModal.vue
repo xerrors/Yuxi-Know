@@ -206,6 +206,8 @@ const resetToDefaults = () => {
   message.success('已重置为默认配置')
 }
 
+defineExpose({ resetToDefaults })
+
 // 保存配置
 const handleSave = async () => {
   // 如果没有 databaseId，不执行保存

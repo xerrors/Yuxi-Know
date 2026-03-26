@@ -30,7 +30,7 @@
 
 <script setup>
 import { Graph } from '@antv/g6'
-import { onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { useThemeStore } from '@/stores/theme'
 
 const props = defineProps({
@@ -142,7 +142,9 @@ function initGraph() {
   if (graphInstance) {
     try {
       graphInstance.destroy()
-    } catch (e) {}
+    } catch {
+      // ignore cleanup error
+    }
     graphInstance = null
   }
 
@@ -330,7 +332,9 @@ function refreshGraph() {
   if (graphInstance) {
     try {
       graphInstance.destroy()
-    } catch (e) {}
+    } catch {
+      // ignore cleanup error
+    }
     graphInstance = null
   }
   if (container.value) container.value.innerHTML = ''
@@ -345,13 +349,17 @@ function fitView() {
   if (graphInstance)
     try {
       graphInstance.fitView()
-    } catch (_) {}
+    } catch {
+      // ignore
+    }
 }
 function fitCenter() {
   if (graphInstance)
     try {
       graphInstance.fitCenter()
-    } catch (_) {}
+    } catch {
+      // ignore
+    }
 }
 function getInstance() {
   return graphInstance
@@ -452,7 +460,9 @@ onUnmounted(() => {
   clearTimeout(renderTimeout)
   try {
     graphInstance?.destroy()
-  } catch (e) {}
+  } catch {
+    // ignore cleanup error
+  }
   graphInstance = null
 })
 

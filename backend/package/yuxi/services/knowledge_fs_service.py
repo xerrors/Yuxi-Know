@@ -130,8 +130,6 @@ async def build_visible_knowledge_mounts(
     return mounts
 
 
-
-
 def cache_minio_object(*, source_url: str, metadata: dict[str, Any] | None = None) -> Path:
     bucket_name, object_name = parse_minio_url(source_url)
     minio_client = get_minio_client()
@@ -139,7 +137,7 @@ def cache_minio_object(*, source_url: str, metadata: dict[str, Any] | None = Non
     etag = str(getattr(stat, "etag", "") or "")
     last_modified = getattr(stat, "last_modified", None)
     version_key = etag or (last_modified.isoformat() if last_modified else "")
-    cache_key = hashlib.sha256(f"{bucket_name}:{object_name}:{version_key}".encode("utf-8")).hexdigest()
+    cache_key = hashlib.sha256(f"{bucket_name}:{object_name}:{version_key}".encode()).hexdigest()
 
     suffix = Path(object_name).suffix
     objects_root = get_kb_cache_root() / "objects"

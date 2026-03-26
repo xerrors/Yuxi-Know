@@ -204,12 +204,9 @@ import { useConfigStore } from '@/stores/config'
 import {
   UploadOutlined,
   SyncOutlined,
-  GlobalOutlined,
-  InfoCircleOutlined,
   SearchOutlined,
   ReloadOutlined,
   LoadingOutlined,
-  HighlightOutlined,
   DatabaseOutlined,
   ExportOutlined
 } from '@ant-design/icons-vue'
@@ -576,10 +573,6 @@ const exportGraphData = () => {
 const getAuthHeaders = () => {
   const userStore = useUserStore()
   return userStore.getAuthHeaders()
-}
-
-const openLink = (url) => {
-  window.open(url, '_blank')
 }
 
 const getDatabaseName = () => {

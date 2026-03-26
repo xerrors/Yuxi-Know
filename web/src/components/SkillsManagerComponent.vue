@@ -268,7 +268,6 @@ import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 import {
-  Upload,
   RotateCw,
   Download,
   Trash2,
@@ -346,8 +345,6 @@ watch(selectedPath, (newPath) => {
   }
 })
 
-const formatRelativeTime = (time) => (time ? dayjs(time).fromNow() : '-')
-
 const toolDependencyOptions = computed(() =>
   (dependencyOptions.tools || []).map((i) =>
     typeof i === 'object' ? { label: i.name, value: i.id } : { label: i, value: i }
@@ -406,7 +403,7 @@ const fetchSkills = async () => {
       }
     }
     await fetchDependencyOptions()
-  } catch (error) {
+  } catch {
     message.error('加载失败')
   } finally {
     loading.value = false
@@ -420,7 +417,9 @@ const fetchDependencyOptions = async () => {
     dependencyOptions.tools = data.tools || []
     dependencyOptions.mcps = data.mcps || []
     dependencyOptions.skills = data.skills || []
-  } catch {}
+  } catch {
+    // ignore error
+  }
 }
 
 const syncDependencyFormFromSkill = (skillRecord) => {
@@ -536,27 +535,6 @@ const handleCreateNode = async () => {
   } finally {
     creatingNode.value = false
   }
-}
-
-const confirmDeleteNode = () => {
-  if (!currentSkill.value || !selectedPath.value || selectedPath.value === 'SKILL.md') return
-  Modal.confirm({
-    title: '确认删除？',
-    content: `将永久删除: ${selectedPath.value}`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        await skillApi.deleteSkillFile(currentSkill.value.slug, selectedPath.value)
-        resetFileState()
-        await reloadTree()
-        message.success('已删除')
-      } catch {
-        message.error('删除失败')
-      }
-    }
-  })
 }
 
 const confirmDeleteSkill = () => {

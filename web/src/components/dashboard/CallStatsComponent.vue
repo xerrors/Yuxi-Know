@@ -220,7 +220,7 @@ const renderCallStatsChart = () => {
         params.forEach((param) => {
           total += param.value
           const truncatedName = truncateLegend(param.seriesName)
-          result += `<span style=\"display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}\"></span>`
+          result += `<span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:${param.color}"></span>`
           result += `${truncatedName}: ${formatValueForDisplay(param.value)}<br/>`
         })
         const labelMap = {
@@ -230,7 +230,7 @@ const renderCallStatsChart = () => {
           tools: '工具调用'
         }
         const formattedTotal = formatValueForDisplay(total)
-        return `<div style=\"font-weight:bold;margin-bottom:5px\">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${formattedTotal}</strong>`
+        return `<div style="font-weight:bold;margin-bottom:5px">${labelMap[callDataType.value]}</div>${result}<strong>总计: ${formattedTotal}</strong>`
       }
     },
     legend: {

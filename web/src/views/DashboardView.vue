@@ -56,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { dashboardApi } from '@/apis/dashboard_api'
 
@@ -84,7 +84,6 @@ const allStatsData = ref({
 
 // 对话列表
 const loading = ref(false)
-const loadingDetail = ref(false)
 
 // 调用统计子组件引用
 const callStatsRef = ref(null)
@@ -132,9 +131,6 @@ const loadAllStats = async () => {
     loading.value = false
   }
 }
-
-// 保留原有的loadStats函数以兼容旧代码
-const loadStats = loadAllStats
 
 // 打开反馈详情弹窗
 const handleOpenFeedback = () => {

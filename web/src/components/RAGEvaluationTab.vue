@@ -418,7 +418,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['switch-to-benchmarks'])
+defineEmits(['switch-to-benchmarks'])
 
 // 使用任务中心 store
 const taskerStore = useTaskerStore()
@@ -571,14 +571,6 @@ const historyColumns = [
     width: 150
   }
 ]
-
-// 计算属性：当前选中的基准对象
-const currentBenchmark = computed(() => {
-  if (!selectedBenchmarkId.value || !availableBenchmarks.value) {
-    return null
-  }
-  return availableBenchmarks.value.find((b) => b.benchmark_id === selectedBenchmarkId.value)
-})
 
 // 切换错误显示模式
 const toggleErrorOnly = async () => {
@@ -946,12 +938,6 @@ const deleteEvaluationRecord = async (taskId) => {
       record.deleting = false
     }
   }
-}
-
-// 工具函数
-const truncateText = (text, maxLength) => {
-  if (!text) return ''
-  return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
 }
 
 const formatTime = (timeStr) => {

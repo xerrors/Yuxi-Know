@@ -18,9 +18,8 @@
 
 <script setup>
 import BaseToolCall from '../BaseToolCall.vue'
-import { NumberOutlined } from '@ant-design/icons-vue'
 
-const props = defineProps({
+defineProps({
   toolCall: {
     type: Object,
     required: true
@@ -31,7 +30,7 @@ const parseData = (content) => {
   if (typeof content === 'string') {
     try {
       return JSON.parse(content)
-    } catch (error) {
+    } catch {
       return content
     }
   }
