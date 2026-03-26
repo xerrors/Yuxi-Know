@@ -2,7 +2,6 @@
 <div align="center">
 <h1>语析 - 基于大模型的知识库与知识图谱智能体开发平台</h1>
 
-[![Dev](https://img.shields.io/badge/dev-v0.6.0--dev-blue.svg)](https://github.com/xerrors/Yuxi-Know)
 [![](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=ffffff)](https://github.com/xerrors/Yuxi-Know/blob/main/docker-compose.yml)
 [![](https://img.shields.io/github/issues/xerrors/Yuxi-Know?color=F48D73)](https://github.com/xerrors/Yuxi-Know/issues)
 [![License](https://img.shields.io/github/license/bitcookies/winrar-keygen.svg?logo=github)](https://github.com/xerrors/Yuxi-Know/blob/main/LICENSE)
@@ -21,7 +20,7 @@
 
 </div>
 
-<img width="2752" height="1536" alt="wps_pic_0" src="https://github.com/user-attachments/assets/96742b56-eda7-4aae-a4df-6fe9d3c30fd1" />
+![image-20260326130844668](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130844668.png)
 
 **图由 Nano Banana 2 生成*
 
@@ -41,6 +40,38 @@
 - 使用 LangGraph v1 构建多智能体 / 子智能体系统
 
 ## 最新动态
+
+
+<details>
+<summary>[2026/03/26] v0.6.0.beta1 版本发布</summary>
+
+### 新增
+
+- 重构后端代码 src -> backend/package/yuxi
+- 重构文档解析，统一文档解析体验，并新增 Parser 类
+- 新增 LITE 模式启动，启动时不加载知识库、知识图谱相关模块，可以使用 make up-lite 快捷启动
+- 新增沙盒环境，详见后续文档更新，统一沙盒虚拟路径前缀默认值为 `/home/gem/user-data`
+- 新增基于沙盒的文件系统，前端工作台可以查看文件系统，支持预览（文本、图片、PDF、HTML）、下载文件
+- 新增基于沙盒的知识库只读映射，按“用户可访问知识库 ∩ 当前 Agent 已启用知识库”暴露原始文件与解析后的 Markdown [#576](https://github.com/xerrors/Yuxi-Know/issues/576)
+- 重构附件系统，直接集成在了沙盒文件系统中，附件上传后直接落盘到沙盒挂载目录
+- 优化前端流式消息体验：新增通用 `useStreamSmoother` 调度层，统一平滑 Agent runs SSE、普通聊天流与审批恢复流中的 `loading` chunk
+- 重构前端 Agent 路由结构及表现形式，体验更加顺畅，切换更加自然（类 chatgpt 体验）
+- 新增 API Key 认证功能，支持外部系统通过 API Key 调用系统服务 [#502](https://github.com/xerrors/Yuxi-Know/issues/502)
+- 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
+- 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
+- 新增文件上传队列功能，大批量文件上传任务，前端显示上传进度，并限制同时上传的文件数量，避免过载
+- 重构 MINIO 的知识库上传逻辑，文件组织更加统一，但可能会导致历史知识库存在删除残留
+- 新增对话自动生成标题功能，默认启用，基于 fast model 调用
+- 新增知识库 PDF、图片的预览功能
+
+
+### 修复
+
+- 修复 Lightrag 知识库修改配置后，模型没有切换的 bug [#580](https://github.com/xerrors/Yuxi-Know/issues/580)
+- 修复数据库获取接口未过滤文件字段而导致的数据包过大的情况
+
+
+</details>
 
 <details>
 <summary>[2026/03/01] v0.5.0 版本发布</summary>
@@ -112,15 +143,14 @@
 - 更多智能体开发套件 中间件、子智能体，更简洁，更易上手。
 </details>
 
-<img width="1760" height="410" alt="image" src="https://github.com/user-attachments/assets/7f668fdc-9472-4153-8e76-7fe3e665d060" />
-
+![image-20260326130753514](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130753514.png)
 
 ## 快速开始
 
 克隆代码，并初始化
 
 ```
-git clone --branch v0.6.0-dev --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.6.0.beta1 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 
 # Linux/macOS
@@ -143,7 +173,7 @@ docker compose up --build
 <table>
   <tr>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/1f7af2b8-10f1-4bf3-aa75-bd975928fadc" width="100%" alt="首页"/>
+      <img src="https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326125852369.png" width="100%" alt="首页"/>
       <br/>
       <strong>首页</strong>
     </td>
@@ -155,7 +185,7 @@ docker compose up --build
   </tr>
   <tr>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/a2059193-bc25-492f-9260-105a1fa1d567" width="100%" alt="智能体配置"/>
+      <img src="https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130528866.png" width="100%" alt="智能体配置"/>
       <br/>
       <strong>智能体配置</strong>
     </td>
@@ -191,7 +221,7 @@ docker compose up --build
   </tr>
   <tr>
     <td align="center">
-      <img src="https://github.com/user-attachments/assets/b0d9dd2b-df3b-47b4-9899-3d8dd0928409" width="100%" alt="拓展管理（Skills）"/>
+      <img src="https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130404306.png" width="100%" alt="拓展管理"/>
       <br/>
       <strong>拓展管理（Skills）</strong>
     </td>
@@ -214,6 +244,8 @@ docker compose up --build
     </td>
   </tr>
 </table>
+
+
 
 ## 致谢
 
@@ -248,7 +280,5 @@ docker compose up --build
 <div align="center">
 
 **如果这个项目对您有帮助，请不要忘记给我们一个 ⭐️**
-
-[报告问题](https://github.com/xerrors/Yuxi-Know/issues) | [功能请求](https://github.com/xerrors/Yuxi-Know/issues) | [讨论](https://github.com/xerrors/Yuxi-Know/discussions)
 
 </div>
