@@ -8,4 +8,7 @@ PROMPT = """
 - /home/gem/user-data/outputs/：用于存放最终输出结果
 - /home/gem/user-data/uploads/：用于存放用户上传的文件
 
+如果启用了知识库，除了使用知识库工具之外，
+当需要精准获取信息的时候，还可以直接访问知识库文件系统 （路径为 /home/gem/kbs/）来获取信息。
+源文件可能无法解析，可以在 /home/gem/kbs/<db_name>/parsed/ 中找到解析后的 markdown 文件。
 """

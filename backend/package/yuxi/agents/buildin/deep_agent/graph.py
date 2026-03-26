@@ -1,5 +1,3 @@
-"""Deep Agent - 基于create_deep_agent的深度分析智能体"""
-
 from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
@@ -23,18 +21,12 @@ from yuxi.services.mcp_service import get_tools_from_all_servers
 from yuxi.services.subagent_service import get_subagents_from_names
 from yuxi.utils import logger
 
-from .context import DeepContext
-
-
-def _create_fs_backend(rt):
-    """创建文件存储后端"""
-    return create_agent_composite_backend(rt)
+from .prompt import DEEP_PROMPT
 
 
 class DeepAgent(BaseAgent):
     name = "深度分析"
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
-    context_schema = DeepContext
     capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能
     metadata = {"examples": ["调研一下多模态 GraphRAG 的相关论文"]}
 
@@ -60,6 +52,7 @@ class DeepAgent(BaseAgent):
     async def get_graph(self, context=None, **kwargs):
 
         context = context or self.context_schema()  # 获取上下文配置
+        system_prompt = f"{DEEP_PROMPT.strip()}\n\n{context.system_prompt or ''}"
 
         model = load_chat_model(context.model)
         sub_model = load_chat_model(context.subagents_model)
@@ -79,28 +72,14 @@ class DeepAgent(BaseAgent):
             max_retention_ratio=0.5,
         )
 
-        # 子 Agent 独立的上下文优化：更激进的压缩策略
-        sub_summary_middleware = SummaryOffloadMiddleware(
-            model=sub_model,
-            trigger=("tokens", 50000),
-            trim_tokens_to_summarize=2000,
-            summary_offload_threshold=300,
-            max_retention_ratio=0.4,
-        )
-
         subagents_middleware = SubAgentMiddleware(
             default_model=sub_model,
             default_tools=search_tools,
             subagents=user_subagents,
             default_middleware=[
-                RuntimeConfigMiddleware(
-                    model_context_name="subagents_model",
-                    enable_model_override=True,
-                    enable_system_prompt_override=False,
-                    enable_tools_override=False,
-                ),
+                FilesystemMiddleware(backend=create_agent_composite_backend),  # 文件系统后端
                 PatchToolCallsMiddleware(),
-                sub_summary_middleware,
+                summary_middleware,
                 # 子 Agent 搜索工具限制：tavily_search 最多 8 次
                 ToolCallLimitMiddleware(
                     tool_name="tavily_search",
@@ -114,9 +93,9 @@ class DeepAgent(BaseAgent):
         # 使用 create_deep_agent 创建深度智能体
         graph = create_agent(
             model=model,
-            system_prompt=context.system_prompt,
+            system_prompt=system_prompt,
             middleware=[
-                FilesystemMiddleware(backend=_create_fs_backend),  # 文件系统后端
+                FilesystemMiddleware(backend=create_agent_composite_backend),  # 文件系统后端
                 RuntimeConfigMiddleware(extra_tools=all_mcp_tools),
                 SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
                 save_attachments_to_fs,  # 附件注入提示词
