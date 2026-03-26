@@ -42,7 +42,12 @@
               @click="selectTool(tool)"
             >
               <div class="item-header">
-                <Wrench :size="16" class="item-icon" />
+                <component
+                  :is="getToolIcon(tool.id)"
+                  v-if="getToolIcon(tool.id)"
+                  :size="16"
+                  class="item-icon"
+                />
                 <span class="item-name">{{ tool.name }}</span>
               </div>
               <div class="item-details item-details-inline">
@@ -140,6 +145,7 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { Search, Wrench, Tag, Tags, FileText, List } from 'lucide-vue-next'
 import { toolApi } from '@/apis/tool_api'
+import { getToolIcon } from '@/components/ToolCallingResult/toolRegistry'
 
 const loading = ref(false)
 const searchQuery = ref('')
@@ -192,7 +198,7 @@ const fetchTools = async () => {
     if (!currentTool.value && tools.value.length > 0) {
       currentTool.value = tools.value[0]
     }
-  } catch (error) {
+  } catch {
     message.error('加载工具失败')
   } finally {
     loading.value = false

@@ -141,7 +141,7 @@
                   </button>
                 </div>
               </div>
-              <div class="file-content flat-md-preview inline-file-content">
+              <div class="file-content inline-file-content">
                 <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
                   <div class="image-preview-wrapper">
                     <img
@@ -168,6 +168,7 @@
                 </template>
                 <template v-else-if="isMarkdown">
                   <MdPreview
+                    class="flat-md-preview "
                     :modelValue="formatContent(currentFile?.content)"
                     :theme="theme"
                     previewTheme="github"
@@ -258,7 +259,7 @@
           </div>
         </div>
       </template>
-      <div class="file-content flat-md-preview">
+      <div class="file-content">
         <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
           <div class="image-preview-wrapper">
             <img :src="currentFile.previewUrl" :alt="currentFilePath" class="image-preview" />
@@ -277,6 +278,7 @@
         </template>
         <template v-else-if="isMarkdown">
           <MdPreview
+            class="flat-md-preview"
             :modelValue="formatContent(currentFile?.content)"
             :theme="theme"
             previewTheme="github"
@@ -1296,6 +1298,10 @@ watch(useInlinePreview, (isInline) => {
     word-wrap: break-word;
     color: var(--gray-1000);
     background: transparent;
+  }
+
+  .flat-md-preview {
+    padding: 12px;
   }
 }
 

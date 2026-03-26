@@ -155,7 +155,6 @@
                 :is-loading="isProcessing"
                 :disabled="!currentAgent"
                 :send-button-disabled="isSendButtonDisabled"
-                placeholder="输入问题..."
                 :mention="mentionConfig"
                 :supports-file-upload="supportsFileUpload"
                 :is-panel-open="isAgentPanelOpen"
