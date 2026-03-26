@@ -299,7 +299,7 @@ import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
 import { ocrApi } from '@/apis/system_api'
 import { fileApi, documentApi } from '@/apis/knowledge_api'
-import { ReloadOutlined } from '@ant-design-icons-vue'
+import { ReloadOutlined } from '@ant-design/icons-vue'
 import {
   FileUp,
   FolderUp,
