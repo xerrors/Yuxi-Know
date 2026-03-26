@@ -260,7 +260,7 @@ const goToLogin = () => {
 }
 
 const openDocs = () => {
-  window.open('https://xerrors.github.io/Yuxi-Know/', '_blank', 'noopener,noreferrer')
+  window.open('https://xerrors.github.io/Yuxi/', '_blank', 'noopener,noreferrer')
 }
 
 const toggleTheme = () => {

@@ -92,7 +92,7 @@ const extraText = computed(() =>
     h(
       'a',
       {
-        href: 'https://xerrors.github.io/Yuxi-Know/latest/intro/evaluation.html',
+        href: 'https://xerrors.github.io/Yuxi/intro/evaluation.html',
         target: '_blank',
         rel: 'noopener noreferrer'
       },

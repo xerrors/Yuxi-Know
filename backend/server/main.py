@@ -7,7 +7,7 @@ import sys
 # 注意：这段代码必须放在应用的极早期，最好在导入 FastAPI 或初始化数据库之前
 # ==============================================================================
 if sys.platform == "win32":
-    # 把当前文件 (main.py) 的上一级的上一级 (即根目录 Yuxi-Know) 加入到 sys.path
+    # 把当前文件 (main.py) 的上一级的上一级 (即根目录 Yuxi) 加入到 sys.path
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 

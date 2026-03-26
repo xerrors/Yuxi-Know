@@ -7,7 +7,7 @@
 
 
 ::: tip 提示
-除了此文档网站外，你还可以访问 [Zread](https://zread.ai/xerrors/Yuxi-Know) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know) 查看自动生成的详细项目文档。
+除了此文档网站外，你还可以访问 [Zread](https://zread.ai/xerrors/Yuxi) 或 [DeepWiki](https://deepwiki.com/xerrors/Yuxi) 查看自动生成的详细项目文档。
 :::
 
 ## 环境要求
@@ -20,8 +20,8 @@
 
 ```bash
 # 克隆最新版本
-git clone --branch v0.6.0.beta2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
-cd Yuxi-Know
+git clone --branch v0.6.0.beta2 --depth 1 https://github.com/xerrors/Yuxi.git
+cd Yuxi
 ```
 
 `--depth 1` 标志会创建一个浅克隆，仅包含最新的提交，从而显著减少下载时间和磁盘使用量。下表提供了版本选择的指导。

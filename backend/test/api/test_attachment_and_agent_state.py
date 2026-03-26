@@ -2,7 +2,7 @@
 测试附件上传和 agent state 获取的 API 脚本
 
 使用方式:
-    cd /home/zwj/workspace/Yuxi-Know
+    cd /home/zwj/workspace/Yuxi
     docker compose exec api uv run python test/api/test_attachment_and_agent_state.py
 
 或者本地运行:

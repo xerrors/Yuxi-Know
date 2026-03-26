@@ -7,7 +7,7 @@ export default defineConfig({
   lang: 'zh-CN',
   title: "Yuxi",
   description: "语析",
-  base: '/Yuxi-Know/',
+  base: '/Yuxi/',
   ignoreDeadLinks: [
     /localhost/,
     /CONTRIBUTING$/,
@@ -71,7 +71,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/xerrors/Yuxi-Know' }
+      { icon: 'github', link: 'https://github.com/xerrors/Yuxi' }
     ],
 
     footer: {
@@ -80,7 +80,7 @@ export default defineConfig({
     },
 
     editLink: {
-      pattern: 'https://github.com/xerrors/Yuxi-Know/edit/main/docs/:path',
+      pattern: 'https://github.com/xerrors/Yuxi/edit/main/docs/:path',
       text: '在 GitHub 上编辑此页'
     },
 

@@ -18,7 +18,7 @@ hero:
       link: /agents/agents-config
     - theme: alt
       text: GitHub
-      link: https://github.com/xerrors/Yuxi-Know
+      link: https://github.com/xerrors/Yuxi
 
 features:
   - title: 🤖 智能体开发
@@ -51,5 +51,5 @@ Yuxi（语析）不是单一的问答页面，而是一个面向开发者与团�
 
 自动生成文档镜像：
 
-- [Zread](https://zread.ai/xerrors/Yuxi-Know)
-- [DeepWiki](https://deepwiki.com/xerrors/Yuxi-Know)
+- [Zread](https://zread.ai/xerrors/Yuxi)
+- [DeepWiki](https://deepwiki.com/xerrors/Yuxi)

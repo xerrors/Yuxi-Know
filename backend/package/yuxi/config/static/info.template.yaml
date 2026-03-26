@@ -44,13 +44,13 @@ actions:
     url: "https://www.bilibili.com/video/BV1DF14BTETq"
   - name: "文档中心"
     icon: "docs"
-    url: "https://xerrors.github.io/Yuxi-Know/"
+    url: "https://xerrors.github.io/Yuxi/"
   - name: "提交 Issue"
     icon: "issue"
-    url: "https://github.com/xerrors/Yuxi-Know/issues/new/choose"
+    url: "https://github.com/xerrors/Yuxi/issues/new/choose"
   - name: "开发路线图"
     icon: "roadmap"
-    url: "https://xerrors.github.io/Yuxi-Know/latest/roadmap.html"
+    url: "https://xerrors.github.io/Yuxi/roadmap.html"
 
 
 

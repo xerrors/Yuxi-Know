@@ -30,7 +30,7 @@
           </div>
           <div class="header-actions">
             <div class="github-link">
-              <a href="https://github.com/xerrors/Yuxi-Know" target="_blank">
+              <a href="https://github.com/xerrors/Yuxi" target="_blank">
                 <svg height="20" width="20" viewBox="0 0 16 16" version="1.1">
                   <path
                     fill-rule="evenodd"
@@ -69,7 +69,7 @@
             <!-- <p class="description">{{ infoStore.branding.description }}</p> -->
             <div class="hero-actions">
               <button class="button-base primary" @click="goToChat">开始体验</button>
-              <a class="doc-text-link" href="https://xerrors.github.io/Yuxi-Know/" target="_blank"
+              <a class="doc-text-link" href="https://xerrors.github.io/Yuxi/" target="_blank"
                 >查看文档</a
               >
             </div>
@@ -151,8 +151,8 @@ const router = useRouter()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
 const agentStore = useAgentStore()
-const repoUrl = 'https://github.com/xerrors/Yuxi-Know'
-const faqUrl = 'https://xerrors.github.io/Yuxi-Know/'
+const repoUrl = 'https://github.com/xerrors/Yuxi'
+const faqUrl = 'https://xerrors.github.io/Yuxi/'
 
 // 加载状态
 const isLoading = ref(true)
@@ -163,7 +163,7 @@ let badgeTimer = null
 let subtitleTimer = null
 let starsFetchController = null
 
-const GITHUB_REPO_API = 'https://api.github.com/repos/xerrors/Yuxi-Know'
+const GITHUB_REPO_API = 'https://api.github.com/repos/xerrors/Yuxi'
 const GITHUB_STARS_TIMEOUT = 3000
 
 const formatStars = (count) => {
