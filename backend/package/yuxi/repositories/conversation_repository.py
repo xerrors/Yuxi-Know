@@ -81,11 +81,26 @@ class ConversationRepository:
         metadata["attachments"] = list(metadata.get("attachments", []))
         return metadata
 
+    def _normalize_agent_config_id(self, agent_config_id: int | None) -> int | None:
+        if agent_config_id is None:
+            return None
+        return int(agent_config_id)
+
     async def _save_metadata(self, conversation: Conversation, metadata: dict) -> None:
         conversation.extra_metadata = metadata
         conversation.updated_at = utc_now_naive()
         await self.db.commit()
         await self.db.refresh(conversation)
+
+    async def bind_agent_config(self, thread_id: str, agent_config_id: int) -> Conversation | None:
+        conversation = await self.get_conversation_by_thread_id(thread_id)
+        if not conversation:
+            return None
+
+        metadata = self._ensure_metadata(conversation)
+        metadata["agent_config_id"] = self._normalize_agent_config_id(agent_config_id)
+        await self._save_metadata(conversation, metadata)
+        return conversation
 
     async def add_message(
         self,

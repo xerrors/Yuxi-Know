@@ -636,6 +636,7 @@ class ThreadResponse(BaseModel):
     is_pinned: bool = False
     created_at: str
     updated_at: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class AttachmentResponse(BaseModel):

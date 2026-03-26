@@ -287,6 +287,7 @@ async def create_thread_view(
         "title": conversation.title,
         "created_at": conversation.created_at.isoformat(),
         "updated_at": conversation.updated_at.isoformat(),
+        "metadata": conversation.extra_metadata or {},
     }
 
 
@@ -316,6 +317,7 @@ async def list_threads_view(
             "is_pinned": bool(conv.is_pinned),
             "created_at": conv.created_at.isoformat(),
             "updated_at": conv.updated_at.isoformat(),
+            "metadata": conv.extra_metadata or {},
         }
         for conv in conversations
     ]
@@ -356,6 +358,7 @@ async def update_thread_view(
         "is_pinned": bool(updated_conv.is_pinned),
         "created_at": updated_conv.created_at.isoformat(),
         "updated_at": updated_conv.updated_at.isoformat(),
+        "metadata": updated_conv.extra_metadata or {},
     }
 
 

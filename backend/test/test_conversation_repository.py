@@ -20,3 +20,19 @@ def test_normalize_title_trims_spaces():
     normalized = repo._normalize_title("   hello world   ")
 
     assert normalized == "hello world"
+
+
+def test_normalize_agent_config_id_casts_to_int():
+    repo = ConversationRepository(None)  # type: ignore[arg-type]
+
+    normalized = repo._normalize_agent_config_id("12")  # type: ignore[arg-type]
+
+    assert normalized == 12
+
+
+def test_normalize_agent_config_id_allows_none():
+    repo = ConversationRepository(None)  # type: ignore[arg-type]
+
+    normalized = repo._normalize_agent_config_id(None)
+
+    assert normalized is None

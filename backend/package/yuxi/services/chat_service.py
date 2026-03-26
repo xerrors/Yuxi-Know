@@ -371,6 +371,27 @@ async def check_and_handle_interrupts(
         logger.error(traceback.format_exc())
 
 
+async def _ensure_thread_bound_agent_config(
+    *,
+    conv_repo: ConversationRepository,
+    thread_id: str,
+    user_id: str,
+    agent_id: str,
+    agent_config_id: int,
+) -> None:
+    conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
+    if not conversation:
+        conversation = await conv_repo.create_conversation(
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+        )
+
+    current_agent_config_id = (conversation.extra_metadata or {}).get("agent_config_id")
+    if current_agent_config_id != int(agent_config_id):
+        await conv_repo.bind_agent_config(thread_id, agent_config_id)
+
+
 async def agent_chat(
     *,
     query: str,
@@ -462,6 +483,13 @@ async def agent_chat(
 
     try:
         conv_repo = ConversationRepository(db)
+        await _ensure_thread_bound_agent_config(
+            conv_repo=conv_repo,
+            thread_id=thread_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_config_id=agent_config_id,
+        )
 
         try:
             await conv_repo.add_message_by_thread_id(
@@ -631,6 +659,13 @@ async def stream_agent_chat(
 
     try:
         conv_repo = ConversationRepository(db)
+        await _ensure_thread_bound_agent_config(
+            conv_repo=conv_repo,
+            thread_id=thread_id,
+            user_id=user_id,
+            agent_id=agent_id,
+            agent_config_id=agent_config_id,
+        )
 
         try:
             await conv_repo.add_message_by_thread_id(

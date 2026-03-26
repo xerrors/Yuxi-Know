@@ -626,12 +626,16 @@ const setThreadAgentConfigId = (threadId, agentConfigId) => {
   if (!threadId) return
   const thread = threads.value.find((item) => item.id === threadId)
   if (thread) {
-    thread.agent_config_id = agentConfigId ?? null
+    thread.metadata = {
+      ...(thread.metadata || {}),
+      agent_config_id: agentConfigId ?? null
+    }
   }
 }
 
 const syncSelectedConfigForThread = async (thread) => {
-  if (!thread?.agent_config_id) return
+  const threadAgentConfigId = thread?.metadata?.agent_config_id
+  if (!threadAgentConfigId) return
 
   const targetAgentId = thread.agent_id || currentAgentId.value
   if (!targetAgentId) return
@@ -641,8 +645,8 @@ const syncSelectedConfigForThread = async (thread) => {
     await agentStore.fetchAgentConfigs(targetAgentId)
   }
 
-  if (selectedAgentConfigId.value !== thread.agent_config_id) {
-    await agentStore.selectAgentConfig(thread.agent_config_id)
+  if (selectedAgentConfigId.value !== threadAgentConfigId) {
+    await agentStore.selectAgentConfig(threadAgentConfigId)
   }
 }
 

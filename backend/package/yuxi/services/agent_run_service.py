@@ -79,6 +79,10 @@ async def create_agent_run_view(
     conversation = await conv_repo.get_conversation_by_thread_id(thread_id)
     if not conversation or conversation.user_id != str(current_user_id) or conversation.status == "deleted":
         raise HTTPException(status_code=404, detail="对话线程不存在")
+    if (conversation.extra_metadata or {}).get("agent_config_id") != int(agent_config_id):
+        conversation = await conv_repo.bind_agent_config(thread_id, agent_config_id)
+        if not conversation:
+            raise HTTPException(status_code=404, detail="对话线程不存在")
 
     request_id = str((meta or {}).get("request_id") or uuid.uuid4())
     config = {

@@ -98,6 +98,16 @@ async def test_chat_agent_sync_with_thread_id(test_client, admin_headers):
             f"thread_id mismatch: expected {thread_id}, got {payload.get('thread_id')}"
         )
 
+        threads_response = await test_client.get("/api/chat/threads", headers=admin_headers)
+        assert threads_response.status_code == 200, threads_response.text
+        threads = threads_response.json()
+        target_thread = next((item for item in threads if item.get("id") == thread_id), None)
+        assert target_thread is not None, f"thread not found in thread list: {thread_id}"
+        assert (target_thread.get("metadata") or {}).get("agent_config_id") == agent_config_id, (
+            "agent_config_id mismatch: "
+            f"expected {agent_config_id}, got {(target_thread.get('metadata') or {}).get('agent_config_id')}"
+        )
+
 
 async def test_chat_agent_sync_with_meta(test_client, admin_headers):
     """测试非流式对话传递 meta 参数"""

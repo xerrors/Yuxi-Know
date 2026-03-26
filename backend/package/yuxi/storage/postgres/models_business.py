@@ -231,6 +231,7 @@ class Conversation(Base):
     )
 
     def to_dict(self) -> dict[str, Any]:
+        metadata = self.extra_metadata or {}
         return {
             "id": self.id,
             "thread_id": self.thread_id,
@@ -241,7 +242,7 @@ class Conversation(Base):
             "is_pinned": bool(self.is_pinned),
             "created_at": format_utc_datetime(self.created_at),
             "updated_at": format_utc_datetime(self.updated_at),
-            "metadata": self.extra_metadata or {},
+            "metadata": metadata,
         }
 
 
