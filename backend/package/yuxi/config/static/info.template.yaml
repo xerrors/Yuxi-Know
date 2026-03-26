@@ -56,6 +56,6 @@ actions:
 
 # 页脚信息
 footer:
-  copyright: "© 江南语析 2026 v0.6.0.beta1"
+  copyright: "© 江南语析 2026 v0.6.0.beta2"
   user_agreement_url: "/protocols/user-agreement.template.html"
   privacy_policy_url: "/protocols/privacy-policy.template.html"

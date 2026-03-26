@@ -90,8 +90,7 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - 历史消息
    */
-  getAgentHistory: (threadId) =>
-    apiGet(`/api/chat/thread/${threadId}/history`),
+  getAgentHistory: (threadId) => apiGet(`/api/chat/thread/${threadId}/history`),
 
   /**
    * 获取指定会话的 AgentState
@@ -99,8 +98,7 @@ export const agentApi = {
    * @param {string} threadId - 会话ID
    * @returns {Promise} - AgentState
    */
-  getAgentState: (threadId) =>
-    apiGet(`/api/chat/thread/${threadId}/state`),
+  getAgentState: (threadId) => apiGet(`/api/chat/thread/${threadId}/state`),
 
   /**
    * Submit feedback for a message

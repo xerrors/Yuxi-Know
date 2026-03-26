@@ -43,7 +43,7 @@
 
 
 <details>
-<summary>[2026/03/26] v0.6.0.beta1 版本发布</summary>
+<summary>[2026/03/26] v0.6.0.beta2 版本发布</summary>
 
 ### 新增
 
@@ -55,7 +55,7 @@
 - 新增基于沙盒的知识库只读映射，按“用户可访问知识库 ∩ 当前 Agent 已启用知识库”暴露原始文件与解析后的 Markdown [#576](https://github.com/xerrors/Yuxi-Know/issues/576)
 - 重构附件系统，直接集成在了沙盒文件系统中，附件上传后直接落盘到沙盒挂载目录
 - 优化前端流式消息体验：新增通用 `useStreamSmoother` 调度层，统一平滑 Agent runs SSE、普通聊天流与审批恢复流中的 `loading` chunk
-- 重构前端 Agent 路由结构及表现形式，体验更加顺畅，切换更加自然（类 chatgpt 体验）
+- 重构 Agent 前后端对话路由结构及表现形式，体验更加顺畅，切换更加自然（API 接口变更）
 - 新增 API Key 认证功能，支持外部系统通过 API Key 调用系统服务 [#502](https://github.com/xerrors/Yuxi-Know/issues/502)
 - 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
 - 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
@@ -69,6 +69,7 @@
 
 - 修复 Lightrag 知识库修改配置后，模型没有切换的 bug [#580](https://github.com/xerrors/Yuxi-Know/issues/580)
 - 修复数据库获取接口未过滤文件字段而导致的数据包过大的情况
+- 修复 Thread 未绑定 agent_config_id 导致的历史对话切换后上下文配置错乱的问题
 
 
 </details>
@@ -150,7 +151,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.6.0.beta1 --depth 1 https://github.com/xerrors/Yuxi-Know.git
+git clone --branch v0.6.0.beta2 --depth 1 https://github.com/xerrors/Yuxi-Know.git
 cd Yuxi-Know
 
 # Linux/macOS
