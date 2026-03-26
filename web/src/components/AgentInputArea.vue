@@ -148,7 +148,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 8px;
+  padding: 6px 8px;
   // height: 28px;
   border-radius: 8px;
   font-size: 14px;

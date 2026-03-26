@@ -58,7 +58,7 @@
           class="sider-item"
           :class="{ activesec: activeTab === 'apikey' }"
           @click="activeTab = 'apikey'"
-          v-if="userStore.isSuperAdmin"
+          v-if="userStore.isLoggedIn"
         >
           <KeyIcon class="icon" :size="18" />
           <span>API Key</span>
@@ -103,7 +103,7 @@
           class="nav-item"
           :class="{ active: activeTab === 'apikey' }"
           @click="activeTab = 'apikey'"
-          v-if="userStore.isSuperAdmin"
+          v-if="userStore.isLoggedIn"
         >
           API Key
         </div>
@@ -128,7 +128,7 @@
             <DepartmentManagementComponent />
           </div>
 
-          <div v-show="activeTab === 'apikey'" v-if="userStore.isSuperAdmin">
+          <div v-show="activeTab === 'apikey'" v-if="userStore.isLoggedIn">
             <ApiKeyManagementComponent />
           </div>
         </div>
@@ -175,6 +175,8 @@ watch(
     if (newVal) {
       if (userStore.isAdmin) {
         activeTab.value = 'base'
+      } else if (userStore.isLogin) {
+        activeTab.value = 'apikey'
       }
     }
   }

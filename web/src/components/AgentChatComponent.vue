@@ -622,6 +622,30 @@ onUnmounted(() => {
 })
 
 // ==================== 线程管理方法 ====================
+const setThreadAgentConfigId = (threadId, agentConfigId) => {
+  if (!threadId) return
+  const thread = threads.value.find((item) => item.id === threadId)
+  if (thread) {
+    thread.agent_config_id = agentConfigId ?? null
+  }
+}
+
+const syncSelectedConfigForThread = async (thread) => {
+  if (!thread?.agent_config_id) return
+
+  const targetAgentId = thread.agent_id || currentAgentId.value
+  if (!targetAgentId) return
+
+  const configList = agentStore.agentConfigs[targetAgentId] || []
+  if (!configList.length) {
+    await agentStore.fetchAgentConfigs(targetAgentId)
+  }
+
+  if (selectedAgentConfigId.value !== thread.agent_config_id) {
+    await agentStore.selectAgentConfig(thread.agent_config_id)
+  }
+}
+
 // 获取当前智能体的线程列表
 const fetchThreads = async (agentId = null) => {
   const targetAgentId = props.singleMode ? agentId || currentAgentId.value : agentId
@@ -926,6 +950,8 @@ const sendMessage = async ({
     return Promise.reject(error)
   }
 
+  setThreadAgentConfigId(threadId, selectedAgentConfigId.value)
+
   const requestData = {
     query: text,
     thread_id: threadId,
@@ -999,6 +1025,14 @@ const selectChat = async (chatId) => {
       handleChatError(error, 'load')
       return
     }
+  }
+
+  try {
+    await syncSelectedConfigForThread(targetChat)
+  } catch (error) {
+    chatState.currentThreadId = previousThreadId
+    handleChatError(error, 'load')
+    return
   }
 
   chatUIStore.isLoadingMessages = true
