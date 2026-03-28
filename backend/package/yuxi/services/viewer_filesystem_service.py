@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import io
 import mimetypes
-from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
@@ -11,11 +10,20 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.agents.backends import KBS_PATH, KnowledgeBaseReadonlyBackend, resolve_visible_knowledge_bases_for_context
-from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH, resolve_virtual_path, virtual_path_for_thread_file
+from yuxi.agents.backends.sandbox import (
+    SKILLS_PATH,
+    USER_DATA_PATH,
+    ensure_thread_dirs,
+    resolve_virtual_path,
+    sandbox_user_data_dir,
+    sandbox_workspace_dir,
+    virtual_path_for_thread_file,
+)
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 from yuxi.services.filesystem_service import _resolve_filesystem_state
 from yuxi.storage.postgres.models_business import User
+from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
 
 _MARKDOWN_EXTENSIONS = frozenset({".md", ".markdown", ".mdx"})
 _PDF_EXTENSIONS = frozenset({".pdf"})
@@ -209,13 +217,8 @@ def _sort_entries(entries: list[dict]) -> list[dict]:
     )
 
 
-def _to_iso8601(timestamp: float | None) -> str:
-    if timestamp is None:
-        return ""
-    return datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
-
-
 def _list_local_entries(thread_id: str, actual_path) -> list[dict]:
+    """List a local directory and remap children back into viewer virtual paths."""
     entries: list[dict] = []
     for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
         stat = child.stat()
@@ -229,7 +232,28 @@ def _list_local_entries(thread_id: str, actual_path) -> list[dict]:
                 "name": child.name,
                 "is_dir": is_dir,
                 "size": 0 if is_dir else stat.st_size,
-                "modified_at": _to_iso8601(stat.st_mtime),
+                "modified_at": utc_isoformat_from_timestamp(stat.st_mtime) or "",
+            }
+        )
+    return entries
+
+
+def _list_user_data_root_entries(thread_id: str) -> list[dict]:
+    """Expose thread-root files while keeping the shared workspace entry visible."""
+    entries = _list_local_entries(thread_id, sandbox_user_data_dir(thread_id))
+    visible_paths = {str(entry.get("path") or "").rstrip("/") for entry in entries}
+    workspace_dir = sandbox_workspace_dir(thread_id)
+    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir).rstrip("/")
+    if workspace_virtual_path not in visible_paths:
+        # workspace is stored outside the per-thread root, so add it explicitly when needed.
+        stat = workspace_dir.stat()
+        entries.append(
+            {
+                "path": f"{workspace_virtual_path}/",
+                "name": workspace_dir.name,
+                "is_dir": True,
+                "size": 0,
+                "modified_at": utc_isoformat_from_timestamp(stat.st_mtime) or "",
             }
         )
     return entries
@@ -294,6 +318,10 @@ async def list_viewer_filesystem_tree(
 
     try:
         if _is_user_data_path(normalized_path):
+            ensure_thread_dirs(thread_id)
+            if normalized_path == USER_DATA_PATH:
+                entries = await asyncio.to_thread(_list_user_data_root_entries, thread_id)
+                return {"entries": _sort_entries(entries)}
             actual_path = resolve_virtual_path(thread_id, normalized_path)
             if not actual_path.exists():
                 return {"entries": []}
