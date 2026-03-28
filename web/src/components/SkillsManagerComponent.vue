@@ -37,13 +37,14 @@
                   <span class="item-name">{{ skill.name }}</span>
                 </div>
                 <div class="item-status">
-                  <a-button
+                  <button
                     v-if="skill.status === 'update_available'"
-                    size="small"
+                    type="button"
+                    class="skill-inline-action skill-inline-action-secondary"
                     @click.stop="handleUpdateBuiltin(skill)"
                   >
                     更新
-                  </a-button>
+                  </button>
                   <span
                     v-else-if="skill.statusLabel"
                     class="status-chip"
@@ -92,9 +93,13 @@
                   <span class="item-name">{{ skill.name }}</span>
                 </div>
                 <div class="item-status">
-                  <a-button size="small" type="primary" @click.stop="handleInstallBuiltin(skill)">
+                  <button
+                    type="button"
+                    class="skill-inline-action skill-inline-action-primary"
+                    @click.stop="handleInstallBuiltin(skill)"
+                  >
                     安装
-                  </a-button>
+                  </button>
                 </div>
               </div>
               <div class="item-details item-details-inline">
@@ -144,43 +149,40 @@
                 >
                   {{ currentSkillStatusLabel }}
                 </span>
-                <a-button
+                <button
                   v-if="currentSkill.is_builtin_spec && currentSkill.status === 'not_installed'"
-                  type="primary"
-                  size="small"
+                  type="button"
                   @click="handleInstallBuiltin(currentSkill)"
-                  class="lucide-icon-btn"
+                  class="lucide-icon-btn skill-panel-action skill-panel-action-primary"
                 >
                   <span>安装</span>
-                </a-button>
-                <a-button
+                </button>
+                <button
                   v-if="currentSkill.is_builtin_spec && currentSkill.status === 'update_available'"
-                  size="small"
+                  type="button"
                   @click="handleUpdateBuiltin(currentSkill)"
-                  class="lucide-icon-btn"
+                  class="lucide-icon-btn skill-panel-action skill-panel-action-secondary"
                 >
                   <span>更新</span>
-                </a-button>
-                <a-button
+                </button>
+                <button
                   v-if="isInstalledSkill"
-                  size="small"
+                  type="button"
                   @click="handleExport"
-                  class="lucide-icon-btn"
+                  class="lucide-icon-btn skill-panel-action skill-panel-action-secondary"
                 >
                   <Download :size="14" />
                   <span>导出</span>
-                </a-button>
-                <a-button
-                  v-if="isInstalledSkill && !isBuiltinInstalledSkill"
-                  size="small"
-                  danger
-                  ghost
+                </button>
+                <button
+                  v-if="isInstalledSkill"
+                  type="button"
                   @click="confirmDeleteSkill"
-                  class="lucide-icon-btn"
+                  class="lucide-icon-btn skill-panel-action skill-panel-action-danger"
                 >
                   <Trash2 :size="14" />
-                  <span>删除</span>
-                </a-button>
+                  <span>{{ isBuiltinInstalledSkill ? '卸载' : '删除' }}</span>
+                </button>
               </a-space>
             </div>
           </div>
@@ -474,6 +476,10 @@ const isInstalledSkill = computed(() => {
 
 const isBuiltinInstalledSkill = computed(() => {
   return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
+})
+
+const currentSkillDeleteActionText = computed(() => {
+  return isBuiltinInstalledSkill.value ? '卸载' : '删除'
 })
 
 const currentSkillStatusLabel = computed(() => {
@@ -777,22 +783,26 @@ const handleCreateNode = async () => {
 
 const confirmDeleteSkill = () => {
   if (!currentSkill.value || !isInstalledSkill.value) return
+  const actionText = currentSkillDeleteActionText.value
+  const detailText = isBuiltinInstalledSkill.value
+    ? '卸载后会移除已安装文件和数据库记录，但仍可从“未安装 Skills”中重新安装。'
+    : '删除后无法恢复，所有文件和配置将永久消失。'
   Modal.confirm({
-    title: `彻底删除技能「${currentSkill.value.slug}」？`,
-    content: '删除后无法恢复，所有文件和配置将永久消失。',
-    okText: '确认删除',
+    title: `确认${actionText}技能「${currentSkill.value.slug}」？`,
+    content: detailText,
+    okText: `确认${actionText}`,
     okType: 'danger',
     cancelText: '取消',
     onOk: async () => {
       try {
         await skillApi.deleteSkill(currentSkill.value.slug)
-        message.success('已删除')
+        message.success(`已${actionText}`)
         currentSkill.value = null
         treeData.value = []
         resetFileState()
         await fetchSkills()
       } catch {
-        message.error('删除失败')
+        message.error(`${actionText}失败`)
       }
     }
   })
@@ -973,6 +983,121 @@ defineExpose({
           background-color: var(--color-success-500);
         }
       }
+    }
+  }
+
+}
+
+.skill-inline-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  min-width: 52px;
+  height: 24px;
+  padding: 0 9px;
+  border-style: solid;
+  border-width: 1px;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+  cursor: pointer;
+  appearance: none;
+
+  &.skill-inline-action-primary {
+    border-color: transparent;
+    background: var(--main-600);
+    color: var(--main-0);
+  }
+
+  &.skill-inline-action-secondary {
+    border-color: var(--main-100);
+    background: var(--main-30);
+    color: var(--main-700);
+  }
+
+  &:hover,
+  &:focus {
+    outline: none;
+  }
+
+  &.skill-inline-action-primary:hover,
+  &.skill-inline-action-primary:focus {
+    background: var(--main-700);
+    color: var(--main-0);
+  }
+
+  &.skill-inline-action-secondary:hover,
+  &.skill-inline-action-secondary:focus {
+    border-color: var(--main-200);
+    background: var(--main-50);
+    color: var(--main-800);
+  }
+}
+
+.skill-panel-action {
+  min-height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border-style: solid;
+  border-width: 1px;
+  box-shadow: none;
+  font-weight: 500;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+  cursor: pointer;
+  appearance: none;
+
+  &:hover,
+  &:focus {
+    outline: none;
+  }
+
+  &.skill-panel-action-primary {
+    border-color: transparent;
+    background: var(--main-600);
+    color: var(--main-0);
+  }
+
+  &.skill-panel-action-primary:hover,
+  &.skill-panel-action-primary:focus {
+    background: var(--main-700);
+    color: var(--main-0);
+  }
+
+  &.skill-panel-action-secondary {
+    border-color: var(--gray-200);
+    background: var(--gray-25);
+    color: var(--gray-700);
+
+    &:hover,
+    &:focus {
+      border-color: var(--gray-300);
+      color: var(--gray-900);
+      background: var(--gray-0);
+    }
+  }
+
+  &.skill-panel-action-danger {
+    border-color: var(--color-error-100);
+    background: var(--color-error-50);
+    color: var(--color-error-700);
+
+    &:hover,
+    &:focus {
+      border-color: var(--color-error-100);
+      background: var(--color-error-100);
+      color: var(--color-error-900);
     }
   }
 }

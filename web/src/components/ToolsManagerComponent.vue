@@ -6,29 +6,33 @@
     <div class="layout-wrapper" :class="{ 'content-loading': loading }">
       <!-- 左侧：工具列表 -->
       <div class="sidebar-list">
-        <div class="search-box">
-          <a-input
-            v-model:value="searchQuery"
-            placeholder="搜索工具..."
-            allow-clear
-            class="search-input"
-          >
-            <template #prefix><Search :size="14" class="text-muted" /></template>
-          </a-input>
-        </div>
-        <!-- 分类筛选 -->
-        <div class="category-filter">
-          <a-select
-            v-model:value="selectedCategory"
-            placeholder="全部分类"
-            allow-clear
-            style="width: 100%"
-          >
-            <a-select-option value="">全部分类</a-select-option>
-            <a-select-option v-for="cat in categories" :key="cat" :value="cat">
-              {{ categoryLabels[cat] || cat }}
-            </a-select-option>
-          </a-select>
+        <div class="sidebar-toolbar">
+          <div class="search-box">
+            <a-input
+              v-model:value="searchQuery"
+              placeholder="搜索工具..."
+              allow-clear
+              class="search-input"
+            >
+              <template #prefix><Search :size="14" class="text-muted" /></template>
+            </a-input>
+          </div>
+
+          <a-tooltip :title="`当前分类：${currentCategoryLabel}`">
+            <a-dropdown trigger="click">
+              <a-button class="sidebar-tool category-trigger" :class="{ active: !!selectedCategory }">
+                <SlidersHorizontal :size="14" />
+              </a-button>
+              <template #overlay>
+                <a-menu :selectedKeys="[selectedCategory || 'all']" @click="handleCategorySelect">
+                  <a-menu-item key="all">全部分类</a-menu-item>
+                  <a-menu-item v-for="cat in categories" :key="cat">
+                    {{ categoryLabels[cat] || cat }}
+                  </a-menu-item>
+                </a-menu>
+              </template>
+            </a-dropdown>
+          </a-tooltip>
         </div>
 
         <div class="list-container">
@@ -143,7 +147,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { Search, Wrench, Tag, Tags, FileText, List } from 'lucide-vue-next'
+import { Search, Wrench, Tag, Tags, FileText, List, SlidersHorizontal } from 'lucide-vue-next'
 import { toolApi } from '@/apis/tool_api'
 import { getToolIcon } from '@/components/ToolCallingResult/toolRegistry'
 
@@ -189,6 +193,10 @@ const filteredTools = computed(() => {
   return result
 })
 
+const currentCategoryLabel = computed(
+  () => categoryLabels[selectedCategory.value] || (selectedCategory.value ? selectedCategory.value : '全部分类')
+)
+
 const fetchTools = async () => {
   loading.value = true
   try {
@@ -209,6 +217,10 @@ const selectTool = (record) => {
   currentTool.value = record
 }
 
+const handleCategorySelect = ({ key }) => {
+  selectedCategory.value = key === 'all' ? '' : key
+}
+
 onMounted(fetchTools)
 
 // 暴露方法给父组件
@@ -219,11 +231,6 @@ defineExpose({
 
 <style scoped lang="less">
 @import '@/assets/css/extensions.less';
-
-.category-filter {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--gray-150);
-}
 
 .list-item {
   .item-details {

@@ -30,6 +30,20 @@
   flex-direction: column;
   flex-shrink: 0;
 
+  .sidebar-toolbar {
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--gray-150);
+
+    .search-box {
+      flex: 1;
+      min-width: 0;
+      padding: 0;
+    }
+  }
+
   .search-box {
     padding: 8px 12px 0;
 
@@ -74,6 +88,34 @@
     // :deep(.ant-input-outlined) {
     //   border: none;
     // }
+  }
+
+  .sidebar-tool {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 8px;
+    border-color: var(--gray-150);
+    background-color: var(--gray-0);
+    color: var(--gray-500);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: none;
+
+    &:hover,
+    &:focus {
+      color: var(--gray-700);
+      border-color: var(--gray-200);
+      background-color: var(--gray-0);
+    }
+
+    &.active {
+      color: var(--main-color);
+      border-color: var(--main-color);
+      background-color: color-mix(in srgb, var(--main-color) 8%, var(--gray-0));
+    }
   }
 
   .list-container {
