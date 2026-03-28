@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import mimetypes
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
@@ -10,30 +11,11 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.agents.backends import KBS_PATH, KnowledgeBaseReadonlyBackend, resolve_visible_knowledge_bases_for_context
-from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH, resolve_virtual_path
+from yuxi.agents.backends.sandbox import SKILLS_PATH, USER_DATA_PATH, resolve_virtual_path, virtual_path_for_thread_file
 from yuxi.agents.backends.skills_backend import SelectedSkillsReadonlyBackend
 from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 from yuxi.services.filesystem_service import _resolve_filesystem_state
 from yuxi.storage.postgres.models_business import User
-
-# Sandbox 的 /home/gem 路径（虚拟根）
-SANDBOX_HOME = "/home/gem"
-
-# 根目录排除的文件/目录名
-_HIDDEN_EXCLUDE = frozenset(
-    {
-        ".cache",
-        ".config",
-        ".jupyter",
-        ".local",
-        ".npm-global",
-        ".pki",
-        ".ipython",
-        ".npm",
-        ".bashrc",
-        ".Xauthority",
-    }
-)
 
 _MARKDOWN_EXTENSIONS = frozenset({".md", ".markdown", ".mdx"})
 _PDF_EXTENSIONS = frozenset({".pdf"})
@@ -227,6 +209,32 @@ def _sort_entries(entries: list[dict]) -> list[dict]:
     )
 
 
+def _to_iso8601(timestamp: float | None) -> str:
+    if timestamp is None:
+        return ""
+    return datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
+
+
+def _list_local_entries(thread_id: str, actual_path) -> list[dict]:
+    entries: list[dict] = []
+    for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+        stat = child.stat()
+        is_dir = child.is_dir()
+        display_path = virtual_path_for_thread_file(thread_id, child)
+        if is_dir and not display_path.endswith("/"):
+            display_path = f"{display_path}/"
+        entries.append(
+            {
+                "path": display_path,
+                "name": child.name,
+                "is_dir": is_dir,
+                "size": 0 if is_dir else stat.st_size,
+                "modified_at": _to_iso8601(stat.st_mtime),
+            }
+        )
+    return entries
+
+
 async def _resolve_viewer_state(
     *,
     thread_id: str,
@@ -271,41 +279,28 @@ async def list_viewer_filesystem_tree(
     )
 
     if normalized_path == "/":
-        # 根目录显示 /home/gem/ 下的所有内容
+        # 根目录只显示 viewer 暴露的虚拟命名空间，避免为只读树视图触发 sandbox 冷启动。
         entries = []
-        # 收集已添加的虚拟挂载点名称，用于去重
-        added_names = set()
 
-        # 添加虚拟挂载点
         entries.append(
             {"path": f"{USER_DATA_PATH}/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""}
         )
-        added_names.add("user-data")
         if selected_skills:
             entries.append({"path": f"{SKILLS_PATH}/", "name": "skills", "is_dir": True, "size": 0, "modified_at": ""})
-            added_names.add("skills")
         if kb_backend.has_entries():
             entries.append({"path": f"{KBS_PATH}/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""})
-            added_names.add("kbs")
-
-        # 添加 sandbox 根目录 /home/gem/ 的实际文件（排除已添加的虚拟挂载点和隐藏文件）
-        sandbox_root_entries = await asyncio.to_thread(sandbox_backend.ls_info, SANDBOX_HOME)
-        if sandbox_root_entries:
-            sandbox_entries = _normalize_entries(sandbox_root_entries)
-            for entry in sandbox_entries:
-                name = PurePosixPath(entry["path"].rstrip("/")).name
-                if name in _HIDDEN_EXCLUDE:
-                    continue
-                if name not in added_names:
-                    entries.append(entry)
-                    added_names.add(name)  # 防止其他同名文件/文件夹重复
 
         return {"entries": _sort_entries(entries)}
 
     try:
         if _is_user_data_path(normalized_path):
-            entries = await asyncio.to_thread(sandbox_backend.ls_info, normalized_path)
-            return {"entries": _sort_entries(_normalize_entries(entries))}
+            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            if not actual_path.exists():
+                return {"entries": []}
+            if not actual_path.is_dir():
+                raise HTTPException(status_code=400, detail="当前路径不是目录")
+            entries = await asyncio.to_thread(_list_local_entries, thread_id, actual_path)
+            return {"entries": _sort_entries(entries)}
 
         if _is_skills_path(normalized_path):
             entries = await asyncio.to_thread(skills_backend.ls_info, _strip_skills_prefix(normalized_path))

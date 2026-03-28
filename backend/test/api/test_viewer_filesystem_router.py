@@ -85,6 +85,73 @@ async def test_viewer_tree_root_lists_user_data_namespace(test_client, standard_
     assert "/home/gem/user-data/" in paths
 
 
+async def test_viewer_tree_root_does_not_require_sandbox_listing(test_client, standard_user, monkeypatch):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    class _FailingSandbox:
+        def ls_info(self, path):
+            raise AssertionError(f"sandbox ls_info should not be used for root path: {path}")
+
+    class _EmptyBackend:
+        def has_entries(self):
+            return False
+
+    service_module = importlib.import_module("yuxi.services.viewer_filesystem_service")
+
+    async def _fake_resolve_viewer_state(**kwargs):
+        return _FailingSandbox(), _EmptyBackend(), _EmptyBackend(), []
+
+    monkeypatch.setattr(service_module, "_resolve_viewer_state", _fake_resolve_viewer_state)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/tree",
+        params={"thread_id": thread_id, "path": "/"},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    entries = response.json().get("entries", [])
+    paths = {entry.get("path") for entry in entries}
+    assert "/home/gem/user-data/" in paths
+
+
+async def test_viewer_tree_user_data_uses_local_thread_directory(test_client, standard_user, monkeypatch):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "viewer_tree_demo.txt"
+    actual_path.write_text("viewer tree", encoding="utf-8")
+
+    class _FailingSandbox:
+        def ls_info(self, path):
+            raise AssertionError(f"sandbox ls_info should not be used for user-data path: {path}")
+
+    class _EmptyBackend:
+        def has_entries(self):
+            return False
+
+    service_module = importlib.import_module("yuxi.services.viewer_filesystem_service")
+
+    async def _fake_resolve_viewer_state(**kwargs):
+        return _FailingSandbox(), _EmptyBackend(), _EmptyBackend(), []
+
+    monkeypatch.setattr(service_module, "_resolve_viewer_state", _fake_resolve_viewer_state)
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/tree",
+        params={"thread_id": thread_id, "path": "/home/gem/user-data"},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    entries = response.json().get("entries", [])
+    paths = {entry.get("path") for entry in entries}
+    assert "/home/gem/user-data/workspace/" in paths
+    assert all(str(path).startswith("/home/gem/user-data") for path in paths)
+
+
 async def test_viewer_file_returns_raw_content_without_line_numbers(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
