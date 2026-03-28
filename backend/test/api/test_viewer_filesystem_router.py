@@ -6,7 +6,12 @@ import importlib
 import uuid
 
 import pytest
-from yuxi.agents.backends.sandbox import ensure_thread_dirs, sandbox_workspace_dir, virtual_path_for_thread_file
+from yuxi.agents.backends.sandbox import (
+    ensure_thread_dirs,
+    sandbox_user_data_dir,
+    sandbox_workspace_dir,
+    virtual_path_for_thread_file,
+)
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.integration]
 
@@ -149,7 +154,63 @@ async def test_viewer_tree_user_data_uses_local_thread_directory(test_client, st
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
     assert "/home/gem/user-data/workspace/" in paths
+    assert "/home/gem/user-data/uploads/" in paths
+    assert "/home/gem/user-data/outputs/" in paths
     assert all(str(path).startswith("/home/gem/user-data") for path in paths)
+
+
+async def test_viewer_tree_user_data_root_keeps_thread_root_files_visible(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    root_file = sandbox_user_data_dir(thread_id) / "root-note.txt"
+    root_file.write_text("visible at root", encoding="utf-8")
+
+    response = await test_client.get(
+        "/api/viewer/filesystem/tree",
+        params={"thread_id": thread_id, "path": "/home/gem/user-data"},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+
+    paths = {entry.get("path") for entry in response.json().get("entries", [])}
+    assert "/home/gem/user-data/root-note.txt" in paths
+    assert "/home/gem/user-data/workspace/" in paths
+
+
+async def test_workspace_is_shared_across_threads_but_uploads_remain_thread_local(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+    other_thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    shared_path = sandbox_workspace_dir(thread_id) / "shared_across_threads.txt"
+    shared_path.write_text("shared workspace", encoding="utf-8")
+
+    upload_path = await _upload_attachment_file(test_client, thread_id, headers, "thread-local.txt", "private upload\n")
+
+    workspace_response = await test_client.get(
+        "/api/viewer/filesystem/tree",
+        params={"thread_id": other_thread_id, "path": "/home/gem/user-data/workspace"},
+        headers=headers,
+    )
+    assert workspace_response.status_code == 200, workspace_response.text
+    workspace_paths = {entry.get("path") for entry in workspace_response.json().get("entries", [])}
+    assert "/home/gem/user-data/workspace/shared_across_threads.txt" in workspace_paths
+
+    shared_file_response = await test_client.get(
+        f"/api/chat/thread/{other_thread_id}/artifacts/home/gem/user-data/workspace/shared_across_threads.txt",
+        headers=headers,
+    )
+    assert shared_file_response.status_code == 200, shared_file_response.text
+    assert shared_file_response.text == "shared workspace"
+
+    upload_response = await test_client.get(
+        f"/api/chat/thread/{other_thread_id}/artifacts/{upload_path.lstrip('/')}",
+        headers=headers,
+    )
+    assert upload_response.status_code == 404, upload_response.text
 
 
 async def test_viewer_file_returns_raw_content_without_line_numbers(test_client, standard_user):

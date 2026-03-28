@@ -127,6 +127,13 @@ def format_utc_datetime(value: dt.datetime | None) -> str | None:
     return utc_isoformat(value)
 
 
+def utc_isoformat_from_timestamp(timestamp: float | int | None) -> str | None:
+    """Format a Unix timestamp as an ISO 8601 UTC datetime string."""
+    if timestamp is None:
+        return None
+    return dt.datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
+
+
 __all__ = [
     "UTC",
     "SHANGHAI_TZ",
@@ -141,4 +148,5 @@ __all__ = [
     "coerce_any_to_utc_datetime",
     "normalize_iterable_to_utc",
     "format_utc_datetime",
+    "utc_isoformat_from_timestamp",
 ]

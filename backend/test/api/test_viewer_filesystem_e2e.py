@@ -14,11 +14,13 @@ _root = Path(__file__).resolve().parents[2]
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-
-def _make_sandbox_backend(thread_id: str):
-    from yuxi.agents.backends.sandbox.backend import ProvisionerSandboxBackend
-
-    return ProvisionerSandboxBackend(thread_id=thread_id)
+from yuxi.agents.backends.sandbox import (  # noqa: E402
+    ensure_thread_dirs,
+    sandbox_outputs_dir,
+    sandbox_uploads_dir,
+    sandbox_user_data_dir,
+    sandbox_workspace_dir,
+)
 
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5050").rstrip("/")
@@ -33,6 +35,7 @@ class ViewerFilesystemE2ETester:
         self.headers: dict[str, str] | None = None
         self.agent_id: str | None = None
         self.thread_id: str | None = None
+        self.other_thread_id: str | None = None
 
     async def close(self):
         await self.client.aclose()
@@ -69,33 +72,48 @@ class ViewerFilesystemE2ETester:
         payload = resp.json()
         self.thread_id = str(payload.get("thread_id") or payload.get("id"))
 
-    async def tree(self, path: str) -> list[dict]:
+    async def create_other_thread(self) -> None:
+        assert self.headers and self.agent_id
+        resp = await self.client.post(
+            "/api/chat/thread",
+            json={"agent_id": self.agent_id, "title": f"viewer-fs-e2e-{uuid.uuid4().hex[:8]}", "metadata": {}},
+            headers=self.headers,
+        )
+        if resp.status_code != 200:
+            raise RuntimeError(f"create second thread failed: {resp.status_code} {resp.text}")
+        payload = resp.json()
+        self.other_thread_id = str(payload.get("thread_id") or payload.get("id"))
+
+    async def tree(self, path: str, *, thread_id: str | None = None) -> list[dict]:
         assert self.headers and self.thread_id and self.agent_id
+        target_thread_id = thread_id or self.thread_id
         resp = await self.client.get(
             "/api/viewer/filesystem/tree",
-            params={"thread_id": self.thread_id, "path": path, "agent_id": self.agent_id},
+            params={"thread_id": target_thread_id, "path": path, "agent_id": self.agent_id},
             headers=self.headers,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"viewer tree failed on {path}: {resp.status_code} {resp.text}")
         return list(resp.json().get("entries") or [])
 
-    async def file(self, path: str) -> dict:
+    async def file(self, path: str, *, thread_id: str | None = None) -> dict:
         assert self.headers and self.thread_id and self.agent_id
+        target_thread_id = thread_id or self.thread_id
         resp = await self.client.get(
             "/api/viewer/filesystem/file",
-            params={"thread_id": self.thread_id, "path": path, "agent_id": self.agent_id},
+            params={"thread_id": target_thread_id, "path": path, "agent_id": self.agent_id},
             headers=self.headers,
         )
         if resp.status_code != 200:
             raise RuntimeError(f"viewer file failed on {path}: {resp.status_code} {resp.text}")
         return dict(resp.json())
 
-    async def download(self, path: str) -> tuple[str, bytes]:
+    async def download(self, path: str, *, thread_id: str | None = None) -> tuple[str, bytes]:
         assert self.headers and self.thread_id and self.agent_id
+        target_thread_id = thread_id or self.thread_id
         resp = await self.client.get(
             "/api/viewer/filesystem/download",
-            params={"thread_id": self.thread_id, "path": path, "agent_id": self.agent_id},
+            params={"thread_id": target_thread_id, "path": path, "agent_id": self.agent_id},
             headers=self.headers,
         )
         if resp.status_code != 200:
@@ -106,37 +124,65 @@ class ViewerFilesystemE2ETester:
         await self.login()
         await self.pick_agent()
         await self.create_thread()
+        await self.create_other_thread()
 
-        assert self.thread_id
-        sandbox = _make_sandbox_backend(self.thread_id)
-        commands = [
-            "mkdir -p /home/gem/user-data/workspace /home/gem/user-data/outputs",
-            "printf 'print(42)\\n' > /home/gem/user-data/workspace/demo.py",
-            "printf 'root-file\\n' > /home/gem/user-data/root_file.txt",
-            "printf 'viewer-output\\n' > /home/gem/user-data/outputs/result.txt",
-        ]
-        for command in commands:
-            result = await asyncio.to_thread(sandbox.execute, command)
-            if result.exit_code != 0:
-                raise RuntimeError(f"command failed: {command}\n{result.output}")
+        assert self.thread_id and self.other_thread_id
+        ensure_thread_dirs(self.thread_id)
+        ensure_thread_dirs(self.other_thread_id)
+        (sandbox_user_data_dir(self.thread_id) / "root-note.txt").write_text("root-visible\n", encoding="utf-8")
+        (sandbox_workspace_dir(self.thread_id) / "demo.py").write_text("print(42)\n", encoding="utf-8")
+        uploads_dir = sandbox_uploads_dir(self.thread_id) / "attachments"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        (uploads_dir / "thread1.txt").write_text("thread-one-upload\n", encoding="utf-8")
+        (sandbox_outputs_dir(self.thread_id) / "result.txt").write_text("viewer-output\n", encoding="utf-8")
 
         root_paths = {str(e.get("path", "")) for e in await self.tree("/")}
         if "/home/gem/user-data/" not in root_paths:
             raise RuntimeError(f"viewer root missing user-data: {sorted(root_paths)}")
 
         user_data_paths = {str(e.get("path", "")) for e in await self.tree("/home/gem/user-data")}
-        if "/home/gem/user-data/root_file.txt" not in user_data_paths:
-            raise RuntimeError(f"viewer user-data missing root_file.txt: {sorted(user_data_paths)}")
+        expected_root_paths = {
+            "/home/gem/user-data/workspace/",
+            "/home/gem/user-data/uploads/",
+            "/home/gem/user-data/outputs/",
+            "/home/gem/user-data/root-note.txt",
+        }
+        if not expected_root_paths.issubset(user_data_paths):
+            raise RuntimeError(f"viewer user-data root mismatch: {sorted(user_data_paths)}")
 
         workspace_paths = {str(e.get("path", "")) for e in await self.tree("/home/gem/user-data/workspace")}
         if "/home/gem/user-data/workspace/demo.py" not in workspace_paths:
             raise RuntimeError(f"viewer workspace missing demo.py: {sorted(workspace_paths)}")
+
+        other_workspace_paths = {
+            str(e.get("path", ""))
+            for e in await self.tree(
+                "/home/gem/user-data/workspace",
+                thread_id=self.other_thread_id,
+            )
+        }
+        if "/home/gem/user-data/workspace/demo.py" not in other_workspace_paths:
+            raise RuntimeError(f"shared workspace missing in second thread: {sorted(other_workspace_paths)}")
+
+        other_upload_paths = {
+            str(e.get("path", ""))
+            for e in await self.tree(
+                "/home/gem/user-data/uploads",
+                thread_id=self.other_thread_id,
+            )
+        }
+        if "/home/gem/user-data/uploads/attachments/" in other_upload_paths:
+            raise RuntimeError(f"thread-local uploads leaked to second thread: {sorted(other_upload_paths)}")
 
         file_payload = await self.file("/home/gem/user-data/workspace/demo.py")
         if file_payload.get("content") != "print(42)\n":
             raise RuntimeError(f"unexpected viewer file content: {file_payload!r}")
         if file_payload.get("preview_type") != "text" or file_payload.get("supported") is not True:
             raise RuntimeError(f"unexpected viewer file preview metadata: {file_payload!r}")
+
+        other_file_payload = await self.file("/home/gem/user-data/workspace/demo.py", thread_id=self.other_thread_id)
+        if other_file_payload.get("content") != "print(42)\n":
+            raise RuntimeError(f"unexpected shared workspace content: {other_file_payload!r}")
 
         content_disposition, payload = await self.download("/home/gem/user-data/outputs/result.txt")
         if "result.txt" not in content_disposition:

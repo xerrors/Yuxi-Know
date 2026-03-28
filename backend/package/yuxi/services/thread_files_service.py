@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -9,22 +8,21 @@ from yuxi import config as conf
 from yuxi.agents.backends.sandbox import (
     ensure_thread_dirs,
     resolve_virtual_path,
+    sandbox_outputs_dir,
+    sandbox_uploads_dir,
     sandbox_user_data_dir,
+    sandbox_workspace_dir,
     virtual_path_for_thread_file,
 )
 from yuxi.repositories.conversation_repository import ConversationRepository
 from yuxi.services.conversation_service import require_user_conversation
+from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
 
 
 def _get_virtual_root() -> str:
+    """Return the virtual root exposed by the thread-files API."""
     prefix = str(getattr(conf, "sandbox_virtual_path_prefix", "/home/gem/user-data") or "/home/gem/user-data")
     return "/" + prefix.strip("/")
-
-
-def _to_iso8601(timestamp: float | None) -> str | None:
-    if timestamp is None:
-        return None
-    return datetime.fromtimestamp(timestamp, tz=UTC).isoformat()
 
 
 async def list_thread_files_view(
@@ -51,7 +49,12 @@ async def list_thread_files_view(
         raise HTTPException(status_code=400, detail="path must be a directory")
 
     if recursive:
+        if virtual_path.rstrip("/") == _get_virtual_root():
+            return _list_user_data_root_entries(thread_id, virtual_path, recursive=True)
         return _list_files_recursive(thread_id, actual_path, virtual_path)
+
+    if virtual_path.rstrip("/") == _get_virtual_root():
+        return _list_user_data_root_entries(thread_id, virtual_path)
 
     entries: list[dict[str, Any]] = []
     for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
@@ -63,7 +66,7 @@ async def list_thread_files_view(
                 "name": child.name,
                 "is_dir": child.is_dir(),
                 "size": stat.st_size if child.is_file() else 0,
-                "modified_at": _to_iso8601(stat.st_mtime),
+                "modified_at": utc_isoformat_from_timestamp(stat.st_mtime),
                 "artifact_url": None
                 if child.is_dir()
                 else f"/api/chat/thread/{thread_id}/artifacts/{child_virtual_path.lstrip('/')}",
@@ -73,7 +76,56 @@ async def list_thread_files_view(
     return {"path": virtual_path, "files": entries}
 
 
+def _list_user_data_root_entries(thread_id: str, virtual_path: str, recursive: bool = False) -> dict:
+    """List the thread root and inject the shared workspace entry if needed."""
+    entries: list[dict[str, Any]] = []
+    thread_root = sandbox_user_data_dir(thread_id)
+    for child in sorted(thread_root.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
+        stat = child.stat()
+        child_virtual_path = virtual_path_for_thread_file(thread_id, child)
+        if child.is_dir() and not child_virtual_path.endswith("/"):
+            child_virtual_path = f"{child_virtual_path}/"
+        entries.append(
+            {
+                "path": child_virtual_path,
+                "name": child.name,
+                "is_dir": child.is_dir(),
+                "size": stat.st_size if child.is_file() else 0,
+                "modified_at": utc_isoformat_from_timestamp(stat.st_mtime),
+                "artifact_url": None
+                if child.is_dir()
+                else f"/api/chat/thread/{thread_id}/artifacts/{child_virtual_path.lstrip('/')}",
+            }
+        )
+        if recursive and child.is_dir():
+            nested = _list_files_recursive(thread_id, child, child_virtual_path)
+            entries.extend(nested["files"])
+
+    workspace_dir = sandbox_workspace_dir(thread_id)
+    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir)
+    if workspace_virtual_path.rstrip("/") not in {str(entry["path"]).rstrip("/") for entry in entries}:
+        # workspace lives outside the per-thread root, so expose it as a top-level entry.
+        stat = workspace_dir.stat()
+        if not workspace_virtual_path.endswith("/"):
+            workspace_virtual_path = f"{workspace_virtual_path}/"
+        entries.append(
+            {
+                "path": workspace_virtual_path,
+                "name": workspace_dir.name,
+                "is_dir": True,
+                "size": 0,
+                "modified_at": utc_isoformat_from_timestamp(stat.st_mtime),
+                "artifact_url": None,
+            }
+        )
+        if recursive:
+            nested = _list_files_recursive(thread_id, workspace_dir, workspace_virtual_path)
+            entries.extend(nested["files"])
+    return {"path": virtual_path, "files": entries}
+
+
 def _list_files_recursive(thread_id: str, actual_path: Path, virtual_path: str) -> dict:
+    """Recursively scan a directory while preserving viewer virtual paths."""
     entries: list[dict[str, Any]] = []
 
     def _scan_dir(base_actual_path: Path, base_virtual_path: str):
@@ -87,7 +139,7 @@ def _list_files_recursive(thread_id: str, actual_path: Path, virtual_path: str) 
                         "name": child.name,
                         "is_dir": child.is_dir(),
                         "size": stat.st_size if child.is_file() else 0,
-                        "modified_at": _to_iso8601(stat.st_mtime),
+                        "modified_at": utc_isoformat_from_timestamp(stat.st_mtime),
                         "artifact_url": None
                         if child.is_dir()
                         else f"/api/chat/thread/{thread_id}/artifacts/{child_virtual_path.lstrip('/')}",
@@ -163,11 +215,21 @@ async def resolve_thread_artifact_view(
     if not actual_path.is_file():
         raise HTTPException(status_code=400, detail="artifact path is not a file")
 
-    # Additional guard to ensure path remains under thread root even if helper changes.
-    thread_root = sandbox_user_data_dir(thread_id).resolve()
-    try:
-        actual_path.resolve().relative_to(thread_root)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="access denied") from exc
+    resolved_path = actual_path.resolve()
+    allowed_roots = (
+        sandbox_workspace_dir(thread_id).resolve(),
+        sandbox_uploads_dir(thread_id).resolve(),
+        sandbox_outputs_dir(thread_id).resolve(),
+    )
+    if not any(_is_path_within(resolved_path, root) for root in allowed_roots):
+        raise HTTPException(status_code=403, detail="access denied")
 
     return actual_path
+
+
+def _is_path_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
