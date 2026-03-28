@@ -18,13 +18,68 @@
         </div>
 
         <div class="list-container">
-          <div v-if="filteredSkills.length === 0" class="empty-text">
+          <div v-if="filteredBuiltinSkills.length === 0 && filteredSkills.length === 0" class="empty-text">
             <a-empty :image="false" description="无匹配技能" />
           </div>
+          <div v-if="filteredBuiltinSkills.length" class="list-section-title">内置 Skills</div>
+          <template v-for="(skill, index) in filteredBuiltinSkills" :key="`builtin-${skill.slug}`">
+            <div
+              class="list-item"
+              :class="{ active: currentSkill?.slug === skill.slug && currentSkill?.is_builtin_spec }"
+              @click="selectSkill(skill)"
+            >
+              <div class="item-header">
+                <BookMarked :size="16" class="item-icon" />
+                <span class="item-name">{{ skill.name }}</span>
+                <span class="builtin-badge">内置</span>
+              </div>
+              <div class="item-details item-details-inline">
+                <span class="item-slug item-meta mono-text">{{ skill.slug }}</span>
+                <span v-if="skill.status === 'update_available'" class="status-text warning">可更新</span>
+                <span v-else-if="skill.status === 'installed'" class="status-text">已安装</span>
+                <span v-else class="status-text">未安装</span>
+                <div class="item-badges">
+                  <span
+                    v-if="skill.installed_record?.tool_dependencies?.length"
+                    class="dot-badge blue"
+                    title="工具依赖"
+                  ></span>
+                  <span
+                    v-if="skill.installed_record?.mcp_dependencies?.length"
+                    class="dot-badge green"
+                    title="MCP依赖"
+                  ></span>
+                </div>
+                <div class="item-inline-actions">
+                  <a-button
+                    v-if="skill.status === 'not_installed'"
+                    size="small"
+                    type="primary"
+                    @click.stop="handleInstallBuiltin(skill)"
+                  >
+                    安装
+                  </a-button>
+                  <a-button
+                    v-else-if="skill.status === 'update_available'"
+                    size="small"
+                    @click.stop="handleUpdateBuiltin(skill)"
+                  >
+                    更新
+                  </a-button>
+                </div>
+              </div>
+            </div>
+            <div
+              v-if="index < filteredBuiltinSkills.length - 1 || filteredSkills.length > 0"
+              class="list-separator"
+            ></div>
+          </template>
+
+          <div v-if="filteredSkills.length" class="list-section-title">已安装 Skills</div>
           <template v-for="(skill, index) in filteredSkills" :key="skill.slug">
             <div
               class="list-item"
-              :class="{ active: currentSkill?.slug === skill.slug }"
+              :class="{ active: currentSkill?.slug === skill.slug && !currentSkill?.is_builtin_spec }"
               @click="selectSkill(skill)"
             >
               <div class="item-header">
@@ -69,11 +124,34 @@
             </div>
             <div class="panel-actions">
               <a-space :size="8">
-                <a-button size="small" @click="handleExport" class="lucide-icon-btn">
+                <a-button
+                  v-if="currentSkill.is_builtin_spec && currentSkill.status === 'not_installed'"
+                  type="primary"
+                  size="small"
+                  @click="handleInstallBuiltin(currentSkill)"
+                  class="lucide-icon-btn"
+                >
+                  <span>安装</span>
+                </a-button>
+                <a-button
+                  v-if="currentSkill.is_builtin_spec && currentSkill.status === 'update_available'"
+                  size="small"
+                  @click="handleUpdateBuiltin(currentSkill)"
+                  class="lucide-icon-btn"
+                >
+                  <span>更新</span>
+                </a-button>
+                <a-button
+                  v-if="isInstalledSkill"
+                  size="small"
+                  @click="handleExport"
+                  class="lucide-icon-btn"
+                >
                   <Download :size="14" />
                   <span>导出</span>
                 </a-button>
                 <a-button
+                  v-if="isInstalledSkill && !isBuiltinInstalledSkill"
                   size="small"
                   danger
                   ghost
@@ -87,7 +165,13 @@
             </div>
           </div>
 
-          <a-tabs v-model:activeKey="activeTab" class="minimal-tabs">
+          <div v-if="!isInstalledSkill" class="builtin-uninstalled-state">
+            <h3>{{ currentSkill.description }}</h3>
+            <p>版本 {{ currentSkill.version }}</p>
+            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)">安装内置 Skill</a-button>
+          </div>
+
+          <a-tabs v-else v-model:activeKey="activeTab" class="minimal-tabs">
             <a-tab-pane key="editor">
               <template #tab>
                 <span class="tab-title"><FileText :size="14" />代码管理</span>
@@ -97,10 +181,10 @@
                   <div class="tree-header">
                     <span class="label">项目结构</span>
                     <div class="tree-actions">
-                      <a-tooltip title="新建文件"
+                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建文件"
                         ><button @click="openCreateModal(false)"><FilePlus :size="14" /></button
                       ></a-tooltip>
-                      <a-tooltip title="新建目录"
+                      <a-tooltip v-if="!isBuiltinInstalledSkill" title="新建目录"
                         ><button @click="openCreateModal(true)"><FolderPlus :size="14" /></button
                       ></a-tooltip>
                       <a-tooltip title="刷新"
@@ -138,6 +222,7 @@
                         <span>{{ viewMode === 'edit' ? '预览' : '编辑' }}</span>
                       </a-button>
                       <a-button
+                        v-if="!isBuiltinInstalledSkill"
                         type="primary"
                         size="small"
                         @click="saveCurrentFile"
@@ -168,6 +253,7 @@
                         v-else
                         v-model:value="fileContent"
                         class="pure-editor"
+                        :readonly="isBuiltinInstalledSkill"
                         spellcheck="false"
                       />
                     </template>
@@ -302,6 +388,7 @@ const searchQuery = ref('')
 const viewMode = ref('edit') // 'edit' | 'preview'
 
 const skills = ref([])
+const builtinSkills = ref([])
 const currentSkill = ref(null)
 const treeData = ref([])
 const selectedTreeKeys = ref([])
@@ -321,11 +408,28 @@ const dependencyForm = reactive({
 })
 
 const filteredSkills = computed(() => {
-  if (!searchQuery.value) return skills.value
+  const installedSkills = (skills.value || []).filter((skill) => !skill.is_builtin)
+  if (!searchQuery.value) return installedSkills
   const q = searchQuery.value.toLowerCase()
-  return skills.value.filter(
+  return installedSkills.filter(
     (s) => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
   )
+})
+
+const filteredBuiltinSkills = computed(() => {
+  if (!searchQuery.value) return builtinSkills.value
+  const q = searchQuery.value.toLowerCase()
+  return builtinSkills.value.filter(
+    (s) => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
+  )
+})
+
+const isInstalledSkill = computed(() => {
+  return !!(currentSkill.value && (currentSkill.value.installed_record || currentSkill.value.dir_path))
+})
+
+const isBuiltinInstalledSkill = computed(() => {
+  return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
 })
 
 const canSave = computed(() => {
@@ -385,17 +489,28 @@ const expandAllKeys = (nodes) =>
 const fetchSkills = async () => {
   loading.value = true
   try {
-    const result = await skillApi.listSkills()
-    skills.value = result?.data || []
+    const [skillResult, builtinResult] = await Promise.all([
+      skillApi.listSkills(),
+      skillApi.listBuiltinSkills()
+    ])
+    skills.value = skillResult?.data || []
+    builtinSkills.value = (builtinResult?.data || []).map((item) => ({
+      ...item,
+      ...(item.installed_record || {}),
+      is_builtin_spec: true
+    }))
 
     // 默认选中第一个技能并加载 SKILL.md
-    if (!currentSkill.value && skills.value.length > 0) {
-      await selectSkill(skills.value[0])
+    const preferredList = builtinSkills.value.length ? builtinSkills.value : filteredSkills.value
+    if (!currentSkill.value && preferredList.length > 0) {
+      await selectSkill(preferredList[0])
     } else if (currentSkill.value) {
-      const latest = skills.value.find((i) => i.slug === currentSkill.value.slug)
+      const latest =
+        builtinSkills.value.find((i) => i.slug === currentSkill.value.slug) ||
+        skills.value.find((i) => i.slug === currentSkill.value.slug)
       if (latest) {
         currentSkill.value = latest
-        syncDependencyFormFromSkill(latest)
+        syncDependencyFormFromSkill(latest.installed_record || latest)
       } else {
         currentSkill.value = null
         treeData.value = []
@@ -429,7 +544,7 @@ const syncDependencyFormFromSkill = (skillRecord) => {
 }
 
 const reloadTree = async () => {
-  if (!currentSkill.value) return
+  if (!currentSkill.value || !isInstalledSkill.value) return
   loading.value = true
   try {
     const result = await skillApi.getSkillTree(currentSkill.value.slug)
@@ -459,8 +574,13 @@ const loadSkillFile = async (slug, path = 'SKILL.md') => {
 
 const selectSkill = async (record) => {
   currentSkill.value = record
-  syncDependencyFormFromSkill(record)
   resetFileState()
+  syncDependencyFormFromSkill(record.installed_record || record)
+
+  if (!record.installed_record && !record.dir_path) {
+    treeData.value = []
+    return
+  }
 
   // 并行执行：加载树结构和获取 SKILL.md
   await Promise.all([reloadTree(), loadSkillFile(record.slug)])
@@ -493,7 +613,7 @@ const handleTreeSelect = async (keys, info) => {
 }
 
 const saveCurrentFile = async () => {
-  if (!currentSkill.value || !selectedPath.value || selectedIsDir.value) return
+  if (!currentSkill.value || !selectedPath.value || selectedIsDir.value || isBuiltinInstalledSkill.value) return
   savingFile.value = true
   try {
     await skillApi.updateSkillFile(currentSkill.value.slug, {
@@ -510,6 +630,62 @@ const saveCurrentFile = async () => {
   }
 }
 
+const handleInstallBuiltin = async (record) => {
+  if (!record?.slug) return
+  loading.value = true
+  try {
+    await skillApi.installBuiltinSkill(record.slug)
+    await fetchSkills()
+    const latest = builtinSkills.value.find((item) => item.slug === record.slug)
+    if (latest) await selectSkill(latest)
+    message.success('安装成功')
+  } catch (error) {
+    message.error(error?.response?.data?.detail || error.message || '安装失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleUpdateBuiltin = async (record) => {
+  if (!record?.slug) return
+  loading.value = true
+  try {
+    await skillApi.updateBuiltinSkill(record.slug, false)
+    await fetchSkills()
+    const latest = builtinSkills.value.find((item) => item.slug === record.slug)
+    if (latest) await selectSkill(latest)
+    message.success('更新成功')
+  } catch (error) {
+    if (error.response?.data?.detail?.needs_confirm) {
+      loading.value = false
+      Modal.confirm({
+        title: '确认覆盖更新？',
+        content: '检测到你修改过此 skill，更新将覆盖你的修改，是否继续？',
+        okText: '继续更新',
+        cancelText: '取消',
+        onOk: async () => {
+          loading.value = true
+          try {
+            await skillApi.updateBuiltinSkill(record.slug, true)
+            await fetchSkills()
+            const latest = builtinSkills.value.find((item) => item.slug === record.slug)
+            if (latest) await selectSkill(latest)
+            message.success('更新成功')
+          } catch (forceError) {
+            message.error(forceError?.response?.data?.detail || forceError.message || '更新失败')
+          } finally {
+            loading.value = false
+          }
+        }
+      })
+      return
+    }
+    message.error(error?.response?.data?.detail || error.message || '更新失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const openCreateModal = (isDir) => {
   if (!currentSkill.value) return
   createForm.path = ''
@@ -519,7 +695,7 @@ const openCreateModal = (isDir) => {
 }
 
 const handleCreateNode = async () => {
-  if (!currentSkill.value || !createForm.path.trim()) return
+  if (!currentSkill.value || !createForm.path.trim() || isBuiltinInstalledSkill.value) return
   creatingNode.value = true
   try {
     await skillApi.createSkillFile(currentSkill.value.slug, {
@@ -538,7 +714,7 @@ const handleCreateNode = async () => {
 }
 
 const confirmDeleteSkill = () => {
-  if (!currentSkill.value) return
+  if (!currentSkill.value || !isInstalledSkill.value) return
   Modal.confirm({
     title: `彻底删除技能「${currentSkill.value.slug}」？`,
     content: '删除后无法恢复，所有文件和配置将永久消失。',
@@ -561,7 +737,7 @@ const confirmDeleteSkill = () => {
 }
 
 const handleExport = async () => {
-  if (!currentSkill.value) return
+  if (!currentSkill.value || !isInstalledSkill.value) return
   try {
     const response = await skillApi.exportSkill(currentSkill.value.slug)
     const blob = await response.blob()
@@ -597,7 +773,7 @@ const handleImportUpload = async ({ file, onSuccess, onError }) => {
 }
 
 const saveDependencies = async () => {
-  if (!currentSkill.value) return
+  if (!currentSkill.value || !isInstalledSkill.value) return
   savingDependencies.value = true
   try {
     const result = await skillApi.updateSkillDependencies(currentSkill.value.slug, {
@@ -631,8 +807,44 @@ defineExpose({
 <style scoped lang="less">
 @import '@/assets/css/extensions.less';
 
+.list-section-title {
+  padding: 10px 14px 6px;
+  color: var(--gray-500);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
 .list-item {
+  .item-header {
+    gap: 8px;
+  }
+
+  .builtin-badge {
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: var(--color-primary-50);
+    color: var(--color-primary-700);
+    font-size: 11px;
+    line-height: 18px;
+  }
+
   .item-details {
+    align-items: center;
+
+    .status-text {
+      color: var(--gray-500);
+      font-size: 12px;
+      &.warning {
+        color: #d97706;
+      }
+    }
+
+    .item-inline-actions {
+      margin-left: auto;
+    }
+
     .item-badges {
       display: flex;
       gap: 4px;
@@ -648,6 +860,18 @@ defineExpose({
         }
       }
     }
+  }
+}
+
+.builtin-uninstalled-state {
+  padding: 24px;
+  h3 {
+    margin: 0 0 8px;
+    font-size: 16px;
+  }
+  p {
+    margin: 0 0 16px;
+    color: var(--gray-500);
   }
 }
 

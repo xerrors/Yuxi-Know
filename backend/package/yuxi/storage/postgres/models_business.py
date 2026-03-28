@@ -186,6 +186,9 @@ class Skill(Base):
     mcp_dependencies = Column(JSON, nullable=False, default=list, comment="依赖的 MCP 服务名列表")
     skill_dependencies = Column(JSON, nullable=False, default=list, comment="依赖的其他 skill slug 列表")
     dir_path = Column(String(512), nullable=False, comment="技能目录路径（相对 save_dir）")
+    version = Column(String(64), nullable=True, comment="技能版本（内置 skill 使用语义化版本）")
+    is_builtin = Column(Boolean, nullable=False, default=False, comment="是否为内置 skill")
+    content_hash = Column(String(128), nullable=True, comment="技能目录内容哈希（内置 skill 安装时计算）")
     created_by = Column(String(64), nullable=True)
     updated_by = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=utc_now_naive)
@@ -201,6 +204,9 @@ class Skill(Base):
             "mcp_dependencies": self.mcp_dependencies or [],
             "skill_dependencies": self.skill_dependencies or [],
             "dir_path": self.dir_path,
+            "version": self.version,
+            "is_builtin": self.is_builtin,
+            "content_hash": self.content_hash,
             "created_by": self.created_by,
             "updated_by": self.updated_by,
             "created_at": format_utc_datetime(self.created_at),

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.utils.auth_middleware import get_admin_user, get_db, get_superadmin_user
 from yuxi.services.skill_service import (
+    BuiltinSkillUpdateConflictError,
     create_skill_node,
     delete_skill,
     delete_skill_node,
@@ -18,8 +19,11 @@ from yuxi.services.skill_service import (
     get_skill_dependency_options,
     get_skill_tree,
     import_skill_zip,
+    install_builtin_skill,
+    list_builtin_skill_specs,
     list_skills,
     read_skill_file,
+    update_builtin_skill,
     update_skill_dependencies,
     update_skill_file,
 )
@@ -44,6 +48,10 @@ class SkillDependenciesUpdateRequest(BaseModel):
     tool_dependencies: list[str] = Field(default_factory=list, description="依赖的内置工具列表")
     mcp_dependencies: list[str] = Field(default_factory=list, description="依赖的 MCP 服务列表")
     skill_dependencies: list[str] = Field(default_factory=list, description="依赖的其他 skill slug 列表")
+
+
+class BuiltinSkillUpdateRequest(BaseModel):
+    force: bool = Field(False, description="是否强制覆盖本地已安装内容")
 
 
 def _raise_from_value_error(e: ValueError) -> None:
@@ -84,6 +92,88 @@ async def get_skill_dependency_options_route(
     except Exception as e:
         logger.error(f"Failed to get skill dependency options: {e}")
         raise HTTPException(status_code=500, detail="获取 skill 依赖选项失败")
+
+
+@skills.get("/builtin")
+async def list_builtin_skills_route(
+    _current_user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        installed_map = {item.slug: item for item in await list_skills(db)}
+        data = []
+        for spec in list_builtin_skill_specs():
+            installed = installed_map.get(spec["slug"])
+            status = "not_installed"
+            if installed:
+                status = "installed"
+                if installed.version != spec["version"] or installed.content_hash != spec["content_hash"]:
+                    status = "update_available"
+            data.append(
+                {
+                    "slug": spec["slug"],
+                    "name": spec["name"],
+                    "description": spec["description"],
+                    "version": spec["version"],
+                    "status": status,
+                    "installed_record": installed.to_dict() if installed else None,
+                }
+            )
+        return {"success": True, "data": data}
+    except ValueError as e:
+        _raise_from_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list builtin skills: {e}")
+        raise HTTPException(status_code=500, detail="获取内置 skill 列表失败")
+
+
+@skills.post("/builtin/{slug}/install")
+async def install_builtin_skill_route(
+    slug: str,
+    current_user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await install_builtin_skill(db, slug, installed_by=current_user.username)
+        return {"success": True, "data": item.to_dict()}
+    except ValueError as e:
+        _raise_from_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to install builtin skill '{slug}': {e}")
+        raise HTTPException(status_code=500, detail="安装内置 skill 失败")
+
+
+@skills.post("/builtin/{slug}/update")
+async def update_builtin_skill_route(
+    slug: str,
+    payload: BuiltinSkillUpdateRequest,
+    current_user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await update_builtin_skill(
+            db,
+            slug,
+            force=payload.force,
+            updated_by=current_user.username,
+        )
+        return {"success": True, "data": item.to_dict()}
+    except BuiltinSkillUpdateConflictError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"needs_confirm": True, "message": str(e)},
+        )
+    except ValueError as e:
+        _raise_from_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update builtin skill '{slug}': {e}")
+        raise HTTPException(status_code=500, detail="更新内置 skill 失败")
 
 
 @skills.post("/import")

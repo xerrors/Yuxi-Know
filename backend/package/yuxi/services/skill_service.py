@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import re
 import shutil
 import tempfile
@@ -55,6 +56,12 @@ TEXT_FILE_EXTENSIONS = {
 BUILTIN_SKILL_OPERATOR = "builtin-system"
 _THREAD_SKILLS_LOCK = threading.Lock()
 _THREAD_SKILLS_LOCKS: dict[str, threading.Lock] = {}
+
+
+class BuiltinSkillUpdateConflictError(ValueError):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.needs_confirm = True
 
 
 def _get_thread_skills_lock(thread_id: str) -> threading.Lock:
@@ -163,6 +170,14 @@ def get_builtin_skill_specs() -> list[Any]:
     return BUILTIN_SKILLS
 
 
+def _get_builtin_skill_spec_or_raise(slug: str) -> Any:
+    normalized_slug = slug.strip() if isinstance(slug, str) else ""
+    for spec in get_builtin_skill_specs():
+        if getattr(spec, "slug", "").strip() == normalized_slug:
+            return spec
+    raise ValueError(f"内置 skill '{slug}' 不存在")
+
+
 def _build_builtin_skill_dir_path(slug: str) -> str:
     return (Path("skills") / slug).as_posix()
 
@@ -183,6 +198,20 @@ def _dirs_equal(dir1: Path, dir2: Path) -> bool:
     return list1 == list2
 
 
+def _compute_dir_hash(source_dir: Path) -> str:
+    hasher = hashlib.sha256()
+    file_paths = sorted(path for path in source_dir.rglob("*") if path.is_file())
+    for file_path in file_paths:
+        relative_path = file_path.relative_to(source_dir).as_posix()
+        hasher.update(relative_path.encode("utf-8"))
+        hasher.update(b"\0")
+        with file_path.open("rb") as f:
+            while chunk := f.read(1024 * 1024):
+                hasher.update(chunk)
+        hasher.update(b"\0")
+    return hasher.hexdigest()
+
+
 def _copy_skill_target(target_dir: Path, source_dir: Path) -> None:
     if target_dir.is_symlink():
         target_dir.unlink()
@@ -192,6 +221,28 @@ def _copy_skill_target(target_dir: Path, source_dir: Path) -> None:
         raise ValueError(f"技能目录已存在且非内置链接，无法托管: {target_dir}")
 
     shutil.copytree(source_dir, target_dir, symlinks=False, dirs_exist_ok=True)
+
+
+def _replace_skill_target(target_dir: Path, source_dir: Path) -> None:
+    temp_target = target_dir.with_name(f".{target_dir.name}.tmp-{uuid.uuid4().hex[:8]}")
+    trash_dir: Path | None = None
+    if temp_target.exists():
+        shutil.rmtree(temp_target, ignore_errors=True)
+
+    shutil.copytree(source_dir, temp_target, symlinks=False)
+    try:
+        if target_dir.exists():
+            trash_dir = target_dir.with_name(f".{target_dir.name}.bak-{uuid.uuid4().hex[:8]}")
+            target_dir.rename(trash_dir)
+        temp_target.rename(target_dir)
+    except Exception:
+        shutil.rmtree(temp_target, ignore_errors=True)
+        if trash_dir and trash_dir.exists() and not target_dir.exists():
+            trash_dir.rename(target_dir)
+        raise
+
+    if trash_dir and trash_dir.exists():
+        shutil.rmtree(trash_dir, ignore_errors=True)
 
 
 async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str] | list[dict]]:
@@ -540,6 +591,8 @@ async def create_skill_node(
     updated_by: str | None,
 ) -> None:
     item = await get_skill_or_raise(db, slug)
+    if item.is_builtin:
+        raise ValueError("内置 skill 不允许直接修改文件")
     skill_dir = _resolve_skill_dir(item)
     target, _ = _resolve_relative_path(skill_dir, relative_path)
     if target.exists():
@@ -569,6 +622,8 @@ async def update_skill_file(
     updated_by: str | None,
 ) -> None:
     item = await get_skill_or_raise(db, slug)
+    if item.is_builtin:
+        raise ValueError("内置 skill 不允许直接修改文件")
     skill_dir = _resolve_skill_dir(item)
     target, _ = _resolve_relative_path(skill_dir, relative_path)
     if not target.exists() or not target.is_file():
@@ -600,6 +655,8 @@ async def _update_skill_metadata_if_skills_md(
 
 async def delete_skill_node(db: AsyncSession, *, slug: str, relative_path: str) -> None:
     item = await get_skill_or_raise(db, slug)
+    if item.is_builtin:
+        raise ValueError("内置 skill 不允许直接修改文件")
     skill_dir = _resolve_skill_dir(item)
     target, rel = _resolve_relative_path(skill_dir, relative_path, allow_root=False)
     if not target.exists():
@@ -659,18 +716,46 @@ async def delete_skill(db: AsyncSession, *, slug: str) -> None:
 
 
 async def init_builtin_skills(db: AsyncSession, *, created_by: str = "system") -> None:
-    """初始化内置 skills（软链接目录 + 启动时同步元数据）。"""
-    repo = SkillRepository(db)
-    skills_root = get_skills_root_dir()
+    """校验内置 skills 配置，不执行安装。"""
     specs = get_builtin_skill_specs()
 
     for spec in specs:
         slug = str(getattr(spec, "slug", "")).strip()
         source_dir = Path(str(getattr(spec, "source_dir", ""))).resolve()
-        configured_description = str(getattr(spec, "description", "")).strip()
-        configured_tools = _normalize_string_list(getattr(spec, "tool_dependencies", None))
-        configured_mcps = _normalize_string_list(getattr(spec, "mcp_dependencies", None))
-        configured_skills = _normalize_string_list(getattr(spec, "skill_dependencies", None))
+
+        if not is_valid_skill_slug(slug):
+            raise ValueError(f"内置 skill slug 非法: {slug}")
+        if not source_dir.exists() or not source_dir.is_dir():
+            logger.warning(f"跳过不存在的内置 skill 目录: {source_dir}")
+            continue
+
+        skill_md = source_dir / "SKILL.md"
+        if not skill_md.exists():
+            legacy_skill_md = source_dir / "SKILLS.md"
+            if not legacy_skill_md.exists():
+                raise ValueError(f"内置 skill 缺少 SKILL.md: {source_dir}")
+            skill_md = legacy_skill_md
+
+        content = skill_md.read_text(encoding="utf-8")
+        parsed_name, _, meta = _parse_skill_markdown(content)
+        if parsed_name != slug:
+            raise ValueError(f"内置 skill frontmatter.name 必须等于 slug: {slug}")
+        _normalize_string_list(meta.get("tool_dependencies"))
+        _normalize_string_list(meta.get("mcp_dependencies"))
+        _normalize_string_list(meta.get("skill_dependencies"))
+        _compute_dir_hash(source_dir)
+
+
+def list_builtin_skill_specs() -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for raw_spec in get_builtin_skill_specs():
+        slug = str(getattr(raw_spec, "slug", "")).strip()
+        source_dir = Path(str(getattr(raw_spec, "source_dir", ""))).resolve()
+        configured_description = str(getattr(raw_spec, "description", "")).strip()
+        version = str(getattr(raw_spec, "version", "1.0.0")).strip() or "1.0.0"
+        configured_tools = _normalize_string_list(getattr(raw_spec, "tool_dependencies", None))
+        configured_mcps = _normalize_string_list(getattr(raw_spec, "mcp_dependencies", None))
+        configured_skills = _normalize_string_list(getattr(raw_spec, "skill_dependencies", None))
 
         if not is_valid_skill_slug(slug):
             raise ValueError(f"内置 skill slug 非法: {slug}")
@@ -690,46 +775,102 @@ async def init_builtin_skills(db: AsyncSession, *, created_by: str = "system") -
         if parsed_name != slug:
             raise ValueError(f"内置 skill frontmatter.name 必须等于 slug: {slug}")
 
-        description = configured_description or parsed_desc
-        tool_dependencies = configured_tools or _normalize_string_list(meta.get("tool_dependencies"))
-        mcp_dependencies = configured_mcps or _normalize_string_list(meta.get("mcp_dependencies"))
-        skill_dependencies = configured_skills or _normalize_string_list(meta.get("skill_dependencies"))
+        specs.append(
+            {
+                "slug": slug,
+                "name": slug,
+                "description": configured_description or parsed_desc,
+                "version": version,
+                "tool_dependencies": configured_tools or _normalize_string_list(meta.get("tool_dependencies")),
+                "mcp_dependencies": configured_mcps or _normalize_string_list(meta.get("mcp_dependencies")),
+                "skill_dependencies": configured_skills or _normalize_string_list(meta.get("skill_dependencies")),
+                "content_hash": _compute_dir_hash(source_dir),
+                "source_dir": source_dir,
+            }
+        )
 
-        target_dir = skills_root / slug
-        _copy_skill_target(target_dir, source_dir)
+    return specs
 
-        item = await repo.get_by_slug(slug)
-        if item and not _is_builtin_managed(item, slug):
-            logger.warning(f"发现同名非内置 skill，跳过自动同步: {slug}")
-            continue
 
-        expected_dir_path = _build_builtin_skill_dir_path(slug)
+async def install_builtin_skill(db: AsyncSession, slug: str, *, installed_by: str | None) -> Skill:
+    _get_builtin_skill_spec_or_raise(slug)
+    repo = SkillRepository(db)
+    spec = next(item for item in list_builtin_skill_specs() if item["slug"] == slug)
 
-        if not item:
-            await repo.create(
-                slug=slug,
-                name=slug,
-                description=description,
-                tool_dependencies=tool_dependencies,
-                mcp_dependencies=mcp_dependencies,
-                skill_dependencies=skill_dependencies,
-                dir_path=expected_dir_path,
-                created_by=BUILTIN_SKILL_OPERATOR,
-            )
-            continue
+    existing = await repo.get_by_slug(slug)
+    if existing:
+        raise ValueError(f"内置 skill '{slug}' 已安装")
 
-        if item.name != slug or item.description != description:
-            await repo.update_metadata(item, name=slug, description=description, updated_by=created_by)
+    target_dir = get_skills_root_dir() / slug
+    if target_dir.exists():
+        raise ValueError(f"技能目录已存在: {slug}")
 
-        if (
-            _normalize_string_list(item.tool_dependencies or []) != tool_dependencies
-            or _normalize_string_list(item.mcp_dependencies or []) != mcp_dependencies
-            or _normalize_string_list(item.skill_dependencies or []) != skill_dependencies
-        ):
-            await repo.update_dependencies(
-                item,
-                tool_dependencies=tool_dependencies,
-                mcp_dependencies=mcp_dependencies,
-                skill_dependencies=skill_dependencies,
-                updated_by=created_by,
-            )
+    shutil.copytree(Path(spec["source_dir"]), target_dir, symlinks=False)
+    try:
+        return await repo.create(
+            slug=slug,
+            name=spec["name"],
+            description=spec["description"],
+            tool_dependencies=spec["tool_dependencies"],
+            mcp_dependencies=spec["mcp_dependencies"],
+            skill_dependencies=spec["skill_dependencies"],
+            dir_path=_build_builtin_skill_dir_path(slug),
+            version=spec["version"],
+            is_builtin=True,
+            content_hash=spec["content_hash"],
+            created_by=installed_by or BUILTIN_SKILL_OPERATOR,
+        )
+    except Exception:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+
+
+async def update_builtin_skill(
+    db: AsyncSession,
+    slug: str,
+    *,
+    force: bool = False,
+    updated_by: str | None,
+) -> Skill:
+    _get_builtin_skill_spec_or_raise(slug)
+    repo = SkillRepository(db)
+    spec = next(item for item in list_builtin_skill_specs() if item["slug"] == slug)
+    item = await repo.get_by_slug(slug)
+    if not item:
+        raise ValueError(f"内置 skill '{slug}' 未安装")
+    if not item.is_builtin:
+        raise ValueError(f"技能 '{slug}' 不是内置 skill")
+
+    if item.content_hash != spec["content_hash"] and not force:
+        raise BuiltinSkillUpdateConflictError("检测到你修改过此 skill，更新将覆盖你的修改，是否继续？")
+
+    target_dir = _resolve_skill_dir(item)
+    _replace_skill_target(target_dir, Path(spec["source_dir"]))
+
+    if item.name != spec["name"] or item.description != spec["description"]:
+        await repo.update_metadata(
+            item,
+            name=spec["name"],
+            description=spec["description"],
+            updated_by=updated_by,
+        )
+
+    if (
+        _normalize_string_list(item.tool_dependencies or []) != spec["tool_dependencies"]
+        or _normalize_string_list(item.mcp_dependencies or []) != spec["mcp_dependencies"]
+        or _normalize_string_list(item.skill_dependencies or []) != spec["skill_dependencies"]
+    ):
+        await repo.update_dependencies(
+            item,
+            tool_dependencies=spec["tool_dependencies"],
+            mcp_dependencies=spec["mcp_dependencies"],
+            skill_dependencies=spec["skill_dependencies"],
+            updated_by=updated_by,
+        )
+
+    return await repo.update_builtin_install(
+        item,
+        version=spec["version"],
+        content_hash=spec["content_hash"],
+        updated_by=updated_by,
+    )

@@ -12,6 +12,7 @@ class BuiltinSkillSpec:
     slug: str
     source_dir: Path
     description: str = ""
+    version: str = "1.0.0"
     tool_dependencies: tuple[str, ...] = ()
     mcp_dependencies: tuple[str, ...] = ()
     skill_dependencies: tuple[str, ...] = ()
@@ -24,6 +25,7 @@ BUILTIN_SKILLS: list[BuiltinSkillSpec] = [
         slug="reporter",
         source_dir=_SKILLS_ROOT / "reporter",
         description="生成 SQL 查询报表并生成可视化图表。",
+        version="1.0.0",
         tool_dependencies=[t["name"] for t in get_tool_info(get_mysql_tools())],
         mcp_dependencies=("mcp-server-chart",),
     ),

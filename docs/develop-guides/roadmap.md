@@ -43,6 +43,7 @@
 - 新增 API Key 认证功能，支持外部系统通过 API Key 调用系统服务
 - 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
 - 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
+- 重构内置 Skills 安装机制：内置 skill 改为在管理页以“未安装”状态展示，支持按需安装、基于 `version + content_hash` 的更新提示与覆盖确认，并对已安装内置 skill 禁止在线文件编辑
 - 新增知识库 PDF、图片的预览功能
 
 <!-- 添加到这里 -->
@@ -122,6 +123,7 @@
 - 为工作台新增 viewer-oriented filesystem service 与 `/api/viewer/filesystem/*` 接口，解耦 agent backend 语义，支持真实目录浏览、原始文件读取与下载
 - 重写沙盒技术文档，明确 thread-local sandbox、viewer-oriented filesystem service、`/mnt` 命名空间、skills 可见性与当前实现边界，替换过时的 `/api/sandbox/*` 与 user-level 设计描述
 - 收紧沙盒遗留代码：修复未注册 `sandbox_router` 中残留的 user/thread 参数错位，改进宿主机挂载路径映射逻辑，并为 remote sandbox provisioner 增加基础 URL 校验与销毁失败日志
+- 修复 builtin skill 内容哈希计算对单文件使用 `read_bytes()` 的无上限内存读取问题，改为分块计算并补充回归测试
 
 ### 破坏性更新
 

@@ -22,6 +22,18 @@ export const getSkillDependencyOptions = async () => {
   return apiSuperAdminGet(`${BASE_URL}/dependency-options`)
 }
 
+export const listBuiltinSkills = async () => {
+  return apiSuperAdminGet(`${BASE_URL}/builtin`)
+}
+
+export const installBuiltinSkill = async (slug) => {
+  return apiSuperAdminPost(`${BASE_URL}/builtin/${encodeURIComponent(slug)}/install`)
+}
+
+export const updateBuiltinSkill = async (slug, force = false) => {
+  return apiSuperAdminPost(`${BASE_URL}/builtin/${encodeURIComponent(slug)}/update`, { force })
+}
+
 export const getSkillTree = async (slug) => {
   return apiSuperAdminGet(`${BASE_URL}/${encodeURIComponent(slug)}/tree`)
 }
@@ -62,6 +74,9 @@ export const skillApi = {
   listSkills,
   importSkillZip,
   getSkillDependencyOptions,
+  listBuiltinSkills,
+  installBuiltinSkill,
+  updateBuiltinSkill,
   getSkillTree,
   getSkillFile,
   createSkillFile,

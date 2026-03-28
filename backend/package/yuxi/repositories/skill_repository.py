@@ -32,6 +32,9 @@ class SkillRepository:
         mcp_dependencies: list[str] | None,
         skill_dependencies: list[str] | None,
         dir_path: str,
+        version: str | None = None,
+        is_builtin: bool = False,
+        content_hash: str | None = None,
         created_by: str | None,
     ) -> Skill:
         now = utc_now_naive()
@@ -43,12 +46,32 @@ class SkillRepository:
             mcp_dependencies=mcp_dependencies or [],
             skill_dependencies=skill_dependencies or [],
             dir_path=dir_path,
+            version=version,
+            is_builtin=is_builtin,
+            content_hash=content_hash,
             created_by=created_by,
             updated_by=created_by,
             created_at=now,
             updated_at=now,
         )
         self.db.add(item)
+        await self.db.commit()
+        await self.db.refresh(item)
+        return item
+
+    async def update_builtin_install(
+        self,
+        item: Skill,
+        *,
+        version: str,
+        content_hash: str,
+        updated_by: str | None,
+    ) -> Skill:
+        item.version = version
+        item.content_hash = content_hash
+        item.is_builtin = True
+        item.updated_by = updated_by
+        item.updated_at = utc_now_naive()
         await self.db.commit()
         await self.db.refresh(item)
         return item

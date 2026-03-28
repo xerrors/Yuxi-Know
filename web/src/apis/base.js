@@ -73,6 +73,13 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
       }
 
       // 特殊处理401和403错误
+      const error = new Error(errorMessage)
+      error.response = {
+        status: response.status,
+        statusText: response.statusText,
+        data: errorData
+      }
+
       if (response.status === 401) {
         // 如果是认证失败，可能需要重新登录
         const userStore = useUserStore()
@@ -97,14 +104,16 @@ export async function apiRequest(url, options = {}, requiresAuth = true, respons
           window.location.href = '/login'
         }, 1500)
 
-        throw new Error('未授权，请先登录')
+        throw error
       } else if (response.status === 403) {
-        throw new Error('没有权限执行此操作')
+        error.message = '没有权限执行此操作'
+        throw error
       } else if (response.status === 500) {
-        throw new Error('服务器内部错误，请使用 docker logs api-dev 查看详细日志')
+        error.message = '服务器内部错误，请使用 docker logs api-dev 查看详细日志'
+        throw error
       }
 
-      throw new Error(errorMessage)
+      throw error
     }
 
     // 根据responseType处理响应
