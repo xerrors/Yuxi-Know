@@ -18,7 +18,7 @@
           >
             <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
               <Upload :size="14" />
-              <span>导入 ZIP</span>
+              <span>上传 ZIP</span>
             </a-button>
           </a-upload>
           <a-button @click="handleSkillsRefresh" :disabled="skillsLoading" class="lucide-icon-btn">

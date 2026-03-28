@@ -18,76 +18,47 @@
         </div>
 
         <div class="list-container">
-          <div v-if="filteredBuiltinSkills.length === 0 && filteredSkills.length === 0" class="empty-text">
+          <div
+            v-if="filteredInstalledSkills.length === 0 && filteredUninstalledBuiltinSkills.length === 0"
+            class="empty-text"
+          >
             <a-empty :image="false" description="无匹配技能" />
           </div>
-          <div v-if="filteredBuiltinSkills.length" class="list-section-title">内置 Skills</div>
-          <template v-for="(skill, index) in filteredBuiltinSkills" :key="`builtin-${skill.slug}`">
+          <div v-if="filteredInstalledSkills.length" class="list-section-title">已安装 Skills</div>
+          <template v-for="(skill, index) in filteredInstalledSkills" :key="`installed-${skill.slug}`">
             <div
-              class="list-item"
-              :class="{ active: currentSkill?.slug === skill.slug && currentSkill?.is_builtin_spec }"
+              class="list-item skill-list-item"
+              :class="{ active: currentSkill?.slug === skill.slug }"
               @click="selectSkill(skill)"
             >
-              <div class="item-header">
-                <BookMarked :size="16" class="item-icon" />
-                <span class="item-name">{{ skill.name }}</span>
-                <span class="builtin-badge">内置</span>
-              </div>
-              <div class="item-details item-details-inline">
-                <span class="item-slug item-meta mono-text">{{ skill.slug }}</span>
-                <span v-if="skill.status === 'update_available'" class="status-text warning">可更新</span>
-                <span v-else-if="skill.status === 'installed'" class="status-text">已安装</span>
-                <span v-else class="status-text">未安装</span>
-                <div class="item-badges">
-                  <span
-                    v-if="skill.installed_record?.tool_dependencies?.length"
-                    class="dot-badge blue"
-                    title="工具依赖"
-                  ></span>
-                  <span
-                    v-if="skill.installed_record?.mcp_dependencies?.length"
-                    class="dot-badge green"
-                    title="MCP依赖"
-                  ></span>
+              <div class="item-main-row">
+                <div class="item-header">
+                  <BookMarked :size="16" class="item-icon" />
+                  <span class="item-name">{{ skill.name }}</span>
                 </div>
-                <div class="item-inline-actions">
+                <div class="item-status">
                   <a-button
-                    v-if="skill.status === 'not_installed'"
-                    size="small"
-                    type="primary"
-                    @click.stop="handleInstallBuiltin(skill)"
-                  >
-                    安装
-                  </a-button>
-                  <a-button
-                    v-else-if="skill.status === 'update_available'"
+                    v-if="skill.status === 'update_available'"
                     size="small"
                     @click.stop="handleUpdateBuiltin(skill)"
                   >
                     更新
                   </a-button>
+                  <span
+                    v-else-if="skill.statusLabel"
+                    class="status-chip"
+                    :class="{ warning: skill.statusTone === 'warning' }"
+                  >
+                    {{ skill.statusLabel }}
+                  </span>
                 </div>
               </div>
-            </div>
-            <div
-              v-if="index < filteredBuiltinSkills.length - 1 || filteredSkills.length > 0"
-              class="list-separator"
-            ></div>
-          </template>
-
-          <div v-if="filteredSkills.length" class="list-section-title">已安装 Skills</div>
-          <template v-for="(skill, index) in filteredSkills" :key="skill.slug">
-            <div
-              class="list-item"
-              :class="{ active: currentSkill?.slug === skill.slug && !currentSkill?.is_builtin_spec }"
-              @click="selectSkill(skill)"
-            >
-              <div class="item-header">
-                <BookMarked :size="16" class="item-icon" />
-                <span class="item-name">{{ skill.name }}</span>
-              </div>
-              <div class="item-details item-details-inline">
-                <span class="item-slug item-meta mono-text">{{ skill.slug }}</span>
+              <div class="item-details">
+                <div class="item-tags">
+                  <span class="source-tag" :class="{ builtin: skill.sourceType === 'builtin' }">
+                    {{ skill.sourceLabel }}
+                  </span>
+                </div>
                 <div class="item-badges">
                   <span
                     v-if="skill.tool_dependencies?.length"
@@ -102,7 +73,49 @@
                 </div>
               </div>
             </div>
-            <div v-if="index < filteredSkills.length - 1" class="list-separator"></div>
+            <div
+              v-if="index < filteredInstalledSkills.length - 1 || filteredUninstalledBuiltinSkills.length > 0"
+              class="list-separator"
+            ></div>
+          </template>
+
+          <div v-if="filteredUninstalledBuiltinSkills.length" class="list-section-title">未安装 Skills</div>
+          <template v-for="(skill, index) in filteredUninstalledBuiltinSkills" :key="`builtin-${skill.slug}`">
+            <div
+              class="list-item skill-list-item"
+              :class="{ active: currentSkill?.slug === skill.slug }"
+              @click="selectSkill(skill)"
+            >
+              <div class="item-main-row">
+                <div class="item-header">
+                  <BookMarked :size="16" class="item-icon" />
+                  <span class="item-name">{{ skill.name }}</span>
+                </div>
+                <div class="item-status">
+                  <a-button size="small" type="primary" @click.stop="handleInstallBuiltin(skill)">
+                    安装
+                  </a-button>
+                </div>
+              </div>
+              <div class="item-details item-details-inline">
+                <div class="item-tags">
+                  <span class="source-tag builtin">内置</span>
+                </div>
+                <div class="item-badges">
+                  <span
+                    v-if="skill.installed_record?.tool_dependencies?.length || skill.tool_dependencies?.length"
+                    class="dot-badge blue"
+                    title="工具依赖"
+                  ></span>
+                  <span
+                    v-if="skill.installed_record?.mcp_dependencies?.length || skill.mcp_dependencies?.length"
+                    class="dot-badge green"
+                    title="MCP依赖"
+                  ></span>
+                </div>
+              </div>
+            </div>
+            <div v-if="index < filteredUninstalledBuiltinSkills.length - 1" class="list-separator"></div>
           </template>
         </div>
       </div>
@@ -124,6 +137,13 @@
             </div>
             <div class="panel-actions">
               <a-space :size="8">
+                <span
+                  v-if="currentSkillStatusLabel"
+                  class="panel-status-chip"
+                  :class="{ warning: currentSkillStatusTone === 'warning' }"
+                >
+                  {{ currentSkillStatusLabel }}
+                </span>
                 <a-button
                   v-if="currentSkill.is_builtin_spec && currentSkill.status === 'not_installed'"
                   type="primary"
@@ -407,21 +427,45 @@ const dependencyForm = reactive({
   skill_dependencies: []
 })
 
-const filteredSkills = computed(() => {
-  const installedSkills = (skills.value || []).filter((skill) => !skill.is_builtin)
-  if (!searchQuery.value) return installedSkills
+const matchesSearch = (skill) => {
+  if (!searchQuery.value) return true
   const q = searchQuery.value.toLowerCase()
-  return installedSkills.filter(
-    (s) => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
+  return skill.name.toLowerCase().includes(q) || skill.slug.toLowerCase().includes(q)
+}
+
+const installedSkillCards = computed(() => {
+  const builtinInstalledMap = new Map(
+    (builtinSkills.value || [])
+      .filter((skill) => skill.status !== 'not_installed')
+      .map((skill) => [
+        skill.slug,
+        {
+          ...skill,
+          sourceType: 'builtin',
+          sourceLabel: '内置',
+          statusLabel: skill.status === 'update_available' ? '更新可用' : '已安装',
+          statusTone: skill.status === 'update_available' ? 'warning' : 'default'
+        }
+      ])
   )
+
+  const importedInstalled = (skills.value || [])
+    .filter((skill) => !builtinInstalledMap.has(skill.slug))
+    .map((skill) => ({
+      ...skill,
+      sourceType: 'imported',
+      sourceLabel: '导入',
+      statusLabel: '已上传',
+      statusTone: 'default'
+    }))
+
+  return [...builtinInstalledMap.values(), ...importedInstalled]
 })
 
-const filteredBuiltinSkills = computed(() => {
-  if (!searchQuery.value) return builtinSkills.value
-  const q = searchQuery.value.toLowerCase()
-  return builtinSkills.value.filter(
-    (s) => s.name.toLowerCase().includes(q) || s.slug.toLowerCase().includes(q)
-  )
+const filteredInstalledSkills = computed(() => installedSkillCards.value.filter(matchesSearch))
+
+const filteredUninstalledBuiltinSkills = computed(() => {
+  return (builtinSkills.value || []).filter((skill) => skill.status === 'not_installed' && matchesSearch(skill))
 })
 
 const isInstalledSkill = computed(() => {
@@ -430,6 +474,22 @@ const isInstalledSkill = computed(() => {
 
 const isBuiltinInstalledSkill = computed(() => {
   return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
+})
+
+const currentSkillStatusLabel = computed(() => {
+  const skill = currentSkill.value
+  if (!skill) return ''
+  if (skill.is_builtin_spec) {
+    if (skill.status === 'not_installed') return '未安装'
+    if (skill.status === 'update_available') return '更新可用'
+    return '已安装'
+  }
+  if (skill.is_builtin) return '已安装'
+  return '已上传'
+})
+
+const currentSkillStatusTone = computed(() => {
+  return currentSkill.value?.status === 'update_available' ? 'warning' : 'default'
 })
 
 const canSave = computed(() => {
@@ -501,7 +561,9 @@ const fetchSkills = async () => {
     }))
 
     // 默认选中第一个技能并加载 SKILL.md
-    const preferredList = builtinSkills.value.length ? builtinSkills.value : filteredSkills.value
+    const preferredList = filteredInstalledSkills.value.length
+      ? filteredInstalledSkills.value
+      : filteredUninstalledBuiltinSkills.value
     if (!currentSkill.value && preferredList.length > 0) {
       await selectSkill(preferredList[0])
     } else if (currentSkill.value) {
@@ -816,50 +878,121 @@ defineExpose({
   text-transform: uppercase;
 }
 
-.list-item {
-  .item-header {
-    gap: 8px;
+.skill-list-item {
+
+  .item-main-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
   }
 
-  .builtin-badge {
-    padding: 1px 6px;
+  .item-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin-bottom: 0;
+
+    .item-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .item-status {
+    flex-shrink: 0;
+  }
+
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 0 9px;
     border-radius: 999px;
-    background: var(--color-primary-50);
-    color: var(--color-primary-700);
+    background: var(--gray-100);
+    color: var(--gray-600);
     font-size: 11px;
-    line-height: 18px;
+    font-weight: 600;
+    line-height: 1;
+
+    &.warning {
+      background: var(--color-warning-50);
+      color: var(--color-warning-900);
+    }
   }
 
   .item-details {
+    display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 
-    .status-text {
-      color: var(--gray-500);
-      font-size: 12px;
-      &.warning {
-        color: #d97706;
-      }
+    .item-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
     }
 
-    .item-inline-actions {
-      margin-left: auto;
+    .source-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 20px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--color-info-50);
+      color: var(--color-info-700);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1;
+      flex-shrink: 0;
+
+      &.builtin {
+        background: var(--color-primary-50);
+        color: var(--color-primary-700);
+      }
     }
 
     .item-badges {
       display: flex;
       gap: 4px;
+      flex-shrink: 0;
       .dot-badge {
         width: 6px;
         height: 6px;
         border-radius: 50%;
         &.blue {
-          background-color: #3b82f6;
+          background-color: var(--color-info-500);
         }
         &.green {
-          background-color: #22c55e;
+          background-color: var(--color-success-500);
         }
       }
     }
+  }
+}
+
+.panel-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+
+  &.warning {
+    background: var(--color-warning-50);
+    color: var(--color-warning-900);
   }
 }
 
@@ -956,7 +1089,7 @@ defineExpose({
       font-size: 12px;
       color: var(--gray-500);
       .save-hint {
-        color: #f59e0b;
+        color: var(--color-warning-500);
         font-size: 10px;
         margin-left: 4px;
       }

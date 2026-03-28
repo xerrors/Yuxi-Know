@@ -678,6 +678,110 @@ async def test_update_builtin_skill_needs_confirm_when_hash_mismatch(
 
 
 @pytest.mark.asyncio
+async def test_update_builtin_skill_accepts_legacy_managed_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
+
+    source_dir = tmp_path / "builtin" / "reporter"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "SKILL.md").write_text(
+        "---\nname: reporter\ndescription: builtin\n---\n# SQL Reporter\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        svc,
+        "list_builtin_skill_specs",
+        lambda: [
+            {
+                "slug": "reporter",
+                "name": "reporter",
+                "description": "builtin",
+                "version": "1.0.1",
+                "tool_dependencies": ["mysql_query"],
+                "mcp_dependencies": ["charts"],
+                "skill_dependencies": [],
+                "content_hash": "hash-v2",
+                "source_dir": source_dir,
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        svc,
+        "get_builtin_skill_specs",
+        lambda: [SimpleNamespace(slug="reporter", source_dir=source_dir)],
+    )
+
+    installed = Skill(
+        slug="reporter",
+        name="reporter",
+        description="old",
+        dir_path="skills/reporter",
+        created_by="system",
+        updated_by="system",
+        version=None,
+        content_hash=None,
+    )
+
+    captured: dict[str, object] = {}
+
+    class FakeRepo:
+        def __init__(self, _db):
+            pass
+
+        async def get_by_slug(self, slug: str):
+            return installed
+
+        async def update_metadata(self, item: Skill, *, name: str, description: str, updated_by: str | None):
+            item.name = name
+            item.description = description
+            captured["metadata_updated_by"] = updated_by
+            return item
+
+        async def update_dependencies(
+            self,
+            item: Skill,
+            *,
+            tool_dependencies: list[str],
+            mcp_dependencies: list[str],
+            skill_dependencies: list[str],
+            updated_by: str | None,
+        ):
+            item.tool_dependencies = tool_dependencies
+            item.mcp_dependencies = mcp_dependencies
+            item.skill_dependencies = skill_dependencies
+            captured["deps_updated_by"] = updated_by
+            return item
+
+        async def update_builtin_install(
+            self,
+            item: Skill,
+            *,
+            version: str,
+            content_hash: str,
+            updated_by: str | None,
+        ):
+            item.version = version
+            item.content_hash = content_hash
+            item.is_builtin = True
+            item.updated_by = updated_by
+            captured["version"] = version
+            captured["content_hash"] = content_hash
+            captured["updated_by"] = updated_by
+            return item
+
+    monkeypatch.setattr(svc, "SkillRepository", FakeRepo)
+
+    item = await svc.update_builtin_skill(None, "reporter", force=True, updated_by="root")
+
+    assert item.is_builtin is True
+    assert item.version == "1.0.1"
+    assert item.content_hash == "hash-v2"
+    assert captured["updated_by"] == "root"
+
+
+@pytest.mark.asyncio
 async def test_update_builtin_skill_force_overwrites(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
 

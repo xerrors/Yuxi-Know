@@ -838,7 +838,7 @@ async def update_builtin_skill(
     item = await repo.get_by_slug(slug)
     if not item:
         raise ValueError(f"内置 skill '{slug}' 未安装")
-    if not item.is_builtin:
+    if not item.is_builtin and not _is_builtin_managed(item, slug):
         raise ValueError(f"技能 '{slug}' 不是内置 skill")
 
     if item.content_hash != spec["content_hash"] and not force:
