@@ -43,6 +43,7 @@
 - 新增 API Key 认证功能，支持外部系统通过 API Key 调用系统服务
 - 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
 - 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
+- 新增内置 Skills `deep-reporter`，用于指导生成科研报告、行业调研和其他深度分析类长报告
 - 重构内置 Skills 安装机制：内置 skill 改为在管理页以“未安装”状态展示，支持按需安装、基于 `version + content_hash` 的更新提示与覆盖确认，并对已安装内置 skill 禁止在线文件编辑
 - 新增知识库 PDF、图片的预览功能
 - 优化扩展页工具列表筛选区：将“全部分类”筛选收纳为搜索框右侧的紧凑下拉入口，并复用扩展页侧栏工具条样式，避免影响其他管理组件布局

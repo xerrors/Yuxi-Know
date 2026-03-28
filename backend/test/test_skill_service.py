@@ -508,6 +508,16 @@ def test_compute_dir_hash_does_not_use_read_bytes(tmp_path: Path, monkeypatch: p
     assert svc._compute_dir_hash(source_dir)
 
 
+def test_builtin_skill_specs_include_deep_reporter():
+    specs = svc.list_builtin_skill_specs()
+    deep_reporter = next(item for item in specs if item["slug"] == "deep-reporter")
+
+    assert deep_reporter["name"] == "deep-reporter"
+    assert "深度" in deep_reporter["description"]
+    assert deep_reporter["source_dir"].is_dir()
+    assert (deep_reporter["source_dir"] / "SKILL.md").is_file()
+
+
 @pytest.mark.asyncio
 async def test_install_builtin_skill_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
