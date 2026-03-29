@@ -177,6 +177,33 @@ class LocalContainerProvisionerBackend:
             raise ValueError("thread skills path resolved outside threads host root") from exc
         return thread_skills
 
+    def _shared_workspace_host_path(self) -> Path:
+        threads_root = Path(self._threads_host_path).resolve()
+        workspace = (threads_root / "shared" / "workspace").resolve()
+        try:
+            workspace.relative_to(threads_root)
+        except ValueError as exc:
+            raise ValueError("shared workspace path resolved outside threads host root") from exc
+        return workspace
+
+    def _thread_uploads_host_path(self, thread_id: str) -> Path:
+        threads_root = Path(self._threads_host_path).resolve()
+        uploads = (threads_root / thread_id / "user-data" / "uploads").resolve()
+        try:
+            uploads.relative_to(threads_root)
+        except ValueError as exc:
+            raise ValueError("thread uploads path resolved outside threads host root") from exc
+        return uploads
+
+    def _thread_outputs_host_path(self, thread_id: str) -> Path:
+        threads_root = Path(self._threads_host_path).resolve()
+        outputs = (threads_root / thread_id / "user-data" / "outputs").resolve()
+        try:
+            outputs.relative_to(threads_root)
+        except ValueError as exc:
+            raise ValueError("thread outputs path resolved outside threads host root") from exc
+        return outputs
+
     def _is_expected_skills_mount(self, container, thread_id: str) -> bool:
         expected_source = str(self._thread_skills_host_path(thread_id))
         for mount in container.attrs.get("Mounts") or []:
@@ -186,6 +213,18 @@ class LocalContainerProvisionerBackend:
             source = str(mount.get("Source") or "").rstrip("/")
             return source == expected_source
         return False
+
+    def _has_expected_user_data_mounts(self, container, thread_id: str) -> bool:
+        expected_mounts = {
+            "/home/gem/user-data/workspace": str(self._shared_workspace_host_path()),
+            "/home/gem/user-data/uploads": str(self._thread_uploads_host_path(thread_id)),
+            "/home/gem/user-data/outputs": str(self._thread_outputs_host_path(thread_id)),
+        }
+        actual_mounts = {
+            str((mount.get("Destination") or "").rstrip("/")): str((mount.get("Source") or "").rstrip("/"))
+            for mount in container.attrs.get("Mounts") or []
+        }
+        return all(actual_mounts.get(destination) == source for destination, source in expected_mounts.items())
 
     def _resolve_host_paths(self) -> None:
         if self._threads_host_path:
@@ -270,6 +309,10 @@ class LocalContainerProvisionerBackend:
                     logger.info("Recreating sandbox %s because skills mount is stale", sandbox_id)
                     self.delete(sandbox_id)
                     existing = None
+                elif not self._has_expected_user_data_mounts(existing, safe_thread_id):
+                    logger.info("Recreating sandbox %s because user-data mounts are stale", sandbox_id)
+                    self.delete(sandbox_id)
+                    existing = None
             if existing is not None:
                 if existing.status == "running":
                     try:
@@ -289,13 +332,12 @@ class LocalContainerProvisionerBackend:
                     logger.warning("Failed to delete stale sandbox %s before recreate: %s", sandbox_id, exc)
 
             threads_root = Path(self._threads_host_path).resolve()
-            thread_user_data = (threads_root / safe_thread_id / "user-data").resolve()
-            try:
-                thread_user_data.relative_to(threads_root)
-            except ValueError as exc:
-                raise ValueError("thread_id resolved outside threads host root") from exc
-            thread_user_data.mkdir(parents=True, exist_ok=True)
-
+            shared_workspace = self._shared_workspace_host_path()
+            shared_workspace.mkdir(parents=True, exist_ok=True)
+            thread_uploads = self._thread_uploads_host_path(safe_thread_id)
+            thread_outputs = self._thread_outputs_host_path(safe_thread_id)
+            thread_uploads.mkdir(parents=True, exist_ok=True)
+            thread_outputs.mkdir(parents=True, exist_ok=True)
             thread_skills = self._thread_skills_host_path(safe_thread_id)
             thread_skills.mkdir(parents=True, exist_ok=True)
 
@@ -310,7 +352,9 @@ class LocalContainerProvisionerBackend:
                     "managed-by": "yuxi-sandbox-provisioner",
                 },
                 "volumes": {
-                    str(thread_user_data): {"bind": "/home/gem/user-data", "mode": "rw"},
+                    str(shared_workspace): {"bind": "/home/gem/user-data/workspace", "mode": "rw"},
+                    str(thread_uploads): {"bind": "/home/gem/user-data/uploads", "mode": "rw"},
+                    str(thread_outputs): {"bind": "/home/gem/user-data/outputs", "mode": "rw"},
                     str(thread_skills): {"bind": "/home/gem/skills", "mode": "ro"},
                 },
                 "ports": {f"{self._container_port}/tcp": None},
@@ -343,6 +387,13 @@ class LocalContainerProvisionerBackend:
         safe_thread_id = self._validate_thread_id(thread_id)
         if not self._is_expected_skills_mount(container, safe_thread_id):
             logger.info("Discarding stale sandbox %s with legacy skills mount", sandbox_id)
+            try:
+                self.delete(sandbox_id)
+            except Exception as exc:
+                logger.warning("Failed to delete stale sandbox %s during discover: %s", sandbox_id, exc)
+            return None
+        if not self._has_expected_user_data_mounts(container, safe_thread_id):
+            logger.info("Discarding stale sandbox %s with legacy user-data mounts", sandbox_id)
             try:
                 self.delete(sandbox_id)
             except Exception as exc:
@@ -433,11 +484,12 @@ class KubernetesProvisionerBackend:
                         command=["sh", "-c"],
                         args=[
                             "chmod 777 /home/gem "
-                            f"&& mkdir -p /mnt/shared-data/threads/{thread_id}/user-data/workspace "
+                            "&& mkdir -p /mnt/shared-data/threads/shared/workspace "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/uploads "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/outputs "
                             f"/mnt/shared-data/threads/{thread_id}/skills "
-                            f"&& chmod -R 777 /mnt/shared-data/threads/{thread_id}/user-data ",
+                            f"&& chmod -R 777 /mnt/shared-data/threads/shared/workspace "
+                            f"/mnt/shared-data/threads/{thread_id}/user-data ",
                         ],
                         volume_mounts=[
                             self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
@@ -454,8 +506,18 @@ class KubernetesProvisionerBackend:
                             self._client.V1VolumeMount(name="home-dir", mount_path="/home/gem"),
                             self._client.V1VolumeMount(
                                 name="shared-data",
-                                mount_path="/home/gem/user-data",
-                                sub_path=f"threads/{thread_id}/user-data",
+                                mount_path="/home/gem/user-data/workspace",
+                                sub_path="threads/shared/workspace",
+                            ),
+                            self._client.V1VolumeMount(
+                                name="shared-data",
+                                mount_path="/home/gem/user-data/uploads",
+                                sub_path=f"threads/{thread_id}/user-data/uploads",
+                            ),
+                            self._client.V1VolumeMount(
+                                name="shared-data",
+                                mount_path="/home/gem/user-data/outputs",
+                                sub_path=f"threads/{thread_id}/user-data/outputs",
                             ),
                             self._client.V1VolumeMount(
                                 name="shared-data",

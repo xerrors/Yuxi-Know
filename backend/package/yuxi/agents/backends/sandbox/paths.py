@@ -37,7 +37,7 @@ def _thread_root_dir(thread_id: str) -> Path:
 
 def _global_user_data_dir() -> Path:
     """Return the shared host-side directory used for thread workspace files."""
-    return Path(conf.save_dir) / "user-data"
+    return Path(conf.save_dir) / "threads" / "shared"
 
 
 def sandbox_user_data_dir(thread_id: str) -> Path:
