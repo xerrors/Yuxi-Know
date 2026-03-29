@@ -4,7 +4,7 @@ from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelRetryMiddleware
 
-from yuxi.agents import BaseAgent, load_chat_model
+from yuxi.agents import BaseAgent, BaseState, load_chat_model
 from yuxi.agents.backends import create_agent_composite_backend
 from yuxi.agents.middlewares import (
     RuntimeConfigMiddleware,
@@ -88,6 +88,7 @@ class ChatbotAgent(BaseAgent):
             model=load_chat_model(fully_specified_name=context.model),
             system_prompt=system_prompt.strip(),
             middleware=await _build_middlewares(context),
+            state_schema=BaseState,
             checkpointer=await self._get_checkpointer(),
         )
 

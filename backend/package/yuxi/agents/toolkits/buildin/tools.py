@@ -1,10 +1,16 @@
 import os
 import traceback
 import uuid
+from pathlib import Path
 from typing import Annotated, Any
 
 import requests
+from langchain.tools import InjectedToolCallId
+from langchain_core.messages import ToolMessage
+from langgraph.prebuilt.tool_node import ToolRuntime
+from langgraph.types import Command
 from langgraph.types import interrupt
+from pydantic import BaseModel, Field
 
 from yuxi import config, graph_base
 from yuxi.agents.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
@@ -49,6 +55,52 @@ if config.enable_web_search:
         logger.warning(f"Failed to register TavilySearch tool: {e}")
 
 
+class PresentArtifactsInput(BaseModel):
+    """Expose artifact files to the frontend after the agent finishes."""
+
+    filepaths: list[str] = Field(
+        description="需要展示给用户的文件绝对路径列表，只允许位于 /home/gem/user-data/outputs/ 下"
+    )
+
+
+def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> str:
+    from yuxi.agents.backends.sandbox.paths import (
+        VIRTUAL_PATH_PREFIX,
+        ensure_thread_dirs,
+        resolve_virtual_path,
+        sandbox_outputs_dir,
+    )
+
+    outputs_virtual_prefix = f"{VIRTUAL_PATH_PREFIX}/outputs"
+    runtime_context = runtime.context
+    thread_id = getattr(runtime_context, "thread_id", None)
+    if not thread_id:
+        raise ValueError("当前运行时缺少 thread_id")
+
+    ensure_thread_dirs(thread_id)
+    outputs_dir = sandbox_outputs_dir(thread_id).resolve()
+    normalized_input = str(filepath or "").strip()
+    if not normalized_input:
+        raise ValueError("文件路径不能为空")
+
+    stripped = normalized_input.lstrip("/")
+    virtual_prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
+    if stripped == virtual_prefix or stripped.startswith(f"{virtual_prefix}/"):
+        actual_path = resolve_virtual_path(thread_id, normalized_input)
+    else:
+        actual_path = Path(normalized_input).expanduser().resolve()
+
+    if not actual_path.exists() or not actual_path.is_file():
+        raise ValueError(f"文件不存在或不是普通文件: {normalized_input}")
+
+    try:
+        relative_path = actual_path.relative_to(outputs_dir)
+    except ValueError as exc:
+        raise ValueError(f"只允许展示 {outputs_virtual_prefix}/ 下的文件: {normalized_input}") from exc
+
+    return f"{outputs_virtual_prefix}/{relative_path.as_posix()}"
+
+
 @tool(category="buildin", tags=["计算"], display_name="计算器")
 def calculator(a: float, b: float, operation: str) -> float:
     """计算器：对给定的2个数字进行基本数学运算"""
@@ -68,6 +120,47 @@ def calculator(a: float, b: float, operation: str) -> float:
     except Exception as e:
         logger.error(f"Calculator error: {e}")
         raise
+
+
+PRESENT_ARTIFACTS_DESCRIPTION = """
+将已经生成好的结果文件展示给用户。
+
+使用场景：
+1. 你已经在 `/home/gem/user-data/outputs/` 下写好了最终结果文件
+2. 你希望前端在对话结束后显示这些结果文件卡片
+3. 这些文件需要支持下载或预览
+
+注意事项：
+1. 只能传入 `/home/gem/user-data/outputs/` 下的文件
+2. 不要传入中间过程文件，只有真正需要给用户看的结果文件才调用
+3. 可以一次传多个文件
+"""
+
+
+@tool(
+    category="buildin",
+    tags=["文件", "交付物"],
+    display_name="展示交付物",
+    description=PRESENT_ARTIFACTS_DESCRIPTION,
+    args_schema=PresentArtifactsInput,
+)
+def present_artifacts(
+    filepaths: list[str],
+    runtime: ToolRuntime,
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """登记当前线程 outputs 目录下的交付物文件，使前端在对话结束后展示给用户。"""
+    try:
+        normalized_paths = [_normalize_presented_artifact_path(filepath, runtime) for filepath in filepaths]
+    except ValueError as exc:
+        return Command(update={"messages": [ToolMessage(content=f"Error: {exc}", tool_call_id=tool_call_id)]})
+
+    return Command(
+        update={
+            "artifacts": normalized_paths,
+            "messages": [ToolMessage(content="已将交付物展示给用户", tool_call_id=tool_call_id)],
+        }
+    )
 
 
 ASK_USER_QUESTION_DESCRIPTION = """

@@ -124,7 +124,7 @@ services:
     build:
       context: ./docker/sandbox_provisioner
       dockerfile: Dockerfile
-    image: yuxi-sandbox-provisioner:0.5.2.dev
+    image: yuxi-sandbox-provisioner:0.6.dev
     container_name: sandbox-provisioner
     volumes:
       - ./saves:/app/saves

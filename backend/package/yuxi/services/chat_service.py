@@ -10,6 +10,7 @@ from langchain.messages import AIMessage, AIMessageChunk, HumanMessage
 from langgraph.types import Command
 from yuxi import config as conf
 from yuxi.agents.buildin import agent_manager
+from yuxi.agents.state import AgentStatePayload
 from yuxi.plugins.guard import content_guard
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
@@ -70,16 +71,18 @@ async def _get_langgraph_messages(agent_instance, config_dict):
     return state.values.get("messages", [])
 
 
-def extract_agent_state(values: dict) -> dict:
+def extract_agent_state(values: dict) -> AgentStatePayload:
     """从 LangGraph state 中提取 agent 状态"""
     if not isinstance(values, dict):
-        return {}
+        return {"todos": [], "files": {}, "artifacts": []}
 
     # 直接获取，信任 state 的数据结构
     todos = values.get("todos")
-    result = {
+    artifacts = values.get("artifacts")
+    result: AgentStatePayload = {
         "todos": list(todos)[:20] if todos else [],
         "files": values.get("files") or {},
+        "artifacts": list(artifacts) if artifacts else [],
     }
 
     return result

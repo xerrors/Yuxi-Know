@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
-from typing import Annotated
+from typing import Annotated, TypedDict
 
-from langchain.messages import AnyMessage
-from langgraph.graph import add_messages
+from langchain.agents import AgentState
 
 
-@dataclass
-class BaseState:
-    """Defines the input state for the agent, representing a narrower interface to the outside world.
+def merge_artifacts(existing: list[str] | None, new: list[str] | None) -> list[str]:
+    """Merge artifact file paths while preserving order and removing duplicates."""
+    if existing is None:
+        return new or []
+    if new is None:
+        return existing
+    return list(dict.fromkeys(existing + new))
 
-    This class is used to define the initial state and structure of incoming data.
-    """
 
-    messages: Annotated[Sequence[AnyMessage], add_messages] = field(default_factory=list)
+class BaseState(AgentState):
+    """Shared state fields for Yuxi agents."""
+
+    artifacts: Annotated[list[str], merge_artifacts]
+
+
+class AgentStatePayload(TypedDict):
+    """Serialized agent state payload consumed by the frontend."""
+
+    todos: list
+    files: dict
+    artifacts: list[str]

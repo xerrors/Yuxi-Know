@@ -7,7 +7,7 @@ from langchain.agents.middleware import (
     ToolCallLimitMiddleware,
 )
 
-from yuxi.agents import BaseAgent, load_chat_model
+from yuxi.agents import BaseAgent, BaseState, load_chat_model
 from yuxi.agents.backends import create_agent_composite_backend
 from yuxi.agents.middlewares import (
     RuntimeConfigMiddleware,
@@ -116,6 +116,7 @@ class DeepAgent(BaseAgent):
                     exit_behavior="end",
                 ),
             ],
+            state_schema=BaseState,
             checkpointer=await self._get_checkpointer(),
         )
 

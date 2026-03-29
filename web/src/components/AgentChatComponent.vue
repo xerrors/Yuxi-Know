@@ -150,6 +150,13 @@
                 />
               </div>
 
+              <AgentArtifactsCard
+                :artifacts="currentArtifacts"
+                :thread-id="currentChatId"
+                :agent-id="currentThread?.agent_id || currentAgentId"
+                :agent-config-id="selectedAgentConfigId"
+              />
+
               <AgentInputArea
                 v-model="userInput"
                 :is-loading="isProcessing"
@@ -254,6 +261,7 @@ import { useAgentRunStream } from '@/composables/useAgentRunStream'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import { useStreamSmoother } from '@/composables/useStreamSmoother'
 import { useAgentMentionConfig } from '@/composables/useAgentMentionConfig'
+import AgentArtifactsCard from '@/components/AgentArtifactsCard.vue'
 import AgentPanel from '@/components/AgentPanel.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
 
@@ -425,6 +433,10 @@ const currentThreadFiles = computed(() => {
 const currentThreadAttachments = computed(() => {
   if (!currentChatId.value) return []
   return threadAttachmentsMap.value[currentChatId.value] || []
+})
+const currentArtifacts = computed(() => {
+  const artifacts = currentAgentState.value?.artifacts
+  return Array.isArray(artifacts) ? artifacts : []
 })
 
 const hasAgentStateContent = computed(() => {
@@ -1917,7 +1929,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
 .conv-box {
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
 .bottom {
@@ -1926,7 +1937,6 @@ watch(currentChatId, (threadId, oldThreadId) => {
   width: 100%;
   margin: 0 auto;
   padding: 4px 1rem 0 1rem;
-  background: var(--gray-0);
   z-index: 1000;
 
   .message-input-wrapper {
@@ -1938,6 +1948,8 @@ watch(currentChatId, (threadId, oldThreadId) => {
       display: flex;
       justify-content: center;
       align-items: center;
+      width: 100%;
+      background: var(--gray-0);
     }
 
     .note {

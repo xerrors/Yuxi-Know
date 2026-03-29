@@ -12,12 +12,13 @@
     @keydown="handleKeyDown"
   >
     <template #top>
-      <ImagePreviewComponent
-        v-if="currentImage"
-        :image-data="currentImage"
-        @remove="handleImageRemoved"
-        class="image-preview-wrapper"
-      />
+      <div v-if="currentImage" class="input-top-stack">
+        <ImagePreviewComponent
+          :image-data="currentImage"
+          @remove="handleImageRemoved"
+          class="image-preview-wrapper"
+        />
+      </div>
     </template>
     <template #options-left>
       <AttachmentOptionsComponent
@@ -143,6 +144,14 @@ defineExpose({
   margin-right: 8px;
 }
 
+.input-top-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
 // 输入框操作按钮通用样式（穿透到 slot 内容）
 :deep(.input-action-btn) {
   display: flex;
@@ -185,6 +194,13 @@ defineExpose({
 :deep(.hide-text) {
   @media (max-width: 768px) {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .input-top-stack {
+    gap: 8px;
+    margin-bottom: 10px;
   }
 }
 </style>

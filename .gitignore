@@ -32,6 +32,11 @@ cache
 *.bak
 *._*
 
+# test
+.pytest_cache
+.playwright
+.playwright-cli
+
 
 ### IDE
 .vscode

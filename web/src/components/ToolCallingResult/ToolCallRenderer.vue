@@ -5,7 +5,7 @@
     :tool-call="toolCall"
     ref="toolRendererRef"
   />
-  <BaseToolCall v-else :tool-call="toolCall" />
+  <BaseToolCall v-else-if="!isHidden" :tool-call="toolCall" />
 </template>
 
 <script setup>
@@ -71,7 +71,10 @@ const TOOL_RENDERERS = {
   write_todos: TodoListTool
 }
 
+const TOOL_RENDERER_HIDE = ["present_artifacts"]
+
 const currentRenderer = computed(() => TOOL_RENDERERS[toolId.value] || null)
+const isHidden = computed(() => TOOL_RENDERER_HIDE.includes(toolId.value))
 
 const toolRendererRef = ref(null)
 const refreshGraph = () => {

@@ -625,6 +625,7 @@ defineExpose({
   border-radius: 0.8rem;
   box-shadow: 0 2px 8px var(--shadow-1);
   transition: all 0.3s ease;
+  background: var(--gray-0);
   gap: 0px;
   position: relative;
 
