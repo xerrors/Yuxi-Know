@@ -741,7 +741,8 @@ const getConfigOptions = (value) => {
     return liveSkillOptions.value.length > 0 ? liveSkillOptions.value : value?.options || []
   }
   if (value?.template_metadata?.kind === 'subagents') {
-    const options = liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
+    const options =
+      liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
     return options.filter((option) => option?.enabled !== false)
   }
   return value?.options || []

@@ -19,13 +19,18 @@
 
         <div class="list-container">
           <div
-            v-if="filteredInstalledSkills.length === 0 && filteredUninstalledBuiltinSkills.length === 0"
+            v-if="
+              filteredInstalledSkills.length === 0 && filteredUninstalledBuiltinSkills.length === 0
+            "
             class="empty-text"
           >
             <a-empty :image="false" description="无匹配技能" />
           </div>
           <div v-if="filteredInstalledSkills.length" class="list-section-title">已添加 Skills</div>
-          <template v-for="(skill, index) in filteredInstalledSkills" :key="`installed-${skill.slug}`">
+          <template
+            v-for="(skill, index) in filteredInstalledSkills"
+            :key="`installed-${skill.slug}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentSkill?.slug === skill.slug }"
@@ -38,7 +43,11 @@
                 </div>
                 <div class="item-status">
                   <span class="status-chip status-chip-success">已添加</span>
-                  <button type="button" class="inline-hover-action" @click.stop="confirmDeleteSkill(skill)">
+                  <button
+                    type="button"
+                    class="inline-hover-action"
+                    @click.stop="confirmDeleteSkill(skill)"
+                  >
                     移除
                   </button>
                 </div>
@@ -46,18 +55,28 @@
               <div class="item-details">
                 <span class="item-desc">{{ skill.description || '暂无描述' }}</span>
                 <div class="item-tags">
-                  <span class="source-tag" :class="{ builtin: skill.sourceType === 'builtin' }">{{ skill.sourceLabel }}</span>
+                  <span class="source-tag" :class="{ builtin: skill.sourceType === 'builtin' }">{{
+                    skill.sourceLabel
+                  }}</span>
                 </div>
               </div>
             </div>
             <div
-              v-if="index < filteredInstalledSkills.length - 1 || filteredUninstalledBuiltinSkills.length > 0"
+              v-if="
+                index < filteredInstalledSkills.length - 1 ||
+                filteredUninstalledBuiltinSkills.length > 0
+              "
               class="list-separator"
             ></div>
           </template>
 
-          <div v-if="filteredUninstalledBuiltinSkills.length" class="list-section-title">可添加 Skills</div>
-          <template v-for="(skill, index) in filteredUninstalledBuiltinSkills" :key="`builtin-${skill.slug}`">
+          <div v-if="filteredUninstalledBuiltinSkills.length" class="list-section-title">
+            可添加 Skills
+          </div>
+          <template
+            v-for="(skill, index) in filteredUninstalledBuiltinSkills"
+            :key="`builtin-${skill.slug}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentSkill?.slug === skill.slug }"
@@ -85,7 +104,10 @@
                 </div>
               </div>
             </div>
-            <div v-if="index < filteredUninstalledBuiltinSkills.length - 1" class="list-separator"></div>
+            <div
+              v-if="index < filteredUninstalledBuiltinSkills.length - 1"
+              class="list-separator"
+            ></div>
           </template>
         </div>
       </div>
@@ -155,7 +177,9 @@
           <div v-if="!isInstalledSkill" class="builtin-uninstalled-state">
             <h3>{{ currentSkill.description }}</h3>
             <p>版本 {{ currentSkill.version }}</p>
-            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)">安装内置 Skill</a-button>
+            <a-button type="primary" @click="handleInstallBuiltin(currentSkill)"
+              >安装内置 Skill</a-button
+            >
           </div>
 
           <a-tabs v-else v-model:activeKey="activeTab" class="minimal-tabs">
@@ -432,15 +456,23 @@ const installedSkillCards = computed(() => {
 const filteredInstalledSkills = computed(() => installedSkillCards.value.filter(matchesSearch))
 
 const filteredUninstalledBuiltinSkills = computed(() => {
-  return (builtinSkills.value || []).filter((skill) => skill.status === 'not_installed' && matchesSearch(skill))
+  return (builtinSkills.value || []).filter(
+    (skill) => skill.status === 'not_installed' && matchesSearch(skill)
+  )
 })
 
 const isInstalledSkill = computed(() => {
-  return !!(currentSkill.value && (currentSkill.value.installed_record || currentSkill.value.dir_path))
+  return !!(
+    currentSkill.value &&
+    (currentSkill.value.installed_record || currentSkill.value.dir_path)
+  )
 })
 
 const isBuiltinInstalledSkill = computed(() => {
-  return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
+  return !!(
+    isInstalledSkill.value &&
+    (currentSkill.value?.is_builtin || currentSkill.value?.installed_record)
+  )
 })
 
 const currentSkillStatusLabel = computed(() => {
@@ -642,7 +674,13 @@ const handleTreeSelect = async (keys, info) => {
 }
 
 const saveCurrentFile = async () => {
-  if (!currentSkill.value || !selectedPath.value || selectedIsDir.value || isBuiltinInstalledSkill.value) return
+  if (
+    !currentSkill.value ||
+    !selectedPath.value ||
+    selectedIsDir.value ||
+    isBuiltinInstalledSkill.value
+  )
+    return
   savingFile.value = true
   try {
     await skillApi.updateSkillFile(currentSkill.value.slug, {
@@ -746,11 +784,17 @@ const confirmDeleteSkill = (targetSkill = null) => {
   const target = targetSkill || currentSkill.value
   if (!target) return
 
-  const installed =
-    !!(target && (target.installed_record || target.dir_path || target.is_builtin || target.sourceType))
+  const installed = !!(
+    target &&
+    (target.installed_record || target.dir_path || target.is_builtin || target.sourceType)
+  )
   if (!installed) return
 
-  const isBuiltinTarget = !!(target?.is_builtin || target?.installed_record || target?.sourceType === 'builtin')
+  const isBuiltinTarget = !!(
+    target?.is_builtin ||
+    target?.installed_record ||
+    target?.sourceType === 'builtin'
+  )
   const actionText = isBuiltinTarget ? '卸载' : '删除'
   const detailText = isBuiltinTarget
     ? '卸载后会移除已安装文件和数据库记录，但仍可从“未安装 Skills”中重新安装。'

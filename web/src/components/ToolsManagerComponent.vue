@@ -20,7 +20,10 @@
 
           <a-tooltip :title="`当前分类：${currentCategoryLabel}`">
             <a-dropdown trigger="click">
-              <a-button class="sidebar-tool category-trigger" :class="{ active: !!selectedCategory }">
+              <a-button
+                class="sidebar-tool category-trigger"
+                :class="{ active: !!selectedCategory }"
+              >
                 <SlidersHorizontal :size="14" />
               </a-button>
               <template #overlay>
@@ -194,7 +197,9 @@ const filteredTools = computed(() => {
 })
 
 const currentCategoryLabel = computed(
-  () => categoryLabels[selectedCategory.value] || (selectedCategory.value ? selectedCategory.value : '全部分类')
+  () =>
+    categoryLabels[selectedCategory.value] ||
+    (selectedCategory.value ? selectedCategory.value : '全部分类')
 )
 
 const fetchTools = async () => {

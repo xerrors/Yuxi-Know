@@ -20,11 +20,20 @@
 
         <!-- SubAgent 列表 -->
         <div class="list-container">
-          <div v-if="!filteredEnabledSubAgents.length && !filteredDisabledSubAgents.length" class="empty-text">
-            <a-empty :image="false" :description="searchQuery ? '无匹配 SubAgent' : '暂无 SubAgent'" />
+          <div
+            v-if="!filteredEnabledSubAgents.length && !filteredDisabledSubAgents.length"
+            class="empty-text"
+          >
+            <a-empty
+              :image="false"
+              :description="searchQuery ? '无匹配 SubAgent' : '暂无 SubAgent'"
+            />
           </div>
           <div v-if="filteredEnabledSubAgents.length" class="list-section-title">已添加</div>
-          <template v-for="(agent, index) in filteredEnabledSubAgents" :key="`enabled-${agent.name}`">
+          <template
+            v-for="(agent, index) in filteredEnabledSubAgents"
+            :key="`enabled-${agent.name}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentAgent?.name === agent.name }"
@@ -37,7 +46,11 @@
                 </div>
                 <div class="item-status">
                   <span class="status-chip status-chip-success">已添加</span>
-                  <button type="button" class="inline-hover-action danger" @click.stop="handleSetAgentEnabled(agent, false)">
+                  <button
+                    type="button"
+                    class="inline-hover-action danger"
+                    @click.stop="handleSetAgentEnabled(agent, false)"
+                  >
                     移除
                   </button>
                 </div>
@@ -50,13 +63,18 @@
               </div>
             </div>
             <div
-              v-if="index < filteredEnabledSubAgents.length - 1 || filteredDisabledSubAgents.length > 0"
+              v-if="
+                index < filteredEnabledSubAgents.length - 1 || filteredDisabledSubAgents.length > 0
+              "
               class="list-separator"
             ></div>
           </template>
 
           <div v-if="filteredDisabledSubAgents.length" class="list-section-title">可添加</div>
-          <template v-for="(agent, index) in filteredDisabledSubAgents" :key="`disabled-${agent.name}`">
+          <template
+            v-for="(agent, index) in filteredDisabledSubAgents"
+            :key="`disabled-${agent.name}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentAgent?.name === agent.name }"
@@ -68,7 +86,11 @@
                   <span class="item-name">{{ agent.name }}</span>
                 </div>
                 <div class="item-status">
-                  <button type="button" class="skill-inline-action skill-inline-action-primary" @click.stop="handleSetAgentEnabled(agent, true)">
+                  <button
+                    type="button"
+                    class="skill-inline-action skill-inline-action-primary"
+                    @click.stop="handleSetAgentEnabled(agent, true)"
+                  >
                     添加
                   </button>
                 </div>
@@ -172,7 +194,10 @@
               </div>
             </div>
 
-            <div class="detail-section" v-if="currentAgent.is_builtin || currentAgent.enabled === false">
+            <div
+              class="detail-section"
+              v-if="currentAgent.is_builtin || currentAgent.enabled === false"
+            >
               <div class="section-header">
                 <Info :size="14" />
                 <span>类型</span>
@@ -325,8 +350,12 @@ const filteredSubAgents = computed(() => {
   )
 })
 
-const filteredEnabledSubAgents = computed(() => filteredSubAgents.value.filter((item) => item.enabled !== false))
-const filteredDisabledSubAgents = computed(() => filteredSubAgents.value.filter((item) => item.enabled === false))
+const filteredEnabledSubAgents = computed(() =>
+  filteredSubAgents.value.filter((item) => item.enabled !== false)
+)
+const filteredDisabledSubAgents = computed(() =>
+  filteredSubAgents.value.filter((item) => item.enabled === false)
+)
 
 // 获取 SubAgent 列表
 const fetchSubAgents = async () => {

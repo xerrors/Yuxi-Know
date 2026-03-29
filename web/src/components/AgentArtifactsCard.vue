@@ -143,7 +143,12 @@ import hljs from 'highlight.js/lib/common'
 import 'md-editor-v3/lib/preview.css'
 import { useThemeStore } from '@/stores/theme'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
-import { getCodeLanguageByPath, getPreviewTypeByPath, isHtmlPreview, isMarkdownPreview } from '@/utils/file_preview'
+import {
+  getCodeLanguageByPath,
+  getPreviewTypeByPath,
+  isHtmlPreview,
+  isMarkdownPreview
+} from '@/utils/file_preview'
 import { downloadViewerFile, getViewerFileContent } from '@/apis/viewer_filesystem'
 
 const props = defineProps({
@@ -176,7 +181,9 @@ const normalizedArtifacts = computed(() =>
       return {
         path: normalizedPath,
         name: normalizedPath.split('/').pop() || normalizedPath,
-        canPreview: ['text', 'markdown', 'pdf', 'image'].includes(getPreviewTypeByPath(normalizedPath))
+        canPreview: ['text', 'markdown', 'pdf', 'image'].includes(
+          getPreviewTypeByPath(normalizedPath)
+        )
       }
     })
 )

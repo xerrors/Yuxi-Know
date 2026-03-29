@@ -124,9 +124,7 @@ def virtual_path_for_thread_file(thread_id: str, path: str | Path) -> str:
     else:
         workspace_relative = relative_path.as_posix()
         relative_path_str = (
-            _WORKSPACE_DIR_NAME
-            if workspace_relative in {"", "."}
-            else f"{_WORKSPACE_DIR_NAME}/{workspace_relative}"
+            _WORKSPACE_DIR_NAME if workspace_relative in {"", "."} else f"{_WORKSPACE_DIR_NAME}/{workspace_relative}"
         )
 
     prefix = get_virtual_path_prefix().rstrip("/")

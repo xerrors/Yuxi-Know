@@ -27,11 +27,17 @@
 
         <!-- 服务器列表 -->
         <div class="list-container">
-          <div v-if="!filteredEnabledServers.length && !filteredDisabledServers.length" class="empty-text">
+          <div
+            v-if="!filteredEnabledServers.length && !filteredDisabledServers.length"
+            class="empty-text"
+          >
             <a-empty :image="false" :description="searchQuery ? '无匹配服务器' : '暂无服务器'" />
           </div>
           <div v-if="filteredEnabledServers.length" class="list-section-title">已添加</div>
-          <template v-for="(server, index) in filteredEnabledServers" :key="`enabled-${server.name}`">
+          <template
+            v-for="(server, index) in filteredEnabledServers"
+            :key="`enabled-${server.name}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentServer?.name === server.name }"
@@ -44,7 +50,11 @@
                 </div>
                 <div class="item-status">
                   <span class="status-chip status-chip-success">已添加</span>
-                  <button type="button" class="inline-hover-action" @click.stop="handleSetServerEnabled(server, false)">
+                  <button
+                    type="button"
+                    class="inline-hover-action"
+                    @click.stop="handleSetServerEnabled(server, false)"
+                  >
                     移除
                   </button>
                 </div>
@@ -62,7 +72,10 @@
             ></div>
           </template>
           <div v-if="filteredDisabledServers.length" class="list-section-title">可添加</div>
-          <template v-for="(server, index) in filteredDisabledServers" :key="`disabled-${server.name}`">
+          <template
+            v-for="(server, index) in filteredDisabledServers"
+            :key="`disabled-${server.name}`"
+          >
             <div
               class="list-item extension-list-item"
               :class="{ active: currentServer?.name === server.name, disabled: true }"
@@ -74,7 +87,11 @@
                   <span class="item-name">{{ server.name }}</span>
                 </div>
                 <div class="item-status">
-                  <button type="button" class="skill-inline-action skill-inline-action-primary" @click.stop="handleSetServerEnabled(server, true)">
+                  <button
+                    type="button"
+                    class="skill-inline-action skill-inline-action-primary"
+                    @click.stop="handleSetServerEnabled(server, true)"
+                  >
                     添加
                   </button>
                 </div>
@@ -556,8 +573,12 @@ const filteredServers = computed(() => {
   )
 })
 
-const filteredEnabledServers = computed(() => filteredServers.value.filter((item) => !!item.enabled))
-const filteredDisabledServers = computed(() => filteredServers.value.filter((item) => !item.enabled))
+const filteredEnabledServers = computed(() =>
+  filteredServers.value.filter((item) => !!item.enabled)
+)
+const filteredDisabledServers = computed(() =>
+  filteredServers.value.filter((item) => !item.enabled)
+)
 
 const isStdioTransport = computed(
   () =>

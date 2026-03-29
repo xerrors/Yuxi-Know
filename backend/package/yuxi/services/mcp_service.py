@@ -516,7 +516,9 @@ async def delete_mcp_server(db: AsyncSession, name: str) -> bool:
 # =============================================================================
 
 
-async def set_server_enabled(db: AsyncSession, name: str, enabled: bool, updated_by: str = None) -> tuple[bool, MCPServer]:
+async def set_server_enabled(
+    db: AsyncSession, name: str, enabled: bool, updated_by: str = None
+) -> tuple[bool, MCPServer]:
     """Set server enabled status."""
     server = await get_mcp_server(db, name)
     if not server:
