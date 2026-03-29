@@ -9,8 +9,9 @@
       -->
 
       <!-- Fixed Status Icon -->
-      <span v-if="(toolCall.status === 'success' || toolCall.tool_call_result) && toolIcon">
-        <component :is="toolIcon" size="16" class="tool-loader tool-success" />
+      <span v-if="toolCall.status === 'success' || toolCall.tool_call_result">
+        <component v-if="toolIcon" :is="toolIcon" size="16" class="tool-loader tool-success" />
+        <CheckCircle v-else size="16" class="tool-loader tool-success" />
       </span>
       <span v-else-if="toolCall.status === 'error'">
         <XCircle size="16" class="tool-loader tool-error" />
@@ -93,7 +94,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Loader, ChevronsUpDown, ChevronsDownUp, XCircle } from 'lucide-vue-next'
+import { Loader, ChevronsUpDown, ChevronsDownUp, XCircle, CheckCircle } from 'lucide-vue-next'
 import { useAgentStore } from '@/stores/agent'
 import { storeToRefs } from 'pinia'
 import { getToolCallId, getToolIcon } from './toolRegistry'
