@@ -18,9 +18,16 @@ class SubAgentRepository:
         result = await self.db.execute(select(SubAgent).order_by(SubAgent.updated_at.desc()))
         return list(result.scalars().all())
 
+    async def list_enabled(self) -> list[SubAgent]:
+        """获取已启用的 SubAgent。"""
+        result = await self.db.execute(
+            select(SubAgent).where(SubAgent.enabled.is_(True)).order_by(SubAgent.updated_at.desc())
+        )
+        return list(result.scalars().all())
+
     async def list_all_specs(self) -> list[dict[str, Any]]:
-        """获取所有 SubAgent 运行规格，按 updated_at 降序"""
-        items = await self.list_all()
+        """获取已启用的 SubAgent 运行规格，按 updated_at 降序。"""
+        items = await self.list_enabled()
         return [item.to_subagent_spec() for item in items]
 
     async def get_by_name(self, name: str) -> SubAgent | None:
@@ -53,6 +60,7 @@ class SubAgentRepository:
             system_prompt=system_prompt,
             tools=tools or [],
             model=model,
+            enabled=True,
             is_builtin=is_builtin,
             created_by=created_by,
             updated_by=created_by,

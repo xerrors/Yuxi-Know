@@ -31,6 +31,10 @@ class SubAgentUpdateRequest(BaseModel):
     model: str | None = Field(None, description="可选的模型覆盖")
 
 
+class SubAgentStatusRequest(BaseModel):
+    enabled: bool = Field(..., description="是否启用")
+
+
 def _raise_from_value_error(e: ValueError) -> None:
     message = str(e)
     status_code = 404 if "不存在" in message else 400
@@ -145,3 +149,26 @@ async def delete_subagent_route(
         raise
     except Exception as e:
         _raise_internal_error("删除", e)
+
+
+@subagents_router.put("/{name}/status")
+async def update_subagent_status_route(
+    name: str,
+    payload: SubAgentStatusRequest,
+    current_user: User = Depends(get_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新 SubAgent 启用状态（管理员）。"""
+    try:
+        item = await service.set_subagent_enabled(name, payload.enabled, updated_by=current_user.username, db=db)
+        if not item:
+            raise HTTPException(status_code=404, detail=f"SubAgent '{name}' 不存在")
+        return {
+            "success": True,
+            "data": item,
+            "message": f"SubAgent '{name}' 已{'添加' if payload.enabled else '移除'}",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        _raise_internal_error("更新状态", e)

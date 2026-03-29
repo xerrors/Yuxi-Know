@@ -56,6 +56,10 @@ export const deleteSubAgent = async (name) => {
   return apiAdminDelete(`${BASE_URL}/${encodeURIComponent(name)}`)
 }
 
+export const updateSubAgentStatus = async (name, enabled) => {
+  return apiAdminPut(`${BASE_URL}/${encodeURIComponent(name)}/status`, { enabled })
+}
+
 // =============================================================================
 // === 导出为对象形式（兼容现有代码风格）===
 // =============================================================================
@@ -65,7 +69,8 @@ export const subagentApi = {
   getSubAgent,
   createSubAgent,
   updateSubAgent,
-  deleteSubAgent
+  deleteSubAgent,
+  updateSubAgentStatus
 }
 
 export default subagentApi

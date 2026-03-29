@@ -648,11 +648,13 @@ const loadSubagentOptions = async (force = false) => {
   try {
     const result = await subagentApi.getSubAgents()
     const rows = result?.data || []
-    liveSubagentOptions.value = rows.map((item) => ({
-      id: item.name,
-      name: item.name,
-      description: item.description || ''
-    }))
+    liveSubagentOptions.value = rows
+      .filter((item) => item?.enabled !== false)
+      .map((item) => ({
+        id: item.name,
+        name: item.name,
+        description: item.description || ''
+      }))
   } catch (error) {
     console.warn('加载 Subagents 列表失败:', error)
   }
@@ -739,7 +741,8 @@ const getConfigOptions = (value) => {
     return liveSkillOptions.value.length > 0 ? liveSkillOptions.value : value?.options || []
   }
   if (value?.template_metadata?.kind === 'subagents') {
-    return liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
+    const options = liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
+    return options.filter((option) => option?.enabled !== false)
   }
   return value?.options || []
 }

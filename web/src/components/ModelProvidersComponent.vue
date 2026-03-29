@@ -805,7 +805,7 @@ const testCustomProvider = async (providerId, modelName) => {
     border-radius: 8px;
     margin-bottom: 12px;
     overflow: hidden;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 3px var(--shadow-1);
 
     .card-header {
       display: flex;

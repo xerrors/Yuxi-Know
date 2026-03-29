@@ -135,7 +135,7 @@ const getSatisfactionClass = () => {
 
       &:hover {
         border-color: var(--gray-200);
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+        box-shadow: 0 1px 3px 0 var(--shadow-1);
       }
 
       &.primary {

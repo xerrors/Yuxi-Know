@@ -70,12 +70,13 @@ export const testMcpServer = async (name) => {
 }
 
 /**
- * 切换 MCP 服务器启用状态
+ * 更新 MCP 服务器启用状态
  * @param {string} name - 服务器名称
+ * @param {boolean} enabled - 是否启用
  * @returns {Promise} - 切换结果
  */
-export const toggleMcpServer = async (name) => {
-  return apiAdminPut(`${BASE_URL}/${encodeURIComponent(name)}/toggle`, {})
+export const updateMcpServerStatus = async (name, enabled) => {
+  return apiAdminPut(`${BASE_URL}/${encodeURIComponent(name)}/status`, { enabled })
 }
 
 // =============================================================================
@@ -124,7 +125,7 @@ export const mcpApi = {
   updateMcpServer,
   deleteMcpServer,
   testMcpServer,
-  toggleMcpServer,
+  updateMcpServerStatus,
   getMcpServerTools,
   refreshMcpServerTools,
   toggleMcpServerTool

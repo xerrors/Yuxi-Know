@@ -27,31 +27,66 @@
 
         <!-- 服务器列表 -->
         <div class="list-container">
-          <div v-if="filteredServers.length === 0" class="empty-text">
+          <div v-if="!filteredEnabledServers.length && !filteredDisabledServers.length" class="empty-text">
             <a-empty :image="false" :description="searchQuery ? '无匹配服务器' : '暂无服务器'" />
           </div>
-          <template v-for="(server, index) in filteredServers" :key="server.name">
+          <div v-if="filteredEnabledServers.length" class="list-section-title">已添加</div>
+          <template v-for="(server, index) in filteredEnabledServers" :key="`enabled-${server.name}`">
             <div
-              class="list-item"
-              :class="{ active: currentServer?.name === server.name, disabled: !server.enabled }"
+              class="list-item extension-list-item"
+              :class="{ active: currentServer?.name === server.name }"
               @click="selectServer(server)"
             >
-              <div class="item-header">
-                <span class="server-icon">{{ server.icon || '🔌' }}</span>
-                <span class="item-name">{{ server.name }}</span>
-                <a-switch
-                  size="small"
-                  :checked="server.enabled"
-                  @change="handleToggleServer(server)"
-                  @click.stop
-                  :loading="toggleLoading === server.name"
-                />
+              <div class="item-main-row">
+                <div class="item-header">
+                  <span class="server-icon">{{ server.icon || '🔌' }}</span>
+                  <span class="item-name">{{ server.name }}</span>
+                </div>
+                <div class="item-status">
+                  <span class="status-chip status-chip-success">已添加</span>
+                  <button type="button" class="inline-hover-action" @click.stop="handleSetServerEnabled(server, false)">
+                    移除
+                  </button>
+                </div>
               </div>
               <div class="item-details">
                 <span class="item-desc">{{ server.description || '暂无描述' }}</span>
+                <div class="item-tags">
+                  <span v-if="server.created_by === 'system'" class="source-tag builtin">内置</span>
+                </div>
               </div>
             </div>
-            <div v-if="index < filteredServers.length - 1" class="list-separator"></div>
+            <div
+              v-if="index < filteredEnabledServers.length - 1 || filteredDisabledServers.length > 0"
+              class="list-separator"
+            ></div>
+          </template>
+          <div v-if="filteredDisabledServers.length" class="list-section-title">可添加</div>
+          <template v-for="(server, index) in filteredDisabledServers" :key="`disabled-${server.name}`">
+            <div
+              class="list-item extension-list-item"
+              :class="{ active: currentServer?.name === server.name, disabled: true }"
+              @click="selectServer(server)"
+            >
+              <div class="item-main-row">
+                <div class="item-header">
+                  <span class="server-icon">{{ server.icon || '🔌' }}</span>
+                  <span class="item-name">{{ server.name }}</span>
+                </div>
+                <div class="item-status">
+                  <button type="button" class="skill-inline-action skill-inline-action-primary" @click.stop="handleSetServerEnabled(server, true)">
+                    添加
+                  </button>
+                </div>
+              </div>
+              <div class="item-details">
+                <span class="item-desc">{{ server.description || '暂无描述' }}</span>
+                <div class="item-tags">
+                  <span v-if="server.created_by === 'system'" class="source-tag builtin">内置</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="index < filteredDisabledServers.length - 1" class="list-separator"></div>
           </template>
         </div>
       </div>
@@ -75,34 +110,36 @@
             </h2>
             <div class="panel-actions">
               <a-space :size="8">
-                <a-button
-                  size="small"
+                <button
+                  type="button"
                   @click="handleTestServer(currentServer)"
-                  :loading="testLoading === currentServer.name"
-                  class="lucide-icon-btn"
+                  :disabled="testLoading === currentServer.name"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
                 >
                   <Zap :size="14" v-if="testLoading !== currentServer.name" />
                   <span>测试</span>
-                </a-button>
-                <a-button
-                  size="small"
+                </button>
+                <button
+                  type="button"
                   @click="showEditModal(currentServer)"
-                  class="lucide-icon-btn"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
                 >
                   <Pencil :size="14" />
                   <span>编辑</span>
-                </a-button>
-                <a-button
-                  size="small"
-                  danger
-                  ghost
-                  :disabled="currentServer.created_by === 'system'"
-                  @click="confirmDeleteServer(currentServer)"
-                  class="lucide-icon-btn"
+                </button>
+                <button
+                  type="button"
+                  @click="handleDangerAction(currentServer)"
+                  :class="[
+                    'lucide-icon-btn',
+                    'extension-panel-action',
+                    getServerActionTone(currentServer)
+                  ]"
                 >
-                  <Trash2 :size="14" />
-                  <span>删除</span>
-                </a-button>
+                  <Plus v-if="currentServer.enabled === false" :size="14" />
+                  <Trash2 v-else :size="14" />
+                  <span>{{ getServerActionLabel(currentServer) }}</span>
+                </button>
               </a-space>
             </div>
           </div>
@@ -452,6 +489,7 @@ import { message, notification, Modal } from 'ant-design-vue'
 import {
   Search,
   Plug,
+  Plus,
   Zap,
   Pencil,
   Trash2,
@@ -518,6 +556,9 @@ const filteredServers = computed(() => {
   )
 })
 
+const filteredEnabledServers = computed(() => filteredServers.value.filter((item) => !!item.enabled))
+const filteredDisabledServers = computed(() => filteredServers.value.filter((item) => !item.enabled))
+
 const isStdioTransport = computed(
   () =>
     String(form.transport || '')
@@ -544,9 +585,11 @@ const fetchServers = async () => {
     const result = await mcpApi.getMcpServers()
     if (result.success) {
       servers.value = result.data || []
-      // 默认选中排序后的第一个服务器
-      if (!currentServer.value && servers.value.length > 0) {
-        selectServer(filteredServers.value[0])
+      const defaultList = filteredEnabledServers.value.length
+        ? filteredEnabledServers.value
+        : filteredDisabledServers.value
+      if (!currentServer.value && defaultList.length > 0) {
+        selectServer(defaultList[0])
       } else if (currentServer.value) {
         const latest = servers.value.find((s) => s.name === currentServer.value.name)
         if (latest) {
@@ -790,19 +833,22 @@ const handleFormSubmit = async () => {
   }
 }
 
-// 切换服务器启用状态
-const handleToggleServer = async (server) => {
+// 更新服务器启用状态
+const handleSetServerEnabled = async (server, enabled) => {
   try {
     toggleLoading.value = server.name
-    const result = await mcpApi.toggleMcpServer(server.name)
+    const result = await mcpApi.updateMcpServerStatus(server.name, enabled)
     if (result.success) {
-      message.success(result.message)
+      message.success(result.message || `MCP 已${enabled ? '添加' : '移除'}`)
       await fetchServers()
+      if (!enabled && currentServer.value?.name === server.name) {
+        tools.value = []
+      }
     } else {
       notification.error({ message: result.message || '操作失败' })
     }
   } catch (err) {
-    console.error('切换状态失败:', err)
+    console.error('更新状态失败:', err)
     notification.error({ message: err.message || '操作失败' })
   } finally {
     toggleLoading.value = null
@@ -827,17 +873,33 @@ const handleTestServer = async (server) => {
   }
 }
 
-// 确认删除服务器
-const confirmDeleteServer = (server) => {
-  // system 创建的服务器不允许删除
-  if (server.created_by === 'system') {
-    notification.warning({
-      message: '无法删除系统服务器',
-      description: '系统内置的 MCP 服务器无法删除，如需停用可切换禁用开关。'
-    })
+const handleDangerAction = async (server) => {
+  if (server.enabled === false) {
+    await handleSetServerEnabled(server, true)
     return
   }
+  if (server.created_by === 'system') {
+    await handleSetServerEnabled(server, false)
+    return
+  }
+  confirmDeleteServer(server)
+}
 
+const getServerActionLabel = (server) => {
+  if (server?.enabled === false) {
+    return '添加'
+  }
+  return server?.created_by === 'system' ? '移除' : '删除'
+}
+
+const getServerActionTone = (server) => {
+  return server?.enabled === false
+    ? 'extension-panel-action-primary'
+    : 'extension-panel-action-danger'
+}
+
+// 确认删除服务器
+const confirmDeleteServer = (server) => {
   Modal.confirm({
     title: '确认删除服务器',
     content: `确定要删除服务器 "${server.name}" 吗？此操作不可撤销。`,

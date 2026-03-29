@@ -20,27 +20,67 @@
 
         <!-- SubAgent 列表 -->
         <div class="list-container">
-          <div v-if="filteredSubAgents.length === 0" class="empty-text">
-            <a-empty
-              :image="false"
-              :description="searchQuery ? '无匹配 SubAgent' : '暂无 SubAgent'"
-            />
+          <div v-if="!filteredEnabledSubAgents.length && !filteredDisabledSubAgents.length" class="empty-text">
+            <a-empty :image="false" :description="searchQuery ? '无匹配 SubAgent' : '暂无 SubAgent'" />
           </div>
-          <template v-for="(agent, index) in filteredSubAgents" :key="agent.name">
+          <div v-if="filteredEnabledSubAgents.length" class="list-section-title">已添加</div>
+          <template v-for="(agent, index) in filteredEnabledSubAgents" :key="`enabled-${agent.name}`">
             <div
-              class="list-item"
+              class="list-item extension-list-item"
               :class="{ active: currentAgent?.name === agent.name }"
               @click="selectAgent(agent)"
             >
-              <div class="item-header">
-                <Bot :size="16" class="item-icon" />
-                <span class="item-name">{{ agent.name }}</span>
+              <div class="item-main-row">
+                <div class="item-header">
+                  <Bot :size="16" class="item-icon" />
+                  <span class="item-name">{{ agent.name }}</span>
+                </div>
+                <div class="item-status">
+                  <span class="status-chip status-chip-success">已添加</span>
+                  <button type="button" class="inline-hover-action danger" @click.stop="handleSetAgentEnabled(agent, false)">
+                    移除
+                  </button>
+                </div>
               </div>
               <div class="item-details">
                 <span class="item-desc">{{ agent.description || '暂无描述' }}</span>
+                <div class="item-tags">
+                  <span v-if="agent.is_builtin" class="source-tag builtin">内置</span>
+                </div>
               </div>
             </div>
-            <div v-if="index < filteredSubAgents.length - 1" class="list-separator"></div>
+            <div
+              v-if="index < filteredEnabledSubAgents.length - 1 || filteredDisabledSubAgents.length > 0"
+              class="list-separator"
+            ></div>
+          </template>
+
+          <div v-if="filteredDisabledSubAgents.length" class="list-section-title">可添加</div>
+          <template v-for="(agent, index) in filteredDisabledSubAgents" :key="`disabled-${agent.name}`">
+            <div
+              class="list-item extension-list-item"
+              :class="{ active: currentAgent?.name === agent.name }"
+              @click="selectAgent(agent)"
+            >
+              <div class="item-main-row">
+                <div class="item-header">
+                  <Bot :size="16" class="item-icon" />
+                  <span class="item-name">{{ agent.name }}</span>
+                </div>
+                <div class="item-status">
+                  <button type="button" class="skill-inline-action skill-inline-action-primary" @click.stop="handleSetAgentEnabled(agent, true)">
+                    添加
+                  </button>
+                </div>
+              </div>
+              <div class="item-details">
+                <span class="item-desc">{{ agent.description || '暂无描述' }}</span>
+                <div class="item-tags">
+                  <span v-if="agent.is_builtin" class="source-tag builtin">内置</span>
+                </div>
+              </div>
+            </div>
+            <div v-if="index < filteredDisabledSubAgents.length - 1" class="list-separator"></div>
           </template>
         </div>
       </div>
@@ -132,13 +172,15 @@
               </div>
             </div>
 
-            <div class="detail-section" v-if="currentAgent.is_builtin">
+            <div class="detail-section" v-if="currentAgent.is_builtin || currentAgent.enabled === false">
               <div class="section-header">
                 <Info :size="14" />
                 <span>类型</span>
               </div>
               <div class="section-content">
-                <a-tag color="blue">内置</a-tag>
+                <a-tag v-if="currentAgent.is_builtin" color="blue">内置</a-tag>
+                <a-tag v-else color="default">自定义</a-tag>
+                <a-tag v-if="currentAgent.enabled === false" color="default">未添加</a-tag>
               </div>
             </div>
 
@@ -283,6 +325,9 @@ const filteredSubAgents = computed(() => {
   )
 })
 
+const filteredEnabledSubAgents = computed(() => filteredSubAgents.value.filter((item) => item.enabled !== false))
+const filteredDisabledSubAgents = computed(() => filteredSubAgents.value.filter((item) => item.enabled === false))
+
 // 获取 SubAgent 列表
 const fetchSubAgents = async () => {
   try {
@@ -300,9 +345,12 @@ const fetchSubAgents = async () => {
           currentAgent.value = null
         }
       }
-      // 默认选中第一项
-      if (!currentAgent.value && subagents.value.length > 0) {
-        currentAgent.value = getSortedSubAgents(subagents.value)[0]
+      // 默认选中第一个已添加项
+      const defaultList = filteredEnabledSubAgents.value.length
+        ? filteredEnabledSubAgents.value
+        : filteredDisabledSubAgents.value
+      if (!currentAgent.value && defaultList.length > 0) {
+        currentAgent.value = defaultList[0]
       }
     } else {
       error.value = result.message || '获取列表失败'
@@ -333,6 +381,21 @@ const formatTime = (timeStr) => formatFullDateTime(timeStr)
 
 const handleModelSelect = (spec) => {
   form.model = spec || ''
+}
+
+const handleSetAgentEnabled = async (agent, enabled) => {
+  try {
+    const result = await subagentApi.updateSubAgentStatus(agent.name, enabled)
+    if (result.success) {
+      message.success(result.message || `SubAgent 已${enabled ? '添加' : '移除'}`)
+      await fetchSubAgents()
+    } else {
+      message.error(result.message || '操作失败')
+    }
+  } catch (err) {
+    console.error('更新状态失败:', err)
+    message.error(err.message || '操作失败')
+  }
 }
 
 // 选择 SubAgent

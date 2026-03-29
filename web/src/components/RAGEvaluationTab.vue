@@ -1312,7 +1312,7 @@ onMounted(() => {
 
       &:hover {
         border-color: var(--gray-300);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 2px 4px var(--shadow-1);
       }
     }
   }

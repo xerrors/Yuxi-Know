@@ -24,10 +24,10 @@
           >
             <a-empty :image="false" description="无匹配技能" />
           </div>
-          <div v-if="filteredInstalledSkills.length" class="list-section-title">已安装 Skills</div>
+          <div v-if="filteredInstalledSkills.length" class="list-section-title">已添加 Skills</div>
           <template v-for="(skill, index) in filteredInstalledSkills" :key="`installed-${skill.slug}`">
             <div
-              class="list-item skill-list-item"
+              class="list-item extension-list-item"
               :class="{ active: currentSkill?.slug === skill.slug }"
               @click="selectSkill(skill)"
             >
@@ -37,40 +37,16 @@
                   <span class="item-name">{{ skill.name }}</span>
                 </div>
                 <div class="item-status">
-                  <button
-                    v-if="skill.status === 'update_available'"
-                    type="button"
-                    class="skill-inline-action skill-inline-action-secondary"
-                    @click.stop="handleUpdateBuiltin(skill)"
-                  >
-                    更新
+                  <span class="status-chip status-chip-success">已添加</span>
+                  <button type="button" class="inline-hover-action" @click.stop="confirmDeleteSkill(skill)">
+                    移除
                   </button>
-                  <span
-                    v-else-if="skill.statusLabel"
-                    class="status-chip"
-                    :class="{ warning: skill.statusTone === 'warning' }"
-                  >
-                    {{ skill.statusLabel }}
-                  </span>
                 </div>
               </div>
               <div class="item-details">
+                <span class="item-desc">{{ skill.description || '暂无描述' }}</span>
                 <div class="item-tags">
-                  <span class="source-tag" :class="{ builtin: skill.sourceType === 'builtin' }">
-                    {{ skill.sourceLabel }}
-                  </span>
-                </div>
-                <div class="item-badges">
-                  <span
-                    v-if="skill.tool_dependencies?.length"
-                    class="dot-badge blue"
-                    title="工具依赖"
-                  ></span>
-                  <span
-                    v-if="skill.mcp_dependencies?.length"
-                    class="dot-badge green"
-                    title="MCP依赖"
-                  ></span>
+                  <span class="source-tag" :class="{ builtin: skill.sourceType === 'builtin' }">{{ skill.sourceLabel }}</span>
                 </div>
               </div>
             </div>
@@ -80,10 +56,10 @@
             ></div>
           </template>
 
-          <div v-if="filteredUninstalledBuiltinSkills.length" class="list-section-title">未安装 Skills</div>
+          <div v-if="filteredUninstalledBuiltinSkills.length" class="list-section-title">可添加 Skills</div>
           <template v-for="(skill, index) in filteredUninstalledBuiltinSkills" :key="`builtin-${skill.slug}`">
             <div
-              class="list-item skill-list-item"
+              class="list-item extension-list-item"
               :class="{ active: currentSkill?.slug === skill.slug }"
               @click="selectSkill(skill)"
             >
@@ -102,21 +78,10 @@
                   </button>
                 </div>
               </div>
-              <div class="item-details item-details-inline">
+              <div class="item-details">
+                <span class="item-desc">{{ skill.description || '暂无描述' }}</span>
                 <div class="item-tags">
                   <span class="source-tag builtin">内置</span>
-                </div>
-                <div class="item-badges">
-                  <span
-                    v-if="skill.installed_record?.tool_dependencies?.length || skill.tool_dependencies?.length"
-                    class="dot-badge blue"
-                    title="工具依赖"
-                  ></span>
-                  <span
-                    v-if="skill.installed_record?.mcp_dependencies?.length || skill.mcp_dependencies?.length"
-                    class="dot-badge green"
-                    title="MCP依赖"
-                  ></span>
                 </div>
               </div>
             </div>
@@ -153,7 +118,7 @@
                   v-if="currentSkill.is_builtin_spec && currentSkill.status === 'not_installed'"
                   type="button"
                   @click="handleInstallBuiltin(currentSkill)"
-                  class="lucide-icon-btn skill-panel-action skill-panel-action-primary"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-primary"
                 >
                   <span>安装</span>
                 </button>
@@ -161,7 +126,7 @@
                   v-if="currentSkill.is_builtin_spec && currentSkill.status === 'update_available'"
                   type="button"
                   @click="handleUpdateBuiltin(currentSkill)"
-                  class="lucide-icon-btn skill-panel-action skill-panel-action-secondary"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
                 >
                   <span>更新</span>
                 </button>
@@ -169,7 +134,7 @@
                   v-if="isInstalledSkill"
                   type="button"
                   @click="handleExport"
-                  class="lucide-icon-btn skill-panel-action skill-panel-action-secondary"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-secondary"
                 >
                   <Download :size="14" />
                   <span>导出</span>
@@ -178,7 +143,7 @@
                   v-if="isInstalledSkill"
                   type="button"
                   @click="confirmDeleteSkill"
-                  class="lucide-icon-btn skill-panel-action skill-panel-action-danger"
+                  class="lucide-icon-btn extension-panel-action extension-panel-action-danger"
                 >
                   <Trash2 :size="14" />
                   <span>{{ isBuiltinInstalledSkill ? '卸载' : '删除' }}</span>
@@ -476,10 +441,6 @@ const isInstalledSkill = computed(() => {
 
 const isBuiltinInstalledSkill = computed(() => {
   return !!(isInstalledSkill.value && (currentSkill.value?.is_builtin || currentSkill.value?.installed_record))
-})
-
-const currentSkillDeleteActionText = computed(() => {
-  return isBuiltinInstalledSkill.value ? '卸载' : '删除'
 })
 
 const currentSkillStatusLabel = computed(() => {
@@ -781,25 +742,34 @@ const handleCreateNode = async () => {
   }
 }
 
-const confirmDeleteSkill = () => {
-  if (!currentSkill.value || !isInstalledSkill.value) return
-  const actionText = currentSkillDeleteActionText.value
-  const detailText = isBuiltinInstalledSkill.value
+const confirmDeleteSkill = (targetSkill = null) => {
+  const target = targetSkill || currentSkill.value
+  if (!target) return
+
+  const installed =
+    !!(target && (target.installed_record || target.dir_path || target.is_builtin || target.sourceType))
+  if (!installed) return
+
+  const isBuiltinTarget = !!(target?.is_builtin || target?.installed_record || target?.sourceType === 'builtin')
+  const actionText = isBuiltinTarget ? '卸载' : '删除'
+  const detailText = isBuiltinTarget
     ? '卸载后会移除已安装文件和数据库记录，但仍可从“未安装 Skills”中重新安装。'
     : '删除后无法恢复，所有文件和配置将永久消失。'
   Modal.confirm({
-    title: `确认${actionText}技能「${currentSkill.value.slug}」？`,
+    title: `确认${actionText}技能「${target.slug}」？`,
     content: detailText,
     okText: `确认${actionText}`,
     okType: 'danger',
     cancelText: '取消',
     onOk: async () => {
       try {
-        await skillApi.deleteSkill(currentSkill.value.slug)
+        await skillApi.deleteSkill(target.slug)
         message.success(`已${actionText}`)
-        currentSkill.value = null
-        treeData.value = []
-        resetFileState()
+        if (currentSkill.value?.slug === target.slug) {
+          currentSkill.value = null
+          treeData.value = []
+          resetFileState()
+        }
         await fetchSkills()
       } catch {
         message.error(`${actionText}失败`)
@@ -878,248 +848,6 @@ defineExpose({
 
 <style scoped lang="less">
 @import '@/assets/css/extensions.less';
-
-.list-section-title {
-  padding: 10px 14px 6px;
-  color: var(--gray-500);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-}
-
-.skill-list-item {
-
-  .item-main-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .item-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    margin-bottom: 0;
-
-    .item-name {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-  }
-
-  .item-status {
-    flex-shrink: 0;
-  }
-
-  .status-chip {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 24px;
-    padding: 0 9px;
-    border-radius: 999px;
-    background: var(--gray-100);
-    color: var(--gray-600);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-
-    &.warning {
-      background: var(--color-warning-50);
-      color: var(--color-warning-900);
-    }
-  }
-
-  .item-details {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-
-    .item-tags {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-
-    .source-tag {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 20px;
-      padding: 0 8px;
-      border-radius: 999px;
-      background: var(--color-info-50);
-      color: var(--color-info-700);
-      font-size: 11px;
-      font-weight: 600;
-      line-height: 1;
-      flex-shrink: 0;
-
-      &.builtin {
-        background: var(--color-primary-50);
-        color: var(--color-primary-700);
-      }
-    }
-
-    .item-badges {
-      display: flex;
-      gap: 4px;
-      flex-shrink: 0;
-      .dot-badge {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        &.blue {
-          background-color: var(--color-info-500);
-        }
-        &.green {
-          background-color: var(--color-success-500);
-        }
-      }
-    }
-  }
-
-}
-
-.skill-inline-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  min-width: 52px;
-  height: 24px;
-  padding: 0 9px;
-  border-style: solid;
-  border-width: 1px;
-  box-shadow: none;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-  cursor: pointer;
-  appearance: none;
-
-  &.skill-inline-action-primary {
-    border-color: transparent;
-    background: var(--main-600);
-    color: var(--main-0);
-  }
-
-  &.skill-inline-action-secondary {
-    border-color: var(--main-100);
-    background: var(--main-30);
-    color: var(--main-700);
-  }
-
-  &:hover,
-  &:focus {
-    outline: none;
-  }
-
-  &.skill-inline-action-primary:hover,
-  &.skill-inline-action-primary:focus {
-    background: var(--main-700);
-    color: var(--main-0);
-  }
-
-  &.skill-inline-action-secondary:hover,
-  &.skill-inline-action-secondary:focus {
-    border-color: var(--main-200);
-    background: var(--main-50);
-    color: var(--main-800);
-  }
-}
-
-.skill-panel-action {
-  min-height: 30px;
-  padding: 0 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  border-style: solid;
-  border-width: 1px;
-  box-shadow: none;
-  font-weight: 500;
-  transition:
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    color 0.18s ease;
-  cursor: pointer;
-  appearance: none;
-
-  &:hover,
-  &:focus {
-    outline: none;
-  }
-
-  &.skill-panel-action-primary {
-    border-color: transparent;
-    background: var(--main-600);
-    color: var(--main-0);
-  }
-
-  &.skill-panel-action-primary:hover,
-  &.skill-panel-action-primary:focus {
-    background: var(--main-700);
-    color: var(--main-0);
-  }
-
-  &.skill-panel-action-secondary {
-    border-color: var(--gray-200);
-    background: var(--gray-25);
-    color: var(--gray-700);
-
-    &:hover,
-    &:focus {
-      border-color: var(--gray-300);
-      color: var(--gray-900);
-      background: var(--gray-0);
-    }
-  }
-
-  &.skill-panel-action-danger {
-    border-color: var(--color-error-100);
-    background: var(--color-error-50);
-    color: var(--color-error-700);
-
-    &:hover,
-    &:focus {
-      border-color: var(--color-error-100);
-      background: var(--color-error-100);
-      color: var(--color-error-900);
-    }
-  }
-}
-
-.panel-status-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: var(--gray-100);
-  color: var(--gray-600);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-
-  &.warning {
-    background: var(--color-warning-50);
-    color: var(--color-warning-900);
-  }
-}
 
 .builtin-uninstalled-state {
   padding: 24px;

@@ -55,6 +55,20 @@ _DEFAULT_MCP_SERVERS = {
     },
 }
 
+_SYNCED_MCP_FIELDS = (
+    "description",
+    "transport",
+    "url",
+    "command",
+    "args",
+    "env",
+    "headers",
+    "timeout",
+    "sse_read_timeout",
+    "tags",
+    "icon",
+)
+
 # =============================================================================
 # === Core Logic (Moved from agents/common/mcp.py) ===
 # =============================================================================
@@ -168,8 +182,19 @@ async def init_mcp_servers() -> None:
                         )
                         session.add(server)
                         logger.info(f"Added built-in MCP server '{name}' to database")
+                    else:
+                        changed = False
+                        for field in _SYNCED_MCP_FIELDS:
+                            next_value = config.get(field)
+                            if getattr(existing, field) != next_value:
+                                setattr(existing, field, next_value)
+                                changed = True
+                        if changed:
+                            existing.updated_by = "system"
                 # Commit if any new servers were added (check session state)
                 if session.new:
+                    await session.commit()
+                elif session.dirty:
                     await session.commit()
 
         # Load configurations from database to cache
@@ -491,13 +516,13 @@ async def delete_mcp_server(db: AsyncSession, name: str) -> bool:
 # =============================================================================
 
 
-async def toggle_server_enabled(db: AsyncSession, name: str, updated_by: str = None) -> tuple[bool, MCPServer]:
-    """Toggle server enabled status."""
+async def set_server_enabled(db: AsyncSession, name: str, enabled: bool, updated_by: str = None) -> tuple[bool, MCPServer]:
+    """Set server enabled status."""
     server = await get_mcp_server(db, name)
     if not server:
         raise ValueError(f"Server '{name}' does not exist")
 
-    server.enabled = 0 if server.enabled else 1
+    server.enabled = 1 if enabled else 0
     if updated_by is not None:
         server.updated_by = updated_by
     await db.commit()
@@ -507,7 +532,7 @@ async def toggle_server_enabled(db: AsyncSession, name: str, updated_by: str = N
     server_config = server.to_mcp_config() if is_enabled else None
     await sync_mcp_server_to_cache(name, server_config)
 
-    logger.info(f"Toggled MCP server '{name}' enabled={is_enabled}")
+    logger.info(f"Set MCP server '{name}' enabled={is_enabled}")
     return is_enabled, server
 
 

@@ -11,7 +11,7 @@ from yuxi.services.mcp_service import (
     get_all_mcp_servers,
     get_all_mcp_tools,
     get_mcp_server,
-    toggle_server_enabled,
+    set_server_enabled,
     toggle_tool_enabled,
     update_mcp_server,
 )
@@ -54,6 +54,10 @@ class UpdateMcpServerRequest(BaseModel):
     sse_read_timeout: int | None = Field(None, description="SSE 读取超时（秒）")
     tags: list | None = Field(None, description="标签数组")
     icon: str | None = Field(None, description="图标（emoji）")
+
+
+class UpdateMcpServerStatusRequest(BaseModel):
+    enabled: bool = Field(..., description="是否启用")
 
 
 # =============================================================================
@@ -246,19 +250,21 @@ async def test_mcp_server(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@mcp.put("/{name}/toggle")
-async def toggle_mcp_server_route(
+@mcp.put("/{name}/status")
+async def update_mcp_server_status_route(
     name: str,
+    request: UpdateMcpServerStatusRequest,
     current_user: User = Depends(get_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """切换 MCP 服务器启用状态"""
+    """更新 MCP 服务器启用状态"""
     try:
-        is_enabled, server = await toggle_server_enabled(db, name, current_user.username)
+        is_enabled, server = await set_server_enabled(db, name, request.enabled, current_user.username)
         return {
             "success": True,
             "enabled": is_enabled,
-            "message": f"MCP '{name}' 已{'启用' if is_enabled else '禁用'}",
+            "data": server.to_dict(),
+            "message": f"MCP '{name}' 已{'添加' if is_enabled else '移除'}",
         }
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))

@@ -53,6 +53,7 @@ def test_list_subagents_returns_data(monkeypatch):
                 "system_prompt": "You are a researcher",
                 "tools": ["tavily_search"],
                 "model": None,
+                "enabled": True,
                 "is_builtin": True,
                 "created_by": "system",
                 "updated_by": "system",
@@ -82,6 +83,7 @@ def test_get_single_subagent(monkeypatch):
                 "system_prompt": "You are a researcher",
                 "tools": ["tavily_search"],
                 "model": None,
+                "enabled": True,
                 "is_builtin": True,
                 "created_by": "system",
                 "updated_by": "system",
@@ -125,6 +127,7 @@ def test_create_subagent(monkeypatch):
             "system_prompt": data["system_prompt"],
             "tools": data.get("tools", []),
             "model": data.get("model"),
+            "enabled": True,
             "is_builtin": False,
             "created_by": created_by,
             "updated_by": created_by,
@@ -191,6 +194,7 @@ def test_update_subagent(monkeypatch):
             "system_prompt": data.get("system_prompt", "Updated prompt"),
             "tools": data.get("tools", []),
             "model": data.get("model"),
+            "enabled": True,
             "is_builtin": False,
             "created_by": "admin",
             "updated_by": updated_by,
@@ -257,6 +261,51 @@ def test_delete_builtin_subagent_fails(monkeypatch):
     client = TestClient(app)
     resp = client.delete("/api/system/subagents/research-agent")
     assert resp.status_code == 400, resp.text
+
+
+def test_update_subagent_status(monkeypatch):
+    captured = {}
+
+    async def fake_set_subagent_enabled(name, enabled, updated_by, db=None):
+        captured["name"] = name
+        captured["enabled"] = enabled
+        captured["updated_by"] = updated_by
+        return {
+            "name": name,
+            "description": "Test",
+            "system_prompt": "Prompt",
+            "tools": [],
+            "model": None,
+            "enabled": enabled,
+            "is_builtin": True,
+            "created_by": "system",
+            "updated_by": updated_by,
+            "created_at": "2024-01-01T00:00:00",
+            "updated_at": "2024-01-01T00:00:00",
+        }
+
+    monkeypatch.setattr("server.routers.subagent_router.service.set_subagent_enabled", fake_set_subagent_enabled)
+
+    app = _build_app()
+    client = TestClient(app)
+    resp = client.put("/api/system/subagents/research-agent/status", json={"enabled": False})
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["success"] is True
+    assert payload["data"]["enabled"] is False
+    assert captured == {"name": "research-agent", "enabled": False, "updated_by": "admin"}
+
+
+def test_update_subagent_status_not_found(monkeypatch):
+    async def fake_set_subagent_enabled(name, enabled, updated_by, db=None):
+        return None
+
+    monkeypatch.setattr("server.routers.subagent_router.service.set_subagent_enabled", fake_set_subagent_enabled)
+
+    app = _build_app()
+    client = TestClient(app)
+    resp = client.put("/api/system/subagents/missing/status", json={"enabled": True})
+    assert resp.status_code == 404, resp.text
 
 
 # =============================================================================

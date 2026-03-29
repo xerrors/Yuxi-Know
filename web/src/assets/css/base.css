@@ -49,36 +49,42 @@
   --main-color: #016179;
   --main-bright: #0188a6;
 
+  --color-secondary-10: #fafcfd; /* 次要色-最浅 */
   --color-secondary-50: #f5f7f7; /* 次要色-最浅 */
   --color-secondary-100: #eff2f2; /* 次要色-浅 */
   --color-secondary-500: #4e616d; /* 次要色-标准 */
   --color-secondary-700: #3a4a56; /* 次要色-深 */
   --color-secondary-900: #2c3843; /* 次要色-最深 */
 
+  --color-success-10: #fafff2; /* 成功色-极浅 */
   --color-success-50: #f6ffed; /* 成功色-最浅 */
   --color-success-100: #b7eb8f; /* 成功色-浅 */
   --color-success-500: #52c41a; /* 成功色-标准 */
   --color-success-700: #389e0d; /* 成功色-深 */
   --color-success-900: #135200; /* 成功色-最深 */
 
+  --color-error-10: #fffaf9; /* 错误色-极浅 */
   --color-error-50: #fff2f0; /* 错误色-最浅 */
   --color-error-100: #ffccc7; /* 错误色-浅 */
   --color-error-500: #ff4d4f; /* 错误色-标准 */
   --color-error-700: #cf1322; /* 错误色-深 */
   --color-error-900: #820014; /* 错误色-最深 */
 
+  --color-warning-10: #fffef5; /* 警告色-极浅 */
   --color-warning-50: #fffbe6; /* 警告色-最浅 */
   --color-warning-100: #ffe58f; /* 警告色-浅 */
   --color-warning-500: #faad14; /* 警告色-标准 */
   --color-warning-700: #d48806; /* 警告色-深 */
   --color-warning-900: #ad6800; /* 警告色-最深 */
 
+  --color-info-10: #f5fbff; /* 信息色-极浅 */
   --color-info-50: #e6f7ff; /* 信息色-最浅 */
   --color-info-100: #bae7ff; /* 信息色-浅 */
   --color-info-500: #1890ff; /* 信息色-标准 */
   --color-info-700: #096dd9; /* 信息色-深 */
   --color-info-900: #0050b3; /* 信息色-最深 */
 
+  --color-accent-10: #f5fffe; /* 强调色-极浅 */
   --color-accent-50: #e6fffb; /* 强调色-最浅 */
   --color-accent-100: #87e8de; /* 强调色-浅 */
   --color-accent-500: #13c2c2; /* 强调色-标准 */

@@ -300,7 +300,7 @@ onUnmounted(() => {
     box-shadow: none;
 
     &:hover {
-      background: rgba(0, 0, 0, 0.05);
+      background: var(--shadow-1);
       color: var(--primary-color);
     }
   }

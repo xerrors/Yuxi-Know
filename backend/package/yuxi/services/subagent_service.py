@@ -34,7 +34,7 @@ _DEFAULT_SUBAGENTS = [
             "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
             "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
             "除了你的最终信息，他们不会知道任何其他事情，所以你的最终报告应该就是你的最终信息！"
-            "将调研结果保存到主题研究文件中 /sub_research/xxx.md 中。"
+            "将调研结果保存到主题研究文件中 sub_research/xxx.md 中。"
         ),
         "tools": ["tavily_search"],
         "is_builtin": True,
@@ -63,13 +63,16 @@ _DEFAULT_SUBAGENTS = [
     },
 ]
 
+_SYNCED_SUBAGENT_FIELDS = ("description", "system_prompt", "tools", "model", "is_builtin")
+
 
 async def init_builtin_subagents() -> None:
-    """初始化内置 SubAgent（仅创建不存在的）"""
+    """初始化内置 SubAgent，并以代码定义覆盖展示字段。"""
     async with pg_manager.get_async_session_context() as session:
         repo = SubAgentRepository(session)
         for data in _DEFAULT_SUBAGENTS:
-            if not await repo.exists_name(data["name"]):
+            item = await repo.get_by_name(data["name"])
+            if item is None:
                 await repo.create(
                     name=data["name"],
                     description=data["description"],
@@ -79,6 +82,19 @@ async def init_builtin_subagents() -> None:
                     is_builtin=data.get("is_builtin", False),
                     created_by="system",
                 )
+                continue
+
+            changed = False
+            for field in _SYNCED_SUBAGENT_FIELDS:
+                next_value = data.get(field)
+                current_value = getattr(item, field)
+                if current_value != next_value:
+                    setattr(item, field, deepcopy(next_value))
+                    changed = True
+            if changed:
+                item.updated_by = "system"
+        await session.commit()
+    clear_specs_cache()
 
 
 async def get_subagent_specs(db: AsyncSession | None = None) -> list[dict[str, Any]]:
@@ -208,3 +224,24 @@ async def delete_subagent(name: str, db: AsyncSession | None = None) -> bool:
         await repo.delete(item)
     clear_specs_cache()
     return True
+
+
+async def set_subagent_enabled(
+    name: str,
+    enabled: bool,
+    *,
+    updated_by: str | None,
+    db: AsyncSession | None = None,
+) -> dict[str, Any] | None:
+    """更新 SubAgent 启用状态。"""
+    async with _get_session(db) as session:
+        repo = SubAgentRepository(session)
+        item = await repo.get_by_name(name)
+        if not item:
+            return None
+        item.enabled = enabled
+        item.updated_by = updated_by
+        await session.commit()
+        await session.refresh(item)
+    clear_specs_cache()
+    return item.to_dict()

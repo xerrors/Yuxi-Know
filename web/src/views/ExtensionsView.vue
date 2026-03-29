@@ -3,9 +3,9 @@
     <div class="extensions-header">
       <a-tabs v-model:activeKey="activeTab" class="extensions-tabs">
         <a-tab-pane key="tools" tab="工具" />
-        <a-tab-pane key="skills" tab="Skills 管理" />
         <a-tab-pane key="mcp" tab="MCP 服务器" />
         <a-tab-pane key="subagents" tab="Subagents 管理" />
+        <a-tab-pane key="skills" tab="Skills 管理" />
       </a-tabs>
       <div class="header-actions">
         <!-- Skills Tab 的按钮 -->
@@ -37,7 +37,7 @@
         <template v-else-if="activeTab === 'mcp'">
           <a-button type="primary" @click="handleMcpAdd" class="lucide-icon-btn">
             <Plus :size="14" />
-            <span>添加服务器</span>
+            <span>添加 MCP</span>
           </a-button>
           <a-button @click="handleMcpRefresh" :disabled="mcpLoading" class="lucide-icon-btn">
             <RotateCw :size="14" />
