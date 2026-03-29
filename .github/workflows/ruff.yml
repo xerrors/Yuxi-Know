@@ -11,8 +11,8 @@ on:
     branches:
       - main
     paths:
-      - '**.py'
-      - 'pyproject.toml'
+      - 'backend/**/*.py'
+      - 'backend/pyproject.toml'
       - 'Makefile'
       - '.github/workflows/ruff.yml'
 
@@ -24,6 +24,9 @@ jobs:
   ruff:
     name: Ruff Format & Lint
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
       # 1. 检出代码
@@ -56,16 +59,16 @@ jobs:
         run: |
           set +e  # 不立即退出失败
 
-          echo "Running ruff check (uv run python -m ruff check .)..."
-          uv run python -m ruff check .
+          echo "Running ruff check (uv run python -m ruff check package)..."
+          uv run python -m ruff check package
           ruff_check_result=$?
 
-          echo "Running ruff format diff check (uv run python -m ruff format src --diff)..."
-          uv run python -m ruff format src --diff
+          echo "Running ruff format diff check (uv run python -m ruff format package --diff)..."
+          uv run python -m ruff format package --diff
           ruff_format_result=$?
 
-          echo "Running import sorting check (uv run python -m ruff check --select I src)..."
-          uv run python -m ruff check --select I src
+          echo "Running import sorting check (uv run python -m ruff check --select I package)..."
+          uv run python -m ruff check --select I package
           ruff_import_result=$?
 
           # 检查是否有任何错误
@@ -85,7 +88,7 @@ jobs:
 
             # 运行 ruff check 以获取详细错误信息
             echo "### Detailed Issues:" >> $GITHUB_STEP_SUMMARY
-            uv run python -m ruff check . --output-format=github >> $GITHUB_STEP_SUMMARY 2>&1 || true
+            uv run python -m ruff check package --output-format=github >> $GITHUB_STEP_SUMMARY 2>&1 || true
 
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "To fix these issues locally, run:" >> $GITHUB_STEP_SUMMARY
@@ -114,7 +117,7 @@ jobs:
           # 先检查是否有格式问题
           echo "Checking for formatting issues..."
           set +e
-          uv run python -m ruff check . --quiet
+          uv run python -m ruff check package --quiet
           has_ruff_issues=$?
           set -e
 
@@ -126,14 +129,14 @@ jobs:
           echo "Formatting issues detected, running automatic fixes..."
 
           # 自动应用格式修复（与项目的 make format 命令一致）
-          echo "Running uv run ruff format ."
-          uv run ruff format .
+          echo "Running uv run ruff format package"
+          uv run ruff format package
 
-          echo "Running uv run ruff check . --fix"
-          uv run ruff check . --fix
+          echo "Running uv run ruff check package --fix"
+          uv run ruff check package --fix
 
-          echo "Running uv run python -m ruff check --select I src --fix"
-          uv run python -m ruff check --select I src --fix
+          echo "Running uv run python -m ruff check --select I package --fix"
+          uv run python -m ruff check --select I package --fix
 
           # 检查是否有格式变更
           echo "Checking for formatting changes..."
