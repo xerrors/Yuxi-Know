@@ -16,6 +16,13 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
+def canonical_backend_name(backend: str) -> str:
+    value = (backend or "").strip().lower()
+    if value == "local":
+        return "docker"
+    return value or "memory"
+
+
 class CreateSandboxRequest(BaseModel):
     sandbox_id: str
     thread_id: str
@@ -750,8 +757,9 @@ class SandboxIdleReaper:
 
 
 def _build_backend():
-    backend = (os.getenv("PROVISIONER_BACKEND", "memory") or "memory").strip().lower()
-    if backend in {"docker", "local"}:
+    backend = canonical_backend_name(os.getenv("PROVISIONER_BACKEND", "memory"))
+    # "local" remains a legacy alias for the Docker-backed provisioner.
+    if backend == "docker":
         return LocalContainerProvisionerBackend(), backend
     if backend == "kubernetes":
         return KubernetesProvisionerBackend(), backend
