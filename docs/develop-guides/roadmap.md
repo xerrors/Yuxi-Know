@@ -45,10 +45,8 @@
 - 新增 subagents 的支持，支持在 web 中添加 subagents，以及两个内置的子智能体
 - 新增内置Skills reporter，并移除内置 Agent reporter，数据库报表将由 Skills 完成
 - 新增内置 Skills `deep-reporter`，用于指导生成科研报告、行业调研和其他深度分析类长报告
-- 重构内置 Skills 安装机制：内置 skill 改为在管理页以“未安装”状态展示，支持按需安装、基于 `version + content_hash` 的更新提示与覆盖确认，并对已安装内置 skill 禁止在线文件编辑
+- 重构内置 Skills/MCP/Subagents 安装/添加/移除机制：内置 skill 支持按需安装、基于 `version + content_hash` 的更新提示与覆盖确认，不再使用服务器级开关切换
 - 新增知识库 PDF、图片的预览功能
-- 优化扩展页工具列表筛选区：将“全部分类”筛选收纳为搜索框右侧的紧凑下拉入口，并复用扩展页侧栏工具条样式，避免影响其他管理组件布局
-- 重构扩展管理中的 SubAgent 与 MCP 交互，统一为类似 Skills 的“已添加 / 可添加”列表，不再使用服务器级开关切换，为 SubAgent 增加 `enabled` 状态，并让运行时只加载已添加项，调整内置 SubAgent / MCP 的启动同步逻辑，使用代码中的最新定义覆盖数据库展示字段，同时保留启用状态与 MCP 工具禁用状态；统一扩展详情区胶囊操作按钮样式到公共 `extensions.less`，并将内置 MCP 在详情页中的危险操作从禁用“删除”改为可执行的“移除”
 - 重构后端测试目录结构：按 `unit / integration / e2e` 分层迁移现有测试，拆分全局 `conftest.py`，统一测试入口为 `uv run --group test pytest`，并新增独立测试规范文档 `docs/vibe/testing-guidelines.md`
 
 <!-- 添加到这里 -->

@@ -1,6 +1,6 @@
 {
   "name": "yuxi-web",
-  "version": "0.6.0.beta2",
+  "version": "0.6.0.beta3",
   "private": true,
   "scripts": {
     "dev": "vite",

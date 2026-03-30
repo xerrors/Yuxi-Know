@@ -374,9 +374,7 @@ class LightRagKB(KnowledgeBase):
                 await self._save_metadata()
 
                 chunks = chunk_markdown(markdown_content, file_id, filename, processing_params)
-                chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(
-                    chunks
-                )
+                chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(chunks)
                 if not chunk_input:
                     chunk_input = markdown_content
 
