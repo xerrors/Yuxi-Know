@@ -136,6 +136,9 @@
                   <button class="modal-action-btn" @click="downloadFile(currentFile)" title="下载">
                     <Download :size="18" />
                   </button>
+                  <button class="modal-action-btn" @click="openFullscreenPreview" title="全屏预览">
+                    <Maximize2 :size="18" />
+                  </button>
                   <button class="modal-action-btn" @click="closePreview" title="关闭预览">
                     <X :size="18" />
                   </button>
@@ -207,7 +210,6 @@
       </div>
     </div>
 
-    <!-- 文件内容 Modal -->
     <a-modal
       v-model:open="modalVisible"
       width="800px"
@@ -246,12 +248,20 @@
               </button>
             </div>
             <button
+              v-if="currentFile"
               class="modal-action-btn"
               @click="downloadFile(currentFile)"
-              v-if="currentFile"
               title="下载"
             >
               <Download :size="18" />
+            </button>
+            <button
+              v-if="currentFile"
+              class="modal-action-btn"
+              @click="openFullscreenPreview"
+              title="全屏预览"
+            >
+              <Maximize2 :size="18" />
             </button>
             <button class="modal-action-btn" @click="closePreview" title="关闭">
               <X :size="18" />
@@ -290,9 +300,7 @@
           </div>
         </template>
         <template v-else>
-          <pre v-if="Array.isArray(currentFile?.content)">{{
-            formatContent(currentFile.content)
-          }}</pre>
+          <pre v-if="Array.isArray(currentFile?.content)">{{ formatContent(currentFile.content) }}</pre>
           <pre
             v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
             :class="['file-content-pre', 'code-highlight', codeThemeClass]"
@@ -304,6 +312,88 @@
         </template>
       </div>
     </a-modal>
+
+    <Teleport to="body">
+      <div v-if="fullscreenPreviewVisible && currentFile" class="fullscreen-preview-overlay">
+        <div class="fullscreen-preview-actions">
+          <div v-if="isHtmlFile" class="preview-mode-switch fullscreen-preview-switch">
+            <button
+              class="preview-mode-btn"
+              :class="{ active: htmlPreviewMode === 'render' }"
+              @click="htmlPreviewMode = 'render'"
+              title="预览"
+            >
+              <Globe :size="16" />
+            </button>
+            <button
+              class="preview-mode-btn"
+              :class="{ active: htmlPreviewMode === 'source' }"
+              @click="htmlPreviewMode = 'source'"
+              title="源码"
+            >
+              <Code2 :size="16" />
+            </button>
+          </div>
+          <button
+            class="modal-action-btn fullscreen-action-btn"
+            @click="closeFullscreenPreview"
+            title="关闭"
+          >
+            <X :size="18" />
+          </button>
+        </div>
+        <div class="fullscreen-preview-content">
+          <div class="file-content fullscreen-file-content">
+            <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
+              <div class="image-preview-wrapper fullscreen-image-preview-wrapper">
+                <img :src="currentFile.previewUrl" :alt="currentFilePath" class="image-preview" />
+              </div>
+            </template>
+            <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
+              <iframe
+                :src="currentFile.previewUrl"
+                class="pdf-preview fullscreen-embed-preview"
+                :title="currentFilePath"
+              />
+            </template>
+            <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
+              <iframe
+                class="html-preview fullscreen-embed-preview"
+                :srcdoc="formatContent(currentFile?.content)"
+                :title="currentFilePath"
+                sandbox=""
+              />
+            </template>
+            <template v-else-if="isMarkdown">
+              <MdPreview
+                class="flat-md-preview"
+                :modelValue="formatContent(currentFile?.content)"
+                :theme="theme"
+                previewTheme="github"
+              />
+            </template>
+            <template v-else-if="currentFile?.supported === false">
+              <div class="unsupported-preview fullscreen-unsupported-preview">
+                {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
+              </div>
+            </template>
+            <template v-else>
+              <pre v-if="Array.isArray(currentFile?.content)">{{
+                formatContent(currentFile.content)
+              }}</pre>
+              <pre
+                v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
+                :class="['file-content-pre', 'code-highlight', codeThemeClass]"
+              ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
+              <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{
+                currentFile.content
+              }}</pre>
+              <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -316,6 +406,7 @@ import {
   Download,
   FolderCode,
   Globe,
+  Maximize2,
   RefreshCw,
   X
 } from 'lucide-vue-next'
@@ -380,6 +471,7 @@ const INLINE_PREVIEW_MIN_WIDTH = 920
 const panelRef = ref(null)
 const activeTab = ref('files')
 const modalVisible = ref(false)
+const fullscreenPreviewVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
 const htmlPreviewMode = ref('render')
@@ -717,12 +809,22 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
 }
 
 const closePreview = () => {
+  fullscreenPreviewVisible.value = false
   revokeCurrentPreviewUrl()
   modalVisible.value = false
   currentFile.value = null
   currentFilePath.value = ''
   htmlPreviewMode.value = 'render'
   selectedKeys.value = []
+}
+
+const openFullscreenPreview = () => {
+  if (!currentFile.value) return
+  fullscreenPreviewVisible.value = true
+}
+
+const closeFullscreenPreview = () => {
+  fullscreenPreviewVisible.value = false
 }
 
 const downloadFile = async (fileItem) => {
@@ -847,6 +949,7 @@ onUnmounted(() => {
   window.removeEventListener('pointercancel', stopResize)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
+  document.body.style.overflow = ''
   revokeCurrentPreviewUrl()
 })
 
@@ -868,6 +971,14 @@ watch(useInlinePreview, (isInline) => {
   }
 
   modalVisible.value = !isInline
+})
+
+watch([modalVisible, fullscreenPreviewVisible], ([modalOpen, fullscreenOpen]) => {
+  document.body.style.overflow = fullscreenOpen ? 'hidden' : ''
+
+  if (fullscreenOpen && modalOpen) {
+    modalVisible.value = false
+  }
 })
 </script>
 
@@ -1305,6 +1416,66 @@ watch(useInlinePreview, (isInline) => {
   }
 }
 
+.fullscreen-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: var(--gray-0);
+}
+
+.fullscreen-preview-actions {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fullscreen-preview-switch {
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+}
+
+.fullscreen-action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.fullscreen-preview-content {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+}
+
+.fullscreen-file-content {
+  height: 100vh;
+  max-height: none;
+  min-height: 100vh;
+  padding: 24px;
+  border-radius: 0;
+}
+
+.fullscreen-image-preview-wrapper {
+  min-height: calc(100vh - 48px);
+  align-items: center;
+}
+
+.fullscreen-embed-preview {
+  min-height: calc(100vh - 48px);
+  height: calc(100vh - 48px);
+  border-radius: 12px;
+}
+
+.fullscreen-unsupported-preview {
+  min-height: calc(100vh - 48px);
+}
+
 .file-content-pre.code-highlight {
   border-radius: 8px;
   background: var(--gray-25);
@@ -1321,6 +1492,10 @@ watch(useInlinePreview, (isInline) => {
   min-height: calc(80vh - 40px);
 }
 
+.fullscreen-file-content .file-content-pre.code-highlight code {
+  min-height: calc(100vh - 48px);
+}
+
 .image-preview-wrapper {
   display: flex;
   justify-content: center;
@@ -1333,6 +1508,10 @@ watch(useInlinePreview, (isInline) => {
   max-height: calc(80vh - 32px);
   object-fit: contain;
   border-radius: 6px;
+}
+
+.fullscreen-file-content .image-preview {
+  max-height: calc(100vh - 48px);
 }
 
 .pdf-preview {
@@ -1443,7 +1622,6 @@ watch(useInlinePreview, (isInline) => {
   white-space: nowrap;
 }
 
-/* Modal 样式优化 - shadcn 风格 */
 :deep(.ant-modal) {
   z-index: 1050;
 }
