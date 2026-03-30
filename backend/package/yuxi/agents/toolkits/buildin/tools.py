@@ -20,6 +20,15 @@ from yuxi.utils.question_utils import normalize_questions
 # Lazy initialization for TavilySearch (only when API key is available)
 _tavily_search_instance = None
 
+QWEN_IMAGE_CONFIG_GUIDE = """
+使用前需要先配置硅基流动的图片生成访问凭证。
+
+请在后端运行环境中配置环境变量：
+- `SILICONFLOW_API_KEY`：用于调用 SiliconFlow 的图片生成接口
+
+配置完成后即可使用该工具生成图片。
+""".strip()
+
 
 def _create_tavily_search():
     """Create and register TavilySearch tool with metadata."""
@@ -280,7 +289,12 @@ def query_knowledge_graph(query: Annotated[str, "The keyword to query knowledge 
         return f"知识图谱查询失败: {str(e)}"
 
 
-@tool(category="buildin", tags=["图片", "生成"], display_name="Qwen-Image")
+@tool(
+    category="buildin",
+    tags=["图片", "生成"],
+    display_name="Qwen-Image",
+    config_guide=QWEN_IMAGE_CONFIG_GUIDE,
+)
 async def text_to_img_qwen_image(
     prompt: Annotated[str, "用于生成图片的文本描述"],
     negative_prompt: Annotated[str, "负面提示词，用于指定不想出现在图片中的元素"] = "",

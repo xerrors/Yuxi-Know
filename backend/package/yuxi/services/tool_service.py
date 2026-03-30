@@ -55,6 +55,7 @@ def _ensure_metadata_loaded():
             extra = extra_meta[tool_name]
             runtime_info["category"] = extra.category
             runtime_info["tags"] = extra.tags
+            runtime_info["config_guide"] = extra.config_guide
             # display_name 优先级高于 tool.name
             if extra.display_name:
                 runtime_info["name"] = extra.display_name
@@ -62,6 +63,7 @@ def _ensure_metadata_loaded():
             # 未注册，设为默认分类
             runtime_info["category"] = "buildin"
             runtime_info["tags"] = []
+            runtime_info["config_guide"] = ""
 
         _metadata_cache.append(runtime_info)
 

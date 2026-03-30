@@ -17,6 +17,22 @@ from .security import MySQLSecurityChecker
 # 全局连接管理器实例
 _connection_manager: MySQLConnectionManager | None = None
 
+MYSQL_CONFIG_GUIDE = """
+使用前需要先配置 MySQL 连接相关环境变量。
+
+必填环境变量：
+- `MYSQL_HOST`
+- `MYSQL_PORT`
+- `MYSQL_USER`
+- `MYSQL_PASSWORD`
+- `MYSQL_DATABASE`
+
+可选环境变量：
+- `MYSQL_DATABASE_DESCRIPTION`：数据库说明，会追加到工具描述中，帮助模型理解库表语义
+
+请在后端运行环境中完成以上配置后再使用这些 MySQL 工具。
+""".strip()
+
 
 def get_connection_manager() -> MySQLConnectionManager:
     """获取全局连接管理器"""
@@ -50,6 +66,7 @@ def get_connection_manager() -> MySQLConnectionManager:
     category="mysql",
     tags=["数据库", "查询"],
     display_name="列出MySQL表",
+    config_guide=MYSQL_CONFIG_GUIDE,
     name_or_callable="mysql_list_tables",
 )
 def mysql_list_tables() -> str:
@@ -110,6 +127,7 @@ class TableDescribeModel(BaseModel):
     category="mysql",
     tags=["数据库", "结构"],
     display_name="描述MySQL表结构",
+    config_guide=MYSQL_CONFIG_GUIDE,
     name_or_callable="mysql_describe_table",
     args_schema=TableDescribeModel,
 )
@@ -212,6 +230,7 @@ class QueryModel(BaseModel):
     category="mysql",
     tags=["数据库", "SQL"],
     display_name="执行MySQL查询",
+    config_guide=MYSQL_CONFIG_GUIDE,
     name_or_callable="mysql_query",
     args_schema=QueryModel,
 )

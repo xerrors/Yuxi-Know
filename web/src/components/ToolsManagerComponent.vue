@@ -101,6 +101,16 @@
               </div>
             </div>
 
+            <div class="detail-section" v-if="currentTool.config_guide">
+              <div class="section-header">
+                <FileText :size="14" />
+                <span>配置说明</span>
+              </div>
+              <div class="section-content description config-guide">
+                {{ currentTool.config_guide }}
+              </div>
+            </div>
+
             <div class="detail-section">
               <div class="section-header">
                 <Tag :size="14" />
@@ -190,7 +200,8 @@ const filteredTools = computed(() => {
       (t) =>
         t.name.toLowerCase().includes(q) ||
         t.id.toLowerCase().includes(q) ||
-        t.description?.toLowerCase().includes(q)
+        t.description?.toLowerCase().includes(q) ||
+        t.config_guide?.toLowerCase().includes(q)
     )
   }
   return result
@@ -260,5 +271,9 @@ defineExpose({
   :deep(.ant-table) {
     font-size: 12px;
   }
+}
+
+.config-guide {
+  white-space: pre-line;
 }
 </style>

@@ -10,6 +10,7 @@ class ToolExtraMetadata:
     tags: list[str] = field(default_factory=list)
     display_name: str = ""  # 显示名称（给人看的名字）
     icon: str = ""
+    config_guide: str = ""  # 配置说明（给人看的使用前配置提示）
 
 
 # 全局注册表: tool_name -> ToolExtraMetadata
@@ -40,6 +41,7 @@ def tool(
     tags: list[str] = None,
     display_name: str = "",
     icon: str = "",
+    config_guide: str = "",
     name_or_callable: str | Callable | None = None,
     description: str | None = None,
     args_schema: type | None = None,
@@ -83,6 +85,7 @@ def tool(
             tags=tags or [],
             display_name=display_name,
             icon=icon,
+            config_guide=config_guide,
         )
 
         # 自动收集工具实例

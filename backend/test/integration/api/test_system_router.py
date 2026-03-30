@@ -38,3 +38,14 @@ async def test_admin_can_fetch_config_and_reload_info(test_client, admin_headers
     reload_payload = reload_response.json()
     assert reload_payload["success"] is True
     assert "data" in reload_payload
+
+
+async def test_admin_can_fetch_tools_with_config_guide_field(test_client, admin_headers):
+    response = await test_client.get("/api/system/tools", headers=admin_headers)
+    assert response.status_code == 200, response.text
+
+    payload = response.json()
+    assert payload["success"] is True
+    assert isinstance(payload["data"], list)
+    assert payload["data"]
+    assert "config_guide" in payload["data"][0]
