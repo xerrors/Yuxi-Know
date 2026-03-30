@@ -109,12 +109,14 @@ members = [
 
 [tool.pytest.ini_options]
 addopts = "-v --tb=short"
-testpaths = ["test"]
+testpaths = ["test/unit", "test/integration", "test/e2e"]
 pythonpath = ["."]
 markers = [
+    "unit: marks tests that run without live services",
     "auth: marks tests that require authentication",
     "slow: marks tests as slow",
-    "integration: marks tests as integration tests"
+    "integration: marks tests as integration tests",
+    "e2e: marks tests as end-to-end tests"
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

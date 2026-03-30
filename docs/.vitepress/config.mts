@@ -66,6 +66,7 @@ export default defineConfig({
           { text: '参与贡献', link: '/develop-guides/contributing' },
           { text: '开发路线图', link: '/develop-guides/roadmap' },
           { text: '界面设计规范', link: '/develop-guides/design' },
+          { text: '测试规范', link: '/develop-guides/testing-guidelines' },
         ]
       }
     ],

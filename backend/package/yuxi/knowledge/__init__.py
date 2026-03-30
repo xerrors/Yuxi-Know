@@ -6,6 +6,7 @@ from .implementations.dify import DifyKB
 from .manager import KnowledgeBaseManager
 
 _LITE_MODE = os.environ.get("LITE_MODE", "").lower() in ("true", "1")
+_SKIP_APP_INIT = os.environ.get("YUXI_SKIP_APP_INIT") == "1"
 
 if not _LITE_MODE:
     from .graphs.upload_graph_service import UploadGraphService
@@ -23,7 +24,7 @@ work_dir = os.path.join(config.save_dir, "knowledge_base_data")
 knowledge_base = KnowledgeBaseManager(work_dir)
 
 # 创建图数据库实例
-if _LITE_MODE:
+if _LITE_MODE or _SKIP_APP_INIT:
     from ..utils import logger
 
     class _LiteGraphStub:
@@ -38,7 +39,10 @@ if _LITE_MODE:
     graph_base = _LiteGraphStub()
     # 向后兼容
     GraphDatabase = _LiteGraphStub
-    logger.info("LITE_MODE enabled, knowledge graph services disabled")
+    if _LITE_MODE:
+        logger.info("LITE_MODE enabled, knowledge graph services disabled")
+    else:
+        logger.info("YUXI_SKIP_APP_INIT enabled, knowledge graph services disabled for current process")
 else:
     graph_base = UploadGraphService()
     # 向后兼容：让 GraphDatabase 指向 UploadGraphService

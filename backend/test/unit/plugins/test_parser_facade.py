@@ -12,7 +12,7 @@ from PIL import Image
 from yuxi.plugins.parser import Parser
 from yuxi.plugins.parser.factory import DocumentProcessorFactory
 
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
 
 def _build_pdf(file_path: Path, text: str) -> None:

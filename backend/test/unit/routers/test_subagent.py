@@ -16,7 +16,7 @@ from yuxi.utils.datetime_utils import utc_now_naive
 # Router Tests
 # =============================================================================
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from server.routers.subagent_router import subagents_router
@@ -429,8 +429,8 @@ class TestSubAgentService:
             def __init__(self, session):
                 pass
 
-            async def exists_name(self, name):
-                return False
+            async def get_by_name(self, name):
+                return None
 
             async def create(self, **kwargs):
                 created_agents.append(kwargs)
@@ -438,7 +438,14 @@ class TestSubAgentService:
 
         @asynccontextmanager
         async def mock_session_context(*args, **kwargs):
-            yield MagicMock()
+            session = MagicMock()
+            session.commit = MagicMock()
+
+            async def _commit():
+                return None
+
+            session.commit = _commit
+            yield session
 
         class MockPgManager:
             get_async_session_context = mock_session_context

@@ -146,7 +146,8 @@ async def test_convert_upload_to_markdown_truncates_content(
 
 
 @pytest.mark.asyncio
-async def test_convert_upload_to_markdown_rejects_unsupported_extension():
+async def test_convert_upload_to_markdown_rejects_unsupported_extension(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(svc, "ATTACHMENT_ALLOWED_EXTENSIONS", (".md",))
     upload = _DummyUpload(filename="note.pdf", content_type="application/pdf", data=b"pdf")
 
     with pytest.raises(ValueError, match="不支持的文件类型"):

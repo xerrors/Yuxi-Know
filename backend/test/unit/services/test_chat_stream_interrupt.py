@@ -1,6 +1,5 @@
 """测试 chat_service 中的 interrupt 相关函数"""
 
-import pytest
 import sys
 import os
 
@@ -212,7 +211,3 @@ class TestCoerceInterruptPayload:
     def test_none_input(self):
         result = _coerce_interrupt_payload(None)
         assert isinstance(result, dict)
-
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])

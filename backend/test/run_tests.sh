@@ -1,95 +1,77 @@
 #!/bin/bash
 
-# 测试脚本运行器
-# 提供快速运行不同类型测试的方法
+set -euo pipefail
 
-echo "Yuxi API 测试运行器"
+echo "Yuxi 测试运行器"
 echo "========================"
 
-# 检查测试服务是否运行
+PYTEST_CMD=("docker" "compose" "exec" "api" "uv" "run" "--group" "test" "pytest")
+
 check_server() {
     echo "检查测试服务器状态..."
-    curl -s http://localhost:5050/api/system/health > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
+    if curl -s http://localhost:5050/api/system/health > /dev/null 2>&1; then
         echo "✓ 测试服务器运行正常"
         return 0
-    else
-        echo "✗ 警告: 测试服务器未运行或无法访问"
-        echo "  请确保服务器在 http://localhost:5050 运行"
-        return 1
     fi
+
+    echo "✗ 警告: 测试服务器未运行或无法访问"
+    echo "  请先执行 docker compose up -d 并确认 api-dev 健康"
+    return 1
 }
 
-# 运行所有测试
+run_unit_tests() {
+    echo "运行单元测试..."
+    "${PYTEST_CMD[@]}" test/unit -m "not slow"
+}
+
+run_integration_tests() {
+    echo "运行集成测试..."
+    check_server
+    "${PYTEST_CMD[@]}" test/integration
+}
+
+run_e2e_tests() {
+    echo "运行端到端测试..."
+    check_server
+    "${PYTEST_CMD[@]}" test/e2e -m e2e
+}
+
 run_all_tests() {
-    echo "运行所有API测试..."
-    uv run pytest test/api/ -v
+    echo "运行全部测试..."
+    check_server
+    "${PYTEST_CMD[@]}" test
 }
 
-# 运行认证测试
-run_auth_tests() {
-    echo "运行认证API测试..."
-    uv run pytest test/api/test_auth_api.py -v
-}
-
-# 运行系统测试
-run_system_tests() {
-    echo "运行系统API测试..."
-    uv run pytest test/api/test_system_api.py -v
-}
-
-# 运行对话测试
-run_chat_tests() {
-    echo "运行对话API测试..."
-    uv run pytest test/api/test_chat_api.py -v
-}
-
-# 运行快速测试（只测试基础功能）
-run_quick_tests() {
-    echo "运行快速测试（基础功能）..."
-    uv run pytest test/api/ -v -m "not slow"
-}
-
-# 显示帮助
 show_help() {
     echo "用法: $0 [选项]"
     echo ""
     echo "选项:"
-    echo "  all     - 运行所有测试"
-    echo "  auth    - 运行认证测试"
-    echo "  system  - 运行系统测试"
-    echo "  chat    - 运行对话测试"
-    echo "  quick   - 运行快速测试（排除慢速测试）"
-    echo "  check   - 检查服务器状态"
-    echo "  help    - 显示此帮助"
+    echo "  unit         - 运行单元测试"
+    echo "  integration  - 运行集成测试"
+    echo "  e2e          - 运行端到端测试"
+    echo "  all          - 运行全部测试"
+    echo "  check        - 检查测试服务"
+    echo "  help         - 显示此帮助"
     echo ""
     echo "示例:"
-    echo "  $0 all       # 运行所有测试"
-    echo "  $0 quick     # 快速测试"
-    echo "  $0 check     # 检查服务器"
+    echo "  $0 unit"
+    echo "  $0 integration"
+    echo "  $0 e2e"
+    echo "  $0 all"
 }
 
-# 主逻辑
 case "${1:-all}" in
+    "unit")
+        run_unit_tests
+        ;;
+    "integration")
+        run_integration_tests
+        ;;
+    "e2e")
+        run_e2e_tests
+        ;;
     "all")
-        check_server
         run_all_tests
-        ;;
-    "auth")
-        check_server
-        run_auth_tests
-        ;;
-    "system")
-        check_server
-        run_system_tests
-        ;;
-    "chat")
-        check_server
-        run_chat_tests
-        ;;
-    "quick")
-        check_server
-        run_quick_tests
         ;;
     "check")
         check_server
