@@ -11,6 +11,8 @@ from yuxi.services import chat_service as svc
 class _FakeConvRepo:
     def __init__(self, _db):
         self.saved_messages: list[dict] = []
+        self.bound_agent_configs: list[tuple[str, int]] = []
+        self.conversations: dict[str, SimpleNamespace] = {}
 
     async def add_message_by_thread_id(
         self,
@@ -33,6 +35,27 @@ class _FakeConvRepo:
             }
         )
         return SimpleNamespace(id=1)
+
+    async def get_conversation_by_thread_id(self, thread_id: str):
+        return self.conversations.get(thread_id)
+
+    async def create_conversation(self, *, user_id: str, agent_id: str, thread_id: str):
+        conversation = SimpleNamespace(
+            user_id=user_id,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            extra_metadata={},
+        )
+        self.conversations[thread_id] = conversation
+        return conversation
+
+    async def bind_agent_config(self, thread_id: str, agent_config_id: int):
+        conversation = self.conversations.setdefault(
+            thread_id,
+            SimpleNamespace(user_id="user-1", agent_id="test-agent", thread_id=thread_id, extra_metadata={}),
+        )
+        conversation.extra_metadata["agent_config_id"] = agent_config_id
+        self.bound_agent_configs.append((thread_id, agent_config_id))
 
 
 @pytest.mark.asyncio
@@ -92,7 +115,7 @@ async def test_agent_chat_uses_invoke_messages_and_persists_langgraph_state(monk
     assert result["response"] == "Hi from invoke"
     assert result["thread_id"] == "thread-1"
     assert result["request_id"] == "req-1"
-    assert result["agent_state"] == {"todos": ["todo-1"], "files": {}}
+    assert result["agent_state"] == {"todos": ["todo-1"], "files": {}, "artifacts": []}
 
     invoke_messages = calls["invoke_messages"]
     assert isinstance(invoke_messages, list)
@@ -102,6 +125,7 @@ async def test_agent_chat_uses_invoke_messages_and_persists_langgraph_state(monk
     assert calls["invoke_input_context"] == {"temperature": 0.1, "user_id": "user-1", "thread_id": "thread-1"}
     assert calls["saved_state"]["thread_id"] == "thread-1"
     assert calls["saved_state"]["config_dict"] == {"configurable": {"thread_id": "thread-1", "user_id": "user-1"}}
+    assert calls["saved_state"]["conv_repo"].bound_agent_configs == [("thread-1", 123)]
 
 
 @pytest.mark.asyncio
@@ -153,3 +177,4 @@ async def test_agent_chat_sync_returns_finished_even_when_state_has_interrupt(mo
     assert result["status"] == "finished"
     assert result["response"] == "Need input later"
     assert result["thread_id"] == "thread-2"
+    assert result["request_id"] == "req-2"

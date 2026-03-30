@@ -226,7 +226,7 @@ async def test_viewer_file_returns_raw_content_without_line_numbers(test_client,
     assert response.status_code == 200, response.text
     assert "alpha" in response.json()["content"]
     assert "beta" in response.json()["content"]
-    assert response.json()["preview_type"] == "text"
+    assert response.json()["preview_type"] == "markdown"
     assert response.json()["supported"] is True
 
 
@@ -334,24 +334,9 @@ async def test_viewer_download_returns_full_file_for_large_user_data_content(tes
     assert response.content == large_content.encode("utf-8")
 
 
-async def test_viewer_tree_root_lists_kbs_namespace_when_visible(test_client, standard_user, monkeypatch):
+async def test_viewer_tree_root_hides_kbs_namespace_when_no_database_is_visible(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
-
-    async def _fake_list_viewer_filesystem_tree(**kwargs):
-        return {
-            "entries": [
-                {"path": "/home/gem/user-data/", "name": "user-data", "is_dir": True, "size": 0, "modified_at": ""},
-                {"path": "/home/gem/kbs/", "name": "kbs", "is_dir": True, "size": 0, "modified_at": ""},
-            ]
-        }
-
-    router_module = importlib.import_module("server.routers.filesystem_router")
-    monkeypatch.setitem(
-        router_module.get_viewer_tree.__globals__,
-        "list_viewer_filesystem_tree",
-        _fake_list_viewer_filesystem_tree,
-    )
 
     response = await test_client.get(
         "/api/viewer/filesystem/tree",
@@ -362,10 +347,11 @@ async def test_viewer_tree_root_lists_kbs_namespace_when_visible(test_client, st
 
     entries = response.json().get("entries", [])
     paths = {entry.get("path") for entry in entries}
-    assert "/home/gem/kbs/" in paths
+    assert "/home/gem/user-data/" in paths
+    assert "/home/gem/kbs/" not in paths
 
 
-async def test_viewer_can_list_and_read_kbs_namespace(test_client, standard_user):
+async def test_viewer_kbs_namespace_is_empty_when_no_database_is_visible(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)
 
@@ -376,4 +362,4 @@ async def test_viewer_can_list_and_read_kbs_namespace(test_client, standard_user
     )
     assert tree_response.status_code == 200, tree_response.text
     entries = tree_response.json().get("entries", [])
-    assert any(str(entry.get("path", "")).startswith("/home/gem/kbs/") for entry in entries)
+    assert entries == []

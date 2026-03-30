@@ -1,3 +1,4 @@
+import asyncio
 import os
 import traceback
 from functools import partial
@@ -34,6 +35,9 @@ class LightRagKB(KnowledgeBase):
 
         # 存储 LightRAG 实例映射 {db_id: LightRAG}
         self.instances: dict[str, LightRAG] = {}
+        self._db_write_locks: dict[str, asyncio.Lock] = {}
+        self._db_instance_locks: dict[str, asyncio.Lock] = {}
+        self._lock_guard = asyncio.Lock()
 
         logger.info("LightRagKB initialized")
 
@@ -197,20 +201,34 @@ class LightRagKB(KnowledgeBase):
         if db_id not in self.databases_meta:
             return None
 
-        try:
-            # 创建实例
-            rag = await self._create_kb_instance(db_id, {})
+        instance_lock = await self._get_db_instance_lock(db_id)
+        async with instance_lock:
+            if db_id in self.instances:
+                logger.info(f"Using cached LightRAG instance for {db_id}")
+                return self.instances[db_id]
 
-            # 异步初始化存储
-            await self._initialize_kb_instance(rag)
+            try:
+                # 创建实例
+                rag = await self._create_kb_instance(db_id, {})
 
-            self.instances[db_id] = rag
-            return rag
+                # 异步初始化存储
+                await self._initialize_kb_instance(rag)
 
-        except Exception as e:
-            logger.error(f"Failed to create LightRAG instance for {db_id}: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            return None
+                self.instances[db_id] = rag
+                return rag
+
+            except Exception as e:
+                logger.error(f"Failed to create LightRAG instance for {db_id}: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                return None
+
+    async def _get_db_write_lock(self, db_id: str) -> asyncio.Lock:
+        async with self._lock_guard:
+            return self._db_write_locks.setdefault(db_id, asyncio.Lock())
+
+    async def _get_db_instance_lock(self, db_id: str) -> asyncio.Lock:
+        async with self._lock_guard:
+            return self._db_instance_locks.setdefault(db_id, asyncio.Lock())
 
     def _get_llm_func(self, llm_info: dict):
         """获取 LLM 函数"""
@@ -299,163 +317,73 @@ class LightRagKB(KnowledgeBase):
         if db_id not in self.databases_meta:
             raise ValueError(f"Database {db_id} not found")
 
-        rag = await self._get_lightrag_instance(db_id)
-        if not rag:
-            raise ValueError(f"Failed to get LightRAG instance for {db_id}")
+        db_write_lock = await self._get_db_write_lock(db_id)
+        async with db_write_lock:
+            rag = await self._get_lightrag_instance(db_id)
+            if not rag:
+                raise ValueError(f"Failed to get LightRAG instance for {db_id}")
 
-        # Get file meta
-        if file_id not in self.files_meta:
-            raise ValueError(f"File {file_id} not found")
-        file_meta = self.files_meta[file_id]
-
-        # Validate current status - only allow indexing from these states
-        current_status = file_meta.get("status")
-        allowed_statuses = {
-            FileStatus.PARSED,
-            FileStatus.ERROR_INDEXING,
-            FileStatus.INDEXED,  # For re-indexing
-            "done",  # Legacy status
-        }
-
-        if current_status not in allowed_statuses:
-            raise ValueError(
-                f"Cannot index file with status '{current_status}'. "
-                f"File must be parsed first (status should be one of: {', '.join(allowed_statuses)})"
-            )
-
-        # Check markdown file exists
-        if not file_meta.get("markdown_file"):
-            raise ValueError("File has not been parsed yet (no markdown_file)")
-
-        # Clear previous error if any
-        if "error" in file_meta:
-            self.files_meta[file_id].pop("error", None)
-
-        # Update status and add to processing queue
-        self.files_meta[file_id]["status"] = FileStatus.INDEXING
-        self.files_meta[file_id]["updated_at"] = utc_isoformat()
-        if operator_id:
-            self.files_meta[file_id]["updated_by"] = operator_id
-        await self._persist_file(file_id)
-
-        # Add to processing queue
-        self._add_to_processing_queue(file_id)
-
-        try:
-            # Read markdown
-            markdown_content = await self._read_markdown_from_minio(file_meta["markdown_file"])
-            file_path = file_meta.get("path")
-            filename = file_meta.get("filename") or file_id
-            processing_params = resolve_chunk_processing_params(
-                kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
-                file_processing_params=file_meta.get("processing_params"),
-            )
-            self.files_meta[file_id]["processing_params"] = processing_params
-            await self._save_metadata()
-
-            chunks = chunk_markdown(markdown_content, file_id, filename, processing_params)
-            chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(chunks)
-            if not chunk_input:
-                chunk_input = markdown_content
-
-            # Clean up existing chunks if any (for re-indexing)
-            await self.delete_file_chunks_only(db_id, file_id)
-
-            # Insert
-            await rag.ainsert(
-                input=chunk_input,
-                ids=file_id,
-                file_paths=file_path,
-                split_by_character=split_by_character,
-                split_by_character_only=split_by_character_only,
-            )
-            await self._ensure_doc_processed(rag, file_id)
-
-            logger.info(
-                f"Indexed file {file_id} into LightRAG with {len(chunks)} chunks, "
-                f"chunk_preset_id={processing_params.get('chunk_preset_id')}"
-            )
-
-            # Update status
-            self.files_meta[file_id]["status"] = FileStatus.INDEXED
-            self.files_meta[file_id]["updated_at"] = utc_isoformat()
-            if operator_id:
-                self.files_meta[file_id]["updated_by"] = operator_id
-            await self._persist_file(file_id)
-
-            return self.files_meta[file_id]
-
-        except Exception as e:
-            logger.error(f"Indexing failed for {file_id}: {e}")
-            self.files_meta[file_id]["status"] = FileStatus.ERROR_INDEXING
-            self.files_meta[file_id]["error"] = str(e)
-            self.files_meta[file_id]["updated_at"] = utc_isoformat()
-            if operator_id:
-                self.files_meta[file_id]["updated_by"] = operator_id
-            await self._persist_file(file_id)
-            raise
-
-        finally:
-            # Remove from processing queue
-            self._remove_from_processing_queue(file_id)
-
-    async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
-        """更新内容 - 根据file_ids重新解析文件并更新向量库"""
-        if db_id not in self.databases_meta:
-            raise ValueError(f"Database {db_id} not found")
-
-        rag = await self._get_lightrag_instance(db_id)
-        if not rag:
-            raise ValueError(f"Failed to get LightRAG instance for {db_id}")
-
-        # 处理默认参数
-        if params is None:
-            params = {}
-        processed_items_info = []
-
-        for file_id in file_ids:
-            # 从元数据中获取文件信息
+            # Get file meta
             if file_id not in self.files_meta:
-                logger.warning(f"File {file_id} not found in metadata, skipping")
-                continue
-
+                raise ValueError(f"File {file_id} not found")
             file_meta = self.files_meta[file_id]
-            file_path = file_meta.get("path")
 
-            if not file_path:
-                logger.warning(f"File path not found for {file_id}, skipping")
-                continue
+            # Validate current status - only allow indexing from these states
+            current_status = file_meta.get("status")
+            allowed_statuses = {
+                FileStatus.PARSED,
+                FileStatus.ERROR_INDEXING,
+                FileStatus.INDEXED,  # For re-indexing
+                "done",  # Legacy status
+            }
 
-            # 添加到处理队列
+            if current_status not in allowed_statuses:
+                raise ValueError(
+                    f"Cannot index file with status '{current_status}'. "
+                    f"File must be parsed first (status should be one of: {', '.join(allowed_statuses)})"
+                )
+
+            # Check markdown file exists
+            if not file_meta.get("markdown_file"):
+                raise ValueError("File has not been parsed yet (no markdown_file)")
+
+            # Clear previous error if any
+            if "error" in file_meta:
+                self.files_meta[file_id].pop("error", None)
+
+            # Update status and add to processing queue
+            self.files_meta[file_id]["status"] = FileStatus.INDEXING
+            self.files_meta[file_id]["updated_at"] = utc_isoformat()
+            if operator_id:
+                self.files_meta[file_id]["updated_by"] = operator_id
+            await self._persist_file(file_id)
+
+            # Add to processing queue
             self._add_to_processing_queue(file_id)
 
             try:
-                # 更新状态为处理中
-                resolved_params = resolve_chunk_processing_params(
-                    kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
-                    file_processing_params=self.files_meta[file_id].get("processing_params"),
-                    request_params=params,
-                )
-                self.files_meta[file_id]["processing_params"] = resolved_params
-                self.files_meta[file_id]["status"] = "processing"
-                await self._persist_file(file_id)
-
-                # 重新解析文件为 markdown
-                params["image_bucket"] = "public"
-                params["image_prefix"] = f"{db_id}/kb-images"
-                markdown_content = await Parser.aparse(source=file_path, params=params)
-                markdown_content_lines = markdown_content[:100].replace("\n", " ")
-                logger.info(f"Markdown content: {markdown_content_lines}...")
+                # Read markdown
+                markdown_content = await self._read_markdown_from_minio(file_meta["markdown_file"])
+                file_path = file_meta.get("path")
                 filename = file_meta.get("filename") or file_id
-                chunks = chunk_markdown(markdown_content, file_id, filename, resolved_params)
-                chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(chunks)
+                processing_params = resolve_chunk_processing_params(
+                    kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
+                    file_processing_params=file_meta.get("processing_params"),
+                )
+                self.files_meta[file_id]["processing_params"] = processing_params
+                await self._save_metadata()
+
+                chunks = chunk_markdown(markdown_content, file_id, filename, processing_params)
+                chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(
+                    chunks
+                )
                 if not chunk_input:
                     chunk_input = markdown_content
 
-                # 先删除现有的 LightRAG 数据（仅删除chunks，保留元数据）
+                # Clean up existing chunks if any (for re-indexing)
                 await self.delete_file_chunks_only(db_id, file_id)
 
-                # 使用 LightRAG 重新插入内容
+                # Insert
                 await rag.ainsert(
                     input=chunk_input,
                     ids=file_id,
@@ -465,39 +393,137 @@ class LightRagKB(KnowledgeBase):
                 )
                 await self._ensure_doc_processed(rag, file_id)
 
-                logger.info(f"Updated file {file_path} in LightRAG. Done.")
+                logger.info(
+                    f"Indexed file {file_id} into LightRAG with {len(chunks)} chunks, "
+                    f"chunk_preset_id={processing_params.get('chunk_preset_id')}"
+                )
 
-                # 更新元数据状态
-                self.files_meta[file_id]["status"] = "done"
+                # Update status
+                self.files_meta[file_id]["status"] = FileStatus.INDEXED
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
                 await self._persist_file(file_id)
 
-                # 从处理队列中移除
-                self._remove_from_processing_queue(file_id)
-
-                # 返回更新后的文件信息
-                updated_file_meta = file_meta.copy()
-                updated_file_meta["status"] = "done"
-                updated_file_meta["file_id"] = file_id
-                processed_items_info.append(updated_file_meta)
+                return self.files_meta[file_id]
 
             except Exception as e:
-                error_msg = str(e)
-                logger.error(f"更新file {file_path} 失败: {error_msg}, {traceback.format_exc()}")
-                self.files_meta[file_id]["status"] = "failed"
-                self.files_meta[file_id]["error"] = error_msg
+                logger.error(f"Indexing failed for {file_id}: {e}")
+                self.files_meta[file_id]["status"] = FileStatus.ERROR_INDEXING
+                self.files_meta[file_id]["error"] = str(e)
+                self.files_meta[file_id]["updated_at"] = utc_isoformat()
+                if operator_id:
+                    self.files_meta[file_id]["updated_by"] = operator_id
                 await self._persist_file(file_id)
+                raise
 
-                # 从处理队列中移除
+            finally:
+                # Remove from processing queue
                 self._remove_from_processing_queue(file_id)
 
-                # 返回失败的文件信息
-                failed_file_meta = file_meta.copy()
-                failed_file_meta["status"] = "failed"
-                failed_file_meta["file_id"] = file_id
-                failed_file_meta["error"] = error_msg
-                processed_items_info.append(failed_file_meta)
+    async def update_content(self, db_id: str, file_ids: list[str], params: dict | None = None) -> list[dict]:
+        """更新内容 - 根据file_ids重新解析文件并更新向量库"""
+        if db_id not in self.databases_meta:
+            raise ValueError(f"Database {db_id} not found")
 
-        return processed_items_info
+        db_write_lock = await self._get_db_write_lock(db_id)
+        async with db_write_lock:
+            rag = await self._get_lightrag_instance(db_id)
+            if not rag:
+                raise ValueError(f"Failed to get LightRAG instance for {db_id}")
+
+            # 处理默认参数
+            if params is None:
+                params = {}
+            processed_items_info = []
+
+            for file_id in file_ids:
+                # 从元数据中获取文件信息
+                if file_id not in self.files_meta:
+                    logger.warning(f"File {file_id} not found in metadata, skipping")
+                    continue
+
+                file_meta = self.files_meta[file_id]
+                file_path = file_meta.get("path")
+
+                if not file_path:
+                    logger.warning(f"File path not found for {file_id}, skipping")
+                    continue
+
+                # 添加到处理队列
+                self._add_to_processing_queue(file_id)
+
+                try:
+                    # 更新状态为处理中
+                    resolved_params = resolve_chunk_processing_params(
+                        kb_additional_params=self.databases_meta.get(db_id, {}).get("metadata"),
+                        file_processing_params=self.files_meta[file_id].get("processing_params"),
+                        request_params=params,
+                    )
+                    self.files_meta[file_id]["processing_params"] = resolved_params
+                    self.files_meta[file_id]["status"] = "processing"
+                    await self._persist_file(file_id)
+
+                    # 重新解析文件为 markdown
+                    params["image_bucket"] = "public"
+                    params["image_prefix"] = f"{db_id}/kb-images"
+                    markdown_content = await Parser.aparse(source=file_path, params=params)
+                    markdown_content_lines = markdown_content[:100].replace("\n", " ")
+                    logger.info(f"Markdown content: {markdown_content_lines}...")
+                    filename = file_meta.get("filename") or file_id
+                    chunks = chunk_markdown(markdown_content, file_id, filename, resolved_params)
+                    chunk_input, split_by_character, split_by_character_only = self._prepare_lightrag_insert_payload(
+                        chunks
+                    )
+                    if not chunk_input:
+                        chunk_input = markdown_content
+
+                    # 先删除现有的 LightRAG 数据（仅删除chunks，保留元数据）
+                    await self.delete_file_chunks_only(db_id, file_id)
+
+                    # 使用 LightRAG 重新插入内容
+                    await rag.ainsert(
+                        input=chunk_input,
+                        ids=file_id,
+                        file_paths=file_path,
+                        split_by_character=split_by_character,
+                        split_by_character_only=split_by_character_only,
+                    )
+                    await self._ensure_doc_processed(rag, file_id)
+
+                    logger.info(f"Updated file {file_path} in LightRAG. Done.")
+
+                    # 更新元数据状态
+                    self.files_meta[file_id]["status"] = "done"
+                    await self._persist_file(file_id)
+
+                    # 从处理队列中移除
+                    self._remove_from_processing_queue(file_id)
+
+                    # 返回更新后的文件信息
+                    updated_file_meta = file_meta.copy()
+                    updated_file_meta["status"] = "done"
+                    updated_file_meta["file_id"] = file_id
+                    processed_items_info.append(updated_file_meta)
+
+                except Exception as e:
+                    error_msg = str(e)
+                    logger.error(f"更新file {file_path} 失败: {error_msg}, {traceback.format_exc()}")
+                    self.files_meta[file_id]["status"] = "failed"
+                    self.files_meta[file_id]["error"] = error_msg
+                    await self._persist_file(file_id)
+
+                    # 从处理队列中移除
+                    self._remove_from_processing_queue(file_id)
+
+                    # 返回失败的文件信息
+                    failed_file_meta = file_meta.copy()
+                    failed_file_meta["status"] = "failed"
+                    failed_file_meta["file_id"] = file_id
+                    failed_file_meta["error"] = error_msg
+                    processed_items_info.append(failed_file_meta)
+
+            return processed_items_info
 
     async def aquery(self, query_text: str, db_id: str, agent_call: bool = False, **kwargs) -> str:
         """异步查询知识库"""

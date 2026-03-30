@@ -422,7 +422,7 @@ async def test_get_supported_file_types(test_client, admin_headers):
 
 async def test_markdown_endpoint_parses_uploaded_text_file(test_client, admin_headers):
     """测试 /files/markdown 能解析上传文件并返回 markdown。"""
-    data_dir = Path(__file__).resolve().parents[1] / "data"
+    data_dir = Path(__file__).resolve().parents[2] / "data"
     test_file = data_dir / "A_Dream_of_Red_Mansions_10hui.txt"
 
     assert test_file.exists(), f"测试文件不存在: {test_file}"

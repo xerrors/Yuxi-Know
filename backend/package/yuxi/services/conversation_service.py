@@ -74,7 +74,7 @@ async def _convert_upload_to_markdown(upload: UploadFile) -> ConversionResult:
     file_name = Path(upload.filename).name
     suffix = Path(file_name).suffix.lower()
 
-    if suffix not in ATTACHMENT_ALLOWED_EXTENSIONS:
+    if ATTACHMENT_ALLOWED_EXTENSIONS and suffix not in ATTACHMENT_ALLOWED_EXTENSIONS:
         allowed = ", ".join(ATTACHMENT_ALLOWED_EXTENSIONS)
         raise ValueError(f"不支持的文件类型: {suffix or '未知'}，当前仅支持 {allowed}")
 

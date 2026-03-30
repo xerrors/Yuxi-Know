@@ -49,6 +49,7 @@ services:
       - ./saves:/app/saves
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts
+      - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
       - ./.env:/app/.env
       - ${MODEL_DIR:-./models}:/models  # 使用默认值处理未定义的环境变量
       - /var/run/docker.sock:/var/run/docker.sock
@@ -95,6 +96,7 @@ services:
       - ./saves:/app/saves
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts
+      - ./docker/sandbox_provisioner:/app/docker/sandbox_provisioner:ro
       - ./.env:/app/.env
       - ./backend/pyproject.toml:/app/pyproject.toml
       - ./backend/uv.lock:/app/uv.lock

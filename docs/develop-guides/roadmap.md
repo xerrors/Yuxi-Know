@@ -49,6 +49,7 @@
 - 新增知识库 PDF、图片的预览功能
 - 优化扩展页工具列表筛选区：将“全部分类”筛选收纳为搜索框右侧的紧凑下拉入口，并复用扩展页侧栏工具条样式，避免影响其他管理组件布局
 - 重构扩展管理中的 SubAgent 与 MCP 交互，统一为类似 Skills 的“已添加 / 可添加”列表，不再使用服务器级开关切换，为 SubAgent 增加 `enabled` 状态，并让运行时只加载已添加项，调整内置 SubAgent / MCP 的启动同步逻辑，使用代码中的最新定义覆盖数据库展示字段，同时保留启用状态与 MCP 工具禁用状态；统一扩展详情区胶囊操作按钮样式到公共 `extensions.less`，并将内置 MCP 在详情页中的危险操作从禁用“删除”改为可执行的“移除”
+- 重构后端测试目录结构：按 `unit / integration / e2e` 分层迁移现有测试，拆分全局 `conftest.py`，统一测试入口为 `uv run --group test pytest`，并新增独立测试规范文档 `docs/vibe/testing-guidelines.md`
 
 <!-- 添加到这里 -->
 
@@ -65,6 +66,7 @@
 - 修复 GitHub Pages 文档部署工作流失败：移除 `actions/setup-node@v4` 对不存在 `docs/package-lock.json` 的缓存依赖，并将 `docs` 目录安装命令从 `npm ci` 调整为 `npm install`，避免因未提交锁文件导致 CI 在依赖缓存和安装阶段直接失败
 - 修正沙盒 provisioner backend 命名与配置说明：统一对外使用 `docker` / `kubernetes`，保留 `local` 作为兼容别名；同步清理 compose 中未生效的 provisioner 环境变量、补齐 K8s 相关变量注释，并更新沙盒架构文档中的默认模式与 backend 描述
 - 修复智能体配置列表接口在“无配置自动创建默认配置”路径下的参数缺失：补齐 `get_or_create_default` 的 `agent_id` 入参，避免 `/api/chat/agent/{agent_id}/configs` 返回 500
+- 修复 LightRAG 同库写入并发导致的入库失败：为 `index_file` / `update_content` 增加按知识库维度的串行锁，并补齐 `documents` 接口 `auto_index` 阶段对最新解析状态的回写与回归测试，避免长时间入库任务进行中再次选择同库文件时直接并发写入报错
 
 <!-- 添加到这里 -->
 

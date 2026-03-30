@@ -142,7 +142,7 @@ async def test_create_agent_run_commits_before_enqueue(monkeypatch: pytest.Monke
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active", department_id=1)
+            return SimpleNamespace(user_id="1", status="active", department_id=1, extra_metadata={"agent_config_id": 1})
 
     class Queue:
         async def enqueue_job(self, job_name: str, run_id: str, _job_id: str):
@@ -227,7 +227,7 @@ async def test_create_agent_run_handles_integrity_error_with_same_user_existing(
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active", department_id=1)
+            return SimpleNamespace(user_id="1", status="active", department_id=1, extra_metadata={"agent_config_id": 1})
 
     async def fake_get_arq_pool():
         raise AssertionError("should not enqueue on integrity fallback")
@@ -300,7 +300,7 @@ async def test_create_agent_run_integrity_error_returns_409_for_other_user(monke
 
         async def get_conversation_by_thread_id(self, thread_id: str):
             del thread_id
-            return SimpleNamespace(user_id="1", status="active", department_id=1)
+            return SimpleNamespace(user_id="1", status="active", department_id=1, extra_metadata={"agent_config_id": 1})
 
     monkeypatch.setattr(agent_run_service.agent_manager, "get_agent", lambda agent_id: object())
     monkeypatch.setattr(agent_run_service, "AgentConfigRepository", FakeConfigRepo)
