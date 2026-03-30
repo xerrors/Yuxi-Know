@@ -208,6 +208,7 @@ async def list_agent_configs(
     if not items:
         await repo.get_or_create_default(
             department_id=current_user.department_id,
+            agent_id=agent_id,
             created_by=str(current_user.id),
         )
         items = await repo.list_by_department_agent(department_id=current_user.department_id, agent_id=agent_id)
