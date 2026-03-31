@@ -10,17 +10,12 @@
 [![demo](https://img.shields.io/badge/demo-00A1D6.svg?style=flat&logo=bilibili&logoColor=white)](https://www.bilibili.com/video/BV1DF14BTETq/)
 
 
-<a href="https://trendshift.io/repositories/15845" target="_blank">
-  <img src="https://trendshift.io/api/badge/repositories/15845" alt="Yuxi | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-</a>
-
-
-[**文档中心**](https://xerrors.github.io/Yuxi/) |
-[**视频演示**](https://www.bilibili.com/video/BV1DF14BTETq/)
+<a href="https://trendshift.io/repositories/24335" target="_blank"><img src="https://trendshift.io/api/badge/repositories/24335" alt="xerrors%2FYuxi | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 
 </div>
 
-![image-20260326130844668](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260326130844668.png)
+![arch](https://xerrors.oss-cn-shanghai.aliyuncs.com/github/image-20260331204645479.png)
+
 
 **图由 Nano Banana 2 生成*
 
