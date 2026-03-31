@@ -4,6 +4,7 @@ from yuxi.utils import logger
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,14 @@ from server.utils.user_utils import generate_unique_user_id, validate_username, 
 from server.utils.common_utils import log_operation
 from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils.datetime_utils import utc_now_naive
+
+# OIDC 认证相关导入
+from server.routers.auth_router_oidc import (
+    get_oidc_config_handler,
+    oidc_callback_handler,
+    oidc_login_url_handler,
+    OIDCConfigResponse,
+)
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -826,3 +835,29 @@ async def impersonate_user(
         "department_id": target_user.department_id,
         "department_name": department_name,
     }
+
+
+# =============================================================================
+# === OIDC 认证分组 ===
+# =============================================================================
+
+@auth.get("/oidc/config", response_model=OIDCConfigResponse)
+async def get_oidc_config():
+    """获取 OIDC 配置（供前端使用）"""
+    return await get_oidc_config_handler()
+
+
+@auth.get("/oidc/login-url")
+async def get_oidc_login_url(redirect_path: str = "/"):
+    """获取 OIDC 登录 URL"""
+    return await oidc_login_url_handler(redirect_path)
+
+
+@auth.get("/oidc/callback", response_class=RedirectResponse)
+async def oidc_callback(
+    code: str,
+    state: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """处理 OIDC 回调 - 重定向到前端 Vue 路由"""
+    return await oidc_callback_handler(None, code, state, db)

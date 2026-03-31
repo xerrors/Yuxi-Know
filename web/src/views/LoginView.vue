@@ -215,6 +215,33 @@
                     </a-button>
                   </a-form-item>
                 </a-form>
+
+                <!-- OIDC 登录选项  -->
+                <div v-if="oidcChecking || oidcEnabled" class="third-party-login">
+                  <div class="divider">
+                    <span>或使用以下方式登录</span>
+                  </div>
+                  <div class="login-icons">
+                    <!-- 检查中显示骨架屏 -->
+                    <div v-if="oidcChecking" class="login-skeleton">
+                      <a-skeleton-button block size="large" :active="true" />
+                    </div>
+                    <!-- 检查完成后显示按钮 -->
+                    <a-button
+                      v-else
+                      type="default"
+                      size="large"
+                      block
+                      :loading="oidcLoading"
+                      @click="handleOIDCLogin"
+                    >
+                      <template #icon>
+                        <key-icon size="18" />
+                      </template>
+                      {{ oidcButtonText }}
+                    </a-button>
+                  </div>
+                </div>
               </div>
 
               <!-- 错误提示 -->
@@ -243,18 +270,22 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useInfoStore } from '@/stores/info'
 import { useAgentStore } from '@/stores/agent'
 import { message } from 'ant-design-vue'
 import { healthApi } from '@/apis/system_api'
+import { authApi } from '@/apis/auth_api'
 import {
   User as UserIcon,
   Lock as LockIcon,
+  Key as KeyIcon,
   AlertCircle as ExclamationCircleIcon
 } from 'lucide-vue-next'
+
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const infoStore = useInfoStore()
 const agentStore = useAgentStore()
@@ -297,6 +328,12 @@ const agreementAccepted = ref(false)
 const serverStatus = ref('loading')
 const serverError = ref('')
 const healthChecking = ref(false)
+
+// OIDC 相关状态
+const oidcEnabled = ref(false)
+const oidcLoading = ref(false)
+const oidcChecking = ref(true) 
+const oidcButtonText = ref('OIDC 登录')
 
 // 登录锁定相关状态
 const isLocked = ref(false)
@@ -462,6 +499,53 @@ const handleLogin = async () => {
   }
 }
 
+// 处理 OIDC 登录
+const handleOIDCLogin = async () => {
+  if (!ensureAgreementAccepted()) {
+    return
+  }
+
+  try {
+    oidcLoading.value = true
+    errorMessage.value = ''
+
+    // 获取 OIDC 登录 URL
+    const response = await authApi.getOIDCLoginUrl()
+    if (response.login_url) {
+      // 保存当前路径，以便登录后返回
+      const redirectPath = sessionStorage.getItem('redirect') || router.currentRoute.value.query.redirect || '/'
+      sessionStorage.setItem('oidc_redirect', redirectPath)
+
+      // 跳转到 OIDC Provider
+      window.location.href = response.login_url
+    } else {
+      errorMessage.value = '获取 OIDC 登录地址失败'
+    }
+  } catch (error) {
+    console.error('OIDC 登录失败:', error)
+    errorMessage.value = error.message || 'OIDC 登录失败，请重试'
+  } finally {
+    oidcLoading.value = false
+  }
+}
+
+// 检查 OIDC 配置
+const checkOIDCConfig = async () => {
+  oidcChecking.value = true
+  try {
+    const config = await authApi.getOIDCConfig()
+    oidcEnabled.value = config.enabled
+    if (config.provider_name) {
+      oidcButtonText.value = config.provider_name
+    }
+  } catch (error) {
+    console.error('检查 OIDC 配置失败:', error)
+    oidcEnabled.value = false
+  } finally {
+    oidcChecking.value = false
+  }
+}
+
 // 处理初始化管理员
 const handleInitialize = async () => {
   if (!ensureAgreementAccepted()) {
@@ -535,11 +619,19 @@ onMounted(async () => {
     return
   }
 
+  // 显示 OIDC 认证失败的错误信息（由后端重定向携带）
+  if (route.query.oidc_error) {
+    errorMessage.value = String(route.query.oidc_error)
+  }
+
   // 首先检查服务器健康状态
   await checkServerHealth()
 
   // 检查是否是首次运行
   await checkFirstRunStatus()
+
+  // 检查 OIDC 配置
+  checkOIDCConfig()
 })
 
 // 组件卸载时清理定时器
@@ -763,25 +855,33 @@ onUnmounted(() => {
   }
 
   .login-icons {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-    .login-icon {
-      width: 36px;
-      height: 36px;
-      font-size: 18px;
-      color: var(--gray-500);
-      border-color: var(--gray-300);
+    :deep(.ant-btn) {
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.2s ease;
+      gap: 8px;
+      border-color: var(--gray-300);
+      color: var(--gray-700);
+
       &:hover {
-        color: var(--main-color);
         border-color: var(--main-color);
+        color: var(--main-color);
         background-color: var(--main-10);
-        transform: translateY(-2px);
       }
+
+      .anticon,
+      svg {
+        color: var(--main-color);
+      }
+    }
+  }
+
+  /* 修复：添加骨架屏样式 */
+  .login-skeleton {
+    :deep(.ant-skeleton-button) {
+      width: 100% !important;
+      height: 44px;
+      border-radius: 8px;
     }
   }
 }
