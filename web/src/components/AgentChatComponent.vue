@@ -262,6 +262,7 @@ import { useAgentRunStream } from '@/composables/useAgentRunStream'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import { useStreamSmoother } from '@/composables/useStreamSmoother'
 import { useAgentMentionConfig } from '@/composables/useAgentMentionConfig'
+import { shouldAutoOpenAgentPanel } from '@/utils/agentPanelAutoOpen'
 import AgentArtifactsCard from '@/components/AgentArtifactsCard.vue'
 import AgentPanel from '@/components/AgentPanel.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
@@ -440,9 +441,7 @@ const currentTodos = computed(() => {
 })
 
 const hasAgentStateContent = computed(() => {
-  if (currentThreadFiles.value.length === 0) return false
-  const fileCount = currentThreadFiles.value.filter((item) => item?.is_dir !== true).length
-  return fileCount > 0
+  return shouldAutoOpenAgentPanel(currentThreadFiles.value)
 })
 
 // 监听 hasAgentStateContent 从 false → true 时，自动展开面板
