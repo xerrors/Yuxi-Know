@@ -252,6 +252,7 @@ const updateMentionItems = (query = '') => {
 
   const lowerQuery = query.toLowerCase()
   const { files = [], knowledgeBases = [], mcps = [], skills = [], subagents = [] } = props.mention
+  const workspacePrefix = '/home/gem/user-data/workspace/'
 
   const filterItems = (list) =>
     list.filter((item) => {
@@ -269,6 +270,13 @@ const updateMentionItems = (query = '') => {
           .includes(lowerQuery)
       )
     })
+
+  const filterFileItems = (list) => {
+    if (!query) {
+      return list.filter((item) => !String(item.value || '').startsWith(workspacePrefix))
+    }
+    return filterItems(list)
+  }
 
   const fileItems = files.map((f) => {
     const path = f.path || ''
@@ -333,7 +341,7 @@ const updateMentionItems = (query = '') => {
   })
 
   mentionItems.value = {
-    files: filterItems(fileItems),
+    files: filterFileItems(fileItems),
     knowledgeBases: filterItems(knowledgeItems),
     mcps: filterItems(mcpItems),
     skills: filterItems(skillItems),

@@ -456,6 +456,7 @@ watch(hasAgentStateContent, (newVal, oldVal) => {
 })
 const { mentionConfig } = useAgentMentionConfig({
   currentAgentState,
+  currentThreadFiles,
   currentThreadAttachments,
   configurableItems,
   agentConfig,
