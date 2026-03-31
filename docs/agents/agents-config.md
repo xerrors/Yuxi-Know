@@ -258,13 +258,13 @@ config_json.context + runtime ids -> context_schema instance
 
 ## 5. `capabilities` 的作用
 
-`capabilities` 用于声明前端能力开关，控制 UI 组件显示，不等同于 Context。
+`capabilities` 用于声明前端可直接从 Agent 静态元数据判断的能力开关，控制上传入口、文件面板等固定 UI，不等同于 Context，也不适合表达运行中才会出现的状态。
 
 示例：
 
 ```python
 class MyAgent(BaseAgent):
-    capabilities = ["file_upload", "files", "todo"]
+    capabilities = ["file_upload", "files"]
 ```
 
 当前常见能力包括：
@@ -273,9 +273,10 @@ class MyAgent(BaseAgent):
 | --- | --- |
 | `file_upload` | 启用上传入口 |
 | `files` | 启用文件面板 |
-| `todo` | 启用待办能力 |
 
-它解决的是“页面上显示什么”，而不是“运行时如何配置模型和工具”。
+像 todo 这类运行态信息，不建议再放进 `capabilities`。Yuxi 当前会直接从 LangGraph state 中提取 `agent_state.todos`，前端按运行时是否真的存在任务来决定是否展示待办入口与状态卡片。
+
+它解决的是“Agent 先天支持什么固定入口”，而不是“运行时当前产生了什么状态”。
 
 ## 6. 开发建议
 
