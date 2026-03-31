@@ -150,3 +150,73 @@ async def test_stream_agent_chat_passes_langfuse_callbacks_and_persists_trace_in
     assert chunks[-1]["status"] == "finished"
     assert calls["flushed"] is True
     assert isinstance(calls["stream_messages"][0], HumanMessage)
+
+
+@pytest.mark.asyncio
+async def test_stream_agent_chat_emits_realtime_agent_state_from_values(monkeypatch: pytest.MonkeyPatch):
+    class FakeGraph:
+        async def aget_state(self, _config):
+            return SimpleNamespace(values={"todos": [{"content": "done", "status": "completed"}]})
+
+    class FakeAgent:
+        async def stream_messages_with_state(self, messages, input_context=None, **kwargs):
+            yield "values", {"messages": [], "todos": [{"content": "step 1", "status": "pending"}]}
+            yield "values", {"messages": [], "todos": [{"content": "step 1", "status": "in_progress"}]}
+            yield "values", {"messages": [], "todos": [{"content": "step 1", "status": "in_progress"}]}
+            yield "messages", (AIMessageChunk(content="hello"), {"node": "llm"})
+
+        async def stream_messages(self, messages, input_context=None, **kwargs):
+            raise AssertionError("stream_messages fallback should not be used")
+
+        async def get_graph(self):
+            return FakeGraph()
+
+    async def fake_get_agent_config_by_id(db, user, agent_config_id):
+        return SimpleNamespace(agent_id="test-agent", config_json={"context": {}})
+
+    async def fake_save_messages_from_langgraph_state(*, agent_instance, thread_id, conv_repo, config_dict, trace_info):
+        return None
+
+    async def fake_guard_check(_content):
+        return False
+
+    async def fake_guard_check_with_keywords(_content):
+        return False
+
+    async def fake_interrupts(agent, langgraph_config, make_chunk, meta, thread_id):
+        if False:
+            yield None
+        return
+
+    monkeypatch.setattr(svc.agent_manager, "get_agent", lambda agent_id: FakeAgent())
+    monkeypatch.setattr(svc, "get_agent_config_by_id", fake_get_agent_config_by_id)
+    monkeypatch.setattr(svc, "ConversationRepository", _FakeConvRepo)
+    monkeypatch.setattr(svc, "save_messages_from_langgraph_state", fake_save_messages_from_langgraph_state)
+    monkeypatch.setattr(svc.content_guard, "check", fake_guard_check)
+    monkeypatch.setattr(svc.content_guard, "check_with_keywords", fake_guard_check_with_keywords)
+    monkeypatch.setattr(svc, "check_and_handle_interrupts", fake_interrupts)
+    monkeypatch.setattr(
+        svc,
+        "_build_langfuse_run_context",
+        lambda **kwargs: SimpleNamespace(callbacks=[], metadata={}, tags=[], trace_id=None),
+    )
+    monkeypatch.setattr(svc, "get_trace_info", lambda _run_context: {})
+    monkeypatch.setattr(svc, "flush_langfuse", lambda: None)
+
+    chunks = []
+    async for chunk in svc.stream_agent_chat(
+        query="hello",
+        agent_config_id=123,
+        thread_id="thread-1",
+        meta={"request_id": "req-1"},
+        image_content=None,
+        current_user=SimpleNamespace(id="user-1", department_id="dept-1"),
+        db=object(),
+    ):
+        chunks.append(json.loads(chunk.decode("utf-8")))
+
+    agent_state_chunks = [chunk for chunk in chunks if chunk.get("status") == "agent_state"]
+    assert len(agent_state_chunks) == 3
+    assert agent_state_chunks[0]["agent_state"]["todos"][0]["status"] == "pending"
+    assert agent_state_chunks[1]["agent_state"]["todos"][0]["status"] == "in_progress"
+    assert agent_state_chunks[2]["agent_state"]["todos"][0]["status"] == "completed"

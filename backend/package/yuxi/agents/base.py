@@ -96,6 +96,32 @@ class BaseAgent:
         ):
             yield msg, metadata
 
+    async def stream_messages_with_state(self, messages: list[str], input_context=None, **kwargs):
+        context = self.context_schema()
+        context.update_from_dict(input_context or {})
+        graph = await self.get_graph(context=context)
+        logger.debug(f"stream_messages_with_state: {context=}")
+
+        input_config = {
+            "configurable": {"thread_id": context.thread_id, "user_id": context.user_id},
+            "recursion_limit": 300,
+        }
+
+        if callbacks := kwargs.get("callbacks"):
+            input_config["callbacks"] = list(callbacks)
+        if metadata := kwargs.get("metadata"):
+            input_config["metadata"] = dict(metadata)
+        if tags := kwargs.get("tags"):
+            input_config["tags"] = list(tags)
+
+        async for mode, payload in graph.astream(
+            {"messages": messages},
+            stream_mode=["messages", "values"],
+            context=context,
+            config=input_config,
+        ):
+            yield mode, payload
+
     async def invoke_messages(self, messages: list[str], input_context=None, **kwargs):
         context = self.context_schema()
         context.update_from_dict(input_context or {})
