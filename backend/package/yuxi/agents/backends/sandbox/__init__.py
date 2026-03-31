@@ -30,11 +30,6 @@ SandboxInfo = SandboxConnection
 USER_DATA_PATH = VIRTUAL_PATH_PREFIX
 SKILLS_PATH = "/home/gem/skills"
 
-# Relative host-side directory names under thread user-data.
-WORKSPACE_DIR = "workspace"
-UPLOADS_DIR = "uploads"
-OUTPUTS_DIR = "outputs"
-
 # Backward-compatible constants kept for old call sites.
 THREADS_DIR = "threads"
 LARGE_TOOL_RESULTS_DIR = "large-tool-results"
@@ -50,9 +45,6 @@ __all__ = [
     "SandboxBackend",
     "SandboxInfo",
     "THREADS_DIR",
-    "UPLOADS_DIR",
-    "USER_DATA_PATH",
-    "WORKSPACE_DIR",
     "YuxiSandboxBackend",
     "YuxiSandboxProvider",
     "ProvisionerSandboxBackend",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -225,6 +226,55 @@ async def resolve_thread_artifact_view(
         raise HTTPException(status_code=403, detail="access denied")
 
     return actual_path
+
+
+async def save_thread_artifact_to_workspace_view(
+    *,
+    thread_id: str,
+    current_user_id: str,
+    db,
+    path: str,
+) -> dict[str, str]:
+    source_path = await resolve_thread_artifact_view(
+        thread_id=thread_id,
+        current_user_id=current_user_id,
+        db=db,
+        path=path,
+    )
+
+    target_dir = sandbox_workspace_dir(thread_id) / "saved_artifacts"
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    target_path = _next_available_artifact_path(target_dir, source_path.name)
+    with source_path.open("rb") as src, target_path.open("wb") as dst:
+        shutil.copyfileobj(src, dst)
+
+    saved_virtual_path = virtual_path_for_thread_file(thread_id, target_path)
+    return {
+        "name": target_path.name,
+        "source_path": "/" + path.lstrip("/"),
+        "saved_path": saved_virtual_path,
+        "saved_artifact_url": f"/api/chat/thread/{thread_id}/artifacts/{saved_virtual_path.lstrip('/')}",
+    }
+
+
+def _next_available_artifact_path(target_dir: Path, filename: str) -> Path:
+    candidate = target_dir / filename
+    if not candidate.exists():
+        return candidate
+
+    base_name = Path(filename).stem
+    suffix = Path(filename).suffix
+    index = 1
+    while True:
+        candidate = target_dir / f"{base_name} ({index}){suffix}"
+        if not candidate.exists():
+            return candidate
+
+        index += 1
+        if index >= 1000:
+            # This is a safety check to prevent infinite loops in case of some unexpected issue with file naming.
+            raise RuntimeError(f"Unable to find available filename for {filename} after 1000 attempts.")
 
 
 def _is_path_within(path: Path, root: Path) -> bool:

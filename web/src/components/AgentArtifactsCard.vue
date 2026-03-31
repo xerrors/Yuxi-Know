@@ -38,6 +38,15 @@
               <button class="item-action-btn" title="下载" @click.stop="downloadFile(file)">
                 <Download :size="15" />
               </button>
+              <button
+                class="item-action-btn"
+                :title="isSaving(file.path) ? '保存中' : '保存到工作区'"
+                :disabled="isSaving(file.path)"
+                @click.stop="saveToWorkspace(file)"
+              >
+                <LoaderCircle v-if="isSaving(file.path)" :size="15" class="item-action-spin" />
+                <Save v-else :size="15" />
+              </button>
             </div>
           </div>
         </div>
@@ -69,7 +78,9 @@
 
 <script setup>
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { ChevronDown, Download, Eye, FolderOutput } from 'lucide-vue-next'
+import { message } from 'ant-design-vue'
+import { ChevronDown, Download, Eye, FolderOutput, LoaderCircle, Save } from 'lucide-vue-next'
+import { threadApi } from '@/apis/agent_api'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
 import { getPreviewTypeByPath } from '@/utils/file_preview'
@@ -93,6 +104,7 @@ const props = defineProps({
     default: null
   }
 })
+const emit = defineEmits(['saved'])
 
 const normalizedArtifacts = computed(() =>
   (props.artifacts || [])
@@ -114,6 +126,7 @@ const expanded = ref(false)
 const modalVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
+const savingState = ref({})
 
 const parseDownloadFilename = (contentDisposition) => {
   if (!contentDisposition) return ''
@@ -222,6 +235,30 @@ const downloadFile = async (file) => {
   link.click()
   document.body.removeChild(link)
   window.URL.revokeObjectURL(url)
+}
+
+const isSaving = (path) => !!savingState.value[path]
+
+const setSaving = (path, saving) => {
+  savingState.value = {
+    ...savingState.value,
+    [path]: saving
+  }
+}
+
+const saveToWorkspace = async (file) => {
+  if (!props.threadId || !file?.path || isSaving(file.path)) return
+
+  setSaving(file.path, true)
+  try {
+    const result = await threadApi.saveThreadArtifactToWorkspace(props.threadId, file.path)
+    message.success(`已保存到工作区：${result.saved_path}`)
+    emit('saved', result)
+  } catch (error) {
+    message.error(error?.message || '保存到工作区失败')
+  } finally {
+    setSaving(file.path, false)
+  }
 }
 
 onUnmounted(() => {
@@ -435,9 +472,28 @@ watch(
   transition: all 0.2s ease;
 }
 
+.item-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .item-action-btn:hover {
   color: var(--main-700);
   background: var(--gray-100);
+}
+
+.item-action-spin {
+  animation: artifacts-spin 1s linear infinite;
+}
+
+@keyframes artifacts-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 768px) {

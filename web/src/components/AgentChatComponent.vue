@@ -155,6 +155,7 @@
                 :thread-id="currentChatId"
                 :agent-id="currentThread?.agent_id || currentAgentId"
                 :agent-config-id="selectedAgentConfigId"
+                @saved="handleArtifactSaved"
               />
 
               <AgentInputArea
@@ -846,6 +847,11 @@ const fetchThreadAttachments = async (threadId) => {
 const refreshThreadFilesAndAttachments = async (threadId) => {
   if (!threadId) return
   await Promise.all([fetchThreadFiles(threadId), fetchThreadAttachments(threadId)])
+}
+
+const handleArtifactSaved = async () => {
+  if (!currentChatId.value) return
+  await refreshThreadFilesAndAttachments(currentChatId.value)
 }
 
 const fetchAgentState = async (agentId, threadId) => {

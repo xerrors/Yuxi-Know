@@ -37,6 +37,7 @@ from yuxi.services.thread_files_service import (
     list_thread_files_view,
     read_thread_file_content_view,
     resolve_thread_artifact_view,
+    save_thread_artifact_to_workspace_view,
 )
 from yuxi.services.feedback_service import get_message_feedback_view, submit_message_feedback_view
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
@@ -687,6 +688,17 @@ class ThreadFileContentResponse(BaseModel):
     artifact_url: str
 
 
+class SaveThreadArtifactRequest(BaseModel):
+    path: str
+
+
+class SaveThreadArtifactResponse(BaseModel):
+    name: str
+    source_path: str
+    saved_path: str
+    saved_artifact_url: str
+
+
 # =============================================================================
 # > === 会话管理分组 ===
 # =============================================================================
@@ -858,6 +870,22 @@ async def get_thread_artifact(
     media_type = guess_type(file_path.name)[0] or "application/octet-stream"
     headers = {"Content-Disposition": f'attachment; filename="{file_path.name}"'} if download else None
     return FileResponse(path=file_path, media_type=media_type, headers=headers)
+
+
+@chat.post("/thread/{thread_id}/artifacts/save", response_model=SaveThreadArtifactResponse)
+async def save_thread_artifact_to_workspace(
+    thread_id: str,
+    request: SaveThreadArtifactRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_required_user),
+):
+    """保存交付物到共享 workspace/saved_artifacts 目录。"""
+    return await save_thread_artifact_to_workspace_view(
+        thread_id=thread_id,
+        current_user_id=str(current_user.id),
+        db=db,
+        path=request.path,
+    )
 
 
 # =============================================================================
