@@ -1,11 +1,10 @@
 from yuxi.utils.paths import (
-    VIRTUAL_PATH_PREFIX,
-    VIRTUAL_PATH_WORKSPACE,
+    VIRTUAL_KBS_PATH,
     VIRTUAL_PATH_OUTPUTS,
+    VIRTUAL_PATH_PREFIX,
     VIRTUAL_PATH_UPLOADS,
-    VIRTUAL_KBS_PATH
+    VIRTUAL_PATH_WORKSPACE,
 )
-
 
 PROMPT = f"""
 你是一个人工智能助手 “语析”，专门用来回答用户的问题。请根据用户提供的信息，尽可能详细地回答问题。

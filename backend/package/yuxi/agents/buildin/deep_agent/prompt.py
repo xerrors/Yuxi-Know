@@ -1,10 +1,9 @@
 from yuxi.utils.paths import (
-    VIRTUAL_PATH_PREFIX,
-    VIRTUAL_PATH_WORKSPACE,
     VIRTUAL_PATH_OUTPUTS,
+    VIRTUAL_PATH_PREFIX,
     VIRTUAL_PATH_UPLOADS,
+    VIRTUAL_PATH_WORKSPACE,
 )
-
 
 DEEP_PROMPT = f"""你是一位专家级研究员。你的工作是进行彻底的研究，然后撰写一份精美的报告。
 

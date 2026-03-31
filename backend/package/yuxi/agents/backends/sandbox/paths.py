@@ -4,13 +4,7 @@ import re
 from pathlib import Path
 
 from yuxi import config as conf
-from yuxi.utils.paths import (
-    VIRTUAL_PATH_PREFIX,
-    WORKSPACE_DIR_NAME,
-    OUTPUTS_DIR_NAME,
-    UPLOADS_DIR_NAME
-)
-
+from yuxi.utils.paths import OUTPUTS_DIR_NAME, UPLOADS_DIR_NAME, VIRTUAL_PATH_PREFIX, WORKSPACE_DIR_NAME
 
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 

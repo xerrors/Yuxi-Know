@@ -43,7 +43,9 @@
               <div class="todo-popover-header">
                 <div class="todo-popover-title-wrap">
                   <span class="todo-popover-title">当前任务</span>
-                  <span class="todo-popover-summary">{{ completedTodoCount }}/{{ totalTodoCount }} 已完成</span>
+                  <span class="todo-popover-summary"
+                    >{{ completedTodoCount }}/{{ totalTodoCount }} 已完成</span
+                  >
                 </div>
                 <span class="todo-popover-progress">{{ todoProgress }}%</span>
               </div>
@@ -53,7 +55,11 @@
               </div>
 
               <div class="todo-popover-list">
-                <div v-for="(todo, index) in todos" :key="`${todo.content}-${index}`" class="todo-item">
+                <div
+                  v-for="(todo, index) in todos"
+                  :key="`${todo.content}-${index}`"
+                  class="todo-item"
+                >
                   <div class="todo-item-icon" :class="todo.status || 'unknown'">
                     <CheckCircleOutlined v-if="todo.status === 'completed'" />
                     <SyncOutlined v-else-if="todo.status === 'in_progress'" spin />
@@ -140,7 +146,9 @@ const todoPopoverOpen = ref(false)
 const placeholder = '问点什么？使用 @ 可以提及哦~'
 
 const totalTodoCount = computed(() => props.todos.length)
-const completedTodoCount = computed(() => props.todos.filter((todo) => todo?.status === 'completed').length)
+const completedTodoCount = computed(
+  () => props.todos.filter((todo) => todo?.status === 'completed').length
+)
 const showTodoEntry = computed(() => props.hasActiveThread && totalTodoCount.value > 0)
 const todoProgress = computed(() => {
   if (!totalTodoCount.value) return 0
@@ -284,8 +292,7 @@ const getTodoStatusLabel = (status) => {
 .todo-popover-card {
   width: min(300px, calc(100vw - 32px));
   padding: 14px;
-  background:
-    linear-gradient(180deg, var(--gray-50) 0%, var(--gray-50) 100%);
+  background: linear-gradient(180deg, var(--gray-50) 0%, var(--gray-50) 100%);
 }
 
 .todo-popover-header {

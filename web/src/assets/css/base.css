@@ -106,7 +106,6 @@
   --bg-sider: var(--main-5);
   --color-text: var(--c-black);
 
-
   --light-98: rgba(255, 255, 255, 0.98);
   --light-95: rgba(255, 255, 255, 0.95);
   --light-90: rgba(255, 255, 255, 0.9);
@@ -132,7 +131,6 @@
   --dark-10: rgba(0, 0, 0, 0.1);
   --dark-5: rgba(0, 0, 0, 0.05);
   --dark-0: rgba(0, 0, 0, 0);
-
 
   /* Shadow System - 阴影系统 */
   --shadow-0: rgba(0, 0, 0, 0.02);

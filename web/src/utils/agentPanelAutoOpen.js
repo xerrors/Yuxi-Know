@@ -15,7 +15,4 @@ export const shouldAutoOpenAgentPanel = (threadFiles) => {
   return threadFiles.some((item) => item?.is_dir !== true && isTrackedPanelFilePath(item?.path))
 }
 
-export {
-  USER_DATA_OUTPUTS_PREFIX,
-  USER_DATA_UPLOADS_PREFIX
-}
+export { USER_DATA_OUTPUTS_PREFIX, USER_DATA_UPLOADS_PREFIX }

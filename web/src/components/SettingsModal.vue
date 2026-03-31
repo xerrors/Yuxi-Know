@@ -72,7 +72,11 @@
               <Star :size="12" />
               <span>支持项目</span>
             </div>
-            <button class="star-card-close lucide-icon-btn" @click="dismissStarCard" aria-label="关闭 Star 提示">
+            <button
+              class="star-card-close lucide-icon-btn"
+              @click="dismissStarCard"
+              aria-label="关闭 Star 提示"
+            >
               <X :size="14" />
             </button>
           </div>
@@ -171,7 +175,16 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
-import { ExternalLink, Key as KeyIcon, Settings, SquareCode, Star, User, Users, X } from 'lucide-vue-next'
+import {
+  ExternalLink,
+  Key as KeyIcon,
+  Settings,
+  SquareCode,
+  Star,
+  User,
+  Users,
+  X
+} from 'lucide-vue-next'
 import BasicSettingsSection from '@/components/BasicSettingsSection.vue'
 import ModelProvidersComponent from '@/components/ModelProvidersComponent.vue'
 import UserManagementComponent from '@/components/UserManagementComponent.vue'

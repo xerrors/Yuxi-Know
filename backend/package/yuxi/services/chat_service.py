@@ -559,7 +559,6 @@ async def agent_chat(
         message_type=message_type,
     )
     trace_info: dict[str, Any] = {}
-    last_agent_state_signature = ""
 
     try:
         conv_repo = ConversationRepository(db)
@@ -986,6 +985,7 @@ async def stream_agent_resume(
         message_type="resume",
     )
     trace_info: dict[str, Any] = {}
+    last_agent_state_signature = ""
 
     stream_source = graph.astream(
         resume_command,

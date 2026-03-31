@@ -140,7 +140,11 @@
               </div>
             </template>
             <template v-else-if="file?.previewType === 'pdf' && file?.previewUrl">
-              <iframe :src="file.previewUrl" class="pdf-preview fullscreen-embed-preview" :title="filePath" />
+              <iframe
+                :src="file.previewUrl"
+                class="pdf-preview fullscreen-embed-preview"
+                :title="filePath"
+              />
             </template>
             <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
               <iframe
@@ -305,14 +309,11 @@ watch(
   }
 )
 
-watch(
-  [() => props.filePath, () => props.file?.previewType, () => props.file?.content],
-  () => {
-    if (isHtmlFile.value) {
-      htmlPreviewRenderKey.value += 1
-    }
+watch([() => props.filePath, () => props.file?.previewType, () => props.file?.content], () => {
+  if (isHtmlFile.value) {
+    htmlPreviewRenderKey.value += 1
   }
-)
+})
 
 watch(fullscreenPreviewVisible, (visible) => {
   document.body.style.overflow = visible ? 'hidden' : ''
@@ -490,7 +491,7 @@ onUnmounted(() => {
   min-height: calc(80vh - 40px);
   border: none;
   border-radius: 0px;
-  background: #fff;  // HTML 内容通常需要白色背景以保证可读性
+  background: #fff; // HTML 内容通常需要白色背景以保证可读性
 }
 
 .unsupported-preview {

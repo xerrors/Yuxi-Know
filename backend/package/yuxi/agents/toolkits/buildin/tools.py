@@ -15,8 +15,8 @@ from yuxi import config, graph_base
 from yuxi.agents.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
 from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils import logger
-from yuxi.utils.question_utils import normalize_questions
 from yuxi.utils.paths import VIRTUAL_PATH_OUTPUTS
+from yuxi.utils.question_utils import normalize_questions
 
 # Lazy initialization for TavilySearch (only when API key is available)
 _tavily_search_instance = None
@@ -67,9 +67,7 @@ if config.enable_web_search:
 class PresentArtifactsInput(BaseModel):
     """Expose artifact files to the frontend after the agent finishes."""
 
-    filepaths: list[str] = Field(
-        description=f"需要展示给用户的文件绝对路径列表，只允许位于 {VIRTUAL_PATH_OUTPUTS} 下"
-    )
+    filepaths: list[str] = Field(description=f"需要展示给用户的文件绝对路径列表，只允许位于 {VIRTUAL_PATH_OUTPUTS} 下")
 
 
 def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> str:
