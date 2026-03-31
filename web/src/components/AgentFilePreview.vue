@@ -60,10 +60,11 @@
       </template>
       <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
         <iframe
+          :key="`embedded-${htmlPreviewRenderKey}`"
           class="html-preview"
           :srcdoc="formatContent(file?.content)"
           :title="filePath"
-          sandbox=""
+          sandbox="allow-scripts"
         />
       </template>
       <template v-else-if="isMarkdown">
@@ -143,10 +144,11 @@
             </template>
             <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
               <iframe
+                :key="`fullscreen-${htmlPreviewRenderKey}`"
                 class="html-preview fullscreen-embed-preview"
                 :srcdoc="formatContent(file?.content)"
                 :title="filePath"
-                sandbox=""
+                sandbox="allow-scripts"
               />
             </template>
             <template v-else-if="isMarkdown">
@@ -237,6 +239,7 @@ const themeStore = useThemeStore()
 const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 const htmlPreviewMode = ref('render')
 const fullscreenPreviewVisible = ref(false)
+const htmlPreviewRenderKey = ref(0)
 
 const isMarkdown = computed(() => isMarkdownPreview(props.filePath, props.file?.previewType))
 const isHtmlFile = computed(
@@ -302,6 +305,15 @@ watch(
   }
 )
 
+watch(
+  [() => props.filePath, () => props.file?.previewType, () => props.file?.content],
+  () => {
+    if (isHtmlFile.value) {
+      htmlPreviewRenderKey.value += 1
+    }
+  }
+)
+
 watch(fullscreenPreviewVisible, (visible) => {
   document.body.style.overflow = visible ? 'hidden' : ''
 })
@@ -314,6 +326,8 @@ onUnmounted(() => {
 <style scoped lang="less">
 .agent-file-preview {
   min-width: 0;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .agent-file-preview.is-full-height {
@@ -396,7 +410,7 @@ onUnmounted(() => {
   min-height: 300px;
   max-height: 80vh;
   overflow-y: auto;
-  border-radius: 6px;
+  border-radius: 0px;
 
   &::-webkit-scrollbar {
     width: 8px;
@@ -431,12 +445,12 @@ onUnmounted(() => {
   word-wrap: break-word;
   color: var(--gray-1000);
   background: transparent;
+  padding: 12px;
 }
 
 .file-content-pre.code-highlight {
   border-radius: 8px;
   background: var(--gray-25);
-  border: 1px solid var(--gray-150);
   white-space: pre;
   overflow-x: auto;
 }
@@ -474,9 +488,9 @@ onUnmounted(() => {
 .html-preview {
   width: 100%;
   min-height: calc(80vh - 40px);
-  border: 1px solid var(--gray-150);
-  border-radius: 6px;
-  background: #fff;
+  border: none;
+  border-radius: 0px;
+  background: #fff;  // HTML 内容通常需要白色背景以保证可读性
 }
 
 .unsupported-preview {
@@ -516,7 +530,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--color-trans-light);
   border: 1px solid var(--gray-200);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
   backdrop-filter: blur(10px);
@@ -532,7 +546,7 @@ onUnmounted(() => {
   height: 100vh;
   max-height: none;
   min-height: 100vh;
-  padding: 24px;
+  padding: 0px;
   border-radius: 0;
 }
 
@@ -542,9 +556,8 @@ onUnmounted(() => {
 }
 
 .fullscreen-embed-preview {
-  min-height: calc(100vh - 48px);
-  height: calc(100vh - 48px);
-  border-radius: 12px;
+  height: 100vh;
+  border-radius: 0px;
 }
 
 .fullscreen-unsupported-preview {

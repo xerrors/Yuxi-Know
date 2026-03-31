@@ -144,6 +144,7 @@
       :bodyStyle="{ maxHeight: '90vh', overflow: 'auto' }"
       :footer="null"
       :closable="false"
+      wrapClassName="agent-file-preview-modal"
       @cancel="closePreview"
     >
       <AgentFilePreview
@@ -1110,33 +1111,6 @@ watch(useInlinePreview, (isInline) => {
   }
 }
 
-:deep(.ant-modal) {
-  z-index: 1050;
-}
-
-:deep(.ant-modal-content) {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--gray-200);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-}
-
-:deep(.ant-modal-header) {
-  background: var(--main-5);
-  border-bottom: 1px solid var(--gray-200);
-  padding: 16px 20px;
-}
-
-:deep(.ant-modal-title) {
-  font-weight: 600;
-  color: var(--gray-1000);
-  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-}
-
-:deep(.ant-modal-body) {
-  padding: 0;
-}
-
 /* File Tree Styles - VS Code Style Refined */
 .file-tree-container {
   padding: 4px;
@@ -1199,6 +1173,10 @@ watch(useInlinePreview, (isInline) => {
   color: var(--main-600);
 }
 
+.tree-delete-btn:hover:not(:disabled) {
+  color: var(--error-600, #dc2626);
+}
+
 /* 附件列表专用样式 */
 .attachment-tree :deep(.ant-tree-node-content-wrapper) {
   border: 1px solid var(--gray-200);
@@ -1214,5 +1192,36 @@ watch(useInlinePreview, (isInline) => {
     background-color: var(--gray-100);
     border-color: var(--main-300);
   }
+}
+</style>
+
+<style lang="less">
+.agent-file-preview-modal {
+  .ant-modal {
+  z-index: 1050;
+  .ant-modal-content {
+    border-radius: 8px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--gray-200);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
+
+  :deep(.ant-modal-header) {
+    background: var(--main-5);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 16px 20px;
+  }
+
+  :deep(.ant-modal-title) {
+    font-weight: 600;
+    color: var(--gray-1000);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  }
+
+  :deep(.ant-modal-body) {
+    padding: 0;
+  }
+}
 }
 </style>

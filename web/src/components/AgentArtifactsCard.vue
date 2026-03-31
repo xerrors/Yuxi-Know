@@ -51,6 +51,7 @@
       :bodyStyle="{ maxHeight: '90vh', overflow: 'auto' }"
       :footer="null"
       :closable="false"
+      wrapClassName="agent-file-preview-modal"
       @cancel="closePreview"
     >
       <AgentFilePreview
