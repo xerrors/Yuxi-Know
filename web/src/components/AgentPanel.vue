@@ -98,6 +98,14 @@
                     >
                       <Download :size="14" />
                     </button>
+                    <button
+                      class="tree-action-btn tree-delete-btn"
+                      :disabled="deletingPaths.has(node.key)"
+                      @click.stop="confirmDeleteFile(node)"
+                      title="删除文件"
+                    >
+                      <Trash2 :size="14" />
+                    </button>
                   </div>
                 </template>
               </FileTreeComponent>
@@ -153,7 +161,15 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, onUpdated, nextTick, ref, watch } from 'vue'
-import { ChevronsDownUp, ChevronsUpDown, Download, FolderCode, RefreshCw, X } from 'lucide-vue-next'
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Download,
+  FolderCode,
+  RefreshCw,
+  Trash2,
+  X
+} from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -161,9 +177,11 @@ import {
   CloseCircleOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons-vue'
+import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import {
+  deleteViewerFile,
   downloadViewerFile,
   getViewerFileContent,
   getViewerFileSystemTree
@@ -219,6 +237,7 @@ const panelWidth = ref(0)
 const dynamicTreeData = ref([])
 const selectedKeys = ref([])
 const expandedKeys = ref([])
+const deletingPaths = ref(new Set())
 
 const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
 
@@ -340,6 +359,24 @@ const updateTreeChildren = (nodes, targetKey, children) => {
       children: updateTreeChildren(node.children, targetKey, children)
     }
   })
+}
+
+const removeTreeNode = (nodes, targetKey) => {
+  return nodes.reduce((result, node) => {
+    if (node.key === targetKey) {
+      return result
+    }
+
+    const nextNode = node.children?.length
+      ? {
+          ...node,
+          children: removeTreeNode(node.children, targetKey)
+        }
+      : node
+
+    result.push(nextNode)
+    return result
+  }, [])
 }
 
 const parseDownloadFilename = (contentDisposition) => {
@@ -498,6 +535,39 @@ const closePreview = () => {
   currentFile.value = null
   currentFilePath.value = ''
   selectedKeys.value = []
+}
+
+const confirmDeleteFile = (node) => {
+  const fileName = node?.title || getFileName(node?.fileData)
+  Modal.confirm({
+    title: `确认删除文件「${fileName}」？`,
+    content: '删除后不可恢复。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      const nextDeletingPaths = new Set(deletingPaths.value)
+      nextDeletingPaths.add(node.key)
+      deletingPaths.value = nextDeletingPaths
+
+      try {
+        await deleteViewerFile(props.threadId, node.key, props.agentId, props.agentConfigId)
+        dynamicTreeData.value = removeTreeNode(dynamicTreeData.value, node.key)
+        selectedKeys.value = selectedKeys.value.filter((key) => key !== node.key)
+        if (currentFilePath.value === node.key) {
+          closePreview()
+        }
+        message.success('文件删除成功')
+      } catch (error) {
+        console.error('删除文件失败:', error)
+        message.error(error?.message || '删除文件失败')
+      } finally {
+        const latestDeletingPaths = new Set(deletingPaths.value)
+        latestDeletingPaths.delete(node.key)
+        deletingPaths.value = latestDeletingPaths
+      }
+    }
+  })
 }
 
 const downloadFile = async (fileItem) => {
@@ -1118,6 +1188,11 @@ watch(useInlinePreview, (isInline) => {
   color: var(--gray-500);
   cursor: pointer;
   padding: 0;
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
 }
 
 .tree-download-btn:hover {

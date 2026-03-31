@@ -334,6 +334,34 @@ async def test_viewer_download_returns_full_file_for_large_user_data_content(tes
     assert response.content == large_content.encode("utf-8")
 
 
+async def test_viewer_delete_removes_user_data_file(test_client, standard_user):
+    headers = standard_user["headers"]
+    thread_id = await _create_thread_for_user(test_client, headers)
+
+    ensure_thread_dirs(thread_id)
+    actual_path = sandbox_workspace_dir(thread_id) / "delete_me.txt"
+    actual_path.write_text("delete me", encoding="utf-8")
+    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+
+    delete_response = await test_client.delete(
+        "/api/viewer/filesystem/file",
+        params={"thread_id": thread_id, "path": file_path},
+        headers=headers,
+    )
+    assert delete_response.status_code == 200, delete_response.text
+    assert delete_response.json()["success"] is True
+    assert not actual_path.exists()
+
+    tree_response = await test_client.get(
+        "/api/viewer/filesystem/tree",
+        params={"thread_id": thread_id, "path": "/home/gem/user-data/workspace"},
+        headers=headers,
+    )
+    assert tree_response.status_code == 200, tree_response.text
+    paths = {entry.get("path") for entry in tree_response.json().get("entries", [])}
+    assert file_path not in paths
+
+
 async def test_viewer_tree_root_hides_kbs_namespace_when_no_database_is_visible(test_client, standard_user):
     headers = standard_user["headers"]
     thread_id = await _create_thread_for_user(test_client, headers)

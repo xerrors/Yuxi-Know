@@ -507,3 +507,42 @@ async def download_viewer_file(
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(file_name)}",
     }
     return StreamingResponse(stream, media_type=media_type, headers=headers)
+
+
+async def delete_viewer_file(
+    *,
+    thread_id: str,
+    path: str,
+    agent_id: str | None,
+    agent_config_id: int | None,
+    current_user: User,
+    db: AsyncSession,
+) -> dict:
+    if not thread_id:
+        raise HTTPException(status_code=422, detail="thread_id 不能为空")
+
+    normalized_path = _normalize_path(path)
+    await _resolve_viewer_state(
+        thread_id=thread_id,
+        agent_id=agent_id,
+        agent_config_id=agent_config_id,
+        current_user=current_user,
+        db=db,
+    )
+
+    if not _is_user_data_path(normalized_path):
+        raise HTTPException(status_code=400, detail="当前路径不支持删除")
+
+    try:
+        actual_path = resolve_virtual_path(thread_id, normalized_path)
+        if not actual_path.exists():
+            raise HTTPException(status_code=404, detail="文件不存在")
+        if actual_path.is_dir():
+            raise HTTPException(status_code=400, detail="当前路径是目录")
+        await asyncio.to_thread(actual_path.unlink)
+    except PermissionError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    return {"success": True, "path": normalized_path}

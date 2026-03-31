@@ -1,4 +1,4 @@
-import { apiGet } from './base'
+import { apiDelete, apiGet } from './base'
 
 const buildQuery = (params) => {
   const query = new URLSearchParams()
@@ -37,4 +37,9 @@ export const getViewerFileContent = (threadId, path, agentId = null, agentConfig
 export const downloadViewerFile = (threadId, path, agentId = null, agentConfigId = null) => {
   const query = buildViewerQuery(threadId, path, agentId, agentConfigId)
   return apiGet(`/api/viewer/filesystem/download?${query}`, {}, true, 'blob')
+}
+
+export const deleteViewerFile = (threadId, path, agentId = null, agentConfigId = null) => {
+  const query = buildViewerQuery(threadId, path, agentId, agentConfigId)
+  return apiDelete(`/api/viewer/filesystem/file?${query}`)
 }
