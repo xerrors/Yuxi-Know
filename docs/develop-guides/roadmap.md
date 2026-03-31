@@ -10,6 +10,7 @@
 ### 看板
 
 - 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
+- Langfuse 增加 self-host 模式支持，补齐私有化部署与配置说明
 - 部分场景应该使用默认模型作为默认值而不是空值
 - 检索测试中，添加问答
 - 集成 Memory，基于 deepagents 的文件后端实现
@@ -49,6 +50,8 @@
 - 新增知识库 PDF、图片的预览功能
 - 重构后端测试目录结构：按 `unit / integration / e2e` 分层迁移现有测试，拆分全局 `conftest.py`，统一测试入口为 `uv run --group test pytest`，并新增独立测试规范文档 `docs/vibe/testing-guidelines.md`
 - 新增工具元数据 `config_guide` 字段：后端工具列表接口现在可返回“给人看的配置说明”，前端工具详情页会展示该说明，用于提示工具使用前需要配置的环境变量或入口；首批为 MySQL 工具和 `Qwen-Image` 补充了配置指引
+- 补充 Langfuse 集成方案文档：明确采用“云端优先、先 tracing 后 feedback”的接入路径，并约定 Yuxi 的 `user/thread` 到 Langfuse `user_id/session_id` 的映射关系
+- 新增面向用户的 Langfuse 集成文档：在“智能体开发”分组中说明 Langfuse 的定位、能力、配置方式与查看路径，并与当前 `LANGFUSE_BASE_URL` 配置保持一致
 
 <!-- 添加到这里 -->
 

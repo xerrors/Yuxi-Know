@@ -41,6 +41,7 @@ export default defineConfig({
         text: '智能体开发',
         items: [
           { text: '智能体配置', link: '/agents/agents-config' },
+          { text: 'Langfuse 集成', link: '/agents/langfuse-integration' },
           { text: '工具系统', link: '/agents/tools-system' },
           { text: '中间件', link: '/agents/middleware' },
           { text: '沙盒架构与设计', link: '/agents/sandbox-architecture' },

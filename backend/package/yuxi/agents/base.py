@@ -80,6 +80,14 @@ class BaseAgent:
             "recursion_limit": 300,
         }
 
+        # langfuse metadata and callbacks integration
+        if callbacks := kwargs.get("callbacks"):
+            input_config["callbacks"] = list(callbacks)
+        if metadata := kwargs.get("metadata"):
+            input_config["metadata"] = dict(metadata)
+        if tags := kwargs.get("tags"):
+            input_config["tags"] = list(tags)
+
         async for msg, metadata in graph.astream(
             {"messages": messages},
             stream_mode="messages",
@@ -99,6 +107,14 @@ class BaseAgent:
             "configurable": {"thread_id": context.thread_id, "user_id": context.user_id},
             "recursion_limit": 100,
         }
+
+        # langfuse metadata and callbacks integration
+        if callbacks := kwargs.get("callbacks"):
+            input_config["callbacks"] = list(callbacks)
+        if metadata := kwargs.get("metadata"):
+            input_config["metadata"] = dict(metadata)
+        if tags := kwargs.get("tags"):
+            input_config["tags"] = list(tags)
 
         msg = await graph.ainvoke(
             {"messages": messages},

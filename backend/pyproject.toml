@@ -20,6 +20,7 @@ dependencies = [
     "langchain-openai>=1.0.2",
     "langchain-tavily>=0.2.13",
     "langchain-text-splitters>=1.0",
+    "langfuse>=4.0.0",
     "langgraph>=1.0.1",
     "langgraph-checkpoint-sqlite>=3.0",
     "langgraph-checkpoint-postgres>=2.0.0",

@@ -14,6 +14,12 @@ from yuxi.agents.state import AgentStatePayload
 from yuxi.plugins.guard import content_guard
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.repositories.conversation_repository import ConversationRepository
+from yuxi.services.langfuse_service import (
+    LangfuseRunContext,
+    build_run_context,
+    flush_langfuse,
+    get_trace_info,
+)
 from yuxi.storage.postgres.manager import pg_manager
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.logging_config import logger
@@ -71,6 +77,30 @@ async def _get_langgraph_messages(agent_instance, config_dict):
     return state.values.get("messages", [])
 
 
+def _build_langfuse_run_context(
+    *,
+    current_user,
+    thread_id: str,
+    agent_id: str,
+    request_id: str,
+    operation: str,
+    agent_config_id: int | None = None,
+    message_type: str | None = None,
+) -> LangfuseRunContext:
+    return build_run_context(
+        user_id=str(current_user.id),
+        thread_id=thread_id,
+        agent_id=agent_id,
+        request_id=request_id,
+        operation=operation,
+        agent_config_id=agent_config_id,
+        message_type=message_type,
+        username=getattr(current_user, "username", None),
+        login_user_id=getattr(current_user, "user_id", None),
+        department_id=getattr(current_user, "department_id", None),
+    )
+
+
 def extract_agent_state(values: dict) -> AgentStatePayload:
     """从 LangGraph state 中提取 agent 状态"""
     if not isinstance(values, dict):
@@ -97,16 +127,24 @@ async def _get_existing_message_ids(conv_repo: ConversationRepository, thread_id
     }
 
 
-async def _save_ai_message(conv_repo: ConversationRepository, thread_id: str, msg_dict: dict) -> None:
+async def _save_ai_message(
+    conv_repo: ConversationRepository,
+    thread_id: str,
+    msg_dict: dict,
+    trace_info: dict[str, Any] | None = None,
+) -> None:
     content = msg_dict.get("content", "")
     tool_calls_data = msg_dict.get("tool_calls", [])
+    extra_metadata = dict(msg_dict)
+    if trace_info:
+        extra_metadata.update(trace_info)
 
     ai_msg = await conv_repo.add_message_by_thread_id(
         thread_id=thread_id,
         role="assistant",
         content=content,
         message_type="text",
-        extra_metadata=msg_dict,
+        extra_metadata=extra_metadata,
     )
 
     if ai_msg and tool_calls_data:
@@ -145,6 +183,7 @@ async def save_partial_message(
     full_msg=None,
     error_message: str | None = None,
     error_type: str = "interrupted",
+    trace_info: dict[str, Any] | None = None,
 ):
     try:
         extra_metadata = {
@@ -158,6 +197,9 @@ async def save_partial_message(
             extra_metadata = msg_dict | extra_metadata
         else:
             content = ""
+
+        if trace_info:
+            extra_metadata.update(trace_info)
 
         return await conv_repo.add_message_by_thread_id(
             thread_id=thread_id,
@@ -178,6 +220,7 @@ async def save_messages_from_langgraph_state(
     thread_id: str,
     conv_repo: ConversationRepository,
     config_dict: dict,
+    trace_info: dict[str, Any] | None = None,
 ) -> None:
     try:
         messages = await _get_langgraph_messages(agent_instance, config_dict)
@@ -194,7 +237,7 @@ async def save_messages_from_langgraph_state(
                 continue
 
             if msg_type == "ai":
-                await _save_ai_message(conv_repo, thread_id, msg_dict)
+                await _save_ai_message(conv_repo, thread_id, msg_dict, trace_info=trace_info)
             elif msg_type == "tool":
                 await _save_tool_message(conv_repo, msg_dict)
 
@@ -483,6 +526,16 @@ async def agent_chat(
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
     input_context = agent_config | {"user_id": user_id, "thread_id": thread_id}
+    langfuse_run = _build_langfuse_run_context(
+        current_user=current_user,
+        thread_id=thread_id,
+        agent_id=agent_id,
+        request_id=meta["request_id"],
+        operation="agent_chat_sync",
+        agent_config_id=agent_config_id,
+        message_type=message_type,
+    )
+    trace_info: dict[str, Any] = {}
 
     try:
         conv_repo = ConversationRepository(db)
@@ -507,8 +560,15 @@ async def agent_chat(
             logger.error(f"Error saving user message: {e}")
 
         langgraph_config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-        invoke_result = await agent.invoke_messages(messages, input_context=input_context)
+        invoke_result = await agent.invoke_messages(
+            messages,
+            input_context=input_context,
+            callbacks=langfuse_run.callbacks,
+            metadata=langfuse_run.metadata,
+            tags=langfuse_run.tags,
+        )
         full_msg = _extract_ai_message(invoke_result.get("messages") if isinstance(invoke_result, dict) else None)
+        trace_info = get_trace_info(langfuse_run)
 
         if full_msg is None:
             try:
@@ -521,7 +581,13 @@ async def agent_chat(
         full_content = full_msg.content if full_msg else ""
 
         if conf.enable_content_guard and await content_guard.check(full_content):
-            await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
+            await save_partial_message(
+                conv_repo,
+                thread_id,
+                full_msg,
+                "content_guard_blocked",
+                trace_info=trace_info,
+            )
             return {
                 "status": "interrupted",
                 "message": "检测到敏感内容，已中断输出",
@@ -541,6 +607,7 @@ async def agent_chat(
             thread_id=thread_id,
             conv_repo=conv_repo,
             config_dict=langgraph_config,
+            trace_info=trace_info,
         )
 
         return {
@@ -560,6 +627,8 @@ async def agent_chat(
             "error_message": str(e),
             "request_id": meta.get("request_id"),
         }
+    finally:
+        flush_langfuse()
 
 
 async def stream_agent_chat(
@@ -657,8 +726,18 @@ async def stream_agent_chat(
         logger.warning(f"No thread_id provided, generated new thread_id: {thread_id}")
 
     input_context = agent_config | {"user_id": user_id, "thread_id": thread_id}
+    langfuse_run = _build_langfuse_run_context(
+        current_user=current_user,
+        thread_id=thread_id,
+        agent_id=agent_id,
+        request_id=meta["request_id"],
+        operation="agent_chat_stream",
+        agent_config_id=agent_config_id,
+        message_type=message_type,
+    )
     full_msg = None
     accumulated_content: list[str] = []
+    trace_info: dict[str, Any] = {}
 
     try:
         conv_repo = ConversationRepository(db)
@@ -690,14 +769,27 @@ async def stream_agent_chat(
 
         full_msg = None
         accumulated_content = []
-        async for msg, metadata in agent.stream_messages(messages, input_context=input_context):
+        async for msg, metadata in agent.stream_messages(
+            messages,
+            input_context=input_context,
+            callbacks=langfuse_run.callbacks,
+            metadata=langfuse_run.metadata,
+            tags=langfuse_run.tags,
+        ):
             if isinstance(msg, AIMessageChunk):
                 accumulated_content.append(msg.content)
+                trace_info = get_trace_info(langfuse_run)
 
                 content_for_check = "".join(accumulated_content[-10:])
                 if conf.enable_content_guard and await content_guard.check_with_keywords(content_for_check):
                     full_msg = AIMessage(content="".join(accumulated_content))
-                    await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
+                    await save_partial_message(
+                        conv_repo,
+                        thread_id,
+                        full_msg,
+                        "content_guard_blocked",
+                        trace_info=trace_info,
+                    )
                     meta["time_cost"] = asyncio.get_event_loop().time() - start_time
                     yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
                     return
@@ -705,6 +797,7 @@ async def stream_agent_chat(
                 yield make_chunk(content=msg.content, msg=msg.model_dump(), metadata=metadata, status="loading")
             else:
                 msg_dict = msg.model_dump()
+                trace_info = get_trace_info(langfuse_run)
                 yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
 
                 try:
@@ -718,9 +811,16 @@ async def stream_agent_chat(
                     logger.error(f"Error processing tool message: {e}")
 
         full_msg = _ensure_full_msg(full_msg, accumulated_content)
+        trace_info = get_trace_info(langfuse_run)
 
         if conf.enable_content_guard and hasattr(full_msg, "content") and await content_guard.check(full_msg.content):
-            await save_partial_message(conv_repo, thread_id, full_msg, "content_guard_blocked")
+            await save_partial_message(
+                conv_repo,
+                thread_id,
+                full_msg,
+                "content_guard_blocked",
+                trace_info=trace_info,
+            )
             meta["time_cost"] = asyncio.get_event_loop().time() - start_time
             yield make_chunk(status="interrupted", message="检测到敏感内容，已中断输出", meta=meta)
             return
@@ -745,6 +845,7 @@ async def stream_agent_chat(
             thread_id=thread_id,
             conv_repo=conv_repo,
             config_dict=langgraph_config,
+            trace_info=trace_info,
         )
 
         yield make_chunk(status="finished", meta=meta)
@@ -764,6 +865,7 @@ async def stream_agent_chat(
                     full_msg=full_msg,
                     error_message="对话已中断" if not full_msg else None,
                     error_type="interrupted",
+                    trace_info=trace_info,
                 )
 
         cleanup_task = asyncio.create_task(save_cleanup())
@@ -792,9 +894,12 @@ async def stream_agent_chat(
                 full_msg=full_msg,
                 error_message=error_msg,
                 error_type=error_type,
+                trace_info=trace_info,
             )
 
         yield make_chunk(status="error", error_type=error_type, error_message=error_msg, meta=meta)
+    finally:
+        flush_langfuse()
 
 
 async def stream_agent_resume(
@@ -844,16 +949,32 @@ async def stream_agent_resume(
     context.update(agent_config or {})
     context.update({"user_id": user_id, "thread_id": thread_id})
     graph = await agent.get_graph(context=context)
+    langfuse_run = _build_langfuse_run_context(
+        current_user=current_user,
+        thread_id=thread_id,
+        agent_id=agent_id,
+        request_id=meta.get("request_id") or str(uuid.uuid4()),
+        operation="agent_chat_resume",
+        agent_config_id=agent_config_id,
+        message_type="resume",
+    )
+    trace_info: dict[str, Any] = {}
 
     stream_source = graph.astream(
         resume_command,
         context=context,
-        config={"configurable": {"thread_id": thread_id, "user_id": user_id}},
+        config={
+            "configurable": {"thread_id": thread_id, "user_id": user_id},
+            "callbacks": langfuse_run.callbacks,
+            "metadata": langfuse_run.metadata,
+            "tags": langfuse_run.tags,
+        },
         stream_mode="messages",
     )
 
     try:
         async for msg, metadata in stream_source:
+            trace_info = get_trace_info(langfuse_run)
             msg_dict = msg.model_dump()
             if "id" not in msg_dict:
                 msg_dict["id"] = str(uuid.uuid4())
@@ -875,6 +996,7 @@ async def stream_agent_resume(
             thread_id=thread_id,
             conv_repo=conv_repo,
             config_dict=langgraph_config,
+            trace_info=trace_info,
         )
 
         yield make_resume_chunk(status="finished", meta=meta)
@@ -885,7 +1007,11 @@ async def stream_agent_resume(
         async with pg_manager.get_async_session_context() as new_db:
             new_conv_repo = ConversationRepository(new_db)
             await save_partial_message(
-                new_conv_repo, thread_id, error_message="对话恢复已中断", error_type="resume_interrupted"
+                new_conv_repo,
+                thread_id,
+                error_message="对话恢复已中断",
+                error_type="resume_interrupted",
+                trace_info=trace_info,
             )
 
         yield make_resume_chunk(status="interrupted", message="对话恢复已中断", meta=meta)
@@ -896,10 +1022,16 @@ async def stream_agent_resume(
         async with pg_manager.get_async_session_context() as new_db:
             new_conv_repo = ConversationRepository(new_db)
             await save_partial_message(
-                new_conv_repo, thread_id, error_message=f"Error during resume: {e}", error_type="resume_error"
+                new_conv_repo,
+                thread_id,
+                error_message=f"Error during resume: {e}",
+                error_type="resume_error",
+                trace_info=trace_info,
             )
 
         yield make_resume_chunk(message=f"Error during resume: {e}", status="error")
+    finally:
+        flush_langfuse()
 
 
 async def get_agent_state_view(
