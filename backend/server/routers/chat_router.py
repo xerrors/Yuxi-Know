@@ -260,6 +260,7 @@ async def create_agent_config_profile(
     repo = AgentConfigRepository(db)
     item = await repo.create(
         department_id=current_user.department_id,
+        agent_id=agent_id,
         name=payload.name,
         description=payload.description,
         icon=payload.icon,
