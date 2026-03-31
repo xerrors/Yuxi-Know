@@ -43,6 +43,7 @@ from yuxi.services.feedback_service import get_message_feedback_view, submit_mes
 from yuxi.repositories.agent_config_repository import AgentConfigRepository
 from yuxi.utils.logging_config import logger
 from yuxi.utils.image_processor import process_uploaded_image
+from yuxi.utils.paths import VIRTUAL_PATH_PREFIX
 
 
 # TODO：当前文件的功能过于庞杂，路由标签混乱
@@ -817,7 +818,7 @@ async def delete_thread_attachment(
 @chat.get("/thread/{thread_id}/files", response_model=ThreadFileListResponse)
 async def list_thread_files(
     thread_id: str,
-    path: str = Query("/home/gem/user-data"),
+    path: str = Query(f"{VIRTUAL_PATH_PREFIX}"),
     recursive: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_required_user),
