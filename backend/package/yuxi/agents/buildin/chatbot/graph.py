@@ -2,7 +2,7 @@ from deepagents.middleware.filesystem import FilesystemMiddleware
 from deepagents.middleware.patch_tool_calls import PatchToolCallsMiddleware
 from deepagents.middleware.subagents import SubAgentMiddleware
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware
+from langchain.agents.middleware import ModelRetryMiddleware, TodoListMiddleware
 
 from yuxi.agents import BaseAgent, BaseState, load_chat_model
 from yuxi.agents.backends import create_agent_composite_backend
@@ -47,15 +47,16 @@ async def _build_middlewares(context):
     )
     # all middlewares
     middlewares = [
-        save_attachments_to_fs,  # 附件注入提示词
         FilesystemMiddleware(backend=create_agent_composite_backend),  # 文件系统后端
+        save_attachments_to_fs,  # 附件注入提示词
         KnowledgeBaseMiddleware(),  # 知识库工具
         RuntimeConfigMiddleware(extra_tools=all_mcp_tools),  # 运行时配置应用（模型/工具/MCP/提示词）
         SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
         subagents_middleware,
         summary_middleware,
-        ModelRetryMiddleware(),  # 模型重试中间件
+        TodoListMiddleware(system_prompt="任务结束前，应该检查维护的待办事项列表是否结束。"),
         PatchToolCallsMiddleware(),
+        ModelRetryMiddleware(),  # 模型重试中间件
     ]
 
     return middlewares

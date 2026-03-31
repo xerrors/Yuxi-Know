@@ -48,8 +48,8 @@ class BaseContext:
         },
     )
 
-    tools: Annotated[list[dict], {"__template_metadata__": {"kind": "tools"}}] = field(
-        default_factory=list,
+    tools: Annotated[list[str], {"__template_metadata__": {"kind": "tools"}}] = field(
+        default_factory=lambda: ["ask_user_question", "tavily_search"],
         metadata={
             "name": "工具",
             "description": "内置的工具。",
