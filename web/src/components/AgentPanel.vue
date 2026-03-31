@@ -105,100 +105,19 @@
           </div>
 
           <div v-if="useInlinePreview" class="inline-preview-pane">
-            <div v-if="currentFile" class="inline-preview-shell">
-              <div class="inline-preview-header">
-                <div class="file-title">
-                  <component
-                    :is="getFileIcon(currentFilePath)"
-                    :style="{ color: getFileIconColor(currentFilePath), fontSize: '18px' }"
-                  />
-                  <span class="file-path-title">{{ currentFilePath }}</span>
-                </div>
-                <div class="modal-actions">
-                  <div v-if="isHtmlFile" class="preview-mode-switch">
-                    <button
-                      class="preview-mode-btn"
-                      :class="{ active: htmlPreviewMode === 'render' }"
-                      @click="htmlPreviewMode = 'render'"
-                      title="预览"
-                    >
-                      <Globe :size="16" />
-                    </button>
-                    <button
-                      class="preview-mode-btn"
-                      :class="{ active: htmlPreviewMode === 'source' }"
-                      @click="htmlPreviewMode = 'source'"
-                      title="源码"
-                    >
-                      <Code2 :size="16" />
-                    </button>
-                  </div>
-                  <button class="modal-action-btn" @click="downloadFile(currentFile)" title="下载">
-                    <Download :size="18" />
-                  </button>
-                  <button class="modal-action-btn" @click="openFullscreenPreview" title="全屏预览">
-                    <Maximize2 :size="18" />
-                  </button>
-                  <button class="modal-action-btn" @click="closePreview" title="关闭预览">
-                    <X :size="18" />
-                  </button>
-                </div>
-              </div>
-              <div class="file-content inline-file-content">
-                <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
-                  <div class="image-preview-wrapper">
-                    <img
-                      :src="currentFile.previewUrl"
-                      :alt="currentFilePath"
-                      class="image-preview"
-                    />
-                  </div>
-                </template>
-                <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
-                  <iframe
-                    :src="currentFile.previewUrl"
-                    class="pdf-preview"
-                    :title="currentFilePath"
-                  />
-                </template>
-                <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
-                  <iframe
-                    class="html-preview"
-                    :srcdoc="formatContent(currentFile?.content)"
-                    :title="currentFilePath"
-                    sandbox=""
-                  />
-                </template>
-                <template v-else-if="isMarkdown">
-                  <MdPreview
-                    class="flat-md-preview"
-                    :modelValue="formatContent(currentFile?.content)"
-                    :theme="theme"
-                    previewTheme="github"
-                  />
-                </template>
-                <template v-else-if="currentFile?.supported === false">
-                  <div class="unsupported-preview">
-                    {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
-                  </div>
-                </template>
-                <template v-else>
-                  <pre v-if="Array.isArray(currentFile?.content)">{{
-                    formatContent(currentFile.content)
-                  }}</pre>
-                  <pre
-                    v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
-                    :class="['file-content-pre', 'code-highlight', codeThemeClass]"
-                  ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
-                  <pre
-                    v-else-if="typeof currentFile?.content === 'string'"
-                    class="file-content-pre"
-                    >{{ currentFile.content }}</pre
-                  >
-                  <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
-                </template>
-              </div>
-            </div>
+            <AgentFilePreview
+              v-if="currentFile"
+              containerClass="inline-preview-shell"
+              contentClass="inline-file-content"
+              :file="currentFile"
+              :filePath="currentFilePath"
+              :fullHeight="true"
+              :showClose="true"
+              :showDownload="true"
+              :showFullscreen="true"
+              @download="downloadFile"
+              @close="closePreview"
+            />
             <div v-else class="inline-preview-empty">
               <div class="inline-preview-empty-title">选择文件后可在此预览</div>
               <div class="inline-preview-empty-desc">
@@ -219,197 +138,22 @@
       :closable="false"
       @cancel="closePreview"
     >
-      <template #title>
-        <div class="modal-header-title">
-          <div class="file-title">
-            <component
-              :is="getFileIcon(currentFilePath)"
-              :style="{ color: getFileIconColor(currentFilePath), fontSize: '18px' }"
-            />
-            <span class="file-path-title">{{ currentFilePath }}</span>
-          </div>
-          <div class="modal-actions">
-            <div v-if="isHtmlFile" class="preview-mode-switch">
-              <button
-                class="preview-mode-btn"
-                :class="{ active: htmlPreviewMode === 'render' }"
-                @click="htmlPreviewMode = 'render'"
-                title="预览"
-              >
-                <Globe :size="16" />
-              </button>
-              <button
-                class="preview-mode-btn"
-                :class="{ active: htmlPreviewMode === 'source' }"
-                @click="htmlPreviewMode = 'source'"
-                title="源码"
-              >
-                <Code2 :size="16" />
-              </button>
-            </div>
-            <button
-              v-if="currentFile"
-              class="modal-action-btn"
-              @click="downloadFile(currentFile)"
-              title="下载"
-            >
-              <Download :size="18" />
-            </button>
-            <button
-              v-if="currentFile"
-              class="modal-action-btn"
-              @click="openFullscreenPreview"
-              title="全屏预览"
-            >
-              <Maximize2 :size="18" />
-            </button>
-            <button class="modal-action-btn" @click="closePreview" title="关闭">
-              <X :size="18" />
-            </button>
-          </div>
-        </div>
-      </template>
-      <div class="file-content">
-        <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
-          <div class="image-preview-wrapper">
-            <img :src="currentFile.previewUrl" :alt="currentFilePath" class="image-preview" />
-          </div>
-        </template>
-        <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
-          <iframe :src="currentFile.previewUrl" class="pdf-preview" :title="currentFilePath" />
-        </template>
-        <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
-          <iframe
-            class="html-preview"
-            :srcdoc="formatContent(currentFile?.content)"
-            :title="currentFilePath"
-            sandbox=""
-          />
-        </template>
-        <template v-else-if="isMarkdown">
-          <MdPreview
-            class="flat-md-preview"
-            :modelValue="formatContent(currentFile?.content)"
-            :theme="theme"
-            previewTheme="github"
-          />
-        </template>
-        <template v-else-if="currentFile?.supported === false">
-          <div class="unsupported-preview">
-            {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
-          </div>
-        </template>
-        <template v-else>
-          <pre v-if="Array.isArray(currentFile?.content)">{{ formatContent(currentFile.content) }}</pre>
-          <pre
-            v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
-            :class="['file-content-pre', 'code-highlight', codeThemeClass]"
-          ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
-          <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{
-            currentFile.content
-          }}</pre>
-          <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
-        </template>
-      </div>
+      <AgentFilePreview
+        :file="currentFile"
+        :filePath="currentFilePath"
+        :showClose="true"
+        :showDownload="true"
+        :showFullscreen="true"
+        @download="downloadFile"
+        @close="closePreview"
+      />
     </a-modal>
-
-    <Teleport to="body">
-      <div v-if="fullscreenPreviewVisible && currentFile" class="fullscreen-preview-overlay">
-        <div class="fullscreen-preview-actions">
-          <div v-if="isHtmlFile" class="preview-mode-switch fullscreen-preview-switch">
-            <button
-              class="preview-mode-btn"
-              :class="{ active: htmlPreviewMode === 'render' }"
-              @click="htmlPreviewMode = 'render'"
-              title="预览"
-            >
-              <Globe :size="16" />
-            </button>
-            <button
-              class="preview-mode-btn"
-              :class="{ active: htmlPreviewMode === 'source' }"
-              @click="htmlPreviewMode = 'source'"
-              title="源码"
-            >
-              <Code2 :size="16" />
-            </button>
-          </div>
-          <button
-            class="modal-action-btn fullscreen-action-btn"
-            @click="closeFullscreenPreview"
-            title="关闭"
-          >
-            <X :size="18" />
-          </button>
-        </div>
-        <div class="fullscreen-preview-content">
-          <div class="file-content fullscreen-file-content">
-            <template v-if="currentFile?.previewType === 'image' && currentFile?.previewUrl">
-              <div class="image-preview-wrapper fullscreen-image-preview-wrapper">
-                <img :src="currentFile.previewUrl" :alt="currentFilePath" class="image-preview" />
-              </div>
-            </template>
-            <template v-else-if="currentFile?.previewType === 'pdf' && currentFile?.previewUrl">
-              <iframe
-                :src="currentFile.previewUrl"
-                class="pdf-preview fullscreen-embed-preview"
-                :title="currentFilePath"
-              />
-            </template>
-            <template v-else-if="isHtmlFile && htmlPreviewMode === 'render'">
-              <iframe
-                class="html-preview fullscreen-embed-preview"
-                :srcdoc="formatContent(currentFile?.content)"
-                :title="currentFilePath"
-                sandbox=""
-              />
-            </template>
-            <template v-else-if="isMarkdown">
-              <MdPreview
-                class="flat-md-preview"
-                :modelValue="formatContent(currentFile?.content)"
-                :theme="theme"
-                previewTheme="github"
-              />
-            </template>
-            <template v-else-if="currentFile?.supported === false">
-              <div class="unsupported-preview fullscreen-unsupported-preview">
-                {{ currentFile?.message || '当前文件暂不支持预览，请下载后查看' }}
-              </div>
-            </template>
-            <template v-else>
-              <pre v-if="Array.isArray(currentFile?.content)">{{
-                formatContent(currentFile.content)
-              }}</pre>
-              <pre
-                v-else-if="isCodePreview && typeof currentFile?.content === 'string'"
-                :class="['file-content-pre', 'code-highlight', codeThemeClass]"
-              ><code class="hljs" v-html="highlightedCodeContent"></code></pre>
-              <pre v-else-if="typeof currentFile?.content === 'string'" class="file-content-pre">{{
-                currentFile.content
-              }}</pre>
-              <pre v-else>{{ JSON.stringify(currentFile, null, 2) }}</pre>
-            </template>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, onUpdated, nextTick, ref, watch } from 'vue'
-import {
-  ChevronsDownUp,
-  ChevronsUpDown,
-  Code2,
-  Download,
-  FolderCode,
-  Globe,
-  Maximize2,
-  RefreshCw,
-  X
-} from 'lucide-vue-next'
+import { ChevronsDownUp, ChevronsUpDown, Download, FolderCode, RefreshCw, X } from 'lucide-vue-next'
 import {
   CheckCircleOutlined,
   SyncOutlined,
@@ -417,13 +161,8 @@ import {
   CloseCircleOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons-vue'
-import { MdPreview } from 'md-editor-v3'
-import hljs from 'highlight.js/lib/common'
-import 'md-editor-v3/lib/preview.css'
-import { useThemeStore } from '@/stores/theme'
-import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
-import { getCodeLanguageByPath, isHtmlPreview, isMarkdownPreview } from '@/utils/file_preview'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
+import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import {
   downloadViewerFile,
   getViewerFileContent,
@@ -471,10 +210,8 @@ const INLINE_PREVIEW_MIN_WIDTH = 920
 const panelRef = ref(null)
 const activeTab = ref('files')
 const modalVisible = ref(false)
-const fullscreenPreviewVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
-const htmlPreviewMode = ref('render')
 const loadingFiles = ref(false)
 const filesystemError = ref('')
 const panelWidth = ref(0)
@@ -483,53 +220,7 @@ const dynamicTreeData = ref([])
 const selectedKeys = ref([])
 const expandedKeys = ref([])
 
-const themeStore = useThemeStore()
-const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
-
-const isMarkdown = computed(() =>
-  isMarkdownPreview(currentFilePath.value, currentFile.value?.previewType)
-)
-const isHtmlFile = computed(
-  () =>
-    currentFile.value?.previewType === 'text' &&
-    typeof currentFile.value?.content === 'string' &&
-    isHtmlPreview(currentFilePath.value)
-)
-const codeThemeClass = computed(() => (themeStore.isDark ? 'hljs-theme-dark' : 'hljs-theme-light'))
-const codeLanguage = computed(() => getCodeLanguageByPath(currentFilePath.value))
-const isCodePreview = computed(
-  () =>
-    currentFile.value?.previewType === 'text' &&
-    typeof currentFile.value?.content === 'string' &&
-    !isHtmlFile.value &&
-    Boolean(codeLanguage.value)
-)
-
-const escapeHtml = (content) =>
-  String(content)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-
-const highlightedCodeContent = computed(() => {
-  const content = currentFile.value?.content
-  if (!isCodePreview.value || typeof content !== 'string') {
-    return ''
-  }
-
-  try {
-    if (codeLanguage.value) {
-      return hljs.highlight(content, { language: codeLanguage.value }).value
-    }
-    return hljs.highlightAuto(content).value
-  } catch (error) {
-    console.warn('代码高亮失败:', error)
-    return escapeHtml(content)
-  }
-})
 
 const todos = computed(() => props.agentState?.todos || [])
 const completedCount = computed(() => todos.value.filter((t) => t.status === 'completed').length)
@@ -678,12 +369,6 @@ const getFileName = (fileItem) => {
   return '未知文件'
 }
 
-const formatContent = (content) => {
-  if (Array.isArray(content)) return content.join('\n')
-  if (content === undefined || content === null) return ''
-  return String(content)
-}
-
 const refreshFileSystem = async () => {
   if (!props.threadId) {
     dynamicTreeData.value = []
@@ -756,7 +441,6 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
 
   revokeCurrentPreviewUrl()
   currentFilePath.value = node.key
-  htmlPreviewMode.value = 'render'
   currentFile.value = {
     ...node.fileData,
     content: 'Loading...',
@@ -809,22 +493,11 @@ const onFileSelect = async (nextSelectedKeys, { node }) => {
 }
 
 const closePreview = () => {
-  fullscreenPreviewVisible.value = false
   revokeCurrentPreviewUrl()
   modalVisible.value = false
   currentFile.value = null
   currentFilePath.value = ''
-  htmlPreviewMode.value = 'render'
   selectedKeys.value = []
-}
-
-const openFullscreenPreview = () => {
-  if (!currentFile.value) return
-  fullscreenPreviewVisible.value = true
-}
-
-const closeFullscreenPreview = () => {
-  fullscreenPreviewVisible.value = false
 }
 
 const downloadFile = async (fileItem) => {
@@ -949,7 +622,6 @@ onUnmounted(() => {
   window.removeEventListener('pointercancel', stopResize)
   document.body.style.cursor = ''
   document.body.style.userSelect = ''
-  document.body.style.overflow = ''
   revokeCurrentPreviewUrl()
 })
 
@@ -971,14 +643,6 @@ watch(useInlinePreview, (isInline) => {
   }
 
   modalVisible.value = !isInline
-})
-
-watch([modalVisible, fullscreenPreviewVisible], ([modalOpen, fullscreenOpen]) => {
-  document.body.style.overflow = fullscreenOpen ? 'hidden' : ''
-
-  if (fullscreenOpen && modalOpen) {
-    modalVisible.value = false
-  }
 })
 </script>
 
@@ -1374,252 +1038,6 @@ watch([modalVisible, fullscreenPreviewVisible], ([modalOpen, fullscreenOpen]) =>
       cursor: not-allowed;
     }
   }
-}
-
-.file-content {
-  min-height: 300px;
-  max-height: 80vh;
-  overflow-y: auto;
-  border-radius: 6px;
-
-  &::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: var(--gray-50);
-    border-radius: 4px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--gray-300);
-    border-radius: 4px;
-
-    &:hover {
-      background: var(--gray-400);
-    }
-  }
-
-  pre {
-    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-    font-size: 13px;
-    line-height: 1.5;
-    margin: 0;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    color: var(--gray-1000);
-    background: transparent;
-  }
-
-  .flat-md-preview {
-    padding: 12px;
-  }
-}
-
-.fullscreen-preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  background: var(--gray-0);
-}
-
-.fullscreen-preview-actions {
-  position: fixed;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fullscreen-preview-switch {
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
-}
-
-.fullscreen-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--gray-200);
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(10px);
-}
-
-.fullscreen-preview-content {
-  position: absolute;
-  inset: 0;
-  min-height: 0;
-}
-
-.fullscreen-file-content {
-  height: 100vh;
-  max-height: none;
-  min-height: 100vh;
-  padding: 24px;
-  border-radius: 0;
-}
-
-.fullscreen-image-preview-wrapper {
-  min-height: calc(100vh - 48px);
-  align-items: center;
-}
-
-.fullscreen-embed-preview {
-  min-height: calc(100vh - 48px);
-  height: calc(100vh - 48px);
-  border-radius: 12px;
-}
-
-.fullscreen-unsupported-preview {
-  min-height: calc(100vh - 48px);
-}
-
-.file-content-pre.code-highlight {
-  border-radius: 8px;
-  background: var(--gray-25);
-  border: 1px solid var(--gray-150);
-  white-space: pre;
-  overflow-x: auto;
-}
-
-.file-content-pre.code-highlight code {
-  padding: 14px 16px;
-  display: block;
-  white-space: pre;
-  color: inherit;
-  min-height: calc(80vh - 40px);
-}
-
-.fullscreen-file-content .file-content-pre.code-highlight code {
-  min-height: calc(100vh - 48px);
-}
-
-.image-preview-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-}
-
-.image-preview {
-  display: block;
-  max-width: 100%;
-  max-height: calc(80vh - 32px);
-  object-fit: contain;
-  border-radius: 6px;
-}
-
-.fullscreen-file-content .image-preview {
-  max-height: calc(100vh - 48px);
-}
-
-.pdf-preview {
-  width: 100%;
-  min-height: calc(80vh - 40px);
-  border: none;
-  border-radius: 6px;
-  background: var(--gray-25);
-}
-
-.html-preview {
-  width: 100%;
-  min-height: calc(80vh - 40px);
-  border: 1px solid var(--gray-150);
-  border-radius: 6px;
-  background: #fff;
-}
-
-.unsupported-preview {
-  min-height: 260px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  color: var(--gray-600);
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.modal-header-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.file-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.modal-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.preview-mode-switch {
-  display: flex;
-  align-items: center;
-  padding: 2px;
-  border-radius: 8px;
-  background: var(--gray-100);
-}
-
-.preview-mode-btn {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--gray-600);
-  cursor: pointer;
-  transition: all 0.15s ease;
-
-  &.active {
-    background: var(--gray-0);
-    color: var(--gray-900);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-  }
-}
-
-.modal-action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  color: var(--gray-600);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  padding: 0;
-
-  &:hover {
-    background: var(--gray-100);
-    color: var(--gray-900);
-  }
-
-  &:active {
-    background: var(--gray-200);
-  }
-}
-
-.file-path-title {
-  font-weight: 400;
-  color: var(--gray-700);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 :deep(.ant-modal) {
