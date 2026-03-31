@@ -55,8 +55,9 @@
                   </div>
                 </template>
                 <template #actions="{ node }">
-                  <div v-if="node.isLeaf" class="node-actions-container">
+                  <div class="node-actions-container">
                     <button
+                      v-if="node.isLeaf"
                       class="tree-action-btn tree-download-btn"
                       @click.stop="downloadFile(node.fileData)"
                       title="下载文件"
@@ -66,8 +67,8 @@
                     <button
                       class="tree-action-btn tree-delete-btn"
                       :disabled="deletingPaths.has(node.key)"
-                      @click.stop="confirmDeleteFile(node)"
-                      title="删除文件"
+                      @click.stop="confirmDeleteNode(node)"
+                      :title="node.isLeaf ? '删除文件' : '删除文件夹'"
                     >
                       <Trash2 :size="14" />
                     </button>
@@ -127,7 +128,15 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronsDownUp, ChevronsUpDown, Download, FolderCode, RefreshCw, Trash2, X } from 'lucide-vue-next'
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Download,
+  FolderCode,
+  RefreshCw,
+  Trash2,
+  X
+} from 'lucide-vue-next'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
@@ -269,6 +278,17 @@ const removeTreeNode = (nodes, targetKey) => {
     result.push(nextNode)
     return result
   }, [])
+}
+
+const normalizePathKey = (path) => String(path || '').replace(/\/+$/, '')
+
+const isSameOrChildPath = (path, targetPath) => {
+  const normalizedPath = normalizePathKey(path)
+  const normalizedTargetPath = normalizePathKey(targetPath)
+  if (!normalizedPath || !normalizedTargetPath) return false
+  return (
+    normalizedPath === normalizedTargetPath || normalizedPath.startsWith(`${normalizedTargetPath}/`)
+  )
 }
 
 const parseDownloadFilename = (contentDisposition) => {
@@ -429,11 +449,21 @@ const closePreview = () => {
   selectedKeys.value = []
 }
 
-const confirmDeleteFile = (node) => {
+const pruneTreeStateAfterDelete = (targetPath) => {
+  selectedKeys.value = selectedKeys.value.filter((key) => !isSameOrChildPath(key, targetPath))
+  expandedKeys.value = expandedKeys.value.filter((key) => !isSameOrChildPath(key, targetPath))
+
+  if (isSameOrChildPath(currentFilePath.value, targetPath)) {
+    closePreview()
+  }
+}
+
+const confirmDeleteNode = (node) => {
   const fileName = node?.title || getFileName(node?.fileData)
+  const isDirectory = !node?.isLeaf
   Modal.confirm({
-    title: `确认删除文件「${fileName}」？`,
-    content: '删除后不可恢复。',
+    title: isDirectory ? `确认删除文件夹「${fileName}」？` : `确认删除文件「${fileName}」？`,
+    content: isDirectory ? '将删除该文件夹及其所有内容，删除后不可恢复。' : '删除后不可恢复。',
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
@@ -445,14 +475,11 @@ const confirmDeleteFile = (node) => {
       try {
         await deleteViewerFile(props.threadId, node.key, props.agentId, props.agentConfigId)
         dynamicTreeData.value = removeTreeNode(dynamicTreeData.value, node.key)
-        selectedKeys.value = selectedKeys.value.filter((key) => key !== node.key)
-        if (currentFilePath.value === node.key) {
-          closePreview()
-        }
-        message.success('文件删除成功')
+        pruneTreeStateAfterDelete(node.key)
+        message.success(isDirectory ? '文件夹删除成功' : '文件删除成功')
       } catch (error) {
-        console.error('删除文件失败:', error)
-        message.error(error?.message || '删除文件失败')
+        console.error(isDirectory ? '删除文件夹失败:' : '删除文件失败:', error)
+        message.error(error?.message || (isDirectory ? '删除文件夹失败' : '删除文件失败'))
       } finally {
         const latestDeletingPaths = new Set(deletingPaths.value)
         latestDeletingPaths.delete(node.key)
@@ -1087,30 +1114,30 @@ watch(useInlinePreview, (isInline) => {
 <style lang="less">
 .agent-file-preview-modal {
   .ant-modal {
-  z-index: 1050;
-  .ant-modal-content {
-    border-radius: 8px;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--gray-200);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
+    z-index: 1050;
+    .ant-modal-content {
+      border-radius: 8px;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
 
-  :deep(.ant-modal-header) {
-    background: var(--main-5);
-    border-bottom: 1px solid var(--gray-200);
-    padding: 16px 20px;
-  }
+    :deep(.ant-modal-header) {
+      background: var(--main-5);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 20px;
+    }
 
-  :deep(.ant-modal-title) {
-    font-weight: 600;
-    color: var(--gray-1000);
-    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  }
+    :deep(.ant-modal-title) {
+      font-weight: 600;
+      color: var(--gray-1000);
+      font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
 
-  :deep(.ant-modal-body) {
-    padding: 0;
+    :deep(.ant-modal-body) {
+      padding: 0;
+    }
   }
-}
 }
 </style>
