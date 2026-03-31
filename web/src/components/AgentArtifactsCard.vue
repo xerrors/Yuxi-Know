@@ -70,6 +70,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, Download, Eye, FolderOutput } from 'lucide-vue-next'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
+import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
 import { getPreviewTypeByPath } from '@/utils/file_preview'
 import { downloadViewerFile, getViewerFileContent } from '@/apis/viewer_filesystem'
 
