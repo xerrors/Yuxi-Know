@@ -10,6 +10,14 @@
       <div class="header-actions">
         <!-- Skills Tab 的按钮 -->
         <template v-if="activeTab === 'skills'">
+          <a-button
+            @click="handleOpenRemoteInstall"
+            :disabled="skillsLoading || skillsImporting"
+            class="lucide-icon-btn"
+          >
+            <Computer :size="14" />
+            <span>远程安装</span>
+          </a-button>
           <a-upload
             accept=".zip,.md"
             :show-upload-list="false"
@@ -90,7 +98,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Upload, RotateCw, Plus } from 'lucide-vue-next'
+import { Upload, RotateCw, Plus, Computer } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
@@ -151,6 +159,12 @@ const handleSkillsRefresh = () => {
     skillsRef.value.fetchSkills().finally(() => {
       updateSkillsState(false, skillsImporting.value)
     })
+  }
+}
+
+const handleOpenRemoteInstall = () => {
+  if (skillsRef.value?.openRemoteInstallModal) {
+    skillsRef.value.openRemoteInstallModal()
   }
 }
 

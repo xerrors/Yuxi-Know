@@ -352,6 +352,62 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <a-modal
+      v-model:open="remoteInstallModalVisible"
+      title="远程安装 Skill"
+      :footer="null"
+      width="560px"
+    >
+      <div class="remote-install-panel modal-mode">
+        <div class="panel-header-text">
+          <span class="title">基于 skills.sh 的能力拉取并导入到当前系统</span>
+          <span class="desc">
+            支持 `owner/repo` 或完整 GitHub URL，可前往
+            <a href="https://skills.sh/" target="_blank" rel="noopener noreferrer">skills.sh</a>
+            查询可用 skills
+          </span>
+        </div>
+        <a-form layout="vertical" class="remote-install-form">
+          <a-form-item label="来源仓库">
+            <a-input
+              v-model:value="remoteInstallForm.source"
+              placeholder="anthropics/skills 或 GitHub URL"
+            />
+          </a-form-item>
+          <a-form-item label="Skill 名称">
+            <a-auto-complete
+              v-model:value="remoteInstallForm.skill"
+              :options="filteredRemoteSkillOptions"
+              placeholder="frontend-design"
+              allow-clear
+            >
+              <a-input />
+            </a-auto-complete>
+          </a-form-item>
+          <div class="remote-install-actions">
+            <a-button
+              :loading="listingRemoteSkills"
+              :disabled="installingRemoteSkill"
+              @click="handleListRemoteSkills"
+            >
+              查看可安装 Skills
+            </a-button>
+            <a-button
+              type="primary"
+              :loading="installingRemoteSkill"
+              :disabled="listingRemoteSkills"
+              @click="handleInstallRemoteSkill"
+            >
+              安装
+            </a-button>
+          </div>
+          <div v-if="remoteSkillOptions.length" class="remote-skill-summary">
+            共发现 {{ remoteSkillOptions.length }} 个 skills，可按输入内容筛选候选项。
+          </div>
+        </a-form>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -391,6 +447,8 @@ const theme = computed(() => (themeStore.isDark ? 'dark' : 'light'))
 
 const loading = ref(false)
 const importing = ref(false)
+const listingRemoteSkills = ref(false)
+const installingRemoteSkill = ref(false)
 const savingFile = ref(false)
 const creatingNode = ref(false)
 const savingDependencies = ref(false)
@@ -410,7 +468,13 @@ const fileContent = ref('')
 const originalFileContent = ref('')
 
 const createModalVisible = ref(false)
+const remoteInstallModalVisible = ref(false)
 const createForm = reactive({ path: '', isDir: false, content: '' })
+const remoteInstallForm = reactive({
+  source: 'https://github.com/anthropics/skills',
+  skill: ''
+})
+const remoteSkillOptions = ref([])
 const dependencyOptions = reactive({ tools: [], mcps: [], skills: [] })
 const dependencyForm = reactive({
   tool_dependencies: [],
@@ -521,6 +585,15 @@ const skillDependencyOptions = computed(() =>
     .filter((s) => s !== currentSkill.value?.slug)
     .map((i) => ({ label: i, value: i }))
 )
+const filteredRemoteSkillOptions = computed(() => {
+  const keyword = remoteInstallForm.skill.trim().toLowerCase()
+  return remoteSkillOptions.value
+    .filter((item) => !keyword || item.name.toLowerCase().includes(keyword))
+    .map((item) => ({
+      value: item.name,
+      label: item.description ? `${item.name} - ${item.description}` : item.name
+    }))
+})
 
 const normalizeTree = (nodes) =>
   (nodes || []).map((node) => ({
@@ -858,6 +931,63 @@ const handleImportUpload = async ({ file, onSuccess, onError }) => {
   }
 }
 
+const handleListRemoteSkills = async () => {
+  const source = remoteInstallForm.source.trim()
+  if (!source) {
+    message.warning('请输入来源仓库')
+    return
+  }
+  listingRemoteSkills.value = true
+  try {
+    const result = await skillApi.listRemoteSkills(source)
+    remoteSkillOptions.value = result?.data || []
+    if (!remoteSkillOptions.value.length) {
+      message.warning('未发现可安装的 Skills')
+      return
+    }
+    if (!remoteInstallForm.skill) {
+      remoteInstallForm.skill = remoteSkillOptions.value[0]?.name || ''
+    }
+    message.success(`已发现 ${remoteSkillOptions.value.length} 个 Skills`)
+  } catch (error) {
+    message.error(error?.response?.data?.detail || error.message || '获取远程 Skills 失败')
+  } finally {
+    listingRemoteSkills.value = false
+  }
+}
+
+const handleInstallRemoteSkill = async () => {
+  const source = remoteInstallForm.source.trim()
+  const skill = remoteInstallForm.skill.trim()
+  if (!source || !skill) {
+    message.warning('请填写来源仓库和 Skill 名称')
+    return
+  }
+  installingRemoteSkill.value = true
+  try {
+    const result = await skillApi.installRemoteSkill({ source, skill })
+    const installed = result?.data
+    remoteInstallForm.skill = installed?.slug || skill
+    await fetchSkills()
+    if (installed?.slug) {
+      const record =
+        skills.value.find((item) => item.slug === installed.slug) ||
+        builtinSkills.value.find((item) => item.slug === installed.slug)
+      if (record) await selectSkill(record)
+    }
+    remoteInstallModalVisible.value = false
+    message.success('远程 Skill 安装成功')
+  } catch (error) {
+    message.error(error?.response?.data?.detail || error.message || '远程 Skill 安装失败')
+  } finally {
+    installingRemoteSkill.value = false
+  }
+}
+
+const openRemoteInstallModal = () => {
+  remoteInstallModalVisible.value = true
+}
+
 const saveDependencies = async () => {
   if (!currentSkill.value || !isInstalledSkill.value) return
   savingDependencies.value = true
@@ -886,7 +1016,8 @@ onMounted(fetchSkills)
 // 暴露方法给父组件
 defineExpose({
   fetchSkills,
-  handleImportUpload
+  handleImportUpload,
+  openRemoteInstallModal
 })
 </script>
 
@@ -911,6 +1042,62 @@ defineExpose({
   min-height: 0;
   height: 100%;
   overflow: hidden;
+}
+
+.remote-install-panel {
+  background: linear-gradient(180deg, var(--gray-0) 0%, var(--gray-50) 100%);
+  border: 1px solid @border-color;
+  border-radius: 12px;
+  padding: 16px;
+
+  &.modal-mode {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+  }
+
+  .panel-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--gray-900);
+    }
+
+    .desc {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+  }
+
+  .remote-install-form {
+    :deep(.ant-form-item) {
+      margin-bottom: 12px;
+    }
+  }
+
+  .remote-install-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .remote-skill-hints {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .remote-skill-summary {
+    margin-top: 12px;
+    font-size: 12px;
+    color: var(--gray-500);
+  }
 }
 
 /* 文件 tree */

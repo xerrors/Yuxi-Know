@@ -222,6 +222,20 @@ async def test_import_skill_md_creates_single_file_skill(
 
 
 @pytest.mark.asyncio
+async def test_import_skill_dir_requires_root_skill_md(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
+    source_dir = tmp_path / "source-skill"
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError, match="根级 SKILL.md"):
+        await svc.import_skill_dir(
+            None,
+            source_dir=source_dir,
+            created_by="root",
+        )
+
+
+@pytest.mark.asyncio
 async def test_update_skill_md_syncs_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
     skill_dir = tmp_path / "skills" / "demo"

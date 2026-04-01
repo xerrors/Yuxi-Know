@@ -33,6 +33,7 @@
 - 调整输入框 `@` 提及中的文件搜索交互：无查询内容时不再直接展示文件列表，改为提示“输入相关内容以搜索文件”，避免未过滤结果干扰选择。
 - 收紧文件系统安全边界：viewer/chat 下载与删除路径统一基于解析后的真实路径做允许目录校验，阻止通过软链接逃逸工作区/线程目录；同时将密码哈希默认实现升级为 Argon2，并移除 skill frontmatter 解析中的正则回溯风险。
 - 调整 Skills 导入能力：`/api/system/skills/import` 现在除 ZIP 外也支持直接上传单个 `SKILL.md`，前端上传入口与后端导入服务同步兼容，便于快速导入单文件技能
+- 新增 Skills 远程安装能力：Skills 管理页支持填写 `owner/repo` 或 GitHub URL，后端通过隔离的临时 `HOME` 调用 `npx skills add` 下载指定 skill，再复用现有导入链路写入 `saves/skills` 和数据库，避免将 `~/.agents/skills` 直接作为系统主存储
 
 ---
 

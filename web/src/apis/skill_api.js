@@ -18,6 +18,14 @@ export const importSkillZip = async (file) => {
   return apiSuperAdminPost(`${BASE_URL}/import`, formData)
 }
 
+export const listRemoteSkills = async (source) => {
+  return apiSuperAdminPost(`${BASE_URL}/remote/list`, { source })
+}
+
+export const installRemoteSkill = async (payload) => {
+  return apiSuperAdminPost(`${BASE_URL}/remote/install`, payload)
+}
+
 export const getSkillDependencyOptions = async () => {
   return apiSuperAdminGet(`${BASE_URL}/dependency-options`)
 }
@@ -73,6 +81,8 @@ export const deleteSkill = async (slug) => {
 export const skillApi = {
   listSkills,
   importSkillZip,
+  listRemoteSkills,
+  installRemoteSkill,
   getSkillDependencyOptions,
   listBuiltinSkills,
   installBuiltinSkill,

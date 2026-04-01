@@ -429,6 +429,63 @@ async def _generate_available_slug(repo: SkillRepository, base_slug: str) -> str
         idx += 1
 
 
+async def _import_skill_dir_impl(
+    db: AsyncSession,
+    *,
+    source_skill_dir: Path,
+    created_by: str | None,
+) -> Skill:
+    repo = SkillRepository(db)
+    skills_root = get_skills_root_dir()
+
+    skill_md_path = source_skill_dir / "SKILL.md"
+    if not skill_md_path.exists() or not skill_md_path.is_file():
+        raise ValueError("技能目录缺少根级 SKILL.md")
+
+    content = skill_md_path.read_text(encoding="utf-8")
+    parsed_name, parsed_desc, _ = _parse_skill_markdown(content)
+
+    final_slug = await _generate_available_slug(repo, parsed_name)
+    final_name = parsed_name
+    with tempfile.TemporaryDirectory(prefix=".skill-import-", dir=str(skills_root.parent)) as temp_root:
+        temp_root_path = Path(temp_root)
+        stage_dir = temp_root_path / "stage"
+        shutil.copytree(source_skill_dir, stage_dir)
+
+        if final_slug != parsed_name:
+            final_name = final_slug
+            content = _rewrite_frontmatter_name(content, final_name)
+            (stage_dir / "SKILL.md").write_text(content, encoding="utf-8")
+
+        temp_target = skills_root / f".{final_slug}.tmp-{uuid.uuid4().hex[:8]}"
+        if temp_target.exists():
+            shutil.rmtree(temp_target)
+        shutil.move(str(stage_dir), str(temp_target))
+
+        final_dir = skills_root / final_slug
+        if final_dir.exists():
+            shutil.rmtree(temp_target, ignore_errors=True)
+            raise ValueError(f"技能目录冲突，请重试: {final_slug}")
+        temp_target.rename(final_dir)
+
+        try:
+            item = await repo.create(
+                slug=final_slug,
+                name=final_name,
+                description=parsed_desc,
+                tool_dependencies=[],
+                mcp_dependencies=[],
+                skill_dependencies=[],
+                dir_path=(Path("skills") / final_slug).as_posix(),
+                created_by=created_by,
+            )
+        except Exception:
+            shutil.rmtree(final_dir, ignore_errors=True)
+            raise
+
+    return item
+
+
 def _resolve_skill_dir(item: Skill) -> Path:
     dir_path = Path(item.dir_path)
     if dir_path.is_absolute():
@@ -498,13 +555,11 @@ async def import_skill_zip(
     if not is_zip_upload and not is_skill_md_upload:
         raise ValueError("仅支持上传 .zip 或 SKILL.md 文件")
 
-    repo = SkillRepository(db)
     skills_root = get_skills_root_dir()
 
     with tempfile.TemporaryDirectory(prefix=".skill-import-", dir=str(skills_root.parent)) as temp_root:
         temp_root_path = Path(temp_root)
         extract_dir = temp_root_path / "extract"
-        stage_dir = temp_root_path / "stage"
         extract_dir.mkdir(parents=True, exist_ok=True)
         if is_zip_upload:
             zip_path = temp_root_path / "upload.zip"
@@ -525,45 +580,27 @@ async def import_skill_zip(
             skill_md_path = source_skill_dir / "SKILL.md"
             skill_md_path.write_bytes(file_bytes)
 
-        content = skill_md_path.read_text(encoding="utf-8")
-        parsed_name, parsed_desc, _ = _parse_skill_markdown(content)
+        return await _import_skill_dir_impl(
+            db,
+            source_skill_dir=source_skill_dir,
+            created_by=created_by,
+        )
 
-        final_slug = await _generate_available_slug(repo, parsed_name)
-        final_name = parsed_name
-        if final_slug != parsed_name:
-            final_name = final_slug
-            content = _rewrite_frontmatter_name(content, final_name)
-            skill_md_path.write_text(content, encoding="utf-8")
 
-        shutil.copytree(source_skill_dir, stage_dir)
-
-        temp_target = skills_root / f".{final_slug}.tmp-{uuid.uuid4().hex[:8]}"
-        if temp_target.exists():
-            shutil.rmtree(temp_target)
-        shutil.move(str(stage_dir), str(temp_target))
-
-        final_dir = skills_root / final_slug
-        if final_dir.exists():
-            shutil.rmtree(temp_target, ignore_errors=True)
-            raise ValueError(f"技能目录冲突，请重试: {final_slug}")
-        temp_target.rename(final_dir)
-
-        try:
-            item = await repo.create(
-                slug=final_slug,
-                name=final_name,
-                description=parsed_desc,
-                tool_dependencies=[],
-                mcp_dependencies=[],
-                skill_dependencies=[],
-                dir_path=(Path("skills") / final_slug).as_posix(),
-                created_by=created_by,
-            )
-        except Exception:
-            shutil.rmtree(final_dir, ignore_errors=True)
-            raise
-
-    return item
+async def import_skill_dir(
+    db: AsyncSession,
+    *,
+    source_dir: Path | str,
+    created_by: str | None,
+) -> Skill:
+    source_skill_dir = Path(source_dir).resolve()
+    if not source_skill_dir.exists() or not source_skill_dir.is_dir():
+        raise ValueError("技能目录不存在")
+    return await _import_skill_dir_impl(
+        db,
+        source_skill_dir=source_skill_dir,
+        created_by=created_by,
+    )
 
 
 async def get_skill_or_raise(db: AsyncSession, slug: str) -> Skill:
