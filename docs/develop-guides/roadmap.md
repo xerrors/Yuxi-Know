@@ -34,6 +34,7 @@
 ### 0.6.1
 
 <!-- 0.6.1 的内容请放在这里 -->
+- 调整 backend Python 工作区依赖边界：将 `backend/package/yuxi` 明确为承载核心运行依赖的业务包，根 `backend/pyproject.toml` 仅保留工作区入口与开发/测试配置，减少依赖职责混淆。
 
 
 历史版本发布记录已迁移到 [版本变更记录](./changelog.md)。
