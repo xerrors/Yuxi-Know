@@ -233,6 +233,7 @@ const getTodoStatusLabel = (status) => {
   display: flex;
   align-items: center;
   margin-right: 8px;
+  gap: 2px;
 }
 
 .input-top-stack {
