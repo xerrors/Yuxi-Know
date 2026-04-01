@@ -70,7 +70,7 @@ footer:
 
 ## 样式定制
 
-系统支持完整的主题色定制。配置文件位于 `web/src/assets/css/base.css`：
+系统支持完整的主题色定制。配置文件位于 `web/src/assets/css/base.css`，以及 `web/src/assets/css/base.dark.css`：
 
 ```css
 :root {

@@ -19,6 +19,10 @@
   --main-1: #000102;
   --main-0: #000000;
 
+  /* 保留原有的 main 变量 */
+  --main-color: #4a9fb8;
+  --main-bright: #5faec2;
+
   --gray-10000: #fafafa;
   --gray-2000: #f8fafa;
   --gray-1000: #f5f7f7;
@@ -37,47 +41,35 @@
   --gray-10: #080808;
   --gray-0: #030303;
 
-  /* Standard Color System - 深色模式5档色阶系统 */
-  --color-primary-50: #023944; /* 主色调-最深 */
-  --color-primary-100: #035065; /* 主色调-深 */
-  --color-primary-500: #4a9fb8; /* 主色调-标准 */
-  --color-primary-700: #5faec2; /* 主色调-浅 */
-  --color-primary-900: #82c3d6; /* 主色调-最浅 */
-
-  /* 保留原有的 main 变量 */
-  --main-color: #4a9fb8;
-  --main-bright: #5faec2;
-
-  --color-secondary-50: #151616; /* 次要色-最深 */
-  --color-secondary-100: #1e1f1f; /* 次要色-深 */
-  --color-secondary-500: #8fa5b0; /* 次要色-标准 */
-  --color-secondary-700: #9fb5c0; /* 次要色-浅 */
-  --color-secondary-900: #b8c8d0; /* 次要色-最浅 */
-
+  --color-success-10: #0f1810; /* 成功色-极深 */
   --color-success-50: #162312; /* 成功色-最深 */
   --color-success-100: #273921; /* 成功色-深 */
   --color-success-500: #52c41a; /* 成功色-标准 */
   --color-success-700: #73d13d; /* 成功色-浅 */
   --color-success-900: #95de64; /* 成功色-最浅 */
 
+  --color-error-10: #1a0a0b; /* 错误色-极深 */
   --color-error-50: #2a1215; /* 错误色-最深 */
   --color-error-100: #58181c; /* 错误色-深 */
   --color-error-500: #ff4d4f; /* 错误色-标准 */
   --color-error-700: #ff7875; /* 错误色-浅 */
   --color-error-900: #ffa39e; /* 错误色-最浅 */
 
+  --color-warning-10: #1a1408; /* 警告色-极深 */
   --color-warning-50: #2b2111; /* 警告色-最深 */
   --color-warning-100: #614700; /* 警告色-深 */
   --color-warning-500: #faad14; /* 警告色-标准 */
   --color-warning-700: #ffc53d; /* 警告色-浅 */
   --color-warning-900: #ffd666; /* 警告色-最浅 */
 
+  --color-info-10: #0c0d0d; /* 信息色-极深 */
   --color-info-50: #111b26; /* 信息色-最深 */
   --color-info-100: #111d2c; /* 信息色-深 */
   --color-info-500: #3d8fff; /* 信息色-标准 */
   --color-info-700: #40a9ff; /* 信息色-浅 */
   --color-info-900: #69c0ff; /* 信息色-最浅 */
 
+  --color-accent-10: #081919; /* 强调色-极深 */
   --color-accent-50: #0f2e2e; /* 强调色-最深 */
   --color-accent-100: #164e63; /* 强调色-深 */
   --color-accent-500: #13c2c2; /* 强调色-标准 */

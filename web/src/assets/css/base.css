@@ -20,6 +20,10 @@
   --main-1: #fefefe;
   --main-0: #ffffff;
 
+  /* 保留原有的 main 变量 */
+  --main-color: var(--main-700);
+  --main-bright: #0188a6;
+
   --gray-10000: #000000; /* 保持纯黑 */
   --gray-2000: #0c0d0d; /* 更精致的暗灰，用于极深背景 */
   --gray-1000: #151616; /* 深灰黑，适用于主文本 */
@@ -39,22 +43,18 @@
   --gray-0: #ffffff;
 
   /* Standard Color System - 标准5档色阶系统 */
-  --color-primary-50: #e1f6fb; /* 主色调-最浅 */
-  --color-primary-100: #a3d8e8; /* 主色调-浅 */
-  --color-primary-500: #3996ae; /* 主色调-标准 */
-  --color-primary-700: #046a82; /* 主色调-深 */
-  --color-primary-900: #023944; /* 主色调-最深 */
+  --color-primary-50: var(--main-50); /* 主色调-最浅 */
+  --color-primary-100: var(--main-200); /* 主色调-浅 */
+  --color-primary-500: var(--main-500); /* 主色调-标准 */
+  --color-primary-700: var(--main-700); /* 主色调-深 */
+  --color-primary-900: var(--main-900); /* 主色调-最深 */
 
-  /* 保留原有的 main 变量 */
-  --main-color: #016179;
-  --main-bright: #0188a6;
-
-  --color-secondary-10: #fafcfd; /* 次要色-最浅 */
-  --color-secondary-50: #f5f7f7; /* 次要色-最浅 */
-  --color-secondary-100: #eff2f2; /* 次要色-浅 */
-  --color-secondary-500: #4e616d; /* 次要色-标准 */
-  --color-secondary-700: #3a4a56; /* 次要色-深 */
-  --color-secondary-900: #2c3843; /* 次要色-最深 */
+  --color-secondary-10: var(--gray-10); /* 次要色-最浅 */
+  --color-secondary-50: var(--gray-50); /* 次要色-最浅 */
+  --color-secondary-100: var(--gray-100); /* 次要色-浅 */
+  --color-secondary-500: var(--gray-700); /* 次要色-标准 */
+  --color-secondary-700: var(--gray-800); /* 次要色-深 */
+  --color-secondary-900: var(--gray-900); /* 次要色-最深 */
 
   --color-success-10: #fafff2; /* 成功色-极浅 */
   --color-success-50: #f6ffed; /* 成功色-最浅 */
@@ -104,7 +104,6 @@
   --chart-palette-10: #8c8c8c;
 
   --bg-sider: var(--main-5);
-  --color-text: var(--c-black);
 
   --light-98: rgba(255, 255, 255, 0.98);
   --light-95: rgba(255, 255, 255, 0.95);
@@ -145,10 +144,11 @@
   /* Ant Design 兼容变量 */
   --color-bg-container: var(--main-0);
   --color-bg-elevated: var(--gray-10);
-  --color-text-secondary: rgba(0, 0, 0, 0.65);
-  --color-text-tertiary: rgba(0, 0, 0, 0.45);
-  --color-trans-light: rgba(255, 255, 255, 0.85);
-  --color-trans-dark: rgba(0, 0, 0, 0.85);
+  --color-text: var(--gray-1000);
+  --color-text-secondary: var(--dark-70);
+  --color-text-tertiary: var(--dark-50);
+  --color-trans-light: var(--light-85);
+  --color-trans-dark: var(--dark-85);
 }
 
 :root {
