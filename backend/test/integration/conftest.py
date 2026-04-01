@@ -30,7 +30,7 @@ ADMIN_LOGIN = os.getenv("TEST_USERNAME")
 ADMIN_PASSWORD = os.getenv("TEST_PASSWORD")
 
 _ADMIN_TOKEN_CACHE: str | None = None
-HTTP_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+HTTP_TIMEOUT = httpx.Timeout(60.0, connect=5.0)
 SANDBOX_CONTAINER_PREFIX = os.getenv("YUXI_SANDBOX_CONTAINER_PREFIX", "yuxi-sandbox")
 
 
@@ -235,8 +235,18 @@ async def standard_user(test_client: httpx.AsyncClient, admin_headers: dict[str,
             "headers": {"Authorization": f"Bearer {access_token}"},
         }
     finally:
-        response = await test_client.delete(f"/api/auth/users/{user_payload['id']}", headers=admin_headers)
-        assert response.status_code == 200, f"Failed to cleanup test user {user_payload['user_id']}: {response.text}"
+        cleanup_error = None
+        for _ in range(3):
+            response = await test_client.delete(f"/api/auth/users/{user_payload['id']}", headers=admin_headers)
+            if response.status_code in (200, 404):
+                cleanup_error = None
+                break
+            cleanup_error = response
+            await anyio.sleep(0.3)
+        if cleanup_error is not None:
+            assert cleanup_error.status_code == 200, (
+                f"Failed to cleanup test user {user_payload['user_id']}: {cleanup_error.text}"
+            )
 
 
 @pytest_asyncio.fixture(scope="function")

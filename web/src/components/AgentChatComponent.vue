@@ -167,6 +167,7 @@
                 :supports-file-upload="supportsFileUpload"
                 :is-panel-open="isAgentPanelOpen"
                 :has-active-thread="!!currentChatId"
+                :todos="currentTodos"
                 @send="handleSendOrStop"
                 @upload-attachment="handleAttachmentUpload"
                 @toggle-panel="toggleAgentPanel"
@@ -222,7 +223,6 @@
             :agent-id="currentThread?.agent_id || currentAgentId"
             :agent-config-id="selectedAgentConfigId"
             :panel-ratio="panelRatio"
-            :supports-todo="supportsTodo"
             :is-expanded="isAgentPanelExpanded"
             @refresh="handleAgentStateRefresh"
             @close="toggleAgentPanel"
@@ -262,6 +262,7 @@ import { useAgentRunStream } from '@/composables/useAgentRunStream'
 import { useAgentStreamHandler } from '@/composables/useAgentStreamHandler'
 import { useStreamSmoother } from '@/composables/useStreamSmoother'
 import { useAgentMentionConfig } from '@/composables/useAgentMentionConfig'
+import { shouldAutoOpenAgentPanel } from '@/utils/agentPanelAutoOpen'
 import AgentArtifactsCard from '@/components/AgentArtifactsCard.vue'
 import AgentPanel from '@/components/AgentPanel.vue'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
@@ -411,11 +412,6 @@ const supportsFileUpload = computed(() => {
   const capabilities = currentAgent.value.capabilities || []
   return capabilities.includes('file_upload')
 })
-const supportsTodo = computed(() => {
-  if (!currentAgent.value) return false
-  const capabilities = currentAgent.value.capabilities || []
-  return capabilities.includes('todo')
-})
 
 const supportsFiles = computed(() => {
   if (!currentAgent.value) return false
@@ -439,13 +435,13 @@ const currentArtifacts = computed(() => {
   const artifacts = currentAgentState.value?.artifacts
   return Array.isArray(artifacts) ? artifacts : []
 })
+const currentTodos = computed(() => {
+  const todos = currentAgentState.value?.todos
+  return Array.isArray(todos) ? todos : []
+})
 
 const hasAgentStateContent = computed(() => {
-  const s = currentAgentState.value
-  if (!s && currentThreadFiles.value.length === 0) return false
-  const todoCount = Array.isArray(s?.todos) ? s.todos.length : 0
-  const fileCount = currentThreadFiles.value.filter((item) => item?.is_dir !== true).length
-  return todoCount > 0 || fileCount > 0
+  return shouldAutoOpenAgentPanel(currentThreadFiles.value)
 })
 
 // 监听 hasAgentStateContent 从 false → true 时，自动展开面板
@@ -936,7 +932,6 @@ const { handleAgentResponse, handleStreamChunk } = useAgentStreamHandler({
   getThreadState,
   processApprovalInStream,
   currentAgentId,
-  supportsTodo,
   supportsFiles,
   streamSmoother
 })

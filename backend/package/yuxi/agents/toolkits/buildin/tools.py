@@ -15,6 +15,7 @@ from yuxi import config, graph_base
 from yuxi.agents.toolkits.registry import ToolExtraMetadata, _all_tool_instances, _extra_registry, tool
 from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils import logger
+from yuxi.utils.paths import VIRTUAL_PATH_OUTPUTS
 from yuxi.utils.question_utils import normalize_questions
 
 # Lazy initialization for TavilySearch (only when API key is available)
@@ -66,9 +67,7 @@ if config.enable_web_search:
 class PresentArtifactsInput(BaseModel):
     """Expose artifact files to the frontend after the agent finishes."""
 
-    filepaths: list[str] = Field(
-        description="需要展示给用户的文件绝对路径列表，只允许位于 /home/gem/user-data/outputs/ 下"
-    )
+    filepaths: list[str] = Field(description=f"需要展示给用户的文件绝对路径列表，只允许位于 {VIRTUAL_PATH_OUTPUTS} 下")
 
 
 def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> str:
@@ -130,16 +129,16 @@ def calculator(a: float, b: float, operation: str) -> float:
         raise
 
 
-PRESENT_ARTIFACTS_DESCRIPTION = """
+PRESENT_ARTIFACTS_DESCRIPTION = f"""
 将已经生成好的结果文件展示给用户。
 
 使用场景：
-1. 你已经在 `/home/gem/user-data/outputs/` 下写好了最终结果文件
+1. 你已经在 `{VIRTUAL_PATH_OUTPUTS}` 下写好了最终结果文件
 2. 你希望前端在对话结束后显示这些结果文件卡片
 3. 这些文件需要支持下载或预览
 
 注意事项：
-1. 只能传入 `/home/gem/user-data/outputs/` 下的文件
+1. 只能传入 `{VIRTUAL_PATH_OUTPUTS}` 下的文件
 2. 不要传入中间过程文件，只有真正需要给用户看的结果文件才调用
 3. 可以一次传多个文件
 """

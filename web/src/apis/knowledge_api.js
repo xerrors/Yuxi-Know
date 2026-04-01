@@ -423,15 +423,6 @@ export const evaluationApi = {
     formData.append('name', metadata.name || '')
     formData.append('description', metadata.description || '')
 
-    // 调试：打印 FormData 内容
-    console.log('FormData 内容:')
-    for (let [key, value] of formData.entries()) {
-      console.log(key, value)
-    }
-    console.log('file type:', file ? file.type : 'undefined')
-    console.log('file name:', file ? file.name : 'undefined')
-
-    // 直接传递 FormData，apiAdminPost 会正确处理
     return apiAdminPost(`/api/evaluation/databases/${dbId}/benchmarks/upload`, formData)
   },
 

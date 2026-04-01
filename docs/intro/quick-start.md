@@ -20,7 +20,7 @@
 
 ```bash
 # 克隆最新版本
-git clone --branch v0.6.0.beta3 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch v0.6.0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 ```
 

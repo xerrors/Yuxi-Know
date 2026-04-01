@@ -5705,20 +5705,14 @@ wheels = [
 
 [[package]]
 name = "yuxi"
-version = "0.6.0b3"
+version = "0.6.0"
 source = { virtual = "package/yuxi" }
-
-[[package]]
-name = "yuxi-workspace"
-version = "0.6.0b3"
-source = { virtual = "." }
 dependencies = [
     { name = "agent-sandbox" },
     { name = "aioboto3" },
     { name = "aiofiles" },
     { name = "aiohttp" },
     { name = "aiosqlite" },
-    { name = "arq" },
     { name = "asyncpg" },
     { name = "chardet" },
     { name = "colorlog" },
@@ -5726,7 +5720,6 @@ dependencies = [
     { name = "deepagents" },
     { name = "docling" },
     { name = "docx2txt" },
-    { name = "fastapi" },
     { name = "httpx" },
     { name = "json-repair" },
     { name = "langchain" },
@@ -5782,19 +5775,7 @@ dependencies = [
     { name = "tqdm" },
     { name = "typer" },
     { name = "unstructured" },
-    { name = "uvicorn", extra = ["standard"] },
     { name = "wcmatch" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "ruff" },
-]
-test = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-cov" },
-    { name = "pytest-httpx" },
 ]
 
 [package.metadata]
@@ -5804,7 +5785,6 @@ requires-dist = [
     { name = "aiofiles", specifier = ">=24.1.0" },
     { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "aiosqlite", specifier = ">=0.20.0" },
-    { name = "arq", specifier = ">=0.26.3" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "chardet", specifier = ">=5.0.0" },
     { name = "colorlog", specifier = ">=6.9.0" },
@@ -5812,7 +5792,6 @@ requires-dist = [
     { name = "deepagents", specifier = ">=0.2.5" },
     { name = "docling", specifier = ">=2.68.0" },
     { name = "docx2txt", specifier = ">=0.9" },
-    { name = "fastapi", specifier = ">=0.121" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "json-repair", specifier = ">=0.54.0" },
     { name = "langchain", specifier = ">=1.2.0" },
@@ -5866,8 +5845,37 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.66.4" },
     { name = "typer", specifier = ">=0.16.0" },
     { name = "unstructured", specifier = ">=0.17.2" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.2" },
     { name = "wcmatch", specifier = ">=8.0.0" },
+]
+
+[[package]]
+name = "yuxi-workspace"
+version = "0.6.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "arq" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "yuxi" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "ruff" },
+]
+test = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "pytest-httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "arq", specifier = ">=0.26.3" },
+    { name = "fastapi", specifier = ">=0.121" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.34.2" },
+    { name = "yuxi", virtual = "package/yuxi" },
 ]
 
 [package.metadata.requires-dev]

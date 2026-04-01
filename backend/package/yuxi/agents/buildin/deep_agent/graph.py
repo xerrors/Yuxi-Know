@@ -27,7 +27,7 @@ from .prompt import DEEP_PROMPT
 class DeepAgent(BaseAgent):
     name = "深度分析"
     description = "具备规划、深度分析和子智能体协作能力的智能体，可以处理复杂的多步骤任务"
-    capabilities = ["file_upload", "files", "todo"]  # 支持文件上传功能
+    capabilities = ["file_upload", "files"]  # 支持文件上传功能
     metadata = {"examples": ["调研一下多模态 GraphRAG 的相关论文"]}
 
     def __init__(self, **kwargs):

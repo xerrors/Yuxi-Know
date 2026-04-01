@@ -118,6 +118,29 @@ def extract_agent_state(values: dict) -> AgentStatePayload:
     return result
 
 
+def _agent_state_signature(agent_state: AgentStatePayload | dict | None) -> str:
+    if not agent_state:
+        return ""
+    try:
+        return json.dumps(agent_state, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        return str(agent_state)
+
+
+async def _stream_agent_events(agent, messages, *, input_context=None, **kwargs):
+    if hasattr(agent, "stream_messages_with_state"):
+        async for mode, payload in agent.stream_messages_with_state(
+            messages,
+            input_context=input_context,
+            **kwargs,
+        ):
+            yield mode, payload
+        return
+
+    async for msg, metadata in agent.stream_messages(messages, input_context=input_context, **kwargs):
+        yield "messages", (msg, metadata)
+
+
 async def _get_existing_message_ids(conv_repo: ConversationRepository, thread_id: str) -> set[str]:
     existing_messages = await conv_repo.get_messages_by_thread_id(thread_id)
     return {
@@ -738,6 +761,7 @@ async def stream_agent_chat(
     full_msg = None
     accumulated_content: list[str] = []
     trace_info: dict[str, Any] = {}
+    last_agent_state_signature = ""
 
     try:
         conv_repo = ConversationRepository(db)
@@ -769,13 +793,23 @@ async def stream_agent_chat(
 
         full_msg = None
         accumulated_content = []
-        async for msg, metadata in agent.stream_messages(
+        async for mode, payload in _stream_agent_events(
+            agent,
             messages,
             input_context=input_context,
             callbacks=langfuse_run.callbacks,
             metadata=langfuse_run.metadata,
             tags=langfuse_run.tags,
         ):
+            if mode == "values":
+                agent_state = extract_agent_state(payload if isinstance(payload, dict) else {})
+                signature = _agent_state_signature(agent_state)
+                if signature and signature != last_agent_state_signature:
+                    last_agent_state_signature = signature
+                    yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
+                continue
+
+            msg, metadata = payload
             if isinstance(msg, AIMessageChunk):
                 accumulated_content.append(msg.content)
                 trace_info = get_trace_info(langfuse_run)
@@ -799,16 +833,6 @@ async def stream_agent_chat(
                 msg_dict = msg.model_dump()
                 trace_info = get_trace_info(langfuse_run)
                 yield make_chunk(msg=msg_dict, metadata=metadata, status="loading")
-
-                try:
-                    if msg_dict.get("type") == "tool":
-                        graph = await agent.get_graph()
-                        state = await graph.aget_state(langgraph_config)
-                        agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
-                        if agent_state:
-                            yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
-                except Exception as e:
-                    logger.error(f"Error processing tool message: {e}")
 
         full_msg = _ensure_full_msg(full_msg, accumulated_content)
         trace_info = get_trace_info(langfuse_run)
@@ -836,7 +860,9 @@ async def stream_agent_chat(
         except Exception:
             agent_state = {}
 
-        if agent_state:
+        final_signature = _agent_state_signature(agent_state)
+        if final_signature and final_signature != last_agent_state_signature:
+            last_agent_state_signature = final_signature
             yield make_chunk(status="agent_state", agent_state=agent_state, meta=meta)
 
         # 先存储数据库，再返回 finished，避免前端查询时数据未落库
@@ -959,6 +985,7 @@ async def stream_agent_resume(
         message_type="resume",
     )
     trace_info: dict[str, Any] = {}
+    last_agent_state_signature = ""
 
     stream_source = graph.astream(
         resume_command,
@@ -969,11 +996,20 @@ async def stream_agent_resume(
             "metadata": langfuse_run.metadata,
             "tags": langfuse_run.tags,
         },
-        stream_mode="messages",
+        stream_mode=["messages", "values"],
     )
 
     try:
-        async for msg, metadata in stream_source:
+        async for mode, payload in stream_source:
+            if mode == "values":
+                agent_state = extract_agent_state(payload if isinstance(payload, dict) else {})
+                signature = _agent_state_signature(agent_state)
+                if signature and signature != last_agent_state_signature:
+                    last_agent_state_signature = signature
+                    yield make_resume_chunk(status="agent_state", agent_state=agent_state, meta=meta)
+                continue
+
+            msg, metadata = payload
             trace_info = get_trace_info(langfuse_run)
             msg_dict = msg.model_dump()
             if "id" not in msg_dict:
@@ -988,6 +1024,16 @@ async def stream_agent_resume(
             yield chunk
 
         meta["time_cost"] = asyncio.get_event_loop().time() - start_time
+
+        try:
+            state = await graph.aget_state(langgraph_config)
+            agent_state = extract_agent_state(getattr(state, "values", {})) if state else {}
+        except Exception:
+            agent_state = {}
+
+        final_signature = _agent_state_signature(agent_state)
+        if final_signature and final_signature != last_agent_state_signature:
+            yield make_resume_chunk(status="agent_state", agent_state=agent_state, meta=meta)
 
         # 先存储数据库，再返回 finished，避免前端查询时数据未落库
         conv_repo = ConversationRepository(db)

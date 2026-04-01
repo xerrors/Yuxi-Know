@@ -22,7 +22,7 @@ branding:
 
 features:
   - label: "GitHub Stars"
-    value: "4600+"
+    value: "4800+"
     description: "开发者社区的认可与支持"
     icon: "stars"
   - label: "已解决 Issues"
@@ -30,7 +30,7 @@ features:
     description: "持续改进和问题解决能力"
     icon: "issues"
   - label: "累计 Commits"
-    value: "1500+"
+    value: "1600+"
     description: "活跃的开发迭代和功能更新"
     icon: "commits"
   - label: "开源协议"
@@ -50,12 +50,12 @@ actions:
     url: "https://github.com/xerrors/Yuxi/issues/new/choose"
   - name: "开发路线图"
     icon: "roadmap"
-    url: "https://xerrors.github.io/Yuxi/roadmap.html"
+    url: "https://xerrors.github.io/Yuxi/develop-guides/roadmap.html"
 
 
 
 # 页脚信息
 footer:
-  copyright: "© 江南语析 2026 v0.6.0.beta3"
+  copyright: "© 江南语析 2026 v0.6.0"
   user_agreement_url: "/protocols/user-agreement.template.html"
   privacy_policy_url: "/protocols/privacy-policy.template.html"

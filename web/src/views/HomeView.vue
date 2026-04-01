@@ -115,8 +115,6 @@
         </div>
       </div>
 
-      <ProjectOverview />
-
       <footer class="footer">
         <div class="footer-content">
           <p class="copyright">{{ infoStore.footer?.copyright || '© 2025 All rights reserved' }}</p>
@@ -134,7 +132,6 @@ import { useInfoStore } from '@/stores/info'
 import { useAgentStore } from '@/stores/agent'
 import { healthApi } from '@/apis/system_api'
 import UserInfoComponent from '@/components/UserInfoComponent.vue'
-import ProjectOverview from '@/components/ProjectOverview.vue'
 import {
   BookText,
   Bug,

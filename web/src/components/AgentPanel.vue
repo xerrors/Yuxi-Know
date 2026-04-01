@@ -15,17 +15,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab" :class="{ active: activeTab === 'files' }" @click="activeTab = 'files'">
-        文件系统
-      </button>
-      <button
-        v-if="supportsTodo"
-        class="tab"
-        :class="{ active: activeTab === 'todos' }"
-        @click="activeTab = 'todos'"
-      >
-        任务 ({{ completedCount }}/{{ todos.length }})
-      </button>
+      <div class="tab active">文件系统</div>
       <div class="tab-actions">
         <button
           class="tab-action-btn"
@@ -40,32 +30,7 @@
       </div>
     </div>
     <div class="tab-content">
-      <!-- Todo Display -->
-      <div v-if="activeTab === 'todos'" class="todo-display">
-        <div v-if="!todos.length" class="empty">暂无任务</div>
-        <div v-else class="todo-list" ref="todoListRef">
-          <div v-for="(todo, index) in todos" :key="index" class="todo-item">
-            <div class="todo-status">
-              <CheckCircleOutlined v-if="todo.status === 'completed'" class="icon completed" />
-              <SyncOutlined
-                v-else-if="todo.status === 'in_progress'"
-                class="icon in-progress"
-                spin
-              />
-              <ClockCircleOutlined v-else-if="todo.status === 'pending'" class="icon pending" />
-              <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" class="icon cancelled" />
-              <QuestionCircleOutlined v-else class="icon unknown" />
-            </div>
-            <a-tooltip v-if="overflowedIds.has(index)" placement="topLeft" :title="todo.content">
-              <span class="todo-text">{{ todo.content }}</span>
-            </a-tooltip>
-            <span v-else class="todo-text">{{ todo.content }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Files Display -->
-      <div v-if="activeTab === 'files'" class="files-display">
+      <div class="files-display">
         <div v-if="!threadId" class="empty">创建对话后可查看工作区</div>
         <div v-else-if="loadingFiles" class="empty">正在加载文件系统...</div>
         <div v-else-if="filesystemError" class="empty error-state">
@@ -90,8 +55,9 @@
                   </div>
                 </template>
                 <template #actions="{ node }">
-                  <div v-if="node.isLeaf" class="node-actions-container">
+                  <div class="node-actions-container">
                     <button
+                      v-if="node.isLeaf"
                       class="tree-action-btn tree-download-btn"
                       @click.stop="downloadFile(node.fileData)"
                       title="下载文件"
@@ -101,8 +67,8 @@
                     <button
                       class="tree-action-btn tree-delete-btn"
                       :disabled="deletingPaths.has(node.key)"
-                      @click.stop="confirmDeleteFile(node)"
-                      title="删除文件"
+                      @click.stop="confirmDeleteNode(node)"
+                      :title="node.isLeaf ? '删除文件' : '删除文件夹'"
                     >
                       <Trash2 :size="14" />
                     </button>
@@ -161,7 +127,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, onUpdated, nextTick, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   ChevronsDownUp,
   ChevronsUpDown,
@@ -171,13 +137,6 @@ import {
   Trash2,
   X
 } from 'lucide-vue-next'
-import {
-  CheckCircleOutlined,
-  SyncOutlined,
-  ClockCircleOutlined,
-  CloseCircleOutlined,
-  QuestionCircleOutlined
-} from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
@@ -213,10 +172,6 @@ const props = defineProps({
     type: Number,
     default: 0.35
   },
-  supportsTodo: {
-    type: Boolean,
-    default: false
-  },
   isExpanded: {
     type: Boolean,
     default: false
@@ -227,7 +182,6 @@ const emit = defineEmits(['refresh', 'close', 'resize', 'resizing', 'toggle-expa
 const INLINE_PREVIEW_MIN_WIDTH = 920
 
 const panelRef = ref(null)
-const activeTab = ref('files')
 const modalVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
@@ -241,60 +195,6 @@ const expandedKeys = ref([])
 const deletingPaths = ref(new Set())
 
 const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
-
-const todos = computed(() => props.agentState?.todos || [])
-const completedCount = computed(() => todos.value.filter((t) => t.status === 'completed').length)
-
-const overflowedIds = ref(new Set())
-const todoListRef = ref(null)
-
-const checkOverflow = () => {
-  if (!todoListRef.value) return
-
-  const newOverflowed = new Set()
-  const textElements = todoListRef.value.querySelectorAll('.todo-text')
-  textElements.forEach((el, index) => {
-    if (el.scrollWidth > el.clientWidth) {
-      newOverflowed.add(index)
-    }
-  })
-
-  if (overflowedIds.value.size === newOverflowed.size) {
-    let isSame = true
-    for (const val of newOverflowed) {
-      if (!overflowedIds.value.has(val)) {
-        isSame = false
-        break
-      }
-    }
-    if (isSame) return
-  }
-
-  overflowedIds.value = newOverflowed
-}
-
-onUpdated(() => {
-  nextTick(checkOverflow)
-})
-
-const updateActiveTab = () => {
-  if (
-    activeTab.value === 'files' &&
-    dynamicTreeData.value.length === 0 &&
-    props.supportsTodo &&
-    todos.value.length > 0
-  ) {
-    activeTab.value = 'todos'
-  }
-}
-
-watch(
-  [() => props.agentState?.todos],
-  () => {
-    updateActiveTab()
-  },
-  { deep: true }
-)
 
 const buildDisplayName = (fullPath) => {
   const normalized = String(fullPath || '').replace(/\/+$/, '')
@@ -378,6 +278,17 @@ const removeTreeNode = (nodes, targetKey) => {
     result.push(nextNode)
     return result
   }, [])
+}
+
+const normalizePathKey = (path) => String(path || '').replace(/\/+$/, '')
+
+const isSameOrChildPath = (path, targetPath) => {
+  const normalizedPath = normalizePathKey(path)
+  const normalizedTargetPath = normalizePathKey(targetPath)
+  if (!normalizedPath || !normalizedTargetPath) return false
+  return (
+    normalizedPath === normalizedTargetPath || normalizedPath.startsWith(`${normalizedTargetPath}/`)
+  )
 }
 
 const parseDownloadFilename = (contentDisposition) => {
@@ -538,11 +449,21 @@ const closePreview = () => {
   selectedKeys.value = []
 }
 
-const confirmDeleteFile = (node) => {
+const pruneTreeStateAfterDelete = (targetPath) => {
+  selectedKeys.value = selectedKeys.value.filter((key) => !isSameOrChildPath(key, targetPath))
+  expandedKeys.value = expandedKeys.value.filter((key) => !isSameOrChildPath(key, targetPath))
+
+  if (isSameOrChildPath(currentFilePath.value, targetPath)) {
+    closePreview()
+  }
+}
+
+const confirmDeleteNode = (node) => {
   const fileName = node?.title || getFileName(node?.fileData)
+  const isDirectory = !node?.isLeaf
   Modal.confirm({
-    title: `确认删除文件「${fileName}」？`,
-    content: '删除后不可恢复。',
+    title: isDirectory ? `确认删除文件夹「${fileName}」？` : `确认删除文件「${fileName}」？`,
+    content: isDirectory ? '将删除该文件夹及其所有内容，删除后不可恢复。' : '删除后不可恢复。',
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
@@ -554,14 +475,11 @@ const confirmDeleteFile = (node) => {
       try {
         await deleteViewerFile(props.threadId, node.key, props.agentId, props.agentConfigId)
         dynamicTreeData.value = removeTreeNode(dynamicTreeData.value, node.key)
-        selectedKeys.value = selectedKeys.value.filter((key) => key !== node.key)
-        if (currentFilePath.value === node.key) {
-          closePreview()
-        }
-        message.success('文件删除成功')
+        pruneTreeStateAfterDelete(node.key)
+        message.success(isDirectory ? '文件夹删除成功' : '文件删除成功')
       } catch (error) {
-        console.error('删除文件失败:', error)
-        message.error(error?.message || '删除文件失败')
+        console.error(isDirectory ? '删除文件夹失败:' : '删除文件失败:', error)
+        message.error(error?.message || (isDirectory ? '删除文件夹失败' : '删除文件失败'))
       } finally {
         const latestDeletingPaths = new Set(deletingPaths.value)
         latestDeletingPaths.delete(node.key)
@@ -666,8 +584,6 @@ const stopResize = (e) => {
 }
 
 onMounted(() => {
-  nextTick(checkOverflow)
-  updateActiveTab()
   refreshFileSystem()
 
   if (panelRef.value && typeof ResizeObserver !== 'undefined') {
@@ -1198,30 +1114,30 @@ watch(useInlinePreview, (isInline) => {
 <style lang="less">
 .agent-file-preview-modal {
   .ant-modal {
-  z-index: 1050;
-  .ant-modal-content {
-    border-radius: 8px;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid var(--gray-200);
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  }
+    z-index: 1050;
+    .ant-modal-content {
+      border-radius: 8px;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--gray-200);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    }
 
-  :deep(.ant-modal-header) {
-    background: var(--main-5);
-    border-bottom: 1px solid var(--gray-200);
-    padding: 16px 20px;
-  }
+    :deep(.ant-modal-header) {
+      background: var(--main-5);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 16px 20px;
+    }
 
-  :deep(.ant-modal-title) {
-    font-weight: 600;
-    color: var(--gray-1000);
-    font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  }
+    :deep(.ant-modal-title) {
+      font-weight: 600;
+      color: var(--gray-1000);
+      font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
 
-  :deep(.ant-modal-body) {
-    padding: 0;
+    :deep(.ant-modal-body) {
+      padding: 0;
+    }
   }
-}
 }
 </style>

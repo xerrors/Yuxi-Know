@@ -1,0 +1,26 @@
+from pathlib import Path
+
+from yuxi import config
+
+VIRTUAL_PATH_PREFIX = config.sandbox_virtual_path_prefix
+WORKSPACE_DIR_NAME = "workspace"
+UPLOADS_DIR_NAME = "uploads"
+OUTPUTS_DIR_NAME = "outputs"
+VIRTUAL_SKILLS_PATH = "/home/gem/skills"
+VIRTUAL_KBS_PATH = "/home/gem/kbs"
+
+VIRTUAL_PATH_WORKSPACE = (Path(VIRTUAL_PATH_PREFIX) / WORKSPACE_DIR_NAME).as_posix()
+VIRTUAL_PATH_UPLOADS = (Path(VIRTUAL_PATH_PREFIX) / UPLOADS_DIR_NAME).as_posix()
+VIRTUAL_PATH_OUTPUTS = (Path(VIRTUAL_PATH_PREFIX) / OUTPUTS_DIR_NAME).as_posix()
+
+__all__ = [
+    "VIRTUAL_PATH_PREFIX",
+    "WORKSPACE_DIR_NAME",
+    "UPLOADS_DIR_NAME",
+    "OUTPUTS_DIR_NAME",
+    "VIRTUAL_PATH_WORKSPACE",
+    "VIRTUAL_PATH_UPLOADS",
+    "VIRTUAL_PATH_OUTPUTS",
+    "VIRTUAL_SKILLS_PATH",
+    "VIRTUAL_KBS_PATH",
+]

@@ -4,21 +4,13 @@ import re
 from pathlib import Path
 
 from yuxi import config as conf
-
-DEFAULT_VIRTUAL_PATH_PREFIX = "/home/gem/user-data"
-VIRTUAL_PATH_PREFIX = DEFAULT_VIRTUAL_PATH_PREFIX
-_WORKSPACE_DIR_NAME = "workspace"
-_UPLOADS_DIR_NAME = "uploads"
-_OUTPUTS_DIR_NAME = "outputs"
+from yuxi.utils.paths import OUTPUTS_DIR_NAME, UPLOADS_DIR_NAME, VIRTUAL_PATH_PREFIX, WORKSPACE_DIR_NAME
 
 _SAFE_THREAD_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 def get_virtual_path_prefix() -> str:
-    configured = str(getattr(conf, "sandbox_virtual_path_prefix", "") or "").strip()
-    if not configured:
-        return DEFAULT_VIRTUAL_PATH_PREFIX
-    return "/" + configured.strip("/")
+    return "/" + VIRTUAL_PATH_PREFIX.strip("/")
 
 
 def _validate_thread_id(thread_id: str) -> str:
@@ -46,15 +38,15 @@ def sandbox_user_data_dir(thread_id: str) -> Path:
 
 def sandbox_workspace_dir(thread_id: str) -> Path:
     _validate_thread_id(thread_id)
-    return _global_user_data_dir() / _WORKSPACE_DIR_NAME
+    return _global_user_data_dir() / WORKSPACE_DIR_NAME
 
 
 def sandbox_uploads_dir(thread_id: str) -> Path:
-    return _thread_root_dir(thread_id) / _UPLOADS_DIR_NAME
+    return _thread_root_dir(thread_id) / UPLOADS_DIR_NAME
 
 
 def sandbox_outputs_dir(thread_id: str) -> Path:
-    return _thread_root_dir(thread_id) / _OUTPUTS_DIR_NAME
+    return _thread_root_dir(thread_id) / OUTPUTS_DIR_NAME
 
 
 def ensure_thread_dirs(thread_id: str) -> None:
@@ -72,16 +64,16 @@ def _resolve_user_data_base_dir(thread_id: str, relative_path: str) -> tuple[Pat
         return base_dir.resolve(), base_dir.resolve()
 
     namespace = parts[0]
-    if namespace == _WORKSPACE_DIR_NAME:
+    if namespace == WORKSPACE_DIR_NAME:
         # Workspace is shared across threads, so it lives outside the per-thread root.
         base_dir = sandbox_workspace_dir(thread_id)
         target_path = base_dir.joinpath(*parts[1:]) if len(parts) > 1 else base_dir
         return base_dir.resolve(), target_path.resolve()
-    if namespace == _UPLOADS_DIR_NAME:
+    if namespace == UPLOADS_DIR_NAME:
         base_dir = sandbox_uploads_dir(thread_id)
         target_path = base_dir.joinpath(*parts[1:]) if len(parts) > 1 else base_dir
         return base_dir.resolve(), target_path.resolve()
-    if namespace == _OUTPUTS_DIR_NAME:
+    if namespace == OUTPUTS_DIR_NAME:
         base_dir = sandbox_outputs_dir(thread_id)
         target_path = base_dir.joinpath(*parts[1:]) if len(parts) > 1 else base_dir
         return base_dir.resolve(), target_path.resolve()
@@ -124,7 +116,7 @@ def virtual_path_for_thread_file(thread_id: str, path: str | Path) -> str:
     else:
         workspace_relative = relative_path.as_posix()
         relative_path_str = (
-            _WORKSPACE_DIR_NAME if workspace_relative in {"", "."} else f"{_WORKSPACE_DIR_NAME}/{workspace_relative}"
+            WORKSPACE_DIR_NAME if workspace_relative in {"", "."} else f"{WORKSPACE_DIR_NAME}/{workspace_relative}"
         )
 
     prefix = get_virtual_path_prefix().rstrip("/")

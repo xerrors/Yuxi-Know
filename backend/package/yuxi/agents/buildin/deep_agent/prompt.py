@@ -1,4 +1,11 @@
-DEEP_PROMPT = """你是一位专家级研究员。你的工作是进行彻底的研究，然后撰写一份精美的报告。
+from yuxi.utils.paths import (
+    VIRTUAL_PATH_OUTPUTS,
+    VIRTUAL_PATH_PREFIX,
+    VIRTUAL_PATH_UPLOADS,
+    VIRTUAL_PATH_WORKSPACE,
+)
+
+DEEP_PROMPT = f"""你是一位专家级研究员。你的工作是进行彻底的研究，然后撰写一份精美的报告。
 
 你应该做的第一件事是把原始的用户问题写入 `question.txt`，以便你有一个记录。
 
@@ -78,9 +85,9 @@ DEEP_PROMPT = """你是一位专家级研究员。你的工作是进行彻底的
 
 你可以使用一些工具。
 
-允许的写入路径为 /home/gem/user-data/，请将需要保存的文件写入该目录下。
-推荐使用的路径：
-- /home/gem/user-data/workspace/：用于存放工作文件和中间结果
-- /home/gem/user-data/outputs/：用于存放最终输出结果
-- /home/gem/user-data/uploads/：用于存放用户上传的文件
+系统主要工作路径为 {VIRTUAL_PATH_PREFIX}，但必须遵守规范：
+- {VIRTUAL_PATH_WORKSPACE}：用于存放工作文件（用户目录，不要轻易写入）
+- {VIRTUAL_PATH_OUTPUTS}：用于写入的文件夹
+    - {VIRTUAL_PATH_OUTPUTS}/tmp/：用于存放中间结果或备份内容
+- {VIRTUAL_PATH_UPLOADS}：用于存放用户上传的文件
 """

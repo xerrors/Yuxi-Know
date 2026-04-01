@@ -38,7 +38,7 @@
 
 
 <details>
-<summary>[2026/03/26] v0.6.0.beta3 版本发布</summary>
+<summary>[2026/04/01] v0.6.0 版本发布</summary>
 
 ### 新增
 
@@ -74,44 +74,21 @@
 <details>
 <summary>[2026/03/01] v0.5.0 版本发布</summary>
 
-### 新增
-
-- 优化 OCR 体验并新增对 Deepseek OCR 的支持
-- 优化 RAG 检索，支持根据文件 pattern 来检索（Agentic Mode）
-- 重构智能体对于“工具变更/模型变更”的处理逻辑，无需导入更复杂的中间件
-- 重构知识库的 Agentic 配置逻辑，与 Tools 解耦
-- 将工具与知识库解耦，在 context 中就完成解耦，虽然最终都是在 Agent 中的 get_tools 中获取
-- 优化chunk逻辑，移除 QA 分割，集成到普通分块中，并优化可视化逻辑
-- 重构知识库处理逻辑，分为 上传—解析—入库 三个阶段
-- 重构 MCP 相关配置，使用数据库来控制 [#469](https://github.com/xerrors/Yuxi/pull/469)
-- 使用 docling 解析 office 文件（docx/xlsx/pptx）
-- 优化后端的依赖，减少镜像体积 [#428](https://github.com/xerrors/Yuxi/issues/428)
-- 优化 liaghtrag 的知识库调用结果，提供 content/graph/both 多个选项
-- 优化数据库查询工具，可通过设计环境变量添加描述，让模型更好的调用
-- 优化任务组件，改用 postgresql 存储，并新增删除任务的接口
-- 重构知识库文件系统，将附件与文件系统整合，文件系统使用 StateStore 存储
-
-### 修复
-
-- 修复知识图谱上传的向量配置错误，并新增模型选择以及 batch size 选择
-- 修复部分场景下获取工具列表报错 [#470](https://github.com/xerrors/Yuxi/pull/470)
-- 修改方法备注信息 [#478](https://github.com/xerrors/Yuxi/pull/478)
-- 修复多次 human-in-the-loop 的渲染解析问题 [#453](https://github.com/xerrors/Yuxi/issues/453) [#475](https://github.com/xerrors/Yuxi/pull/475)
-- 修复消息加载逻辑导致的前端消息渲染延迟问题
+详见 [changelog](docs/develop-guides/changelog.md)
 
 </details>
 
 <details>
 <summary>[2025/12/19] v0.4.0 版本发布</summary>
 
-详见 roadmap 更新记录
+详见 [changelog](docs/develop-guides/changelog.md)
 
 </details>
 
 <details>
 <summary>[2025/11/05] v0.3.0 版本发布</summary>
 
-详见 roadmap 更新记录
+详见 [changelog](docs/develop-guides/changelog.md)
 
 </details>
 
@@ -122,7 +99,7 @@
 克隆代码，并初始化
 
 ```
-git clone --branch v0.6.0.beta3 --depth 1 https://github.com/xerrors/Yuxi.git
+git clone --branch v0.6.0 --depth 1 https://github.com/xerrors/Yuxi.git
 cd Yuxi
 
 # Linux/macOS

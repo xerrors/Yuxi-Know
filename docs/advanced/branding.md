@@ -70,7 +70,7 @@ footer:
 
 ## 样式定制
 
-系统支持完整的主题色定制。配置文件位于 `web/src/assets/css/base.css`：
+系统支持完整的主题色定制。配置文件位于 `web/src/assets/css/base.css`，以及 `web/src/assets/css/base.dark.css`：
 
 ```css
 :root {
@@ -84,7 +84,3 @@ footer:
 修改配色变量后，界面会实时更新，无需重启服务。
 
 此外，`web/src/stores/theme.js` 中的 `colorPrimary` 也需要同步修改。
-
-## 首页定制
-
-首页的「项目介绍」部分是一个插槽组件，位于 `web/src/components/ProjectOverview.vue`。可以根据需要自定义展示内容。

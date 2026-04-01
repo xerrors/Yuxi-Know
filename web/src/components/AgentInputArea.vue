@@ -31,21 +31,72 @@
     </template>
     <template #actions-left>
       <div class="input-actions-left">
-        <!-- State Toggle Button -->
-        <button
-          v-if="hasActiveThread"
-          class="input-action-btn"
-          :class="{ active: isPanelOpen }"
-          @click="$emit('toggle-panel')"
-          title="查看工作状态"
+        <a-popover
+          v-if="showTodoEntry"
+          v-model:open="todoPopoverOpen"
+          placement="topLeft"
+          trigger="click"
+          overlay-class-name="todo-popover-overlay"
         >
-          <FolderCode :size="18" />
-          <span>状态</span>
-        </button>
+          <template #content>
+            <div class="todo-popover-card">
+              <div class="todo-popover-header">
+                <div class="todo-popover-title-wrap">
+                  <span class="todo-popover-title">当前任务</span>
+                  <span class="todo-popover-summary"
+                    >{{ completedTodoCount }}/{{ totalTodoCount }} 已完成</span
+                  >
+                </div>
+                <span class="todo-popover-progress">{{ todoProgress }}%</span>
+              </div>
+
+              <div class="todo-progress-bar">
+                <span class="todo-progress-bar-fill" :style="{ width: `${todoProgress}%` }"></span>
+              </div>
+
+              <div class="todo-popover-list">
+                <div
+                  v-for="(todo, index) in todos"
+                  :key="`${todo.content}-${index}`"
+                  class="todo-item"
+                >
+                  <div class="todo-item-icon" :class="todo.status || 'unknown'">
+                    <CheckCircleOutlined v-if="todo.status === 'completed'" />
+                    <SyncOutlined v-else-if="todo.status === 'in_progress'" spin />
+                    <ClockCircleOutlined v-else-if="todo.status === 'pending'" />
+                    <CloseCircleOutlined v-else-if="todo.status === 'cancelled'" />
+                    <QuestionCircleOutlined v-else />
+                  </div>
+                  <div class="todo-item-body">
+                    <span class="todo-item-text">{{ todo.content }}</span>
+                    <span class="todo-item-status">{{ getTodoStatusLabel(todo.status) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <button class="input-action-btn" @click.stop>
+            <span class="todo-entry-icon" aria-hidden="true">
+              <SquareCheck :size="16" />
+            </span>
+            <span>待办</span>
+          </button>
+        </a-popover>
       </div>
     </template>
     <template #actions-right>
       <div class="input-actions-right">
+        <button
+          v-if="hasActiveThread"
+          class="input-action-btn"
+          :class="{ active: isPanelOpen }"
+          @click.stop="$emit('toggle-panel')"
+          title="查看文件"
+        >
+          <FolderCode :size="18" />
+          <span>文件</span>
+        </button>
         <slot name="actions-left-extra"></slot>
       </div>
     </template>
@@ -53,11 +104,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import MessageInputComponent from '@/components/MessageInputComponent.vue'
 import ImagePreviewComponent from '@/components/ImagePreviewComponent.vue'
 import AttachmentOptionsComponent from '@/components/AttachmentOptionsComponent.vue'
-import { FolderCode } from 'lucide-vue-next'
+import { FolderCode, SquareCheck } from 'lucide-vue-next'
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
+  QuestionCircleOutlined,
+  SyncOutlined
+} from '@ant-design/icons-vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -67,7 +125,11 @@ const props = defineProps({
   mention: { type: Object, default: () => null },
   supportsFileUpload: { type: Boolean, default: false },
   isPanelOpen: { type: Boolean, default: false },
-  hasActiveThread: { type: Boolean, default: true }
+  hasActiveThread: { type: Boolean, default: true },
+  todos: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const emit = defineEmits([
@@ -80,7 +142,24 @@ const emit = defineEmits([
 
 const inputRef = ref(null)
 const currentImage = ref(null)
+const todoPopoverOpen = ref(false)
 const placeholder = '问点什么？使用 @ 可以提及哦~'
+
+const totalTodoCount = computed(() => props.todos.length)
+const completedTodoCount = computed(
+  () => props.todos.filter((todo) => todo?.status === 'completed').length
+)
+const showTodoEntry = computed(() => props.hasActiveThread && totalTodoCount.value > 0)
+const todoProgress = computed(() => {
+  if (!totalTodoCount.value) return 0
+  return Math.round((completedTodoCount.value / totalTodoCount.value) * 100)
+})
+
+watch(showTodoEntry, (visible) => {
+  if (!visible) {
+    todoPopoverOpen.value = false
+  }
+})
 
 const updateValue = (val) => {
   emit('update:modelValue', val)
@@ -110,6 +189,7 @@ const handleImageRemoved = () => {
 const handleSend = () => {
   emit('send', { image: currentImage.value })
   currentImage.value = null
+  todoPopoverOpen.value = false
 }
 
 const handleKeyDown = (e) => {
@@ -129,6 +209,16 @@ defineExpose({
   focus: () => inputRef.value?.focus(),
   closeOptions: () => inputRef.value?.closeOptions()
 })
+
+const getTodoStatusLabel = (status) => {
+  const labelMap = {
+    completed: '已完成',
+    in_progress: '进行中',
+    pending: '待处理',
+    cancelled: '已取消'
+  }
+  return labelMap[status] || '未知状态'
+}
 </script>
 
 <style lang="less" scoped>
@@ -136,12 +226,14 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .input-actions-right {
   display: flex;
   align-items: center;
   margin-right: 8px;
+  gap: 2px;
 }
 
 .input-top-stack {
@@ -190,6 +282,137 @@ defineExpose({
   }
 }
 
+.todo-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
+.todo-popover-card {
+  width: min(300px, calc(100vw - 32px));
+  padding: 14px;
+  background: linear-gradient(180deg, var(--gray-50) 0%, var(--gray-50) 100%);
+}
+
+.todo-popover-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.todo-popover-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.todo-popover-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--gray-900);
+}
+
+.todo-popover-summary {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
+.todo-popover-progress {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.todo-progress-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.todo-progress-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--color-success-500) 0%, var(--color-success-700) 100%);
+}
+
+.todo-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--light-70);
+  box-shadow: inset 0 0 0 1px var(--light-70);
+}
+
+.todo-item-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--gray-100);
+  color: var(--gray-500);
+
+  &.completed {
+    background: var(--color-success-10);
+    color: var(--color-success-700);
+  }
+
+  &.in_progress {
+    background: var(--color-info-10);
+    color: var(--color-info-700);
+  }
+
+  &.pending {
+    background: var(--color-warning-10);
+    color: var(--color-warning-700);
+  }
+
+  &.cancelled {
+    background: var(--color-error-10);
+    color: var(--color-error-700);
+  }
+}
+
+.todo-item-body {
+  min-width: 0;
+}
+
+.todo-item-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--gray-800);
+  word-break: break-word;
+  margin-right: 4px;
+}
+
+.todo-item-status {
+  font-size: 12px;
+  color: var(--gray-500);
+}
+
 // slot 内容的 hide-text 响应式样式
 :deep(.hide-text) {
   @media (max-width: 768px) {
@@ -201,6 +424,21 @@ defineExpose({
   .input-top-stack {
     gap: 8px;
     margin-bottom: 10px;
+  }
+
+  .todo-popover-card {
+    width: min(320px, calc(100vw - 24px));
+    padding: 12px;
+  }
+}
+</style>
+
+<style lang="less">
+.todo-popover-overlay {
+  .ant-popover-inner {
+    padding: 0;
+    border-radius: 12px;
+    overflow: hidden;
   }
 }
 </style>

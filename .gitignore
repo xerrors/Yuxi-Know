@@ -1,3 +1,5 @@
+.yuxi/
+
 ### python gitignore
 __pycache__/
 *.pyc

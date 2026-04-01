@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import mimetypes
+import shutil
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
@@ -24,6 +25,7 @@ from yuxi.agents.middlewares.skills_middleware import normalize_selected_skills
 from yuxi.services.filesystem_service import _resolve_filesystem_state
 from yuxi.storage.postgres.models_business import User
 from yuxi.utils.datetime_utils import utc_isoformat_from_timestamp
+from yuxi.utils.paths import VIRTUAL_PATH_OUTPUTS, VIRTUAL_PATH_UPLOADS, VIRTUAL_PATH_WORKSPACE
 
 _MARKDOWN_EXTENSIONS = frozenset({".md", ".markdown", ".mdx"})
 _PDF_EXTENSIONS = frozenset({".pdf"})
@@ -78,6 +80,13 @@ _BINARY_SIGNATURES = (
     b"GIF87a",
     b"GIF89a",
     b"RIFF",
+)
+_PROTECTED_USER_DATA_ROOTS = frozenset(
+    {
+        VIRTUAL_PATH_WORKSPACE,
+        VIRTUAL_PATH_UPLOADS,
+        VIRTUAL_PATH_OUTPUTS,
+    }
 )
 
 
@@ -532,14 +541,17 @@ async def delete_viewer_file(
 
     if not _is_user_data_path(normalized_path):
         raise HTTPException(status_code=400, detail="当前路径不支持删除")
+    if normalized_path in _PROTECTED_USER_DATA_ROOTS:
+        raise HTTPException(status_code=400, detail="当前目录不允许删除")
 
     try:
         actual_path = resolve_virtual_path(thread_id, normalized_path)
         if not actual_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
         if actual_path.is_dir():
-            raise HTTPException(status_code=400, detail="当前路径是目录")
-        await asyncio.to_thread(actual_path.unlink)
+            await asyncio.to_thread(shutil.rmtree, actual_path)
+        else:
+            await asyncio.to_thread(actual_path.unlink)
     except PermissionError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except ValueError as e:

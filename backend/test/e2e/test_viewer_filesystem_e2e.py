@@ -80,6 +80,23 @@ async def _download(
     return response.headers.get("content-disposition", ""), response.content
 
 
+async def _delete(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    *,
+    agent_id: str,
+    thread_id: str,
+    path: str,
+) -> dict:
+    response = await client.delete(
+        "/api/viewer/filesystem/file",
+        params={"thread_id": thread_id, "path": path, "agent_id": agent_id},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return dict(response.json())
+
+
 async def test_viewer_filesystem_e2e_respects_workspace_sharing_and_thread_local_uploads(
     e2e_client: httpx.AsyncClient,
     e2e_headers: dict[str, str],
@@ -193,3 +210,40 @@ async def test_viewer_filesystem_e2e_respects_workspace_sharing_and_thread_local
     )
     assert "result.txt" in content_disposition, content_disposition
     assert payload == b"viewer-output\n", payload
+
+
+async def test_viewer_filesystem_e2e_deletes_workspace_directory_recursively(
+    e2e_client: httpx.AsyncClient,
+    e2e_headers: dict[str, str],
+    e2e_agent_context: dict[str, str | int],
+):
+    agent_id = str(e2e_agent_context["agent_id"])
+    thread_id = await _create_thread(e2e_client, e2e_headers, agent_id)
+
+    ensure_thread_dirs(thread_id)
+    target_dir = sandbox_workspace_dir(thread_id) / "delete-dir"
+    nested_dir = target_dir / "deep"
+    nested_dir.mkdir(parents=True)
+    (nested_dir / "artifact.txt").write_text("delete me\n", encoding="utf-8")
+
+    delete_payload = await _delete(
+        e2e_client,
+        e2e_headers,
+        agent_id=agent_id,
+        thread_id=thread_id,
+        path="/home/gem/user-data/workspace/delete-dir",
+    )
+    assert delete_payload.get("success") is True, delete_payload
+    assert not target_dir.exists()
+
+    workspace_paths = {
+        str(entry.get("path", ""))
+        for entry in await _tree(
+            e2e_client,
+            e2e_headers,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            path="/home/gem/user-data/workspace",
+        )
+    }
+    assert "/home/gem/user-data/workspace/delete-dir/" not in workspace_paths, sorted(workspace_paths)

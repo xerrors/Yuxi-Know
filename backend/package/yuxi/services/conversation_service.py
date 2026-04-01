@@ -13,12 +13,13 @@ from yuxi.agents.buildin import agent_manager
 from yuxi.config import config as app_config
 from yuxi.plugins.parser import Parser
 from yuxi.repositories.conversation_repository import ConversationRepository
-from yuxi.services.doc_converter import ATTACHMENT_ALLOWED_EXTENSIONS, MAX_ATTACHMENT_SIZE_BYTES
 from yuxi.utils.datetime_utils import utc_isoformat
 from yuxi.utils.logging_config import logger
+from yuxi.utils.paths import VIRTUAL_PATH_UPLOADS
 
-UPLOADS_VIRTUAL_PREFIX = "/home/gem/user-data/uploads"
-MAX_ATTACHMENT_MARKDOWN_CHARS = 32_000
+ATTACHMENT_ALLOWED_EXTENSIONS: tuple[str, ...] = ()
+MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+MAX_ATTACHMENT_MARKDOWN_CHARS = 32_000  # TODO: 转 MARKDOWN的时候，不应该裁剪
 
 
 @dataclass(slots=True)
@@ -107,7 +108,7 @@ async def require_user_conversation(conv_repo: ConversationRepository, thread_id
 
 def _make_upload_virtual_path(file_name: str) -> str:
     safe_name = file_name.replace("/", "_").replace("\\", "_").strip(" .")
-    return f"{UPLOADS_VIRTUAL_PREFIX}/{safe_name or 'attachment.bin'}"
+    return f"{VIRTUAL_PATH_UPLOADS}/{safe_name or 'attachment.bin'}"
 
 
 def _make_attachment_path(file_name: str) -> str:
@@ -127,7 +128,7 @@ def _make_attachment_path(file_name: str) -> str:
 def _build_attachment_storage_path(*, user_id: str, thread_id: str, file_name: str) -> tuple[str, Path]:
     """返回附件虚拟路径和宿主机落盘路径。"""
     relative_name = _make_attachment_path(file_name)
-    virtual_path = f"/home/gem/user-data/uploads/attachments/{relative_name}"
+    virtual_path = f"{VIRTUAL_PATH_UPLOADS}/attachments/{relative_name}"
 
     host_dir = Path(app_config.save_dir) / "threads" / thread_id / "user-data" / "uploads" / "attachments"
     host_dir.mkdir(parents=True, exist_ok=True)
