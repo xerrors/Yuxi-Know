@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -12,7 +13,6 @@ from yuxi.services.skill_service import import_skill_dir, is_valid_skill_slug
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 CONTROL_SEQUENCE_RE = re.compile(r"\x1B\][^\x07]*(?:\x07|\x1B\\)|\x1B[\(\)][A-Za-z0-9]")
-SKILL_LINE_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 CLI_TIMEOUT_SECONDS = 300
 
 
@@ -60,7 +60,7 @@ def _parse_available_skills(output: str) -> list[dict[str, str]]:
             continue
         if "Use --skill " in line:
             break
-        if not SKILL_LINE_RE.fullmatch(line):
+        if not is_valid_skill_slug(line):
             continue
         if line in seen:
             continue
@@ -74,10 +74,12 @@ def _parse_available_skills(output: str) -> list[dict[str, str]]:
                 continue
             if "Use --skill " in next_line:
                 break
-            if SKILL_LINE_RE.fullmatch(next_line):
+            if is_valid_skill_slug(next_line):
                 break
             if next_line and next_line[0].isalpha():
                 description = next_line
+            else:
+                continue
             break
 
         seen.add(line)
@@ -114,20 +116,27 @@ async def _run_skills_cli(
     return combined
 
 
+def _create_isolated_workdir() -> tuple[str, dict[str, str], str]:
+    temp_home = tempfile.mkdtemp(prefix=".remote-skills-")
+    env = os.environ.copy()
+    env["HOME"] = temp_home
+    workdir = str(Path(temp_home) / "workspace")
+    Path(workdir).mkdir(parents=True, exist_ok=True)
+    return temp_home, env, workdir
+
+
 async def list_remote_skills(source: str) -> list[dict[str, str]]:
     normalized_source = _normalize_source(source)
 
-    with tempfile.TemporaryDirectory(prefix=".remote-skills-") as temp_home:
-        env = os.environ.copy()
-        env["HOME"] = temp_home
-        workdir = str(Path(temp_home) / "workspace")
-        Path(workdir).mkdir(parents=True, exist_ok=True)
-
+    temp_home, env, workdir = _create_isolated_workdir()
+    try:
         output = await _run_skills_cli(
             ["npx", "-y", "skills", "add", normalized_source, "--list"],
             env=env,
             cwd=workdir,
         )
+    finally:
+        shutil.rmtree(temp_home, ignore_errors=True)
 
     skills = _parse_available_skills(output)
     if not skills:
@@ -145,12 +154,8 @@ async def install_remote_skill(
     normalized_source = _normalize_source(source)
     normalized_skill = _normalize_skill_name(skill)
 
-    with tempfile.TemporaryDirectory(prefix=".remote-skills-") as temp_home:
-        env = os.environ.copy()
-        env["HOME"] = temp_home
-        workdir = str(Path(temp_home) / "workspace")
-        Path(workdir).mkdir(parents=True, exist_ok=True)
-
+    temp_home, env, workdir = _create_isolated_workdir()
+    try:
         available_skills = _parse_available_skills(
             await _run_skills_cli(
                 ["npx", "-y", "skills", "add", normalized_source, "--list"],
@@ -188,3 +193,5 @@ async def install_remote_skill(
             source_dir=installed_dir,
             created_by=created_by,
         )
+    finally:
+        shutil.rmtree(temp_home, ignore_errors=True)
