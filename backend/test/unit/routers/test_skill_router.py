@@ -72,6 +72,37 @@ def test_import_skill_requires_superadmin():
     assert resp.status_code == 403
 
 
+def test_import_skill_route_accepts_skill_md(monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_import_skill_zip(_db, *, filename, file_bytes, created_by):
+        captured["filename"] = filename
+        captured["file_bytes"] = file_bytes.decode("utf-8")
+        captured["created_by"] = created_by
+        return Skill(
+            slug="demo",
+            name="demo",
+            description="demo skill",
+            dir_path="skills/demo",
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    monkeypatch.setattr("server.routers.skill_router.import_skill_zip", fake_import_skill_zip)
+
+    app = _build_app(allow_superadmin=True)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/api/system/skills/import",
+        files={"file": ("SKILL.md", b"---\nname: demo\ndescription: demo skill\n---\n", "text/markdown")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured["filename"] == "SKILL.md"
+    assert "name: demo" in captured["file_bytes"]
+    assert captured["created_by"] == "root"
+
+
 def test_update_skill_file_passes_operator(monkeypatch):
     captured: dict[str, str] = {}
 

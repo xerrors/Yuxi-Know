@@ -11,14 +11,14 @@
         <!-- Skills Tab 的按钮 -->
         <template v-if="activeTab === 'skills'">
           <a-upload
-            accept=".zip"
+            accept=".zip,.md"
             :show-upload-list="false"
             :custom-request="handleImportUpload"
             :disabled="skillsLoading || skillsImporting"
           >
             <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
               <Upload :size="14" />
-              <span>上传 ZIP</span>
+              <span>上传 Skill</span>
             </a-button>
           </a-upload>
           <a-button @click="handleSkillsRefresh" :disabled="skillsLoading" class="lucide-icon-btn">

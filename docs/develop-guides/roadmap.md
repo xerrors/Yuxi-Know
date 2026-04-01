@@ -9,17 +9,11 @@
 
 ### 看板
 
-- 集成 LangFuse (观望) 添加用户日志与用户反馈模块，可以在 AgentView 中查看信息
 - Langfuse 增加 self-host 模式支持，补齐私有化部署与配置说明
-- 部分场景应该使用默认模型作为默认值而不是空值
 - 检索测试中，添加问答
 - 集成 Memory，基于 deepagents 的文件后端实现
 - 添加自定义向量模型和 rerank 模型的配置，在网页上面
-- 调研轻便的文件展示与编辑器
-- 移除 TODO 的模块与设计，移除这个中间件。
 - Yuxi-cli 相关的功能，放在后续版本中实现（不是类似于编程助手，而是工具）
-- 工作区实现长期记忆保存，要求模型只能将结果写入到 outputs 文件夹
-- 新增 present file 工具，提供预览以及保存到工作区的选项
 
 ### Bugs
 - 部分异常状态下，智能体的模型名称出现重叠[#279](https://github.com/xerrors/Yuxi/issues/279)
@@ -38,7 +32,9 @@
 - 修复沙盒 `workspace` 隔离粒度：宿主机目录从共享 `saves/threads/shared/workspace` 收敛为用户级 `saves/threads/shared/<user_id>/workspace`，并同步传递 `user_id` 到 sandbox 路径解析、provisioner 挂载与 viewer/chat 测试，保证同用户跨线程共享、不同用户隔离。
 - 调整输入框 `@` 提及中的文件搜索交互：无查询内容时不再直接展示文件列表，改为提示“输入相关内容以搜索文件”，避免未过滤结果干扰选择。
 - 收紧文件系统安全边界：viewer/chat 下载与删除路径统一基于解析后的真实路径做允许目录校验，阻止通过软链接逃逸工作区/线程目录；同时将密码哈希默认实现升级为 Argon2，并移除 skill frontmatter 解析中的正则回溯风险。
+- 调整 Skills 导入能力：`/api/system/skills/import` 现在除 ZIP 外也支持直接上传单个 `SKILL.md`，前端上传入口与后端导入服务同步兼容，便于快速导入单文件技能
 
+---
 
 历史版本发布记录已迁移到 [版本变更记录](./changelog.md)。
 

@@ -492,31 +492,39 @@ async def import_skill_zip(
     file_bytes: bytes,
     created_by: str | None,
 ) -> Skill:
-    if not filename.lower().endswith(".zip"):
-        raise ValueError("仅支持上传 .zip 文件")
+    normalized_filename = filename.lower()
+    is_zip_upload = normalized_filename.endswith(".zip")
+    is_skill_md_upload = normalized_filename.endswith("skill.md")
+    if not is_zip_upload and not is_skill_md_upload:
+        raise ValueError("仅支持上传 .zip 或 SKILL.md 文件")
 
     repo = SkillRepository(db)
     skills_root = get_skills_root_dir()
 
     with tempfile.TemporaryDirectory(prefix=".skill-import-", dir=str(skills_root.parent)) as temp_root:
         temp_root_path = Path(temp_root)
-        zip_path = temp_root_path / "upload.zip"
         extract_dir = temp_root_path / "extract"
         stage_dir = temp_root_path / "stage"
         extract_dir.mkdir(parents=True, exist_ok=True)
+        if is_zip_upload:
+            zip_path = temp_root_path / "upload.zip"
+            zip_path.write_bytes(file_bytes)
 
-        zip_path.write_bytes(file_bytes)
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                _validate_zip_paths(zf)
+                zf.extractall(extract_dir)
 
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            _validate_zip_paths(zf)
-            zf.extractall(extract_dir)
+            skill_md_files = list(extract_dir.rglob("SKILL.md"))
+            if len(skill_md_files) != 1:
+                raise ValueError("ZIP 必须且只能包含一个技能（检测到一个 SKILL.md）")
 
-        skill_md_files = list(extract_dir.rglob("SKILL.md"))
-        if len(skill_md_files) != 1:
-            raise ValueError("ZIP 必须且只能包含一个技能（检测到一个 SKILL.md）")
+            skill_md_path = skill_md_files[0]
+            source_skill_dir = skill_md_path.parent
+        else:
+            source_skill_dir = extract_dir
+            skill_md_path = source_skill_dir / "SKILL.md"
+            skill_md_path.write_bytes(file_bytes)
 
-        skill_md_path = skill_md_files[0]
-        source_skill_dir = skill_md_path.parent
         content = skill_md_path.read_text(encoding="utf-8")
         parsed_name, parsed_desc, _ = _parse_skill_markdown(content)
 

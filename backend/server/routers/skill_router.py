@@ -182,7 +182,7 @@ async def import_skill_route(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """导入技能压缩包（仅超级管理员）。"""
+    """导入技能包（支持 ZIP 或单个 SKILL.md，仅超级管理员）。"""
     try:
         file_bytes = await file.read()
         item = await import_skill_zip(
@@ -197,7 +197,7 @@ async def import_skill_route(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to import skill zip: {e}")
+        logger.error(f"Failed to import skill package: {e}")
         raise HTTPException(status_code=500, detail="导入技能失败")
 
 
