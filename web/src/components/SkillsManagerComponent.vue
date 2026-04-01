@@ -612,7 +612,7 @@ const resetFileState = () => {
   expandedKeys.value = []
   fileContent.value = ''
   originalFileContent.value = ''
-  viewMode.value = 'edit'
+  viewMode.value = 'preview'
 }
 
 const expandAllKeys = (nodes) =>
