@@ -1,5 +1,6 @@
 """OIDC 认证工具类"""
 import secrets
+import time
 import urllib.parse
 from typing import Any, Optional
 
@@ -51,7 +52,24 @@ class OIDCUtils:
     """OIDC 工具类"""
 
     _metadata: Optional[OIDCProviderMetadata] = None
-    _state_store: dict[str, dict[str, Any]] = {}  # 简单的 state 存储
+    _state_store: dict[str, dict[str, Any]] = {}
+    _login_code_store: dict[str, dict[str, Any]] = {}
+    _state_ttl_seconds = 300
+    _login_code_ttl_seconds = 60
+
+    @classmethod
+    def _cleanup_expired_state(cls) -> None:
+        now = time.time()
+        expired = [k for k, v in cls._state_store.items() if v["expires_at"] <= now]
+        for key in expired:
+            cls._state_store.pop(key, None)
+
+    @classmethod
+    def _cleanup_expired_login_code(cls) -> None:
+        now = time.time()
+        expired = [k for k, v in cls._login_code_store.items() if v["expires_at"] <= now]
+        for key in expired:
+            cls._login_code_store.pop(key, None)
 
     @classmethod
     async def get_metadata(cls) -> Optional[OIDCProviderMetadata]:
@@ -80,14 +98,44 @@ class OIDCUtils:
     @classmethod
     def generate_state(cls, redirect_path: str = "/") -> str:
         """生成 state 参数并存储"""
+        cls._cleanup_expired_state()
         state = secrets.token_urlsafe(32)
-        cls._state_store[state] = {"redirect_path": redirect_path}
+        cls._state_store[state] = {
+            "redirect_path": redirect_path,
+            "expires_at": time.time() + cls._state_ttl_seconds,
+        }
         return state
 
     @classmethod
     def verify_state(cls, state: str) -> Optional[dict[str, Any]]:
         """验证 state 参数"""
-        return cls._state_store.pop(state, None)
+        state_data = cls._state_store.pop(state, None)
+        if not state_data:
+            return None
+        if state_data["expires_at"] <= time.time():
+            return None
+        return {"redirect_path": state_data["redirect_path"]}
+
+    @classmethod
+    def generate_login_code(cls, payload: dict[str, Any]) -> str:
+        """生成一次性短期登录 code"""
+        cls._cleanup_expired_login_code()
+        code = secrets.token_urlsafe(32)
+        cls._login_code_store[code] = {
+            "payload": payload,
+            "expires_at": time.time() + cls._login_code_ttl_seconds,
+        }
+        return code
+
+    @classmethod
+    def consume_login_code(cls, code: str) -> Optional[dict[str, Any]]:
+        """消费一次性短期登录 code"""
+        data = cls._login_code_store.pop(code, None)
+        if not data:
+            return None
+        if data["expires_at"] <= time.time():
+            return None
+        return data["payload"]
 
     @classmethod
     def generate_nonce(cls) -> str:

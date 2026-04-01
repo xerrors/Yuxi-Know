@@ -32,6 +32,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAgentStore } from '@/stores/agent'
+import { authApi } from '@/apis/auth_api'
 import { message } from 'ant-design-vue'
 
 const router = useRouter()
@@ -50,42 +51,37 @@ const goToLogin = () => {
   router.push('/login')
 }
 
-// 处理 OIDC 回调 - 从 URL 参数中获取 token 数据
-const handleCallback = () => {
+// 处理 OIDC 回调 - 从 URL 参数中获取一次性 code
+const handleCallback = async () => {
   try {
-    // 从 URL 参数中获取 token 数据（由后端直接重定向传递）
-    const token = route.query.token
-    const userId = route.query.user_id
-    const username = route.query.username
-    const userIdLogin = route.query.user_id_login
-    const phoneNumber = route.query.phone_number
-    const avatar = route.query.avatar
-    const role = route.query.role
-    const departmentId = route.query.department_id
-    const departmentName = route.query.department_name
+    const code = route.query.code
 
     // 检查必要的参数
-    if (!token || !userId || !username) {
+    if (!code || typeof code !== 'string') {
       loading.value = false
       error.value = true
       errorTitle.value = '参数错误'
-      errorMessage.value = '缺少必要的登录信息，请重新登录'
+      errorMessage.value = '缺少有效的登录 code，请重新登录'
       return
     }
 
+    const tokenData = await authApi.exchangeOIDCCode(code)
+
+    await router.replace({ path: route.path, query: {} })
+
     // 更新用户状态
-    userStore.token = token
-    userStore.userId = parseInt(userId)
-    userStore.username = username
-    userStore.userIdLogin = userIdLogin || ''
-    userStore.phoneNumber = phoneNumber || ''
-    userStore.avatar = avatar || ''
-    userStore.userRole = role || 'user'
-    userStore.departmentId = departmentId ? parseInt(departmentId) : null
-    userStore.departmentName = departmentName || ''
+    userStore.token = tokenData.access_token
+    userStore.userId = tokenData.user_id
+    userStore.username = tokenData.username
+    userStore.userIdLogin = tokenData.user_id_login || ''
+    userStore.phoneNumber = tokenData.phone_number || ''
+    userStore.avatar = tokenData.avatar || ''
+    userStore.userRole = tokenData.role || 'user'
+    userStore.departmentId = tokenData.department_id || null
+    userStore.departmentName = tokenData.department_name || ''
 
     // 保存 token 到 localStorage
-    localStorage.setItem('user_token', token)
+    localStorage.setItem('user_token', tokenData.access_token)
 
     // 显示成功消息
     message.success('登录成功')
@@ -117,19 +113,19 @@ const handleCallback = () => {
     loading.value = false
     error.value = true
     errorTitle.value = '登录失败'
-    errorMessage.value = err.message || '处理登录请求时发生错误，请重试'
+    errorMessage.value = err?.message || '处理登录请求时发生错误，请重试'
   }
 }
 
 // 组件挂载时处理回调
-onMounted(() => {
+onMounted(async () => {
   // 如果已登录，跳转到首页
   if (userStore.isLoggedIn) {
     router.push('/')
     return
   }
 
-  handleCallback()
+  await handleCallback()
 })
 </script>
 

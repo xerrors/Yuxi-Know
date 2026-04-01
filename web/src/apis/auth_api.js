@@ -2,6 +2,18 @@
  * 认证相关 API
  */
 
+async function parseErrorDetail(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    const error = await response.json()
+    return error?.detail || fallbackMessage
+  }
+
+  const text = (await response.text()).trim()
+  return text || fallbackMessage
+}
+
 /**
  * 获取 OIDC 配置
  * @returns {Promise<{enabled: boolean, provider_name?: string}>}
@@ -23,16 +35,15 @@ async function getOIDCLoginUrl(redirectPath = '/') {
   const params = new URLSearchParams({ redirect_path: redirectPath })
   const response = await fetch(`/api/auth/oidc/login-url?${params}`)
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || '获取 OIDC 登录地址失败')
+    const detail = await parseErrorDetail(response, '获取 OIDC 登录地址失败')
+    throw new Error(detail)
   }
   return response.json()
 }
 
 /**
- * 处理 OIDC 回调
- * @param {string} code - 授权码
- * @param {string} state - state 参数
+ * 使用一次性 code 交换 OIDC 登录结果
+ * @param {string} code - 一次性登录 code
  * @returns {Promise<{
  *   access_token: string,
  *   token_type: string,
@@ -46,34 +57,18 @@ async function getOIDCLoginUrl(redirectPath = '/') {
  *   department_name: string | null
  * }>}
  */
-async function handleOIDCCallback(code, state) {
-  const params = new URLSearchParams({ code, state })
-  const response = await fetch(`/api/auth/oidc/callback?${params}`)
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'OIDC 登录失败')
-  }
-
-  return response.json()
-}
-
-/**
- * 执行 OIDC 登出
- * @param {string} token - JWT token
- * @returns {Promise<{logout_url?: string}>}
- */
-async function oidcLogout(token) {
-  const response = await fetch('/api/auth/oidc/logout', {
+async function exchangeOIDCCode(code) {
+  const response = await fetch('/api/auth/oidc/exchange-code', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`
-    }
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ code })
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'OIDC 登出失败')
+    const detail = await parseErrorDetail(response, 'OIDC 登录失败')
+    throw new Error(detail)
   }
 
   return response.json()
@@ -82,6 +77,5 @@ async function oidcLogout(token) {
 export const authApi = {
   getOIDCConfig,
   getOIDCLoginUrl,
-  handleOIDCCallback,
-  oidcLogout,
+  exchangeOIDCCode,
 }
