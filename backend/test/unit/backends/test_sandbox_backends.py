@@ -14,13 +14,18 @@ from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 def _runtime(
     *,
     thread_id: str | None = "thread-1",
+    user_id: str | None = "user-1",
     skills: list[str] | None = None,
     visible_kbs: list[dict] | None = None,
 ):
-    configurable = {"thread_id": thread_id} if thread_id else {}
+    configurable = {"thread_id": thread_id, "user_id": user_id} if thread_id and user_id else {}
     return SimpleNamespace(
         config={"configurable": configurable},
-        context=SimpleNamespace(skills=skills or [], _visible_knowledge_bases=visible_kbs or []),
+        context=SimpleNamespace(
+            skills=skills or [],
+            _visible_knowledge_bases=visible_kbs or [],
+            user_id=user_id,
+        ),
     )
 
 
@@ -50,12 +55,12 @@ def test_skills_middleware_extracts_slug_for_new_paths() -> None:
 
 def test_resolve_virtual_path_rejects_outside_prefix():
     with pytest.raises(ValueError, match="path must start with"):
-        resolve_virtual_path("thread-1", "/etc/passwd")
+        resolve_virtual_path("thread-1", "/etc/passwd", user_id="user-1")
 
 
 def test_resolve_virtual_path_rejects_path_traversal():
     with pytest.raises(ValueError, match="path traversal"):
-        resolve_virtual_path("thread-1", "/home/gem/user-data/../secrets")
+        resolve_virtual_path("thread-1", "/home/gem/user-data/../secrets", user_id="user-1")
 
 
 def test_sandbox_id_for_thread_is_stable():
@@ -69,7 +74,7 @@ def test_sandbox_id_for_thread_is_stable():
 
 def test_provisioner_read_reports_binary_files(monkeypatch) -> None:
     monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", user_id="user-1")
     monkeypatch.setattr(backend, "_read_binary", lambda path, offset=0, limit=None: b"\x89PNG\r\n\x1a\n")
 
     result = backend.read("/home/gem/user-data/image.png")
@@ -79,7 +84,7 @@ def test_provisioner_read_reports_binary_files(monkeypatch) -> None:
 
 def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:
     monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", user_id="user-1")
 
     def _raise_invalid_path(path, offset=0, limit=None):
         raise ValueError("path traversal is not allowed")
@@ -93,7 +98,7 @@ def test_provisioner_read_reports_invalid_path(monkeypatch) -> None:
 
 def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure(monkeypatch) -> None:
     monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", user_id="user-1")
 
     def _fake_read_binary(path, offset=0, limit=None):
         if path == "/bad-path":
@@ -110,7 +115,7 @@ def test_provisioner_download_files_distinguishes_invalid_path_from_read_failure
 
 def test_provisioner_execute_returns_error_response_on_client_failure(monkeypatch) -> None:
     monkeypatch.setattr("yuxi.agents.backends.sandbox.backend.get_sandbox_provider", lambda: object())
-    backend = ProvisionerSandboxBackend(thread_id="thread-1")
+    backend = ProvisionerSandboxBackend(thread_id="thread-1", user_id="user-1")
 
     class _FakeClient:
         class shell:

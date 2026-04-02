@@ -92,10 +92,11 @@ async def test_setting_default_agent_requires_admin(test_client, admin_headers, 
 
 async def test_save_thread_artifact_to_workspace_copies_output_file(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
     filename = f"artifact-{uuid.uuid4().hex[:8]}.md"
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
     source_path = sandbox_user_data_dir(thread_id) / "outputs" / filename
     source_path.write_text("# artifact\n", encoding="utf-8")
 
@@ -111,7 +112,7 @@ async def test_save_thread_artifact_to_workspace_copies_output_file(test_client,
     assert payload["source_path"] == f"/home/gem/user-data/outputs/{filename}"
     assert payload["saved_path"] == f"/home/gem/user-data/workspace/saved_artifacts/{filename}"
 
-    saved_path = sandbox_workspace_dir(thread_id) / "saved_artifacts" / filename
+    saved_path = sandbox_workspace_dir(thread_id, user_id) / "saved_artifacts" / filename
     assert saved_path.exists()
     assert saved_path.read_text(encoding="utf-8") == "# artifact\n"
 
@@ -122,11 +123,12 @@ async def test_save_thread_artifact_to_workspace_copies_output_file(test_client,
 
 async def test_save_thread_artifact_to_workspace_auto_renames_conflicts(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
     filename = f"artifact-{uuid.uuid4().hex[:8]}.txt"
     renamed_filename = filename.replace(".txt", " (1).txt")
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
     source_path = sandbox_user_data_dir(thread_id) / "outputs" / filename
     source_path.write_text("first\n", encoding="utf-8")
 
@@ -150,14 +152,15 @@ async def test_save_thread_artifact_to_workspace_auto_renames_conflicts(test_cli
     assert first_payload["saved_path"] == f"/home/gem/user-data/workspace/saved_artifacts/{filename}"
     assert second_payload["saved_path"] == f"/home/gem/user-data/workspace/saved_artifacts/{renamed_filename}"
 
-    first_saved = sandbox_workspace_dir(thread_id) / "saved_artifacts" / filename
-    second_saved = sandbox_workspace_dir(thread_id) / "saved_artifacts" / renamed_filename
+    first_saved = sandbox_workspace_dir(thread_id, user_id) / "saved_artifacts" / filename
+    second_saved = sandbox_workspace_dir(thread_id, user_id) / "saved_artifacts" / renamed_filename
     assert first_saved.read_text(encoding="utf-8") == "first\n"
     assert second_saved.read_text(encoding="utf-8") == "second\n"
 
 
 async def test_save_thread_artifact_to_workspace_rejects_invalid_paths(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
     invalid_response = await test_client.post(
@@ -167,8 +170,8 @@ async def test_save_thread_artifact_to_workspace_rejects_invalid_paths(test_clie
     )
     assert invalid_response.status_code == 404, invalid_response.text
 
-    ensure_thread_dirs(thread_id)
-    directory_path = sandbox_workspace_dir(thread_id) / "nested-dir"
+    ensure_thread_dirs(thread_id, user_id)
+    directory_path = sandbox_workspace_dir(thread_id, user_id) / "nested-dir"
     directory_path.mkdir(parents=True, exist_ok=True)
     directory_response = await test_client.post(
         f"/api/chat/thread/{thread_id}/artifacts/save",

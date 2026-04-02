@@ -62,10 +62,13 @@ def _looks_like_binary(content: bytes) -> bool:
 
 
 class ProvisionerSandboxBackend(BaseSandbox):
-    def __init__(self, thread_id: str, *, visible_skills: list[str] | None = None):
+    def __init__(self, thread_id: str, *, user_id: str, visible_skills: list[str] | None = None):
         self._thread_id = str(thread_id or "").strip()
         if not self._thread_id:
             raise ValueError("thread_id is required for ProvisionerSandboxBackend")
+        self._user_id = str(user_id or "").strip()
+        if not self._user_id:
+            raise ValueError("user_id is required for ProvisionerSandboxBackend")
 
         self._visible_skills = list(visible_skills or [])
         self._provider = get_sandbox_provider()
@@ -91,7 +94,7 @@ class ProvisionerSandboxBackend(BaseSandbox):
 
     def _get_client(self) -> Any:
         sync_thread_visible_skills(self._thread_id, self._visible_skills)
-        connection = self._provider.get(self._thread_id, create_if_missing=True)
+        connection = self._provider.get(self._thread_id, user_id=self._user_id, create_if_missing=True)
         if connection is None:
             raise RuntimeError(f"sandbox is unavailable for thread {self._thread_id}")
 

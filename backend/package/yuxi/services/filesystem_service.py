@@ -67,7 +67,7 @@ async def _resolve_filesystem_state(
     runtime_context.user_id = str(user.id)
     await resolve_visible_knowledge_bases_for_context(runtime_context)
 
-    sandbox_backend = ProvisionerSandboxBackend(thread_id=thread_id)
+    sandbox_backend = ProvisionerSandboxBackend(thread_id=thread_id, user_id=str(user.id))
     return conversation, runtime_context, sandbox_backend
 
 
