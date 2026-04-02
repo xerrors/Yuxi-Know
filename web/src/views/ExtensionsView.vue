@@ -22,6 +22,7 @@
             accept=".zip,.md"
             :show-upload-list="false"
             :custom-request="handleImportUpload"
+            :before-upload="beforeSkillUpload"
             :disabled="skillsLoading || skillsImporting"
           >
             <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
@@ -98,6 +99,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { Upload, RotateCw, Plus, Computer } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
@@ -208,6 +210,16 @@ const handleSubagentRefresh = () => {
       updateSubagentsState(false)
     })
   }
+}
+
+// 上传前校验文件名：仅允许 .zip 或 SKILL.md
+const beforeSkillUpload = (file) => {
+  const lower = file.name.toLowerCase()
+  if (!lower.endsWith('.zip') && lower !== 'skill.md') {
+    message.error('仅支持上传 .zip 文件或 SKILL.md 文件')
+    return false
+  }
+  return true
 }
 
 // 处理导入上传

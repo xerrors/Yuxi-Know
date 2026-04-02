@@ -594,6 +594,10 @@ async def import_skill_dir(
     created_by: str | None,
 ) -> Skill:
     source_skill_dir = Path(source_dir).resolve()
+    # Confine to the system temp directory to prevent path traversal
+    tmp_root = Path(tempfile.gettempdir()).resolve()
+    if not source_skill_dir.is_relative_to(tmp_root):
+        raise ValueError("技能目录路径不合法")
     if not source_skill_dir.exists() or not source_skill_dir.is_dir():
         raise ValueError("技能目录不存在")
     return await _import_skill_dir_impl(

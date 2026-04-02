@@ -6,9 +6,13 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.services.skill_service import import_skill_dir, is_valid_skill_slug
+
+if TYPE_CHECKING:
+    from yuxi.storage.postgres.models_business import Skill
 
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 CONTROL_SEQUENCE_RE = re.compile(r"\x1B\][^\x07]*(?:\x07|\x1B\\)|\x1B[\(\)][A-Za-z0-9]")
@@ -111,7 +115,9 @@ async def _run_skills_cli(
     error_output = (stderr or b"").decode("utf-8", errors="replace")
     combined = "\n".join(part for part in [output.strip(), error_output.strip()] if part)
     if process.returncode != 0:
-        raise ValueError(combined or "skills CLI 执行失败")
+        cleaned_lines = _clean_cli_output(combined)
+        error_msg = "\n".join(line for line in cleaned_lines if line)[:500]
+        raise ValueError(error_msg or "skills CLI 执行失败")
     return combined
 
 
@@ -149,7 +155,7 @@ async def install_remote_skill(
     source: str,
     skill: str,
     created_by: str | None,
-) -> object:
+) -> Skill:
     normalized_source = _normalize_source(source)
     normalized_skill = _normalize_skill_name(skill)
 
@@ -183,8 +189,17 @@ async def install_remote_skill(
             cwd=workdir,
         )
 
-        installed_dir = Path(temp_home) / ".agents" / "skills" / normalized_skill
-        if not installed_dir.exists() or not installed_dir.is_dir():
+        base_dir = Path(temp_home).resolve()
+        skills_dir = base_dir / ".agents" / "skills"
+        # Scan for the installed skill directory rather than constructing the path
+        # from user input, to avoid path traversal concerns
+        installed_dir = None
+        if skills_dir.is_dir():
+            for candidate in skills_dir.iterdir():
+                if candidate.name == normalized_skill and candidate.is_dir():
+                    installed_dir = candidate
+                    break
+        if installed_dir is None:
             raise ValueError("skills CLI 未生成预期的技能目录")
 
         return await import_skill_dir(
