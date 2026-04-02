@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import uuid
 from collections.abc import Callable, Iterable, Mapping
 from functools import partial
@@ -30,6 +31,8 @@ from langchain_core.messages.utils import (
 )
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.runtime import Runtime
+
+from yuxi.utils.paths import OUTPUTS_DIR_NAME
 
 TokenCounter = Callable[[Iterable[MessageLikeRepresentation]], int]
 
@@ -74,9 +77,7 @@ Messages to summarize:
 </messages>"""
 
 _DEFAULT_MESSAGES_TO_KEEP = 20
-_DEFAULT_TRIM_TOKEN_LIMIT = 4000
 _DEFAULT_FALLBACK_MESSAGE_COUNT = 15
-_DEFAULT_OFFLOAD_THRESHOLD = 1000  # Token 数阈值，超过此值则卸载到文件系统
 _OFFLOAD_DIR = "/summary_offload"  # 虚拟文件系统路径
 
 ContextFraction = tuple[Literal["fraction"], float]
@@ -143,7 +144,7 @@ def _offload_tool_result(msg: ToolMessage, threshold: int, token_counter: TokenC
     # 生成文件路径 (工具名称-xxx)
     message_id = msg.id or str(uuid.uuid4())[:8]
     safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in tool_name)
-    file_path = f"{_OFFLOAD_DIR}/{safe_name}-{message_id}"
+    file_path = (Path(OUTPUTS_DIR_NAME) / f"{_OFFLOAD_DIR}/{safe_name}-{message_id}").as_posix()
 
     # 构建文件头部信息
     header_lines = [
@@ -226,7 +227,7 @@ class SummaryOffloadMiddleware(AgentMiddleware):
         keep: ContextSize = ("messages", _DEFAULT_MESSAGES_TO_KEEP),
         token_counter: TokenCounter = count_tokens_approximately,
         summary_prompt: str = DEFAULT_SUMMARY_PROMPT,
-        trim_tokens_to_summarize: int | None = _DEFAULT_TRIM_TOKEN_LIMIT,
+        trim_tokens_to_summarize: int | None = 4000,
         # 工具结果卸载参数
         summary_offload_threshold: int = 1000,
         max_retention_ratio: float = 0.6,
@@ -240,17 +241,11 @@ class SummaryOffloadMiddleware(AgentMiddleware):
             keep: 摘要后保留的消息数量/ token 策略 (作为 fallback)
             token_counter: token 计数函数
             summary_prompt: 生成摘要的提示词模板
-            trim_tokens_to_summarize: 准备摘要消息时的最大 token 数
-            summary_offload_threshold: Summary 时卸载阈值（token 数），默认 1000
+            trim_tokens_to_summarize: Summary 时，无损保留的消息数
+            summary_offload_threshold: Summary 时，工具调用结果超过此 token 数阈值则卸载到文件系统
             max_retention_ratio: 触发 Summary 后，如果不超过此比例（相对于 trigger），则不删除消息。默认 0.6
         """
         super().__init__()
-
-        # Handle renamed argument for backward compatibility if needed,
-        # but since we are refactoring, we map deprecated 'result_offload_threshold'
-        # to 'summary_offload_threshold' if present in kwargs.
-        if "result_offload_threshold" in deprecated_kwargs:
-            summary_offload_threshold = deprecated_kwargs.pop("result_offload_threshold")
 
         if isinstance(model, str):
             model = init_chat_model(model)
