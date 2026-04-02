@@ -46,16 +46,21 @@
     >
       <div class="mention-popup">
         <!-- 文件列表 -->
-        <div v-if="mentionItems.files.length > 0" class="mention-group">
+        <div v-if="mentionItems.files.length > 0 || showFileSearchPrompt" class="mention-group">
           <div class="mention-group-title">文件</div>
-          <div
-            v-for="(item, index) in mentionItems.files"
-            :key="'file-' + item.value"
-            :class="['mention-item', { active: isItemSelected('file', index) }]"
-            @click="insertMention(item)"
-          >
-            {{ item.label }}
+          <div v-if="showFileSearchPrompt" class="mention-search-placeholder">
+            输入相关内容以搜索文件
           </div>
+          <template v-else>
+            <div
+              v-for="(item, index) in mentionItems.files"
+              :key="'file-' + item.value"
+              :class="['mention-item', { active: isItemSelected('file', index) }]"
+              @click="insertMention(item)"
+            >
+              {{ item.label }}
+            </div>
+          </template>
         </div>
 
         <!-- 知识库列表 -->
@@ -252,7 +257,6 @@ const updateMentionItems = (query = '') => {
 
   const lowerQuery = query.toLowerCase()
   const { files = [], knowledgeBases = [], mcps = [], skills = [], subagents = [] } = props.mention
-  const workspacePrefix = '/home/gem/user-data/workspace/'
 
   const filterItems = (list) =>
     list.filter((item) => {
@@ -273,7 +277,7 @@ const updateMentionItems = (query = '') => {
 
   const filterFileItems = (list) => {
     if (!query) {
-      return list.filter((item) => !String(item.value || '').startsWith(workspacePrefix))
+      return []
     }
     return filterItems(list)
   }
@@ -372,9 +376,14 @@ const isItemSelected = (type, index) => {
 }
 
 // 是否有任何候选项
+const showFileSearchPrompt = computed(() => {
+  return Boolean(props.mention?.files?.length) && !mentionQuery.value
+})
+
 const hasAnyItems = computed(() => {
   const items = mentionItems.value
   return (
+    showFileSearchPrompt.value ||
     items.files.length > 0 ||
     items.knowledgeBases.length > 0 ||
     items.mcps.length > 0 ||
@@ -880,6 +889,12 @@ defineExpose({
   .mention-empty {
     text-align: center;
     padding: 12px 8px;
+    color: var(--gray-400);
+    font-size: 13px;
+  }
+
+  .mention-search-placeholder {
+    padding: 4px 8px;
     color: var(--gray-400);
     font-size: 13px;
   }
