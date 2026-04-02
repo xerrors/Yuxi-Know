@@ -29,6 +29,7 @@ RUN set -ex \
     && apt-get install -y --no-install-recommends --fix-missing \
         curl \
         ffmpeg \
+        git \
         libpq5 \
         libsm6 \
         libxext6 \
