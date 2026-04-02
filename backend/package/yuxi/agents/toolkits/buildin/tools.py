@@ -83,8 +83,11 @@ def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> s
     thread_id = getattr(runtime_context, "thread_id", None)
     if not thread_id:
         raise ValueError("当前运行时缺少 thread_id")
+    user_id = getattr(runtime_context, "user_id", None)
+    if not user_id:
+        raise ValueError("当前运行时缺少 user_id")
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, str(user_id))
     outputs_dir = sandbox_outputs_dir(thread_id).resolve()
     normalized_input = str(filepath or "").strip()
     if not normalized_input:
@@ -93,7 +96,7 @@ def _normalize_presented_artifact_path(filepath: str, runtime: ToolRuntime) -> s
     stripped = normalized_input.lstrip("/")
     virtual_prefix = VIRTUAL_PATH_PREFIX.lstrip("/")
     if stripped == virtual_prefix or stripped.startswith(f"{virtual_prefix}/"):
-        actual_path = resolve_virtual_path(thread_id, normalized_input)
+        actual_path = resolve_virtual_path(thread_id, normalized_input, user_id=str(user_id))
     else:
         actual_path = Path(normalized_input).expanduser().resolve()
 

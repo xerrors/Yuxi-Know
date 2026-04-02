@@ -9,8 +9,8 @@ from yuxi.agents.toolkits.buildin.tools import _normalize_presented_artifact_pat
 from yuxi.services.chat_service import extract_agent_state
 
 
-def _runtime_with_thread(thread_id: str):
-    context = type("RuntimeContext", (), {"thread_id": thread_id})()
+def _runtime_with_thread(thread_id: str, user_id: str = "user-1"):
+    context = type("RuntimeContext", (), {"thread_id": thread_id, "user_id": user_id})()
     return type("RuntimeStub", (), {"context": context})()
 
 
@@ -26,7 +26,7 @@ def test_merge_artifacts_deduplicates_and_preserves_order():
 
 def test_normalize_presented_artifact_path_accepts_host_path():
     thread_id = "artifacts-host-path"
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, "user-1")
     output_file = sandbox_outputs_dir(thread_id) / "report.md"
     output_file.write_text("# demo", encoding="utf-8")
 
@@ -37,7 +37,7 @@ def test_normalize_presented_artifact_path_accepts_host_path():
 
 def test_normalize_presented_artifact_path_accepts_virtual_path():
     thread_id = "artifacts-virtual-path"
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, "user-1")
     output_file = sandbox_outputs_dir(thread_id) / "summary.txt"
     output_file.write_text("demo", encoding="utf-8")
 
@@ -51,7 +51,7 @@ def test_normalize_presented_artifact_path_accepts_virtual_path():
 
 def test_normalize_presented_artifact_path_rejects_non_outputs_path():
     thread_id = "artifacts-reject-path"
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, "user-1")
     upload_file = sandbox_uploads_dir(thread_id) / "note.txt"
     upload_file.write_text("demo", encoding="utf-8")
 

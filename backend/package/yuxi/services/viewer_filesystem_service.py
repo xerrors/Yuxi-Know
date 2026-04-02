@@ -226,13 +226,13 @@ def _sort_entries(entries: list[dict]) -> list[dict]:
     )
 
 
-def _list_local_entries(thread_id: str, actual_path) -> list[dict]:
+def _list_local_entries(thread_id: str, user_id: str, actual_path) -> list[dict]:
     """List a local directory and remap children back into viewer virtual paths."""
     entries: list[dict] = []
     for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
         stat = child.stat()
         is_dir = child.is_dir()
-        display_path = virtual_path_for_thread_file(thread_id, child)
+        display_path = virtual_path_for_thread_file(thread_id, child, user_id=user_id)
         if is_dir and not display_path.endswith("/"):
             display_path = f"{display_path}/"
         entries.append(
@@ -247,12 +247,12 @@ def _list_local_entries(thread_id: str, actual_path) -> list[dict]:
     return entries
 
 
-def _list_user_data_root_entries(thread_id: str) -> list[dict]:
-    """Expose thread-root files while keeping the shared workspace entry visible."""
-    entries = _list_local_entries(thread_id, sandbox_user_data_dir(thread_id))
+def _list_user_data_root_entries(thread_id: str, user_id: str) -> list[dict]:
+    """Expose thread-root files while keeping the user workspace entry visible."""
+    entries = _list_local_entries(thread_id, user_id, sandbox_user_data_dir(thread_id))
     visible_paths = {str(entry.get("path") or "").rstrip("/") for entry in entries}
-    workspace_dir = sandbox_workspace_dir(thread_id)
-    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir).rstrip("/")
+    workspace_dir = sandbox_workspace_dir(thread_id, user_id)
+    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir, user_id=user_id).rstrip("/")
     if workspace_virtual_path not in visible_paths:
         # workspace is stored outside the per-thread root, so add it explicitly when needed.
         stat = workspace_dir.stat()
@@ -327,16 +327,17 @@ async def list_viewer_filesystem_tree(
 
     try:
         if _is_user_data_path(normalized_path):
-            ensure_thread_dirs(thread_id)
+            user_id = str(current_user.id)
+            ensure_thread_dirs(thread_id, user_id)
             if normalized_path == USER_DATA_PATH:
-                entries = await asyncio.to_thread(_list_user_data_root_entries, thread_id)
+                entries = await asyncio.to_thread(_list_user_data_root_entries, thread_id, user_id)
                 return {"entries": _sort_entries(entries)}
-            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=user_id)
             if not actual_path.exists():
                 return {"entries": []}
             if not actual_path.is_dir():
                 raise HTTPException(status_code=400, detail="当前路径不是目录")
-            entries = await asyncio.to_thread(_list_local_entries, thread_id, actual_path)
+            entries = await asyncio.to_thread(_list_local_entries, thread_id, user_id, actual_path)
             return {"entries": _sort_entries(entries)}
 
         if _is_skills_path(normalized_path):
@@ -378,7 +379,7 @@ async def read_viewer_file_content(
 
     try:
         if _is_user_data_path(normalized_path):
-            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
             if not actual_path.exists():
                 raise HTTPException(status_code=404, detail="文件不存在")
             if not actual_path.is_file():
@@ -471,7 +472,7 @@ async def download_viewer_file(
 
     try:
         if _is_user_data_path(normalized_path):
-            actual_path = resolve_virtual_path(thread_id, normalized_path)
+            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
             if not actual_path.exists():
                 raise HTTPException(status_code=404, detail="文件不存在")
             if not actual_path.is_file():
@@ -545,7 +546,7 @@ async def delete_viewer_file(
         raise HTTPException(status_code=400, detail="当前目录不允许删除")
 
     try:
-        actual_path = resolve_virtual_path(thread_id, normalized_path)
+        actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
         if not actual_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
         if actual_path.is_dir():

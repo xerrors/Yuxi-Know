@@ -26,6 +26,7 @@ def canonical_backend_name(backend: str) -> str:
 class CreateSandboxRequest(BaseModel):
     sandbox_id: str
     thread_id: str
+    user_id: str
 
 
 class SandboxResponse(BaseModel):
@@ -69,8 +70,9 @@ class MemoryProvisionerBackend:
             return template.format(sandbox_id=sandbox_id)
         return template
 
-    def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
+    def create(self, sandbox_id: str, thread_id: str, user_id: str) -> SandboxRecord:
         _ = thread_id  # unused in memory backend
+        _ = user_id  # unused in memory backend
         with self._lock:
             existing = self._records.get(sandbox_id)
             if existing is not None:
@@ -168,6 +170,17 @@ class LocalContainerProvisionerBackend:
         return candidate
 
     @staticmethod
+    def _validate_user_id(user_id: str) -> str:
+        candidate = str(user_id or "").strip()
+        if not candidate:
+            raise ValueError("user_id is required")
+        if any(ch in candidate for ch in ("/", "\\", "\x00")):
+            raise ValueError("user_id must be a single safe path segment")
+        if ".." in candidate:
+            raise ValueError("user_id contains invalid path traversal sequence")
+        return candidate
+
+    @staticmethod
     def _sanitize_id(value: str) -> str:
         sanitized = "".join(ch if ch.isalnum() or ch in "-_" else "-" for ch in value.strip().lower())
         return sanitized[:48] or "sandbox"
@@ -184,13 +197,13 @@ class LocalContainerProvisionerBackend:
             raise ValueError("thread skills path resolved outside threads host root") from exc
         return thread_skills
 
-    def _shared_workspace_host_path(self) -> Path:
+    def _shared_workspace_host_path(self, user_id: str) -> Path:
         threads_root = Path(self._threads_host_path).resolve()
-        workspace = (threads_root / "shared" / "workspace").resolve()
+        workspace = (threads_root / "shared" / user_id / "workspace").resolve()
         try:
             workspace.relative_to(threads_root)
         except ValueError as exc:
-            raise ValueError("shared workspace path resolved outside threads host root") from exc
+            raise ValueError("user workspace path resolved outside threads host root") from exc
         return workspace
 
     def _thread_uploads_host_path(self, thread_id: str) -> Path:
@@ -221,9 +234,9 @@ class LocalContainerProvisionerBackend:
             return source == expected_source
         return False
 
-    def _has_expected_user_data_mounts(self, container, thread_id: str) -> bool:
+    def _has_expected_user_data_mounts(self, container, thread_id: str, user_id: str) -> bool:
         expected_mounts = {
-            "/home/gem/user-data/workspace": str(self._shared_workspace_host_path()),
+            "/home/gem/user-data/workspace": str(self._shared_workspace_host_path(user_id)),
             "/home/gem/user-data/uploads": str(self._thread_uploads_host_path(thread_id)),
             "/home/gem/user-data/outputs": str(self._thread_outputs_host_path(thread_id)),
         }
@@ -306,9 +319,10 @@ class LocalContainerProvisionerBackend:
         except NotFound:
             return None
 
-    def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
+    def create(self, sandbox_id: str, thread_id: str, user_id: str) -> SandboxRecord:
         with self._lock:
             safe_thread_id = self._validate_thread_id(thread_id)
+            safe_user_id = self._validate_user_id(user_id)
             existing = self._get_container(sandbox_id)
             if existing is not None:
                 existing.reload()
@@ -316,7 +330,7 @@ class LocalContainerProvisionerBackend:
                     logger.info("Recreating sandbox %s because skills mount is stale", sandbox_id)
                     self.delete(sandbox_id)
                     existing = None
-                elif not self._has_expected_user_data_mounts(existing, safe_thread_id):
+                elif not self._has_expected_user_data_mounts(existing, safe_thread_id, safe_user_id):
                     logger.info("Recreating sandbox %s because user-data mounts are stale", sandbox_id)
                     self.delete(sandbox_id)
                     existing = None
@@ -339,7 +353,7 @@ class LocalContainerProvisionerBackend:
                     logger.warning("Failed to delete stale sandbox %s before recreate: %s", sandbox_id, exc)
 
             threads_root = Path(self._threads_host_path).resolve()
-            shared_workspace = self._shared_workspace_host_path()
+            shared_workspace = self._shared_workspace_host_path(safe_user_id)
             shared_workspace.mkdir(parents=True, exist_ok=True)
             thread_uploads = self._thread_uploads_host_path(safe_thread_id)
             thread_outputs = self._thread_outputs_host_path(safe_thread_id)
@@ -356,6 +370,7 @@ class LocalContainerProvisionerBackend:
                     "app": "yuxi-sandbox",
                     "sandbox-id": sandbox_id,
                     "thread-id": thread_id,
+                    "user-id": user_id,
                     "managed-by": "yuxi-sandbox-provisioner",
                 },
                 "volumes": {
@@ -391,7 +406,11 @@ class LocalContainerProvisionerBackend:
         thread_id = str((container.labels or {}).get("thread-id") or "").strip()
         if not thread_id:
             return None
+        user_id = str((container.labels or {}).get("user-id") or "").strip()
+        if not user_id:
+            return None
         safe_thread_id = self._validate_thread_id(thread_id)
+        safe_user_id = self._validate_user_id(user_id)
         if not self._is_expected_skills_mount(container, safe_thread_id):
             logger.info("Discarding stale sandbox %s with legacy skills mount", sandbox_id)
             try:
@@ -399,7 +418,7 @@ class LocalContainerProvisionerBackend:
             except Exception as exc:
                 logger.warning("Failed to delete stale sandbox %s during discover: %s", sandbox_id, exc)
             return None
-        if not self._has_expected_user_data_mounts(container, safe_thread_id):
+        if not self._has_expected_user_data_mounts(container, safe_thread_id, safe_user_id):
             logger.info("Discarding stale sandbox %s with legacy user-data mounts", sandbox_id)
             try:
                 self.delete(sandbox_id)
@@ -470,13 +489,13 @@ class KubernetesProvisionerBackend:
     def _service_name(sandbox_id: str) -> str:
         return f"sandbox-{sandbox_id}"
 
-    def _build_pod_spec(self, sandbox_id: str, thread_id: str):
+    def _build_pod_spec(self, sandbox_id: str, thread_id: str, user_id: str):
         pod_name = self._pod_name(sandbox_id)
         return self._client.V1Pod(
             metadata=self._client.V1ObjectMeta(
                 name=pod_name,
                 labels={"app": "yuxi-sandbox", "sandbox-id": sandbox_id},
-                annotations={"thread-id": thread_id},
+                annotations={"thread-id": thread_id, "user-id": user_id},
             ),
             spec=self._client.V1PodSpec(
                 restart_policy="Never",
@@ -491,11 +510,11 @@ class KubernetesProvisionerBackend:
                         command=["sh", "-c"],
                         args=[
                             "chmod 777 /home/gem "
-                            "&& mkdir -p /mnt/shared-data/threads/shared/workspace "
+                            f"&& mkdir -p /mnt/shared-data/threads/shared/{user_id}/workspace "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/uploads "
                             f"/mnt/shared-data/threads/{thread_id}/user-data/outputs "
                             f"/mnt/shared-data/threads/{thread_id}/skills "
-                            f"&& chmod -R 777 /mnt/shared-data/threads/shared/workspace "
+                            f"&& chmod -R 777 /mnt/shared-data/threads/shared/{user_id}/workspace "
                             f"/mnt/shared-data/threads/{thread_id}/user-data ",
                         ],
                         volume_mounts=[
@@ -514,7 +533,7 @@ class KubernetesProvisionerBackend:
                             self._client.V1VolumeMount(
                                 name="shared-data",
                                 mount_path="/home/gem/user-data/workspace",
-                                sub_path="threads/shared/workspace",
+                                sub_path=f"threads/shared/{user_id}/workspace",
                             ),
                             self._client.V1VolumeMount(
                                 name="shared-data",
@@ -572,7 +591,7 @@ class KubernetesProvisionerBackend:
             ),
         )
 
-    def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
+    def create(self, sandbox_id: str, thread_id: str, user_id: str) -> SandboxRecord:
         from kubernetes.client.rest import ApiException
 
         with self._lock:
@@ -586,7 +605,7 @@ class KubernetesProvisionerBackend:
             try:
                 self._core_api.create_namespaced_pod(
                     namespace=self._namespace,
-                    body=self._build_pod_spec(sandbox_id, thread_id),
+                    body=self._build_pod_spec(sandbox_id, thread_id, user_id),
                 )
             except ApiException as exc:
                 if exc.status != 409:
@@ -798,7 +817,7 @@ def health():
 def create_sandbox(payload: CreateSandboxRequest):
     try:
         # Backend.create() already handles container reuse (discovers existing container first)
-        record = backend_impl.create(payload.sandbox_id, payload.thread_id)
+        record = backend_impl.create(payload.sandbox_id, payload.thread_id, payload.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

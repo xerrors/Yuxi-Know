@@ -123,10 +123,11 @@ async def test_viewer_tree_root_does_not_require_sandbox_listing(test_client, st
 
 async def test_viewer_tree_user_data_uses_local_thread_directory(test_client, standard_user, monkeypatch):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "viewer_tree_demo.txt"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "viewer_tree_demo.txt"
     actual_path.write_text("viewer tree", encoding="utf-8")
 
     class _FailingSandbox:
@@ -161,9 +162,10 @@ async def test_viewer_tree_user_data_uses_local_thread_directory(test_client, st
 
 async def test_viewer_tree_user_data_root_keeps_thread_root_files_visible(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
     root_file = sandbox_user_data_dir(thread_id) / "root-note.txt"
     root_file.write_text("visible at root", encoding="utf-8")
 
@@ -179,13 +181,14 @@ async def test_viewer_tree_user_data_root_keeps_thread_root_files_visible(test_c
     assert "/home/gem/user-data/workspace/" in paths
 
 
-async def test_workspace_is_shared_across_threads_but_uploads_remain_thread_local(test_client, standard_user):
+async def test_workspace_is_shared_across_same_user_threads_but_uploads_remain_thread_local(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
     other_thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    shared_path = sandbox_workspace_dir(thread_id) / "shared_across_threads.txt"
+    ensure_thread_dirs(thread_id, user_id)
+    shared_path = sandbox_workspace_dir(thread_id, user_id) / "shared_across_threads.txt"
     shared_path.write_text("shared workspace", encoding="utf-8")
 
     upload_path = await _upload_attachment_file(test_client, thread_id, headers, "thread-local.txt", "private upload\n")
@@ -232,12 +235,13 @@ async def test_viewer_file_returns_raw_content_without_line_numbers(test_client,
 
 async def test_viewer_file_returns_unsupported_for_binary_payload(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "binary.bin"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "binary.bin"
     actual_path.write_bytes(b"\x00\x01\x02\x03binary")
-    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+    file_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     response = await test_client.get(
         "/api/viewer/filesystem/file",
@@ -254,14 +258,15 @@ async def test_viewer_file_returns_unsupported_for_binary_payload(test_client, s
 
 async def test_viewer_file_returns_image_preview_metadata(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "demo.png"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "demo.png"
     actual_path.write_bytes(
         b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89"
     )
-    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+    file_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     response = await test_client.get(
         "/api/viewer/filesystem/file",
@@ -278,12 +283,13 @@ async def test_viewer_file_returns_image_preview_metadata(test_client, standard_
 
 async def test_viewer_file_returns_pdf_preview_metadata(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "demo.pdf"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "demo.pdf"
     actual_path.write_bytes(b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF")
-    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+    file_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     response = await test_client.get(
         "/api/viewer/filesystem/file",
@@ -317,13 +323,14 @@ async def test_viewer_download_returns_attachment_response(test_client, standard
 
 async def test_viewer_download_returns_full_file_for_large_user_data_content(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
     large_content = "0123456789abcdef" * 4096
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "large_download.txt"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "large_download.txt"
     actual_path.write_text(large_content, encoding="utf-8")
-    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+    file_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     response = await test_client.get(
         "/api/viewer/filesystem/download",
@@ -336,12 +343,13 @@ async def test_viewer_download_returns_full_file_for_large_user_data_content(tes
 
 async def test_viewer_delete_removes_user_data_file(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "delete_me.txt"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "delete_me.txt"
     actual_path.write_text("delete me", encoding="utf-8")
-    file_path = virtual_path_for_thread_file(thread_id, actual_path)
+    file_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     delete_response = await test_client.delete(
         "/api/viewer/filesystem/file",
@@ -364,12 +372,13 @@ async def test_viewer_delete_removes_user_data_file(test_client, standard_user):
 
 async def test_viewer_delete_removes_empty_user_data_directory(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "empty-folder"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "empty-folder"
     actual_path.mkdir()
-    dir_path = virtual_path_for_thread_file(thread_id, actual_path)
+    dir_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     delete_response = await test_client.delete(
         "/api/viewer/filesystem/file",
@@ -392,15 +401,16 @@ async def test_viewer_delete_removes_empty_user_data_directory(test_client, stan
 
 async def test_viewer_delete_recursively_removes_user_data_directory(test_client, standard_user):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
-    actual_path = sandbox_workspace_dir(thread_id) / "nested-folder"
+    ensure_thread_dirs(thread_id, user_id)
+    actual_path = sandbox_workspace_dir(thread_id, user_id) / "nested-folder"
     nested_dir = actual_path / "child"
     nested_dir.mkdir(parents=True)
     nested_file = nested_dir / "notes.txt"
     nested_file.write_text("remove recursively", encoding="utf-8")
-    dir_path = virtual_path_for_thread_file(thread_id, actual_path)
+    dir_path = virtual_path_for_thread_file(thread_id, actual_path, user_id=user_id)
 
     delete_response = await test_client.delete(
         "/api/viewer/filesystem/file",
@@ -447,9 +457,10 @@ async def test_viewer_delete_rejects_protected_user_data_root_directories(
     test_client, standard_user, protected_path: str
 ):
     headers = standard_user["headers"]
+    user_id = str(standard_user["user"]["id"])
     thread_id = await _create_thread_for_user(test_client, headers)
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
 
     response = await test_client.delete(
         "/api/viewer/filesystem/file",

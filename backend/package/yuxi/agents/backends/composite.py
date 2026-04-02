@@ -94,6 +94,23 @@ def _extract_thread_id(runtime) -> str:
     raise ValueError("thread_id is required in runtime configurable context")
 
 
+def _extract_user_id(runtime) -> str:
+    config = getattr(runtime, "config", None)
+    if isinstance(config, dict):
+        configurable = config.get("configurable", {})
+        if isinstance(configurable, dict):
+            user_id = configurable.get("user_id")
+            if isinstance(user_id, str) and user_id.strip():
+                return user_id.strip()
+
+    context = getattr(runtime, "context", None)
+    user_id = getattr(context, "user_id", None)
+    if isinstance(user_id, str) and user_id.strip():
+        return user_id.strip()
+
+    raise ValueError("user_id is required in runtime configurable context")
+
+
 def _get_visible_knowledge_bases_from_runtime(runtime) -> list[dict]:
     context = getattr(runtime, "context", None)
     selected = getattr(context, "_visible_knowledge_bases", None)
@@ -105,9 +122,10 @@ def _get_visible_knowledge_bases_from_runtime(runtime) -> list[dict]:
 def create_agent_composite_backend(runtime) -> CompositeBackend:
     visible_skills = _get_visible_skills_from_runtime(runtime)
     thread_id = _extract_thread_id(runtime)
+    user_id = _extract_user_id(runtime)
     visible_kbs = _get_visible_knowledge_bases_from_runtime(runtime)
     return CustomCompositeBackend(
-        default=ProvisionerSandboxBackend(thread_id=thread_id, visible_skills=visible_skills),
+        default=ProvisionerSandboxBackend(thread_id=thread_id, user_id=user_id, visible_skills=visible_skills),
         routes={
             "/skills/": SelectedSkillsReadonlyBackend(selected_slugs=visible_skills),
             "/home/gem/kbs/": KnowledgeBaseReadonlyBackend(visible_kbs=visible_kbs),

@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi.repositories.subagent_repository import SubAgentRepository
 from yuxi.storage.postgres.manager import pg_manager
 from yuxi.utils import logger
+from yuxi.utils.paths import OUTPUTS_DIR_NAME
 
 # SubAgent specs cache for get_subagent_specs
 _subagent_specs_cache: list[dict[str, Any]] | None = None
@@ -34,7 +35,7 @@ _DEFAULT_SUBAGENTS = [
             "你是一位专注的研究员。你的工作是根据用户的问题进行研究。"
             "进行彻底的研究，然后用详细的答案回复用户的问题，只有你的最终答案会被传递给用户。"
             "除了你的最终信息，他们不会知道任何其他事情，所以你的最终报告应该就是你的最终信息！"
-            "将调研结果保存到主题研究文件中 sub_research/xxx.md 中。"
+            f"将调研结果保存到主题研究文件中 {OUTPUTS_DIR_NAME}/sub_research/xxx.md 中。"
         ),
         "tools": ["tavily_search"],
         "is_builtin": True,

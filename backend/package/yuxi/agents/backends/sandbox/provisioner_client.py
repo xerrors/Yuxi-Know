@@ -29,11 +29,11 @@ class ProvisionerClient:
         response = self._request("GET", "/health")
         return response.status_code == 200
 
-    def create(self, sandbox_id: str, thread_id: str) -> SandboxRecord:
+    def create(self, sandbox_id: str, thread_id: str, user_id: str) -> SandboxRecord:
         response = self._request(
             "POST",
             "/api/sandboxes",
-            json={"sandbox_id": sandbox_id, "thread_id": thread_id},
+            json={"sandbox_id": sandbox_id, "thread_id": thread_id, "user_id": user_id},
         )
         if response.status_code >= 400:
             raise RuntimeError(f"failed to create sandbox {sandbox_id}: {response.status_code} {response.text}")

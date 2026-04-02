@@ -35,12 +35,13 @@ async def list_thread_files_view(
     recursive: bool = False,
 ) -> dict:
     conv_repo = ConversationRepository(db)
-    await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    user_id = str(conversation.user_id)
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
     virtual_path = path or _get_virtual_root()
     try:
-        actual_path = resolve_virtual_path(thread_id, virtual_path)
+        actual_path = resolve_virtual_path(thread_id, virtual_path, user_id=user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -51,16 +52,16 @@ async def list_thread_files_view(
 
     if recursive:
         if virtual_path.rstrip("/") == _get_virtual_root():
-            return _list_user_data_root_entries(thread_id, virtual_path, recursive=True)
-        return _list_files_recursive(thread_id, actual_path, virtual_path)
+            return _list_user_data_root_entries(thread_id, user_id, virtual_path, recursive=True)
+        return _list_files_recursive(thread_id, user_id, actual_path, virtual_path)
 
     if virtual_path.rstrip("/") == _get_virtual_root():
-        return _list_user_data_root_entries(thread_id, virtual_path)
+        return _list_user_data_root_entries(thread_id, user_id, virtual_path)
 
     entries: list[dict[str, Any]] = []
     for child in sorted(actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
         stat = child.stat()
-        child_virtual_path = virtual_path_for_thread_file(thread_id, child)
+        child_virtual_path = virtual_path_for_thread_file(thread_id, child, user_id=user_id)
         entries.append(
             {
                 "path": child_virtual_path,
@@ -77,13 +78,13 @@ async def list_thread_files_view(
     return {"path": virtual_path, "files": entries}
 
 
-def _list_user_data_root_entries(thread_id: str, virtual_path: str, recursive: bool = False) -> dict:
-    """List the thread root and inject the shared workspace entry if needed."""
+def _list_user_data_root_entries(thread_id: str, user_id: str, virtual_path: str, recursive: bool = False) -> dict:
+    """List the thread root and inject the user workspace entry if needed."""
     entries: list[dict[str, Any]] = []
     thread_root = sandbox_user_data_dir(thread_id)
     for child in sorted(thread_root.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
         stat = child.stat()
-        child_virtual_path = virtual_path_for_thread_file(thread_id, child)
+        child_virtual_path = virtual_path_for_thread_file(thread_id, child, user_id=user_id)
         if child.is_dir() and not child_virtual_path.endswith("/"):
             child_virtual_path = f"{child_virtual_path}/"
         entries.append(
@@ -99,11 +100,11 @@ def _list_user_data_root_entries(thread_id: str, virtual_path: str, recursive: b
             }
         )
         if recursive and child.is_dir():
-            nested = _list_files_recursive(thread_id, child, child_virtual_path)
+            nested = _list_files_recursive(thread_id, user_id, child, child_virtual_path)
             entries.extend(nested["files"])
 
-    workspace_dir = sandbox_workspace_dir(thread_id)
-    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir)
+    workspace_dir = sandbox_workspace_dir(thread_id, user_id)
+    workspace_virtual_path = virtual_path_for_thread_file(thread_id, workspace_dir, user_id=user_id)
     if workspace_virtual_path.rstrip("/") not in {str(entry["path"]).rstrip("/") for entry in entries}:
         # workspace lives outside the per-thread root, so expose it as a top-level entry.
         stat = workspace_dir.stat()
@@ -120,12 +121,12 @@ def _list_user_data_root_entries(thread_id: str, virtual_path: str, recursive: b
             }
         )
         if recursive:
-            nested = _list_files_recursive(thread_id, workspace_dir, workspace_virtual_path)
+            nested = _list_files_recursive(thread_id, user_id, workspace_dir, workspace_virtual_path)
             entries.extend(nested["files"])
     return {"path": virtual_path, "files": entries}
 
 
-def _list_files_recursive(thread_id: str, actual_path: Path, virtual_path: str) -> dict:
+def _list_files_recursive(thread_id: str, user_id: str, actual_path: Path, virtual_path: str) -> dict:
     """Recursively scan a directory while preserving viewer virtual paths."""
     entries: list[dict[str, Any]] = []
 
@@ -133,7 +134,7 @@ def _list_files_recursive(thread_id: str, actual_path: Path, virtual_path: str) 
         try:
             for child in sorted(base_actual_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
                 stat = child.stat()
-                child_virtual_path = virtual_path_for_thread_file(thread_id, child)
+                child_virtual_path = virtual_path_for_thread_file(thread_id, child, user_id=user_id)
                 entries.append(
                     {
                         "path": child_virtual_path,
@@ -165,10 +166,11 @@ async def read_thread_file_content_view(
     limit: int = 2000,
 ) -> dict:
     conv_repo = ConversationRepository(db)
-    await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    user_id = str(conversation.user_id)
 
     try:
-        actual_path = resolve_virtual_path(thread_id, path)
+        actual_path = resolve_virtual_path(thread_id, path, user_id=user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -201,13 +203,14 @@ async def resolve_thread_artifact_view(
     path: str,
 ) -> Path:
     conv_repo = ConversationRepository(db)
-    await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    user_id = str(conversation.user_id)
 
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
 
     normalized = "/" + path.lstrip("/")
     try:
-        actual_path = resolve_virtual_path(thread_id, normalized)
+        actual_path = resolve_virtual_path(thread_id, normalized, user_id=user_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -218,7 +221,7 @@ async def resolve_thread_artifact_view(
 
     resolved_path = actual_path.resolve()
     allowed_roots = (
-        sandbox_workspace_dir(thread_id).resolve(),
+        sandbox_workspace_dir(thread_id, user_id).resolve(),
         sandbox_uploads_dir(thread_id).resolve(),
         sandbox_outputs_dir(thread_id).resolve(),
     )
@@ -242,14 +245,17 @@ async def save_thread_artifact_to_workspace_view(
         path=path,
     )
 
-    target_dir = sandbox_workspace_dir(thread_id) / "saved_artifacts"
+    conv_repo = ConversationRepository(db)
+    conversation = await require_user_conversation(conv_repo, thread_id, str(current_user_id))
+    user_id = str(conversation.user_id)
+    target_dir = sandbox_workspace_dir(thread_id, user_id) / "saved_artifacts"
     target_dir.mkdir(parents=True, exist_ok=True)
 
     target_path = _next_available_artifact_path(target_dir, source_path.name)
     with source_path.open("rb") as src, target_path.open("wb") as dst:
         shutil.copyfileobj(src, dst)
 
-    saved_virtual_path = virtual_path_for_thread_file(thread_id, target_path)
+    saved_virtual_path = virtual_path_for_thread_file(thread_id, target_path, user_id=user_id)
     return {
         "name": target_path.name,
         "source_path": "/" + path.lstrip("/"),

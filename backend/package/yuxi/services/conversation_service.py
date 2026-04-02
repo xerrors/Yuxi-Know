@@ -209,12 +209,13 @@ def serialize_attachment(record: dict) -> dict:
 async def _materialize_attachment_files(
     *,
     thread_id: str,
+    user_id: str,
     upload: UploadFile,
     file_name: str,
     file_content: bytes,
 ) -> dict:
     """将原始附件与可选 markdown 副本落盘到线程 user-data。"""
-    ensure_thread_dirs(thread_id)
+    ensure_thread_dirs(thread_id, user_id)
 
     upload_virtual_path = _make_upload_virtual_path(file_name)
     uploads_dir = sandbox_uploads_dir(thread_id)
@@ -384,6 +385,7 @@ async def upload_thread_attachment_view(
         raise HTTPException(status_code=400, detail=f"附件过大，当前仅支持 {max_size_mb} MB 以内的文件")
     materialized = await _materialize_attachment_files(
         thread_id=thread_id,
+        user_id=str(conversation.user_id),
         upload=file,
         file_name=file_name,
         file_content=file_content,
