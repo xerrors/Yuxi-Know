@@ -228,7 +228,7 @@ async def resolve_thread_artifact_view(
     if not any(_is_path_within(resolved_path, root) for root in allowed_roots):
         raise HTTPException(status_code=403, detail="access denied")
 
-    return actual_path
+    return resolved_path
 
 
 async def save_thread_artifact_to_workspace_view(

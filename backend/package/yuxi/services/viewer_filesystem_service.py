@@ -4,7 +4,7 @@ import asyncio
 import io
 import mimetypes
 import shutil
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 from fastapi import HTTPException
@@ -138,6 +138,26 @@ def _normalize_path(path: str | None) -> str:
     if not normalized.startswith("/"):
         normalized = f"/{normalized}"
     return normalized.rstrip("/") if normalized not in {"/", KBS_PATH, SKILLS_PATH, USER_DATA_PATH} else normalized
+
+
+def _is_path_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+def _resolve_local_user_data_path(thread_id: str, user_id: str, path: str) -> Path:
+    actual_path = resolve_virtual_path(thread_id, path, user_id=user_id)
+    resolved_path = actual_path.resolve()
+    allowed_roots = (
+        sandbox_user_data_dir(thread_id).resolve(),
+        sandbox_workspace_dir(thread_id, user_id).resolve(),
+    )
+    if not any(_is_path_within(resolved_path, root) for root in allowed_roots):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return resolved_path
 
 
 def _is_user_data_path(path: str) -> bool:
@@ -332,7 +352,7 @@ async def list_viewer_filesystem_tree(
             if normalized_path == USER_DATA_PATH:
                 entries = await asyncio.to_thread(_list_user_data_root_entries, thread_id, user_id)
                 return {"entries": _sort_entries(entries)}
-            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=user_id)
+            actual_path = _resolve_local_user_data_path(thread_id, user_id, normalized_path)
             if not actual_path.exists():
                 return {"entries": []}
             if not actual_path.is_dir():
@@ -379,7 +399,7 @@ async def read_viewer_file_content(
 
     try:
         if _is_user_data_path(normalized_path):
-            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
+            actual_path = _resolve_local_user_data_path(thread_id, str(current_user.id), normalized_path)
             if not actual_path.exists():
                 raise HTTPException(status_code=404, detail="文件不存在")
             if not actual_path.is_file():
@@ -472,7 +492,7 @@ async def download_viewer_file(
 
     try:
         if _is_user_data_path(normalized_path):
-            actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
+            actual_path = _resolve_local_user_data_path(thread_id, str(current_user.id), normalized_path)
             if not actual_path.exists():
                 raise HTTPException(status_code=404, detail="文件不存在")
             if not actual_path.is_file():
@@ -546,7 +566,7 @@ async def delete_viewer_file(
         raise HTTPException(status_code=400, detail="当前目录不允许删除")
 
     try:
-        actual_path = resolve_virtual_path(thread_id, normalized_path, user_id=str(current_user.id))
+        actual_path = _resolve_local_user_data_path(thread_id, str(current_user.id), normalized_path)
         if not actual_path.exists():
             raise HTTPException(status_code=404, detail="文件不存在")
         if actual_path.is_dir():

@@ -21,7 +21,6 @@ from yuxi.utils.logging_config import logger
 
 SKILL_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SKILL_NAME_PATTERN = SKILL_SLUG_PATTERN
-FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 TEXT_FILE_EXTENSIONS = {
     ".md",
@@ -357,12 +356,31 @@ def _validate_skill_name(name: str) -> str:
     return name
 
 
-def _parse_skill_markdown(content: str) -> tuple[str, str, dict[str, Any]]:
-    match = FRONTMATTER_PATTERN.match(content)
-    if not match:
+def _split_frontmatter(content: str) -> tuple[str, str]:
+    if not content.startswith("---"):
         raise ValueError("SKILL.md 缺少有效 frontmatter（--- ... ---）")
 
-    frontmatter_raw = match.group(1)
+    lines = content.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        raise ValueError("SKILL.md 缺少有效 frontmatter（--- ... ---）")
+
+    frontmatter_lines: list[str] = []
+    body_start = 0
+    for index, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            body_start = index + 1
+            break
+        frontmatter_lines.append(line)
+    else:
+        raise ValueError("SKILL.md 缺少有效 frontmatter（--- ... ---）")
+
+    frontmatter_raw = "".join(frontmatter_lines)
+    body = "".join(lines[body_start:])
+    return frontmatter_raw, body
+
+
+def _parse_skill_markdown(content: str) -> tuple[str, str, dict[str, Any]]:
+    frontmatter_raw, _body = _split_frontmatter(content)
     try:
         data = yaml.safe_load(frontmatter_raw)
     except yaml.YAMLError as e:
@@ -380,12 +398,7 @@ def _parse_skill_markdown(content: str) -> tuple[str, str, dict[str, Any]]:
 
 
 def _rewrite_frontmatter_name(content: str, new_name: str) -> str:
-    match = FRONTMATTER_PATTERN.match(content)
-    if not match:
-        raise ValueError("SKILL.md 缺少有效 frontmatter（--- ... ---）")
-
-    frontmatter_raw = match.group(1)
-    body = content[match.end() :]
+    frontmatter_raw, body = _split_frontmatter(content)
     data = yaml.safe_load(frontmatter_raw)
     if not isinstance(data, dict):
         raise ValueError("SKILL.md frontmatter 必须是对象")

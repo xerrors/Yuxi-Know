@@ -37,6 +37,7 @@
 - 调整 backend Python 工作区依赖边界：将 `backend/package/yuxi` 明确为承载核心运行依赖的业务包，根 `backend/pyproject.toml` 仅保留工作区入口与开发/测试配置，减少依赖职责混淆。
 - 修复沙盒 `workspace` 隔离粒度：宿主机目录从共享 `saves/threads/shared/workspace` 收敛为用户级 `saves/threads/shared/<user_id>/workspace`，并同步传递 `user_id` 到 sandbox 路径解析、provisioner 挂载与 viewer/chat 测试，保证同用户跨线程共享、不同用户隔离。
 - 调整输入框 `@` 提及中的文件搜索交互：无查询内容时不再直接展示文件列表，改为提示“输入相关内容以搜索文件”，避免未过滤结果干扰选择。
+- 收紧文件系统安全边界：viewer/chat 下载与删除路径统一基于解析后的真实路径做允许目录校验，阻止通过软链接逃逸工作区/线程目录；同时将密码哈希默认实现升级为 Argon2，并移除 skill frontmatter 解析中的正则回溯风险。
 
 
 历史版本发布记录已迁移到 [版本变更记录](./changelog.md)。

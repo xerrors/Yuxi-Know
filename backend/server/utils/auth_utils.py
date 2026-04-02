@@ -1,9 +1,12 @@
 import hashlib
+import hmac
 import os
 from datetime import timedelta
 from typing import Any
 
 import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 
 from yuxi.utils.datetime_utils import utc_now
 
@@ -11,6 +14,7 @@ from yuxi.utils.datetime_utils import utc_now
 JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "yuxi_know_secure_key")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 7 * 24 * 60 * 60  # 7天过期
+PASSWORD_HASHER = PasswordHasher()
 
 
 class AuthUtils:
@@ -18,28 +22,25 @@ class AuthUtils:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """使用SHA-256哈希密码"""
-        # 生成盐
-        salt = os.urandom(32).hex()
-        # 哈希密码
-        hashed = hashlib.sha256((password + salt).encode()).hexdigest()
-        # 返回格式: "哈希值:盐"
-        return f"{hashed}:{salt}"
+        """使用 Argon2 哈希密码"""
+        return PASSWORD_HASHER.hash(password)
 
     @staticmethod
     def verify_password(stored_password: str, provided_password: str) -> bool:
         """验证密码"""
-        # 分离哈希值和盐
+        if stored_password.startswith("$argon2"):
+            try:
+                return PASSWORD_HASHER.verify(stored_password, provided_password)
+            except (InvalidHash, VerifyMismatchError, VerificationError):
+                return False
+
+        # 兼容历史 SHA-256:盐 格式，避免现有账号密码在升级后立即失效。
         if ":" not in stored_password:
             return False
 
-        hashed, salt = stored_password.split(":")
-
-        # 使用相同的盐哈希提供的密码
+        hashed, salt = stored_password.split(":", 1)
         check_hash = hashlib.sha256((provided_password + salt).encode()).hexdigest()
-
-        # 比较哈希值
-        return hashed == check_hash
+        return hmac.compare_digest(hashed, check_hash)
 
     @staticmethod
     def create_access_token(data: dict[str, Any], expires_delta: timedelta | None = None) -> str:
