@@ -349,14 +349,14 @@ async def oidc_login_url_handler(redirect_path: str = "/"):
     if not oidc_config.enabled or not oidc_config.is_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OIDC is not enabled or not configured"
+            detail="OIDC 登录暂不可用，请联系管理员"
         )
 
     login_url = await OIDCUtils.build_authorization_url(redirect_path)
     if not login_url:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to build authorization URL"
+            detail="生成登录链接失败，请稍后重试或联系管理员"
         )
 
     return {"login_url": login_url}
