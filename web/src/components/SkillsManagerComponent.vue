@@ -945,9 +945,6 @@ const handleListRemoteSkills = async () => {
       message.warning('未发现可安装的 Skills')
       return
     }
-    if (!remoteInstallForm.skill) {
-      remoteInstallForm.skill = remoteSkillOptions.value[0]?.name || ''
-    }
     message.success(`已发现 ${remoteSkillOptions.value.length} 个 Skills`)
   } catch (error) {
     message.error(error?.response?.data?.detail || error.message || '获取远程 Skills 失败')
