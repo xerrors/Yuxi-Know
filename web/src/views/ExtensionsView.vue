@@ -10,15 +10,24 @@
       <div class="header-actions">
         <!-- Skills Tab 的按钮 -->
         <template v-if="activeTab === 'skills'">
+          <a-button
+            @click="handleOpenRemoteInstall"
+            :disabled="skillsLoading || skillsImporting"
+            class="lucide-icon-btn"
+          >
+            <Computer :size="14" />
+            <span>远程安装</span>
+          </a-button>
           <a-upload
-            accept=".zip"
+            accept=".zip,.md"
             :show-upload-list="false"
             :custom-request="handleImportUpload"
+            :before-upload="beforeSkillUpload"
             :disabled="skillsLoading || skillsImporting"
           >
             <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
               <Upload :size="14" />
-              <span>上传 ZIP</span>
+              <span>上传 Skill</span>
             </a-button>
           </a-upload>
           <a-button @click="handleSkillsRefresh" :disabled="skillsLoading" class="lucide-icon-btn">
@@ -90,7 +99,8 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { Upload, RotateCw, Plus } from 'lucide-vue-next'
+import { message } from 'ant-design-vue'
+import { Upload, RotateCw, Plus, Computer } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
@@ -154,6 +164,12 @@ const handleSkillsRefresh = () => {
   }
 }
 
+const handleOpenRemoteInstall = () => {
+  if (skillsRef.value?.openRemoteInstallModal) {
+    skillsRef.value.openRemoteInstallModal()
+  }
+}
+
 // Tools 事件处理
 const handleToolsRefresh = () => {
   if (toolsRef.value?.fetchTools) {
@@ -194,6 +210,16 @@ const handleSubagentRefresh = () => {
       updateSubagentsState(false)
     })
   }
+}
+
+// 上传前校验文件名：仅允许 .zip 或 SKILL.md
+const beforeSkillUpload = (file) => {
+  const lower = file.name.toLowerCase()
+  if (!lower.endsWith('.zip') && lower !== 'skill.md') {
+    message.error('仅支持上传 .zip 文件或 SKILL.md 文件')
+    return false
+  }
+  return true
 }
 
 // 处理导入上传

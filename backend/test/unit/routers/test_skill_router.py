@@ -72,6 +72,37 @@ def test_import_skill_requires_superadmin():
     assert resp.status_code == 403
 
 
+def test_import_skill_route_accepts_skill_md(monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_import_skill_zip(_db, *, filename, file_bytes, created_by):
+        captured["filename"] = filename
+        captured["file_bytes"] = file_bytes.decode("utf-8")
+        captured["created_by"] = created_by
+        return Skill(
+            slug="demo",
+            name="demo",
+            description="demo skill",
+            dir_path="skills/demo",
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    monkeypatch.setattr("server.routers.skill_router.import_skill_zip", fake_import_skill_zip)
+
+    app = _build_app(allow_superadmin=True)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/api/system/skills/import",
+        files={"file": ("SKILL.md", b"---\nname: demo\ndescription: demo skill\n---\n", "text/markdown")},
+    )
+    assert resp.status_code == 200, resp.text
+    assert captured["filename"] == "SKILL.md"
+    assert "name: demo" in captured["file_bytes"]
+    assert captured["created_by"] == "root"
+
+
 def test_update_skill_file_passes_operator(monkeypatch):
     captured: dict[str, str] = {}
 
@@ -163,3 +194,52 @@ def test_update_skill_dependencies_route(monkeypatch):
     assert captured["mcp_dependencies"] == ["mcp-a"]
     assert captured["skill_dependencies"] == ["other-skill"]
     assert captured["updated_by"] == "root"
+
+
+def test_list_remote_skills_route(monkeypatch):
+    async def fake_list_remote_skills(source: str):
+        assert source == "anthropics/skills"
+        return [{"name": "frontend-design", "description": "demo"}]
+
+    monkeypatch.setattr("server.routers.skill_router.list_remote_skills", fake_list_remote_skills)
+
+    app = _build_app(allow_superadmin=True)
+    client = TestClient(app)
+    resp = client.post("/api/system/skills/remote/list", json={"source": "anthropics/skills"})
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["success"] is True
+    assert payload["data"] == [{"name": "frontend-design", "description": "demo"}]
+
+
+def test_install_remote_skill_route(monkeypatch):
+    captured: dict[str, str] = {}
+
+    async def fake_install_remote_skill(_db, *, source, skill, created_by):
+        captured["source"] = source
+        captured["skill"] = skill
+        captured["created_by"] = created_by
+        return Skill(
+            slug="frontend-design",
+            name="frontend-design",
+            description="demo skill",
+            dir_path="skills/frontend-design",
+            created_by=created_by,
+            updated_by=created_by,
+        )
+
+    monkeypatch.setattr("server.routers.skill_router.install_remote_skill", fake_install_remote_skill)
+
+    app = _build_app(allow_superadmin=True)
+    client = TestClient(app)
+    resp = client.post(
+        "/api/system/skills/remote/install",
+        json={"source": "anthropics/skills", "skill": "frontend-design"},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["success"] is True
+    assert payload["data"]["slug"] == "frontend-design"
+    assert captured["source"] == "anthropics/skills"
+    assert captured["skill"] == "frontend-design"
+    assert captured["created_by"] == "root"

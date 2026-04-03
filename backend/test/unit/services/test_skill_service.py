@@ -166,6 +166,76 @@ async def test_import_skill_zip_conflict_rewrite_name(tmp_path: Path, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_import_skill_md_creates_single_file_skill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
+
+    class FakeRepo:
+        created_item: Skill | None = None
+
+        def __init__(self, _db):
+            pass
+
+        async def exists_slug(self, slug: str) -> bool:
+            return False
+
+        async def create(
+            self,
+            *,
+            slug: str,
+            name: str,
+            description: str,
+            tool_dependencies: list[str] | None,
+            mcp_dependencies: list[str] | None,
+            skill_dependencies: list[str] | None,
+            dir_path: str,
+            created_by: str | None,
+        ) -> Skill:
+            item = Skill(
+                slug=slug,
+                name=name,
+                description=description,
+                tool_dependencies=tool_dependencies or [],
+                mcp_dependencies=mcp_dependencies or [],
+                skill_dependencies=skill_dependencies or [],
+                dir_path=dir_path,
+                created_by=created_by,
+                updated_by=created_by,
+            )
+            self.__class__.created_item = item
+            return item
+
+    monkeypatch.setattr(svc, "SkillRepository", FakeRepo)
+
+    skill_md = "---\nname: demo\ndescription: this is demo\n---\n# Demo\n"
+    item = await svc.import_skill_zip(
+        None,
+        filename="SKILL.md",
+        file_bytes=skill_md.encode("utf-8"),
+        created_by="root",
+    )
+
+    assert item.slug == "demo"
+    assert item.name == "demo"
+    assert (tmp_path / "skills" / "demo" / "SKILL.md").read_text(encoding="utf-8") == skill_md
+
+
+@pytest.mark.asyncio
+async def test_import_skill_dir_requires_root_skill_md(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
+    source_dir = tmp_path / "source-skill"
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    with pytest.raises(ValueError, match="根级 SKILL.md"):
+        await svc.import_skill_dir(
+            None,
+            source_dir=source_dir,
+            created_by="root",
+        )
+
+
+@pytest.mark.asyncio
 async def test_update_skill_md_syncs_metadata(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(svc.sys_config, "save_dir", str(tmp_path))
     skill_dir = tmp_path / "skills" / "demo"

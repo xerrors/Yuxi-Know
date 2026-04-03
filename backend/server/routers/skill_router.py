@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from server.utils.auth_middleware import get_admin_user, get_db, get_superadmin_user
+from yuxi.services.remote_skill_install_service import install_remote_skill, list_remote_skills
 from yuxi.services.skill_service import (
     BuiltinSkillUpdateConflictError,
     create_skill_node,
@@ -52,6 +53,14 @@ class SkillDependenciesUpdateRequest(BaseModel):
 
 class BuiltinSkillUpdateRequest(BaseModel):
     force: bool = Field(False, description="是否强制覆盖本地已安装内容")
+
+
+class RemoteSkillSourceRequest(BaseModel):
+    source: str = Field(..., description="skills 仓库来源，如 owner/repo 或 GitHub URL")
+
+
+class RemoteSkillInstallRequest(RemoteSkillSourceRequest):
+    skill: str = Field(..., description="需要安装的 skill 名称")
 
 
 def _raise_from_value_error(e: ValueError) -> None:
@@ -182,7 +191,7 @@ async def import_skill_route(
     current_user: User = Depends(get_superadmin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """导入技能压缩包（仅超级管理员）。"""
+    """导入技能包（支持 ZIP 或单个 SKILL.md，仅超级管理员）。"""
     try:
         file_bytes = await file.read()
         item = await import_skill_zip(
@@ -197,8 +206,49 @@ async def import_skill_route(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to import skill zip: {e}")
+        logger.error(f"Failed to import skill package: {e}")
         raise HTTPException(status_code=500, detail="导入技能失败")
+
+
+@skills.post("/remote/list")
+async def list_remote_skills_route(
+    payload: RemoteSkillSourceRequest,
+    _current_user: User = Depends(get_superadmin_user),
+):
+    try:
+        return {"success": True, "data": await list_remote_skills(payload.source)}
+    except ValueError as e:
+        _raise_from_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list remote skills from '{payload.source}': {e}")
+        raise HTTPException(status_code=500, detail="获取远程 skills 列表失败")
+
+
+@skills.post("/remote/install")
+async def install_remote_skill_route(
+    payload: RemoteSkillInstallRequest,
+    current_user: User = Depends(get_superadmin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        item = await install_remote_skill(
+            db,
+            source=payload.source,
+            skill=payload.skill,
+            created_by=current_user.username,
+        )
+        return {"success": True, "data": item.to_dict()}
+    except ValueError as e:
+        _raise_from_value_error(e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"Failed to install remote skill '{payload.skill}' from '{payload.source}': {e}"
+        )
+        raise HTTPException(status_code=500, detail="安装远程 skill 失败")
 
 
 @skills.get("/{slug}/tree")
