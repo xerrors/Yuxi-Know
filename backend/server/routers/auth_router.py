@@ -27,13 +27,11 @@ from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils.datetime_utils import utc_now_naive
 
 # OIDC 认证相关导入
-from server.routers.auth_router_oidc import (
+from yuxi.services.oidc_service import (
     get_oidc_config_handler,
     oidc_callback_handler,
     oidc_exchange_code_handler,
     oidc_login_url_handler,
-    OIDCConfigResponse,
-    OIDCLoginResponse,
 )
 
 # 创建路由器
@@ -103,6 +101,29 @@ class UserIdGeneration(BaseModel):
     username: str
     user_id: str
     is_available: bool
+
+
+class OIDCConfigResponse(BaseModel):
+    """OIDC 配置响应"""
+
+    enabled: bool
+    login_url: str | None = None
+    provider_name: str | None = "OIDC登录"
+
+
+class OIDCLoginResponse(BaseModel):
+    """OIDC 登录响应"""
+
+    access_token: str
+    token_type: str
+    user_id: int
+    username: str
+    user_id_login: str
+    phone_number: str | None = None
+    avatar: str | None = None
+    role: str
+    department_id: int | None = None
+    department_name: str | None = None
 
 
 # =============================================================================
