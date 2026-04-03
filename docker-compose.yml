@@ -3,7 +3,6 @@ x-api-worker-env: &api-worker-env
   LITE_MODE: ${LITE_MODE:-false}
   RUNNING_IN_DOCKER: "true"
   MODEL_DIR_IN_DOCKER: /models
-  PYTHONPATH: /app/package
   # DBs and other services
   POSTGRES_URL: ${POSTGRES_URL:-postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-yuxi_know}}
   REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -45,7 +44,7 @@ services:
     working_dir: /app
     volumes:
       - ./backend/server:/app/server
-      - ./backend/package/yuxi:/app/package/yuxi
+      - ./backend/package:/app/package
       - ./saves:/app/saves
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts
@@ -92,7 +91,7 @@ services:
     working_dir: /app
     volumes:
       - ./backend/server:/app/server
-      - ./backend/package/yuxi:/app/package/yuxi
+      - ./backend/package:/app/package
       - ./saves:/app/saves
       - ./backend/test:/app/test
       - ./backend/scripts:/app/scripts

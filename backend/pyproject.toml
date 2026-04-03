@@ -33,15 +33,9 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-yuxi = { workspace = true }
+yuxi = { path = "package", editable = true }
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
-
-[tool.uv.workspace]
-exclude = ["."]
-members = [
-    "package/yuxi",
-]
 
 
 [tool.pytest.ini_options]

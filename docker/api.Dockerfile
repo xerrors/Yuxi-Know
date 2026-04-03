@@ -50,8 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # 激活虚拟环境并添加到PATH
 ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app/package:$PYTHONPATH"
 
 # 复制代码到容器中
-COPY ../backend/package/yuxi /app/package/yuxi
+COPY ../backend/package /app/package
 COPY ../backend/server /app/server
