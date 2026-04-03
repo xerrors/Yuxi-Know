@@ -37,8 +37,6 @@ Don't create helpers, utilities, or abstractions for one-time operations. Don't 
 # 代码检查和格式化
 make format        # 格式化代码
 
-# 直接在容器内执行命令
-docker compose exec api uv run python test/your_script.py  # 放在 test 文件夹
 ```
 注意：
 - Python 代码要符合 pythonic 风格
