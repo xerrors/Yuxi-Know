@@ -1,5 +1,7 @@
 .yuxi/
 
+*.egg-info
+
 ### python gitignore
 __pycache__/
 *.pyc

@@ -84,3 +84,22 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["yuxi*"]
+
+
+[tool.uv]
+
+[[tool.uv.index]]
+name = "tsinghua"
+url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+default = true
+
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+yuxi = { path = "package", editable = true }
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
