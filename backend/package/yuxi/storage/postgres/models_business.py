@@ -1,5 +1,6 @@
 """PostgreSQL 业务数据模型 - 用户、部门、对话等相关表"""
 
+from datetime import timedelta
 from typing import Any
 
 from sqlalchemy import (
@@ -20,6 +21,9 @@ from sqlalchemy.orm import relationship
 from yuxi.utils.datetime_utils import format_utc_datetime, utc_now_naive
 
 Base = declarative_base()
+
+MAX_LOGIN_FAILED_ATTEMPTS = 5
+LOGIN_LOCK_DURATION_SECONDS = 300
 
 
 class Department(Base):
@@ -111,6 +115,13 @@ class User(Base):
             return 0
         remaining = int((self.login_locked_until - utc_now_naive()).total_seconds())
         return max(0, remaining)
+
+    def increment_failed_login(self):
+        """增加登录失败计数，并在达到阈值后锁定登录"""
+        self.login_failed_count += 1
+        self.last_failed_login = utc_now_naive()
+        if self.login_failed_count >= MAX_LOGIN_FAILED_ATTEMPTS:
+            self.login_locked_until = self.last_failed_login + timedelta(seconds=LOGIN_LOCK_DURATION_SECONDS)
 
     def reset_failed_login(self):
         """重置登录失败相关字段"""
