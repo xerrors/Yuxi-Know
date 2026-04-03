@@ -15,7 +15,9 @@ ENV TZ=Asia/Shanghai \
     UV_COMPILE_BYTECODE=1 \
     DEBIAN_FRONTEND=noninteractive
 
-RUN npm install -g npm@latest && npm cache clean --force
+# 设置 npm 镜像源，为 MCP 和 Skills 安装依赖
+RUN npm config set registry https://registry.npmmirror.com --global \
+    && npm cache clean --force
 
 # 设置代理和时区，更换镜像源，安装系统依赖 - 合并为一个RUN减少层数
 RUN set -ex \
@@ -36,7 +38,6 @@ RUN set -ex \
     # (D) 清理垃圾，减小体积
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
 
 # 复制项目配置文件
 COPY ../backend/pyproject.toml /app/pyproject.toml

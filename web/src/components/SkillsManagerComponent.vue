@@ -358,6 +358,9 @@
       title="远程安装 Skill"
       :footer="null"
       width="560px"
+      :closable="!installingRemoteSkill"
+      :mask-closable="!installingRemoteSkill"
+      :keyboard="!installingRemoteSkill"
     >
       <div class="remote-install-panel modal-mode">
         <div class="panel-header-text">
@@ -373,17 +376,21 @@
             <a-input
               v-model:value="remoteInstallForm.source"
               placeholder="anthropics/skills 或 GitHub URL"
+              :disabled="installingRemoteSkill"
             />
           </a-form-item>
           <a-form-item label="Skill 名称">
-            <a-auto-complete
-              v-model:value="remoteInstallForm.skill"
+            <a-select
+              v-model:value="remoteInstallForm.skills"
+              mode="tags"
               :options="filteredRemoteSkillOptions"
               placeholder="frontend-design"
               allow-clear
-            >
-              <a-input />
-            </a-auto-complete>
+              show-search
+              :disabled="installingRemoteSkill"
+              :filter-option="filterRemoteSkillOption"
+              :max-tag-count="6"
+            />
           </a-form-item>
           <div class="remote-install-actions">
             <a-button
@@ -401,6 +408,9 @@
             >
               安装
             </a-button>
+            <span v-if="remoteInstallStatusText" class="remote-install-status">
+              {{ remoteInstallStatusText }}
+            </span>
           </div>
           <div v-if="remoteSkillOptions.length" class="remote-skill-summary">
             共发现 {{ remoteSkillOptions.length }} 个 skills，可按输入内容筛选候选项。
@@ -472,9 +482,21 @@ const remoteInstallModalVisible = ref(false)
 const createForm = reactive({ path: '', isDir: false, content: '' })
 const remoteInstallForm = reactive({
   source: 'https://github.com/anthropics/skills',
-  skill: ''
+  skills: []
 })
 const remoteSkillOptions = ref([])
+const remoteInstallProgress = reactive({
+  visible: false,
+  total: 0,
+  completed: 0,
+  success: 0,
+  failed: 0,
+  currentSkill: ''
+})
+const remoteInstallResults = reactive({
+  success: [],
+  failed: []
+})
 const dependencyOptions = reactive({ tools: [], mcps: [], skills: [] })
 const dependencyForm = reactive({
   tool_dependencies: [],
@@ -585,15 +607,49 @@ const skillDependencyOptions = computed(() =>
     .filter((s) => s !== currentSkill.value?.slug)
     .map((i) => ({ label: i, value: i }))
 )
-const filteredRemoteSkillOptions = computed(() => {
-  const keyword = remoteInstallForm.skill.trim().toLowerCase()
-  return remoteSkillOptions.value
-    .filter((item) => !keyword || item.name.toLowerCase().includes(keyword))
-    .map((item) => ({
-      value: item.name,
-      label: item.description ? `${item.name} - ${item.description}` : item.name
-    }))
+const filteredRemoteSkillOptions = computed(() =>
+  remoteSkillOptions.value.map((item) => ({
+    value: item.name,
+    label: item.description ? `${item.name} - ${item.description}` : item.name
+  }))
+)
+const remoteInstallStatusText = computed(() => {
+  if (!remoteInstallProgress.visible || !remoteInstallProgress.total) return ''
+  const progressText = `[${remoteInstallProgress.completed}/${remoteInstallProgress.total}]`
+  const currentSkill = remoteInstallProgress.currentSkill || ''
+  const failedText =
+    remoteInstallProgress.failed > 0 ? `, ${remoteInstallProgress.failed} failed` : ''
+  return `${progressText} ${currentSkill}${failedText}`.trim()
 })
+const filterRemoteSkillOption = (input, option) => {
+  const keyword = input.trim().toLowerCase()
+  if (!keyword) return true
+  const value = String(option?.value || '').toLowerCase()
+  const label = String(option?.label || '').toLowerCase()
+  return value.includes(keyword) || label.includes(keyword)
+}
+
+const normalizeRemoteSkillNames = (skills) => {
+  const seen = new Set()
+  return (skills || []).reduce((acc, skill) => {
+    const normalized = String(skill || '').trim()
+    if (!normalized || seen.has(normalized)) return acc
+    seen.add(normalized)
+    acc.push(normalized)
+    return acc
+  }, [])
+}
+
+const resetRemoteInstallState = () => {
+  remoteInstallProgress.visible = false
+  remoteInstallProgress.total = 0
+  remoteInstallProgress.completed = 0
+  remoteInstallProgress.success = 0
+  remoteInstallProgress.failed = 0
+  remoteInstallProgress.currentSkill = ''
+  remoteInstallResults.success = []
+  remoteInstallResults.failed = []
+}
 
 const normalizeTree = (nodes) =>
   (nodes || []).map((node) => ({
@@ -941,6 +997,7 @@ const handleListRemoteSkills = async () => {
   try {
     const result = await skillApi.listRemoteSkills(source)
     remoteSkillOptions.value = result?.data || []
+    remoteInstallForm.skills = normalizeRemoteSkillNames(remoteInstallForm.skills)
     if (!remoteSkillOptions.value.length) {
       message.warning('未发现可安装的 Skills')
       return
@@ -955,35 +1012,77 @@ const handleListRemoteSkills = async () => {
 
 const handleInstallRemoteSkill = async () => {
   const source = remoteInstallForm.source.trim()
-  const skill = remoteInstallForm.skill.trim()
-  if (!source || !skill) {
+  const skillsToInstall = normalizeRemoteSkillNames(remoteInstallForm.skills)
+  if (!source || !skillsToInstall.length) {
     message.warning('请填写来源仓库和 Skill 名称')
     return
   }
+  remoteInstallForm.skills = skillsToInstall
+  resetRemoteInstallState()
   installingRemoteSkill.value = true
+  remoteInstallProgress.visible = true
+  remoteInstallProgress.total = skillsToInstall.length
+  let lastInstalledSlug = ''
   try {
-    const result = await skillApi.installRemoteSkill({ source, skill })
-    const installed = result?.data
-    remoteInstallForm.skill = installed?.slug || skill
+    for (const skill of skillsToInstall) {
+      remoteInstallProgress.currentSkill = skill
+      try {
+        const result = await skillApi.installRemoteSkill({ source, skill })
+        const installed = result?.data
+        const installedSlug = installed?.slug || skill
+        remoteInstallResults.success.push(installedSlug)
+        remoteInstallProgress.success += 1
+        lastInstalledSlug = installedSlug
+      } catch (error) {
+        remoteInstallResults.failed.push({
+          skill,
+          error: error?.response?.data?.detail || error.message || '远程 Skill 安装失败'
+        })
+        remoteInstallProgress.failed += 1
+      } finally {
+        remoteInstallProgress.completed += 1
+      }
+    }
+    remoteInstallProgress.currentSkill = ''
     await fetchSkills()
-    if (installed?.slug) {
+    if (lastInstalledSlug) {
       const record =
-        skills.value.find((item) => item.slug === installed.slug) ||
-        builtinSkills.value.find((item) => item.slug === installed.slug)
+        skills.value.find((item) => item.slug === lastInstalledSlug) ||
+        builtinSkills.value.find((item) => item.slug === lastInstalledSlug)
       if (record) await selectSkill(record)
     }
-    remoteInstallModalVisible.value = false
-    message.success('远程 Skill 安装成功')
+    if (remoteInstallResults.failed.length === 0) {
+      remoteInstallModalVisible.value = false
+      message.success(`远程 Skills 安装成功，共 ${remoteInstallResults.success.length} 个`)
+      resetRemoteInstallState()
+      remoteInstallForm.skills = []
+      return
+    }
+    message.warning(
+      `远程 Skills 安装完成，成功 ${remoteInstallResults.success.length} 个，失败 ${remoteInstallResults.failed.length} 个`
+    )
   } catch (error) {
     message.error(error?.response?.data?.detail || error.message || '远程 Skill 安装失败')
   } finally {
+    remoteInstallProgress.currentSkill = ''
     installingRemoteSkill.value = false
   }
 }
 
 const openRemoteInstallModal = () => {
+  if (!remoteInstallModalVisible.value) {
+    remoteInstallForm.skills = []
+    resetRemoteInstallState()
+  }
   remoteInstallModalVisible.value = true
 }
+
+watch(remoteInstallModalVisible, (visible) => {
+  if (!visible && !installingRemoteSkill.value) {
+    remoteInstallForm.skills = []
+    resetRemoteInstallState()
+  }
+})
 
 const saveDependencies = async () => {
   if (!currentSkill.value || !isInstalledSkill.value) return
@@ -1080,7 +1179,18 @@ defineExpose({
 
   .remote-install-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+  }
+
+  .remote-install-status {
+    min-width: 0;
+    flex: 1;
+    font-size: 12px;
+    color: var(--gray-600);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .remote-skill-hints {
