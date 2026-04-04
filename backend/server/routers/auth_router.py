@@ -640,7 +640,7 @@ async def delete_user(
         )
 
     # 检查是否是部门的唯一管理员
-    if user.role == "admin":
+    if user.role == "admin" and current_user.role != "superadmin":
         result = await db.execute(
             select(func.count(User.id)).filter(
                 User.department_id == user.department_id, User.role == "admin", User.is_deleted == 0

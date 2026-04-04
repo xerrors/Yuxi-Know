@@ -7,10 +7,10 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import delete as sqlalchemy_delete, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from yuxi.storage.postgres.models_business import Department, User
+from yuxi.storage.postgres.models_business import APIKey, AgentConfig, Department, User
 from yuxi.repositories.department_repository import DepartmentRepository
 from yuxi.repositories.user_repository import UserRepository
 from server.utils.auth_middleware import get_superadmin_user, get_admin_user, get_db
@@ -60,6 +60,21 @@ class DepartmentResponse(BaseModel):
     description: str | None = None
     created_at: str
     user_count: int = 0
+
+
+async def ensure_default_department(db: AsyncSession) -> Department:
+    result = await db.execute(select(Department).filter(Department.id == 1))
+    default_department = result.scalar_one_or_none()
+    if default_department is not None:
+        return default_department
+
+    default_department = Department(
+        name="默认部门",
+        description="系统在删除部门时自动创建的默认部门",
+    )
+    db.add(default_department)
+    await db.flush()
+    return default_department
 
 
 # =============================================================================
@@ -226,22 +241,27 @@ async def delete_department(
     if not department:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="部门不存在")
 
-    # 检查部门下是否有用户
-    user_count_result = await db.execute(
-        select(func.count(User.id)).filter(User.department_id == department_id, User.is_deleted == 0)
-    )
-    user_count = user_count_result.scalar()
-
-    if user_count > 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"无法删除部门，该部门下还有 {user_count} 个用户"
-        )
+    if department.id == 1:  # 默认部门的ID为1
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="默认部门不允许删除")
 
     department_name = department.name
+    result = await db.execute(select(User).filter(User.department_id == department_id))
+    department_users = result.scalars().all()
+
+    if department_users:
+        for user in department_users:
+            user.department_id = 1  # 将用户迁移到默认部门
+
+    await db.execute(sqlalchemy_delete(AgentConfig).where(AgentConfig.department_id == department_id))
+    await db.execute(sqlalchemy_delete(APIKey).where(APIKey.department_id == department_id))
     await db.delete(department)
     await db.commit()
 
     # 记录操作
-    await log_operation(db, current_user.id, "删除部门", f"删除部门: {department_name}", request)
+    if department_users:
+        detail = f"删除部门: {department_name}，迁移 {len(department_users)} 个用户到默认部门"
+    else:
+        detail = f"删除部门: {department_name}"
+    await log_operation(db, current_user.id, "删除部门", detail, request)
 
     return {"success": True, "message": "部门已删除"}

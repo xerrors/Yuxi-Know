@@ -57,7 +57,7 @@
                       size="small"
                       danger
                       @click="confirmDeleteDepartment(record)"
-                      :disabled="record.user_count > 0"
+                      :disabled="record.id === 1"
                       class="action-btn lucide-icon-btn"
                     >
                       <Trash2 :size="14" />
@@ -422,7 +422,7 @@ const handleDepartmentFormSubmit = async () => {
 const confirmDeleteDepartment = (department) => {
   Modal.confirm({
     title: '确认删除部门',
-    content: `确定要删除部门 "${department.name}" 吗？此操作不可撤销。部门下必须没有用户才能删除。`,
+    content: `确定要删除部门 "${department.name}" 吗？此操作不可撤销。该部门下的用户会被迁移到默认部门，部门级配置和部门 API Key 会一并清理。`,
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
