@@ -62,21 +62,6 @@ class DepartmentResponse(BaseModel):
     user_count: int = 0
 
 
-async def ensure_default_department(db: AsyncSession) -> Department:
-    result = await db.execute(select(Department).filter(Department.id == 1))
-    default_department = result.scalar_one_or_none()
-    if default_department is not None:
-        return default_department
-
-    default_department = Department(
-        name="默认部门",
-        description="系统在删除部门时自动创建的默认部门",
-    )
-    db.add(default_department)
-    await db.flush()
-    return default_department
-
-
 # =============================================================================
 # === 部门管理路由 ===
 # =============================================================================
