@@ -50,6 +50,7 @@ cache
 .claude
 .cursor
 .trae
+.codex
 .pytest_cache
 
 *.secret*

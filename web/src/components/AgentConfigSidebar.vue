@@ -451,6 +451,7 @@ import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import { useAgentStore } from '@/stores/agent'
 import { useUserStore } from '@/stores/user'
 import { useDatabaseStore } from '@/stores/database'
+import { mcpApi } from '@/apis/mcp_api'
 import { skillApi } from '@/apis/skill_api'
 import { subagentApi } from '@/apis/subagent_api'
 import { toolApi } from '@/apis/tool_api'
@@ -484,6 +485,7 @@ watch(
       // 强制刷新以获取最新数据
       databaseStore.loadDatabases(true).catch(() => {})
       loadLiveSkillOptions(true).catch(() => {})
+      loadMcpOptions(true).catch(() => {})
       loadSubagentOptions(true).catch(() => {})
       loadToolOptions(true).catch(() => {})
       if (selectedAgentId.value) {
@@ -501,7 +503,6 @@ watch(
 )
 
 const {
-  availableTools,
   selectedAgent,
   selectedAgentId,
   selectedAgentConfigId,
@@ -522,6 +523,7 @@ const systemPromptModalOpen = ref(false)
 const currentSystemPromptKey = ref(null)
 const systemPromptDraft = ref('')
 const liveSkillOptions = ref([])
+const liveMcpOptions = ref([])
 const liveSubagentOptions = ref([])
 const toolOptionsFromApi = ref([])
 const createConfigModalOpen = ref(false)
@@ -616,6 +618,29 @@ const loadLiveSkillOptions = async (force = false) => {
   }
 }
 
+const loadMcpOptions = async (force = false) => {
+  if (!userStore.isAdmin) {
+    liveMcpOptions.value = []
+    return
+  }
+  if (!force && liveMcpOptions.value.length > 0) {
+    return
+  }
+  try {
+    const result = await mcpApi.getMcpServers()
+    const rows = result?.data || []
+    liveMcpOptions.value = rows
+      .filter((item) => item?.enabled !== false)
+      .map((item) => ({
+        id: item.name,
+        name: item.name,
+        description: item.description || ''
+      }))
+  } catch (error) {
+    console.warn('加载 MCP 列表失败:', error)
+  }
+}
+
 const loadToolOptions = async (force = false) => {
   if (!userStore.isAdmin) {
     toolOptionsFromApi.value = []
@@ -687,8 +712,8 @@ const refreshConfigOptions = async (_key, kind) => {
         message.success('Subagents 列表已刷新')
         break
       case 'mcps':
-        // MCP 没有前端 store，提示用户刷新页面
-        message.info('请在 MCP 管理页面刷新')
+        await loadMcpOptions(true)
+        message.success('MCP 列表已刷新')
         break
     }
   } catch (error) {
@@ -725,25 +750,28 @@ const navigateToConfigPage = (kind) => {
 }
 
 // 通用选项获取与处理
+const resolveOptionValue = (option) => {
+  if (typeof option === 'object' && option !== null) {
+    return option.id || option.value || option.name || option.db_id || option.slug
+  }
+  return option
+}
+
 const getConfigOptions = (value) => {
   if (value?.template_metadata?.kind === 'tools') {
-    // 优先使用从 API 获取的工具列表，否则回退到 configurableItems 中的选项
-    return toolOptionsFromApi.value.length > 0
-      ? toolOptionsFromApi.value
-      : availableTools.value
-        ? Object.values(availableTools.value)
-        : []
+    return toolOptionsFromApi.value || []
   }
   if (value?.template_metadata?.kind === 'knowledges') {
     return databaseStore.databases || []
+  }
+  if (value?.template_metadata?.kind === 'mcps') {
+    return liveMcpOptions.value || []
   }
   if (value?.template_metadata?.kind === 'skills') {
     return liveSkillOptions.value.length > 0 ? liveSkillOptions.value : value?.options || []
   }
   if (value?.template_metadata?.kind === 'subagents') {
-    const options =
-      liveSubagentOptions.value.length > 0 ? liveSubagentOptions.value : value?.options || []
-    return options.filter((option) => option?.enabled !== false)
+    return liveSubagentOptions.value || []
   }
   return value?.options || []
 }
@@ -755,10 +783,7 @@ const isListConfig = (key, value) => {
 }
 
 const getOptionValue = (option) => {
-  if (typeof option === 'object' && option !== null) {
-    return option.id || option.value || option.name || option.db_id || option.slug
-  }
-  return option
+  return resolveOptionValue(option)
 }
 
 const getOptionLabel = (option) => {

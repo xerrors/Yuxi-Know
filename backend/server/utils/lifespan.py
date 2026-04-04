@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from yuxi.services.task_service import tasker
-from yuxi.services.mcp_service import init_mcp_servers
+from yuxi.services.mcp_service import ensure_builtin_mcp_servers_in_db
 from yuxi.services.subagent_service import init_builtin_subagents
 from yuxi.services.run_queue_service import close_queue_clients, get_redis_client
 from yuxi.storage.postgres.manager import pg_manager
@@ -26,11 +26,11 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database during startup: {e}")
 
-    # 初始化 MCP 服务器配置
+    # 确保内置 MCP 服务器定义存在于数据库
     try:
-        await init_mcp_servers()
+        await ensure_builtin_mcp_servers_in_db()
     except Exception as e:
-        logger.error(f"Failed to initialize MCP servers during startup: {e}")
+        logger.error(f"Failed to ensure builtin MCP servers during startup: {e}")
 
     # 初始化内置 SubAgent
     try:

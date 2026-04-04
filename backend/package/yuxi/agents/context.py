@@ -5,7 +5,6 @@ from dataclasses import MISSING, dataclass, field, fields
 from typing import Annotated, get_args, get_origin
 
 from yuxi import config as sys_config
-from yuxi.services.mcp_service import get_mcp_server_names
 
 
 @dataclass(kw_only=True)
@@ -69,7 +68,7 @@ class BaseContext:
         default_factory=list,
         metadata={
             "name": "MCP服务器",
-            "options": lambda: get_mcp_server_names(),
+            "options": [],
             "description": (
                 "MCP服务器列表，建议使用支持 SSE 的 MCP 服务器，"
                 "如果需要使用 uvx 或 npx 运行的服务器，也请在项目外部启动 MCP 服务器，并在项目中配置 MCP 服务器。"

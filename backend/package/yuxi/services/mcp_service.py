@@ -2,12 +2,14 @@
 
 Responsibilities:
 - Server configuration CRUD operations
-- Configuration synchronization (Database <-> Cache)
+- Built-in configuration synchronization (Code <-> Database)
 - Unified entry point for Agent tool retrieval (auto-filtering disabled_tools)
 - MCP Client and Tools management (formerly in agents/common/mcp.py)
 """
 
 import asyncio
+import hashlib
+import json
 import re
 import traceback
 from collections.abc import Callable
@@ -26,14 +28,12 @@ from yuxi.utils import logger
 # Global Lock for MCP state
 _mcp_lock = asyncio.Lock()
 
-# Global MCP tools cache
+# 本地仅缓存工具对象。配置始终以数据库为准，每次按 server_name 现查。
+# cache key 使用 server_name:config_hash，当配置变化时会自然失效。
 _mcp_tools_cache: dict[str, list[Callable[..., Any]]] = {}
 
 # MCP tools statistics (for reporting enabled/disabled counts)
 _mcp_tools_stats: dict[str, dict[str, int]] = {}
-
-# MCP Server configurations (Runtime cache, loaded from DB)
-MCP_SERVERS: dict[str, dict[str, Any]] = {}
 _UNSET = object()
 
 # Default MCP Server configurations (Imported to DB on first run)
@@ -74,55 +74,11 @@ _SYNCED_MCP_FIELDS = (
 # =============================================================================
 
 
-async def load_mcp_servers_from_db() -> None:
-    """Load all enabled MCP server configurations from database to MCP_SERVERS cache."""
-    global MCP_SERVERS
+async def ensure_builtin_mcp_servers_in_db() -> None:
+    """Ensure built-in MCP server definitions exist in the database.
 
-    # Delayed import to avoid circular references
-    from yuxi.storage.postgres.manager import pg_manager
-
-    try:
-        async with pg_manager.get_async_session_context() as session:
-            result = await session.execute(select(MCPServer).filter(MCPServer.enabled == 1))
-            servers = result.scalars().all()
-
-            async with _mcp_lock:
-                MCP_SERVERS.clear()
-                for server in servers:
-                    MCP_SERVERS[server.name] = server.to_mcp_config()
-
-            logger.info(f"Loaded {len(MCP_SERVERS)} MCP servers from database: {list(MCP_SERVERS.keys())}")
-    except Exception as e:
-        logger.error(f"Failed to load MCP servers from database: {e}")
-
-
-async def sync_mcp_server_to_cache(name: str, config: dict[str, Any] | None) -> None:
-    """Sync a single MCP server configuration to cache.
-
-    Args:
-        name: Server name
-        config: Server configuration, or None to remove from cache
-    """
-    global MCP_SERVERS
-
-    async with _mcp_lock:
-        if config is None:
-            MCP_SERVERS.pop(name, None)
-            logger.info(f"Removed MCP server '{name}' from cache")
-        else:
-            MCP_SERVERS[name] = config
-            logger.info(f"Synced MCP server '{name}' to cache")
-
-        # Clear tools cache for this server
-        _mcp_tools_cache.pop(name, None)
-
-
-async def init_mcp_servers() -> None:
-    """Initialize MCP server configurations.
-
-    On first run, if database is empty, import default configurations.
-    Then load configurations from database to MCP_SERVERS cache.
-    Also ensures all built-in MCP servers are present in the database.
+    This function only synchronizes code-defined built-ins to the database.
+    It does not preload runtime configuration into memory.
     """
     # Delayed import to avoid circular references
     from yuxi.storage.postgres.manager import pg_manager
@@ -197,11 +153,8 @@ async def init_mcp_servers() -> None:
                 elif session.dirty:
                     await session.commit()
 
-        # Load configurations from database to cache
-        await load_mcp_servers_from_db()
-
     except Exception as e:
-        logger.error(f"Failed to initialize MCP servers: {e}, traceback: {traceback.format_exc()}")
+        logger.error(f"Failed to ensure builtin MCP servers in database: {e}, traceback: {traceback.format_exc()}")
 
 
 async def get_mcp_client(
@@ -227,10 +180,41 @@ def to_camel_case(s: str) -> str:
         s = s[0].lower() + s[1:]
     return s
 
+async def _load_enabled_mcp_server_configs(
+    *,
+    names: list[str] | None = None,
+    db: AsyncSession | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Load enabled MCP server configs directly from the database."""
+    if db is not None:
+        stmt = select(MCPServer).where(MCPServer.enabled == 1)
+        if names:
+            stmt = stmt.where(MCPServer.name.in_(names))
+        result = await db.execute(stmt)
+        servers = result.scalars().all()
+        return {server.name: server.to_mcp_config() for server in servers}
+
+    from yuxi.storage.postgres.manager import pg_manager
+
+    async with pg_manager.get_async_session_context() as session:
+        return await _load_enabled_mcp_server_configs(names=names, db=session)
+
+
+async def get_enabled_mcp_server_config(server_name: str, *, db: AsyncSession | None = None) -> dict[str, Any] | None:
+    """Get the latest enabled MCP server config from the database."""
+    configs = await _load_enabled_mcp_server_configs(names=[server_name], db=db)
+    return configs.get(server_name)
+
+
+async def get_enabled_mcp_server_names(*, db: AsyncSession | None = None) -> list[str]:
+    """Get enabled MCP server names from the database."""
+    configs = await _load_enabled_mcp_server_configs(db=db)
+    return list(configs.keys())
+
 
 async def get_mcp_tools(
     server_name: str,
-    additional_servers: dict[str, dict] = None,
+    additional_servers: dict[str, dict[str, Any]] | None = None,
     disabled_tools: list[str] = None,
     cache: bool = True,
     force_refresh: bool = False,
@@ -249,70 +233,71 @@ async def get_mcp_tools(
         cache: Whether to use/update the cache (default: True)
         force_refresh: Whether to force a refresh from the server (default: False)
     """
-    global _mcp_tools_cache
-
-    # 1. Prepare Server Config
-    async with _mcp_lock:
-        mcp_servers = MCP_SERVERS | (additional_servers or {})
-
-    all_processed_tools = []
-
-    # 2. Check Cache / Fetch Strategy
-    # If we have it in cache and don't need to force refresh, use cache.
-    if not force_refresh and cache and server_name in _mcp_tools_cache:
-        all_processed_tools = _mcp_tools_cache[server_name]
+    if additional_servers and server_name in additional_servers:
+        server_config = additional_servers[server_name]
     else:
-        # Need to fetch from server
-        try:
-            assert server_name in mcp_servers, f"Server {server_name} not found in ({list(mcp_servers.keys())})"
+        server_config = await get_enabled_mcp_server_config(server_name)
 
-            # Extract connection config
-            server_config = mcp_servers[server_name]
+    if server_config is None:
+        logger.warning(f"MCP server '{server_name}' not found in database or disabled")
+        return []
+
+    # 配置 hash 直接基于完整配置生成。只要数据库中的配置发生变化，
+    # 本地工具缓存 key 就会变化，从而自然触发重建。
+    config_payload = json.dumps(server_config, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    config_hash = hashlib.sha256(config_payload.encode("utf-8")).hexdigest()[:16]
+    cache_key = f"{server_name}:{config_hash}"
+
+    all_processed_tools: list[Callable[..., Any]] = []
+
+    async with _mcp_lock:
+        if not force_refresh and cache and cache_key in _mcp_tools_cache:
+            all_processed_tools = _mcp_tools_cache[cache_key]
+
+    if not all_processed_tools:
+        try:
+            # disabled_tools 只影响返回值过滤，不参与 MCP client 建连参数。
             client_config = {k: v for k, v in server_config.items() if k not in ("disabled_tools",)}
 
             client = await get_mcp_client({server_name: client_config})
             if client is None:
                 return []
 
-            # Get ALL tools (Raw)
             raw_tools = cast(list[Any], await client.get_tools())
 
-            # Render IDs for ALL tools
             server_cc = to_camel_case(server_name)
             for tool in raw_tools:
-                # Render unique ID rule: mcp__[camelCaseServer]__[camelCaseTool]
                 original_name = tool.name
                 tool_cc = to_camel_case(original_name)
                 unique_id = f"mcp__{server_cc}__{tool_cc}"
 
-                # Use metadata to store
                 if tool.metadata is None:
                     tool.metadata = {}
                 tool.metadata["id"] = unique_id
-
                 all_processed_tools.append(tool)
 
-            # Update Cache (Store the FULL list)
             if cache:
-                _mcp_tools_cache[server_name] = all_processed_tools
+                async with _mcp_lock:
+                    stale_keys = [
+                        key for key in _mcp_tools_cache if key.startswith(f"{server_name}:") and key != cache_key
+                    ]
+                    for stale_key in stale_keys:
+                        _mcp_tools_cache.pop(stale_key, None)
+                    _mcp_tools_cache[cache_key] = all_processed_tools
 
-                # Update Stats
-                # Stats should reflect the GLOBAL configuration state
-                # (How many are disabled in the stored config, not the transient arg)
-                global_config_disabled = mcp_servers.get(server_name, {}).get("disabled_tools") or []
+                global_config_disabled = server_config.get("disabled_tools") or []
                 enabled_count = len([t for t in all_processed_tools if t.name not in global_config_disabled])
-
                 _mcp_tools_stats[server_name] = {
                     "total": len(all_processed_tools),
                     "enabled": enabled_count,
                     "disabled": len(all_processed_tools) - enabled_count,
                 }
 
-                logger.info(f"Refreshed MCP tools cache for '{server_name}': {len(all_processed_tools)} tools loaded.")
+                logger.info(
+                    f"Refreshed MCP tools cache for '{server_name}' with key '{cache_key}': "
+                    f"{len(all_processed_tools)} tools loaded."
+                )
 
-        except AssertionError as e:
-            logger.warning(f"[assert] Failed to load tools from MCP server '{server_name}': {e}")
-            return []
         except Exception as e:
             logger.error(
                 f"Failed to load tools from MCP server '{server_name}': {e}, traceback: {traceback.format_exc()}"
@@ -333,18 +318,12 @@ async def get_mcp_tools(
 
 async def get_tools_from_all_servers() -> list[Callable[..., Any]]:
     """Get all tools from all configured MCP servers."""
+    server_configs = await _load_enabled_mcp_server_configs()
     all_tools = []
-    for server_name in MCP_SERVERS.keys():
-        tools = await get_mcp_tools(server_name)
+    for server_name in server_configs:
+        tools = await get_mcp_tools(server_name, additional_servers=server_configs)
         all_tools.extend(tools)
     return all_tools
-
-
-def add_mcp_server(name: str, config: dict[str, Any]) -> None:
-    """Add a new MCP server configuration."""
-    MCP_SERVERS[name] = config
-    # Clear client to force reinitialization with new config
-    clear_mcp_cache()
 
 
 def clear_mcp_cache() -> None:
@@ -357,7 +336,10 @@ def clear_mcp_cache() -> None:
 def clear_mcp_server_tools_cache(server_name: str) -> None:
     """Clear the tools cache for a specific MCP server."""
     global _mcp_tools_cache, _mcp_tools_stats
-    _mcp_tools_cache.pop(server_name, None)
+    server_prefix = f"{server_name}:"
+    stale_keys = [key for key in _mcp_tools_cache if key.startswith(server_prefix)]
+    for stale_key in stale_keys:
+        _mcp_tools_cache.pop(stale_key, None)
     _mcp_tools_stats.pop(server_name, None)
     logger.info(f"Cleared tools cache for MCP server '{server_name}'")
 
@@ -431,8 +413,7 @@ async def create_mcp_server(
     await db.commit()
     await db.refresh(server)
 
-    # Sync to cache
-    await sync_mcp_server_to_cache(name, server.to_mcp_config())
+    clear_mcp_server_tools_cache(name)
 
     logger.info(f"Created MCP server '{name}'")
     return server
@@ -487,9 +468,7 @@ async def update_mcp_server(
     await db.commit()
     await db.refresh(server)
 
-    # Sync to cache (if enabled)
-    if server.enabled:
-        await sync_mcp_server_to_cache(name, server.to_mcp_config())
+    clear_mcp_server_tools_cache(name)
 
     logger.info(f"Updated MCP server '{name}'")
     return server
@@ -504,8 +483,7 @@ async def delete_mcp_server(db: AsyncSession, name: str) -> bool:
     await db.delete(server)
     await db.commit()
 
-    # Remove from cache
-    await sync_mcp_server_to_cache(name, None)
+    clear_mcp_server_tools_cache(name)
 
     logger.info(f"Deleted MCP server '{name}'")
     return True
@@ -529,10 +507,8 @@ async def set_server_enabled(
         server.updated_by = updated_by
     await db.commit()
 
-    # Sync to cache
     is_enabled = bool(server.enabled)
-    server_config = server.to_mcp_config() if is_enabled else None
-    await sync_mcp_server_to_cache(name, server_config)
+    clear_mcp_server_tools_cache(name)
 
     logger.info(f"Set MCP server '{name}' enabled={is_enabled}")
     return is_enabled, server
@@ -585,19 +561,11 @@ async def toggle_tool_enabled(
 # =============================================================================
 
 
-def get_mcp_server_names() -> list[str]:
-    """Get list of loaded MCP server names.
-
-    Returns a copy of keys to avoid runtime modification issues during iteration.
-    """
-    return list(MCP_SERVERS.keys())
-
-
 async def get_enabled_mcp_tools(server_name: str) -> list:
     """Get MCP server tools (auto-filtering disabled_tools).
 
     Unified entry point for Agents, automatically:
-    1. Gets server config from cache
+    1. Gets the latest server config from database
     2. Gets all tools
     3. Filters out disabled_tools
 
@@ -607,13 +575,13 @@ async def get_enabled_mcp_tools(server_name: str) -> list:
     Returns:
         List of enabled tools
     """
-    config = MCP_SERVERS.get(server_name)
-    if not config:
-        logger.warning(f"MCP server '{server_name}' not found in cache")
+    config = await get_enabled_mcp_server_config(server_name)
+    if config is None:
+        logger.warning(f"MCP server '{server_name}' not found in database or disabled")
         return []
 
     disabled_tools = config.get("disabled_tools") or []
-    return await get_mcp_tools(server_name, disabled_tools=disabled_tools)
+    return await get_mcp_tools(server_name, additional_servers={server_name: config}, disabled_tools=disabled_tools)
 
 
 async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
@@ -625,7 +593,7 @@ async def get_servers_config(names: list[str]) -> dict[str, dict[str, Any]]:
     Returns:
         {name: config} dictionary, containing only found servers
     """
-    return {name: MCP_SERVERS[name] for name in names if name in MCP_SERVERS}
+    return await _load_enabled_mcp_server_configs(names=names)
 
 
 async def get_all_mcp_tools(server_name: str) -> list:
@@ -640,10 +608,16 @@ async def get_all_mcp_tools(server_name: str) -> list:
     Returns:
         List of all tools (unfiltered)
     """
-    config = MCP_SERVERS.get(server_name)
-    if not config:
-        logger.warning(f"MCP server '{server_name}' not found in cache")
+    config = await get_enabled_mcp_server_config(server_name)
+    if config is None:
+        logger.warning(f"MCP server '{server_name}' not found in database or disabled")
         return []
 
     # Get all tools (no filtering, force refresh, no cache update)
-    return await get_mcp_tools(server_name, disabled_tools=[], cache=False, force_refresh=True)
+    return await get_mcp_tools(
+        server_name,
+        additional_servers={server_name: config},
+        disabled_tools=[],
+        cache=False,
+        force_refresh=True,
+    )

@@ -74,7 +74,11 @@ async def test_get_skill_dependency_options(monkeypatch: pytest.MonkeyPatch):
         ]
 
     monkeypatch.setattr(tool_service, "get_tool_metadata", fake_get_tool_metadata)
-    monkeypatch.setattr(svc, "get_mcp_server_names", lambda: ["mcp-a", "mcp-b"])
+    async def fake_get_enabled_mcp_server_names(db=None):
+        del db
+        return ["mcp-a", "mcp-b"]
+
+    monkeypatch.setattr(svc, "get_enabled_mcp_server_names", fake_get_enabled_mcp_server_names)
 
     class FakeRepo:
         def __init__(self, _db):
@@ -312,7 +316,12 @@ async def test_update_skill_dependencies(monkeypatch: pytest.MonkeyPatch):
         return [{"id": "calculator", "name": "Calculator"}]
 
     monkeypatch.setattr(tool_service, "get_tool_metadata", fake_get_tool_metadata)
-    monkeypatch.setattr(svc, "get_mcp_server_names", lambda: ["mcp-a"])
+
+    async def fake_get_enabled_mcp_server_names(db=None):
+        del db
+        return ["mcp-a"]
+
+    monkeypatch.setattr(svc, "get_enabled_mcp_server_names", fake_get_enabled_mcp_server_names)
 
     async def fake_get_skill_or_raise(_db, slug: str):
         assert slug == "alpha"

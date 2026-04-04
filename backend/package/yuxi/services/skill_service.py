@@ -15,7 +15,7 @@ import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 from yuxi import config as sys_config
 from yuxi.repositories.skill_repository import SkillRepository
-from yuxi.services.mcp_service import get_mcp_server_names
+from yuxi.services.mcp_service import get_enabled_mcp_server_names
 from yuxi.storage.postgres.models_business import Skill
 from yuxi.utils.logging_config import logger
 
@@ -259,7 +259,7 @@ async def get_skill_dependency_options(db: AsyncSession) -> dict[str, list[str] 
     items, tool_list, mcp_names = await asyncio.gather(
         get_skills(),
         asyncio.to_thread(get_tools),
-        asyncio.to_thread(get_mcp_server_names),
+        get_enabled_mcp_server_names(db=db),
     )
 
     return {
@@ -282,7 +282,7 @@ def _get_all_tool_names() -> list[str]:
     return [tool["id"] for tool in all_tools]
 
 
-def _validate_dependencies(
+async def _validate_dependencies(
     *,
     slug: str,
     tool_dependencies: list[str],
@@ -300,7 +300,7 @@ def _validate_dependencies(
     if invalid_tools:
         raise ValueError(f"存在无效工具依赖: {', '.join(invalid_tools)}")
 
-    available_mcps = set(get_mcp_server_names())
+    available_mcps = set(await get_enabled_mcp_server_names(db=None))
     invalid_mcps = [name for name in mcps if name not in available_mcps]
     if invalid_mcps:
         raise ValueError(f"存在无效 MCP 依赖: {', '.join(invalid_mcps)}")
@@ -328,7 +328,7 @@ async def update_skill_dependencies(
     repo = SkillRepository(db)
     skill_items = await repo.list_all()
     available_skill_slugs = {skill.slug for skill in skill_items}
-    tools, mcps, skills = _validate_dependencies(
+    tools, mcps, skills = await _validate_dependencies(
         slug=slug,
         tool_dependencies=tool_dependencies,
         mcp_dependencies=mcp_dependencies,

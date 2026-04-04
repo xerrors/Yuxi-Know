@@ -151,3 +151,34 @@ async def test_process_agent_run_retryable_error_retries_then_completes(monkeypa
 
     await run_worker.process_agent_run({"job_try": 2}, "run-1")
     assert terminal_statuses == ["completed"]
+
+
+@pytest.mark.asyncio
+async def test_worker_startup_ensures_builtin_mcp_servers(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    def fake_initialize():
+        calls.append("initialize")
+
+    async def fake_create_business_tables():
+        calls.append("create_business_tables")
+
+    async def fake_ensure_business_schema():
+        calls.append("ensure_business_schema")
+
+    async def fake_ensure_builtin_mcp_servers_in_db():
+        calls.append("ensure_builtin_mcp_servers_in_db")
+
+    monkeypatch.setattr(run_worker.pg_manager, "initialize", fake_initialize)
+    monkeypatch.setattr(run_worker.pg_manager, "create_business_tables", fake_create_business_tables)
+    monkeypatch.setattr(run_worker.pg_manager, "ensure_business_schema", fake_ensure_business_schema)
+    monkeypatch.setattr(run_worker, "ensure_builtin_mcp_servers_in_db", fake_ensure_builtin_mcp_servers_in_db)
+
+    await run_worker._worker_startup({})
+
+    assert calls == [
+        "initialize",
+        "create_business_tables",
+        "ensure_business_schema",
+        "ensure_builtin_mcp_servers_in_db",
+    ]
