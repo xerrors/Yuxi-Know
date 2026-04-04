@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # Avoid package-level knowledge graph initialization during pytest collection.
 os.environ.setdefault("YUXI_SKIP_APP_INIT", "1")
+os.environ.setdefault("SAVE_DIR", "/tmp/yuxi-test-saves")
 
 
 def pytest_configure(config: pytest.Config) -> None:

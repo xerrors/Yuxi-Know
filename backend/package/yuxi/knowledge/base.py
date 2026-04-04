@@ -894,7 +894,14 @@ class KnowledgeBase(ABC):
         await self._persist_file(file_id)
         return meta
 
-    @abstractmethod
+    async def _delete_file_metadata_only(self, file_id: str) -> None:
+        """删除文件元数据，供不需要额外存储清理的实现复用。"""
+        if file_id in self.files_meta:
+            del self.files_meta[file_id]
+            from yuxi.repositories.knowledge_file_repository import KnowledgeFileRepository
+
+            await KnowledgeFileRepository().delete(file_id)
+
     async def delete_file(self, db_id: str, file_id: str) -> None:
         """
         删除文件
@@ -903,9 +910,9 @@ class KnowledgeBase(ABC):
             db_id: 数据库ID
             file_id: 文件ID
         """
-        pass
+        del db_id
+        await self._delete_file_metadata_only(file_id)
 
-    @abstractmethod
     async def get_file_basic_info(self, db_id: str, file_id: str) -> dict:
         """
         获取文件基本信息（仅元数据）
@@ -917,9 +924,12 @@ class KnowledgeBase(ABC):
         Returns:
             dict: 包含文件基本信息的字典
         """
-        pass
+        del db_id
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
 
-    @abstractmethod
+        return {"meta": self.files_meta[file_id]}
+
     async def get_file_content(self, db_id: str, file_id: str) -> dict:
         """
         获取文件内容信息（chunks和lines）
@@ -931,9 +941,19 @@ class KnowledgeBase(ABC):
         Returns:
             dict: 包含文件内容信息的字典
         """
-        pass
+        del db_id
+        if file_id not in self.files_meta:
+            raise Exception(f"File not found: {file_id}")
 
-    @abstractmethod
+        content_info = {"lines": []}
+        file_meta = self.files_meta[file_id]
+        if file_meta.get("markdown_file"):
+            try:
+                content_info["content"] = await self._read_markdown_from_minio(file_meta["markdown_file"])
+            except Exception as e:
+                logger.error(f"Failed to read markdown file for {file_id}: {e}")
+        return content_info
+
     async def get_file_info(self, db_id: str, file_id: str) -> dict:
         """
         获取文件完整信息（基本信息+内容信息）- 保持向后兼容
@@ -945,7 +965,9 @@ class KnowledgeBase(ABC):
         Returns:
             dict: 包含文件信息和chunks的字典
         """
-        pass
+        basic_info = await self.get_file_basic_info(db_id, file_id)
+        content_info = await self.get_file_content(db_id, file_id)
+        return {**basic_info, **content_info}
 
     def get_db_upload_path(self, db_id: str | None = None) -> str:
         """

@@ -25,7 +25,7 @@
           </span>
 
           <!-- 视图模式切换 -->
-          <div class="view-controls" v-if="file && hasChunks">
+          <div class="view-controls" v-if="file && hasMultipleViewModes">
             <a-segmented v-model:value="viewMode" :options="viewModeOptions" />
           </div>
 
@@ -168,6 +168,7 @@ const sourcePreviewType = computed(() => getPreviewTypeByPath(file.value?.filena
 const hasSourcePreview = computed(() => ['image', 'pdf'].includes(sourcePreviewType.value))
 // 是否有实际的分块数据
 const hasChunks = computed(() => mappedChunks.value && mappedChunks.value.length > 0)
+const hasMultipleViewModes = computed(() => viewModeOptions.value.length > 1)
 
 const viewModeOptions = computed(() => {
   const options = []

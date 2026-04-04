@@ -58,14 +58,14 @@
         />
       </template>
 
-      <div v-if="newDatabase.kb_type !== 'dify'" class="chunk-preset-title-row">
+      <div v-if="showChunkPreset" class="chunk-preset-title-row">
         <h3 style="margin: 0">分块策略</h3>
         <a-tooltip :title="selectedPresetDescription">
           <QuestionCircleOutlined class="chunk-preset-help-icon" />
         </a-tooltip>
       </div>
       <a-select
-        v-if="newDatabase.kb_type !== 'dify'"
+        v-if="showChunkPreset"
         v-model:value="newDatabase.chunk_preset_id"
         :options="chunkPresetOptions"
         style="width: 100%"
@@ -307,6 +307,7 @@ const newDatabase = reactive(createEmptyDatabaseForm())
 const selectedPresetDescription = computed(() =>
   getChunkPresetDescription(newDatabase.chunk_preset_id)
 )
+const showChunkPreset = computed(() => !['dify', 'test_pre'].includes(newDatabase.kb_type))
 
 const llmModelSpec = computed(() => {
   const provider = newDatabase.llm_info?.provider || ''
@@ -420,7 +421,9 @@ const buildRequestData = () => {
   if (newDatabase.kb_type !== 'dify') {
     requestData.embed_model_name = newDatabase.embed_model_name || configStore.config.embed_model
     requestData.additional_params.is_private = newDatabase.is_private || false
-    requestData.additional_params.chunk_preset_id = newDatabase.chunk_preset_id || 'general'
+    if (newDatabase.kb_type !== 'test_pre') {
+      requestData.additional_params.chunk_preset_id = newDatabase.chunk_preset_id || 'general'
+    }
   }
 
   // 添加共享配置

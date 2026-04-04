@@ -9,5 +9,6 @@
 from .dify import DifyKB
 from .lightrag import LightRagKB
 from .milvus import MilvusKB
+from .test_pre import TestPreKB
 
-__all__ = ["MilvusKB", "LightRagKB", "DifyKB"]
+__all__ = ["MilvusKB", "LightRagKB", "DifyKB", "TestPreKB"]
