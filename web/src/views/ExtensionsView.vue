@@ -3,7 +3,7 @@
     <div class="extensions-header">
       <a-tabs v-model:activeKey="activeTab" class="extensions-tabs">
         <a-tab-pane key="tools" tab="工具" />
-        <a-tab-pane key="mcp" tab="MCP 服务器" />
+        <a-tab-pane key="mcp" tab="MCP 管理" />
         <a-tab-pane key="subagents" tab="Subagents 管理" />
         <a-tab-pane key="skills" tab="Skills 管理" />
       </a-tabs>

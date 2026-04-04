@@ -281,7 +281,7 @@
                 <div class="config-header">
                   <div class="text">
                     <h3>依赖声明</h3>
-                    <p>配置此 Skill 所需的工具、MCP 服务器及其他 Skill 依赖。</p>
+                    <p>配置此 Skill 所需的工具、MCP 及其他 Skill 依赖。</p>
                   </div>
                   <a-button
                     type="primary"

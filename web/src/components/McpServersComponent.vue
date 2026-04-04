@@ -4,13 +4,13 @@
       <div class="loading-bar"></div>
     </div>
     <div class="layout-wrapper" :class="{ 'content-loading': loading }">
-      <!-- 左侧：服务器列表 -->
+      <!-- 左侧：MCP 列表 -->
       <div class="sidebar-list">
         <!-- 搜索框 -->
         <div class="search-box">
           <a-input
             v-model:value="searchQuery"
-            placeholder="搜索服务器..."
+            placeholder="搜索 MCP..."
             allow-clear
             class="search-input"
           >
@@ -21,17 +21,17 @@
         <!-- 统计信息 -->
         <!-- <div class="stats-section" v-if="filteredServers.length > 0">
           <span class="stats-text">
-            {{ filteredServers.length }} 个服务器： HTTP: {{ httpCount }} · SSE: {{ sseCount }} · StdIO: {{ stdioCount }}
+            {{ filteredServers.length }} 个 MCP： HTTP: {{ httpCount }} · SSE: {{ sseCount }} · StdIO: {{ stdioCount }}
           </span>
         </div> -->
 
-        <!-- 服务器列表 -->
+        <!-- MCP 列表 -->
         <div class="list-container">
           <div
             v-if="!filteredEnabledServers.length && !filteredDisabledServers.length"
             class="empty-text"
           >
-            <a-empty :image="false" :description="searchQuery ? '无匹配服务器' : '暂无服务器'" />
+            <a-empty :image="false" :description="searchQuery ? '无匹配 MCP' : '暂无 MCP'" />
           </div>
           <div v-if="filteredEnabledServers.length" class="list-section-title">已添加</div>
           <template
@@ -113,7 +113,7 @@
         <div v-if="!currentServer" class="unselected-state">
           <div class="hint-box">
             <Plug :size="40" class="text-muted" />
-            <p>请在左侧选择服务器进行操作</p>
+            <p>请在左侧选择 MCP 进行操作</p>
           </div>
         </div>
 
@@ -199,7 +199,7 @@
                     "
                   >
                     <div class="info-item" v-if="currentServer.url">
-                      <label>服务器 URL</label>
+                      <label>MCP URL</label>
                       <span class="code-inline text-break-all">{{ currentServer.url }}</span>
                     </div>
                     <div
@@ -357,10 +357,10 @@
       </div>
     </div>
 
-    <!-- 添加/编辑服务器模态框 -->
+    <!-- 添加/编辑 MCP 模态框 -->
     <a-modal
       v-model:open="formModalVisible"
-      :title="editMode ? '编辑 MCP 服务器' : '添加 MCP 服务器'"
+      :title="editMode ? '编辑 MCP' : '添加 MCP'"
       @ok="handleFormSubmit"
       :confirmLoading="formLoading"
       @cancel="formModalVisible = false"
@@ -378,16 +378,16 @@
 
       <!-- 表单模式 -->
       <a-form v-if="formMode === 'form'" layout="vertical" class="extension-form">
-        <a-form-item label="服务器名称" required class="form-item">
+        <a-form-item label="MCP 名称" required class="form-item">
           <a-input
             v-model:value="form.name"
-            placeholder="请输入服务器名称（唯一标识）"
+            placeholder="请输入 MCP 名称（唯一标识）"
             :disabled="editMode"
           />
         </a-form-item>
 
         <a-form-item label="描述" class="form-item">
-          <a-input v-model:value="form.description" placeholder="请输入服务器描述" />
+          <a-input v-model:value="form.description" placeholder="请输入 MCP 描述" />
         </a-form-item>
 
         <a-row :gutter="16">
@@ -409,7 +409,7 @@
 
         <!-- HTTP 类型 -->
         <template v-if="form.transport === 'streamable_http' || form.transport === 'sse'">
-          <a-form-item label="服务器 URL" required class="form-item">
+          <a-form-item label="MCP URL" required class="form-item">
             <a-input v-model:value="form.url" placeholder="https://example.com/mcp" />
           </a-form-item>
 
@@ -485,7 +485,7 @@
   "name": "my-server",
   "transport": "streamable_http",
   "url": "https://example.com/mcp",
-  "description": "服务器描述",
+  "description": "MCP 描述",
   "headers": {"Authorization": "Bearer xxx"},
   "tags": ["工具", "AI"]
 }'
@@ -502,7 +502,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { message, notification, Modal } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   Search,
   Plug,
@@ -598,7 +598,7 @@ const filteredTools = computed(() => {
   )
 })
 
-// 获取服务器列表
+// 获取 MCP 列表
 const fetchServers = async () => {
   try {
     loading.value = true
@@ -618,11 +618,11 @@ const fetchServers = async () => {
         }
       }
     } else {
-      error.value = result.message || '获取服务器列表失败'
+      error.value = result.message || '获取 MCP 列表失败'
     }
   } catch (err) {
-    console.error('获取服务器列表失败:', err)
-    error.value = err.message || '获取服务器列表失败'
+    console.error('获取 MCP 列表失败:', err)
+    error.value = err.message || '获取 MCP 列表失败'
   } finally {
     loading.value = false
   }
@@ -659,17 +659,17 @@ const handleToggleTool = async (tool) => {
     toggleToolLoading.value = tool.name
     const result = await mcpApi.toggleMcpServerTool(currentServer.value.name, tool.name)
     if (result.success) {
-      notification.success({ message: result.message })
+      message.success(result.message)
       const targetTool = tools.value.find((t) => t.name === tool.name)
       if (targetTool) {
         targetTool.enabled = result.enabled
       }
     } else {
-      notification.error({ message: result.message || '操作失败' })
+      message.error(result.message || '操作失败')
     }
   } catch (err) {
     console.error('切换工具状态失败:', err)
-    notification.error({ message: err.message || '操作失败' })
+    message.error(err.message || '操作失败')
   } finally {
     toggleToolLoading.value = null
   }
@@ -679,9 +679,9 @@ const handleToggleTool = async (tool) => {
 const copyToolName = async (name) => {
   try {
     await navigator.clipboard.writeText(name)
-    notification.success({ message: '已复制到剪贴板' })
+    message.success('已复制到剪贴板')
   } catch {
-    notification.error({ message: '复制失败' })
+    message.error('复制失败')
   }
 }
 
@@ -698,7 +698,7 @@ const getTransportColor = (transport) => {
   return colors[transport] || 'blue'
 }
 
-// 选择服务器
+// 选择 MCP
 const selectServer = (server) => {
   currentServer.value = server
   detailTab.value = 'general'
@@ -756,7 +756,7 @@ const showEditModal = async (server) => {
       return
     }
   } catch (err) {
-    console.error('获取服务器详情失败，回退使用列表数据:', err)
+    console.error('获取 MCP 详情失败，回退使用列表数据:', err)
   }
   applyServerToForm(server)
 }
@@ -771,7 +771,7 @@ const handleFormSubmit = async () => {
       try {
         data = JSON.parse(jsonContent.value)
       } catch {
-        notification.error({ message: 'JSON 格式错误' })
+        message.error('JSON 格式错误')
         return
       }
     } else {
@@ -781,7 +781,7 @@ const handleFormSubmit = async () => {
         try {
           headers = JSON.parse(form.headersText)
         } catch {
-          notification.error({ message: '请求头 JSON 格式错误' })
+          message.error('请求头 JSON 格式错误')
           return
         }
       }
@@ -804,24 +804,24 @@ const handleFormSubmit = async () => {
 
     // 校验必填字段
     if (!data.name?.trim()) {
-      notification.error({ message: '服务器名称不能为空' })
+      message.error('MCP 名称不能为空')
       return
     }
     if (!data.transport) {
-      notification.error({ message: '请选择传输类型' })
+      message.error('请选择传输类型')
       return
     }
     // HTTP 类型校验 URL
     if (['sse', 'streamable_http'].includes(data.transport)) {
       if (!data.url?.trim()) {
-        notification.error({ message: 'HTTP 类型必须填写服务器 URL' })
+        message.error('HTTP 类型必须填写 MCP URL')
         return
       }
     }
     // StdIO 类型校验 command
     if (data.transport === 'stdio') {
       if (!data.command?.trim()) {
-        notification.error({ message: 'StdIO 类型必须填写命令' })
+        message.error('StdIO 类型必须填写命令')
         return
       }
     }
@@ -829,17 +829,17 @@ const handleFormSubmit = async () => {
     if (editMode.value) {
       const result = await mcpApi.updateMcpServer(data.name, data)
       if (result.success) {
-        notification.success({ message: '服务器更新成功' })
+        message.success('MCP 更新成功')
       } else {
-        notification.error({ message: result.message || '更新失败' })
+        message.error(result.message || '更新失败')
         return
       }
     } else {
       const result = await mcpApi.createMcpServer(data)
       if (result.success) {
-        notification.success({ message: '服务器创建成功' })
+        message.success('MCP 创建成功')
       } else {
-        notification.error({ message: result.message || '创建失败' })
+        message.error(result.message || '创建失败')
         return
       }
     }
@@ -848,13 +848,13 @@ const handleFormSubmit = async () => {
     await fetchServers()
   } catch (err) {
     console.error('操作失败:', err)
-    notification.error({ message: err.message || '操作失败' })
+    message.error(err.message || '操作失败')
   } finally {
     formLoading.value = false
   }
 }
 
-// 更新服务器启用状态
+// 更新 MCP 启用状态
 const handleSetServerEnabled = async (server, enabled) => {
   try {
     toggleLoading.value = server.name
@@ -866,29 +866,29 @@ const handleSetServerEnabled = async (server, enabled) => {
         tools.value = []
       }
     } else {
-      notification.error({ message: result.message || '操作失败' })
+      message.error(result.message || '操作失败')
     }
   } catch (err) {
     console.error('更新状态失败:', err)
-    notification.error({ message: err.message || '操作失败' })
+    message.error(err.message || '操作失败')
   } finally {
     toggleLoading.value = null
   }
 }
 
-// 测试服务器连接
+// 测试 MCP 连接
 const handleTestServer = async (server) => {
   try {
     testLoading.value = server.name
     const result = await mcpApi.testMcpServer(server.name)
     if (result.success) {
-      notification.success({ message: result.message })
+      message.success(result.message)
     } else {
-      notification.warning({ message: result.message || '连接失败' })
+      message.warning(result.message || '连接失败')
     }
   } catch (err) {
     console.error('测试连接失败:', err)
-    notification.error({ message: err.message || '测试失败' })
+    message.error(err.message || '测试失败')
   } finally {
     testLoading.value = null
   }
@@ -919,11 +919,11 @@ const getServerActionTone = (server) => {
     : 'extension-panel-action-danger'
 }
 
-// 确认删除服务器
+// 确认删除 MCP
 const confirmDeleteServer = (server) => {
   Modal.confirm({
-    title: '确认删除服务器',
-    content: `确定要删除服务器 "${server.name}" 吗？此操作不可撤销。`,
+    title: '确认删除 MCP',
+    content: `确定要删除 MCP "${server.name}" 吗？此操作不可撤销。`,
     okText: '删除',
     okType: 'danger',
     cancelText: '取消',
@@ -931,14 +931,14 @@ const confirmDeleteServer = (server) => {
       try {
         const result = await mcpApi.deleteMcpServer(server.name)
         if (result.success) {
-          notification.success({ message: '服务器删除成功' })
+          message.success('MCP 删除成功')
           await fetchServers()
         } else {
-          notification.error({ message: result.message || '删除失败' })
+          message.error(result.message || '删除失败')
         }
       } catch (err) {
         console.error('删除失败:', err)
-        notification.error({ message: err.message || '删除失败' })
+        message.error(err.message || '删除失败')
       }
     }
   })
@@ -950,7 +950,7 @@ const formatJson = () => {
     const obj = JSON.parse(jsonContent.value)
     jsonContent.value = JSON.stringify(obj, null, 2)
   } catch {
-    notification.error({ message: 'JSON 格式错误，无法格式化' })
+    message.error('JSON 格式错误，无法格式化')
   }
 }
 
@@ -973,9 +973,9 @@ const parseJsonToForm = () => {
       icon: obj.icon || ''
     })
     formMode.value = 'form'
-    notification.success({ message: '已解析到表单' })
+    message.success('已解析到表单')
   } catch {
-    notification.error({ message: 'JSON 格式错误' })
+    message.error('JSON 格式错误')
   }
 }
 
