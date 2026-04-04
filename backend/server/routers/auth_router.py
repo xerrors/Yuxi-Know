@@ -2,8 +2,9 @@ import re
 import uuid
 from yuxi.utils import logger
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,14 @@ from server.utils.user_utils import generate_unique_user_id, validate_username, 
 from server.utils.common_utils import log_operation
 from yuxi.storage.minio import aupload_file_to_minio
 from yuxi.utils.datetime_utils import utc_now_naive
+
+# OIDC 认证相关导入
+from yuxi.services.oidc_service import (
+    get_oidc_config_handler,
+    oidc_callback_handler,
+    oidc_exchange_code_handler,
+    oidc_login_url_handler,
+)
 
 # 创建路由器
 auth = APIRouter(prefix="/auth", tags=["authentication"])
@@ -92,6 +101,29 @@ class UserIdGeneration(BaseModel):
     username: str
     user_id: str
     is_available: bool
+
+
+class OIDCConfigResponse(BaseModel):
+    """OIDC 配置响应"""
+
+    enabled: bool
+    login_url: str | None = None
+    provider_name: str | None = "OIDC登录"
+
+
+class OIDCLoginResponse(BaseModel):
+    """OIDC 登录响应"""
+
+    access_token: str
+    token_type: str
+    user_id: int
+    username: str
+    user_id_login: str
+    phone_number: str | None = None
+    avatar: str | None = None
+    role: str
+    department_id: int | None = None
+    department_name: str | None = None
 
 
 # =============================================================================
@@ -672,8 +704,8 @@ async def delete_user(
     # 软删除：标记删除状态并脱敏
     import hashlib
 
-    # 生成4位哈希（基于user_id保证唯一性）
-    hash_suffix = hashlib.sha256(user.user_id.encode()).hexdigest()[:4]
+    # 生成4位哈希（基于 user_id + id，避免历史软删除记录重名冲突）
+    hash_suffix = hashlib.sha256(f"{user.user_id}:{user.id}".encode()).hexdigest()[:4]
 
     user.is_deleted = 1
     user.deleted_at = utc_now_naive()
@@ -826,3 +858,36 @@ async def impersonate_user(
         "department_id": target_user.department_id,
         "department_name": department_name,
     }
+
+
+# =============================================================================
+# === OIDC 认证分组 ===
+# =============================================================================
+
+@auth.get("/oidc/config", response_model=OIDCConfigResponse)
+async def get_oidc_config():
+    """获取 OIDC 配置（供前端使用）"""
+    return await get_oidc_config_handler()
+
+
+@auth.get("/oidc/login-url")
+async def get_oidc_login_url(redirect_path: str = "/"):
+    """获取 OIDC 登录 URL"""
+    return await oidc_login_url_handler(redirect_path)
+
+
+@auth.get("/oidc/callback", response_class=RedirectResponse)
+async def oidc_callback(
+    request: Request,
+    code: str,
+    state: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """处理 OIDC 回调 - 重定向到前端 Vue 路由"""
+    return await oidc_callback_handler(code, state, db, request)
+
+
+@auth.post("/oidc/exchange-code", response_model=OIDCLoginResponse)
+async def oidc_exchange_code(code: str = Body(..., embed=True)):
+    """使用一次性 code 交换 OIDC 登录数据"""
+    return await oidc_exchange_code_handler(code)
