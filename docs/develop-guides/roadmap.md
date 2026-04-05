@@ -40,6 +40,7 @@
 - 新增 Skills 远程安装能力：Skills 管理页支持填写 `owner/repo` 或 GitHub URL，后端通过隔离的临时 `HOME` 调用 `npx skills add` 下载指定 skill，再复用现有导入链路写入 `saves/skills` 和数据库，避免将 `~/.agents/skills` 直接作为系统主存储；前端远程安装弹窗补充多选串行安装与批量进度展示，复用现有单 skill 安装接口逐个提交请求
 - 调整部门删除语义：删除部门时不再要求用户数为 0，而是将部门下用户迁移到默认部门，同时清理部门级配置和部门 API Key，保证测试部门、撤换部门等场景可直接删除，并补充对应集成测试覆盖该链路
 - 重构 MCP 运行时配置加载模型：移除 `MCP_SERVERS` 作为运行正确性前提的设计，改为每次直接从数据库读取最新 MCP 配置，并用 `server_name:config_hash` 作为本地工具缓存 key；同时将内置 MCP 初始化职责收敛为仅同步数据库默认项，前端 MCP 选项改为直接使用实时资源列表，解决 `api`/`worker` 分进程下的配置不一致与缓存失效问题
+- 为知识库检索工具补充 `metadata.filepath` 注入：在 `query_kb` 统一出口基于会话可见知识库构建 `file_id -> /home/gem/kbs/...` 映射并回填检索结果，注入逻辑复用知识库只读后端命名规则；并将工具调用范围收敛为 Milvus（仅支持 Milvus chunks 列表且要求显式 `file_id`），不再兼容无显式 `file_id` 的推断注入，新增单测覆盖该约束
 
 ---
 

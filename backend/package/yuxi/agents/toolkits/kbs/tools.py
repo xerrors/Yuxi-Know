@@ -160,6 +160,53 @@ class QueryKBInput(BaseModel):
     )
 
 
+async def _resolve_visible_knowledge_bases_for_query(runtime: ToolRuntime | None) -> list[dict[str, Any]]:
+    if runtime is None:
+        return []
+
+    context = getattr(runtime, "context", None)
+    if context is None:
+        return []
+
+    visible_kbs = getattr(context, "_visible_knowledge_bases", None)
+    if isinstance(visible_kbs, list):
+        return visible_kbs
+
+    try:
+        from yuxi.agents.backends.knowledge_base_backend import resolve_visible_knowledge_bases_for_context
+
+        return await resolve_visible_knowledge_bases_for_context(context)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"解析会话可见知识库失败，跳过 filepath 注入: {exc}")
+        return []
+
+
+def _find_query_target(
+    *,
+    kb_name: str,
+    retrievers: dict[str, Any],
+    visible_kbs: list[dict[str, Any]],
+) -> tuple[str | None, dict[str, Any] | None, str | None]:
+    if visible_kbs:
+        matched_kbs = [db for db in visible_kbs if str(db.get("name") or "").strip() == kb_name]
+        if not matched_kbs:
+            return None, None, f"知识库 '{kb_name}' 不存在或当前会话未启用"
+        if len(matched_kbs) > 1:
+            return None, None, f"知识库 '{kb_name}' 存在重名，请先调整名称后重试"
+
+        target_db_id = str(matched_kbs[0].get("db_id") or "")
+        target_info = retrievers.get(target_db_id)
+        if target_info is None:
+            return None, None, f"知识库 '{kb_name}' 不存在"
+        return target_db_id, target_info, None
+
+    for db_id, info in retrievers.items():
+        if info["name"] == kb_name:
+            return str(db_id), info, None
+
+    return None, None, f"知识库 '{kb_name}' 不存在"
+
+
 @tool(args_schema=QueryKBInput)
 async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, runtime: ToolRuntime = None) -> Any:
     """在指定知识库中检索内容
@@ -182,15 +229,20 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
     # 获取所有检索器
     retrievers = knowledge_base.get_retrievers()
 
-    # 查找对应的知识库
-    target_info = None
-    for db_id, info in retrievers.items():
-        if info["name"] == kb_name:
-            target_info = info
-            break
+    visible_kbs = await _resolve_visible_knowledge_bases_for_query(runtime)
 
-    if not target_info:
-        return f"知识库 '{kb_name}' 不存在"
+    target_db_id, target_info, target_error = _find_query_target(
+        kb_name=kb_name,
+        retrievers=retrievers,
+        visible_kbs=visible_kbs,
+    )
+    if target_error:
+        return target_error
+
+    metadata = target_info.get("metadata") if isinstance(target_info, dict) else None
+    kb_type = str((metadata or {}).get("kb_type") or "").strip().lower()
+    if kb_type != "milvus":
+        return f"知识库 '{kb_name}' 不是 Milvus 类型，当前 query_kb 仅支持 Milvus"
 
     try:
         retriever = target_info["retriever"]
@@ -203,7 +255,17 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
         else:
             result = retriever(query_text, **kwargs)
 
-        return result
+        if not isinstance(result, list):
+            return f"知识库 '{kb_name}' 返回结果不是 Milvus chunks 列表，当前 query_kb 仅支持 Milvus"
+
+        from yuxi.agents.backends.knowledge_base_backend import inject_filepaths_into_retrieval_result
+
+        return await inject_filepaths_into_retrieval_result(
+            retrieval_chunks=result,
+            visible_kbs=visible_kbs,
+            target_db_id=target_db_id,
+            target_kb_name=kb_name,
+        )
 
     except Exception as e:
         logger.error(f"检索失败: {e}")

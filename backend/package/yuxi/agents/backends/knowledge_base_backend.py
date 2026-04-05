@@ -28,6 +28,26 @@ class _MaterializedFile:
     modified_at: str | None = None
 
 
+@dataclass(frozen=True)
+class _ResolvedVirtualNode:
+    db_id: str
+    file_id: str
+    path: str
+    parent_path: str
+    name: str
+    is_folder: bool
+
+
+@dataclass(frozen=True)
+class _KnowledgeBaseVirtualLayout:
+    kb_virtual_names: dict[str, str]
+    files_by_db: dict[str, dict[str, dict[str, Any]]]
+    nodes_by_db: dict[str, list[_ResolvedVirtualNode]]
+    nodes_by_file_id: dict[str, _ResolvedVirtualNode]
+    source_filepaths: dict[str, str]
+    parsed_filepaths: dict[str, str]
+
+
 def _normalize_virtual_path(path: str | None) -> str:
     raw = str(path or "").strip() or "/"
     normalized = "/" + raw.lstrip("/")
@@ -132,6 +152,239 @@ def _all_files_meta() -> dict[str, dict[str, Any]]:
     return aggregated
 
 
+def _resolve_kb_virtual_names(visible_kbs: list[dict[str, Any]]) -> dict[str, str]:
+    kb_name_candidates = {
+        str(db.get("db_id") or db.get("name") or f"kb-{index}"): _sanitize_segment(
+            db.get("name"),
+            str(db.get("db_id") or f"kb-{index}"),
+        )
+        for index, db in enumerate(visible_kbs)
+    }
+    used_root_names: set[str] = set()
+    kb_virtual_names: dict[str, str] = {}
+    sorted_kbs = sorted(
+        visible_kbs,
+        key=lambda item: (str(item.get("name") or ""), str(item.get("db_id") or "")),
+    )
+    for db in sorted_kbs:
+        db_id = str(db.get("db_id") or "")
+        if not db_id:
+            continue
+        base_name = kb_name_candidates.get(db_id) or db_id
+        kb_virtual_names[db_id] = _unique_name(base_name, stable_id=db_id, used_names=used_root_names)
+    return kb_virtual_names
+
+
+def _resolve_db_virtual_nodes(
+    *,
+    db_id: str,
+    kb_root: str,
+    records: dict[str, dict[str, Any]],
+) -> list[_ResolvedVirtualNode]:
+    # Keep sibling deduplication local to each parent directory so the generated tree is deterministic.
+    children_by_parent: dict[str | None, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
+    for file_id, meta in records.items():
+        parent_id = str(meta.get("parent_id") or "").strip() or None
+        children_by_parent[parent_id].append((file_id, meta))
+
+    resolved_nodes: list[_ResolvedVirtualNode] = []
+
+    def walk(parent_id: str | None, parent_path: str) -> None:
+        used_names: set[str] = set()
+        siblings = children_by_parent.get(parent_id, [])
+        sorted_siblings = sorted(
+            siblings,
+            key=lambda item: (_sanitize_segment(_candidate_name(item[1]), item[0]), item[0]),
+        )
+        for file_id, meta in sorted_siblings:
+            base_name = _sanitize_segment(_candidate_name(meta), file_id)
+            unique_name = _unique_name(base_name, stable_id=file_id, used_names=used_names)
+            child_path = f"{parent_path.rstrip('/')}/{unique_name}" if parent_path != "/" else f"/{unique_name}"
+            node = _ResolvedVirtualNode(
+                db_id=db_id,
+                file_id=file_id,
+                path=child_path,
+                parent_path=parent_path,
+                name=unique_name,
+                is_folder=bool(meta.get("is_folder")),
+            )
+            resolved_nodes.append(node)
+            if node.is_folder:
+                walk(file_id, child_path)
+
+    walk(None, kb_root)
+    return resolved_nodes
+
+
+def _build_parsed_filepath_map(
+    *,
+    nodes_by_file_id: dict[str, _ResolvedVirtualNode],
+    files_by_db: dict[str, dict[str, dict[str, Any]]],
+    kb_virtual_names: dict[str, str],
+) -> dict[str, str]:
+    # Parsed files mirror the source tree and only add a fixed `/parsed` segment plus `.md` suffix.
+    parsed_paths: dict[str, str] = {}
+    for file_id, node in nodes_by_file_id.items():
+        if node.is_folder:
+            continue
+
+        record = files_by_db.get(node.db_id, {}).get(file_id, {})
+        if not str(record.get("markdown_file") or "").strip():
+            continue
+
+        kb_root = f"/{kb_virtual_names[node.db_id]}"
+        parsed_root = f"{kb_root}/parsed"
+        parsed_parent = (
+            f"{parsed_root}{node.parent_path[len(kb_root) :]}" if node.parent_path.startswith(kb_root) else parsed_root
+        )
+        parsed_name = _sanitize_segment(f"{node.name}.md", f"{file_id}.md")
+        parsed_path = f"{parsed_parent.rstrip('/')}/{parsed_name}" if parsed_parent != "/" else f"/{parsed_name}"
+        parsed_paths[file_id] = f"{KBS_PATH}{parsed_path}"
+
+    return parsed_paths
+
+
+def _resolve_virtual_layout(
+    *,
+    visible_kbs: list[dict[str, Any]] | None,
+    files_meta: dict[str, dict[str, Any]] | None = None,
+) -> _KnowledgeBaseVirtualLayout:
+    # Single source of truth for the virtual KB tree.
+    # The readonly backend and query_kb filepath injection must stay fully aligned.
+    kb_virtual_names = _resolve_kb_virtual_names(list(visible_kbs or []))
+    if not kb_virtual_names:
+        return _KnowledgeBaseVirtualLayout(
+            kb_virtual_names={},
+            files_by_db={},
+            nodes_by_db={},
+            nodes_by_file_id={},
+            source_filepaths={},
+            parsed_filepaths={},
+        )
+
+    source_files = _all_files_meta() if files_meta is None else files_meta
+    files_by_db: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    for file_id, meta in source_files.items():
+        db_id = str(meta.get("database_id") or "")
+        if db_id in kb_virtual_names:
+            files_by_db[db_id][str(file_id)] = meta
+
+    nodes_by_db: dict[str, list[_ResolvedVirtualNode]] = {}
+    nodes_by_file_id: dict[str, _ResolvedVirtualNode] = {}
+    source_filepaths: dict[str, str] = {}
+
+    for db_id, kb_virtual_name in kb_virtual_names.items():
+        kb_root = f"/{kb_virtual_name}"
+        records = files_by_db.get(db_id, {})
+        nodes = _resolve_db_virtual_nodes(db_id=db_id, kb_root=kb_root, records=records)
+        nodes_by_db[db_id] = nodes
+        for node in nodes:
+            nodes_by_file_id[node.file_id] = node
+            if not node.is_folder:
+                source_filepaths[node.file_id] = f"{KBS_PATH}{node.path}"
+
+    return _KnowledgeBaseVirtualLayout(
+        kb_virtual_names=kb_virtual_names,
+        files_by_db=dict(files_by_db),
+        nodes_by_db=nodes_by_db,
+        nodes_by_file_id=nodes_by_file_id,
+        source_filepaths=source_filepaths,
+        parsed_filepaths=_build_parsed_filepath_map(
+            nodes_by_file_id=nodes_by_file_id,
+            files_by_db=files_by_db,
+            kb_virtual_names=kb_virtual_names,
+        ),
+    )
+
+
+def resolve_file_relative_virtual_path(
+    *,
+    file_id: str,
+    visible_kbs: list[dict[str, Any]] | None,
+    files_meta: dict[str, dict[str, Any]] | None = None,
+) -> str | None:
+    normalized_id = str(file_id or "").strip()
+    if not normalized_id:
+        return None
+
+    layout = _resolve_virtual_layout(
+        visible_kbs=visible_kbs,
+        files_meta=files_meta,
+    )
+    node = layout.nodes_by_file_id.get(normalized_id)
+    if node is None or node.is_folder:
+        return None
+    return node.path
+
+
+def build_knowledge_base_filepath_map(
+    *,
+    visible_kbs: list[dict[str, Any]] | None,
+    files_meta: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, str]:
+    layout = _resolve_virtual_layout(
+        visible_kbs=visible_kbs,
+        files_meta=files_meta,
+    )
+    return layout.source_filepaths.copy()
+
+
+def _inject_kb_filepaths(
+    chunks: list[dict[str, Any]],
+    filepath_map: dict[str, str],
+    parsed_filepath_map: dict[str, str],
+) -> list[dict[str, Any]]:
+    if not filepath_map and not parsed_filepath_map:
+        return chunks
+
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            continue
+
+        metadata = chunk.get("metadata")
+        if metadata is None:
+            metadata = {}
+        if not isinstance(metadata, dict):
+            continue
+
+        file_id = str(metadata.get("file_id") or chunk.get("file_id") or "").strip()
+        if not file_id:
+            continue
+
+        if not metadata.get("filepath"):
+            filepath = filepath_map.get(file_id)
+            if filepath:
+                metadata["filepath"] = filepath
+
+        if not metadata.get("parsed_path"):
+            parsed_path = parsed_filepath_map.get(file_id)
+            if parsed_path:
+                metadata["parsed_path"] = parsed_path
+
+        chunk["metadata"] = metadata
+
+    return chunks
+
+
+async def inject_filepaths_into_retrieval_result(
+    *,
+    retrieval_chunks: list[dict[str, Any]],
+    visible_kbs: list[dict[str, Any]] | None,
+    target_db_id: str | None,
+    target_kb_name: str | None = None,
+) -> list[dict[str, Any]]:
+    scope_kbs = list(visible_kbs or [])
+    if not scope_kbs and target_db_id:
+        scope_kbs = [{"db_id": target_db_id, "name": target_kb_name or target_db_id}]
+
+    layout = _resolve_virtual_layout(visible_kbs=scope_kbs)
+    return _inject_kb_filepaths(
+        retrieval_chunks,
+        layout.source_filepaths,
+        layout.parsed_filepaths,
+    )
+
+
 class KnowledgeBaseReadonlyBackend(FilesystemBackend):
     def __init__(self, *, visible_kbs: list[dict[str, Any]] | None, cache_root: Path | str | None = None):
         self._cache_root = Path(cache_root or (Path(conf.save_dir) / "knowledge_base_data" / "kb-cache")).resolve()
@@ -148,37 +401,13 @@ class KnowledgeBaseReadonlyBackend(FilesystemBackend):
         return bool(self._visible_kbs)
 
     def _build_virtual_tree(self) -> None:
-        kb_name_candidates = {
-            str(db.get("db_id") or db.get("name") or f"kb-{index}"): _sanitize_segment(
-                db.get("name"),
-                str(db.get("db_id") or f"kb-{index}"),
-            )
-            for index, db in enumerate(self._visible_kbs)
-        }
-        used_root_names: set[str] = set()
-        kb_virtual_names: dict[str, str] = {}
-        sorted_kbs = sorted(
-            self._visible_kbs,
-            key=lambda item: (str(item.get("name") or ""), str(item.get("db_id") or "")),
-        )
-        for db in sorted_kbs:
-            db_id = str(db.get("db_id") or "")
-            if not db_id:
-                continue
-            base_name = kb_name_candidates.get(db_id) or db_id
-            kb_virtual_names[db_id] = _unique_name(base_name, stable_id=db_id, used_names=used_root_names)
+        layout = _resolve_virtual_layout(visible_kbs=self._visible_kbs)
 
-        files_by_db: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
-        for file_id, meta in _all_files_meta().items():
-            db_id = str(meta.get("database_id") or "")
-            if db_id in kb_virtual_names:
-                files_by_db[db_id][str(file_id)] = meta
-
-        for db_id, kb_virtual_name in kb_virtual_names.items():
+        for db_id, kb_virtual_name in layout.kb_virtual_names.items():
             kb_root = f"/{kb_virtual_name}"
             self._add_entry("/", kb_root, is_dir=True)
-            records = files_by_db.get(db_id, {})
-            self._build_source_tree(db_id=db_id, kb_root=kb_root, records=records)
+            records = layout.files_by_db.get(db_id, {})
+            self._build_source_tree(db_id=db_id, records=records, nodes=layout.nodes_by_db.get(db_id, []))
             self._build_parsed_tree(db_id=db_id, kb_root=kb_root, records=records)
 
         for path, entries in list(self._entries_by_dir.items()):
@@ -186,62 +415,48 @@ class KnowledgeBaseReadonlyBackend(FilesystemBackend):
             self._entries_by_dir[path] = entries
         self._all_files = sorted(self._all_files, key=lambda item: str(item.get("path") or ""))
 
-    def _build_source_tree(self, *, db_id: str, kb_root: str, records: dict[str, dict[str, Any]]) -> None:
-        children_by_parent: dict[str | None, list[dict[str, Any]]] = defaultdict(list)
-        for file_id, meta in records.items():
-            parent_id = meta.get("parent_id")
-            children_by_parent[str(parent_id) if parent_id else None].append({"file_id": file_id, "meta": meta})
-
+    def _build_source_tree(
+        self,
+        *,
+        db_id: str,
+        records: dict[str, dict[str, Any]],
+        nodes: list[_ResolvedVirtualNode],
+    ) -> None:
         resolved_parent_paths: dict[str, str] = {}
         resolved_source_names: dict[str, str] = {}
 
-        def walk(parent_id: str | None, parent_path: str) -> None:
-            siblings = children_by_parent.get(parent_id, [])
-            used_names: set[str] = set()
-            candidates: list[tuple[dict[str, Any], str]] = []
-            for item in siblings:
-                file_id = item["file_id"]
-                meta = item["meta"]
-                base_name = _sanitize_segment(_candidate_name(meta), file_id)
-                candidates.append((item, base_name))
+        for node in sorted(nodes, key=lambda item: item.path):
+            meta = records.get(node.file_id, {})
+            modified_at = meta.get("updated_at") or meta.get("created_at")
+            if node.is_folder:
+                self._add_entry(node.parent_path, node.path, is_dir=True, modified_at=modified_at)
+                continue
 
-            for item, base_name in sorted(candidates, key=lambda pair: (pair[1], pair[0]["file_id"])):
-                file_id = item["file_id"]
-                meta = item["meta"]
-                unique_name = _unique_name(base_name, stable_id=file_id, used_names=used_names)
-                child_path = f"{parent_path.rstrip('/')}/{unique_name}" if parent_path != "/" else f"/{unique_name}"
-                if meta.get("is_folder"):
-                    modified_at = meta.get("updated_at") or meta.get("created_at")
-                    self._add_entry(parent_path, child_path, is_dir=True, modified_at=modified_at)
-                    walk(file_id, child_path)
-                    continue
+            self._add_entry(
+                node.parent_path,
+                node.path,
+                is_dir=False,
+                size=int(meta.get("size") or 0),
+                modified_at=modified_at,
+            )
+            resolved_parent_paths[node.file_id] = node.parent_path
+            resolved_source_names[node.file_id] = node.name
+            cache_path = self._cache_root / db_id / "source" / node.file_id / node.name
+            self._files[node.path] = _MaterializedFile(
+                virtual_path=node.path,
+                cache_path=cache_path,
+                source_path=str(meta.get("path") or ""),
+                modified_at=modified_at,
+            )
+            self._all_files.append(
+                {
+                    "path": node.path,
+                    "is_dir": False,
+                    "size": int(meta.get("size") or 0),
+                    "modified_at": str(modified_at or ""),
+                }
+            )
 
-                self._add_entry(
-                    parent_path,
-                    child_path,
-                    is_dir=False,
-                    size=int(meta.get("size") or 0),
-                    modified_at=meta.get("updated_at") or meta.get("created_at"),
-                )
-                resolved_parent_paths[file_id] = parent_path
-                resolved_source_names[file_id] = unique_name
-                cache_path = self._cache_root / db_id / "source" / file_id / unique_name
-                self._files[child_path] = _MaterializedFile(
-                    virtual_path=child_path,
-                    cache_path=cache_path,
-                    source_path=str(meta.get("path") or ""),
-                    modified_at=meta.get("updated_at") or meta.get("created_at"),
-                )
-                self._all_files.append(
-                    {
-                        "path": child_path,
-                        "is_dir": False,
-                        "size": int(meta.get("size") or 0),
-                        "modified_at": str(meta.get("updated_at") or meta.get("created_at") or ""),
-                    }
-                )
-
-        walk(None, kb_root)
         self._resolved_parent_paths = getattr(self, "_resolved_parent_paths", {})
         self._resolved_parent_paths[db_id] = resolved_parent_paths
         self._resolved_source_names = getattr(self, "_resolved_source_names", {})
@@ -268,8 +483,8 @@ class KnowledgeBaseReadonlyBackend(FilesystemBackend):
                 f"{parsed_root}{source_parent[len(kb_root) :]}" if source_parent.startswith(kb_root) else parsed_root
             )
             source_name = source_names.get(file_id) or _sanitize_segment(meta.get("filename"), file_id)
-            source_stem = PurePosixPath(source_name).stem or source_name or file_id
-            base_name = _sanitize_segment(f"{source_stem}.md", f"{file_id}.md")
+            safe_name = source_name or file_id
+            base_name = _sanitize_segment(f"{safe_name}.md", f"{file_id}.md")
             grouped[parsed_parent].append((file_id, meta, base_name))
 
         for parsed_parent, items in grouped.items():
