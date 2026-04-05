@@ -1,5 +1,5 @@
 <template>
-  <BaseToolCall :tool-call="toolCall" :default-expanded="true">
+  <BaseToolCall :tool-call="toolCall">
     <template #header-success>
       <span class="sep-header">
         <span class="keywords">执行SQL查询：</span>

@@ -3,6 +3,8 @@
     <template #header>
       <div class="sep-header">
         <span class="note">{{ operationLabel }}</span>
+        <span class="separator">|</span>
+        <span class="description">{{ headerSummary }}</span>
       </div>
     </template>
     <template #result="{}">
@@ -49,6 +51,17 @@ const kbList = computed(() => {
   const resultContent = props.toolCall.tool_call_result?.content
   const data = parseData(resultContent)
   return Array.isArray(data) ? data : []
+})
+
+const headerSummary = computed(() => {
+  const names = kbList.value.map((kb) => kb?.name).filter(Boolean)
+  if (!names.length) return '暂无知识库'
+
+  const previewNames = names.slice(0, 3).join('，')
+  const remainingCount = names.length - 3
+  return remainingCount > 0
+    ? `${names.length}个知识库：${previewNames} 等${remainingCount}个`
+    : `${names.length}个知识库：${previewNames}`
 })
 </script>
 

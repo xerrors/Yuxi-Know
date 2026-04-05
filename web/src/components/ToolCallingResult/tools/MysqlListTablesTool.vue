@@ -1,5 +1,5 @@
 <template>
-  <BaseToolCall :tool-call="toolCall" :default-expanded="true" :hide-params="true">
+  <BaseToolCall :tool-call="toolCall" :hide-params="true">
     <template #header-success>
       <span class="sep-header">
         <span class="keywords">列出数据库表</span>
