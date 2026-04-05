@@ -434,3 +434,4 @@ services:
 networks:
   app-network:
     driver: bridge
+    name: yuxi-know_app-network
