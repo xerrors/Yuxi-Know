@@ -433,3 +433,4 @@ services:
 networks:
   app-network:
     driver: bridge
+    name: ${SANDBOX_DOCKER_NETWORK:-yuxi-know_app-network}
