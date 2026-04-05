@@ -364,6 +364,8 @@ async def process_agent_run(ctx, run_id: str):
 
 async def _worker_startup(ctx):
     del ctx
+    # 导入 knowledge 模块以注册所有知识库类型（包括 test_pre）
+    from yuxi import knowledge as _   # noqa: F401
     pg_manager.initialize()
     await pg_manager.create_business_tables()
     await pg_manager.ensure_business_schema()
