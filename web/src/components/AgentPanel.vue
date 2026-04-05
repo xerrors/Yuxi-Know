@@ -5,27 +5,22 @@
     <div class="panel-header">
       <div class="panel-title">
         <FolderCode :size="20" class="header-icon" />
-        <span><strong>状态工作台</strong></span>
+        <span><strong>文件系统</strong></span>
       </div>
       <div class="header-actions">
-        <button class="close-btn" @click="$emit('close')">
-          <X :size="18" />
+        <button class="header-action-btn" title="刷新" @click="emitRefresh">
+          <RefreshCw :size="15" />
         </button>
-      </div>
-    </div>
-
-    <div class="tabs">
-      <div class="tab active">文件系统</div>
-      <div class="tab-actions">
+        <span class="header-divider"></span>
         <button
-          class="tab-action-btn"
+          class="header-action-btn"
           :title="isExpanded ? '恢复高度' : '向上展开'"
           @click="emit('toggle-expand')"
         >
           <component :is="isExpanded ? ChevronsDownUp : ChevronsUpDown" :size="15" />
         </button>
-        <button class="tab-action-btn" title="刷新" @click="emitRefresh">
-          <RefreshCw :size="15" />
+        <button class="close-btn" @click="$emit('close')">
+          <X :size="18" />
         </button>
       </div>
     </div>
@@ -675,6 +670,26 @@ watch(useInlinePreview, (isInline) => {
   flex-shrink: 0;
 }
 
+.header-action-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gray-600);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: var(--gray-100);
+    color: var(--gray-900);
+  }
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -694,6 +709,13 @@ watch(useInlinePreview, (isInline) => {
   gap: 4px;
 }
 
+.header-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--gray-300);
+  margin: 0 4px;
+}
+
 .close-btn {
   border: none;
   background: transparent;
@@ -709,67 +731,6 @@ watch(useInlinePreview, (isInline) => {
   &:hover {
     background: var(--gray-100);
     color: var(--gray-700);
-  }
-}
-
-.tabs {
-  display: flex;
-  background: var(--gray-25);
-  position: relative;
-  align-items: center;
-  padding: 8px 10px;
-  padding-top: 0px;
-  gap: 4px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--gray-150);
-}
-
-.tab-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tab {
-  padding: 4px 12px;
-  border: none;
-  background: none;
-  color: var(--gray-600);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
-  border-radius: 999px;
-
-  &:hover {
-    background: var(--gray-150);
-    color: var(--gray-900);
-  }
-
-  &.active {
-    background: var(--gray-150);
-    color: var(--gray-900);
-  }
-}
-
-.tab-action-btn {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--gray-600);
-  cursor: pointer;
-  padding: 0;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: var(--gray-150);
-    color: var(--gray-900);
   }
 }
 
