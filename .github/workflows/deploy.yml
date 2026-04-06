@@ -3,10 +3,18 @@
 name: Deploy VitePress site to Pages
 
 on:
-  # 在针对 `main` 分支的推送上运行。如果你
-  # 使用 `master` 分支作为默认分支，请将其更改为 `master`
+  # 在 docs 相关变更推送时运行构建（任意分支）
   push:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy.yml'
+
+  # 在面向 main 的 PR 中提前验证 docs 构建
+  pull_request:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy.yml'
 
   # 允许你从 Actions 选项卡手动运行此工作流程
   workflow_dispatch:
@@ -51,6 +59,7 @@ jobs:
 
   # 部署工作
   deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
