@@ -56,7 +56,7 @@ class LightRagKB(KnowledgeBase):
 
         delimiter = "\n<|YUXI_CHUNK_DELIM|>\n"
         payload = delimiter.join(chunk["content"] for chunk in chunks if chunk.get("content"))
-        return payload, delimiter, True
+        return payload, delimiter, False  # 允许 LightRAG 基于进行二次切分，避免超限
 
     def delete_database(self, db_id: str) -> dict:
         """删除数据库，同时清除Milvus和Neo4j中的数据"""
