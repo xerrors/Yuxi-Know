@@ -8,6 +8,22 @@
         <span><strong>文件系统</strong></span>
       </div>
       <div class="header-actions">
+        <button
+          class="header-action-btn"
+          title="新建文件夹"
+          :disabled="!threadId"
+          @click="openCreateDirectoryModal"
+        >
+          <FolderPlus :size="15" />
+        </button>
+        <button
+          class="header-action-btn"
+          title="上传文件"
+          :disabled="!threadId"
+          @click="openUploadFilePicker"
+        >
+          <Upload :size="15" />
+        </button>
         <button class="header-action-btn" title="刷新" @click="emitRefresh">
           <RefreshCw :size="15" />
         </button>
@@ -24,6 +40,12 @@
         </button>
       </div>
     </div>
+    <input
+      ref="uploadInputRef"
+      class="hidden-file-input"
+      type="file"
+      @change="handleUploadInputChange"
+    />
     <div class="tab-content">
       <div class="files-display">
         <div v-if="!threadId" class="empty">创建对话后可查看工作区</div>
@@ -118,6 +140,23 @@
         @close="closePreview"
       />
     </a-modal>
+
+    <a-modal
+      v-model:open="createDirectoryModalVisible"
+      title="新建文件夹"
+      okText="创建"
+      cancelText="取消"
+      :confirmLoading="creatingDirectory"
+      @ok="createDirectory"
+      @cancel="closeCreateDirectoryModal"
+    >
+      <a-input
+        v-model:value="newDirectoryName"
+        placeholder="输入文件夹名"
+        :maxlength="120"
+        @pressEnter="createDirectory"
+      />
+    </a-modal>
   </div>
 </template>
 
@@ -128,18 +167,22 @@ import {
   ChevronsUpDown,
   Download,
   FolderCode,
+  FolderPlus,
   RefreshCw,
   Trash2,
+  Upload,
   X
 } from 'lucide-vue-next'
 import { Modal, message } from 'ant-design-vue'
 import FileTreeComponent from '@/components/FileTreeComponent.vue'
 import AgentFilePreview from '@/components/AgentFilePreview.vue'
 import {
+  createViewerDirectory,
   deleteViewerFile,
   downloadViewerFile,
   getViewerFileContent,
-  getViewerFileSystemTree
+  getViewerFileSystemTree,
+  uploadViewerFile
 } from '@/apis/viewer_filesystem'
 
 const props = defineProps({
@@ -175,14 +218,20 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh', 'close', 'resize', 'resizing', 'toggle-expand'])
 const INLINE_PREVIEW_MIN_WIDTH = 920
+const WORKSPACE_PATH = '/home/gem/user-data/workspace'
 
 const panelRef = ref(null)
+const uploadInputRef = ref(null)
 const modalVisible = ref(false)
+const createDirectoryModalVisible = ref(false)
 const currentFile = ref(null)
 const currentFilePath = ref('')
 const loadingFiles = ref(false)
 const filesystemError = ref('')
 const panelWidth = ref(0)
+const newDirectoryName = ref('')
+const creatingDirectory = ref(false)
+const uploadingFile = ref(false)
 
 const dynamicTreeData = ref([])
 const selectedKeys = ref([])
@@ -277,6 +326,43 @@ const removeTreeNode = (nodes, targetKey) => {
 
 const normalizePathKey = (path) => String(path || '').replace(/\/+$/, '')
 
+const isWorkspacePath = (path) => {
+  const normalizedPath = normalizePathKey(path)
+  return normalizedPath === WORKSPACE_PATH || normalizedPath.startsWith(`${WORKSPACE_PATH}/`)
+}
+
+const parentPathOf = (path) => {
+  const normalizedPath = normalizePathKey(path)
+  if (!normalizedPath || normalizedPath === '/') return '/'
+  const parts = normalizedPath.split('/').filter(Boolean)
+  parts.pop()
+  return parts.length ? `/${parts.join('/')}` : '/'
+}
+
+const findTreeNode = (nodes, targetKey) => {
+  const normalizedTargetKey = normalizePathKey(targetKey)
+  for (const node of nodes) {
+    if (normalizePathKey(node.key) === normalizedTargetKey) return node
+    if (node.children?.length) {
+      const child = findTreeNode(node.children, targetKey)
+      if (child) return child
+    }
+  }
+  return null
+}
+
+const resolveWorkspaceTargetDirectory = () => {
+  const selectedKey = selectedKeys.value[0]
+  if (!selectedKey) return WORKSPACE_PATH
+
+  // 根据当前选中节点推断写入目录，避免把文件上传到只读命名空间。
+  const selectedNode = findTreeNode(dynamicTreeData.value, selectedKey)
+  const targetPath = selectedNode?.isLeaf
+    ? parentPathOf(selectedKey)
+    : normalizePathKey(selectedKey)
+  return isWorkspacePath(targetPath) ? targetPath : ''
+}
+
 const isSameOrChildPath = (path, targetPath) => {
   const normalizedPath = normalizePathKey(path)
   const normalizedTargetPath = normalizePathKey(targetPath)
@@ -366,6 +452,28 @@ const loadData = (treeNode) => {
         resolve()
       })
   })
+}
+
+const refreshDirectoryChildren = async (directoryPath) => {
+  const normalizedDirectoryPath = normalizePathKey(directoryPath)
+  const targetNode = findTreeNode(dynamicTreeData.value, normalizedDirectoryPath)
+  if (!targetNode || targetNode.isLeaf) {
+    return
+  }
+
+  const res = await getViewerFileSystemTree(
+    props.threadId,
+    normalizedDirectoryPath,
+    props.agentId,
+    props.agentConfigId
+  )
+  if (res?.entries) {
+    const children = sortEntries(res.entries).map((entry) => createTreeNode(entry))
+    dynamicTreeData.value = updateTreeChildren(dynamicTreeData.value, targetNode.key, children)
+    if (!expandedKeys.value.includes(targetNode.key)) {
+      expandedKeys.value = [...expandedKeys.value, targetNode.key]
+    }
+  }
 }
 
 const fileTreeData = computed(() => dynamicTreeData.value)
@@ -482,6 +590,100 @@ const confirmDeleteNode = (node) => {
       }
     }
   })
+}
+
+const openCreateDirectoryModal = () => {
+  if (!props.threadId) return
+  const targetDirectory = resolveWorkspaceTargetDirectory()
+  if (!targetDirectory) {
+    message.warning('只能在 workspace 目录下新建文件夹')
+    return
+  }
+  newDirectoryName.value = ''
+  createDirectoryModalVisible.value = true
+}
+
+const closeCreateDirectoryModal = () => {
+  createDirectoryModalVisible.value = false
+  newDirectoryName.value = ''
+}
+
+const createDirectory = async () => {
+  if (creatingDirectory.value) return
+  const targetDirectory = resolveWorkspaceTargetDirectory()
+  const directoryName = newDirectoryName.value.trim()
+
+  if (!targetDirectory) {
+    message.warning('只能在 workspace 目录下新建文件夹')
+    return
+  }
+  if (!directoryName) {
+    message.warning('请输入文件夹名')
+    return
+  }
+
+  creatingDirectory.value = true
+  try {
+    await createViewerDirectory(
+      props.threadId,
+      targetDirectory,
+      directoryName,
+      props.agentId,
+      props.agentConfigId
+    )
+    await refreshDirectoryChildren(targetDirectory)
+    closeCreateDirectoryModal()
+    message.success('文件夹创建成功')
+  } catch (error) {
+    console.error('创建文件夹失败:', error)
+    message.error(error?.message || '创建文件夹失败')
+  } finally {
+    creatingDirectory.value = false
+  }
+}
+
+const openUploadFilePicker = () => {
+  if (!props.threadId || uploadingFile.value) return
+  const targetDirectory = resolveWorkspaceTargetDirectory()
+  if (!targetDirectory) {
+    message.warning('只能上传到 workspace 目录')
+    return
+  }
+  if (uploadInputRef.value) {
+    uploadInputRef.value.value = ''
+    uploadInputRef.value.click()
+  }
+}
+
+const handleUploadInputChange = async (event) => {
+  const file = event.target?.files?.[0]
+  if (!file || uploadingFile.value) return
+
+  const targetDirectory = resolveWorkspaceTargetDirectory()
+  if (!targetDirectory) {
+    message.warning('只能上传到 workspace 目录')
+    event.target.value = ''
+    return
+  }
+
+  uploadingFile.value = true
+  try {
+    await uploadViewerFile(
+      props.threadId,
+      targetDirectory,
+      file,
+      props.agentId,
+      props.agentConfigId
+    )
+    await refreshDirectoryChildren(targetDirectory)
+    message.success('文件上传成功')
+  } catch (error) {
+    console.error('上传文件失败:', error)
+    message.error(error?.message || '上传文件失败')
+  } finally {
+    uploadingFile.value = false
+    event.target.value = ''
+  }
 }
 
 const downloadFile = async (fileItem) => {
@@ -688,6 +890,12 @@ watch(useInlinePreview, (isInline) => {
     background: var(--gray-100);
     color: var(--gray-900);
   }
+
+  &:disabled {
+    color: var(--gray-300);
+    cursor: not-allowed;
+    background: transparent;
+  }
 }
 
 .panel-title {
@@ -714,6 +922,10 @@ watch(useInlinePreview, (isInline) => {
   height: 16px;
   background: var(--gray-300);
   margin: 0 4px;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 .close-btn {

@@ -97,6 +97,44 @@ async def _delete(
     return dict(response.json())
 
 
+async def _create_directory(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    *,
+    agent_id: str,
+    thread_id: str,
+    parent_path: str,
+    name: str,
+) -> dict:
+    response = await client.post(
+        "/api/viewer/filesystem/directory",
+        json={"thread_id": thread_id, "parent_path": parent_path, "name": name, "agent_id": agent_id},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return dict(response.json())
+
+
+async def _upload(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    *,
+    agent_id: str,
+    thread_id: str,
+    parent_path: str,
+    file_name: str,
+    content: bytes,
+) -> dict:
+    response = await client.post(
+        "/api/viewer/filesystem/upload",
+        data={"thread_id": thread_id, "parent_path": parent_path, "agent_id": agent_id},
+        files={"file": (file_name, content, "text/plain")},
+        headers=headers,
+    )
+    assert response.status_code == 200, response.text
+    return dict(response.json())
+
+
 async def test_viewer_filesystem_e2e_respects_workspace_sharing_and_thread_local_uploads(
     e2e_client: httpx.AsyncClient,
     e2e_headers: dict[str, str],
@@ -249,3 +287,59 @@ async def test_viewer_filesystem_e2e_deletes_workspace_directory_recursively(
         )
     }
     assert "/home/gem/user-data/workspace/delete-dir/" not in workspace_paths, sorted(workspace_paths)
+
+
+async def test_viewer_filesystem_e2e_creates_directory_and_uploads_file(
+    e2e_client: httpx.AsyncClient,
+    e2e_headers: dict[str, str],
+    e2e_agent_context: dict[str, str | int],
+):
+    agent_id = str(e2e_agent_context["agent_id"])
+    user_id = str(e2e_agent_context["user_id"])
+    thread_id = await _create_thread(e2e_client, e2e_headers, agent_id)
+    directory_name = f"viewer-created-{uuid.uuid4().hex[:8]}"
+
+    ensure_thread_dirs(thread_id, user_id)
+
+    directory_payload = await _create_directory(
+        e2e_client,
+        e2e_headers,
+        agent_id=agent_id,
+        thread_id=thread_id,
+        parent_path="/home/gem/user-data/workspace",
+        name=directory_name,
+    )
+    assert directory_payload.get("success") is True, directory_payload
+    assert (sandbox_workspace_dir(thread_id, user_id) / directory_name).is_dir()
+
+    upload_payload = await _upload(
+        e2e_client,
+        e2e_headers,
+        agent_id=agent_id,
+        thread_id=thread_id,
+        parent_path=f"/home/gem/user-data/workspace/{directory_name}",
+        file_name="note.txt",
+        content=b"created by viewer\n",
+    )
+    assert upload_payload.get("success") is True, upload_payload
+
+    created_paths = {
+        str(entry.get("path", ""))
+        for entry in await _tree(
+            e2e_client,
+            e2e_headers,
+            agent_id=agent_id,
+            thread_id=thread_id,
+            path=f"/home/gem/user-data/workspace/{directory_name}",
+        )
+    }
+    assert f"/home/gem/user-data/workspace/{directory_name}/note.txt" in created_paths, sorted(created_paths)
+
+    file_payload = await _file(
+        e2e_client,
+        e2e_headers,
+        agent_id=agent_id,
+        thread_id=thread_id,
+        path=f"/home/gem/user-data/workspace/{directory_name}/note.txt",
+    )
+    assert file_payload.get("content") == "created by viewer\n", file_payload
