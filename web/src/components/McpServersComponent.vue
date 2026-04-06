@@ -53,9 +53,9 @@
                   <button
                     type="button"
                     class="inline-hover-action"
-                    @click.stop="handleSetServerEnabled(server, false)"
+                    @click.stop="handleInlineRemoveServer(server)"
                   >
-                    移除
+                    {{ getServerActionLabel(server) }}
                   </button>
                 </div>
               </div>
@@ -899,6 +899,14 @@ const handleDangerAction = async (server) => {
     await handleSetServerEnabled(server, true)
     return
   }
+  if (server.created_by === 'system') {
+    await handleSetServerEnabled(server, false)
+    return
+  }
+  confirmDeleteServer(server)
+}
+
+const handleInlineRemoveServer = async (server) => {
   if (server.created_by === 'system') {
     await handleSetServerEnabled(server, false)
     return
