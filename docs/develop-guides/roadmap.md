@@ -31,6 +31,9 @@
 ### 0.6.1
 
 <!-- 0.6.1 的内容请放在这里 -->
+- 合并知识库导航入口：左侧导航仅保留“知识库”，文档知识库与图知识库在页面 header 中通过同一组轻量切换入口切换，保留原有列表与图谱内容区交互。
+- 抽象页面轻量切换 header：知识库与扩展管理页直接共用 `ViewSwitchHeader`，通过统一切换样式和 actions slot 收敛文档知识库、知识图谱、Tools、MCP、Subagents、Skills 等入口的信息层级；扩展管理各列表的刷新入口下沉到搜索框右侧，并统一搜索框与工具按钮的边框和圆角。
+- 调整任务中心交互：入口移动到 GitHub 按钮下方，并将右侧抽屉展示改为居中弹窗，减少对主页面布局的占用。
 - 调整 backend Python 工作区依赖边界：将 `backend/package/yuxi` 明确为承载核心运行依赖的业务包，根 `backend/pyproject.toml` 仅保留工作区入口与开发/测试配置，减少依赖职责混淆。
 - 将 `yuxi` 从 uv workspace 成员调整为 `backend/package` 下可独立构建的本地 Python 包，backend 通过 path dependency 以已安装包形式发现依赖，移除对 `PYTHONPATH=/app/package` 的运行时耦合。
 - 修复沙盒 `workspace` 隔离粒度：宿主机目录从共享 `saves/threads/shared/workspace` 收敛为用户级 `saves/threads/shared/<user_id>/workspace`，并同步传递 `user_id` 到 sandbox 路径解析、provisioner 挂载与 viewer/chat 测试，保证同用户跨线程共享、不同用户隔离。

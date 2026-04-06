@@ -18,6 +18,12 @@
             </a-input>
           </div>
 
+          <a-tooltip title="刷新工具">
+            <a-button class="sidebar-tool" :disabled="loading" @click="fetchTools">
+              <RotateCw :size="14" />
+            </a-button>
+          </a-tooltip>
+
           <a-tooltip :title="`当前分类：${currentCategoryLabel}`">
             <a-dropdown trigger="click">
               <a-button
@@ -160,7 +166,16 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { Search, Wrench, Tag, Tags, FileText, List, SlidersHorizontal } from 'lucide-vue-next'
+import {
+  Search,
+  Wrench,
+  Tag,
+  Tags,
+  FileText,
+  List,
+  SlidersHorizontal,
+  RotateCw
+} from 'lucide-vue-next'
 import { toolApi } from '@/apis/tool_api'
 import { getToolIcon } from '@/components/ToolCallingResult/toolRegistry'
 

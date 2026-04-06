@@ -7,15 +7,23 @@
       <!-- 左侧：SubAgent 列表 -->
       <div class="sidebar-list">
         <!-- 搜索框 -->
-        <div class="search-box">
-          <a-input
-            v-model:value="searchQuery"
-            placeholder="搜索 SubAgent..."
-            allow-clear
-            class="search-input"
-          >
-            <template #prefix><Search :size="14" class="text-muted" /></template>
-          </a-input>
+        <div class="sidebar-toolbar">
+          <div class="search-box">
+            <a-input
+              v-model:value="searchQuery"
+              placeholder="搜索 SubAgent..."
+              allow-clear
+              class="search-input"
+            >
+              <template #prefix><Search :size="14" class="text-muted" /></template>
+            </a-input>
+          </div>
+
+          <a-tooltip title="刷新 Subagents">
+            <a-button class="sidebar-tool" :disabled="loading" @click="fetchSubAgents">
+              <RotateCw :size="14" />
+            </a-button>
+          </a-tooltip>
         </div>
 
         <!-- SubAgent 列表 -->
@@ -298,6 +306,7 @@ import {
   Bot,
   Pencil,
   Trash2,
+  RotateCw,
   Info,
   MessageSquare,
   FileText,

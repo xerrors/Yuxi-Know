@@ -588,7 +588,7 @@ const configSwitchOptions = computed(() => {
 
   if (userStore.isAdmin) {
     options.push({
-      label: '新建配置',
+      label: '+ 新建配置',
       value: CREATE_CONFIG_OPTION_VALUE
     })
   }

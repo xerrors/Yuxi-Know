@@ -1,96 +1,66 @@
 <template>
   <div class="extensions-view extension-page-root">
-    <div class="extensions-header">
-      <a-tabs v-model:activeKey="activeTab" class="extensions-tabs">
-        <a-tab-pane key="tools" tab="工具" />
-        <a-tab-pane key="mcp" tab="MCP 管理" />
-        <a-tab-pane key="subagents" tab="Subagents 管理" />
-        <a-tab-pane key="skills" tab="Skills 管理" />
-      </a-tabs>
-      <div class="header-actions">
-        <!-- Skills Tab 的按钮 -->
-        <template v-if="activeTab === 'skills'">
-          <a-button
-            @click="handleOpenRemoteInstall"
-            :disabled="skillsLoading || skillsImporting"
-            class="lucide-icon-btn"
-          >
-            <Computer :size="14" />
-            <span>远程安装</span>
-          </a-button>
-          <a-upload
-            accept=".zip,.md"
-            :show-upload-list="false"
-            :custom-request="handleImportUpload"
-            :before-upload="beforeSkillUpload"
-            :disabled="skillsLoading || skillsImporting"
-          >
-            <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
-              <Upload :size="14" />
-              <span>上传 Skill</span>
+    <ViewSwitchHeader
+      v-model:active-key="activeTab"
+      title="扩展管理"
+      :items="extensionTabs"
+      aria-label="扩展管理视图切换"
+    >
+      <template #actions>
+        <div class="extension-header-actions">
+          <!-- Skills Tab 的按钮 -->
+          <template v-if="activeTab === 'skills'">
+            <a-button
+              @click="handleOpenRemoteInstall"
+              :disabled="skillsLoading || skillsImporting"
+              class="lucide-icon-btn"
+            >
+              <Computer :size="14" />
+              <span>远程安装</span>
             </a-button>
-          </a-upload>
-          <a-button @click="handleSkillsRefresh" :disabled="skillsLoading" class="lucide-icon-btn">
-            <RotateCw :size="14" />
-            <span>刷新</span>
-          </a-button>
-        </template>
-        <!-- Tools Tab 的按钮 -->
-        <template v-else-if="activeTab === 'tools'">
-          <a-button @click="handleToolsRefresh" :disabled="toolsLoading" class="lucide-icon-btn">
-            <RotateCw :size="14" />
-            <span>刷新</span>
-          </a-button>
-        </template>
-        <!-- MCP Tab 的按钮 -->
-        <template v-else-if="activeTab === 'mcp'">
-          <a-button type="primary" @click="handleMcpAdd" class="lucide-icon-btn">
-            <Plus :size="14" />
-            <span>添加 MCP</span>
-          </a-button>
-          <a-button @click="handleMcpRefresh" :disabled="mcpLoading" class="lucide-icon-btn">
-            <RotateCw :size="14" />
-            <span>刷新</span>
-          </a-button>
-        </template>
-        <!-- Subagents Tab 的按钮 -->
-        <template v-else-if="activeTab === 'subagents'">
-          <a-button type="primary" @click="handleSubagentAdd" class="lucide-icon-btn">
-            <Plus :size="14" />
-            <span>添加</span>
-          </a-button>
-          <a-button
-            @click="handleSubagentRefresh"
-            :disabled="subagentsLoading"
-            class="lucide-icon-btn"
-          >
-            <RotateCw :size="14" />
-            <span>刷新</span>
-          </a-button>
-        </template>
-      </div>
-    </div>
+            <a-upload
+              accept=".zip,.md"
+              :show-upload-list="false"
+              :custom-request="handleImportUpload"
+              :before-upload="beforeSkillUpload"
+              :disabled="skillsLoading || skillsImporting"
+            >
+              <a-button type="primary" :loading="skillsImporting" class="lucide-icon-btn">
+                <Upload :size="14" />
+                <span>上传 Skill</span>
+              </a-button>
+            </a-upload>
+          </template>
+          <!-- MCP Tab 的按钮 -->
+          <template v-else-if="activeTab === 'mcp'">
+            <a-button type="primary" @click="handleMcpAdd" class="lucide-icon-btn">
+              <Plus :size="14" />
+              <span>添加 MCP</span>
+            </a-button>
+          </template>
+          <!-- Subagents Tab 的按钮 -->
+          <template v-else-if="activeTab === 'subagents'">
+            <a-button type="primary" @click="handleSubagentAdd" class="lucide-icon-btn">
+              <Plus :size="14" />
+              <span>添加</span>
+            </a-button>
+          </template>
+        </div>
+      </template>
+    </ViewSwitchHeader>
 
     <div class="extensions-content">
       <div v-show="activeTab === 'tools'" class="tab-panel">
-        <ToolsManagerComponent ref="toolsRef" @refresh="handleToolsRefresh" />
+        <ToolsManagerComponent />
       </div>
       <div v-show="activeTab === 'skills'" class="tab-panel">
-        <SkillsManagerComponent
-          ref="skillsRef"
-          @import="handleSkillsImport"
-          @refresh="handleSkillsRefresh"
-        />
+        <SkillsManagerComponent ref="skillsRef" @import="handleSkillsImport" />
       </div>
       <div v-show="activeTab === 'mcp'" class="tab-panel">
-        <McpServersComponent ref="mcpRef" @add="handleMcpAdd" @refresh="handleMcpRefresh" />
+        <McpServersComponent ref="mcpRef" @add="handleMcpAdd" />
       </div>
       <div v-show="activeTab === 'subagents'" class="tab-panel">
-        <SubAgentsComponent
-          ref="subagentsRef"
-          @add="handleSubagentAdd"
-          @refresh="handleSubagentRefresh"
-        />
+        <SubAgentsComponent ref="subagentsRef" @add="handleSubagentAdd" />
       </div>
     </div>
   </div>
@@ -100,15 +70,23 @@
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { Upload, RotateCw, Plus, Computer } from 'lucide-vue-next'
+import { Upload, Plus, Computer } from 'lucide-vue-next'
 import SkillsManagerComponent from '@/components/SkillsManagerComponent.vue'
 import ToolsManagerComponent from '@/components/ToolsManagerComponent.vue'
 import McpServersComponent from '@/components/McpServersComponent.vue'
 import SubAgentsComponent from '@/components/SubAgentsComponent.vue'
+import ViewSwitchHeader from '@/components/ViewSwitchHeader.vue'
 
 const route = useRoute()
 const activeTab = ref('tools')
 const skillsRef = ref(null)
+
+const extensionTabs = [
+  { key: 'tools', label: '工具' },
+  { key: 'mcp', label: 'MCP' },
+  { key: 'subagents', label: 'Subagents' },
+  { key: 'skills', label: 'Skills' }
+]
 
 // 监听路由 query 参数变化
 watch(
@@ -120,33 +98,17 @@ watch(
   },
   { immediate: true }
 )
-const toolsRef = ref(null)
 const mcpRef = ref(null)
 const subagentsRef = ref(null)
 
 // Skills 相关状态（从子组件透传）
 const skillsLoading = ref(false)
 const skillsImporting = ref(false)
-const toolsLoading = ref(false)
-const mcpLoading = ref(false)
-const subagentsLoading = ref(false)
 
 // 暴露给子组件的状态更新
 const updateSkillsState = (loading, importing) => {
   skillsLoading.value = loading
   skillsImporting.value = importing
-}
-
-const updateToolsState = (loading) => {
-  toolsLoading.value = loading
-}
-
-const updateMcpState = (loading) => {
-  mcpLoading.value = loading
-}
-
-const updateSubagentsState = (loading) => {
-  subagentsLoading.value = loading
 }
 
 // Skills 事件处理
@@ -170,16 +132,6 @@ const handleOpenRemoteInstall = () => {
   }
 }
 
-// Tools 事件处理
-const handleToolsRefresh = () => {
-  if (toolsRef.value?.fetchTools) {
-    updateToolsState(true)
-    toolsRef.value.fetchTools().finally(() => {
-      updateToolsState(false)
-    })
-  }
-}
-
 // MCP 事件处理
 const handleMcpAdd = () => {
   if (mcpRef.value?.showAddModal) {
@@ -187,28 +139,10 @@ const handleMcpAdd = () => {
   }
 }
 
-const handleMcpRefresh = () => {
-  if (mcpRef.value?.fetchServers) {
-    updateMcpState(true)
-    mcpRef.value.fetchServers().finally(() => {
-      updateMcpState(false)
-    })
-  }
-}
-
 // Subagents 事件处理
 const handleSubagentAdd = () => {
   if (subagentsRef.value?.showAddModal) {
     subagentsRef.value.showAddModal()
-  }
-}
-
-const handleSubagentRefresh = () => {
-  if (subagentsRef.value?.fetchSubAgents) {
-    updateSubagentsState(true)
-    subagentsRef.value.fetchSubAgents().finally(() => {
-      updateSubagentsState(false)
-    })
   }
 }
 
@@ -242,57 +176,9 @@ const handleImportUpload = async ({ file, onSuccess, onError }) => {
 @import '@/assets/css/extensions.less';
 
 .extensions-view {
-  .extensions-header {
+  .extension-header-actions {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 16px;
-    border-bottom: 1px solid var(--gray-150);
-    background-color: var(--gray-0);
-
-    .extensions-tabs {
-      flex: 1;
-      height: auto;
-      display: flex;
-      flex-direction: column;
-
-      :deep(.ant-tabs-nav) {
-        margin: 0;
-        padding: 0;
-
-        &::before {
-          border-bottom: none;
-        }
-      }
-
-      :deep(.ant-tabs-nav::after) {
-        content: none;
-      }
-
-      :deep(.ant-tabs-nav-left-bar) {
-        display: none;
-      }
-
-      :deep(.ant-tabs-items) {
-        padding: 0;
-      }
-
-      :deep(.ant-tabs-tab) {
-        padding: 12px 16px;
-        font-size: 14px;
-        margin: 0;
-      }
-
-      :deep(.ant-tabs-ink-bar) {
-        display: block;
-      }
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 8px;
-      padding: 8px 0;
-    }
+    gap: 8px;
   }
 
   .extensions-content {

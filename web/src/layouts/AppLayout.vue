@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, provide } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { GithubOutlined } from '@ant-design/icons-vue'
-import { Bot, Waypoints, LibraryBig, BarChart3, CircleCheck, Blocks } from 'lucide-vue-next'
+import { Bot, LibraryBig, BarChart3, ClipboardList, Blocks } from 'lucide-vue-next'
 
 import { useConfigStore } from '@/stores/config'
 import { useDatabaseStore } from '@/stores/database'
@@ -113,20 +113,13 @@ const mainList = computed(() => {
 
   if (userStore.isAdmin) {
     if (!isLiteMode) {
-      items.push(
-        {
-          name: '图谱',
-          path: '/graph',
-          icon: Waypoints,
-          activeIcon: Waypoints
-        },
-        {
-          name: '知识库',
-          path: '/database',
-          icon: LibraryBig,
-          activeIcon: LibraryBig
-        }
-      )
+      items.push({
+        name: '知识库',
+        path: '/database',
+        activePaths: ['/database', '/graph'],
+        icon: LibraryBig,
+        activeIcon: LibraryBig
+      })
     }
 
     if (userStore.isSuperAdmin) {
@@ -148,6 +141,11 @@ const mainList = computed(() => {
 
   return items
 })
+
+const isNavItemActive = (item) => {
+  const activePaths = item.activePaths || [item.path]
+  return activePaths.some((path) => route.path === path || route.path.startsWith(`${path}/`))
+}
 
 // Provide settings modal methods to child components
 provide('settingsModal', {
@@ -171,35 +169,18 @@ provide('settingsModal', {
           :to="item.path"
           v-show="!item.hidden"
           class="nav-item"
+          :class="{ active: isNavItemActive(item) }"
           active-class="active"
         >
           <a-tooltip placement="right">
             <template #title>{{ item.name }}</template>
             <component
               class="icon"
-              :is="route.path.startsWith(item.path) ? item.activeIcon : item.icon"
+              :is="isNavItemActive(item) ? item.activeIcon : item.icon"
               size="22"
             />
           </a-tooltip>
         </RouterLink>
-        <div
-          v-if="userStore.isAdmin"
-          class="nav-item task-center"
-          :class="{ active: isDrawerOpen }"
-          @click="taskerStore.openDrawer()"
-        >
-          <a-tooltip placement="right">
-            <template #title>任务中心</template>
-            <a-badge
-              :count="activeTaskCount"
-              :overflow-count="99"
-              class="task-center-badge"
-              size="small"
-            >
-              <CircleCheck class="icon" size="22" />
-            </a-badge>
-          </a-tooltip>
-        </div>
       </div>
       <div class="fill"></div>
       <div class="github nav-item">
@@ -211,6 +192,24 @@ provide('settingsModal', {
               <span class="star-count">{{ (githubStars / 1000).toFixed(1) }}k</span>
             </span>
           </a>
+        </a-tooltip>
+      </div>
+      <div
+        v-if="userStore.isAdmin"
+        class="nav-item task-center"
+        :class="{ active: isDrawerOpen }"
+        @click="taskerStore.openDrawer()"
+      >
+        <a-tooltip placement="right">
+          <template #title>任务中心</template>
+          <a-badge
+            :count="activeTaskCount"
+            :overflow-count="99"
+            class="task-center-badge"
+            size="small"
+          >
+            <ClipboardList class="icon" size="22" />
+          </a-badge>
         </a-tooltip>
       </div>
       <!-- 用户信息组件 -->
@@ -392,6 +391,8 @@ div.header,
       display: none;
     }
     &.task-center {
+      margin-bottom: 16px;
+
       .task-center-badge {
         width: 100%;
         display: flex;
@@ -538,6 +539,10 @@ div.header,
           color: var(--main-color);
         }
       }
+    }
+
+    &.task-center {
+      margin-bottom: 0;
     }
   }
 }

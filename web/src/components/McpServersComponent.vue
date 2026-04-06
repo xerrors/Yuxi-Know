@@ -7,15 +7,23 @@
       <!-- 左侧：MCP 列表 -->
       <div class="sidebar-list">
         <!-- 搜索框 -->
-        <div class="search-box">
-          <a-input
-            v-model:value="searchQuery"
-            placeholder="搜索 MCP..."
-            allow-clear
-            class="search-input"
-          >
-            <template #prefix><Search :size="14" class="text-muted" /></template>
-          </a-input>
+        <div class="sidebar-toolbar">
+          <div class="search-box">
+            <a-input
+              v-model:value="searchQuery"
+              placeholder="搜索 MCP..."
+              allow-clear
+              class="search-input"
+            >
+              <template #prefix><Search :size="14" class="text-muted" /></template>
+            </a-input>
+          </div>
+
+          <a-tooltip title="刷新 MCP">
+            <a-button class="sidebar-tool" :disabled="loading" @click="fetchServers">
+              <RotateCw :size="14" />
+            </a-button>
+          </a-tooltip>
         </div>
 
         <!-- 统计信息 -->

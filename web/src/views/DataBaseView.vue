@@ -1,10 +1,16 @@
 <template>
   <div class="database-container layout-container">
-    <HeaderComponent title="文档知识库" :loading="dbState.listLoading">
+    <ViewSwitchHeader
+      title="知识库"
+      :active-key="knowledgeActiveView"
+      :items="knowledgeViewItems"
+      :loading="dbState.listLoading"
+      aria-label="知识库视图切换"
+    >
       <template #actions>
         <a-button type="primary" @click="state.openNewDatabaseModel = true"> 新建知识库 </a-button>
       </template>
-    </HeaderComponent>
+    </ViewSwitchHeader>
 
     <a-modal
       :open="state.openNewDatabaseModel"
@@ -240,7 +246,7 @@ import { useDatabaseStore } from '@/stores/database'
 import { LockOutlined, PlusOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { typeApi } from '@/apis/knowledge_api'
-import HeaderComponent from '@/components/HeaderComponent.vue'
+import ViewSwitchHeader from '@/components/ViewSwitchHeader.vue'
 import ModelSelectorComponent from '@/components/ModelSelectorComponent.vue'
 import EmbeddingModelSelector from '@/components/EmbeddingModelSelector.vue'
 import ShareConfigForm from '@/components/ShareConfigForm.vue'
@@ -256,6 +262,12 @@ const databaseStore = useDatabaseStore()
 
 // 使用 store 的状态
 const { databases, state: dbState } = storeToRefs(databaseStore)
+
+const knowledgeActiveView = 'documents'
+const knowledgeViewItems = [
+  { key: 'documents', label: '文档知识库', path: '/database' },
+  { key: 'graph', label: '知识图谱', path: '/graph' }
+]
 
 const state = reactive({
   openNewDatabaseModel: false
@@ -668,7 +680,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 .databases {
-  padding: 20px;
+  padding: 12px 16px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
@@ -691,9 +703,9 @@ onMounted(() => {
 .dbcard,
 .database {
   width: 100%;
-  padding: 16px;
-  border-radius: 16px;
-  height: 156px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  height: 140px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -721,9 +733,9 @@ onMounted(() => {
     margin-bottom: 14px;
 
     .icon {
-      width: 54px;
-      height: 54px;
-      font-size: 26px;
+      width: 50px;
+      height: 50px;
+      font-size: 24px;
       margin-right: 14px;
       display: flex;
       justify-content: center;
@@ -746,7 +758,7 @@ onMounted(() => {
       }
 
       h3 {
-        font-size: 17px;
+        font-size: 16px;
         font-weight: 600;
         letter-spacing: -0.02em;
         line-height: 1.4;

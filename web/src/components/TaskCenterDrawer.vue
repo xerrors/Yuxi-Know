@@ -1,5 +1,13 @@
 <template>
-  <a-drawer :open="isOpen" :width="620" title="任务中心" placement="right" @close="handleClose">
+  <a-modal
+    :open="isOpen"
+    title="任务中心"
+    :width="680"
+    :footer="null"
+    :destroy-on-close="false"
+    class="task-center-modal"
+    @cancel="handleClose"
+  >
     <p>提醒：任务执行成功，只代表任务已执行完成，但是任务内部可能有问题已捕获，请注意观察日志。</p>
     <div class="task-center">
       <div class="task-toolbar">
@@ -37,8 +45,8 @@
             <div class="task-card-info">
               <div class="task-card-title">{{ task.name }}</div>
               <div class="task-card-meta">
-                <span class="task-card-id">#{{ formatTaskId(task.id) }}</span>
                 <span class="task-card-type">{{ taskTypeLabel(task.type) }}</span>
+                <span class="task-card-id">#{{ formatTaskId(task.id) }}</span>
                 <span v-if="getTaskDuration(task)" class="task-card-duration">{{
                   getTaskDuration(task)
                 }}</span>
@@ -107,7 +115,7 @@
         </div>
       </div>
     </div>
-  </a-drawer>
+  </a-modal>
 </template>
 
 <script setup>
@@ -349,7 +357,9 @@ function canCancel(task) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  height: 100%;
+  max-height: min(70vh, 720px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .task-toolbar {
@@ -389,16 +399,20 @@ function canCancel(task) {
 }
 
 .task-list {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .task-card {
   background: var(--gray-0);
   border: 1px solid var(--gray-200);
   border-radius: 10px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
@@ -519,10 +533,7 @@ function canCancel(task) {
 }
 
 .task-card-type {
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--gray-100);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .task-card-duration {
@@ -586,7 +597,7 @@ function canCancel(task) {
 }
 
 .task-card-actions :deep(.ant-btn) {
-  height: 28px;
+  height: 24px;
   padding: 0 10px;
   font-size: 12px;
   color: var(--gray-500);

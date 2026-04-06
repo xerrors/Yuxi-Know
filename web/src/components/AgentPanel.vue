@@ -2,12 +2,25 @@
   <div ref="panelRef" class="agent-panel" :class="{ resizing: isResizing }">
     <!-- 拖拽手柄 -->
     <div class="resize-handle" @pointerdown="startResize"></div>
-    <div class="panel-header">
-      <div class="panel-title">
-        <FolderCode :size="20" class="header-icon" />
-        <span><strong>文件系统</strong></span>
+    <div class="panel-header" :class="{ 'is-compact': isCompactHeader }">
+      <div class="panel-header-main">
+        <div class="panel-title">
+          <span><strong>文件系统</strong></span>
+        </div>
+        <div class="window-actions">
+          <button
+            class="header-action-btn"
+            :title="isExpanded ? '恢复高度' : '向上展开'"
+            @click="emit('toggle-expand')"
+          >
+            <component :is="isExpanded ? ChevronsDownUp : ChevronsUpDown" :size="15" />
+          </button>
+          <button class="close-btn" @click="$emit('close')">
+            <X :size="18" />
+          </button>
+        </div>
       </div>
-      <div class="header-actions">
+      <div class="file-toolbar">
         <button
           class="header-action-btn"
           title="新建文件夹"
@@ -26,17 +39,6 @@
         </button>
         <button class="header-action-btn" title="刷新" @click="emitRefresh">
           <RefreshCw :size="15" />
-        </button>
-        <span class="header-divider"></span>
-        <button
-          class="header-action-btn"
-          :title="isExpanded ? '恢复高度' : '向上展开'"
-          @click="emit('toggle-expand')"
-        >
-          <component :is="isExpanded ? ChevronsDownUp : ChevronsUpDown" :size="15" />
-        </button>
-        <button class="close-btn" @click="$emit('close')">
-          <X :size="18" />
         </button>
       </div>
     </div>
@@ -166,7 +168,6 @@ import {
   ChevronsDownUp,
   ChevronsUpDown,
   Download,
-  FolderCode,
   FolderPlus,
   RefreshCw,
   Trash2,
@@ -239,6 +240,7 @@ const expandedKeys = ref([])
 const deletingPaths = ref(new Set())
 
 const useInlinePreview = computed(() => panelWidth.value >= INLINE_PREVIEW_MIN_WIDTH)
+const isCompactHeader = computed(() => panelWidth.value > 0 && panelWidth.value < 360)
 
 const buildDisplayName = (fullPath) => {
   const normalized = String(fullPath || '').replace(/\/+$/, '')
@@ -866,10 +868,41 @@ watch(useInlinePreview, (isInline) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 4px 16px;
-  height: 56px;
+  min-height: 56px;
   background: var(--gray-25);
   flex-shrink: 0;
+
+  &.is-compact {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 12px;
+
+    .panel-header-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .file-toolbar {
+      order: 2;
+      width: 100%;
+      justify-content: flex-start;
+      padding: 4px;
+      border-right: none;
+      border: 1px solid var(--gray-150);
+      border-radius: 8px;
+      background: var(--gray-0);
+    }
+  }
+}
+
+.panel-header-main {
+  display: contents;
 }
 
 .header-action-btn {
@@ -902,26 +935,41 @@ watch(useInlinePreview, (isInline) => {
   display: flex;
   align-items: center;
   gap: 12px;
+  order: 1;
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   font-size: 14px;
   color: var(--gray-900);
 
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .header-icon {
+    flex-shrink: 0;
     color: var(--gray-700);
   }
 }
 
-.header-actions {
+.file-toolbar,
+.window-actions {
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.header-divider {
-  width: 1px;
-  height: 16px;
-  background: var(--gray-300);
-  margin: 0 4px;
+.file-toolbar {
+  order: 2;
+  padding-right: 8px;
+  border-right: 1px solid var(--gray-300);
+}
+
+.window-actions {
+  order: 3;
+  flex-shrink: 0;
 }
 
 .hidden-file-input {

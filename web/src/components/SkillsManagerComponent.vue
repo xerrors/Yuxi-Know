@@ -6,15 +6,23 @@
     <div class="layout-wrapper" :class="{ 'content-loading': loading }">
       <!-- 左侧：技能列表 -->
       <div class="sidebar-list">
-        <div class="search-box">
-          <a-input
-            v-model:value="searchQuery"
-            placeholder="搜索技能..."
-            allow-clear
-            class="search-input"
-          >
-            <template #prefix><Search :size="14" class="text-muted" /></template>
-          </a-input>
+        <div class="sidebar-toolbar">
+          <div class="search-box">
+            <a-input
+              v-model:value="searchQuery"
+              placeholder="搜索技能..."
+              allow-clear
+              class="search-input"
+            >
+              <template #prefix><Search :size="14" class="text-muted" /></template>
+            </a-input>
+          </div>
+
+          <a-tooltip title="刷新 Skills">
+            <a-button class="sidebar-tool" :disabled="loading" @click="fetchSkills">
+              <RotateCw :size="14" />
+            </a-button>
+          </a-tooltip>
         </div>
 
         <div class="list-container">
@@ -1211,20 +1219,17 @@ defineExpose({
 .tree-container {
   width: 240px;
   border-right: 1px solid @border-color;
-  background-color: @bg-secondary;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 
   .tree-header {
-    padding: 10px 16px;
+    padding: 10px 12px 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid @border-color;
-    background-color: var(--gray-50);
     .label {
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--gray-500);
       text-transform: uppercase;
@@ -1251,7 +1256,8 @@ defineExpose({
   .tree-content {
     flex: 1;
     overflow-y: auto;
-    padding: 8px;
+    height: 100%;
+    padding: 8px 0;
   }
 }
 
@@ -1264,8 +1270,7 @@ defineExpose({
   min-height: 0;
 
   .editor-header {
-    padding: 8px 16px;
-    border-bottom: 1px solid @border-color;
+    padding: 8px 16px 4px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -1327,7 +1332,7 @@ defineExpose({
     height: 100%;
     border: none;
     resize: none;
-    padding: 20px;
+    padding: 16px;
     font-family: 'Fira Code', 'Monaco', monospace;
     font-size: 13px;
     line-height: 1.6;

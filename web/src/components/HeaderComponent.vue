@@ -43,7 +43,8 @@ defineProps({
 .header-container {
   background-color: var(--bg-sider);
   backdrop-filter: blur(10px);
-  padding: 10px 24px;
+  padding: 8px 16px;
+  height: 50px;
   border-bottom: 1px solid var(--gray-150);
   position: sticky;
   top: 0;
@@ -52,6 +53,8 @@ defineProps({
 
 .header-content {
   display: flex;
+  width: 100%;
+  height: 100%;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
@@ -71,7 +74,7 @@ defineProps({
 
   h1 {
     margin: 0;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 500;
     color: var(--gray-2000);
   }

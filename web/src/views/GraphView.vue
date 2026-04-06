@@ -7,7 +7,12 @@
     </a-empty>
   </div>
   <div class="graph-container layout-container" v-else>
-    <HeaderComponent title="图数据库">
+    <ViewSwitchHeader
+      title="知识库"
+      :active-key="knowledgeActiveView"
+      :items="knowledgeViewItems"
+      aria-label="知识库视图切换"
+    >
       <template #actions>
         <div class="db-selector">
           <div class="status-wrapper">
@@ -43,7 +48,7 @@
           <SyncOutlined v-if="!state.indexing" /> 为{{ unindexedCount }}个节点添加索引
         </a-button>
       </template>
-    </HeaderComponent>
+    </ViewSwitchHeader>
 
     <div class="container-outter">
       <GraphCanvas
@@ -210,7 +215,7 @@ import {
   DatabaseOutlined,
   ExportOutlined
 } from '@ant-design/icons-vue'
-import HeaderComponent from '@/components/HeaderComponent.vue'
+import ViewSwitchHeader from '@/components/ViewSwitchHeader.vue'
 import { neo4jApi, unifiedApi } from '@/apis/graph_api'
 import { useUserStore } from '@/stores/user'
 import GraphCanvas from '@/components/GraphCanvas.vue'
@@ -220,6 +225,11 @@ import { useGraph } from '@/composables/useGraph'
 
 const configStore = useConfigStore()
 const cur_embed_model = computed(() => configStore.config?.embed_model)
+const knowledgeActiveView = 'graph'
+const knowledgeViewItems = [
+  { key: 'documents', label: '文档知识库', path: '/database' },
+  { key: 'graph', label: '知识图谱', path: '/graph' }
+]
 const modelMatched = computed(
   () =>
     !graphInfo?.value?.embed_model_name ||
