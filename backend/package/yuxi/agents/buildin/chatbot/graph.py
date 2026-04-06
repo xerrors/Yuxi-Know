@@ -16,7 +16,7 @@ from yuxi.agents.middlewares.skills_middleware import SkillsMiddleware
 from yuxi.services.mcp_service import get_tools_from_all_servers
 from yuxi.services.subagent_service import get_subagents_from_names
 
-from .prompt import PROMPT
+from .prompt import TODO_MID_PROMPT, build_prompt_with_context
 
 
 async def _build_middlewares(context):
@@ -54,7 +54,7 @@ async def _build_middlewares(context):
         SkillsMiddleware(),  # Skills 中间件（提示词注入、依赖展开、动态激活）
         subagents_middleware,
         summary_middleware,
-        TodoListMiddleware(system_prompt="任务结束前，应该检查维护的待办事项列表是否结束。"),
+        TodoListMiddleware(system_prompt=TODO_MID_PROMPT),  # 待办事项中间件
         PatchToolCallsMiddleware(),
         ModelRetryMiddleware(),  # 模型重试中间件
     ]
@@ -82,12 +82,10 @@ class ChatbotAgent(BaseAgent):
 
         context = context or self.context_schema()  # 获取上下文配置
 
-        system_prompt = f"{PROMPT.strip()}\n\n{context.system_prompt or ''}"
-
         # 使用 create_agent 创建智能体
         graph = create_agent(
             model=load_chat_model(fully_specified_name=context.model),
-            system_prompt=system_prompt.strip(),
+            system_prompt=build_prompt_with_context(context),
             middleware=await _build_middlewares(context),
             state_schema=BaseState,
             checkpointer=await self._get_checkpointer(),

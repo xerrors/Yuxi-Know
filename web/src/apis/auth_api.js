@@ -77,5 +77,5 @@ async function exchangeOIDCCode(code) {
 export const authApi = {
   getOIDCConfig,
   getOIDCLoginUrl,
-  exchangeOIDCCode,
+  exchangeOIDCCode
 }

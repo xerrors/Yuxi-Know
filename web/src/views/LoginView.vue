@@ -332,7 +332,7 @@ const healthChecking = ref(false)
 // OIDC 相关状态
 const oidcEnabled = ref(false)
 const oidcLoading = ref(false)
-const oidcChecking = ref(true) 
+const oidcChecking = ref(true)
 const oidcButtonText = ref('OIDC 登录')
 
 // 登录锁定相关状态
@@ -513,7 +513,8 @@ const handleOIDCLogin = async () => {
     const response = await authApi.getOIDCLoginUrl()
     if (response.login_url) {
       // 保存当前路径，以便登录后返回
-      const redirectPath = sessionStorage.getItem('redirect') || router.currentRoute.value.query.redirect || '/'
+      const redirectPath =
+        sessionStorage.getItem('redirect') || router.currentRoute.value.query.redirect || '/'
       sessionStorage.setItem('oidc_redirect', redirectPath)
 
       // 跳转到 OIDC Provider

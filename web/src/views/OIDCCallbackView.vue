@@ -9,9 +9,7 @@
       <div v-else-if="error" class="error-section">
         <a-result status="error" :title="errorTitle" :sub-title="errorMessage">
           <template #extra>
-            <a-button type="primary" @click="goToLogin">
-              返回登录页
-            </a-button>
+            <a-button type="primary" @click="goToLogin"> 返回登录页 </a-button>
           </template>
         </a-result>
       </div>
@@ -107,7 +105,6 @@ const handleCallback = async () => {
         router.push(redirectPath)
       }
     }, 500)
-
   } catch (err) {
     console.error('OIDC 回调处理失败:', err)
     loading.value = false
