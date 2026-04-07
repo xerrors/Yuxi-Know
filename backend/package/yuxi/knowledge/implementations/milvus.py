@@ -1,12 +1,23 @@
 import asyncio
 import os
-import re
 import time
 import traceback
 from functools import partial
 from typing import Any
 
-from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, db, utility
+from pymilvus import (
+    AnnSearchRequest,
+    Collection,
+    CollectionSchema,
+    DataType,
+    FieldSchema,
+    Function,
+    FunctionType,
+    WeightedRanker,
+    connections,
+    db,
+    utility,
+)
 
 from yuxi import config
 from yuxi.knowledge.base import FileStatus, KnowledgeBase
@@ -19,6 +30,8 @@ from yuxi.utils import hashstr, logger
 from yuxi.utils.datetime_utils import utc_isoformat
 
 MILVUS_AVAILABLE = True
+CONTENT_SPARSE_FIELD = "content_sparse"
+CONTENT_ANALYZER_PARAMS = {"type": "chinese"}
 
 
 class MilvusKB(KnowledgeBase):
@@ -118,6 +131,11 @@ class MilvusKB(KnowledgeBase):
                     utility.drop_collection(collection_name, using=self.connection_alias)
                     return self._create_new_collection(collection_name, embed_info, db_id)
 
+                if not self._collection_supports_bm25(collection):
+                    logger.warning(f"Collection {collection_name} schema does not support BM25, recreating")
+                    utility.drop_collection(collection_name, using=self.connection_alias)
+                    return self._create_new_collection(collection_name, embed_info, db_id)
+
                 logger.info(f"Retrieved existing collection: {collection_name}")
                 return collection
             else:
@@ -140,16 +158,31 @@ class MilvusKB(KnowledgeBase):
         # 定义集合Schema
         fields = [
             FieldSchema(name="id", dtype=DataType.VARCHAR, max_length=100, is_primary=True),
-            FieldSchema(name="content", dtype=DataType.VARCHAR, max_length=65535),
+            FieldSchema(
+                name="content",
+                dtype=DataType.VARCHAR,
+                max_length=65535,
+                enable_analyzer=True,
+                analyzer_params=CONTENT_ANALYZER_PARAMS,
+            ),
             FieldSchema(name="source", dtype=DataType.VARCHAR, max_length=500),
             FieldSchema(name="chunk_id", dtype=DataType.VARCHAR, max_length=100),
             FieldSchema(name="file_id", dtype=DataType.VARCHAR, max_length=100),
             FieldSchema(name="chunk_index", dtype=DataType.INT64),
             FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=embedding_dim),
+            FieldSchema(name=CONTENT_SPARSE_FIELD, dtype=DataType.SPARSE_FLOAT_VECTOR),
         ]
+        bm25_function = Function(
+            name="content_bm25",
+            input_field_names=["content"],
+            output_field_names=[CONTENT_SPARSE_FIELD],
+            function_type=FunctionType.BM25,
+        )
 
         schema = CollectionSchema(
-            fields=fields, description=f"Knowledge base collection for {db_id} using {model_name}"
+            fields=fields,
+            description=f"Knowledge base collection for {db_id} using {model_name}",
+            functions=[bm25_function],
         )
 
         # 创建集合
@@ -158,10 +191,37 @@ class MilvusKB(KnowledgeBase):
         # 创建索引
         index_params = {"metric_type": "COSINE", "index_type": "IVF_FLAT", "params": {"nlist": 1024}}
         collection.create_index("embedding", index_params)
+        sparse_index_params = {
+            "metric_type": "BM25",
+            "index_type": "SPARSE_INVERTED_INDEX",
+            "params": {"inverted_index_algo": "DAAT_MAXSCORE"},
+        }
+        collection.create_index(CONTENT_SPARSE_FIELD, sparse_index_params)
 
         logger.info(f"Created new Milvus collection: {collection_name} '{model_name=}', {embedding_dim=}")
 
         return collection
+
+    def _collection_supports_bm25(self, collection: Collection) -> bool:
+        """检查集合是否具备 Milvus 内置 BM25 所需的 schema。"""
+        fields = {field.name: field for field in collection.schema.fields}
+        content_field = fields.get("content")
+        sparse_field = fields.get(CONTENT_SPARSE_FIELD)
+        if not content_field or content_field.dtype != DataType.VARCHAR:
+            return False
+        if content_field.params.get("enable_analyzer") is not True:
+            return False
+        if not sparse_field or sparse_field.dtype != DataType.SPARSE_FLOAT_VECTOR:
+            return False
+
+        for function in collection.schema.functions:
+            if (
+                function.type == FunctionType.BM25
+                and function.input_field_names == ["content"]
+                and function.output_field_names == [CONTENT_SPARSE_FIELD]
+            ):
+                return True
+        return False
 
     async def _initialize_kb_instance(self, instance: Any) -> None:
         """初始化 Milvus 集合（加载到内存）"""
@@ -468,6 +528,28 @@ class MilvusKB(KnowledgeBase):
 
         return processed_items_info
 
+    def _build_chunk_from_hit(
+        self,
+        hit: Any,
+        score: float,
+        include_distances: bool,
+        score_field: str | None = None,
+    ) -> dict:
+        """将 Milvus Hit 转成知识库统一返回的 Chunk 结构。"""
+        entity = hit.entity
+        metadata = {
+            "source": entity.get("source", "未知来源"),
+            "chunk_id": entity.get("chunk_id"),
+            "file_id": entity.get("file_id"),
+            "chunk_index": entity.get("chunk_index"),
+        }
+        chunk = {"content": entity.get("content", ""), "metadata": metadata, "score": float(score or 0.0)}
+        if score_field:
+            chunk[score_field] = float(score or 0.0)
+        if include_distances:
+            chunk["distance"] = hit.distance
+        return chunk
+
     async def aquery(self, query_text: str, db_id: str, agent_call: bool = False, **kwargs) -> list[dict]:
         """异步查询知识库"""
         collection = await self._get_milvus_collection(db_id)
@@ -508,8 +590,9 @@ class MilvusKB(KnowledgeBase):
                     file_expr = f'source like "{safe_file_name}"'
                 logger.debug(f"Using filter expression: {file_expr}")
 
-            vector_results: list[dict] = []
-            if search_mode in {"vector", "hybrid"}:
+            output_fields = ["content", "source", "chunk_id", "file_id", "chunk_index"]
+            retrieved_chunks: list[dict] = []
+            if search_mode == "vector":
                 embed_info = self.databases_meta[db_id].get("embed_info", {})
                 embedding_function = self._get_embedding_function(embed_info)
                 query_embedding = embedding_function([query_text])
@@ -522,7 +605,7 @@ class MilvusKB(KnowledgeBase):
                     param=search_params,
                     limit=recall_top_k,
                     expr=file_expr,
-                    output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"],
+                    output_fields=output_fields,
                 )
 
                 if results and len(results) > 0 and len(results[0]) > 0:
@@ -531,104 +614,80 @@ class MilvusKB(KnowledgeBase):
                         if similarity < similarity_threshold:
                             continue
 
-                        entity = hit.entity
-                        metadata = {
-                            "source": entity.get("source", "未知来源"),
-                            "chunk_id": entity.get("chunk_id"),
-                            "file_id": entity.get("file_id"),
-                            "chunk_index": entity.get("chunk_index"),
-                        }
-
-                        chunk = {"content": entity.get("content", ""), "metadata": metadata, "score": similarity}
-                        if include_distances:
-                            chunk["distance"] = hit.distance
-                        vector_results.append(chunk)
+                        retrieved_chunks.append(self._build_chunk_from_hit(hit, similarity, include_distances))
 
                 logger.debug(
-                    f"Milvus vector query response: {len(vector_results)} chunks found (after similarity filtering)"
+                    f"Milvus vector query response: {len(retrieved_chunks)} chunks found (after similarity filtering)"
                 )
 
-            keyword_results: list[dict] = []
-            if search_mode in {"keyword", "hybrid"}:
-                keyword_top_k = int(merged_kwargs.get("keyword_top_k", final_top_k))
-                keyword_top_k = max(keyword_top_k, 1)
-                raw_keywords = re.split(r"[\s,，;；]+", str(query_text))
-                keywords = [kw.strip() for kw in raw_keywords if kw and kw.strip()]
-
-                if keywords:
-                    keyword_clauses = []
-                    for kw in keywords:
-                        safe_kw = kw.replace('"', '\\"')
-                        keyword_clauses.append(f'content like "%{safe_kw}%"')
-
-                    keyword_expr = " or ".join(keyword_clauses)
-                    if file_expr:
-                        keyword_expr = f"({keyword_expr}) and ({file_expr})"
-
-                    results = collection.query(
-                        expr=keyword_expr,
-                        output_fields=["content", "source", "chunk_id", "file_id", "chunk_index"],
-                        limit=keyword_top_k,
-                    )
-
-                    keyword_scores = []
-                    for result in results or []:
-                        content = result.get("content", "")
-                        text_lower = content.lower()
-                        match_count = sum(text_lower.count(kw.lower()) for kw in keywords if kw)
-                        if match_count <= 0:
-                            continue
-
-                        metadata = {
-                            "source": result.get("source", "未知来源"),
-                            "chunk_id": result.get("chunk_id"),
-                            "file_id": result.get("file_id"),
-                            "chunk_index": result.get("chunk_index"),
-                        }
-                        keyword_scores.append((result, metadata, match_count))
-
-                    if keyword_scores:
-                        max_count = max(item[2] for item in keyword_scores)
-                        for result, metadata, match_count in keyword_scores:
-                            score = match_count / max_count if max_count > 0 else 0.0
-                            keyword_results.append(
-                                {
-                                    "content": result.get("content", ""),
-                                    "metadata": metadata,
-                                    "score": score,
-                                    "keyword_score": score,
-                                }
-                            )
-                        keyword_results.sort(key=lambda item: item.get("score", 0.0), reverse=True)
-
-                logger.debug(f"Milvus keyword query response: {len(keyword_results)} chunks found")
-
-            if search_mode == "vector":
-                retrieved_chunks = vector_results
             elif search_mode == "keyword":
-                retrieved_chunks = keyword_results
+                bm25_top_k = int(merged_kwargs.get("bm25_top_k", recall_top_k))
+                bm25_top_k = max(bm25_top_k, 1)
+                bm25_drop_ratio_search = float(merged_kwargs.get("bm25_drop_ratio_search", 0.0))
+                bm25_search_params = {
+                    "metric_type": "BM25",
+                    "params": {"drop_ratio_search": bm25_drop_ratio_search},
+                }
+
+                results = collection.search(
+                    data=[query_text],
+                    anns_field=CONTENT_SPARSE_FIELD,
+                    param=bm25_search_params,
+                    limit=bm25_top_k,
+                    expr=file_expr,
+                    output_fields=output_fields,
+                )
+
+                if results and len(results) > 0 and len(results[0]) > 0:
+                    for hit in results[0]:
+                        retrieved_chunks.append(
+                            self._build_chunk_from_hit(hit, hit.distance, include_distances, score_field="bm25_score")
+                        )
+
+                logger.debug(f"Milvus BM25 query response: {len(retrieved_chunks)} chunks found")
             else:
-                merged: dict[str, dict] = {}
-                for item in vector_results:
-                    chunk_id = item.get("metadata", {}).get("chunk_id")
-                    if chunk_id:
-                        merged[chunk_id] = item
-                    else:
-                        merged[id(item)] = item
+                embed_info = self.databases_meta[db_id].get("embed_info", {})
+                embedding_function = self._get_embedding_function(embed_info)
+                query_embedding = embedding_function([query_text])
+                bm25_top_k = int(merged_kwargs.get("bm25_top_k", recall_top_k))
+                bm25_top_k = max(bm25_top_k, 1)
+                bm25_drop_ratio_search = float(merged_kwargs.get("bm25_drop_ratio_search", 0.0))
+                vector_weight = float(merged_kwargs.get("vector_weight", 0.7))
+                bm25_weight = float(merged_kwargs.get("bm25_weight", 0.3))
 
-                for item in keyword_results:
-                    chunk_id = item.get("metadata", {}).get("chunk_id")
-                    if chunk_id in merged:
-                        existing = merged[chunk_id]
-                        keyword_score = item.get("keyword_score", item.get("score", 0.0))
-                        existing_score = existing.get("score", 0.0)
-                        existing["score"] = max(existing_score, keyword_score)
-                        existing["keyword_score"] = keyword_score
-                    else:
-                        merged[chunk_id or id(item)] = item
+                vector_request = AnnSearchRequest(
+                    data=query_embedding,
+                    anns_field="embedding",
+                    param={"metric_type": metric_type, "params": {"nprobe": 10}},
+                    limit=recall_top_k,
+                    expr=file_expr,
+                )
+                bm25_request = AnnSearchRequest(
+                    data=[query_text],
+                    anns_field=CONTENT_SPARSE_FIELD,
+                    param={
+                        "metric_type": "BM25",
+                        "params": {"drop_ratio_search": bm25_drop_ratio_search},
+                    },
+                    limit=bm25_top_k,
+                    expr=file_expr,
+                )
+                results = collection.hybrid_search(
+                    reqs=[vector_request, bm25_request],
+                    rerank=WeightedRanker(vector_weight, bm25_weight),
+                    limit=recall_top_k,
+                    output_fields=output_fields,
+                )
+                if results and len(results) > 0 and len(results[0]) > 0:
+                    for hit in results[0]:
+                        score = float(hit.distance or 0.0)
+                        if score < similarity_threshold:
+                            continue
+                        retrieved_chunks.append(
+                            self._build_chunk_from_hit(hit, score, include_distances, score_field="hybrid_score")
+                        )
 
-                retrieved_chunks = list(merged.values())
-                retrieved_chunks.sort(key=lambda item: item.get("score", 0.0), reverse=True)
+                logger.debug(f"Milvus hybrid query response: {len(retrieved_chunks)} chunks found")
 
             if not retrieved_chunks:
                 return []
@@ -804,8 +863,8 @@ class MilvusKB(KnowledgeBase):
                 "default": "vector",
                 "options": [
                     {"value": "vector", "label": "向量检索", "description": "仅使用向量相似度检索"},
-                    {"value": "keyword", "label": "关键词检索", "description": "仅使用关键词匹配检索"},
-                    {"value": "hybrid", "label": "混合检索", "description": "向量检索与关键词检索融合"},
+                    {"value": "keyword", "label": "BM25 全文检索", "description": "仅使用 Milvus BM25 检索"},
+                    {"value": "hybrid", "label": "混合检索", "description": "Milvus 向量检索与 BM25 融合检索"},
                 ],
                 "description": "选择检索模式",
             },
@@ -829,13 +888,43 @@ class MilvusKB(KnowledgeBase):
                 "description": "过滤相似度低于此值的结果",
             },
             {
-                "key": "keyword_top_k",
-                "label": "使用关键词召回的最大 Chunk 数",
+                "key": "bm25_top_k",
+                "label": "BM25 召回数量",
                 "type": "number",
                 "default": 50,
                 "min": 1,
                 "max": 200,
-                "description": "关键词/混合检索时的候选数量",
+                "description": "BM25 全文检索和混合检索中的 BM25 候选数量",
+            },
+            {
+                "key": "vector_weight",
+                "label": "向量检索权重",
+                "type": "number",
+                "default": 0.7,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "混合检索中向量召回结果的融合权重",
+            },
+            {
+                "key": "bm25_weight",
+                "label": "BM25 权重",
+                "type": "number",
+                "default": 0.3,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "混合检索中 BM25 召回结果的融合权重",
+            },
+            {
+                "key": "bm25_drop_ratio_search",
+                "label": "BM25 稀疏项丢弃比例",
+                "type": "number",
+                "default": 0.0,
+                "min": 0.0,
+                "max": 1.0,
+                "step": 0.1,
+                "description": "BM25 检索时丢弃低分稀疏项的比例，数值越大检索越快但可能降低召回",
             },
             {
                 "key": "include_distances",
@@ -881,7 +970,7 @@ class MilvusKB(KnowledgeBase):
                 "default": 50,
                 "min": 10,
                 "max": 200,
-                "description": "向量检索时保留的候选数量（启用重排序时有效）",
+                "description": "向量检索或混合检索保留的候选数量（启用重排序时有效）",
             },
         ]
 
