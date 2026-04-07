@@ -47,5 +47,11 @@
     "prettier": "^3.8.1",
     "vite": "^7.3.1"
   },
+  "pnpm": {
+    "overrides": {
+      "flatted": "3.4.2",
+      "lodash-es": "4.18.1"
+    }
+  },
   "packageManager": "pnpm@10.11.0"
 }
