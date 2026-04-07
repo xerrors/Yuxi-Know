@@ -152,6 +152,7 @@
       @ok="createDirectory"
       @cancel="closeCreateDirectoryModal"
     >
+      <p>文件夹将创建在{{ resolveWorkspaceTargetDirectory() }}下</p>
       <a-input
         v-model:value="newDirectoryName"
         placeholder="输入文件夹名"
