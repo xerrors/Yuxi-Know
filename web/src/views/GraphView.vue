@@ -619,7 +619,7 @@ const goToDatabasePage = () => {
 </script>
 
 <style lang="less" scoped>
-@graph-header-height: 55px;
+@graph-header-height: 50px;
 
 .graph-container {
   padding: 0;
