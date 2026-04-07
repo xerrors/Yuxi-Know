@@ -4,7 +4,7 @@
       :selected-keys="selectedKeys"
       :expanded-keys="expandedKeys"
       :tree-data="treeData"
-      :load-data="loadData"
+      :load-data="loadData ? internalLoadData : undefined"
       :show-icon="showIcon"
       :block-node="blockNode"
       :show-line="showLine"
@@ -25,7 +25,12 @@
             <FileText v-else :size="16" class="file-icon" />
           </template>
           <template v-else>
-            <FolderOpen v-if="expanded" :size="18" class="folder-icon open" />
+            <span
+              v-if="isNodeLoading(data.key)"
+              class="folder-loading-icon"
+              aria-label="正在加载"
+            ></span>
+            <FolderOpen v-else-if="expanded" :size="18" class="folder-icon open" />
             <Folder v-else :size="18" class="folder-icon" />
           </template>
         </slot>
@@ -49,6 +54,7 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { Folder, FolderOpen, FileText } from 'lucide-vue-next'
 import { getFileIcon, getFileIconColor } from '@/utils/file_utils'
 
@@ -99,6 +105,32 @@ const emit = defineEmits([
   'nodeClick',
   'toggleFolder'
 ])
+
+const loadingKeys = ref(new Set())
+
+const setNodeLoading = (key, isLoading) => {
+  const nextLoadingKeys = new Set(loadingKeys.value)
+  if (isLoading) {
+    nextLoadingKeys.add(key)
+  } else {
+    nextLoadingKeys.delete(key)
+  }
+  loadingKeys.value = nextLoadingKeys
+}
+
+const isNodeLoading = (key) => loadingKeys.value.has(key)
+
+const internalLoadData = async (treeNode) => {
+  if (!props.loadData) return
+
+  const key = treeNode?.key
+  if (key) setNodeLoading(key, true)
+  try {
+    await props.loadData(treeNode)
+  } finally {
+    if (key) setNodeLoading(key, false)
+  }
+}
 
 const handleSelectedUpdate = (keys) => {
   emit('update:selectedKeys', keys)
@@ -233,9 +265,24 @@ const handleNodeClick = (data) => {
 }
 
 .folder-icon {
-  color: #dcb67a;
-  fill: #dcb67a;
+  color: var(--main-500);
+  fill: var(--main-500);
   fill-opacity: 0.2;
+}
+
+.folder-loading-icon {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--gray-200);
+  border-top-color: var(--main-500);
+  border-radius: 50%;
+  animation: file-tree-folder-loading 0.8s linear infinite;
+}
+
+@keyframes file-tree-folder-loading {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .node-actions {

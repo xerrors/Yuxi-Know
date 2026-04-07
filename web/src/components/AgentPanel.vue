@@ -870,7 +870,7 @@ watch(useInlinePreview, (isInline) => {
   justify-content: space-between;
   gap: 8px;
   padding: 4px 16px;
-  min-height: 56px;
+  min-height: 44px;
   background: var(--gray-25);
   flex-shrink: 0;
 
@@ -1250,7 +1250,6 @@ watch(useInlinePreview, (isInline) => {
 
 /* File Tree Styles - VS Code Style Refined */
 .file-tree-container {
-  padding: 4px;
   margin: 0 -4px;
   min-height: 0;
 }
