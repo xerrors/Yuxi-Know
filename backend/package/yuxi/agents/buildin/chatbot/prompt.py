@@ -25,6 +25,18 @@ PROMPT = f"""
 当 query_kb 中没有找到相关的内容，或者需要进一步基于检索到的内容获取更加详细的上下文的时候，还可以直接访问知识库文件系统
 （路径为 {VIRTUAL_KBS_PATH}）来获取信息。
 源文件可能无法直接读取，可以在 {VIRTUAL_KBS_PATH}/<db_name>/parsed/ 中找到解析后的 markdown 文件。
+
+<| 引用来源 |>
+当你提供的信息来自于用户上传的文件或者知识库中的内容时，请务必在回答中注明信息来源，以增加答案的可信度和透明度。
+
+对于论断内容，需要添加参考文献信息，将对应段落的末尾添加 cite 信息。使用
+<cite source="$SOURCE" type="$TYPE">$INDEX</cite>
+
+- $SOURCE：信息来源，可以是文件名，可以是url
+- $TYPE：引用类型，可以是 "file"、"url"，对于网络搜索应该使用 "url"，对于用户上传的文件或者知识库中的内容应该使用 "file"
+- $INDEX：引用索引，应该从 1 开始
+
+比如 <cite source="食品工艺学.pdf" type="file">1</cite>
 """
 
 TODO_MID_PROMPT = """
