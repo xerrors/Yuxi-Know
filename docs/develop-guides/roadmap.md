@@ -48,6 +48,7 @@
 - 为知识库检索工具补充 `metadata.filepath` 注入：在 `query_kb` 统一出口基于会话可见知识库构建 `file_id -> /home/gem/kbs/...` 映射并回填检索结果，注入逻辑复用知识库只读后端命名规则；并将工具调用范围收敛为 Milvus（仅支持 Milvus chunks 列表且要求显式 `file_id`），不再兼容无显式 `file_id` 的推断注入，新增单测覆盖该约束
 - 调整 Milvus 混合检索实现：集合 schema 增加 Milvus 内置 BM25 稀疏向量字段、BM25 函数和中文 analyzer 配置，`keyword` 模式改为 BM25 全文检索，`hybrid` 模式改为 Milvus 原生向量 + BM25 混合检索，并同步更新检索参数说明。
 - 修复前端依赖安全告警：通过 `pnpm.overrides` 将传递依赖 `flatted` 锁定到 `3.4.2`、`lodash-es` 锁定到 `4.18.1`，并同步更新 `pnpm-lock.yaml` 以消除 DriftGuard 报告的高危 CVE
+- 重写界面设计规范：参考 `DESIGN.md` 写法补充视觉气质、颜色 token、组件状态、布局层级、响应式与 Agent Prompt Guide，并基于该规范收敛首页视觉表现，移除装饰性渐变、重阴影、hover 位移和入场动画。
 
 ---
 
