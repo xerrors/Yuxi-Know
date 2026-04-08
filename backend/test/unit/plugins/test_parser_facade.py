@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from pathlib import Path
+from types import SimpleNamespace
 
 import fitz
 import pytest
@@ -61,6 +63,50 @@ def test_parser_parse_docx_file_returns_markdown_text(tmp_path: Path, monkeypatc
     assert isinstance(markdown, str)
     assert "Parser DOCX content" in markdown
     assert len(markdown.strip()) > 0
+
+
+def test_convert_with_docling_reinserts_image_links_in_document_order(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    file_path = tmp_path / "parser_test.docx"
+    file_path.write_bytes(b"fake docx")
+    first_image = base64.b64encode(b"first image").decode()
+    second_image = base64.b64encode(b"second image").decode()
+    fake_doc = SimpleNamespace(
+        pictures=[
+            SimpleNamespace(image=SimpleNamespace(uri=f"data:image/png;base64,{first_image}")),
+            SimpleNamespace(image=SimpleNamespace(uri=f"data:image/png;base64,{second_image}")),
+        ],
+        export_to_markdown=lambda: "before\n<!-- image -->\nbetween\n<!-- image -->\nafter",
+    )
+    fake_result = SimpleNamespace(status=SimpleNamespace(name="SUCCESS"), document=fake_doc)
+    uploaded_images: list[bytes] = []
+
+    class FakeConverter:
+        def convert(self, path: Path):
+            assert path == file_path
+            return fake_result
+
+    def _fake_upload_image_to_minio(image_data, filename, bucket_name, object_prefix):
+        uploaded_images.append(image_data)
+        return f"https://example.test/{len(uploaded_images)}.png"
+
+    monkeypatch.setattr(parser_unified, "_get_docling_converter", lambda: FakeConverter())
+    monkeypatch.setattr(parser_unified, "_upload_image_to_minio", _fake_upload_image_to_minio)
+    image_timestamps = iter([1.0, 2.0])
+    monkeypatch.setattr(parser_unified.time, "time", lambda: next(image_timestamps))
+
+    markdown = parser_unified._convert_with_docling(file_path)
+
+    assert uploaded_images == [b"first image", b"second image"]
+    assert markdown == (
+        "before\n"
+        "![image_1000000.png](https://example.test/1.png)\n"
+        "between\n"
+        "![image_2000000.png](https://example.test/2.png)\n"
+        "after"
+    )
 
 
 def test_parser_parse_png_file_returns_markdown_text_with_mocked_ocr(

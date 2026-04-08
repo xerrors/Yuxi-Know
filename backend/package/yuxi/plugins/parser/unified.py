@@ -149,7 +149,7 @@ def _convert_with_docling(file_path: Path, params: dict | None = None) -> str:
 
         markdown = doc.export_to_markdown()
 
-        for url in reversed(image_urls):
+        for url in image_urls:
             markdown = re.sub(r"<!--\s*image\s*-->", url, markdown, count=1)
 
         return markdown
