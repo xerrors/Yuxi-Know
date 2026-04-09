@@ -139,6 +139,18 @@ models = [
 3. **权限错误**: 确保用户具有管理员权限
 4. **配置未生效**: 检查环境变量配置和服务重启状态
 
+### 问答结果不稳定、热度（temperature）在哪里设置？
+
+- 当前对话配置页默认不单独暴露 `temperature` 参数。
+- 同一个问题多次回答不一致，通常不只是“热度”导致，也可能是模型采样随机性、工具调用路径差异或外部接口波动。
+- 如果你在硅基流动/Kimi 场景看到类似报错：
+  `thinking is enabled but reasoning_content is missing in assistant tool call message`
+  这通常是 **thinking 模式 + tool call** 的兼容性问题，不是单纯调热度能解决。
+- 建议优先：
+  1. 切换到同系列的非 thinking 模型版本（或关闭思考模式）；
+  2. 保留同一 Agent 配置并重复验证；
+  3. 若仍偶发失败，查看后端日志定位具体 tool call 失败链路。
+
 ## 多模态模型
 
 系统支持图片作为输入，与文本结合形成多模态查询。
