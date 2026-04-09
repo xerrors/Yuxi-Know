@@ -79,10 +79,61 @@ async def test_query_kb_injects_filepath_into_chunk_metadata(monkeypatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_query_kb_rejects_non_milvus_knowledge_base(monkeypatch) -> None:
+async def test_query_kb_allows_dify_knowledge_base(monkeypatch) -> None:
     async def _fake_retriever(query_text: str, **kwargs):
         assert query_text == "auth"
-        return []
+        return [
+            {
+                "content": "auth guide",
+                "score": 0.98,
+                "metadata": {
+                    "file_id": "dify-doc-1",
+                    "source": "Dify Doc",
+                },
+            }
+        ]
+
+    monkeypatch.setattr(
+        tools.knowledge_base,
+        "get_retrievers",
+        lambda: {
+            "db-1": {
+                "name": "FAQ",
+                "retriever": _fake_retriever,
+                "metadata": {"kb_type": "dify"},
+            }
+        },
+    )
+
+    async def _fake_visible_kbs(runtime):
+        return [{"db_id": "db-1", "name": "FAQ"}]
+
+    monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    monkeypatch.setattr(
+        "yuxi.agents.backends.knowledge_base_backend.inject_filepaths_into_retrieval_result",
+        pytest.fail,
+    )
+
+    runtime = SimpleNamespace(context=SimpleNamespace())
+    result = await _run_query_kb(kb_name="FAQ", query_text="auth", runtime=runtime)
+
+    assert result == [
+        {
+            "content": "auth guide",
+            "score": 0.98,
+            "metadata": {
+                "file_id": "dify-doc-1",
+                "source": "Dify Doc",
+            },
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_query_kb_returns_lightrag_result_without_filepath_injection(monkeypatch) -> None:
+    async def _fake_retriever(query_text: str, **kwargs):
+        assert query_text == "auth"
+        return "LightRAG context"
 
     monkeypatch.setattr(
         tools.knowledge_base,
@@ -100,11 +151,15 @@ async def test_query_kb_rejects_non_milvus_knowledge_base(monkeypatch) -> None:
         return [{"db_id": "db-1", "name": "FAQ"}]
 
     monkeypatch.setattr(tools, "_resolve_visible_knowledge_bases_for_query", _fake_visible_kbs)
+    monkeypatch.setattr(
+        "yuxi.agents.backends.knowledge_base_backend.inject_filepaths_into_retrieval_result",
+        pytest.fail,
+    )
 
     runtime = SimpleNamespace(context=SimpleNamespace())
     result = await _run_query_kb(kb_name="FAQ", query_text="auth", runtime=runtime)
 
-    assert result == "知识库 'FAQ' 不是 Milvus 类型，当前 query_kb 仅支持 Milvus"
+    assert result == "LightRAG context"
 
 
 @pytest.mark.asyncio

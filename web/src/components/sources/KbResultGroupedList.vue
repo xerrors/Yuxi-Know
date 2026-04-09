@@ -68,7 +68,7 @@ import KbChunkDetailModal from './KbChunkDetailModal.vue'
 
 const props = defineProps({
   chunks: {
-    type: Array,
+    type: [Array, Object],
     default: () => []
   },
   showSummary: {
@@ -86,8 +86,18 @@ const modalVisible = ref(false)
 const selectedChunk = ref(null)
 const selectedChunkIndex = ref(null)
 
+const resolveChunks = (input) => {
+  if (Array.isArray(input)) return input
+  if (!input || typeof input !== 'object') return []
+
+  if (Array.isArray(input.chunks)) return input.chunks
+  if (Array.isArray(input.data?.chunks)) return input.data.chunks
+
+  return []
+}
+
 const normalizedChunks = computed(() =>
-  (props.chunks || []).filter((item) => item && typeof item === 'object' && item.content)
+  resolveChunks(props.chunks).filter((item) => item && typeof item === 'object' && item.content)
 )
 
 const fileGroupList = computed(() => {

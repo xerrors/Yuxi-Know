@@ -241,8 +241,6 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
 
     metadata = target_info.get("metadata") if isinstance(target_info, dict) else None
     kb_type = str((metadata or {}).get("kb_type") or "").strip().lower()
-    if kb_type != "milvus":
-        return f"知识库 '{kb_name}' 不是 Milvus 类型，当前 query_kb 仅支持 Milvus"
 
     try:
         retriever = target_info["retriever"]
@@ -255,11 +253,15 @@ async def query_kb(kb_name: str, query_text: str, file_name: str | None = None, 
         else:
             result = retriever(query_text, **kwargs)
 
+        if kb_type != "milvus":
+            return result
+
         if not isinstance(result, list):
-            return f"知识库 '{kb_name}' 返回结果不是 Milvus chunks 列表，当前 query_kb 仅支持 Milvus"
+            return f"知识库 '{kb_name}' 返回结果不是 Milvus chunks 列表，无法注入文件路径"
 
         from yuxi.agents.backends.knowledge_base_backend import inject_filepaths_into_retrieval_result
 
+        # 只有 Milvus 结果的 file_id 对应本地文件系统，可补充沙盒可读路径。
         return await inject_filepaths_into_retrieval_result(
             retrieval_chunks=result,
             visible_kbs=visible_kbs,
